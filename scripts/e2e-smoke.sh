@@ -273,6 +273,66 @@ await p.end();})()" 2>/dev/null
 check 'the cancelled job row is gone' 404 "$(req GET "/api/v1/Job/${SEND_JOB_ID}" "$TOKEN")"
 check 'the test emails are gone too' 404 "$(req GET "/api/v1/Email/${EMAIL_ID}" "$TOKEN")"
 
+echo '--- search, saved filters, import/export, dashboards (PLAN §30, §32, §33)'
+S_NAME="E2E Search ${RUN_ID}"
+code=$(req POST /api/v1/Account "$TOKEN" "{\"name\":\"$S_NAME\",\"emailAddress\":\"e2e.${RUN_ID}@example.com\"}")
+check 'POST /Account (search fixture) 201' 201 "$code"
+S_ID="$(jq_get .id)"
+code=$(req GET "/api/v1/Search?q=${RUN_ID}&entities=Account" "$TOKEN")
+check 'GET /Search 200' 200 "$code"
+check 'global search finds the fixture by name' true "$(jq -r --arg id "$S_ID" '[.list[]? | select(.entityType=="Account" and .record.id==$id)] | length > 0' "$TMP/body")"
+# Only emailAddress can carry this term, so it proves the trigram-indexed attrs path is searched.
+code=$(req GET "/api/v1/Search/Account?q=${RUN_ID}%40example" "$TOKEN")
+check 'GET /Search/:entity 200' 200 "$code"
+check 'entity search matches on the indexed email key' true "$(jq -r --arg id "$S_ID" '[.list[]? | select(.id==$id)] | length > 0' "$TMP/body")"
+code=$(req GET "/api/v1/Search/Account?q=${S_ID}" "$TOKEN")
+check 'entity search matches an exact id' true "$(jq -r --arg id "$S_ID" '[.list[]? | select(.id==$id)] | length > 0' "$TMP/body")"
+check 'empty search query 422' 422 "$(req GET '/api/v1/Search?q=%20' "$TOKEN")"
+check 'unknown search entity 404' 404 "$(req GET '/api/v1/Search/Nope?q=x' "$TOKEN")"
+
+code=$(req POST /api/v1/SavedFilter "$TOKEN" "{\"name\":\"E2E Filter ${RUN_ID}\",\"entityType\":\"Account\",\"criteria\":[{\"field\":\"name\",\"operator\":\"like\",\"value\":\"${RUN_ID}\"}],\"visibility\":\"private\"}")
+check 'POST /SavedFilter 201' 201 "$code"
+FILTER_ID="$(jq_get .id)"
+code=$(req POST "/api/v1/SavedFilter/${FILTER_ID}/action/run" "$TOKEN" '{}')
+check 'POST /SavedFilter/:id/action/run 200' 200 "$code"
+check 'saved filter run returns the fixture' true "$(jq -r --arg id "$S_ID" '[.result.list[]? | select(.id==$id)] | length > 0' "$TMP/body")"
+check 'GET /SavedFilter lists it' true "$(req GET "/api/v1/SavedFilter?entityType=Account" "$TOKEN" >/dev/null; jq -r --arg id "$FILTER_ID" '[.[]? | select(.id==$id)] | length > 0' "$TMP/body")"
+
+I_NAME="E2E Import ${RUN_ID}"
+code=$(req POST /api/v1/Account/action/import "$TOKEN" "{\"csv\":\"name,type\\n\\\"$I_NAME\\\",\\\"=HYPERLINK(\\\"\\\"http://evil.example\\\"\\\")\\\"\\n\"}")
+check 'POST /:entity/action/import 200' 200 "$code"
+check 'import created a row' true "$([ "$(jq_get .created)" -ge 1 ] && echo true || echo false)"
+check 'unknown import column 422' 422 "$(req POST /api/v1/Account/action/import "$TOKEN" '{"csv":"nope\nx\n"}')"
+check 'GET /:entity/action/exportColumns 200' 200 "$(req GET /api/v1/Account/action/exportColumns "$TOKEN")"
+export_ct="$(curl -s -m 20 -o "$TMP/export.csv" -D "$TMP/export.hdr" -w '%{http_code}' -X POST "$BASE/api/v1/Account/action/export" \
+  -H "authorization: $TOKEN" -H 'content-type: application/json' \
+  -d "{\"where\":[{\"field\":\"name\",\"operator\":\"like\",\"value\":\"$I_NAME\"}]}")"
+check 'POST /:entity/action/export 200' 200 "$export_ct"
+check 'export is served as text/csv' true "$(grep -qi 'content-type: text/csv' "$TMP/export.hdr" && echo true || echo false)"
+check 'export carries the imported row' true "$(grep -q "$I_NAME" "$TMP/export.csv" && echo true || echo false)"
+check 'export neutralises a stored formula' true "$(grep -q "'=HYPERLINK" "$TMP/export.csv" && echo true || echo false)"
+
+code=$(req POST /api/v1/Dashboard "$TOKEN" "{\"name\":\"E2E Dashboard ${RUN_ID}\",\"layout\":[],\"config\":{}}")
+check 'POST /Dashboard 201' 201 "$code"
+DASH_ID="$(jq_get .id)"
+code=$(req POST "/api/v1/Dashboard/${DASH_ID}/dashlets" "$TOKEN" "{\"name\":\"E2E KPI ${RUN_ID}\",\"kind\":\"kpi\",\"position\":0,\"config\":{\"entity\":\"Account\",\"where\":[{\"field\":\"name\",\"operator\":\"like\",\"value\":\"${RUN_ID}\"}]}}")
+check 'POST /Dashboard/:id/dashlets 201' 201 "$code"
+DASHLET_ID="$(jq_get .id)"
+code=$(req GET "/api/v1/Dashboard/${DASH_ID}/dashlets/${DASHLET_ID}/action/run" "$TOKEN")
+check 'GET dashlet action/run 200' 200 "$code"
+check 'kpi dashlet counts through the query engine' true "$([ "$(jq_get .count)" -ge 2 ] && echo true || echo false)"
+check 'dashlet config rejects an unknown entity' 404 "$(req POST "/api/v1/Dashboard/${DASH_ID}/dashlets" "$TOKEN" '{"name":"E2E bad","kind":"list","position":1,"config":{"entity":"Nope"}}')"
+check 'DELETE /Dashboard/:id 200' 200 "$(req DELETE "/api/v1/Dashboard/${DASH_ID}" "$TOKEN")"
+check 'dashboard gone 404' 404 "$(req GET "/api/v1/Dashboard/${DASH_ID}" "$TOKEN")"
+check 'DELETE /SavedFilter/:id 200' 200 "$(req DELETE "/api/v1/SavedFilter/${FILTER_ID}" "$TOKEN")"
+node -e "
+const {Pool}=require('pg');
+(async()=>{const p=new Pool({connectionString:process.env.DATABASE_URL,max:1});
+await p.query('DELETE FROM entity_records WHERE id = ANY(\$1::text[])',[['${S_ID}']]);
+await p.query(\"DELETE FROM entity_records WHERE entity_type='Account' AND name = \$1\",['${I_NAME}']);
+await p.end();})()" 2>/dev/null
+check 'search fixture removed' 404 "$(req GET "/api/v1/Account/${S_ID}" "$TOKEN")"
+
 echo '--- audit'
 audit_code=$(req GET "/api/v1/AuditLog?entityType=Contact&maxSize=50" "$TOKEN")
 check 'GET /AuditLog 200 for admin' 200 "$audit_code"

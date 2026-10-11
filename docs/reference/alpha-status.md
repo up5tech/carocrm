@@ -3,8 +3,9 @@
 Date: 2026-10-10. Scope agreed with the user: **CRM Kernel Alpha only** (PLAN tasks 01–16, 19–20 of §87).
 Tasks 17–18 (generic React UI + Entity Manager) were completed afterwards, together with stream,
 calendar and the PLAN §21–§22 dynamic logic + formula engine, §23 hooks + domain events, §24 jobs,
-§25 attachments/file storage and the §28 outbound email subsystem (see the sections at the end of this file);
-import/export, dashboards, extension SDK, workflow, reports, BPM and portal remain
+§25 attachments/file storage, the §28 outbound email subsystem and Phase 12 (search, saved filters,
+CSV import/export, dashboards — see the sections at the end of this file);
+extension SDK, workflow, reports, BPM and portal remain
 unimplemented; see PLAN §72 for the remaining priority matrix.
 
 ## Checklist from PLAN §73
@@ -27,6 +28,10 @@ unimplemented; see PLAN §72 for the remaining priority matrix.
 | Attachments working | done | `POST /api/v1/Attachment/upload`, MIME/size/extension checks, local FS storage |
 | Outbound email working | done | `MailTransport` port (SMTP + generic relay + disabled/memory), `POST /api/v1/Email/:id/action/send` queues `system.sendEmail`, `email_deliveries` ledger; inbound (§28.2) not implemented |
 | Audit working | done | field-level rows in `audit_log`, `GET /api/v1/AuditLog`, secrets redacted |
+| Global and entity search working | done | `GET /api/v1/Search[/:entity]?q=`, ACL-filtered, trigram-indexed (see Phase 12 section) |
+| Saved filters working | done | `/api/v1/SavedFilter` CRUD + `action/run`, private/shared ownership columns |
+| CSV import/export working | done | `POST /:entity/action/import`, `POST|GET /:entity/action/export`, formula-injection guarded |
+| Dashboards and dashlets working | done | `/api/v1/Dashboard` + dashlets (`list`/`chart`/`kpi`), SPA `/dashboards` |
 | OpenAPI working | done | `GET /api/v1/OpenApi` (generated from controllers) |
 | API integration tests working | done | 77 vitest tests, 6 files (`apps/api/test`) |
 | Playwright login/CRUD tests working | done | `e2e/crud.spec.ts` (`npx playwright test`) |
@@ -41,10 +46,10 @@ pnpm db:seed          # applies migrations and seeds admin/roles/metadata into t
 pnpm lint             # eslint, 0 warnings allowed
 pnpm typecheck        # tsc --noEmit over the whole workspace
 pnpm -r build         # all packages + api + worker
-npx vitest run        # 325 tests: 182 API/integration (apps/api/test) + 143 package unit (formula 59, files 21, mail 63); runs on the configured DATABASE_URL, no extra database
-bash scripts/e2e-smoke.sh   # 92 checks: HTTP end-to-end, incl. attachments, scan hook, chunked upload and outbound email
+npx vitest run        # 369 tests: 218 API/integration (apps/api/test) + 151 package unit; runs on the configured DATABASE_URL, no extra database
+bash scripts/e2e-smoke.sh   # 121 checks: HTTP end-to-end, incl. attachments, scan hook, chunked upload, outbound email, search/filters/import/export/dashboards
 bash scripts/worker-smoke.sh # 34 checks: outbox, BullMQ jobs, cron, graceful shutdown, job progress/logs/cancellation, upload cleanup, system.sendEmail
-npx playwright test    # 11 browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic/jobs/email); starts API+SPA itself
+npx playwright test    # 14 browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic/jobs/email/phase-12 search+csv+dashboards); starts API+SPA itself
 pnpm --filter @carocrm/worker test  # 111 worker tests (jobs, scheduler, outbox, reminder job, upload cleanup, sendEmail job, domain-event subscribers)
 ```
 
@@ -216,6 +221,46 @@ outbound side only:
   (`apps/api/test/email.test.ts`), 20 worker job tests, 1 browser spec (`e2e/email.spec.ts`: draft in the
   generated form → queue → ledger → cancel), 24 new `scripts/e2e-smoke.sh` checks and 8 new
   `scripts/worker-smoke.sh` checks; every suite deletes only the records it created.
+
+## Search, saved filters, import/export and dashboards (Phase 12, PLAN §30/§32/§33, added 2026-10-11)
+
+`apps/api/src/search` (search, saved filter, import/export, dashboard services + controllers), wired
+into `AppModule` before the generic `:entity` wildcard, and three SPA pages (`/search`,
+`/dashboards`, plus the search/filter/import/export row on every record list). Migration `008`
+created the tables and ownership columns, `009` corrected the search indexes.
+
+- Every read goes through `EntityCrudService`, so entity/record/field ACL, audit, stream and dynamic
+  logic apply exactly as on a normal list. Search never builds SQL itself; it composes criteria the
+  Query Engine validates (PLAN §15.3).
+- Global search iterates the enabled entities the caller may read, silently skipping unreadable ones
+  so it cannot leak which entities exist, and caps query length, entity count and per-entity rows.
+- The searched expression set is `name`, the four standard contact attributes and an exact `id`
+  match — precisely the expressions that carry a trigram index. PostgreSQL can only use an index for
+  a disjunction when *every* branch is indexable, so one unindexed custom key in the OR would make
+  the whole search a sequential scan. Verified with `EXPLAIN` on the configured database: the OR now
+  plans as `BitmapOr` over `entity_records_pkey` + the four trigram indexes. Widening coverage means
+  adding the key to `SEARCH_INDEXED_ATTRS` **and** indexing it in a new migration.
+- CSV import maps header names to metadata fields (unknown or non-importable columns are rejected up
+  front), coerces per field type, updates by `id` when the column is present, optionally upserts on
+  `name`, and returns a per-row validation report; bytes and rows are both bounded.
+- CSV export pages the Query Engine (`EXPORT_PAGE_SIZE`, because one list page clamps to 500 rows) so
+  a filter on a large entity exports the whole result rather than the first page, and every cell is
+  guarded against spreadsheet formula injection (`= + - @` get a leading `'`, AGENTS §5.3).
+- Dashlets are configuration-driven (`list`/`chart`/`kpi` with entity, saved-filter or ad-hoc where,
+  `groupBy`, numeric `measure`, `count|sum|avg`) and execute through the Query Engine — no raw SQL
+  from configuration (PLAN §33). An ungrouped KPI asks the engine for `total`, so it reports the real
+  number on a 100k table; a grouped chart aggregates over a bounded scan and returns `truncated` +
+  `scanned`, which the SPA surfaces instead of silently showing a capped bar chart.
+- Not built from §32: XLSX/JSON export, field-mapping UI, import preview and background (queued)
+  import for oversized files — imports are synchronous up to 2,000 rows. §33 dashlet kinds `Calendar`,
+  `Stream` and `Custom`, and the §30 Stage 2 search-provider abstraction (OpenSearch/Elasticsearch),
+  are also not built. Export enforces entity `read` ACL; there is no separate `export` ACL action in
+  the role vocabulary yet (record- and field-level rules still apply through the list path).
+- Verification: 12 API/unit tests (`apps/api/test/phase12-search-import-dashboards.test.ts`), 29 new
+  `scripts/e2e-smoke.sh` checks (search by name/email/id, filter run, import/export round-trip with
+  the formula guard, dashlet run and dashboard delete) and 3 browser specs
+  (`e2e/search-import-dashboards.spec.ts`) covering the header-search deep link, the list search /
+  saved-filter / CSV round-trip and the dashboard dashlet + delete flow.
 
 ## Web UI theme (Lizant)
 

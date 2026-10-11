@@ -291,6 +291,41 @@ HTTP request → EntityManager phases → PostgresRecordStore.withTransaction
   `apps/worker/src/handlers/mail-handlers.test.ts` (20 job tests), the email block in
   `scripts/e2e-smoke.sh`, section 6 of `scripts/worker-smoke.sh` and the `e2e/email.spec.ts` browser spec.
 
+## Search, import/export and dashboards (PLAN §30, §32, §33 — Phase 12)
+
+- **Search is a Query Engine client, not a SQL writer.** `PortalSearchService` builds criteria and
+  calls `EntityCrudService.list`, so ACL, audit, stream, hooks and dynamic logic are identical to a
+  normal list. Never add string SQL to this module.
+- **The searched field set and the index set are one contract.** `SEARCH_INDEXED_ATTRS`
+  (`apps/api/src/search/portal-shapes.ts`) must stay exactly in sync with the trigram indexes created
+  by `database/migrations/009_phase12_search.sql`. PostgreSQL can only index-scan a disjunction when
+  *every* branch is indexable: adding a field to the search OR without adding its trigram index turns
+  every search into a sequential scan. Same rule for `id`, which is matched whole (`equals`) rather
+  than as a substring.
+- Expression indexes only match the expression they index. The 008 concatenation index was dead for
+  this reason (the engine emits one `ILIKE` per field) — do not reintroduce a multi-key expression
+  index expecting the planner to use it; add one index per searched key and check with `EXPLAIN`.
+- **Saved filters and dashboards are owner-scoped rows**, with `user_id`/`visibility`/`is_shared`
+  columns from 008. A non-owner non-admin sees a row only when it is shared; `criteria`/`config`/
+  `layout` are JSON that is re-validated on read (`zod` in `portal-shapes.ts`), never trusted.
+- **CSV columns are metadata names.** Import rejects unknown/non-importable columns before touching a
+  record, coerces per field type, and updates by `id` (or by `name` with `updateOnName`). Export must
+  page the Query Engine (`EXPORT_PAGE_SIZE`) because one list page is clamped to 500 rows by
+  `MAX_MAX_SIZE`; a single call with a large `maxSize` silently returns one page.
+- **Every exported cell goes through `csvCell`**, which both RFC-4180 quotes and neutralises
+  spreadsheet formulas (`= + - @` get a leading quote). Keep that guard on any new export format.
+- **Dashlet configuration is data, never SQL.** Kinds are `list`/`chart`/`kpi`; `entity`, `filterId`,
+  `where`, `groupBy`, `measure`, `aggregation` are validated against metadata (categorical field for
+  `groupBy`, numeric for `measure`). An ungrouped KPI reads `total` from the engine so it stays
+  correct on large tables; grouped aggregation runs in-process over a bounded scan and must keep
+  reporting `scanned`/`truncated`, which the SPA shows.
+- Controllers register in `SEARCH_CONTROLLERS` **before** `ENTITY_CONTROLLERS`: `/Search`,
+  `/SavedFilter`, `/Dashboard` are static prefixes and `/:entity/action/{import,export}` must be
+  matched ahead of the generic `:entity` wildcard.
+- Tests: `apps/api/test/phase12-search-import-dashboards.test.ts` (search coverage, csv guard,
+  export paging, dashlet scale behaviour), the phase-12 block of `scripts/e2e-smoke.sh` and
+  `e2e/search-import-dashboards.spec.ts`.
+
 ## Test database policy (AGENTS.md §3 — mandatory)
 
 Tests run against the **configured primary database** (`DATABASE_URL` from `.env`).
