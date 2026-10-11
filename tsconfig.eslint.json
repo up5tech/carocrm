@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "include": [
+    "apps/api/src/**/*.ts",
+    "apps/worker/src/**/*.ts",
+    "apps/*/test/**/*.ts",
+    "packages/*/src/**/*.ts",
+    "database/**/*.ts",
+    "e2e/**/*.ts",
+    "eslint.config.js",
+    "vitest.config.ts"
+  ],
+  "exclude": [
+    "apps/web/**",
+    "node_modules",
+    "**/dist"
+  ]
+}

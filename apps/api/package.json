@@ -1,0 +1,51 @@
+{
+  "name": "@carocrm/api",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/main.js",
+  "types": "dist/main.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "lint": "eslint src --max-warnings=0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@carocrm/core": "workspace:*",
+    "@carocrm/metadata": "workspace:*",
+    "@carocrm/entity-engine": "workspace:*",
+    "@carocrm/query-engine": "workspace:*",
+    "@carocrm/acl": "workspace:*",
+    "@carocrm/jobs": "workspace:*",
+    "@carocrm/files": "workspace:*",
+    "@fastify/cookie": "^11.0.0",
+    "@fastify/cors": "^10.0.0",
+    "@fastify/helmet": "^13.0.0",
+    "@fastify/multipart": "^9.0.0",
+    "@fastify/rate-limit": "^10.0.0",
+    "@fastify/swagger": "^9.0.0",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-fastify": "^11.0.0",
+    "@nestjs/swagger": "^11.0.0",
+    "@nestjs/terminus": "^11.0.0",
+    "argon2": "^0.40.0",
+    "bullmq": "^5.0.0",
+    "cron-parser": "^4.9.0",
+    "fastify": "^5.0.0",
+    "ioredis": "^5.4.0",
+    "jose": "^6.0.0",
+    "kysely": "^0.28.0",
+    "pg": "^8.13.0",
+    "pino": "^9.0.0",
+    "reflect-metadata": "^0.2.2",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

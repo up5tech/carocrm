@@ -1,0 +1,335 @@
+/* Structural styling that antd theme tokens cannot express — Lizant look. */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: #f5f5f5;
+  color: #31373d;
+}
+
+/* ---- top header: white, 70px, brand at the left ---- */
+.lizant-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #fff;
+  height: 70px;
+  padding: 0 24px;
+  border-bottom: 1px solid #eff2f7;
+}
+
+.lizant-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 212px;
+  flex: 0 0 auto;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #31373d;
+}
+
+.lizant-brand-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, #438eff 0%, #6fa9ff 100%);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.lizant-brand--compact {
+  width: 56px;
+}
+
+.lizant-collapse-toggle {
+  cursor: pointer;
+  color: #438eff;
+  font-size: 16px;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+}
+
+.lizant-collapse-toggle:hover {
+  background: #f0f8ff;
+}
+
+.lizant-header-search {
+  flex: 1 1 auto;
+  max-width: 320px;
+}
+
+.lizant-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: #737b85;
+}
+
+.lizant-header-actions .anticon {
+  font-size: 17px;
+  cursor: pointer;
+}
+
+.lizant-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #438eff, #6fa9ff);
+}
+
+.lizant-footer {
+  background: transparent;
+  text-align: center;
+  color: #a1a8b3;
+  font-size: 13px;
+  padding: 18px 24px;
+}
+
+/* ---- sidebar ---- */
+.lizant-sider {
+  background: #fff !important;
+  border-right: 1px solid #eff2f7;
+  box-shadow: none !important;
+}
+
+.lizant-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0 16px;
+}
+
+.lizant-sider .ant-menu-item-group-title {
+  padding: 14px 16px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #a1a8b3;
+}
+
+.lizant-nav-group {
+  padding: 14px 24px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #a1a8b3;
+}
+
+.lizant-sider .ant-menu {
+  background: transparent;
+  border-inline-end: none !important;
+  padding: 0 8px;
+}
+
+.lizant-sider .ant-menu .ant-menu-item,
+.lizant-sider .ant-menu .ant-menu-submenu-title {
+  font-size: 14px;
+}
+
+.lizant-sider .ant-menu-item-selected {
+  font-weight: 500;
+}
+
+.lizant-sider-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ---- content ---- */
+.lizant-content {
+  padding: 24px;
+}
+
+.lizant-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.lizant-page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.lizant-page-sub {
+  margin: 2px 0 0;
+  color: #737b85;
+  font-size: 13px;
+}
+
+.lizant-card {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.lizant-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #737b85;
+}
+
+/* stat tiles on the home page */
+.lizant-stat {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.lizant-stat-value {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 6px;
+}
+
+.lizant-stat-hint {
+  color: #a1a8b3;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.lizant-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  flex: 0 0 auto;
+}
+
+.lizant-stat-icon--blue { background: #e3f0ff; color: #438eff; }
+.lizant-stat-icon--green { background: #ecfff3; color: #55c27f; }
+.lizant-stat-icon--cyan { background: #dbefef; color: #23819c; }
+.lizant-stat-icon--yellow { background: #fffbe6; color: #e8a33d; }
+.lizant-stat-icon--purple { background: #f1ecff; color: #7b61ff; }
+
+/* soft status pills, as used for enum values and record states */
+.lizant-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 20px;
+  background: #e3f0ff;
+  color: #438eff;
+}
+
+.lizant-pill--green { background: #ecfff3; color: #55c27f; }
+.lizant-pill--amber { background: #fffbe6; color: #e8a33d; }
+.lizant-pill--red { background: #fdecec; color: #fa626b; }
+.lizant-pill--grey { background: #f2f3f5; color: #737b85; }
+
+/* ---- login ---- */
+.lizant-auth {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #f5f5f5;
+  padding: 24px;
+}
+
+.lizant-auth-card {
+  width: 380px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 32px;
+}
+
+.lizant-auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 21px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.lizant-auth-sub {
+  color: #737b85;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+/* ---- tables ---- */
+.ant-table-thead > tr > th {
+  font-weight: 600;
+}
+
+.ant-table-wrapper .ant-table-pagination.ant-pagination {
+  margin: 16px 0 0;
+}
+
+/* ---- record list page (Lizant app-* list pattern) ---- */
+.lizant-list-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.lizant-list-head .lizant-page-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.lizant-filter {
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+}
+
+.lizant-filter-label {
+  color: #737b85;
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.lizant-filter-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.lizant-row-link {
+  color: #438eff;
+  font-weight: 400;
+}
+

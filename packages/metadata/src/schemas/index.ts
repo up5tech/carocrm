@@ -1,0 +1,198 @@
+import { z } from 'zod';
+
+export const fieldTypes = [
+  'varchar',
+  'text',
+  'int',
+  'float',
+  'decimal',
+  'bool',
+  'date',
+  'datetime',
+  'enum',
+  'multiEnum',
+  'currency',
+  'url',
+  'email',
+  'phone',
+  'password',
+  'link',
+  'linkOne',
+  'linkMultiple',
+  'linkParent',
+  'foreign',
+  'file',
+  'image',
+  'attachmentMultiple',
+  'formula',
+  'generated',
+  'aggregationCount',
+] as const;
+
+export const relationTypes = ['oneToOne', 'oneToMany', 'manyToOne', 'manyToMany', 'parentChild'] as const;
+
+export const aclRoleLevels = ['yes', 'all', 'team', 'own', 'no'] as const;
+
+export const aclActions = ['create', 'read', 'edit', 'delete', 'stream'] as const;
+
+export const FieldDefinitionSchema = z.object({
+  type: z.string(),
+  required: z.boolean().default(false),
+  label: z.string().optional(),
+  maxLength: z.number().int().positive().optional(),
+  defaultValue: z.any().optional(),
+  entityKey: z.string().optional(),
+  values: z.array(z.string()).optional(),
+  enum: z.array(z.string()).optional(),
+  options: z.record(z.any()).optional(),
+  notDisabled: z.boolean().optional(),
+  inEdit: z.boolean().optional(),
+  inDetail: z.boolean().optional(),
+  inList: z.boolean().optional(),
+  inFilter: z.boolean().optional(),
+  inSearch: z.boolean().optional(),
+  importable: z.boolean().optional(),
+  exportable: z.boolean().optional(),
+  sortable: z.boolean().optional(),
+  unique: z.boolean().optional(),
+  audited: z.boolean().optional(),
+  description: z.string().optional(),
+});
+
+export type FieldDefinition = z.infer<typeof FieldDefinitionSchema>;
+
+export const RelationDefinitionSchema = z.object({
+  type: z.string(),
+  target: z.string(),
+  mappedBy: z.string().optional(),
+  inverseBy: z.string().optional(),
+  label: z.string().optional(),
+  required: z.boolean().default(false),
+  removable: z.boolean().default(true),
+  straight: z.boolean().default(false),
+  metadata: z.record(z.any()).optional(),
+});
+
+export type RelationDefinition = z.infer<typeof RelationDefinitionSchema>;
+
+export const IndexDefinitionSchema = z.object({
+  name: z.string(),
+  fields: z.array(z.string()),
+  unique: z.boolean().default(false),
+});
+
+export type IndexDefinition = z.infer<typeof IndexDefinitionSchema>;
+
+export const AclDefinitionSchema = z.object({
+  permissions: z.record(z.string(), z.record(z.string(), z.enum(aclRoleLevels))).optional(),
+  fieldPermissions: z.record(z.string(), z.record(z.string(), z.enum(aclRoleLevels))).optional(),
+  recordAccess: z.record(z.string(), z.record(z.string(), z.enum(aclRoleLevels))).optional(),
+});
+
+export type AclDefinition = z.infer<typeof AclDefinitionSchema>;
+
+export const RecordDefinitionSchema = z.object({
+  displayField: z.string().optional(),
+  nameField: z.string().optional(),
+  duplicate: z.boolean().default(true),
+  followable: z.boolean().default(true),
+  streamable: z.boolean().default(true),
+  audited: z.boolean().default(false),
+  removable: z.boolean().default(true),
+  mergeable: z.boolean().default(false),
+  importable: z.boolean().default(true),
+  exportable: z.boolean().default(true),
+});
+
+export type RecordDefinition = z.infer<typeof RecordDefinitionSchema>;
+
+export const ClientDefinitionSchema = z.object({
+  portal: z.boolean().default(false),
+  web: z.boolean().default(true),
+  api: z.boolean().default(true),
+  mobile: z.boolean().default(false),
+});
+
+export type ClientDefinition = z.infer<typeof ClientDefinitionSchema>;
+
+export const EntityDefinitionSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  table: z.string().optional(),
+  isEntity: z.boolean().default(true),
+  fields: z.record(z.string(), FieldDefinitionSchema),
+  relations: z.record(z.string(), RelationDefinitionSchema),
+  indexes: z.array(IndexDefinitionSchema).default([]),
+  acl: AclDefinitionSchema.optional(),
+  record: RecordDefinitionSchema.default({}),
+  client: ClientDefinitionSchema.default({}),
+});
+export type EntityDefinition = {
+  name: string;
+  label: string;
+  table?: string | undefined;
+  isEntity: boolean;
+  fields: Record<string, FieldDefinition>;
+  relations: Record<string, RelationDefinition>;
+  indexes: IndexDefinition[];
+  acl?: AclDefinition | undefined;
+  record: RecordDefinition;
+  client: ClientDefinition;
+};
+
+export const LayoutPanelSchema = z.object({
+  name: z.string(),
+  label: z.string().optional(),
+  position: z.number().int().default(0),
+  fields: z.array(z.string()).optional(),
+  tabs: z.array(z.string()).optional(),
+});
+
+export type LayoutPanel = z.infer<typeof LayoutPanelSchema>;
+
+export const LayoutDefinitionSchema = z.object({
+  entity: z.string(),
+  type: z.enum(['list', 'detail', 'edit', 'filter', 'search', 'massUpdate']),
+  panels: z.array(LayoutPanelSchema),
+});
+
+export type LayoutDefinition = z.infer<typeof LayoutDefinitionSchema>;
+
+export const PermissionDefinitionSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  scope: z.string().optional(),
+});
+
+export type PermissionDefinition = z.infer<typeof PermissionDefinitionSchema>;
+
+export const JobDefinitionSchema = z.object({
+  name: z.string(),
+  scheduling: z.string().optional(),
+  handler: z.string(),
+  description: z.string().optional(),
+  enabled: z.boolean().default(true),
+});
+
+export type JobDefinition = z.infer<typeof JobDefinitionSchema>;
+
+export const RouteDefinitionSchema = z.object({
+  path: z.string(),
+  method: z.string(),
+  handler: z.string(),
+  description: z.string().optional(),
+});
+
+export type RouteDefinition = z.infer<typeof RouteDefinitionSchema>;
+
+export const MetadataManifestSchema = z.object({
+  name: z.string(),
+  id: z.string(),
+  version: z.string(),
+  minPlatformVersion: z.string().optional(),
+  dependencies: z.array(z.string()).default([]),
+  permissions: z.array(z.string()).default([]),
+  metadata: z.record(z.any()).optional(),
+});
+
+export type MetadataManifest = z.infer<typeof MetadataManifestSchema>;

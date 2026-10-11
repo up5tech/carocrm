@@ -1,0 +1,48 @@
+{
+  "name": "carocrm",
+  "version": "1.0.0",
+  "description": "NestJS CRM Platform - Clean-room reimplementation of EspoCRM concepts",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --filter @carocrm/api dev",
+    "dev:all": "concurrently \"pnpm -r --filter @carocrm/api dev\" \"pnpm -r --filter @carocrm/web dev\"",
+    "db:migrate": "tsx database/migrate.ts",
+    "db:seed": "tsx database/seed.ts",
+    "test:e2e": "bash scripts/e2e-smoke.sh"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.15.0",
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.0",
+    "argon2": "^0.40.0",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-import-resolver-typescript": "^3.6.0",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-n": "^17.15.1",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "eslint-plugin-unused-imports": "^3.2.0",
+    "globals": "^16.0.0",
+    "pg": "^8.13.0",
+    "prettier": "^3.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.15.0",
+    "vitest": "^3.0.0"
+  },
+  "type": "module"
+}

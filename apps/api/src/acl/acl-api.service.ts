@@ -1,0 +1,319 @@
+import { AclEvaluator } from '@carocrm/acl/evaluator/index.js';
+import type { AclAction, AclDecision, AclRoleLevel } from '@carocrm/acl/types/index.js';
+import { maxLevel } from '@carocrm/acl/types/index.js';
+import { AuthorizationDeniedError } from '@carocrm/core/errors/index.js';
+import { toCamelCase } from '@carocrm/query-engine/index.js';
+import { Inject, Injectable } from '@nestjs/common';
+
+import type { RequestScope } from '../common/request-scope.js';
+import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
+import { DatabaseService } from '../database/database.service.js';
+import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
+import { METADATA_STORE } from '../metadata/metadata-store.service.js';
+
+/** Record-scope descriptor injected into list/detail queries by the record store. */
+export type AclPredicate =
+  | { readonly kind: 'allowAll' }
+  | { readonly kind: 'denyAll' }
+  | { readonly kind: 'own'; readonly userId: string }
+  | { readonly kind: 'team'; readonly userId: string; readonly teamIds: readonly string[] };
+
+export interface FieldAccess {
+  readonly read: AclRoleLevel;
+  readonly edit: AclRoleLevel;
+}
+
+export interface AclRecordLike {
+  readonly assignedUserId?: string | undefined;
+  readonly createdById?: string | undefined;
+  readonly teams?: readonly string[] | undefined;
+}
+
+interface RolePermissions {
+  readonly [entity: string]: { readonly [action: string]: string | undefined } | undefined;
+}
+
+interface FieldPermissions {
+  readonly [entity: string]: { readonly [field: string]: { readonly [action: string]: string | undefined } | undefined } | undefined;
+}
+
+interface DbRole {
+  readonly id: string;
+  readonly permissions: RolePermissions;
+  readonly fieldPermissions: FieldPermissions;
+}
+
+interface AclSnapshot {
+  readonly roles: readonly DbRole[];
+  readonly roleIds: readonly string[];
+  readonly userId: string | undefined;
+  readonly teams: readonly string[];
+  readonly admin: boolean;
+  readonly evaluators: Map<string, AclEvaluator>;
+}
+
+const ENTITY_WILDCARD = '*';
+const SYS_ADMIN_ROLE = 'sysAdmin';
+const SNAPSHOT_CACHE_LIMIT = 256;
+const ACL_ACTION_LIST: readonly AclAction[] = ['create', 'read', 'edit', 'delete', 'stream'];
+
+/**
+ * Request-facing ACL facade: resolves the DB roles of the current principal
+ * (through RequestScope) into entity/field/record access decisions.
+ * Registered by class token (`AclApiService`) — every injection site uses an
+ * explicit `@Inject(...)` token because decorator metadata is not emitted.
+ */
+@Injectable()
+export class AclApiService {
+  private readonly snapshots = new Map<string, AclSnapshot>();
+
+  constructor(
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
+  ) {}
+
+  /** Effective ACL level of the current principal for `entity`/`action`. */
+  async canUser(entity: string, action: AclAction): Promise<AclRoleLevel> {
+    const snapshot = await this.snapshot();
+    if (snapshot.admin) return 'all';
+    const levels = snapshot.roles.map((role) => roleLevel(role, entity, action));
+    return maxLevel(levels);
+  }
+
+  /** Throws 403 when the current principal has no access at all. */
+  async assertAccess(entity: string, action: AclAction): Promise<AclRoleLevel> {
+    const level = await this.canUser(entity, action);
+    if (level === 'no') {
+      throw new AuthorizationDeniedError(`No "${action}" permission for "${entity}".`, { entity, action });
+    }
+    return level;
+  }
+
+  /** Merged (max) field access across the principal's roles; unrestricted defaults to 'all'. */
+  async fieldAccess(entity: string, field: string): Promise<FieldAccess> {
+    const snapshot = await this.snapshot();
+    if (snapshot.admin) return { read: 'all', edit: 'all' };
+    const camel = toCamelCase(field);
+    const evaluator = evaluatorFor(snapshot, entity);
+    const read = maxLevel(snapshot.roles.map((role) => evaluator.getFieldRoleLevel(role.id, entity, camel, 'read')));
+    const edit = maxLevel(snapshot.roles.map((role) => evaluator.getFieldRoleLevel(role.id, entity, camel, 'edit')));
+    return { read, edit };
+  }
+
+  /** Every metadata field the principal may read (used by list/detail serialization). */
+  async visibleFields(entity: string): Promise<string[]> {
+    const snapshot = await this.snapshot();
+    const fields = Object.keys(this.metadata.registry.getFields(entity));
+    if (!fields.includes('id')) fields.unshift('id');
+    if (snapshot.admin) return fields;
+    const evaluator = evaluatorFor(snapshot, entity);
+    return fields.filter((field) => {
+      const level = maxLevel(snapshot.roles.map((role) => evaluator.getFieldRoleLevel(role.id, entity, toCamelCase(field), 'read')));
+      return level !== 'no';
+    });
+  }
+
+  /** Remove fields the principal may not read from a serialized record. */
+  async stripRestricted(entity: string, dto: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const snapshot = await this.snapshot();
+    if (snapshot.admin) return dto;
+    const evaluator = evaluatorFor(snapshot, entity);
+    const restricted = new Set<string>();
+    for (const key of Object.keys(dto)) {
+      const level = maxLevel(snapshot.roles.map((role) => evaluator.getFieldRoleLevel(role.id, entity, toCamelCase(key), 'read')));
+      if (level === 'no') restricted.add(key);
+    }
+    if (restricted.size === 0) return dto;
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(dto)) {
+      if (!restricted.has(key)) out[key] = value;
+    }
+    return out;
+  }
+
+  /** Reject writes touching fields restricted with edit level 'no'. */
+  async assertFieldWrites(entity: string, data: Record<string, unknown>): Promise<void> {
+    const snapshot = await this.snapshot();
+    if (snapshot.admin) return;
+    const evaluator = evaluatorFor(snapshot, entity);
+    const blocked: string[] = [];
+    for (const key of Object.keys(data)) {
+      if (data[key] === undefined) continue;
+      const level = maxLevel(snapshot.roles.map((role) => evaluator.getFieldRoleLevel(role.id, entity, toCamelCase(key), 'edit')));
+      if (level === 'no') blocked.push(key);
+    }
+    if (blocked.length > 0) {
+      throw new AuthorizationDeniedError(`Field(s) ${blocked.join(', ')} cannot be modified.`, { entity, fields: blocked });
+    }
+  }
+
+  /** List/detail record-scope predicate derived from the entity level. */
+  async recordPredicate(entity: string, action: AclAction): Promise<AclPredicate> {
+    const level = await this.canUser(entity, action);
+    if (level === 'no') return { kind: 'denyAll' };
+    if (level === 'all' || level === 'yes') return { kind: 'allowAll' };
+    const userId = this.scope.userId;
+    if (!userId) return { kind: 'denyAll' };
+    if (level === 'own') return { kind: 'own', userId };
+    return { kind: 'team', userId, teamIds: this.scope.teamIds() };
+  }
+
+  /** Record level decision honouring own/team scoping. Used for get/update/delete. */
+  async canAccessRecord(entity: string, action: AclAction, record: AclRecordLike): Promise<AclDecision> {
+    const snapshot = await this.snapshot();
+    if (snapshot.admin) return { allowed: true, scope: 'all' };
+    if (snapshot.roleIds.length === 0) return { allowed: false, reason: 'No roles assigned' };
+    const evaluator = evaluatorFor(snapshot, entity);
+    return evaluator.evaluate({
+      entity,
+      action,
+      record: { ...record },
+      userId: snapshot.userId,
+      roles: [...snapshot.roleIds],
+      teams: [...snapshot.teams],
+    });
+  }
+
+  /** 403 when the action is not permitted at entity level, 403 also when the record is out of scope. */
+  async assertRecordAccess(entity: string, action: AclAction, record: AclRecordLike): Promise<boolean> {
+    const level = await this.canUser(entity, action);
+    if (level === 'no') {
+      throw new AuthorizationDeniedError(`No "${action}" permission for "${entity}".`, { entity, action });
+    }
+    if (level === 'all' || level === 'yes') return true;
+    const decision = await this.canAccessRecord(entity, action, record);
+    return decision.allowed === true;
+  }
+
+  /** Drop any memoised role snapshot (call after modifying roles or teams). */
+  invalidateSnapshotCache(): void {
+    this.snapshots.clear();
+  }
+
+  private async snapshot(): Promise<AclSnapshot> {
+    const cacheKey = this.scope.requestId;
+    const cached = this.snapshots.get(cacheKey);
+    if (cached) return cached;
+
+    const principal = this.scope.principal;
+    const roleIds = principal ? [...principal.roles] : [];
+    const rows = await this.loadRoles(roleIds);
+    const snapshot: AclSnapshot = {
+      roles: rows,
+      roleIds,
+      userId: principal?.userId,
+      teams: principal ? [...principal.teams] : [],
+      admin: this.scope.isAdmin || roleIds.includes(SYS_ADMIN_ROLE),
+      evaluators: new Map(),
+    };
+    if (this.snapshots.size >= SNAPSHOT_CACHE_LIMIT) {
+      const oldest = this.snapshots.keys().next().value;
+      if (oldest !== undefined) this.snapshots.delete(oldest);
+    }
+    this.snapshots.set(cacheKey, snapshot);
+    return snapshot;
+  }
+
+  private async loadRoles(roleIds: readonly string[]): Promise<DbRole[]> {
+    const rows = await this.database.db
+      .selectFrom('roles')
+      .select(['id', 'permissions', 'field_permissions'])
+      .where('is_deleted', '=', false)
+      .execute();
+    const byId = new Map(rows.map((row) => [row.id, toDbRole(row.id, row.permissions, row.field_permissions)]));
+    const out: DbRole[] = [];
+    for (const roleId of roleIds) {
+      const role = byId.get(roleId);
+      if (role) out.push(role);
+    }
+    return out;
+  }
+}
+
+function toDbRole(id: string, permissions: unknown, fieldPermissions: unknown): DbRole {
+  return {
+    id,
+    permissions: asNested(permissions),
+    fieldPermissions: asFieldNested(fieldPermissions),
+  };
+}
+
+/** Explicit entity entry wins; the `*` key is the role default for every other entity. */
+function roleLevel(role: DbRole, entity: string, action: AclAction): AclRoleLevel {
+  const entry = role.permissions[entity] ?? role.permissions[ENTITY_WILDCARD];
+  if (!entry) return 'no';
+  return toLevel(entry[action], 'no');
+}
+
+function toLevel(value: string | undefined, fallback: AclRoleLevel): AclRoleLevel {
+  return isLevel(value) ? value : fallback;
+}
+
+function isLevel(value: unknown): value is AclRoleLevel {
+  return value === 'yes' || value === 'all' || value === 'team' || value === 'own' || value === 'no';
+}
+
+/**
+ * Builds (and memoises per request) an AclEvaluator holding the DB roles with the
+ * wildcard already expanded for `entity`, so record scoping can be delegated to
+ * the shared @carocrm/acl engine.
+ */
+function evaluatorFor(snapshot: AclSnapshot, entity: string): AclEvaluator {
+  const cached = snapshot.evaluators.get(entity);
+  if (cached) return cached;
+
+  const evaluator = new AclEvaluator();
+  for (const role of snapshot.roles) {
+    const actions: Record<string, AclRoleLevel> = {};
+    for (const action of ACL_ACTION_LIST) {
+      actions[action] = roleLevel(role, entity, action);
+    }
+    const fieldEntry = role.fieldPermissions[entity] ?? role.fieldPermissions[ENTITY_WILDCARD] ?? {};
+    const fieldPermissions: Record<string, Record<string, AclRoleLevel>> = {};
+    for (const [field, actionsByField] of Object.entries(fieldEntry)) {
+      if (!actionsByField) continue;
+      const normalized: Record<string, AclRoleLevel> = {};
+      for (const action of ['read', 'edit'] as const) {
+        normalized[action] = toLevel(actionsByField[action], 'all');
+      }
+      fieldPermissions[toCamelCase(field)] = normalized;
+    }
+    evaluator.registerRole(role.id, { [entity]: actions }, { [entity]: fieldPermissions });
+  }
+  snapshot.evaluators.set(entity, evaluator);
+  return evaluator;
+}
+
+function asNested(value: unknown): RolePermissions {
+  if (typeof value !== 'object' || value === null) return {};
+  const out: Record<string, Record<string, string | undefined>> = {};
+  for (const [entity, actions] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof actions !== 'object' || actions === null) continue;
+    const entry: Record<string, string | undefined> = {};
+    for (const [action, level] of Object.entries(actions as Record<string, unknown>)) {
+      entry[action] = typeof level === 'string' ? level : undefined;
+    }
+    out[entity] = entry;
+  }
+  return out;
+}
+
+function asFieldNested(value: unknown): FieldPermissions {
+  if (typeof value !== 'object' || value === null) return {};
+  const out: Record<string, Record<string, Record<string, string | undefined> | undefined>> = {};
+  for (const [entity, fields] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof fields !== 'object' || fields === null) continue;
+    const entry: Record<string, Record<string, string | undefined> | undefined> = {};
+    for (const [field, actions] of Object.entries(fields as Record<string, unknown>)) {
+      if (typeof actions !== 'object' || actions === null) continue;
+      const normalized: Record<string, string | undefined> = {};
+      for (const [action, level] of Object.entries(actions as Record<string, unknown>)) {
+        normalized[action] = typeof level === 'string' ? level : undefined;
+      }
+      entry[field] = normalized;
+    }
+    out[entity] = entry;
+  }
+  return out;
+}
