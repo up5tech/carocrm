@@ -295,6 +295,47 @@ export interface SchemaChangesTable {
   applied_at: Date | null;
 }
 
+/** Saved list filter (PLAN §32.2): named where-clause owned by a user, optionally shared. */
+export interface SavedFiltersTable {
+  id: string;
+  name: string;
+  entity_type: string;
+  user_id: string | null;
+  criteria: unknown;
+  visibility: string;
+  is_shared: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Dashboard shell (PLAN §33): layout owned by a user, optionally shared. */
+export interface DashboardsTable {
+  id: string;
+  name: string;
+  user_id: string | null;
+  config: unknown;
+  layout: unknown;
+  is_shared: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/**
+ * Dashlet widget (PLAN §33): one configured view on a dashboard. `config` carries the
+ * dashlet kind (list | chart | kpi) plus its entity/filter/metric definition; the API
+ * executes it through the Query Engine — never raw SQL from config.
+ */
+export interface DashletsTable {
+  id: string;
+  dashboard_id: string;
+  name: string;
+  kind: string;
+  position: number;
+  config: unknown;
+  created_at: Date;
+  modified_at: Date;
+}
+
 /** One row per recipient of one Email record (PLAN §28.3 delivery status). */
 export interface EmailDeliveriesTable {
   id: string;
@@ -360,6 +401,9 @@ export interface Database {
   job_logs: JobLogsTable;
   scheduled_jobs: ScheduledJobsTable;
   schema_changes: SchemaChangesTable;
+  saved_filters: SavedFiltersTable;
+  dashboards: DashboardsTable;
+  dashlets: DashletsTable;
 }
 
 export type Db = Kysely<Database>;

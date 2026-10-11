@@ -32,6 +32,7 @@ import { JOB_CONTROLLERS, JOB_PROVIDERS } from './jobs/index.js';
 import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
 import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.service.js';
+import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
 import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, STREAM_PROVIDERS, StreamUpdateHookService } from './stream/index.js';
 
@@ -55,6 +56,9 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     ...JOB_CONTROLLERS,
     // `/api/v1/Email/action/...` and `/Email/:id/deliveries` must be matched before `:entity`.
     ...EMAIL_CONTROLLERS,
+    // Phase 12: `/api/v1/Search`, `/SavedFilter`, `/Dashboard` static prefixes plus
+    // `:entity/action/{import,export}` — all before the generic `:entity` wildcard.
+    ...SEARCH_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
     ...ENTITY_CONTROLLERS,
   ],
@@ -72,6 +76,7 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     ...JOB_PROVIDERS,
     ...EMAIL_PROVIDERS,
     ...LOGIC_PROVIDERS,
+    ...SEARCH_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
     ...AUDIT_PROVIDERS,

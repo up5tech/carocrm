@@ -113,6 +113,18 @@ function simpleQuery(params: Record<string, string | number | undefined>): strin
   return encoded === '' ? '' : `?${encoded}`;
 }
 
+function searchQuery(params: ListParams & { q?: string | undefined }): string {
+  const query = new URLSearchParams();
+  if (params.q) query.set('q', params.q);
+  if (params.where && params.where.length > 0) query.set('where', JSON.stringify(params.where));
+  if (params.orderBy) query.set('orderBy', params.orderBy);
+  if (params.offset !== undefined) query.set('offset', String(params.offset));
+  if (params.maxSize !== undefined) query.set('maxSize', String(params.maxSize));
+  if (params.select && params.select.length > 0) query.set('select', params.select.join(','));
+  const encoded = query.toString();
+  return encoded === '' ? '' : `?${encoded}`;
+}
+
 export interface StreamUser {
   userId: string;
   userName: string;
@@ -172,6 +184,55 @@ export interface CalendarResult {
   count: number;
 }
 
+
+export interface SavedFilterRow {
+  id: string;
+  name: string;
+  entityType: string;
+  userId: string | null;
+  criteria: Record<string, unknown>[];
+  visibility: string;
+  isShared: boolean;
+  createdAt: string;
+  modifiedAt: string;
+}
+
+export interface GlobalSearchResult {
+  query: string;
+  total: number;
+  offset: number;
+  count: number;
+  list: { entityType: string; record: RecordData }[];
+}
+
+export interface ImportResult {
+  entity: string;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: { row: number; message: string }[];
+  ids: string[];
+}
+
+export interface DashletRow {
+  id: string;
+  name: string;
+  kind: string;
+  position: number;
+  config: Record<string, unknown>;
+}
+
+export interface DashboardRow {
+  id: string;
+  name: string;
+  userId: string | null;
+  config: Record<string, unknown>;
+  layout: unknown[];
+  isShared: boolean;
+  dashlets: DashletRow[];
+  createdAt: string;
+  modifiedAt: string;
+}
 
 export interface JobRow {
   id: string;
@@ -339,4 +400,55 @@ export const api = {
   runScheduleNow: (id: string) => request<JobRow>(`/ScheduledJob/${encodeURIComponent(id)}/action/runNow`, { method: 'POST' }),
   previewCron: (scheduling: string) =>
     request<{ valid: boolean; next: string[] }>('/ScheduledJob/action/preview', { method: 'POST', body: JSON.stringify({ scheduling }) }),
+
+  globalSearch: (params: { q: string; entities?: string | undefined; limit?: number | undefined; offset?: number | undefined }) =>
+    request<GlobalSearchResult>(
+      `/Search${simpleQuery({ q: params.q, entities: params.entities, limit: params.limit, offset: params.offset })}`,
+    ),
+  entitySearch: (entity: string, params: ListParams & { q?: string | undefined }) =>
+    request<ListResult>(`/Search/${encodeURIComponent(entity)}${searchQuery(params)}`),
+
+  savedFilters: (entityType?: string | undefined) =>
+    request<SavedFilterRow[]>(`/SavedFilter${simpleQuery({ entityType })}`),
+  savedFilter: (id: string) => request<SavedFilterRow>(`/SavedFilter/${encodeURIComponent(id)}`),
+  createSavedFilter: (input: { name: string; entityType: string; criteria: Record<string, unknown>[]; visibility?: string | undefined }) =>
+    request<SavedFilterRow>('/SavedFilter', { method: 'POST', body: JSON.stringify(input) }),
+  updateSavedFilter: (id: string, input: Partial<{ name: string; entityType: string; criteria: Record<string, unknown>[]; visibility: string }>) =>
+    request<SavedFilterRow>(`/SavedFilter/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deleteSavedFilter: (id: string) => request<unknown>(`/SavedFilter/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  runSavedFilter: (id: string, params: ListParams = {}) =>
+    request<{ filter: SavedFilterRow; result: ListResult }>(`/SavedFilter/${encodeURIComponent(id)}/action/run`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  importCsv: (entity: string, csv: string, updateOnName = false) =>
+    request<ImportResult>(`/${encodeURIComponent(entity)}/action/import${updateOnName ? '?updateOnName=true' : ''}`, {
+      method: 'POST',
+      body: JSON.stringify({ csv }),
+    }),
+  exportColumns: (entity: string) =>
+    request<{ entity: string; columns: { name: string; type: string }[] }>(`/${encodeURIComponent(entity)}/action/exportColumns`),
+
+  dashboards: () => request<DashboardRow[]>('/Dashboard'),
+  dashboard: (id: string) => request<DashboardRow>(`/Dashboard/${encodeURIComponent(id)}`),
+  createDashboard: (input: { name: string; layout?: unknown[] | undefined; config?: Record<string, unknown> | undefined; isShared?: boolean | undefined }) =>
+    request<DashboardRow>('/Dashboard', { method: 'POST', body: JSON.stringify(input) }),
+  updateDashboard: (id: string, input: Partial<{ name: string; layout: unknown[]; config: Record<string, unknown>; isShared: boolean }>) =>
+    request<DashboardRow>(`/Dashboard/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deleteDashboard: (id: string) => request<unknown>(`/Dashboard/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  createDashlet: (dashboardId: string, input: { name: string; kind: string; position?: number | undefined; config: Record<string, unknown> }) =>
+    request<DashletRow>(`/Dashboard/${encodeURIComponent(dashboardId)}/dashlets`, { method: 'POST', body: JSON.stringify(input) }),
+  updateDashlet: (dashboardId: string, dashletId: string, input: Partial<{ name: string; kind: string; position: number; config: Record<string, unknown> }>) =>
+    request<DashletRow>(`/Dashboard/${encodeURIComponent(dashboardId)}/dashlets/${encodeURIComponent(dashletId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  deleteDashlet: (dashboardId: string, dashletId: string) =>
+    request<unknown>(`/Dashboard/${encodeURIComponent(dashboardId)}/dashlets/${encodeURIComponent(dashletId)}`, { method: 'DELETE' }),
+  runDashlet: (dashboardId: string, dashletId: string) =>
+    request<Record<string, unknown>>(`/Dashboard/${encodeURIComponent(dashboardId)}/dashlets/${encodeURIComponent(dashletId)}/action/run`, {
+      method: 'POST',
+      body: '{}',
+    }),
 };

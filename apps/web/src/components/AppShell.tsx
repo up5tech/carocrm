@@ -1,4 +1,4 @@
-import { AppstoreOutlined, CalendarOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, SearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, CalendarOutlined, DashboardOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, SearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
@@ -22,6 +22,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const navItems = useMemo<MenuItems>(() => {
     const groups: MenuItems = [{ key: '/home', icon: <AppstoreOutlined />, label: <Link to="/home">Home</Link> }];
+    groups.push({ key: '/search', icon: <SearchOutlined />, label: <Link to="/search">Search</Link> });
+    groups.push({ key: '/dashboards', icon: <DashboardOutlined />, label: <Link to="/dashboards">Dashboards</Link> });
     groups.push({ key: '/stream', icon: <NotificationOutlined />, label: <Link to="/stream">Stream</Link> });
     groups.push({ key: '/calendar', icon: <CalendarOutlined />, label: <Link to="/calendar">Calendar</Link> });
 
@@ -79,7 +81,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
         </span>
-        <Input className="lizant-header-search" prefix={<SearchOutlined />} placeholder="Search records" variant="filled" />
+        <Input
+          className="lizant-header-search"
+          prefix={<SearchOutlined />}
+          placeholder="Search records"
+          variant="filled"
+          onPressEnter={(event) => {
+            const q = (event.target as HTMLInputElement).value.trim();
+            if (q !== '') navigate(`/search?q=${encodeURIComponent(q)}`);
+          }}
+        />
         <div className="lizant-header-actions">
           <Dropdown menu={{ items: userMenu }} trigger={['click']}>
             <span className="lizant-avatar" title={principal?.userName}>
