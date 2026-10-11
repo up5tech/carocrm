@@ -6,10 +6,13 @@ The engineering plan lives in [PLAN.md](PLAN.md).
 
 **Current state: CRM Kernel Alpha + generic React UI (PLAN §73, tasks 01–20) with stream,
 calendar, the PLAN §21–§22 dynamic logic + formula engine, the PLAN §23 hook phases +
-domain-event bus and the PLAN §24 job system (progress, logs, cancellation, admin UI).**
-Backend: metadata engine, entity/query/ACL engines, attachments, audit, jobs, sandboxed formula
-evaluation, declarative record rules, entity lifecycle hooks, a transactional-outbox event bus and
-a BullMQ background-job runner with progress, logs and cancellation.
+domain-event bus, the PLAN §24 job system (progress, logs, cancellation, admin UI) and the
+PLAN §25 attachment + file-storage layer (streaming uploads, S3/MinIO, malware-scan hook,
+chunked upload).**
+Backend: metadata engine, entity/query/ACL engines, attachments over a pluggable storage port,
+audit, jobs, sandboxed formula evaluation, declarative record rules, entity lifecycle hooks, a
+transactional-outbox event bus and a BullMQ background-job runner with progress, logs and
+cancellation.
 Frontend (`apps/web`): metadata-driven login, navigation, list/detail/edit views, the
 Entity Manager admin UI (including the rule builder), stream panel, calendar and the Jobs admin page. Email,
 import/export, dashboards, workflows, BPM, reports and portals are not implemented yet.
@@ -58,6 +61,9 @@ docs/           module guide (runtime rules), reference, operations
 - `POST /api/v1/:entity/:id/restore`, `POST /api/v1/:entity/action/massUpdate|massDelete`
 - `GET|PUT|DELETE /api/v1/:entity/:id/:relation[/:relatedId]`
 - `POST /api/v1/Attachment/upload`, `GET /api/v1/Attachment/:id/file`, `GET /api/v1/AuditLog`
+- `GET /api/v1/Attachment/action/info`, `GET /api/v1/Attachment/:id/url` (object storage only),
+  `POST /api/v1/AttachmentUpload/init`, `POST /api/v1/AttachmentUpload/:id/part`,
+  `GET /api/v1/AttachmentUpload/:id`, `POST /api/v1/AttachmentUpload/:id/complete|abort`
 - `GET /api/v1/OpenApi`, `GET /health/live`, `GET /health/ready`
 
 Auth: `Authorization: Bearer <jwt>`, `Authorization: ApiKey <keyId>:<secret>`, or the

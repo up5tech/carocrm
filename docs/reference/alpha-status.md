@@ -2,7 +2,8 @@
 
 Date: 2026-10-10. Scope agreed with the user: **CRM Kernel Alpha only** (PLAN tasks 01–16, 19–20 of §87).
 Tasks 17–18 (generic React UI + Entity Manager) were completed afterwards, together with stream,
-calendar and the PLAN §21–§22 dynamic logic + formula engine (see the sections at the end of this file);
+calendar and the PLAN §21–§22 dynamic logic + formula engine, §23 hooks + domain events, §24 jobs and
+§25 attachments/file storage (see the sections at the end of this file);
 email, import/export, dashboards, extension SDK, workflow, reports, BPM and portal remain
 unimplemented; see PLAN §72 for the remaining priority matrix.
 
@@ -39,11 +40,11 @@ pnpm db:seed          # applies migrations and seeds admin/roles/metadata into t
 pnpm lint             # eslint, 0 warnings allowed
 pnpm typecheck        # tsc --noEmit over the whole workspace
 pnpm -r build         # all packages + api + worker
-npx vitest run        # 212 tests: 153 API/integration (apps/api/test) + 59 formula unit tests; runs on the configured DATABASE_URL, no extra database
-bash scripts/e2e-smoke.sh   # HTTP end-to-end checks against a booted server
-bash scripts/worker-smoke.sh # 22 checks: outbox, BullMQ jobs, cron, graceful shutdown, job progress/logs/cancellation
+npx vitest run        # 250 tests: 170 API/integration (apps/api/test) + 80 package unit (formula 59, files 21); runs on the configured DATABASE_URL, no extra database
+bash scripts/e2e-smoke.sh   # 68 checks: HTTP end-to-end, incl. attachments, scan hook and chunked upload
+bash scripts/worker-smoke.sh # 26 checks: outbox, BullMQ jobs, cron, graceful shutdown, job progress/logs/cancellation, upload cleanup
 npx playwright test    # 10 browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic/jobs); starts API+SPA itself
-pnpm --filter @carocrm/worker test  # 87 worker tests (jobs, scheduler, outbox, reminder job, domain-event subscribers)
+pnpm --filter @carocrm/worker test  # 91 worker tests (jobs, scheduler, outbox, reminder job, upload cleanup, domain-event subscribers)
 ```
 
 ## Deviations from PLAN (deliberate, for Alpha)
@@ -146,6 +147,36 @@ parts of §24 that were missing — progress, logs, cancellation, the job API an
   enable / disable / run-now and live cron validation.
 - Verification: 13 API tests (`apps/api/test/jobs.test.ts`), 12 new worker tests, 2 browser specs,
   and 8 new checks in `scripts/worker-smoke.sh` (adoption, progress, logs, cancelled-never-starts).
+
+## Attachments and file storage (PLAN §25, added 2026-10-11)
+
+The attachment module existed as a single-request, buffer-in-memory upload on local disk. This round
+turned it into the storage layer PLAN §25 describes:
+
+- `packages/files` now owns the port (`FileStorage`: `put/get/openRead/delete/exists/signDownloadUrl?`)
+  with two drivers — local disk and S3-compatible (S3 + MinIO via `S3_ENDPOINT`/`S3_FORCE_PATH_STYLE`).
+  Both stream in and out; `put` takes a `Buffer` or a `Readable`.
+- Uploads stream through `StreamProbe`, which sniffs the head, counts bytes and hashes sha256 in one
+  pass. The ceiling is applied to the multipart parser per request **and** to the probe, and
+  `file.truncated` is checked afterwards — that last part fixed a real hole: a body cut at the
+  transport limit used to be stored as a complete file of exactly the maximum size.
+- Malware scanning hook: `SignatureScanner` (EICAR, executable magic behind a benign MIME type, NUL in
+  declared text, non-image served as `image/*`), `CompositeScanner` fails closed, a ClamAV scanner
+  plugs in behind `MALWARE_SCANNER_TOKEN`.
+- Read path enforces admin / uploader / parent-ACL per attachment, on both `GET /Attachment/:id/file`
+  and `GET /Attachment/:id`; `GET /Attachment/action/info` tells the UI the driver, ceiling and scanner.
+- Chunked upload for large files: `/api/v1/AttachmentUpload` init → part (any order) → complete. The
+  `parts` JSONB ledger makes a retried chunk replace rather than double count, completion requires
+  contiguous chunks and an exact total, and assembly replays the parts through the normal upload path.
+- Abandoned reservations are cleaned by the new `system.cleanupUploads` worker job (hourly in the seed).
+- Migrations: `004_file_uploads.sql` (reservations) and `005_file_upload_parts.sql` (the chunk ledger,
+  additive `ALTER … ADD COLUMN IF NOT EXISTS` because `004` was already applied to the dev database).
+- Not done here: no attachment UI (no file field/panel in the SPA) and `PARENT_ACL_CHECK_TOKEN` is
+  still the permissive default, so parent-record permission is not enforced yet.
+- Verification: 17 new API tests (`apps/api/test/attachments-storage.test.ts`), 21 package tests
+  (storage/S3/scanner), 4 worker tests, 19 new `scripts/e2e-smoke.sh` checks, 4 new
+  `scripts/worker-smoke.sh` checks; totals moved to 250 vitest / 91 worker / 68 + 26 smoke checks and
+  10 Playwright specs still green.
 
 ## Web UI theme (Lizant)
 

@@ -134,9 +134,14 @@ export function authHeader(token: string): Record<string, string> {
 
 export interface MultipartPartSpec {
   name: string;
-  data: string;
+  /** Text parts may be strings; binary parts must be Buffers (strings are encoded as UTF-8). */
+  data: string | Buffer;
   filename?: string;
   contentType?: string;
+}
+
+function toBuffer(data: string | Buffer): Buffer {
+  return typeof data === 'string' ? Buffer.from(data, 'utf8') : Buffer.from(data);
 }
 
 /** Build a raw multipart/form-data payload (text fields first, then files). */
@@ -156,7 +161,7 @@ export function buildMultipart(
     } else {
       head += '\r\n';
     }
-    chunks.push(Buffer.from(head, 'utf8'), Buffer.from(part.data, 'utf8'), Buffer.from('\r\n', 'utf8'));
+    chunks.push(Buffer.from(head, 'utf8'), toBuffer(part.data), Buffer.from('\r\n', 'utf8'));
   }
   chunks.push(Buffer.from(`--${boundary}--\r\n`, 'utf8'));
   return {

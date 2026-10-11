@@ -13,6 +13,7 @@ import { JobConsumer } from './queue/job-consumer.js';
 import { BullMqJobQueue } from './queue/job-queue.js';
 import { JobRepository } from './queue/job-repository.js';
 import { Scheduler } from './schedule/scheduler.js';
+import { createStorage } from './storage.js';
 
 /**
  * Composition root of the worker process.
@@ -50,7 +51,12 @@ export class WorkerApplication {
     private readonly log: Logger,
   ) {
     this.jobRegistry = new JobRegistry();
-    registerSystemJobs(this.jobRegistry, { db: this.db, log: this.log });
+    registerSystemJobs(this.jobRegistry, {
+      db: this.db,
+      log: this.log,
+      storage: createStorage(this.config),
+      uploadExpiryHours: this.config.uploadExpiryHours,
+    });
 
     const outbox = createKernelOutboxSetup(this.log);
     this.outboxRegistry = outbox.registry;

@@ -180,6 +180,46 @@ check 'attachment checksum returned' true "$([ -n "$(jq_get .checksum)" ] && ech
 curl -s -m 20 -o "$TMP/download.txt" -w '%{http_code}' "$BASE/api/v1/Attachment/${ATT_ID}/file" -H "authorization: $ATTACH_TOKEN" >/dev/null
 check 'attachment downloads byte-identical' 'e2e attachment payload' "$(cat "$TMP/download.txt")"
 
+# --- storage capabilities and file safety (PLAN §25)
+check 'GET /Attachment/action/info 200' 200 "$(req GET /api/v1/Attachment/action/info "$TOKEN")"
+check 'info reports the local driver' local "$(jq_get .driver)"
+check 'info reports the size ceiling' true "$([ "$(jq_get .maxUploadBytes)" -gt 0 ] && echo true || echo false)"
+check 'info reports the malware scanner' true "$([ -n "$(jq_get .scanProvider)" ] && echo true || echo false)"
+check 'local storage has no signed download URL' 403 "$(req GET "/api/v1/Attachment/${ATT_ID}/url" "$TOKEN")"
+check 'anonymous download refused' 401 "$(req GET "/api/v1/Attachment/${ATT_ID}/file")"
+
+printf '%s\n' 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' >"$TMP/eicar.txt"
+code=$(curl -s -m 20 -o "$TMP/body" -w '%{http_code}' -X POST "$BASE/api/v1/Attachment/upload" -H "authorization: $TOKEN" -F "file=@$TMP/eicar.txt" -F 'type=text/plain')
+check 'EICAR test file rejected by the scan hook' 422 "$code"
+code=$(curl -s -m 20 -o "$TMP/body" -w '%{http_code}' -X POST "$BASE/api/v1/Attachment/upload" -H "authorization: $TOKEN" -F "file=@$TMP/upload.txt;filename=payload.exe")
+check 'blocked executable extension rejected' 422 "$code"
+
+# --- chunked upload: reserve, parts out of order, assemble into one attachment
+head -c 700 /dev/zero | tr '\0' 'a' >"$TMP/part0"
+head -c 300 /dev/zero | tr '\0' 'b' >"$TMP/part1"
+TOTAL=$(( $(wc -c <"$TMP/part0") + $(wc -c <"$TMP/part1") ))
+code=$(req POST /api/v1/AttachmentUpload/init "$TOKEN" "{\"name\":\"chunked.txt\",\"mimeType\":\"text/plain\",\"totalSize\":$TOTAL}")
+check 'POST /AttachmentUpload/init 200' 200 "$code"
+UP_ID="$(jq_get .id)"
+check 'reservation reports the chunk ceiling' true "$([ "$(jq_get .chunkMaxSize)" -gt 0 ] && echo true || echo false)"
+code=$(curl -s -m 20 -o "$TMP/body" -w '%{http_code}' -X POST "$BASE/api/v1/AttachmentUpload/${UP_ID}/part" -H "authorization: $TOKEN" -F "index=1" -F "file=@$TMP/part1;type=application/octet-stream")
+check 'POST part (second chunk first) 200' 200 "$code"
+code=$(req POST "/api/v1/AttachmentUpload/${UP_ID}/complete" "$TOKEN")
+check 'complete with a gap refused' 422 "$code"
+code=$(curl -s -m 20 -o "$TMP/body" -w '%{http_code}' -X POST "$BASE/api/v1/AttachmentUpload/${UP_ID}/part" -H "authorization: $TOKEN" -F "index=0" -F "file=@$TMP/part0;type=application/octet-stream")
+check 'POST part (first chunk) 200' 200 "$code"
+check 'progress reports every reserved byte' "$TOTAL" "$(jq_get .received)"
+code=$(req POST "/api/v1/AttachmentUpload/${UP_ID}/complete" "$TOKEN")
+check 'complete assembles one attachment 201' 201 "$code"
+CHUNK_ID="$(jq_get .id)"
+check 'assembled size matches the parts' "$TOTAL" "$(jq_get .size)"
+curl -s -m 20 -o "$TMP/chunked.txt" "$BASE/api/v1/Attachment/${CHUNK_ID}/file" -H "authorization: $TOKEN" >/dev/null
+check 'assembled bytes are in chunk order' true "$([ "$(cat "$TMP/chunked.txt" | tr -d 'b' | wc -c)" -eq 700 ] && [ "$(wc -c <"$TMP/chunked.txt")" -eq "$TOTAL" ] && echo true || echo false)"
+code=$(req POST "/api/v1/AttachmentUpload/${UP_ID}/complete" "$TOKEN")
+check 'completing twice refused' 422 "$code"
+
+check 'aborted upload keeps its status' aborted "$(req POST /api/v1/AttachmentUpload/init "$TOKEN" '{"name":"aborted.txt","mimeType":"text/plain","totalSize":10}' >/dev/null; jq_get .id | { read -r uid; req POST "/api/v1/AttachmentUpload/${uid}/abort" "$TOKEN" >/dev/null; req GET "/api/v1/AttachmentUpload/${uid}" "$TOKEN" >/dev/null; jq_get .status; })"
+
 echo '--- audit'
 audit_code=$(req GET "/api/v1/AuditLog?entityType=Contact&maxSize=50" "$TOKEN")
 check 'GET /AuditLog 200 for admin' 200 "$audit_code"

@@ -1,3 +1,6 @@
+import type { Readable } from 'node:stream';
+
+import type { FileRef, FileStorage, PutFileInput } from '@carocrm/files';
 import { JobRegistry } from '@carocrm/jobs';
 import { describe, expect, it } from 'vitest';
 
@@ -9,6 +12,9 @@ import {
   createSystemJobRegistry,
   DEFAULT_OUTBOX_RETENTION_DAYS,
   DEFAULT_SESSION_RETENTION_DAYS,
+  DEFAULT_UPLOAD_BATCH,
+  DEFAULT_UPLOAD_EXPIRY_HOURS,
+  EXPIRED_UPLOADS_SQL,
   PRUNE_SESSIONS_SQL,
   registerSystemJobs,
   REMINDER_INSERT_SQL,
@@ -19,6 +25,35 @@ import {
 
 const OUTBOX_FRAGMENT = 'delete from outbox_events';
 const SESSIONS_FRAGMENT = 'delete from user_sessions';
+const EXPIRED_FRAGMENT = 'from file_uploads';
+const CLAIM_FRAGMENT = 'update file_uploads';
+
+/** Storage double that records the keys the cleanup removed. */
+class FakeStorage implements FileStorage {
+  readonly driver = 'local' as const;
+  readonly supportsSignedUrls = false;
+  readonly deletedKeys: string[] = [];
+
+  async put(input: PutFileInput): Promise<FileRef> {
+    return { key: input.key, size: 0, driver: this.driver };
+  }
+
+  async get(): Promise<Buffer> {
+    return Buffer.alloc(0);
+  }
+
+  async openRead(): Promise<Readable> {
+    throw new Error('these tests never read stored bytes');
+  }
+
+  async delete(key: string): Promise<void> {
+    this.deletedKeys.push(key);
+  }
+
+  async exists(): Promise<boolean> {
+    return false;
+  }
+}
 
 function harness() {
   const db = new FakeDb();
@@ -148,6 +183,67 @@ describe('system.pruneSessions', () => {
     await registry.get('system.pruneSessions')?.(jobContext({ retentionDays: -5 }));
 
     expect(db.lastCall(SESSIONS_FRAGMENT)?.params).toEqual([30]);
+  });
+});
+
+describe('system.cleanupUploads', () => {
+  it('claims an expired upload and deletes its part files', async () => {
+    const db = new FakeDb();
+    const logger = createTestLogger();
+    const storage = new FakeStorage();
+    const registry = createSystemJobRegistry({ db, log: logger.log, storage, uploadExpiryHours: 12 });
+
+    db.returns(EXPIRED_FRAGMENT, [{ id: 'u1', storage_prefix: 'uploads/u1', parts: { 0: { size: 5 }, 2: { size: 7 } } }]);
+    db.returns(CLAIM_FRAGMENT, [{ id: 'u1' }]);
+
+    const outcome = await registry.get('system.cleanupUploads')?.(jobContext({}));
+
+    expect(outcome?.status).toBe('completed');
+    expect(outcome?.result).toEqual({ uploads: 1, parts: 2 });
+    expect(storage.deletedKeys).toEqual(['uploads/u1/part-000000', 'uploads/u1/part-000002']);
+    const call = db.lastCall(EXPIRED_FRAGMENT);
+    expect(call?.params[1]).toBe(DEFAULT_UPLOAD_BATCH);
+    expect(call?.params[0]).toBeInstanceOf(Date);
+    expect(EXPIRED_UPLOADS_SQL.toLowerCase()).toContain("status = 'open'");
+  });
+
+  it('skips an upload another worker already claimed', async () => {
+    const db = new FakeDb();
+    const storage = new FakeStorage();
+    const registry = createSystemJobRegistry({ db, log: createTestLogger().log, storage });
+
+    db.returns(EXPIRED_FRAGMENT, [{ id: 'u2', storage_prefix: 'uploads/u2', parts: { 0: { size: 5 } } }]);
+    db.returns(CLAIM_FRAGMENT, [], 0);
+
+    const outcome = await registry.get('system.cleanupUploads')?.(jobContext({}));
+
+    expect(outcome?.result).toEqual({ uploads: 0, parts: 0 });
+    expect(storage.deletedKeys).toEqual([]);
+  });
+
+  it('waits the grace window after expires_at and keeps the default when the override is bogus', async () => {
+    const db = new FakeDb();
+    const registry = createSystemJobRegistry({ db, log: createTestLogger().log, storage: new FakeStorage() });
+    db.returns(EXPIRED_FRAGMENT, []);
+
+    const before = Date.now();
+    await registry.get('system.cleanupUploads')?.(jobContext({ expiryHours: 2 }));
+    const cutoff = db.lastCall(EXPIRED_FRAGMENT)?.params[0];
+    expect(cutoff).toBeInstanceOf(Date);
+    const hours = (before - (cutoff as Date).getTime()) / 3_600_000;
+    expect(hours).toBeGreaterThan(1.9);
+    expect(hours).toBeLessThan(2.1);
+
+    await registry.get('system.cleanupUploads')?.(jobContext({ expiryHours: -1 }));
+    const fallback = db.lastCall(EXPIRED_FRAGMENT)?.params[0];
+    expect(fallback).toBeInstanceOf(Date);
+    const fallbackHours = (before - (fallback as Date).getTime()) / 3_600_000;
+    expect(fallbackHours).toBeCloseTo(DEFAULT_UPLOAD_EXPIRY_HOURS, 0);
+  });
+
+  it('is not installed when the process has no attachment storage', () => {
+    const registry = createSystemJobRegistry({ db: new FakeDb(), log: createTestLogger().log });
+    expect(registry.get('system.cleanupUploads')).toBeUndefined();
   });
 });
 

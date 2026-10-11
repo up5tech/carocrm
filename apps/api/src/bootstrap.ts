@@ -104,8 +104,10 @@ export async function createApp(
   });
   await app.register(asPlugin(helmet), { global: true });
   await app.register(asPlugin(rateLimit), { max: config.rateLimitMax, timeWindow: '1 minute', global: true });
+  // One file per request; the attachment service enforces the same ceiling while streaming, so a
+  // larger body fails with 413 instead of filling the disk (PLAN §25 size limits).
   await app.register(asPlugin(multipart), {
-    limits: { fileSize: 25 * 1024 * 1024, files: 10 },
+    limits: { fileSize: config.uploadMaxMb * 1024 * 1024, files: 1 },
   });
 
   app.useGlobalFilters(new GlobalExceptionFilter());

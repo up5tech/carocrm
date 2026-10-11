@@ -187,6 +187,49 @@ HTTP request → EntityManager phases → PostgresRecordStore.withTransaction
   around each action, and `purgeEntityEvents()` in `apps/api/test/support/boot-api.ts` removes the
   domain events an API suite generated (no worker runs during vitest).
 
+## Attachments and file storage (PLAN §25)
+
+- **Storage port** (`packages/files`): `FileStorage = { driver, supportsSignedUrls, put, get,
+  openRead, delete, exists, signDownloadUrl? }`. Keys are POSIX-relative paths validated by
+  `assertSafeStorageKey` (no absolute paths, no `.`/`..`, restricted segment charset) — every driver
+  re-checks that the resolved target stays inside its own root. `put` accepts a `Buffer` **or** a
+  `Readable`; both drivers stream, so an upload is never buffered whole in the process.
+- **Drivers**: `LocalFsStorage` (`STORAGE_DRIVER=local`, root `STORAGE_ROOT`) and `S3FileStorage`
+  (`STORAGE_DRIVER=s3`, `S3_BUCKET/REGION/ENDPOINT/ACCESS_KEY_ID/SECRET_ACCESS_KEY/FORCE_PATH_STYLE`).
+  MinIO is the s3 driver with an endpoint and path-style addressing; a missing bucket/region fails at
+  boot, not on the first upload. Only the s3 driver sets `supportsSignedUrls`, because local disk has
+  no public read path.
+- **Upload pipeline**: `StreamProbe` (a `Transform`) captures the head for sniffing, counts bytes and
+  hashes sha256 in one pass, and raises `OversizedUploadError` the moment the ceiling is crossed. The
+  multipart parser is then given the *same* ceiling per request (`request.file({ limits: { fileSize } })`)
+  and `file.truncated` is checked afterwards — otherwise a body cut at the transport limit would be
+  stored as a complete file of exactly the maximum size.
+- **File safety**: blocked extensions (`.exe .sh .bat .cmd .js .jar .msi .apk .dll .so`), an allowlist
+  of MIME types plus `image/*`/`text/*`, and a malware hook (`MALWARE_SCANNER_TOKEN`). The built-in
+  `SignatureScanner` catches EICAR, executable magic behind a benign MIME type, NUL bytes in declared
+  text and non-images declared as images; `CompositeScanner` fails closed, so a broken scanner rejects
+  rather than accepts. An installation with ClamAV registers its own scanner behind the same token.
+- **Access checks** run on every read, not only on upload: admin, the uploader, or a caller whose
+  parent record passes `PARENT_ACL_CHECK_TOKEN` may download. The default checker is permissive until
+  the entity ACL is wired in — swap it in `ATTACHMENT_PROVIDERS`.
+- **Chunked uploads** (`/api/v1/AttachmentUpload`): `init` reserves `{name, mimeType, totalSize,
+  chunkSize?}` in `file_uploads`, `:id/part` takes `index` + `file` in any order, `:id/complete`
+  replays the parts in index order through the *same* attachment path (so the checks are identical),
+  `:id/abort` deletes them. The `parts` JSONB ledger records each accepted index with its size, so a
+  retried chunk replaces its bytes instead of double counting, and completion requires contiguous
+  indexes plus an exact `received == totalSize`.
+- **Expiry**: `expires_at` is stamped at init (`UPLOAD_EXPIRY_HOURS` grace). `system.cleanupUploads`
+  (hourly in `database/seed.ts`) claims rows past deadline + grace (`WHERE id = $1 AND status='open'`,
+  so two workers never fight) and deletes their part files. The job is only registered when the
+  process can reach the storage, so an API-only deployment does not advertise it.
+- **Migrations**: `004_file_uploads.sql` creates the reservation table; `005_file_upload_parts.sql`
+  adds the `parts` ledger. `004` had already been applied to the development database when the ledger
+  was designed, so the column arrived as an additive `ALTER … ADD COLUMN IF NOT EXISTS` instead of an
+  edit to an applied migration.
+- Tests: `apps/api/test/attachments-storage.test.ts` (driver info, ceilings, scan hook, per-record
+  download ACL, chunked flow), `packages/files/src/{storage,s3,scanner}/index.test.ts`, the attachment
+  block in `scripts/e2e-smoke.sh`, and section 5 of `scripts/worker-smoke.sh`.
+
 ## Test database policy (AGENTS.md §3 — mandatory)
 
 Tests run against the **configured primary database** (`DATABASE_URL` from `.env`).

@@ -15,6 +15,24 @@ const ConfigSchema = z.object({
   storageRoot: z.string().default('.data/files'),
   logLevel: z.string().default('info'),
   corsOrigins: z.string().default(''),
+  /** Storage driver for attachments: local disk, AWS S3 or a MinIO-compatible endpoint. */
+  storageDriver: z.enum(['local', 's3', 'minio']).default('local'),
+  s3Bucket: z.string().default(''),
+  s3Region: z.string().default(''),
+  /** Only used by the s3/minio drivers; empty means the SDK default endpoint. */
+  s3Endpoint: z.string().default(''),
+  s3AccessKeyId: z.string().default(''),
+  s3SecretAccessKey: z.string().default(''),
+  /** "" = derive (MinIO uses path style), otherwise an explicit true/false. */
+  s3ForcePathStyle: z.string().default(''),
+  /** Upload ceiling in megabytes, enforced while streaming (PLAN §25 file size limits). */
+  uploadMaxMb: z.coerce.number().int().min(1).max(2000).default(25),
+  /** Chunk size accepted by the chunked upload API. */
+  uploadChunkMaxMb: z.coerce.number().int().min(1).max(128).default(8),
+  /** Lifetime of a pre-signed download URL for object storage. */
+  signedUrlTtlSeconds: z.coerce.number().int().min(30).max(86_400).default(900),
+  /** 'none' turns the malware hook off; 'signature' runs the built-in scanner (PLAN §25). */
+  malwareScanMode: z.enum(['signature', 'none']).default('signature'),
   /** Global API rate limit per minute; the SPA spends many small calls per screen. */
   rateLimitMax: z.coerce.number().int().positive().default(300),
   /** BullMQ queue the API produces into; must match the worker's WORKER_QUEUE_NAME. */
@@ -24,6 +42,13 @@ const ConfigSchema = z.object({
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
+
+/** True/False from an env string; undefined when unset so a caller can apply its own default. */
+export function parseBooleanSetting(value: string): boolean | undefined {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === '') return undefined;
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+}
 
 function loadDotEnv(): void {
   let dir = process.cwd();
@@ -66,6 +91,17 @@ export function buildConfig(): AppConfig {
     logLevel: process.env.LOG_LEVEL,
     corsOrigins: process.env.CORS_ORIGINS,
     rateLimitMax: process.env.RATE_LIMIT_MAX,
+    storageDriver: process.env.STORAGE_DRIVER,
+    s3Bucket: process.env.S3_BUCKET,
+    s3Region: process.env.S3_REGION,
+    s3Endpoint: process.env.S3_ENDPOINT,
+    s3AccessKeyId: process.env.S3_ACCESS_KEY_ID,
+    s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+    s3ForcePathStyle: process.env.S3_FORCE_PATH_STYLE,
+    uploadMaxMb: process.env.UPLOAD_MAX_MB,
+    uploadChunkMaxMb: process.env.UPLOAD_CHUNK_MAX_MB,
+    signedUrlTtlSeconds: process.env.SIGNED_URL_TTL_SECONDS,
+    malwareScanMode: process.env.MALWARE_SCAN_MODE,
     jobQueueName: process.env.JOB_QUEUE_NAME,
     jobAttempts: process.env.JOB_ATTEMPTS,
     jobBackoffBaseMs: process.env.JOB_BACKOFF_BASE_MS,

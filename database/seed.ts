@@ -70,6 +70,13 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
        ON CONFLICT (id) DO NOTHING`,
     );
 
+    // Chunked-upload housekeeping (PLAN §25): part files of abandoned uploads are removed hourly.
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('cleanupUploads', 'system.cleanupUploads', '5 * * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+
     for (const entry of coreMetadata) {
       await pool.query(
         `INSERT INTO metadata_entries (scope, name, data) VALUES ($1, $2, $3)

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Logger } from '@carocrm/core/logger/index.js';
+import type { FileStorage } from '@carocrm/files';
 import type { JobContext, JobHandler } from '@carocrm/jobs';
 import { JobRegistry } from '@carocrm/jobs';
 
@@ -43,7 +44,20 @@ export const DEFAULT_SESSION_RETENTION_DAYS = 30;
 export interface SystemJobDeps {
   db: Queryable;
   log: Logger;
+  /** Storage used to delete abandoned upload parts; omit to skip that job entirely. */
+  storage?: FileStorage;
+  uploadExpiryHours?: number;
 }
+
+export interface UploadCleanupDeps extends SystemJobDeps {
+  storage: FileStorage;
+  expiryHours: number;
+}
+
+export const DEFAULT_UPLOAD_EXPIRY_HOURS = 24;
+export const DEFAULT_UPLOAD_BATCH = 200;
+
+
 
 export const CLEANUP_OUTBOX_SQL = `
   DELETE FROM outbox_events
@@ -177,11 +191,93 @@ export function sendRemindersJob(deps: SystemJobDeps): JobHandler {
 }
 
 /** Registers the kernel jobs. Modules register theirs alongside this call. */
+export const EXPIRED_UPLOADS_SQL = `
+  SELECT id, storage_prefix, parts
+    FROM file_uploads
+   WHERE status = 'open'
+     AND expires_at < $1
+   ORDER BY expires_at
+   LIMIT $2
+`;
+
+export const ABANDON_UPLOAD_SQL = `
+  UPDATE file_uploads
+     SET status = 'aborted', modified_at = now()
+   WHERE id = $1
+     AND status = 'open'
+   RETURNING id
+`;
+
+/**
+ * Abandons chunked uploads whose client never completed and deletes their part files, so an
+ * interrupted upload cannot leave bytes on the storage forever (PLAN §25). Idempotent: the row is
+ * claimed before its parts are removed, and deleting a missing part is fine.
+ *
+ * `expiryHours` is a grace window *after* `expires_at`: the reservation deadline the API stamps at
+ * init, plus this window. A client that is still assembling inside the window can complete; once
+ * it passes, the parts go and the row is marked aborted.
+ */
+export function cleanupUploadsJob(deps: UploadCleanupDeps): JobHandler {
+  return async (context: JobContext) => {
+    const expiryHours = retentionDays(context.data, 'expiryHours', deps.expiryHours);
+    const batch = retentionDays(context.data, 'batchSize', DEFAULT_UPLOAD_BATCH);
+    const cutoff = new Date(Date.now() - expiryHours * 3_600_000);
+    context.progress(10, `uploads reserved before ${cutoff.toISOString()}`);
+
+    const found = await deps.db.query(EXPIRED_UPLOADS_SQL, [cutoff, batch]);
+    let uploads = 0;
+    let parts = 0;
+    for (const row of found.rows as Array<Record<string, unknown>>) {
+      const id = String(row['id'] ?? '');
+      const prefix = String(row['storage_prefix'] ?? '');
+      if (id === '' || prefix === '') continue;
+      const claimed = await deps.db.query(ABANDON_UPLOAD_SQL, [id]);
+      if ((claimed.rowCount ?? 0) === 0) continue;
+      const indexes = partIndexes(row['parts']);
+      for (const index of indexes) {
+        await deps.storage.delete(`${prefix}/part-${String(index).padStart(6, '0')}`).catch(() => undefined);
+      }
+      parts += indexes.length;
+      uploads += 1;
+      context.log(`abandoned upload ${id} (${String(indexes.length)} parts)`, 'info');
+    }
+
+    deps.log.info({ uploads, parts, cutoff: cutoff.toISOString() }, 'upload cleanup finished');
+    return { status: 'completed', message: `Abandoned ${String(uploads)} uploads`, result: { uploads, parts } };
+  };
+}
+
+function partIndexes(value: unknown): number[] {
+  const raw = typeof value === 'string' ? safeJson(value) : value;
+  if (typeof raw !== 'object' || raw === null) return [];
+  return Object.keys(raw as Record<string, unknown>)
+    .map(Number)
+    .filter((index) => Number.isInteger(index) && index >= 0);
+}
+
+function safeJson(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 export function registerSystemJobs(registry: JobRegistry, deps: SystemJobDeps): void {
   registry.register('system.noop', noopJob());
   registry.register('system.cleanupOutbox', cleanupOutboxJob(deps));
   registry.register('system.pruneSessions', pruneSessionsJob(deps));
   registry.register('system.sendReminders', sendRemindersJob(deps));
+  // Only installed when the process can reach the attachment storage.
+  const storage = deps.storage;
+  if (storage !== undefined) {
+    registry.register('system.cleanupUploads', cleanupUploadsJob({
+      db: deps.db,
+      log: deps.log,
+      storage,
+      expiryHours: deps.uploadExpiryHours ?? DEFAULT_UPLOAD_EXPIRY_HOURS,
+    }));
+  }
 }
 
 export function createSystemJobRegistry(deps: SystemJobDeps): JobRegistry {

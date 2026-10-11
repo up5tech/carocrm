@@ -130,3 +130,31 @@ phase names and event payloads are PLAN §23.1/§23.2 plus our own design; the u
   transaction as well.
 - Outbox delivery is at-least-once with per-event retry/backoff and a `failed` dead-letter status;
   upstream runs job consumers through its own queue table.
+
+## Attachments and file storage (PLAN §25)
+
+Upstream documentation was **not reachable from this environment** while building, so the endpoint
+shapes below follow PLAN §25 and our own `attachments` table; parity with EspoCRM's attachment API
+still needs a documentation pass.
+
+- Uploaded bytes are streamed: the body never lives whole in the API process, and the size ceiling is
+  enforced twice (multipart parser + counting transform), so an oversized file is stopped mid-request
+  instead of after it lands. `UPLOAD_MAX_MB` / `UPLOAD_CHUNK_MAX_MB` configure it.
+- Every attachment stores a sha256 `checksum` computed during the same pass and returns it as
+  `x-checksum-sha256` on download. Upstream does not publish a content hash, so this is additive.
+- Pre-signed download URLs (`GET /api/v1/Attachment/:id/url`) are an **addition** and only exist for
+  S3/MinIO; local disk has no public read path and answers `FEATURE_DISABLED`, keeping downloads
+  authenticated.
+- Chunked upload (`/api/v1/AttachmentUpload`) is an **addition** — there is no public chunked upload
+  API upstream. Parts live outside the attachment table until completion, then replay through the
+  ordinary upload path, so a chunked file gets exactly the same validation as a direct one.
+  Reservations expire and `system.cleanupUploads` removes their bytes.
+- Malware scanning is a hook (`MALWARE_SCANNER_TOKEN`), as PLAN §25 asks, not a bundled vendor. The
+  built-in `SignatureScanner` covers EICAR and magic-number/MIME mismatches and fails closed.
+  **Upstream parity: unknown** — antivirus is an integration/extension there.
+- Extension and MIME filtering (`BLOCKED_EXTENSIONS`, `ALLOWED_MIME_TYPES` + `image/*`, `text/*`) is
+  ours; upstream's allowlist is per-installation and was not verifiable here.
+- Downloads enforce admin / uploader / parent-ACL access. `PARENT_ACL_CHECK_TOKEN` still defaults to
+  permissive, so parent record permission is **not yet enforced** — the seam exists, the wiring does
+  not.
+- No attachment UI yet: the SPA has no file field or panel, so uploads and downloads are API-only.

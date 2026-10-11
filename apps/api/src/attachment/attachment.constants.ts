@@ -2,18 +2,20 @@
  * Attachment module constants and cross-module tokens.
  *
  * Contract with the integrator (docs/module-guide.md):
- * - `FILE_STORAGE_TOKEN`   → `FileStorage` from `@carocrm/files`.
- * - `PARENT_ACL_CHECK_TOKEN` → `ParentAclChecker`; a permissive default is
- *   registered by the barrel so the module compiles standalone. Replace it
- *   with a real ACL-aware checker once the entity/acl modules are wired.
+ * - `FILE_STORAGE_TOKEN`     → `FileStorage` from `@carocrm/files` (local | s3 | minio).
+ * - `MALWARE_SCANNER_TOKEN`  → `MalwareScanner`; runs every upload (PLAN §25 scanning hook).
+ * - `PARENT_ACL_CHECK_TOKEN` → `ParentAclChecker`; gates uploads, downloads and metadata reads.
  */
 import type { RequestScope } from '../common/request-scope.js';
 
 export const FILE_STORAGE_TOKEN = Symbol('FILE_STORAGE');
 export const PARENT_ACL_CHECK_TOKEN = Symbol('PARENT_ACL_CHECK');
+export const MALWARE_SCANNER_TOKEN = Symbol('MALWARE_SCANNER');
 
-/** Maximum accepted upload size (25 MB). */
-export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+/** Open chunked uploads older than this are abandoned by `system.cleanupUploads`. */
+export const UPLOAD_EXPIRY_HOURS = 24;
+/** Part files of an abandoned/expired upload are deleted this long after expiry. */
+export const UPLOAD_GRACE_HOURS = 2;
 
 /** Extensions that are always rejected, regardless of MIME type. */
 export const BLOCKED_EXTENSIONS: readonly string[] = [
@@ -58,9 +60,8 @@ export function isAllowedMimeType(mimeType: string): boolean {
 }
 
 /**
- * Optional parent-read gate. The default provider always allows; the
- * integrator swaps in a checker that consults the entity ACL once the
- * entity module exposes read-permission checks.
+ * Parent-record gate for uploads, downloads and metadata reads. The default provider always
+ * allows; the integrator registers an ACL-aware checker (see AppModule).
  */
 export interface ParentAclChecker {
   canReadParent(entityType: string, recordId: string, scope: RequestScope): Promise<boolean> | boolean;

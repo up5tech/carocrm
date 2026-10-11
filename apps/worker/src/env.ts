@@ -34,6 +34,17 @@ const WorkerConfigSchema = z.object({
   schedulerIntervalMs: z.coerce.number().int().min(250).max(600000).default(30000),
   /** Seconds an idle BullMQ worker waits for a job before its blocking connection loops. */
   jobBlockingTimeoutMs: z.coerce.number().int().min(1000).max(120000).default(5000),
+  /** Attachment storage for `system.cleanupUploads` (same env keys as the API). */
+  storageDriver: z.enum(['local', 's3', 'minio']).default('local'),
+  storageRoot: z.string().default('.data/files'),
+  s3Bucket: z.string().default(''),
+  s3Region: z.string().default(''),
+  s3Endpoint: z.string().default(''),
+  s3AccessKeyId: z.string().default(''),
+  s3SecretAccessKey: z.string().default(''),
+  s3ForcePathStyle: z.string().default(''),
+  /** Open uploads older than this are abandoned by the cleanup job. */
+  uploadExpiryHours: z.coerce.number().int().min(1).max(24 * 30).default(24),
   /**
    * Auto-stop after N ms (0 = run forever). Lets smoke tests and one-shot container runs get
    * a full graceful shutdown without sending signals.
@@ -97,6 +108,15 @@ export function buildWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerC
     jobBackoffMaxMs: env.WORKER_JOB_BACKOFF_MAX_MS,
     schedulerIntervalMs: env.WORKER_SCHEDULER_INTERVAL_MS,
     jobBlockingTimeoutMs: env.WORKER_JOB_BLOCKING_TIMEOUT_MS,
+    storageDriver: env.STORAGE_DRIVER,
+    storageRoot: env.STORAGE_ROOT,
+    s3Bucket: env.S3_BUCKET,
+    s3Region: env.S3_REGION,
+    s3Endpoint: env.S3_ENDPOINT,
+    s3AccessKeyId: env.S3_ACCESS_KEY_ID,
+    s3SecretAccessKey: env.S3_SECRET_ACCESS_KEY,
+    s3ForcePathStyle: env.S3_FORCE_PATH_STYLE,
+    uploadExpiryHours: env.WORKER_UPLOAD_EXPIRY_HOURS,
     runForMs: env.WORKER_RUN_MS,
   });
 }

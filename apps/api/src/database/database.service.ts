@@ -156,6 +156,27 @@ export interface AttachmentsTable {
   created_at: Date;
 }
 
+export interface FileUploadsTable {
+  id: string;
+  created_by_id: string | null;
+  name: string;
+  mime_type: string;
+  total_size: bigint;
+  chunk_max_size: number;
+  received: bigint;
+  part_count: number;
+  parts: unknown;
+  status: string;
+  parent_type: string | null;
+  parent_id: string | null;
+  field: string | null;
+  role: string | null;
+  storage_prefix: string;
+  expires_at: Date;
+  created_at: Date;
+  modified_at: Date;
+}
+
 export interface AuditLogTable {
   id: string;
   entity_type: string;
@@ -289,6 +310,7 @@ export interface Database {
   entity_records: EntityRecordsTable;
   entity_links: EntityLinksTable;
   attachments: AttachmentsTable;
+  file_uploads: FileUploadsTable;
   audit_log: AuditLogTable;
   stream_items: StreamItemsTable;
   stream_mentions: StreamMentionsTable;

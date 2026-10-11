@@ -25,6 +25,10 @@ export NODE_ENV="${NODE_ENV:-production}"
 export LOG_LEVEL="${LOG_LEVEL:-info}"
 
 RUN_ID="smoke-worker-$(date +%Y%m%d%H%M%S)-$$"
+# Dedicated storage root for this run: the chunked-upload cleanup check writes and expects to lose
+# one part file here, and nothing outside it is touched.
+STORAGE_ROOT=".data/worker-smoke-${RUN_ID}"
+export STORAGE_ROOT
 LOG_FILE="$(mktemp -t carocrm-worker-smoke)"
 SEED_LOG="$(mktemp -t carocrm-worker-seed)"
 SIG_LOG="$(mktemp -t carocrm-worker-sig)"
@@ -154,6 +158,7 @@ purge_like() { # purge_like <id-prefix> — delete this run's rows (also used fo
   node_pg "
     DELETE FROM outbox_events WHERE id LIKE '$1%';
     DELETE FROM scheduled_jobs WHERE id LIKE '$1%';
+    DELETE FROM file_uploads WHERE id LIKE '$1%';
     DELETE FROM jobs WHERE target->>'smokeRunId' LIKE '$1%';  -- job_logs rows cascade through the FK
   " >/dev/null 2>&1 || true
 }
@@ -168,6 +173,7 @@ cleanup() {
     wait_gone "$SIG_PID" 12 || kill_tree "$SIG_PID" KILL
   fi
   purge_like "$RUN_ID"
+  rm -rf "$STORAGE_ROOT"
   rm -f "$LOG_FILE" "$SEED_LOG" "$SIG_LOG" "$PROG_LOG"
 }
 trap cleanup EXIT
@@ -176,6 +182,7 @@ worker_run() { # worker_run <script.ts> [args...] — bounded by WORKER_RUN_MS
   local script="$1"
   shift
   env DATABASE_URL="$DATABASE_URL" REDIS_URL="$REDIS_URL" LOG_LEVEL="$LOG_LEVEL" NODE_ENV="$NODE_ENV" \
+    STORAGE_ROOT="$STORAGE_ROOT" \
     WORKER_OUTBOX_POLL_INTERVAL_MS=700 WORKER_SCHEDULER_INTERVAL_MS=1000 WORKER_JOB_CONCURRENCY=2 \
     WORKER_RUN_MS="$WORKER_RUN_MS" \
     "$ROOT/apps/worker/node_modules/.bin/tsx" "$script" "$@"
@@ -332,6 +339,56 @@ if wait_gone "$WORKER_PID" 40; then
   ok 'worker finished the progress run and stopped itself'
 else
   bad 'worker finished the progress run and stopped itself'
+  kill_tree "$WORKER_PID" KILL
+fi
+WORKER_PID=""
+
+# ---------------------------------------------------------------------------
+# 5. abandoned chunked uploads (PLAN §25)
+# ---------------------------------------------------------------------------
+# A reservation whose client went away, two hours past its deadline, plus one orphan part file in
+# this run's own storage root. `system.cleanupUploads` claims the row and removes the bytes.
+UPLOAD_ID="${RUN_ID}-upload"
+PART_FILE="$STORAGE_ROOT/uploads/$UPLOAD_ID/part-000000"
+mkdir -p "$(dirname "$PART_FILE")"
+printf 'orphan chunk' >"$PART_FILE"
+
+node_pg "
+  INSERT INTO file_uploads (id, name, mime_type, total_size, chunk_max_size, received, part_count,
+                            parts, status, storage_prefix, expires_at, created_at, modified_at)
+  VALUES ('$UPLOAD_ID', 'orphan.txt', 'text/plain', 11, 1024, 11, 1,
+          '{\"0\":{\"size\":11}}'::jsonb, 'open', 'uploads/$UPLOAD_ID',
+          now() - interval '2 hours', now(), now());
+  INSERT INTO jobs (id, job, status, scheduling_type, created_at, target, progress, attempt, max_attempts, cancel_requested)
+  VALUES ('${RUN_ID}-uploads', 'system.cleanupUploads', 'pending', NULL, now(),
+          '{\"smokeRunId\":\"${RUN_ID}\",\"expiryHours\":1}'::jsonb, 0, 1, 1, FALSE);
+" >/dev/null
+
+uploads_status() { node_pg "SELECT status FROM jobs WHERE id = '${RUN_ID}-uploads';" | first_value; }
+abandoned_uploads() { count_where "file_uploads WHERE id = '$UPLOAD_ID' AND status = 'aborted'"; }
+part_exists() { [ -f "$PART_FILE" ] && echo yes || echo no; }
+
+WORKER_RUN_MS=12000
+worker_run apps/worker/src/main.ts >"$PROG_LOG" 2>&1 &
+WORKER_PID=$!
+sleep 2
+CHECKS=$((CHECKS + 1))
+if worker_run apps/worker/src/tools/enqueue-cli.ts --row "${RUN_ID}-uploads" system.cleanupUploads \
+  "{\"smokeRunId\":\"${RUN_ID}\",\"expiryHours\":1}" >>"$PROG_LOG" 2>&1; then
+  ok 'producer enqueued system.cleanupUploads'
+else
+  bad 'producer enqueued system.cleanupUploads'
+fi
+
+wait_until_equals 'completed' uploads_status || true
+check_equals 'cleanupUploads: the expired reservation was claimed' '1' "$(abandoned_uploads)"
+check_equals 'cleanupUploads: the orphan part file was deleted' 'no' "$(part_exists)"
+
+CHECKS=$((CHECKS + 1))
+if wait_gone "$WORKER_PID" 40; then
+  ok 'worker finished the cleanup run and stopped itself'
+else
+  bad 'worker finished the cleanup run and stopped itself'
   kill_tree "$WORKER_PID" KILL
 fi
 WORKER_PID=""
