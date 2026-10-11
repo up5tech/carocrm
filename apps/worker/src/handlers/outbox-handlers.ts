@@ -1,6 +1,7 @@
 import type { Logger } from '@carocrm/core/logger/index.js';
 import type { OutboxEvent } from '@carocrm/jobs';
 
+import { DomainEventBus, registerDomainEventHandlers } from '../events/domain-event-bus.js';
 import { OutboxHandlerRegistry } from '../outbox/outbox-registry.js';
 
 /**
@@ -47,8 +48,23 @@ export function registerKernelOutboxHandlers(registry: OutboxHandlerRegistry, de
   registry.register('system.log', logOutboxHandler(deps));
 }
 
-export function createKernelOutboxRegistry(log: Logger): OutboxHandlerRegistry {
+export interface KernelOutboxSetup {
+  registry: OutboxHandlerRegistry;
+  events: DomainEventBus;
+}
+
+/**
+ * Builds the outbox registry together with the domain-event bus and wires `entity.*` events to it,
+ * so a subscriber can be attached at composition without touching the poller.
+ */
+export function createKernelOutboxSetup(log: Logger): KernelOutboxSetup {
   const registry = new OutboxHandlerRegistry(log);
   registerKernelOutboxHandlers(registry, { log });
-  return registry;
+  const events = new DomainEventBus(log);
+  registerDomainEventHandlers(registry, events);
+  return { registry, events };
+}
+
+export function createKernelOutboxRegistry(log: Logger): OutboxHandlerRegistry {
+  return createKernelOutboxSetup(log).registry;
 }

@@ -3,8 +3,9 @@ import { JobRegistry } from '@carocrm/jobs';
 
 import { createPool, errorMessage, type Queryable } from './db.js';
 import type { WorkerConfig } from './env.js';
+import { DomainEventBus } from './events/domain-event-bus.js';
 import { registerSystemJobs } from './handlers/job-handlers.js';
-import { createKernelOutboxRegistry } from './handlers/outbox-handlers.js';
+import { createKernelOutboxSetup } from './handlers/outbox-handlers.js';
 import { OutboxPoller } from './outbox/outbox-poller.js';
 import { OutboxHandlerRegistry } from './outbox/outbox-registry.js';
 import { closeRedisConnection, createRedisConnection } from './queue/connection.js';
@@ -29,6 +30,8 @@ import { Scheduler } from './schedule/scheduler.js';
 export class WorkerApplication {
   readonly jobRegistry: JobRegistry;
   readonly outboxRegistry: OutboxHandlerRegistry;
+  /** Subscribe automation here before `start()`; `entity.*` outbox events fan out through it. */
+  readonly domainEvents: DomainEventBus;
 
   private readonly pool = createPool(this.config.databaseUrl, Math.max(5, this.config.jobConcurrency + 2));
   private readonly db: Queryable = this.pool;
@@ -49,7 +52,9 @@ export class WorkerApplication {
     this.jobRegistry = new JobRegistry();
     registerSystemJobs(this.jobRegistry, { db: this.db, log: this.log });
 
-    this.outboxRegistry = createKernelOutboxRegistry(this.log);
+    const outbox = createKernelOutboxSetup(this.log);
+    this.outboxRegistry = outbox.registry;
+    this.domainEvents = outbox.events;
 
     this.jobQueue = new BullMqJobQueue({
       queueName: this.config.queueName,
@@ -105,6 +110,7 @@ export class WorkerApplication {
         redis: redactUrl(this.config.redisUrl),
         database: redactUrl(this.config.databaseUrl),
         outboxHandlers: this.outboxRegistry.list(),
+        domainSubscribers: this.domainEvents.list().map((subscriber) => subscriber.eventType),
         jobHandlers: this.jobRegistry.list(),
         outboxPollIntervalMs: this.config.outboxPollIntervalMs,
         outboxBatchSize: this.config.outboxBatchSize,

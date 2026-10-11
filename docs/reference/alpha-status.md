@@ -39,11 +39,11 @@ pnpm db:seed          # applies migrations and seeds admin/roles/metadata into t
 pnpm lint             # eslint, 0 warnings allowed
 pnpm typecheck        # tsc --noEmit over the whole workspace
 pnpm -r build         # all packages + api + worker
-npx vitest run        # 186 tests: 127 API/integration (apps/api/test) + 59 formula unit tests; runs on the configured DATABASE_URL, no extra database
+npx vitest run        # 199 tests: 140 API/integration (apps/api/test) + 59 formula unit tests; runs on the configured DATABASE_URL, no extra database
 bash scripts/e2e-smoke.sh   # HTTP end-to-end checks against a booted server
 bash scripts/worker-smoke.sh # 14 checks: outbox, BullMQ jobs, cron scheduler, graceful shutdown
-npx playwright test    # 7 browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic); starts API+SPA itself
-pnpm --filter @carocrm/worker test  # 70 worker tests (jobs, scheduler, outbox, reminder job)
+npx playwright test    # 8 browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic); starts API+SPA itself
+pnpm --filter @carocrm/worker test  # 78 worker tests (jobs, scheduler, outbox, reminder job, domain-event subscribers)
 ```
 
 ## Deviations from PLAN (deliberate, for Alpha)
@@ -100,6 +100,28 @@ audit of `updateTable` calls confirmed every mutation is keyed.
   become required, lock or fill themselves while the user types; the detail view hides invisible fields.
 - Config: the global HTTP rate limit is now `RATE_LIMIT_MAX` (default 300/min, unchanged); the browser
   suite raises it because seven specs share one server.
+
+## Hooks and domain events (PLAN §23, added 2026-10-11)
+
+- `HookRegistry` (API) dispatches the PLAN §23.1 phases — `beforeValidate`, `beforeCreate`,
+  `beforeUpdate`, `beforeDelete`, `beforeSave`, `afterCreate`, `whenCreated`, `whenUpdated`,
+  `whenDeleted`, `afterSave` — to named, optionally entity-scoped handlers. A `before*` handler can
+  change the data being written (including the value of a dynamic-logic/formula field), and any
+  handler can abort the write by throwing an `AppError`. The phase list is open (`HookPhase` is a
+  string with `HOOK_PHASES` as the recommended set), as PLAN §23.1 asks.
+- Domain events now go through the **transactional outbox** for real: `entity.created`,
+  `entity.updated`, `entity.deleted` and `entity.restored` are written into `outbox_events` inside
+  the same transaction as the record mutation (`EntityEventHookService` on `KERNEL_HOOKS_TOKEN`),
+  replacing the previous post-commit `emit()` that could lose an event when the process died after
+  the commit. Payload is `{ entityType, entityId, changed[], userId, version }`; the catalog is in
+  `@carocrm/core` so the API and worker agree.
+- The worker fans a claimed event out to `DomainEventBus` subscribers (registration order, `'*'`
+  wildcard, at-least-once so subscribers must be idempotent) — `app.domainEvents.subscribe(...)` or
+  the `subscribeToMutation` helper.
+- Introspection endpoints (admin only): `GET /api/v1/Hook`, `GET /api/v1/DomainEvent`.
+- Restore is now transactional too (row + audit + event commit together) and emits `entity.restored`.
+- Not covered yet: events for relation link/unlink, and any UI for browsing events (the API is the
+  interface for now).
 
 ## Web UI theme (Lizant)
 

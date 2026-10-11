@@ -30,6 +30,7 @@ no upstream source used (PLAN §2). Status is as of 2026-10-11 (CRM Kernel Alpha
 | Formula engine | v9.3.x | sandboxed parser → AST → evaluator with an allowlisted function set and execution budgets (`@carocrm/formula`) | P2 | implemented |
 | Dynamic logic | v9.3.x | metadata `dynamicLogic.rules` evaluated in the SPA **and** on every API write | P2 | implemented |
 | Workflows / BPM / Reports / Portals | commercial/baseline | out of Alpha scope | P2 | not started |
+| Hooks / domain events | v9.3.x entity hooks + event bus | `HookRegistry` phases + transactional-outbox domain events consumed by a worker subscriber bus | P2 | implemented (see note) |
 | Database | MySQL/MariaDB/PG | PostgreSQL only; MySQL/MariaDB later (PLAN §6.2) | — | PG first |
 | PHP source compatibility | — | explicitly a non-goal (PLAN §5) | — | N/A |
 
@@ -96,3 +97,25 @@ re-checked against upstream docs before claiming compatibility (PLAN §60).
   yet (PLAN §20 panels are still unwired), so panel rules have no visible effect today.
 - Cross-record reads inside a formula (`parent()`, `related()`) are **not** implemented: a formula
   sees only the record it is evaluating.
+
+## Hooks and domain events (PLAN §23)
+
+Upstream documentation was again **not reachable from this environment** while building, so the
+phase names and event payloads are PLAN §23.1/§23.2 plus our own design; the upstream hook naming
+(`beforeSave_ENTITY`, `afterLoad_ENTITY`, …) must be re-checked before claiming parity.
+
+- Phases implemented as documented in PLAN §23.1: `beforeValidate`, `beforeCreate`, `beforeUpdate`,
+  `beforeDelete`, `beforeSave`, `afterCreate`, `whenCreated`, `whenUpdated`, `whenDeleted`,
+  `afterSave`. There is no load/read phase yet (`afterLoad` upstream) and no `afterDelete` — soft
+  delete reports `whenDeleted`.
+- Hooks are **code-registered** (a `HookRegistry` provider), not files dropped in an extension
+  directory; that belongs to the extension SDK (PLAN §38, task 31).
+- EspoCRM exposes its event bus to extensions only; here `GET /api/v1/Hook` and
+  `GET /api/v1/DomainEvent` publish the same facts over the API, which is additive, not upstream.
+- `entity.created|updated|deleted|restored` payloads (`{entityType, entityId, changed[], userId,
+  version}`) are our own shape. Upstream event payloads carry the entity, `id`, `attributes`,
+  `changed` and `acm`, but the exact field naming is not published in the docs we could reach.
+- Restore is atomic (row + audit + event in one transaction) — upstream restores through its own
+  transaction as well.
+- Outbox delivery is at-least-once with per-event retry/backoff and a `failed` dead-letter status;
+  upstream runs job consumers through its own queue table.

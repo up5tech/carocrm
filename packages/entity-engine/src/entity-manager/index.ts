@@ -3,7 +3,22 @@ import { parseDate } from '@carocrm/core/utils/date.js';
 import { generateId } from '@carocrm/core/utils/id.js';
 import type { FieldDefinition, RelationDefinition } from '@carocrm/metadata/schemas/index.js';
 
-import type { CreateRecordOptions, CreateResult, DeleteRecordOptions, DeleteResult, EntityQuery, EntityRecord, GetRecordOptions, HookContext,HookHandler, HookPhase, ListResult, UpdateRecordOptions, UpdateResult } from '../types/index.js';
+import type {
+  CreateRecordOptions,
+  CreateResult,
+  DeleteRecordOptions,
+  DeleteResult,
+  EntityQuery,
+  EntityRecord,
+  GetRecordOptions,
+  HookBinding,
+  HookContext,
+  HookHandler,
+  HookPhase,
+  ListResult,
+  UpdateRecordOptions,
+  UpdateResult,
+} from '../types/index.js';
 import { RecordValidator } from '../validation/index.js';
 
 export interface EntityMetadataPort {
@@ -47,7 +62,10 @@ export class EntityManager {
   constructor(
     private readonly store: RecordStorePort,
     private readonly metadata: EntityMetadataPort,
-  ) {}
+    hooks: Iterable<HookBinding> = [],
+  ) {
+    for (const binding of hooks) this.addHook(binding.phase, binding.handler);
+  }
 
   addHook(phase: HookPhase, handler: HookHandler): void {
     const list = this.hooks.get(phase) ?? [];
@@ -62,12 +80,14 @@ export class EntityManager {
   }
 
   private context(
+    phase: HookPhase,
     entity: string,
     operation: HookContext['operation'],
     extras: Partial<HookContext>,
   ): HookContext {
-    const ctx: HookContext = { entity, operation };
+    const ctx: HookContext = { entity, operation, phase };
     if (extras.record !== undefined) ctx.record = extras.record;
+    if (extras.previous !== undefined) ctx.previous = extras.previous;
     if (extras.data !== undefined) ctx.data = extras.data;
     if (extras.userId !== undefined) ctx.userId = extras.userId;
     return ctx;
@@ -78,7 +98,7 @@ export class EntityManager {
       throw new ValidationError(`Unknown entity "${options.entity}".`);
     }
     const data = { ...options.data };
-    await this.runHooks('beforeValidate', this.context(options.entity, 'create', { data, userId: options.userId }));
+    await this.runHooks('beforeValidate', this.context('beforeValidate', options.entity, 'create', { data, userId: options.userId }));
     this.applyDefaults(options.entity, data);
     this.validate(options.entity, data);
 
@@ -98,15 +118,15 @@ export class EntityManager {
     }
     if (typeof data.assignedUserId === 'string') record.assignedUserId = data.assignedUserId;
 
-    await this.runHooks('beforeCreate', this.context(options.entity, 'create', { data, userId: options.userId }));
-    await this.runHooks('beforeSave', this.context(options.entity, 'create', { data, userId: options.userId }));
+    await this.runHooks('beforeCreate', this.context('beforeCreate', options.entity, 'create', { data, userId: options.userId }));
+    await this.runHooks('beforeSave', this.context('beforeSave', options.entity, 'create', { data, userId: options.userId }));
 
     await this.store.insert(record);
     await this.applyRelations(options.entity, id, options.relations);
 
-    await this.runHooks('afterCreate', this.context(options.entity, 'create', { record, userId: options.userId }));
-    await this.runHooks('whenCreated', this.context(options.entity, 'create', { record, userId: options.userId }));
-    await this.runHooks('afterSave', this.context(options.entity, 'create', { record, userId: options.userId }));
+    await this.runHooks('afterCreate', this.context('afterCreate', options.entity, 'create', { record, userId: options.userId }));
+    await this.runHooks('whenCreated', this.context('whenCreated', options.entity, 'create', { record, userId: options.userId }));
+    await this.runHooks('afterSave', this.context('afterSave', options.entity, 'create', { record, userId: options.userId }));
     return record;
   }
 
@@ -136,7 +156,7 @@ export class EntityManager {
     }
 
     const data: Record<string, unknown> = { ...existing.data, ...options.data };
-    await this.runHooks('beforeValidate', this.context(options.entity, 'update', { record: existing, data, userId: options.userId }));
+    await this.runHooks('beforeValidate', this.context('beforeValidate', options.entity, 'update', { record: existing, previous: existing.data, data, userId: options.userId }));
     this.validate(options.entity, data);
 
     const record: EntityRecord = {
@@ -152,8 +172,8 @@ export class EntityManager {
       else record.assignedUserId = undefined;
     }
 
-    await this.runHooks('beforeUpdate', this.context(options.entity, 'update', { record: existing, data, userId: options.userId }));
-    await this.runHooks('beforeSave', this.context(options.entity, 'update', { record: existing, data, userId: options.userId }));
+    await this.runHooks('beforeUpdate', this.context('beforeUpdate', options.entity, 'update', { record: existing, previous: existing.data, data, userId: options.userId }));
+    await this.runHooks('beforeSave', this.context('beforeSave', options.entity, 'update', { record: existing, previous: existing.data, data, userId: options.userId }));
 
     const updated = await this.store.update(record, existing.version);
     if (!updated) {
@@ -163,8 +183,8 @@ export class EntityManager {
       await this.applyRelations(options.entity, options.id, options.relations);
     }
 
-    await this.runHooks('whenUpdated', this.context(options.entity, 'update', { record, userId: options.userId }));
-    await this.runHooks('afterSave', this.context(options.entity, 'update', { record, userId: options.userId }));
+    await this.runHooks('whenUpdated', this.context('whenUpdated', options.entity, 'update', { record, previous: existing.data, userId: options.userId }));
+    await this.runHooks('afterSave', this.context('afterSave', options.entity, 'update', { record, previous: existing.data, userId: options.userId }));
     return record;
   }
 
@@ -173,12 +193,12 @@ export class EntityManager {
     if (!existing) {
       throw new RecordNotFoundError(options.entity, options.id);
     }
-    await this.runHooks('beforeDelete', this.context(options.entity, 'delete', { record: existing, userId: options.userId }));
+    await this.runHooks('beforeDelete', this.context('beforeDelete', options.entity, 'delete', { record: existing, userId: options.userId }));
     const removed = await this.store.markDeleted(options.entity, options.id, new Date());
     if (!removed) {
       throw new RecordNotFoundError(options.entity, options.id);
     }
-    await this.runHooks('whenDeleted', this.context(options.entity, 'delete', { record: existing, userId: options.userId }));
+    await this.runHooks('whenDeleted', this.context('whenDeleted', options.entity, 'delete', { record: existing, userId: options.userId }));
   }
 
   private applyDefaults(entity: string, data: Record<string, unknown>): void {

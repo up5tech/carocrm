@@ -106,7 +106,8 @@ describe('generic entity API — metadata driven fields', () => {
       .select(['event_type', 'payload'])
       .where('status', '=', 'pending')
       .execute();
-    const forRecord = rows.filter((row) => (row.payload as { id?: string }).id === id);
+    // Entity events identify the record by `entityId` inside the payload (PLAN §23.2).
+    const forRecord = rows.filter((row) => (row.payload as { entityId?: string }).entityId === id);
     expect(forRecord.map((row) => row.event_type)).toEqual(
       expect.arrayContaining(['entity.created', 'entity.deleted']),
     );

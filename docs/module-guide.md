@@ -36,7 +36,10 @@ stream/calendar and the PLAN §21–§22 dynamic logic + formula engine).
 | Calendar | `apps/api/src/calendar/` | `CalendarService` + pure `expandOccurrences()` in `recurrence.ts`; route `GET /Calendar` |
 | Formula engine | `packages/formula` (`@carocrm/formula`) | `FormulaEngine` (parser → AST → evaluator), `FunctionRegistry`, `DEFAULT_LIMITS`; pure, no I/O |
 | Dynamic logic | `apps/api/src/logic/` | `FormulaService` (metadata guard), `RecordLogicService` (write path), `POST /api/v1/Formula/{validate,evaluate}` (admin) |
-| Kernel hooks | `apps/api/src/entity/hooks.ts` | `KERNEL_HOOKS_TOKEN` → `AfterSaveHook[]`; audit and stream-update each register one |
+| Hook phases | `apps/api/src/hooks/` | `HookRegistry` (named handlers, optional entity scope), `GET /api/v1/Hook` (admin); phases from `@carocrm/entity-engine` `HOOK_PHASES` |
+| Domain events | `apps/api/src/events/` | `EventBus.dispatch(tx, event)` writes `outbox_events` in-tx, `EntityEventHookService` on `KERNEL_HOOKS_TOKEN`, `GET /api/v1/DomainEvent` (admin) |
+| Event consumers | `apps/worker/src/events/` | `DomainEventBus.subscribe({eventType, name, handler})`, `'*'` wildcard; wired to the outbox registry by `createKernelOutboxSetup` |
+| Kernel hooks | `apps/api/src/entity/hooks.ts` | `KERNEL_HOOKS_TOKEN` → `AfterSaveHook[]` with `operation: 'create'\|'update'\|'delete'\|'restore'`; audit, stream-update and domain-event hooks each register one |
 
 ## API conventions
 
@@ -117,6 +120,44 @@ stream/calendar and the PLAN §21–§22 dynamic logic + formula engine).
   before `ENTITY_CONTROLLERS`, like stream/calendar.
 - `RATE_LIMIT_MAX` (`.env`, default 300 req/min) is the global HTTP limit; the browser suite raises
   it because a single SPA screen issues many small calls.
+
+## Hooks and domain events (PLAN §23)
+
+Two seams, deliberately different:
+
+- **`HookRegistry`** (`apps/api/src/hooks/`) — the §23.1 *phases*. Handlers are named, optional per
+  entity, and dispatched by `EntityManager` outside the mutation transaction, so a handler may
+  mutate `context.data` (before phases) or react to the stored `context.record` (after phases).
+  Throwing an `AppError` aborts the request. `packages/entity-engine` exports `HOOK_PHASES` as a
+  **list, not a closed enum** (`HookPhase = string`) so new phases can be added as the product needs.
+  `EntityCrudService` builds its `EntityManager` per mutation on purpose — a cached manager would
+  freeze the handler set at first use.
+- **`KERNEL_HOOKS_TOKEN`** — transaction-scoped work. Audit rows, stream `Update` items and domain
+  events all need the *same* transaction as the record write, so they run here and receive
+  `{ entityType, record, previous?, userId?, operation, tx }`. Do not do I/O in these hooks.
+
+Domain events (PLAN §23.2) follow the outbox pattern end to end:
+
+```
+HTTP request → EntityManager phases → PostgresRecordStore.withTransaction
+  → entity row + audit + stream + outbox_events row  (one transaction)
+  → commit → worker OutboxPoller claims → OutboxHandlerRegistry → DomainEventBus.publish
+  → subscribers (registration order; first failure rethrows so the poller retries)
+```
+
+- Catalog lives in `@carocrm/core` (`DOMAIN_EVENT_TYPES`, `entityEventType`, `changedFields`,
+  `EntityEventPayload`) so producer and consumer share one definition. Types:
+  `entity.created|updated|deleted|restored`, payload `{ entityType, entityId, changed[], userId, version }`.
+- Publishing is automatic for generic record mutations; other producers call
+  `EventBus.dispatch(tx, { type, payload })` with their own transaction.
+- Relation link/unlink and stream/notification writes do **not** publish domain events yet.
+- Delivery is at-least-once; subscribers must be idempotent (the outbox `id` is a stable key).
+  An event type with no subscriber is logged and marked processed, so the queue cannot clog.
+- Subscribe from worker composition before `start()`: `app.domainEvents.subscribe({ ... })`
+  (`apps/worker/src/events/domain-event-bus.ts`, helper `subscribeToMutation`).
+- Introspection: `GET /api/v1/Hook` (phases + installed handlers) and
+  `GET /api/v1/DomainEvent?status=&eventType=&offset=&limit=` (outbox rows, newest first) —
+  both admin-only, both registered before `ENTITY_CONTROLLERS`.
 
 ## Test database policy (AGENTS.md §3 — mandatory)
 

@@ -97,27 +97,46 @@ export interface ListResult<T> {
   count: number;
 }
 
+/**
+ * Hook phases (PLAN §23.1). The list is data, not a closed enum: `HookPhase` is any string, so a
+ * module can add a phase as the product needs one, while `HOOK_PHASES` stays the recommended set
+ * that the kernel dispatches for entity writes.
+ */
+export const HOOK_PHASES = [
+  'beforeValidate',
+  'beforeCreate',
+  'beforeUpdate',
+  'beforeDelete',
+  'beforeSave',
+  'afterCreate',
+  'whenCreated',
+  'whenUpdated',
+  'whenDeleted',
+  'afterSave',
+] as const;
+
+export type KnownHookPhase = (typeof HOOK_PHASES)[number];
+
+export type HookPhase = string;
+
 export interface HookContext {
   entity: string;
+  phase: HookPhase;
   record?: EntityRecord | undefined;
+  /** State before the mutation, for update/delete phases. */
+  previous?: Record<string, unknown> | undefined;
   data?: Record<string, unknown> | undefined;
   userId?: string | undefined;
   operation: 'create' | 'update' | 'delete';
 }
 
-export type HookPhase =
-  | 'beforeValidate'
-  | 'beforeCreate'
-  | 'beforeUpdate'
-  | 'beforeDelete'
-  | 'beforeSave'
-  | 'afterCreate'
-  | 'whenCreated'
-  | 'whenUpdated'
-  | 'whenDeleted'
-  | 'afterSave';
-
 export type HookHandler = (context: HookContext) => Promise<void> | void;
+
+/** A handler bound to a phase; what a hook registry hands to the entity manager. */
+export interface HookBinding {
+  phase: HookPhase;
+  handler: HookHandler;
+}
 
 export interface TransactionClient {
   commit(): Promise<void>;

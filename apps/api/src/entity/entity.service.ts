@@ -13,10 +13,9 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import type { AclPredicate } from '../acl/acl-api.service.js';
 import { AclApiService } from '../acl/acl-api.service.js';
-import { OutboxService } from '../common/outbox.service.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
-import { DatabaseService } from '../database/database.service.js';
+import { HookRegistry } from '../hooks/hook.registry.js';
 import { RecordLogicService } from '../logic/record-logic.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
@@ -73,15 +72,12 @@ const IMMUTABLE_INPUT: ReadonlySet<string> = new Set(['entityType', 'entity_type
 
 @Injectable()
 export class EntityCrudService {
-  private manager?: EntityManager | undefined;
-
   constructor(
     @Inject(ENTITY_STORE) private readonly store: PostgresRecordStore,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
     @Inject(AclApiService) private readonly acl: AclApiService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
-    @Inject(OutboxService) private readonly outbox: OutboxService,
-    @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(HookRegistry) private readonly hooks: HookRegistry,
     @Inject(RecordLogicService) private readonly logic: RecordLogicService,
   ) {}
 
@@ -183,7 +179,6 @@ export class EntityCrudService {
       data: this.withName(entity, withLogic),
       ...(this.scope.userId !== undefined ? { userId: this.scope.userId } : {}),
     });
-    await this.emit('entity.created', entity, record.id);
     return this.serialize(entity, record);
   }
 
@@ -209,7 +204,6 @@ export class EntityCrudService {
       ...(expectedVersion !== undefined ? { expectedVersion } : {}),
       ...(this.scope.userId !== undefined ? { userId: this.scope.userId } : {}),
     });
-    await this.emit('entity.updated', entity, record.id);
     return this.serialize(entity, record);
   }
 
@@ -229,7 +223,6 @@ export class EntityCrudService {
       softDelete: true,
       ...(this.scope.userId !== undefined ? { userId: this.scope.userId } : {}),
     });
-    await this.emit('entity.deleted', entity, id);
     return { status: true };
   }
 
@@ -245,7 +238,6 @@ export class EntityCrudService {
     if (!restored) throw new RecordNotFoundError(entity, id);
     const fresh = await this.store.findById(entity, id);
     if (!fresh) throw new RecordNotFoundError(entity, id);
-    await this.emit('entity.updated', entity, id);
     return this.serialize(entity, fresh);
   }
 
@@ -311,9 +303,12 @@ export class EntityCrudService {
   // internals
   // -------------------------------------------------------------------------
 
+  /**
+   * Built per mutation on purpose: the hook registry can gain a handler between two requests, and a
+   * cached manager would keep serving the snapshot it was created with.
+   */
   private get em(): EntityManager {
-    this.manager ??= new EntityManager(this.store, this.metadata.registry);
-    return this.manager;
+    return new EntityManager(this.store, this.metadata.registry, this.hooks.bindings());
   }
 
   private assertEntity(entity: string): void {
@@ -531,10 +526,6 @@ export class EntityCrudService {
       }
     }
     return this.acl.stripRestricted(entity, dto);
-  }
-
-  private async emit(eventType: string, entity: string, id: string): Promise<void> {
-    await this.outbox.insertMany(this.database.db, [{ eventType, payload: { entityType: entity, id } }]);
   }
 }
 

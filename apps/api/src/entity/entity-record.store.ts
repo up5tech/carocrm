@@ -13,7 +13,7 @@ import type { Db, DbTx, EntityRecordsTable } from '../database/database.service.
 import { DatabaseService } from '../database/database.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
-import type { AfterSaveHook } from './hooks.js';
+import type { AfterSaveHook, KernelMutation } from './hooks.js';
 import { KERNEL_HOOKS_TOKEN } from './hooks.js';
 
 export const ENTITY_STORE = Symbol('ENTITY_STORE');
@@ -101,7 +101,7 @@ export class PostgresRecordStore implements RecordStorePort {
     const values = toRow(record);
     await this.withTransaction(async (tx) => {
       await tx.insertInto(TABLE).values(values).execute();
-      await this.runHooks(record, undefined, tx);
+      await this.runHooks(record, undefined, tx, 'create');
     });
   }
 
@@ -148,7 +148,7 @@ export class PostgresRecordStore implements RecordStorePort {
         .executeTakeFirst();
       if (!updatedOnce(result.numUpdatedRows)) return false;
 
-      await this.runHooks(record, this.dataOf(previousRow), tx);
+      await this.runHooks(record, this.dataOf(previousRow), tx, 'update');
       return true;
     });
   }
@@ -174,21 +174,38 @@ export class PostgresRecordStore implements RecordStorePort {
       if (!updatedOnce(result.numUpdatedRows)) return false;
 
       const record = this.mapRow({ ...previousRow, deleted_at: deletedAt });
-      await this.runHooks(record, this.dataOf(previousRow), tx);
+      await this.runHooks(record, this.dataOf(previousRow), tx, 'delete');
       return true;
     });
   }
 
-  /** Clears `deleted_at`; returns false when the row is missing or was never deleted. */
+  /**
+   * Clears `deleted_at` and runs the kernel hooks, so a restore is observable through the same
+   * transactional path as any other mutation. Returns false when the row is missing or live.
+   */
   async restore(entity: string, id: string): Promise<boolean> {
-    const result = await this.db
-      .updateTable(TABLE)
-      .set({ deleted_at: null, modified_at: new Date() })
-      .where('entity_type', '=', entity)
-      .where('id', '=', id)
-      .where('deleted_at', 'is not', null)
-      .executeTakeFirst();
-    return updatedOnce(result.numUpdatedRows);
+    return this.withTransaction(async (tx) => {
+      const previousRow = await tx
+        .selectFrom(TABLE)
+        .selectAll()
+        .where('entity_type', '=', entity)
+        .where('id', '=', id)
+        .where('deleted_at', 'is not', null)
+        .executeTakeFirst();
+      if (!previousRow) return false;
+
+      const result = await tx
+        .updateTable(TABLE)
+        .set({ deleted_at: null, modified_at: new Date() })
+        .where('entity_type', '=', entity)
+        .where('id', '=', id)
+        .where('deleted_at', 'is not', null)
+        .executeTakeFirst();
+      if (!updatedOnce(result.numUpdatedRows)) return false;
+
+      await this.runHooks(this.mapRow({ ...previousRow, deleted_at: null }), this.dataOf(previousRow), tx, 'restore');
+      return true;
+    });
   }
 
   async findMany(entity: string, query: StoreFindQuery = {}): Promise<ListResult<EntityRecord>> {
@@ -304,11 +321,17 @@ export class PostgresRecordStore implements RecordStorePort {
     return rows.map((row) => row.record_id_b);
   }
 
-  private async runHooks(record: EntityRecord, previous: Record<string, unknown> | undefined, tx: Queryable): Promise<void> {
+  private async runHooks(
+    record: EntityRecord,
+    previous: Record<string, unknown> | undefined,
+    tx: Queryable,
+    operation: KernelMutation,
+  ): Promise<void> {
     for (const hook of this.hooks) {
       await hook({
         entityType: record.entityType,
         record,
+        operation,
         ...(previous !== undefined ? { previous } : {}),
         ...(record.modifiedById !== undefined ? { userId: record.modifiedById } : {}),
         tx,
