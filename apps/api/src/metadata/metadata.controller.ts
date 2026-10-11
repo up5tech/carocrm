@@ -82,7 +82,9 @@ export class MetadataController {
         ...isRecord(patch['fields']) ? patch['fields'] : {},
       },
       relations: isRecord(patch['relations']) ? patch['relations'] : {},
-      indexes: [],
+      indexes: Array.isArray(patch['indexes']) ? patch['indexes'] : [],
+      layouts: isRecord(patch['layouts']) ? patch['layouts'] : {},
+      ...(isRecord(patch['acl']) ? { acl: patch['acl'] } : {}),
       record: { displayField: 'name', removable: true, ...(isRecord(patch['record']) ? patch['record'] : {}) },
       client: { ...(isRecord(patch['client']) ? patch['client'] : {}) },
       ...(isRecord(patch['dynamicLogic']) || Array.isArray(patch['dynamicLogic']) ? { dynamicLogic: patch['dynamicLogic'] } : {}),
@@ -140,6 +142,12 @@ export class MetadataController {
       });
     }
     const definition = parsed.data as EntityDefinition;
+    if (Array.isArray(patch['indexes'])) {
+      this.validateIndexes(definition, patch['indexes']);
+    }
+    if (isRecord(patch['layouts'])) {
+      this.validateLayouts(definition, patch['layouts']);
+    }
     this.formulas.validateDefinition(definition);
 
     await this.store.persistEntityOverride(entity, patch);
@@ -150,7 +158,7 @@ export class MetadataController {
       .insertInto('schema_changes')
       .values({
         id: randomUUID(),
-        operation: fieldName ? 'field.disable' : 'entity.update',
+        operation: schemaChangeOperation(patch, fieldName),
         entity_type: entity,
         field_name: fieldName ?? null,
         payload: JSON.stringify(patch),
@@ -162,6 +170,78 @@ export class MetadataController {
       .execute();
 
     return this.store.registry.getEntity(entity);
+  }
+
+  /**
+   * Index configuration is declarative metadata (PLAN §8): it names the columns an index should cover
+   * so a reviewed migration can create the physical index. This validates the declaration only — it
+   * never touches the database schema (AGENTS.md §3.4). Field names must be allow-listed against the
+   * entity's own fields, and reserved bookkeeping columns are rejected.
+   */
+  private validateIndexes(definition: EntityDefinition, indexes: unknown): void {
+    const reserved = new Set(['id', 'createdAt', 'modifiedAt', 'createdById', 'modifiedById', 'deletedAt', 'version']);
+    const allowed = new Set(Object.keys(definition.fields));
+    const list = indexes as { name?: unknown; fields?: unknown }[];
+    const seen = new Set<string>();
+    for (const index of list) {
+      const name = typeof index?.name === 'string' ? index.name : '';
+      if (name === '') throw new ValidationError('Every index needs a name.', { entity: definition.name });
+      if (seen.has(name)) throw new ValidationError(`Duplicate index name "${name}".`, { entity: definition.name });
+      seen.add(name);
+      const fields = Array.isArray(index.fields) ? index.fields : [];
+      if (fields.length === 0) throw new ValidationError(`Index "${name}" must cover at least one field.`, { entity: definition.name });
+      for (const field of fields) {
+        if (typeof field !== 'string' || reserved.has(field)) {
+          throw new ValidationError(`Index "${name}" cannot reference reserved column "${String(field)}".`, { entity: definition.name });
+        }
+        if (!allowed.has(field)) {
+          throw new ValidationError(`Index "${name}" references unknown field "${field}".`, { entity: definition.name });
+        }
+      }
+    }
+  }
+
+  /**
+   * Layout configuration is declarative metadata (PLAN §8). This validates the declaration only and
+   * never touches the database schema (AGENTS.md §3.4). Every panel's member field must be an
+   * enabled (non-disabled) field of the entity, so a layout can never reference a hidden or
+   * reserved bookkeeping column. A view with no panels is allowed (it just falls back to flat order).
+   */
+  private validateLayouts(definition: EntityDefinition, layouts: unknown): void {
+    const viewTypes = new Set(['list', 'detail', 'edit', 'filter', 'search', 'massUpdate']);
+    const allowed = new Set(Object.keys(definition.fields));
+    for (const [view, groups] of Object.entries(layouts as Record<string, unknown>)) {
+      if (!viewTypes.has(view)) {
+        throw new ValidationError(`Layout view "${view}" is not supported.`, { entity: definition.name });
+      }
+      if (!Array.isArray(groups)) {
+        throw new ValidationError(`Layout for "${view}" must be a list of panels.`, { entity: definition.name });
+      }
+      for (const group of groups) {
+        const panels = (group as { panels?: unknown }).panels;
+        if (!Array.isArray(panels)) {
+          throw new ValidationError(`Layout "${view}" is missing its panels.`, { entity: definition.name });
+        }
+        for (const panel of panels) {
+          const name = typeof panel?.name === 'string' ? panel.name : '';
+          if (name === '') {
+            throw new ValidationError(`Layout "${view}" has a panel without a name.`, { entity: definition.name });
+          }
+          const fields = Array.isArray(panel.fields) ? panel.fields : [];
+          for (const field of fields) {
+            if (typeof field !== 'string') {
+              throw new ValidationError(`Panel "${name}" lists a non-string field.`, { entity: definition.name });
+            }
+            if (!allowed.has(field)) {
+              throw new ValidationError(`Panel "${name}" references unknown field "${field}".`, { entity: definition.name });
+            }
+            if (definition.fields[field]?.type === 'disabled') {
+              throw new ValidationError(`Panel "${name}" references disabled field "${field}".`, { entity: definition.name });
+            }
+          }
+        }
+      }
+    }
   }
 
   private definition(entity: string): EntityDefinition {
@@ -193,6 +273,17 @@ function mergeDefinition(entity: string, base: EntityDefinition, patch: Record<s
   if (base.record && isRecord(patch['record'])) {
     merged['record'] = { ...base.record, ...patch['record'] };
   }
+  // indexes/layouts/acl are whole-scope objects in the patch: replace rather than shallow-merge so a
+  // removed entry actually disappears (metadata-scoped, never physical DDL — AGENTS.md §3.4).
+  if (Array.isArray(patch['indexes'])) {
+    merged['indexes'] = patch['indexes'];
+  }
+  if (isRecord(patch['layouts'])) {
+    merged['layouts'] = { ...base.layouts, ...patch['layouts'] };
+  }
+  if (isRecord(patch['acl'])) {
+    merged['acl'] = { ...base.acl, ...patch['acl'] };
+  }
   return merged;
 }
 
@@ -203,4 +294,13 @@ function asObject(body: unknown): Record<string, unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Picks the `schema_changes.operation` label from what the patch actually changed (PLAN §8). */
+function schemaChangeOperation(patch: Record<string, unknown>, fieldName?: string): string {
+  if (fieldName) return 'field.disable';
+  if (Array.isArray(patch['indexes'])) return 'entity.index.update';
+  if (isRecord(patch['layouts'])) return 'entity.layout.update';
+  if (isRecord(patch['acl'])) return 'entity.acl.update';
+  return 'entity.update';
 }

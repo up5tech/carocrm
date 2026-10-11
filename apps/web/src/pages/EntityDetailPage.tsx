@@ -1,4 +1,4 @@
-import { DeleteOutlined, DisconnectOutlined,EditOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, DisconnectOutlined, EditOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Card, Descriptions, Popconfirm, Select, Space, Spin, Table, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -8,7 +8,18 @@ import type { EntityDefinition } from '../api/types.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
 import { StreamPanel } from '../components/StreamPanel.js';
 import { evaluateEntityLogic } from '../state/logic.js';
-import { detailEntries, fieldLabel, recordLabel, useEntity, useMetadata } from '../state/metadata.js';
+import {
+  detailEntries,
+  type FieldEntry,
+  fieldLabel,
+  layoutFieldNames,
+  layoutPanelsFor,
+  orderByLayout,
+  panelFieldNames,
+  recordLabel,
+  useEntity,
+  useMetadata,
+} from '../state/metadata.js';
 
 interface PanelProps {
   parent: string;
@@ -166,7 +177,21 @@ export function EntityDetailPage() {
     () => detailEntries(definition.data).filter((entry) => logic.fields[entry.name]?.visible !== false),
     [definition.data, logic],
   );
+  // PLAN §8: an entity without a 'detail' layout keeps the single field-ordered Descriptions.
+  const panels = useMemo(() => layoutPanelsFor(definition.data, 'detail'), [definition.data]);
+  const ordered = useMemo(() => orderByLayout(entries, panels), [entries, panels]);
+  const covered = useMemo(() => layoutFieldNames(panels), [panels]);
+  const others = useMemo(() => ordered.filter((entry) => !covered.has(entry.name)), [ordered, covered]);
   const relations = useMemo(() => Object.keys(definition.data?.relations ?? {}), [definition.data]);
+
+  const labelStyle = { width: 200, color: '#737b85', fontWeight: 400, paddingBlock: 10 };
+  const contentStyle = { paddingBlock: 10, paddingInlineEnd: 24 };
+  const describe = (list: FieldEntry[]) =>
+    list.map((entry) => ({
+      key: entry.name,
+      label: fieldLabel(entry.name, entry.field, metadata.data),
+      children: <FieldValue field={entry.field} value={record?.[entry.name]} />,
+    }));
 
   if (!entity || !id) return <Card>Missing route parameters.</Card>;
 
@@ -205,18 +230,39 @@ export function EntityDetailPage() {
             </Space>
           }
         >
-          <Descriptions
-            column={2}
-            colon={false}
-            labelStyle={{ width: 200, color: '#737b85', fontWeight: 400, paddingBlock: 10 }}
-            contentStyle={{ paddingBlock: 10, paddingInlineEnd: 24 }}
-            items={entries.map((entry) => ({
-              key: entry.name,
-              label: fieldLabel(entry.name, entry.field, metadata.data),
-              children: <FieldValue field={entry.field} value={record?.[entry.name]} />,
-            }))}
-          />
+          {panels.length === 0 ? (
+            <Descriptions
+              column={2}
+              colon={false}
+              labelStyle={labelStyle}
+              contentStyle={contentStyle}
+              items={describe(ordered)}
+            />
+          ) : null}
         </Card>
+
+        {panels.map((panel) => (
+          <Card
+            key={panel.name}
+            className="lizant-card"
+            size="small"
+            title={<Typography.Text strong>{panel.label ?? panel.name}</Typography.Text>}
+          >
+            <Descriptions
+              column={2}
+              colon={false}
+              labelStyle={labelStyle}
+              contentStyle={contentStyle}
+              items={describe(ordered.filter((entry) => panelFieldNames(panel).has(entry.name)))}
+            />
+          </Card>
+        ))}
+
+        {others.length > 0 ? (
+          <Card className="lizant-card" size="small" title={<Typography.Text strong>Other</Typography.Text>}>
+            <Descriptions column={2} colon={false} labelStyle={labelStyle} contentStyle={contentStyle} items={describe(others)} />
+          </Card>
+        ) : null}
 
         {relations.map((relation) => (
           <RelationPanel

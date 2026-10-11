@@ -150,6 +150,100 @@ describe('metadata API', () => {
     expect(errorOf(missing.body)).toBe('NOT_FOUND');
   });
 
+  it('persists a layout patch, validates its panels and exposes it on GET', async () => {
+    const view = 'detail';
+    const layouts = {
+      [view]: [{ entity: 'Account', type: view, panels: [{ name: 'overview', label: 'Overview', position: 0, fields: ['name', 'website'] }] }],
+    };
+    const patched = await call('POST', '/api/v1/Metadata/Account', adminToken, { layouts });
+    expect(patched.status).toBe(200);
+    const layoutsOf = (body: Record<string, unknown>) => (body['layouts'] ?? {}) as Record<string, { panels?: { name: string; fields?: string[] }[] }[]>;
+    expect(layoutsOf(patched.body)[view]?.[0]?.panels?.[0]?.name).toBe('overview');
+
+    const after = await call('GET', '/api/v1/Metadata/Account', adminToken);
+    expect(layoutsOf(after.body)[view]?.[0]?.panels?.[0]?.fields).toEqual(['name', 'website']);
+
+    const change = await ctx.database.db
+      .selectFrom('schema_changes')
+      .select('operation')
+      .where('entity_type', '=', 'Account')
+      .orderBy('created_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    expect(change).toMatchObject({ operation: 'entity.layout.update' });
+  });
+
+  it('rejects a layout panel that references an unknown or disabled field', async () => {
+    const view = 'detail';
+    const unknown = await call('POST', '/api/v1/Metadata/Account', adminToken, {
+      layouts: { [view]: [{ entity: 'Account', type: view, panels: [{ name: 'p', position: 0, fields: ['doesNotExist'] }] }] },
+    });
+    expect(unknown.status).toBe(422);
+    expect(errorOf(unknown.body)).toBe('VALIDATION_FAILED');
+
+    const disabledField = `layoutDisabled${runId.replace(/^\w/, (c) => c.toUpperCase())}`;
+    await call('POST', '/api/v1/Metadata/Account', adminToken, { fields: { [disabledField]: { type: 'varchar' } } });
+    await call('DELETE', `/api/v1/Metadata/Account/Field/${disabledField}`, adminToken);
+    const disabledPanel = await call('POST', '/api/v1/Metadata/Account', adminToken, {
+      layouts: { [view]: [{ entity: 'Account', type: view, panels: [{ name: 'p2', position: 0, fields: [disabledField] }] }] },
+    });
+    expect(disabledPanel.status).toBe(422);
+    expect(errorOf(disabledPanel.body)).toBe('VALIDATION_FAILED');
+  });
+
+  it('persists index metadata without altering the database schema', async () => {
+    const indexes = [{ name: 'idx_account_industry', fields: ['industry'], unique: false }];
+    const patched = await call('POST', '/api/v1/Metadata/Account', adminToken, { indexes });
+    expect(patched.status).toBe(200);
+    expect((patched.body['indexes'] as { name: string }[])[0]).toMatchObject({ name: 'idx_account_industry', unique: false });
+
+    const after = await call('GET', '/api/v1/Metadata/Account', adminToken);
+    expect((after.body['indexes'] as { name: string }[]).some((index) => index.name === 'idx_account_industry')).toBe(true);
+
+    const change = await ctx.database.db
+      .selectFrom('schema_changes')
+      .select('operation')
+      .where('entity_type', '=', 'Account')
+      .orderBy('created_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    expect(change).toMatchObject({ operation: 'entity.index.update' });
+  });
+
+  it('rejects an index that references an unknown field or a reserved column', async () => {
+    const unknown = await call('POST', '/api/v1/Metadata/Account', adminToken, { indexes: [{ name: 'bad1', fields: ['nope'] }] });
+    expect(unknown.status).toBe(422);
+    expect(errorOf(unknown.body)).toBe('VALIDATION_FAILED');
+
+    const reserved = await call('POST', '/api/v1/Metadata/Account', adminToken, { indexes: [{ name: 'bad2', fields: ['createdAt'] }] });
+    expect(reserved.status).toBe(422);
+    expect(errorOf(reserved.body)).toBe('VALIDATION_FAILED');
+
+    const empty = await call('POST', '/api/v1/Metadata/Account', adminToken, { indexes: [{ name: 'bad3', fields: [] }] });
+    expect(empty.status).toBe(422);
+    expect(errorOf(empty.body)).toBe('VALIDATION_FAILED');
+  });
+
+  it('persists per-entity ACL metadata on the entity definition', async () => {
+    const acl = { permissions: { Account: { read: 'all', edit: 'all' } } };
+    const patched = await call('POST', '/api/v1/Metadata/Account', adminToken, { acl });
+    expect(patched.status).toBe(200);
+    const aclOf = (body: Record<string, unknown>) => (body['acl'] ?? {}) as { permissions?: Record<string, Record<string, string>> };
+    expect(aclOf(patched.body).permissions?.Account?.read).toBe('all');
+
+    const after = await call('GET', '/api/v1/Metadata/Account', adminToken);
+    expect(aclOf(after.body).permissions?.Account?.edit).toBe('all');
+
+    const change = await ctx.database.db
+      .selectFrom('schema_changes')
+      .select('operation')
+      .where('entity_type', '=', 'Account')
+      .orderBy('created_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    expect(change).toMatchObject({ operation: 'entity.acl.update' });
+  });
+
   it('denies metadata writes to non-admin users', async () => {
     const plain = await createTestUser(ctx, { userName: `meta_plain_${runId}`, roleIds: ['noAccess'] });
 
@@ -163,5 +257,91 @@ describe('metadata API', () => {
     const read = await call('GET', '/api/v1/Metadata', plain.token);
     expect(read.status).toBe(200);
     expect(fieldsOf(read.body)['sneaky']).toBeUndefined();
+  });
+
+  it('persists index configuration as declarative metadata (PLAN §8)', async () => {
+    const patched = await call('POST', '/api/v1/Metadata/Account', adminToken, {
+      indexes: [{ name: `idxAccountIndustry${runId}`, fields: ['industry'], unique: false }],
+    });
+    expect(patched.status).toBe(200);
+    const indexes = (patched.body['indexes'] ?? []) as { name: string; fields: string[] }[];
+    expect(indexes).toEqual(expect.arrayContaining([{ name: `idxAccountIndustry${runId}`, fields: ['industry'], unique: false }]));
+
+    const after = await call('GET', '/api/v1/Metadata/Account', adminToken);
+    const stored = (after.body['indexes'] ?? []) as { name: string }[];
+    expect(stored.some((index) => index.name === `idxAccountIndustry${runId}`)).toBe(true);
+
+    const change = await ctx.database.db
+      .selectFrom('schema_changes')
+      .select('operation')
+      .where('entity_type', '=', 'Account')
+      .orderBy('created_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    expect(change).toMatchObject({ operation: 'entity.index.update' });
+  });
+
+  it('rejects an index that references an unknown, reserved, or empty field set (PLAN §8)', async () => {
+    const unknownField = await call('POST', '/api/v1/Metadata/Account', adminToken, {
+      indexes: [{ name: `idxBad${runId}`, fields: ['noSuchColumn'], unique: false }],
+    });
+    expect(unknownField.status).toBe(422);
+    expect(errorOf(unknownField.body)).toBe('VALIDATION_FAILED');
+
+    const reserved = await call('POST', '/api/v1/Metadata/Account', adminToken, {
+      indexes: [{ name: `idxReserved${runId}`, fields: ['createdAt'], unique: false }],
+    });
+    expect(reserved.status).toBe(422);
+
+    const empty = await call('POST', '/api/v1/Metadata/Account', adminToken, {
+      indexes: [{ name: `idxEmpty${runId}`, fields: [], unique: false }],
+    });
+    expect(empty.status).toBe(422);
+  });
+
+  it('persists a layout that groups fields into panels (PLAN §8)', async () => {
+    const patched = await call('POST', '/api/v1/Metadata/Account', adminToken, {
+      layouts: {
+        detail: [
+          { entity: 'Account', type: 'detail', panels: [{ name: 'overview', label: 'Overview', position: 0, fields: ['name', 'industry'] }] },
+        ],
+      },
+    });
+    expect(patched.status).toBe(200);
+    const layouts = (patched.body['layouts'] ?? {}) as { detail?: { panels?: { name: string; fields?: string[] }[] }[] };
+    expect(layouts.detail?.[0]?.panels?.[0]).toMatchObject({ name: 'overview', fields: ['name', 'industry'] });
+
+    const after = await call('GET', '/api/v1/Metadata/Account', adminToken);
+    const stored = (after.body['layouts'] ?? {}) as { detail?: { panels?: { name: string }[] }[] };
+    expect(stored.detail?.[0]?.panels?.[0]?.name).toBe('overview');
+
+    const change = await ctx.database.db
+      .selectFrom('schema_changes')
+      .select('operation')
+      .where('entity_type', '=', 'Account')
+      .orderBy('created_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    expect(change).toMatchObject({ operation: 'entity.layout.update' });
+  });
+
+  it('rejects a layout panel that references a disabled field (PLAN §8)', async () => {
+    const added = await call('POST', '/api/v1/Metadata/Account', adminToken, {
+      fields: { [`legacyForLayout${runId}`]: { type: 'varchar' } },
+    });
+    expect(added.status).toBe(200);
+
+    const disabled = await call('DELETE', `/api/v1/Metadata/Account/Field/legacyForLayout${runId}`, adminToken);
+    expect(disabled.status).toBe(200);
+
+    const bad = await call('POST', '/api/v1/Metadata/Account', adminToken, {
+      layouts: {
+        detail: [
+          { entity: 'Account', type: 'detail', panels: [{ name: 'overview', position: 0, fields: [`legacyForLayout${runId}`] }] },
+        ],
+      },
+    });
+    expect(bad.status).toBe(422);
+    expect(errorOf(bad.body)).toBe('VALIDATION_FAILED');
   });
 });

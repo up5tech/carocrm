@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api, type WhereClause } from '../api/client.js';
 import { FieldValue } from '../components/fields.js';
-import { fieldLabel, filterEntries, listEntries, useEntity, useMetadata } from '../state/metadata.js';
+import { fieldLabel, filterEntries, layoutPanelsFor, listEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
 import type { FilterDraft } from '../types/views.js';
 
 const OPERATORS: { value: string; label: string }[] = [
@@ -35,7 +35,9 @@ export function EntityListPage() {
   const [drafts, setDrafts] = useState<FilterDraft[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const columns = useMemo(() => listEntries(definition.data), [definition.data]);
+  // PLAN §8: a 'list' layout only reorders the columns; without one the field order is unchanged.
+  const panels = useMemo(() => layoutPanelsFor(definition.data, 'list'), [definition.data]);
+  const columns = useMemo(() => orderByLayout(listEntries(definition.data), panels), [definition.data, panels]);
   const filterable = useMemo(() => filterEntries(definition.data), [definition.data]);
 
   const load = useCallback(async () => {

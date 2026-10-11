@@ -1,4 +1,14 @@
-import type { EntityDefinition, ListResult, LoginResult, Metadata, Principal } from './types.js';
+import type {
+  AclDefinition,
+  EntityDefinition,
+  IndexDefinition,
+  LayoutDefinition,
+  ListResult,
+  LoginResult,
+  Metadata,
+  Principal,
+  Role,
+} from './types.js';
 
 export class ApiError extends Error {
   constructor(
@@ -220,6 +230,18 @@ export const api = {
     request<EntityDefinition>(`/Metadata/${encodeURIComponent(name)}`, { method: 'POST', body: JSON.stringify(patch) }),
   disableField: (name: string, field: string) =>
     request<EntityDefinition>(`/Metadata/${encodeURIComponent(name)}/Field/${encodeURIComponent(field)}`, { method: 'DELETE' }),
+
+  roles: () => request<ListResult<Role>>('/Role'),
+  patchRole: (id: string, patch: Record<string, unknown>) =>
+    request<Role>(`/Role/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  // Phase 8 — index / layout / ACL metadata editing.
+  saveIndexes: (name: string, indexes: IndexDefinition[]) =>
+    request<EntityDefinition>(`/Metadata/${encodeURIComponent(name)}`, { method: 'POST', body: JSON.stringify({ indexes }) }),
+  saveLayouts: (name: string, layouts: Record<string, LayoutDefinition[]>) =>
+    request<EntityDefinition>(`/Metadata/${encodeURIComponent(name)}`, { method: 'POST', body: JSON.stringify({ layouts }) }),
+  saveEntityAcl: (name: string, acl: AclDefinition) =>
+    request<EntityDefinition>(`/Metadata/${encodeURIComponent(name)}`, { method: 'POST', body: JSON.stringify({ acl }) }),
 
   list: (entity: string, params: ListParams = {}) =>
     request<ListResult>(`/${encodeURIComponent(entity)}${listQuery(params)}`),

@@ -1,12 +1,29 @@
 import { Alert, App as AntApp, Button, Card, Form, Space, Spin, Typography } from 'antd';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { api, type RecordData } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition } from '../api/types.js';
 import { FieldEditor } from '../components/fields.js';
 import { evaluateEntityLogic, isComputedField } from '../state/logic.js';
-import { editEntries, fieldLabel, useEntity, useMetadata } from '../state/metadata.js';
+import {
+  editEntries,
+  fieldLabel,
+  layoutFieldNames,
+  layoutPanelsFor,
+  orderByLayout,
+  panelFieldNames,
+  useEntity,
+  useMetadata,
+} from '../state/metadata.js';
+
+const GRID_STYLE: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0 16px' };
+
+interface FieldSection {
+  key: string;
+  title: string;
+  entries: VisibleEntry[];
+}
 
 /** Client-side rules derived from metadata + dynamic logic (PLAN §13, §21). */
 function fieldRules(name: string, field: FieldDefinition, required: boolean) {
@@ -53,6 +70,33 @@ export function EntityEditPage() {
   const logic = useMemo(() => evaluateEntityLogic(definition.data, watched ?? {}), [definition.data, watched]);
   const entries = useMemo(() => buildEntries(definition.data, logic), [definition.data, logic]);
   const computedNames = useMemo(() => Object.keys(logic.values), [logic.values]);
+
+  // PLAN §8: an entity without an 'edit' layout keeps a single grid in field order.
+  const panels = useMemo(() => layoutPanelsFor(definition.data, 'edit'), [definition.data]);
+  const ordered = useMemo(() => orderByLayout(entries, panels), [entries, panels]);
+  const sections = useMemo(() => {
+    const list: FieldSection[] = panels.map((panel) => ({
+      key: panel.name,
+      title: panel.label ?? panel.name,
+      entries: ordered.filter((entry) => panelFieldNames(panel).has(entry.name)),
+    }));
+    const covered = layoutFieldNames(panels);
+    const uncovered = ordered.filter((entry) => !covered.has(entry.name));
+    if (uncovered.length > 0) list.push({ key: '__uncovered', title: 'Other', entries: uncovered });
+    return list;
+  }, [panels, ordered]);
+
+  const renderField = (entry: VisibleEntry) => (
+    <Form.Item
+      key={entry.name}
+      name={entry.name}
+      label={fieldLabel(entry.name, entry.field, metadata.data)}
+      rules={fieldRules(entry.name, entry.field, entry.required)}
+      valuePropName={entry.field.type === 'bool' ? 'checked' : 'value'}
+    >
+      <FieldEditor fieldName={entry.name} field={entry.field} value={undefined} disabled={entry.readOnly || computedNames.includes(entry.name)} onChange={() => undefined} />
+    </Form.Item>
+  );
 
   useEffect(() => {
     for (const [name, value] of Object.entries(logic.values)) {
@@ -134,19 +178,16 @@ export function EntityEditPage() {
         }}
       >
         {id ? <Form.Item name="version" hidden><input type="hidden" /></Form.Item> : null}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0 16px' }}>
-          {entries.map((entry) => (
-            <Form.Item
-              key={entry.name}
-              name={entry.name}
-              label={fieldLabel(entry.name, entry.field, metadata.data)}
-              rules={fieldRules(entry.name, entry.field, entry.required)}
-              valuePropName={entry.field.type === 'bool' ? 'checked' : 'value'}
-            >
-              <FieldEditor fieldName={entry.name} field={entry.field} value={undefined} disabled={entry.readOnly || computedNames.includes(entry.name)} onChange={() => undefined} />
-            </Form.Item>
-          ))}
-        </div>
+        {panels.length === 0 ? (
+          <div style={GRID_STYLE}>{ordered.map(renderField)}</div>
+        ) : (
+          sections.map((section) => (
+            <div key={section.key} style={{ marginBottom: 16 }}>
+              <Typography.Text strong>{section.title}</Typography.Text>
+              <div style={GRID_STYLE}>{section.entries.map(renderField)}</div>
+            </div>
+          ))
+        )}
         <Space>
           <Button type="primary" htmlType="submit" loading={saving} disabled={blocked}>
             Save

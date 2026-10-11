@@ -93,6 +93,24 @@ export const AclDefinitionSchema = z.object({
 
 export type AclDefinition = z.infer<typeof AclDefinitionSchema>;
 
+export const LayoutPanelSchema = z.object({
+  name: z.string(),
+  label: z.string().optional(),
+  position: z.number().int().default(0),
+  fields: z.array(z.string()).optional(),
+  tabs: z.array(z.string()).optional(),
+});
+
+export type LayoutPanel = z.infer<typeof LayoutPanelSchema>;
+
+export const LayoutDefinitionSchema = z.object({
+  entity: z.string(),
+  type: z.enum(['list', 'detail', 'edit', 'filter', 'search', 'massUpdate']),
+  panels: z.array(LayoutPanelSchema),
+});
+
+export type LayoutDefinition = z.infer<typeof LayoutDefinitionSchema>;
+
 export const RecordDefinitionSchema = z.object({
   displayField: z.string().optional(),
   nameField: z.string().optional(),
@@ -136,6 +154,11 @@ export const EntityDefinitionSchema = z.object({
   relations: z.record(z.string(), RelationDefinitionSchema),
   indexes: z.array(IndexDefinitionSchema).default([]),
   acl: AclDefinitionSchema.optional(),
+  /**
+   * Per-view panel layout (PLAN §8). Each entry groups fields into a labelled panel; a view with no
+   * entry falls back to the flat field order, so seeded entities keep working untouched.
+   */
+  layouts: z.record(z.string(), z.array(LayoutDefinitionSchema)).default({}),
   record: RecordDefinitionSchema.default({}),
   client: ClientDefinitionSchema.default({}),
   dynamicLogic: DynamicLogicSectionSchema.optional(),
@@ -149,28 +172,11 @@ export type EntityDefinition = {
   relations: Record<string, RelationDefinition>;
   indexes: IndexDefinition[];
   acl?: AclDefinition | undefined;
+  layouts: Record<string, LayoutDefinition[]>;
   record: RecordDefinition;
   client: ClientDefinition;
   dynamicLogic?: DynamicLogicSection | undefined;
 };
-
-export const LayoutPanelSchema = z.object({
-  name: z.string(),
-  label: z.string().optional(),
-  position: z.number().int().default(0),
-  fields: z.array(z.string()).optional(),
-  tabs: z.array(z.string()).optional(),
-});
-
-export type LayoutPanel = z.infer<typeof LayoutPanelSchema>;
-
-export const LayoutDefinitionSchema = z.object({
-  entity: z.string(),
-  type: z.enum(['list', 'detail', 'edit', 'filter', 'search', 'massUpdate']),
-  panels: z.array(LayoutPanelSchema),
-});
-
-export type LayoutDefinition = z.infer<typeof LayoutDefinitionSchema>;
 
 export const PermissionDefinitionSchema = z.object({
   name: z.string(),

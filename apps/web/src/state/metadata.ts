@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client.js';
-import type { EntityDefinition, FieldDefinition, Metadata } from '../api/types.js';
+import type { EntityDefinition, FieldDefinition, LayoutPanel, Metadata } from '../api/types.js';
 import { isComputedField } from './logic.js';
 
 export interface FieldEntry {
@@ -56,6 +56,7 @@ export function editEntries(definition: EntityDefinition | undefined): FieldEntr
   return visibleEntries(definition, (field) => field.inEdit === false || isComputedField(field.type));
 }
 
+
 export function filterEntries(definition: EntityDefinition | undefined): FieldEntry[] {
   return definition
     ? Object.entries(definition.fields)
@@ -68,6 +69,52 @@ export function filterEntries(definition: EntityDefinition | undefined): FieldEn
         .slice(0, 12)
         .map(([name, field]) => ({ name, field }))
     : [];
+}
+
+/** Views the generated record screens can lay out (PLAN §8). */
+type LayoutView = 'list' | 'detail' | 'edit';
+
+/**
+ * Panels of the first layout declared for a view, in position order (PLAN §8).
+ * Entities without a layout return an empty list so callers can fall back to field order.
+ */
+export function layoutPanelsFor(definition: EntityDefinition | undefined, view: LayoutView): LayoutPanel[] {
+  for (const group of Object.values(definition?.layouts ?? {})) {
+    const layout = group.find((candidate) => candidate.type === view);
+    const panels = layout?.panels;
+    if (panels) return [...panels].sort((a, b) => a.position - b.position);
+  }
+  return [];
+}
+
+/**
+ * Reorders entries to follow the field order declared by `panels` (PLAN §8).
+ * Entries no panel mentions keep their original relative order, after the laid-out ones.
+ * Without panels the input list is returned untouched, so callers need no special case.
+ */
+export function orderByLayout<T extends FieldEntry>(entries: T[], panels: LayoutPanel[]): T[] {
+  if (panels.length === 0) return entries;
+  // A Set preserves the union order (panel position, then declared field order) and drops repeats.
+  const covered = layoutFieldNames(panels);
+  const ordered: T[] = [];
+  for (const name of covered) {
+    const entry = entries.find((candidate) => candidate.name === name);
+    if (entry) ordered.push(entry);
+  }
+  for (const entry of entries) {
+    if (!covered.has(entry.name)) ordered.push(entry);
+  }
+  return ordered;
+}
+
+/** Field names a panel lays out, used to split entries into panel sections. */
+export function panelFieldNames(panel: LayoutPanel): Set<string> {
+  return new Set(panel.fields ?? []);
+}
+
+/** Field names laid out by any panel, so callers can group the remainder separately. */
+export function layoutFieldNames(panels: LayoutPanel[]): Set<string> {
+  return new Set(panels.flatMap((panel) => panel.fields ?? []));
 }
 
 export function labelOf(definition: EntityDefinition | undefined, name: string): string {

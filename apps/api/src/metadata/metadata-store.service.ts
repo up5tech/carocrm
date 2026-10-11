@@ -104,6 +104,13 @@ function mergeEntityData(base: Record<string, unknown> | undefined, patch: Recor
   if (base.relations && patch.relations) {
     merged.relations = { ...(base.relations as Record<string, unknown>), ...(patch.relations as Record<string, unknown>) };
   }
+  // `layouts`, `indexes` and `acl` are whole-section replacements (PLAN §8): a patch that omits them
+  // keeps the persisted value, a patch that provides them replaces them outright.
+  for (const section of ['layouts', 'indexes', 'acl'] as const) {
+    if (patch[section] === undefined && base[section] !== undefined) {
+      merged[section] = base[section];
+    }
+  }
   return merged;
 }
 

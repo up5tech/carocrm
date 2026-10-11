@@ -25,16 +25,61 @@ export interface RelationDefinition {
   label?: string | undefined;
 }
 
+/** One index declaration (PLAN §8). Declarative metadata only — no physical index is auto-created. */
+export interface IndexDefinition {
+  name: string;
+  fields: string[];
+  unique: boolean;
+}
+
+/** One panel within a per-view layout (PLAN §8). */
+export interface LayoutPanel {
+  name: string;
+  label?: string | undefined;
+  position: number;
+  fields?: string[] | undefined;
+  tabs?: string[] | undefined;
+}
+
+/** A single layout definition for one view (PLAN §8). */
+export interface LayoutDefinition {
+  entity: string;
+  type: LayoutViewType;
+  panels: LayoutPanel[];
+}
+
+export type LayoutViewType = 'list' | 'detail' | 'edit' | 'filter' | 'search' | 'massUpdate';
+
+/** Optional per-entity ACL defaults stored on the entity definition (PLAN §8). */
+export interface AclDefinition {
+  permissions?: Record<string, Record<string, string>> | undefined;
+  fieldPermissions?: Record<string, Record<string, string>> | undefined;
+  recordAccess?: Record<string, Record<string, string>> | undefined;
+}
+
 export interface EntityDefinition {
   name: string;
   label: string;
   isEntity: boolean;
   fields: Record<string, FieldDefinition>;
   relations: Record<string, RelationDefinition>;
+  indexes?: IndexDefinition[] | undefined;
+  layouts?: Record<string, LayoutDefinition[]> | undefined;
+  acl?: AclDefinition | undefined;
   record?: { displayField?: string | undefined; nameField?: string | undefined } | undefined;
   client?: { web?: boolean | undefined } | undefined;
   /** Declarative rules evaluated in the form and on the server (PLAN §21). */
   dynamicLogic?: { rules: Record<string, unknown>[] } | undefined;
+}
+
+/** A role as served by `GET /api/v1/Role` (the enforced ACL source, PLAN §8). */
+export interface Role {
+  id: string;
+  name: string;
+  permissions: Record<string, Record<string, string>>;
+  fieldPermissions: Record<string, Record<string, Record<string, string>>>;
+  createdAt: string;
+  modifiedAt: string;
 }
 
 export type Metadata = Record<string, EntityDefinition>;

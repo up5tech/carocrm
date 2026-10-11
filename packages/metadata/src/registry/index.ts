@@ -55,6 +55,33 @@ export class MetadataRegistry {
     this.version++;
   }
 
+  /** Per-view panel layouts persisted on the entity definition (PLAN §8). */
+  getEntityLayouts(entity: string): Record<string, unknown[]> {
+    const def = this.entities.get(entity);
+    const layouts = def?.layouts as Record<string, unknown[]> | undefined;
+    return layouts ?? {};
+  }
+
+  setEntityLayouts(entity: string, layouts: Record<string, unknown[]>): void {
+    const def = this.entities.get(entity);
+    if (!def) return;
+    (def as { layouts: Record<string, unknown[]> }).layouts = layouts;
+    this.version++;
+  }
+
+  /** Index definitions persisted on the entity definition (PLAN §8). */
+  getEntityIndexes(entity: string): unknown[] {
+    const def = this.entities.get(entity);
+    return (def?.indexes as unknown[] | undefined) ?? [];
+  }
+
+  setEntityIndexes(entity: string, indexes: unknown[]): void {
+    const def = this.entities.get(entity);
+    if (!def) return;
+    (def as { indexes: unknown[] }).indexes = indexes;
+    this.version++;
+  }
+
   getAcl(entity: string): unknown {
     return this.acl.get(entity);
   }
@@ -100,9 +127,11 @@ export class MetadataRegistry {
         isEntity: def.isEntity,
         fields: this.getFields(name),
         relations: this.getRelations(name),
+        indexes: def.indexes ?? [],
+        layouts: def.layouts ?? {},
         record: def.record,
         client: def.client,
-        acl: this.getAcl(name),
+        acl: def.acl ?? this.getAcl(name),
         dynamicLogic: def.dynamicLogic,
       };
     }
