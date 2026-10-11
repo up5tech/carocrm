@@ -19,6 +19,7 @@ import { RequestContextMiddleware } from './common/request-context.middleware.js
 import { REQUEST_SCOPE_TOKEN,RequestScope } from './common/request-scope.js';
 import { buildConfig, CONFIG_TOKEN } from './config.js';
 import { DatabaseService } from './database/database.service.js';
+import { EMAIL_CONTROLLERS, EMAIL_PROVIDERS } from './email/index.js';
 import { ENTITY_CONTROLLERS, ENTITY_PROVIDERS } from './entity/entity.module.js';
 import type { PostgresRecordStore } from './entity/entity-record.store.js';
 import { ENTITY_STORE } from './entity/entity-record.store.js';
@@ -52,6 +53,8 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     ...DOMAIN_EVENT_CONTROLLERS,
     // `/api/v1/Job...` and `/api/v1/ScheduledJob...` are static prefixes too.
     ...JOB_CONTROLLERS,
+    // `/api/v1/Email/action/...` and `/Email/:id/deliveries` must be matched before `:entity`.
+    ...EMAIL_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
     ...ENTITY_CONTROLLERS,
   ],
@@ -67,6 +70,7 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     ...HOOK_PROVIDERS,
     ...DOMAIN_EVENT_PROVIDERS,
     ...JOB_PROVIDERS,
+    ...EMAIL_PROVIDERS,
     ...LOGIC_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,

@@ -154,7 +154,45 @@ still needs a documentation pass.
   **Upstream parity: unknown** — antivirus is an integration/extension there.
 - Extension and MIME filtering (`BLOCKED_EXTENSIONS`, `ALLOWED_MIME_TYPES` + `image/*`, `text/*`) is
   ours; upstream's allowlist is per-installation and was not verifiable here.
-- Downloads enforce admin / uploader / parent-ACL access. `PARENT_ACL_CHECK_TOKEN` still defaults to
-  permissive, so parent record permission is **not yet enforced** — the seam exists, the wiring does
-  not.
+- Downloads enforce admin / uploader / parent-ACL access; `AppModule` wires `PARENT_ACL_CHECK_TOKEN` to
+  the record ACL (`AclApiService` + the record store), so an attachment is readable by an admin, its
+  uploader, or anyone who can read its parent record. The barrel still ships the permissive default for
+  standalone use.
 - No attachment UI yet: the SPA has no file field or panel, so uploads and downloads are API-only.
+
+## Outbound email (PLAN §28)
+
+Upstream documentation was **not reachable from this environment** while building, so the shapes below
+follow PLAN §28 and our own record model; parity with EspoCRM's email module still needs a
+documentation pass, and its templates, tags, mailbox accounts and feedback loop are out of scope here.
+
+- `Email` is a **metadata entity** (content in `entity_records.attrs`), so upstream's dedicated `email`
+  table with separate body/address tables is not reproduced. The §28.3 fields map to `name` (the
+  subject), from/to/cc/bcc/reply-to, `body`/`bodyHtml`, `headers` (JSON text), `messageId`, `threadId`,
+  `inReplyTo`, `status`, `dateSent`, `deliveryError`, `parentType`/`parentId` and manyMany links to
+  Account/Contact/Lead/User — which is how ACL, audit, stream and the generated UI come for free.
+- **Delivery status is our own `email_deliveries` table** (one row per recipient, unique on
+  `(email_id, recipient)`, with transport, provider message id, error and attempts). Upstream tracks
+  addresses through `emails_to_*` join tables; these column names and the retry accounting are ours.
+- Sending is **queued, never inline**: the API validates the draft, writes the ledger and enqueues the
+  §24 job `system.sendEmail`; the worker performs the SMTP call. Upstream sends during the request, so
+  *when* a failure surfaces differs deliberately (PLAN §7.4 observability, §5.5 external effects).
+- Transports implemented: SMTP submission and a generic credential-free SMTP relay over nodemailer,
+  plus `memory` and `none`, which deliver nothing — `none` is the default and the API answers
+  `FEATURE_DISABLED` while it is selected. **AWS SES, SendGrid and Microsoft Graph are PLAN §28
+  "later" and are absent**, and so is **inbound collection (IMAP / POP3 / Graph / Gmail)**: upstream's
+  fetched-mail behaviour is therefore **not comparable yet**.
+- **No mail credential is stored in the database.** `SMTP_*` settings come from the environment, so
+  PLAN §28.3's "secrets and credentials must be stored encrypted at rest" currently has no stored
+  secret to satisfy. This is a deliberate deviation, not an implementation: if mail accounts become
+  editable data (upstream stores inbound/outbound accounts), that rule needs a real secret store and
+  this row must be revisited.
+- Anti-spoofing and injection defenses are ours, not upstream-documented: the From address must equal
+  the configured mailbox unless `SMTP_STRICT_FROM=false`, header names the envelope owns
+  (`From`/`To`/`Subject`/`Message-Id`/`Content-Type`/`Received`…) are refused, header values containing
+  CR/LF are rejected, and recipients are capped by `MAIL_MAX_RECIPIENTS`.
+- Retry semantics are ours: a connection failure or 4xx answer is re-thrown so BullMQ backs off and the
+  record returns to `Queued`; a 5xx or all-rejected envelope is final. A record already `Sent` is a
+  no-op, so a duplicate queue entry cannot mail twice.
+- No email UI yet (no compose screen, mailbox list or thread view) and email notifications (§29) are
+  not wired to this subsystem — reminders still deliver in-app notifications only.

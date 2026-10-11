@@ -33,6 +33,12 @@ const ConfigSchema = z.object({
   signedUrlTtlSeconds: z.coerce.number().int().min(30).max(86_400).default(900),
   /** 'none' turns the malware hook off; 'signature' runs the built-in scanner (PLAN §25). */
   malwareScanMode: z.enum(['signature', 'none']).default('signature'),
+  /**
+   * Outbound mail transport (PLAN §28.1). `none` is the default so an installation that has not
+   * configured SMTP cannot send mail by accident. The `SMTP_*` settings themselves are parsed by
+   * `@carocrm/mail` from the environment, and a broken `smtp` configuration fails at boot.
+   */
+  mailTransport: z.enum(['none', 'memory', 'smtp', 'relay']).default('none'),
   /** Global API rate limit per minute; the SPA spends many small calls per screen. */
   rateLimitMax: z.coerce.number().int().positive().default(300),
   /** BullMQ queue the API produces into; must match the worker's WORKER_QUEUE_NAME. */
@@ -102,6 +108,7 @@ export function buildConfig(): AppConfig {
     uploadChunkMaxMb: process.env.UPLOAD_CHUNK_MAX_MB,
     signedUrlTtlSeconds: process.env.SIGNED_URL_TTL_SECONDS,
     malwareScanMode: process.env.MALWARE_SCAN_MODE,
+    mailTransport: process.env.MAIL_TRANSPORT,
     jobQueueName: process.env.JOB_QUEUE_NAME,
     jobAttempts: process.env.JOB_ATTEMPTS,
     jobBackoffBaseMs: process.env.JOB_BACKOFF_BASE_MS,

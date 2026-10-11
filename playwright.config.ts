@@ -19,7 +19,7 @@ export default defineConfig({
   webServer: [
     {
       // Uses the configured project database from .env (AGENTS.md §3.1); creates nothing.
-      command: `bash -c "pnpm db:seed && APP_PORT=${apiPort} JWT_SECRET=e2e-playwright-secret STORAGE_ROOT=.data/e2e-playwright NODE_ENV=production RATE_LIMIT_MAX=2000 node apps/api/dist/main.js"`,
+      command: `bash -c "pnpm db:seed && APP_PORT=${apiPort} JWT_SECRET=e2e-playwright-secret STORAGE_ROOT=.data/e2e-playwright NODE_ENV=production RATE_LIMIT_MAX=2000 MAIL_TRANSPORT=memory node apps/api/dist/main.js"`,
       url: `http://127.0.0.1:${apiPort}/health/ready`,
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,

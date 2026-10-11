@@ -20,6 +20,7 @@
     "@carocrm/acl": "workspace:*",
     "@carocrm/jobs": "workspace:*",
     "@carocrm/files": "workspace:*",
+    "@carocrm/mail": "workspace:*",
     "@fastify/cookie": "^11.0.0",
     "@fastify/cors": "^10.0.0",
     "@fastify/helmet": "^13.0.0",

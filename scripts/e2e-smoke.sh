@@ -25,6 +25,11 @@ export NODE_ENV=production
 export LOG_LEVEL=error
 export STORAGE_ROOT=".data/e2e-${RUN_ID}"
 export JWT_SECRET="e2e-se…tion"
+# Outbound mail is held in memory: this run must never reach a mail server (AGENTS.md §5.5).
+export MAIL_TRANSPORT=memory
+# The scratch queue the API test suite already uses: a send job queued here can never reach the real
+# `crm-jobs` queue, and no per-run queue accumulates in Redis (AGENTS.md §3.3).
+export JOB_QUEUE_NAME=crm-jobs-test
 
 PASS=0
 FAIL=0
@@ -219,6 +224,54 @@ code=$(req POST "/api/v1/AttachmentUpload/${UP_ID}/complete" "$TOKEN")
 check 'completing twice refused' 422 "$code"
 
 check 'aborted upload keeps its status' aborted "$(req POST /api/v1/AttachmentUpload/init "$TOKEN" '{"name":"aborted.txt","mimeType":"text/plain","totalSize":10}' >/dev/null; jq_get .id | { read -r uid; req POST "/api/v1/AttachmentUpload/${uid}/abort" "$TOKEN" >/dev/null; req GET "/api/v1/AttachmentUpload/${uid}" "$TOKEN" >/dev/null; jq_get .status; })"
+
+
+echo '--- email (PLAN §28)'
+check 'GET /Email/action/transport 200' 200 "$(req GET /api/v1/Email/action/transport "$TOKEN")"
+check 'transport is the in-memory one' memory "$(jq_get .name)"
+check 'transport is not delivering' disabled "$(jq_get .mode)"
+check 'transport response carries no credential' true "$(! grep -qi 'password\|secret' "$TMP/body" && echo true || echo false)"
+check 'anonymous transport 401' 401 "$(req GET /api/v1/Email/action/transport)"
+check 'admin can verify the transport' true "$(req POST /api/v1/Email/action/verify "$TOKEN" >/dev/null; jq_get .verified)"
+check 'regular user cannot verify the transport' 403 "$(req POST /api/v1/Email/action/verify "$OWN_TOKEN")"
+
+req POST /api/v1/Email "$TOKEN" "{\"name\":\"AGENT_TEST ${RUN_ID} hello\",\"fromAddress\":\"Sales <sales@example.com>\",\"toAddressList\":\"a-${RUN_ID}@example.com, b-${RUN_ID}@example.com\",\"ccAddressList\":\"c-${RUN_ID}@example.com\",\"body\":\"Smoke body\"}" >/dev/null
+EMAIL_ID="$(jq_get .id)"
+check 'POST /Email stored a Draft' Draft "$(req GET "/api/v1/Email/${EMAIL_ID}" "$TOKEN" >/dev/null; jq_get .status)"
+
+check 'POST /Email/:id/action/send 200' 200 "$(req POST "/api/v1/Email/${EMAIL_ID}/action/send" "$TOKEN")"
+SEND_JOB_ID="$(jq_get .job.id)"
+check 'send produced a system.sendEmail job' system.sendEmail "$(jq_get .job.name)"
+check 'send wrote one ledger row per recipient' 3 "$(jq -r '.deliveries | length' "$TMP/body")"
+check 'the record is now Queued' Queued "$(req GET "/api/v1/Email/${EMAIL_ID}" "$TOKEN" >/dev/null; jq_get .status)"
+check 'GET /Email/:id/deliveries 200' 200 "$(req GET "/api/v1/Email/${EMAIL_ID}/deliveries" "$TOKEN")"
+check 'every ledger row is pending' 3 "$(jq -r '[.[] | select(.status=="pending")] | length' "$TMP/body")"
+check 'the cc recipient is remembered' 1 "$(jq -r '[.[] | select(.recipientType=="cc")] | length' "$TMP/body")"
+check 'a queued email cannot be queued twice' 422 "$(req POST "/api/v1/Email/${EMAIL_ID}/action/send" "$TOKEN")"
+check 'deliveries need authentication' 401 "$(req GET "/api/v1/Email/${EMAIL_ID}/deliveries")"
+
+req POST /api/v1/Email "$TOKEN" "{\"name\":\"AGENT_TEST ${RUN_ID} no recipient\",\"body\":\"x\"}" >/dev/null
+NO_TO_ID="$(jq_get .id)"
+check 'an email with no recipient is refused' 422 "$(req POST "/api/v1/Email/${NO_TO_ID}/action/send" "$TOKEN")"
+check 'the refused draft is still a Draft' Draft "$(req GET "/api/v1/Email/${NO_TO_ID}" "$TOKEN" >/dev/null; jq_get .status)"
+check 'the refused draft wrote no ledger row' 0 "$(req GET "/api/v1/Email/${NO_TO_ID}/deliveries" "$TOKEN" >/dev/null; jq -r 'length' "$TMP/body")"
+
+req POST /api/v1/Email "$TOKEN" "{\"name\":\"AGENT_TEST ${RUN_ID} forged header\",\"body\":\"x\",\"toAddressList\":\"a-${RUN_ID}@example.com\",\"headers\":\"{\\\"From\\\":\\\"victim@example.com\\\"}\"}" >/dev/null
+FORGE_ID="$(jq_get .id)"
+check 'a header the envelope owns is refused' 422 "$(req POST "/api/v1/Email/${FORGE_ID}/action/send" "$TOKEN")"
+
+# Nothing this run queued may survive for a later worker to execute (§3.3): cancel, then delete by id.
+check 'the queued send job can be cancelled' 200 "$(req POST "/api/v1/Job/${SEND_JOB_ID}/action/cancel" "$TOKEN")"
+node -e "
+const {Pool}=require('pg');
+(async()=>{const p=new Pool({connectionString:process.env.DATABASE_URL,max:1});
+await p.query('DELETE FROM email_deliveries WHERE email_id = ANY(\$1::text[])',[['${EMAIL_ID}','${NO_TO_ID}','${FORGE_ID}']]);
+await p.query('DELETE FROM entity_records WHERE id = ANY(\$1::text[])',[['${EMAIL_ID}','${NO_TO_ID}','${FORGE_ID}']]);
+await p.query('DELETE FROM job_logs WHERE job_id = \$1',['${SEND_JOB_ID}']);
+await p.query('DELETE FROM jobs WHERE id = \$1',['${SEND_JOB_ID}']);
+await p.end();})()" 2>/dev/null
+check 'the cancelled job row is gone' 404 "$(req GET "/api/v1/Job/${SEND_JOB_ID}" "$TOKEN")"
+check 'the test emails are gone too' 404 "$(req GET "/api/v1/Email/${EMAIL_ID}" "$TOKEN")"
 
 echo '--- audit'
 audit_code=$(req GET "/api/v1/AuditLog?entityType=Contact&maxSize=50" "$TOKEN")

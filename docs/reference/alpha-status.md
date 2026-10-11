@@ -2,9 +2,9 @@
 
 Date: 2026-10-10. Scope agreed with the user: **CRM Kernel Alpha only** (PLAN tasks 01–16, 19–20 of §87).
 Tasks 17–18 (generic React UI + Entity Manager) were completed afterwards, together with stream,
-calendar and the PLAN §21–§22 dynamic logic + formula engine, §23 hooks + domain events, §24 jobs and
-§25 attachments/file storage (see the sections at the end of this file);
-email, import/export, dashboards, extension SDK, workflow, reports, BPM and portal remain
+calendar and the PLAN §21–§22 dynamic logic + formula engine, §23 hooks + domain events, §24 jobs,
+§25 attachments/file storage and the §28 outbound email subsystem (see the sections at the end of this file);
+import/export, dashboards, extension SDK, workflow, reports, BPM and portal remain
 unimplemented; see PLAN §72 for the remaining priority matrix.
 
 ## Checklist from PLAN §73
@@ -25,6 +25,7 @@ unimplemented; see PLAN §72 for the remaining priority matrix.
 | Generic React CRUD UI working | done | `apps/web`: nav, list (filter/sort/paging/mass delete), detail with relationship panels, create/edit forms — all rendered from `GET /Metadata` |
 | Entity Manager admin UI working | done | `apps/web/src/pages/EntityManagerPage.tsx`: labels, add/disable fields, add relations, enable/disable and create entities |
 | Attachments working | done | `POST /api/v1/Attachment/upload`, MIME/size/extension checks, local FS storage |
+| Outbound email working | done | `MailTransport` port (SMTP + generic relay + disabled/memory), `POST /api/v1/Email/:id/action/send` queues `system.sendEmail`, `email_deliveries` ledger; inbound (§28.2) not implemented |
 | Audit working | done | field-level rows in `audit_log`, `GET /api/v1/AuditLog`, secrets redacted |
 | OpenAPI working | done | `GET /api/v1/OpenApi` (generated from controllers) |
 | API integration tests working | done | 77 vitest tests, 6 files (`apps/api/test`) |
@@ -40,11 +41,11 @@ pnpm db:seed          # applies migrations and seeds admin/roles/metadata into t
 pnpm lint             # eslint, 0 warnings allowed
 pnpm typecheck        # tsc --noEmit over the whole workspace
 pnpm -r build         # all packages + api + worker
-npx vitest run        # 250 tests: 170 API/integration (apps/api/test) + 80 package unit (formula 59, files 21); runs on the configured DATABASE_URL, no extra database
-bash scripts/e2e-smoke.sh   # 68 checks: HTTP end-to-end, incl. attachments, scan hook and chunked upload
-bash scripts/worker-smoke.sh # 26 checks: outbox, BullMQ jobs, cron, graceful shutdown, job progress/logs/cancellation, upload cleanup
-npx playwright test    # 10 browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic/jobs); starts API+SPA itself
-pnpm --filter @carocrm/worker test  # 91 worker tests (jobs, scheduler, outbox, reminder job, upload cleanup, domain-event subscribers)
+npx vitest run        # 325 tests: 182 API/integration (apps/api/test) + 143 package unit (formula 59, files 21, mail 63); runs on the configured DATABASE_URL, no extra database
+bash scripts/e2e-smoke.sh   # 92 checks: HTTP end-to-end, incl. attachments, scan hook, chunked upload and outbound email
+bash scripts/worker-smoke.sh # 34 checks: outbox, BullMQ jobs, cron, graceful shutdown, job progress/logs/cancellation, upload cleanup, system.sendEmail
+npx playwright test    # 11 browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic/jobs/email); starts API+SPA itself
+pnpm --filter @carocrm/worker test  # 111 worker tests (jobs, scheduler, outbox, reminder job, upload cleanup, sendEmail job, domain-event subscribers)
 ```
 
 ## Deviations from PLAN (deliberate, for Alpha)
@@ -171,12 +172,50 @@ turned it into the storage layer PLAN §25 describes:
 - Abandoned reservations are cleaned by the new `system.cleanupUploads` worker job (hourly in the seed).
 - Migrations: `004_file_uploads.sql` (reservations) and `005_file_upload_parts.sql` (the chunk ledger,
   additive `ALTER … ADD COLUMN IF NOT EXISTS` because `004` was already applied to the dev database).
-- Not done here: no attachment UI (no file field/panel in the SPA) and `PARENT_ACL_CHECK_TOKEN` is
-  still the permissive default, so parent-record permission is not enforced yet.
+- Not done here: no attachment UI (no file field/panel in the SPA). Parent-record permission is
+  enforced — `AppModule` wires `PARENT_ACL_CHECK_TOKEN` to `AclApiService` and the record store.
 - Verification: 17 new API tests (`apps/api/test/attachments-storage.test.ts`), 21 package tests
   (storage/S3/scanner), 4 worker tests, 19 new `scripts/e2e-smoke.sh` checks, 4 new
   `scripts/worker-smoke.sh` checks; totals moved to 250 vitest / 91 worker / 68 + 26 smoke checks and
   10 Playwright specs still green.
+
+## Outbound email (PLAN §28, added 2026-10-11)
+
+`packages/mail` was a two-line placeholder. It is now the email platform service PLAN §28 describes,
+outbound side only:
+
+- `MailTransport` port (`prepare` / `send` / `verify` + an `info` block the UI can read) with four
+  implementations: `smtp` (authenticating submission mailbox), `relay` (generic SMTP relay — refuses
+  credentials at boot because a relay trusts the network), `memory` (holds messages, delivers nothing)
+  and `none` (default). `createMailTransport(mode, env)` selects it; SES/SendGrid/Graph stay PLAN §28
+  "later" and drop behind the same token.
+- Normalization is shared, not per transport: quoted display names, comma-outside-angle splitting,
+  case-insensitive dedupe across to/cc/bcc, `MAIL_MAX_RECIPIENTS` ceiling, Message-Id/thread
+  generation, and rejection of headers the envelope owns or whose values carry CR/LF (SMTP header
+  injection). `SMTP_STRICT_FROM` (default on) refuses a From that is not the configured account.
+- Pipeline: `POST /api/v1/Email/:id/action/send` validates with `transport.prepare()`, writes one
+  `email_deliveries` row per recipient (`006_email_deliveries.sql`, unique on `(email_id, recipient)`),
+  enqueues `system.sendEmail` as an ordinary §24 job and only then flips the record to `Queued`.
+  Nothing sends from the API process. With `MAIL_TRANSPORT=none` the API answers `FEATURE_DISABLED`
+  rather than queueing work that can never deliver.
+- The worker (`system.sendEmail`) rebuilds the message from the record plus its §25 attachments, sends
+  it, and writes the outcome per recipient: transient/4xx failures are re-thrown so BullMQ retries with
+  backoff and the record returns to `Queued`; 5xx/`EENVELOPE` is final (`Failed` + `deliveryError`);
+  an already-`Sent` record is a no-op, so a duplicate queue entry cannot send twice.
+- `Email` is a metadata entity (`database/seed-metadata.ts`), so its ACL, audit, stream and domain
+  events come from the kernel and the generic SPA renders it; the module only owns the ledger, the
+  ceiling and the queue. Attachments link through the §25 attachment table (`parentType: 'Email'`).
+- Credentials live in the environment, never in a table, so PLAN §28.3's "encrypted at rest" requirement
+  has nothing to encrypt — recorded as a deliberate deviation rather than half-implementing a secret
+  store.
+- Not built: inbound collection (PLAN §28.2 IMAP/POP3/Graph/Gmail — PLAN itself defers it) and the later
+  providers above. There is no email-specific UI (no compose screen, mailbox list or thread view), but
+  `Email` is a metadata entity, so the generated list/detail/edit views already work for drafts and the
+  send is an API action.
+- Verification: 63 package unit tests with a fake sender (no socket is ever opened), 12 API tests
+  (`apps/api/test/email.test.ts`), 20 worker job tests, 1 browser spec (`e2e/email.spec.ts`: draft in the
+  generated form → queue → ledger → cancel), 24 new `scripts/e2e-smoke.sh` checks and 8 new
+  `scripts/worker-smoke.sh` checks; every suite deletes only the records it created.
 
 ## Web UI theme (Lizant)
 

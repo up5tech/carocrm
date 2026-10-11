@@ -46,6 +46,12 @@ const WorkerConfigSchema = z.object({
   /** Open uploads older than this are abandoned by the cleanup job. */
   uploadExpiryHours: z.coerce.number().int().min(1).max(24 * 30).default(24),
   /**
+   * Outbound mail transport (PLAN §28.1), same env key as the API so a queued email is delivered by
+   * whatever the front end was configured with. The `SMTP_*` settings themselves are parsed by
+   * `@carocrm/mail` from the environment.
+   */
+  mailTransport: z.enum(['none', 'memory', 'smtp', 'relay']).default('none'),
+  /**
    * Auto-stop after N ms (0 = run forever). Lets smoke tests and one-shot container runs get
    * a full graceful shutdown without sending signals.
    */
@@ -117,6 +123,7 @@ export function buildWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerC
     s3SecretAccessKey: env.S3_SECRET_ACCESS_KEY,
     s3ForcePathStyle: env.S3_FORCE_PATH_STYLE,
     uploadExpiryHours: env.WORKER_UPLOAD_EXPIRY_HOURS,
+    mailTransport: env.MAIL_TRANSPORT,
     runForMs: env.WORKER_RUN_MS,
   });
 }

@@ -295,6 +295,22 @@ export interface SchemaChangesTable {
   applied_at: Date | null;
 }
 
+/** One row per recipient of one Email record (PLAN §28.3 delivery status). */
+export interface EmailDeliveriesTable {
+  id: string;
+  email_id: string;
+  recipient: string;
+  recipient_type: string;
+  status: string;
+  transport: string | null;
+  provider_message_id: string | null;
+  error: string | null;
+  attempts: number;
+  created_at: Date;
+  modified_at: Date;
+  sent_at: Date | null;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
@@ -311,6 +327,7 @@ export interface Database {
   entity_links: EntityLinksTable;
   attachments: AttachmentsTable;
   file_uploads: FileUploadsTable;
+  email_deliveries: EmailDeliveriesTable;
   audit_log: AuditLogTable;
   stream_items: StreamItemsTable;
   stream_mentions: StreamMentionsTable;

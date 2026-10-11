@@ -89,6 +89,9 @@ importers:
       '@carocrm/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@carocrm/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
       '@carocrm/metadata':
         specifier: workspace:*
         version: link:../../packages/metadata
@@ -259,6 +262,9 @@ importers:
       '@carocrm/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@carocrm/mail':
+        specifier: workspace:*
+        version: link:../../packages/mail
       '@carocrm/metadata':
         specifier: workspace:*
         version: link:../../packages/metadata

@@ -209,9 +209,10 @@ HTTP request → EntityManager phases → PostgresRecordStore.withTransaction
   `SignatureScanner` catches EICAR, executable magic behind a benign MIME type, NUL bytes in declared
   text and non-images declared as images; `CompositeScanner` fails closed, so a broken scanner rejects
   rather than accepts. An installation with ClamAV registers its own scanner behind the same token.
-- **Access checks** run on every read, not only on upload: admin, the uploader, or a caller whose
-  parent record passes `PARENT_ACL_CHECK_TOKEN` may download. The default checker is permissive until
-  the entity ACL is wired in — swap it in `ATTACHMENT_PROVIDERS`.
+- **Read path** enforces admin / uploader / parent-ACL on every read, not only on upload
+  (`GET /Attachment/:id/file`, `GET /Attachment/:id`, `GET /Attachment/:id/url`). `AppModule` registers
+  `PARENT_ACL_CHECK_TOKEN` against `AclApiService` + the record store, so anyone who can read the parent
+  record can read its attachments; the barrel's permissive default only applies to standalone use.
 - **Chunked uploads** (`/api/v1/AttachmentUpload`): `init` reserves `{name, mimeType, totalSize,
   chunkSize?}` in `file_uploads`, `:id/part` takes `index` + `file` in any order, `:id/complete`
   replays the parts in index order through the *same* attachment path (so the checks are identical),
@@ -229,6 +230,56 @@ HTTP request → EntityManager phases → PostgresRecordStore.withTransaction
 - Tests: `apps/api/test/attachments-storage.test.ts` (driver info, ceilings, scan hook, per-record
   download ACL, chunked flow), `packages/files/src/{storage,s3,scanner}/index.test.ts`, the attachment
   block in `scripts/e2e-smoke.sh`, and section 5 of `scripts/worker-smoke.sh`.
+
+## Email subsystem (PLAN §28)
+
+- **Two layers, one seam.** `packages/mail` owns the message model (`MailMessage`,
+  `normalizeMailMessage`) and the transports behind `MailTransport`. Neither knows about Nest, HTTP
+  or the database. `MAIL_TRANSPORT_TOKEN` (API) and `createMailTransportForWorker` (worker) each build
+  one transport from the same `MAIL_TRANSPORT`/`SMTP_*` environment, so a message queued by the API is
+  delivered with the worker's settings.
+- **Transports**: `smtp` (authenticating submission mailbox), `relay` (generic SMTP relay — the same
+  protocol with credentials *refused* at boot, because a relay trusts the network), `memory` (records
+  messages, delivers nothing) and `none` (default; drops them). SES/SendGrid/Graph are PLAN §28
+  "later" and are not implemented; they plug in behind the same port.
+- **Nothing sends from the API process.** `POST /api/v1/Email/:id/action/send` validates the draft with
+  `transport.prepare()`, writes one `email_deliveries` row per recipient, enqueues `system.sendEmail`
+  (a normal §24 job row, so it is visible and cancellable in `/admin/jobs`) and only then flips the
+  record to `Queued`. A slow or dead SMTP server cannot hold a request open.
+- **`none` is refused early**: with the disabled transport the API answers `FEATURE_DISABLED` instead
+  of queueing work that can never deliver. `MAIL_TRANSPORT=none` is the default in every environment,
+  so an unconfigured installation cannot send mail by accident.
+- **Delivery semantics** (`apps/worker/src/handlers/mail-handlers.ts`): the worker rebuilds the message
+  from the record plus its §25 attachments (`parent_type = 'Email'`), sends it and writes the outcome
+  per recipient. A connection failure or 4xx answer is re-thrown so BullMQ retries with backoff and the
+  record goes back to `Queued`; a 5xx or `EENVELOPE` answer is final — rows become `failed`, the record
+  becomes `Failed` with `deliveryError`. A transport that does not deliver marks the rows `skipped` and
+  the record `Failed` with its own reason. An already-`Sent` record is a no-op, so a duplicate queue
+  entry cannot send twice.
+- **The ledger is keyed `(email_id, recipient)`**: a retry updates the same row and bumps `attempts`
+  instead of adding history rows, and the recipient kind (`to`/`cc`/`bcc`) is preserved.
+- **Email is a metadata entity** (`Email` in `database/seed-metadata.ts`), not a bespoke table: subject
+  is `name`, plus from/to/cc/bcc/reply-to lists, `body`/`bodyHtml`, `headers` (JSON text), `messageId`,
+  `threadId`, `inReplyTo`, `status`, `dateSent`, `deliveryError`, `parentType`/`parentId` for the
+  related record, and `manyMany` relations to Account/Contact/Lead/User. CRUD, ACL, audit, stream and
+  domain events therefore come from the kernel; the module never bypasses `EntityCrudService`.
+- **Message safety** lives in the normalizer, so every transport shares it: addresses are parsed
+  (quoted display names, comma-outside-angle splitting), deduped case-insensitively across to/cc/bcc,
+  capped by `MAIL_MAX_RECIPIENTS`, control characters are rejected, `Message-Id`/thread ids are
+  generated or reused, header *names* the envelope owns (`From`, `To`, `Subject`, `Content-Type`,
+  `Message-Id`, `Received`, …) and any header value containing CR/LF are rejected — that is SMTP header
+  injection, treated as untrusted input like everything else. `SMTP_STRICT_FROM` (default true) refuses
+  a From address that is not the configured account.
+- **Secrets stay in the environment**: there is no SMTP credential column in any table, so nothing
+  sensitive is stored at rest to encrypt (PLAN §28.3). `parseSmtpSettings` runs at boot: `smtp` without
+  a host, a half-set credential pair, or an out-of-range port/pool is a startup failure, not a
+  first-send failure.
+- **Inbound (PLAN §28.2: IMAP / POP3 / Graph / Gmail) is not implemented** — PLAN lists it under
+  "later". The record model already carries `direction`, `threadId` and `inReplyTo` for it.
+- Tests: `packages/mail/src/{index,message,smtp,offline,record}/*.test.ts` (63 unit tests with a fake
+  sender, no socket), `apps/api/test/email.test.ts` (validation, ledger, queueing, ACL, cleanup),
+  `apps/worker/src/handlers/mail-handlers.test.ts` (20 job tests), the email block in
+  `scripts/e2e-smoke.sh`, section 6 of `scripts/worker-smoke.sh` and the `e2e/email.spec.ts` browser spec.
 
 ## Test database policy (AGENTS.md §3 — mandatory)
 

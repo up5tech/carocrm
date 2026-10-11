@@ -24,7 +24,8 @@
     "pg": "^8.13.0",
     "pino": "^9.0.0",
     "zod": "^3.24.0",
-    "@carocrm/files": "workspace:*"
+    "@carocrm/files": "workspace:*",
+    "@carocrm/mail": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

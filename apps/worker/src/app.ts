@@ -5,7 +5,9 @@ import { createPool, errorMessage, type Queryable } from './db.js';
 import type { WorkerConfig } from './env.js';
 import { DomainEventBus } from './events/domain-event-bus.js';
 import { registerSystemJobs } from './handlers/job-handlers.js';
+import { registerMailJobs } from './handlers/mail-handlers.js';
 import { createKernelOutboxSetup } from './handlers/outbox-handlers.js';
+import { createMailTransportForWorker } from './mail.js';
 import { OutboxPoller } from './outbox/outbox-poller.js';
 import { OutboxHandlerRegistry } from './outbox/outbox-registry.js';
 import { closeRedisConnection, createRedisConnection } from './queue/connection.js';
@@ -51,11 +53,19 @@ export class WorkerApplication {
     private readonly log: Logger,
   ) {
     this.jobRegistry = new JobRegistry();
+    const storage = createStorage(this.config);
     registerSystemJobs(this.jobRegistry, {
       db: this.db,
       log: this.log,
-      storage: createStorage(this.config),
+      storage,
       uploadExpiryHours: this.config.uploadExpiryHours,
+    });
+    // Email is delivered here, never in the API process; `none` keeps it inert until SMTP exists.
+    registerMailJobs(this.jobRegistry, {
+      db: this.db,
+      log: this.log,
+      transport: createMailTransportForWorker(this.config),
+      storage,
     });
 
     const outbox = createKernelOutboxSetup(this.log);

@@ -159,6 +159,10 @@ purge_like() { # purge_like <id-prefix> — delete this run's rows (also used fo
     DELETE FROM outbox_events WHERE id LIKE '$1%';
     DELETE FROM scheduled_jobs WHERE id LIKE '$1%';
     DELETE FROM file_uploads WHERE id LIKE '$1%';
+    DELETE FROM email_deliveries WHERE email_id LIKE '$1%';
+    DELETE FROM entity_records WHERE entity_type = 'Email' AND id LIKE '$1%';
+    DELETE FROM email_deliveries WHERE email_id LIKE '$1%';
+    DELETE FROM entity_records WHERE entity_type = 'Email' AND id LIKE '$1%';
     DELETE FROM jobs WHERE target->>'smokeRunId' LIKE '$1%';  -- job_logs rows cascade through the FK
   " >/dev/null 2>&1 || true
 }
@@ -182,7 +186,7 @@ worker_run() { # worker_run <script.ts> [args...] — bounded by WORKER_RUN_MS
   local script="$1"
   shift
   env DATABASE_URL="$DATABASE_URL" REDIS_URL="$REDIS_URL" LOG_LEVEL="$LOG_LEVEL" NODE_ENV="$NODE_ENV" \
-    STORAGE_ROOT="$STORAGE_ROOT" \
+    STORAGE_ROOT="$STORAGE_ROOT" MAIL_TRANSPORT="${MAIL_TRANSPORT:-memory}" \
     WORKER_OUTBOX_POLL_INTERVAL_MS=700 WORKER_SCHEDULER_INTERVAL_MS=1000 WORKER_JOB_CONCURRENCY=2 \
     WORKER_RUN_MS="$WORKER_RUN_MS" \
     "$ROOT/apps/worker/node_modules/.bin/tsx" "$script" "$@"
@@ -389,6 +393,62 @@ if wait_gone "$WORKER_PID" 40; then
   ok 'worker finished the cleanup run and stopped itself'
 else
   bad 'worker finished the cleanup run and stopped itself'
+  kill_tree "$WORKER_PID" KILL
+fi
+WORKER_PID=""
+
+# ---------------------------------------------------------------------------
+# 6. outbound email delivery (PLAN §28)
+# ---------------------------------------------------------------------------
+# An Email record and a pending job row: the worker rebuilds the message from the record, hands it
+# to the transport and writes one ledger row per recipient. `memory` keeps the whole run off any
+# real mail server (AGENTS.md §5.5), so the ledger must say `skipped`, not `sent`.
+EMAIL_ID="${RUN_ID}-email"
+node_pg "
+  INSERT INTO entity_records (id, entity_type, name, attrs, team_ids, created_at, modified_at, version)
+  VALUES ('$EMAIL_ID', 'Email', 'AGENTS smoke email ${RUN_ID}',
+          '{\"status\":\"Draft\",\"fromAddress\":\"Sales <smoke@crm.example>\",
+            \"toAddressList\":\"one-${RUN_ID}@example.com,two-${RUN_ID}@example.com\",
+            \"ccAddressList\":\"three-${RUN_ID}@example.com\",\"body\":\"smoke body\"}'::jsonb,
+          '[]'::jsonb, now(), now(), 1);
+  INSERT INTO jobs (id, job, status, scheduling_type, created_at, target, progress, attempt, max_attempts, cancel_requested)
+  VALUES ('${RUN_ID}-email', 'system.sendEmail', 'pending', NULL, now(),
+          '{\"smokeRunId\":\"${RUN_ID}\",\"emailId\":\"${EMAIL_ID}\"}'::jsonb, 0, 1, 1, FALSE);
+" >/dev/null
+
+email_job_status() { node_pg "SELECT status FROM jobs WHERE id = '${RUN_ID}-email';" | first_value; }
+email_record_status() { node_pg "SELECT attrs->>'status' FROM entity_records WHERE id = '${EMAIL_ID}';" | first_value; }
+email_ledger() { node_pg "SELECT count(*)::int AS n FROM email_deliveries WHERE email_id = '${EMAIL_ID}';" | first_value; }
+email_ledger_status() { node_pg "SELECT count(*)::int AS n FROM email_deliveries WHERE email_id = '${EMAIL_ID}' AND status = '$1';" | first_value; }
+email_ledger_kinds() { node_pg "SELECT string_agg(recipient_type, ',' ORDER BY recipient_type, recipient) AS t FROM email_deliveries WHERE email_id = '${EMAIL_ID}';" | first_value; }
+email_message_id() { node_pg "SELECT COALESCE(attrs->>'messageId', 'none') FROM entity_records WHERE id = '${EMAIL_ID}';" | first_value; }
+email_error_text() { node_pg "SELECT COALESCE(attrs->>'deliveryError', 'none') FROM entity_records WHERE id = '${EMAIL_ID}';" | first_value; }
+
+WORKER_RUN_MS=12000
+worker_run apps/worker/src/main.ts >"$PROG_LOG" 2>&1 &
+WORKER_PID=$!
+sleep 2
+CHECKS=$((CHECKS + 1))
+if worker_run apps/worker/src/tools/enqueue-cli.ts --row "${RUN_ID}-email" system.sendEmail \
+  "{\"smokeRunId\":\"${RUN_ID}\",\"emailId\":\"${EMAIL_ID}\"}" >>"$PROG_LOG" 2>&1; then
+  ok 'producer enqueued system.sendEmail'
+else
+  bad 'producer enqueued system.sendEmail'
+fi
+
+wait_until_equals 'completed' email_job_status || true
+check_equals 'sendEmail: the ledger has one row per recipient' '3' "$(email_ledger)"
+check_equals 'sendEmail: the recipient kind is recorded' 'cc,to,to' "$(email_ledger_kinds)"
+check_equals 'sendEmail: nothing was delivered by the memory transport' '3' "$(email_ledger_status skipped)"
+check_equals 'sendEmail: the record kept its normalized Message-Id' true "$([ "$(email_message_id)" != none ] && echo true || echo false)"
+check_equals 'sendEmail: an undelivered send is Failed' 'Failed' "$(email_record_status)"
+check_equals 'sendEmail: the record says why' true "$([ "$(email_error_text)" != none ] && echo true || echo false)"
+
+CHECKS=$((CHECKS + 1))
+if wait_gone "$WORKER_PID" 40; then
+  ok 'worker finished the email run and stopped itself'
+else
+  bad 'worker finished the email run and stopped itself'
   kill_tree "$WORKER_PID" KILL
 fi
 WORKER_PID=""

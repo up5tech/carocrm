@@ -54,6 +54,18 @@ const activityRelations: Record<string, Record<string, unknown>> = {
   reminders: { type: 'manyMany', target: 'Reminder' },
 };
 
+/**
+ * Relations of an Email (PLAN §28.3 "Related entity"). The same `entity_links` store the activities
+ * use, so an email links to the records it concerns; its own attachments come from the §25
+ * attachment table through `parentType: 'Email'`, not from a relation.
+ */
+const emailRelations: Record<string, Record<string, unknown>> = {
+  accounts: { type: 'manyMany', target: 'Account' },
+  contacts: { type: 'manyMany', target: 'Contact' },
+  leads: { type: 'manyMany', target: 'Lead' },
+  users: { type: 'manyMany', target: 'User' },
+};
+
 export const coreMetadata: MetadataSeedEntry[] = [
   {
     scope: 'entity',
@@ -267,6 +279,50 @@ export const coreMetadata: MetadataSeedEntry[] = [
       indexes: [],
       record: { displayField: 'type', removable: true },
       client: { web: false },
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'Email',
+    data: {
+      name: 'Email',
+      label: 'Email',
+      isEntity: true,
+      fields: {
+        ...standardFields,
+        // The record's display name IS the subject (PLAN §28.3), so lists and search show what a
+        // reader recognises from their inbox.
+        name: { ...standardFields.name, label: 'Subject', required: true, maxLength: 998, audited: true },
+        status: {
+          type: 'enum',
+          values: ['Draft', 'Queued', 'Sending', 'Sent', 'Failed'],
+          defaultValue: 'Draft',
+          inList: true,
+          inDetail: true,
+          inEdit: true,
+          audited: true,
+        },
+        direction: { type: 'enum', values: ['Outbound', 'Inbound'], defaultValue: 'Outbound', inList: true, inDetail: true },
+        fromAddress: { type: 'varchar', maxLength: 512, inList: true, inDetail: true, inEdit: true },
+        toAddressList: { type: 'varchar', maxLength: 4000, label: 'To', inList: true, inDetail: true, inEdit: true },
+        ccAddressList: { type: 'varchar', maxLength: 4000, label: 'Cc', inDetail: true, inEdit: true },
+        bccAddressList: { type: 'varchar', maxLength: 4000, label: 'Bcc', inDetail: true, inEdit: true },
+        replyToAddress: { type: 'varchar', maxLength: 512, label: 'Reply-to', inDetail: true, inEdit: true },
+        body: { type: 'text', label: 'Body', inDetail: true, inEdit: true },
+        bodyHtml: { type: 'text', label: 'Html Body', inDetail: true, inEdit: true },
+        headers: { type: 'text', label: 'Headers (JSON)', inDetail: true },
+        messageId: { type: 'varchar', maxLength: 512, inDetail: true },
+        threadId: { type: 'varchar', maxLength: 512, inDetail: true },
+        inReplyTo: { type: 'varchar', maxLength: 512, inDetail: true },
+        dateSent: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+        deliveryError: { type: 'text', label: 'Delivery error', inDetail: true },
+        parentType: { type: 'varchar', maxLength: 64, inDetail: true },
+        parentId: { type: 'varchar', maxLength: 64, inDetail: true },
+      },
+      relations: emailRelations,
+      indexes: [{ name: 'idx_email_message_id', fields: ['messageId'] }, { name: 'idx_email_thread_id', fields: ['threadId'] }],
+      record: { displayField: 'name', removable: true },
+      client: {},
     },
   },
 ];
