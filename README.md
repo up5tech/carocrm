@@ -5,12 +5,13 @@ reimplementation of EspoCRM concepts (no PHP runtime, no upstream source copied)
 The engineering plan lives in [PLAN.md](PLAN.md).
 
 **Current state: CRM Kernel Alpha + generic React UI (PLAN §73, tasks 01–20) with stream,
-calendar, the PLAN §21–§22 dynamic logic + formula engine and the PLAN §23 hook phases +
-domain-event bus.**
+calendar, the PLAN §21–§22 dynamic logic + formula engine, the PLAN §23 hook phases +
+domain-event bus and the PLAN §24 job system (progress, logs, cancellation, admin UI).**
 Backend: metadata engine, entity/query/ACL engines, attachments, audit, jobs, sandboxed formula
-evaluation, declarative record rules, entity lifecycle hooks and a transactional-outbox event bus.
+evaluation, declarative record rules, entity lifecycle hooks, a transactional-outbox event bus and
+a BullMQ background-job runner with progress, logs and cancellation.
 Frontend (`apps/web`): metadata-driven login, navigation, list/detail/edit views, the
-Entity Manager admin UI (including the rule builder), stream panel and calendar. Email,
+Entity Manager admin UI (including the rule builder), stream panel, calendar and the Jobs admin page. Email,
 import/export, dashboards, workflows, BPM, reports and portals are not implemented yet.
 Full checklist and deviations: [docs/reference/alpha-status.md](docs/reference/alpha-status.md).
 

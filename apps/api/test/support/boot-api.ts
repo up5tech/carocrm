@@ -1,4 +1,5 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { sql } from 'kysely';
 
 import { seed } from '../../../../database/seed.js';
 import { ACL_PROVIDERS } from '../../src/acl/acl.module.js';
@@ -43,6 +44,8 @@ export async function bootApi(): Promise<ApiContext> {
 
   process.env.NODE_ENV = 'test';
   process.env.LOG_LEVEL = process.env.LOG_LEVEL ?? 'error';
+  // Jobs are enqueued to a scratch queue so a test run never leaves work on the real one (AGENTS.md §3.3).
+  process.env.JOB_QUEUE_NAME = process.env.JOB_QUEUE_NAME ?? 'crm-jobs-test';
 
   const config = buildConfig();
   await migrateDb(config.databaseUrl);
@@ -69,6 +72,21 @@ export async function bootApi(): Promise<ApiContext> {
     auth: app.get(AuthService),
   };
   return cached;
+}
+
+/**
+ * Deletes the `outbox_events` rows a suite produced for its own entity types (AGENTS.md §3.3:
+ * only rows this run can positively identify). Without it, a development database accumulates
+ * unconsumed events whenever tests run without a worker attached.
+ */
+export async function purgeEntityEvents(database: DatabaseService, entityTypes: readonly string[]): Promise<number> {
+  if (entityTypes.length === 0) return 0;
+  const deleted = await database.db
+    .deleteFrom('outbox_events')
+    .where(sql`payload ->> 'entityType'`, 'in', entityTypes)
+    .returning('id')
+    .execute();
+  return deleted.length;
 }
 
 export async function shutdownApi(): Promise<void> {

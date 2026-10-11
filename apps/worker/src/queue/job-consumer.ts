@@ -109,6 +109,8 @@ export class JobConsumer {
     );
 
     if (outcome.status === 'completed') return outcome.result;
+    // A cancelled job must not be retried; the row already says `cancelled`.
+    if (outcome.status === 'cancelled') return { cancelled: true, message: outcome.message };
     if (!outcome.retry) return { failed: true, message: outcome.message };
     throw new Error(outcome.message);
   }

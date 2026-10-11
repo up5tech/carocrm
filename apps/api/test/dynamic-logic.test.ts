@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { ApiContext } from './support/boot-api.js';
-import { authHeader, bootApi, createTestUser, shutdownApi } from './support/boot-api.js';
+import { authHeader, bootApi, createTestUser, purgeEntityEvents, shutdownApi } from './support/boot-api.js';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -78,6 +78,7 @@ afterAll(async () => {
   }
   // Take the probe entity out of the app so later suites never see it.
   await call('POST', `/api/v1/Metadata/${entity}`, adminToken, { isEntity: false, dynamicLogic: { rules: [] } });
+  await purgeEntityEvents(ctx.database, [entity]);
   await shutdownApi();
 });
 

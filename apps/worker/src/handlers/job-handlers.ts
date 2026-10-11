@@ -23,10 +23,13 @@ import type { Queryable } from '../db.js';
  * ```
  *
  * Contract (see `packages/jobs`):
- * - handler receives `{ userId?, data? }` where `data` is the BullMQ payload `data` object;
+ * - handler receives `{ userId?, data?, progress(), log(), shouldStop() }` where `data` is the
+ *   BullMQ payload `data` object and the three functions write to this execution's `jobs` row
+ *   (progress bar, `job_logs` lines, cooperative cancellation) — plan §24;
  * - return `{ status: 'completed', result? }` on success;
+ * - return `{ status: 'cancelled' }` when `shouldStop()` said yes — the attempt is not retried;
  * - return `{ status: 'failed', message }` or throw to trigger a retry (3 attempts,
- *   exponential backoff); every attempt is recorded as its own `jobs` table row.
+ *   exponential backoff); a retry gets its own `jobs` row, an API-submitted job keeps its one row.
  *
  * Names use `<module>.<action>`; `system.*` belongs to the kernel.
  * A schedule can be attached to any registered job by inserting a `scheduled_jobs` row
@@ -67,8 +70,10 @@ export function noopJob(): JobHandler {
 export function cleanupOutboxJob(deps: SystemJobDeps): JobHandler {
   return async (context: JobContext) => {
     const days = retentionDays(context.data, 'retentionDays', DEFAULT_OUTBOX_RETENTION_DAYS);
+    context.progress(20, `removing outbox events older than ${String(days)} days`);
     const result = await deps.db.query(CLEANUP_OUTBOX_SQL, [days]);
     const deleted = countDeleted(result.rows.length, result.rowCount);
+    context.log(`removed ${String(deleted)} outbox events`, 'info');
     deps.log.info({ deleted, days }, 'outbox cleanup finished');
     return { status: 'completed', message: `Removed ${String(deleted)} outbox events`, result: { deleted, days } };
   };
@@ -77,6 +82,7 @@ export function cleanupOutboxJob(deps: SystemJobDeps): JobHandler {
 export function pruneSessionsJob(deps: SystemJobDeps): JobHandler {
   return async (context: JobContext) => {
     const days = retentionDays(context.data, 'retentionDays', DEFAULT_SESSION_RETENTION_DAYS);
+    context.progress(20, `pruning sessions older than ${String(days)} days`);
     const result = await deps.db.query(PRUNE_SESSIONS_SQL, [days]);
     const deleted = countDeleted(result.rows.length, result.rowCount);
     deps.log.info({ deleted, days }, 'session pruning finished');
@@ -132,9 +138,17 @@ export function sendRemindersJob(deps: SystemJobDeps): JobHandler {
     const limit = retentionDays(context.data, 'batchSize', DEFAULT_REMINDER_BATCH);
     const found = await deps.db.query(REMINDER_SCAN_SQL, [limit]);
     const rows = found.rows as Array<Record<string, unknown>>;
+    context.log(`scanned ${String(rows.length)} due reminders`, 'info');
     let delivered = 0;
+    let stopped = false;
 
-    for (const row of rows) {
+    for (const [index, row] of rows.entries()) {
+      if (await context.shouldStop()) {
+        stopped = true;
+        context.log(`cancelled after ${String(delivered)} of ${String(rows.length)} deliveries`, 'warn');
+        break;
+      }
+      if (rows.length > 1) context.progress(Math.round(((index + 1) / rows.length) * 100));
       const recipient = row['recipient_id'];
       const activityId = row['id'];
       if (typeof recipient !== 'string' || recipient === '' || typeof activityId !== 'string') continue;
@@ -151,6 +165,9 @@ export function sendRemindersJob(deps: SystemJobDeps): JobHandler {
     }
 
     deps.log.info({ scanned: rows.length, delivered }, 'activity reminders delivered');
+    if (stopped) {
+      return { status: 'cancelled', message: `Delivered ${String(delivered)} reminders before cancelling` };
+    }
     return {
       status: 'completed',
       message: `Delivered ${String(delivered)} reminders`,

@@ -162,3 +162,148 @@ describe('runJob', () => {
     await expect(run({ job: 'demo.db', data: {} })).rejects.toThrow('jobs table unavailable');
   });
 });
+
+describe('runJob — progress, logs and cancellation (PLAN §24)', () => {
+  const ADOPT_FRAGMENT = 'and cancel_requested = false';
+  const CANCEL_FRAGMENT = 'select cancel_requested from jobs';
+  const PROGRESS_FRAGMENT = 'set progress';
+  const LOG_FRAGMENT = 'insert into job_logs';
+  const FINISH_FRAGMENT = 'finished_at = now()';
+
+  interface RefinedHarness extends Harness {
+    runWith: (payload: JobPayload, clock?: () => number) => Promise<JobRunOutcome>;
+  }
+
+  function refined(): RefinedHarness {
+    const db = new FakeDb();
+    const logger = createTestLogger();
+    const registry = new JobRegistry();
+    const repo = new JobRepository(db);
+    return {
+      db,
+      registry,
+      repo,
+      logger,
+      run: (payload) => runJob({ registry, repo, log: logger.log }, { payload, attempt: 1, maxAttempts: 3 }),
+      runWith: (payload, clock) =>
+        runJob(
+          { registry, repo, log: logger.log, ...(clock === undefined ? {} : { now: clock }) },
+          { payload, attempt: 1, maxAttempts: 3 },
+        ),
+    };
+  }
+
+  it('adopts the pending row the Jobs API created instead of inserting a second one', async () => {
+    const { db, registry, runWith } = refined();
+    db.returns(ADOPT_FRAGMENT, [{ id: 'row-1' }]);
+    registry.register('demo.adopt', async (): Promise<JobRunResult> => ({ status: 'completed' }));
+
+    const outcome = await runWith({ job: 'demo.adopt', data: {}, jobRowId: 'row-1' });
+
+    expect(outcome.status).toBe('completed');
+    expect(outcome.jobRowId).toBe('row-1');
+    expect(db.callsFor(INSERT_FRAGMENT)).toHaveLength(0);
+    const adopt = db.lastCall(ADOPT_FRAGMENT);
+    expect(adopt?.params[0]).toBe('row-1');
+    expect(db.lastCall(FINISH_FRAGMENT)?.params[0]).toBe('row-1');
+  });
+
+  it('skips the handler when the row was already cancelled', async () => {
+    const { db, registry, runWith, logger } = refined();
+    db.returns(ADOPT_FRAGMENT, []);
+    db.returns(CANCEL_FRAGMENT, [{ cancel_requested: true }]);
+    let ran = false;
+    registry.register('demo.gone', async (): Promise<JobRunResult> => {
+      ran = true;
+      return { status: 'completed' };
+    });
+
+    const outcome = await runWith({ job: 'demo.gone', data: {}, jobRowId: 'row-2' });
+
+    expect(outcome.status).toBe('cancelled');
+    expect(ran).toBe(false);
+    expect(db.callsFor(INSERT_FRAGMENT)).toHaveLength(0);
+    expect(logger.recordsAt('warn')).toHaveLength(0);
+  });
+
+  it('writes a fresh row when the pending row vanished (a retry attempt)', async () => {
+    const { db, registry, runWith } = refined();
+    db.returns(ADOPT_FRAGMENT, []);
+    db.returns(CANCEL_FRAGMENT, [{ cancel_requested: false }]);
+    registry.register('demo.retry', async (): Promise<JobRunResult> => ({ status: 'completed' }));
+
+    const outcome = await runWith({ job: 'demo.retry', data: {}, jobRowId: 'row-3' });
+
+    expect(outcome.status).toBe('completed');
+    expect(outcome.jobRowId).not.toBe('row-3');
+    expect(db.callsFor(INSERT_FRAGMENT)).toHaveLength(1);
+  });
+
+  it('records progress, clamps it and does not write the same percent twice', async () => {
+    const { db, registry, runWith } = refined();
+    let clock = 1_000;
+    registry.register('demo.progress', async (context: JobContext): Promise<JobRunResult> => {
+      context.progress(0);
+      context.progress(50, 'halfway');
+      context.progress(50);
+      context.progress(140);
+      return { status: 'completed' };
+    });
+
+    await runWith({ job: 'demo.progress', data: {} }, () => clock);
+    clock = 9_000;
+
+    const writes = db.callsFor(PROGRESS_FRAGMENT);
+    expect(writes.map((call) => call.params[1])).toEqual([0, 50, 100]);
+    expect(writes[1]?.params[2]).toBe('halfway');
+  });
+
+  it('appends job log lines and mirrors them to the worker logger', async () => {
+    const { db, registry, runWith, logger } = refined();
+    registry.register('demo.logging', async (context: JobContext): Promise<JobRunResult> => {
+      context.log('starting batch');
+      context.log('disk almost full', 'warn');
+      return { status: 'completed' };
+    });
+
+    await runWith({ job: 'demo.logging', data: {} });
+
+    const lines = db.callsFor(LOG_FRAGMENT);
+    expect(lines.map((call) => [call.params[1], call.params[2]])).toEqual([
+      ['info', 'starting batch'],
+      ['warn', 'disk almost full'],
+    ]);
+    expect(logger.recordsAt('warn').length).toBeGreaterThanOrEqual(1);
+    const finish = db.lastCall(FINISH_FRAGMENT);
+    expect(finish?.params[3]).toBe('disk almost full');
+  });
+
+  it('lets a long job stop cooperatively and reports the row as cancelled', async () => {
+    const { db, registry, runWith } = refined();
+    db.returns(CANCEL_FRAGMENT, [{ cancel_requested: true }]);
+    registry.register('demo.stops', async (context: JobContext): Promise<JobRunResult> => {
+      if (await context.shouldStop()) {
+        context.log('stopping at the user request');
+        return { status: 'cancelled', message: 'stopped after 3 batches' };
+      }
+      return { status: 'completed' };
+    });
+
+    const outcome = await runWith({ job: 'demo.stops', data: {} });
+
+    expect(outcome.status).toBe('cancelled');
+    expect(db.lastCall(FINISH_FRAGMENT)?.params[1]).toBe('cancelled');
+  });
+
+  it('reports a completion that arrived after an admin cancel as cancelled', async () => {
+    const { db, registry, runWith } = refined();
+    // the admin cancelled while the handler was still finishing
+    db.returns(CANCEL_FRAGMENT, [{ cancel_requested: true }]);
+    registry.register('demo.race', async (): Promise<JobRunResult> => ({ status: 'completed', result: { rows: 5 } }));
+
+    const outcome = await runWith({ job: 'demo.race', data: {} });
+
+    expect(outcome.status).toBe('cancelled');
+    expect(db.lastCall(FINISH_FRAGMENT)?.params[1]).toBe('cancelled');
+  });
+});

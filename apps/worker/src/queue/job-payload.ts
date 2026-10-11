@@ -15,6 +15,7 @@ export type JobPayload = {
   data: Record<string, unknown>;
   scheduleId?: string | undefined;
   scheduledForMs?: number | undefined;
+  jobRowId?: string | undefined;
 };
 
 const JobPayloadSchema = z.object({
@@ -22,6 +23,7 @@ const JobPayloadSchema = z.object({
   data: z.record(z.unknown()).default({}),
   scheduleId: z.string().min(1).optional(),
   scheduledForMs: z.number().int().nonnegative().optional(),
+  jobRowId: z.string().min(1).max(64).optional(),
 });
 
 export function parseJobPayload(raw: unknown): JobPayload | undefined {
@@ -34,6 +36,7 @@ export function parseJobPayload(raw: unknown): JobPayload | undefined {
     ...(parsed.data.scheduledForMs !== undefined
       ? { scheduledForMs: parsed.data.scheduledForMs }
       : {}),
+    ...(parsed.data.jobRowId !== undefined ? { jobRowId: parsed.data.jobRowId } : {}),
   };
 }
 
@@ -42,12 +45,14 @@ export function buildJobPayload(input: {
   data?: Record<string, unknown> | undefined;
   scheduleId?: string | undefined;
   scheduledForMs?: number | undefined;
+  jobRowId?: string | undefined;
 }): JobPayload {
   return {
     job: input.job,
     data: input.data ?? {},
     ...(input.scheduleId !== undefined ? { scheduleId: input.scheduleId } : {}),
     ...(input.scheduledForMs !== undefined ? { scheduledForMs: input.scheduledForMs } : {}),
+    ...(input.jobRowId !== undefined ? { jobRowId: input.jobRowId } : {}),
   };
 }
 

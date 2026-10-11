@@ -13,6 +13,7 @@ import { BullMqJobQueue } from '../queue/job-queue.js';
  * Used by `scripts/worker-smoke.sh` and handy for ops.
  *
  *   tsx apps/worker/src/tools/enqueue-cli.ts <job> [jsonObject]
+ *   tsx apps/worker/src/tools/enqueue-cli.ts --row <jobRowId> <job> [jsonObject]
  *   tsx apps/worker/src/tools/enqueue-cli.ts --schedule <id> <cron> <job> [jsonObject]
  *   tsx apps/worker/src/tools/enqueue-cli.ts --unschedule <id>
  *   tsx apps/worker/src/tools/enqueue-cli.ts --stats
@@ -86,6 +87,16 @@ async function dispatch(
     return 0;
   }
 
+  // `--row <jobRowId> <job> [json]` re-queues work onto an existing `jobs` row.
+  if (command === '--row') {
+    const jobRowId = rest[0];
+    const job = rest[1];
+    if (jobRowId === undefined || job === undefined) return usage();
+    const queueJobId = await queue.enqueue(job, parseData(rest[2]), jobRowId);
+    write(`enqueued ${job} as ${queueJobId} onto row ${jobRowId} on ${config.queueName}`);
+    return 0;
+  }
+
   const queueJobId = await queue.enqueue(command, parseData(rest[0]));
   write(`enqueued ${command} as ${queueJobId} on ${config.queueName}`);
   return 0;
@@ -93,7 +104,7 @@ async function dispatch(
 
 function usage(): number {
   write(
-    'usage: enqueue-cli <job> [jsonObject] | --schedule <id> <cron> <job> [jsonObject] | --unschedule <id> | --stats',
+    'usage: enqueue-cli <job> [jsonObject] | --row <jobRowId> <job> [jsonObject] | --schedule <id> <cron> <job> [jsonObject] | --unschedule <id> | --stats',
   );
   return 2;
 }

@@ -28,6 +28,7 @@ RUN_ID="smoke-worker-$(date +%Y%m%d%H%M%S)-$$"
 LOG_FILE="$(mktemp -t carocrm-worker-smoke)"
 SEED_LOG="$(mktemp -t carocrm-worker-seed)"
 SIG_LOG="$(mktemp -t carocrm-worker-sig)"
+PROG_LOG="$(mktemp -t carocrm-worker-progress)"
 WORKER_PID=""
 FAILURES=0
 CHECKS=0
@@ -61,7 +62,7 @@ node_pg() {
     pool.query(process.env.SMOKE_SQL)
       .then((res) => pool.end().then(() => res))
       .then((res) => {
-        process.stdout.write(JSON.stringify(res.rows));
+        process.stdout.write(JSON.stringify(res.rows ?? []));
       })
       .catch(async (error) => {
         process.stderr.write(`pg: ${error.message}\n`);
@@ -153,7 +154,7 @@ purge_like() { # purge_like <id-prefix> — delete this run's rows (also used fo
   node_pg "
     DELETE FROM outbox_events WHERE id LIKE '$1%';
     DELETE FROM scheduled_jobs WHERE id LIKE '$1%';
-    DELETE FROM jobs WHERE target->>'smokeRunId' LIKE '$1%';
+    DELETE FROM jobs WHERE target->>'smokeRunId' LIKE '$1%';  -- job_logs rows cascade through the FK
   " >/dev/null 2>&1 || true
 }
 
@@ -167,7 +168,7 @@ cleanup() {
     wait_gone "$SIG_PID" 12 || kill_tree "$SIG_PID" KILL
   fi
   purge_like "$RUN_ID"
-  rm -f "$LOG_FILE" "$SEED_LOG" "$SIG_LOG"
+  rm -f "$LOG_FILE" "$SEED_LOG" "$SIG_LOG" "$PROG_LOG"
 }
 trap cleanup EXIT
 
@@ -210,6 +211,10 @@ node_pg "
 
   INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled, last_run_at)
   VALUES ('${RUN_ID}-sched', 'system.noop', '* * * * *', '{\"smokeRunId\":\"${RUN_ID}\"}'::jsonb, TRUE, NULL);
+
+  -- The poller claims the oldest pending rows first, so this run's fixtures jump that queue
+  -- instead of waiting behind events left by earlier development runs.
+  UPDATE outbox_events SET available_at = now() - interval '1 hour' WHERE id LIKE '${RUN_ID}%';
 " >/dev/null
 
 check_equals 'fixtures: 3 pending outbox events' '3' "$(count_where "outbox_events WHERE id LIKE '${RUN_ID}%' AND status = 'pending'")"
@@ -278,6 +283,58 @@ else
   kill_tree "$SIG_PID" KILL
 fi
 check_equals 'SIGTERM: graceful drain logged' 'yes' "$(grep -q '"msg":"worker stopped"' "$SIG_LOG" && echo yes || echo no)"
+
+# ---------------------------------------------------------------------------
+# 4. job progress, logs and cancellation (PLAN §24)
+# ---------------------------------------------------------------------------
+# Two `pending` rows are created first, then one is cancelled before any worker
+# claims it: the adoption rule (status = 'pending' AND cancel_requested = FALSE)
+# decides the outcome, so there is no race to lose.
+node_pg "
+  INSERT INTO jobs (id, job, status, scheduling_type, created_at, target, progress, attempt, max_attempts, cancel_requested)
+  VALUES
+    ('${RUN_ID}-adopt', 'system.cleanupOutbox', 'pending', NULL, now(),
+     '{\"smokeRunId\":\"${RUN_ID}\",\"source\":\"adopt\",\"retentionDays\":3650}'::jsonb, 0, 1, 1, FALSE),
+    ('${RUN_ID}-cancelled', 'system.noop', 'pending', NULL, now(),
+     '{\"smokeRunId\":\"${RUN_ID}\",\"source\":\"cancelled\"}'::jsonb, 0, 1, 1, FALSE);
+  UPDATE jobs SET status = 'cancelled', finished_at = now(), cancel_requested = TRUE, message = 'Cancelled before it started.'
+   WHERE id = '${RUN_ID}-cancelled';
+" >/dev/null
+
+adopt_status() { node_pg "SELECT status FROM jobs WHERE id = '${RUN_ID}-adopt';" | first_value; }
+adopt_progress() { node_pg "SELECT COALESCE(progress, -1)::int AS p FROM jobs WHERE id = '${RUN_ID}-adopt';" | first_value; }
+adopt_logs() { count_where "job_logs WHERE job_id = '${RUN_ID}-adopt'"; }
+adopt_rows() { count_where "jobs WHERE id = '${RUN_ID}-adopt'"; }
+cancelled_started() { node_pg "SELECT COALESCE(started_at::text, 'null') AS s FROM jobs WHERE id = '${RUN_ID}-cancelled';" | first_value; }
+
+WORKER_RUN_MS=15000
+worker_run apps/worker/src/main.ts >"$PROG_LOG" 2>&1 &
+WORKER_PID=$!
+sleep 2
+CHECKS=$((CHECKS + 1))
+if worker_run apps/worker/src/tools/enqueue-cli.ts --row "${RUN_ID}-adopt" system.cleanupOutbox "{\"smokeRunId\":\"${RUN_ID}\",\"source\":\"adopt\",\"retentionDays\":3650}" >>"$PROG_LOG" 2>&1; then
+  ok 'producer enqueued onto the pending row'
+else
+  bad 'producer enqueued onto the pending row'
+fi
+worker_run apps/worker/src/tools/enqueue-cli.ts --row "${RUN_ID}-cancelled" system.noop "{\"smokeRunId\":\"${RUN_ID}\",\"source\":\"cancelled\"}" >>"$PROG_LOG" 2>&1 || true
+
+wait_until_equals 'completed' adopt_status || true
+check_equals 'jobs: the API pending row was adopted, not duplicated' '1' "$(adopt_rows)"
+check_equals 'jobs: adopted row finished as completed' 'completed' "$(adopt_status)"
+check_at_least 'jobs: progress was written by context.progress()' 20 "$(adopt_progress)"
+check_at_least 'jobs: log lines were written by context.log()' 1 "$(adopt_logs)"
+check_equals 'jobs: a cancelled job never starts' 'null' "$(cancelled_started)"
+check_equals 'jobs: cancelled job stayed cancelled' 'cancelled' "$(node_pg "SELECT status FROM jobs WHERE id = '${RUN_ID}-cancelled';" | first_value)"
+
+CHECKS=$((CHECKS + 1))
+if wait_gone "$WORKER_PID" 40; then
+  ok 'worker finished the progress run and stopped itself'
+else
+  bad 'worker finished the progress run and stopped itself'
+  kill_tree "$WORKER_PID" KILL
+fi
+WORKER_PID=""
 
 # ---------------------------------------------------------------------------
 # summary

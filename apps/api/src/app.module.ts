@@ -27,6 +27,7 @@ import { KERNEL_HOOKS_TOKEN } from './entity/hooks.js';
 import { DOMAIN_EVENT_CONTROLLERS, DOMAIN_EVENT_PROVIDERS, EntityEventHookService, registerEntityEventHook } from './events/index.js';
 import { HealthController } from './health/health.controller.js';
 import { HOOK_CONTROLLERS, HOOK_PROVIDERS } from './hooks/index.js';
+import { JOB_CONTROLLERS, JOB_PROVIDERS } from './jobs/index.js';
 import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
 import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.service.js';
@@ -49,6 +50,8 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     ...LOGIC_CONTROLLERS,
     ...HOOK_CONTROLLERS,
     ...DOMAIN_EVENT_CONTROLLERS,
+    // `/api/v1/Job...` and `/api/v1/ScheduledJob...` are static prefixes too.
+    ...JOB_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
     ...ENTITY_CONTROLLERS,
   ],
@@ -63,6 +66,7 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     ...ACL_PROVIDERS,
     ...HOOK_PROVIDERS,
     ...DOMAIN_EVENT_PROVIDERS,
+    ...JOB_PROVIDERS,
     ...LOGIC_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,

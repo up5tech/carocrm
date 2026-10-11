@@ -7,7 +7,7 @@ import type { AfterSaveHook } from '../src/entity/hooks.js';
 import { KERNEL_HOOKS_TOKEN } from '../src/entity/hooks.js';
 import { HookRegistry } from '../src/hooks/hook.registry.js';
 import type { ApiContext } from './support/boot-api.js';
-import { authHeader, bootApi, createTestUser, shutdownApi } from './support/boot-api.js';
+import { authHeader, bootApi, createTestUser, purgeEntityEvents, shutdownApi } from './support/boot-api.js';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -99,6 +99,7 @@ afterAll(async () => {
     await call('DELETE', `/api/v1/${entity}/${id}`);
   }
   await call('POST', `/api/v1/Metadata/${entity}`, { isEntity: false });
+  await purgeEntityEvents(ctx.database, [entity]);
   await shutdownApi();
 });
 

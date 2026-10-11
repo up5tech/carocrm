@@ -26,7 +26,7 @@ no upstream source used (PLAN §2). Status is as of 2026-10-11 (CRM Kernel Alpha
 | Import / Export | v9.3.x | not built | P1 | not started |
 | Dashboards / dashlets | v9.3.x | not built | P1 | not started |
 | Frontend SPA | v9.3.x | React SPA: generic list/detail/edit/create, Entity Manager, audit, stream, calendar (Lizant theme) | P0 (product) | implemented |
-| Background jobs / scheduled jobs | v9.3.x | BullMQ worker, cron metadata-driven, transactional outbox | P2 | implemented |
+| Background jobs / scheduled jobs | v9.3.x | BullMQ worker, cron metadata, retries + backoff + dead letter, per-job progress and logs, cooperative cancellation, REST API and admin UI | P2 | implemented |
 | Formula engine | v9.3.x | sandboxed parser → AST → evaluator with an allowlisted function set and execution budgets (`@carocrm/formula`) | P2 | implemented |
 | Dynamic logic | v9.3.x | metadata `dynamicLogic.rules` evaluated in the SPA **and** on every API write | P2 | implemented |
 | Workflows / BPM / Reports / Portals | commercial/baseline | out of Alpha scope | P2 | not started |
@@ -66,6 +66,17 @@ Confirmed against EspoCRM documentation on 2026-10-11:
 - Reminders deliver **in-app notifications** only. Upstream popup/email transports
   (`SendEmailReminders`, WebSocket topics) are not implemented; `reminderSentAt` on the
   activity is the idempotency marker used by `system.sendReminders`.
+
+## Background jobs (PLAN §24)
+
+- Upstream ships a `Job` entity with `status`/`createdById`/`scheduledDate`/`attemptsCount` and an
+  `Job.run` entitlement; here `jobs` is an execution table (one row per attempt) plus
+  `scheduled_jobs` for cron metadata, and the HTTP surface is `/api/v1/Job` + `/api/v1/ScheduledJob`.
+  The shape is ours — the upstream job lifecycle was not re-verified from documentation in this
+  environment, so this row is a behaviour-level match, not a contract match.
+- Job **names** must be registered by code (`JobRegistry`); metadata stores names only, never
+  executable code (PLAN §24).
+- Cancellation is cooperative (`cancel_requested` + `context.shouldStop()`), not a hard kill.
 
 ## Formula and dynamic logic (PLAN §21–§22)
 

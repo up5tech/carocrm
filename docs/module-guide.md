@@ -39,6 +39,8 @@ stream/calendar and the PLAN §21–§22 dynamic logic + formula engine).
 | Hook phases | `apps/api/src/hooks/` | `HookRegistry` (named handlers, optional entity scope), `GET /api/v1/Hook` (admin); phases from `@carocrm/entity-engine` `HOOK_PHASES` |
 | Domain events | `apps/api/src/events/` | `EventBus.dispatch(tx, event)` writes `outbox_events` in-tx, `EntityEventHookService` on `KERNEL_HOOKS_TOKEN`, `GET /api/v1/DomainEvent` (admin) |
 | Event consumers | `apps/worker/src/events/` | `DomainEventBus.subscribe({eventType, name, handler})`, `'*'` wildcard; wired to the outbox registry by `createKernelOutboxSetup` |
+| Background jobs (API) | `apps/api/src/jobs/` | `JobsService` + `JobQueueService` (BullMQ producer); `POST/GET /api/v1/Job`, `GET /Job/:id`, `GET /Job/:id/log`, `POST /Job/:id/action/cancel`, `GET/POST /api/v1/ScheduledJob[/:id/{enable,disable,action/runNow}]`, `POST /ScheduledJob/action/preview` (all admin) |
+| Job execution (worker) | `apps/worker/src/queue/` | `runJob` adopts the API's `pending` row, writes `progress`/`message` and `job_logs`, honours `shouldStop()`; `job-handlers.ts` is the registry extension point |
 | Kernel hooks | `apps/api/src/entity/hooks.ts` | `KERNEL_HOOKS_TOKEN` → `AfterSaveHook[]` with `operation: 'create'\|'update'\|'delete'\|'restore'`; audit, stream-update and domain-event hooks each register one |
 
 ## API conventions
@@ -158,6 +160,32 @@ HTTP request → EntityManager phases → PostgresRecordStore.withTransaction
 - Introspection: `GET /api/v1/Hook` (phases + installed handlers) and
   `GET /api/v1/DomainEvent?status=&eventType=&offset=&limit=` (outbox rows, newest first) —
   both admin-only, both registered before `ENTITY_CONTROLLERS`.
+
+## Background jobs and scheduled jobs (PLAN §24)
+
+- `jobs` is the durable record (one row per attempt), `scheduled_jobs` is the cron metadata the
+  scheduler polls, `job_logs` holds `context.log(...)` lines. Redis only carries the queue.
+- **Row adoption**: the Jobs API inserts a `pending` row and puts its `jobRowId` into the BullMQ
+  payload; `runJob` adopts that row (`WHERE status='pending' AND cancel_requested = FALSE`). A
+  retry attempt or a scheduler run therefore creates its own row, and an admin who cancelled before
+  the worker woke up is never executed. `scripts/worker-smoke.sh` asserts all of this.
+- **Handler contract** (`packages/jobs`): `JobContext = { data, userId?, progress(%), log(msg, level?), shouldStop() }`.
+  `progress()` is throttled (only changed percents are written, clamped 0..100) and cannot resurrect
+  a finished row (the update filters `status = 'running'`). `shouldStop()` polls the cancel flag with a
+  1s cache, so a long job checks it between batches — cancellation is cooperative, never a kill.
+- **Retries**: BullMQ `attempts` + exponential backoff, configurable through `JOB_ATTEMPTS`,
+  `JOB_BACKOFF_BASE_MS`, `JOB_QUEUE_NAME` (must equal the worker's `WORKER_QUEUE_NAME`; the API test
+  suite pins it to `crm-jobs-test`). The last attempt leaves the row `failed` with `last_error`, which
+  is the dead-letter trail.
+- **Names**: `<module>.<action>` (`system.cleanupOutbox`). The API validates the shape and refuses a
+  payload over ~32 KB; only a registered name can ever run — metadata stores names, never code.
+- **Admin UI**: `apps/web/src/pages/AdminJobsPage.tsx` at `/admin/jobs` (admin nav only) — job list
+  with status/progress/attempt/message, status filter, queue counts, log drawer, cancel, run-a-job
+  modal, and the schedule table with enable/disable/run-now/save (cron is validated against the
+  `ScheduledJob/action/preview` endpoint while typing).
+- Tests that submit jobs must cancel what they created: `e2e/jobs.spec.ts` snapshots pending ids
+  around each action, and `purgeEntityEvents()` in `apps/api/test/support/boot-api.ts` removes the
+  domain events an API suite generated (no worker runs during vitest).
 
 ## Test database policy (AGENTS.md §3 — mandatory)
 

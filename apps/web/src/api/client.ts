@@ -162,6 +162,52 @@ export interface CalendarResult {
   count: number;
 }
 
+
+export interface JobRow {
+  id: string;
+  job: string;
+  status: string;
+  schedulingType: string | null;
+  attempt: number;
+  maxAttempts: number;
+  progress: number;
+  message: string | null;
+  lastError: string | null;
+  cancelRequested: boolean;
+  queueJobId: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  data: RecordData;
+  result: RecordData | null;
+}
+
+export interface JobListResult {
+  list: JobRow[];
+  total: number;
+  offset: number;
+  count: number;
+  queue: Record<string, number>;
+}
+
+export interface JobLogLine {
+  seq: string;
+  level: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface ScheduleRow {
+  id: string;
+  job: string;
+  scheduling: string;
+  enabled: boolean;
+  lastRunAt: string | null;
+  createdAt: string;
+  modifiedAt: string;
+  data: RecordData;
+}
+
 export const api = {
   login: (userName: string, password: string) =>
     request<LoginResult>('/Authentication', { method: 'POST', body: JSON.stringify({ userName, password }) }),
@@ -252,4 +298,23 @@ export const api = {
         ...(params.maxSize !== undefined ? { maxSize: params.maxSize } : {}),
       })}`,
     ),
+
+  jobs: (params: { status?: string | undefined; job?: string | undefined; offset?: number | undefined; limit?: number | undefined } = {}) =>
+    request<JobListResult>(
+      `/Job${simpleQuery({ status: params.status, job: params.job, offset: params.offset, limit: params.limit })}`,
+    ),
+  job: (id: string) => request<JobRow>(`/Job/${encodeURIComponent(id)}`),
+  jobLogs: (id: string) => request<{ jobId: string; lines: JobLogLine[] }>(`/Job/${encodeURIComponent(id)}/log`),
+  runJob: (jobName: string, data: RecordData = {}) =>
+    request<JobRow>('/Job', { method: 'POST', body: JSON.stringify({ jobName, data }) }),
+  cancelJob: (id: string) => request<JobRow>(`/Job/${encodeURIComponent(id)}/action/cancel`, { method: 'POST' }),
+
+  schedules: () => request<{ list: ScheduleRow[] }>('/ScheduledJob'),
+  saveSchedule: (input: { id: string; job: string; scheduling: string; data?: RecordData | undefined; enabled?: boolean | undefined }) =>
+    request<ScheduleRow>('/ScheduledJob', { method: 'POST', body: JSON.stringify(input) }),
+  setScheduleEnabled: (id: string, enabled: boolean) =>
+    request<ScheduleRow>(`/ScheduledJob/${encodeURIComponent(id)}/${enabled ? 'enable' : 'disable'}`, { method: 'POST' }),
+  runScheduleNow: (id: string) => request<JobRow>(`/ScheduledJob/${encodeURIComponent(id)}/action/runNow`, { method: 'POST' }),
+  previewCron: (scheduling: string) =>
+    request<{ valid: boolean; next: string[] }>('/ScheduledJob/action/preview', { method: 'POST', body: JSON.stringify({ scheduling }) }),
 };

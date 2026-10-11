@@ -2,6 +2,7 @@ import { JobRegistry } from '@carocrm/jobs';
 import { describe, expect, it } from 'vitest';
 
 import { FakeDb } from '../testing/fake-db.js';
+import { jobContext } from '../testing/job-context.js';
 import { createTestLogger } from '../testing/test-logger.js';
 import {
   CLEANUP_OUTBOX_SQL,
@@ -40,7 +41,7 @@ describe('system.sendReminders', () => {
     db.returns(REMINDER_INSERT_FRAGMENT, []);
     db.returns(REMINDER_MARK_FRAGMENT, [{ id: 'task-1' }], 1);
 
-    const outcome = await registry.get('system.sendReminders')?.({ data: {} });
+    const outcome = await registry.get('system.sendReminders')?.(jobContext({}));
 
     expect(outcome?.status).toBe('completed');
     expect(outcome?.result).toEqual({ scanned: 1, delivered: 1 });
@@ -54,7 +55,7 @@ describe('system.sendReminders', () => {
   it('skips rows without a recipient and reports nothing delivered', async () => {
     const { db, registry } = harness();
     db.returns(REMINDER_SCAN_FRAGMENT, [{ id: 'task-2', entity_type: 'Task', name: null, recipient_id: null, date_start: new Date() }]);
-    const outcome = await registry.get('system.sendReminders')?.({ data: { batchSize: 5 } });
+    const outcome = await registry.get('system.sendReminders')?.(jobContext({ batchSize: 5 }));
     expect(outcome?.result).toEqual({ scanned: 1, delivered: 0 });
     expect(db.lastCall(REMINDER_SCAN_FRAGMENT)?.params).toEqual([5]);
     expect(db.calls.some((call) => call.sql.toLowerCase().includes('insert into notifications'))).toBe(false);
@@ -92,7 +93,7 @@ describe('kernel job registry', () => {
 
   it('system.noop completes without touching the database', async () => {
     const { db, registry } = harness();
-    const outcome = await registry.get('system.noop')?.({ data: { anything: true } });
+    const outcome = await registry.get('system.noop')?.(jobContext({ anything: true }));
     expect(outcome?.status).toBe('completed');
     expect(outcome?.result?.ok).toBe(true);
     expect(db.calls).toHaveLength(0);
@@ -104,7 +105,7 @@ describe('system.cleanupOutbox', () => {
     const { db, registry } = harness();
     db.returns(OUTBOX_FRAGMENT, [{ id: 'a' }, { id: 'b' }, { id: 'c' }], 3);
 
-    const outcome = await registry.get('system.cleanupOutbox')?.({ data: {} });
+    const outcome = await registry.get('system.cleanupOutbox')?.(jobContext({}));
 
     expect(outcome?.status).toBe('completed');
     expect(outcome?.result).toEqual({ deleted: 3, days: DEFAULT_OUTBOX_RETENTION_DAYS });
@@ -118,7 +119,7 @@ describe('system.cleanupOutbox', () => {
     const { db, registry } = harness();
     db.returns(OUTBOX_FRAGMENT, [], 0);
 
-    const outcome = await registry.get('system.cleanupOutbox')?.({ data: { retentionDays: 2 } });
+    const outcome = await registry.get('system.cleanupOutbox')?.(jobContext({ retentionDays: 2 }));
 
     expect(db.lastCall(OUTBOX_FRAGMENT)?.params).toEqual([2]);
     expect(outcome?.message).toBe('Removed 0 outbox events');
@@ -130,7 +131,7 @@ describe('system.pruneSessions', () => {
     const { db, registry } = harness();
     db.returns(SESSIONS_FRAGMENT, [{ id: 's1' }], 1);
 
-    const outcome = await registry.get('system.pruneSessions')?.({ data: {} });
+    const outcome = await registry.get('system.pruneSessions')?.(jobContext({}));
 
     expect(outcome?.status).toBe('completed');
     expect(outcome?.result).toEqual({ deleted: 1, days: DEFAULT_SESSION_RETENTION_DAYS });
@@ -144,7 +145,7 @@ describe('system.pruneSessions', () => {
     const { db, registry } = harness();
     db.returns(SESSIONS_FRAGMENT, [], 0);
 
-    await registry.get('system.pruneSessions')?.({ data: { retentionDays: -5 } });
+    await registry.get('system.pruneSessions')?.(jobContext({ retentionDays: -5 }));
 
     expect(db.lastCall(SESSIONS_FRAGMENT)?.params).toEqual([30]);
   });

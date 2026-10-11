@@ -71,8 +71,15 @@ export class BullMqJobQueue implements JobQueuePort {
     return this.options.queueName;
   }
 
-  async enqueue(job: string, data: Record<string, unknown> = {}): Promise<string> {
-    const added = await this.queue.add(job, buildJobPayload({ job, data }));
+  /**
+   * `jobRowId` re-queues work onto an existing `jobs` row (the row the Jobs API created, or a row
+   * an operator wants to retry) so the Admin UI keeps following one record.
+   */
+  async enqueue(job: string, data: Record<string, unknown> = {}, jobRowId?: string): Promise<string> {
+    const added = await this.queue.add(
+      job,
+      buildJobPayload({ job, data, ...(jobRowId === undefined || jobRowId === '' ? {} : { jobRowId }) }),
+    );
     return String(added.id ?? '');
   }
 

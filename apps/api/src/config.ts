@@ -17,6 +17,10 @@ const ConfigSchema = z.object({
   corsOrigins: z.string().default(''),
   /** Global API rate limit per minute; the SPA spends many small calls per screen. */
   rateLimitMax: z.coerce.number().int().positive().default(300),
+  /** BullMQ queue the API produces into; must match the worker's WORKER_QUEUE_NAME. */
+  jobQueueName: z.string().min(1).default('crm-jobs'),
+  jobAttempts: z.coerce.number().int().min(1).max(10).default(3),
+  jobBackoffBaseMs: z.coerce.number().int().min(100).default(2_000),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
@@ -62,6 +66,9 @@ export function buildConfig(): AppConfig {
     logLevel: process.env.LOG_LEVEL,
     corsOrigins: process.env.CORS_ORIGINS,
     rateLimitMax: process.env.RATE_LIMIT_MAX,
+    jobQueueName: process.env.JOB_QUEUE_NAME,
+    jobAttempts: process.env.JOB_ATTEMPTS,
+    jobBackoffBaseMs: process.env.JOB_BACKOFF_BASE_MS,
   });
 }
 

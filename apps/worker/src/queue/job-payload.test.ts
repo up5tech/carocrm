@@ -63,3 +63,17 @@ describe('scheduledJobId', () => {
     expect(scheduledJobId('cleanup', 1700000000000)).not.toContain(':');
   });
 });
+
+describe('jobRowId (Jobs API row adoption, PLAN §24)', () => {
+  it('builds and parses the row id symmetrically', () => {
+    const payload = buildJobPayload({ job: 'system.noop', data: { a: 1 }, jobRowId: 'row-9' });
+    expect(payload.jobRowId).toBe('row-9');
+    expect(parseJobPayload(payload)?.jobRowId).toBe('row-9');
+    expect(buildJobPayload({ job: 'system.noop' }).jobRowId).toBeUndefined();
+  });
+
+  it('rejects an over-long or empty row id', () => {
+    expect(parseJobPayload({ job: 'system.noop', data: {}, jobRowId: '' })).toBeUndefined();
+    expect(parseJobPayload({ job: 'system.noop', data: {}, jobRowId: 'x'.repeat(80) })).toBeUndefined();
+  });
+});

@@ -234,6 +234,21 @@ export interface JobsTable {
   finished_at: Date | null;
   target: unknown;
   result: unknown;
+  progress: number | null;
+  message: string | null;
+  last_error: string | null;
+  queue_job_id: string | null;
+  attempt: number;
+  max_attempts: number;
+  cancel_requested: boolean;
+}
+
+export interface JobLogsTable {
+  seq: string;
+  job_id: string;
+  level: string;
+  message: string;
+  created_at: Date;
 }
 
 export interface ScheduledJobsTable {
@@ -282,6 +297,7 @@ export interface Database {
   notifications: NotificationsTable;
   outbox_events: OutboxEventsTable;
   jobs: JobsTable;
+  job_logs: JobLogsTable;
   scheduled_jobs: ScheduledJobsTable;
   schema_changes: SchemaChangesTable;
 }

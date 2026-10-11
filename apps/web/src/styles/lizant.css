@@ -421,3 +421,20 @@ body {
   text-align: center;
   width: auto;
 }
+
+/* Jobs admin: the log viewer stays a plain monospace block (PLAN §24 job logs). */
+.lizant-job-log {
+  margin: 0;
+  padding: 12px 14px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 18px;
+  color: #31373d;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 60vh;
+  overflow: auto;
+}

@@ -6,9 +6,20 @@ export interface OutboxEvent {
 
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
+export type JobLogLevel = 'info' | 'warn' | 'error';
+
 export interface JobContext {
   userId?: string;
   data?: Record<string, unknown>;
+  /** Report 0..100 progress; the Admin UI reads it straight off the `jobs` row. */
+  progress(percent: number, message?: string): void;
+  /** Append a line to this execution's log. */
+  log(message: string, level?: JobLogLevel): void;
+  /**
+   * Cooperative cancellation (PLAN §24). An admin cancel marks the row; a long-running job is
+   * asked to stop between batches rather than being killed mid-statement.
+   */
+  shouldStop(): Promise<boolean>;
 }
 
 export interface JobRunResult {

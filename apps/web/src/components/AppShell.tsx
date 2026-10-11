@@ -1,4 +1,4 @@
-import { AppstoreOutlined, CalendarOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, SearchOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, CalendarOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, SearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
@@ -35,6 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     const admin: MenuItems = [{ key: '/admin/entity-manager', icon: <KeyOutlined />, label: <Link to="/admin/entity-manager">Entity Manager</Link> }];
     if (principal?.type === 'admin') {
       admin.push({ key: '/admin/audit-log', icon: <FileSearchOutlined />, label: <Link to="/admin/audit-log">Audit Log</Link> });
+      admin.push({ key: '/admin/jobs', icon: <ThunderboltOutlined />, label: <Link to="/admin/jobs">Jobs</Link> });
     }
     groups.push({ type: 'group', key: 'grp-admin', label: 'Administration', children: admin });
     return groups;

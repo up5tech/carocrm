@@ -39,11 +39,11 @@ pnpm db:seed          # applies migrations and seeds admin/roles/metadata into t
 pnpm lint             # eslint, 0 warnings allowed
 pnpm typecheck        # tsc --noEmit over the whole workspace
 pnpm -r build         # all packages + api + worker
-npx vitest run        # 199 tests: 140 API/integration (apps/api/test) + 59 formula unit tests; runs on the configured DATABASE_URL, no extra database
+npx vitest run        # 212 tests: 153 API/integration (apps/api/test) + 59 formula unit tests; runs on the configured DATABASE_URL, no extra database
 bash scripts/e2e-smoke.sh   # HTTP end-to-end checks against a booted server
-bash scripts/worker-smoke.sh # 14 checks: outbox, BullMQ jobs, cron scheduler, graceful shutdown
-npx playwright test    # 8 browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic); starts API+SPA itself
-pnpm --filter @carocrm/worker test  # 78 worker tests (jobs, scheduler, outbox, reminder job, domain-event subscribers)
+bash scripts/worker-smoke.sh # 22 checks: outbox, BullMQ jobs, cron, graceful shutdown, job progress/logs/cancellation
+npx playwright test    # 10 browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic/jobs); starts API+SPA itself
+pnpm --filter @carocrm/worker test  # 87 worker tests (jobs, scheduler, outbox, reminder job, domain-event subscribers)
 ```
 
 ## Deviations from PLAN (deliberate, for Alpha)
@@ -122,6 +122,30 @@ audit of `updateTable` calls confirmed every mutation is keyed.
 - Restore is now transactional too (row + audit + event commit together) and emits `entity.restored`.
 - Not covered yet: events for relation link/unlink, and any UI for browsing events (the API is the
   interface for now).
+
+## Background jobs and scheduled jobs (PLAN §24, added 2026-10-11)
+
+The worker already had queue, retries, backoff, cron and dead-letter handling; this round added the
+parts of §24 that were missing — progress, logs, cancellation, the job API and the admin UI:
+
+- New migration `003_jobs.sql` (additive): `jobs.progress/message/last_error/queue_job_id/attempt/
+  max_attempts/cancel_requested` plus the `job_logs` table (cascades from `jobs`).
+- `JobContext` gained `progress(percent, message?)`, `log(message, level?)` and `shouldStop()`;
+  `system.cleanupOutbox`, `system.pruneSessions` and `system.sendReminders` now report through them.
+- The Jobs API (`apps/api/src/jobs/`) inserts a `pending` row, produces to BullMQ, and lets the
+  worker adopt that row, so one submitted job stays one record while retries keep their own.
+  Endpoints (admin only): `POST/GET /api/v1/Job`, `GET /Job/{id}`, `GET /Job/{id}/log`,
+  `POST /Job/{id}/action/cancel`, `GET/POST /api/v1/ScheduledJob`, `POST /ScheduledJob/{id}/enable`,
+  `.../disable`, `.../action/runNow`, `POST /ScheduledJob/action/preview`.
+- Cancellation is cooperative: a waiting queue entry is removed, a running attempt is flagged and
+  sees it through `shouldStop()`; a job cancelled before the worker woke up never runs.
+- Retry/backoff settings moved to `JOB_QUEUE_NAME`, `JOB_ATTEMPTS`, `JOB_BACKOFF_BASE_MS` (`.env`),
+  matching the worker's `WORKER_*` equivalents.
+- Admin UI at `/admin/jobs`: job list (status, progress, attempt, message, duration), status filter,
+  queue counts, run-a-job modal, cancel, log drawer with refresh, and the schedule table with save /
+  enable / disable / run-now and live cron validation.
+- Verification: 13 API tests (`apps/api/test/jobs.test.ts`), 12 new worker tests, 2 browser specs,
+  and 8 new checks in `scripts/worker-smoke.sh` (adoption, progress, logs, cancelled-never-starts).
 
 ## Web UI theme (Lizant)
 
