@@ -372,6 +372,28 @@ export interface EmailAccountsTable {
   modified_at: Date;
 }
 
+/**
+ * Phase 14 extension installation state (PLAN §38.3). `manifest` keeps the manifest document the
+ * package was installed from, so an admin can see what was granted without reading the directory.
+ */
+export interface InstalledExtensionsTable {
+  id: string;
+  name: string;
+  version: string;
+  order_num: number;
+  enabled: boolean;
+  manifest: unknown;
+  installed_at: Date;
+  modified_at: Date;
+}
+
+/** Per-extension migration ledger; separate from the kernel's `schema_migrations` on purpose. */
+export interface ExtensionMigrationsTable {
+  extension_id: string;
+  name: string;
+  applied_at: Date;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
@@ -404,6 +426,8 @@ export interface Database {
   saved_filters: SavedFiltersTable;
   dashboards: DashboardsTable;
   dashlets: DashletsTable;
+  installed_extensions: InstalledExtensionsTable;
+  extension_migrations: ExtensionMigrationsTable;
 }
 
 export type Db = Kysely<Database>;

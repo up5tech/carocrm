@@ -1,0 +1,22 @@
+{
+  "name": "CaroCRM Extension: Account Health Fields",
+  "id": "account-health-fields",
+  "version": "1.0.0",
+  "description": "Adds a customer-health model to Account: tier, renewal date and a sandboxed formula score.",
+  "minPlatformVersion": "1.0.0",
+  "order": 200,
+  "permissions": [],
+  "metadata": "metadata",
+  "migrations": "migrations",
+  "backend": {
+    "entry": "src/index.ts",
+    "worker": false
+  },
+  "frontend": {
+    "nav": []
+  },
+  "package": {
+    "vendor": "CaroCRM",
+    "homepage": "https://docs.espocrm.com/development/modules/"
+  }
+}

@@ -326,6 +326,40 @@ HTTP request → EntityManager phases → PostgresRecordStore.withTransaction
   export paging, dashlet scale behaviour), the phase-12 block of `scripts/e2e-smoke.sh` and
   `e2e/search-import-dashboards.spec.ts`.
 
+## Extension SDK (PLAN §38 — Phase 14)
+
+Full guide: [`docs/extension-sdk.md`](extension-sdk.md). What a module author needs to know:
+
+- **The host is a value, not an injectable.** `loadExtensions()` (SDK) runs in `bootstrap.ts`
+  *before* `NestFactory.create`, because providers/controllers/metadata precedence are fixed when
+  the container is built. `setExtensionHost()` parks it; `AppModule` exposes it through
+  `EXTENSION_HOST` (`useFactory: () => extensionHost()`), so application code reads it via DI.
+  An installation with no `EXTENSIONS_DIR` gets an empty host and behaves exactly as before.
+- **`createAppModule` / `createExtensionHostModule`** builds the root module: it imports `AppModule`
+  and adds the packages' providers/controllers. Because Nest initializes dependencies first, an
+  extension controller route (`/api/v1/Project/:id/summary`) is registered *ahead* of
+  `ENTITY_CONTROLLERS`' `:entity/:id/:link` wildcard — verified by `apps/api/test/extensions.test.ts`.
+- **Injection surface for extensions** (exported by `AppModule`, declared as symbols in the SDK):
+  `EXTENSION_DATABASE`, `EXTENSION_ACL`, `EXTENSION_METADATA`, `EXTENSION_JOB_ENQUEUER`,
+  `EXTENSION_PRINCIPAL`, `EXTENSION_HOST`. The classes (`DatabaseService`, `AuthService`,
+  `IdentityService`, `AclApiService`, `HookRegistry`, `JobsService`, `OutboxService`, …) are exported
+  too, but a package should prefer the tokens so it never imports the application.
+  `EXTENSION_PRINCIPAL` is built with **getters**: `RequestScope` is a singleton the auth guard fills
+  per request, so a boot-time snapshot would answer for whoever was signed in then.
+- **Metadata precedence** is core `metadata_entries` → extensions (load order) → admin overrides in
+  `app_settings`. `mergeExtensionEntity()` concatenates `indexes` (an extension must not drop the
+  ones a core entity declares); index declarations are metadata, never DDL.
+- **Controller order**: `EXTENSION_CONTROLLERS` (`/api/v1/Extension`) sits just before
+  `ENTITY_CONTROLLERS`, like stream/calendar/jobs/search.
+- **Worker**: `loadWorkerExtensions()` (apps/worker/src/extensions.ts) reads the same
+  `installed_extensions` rows, registers each package's `jobs` and `domainEvents` in the
+  `WorkerApplication` constructor (before any loop starts) and runs `setup()` in `start()`.
+- **Extension tables**: `installed_extensions` + `extension_migrations` (migration `010`), kept apart
+  from `schema_migrations` so a package can neither claim nor re-run a kernel migration. Uninstall
+  drops the activation row only; applied SQL is never rolled back.
+- Sample packages live in `modules/` (field package, integration, custom domain module); point
+  `EXTENSIONS_DIR=modules` to try them, then `POST /api/v1/Extension/action/install`.
+
 ## Test database policy (AGENTS.md §3 — mandatory)
 
 Tests run against the **configured primary database** (`DATABASE_URL` from `.env`).

@@ -17,6 +17,7 @@
     "@carocrm/core": "workspace:*",
     "@carocrm/metadata": "workspace:*",
     "@carocrm/entity-engine": "workspace:*",
+    "@carocrm/extension-sdk": "workspace:*",
     "@carocrm/jobs": "workspace:*",
     "bullmq": "^5.0.0",
     "cron-parser": "^4.9.0",

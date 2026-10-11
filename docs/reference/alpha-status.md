@@ -3,9 +3,10 @@
 Date: 2026-10-10. Scope agreed with the user: **CRM Kernel Alpha only** (PLAN tasks 01–16, 19–20 of §87).
 Tasks 17–18 (generic React UI + Entity Manager) were completed afterwards, together with stream,
 calendar and the PLAN §21–§22 dynamic logic + formula engine, §23 hooks + domain events, §24 jobs,
-§25 attachments/file storage, the §28 outbound email subsystem and Phase 12 (search, saved filters,
-CSV import/export, dashboards — see the sections at the end of this file);
-extension SDK, workflow, reports, BPM and portal remain
+§25 attachments/file storage, the §28 outbound email subsystem, Phase 12 (search, saved filters,
+CSV import/export, dashboards — see the sections at the end of this file) and Phase 14 (extension
+SDK, `packages/extension-sdk` + the `modules/` sample packages);
+workflow, reports, BPM and portal remain
 unimplemented; see PLAN §72 for the remaining priority matrix.
 
 ## Checklist from PLAN §73
@@ -32,8 +33,9 @@ unimplemented; see PLAN §72 for the remaining priority matrix.
 | Saved filters working | done | `/api/v1/SavedFilter` CRUD + `action/run`, private/shared ownership columns |
 | CSV import/export working | done | `POST /:entity/action/import`, `POST|GET /:entity/action/export`, formula-injection guarded |
 | Dashboards and dashlets working | done | `/api/v1/Dashboard` + dashlets (`list`/`chart`/`kpi`), SPA `/dashboards` |
+| Extension packages working | done | `packages/extension-sdk` + `modules/` sample packages, `/api/v1/Extension`, `/admin/extensions` |
 | OpenAPI working | done | `GET /api/v1/OpenApi` (generated from controllers) |
-| API integration tests working | done | 77 vitest tests, 6 files (`apps/api/test`) |
+| API integration tests working | done | 281 vitest tests in `apps/api/test` (+151 package unit tests) |
 | Playwright login/CRUD tests working | done | `e2e/crud.spec.ts` (`npx playwright test`) |
 | Docker deployment working | partial | `docker-compose.yml` provides postgres/redis/api; images not built yet |
 | Backup and restore documented | done | `docs/operations/backup-restore.md` |
@@ -46,11 +48,11 @@ pnpm db:seed          # applies migrations and seeds admin/roles/metadata into t
 pnpm lint             # eslint, 0 warnings allowed
 pnpm typecheck        # tsc --noEmit over the whole workspace
 pnpm -r build         # all packages + api + worker
-npx vitest run        # 369 tests: 218 API/integration (apps/api/test) + 151 package unit; runs on the configured DATABASE_URL, no extra database
-bash scripts/e2e-smoke.sh   # 121 checks: HTTP end-to-end, incl. attachments, scan hook, chunked upload, outbound email, search/filters/import/export/dashboards
+npx vitest run        # 432 tests: 281 API/integration (apps/api/test) + 151 package unit; runs on the configured DATABASE_URL, no extra database
+bash scripts/e2e-smoke.sh   # 127 checks: HTTP end-to-end, incl. attachments, scan hook, chunked upload, outbound email, search/filters/import/export/dashboards, extensions
 bash scripts/worker-smoke.sh # 34 checks: outbox, BullMQ jobs, cron, graceful shutdown, job progress/logs/cancellation, upload cleanup, system.sendEmail
-npx playwright test    # 14 browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic/jobs/email/phase-12 search+csv+dashboards); starts API+SPA itself
-pnpm --filter @carocrm/worker test  # 111 worker tests (jobs, scheduler, outbox, reminder job, upload cleanup, sendEmail job, domain-event subscribers)
+npx playwright test    # browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic/jobs/email/phase-12 search+csv+dashboards/extensions); starts API+SPA itself
+pnpm --filter @carocrm/worker test  # 116 worker tests (jobs, scheduler, outbox, reminder job, upload cleanup, sendEmail job, domain-event subscribers, extension config)
 ```
 
 ## Deviations from PLAN (deliberate, for Alpha)
@@ -261,6 +263,49 @@ created the tables and ownership columns, `009` corrected the search indexes.
   the formula guard, dashlet run and dashboard delete) and 3 browser specs
   (`e2e/search-import-dashboards.spec.ts`) covering the header-search deep link, the list search /
   saved-filter / CSV round-trip and the dashboard dashlet + delete flow.
+
+## Extension SDK (Phase 14, PLAN §38/§39, added 2026-10-11)
+
+`packages/extension-sdk` was a placeholder comment; it is now the contract the API and the worker
+both load from, and `modules/` holds three working packages built against it (PLAN §38 acceptance:
+three independent extensions without touching the core).
+
+- **Contract** (`packages/extension-sdk`): `manifest` (strict zod schema — a typo such as
+  `dependancies` fails the install), `semver` (dependency + platform windows), `resolver`
+  (dependencies first, then ascending `order`, with cycles/missing/duplicate ids failing fast),
+  `loader` (directory scan, metadata documents, ordered `*.sql`, dynamic backend import, paths
+  resolved inside the package), `metadata` (partial-contribution validation and merge rules) and
+  `host` (the loaded set, shared by both processes).
+- **Host**: `loadExtensions()` runs in `bootstrap.ts` *before* `NestFactory.create` and produces an
+  `ExtensionHost`, because providers, controllers and metadata precedence are fixed at container
+  build time. `createExtensionHostModule()` imports `AppModule` and adds the packages' providers and
+  controllers; `AppModule` exposes the host and the `EXTENSION_*` tokens (database, ACL, metadata,
+  job enqueuer, principal) so a package never imports the application.
+- **Metadata precedence** is now core `metadata_entries` → extensions (load order) → admin overrides
+  in `app_settings`. Extension contributions merge fields/relations/layouts and concatenate index
+  declarations; a contributed entity is served by the generic CRUD API, ACL, audit, stream and the
+  generated SPA screens with no new code.
+- **Installation** is an audited admin action (`POST /api/v1/Extension/action/install`): it checks
+  dependencies and the platform window, applies the package's migrations with their own
+  `extension_migrations` ledger (migration `010`, additive), records the activation row and asks for
+  a restart. Uninstall is refused while a dependent is installed and never rolls SQL back.
+  Packages come from `EXTENSIONS_DIR` — there is deliberately no upload endpoint.
+- **Worker**: loads the same packages, registers their `jobs` and `domainEvents` before any loop
+  starts and runs `setup()` during `start()`.
+- **SPA**: `/admin/extensions` lists packages with their state (`available` / `installed` / `running`)
+  and contributions; installed packages contribute sidebar entries through
+  `GET /api/v1/Extension/frontend` (admin-only entries are filtered server-side).
+- **Sample packages**: `modules/account-health-fields` (metadata only — fields, layouts, an index
+  declaration and a `formula` field), `modules/webhook-integration` (provider, admin controller,
+  `webhook.deliver` job, domain-event subscriber, own migration, encrypted signing secrets and an
+  SSRF guard), `modules/project-domain` (a custom `Project` entity plus one derived summary endpoint
+  that asks the host's ACL evaluator, and a declared dependency on the webhook package).
+- **Not built**: package signing/integrity verification, an upload flow, and React components shipped
+  from a package (that needs a build-time Vite plugin). Documentation: `docs/extension-sdk.md`.
+- Verification: 46 SDK unit tests, 17 API integration tests covering the whole lifecycle
+  (list → guard → install → restart → merge → CRUD → nav → uninstall), 5 worker tests, 6 new
+  `scripts/e2e-smoke.sh` checks and 1 browser spec (`e2e/extensions.spec.ts`, not executed in this
+  environment).
 
 ## Web UI theme (Lizant)
 

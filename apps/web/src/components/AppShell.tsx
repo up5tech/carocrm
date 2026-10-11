@@ -1,10 +1,11 @@
-import { AppstoreOutlined, CalendarOutlined, DashboardOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, SearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ApiOutlined, AppstoreOutlined, CalendarOutlined, DashboardOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, ProjectOutlined, SearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
+import { useExtensionNav } from '../state/extensions.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
 
@@ -12,9 +13,23 @@ const { Sider, Content, Footer } = Layout;
 
 type MenuItems = Required<MenuProps>['items'];
 
+/**
+ * Icons an extension may name in `manifest.frontend.nav[].icon`.
+ *
+ * The SPA resolves them from this fixed set — a package ships data, never remote code, so a
+ * manifest can add a menu entry but cannot make the browser execute or fetch anything.
+ */
+const EXTENSION_ICONS: Record<string, ReactNode> = {
+  ApiOutlined: <ApiOutlined />,
+  DatabaseOutlined: <DatabaseOutlined />,
+  ProjectOutlined: <ProjectOutlined />,
+  ThunderboltOutlined: <ThunderboltOutlined />,
+};
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { principal, signOut } = useSession();
   const metadata = useMetadata();
+  const extensionNav = useExtensionNav();
   const location = useLocation();
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
@@ -34,14 +49,24 @@ export function AppShell({ children }: { children: ReactNode }) {
     }));
     if (records.length > 0) groups.push({ type: 'group', key: 'grp-records', label: 'Records', children: records });
 
+    // Entries contributed by installed extensions (PLAN §38). The server already filtered the ones
+    // this user may not see, so the client renders them as-is.
+    const contributed: MenuItems = (extensionNav.data?.nav ?? []).map((item) => ({
+      key: item.route,
+      icon: item.icon ? EXTENSION_ICONS[item.icon] ?? <DatabaseOutlined /> : <DatabaseOutlined />,
+      label: <Link to={item.route}>{item.label}</Link>,
+    }));
+    if (contributed.length > 0) groups.push({ type: 'group', key: 'grp-extensions', label: 'Extensions', children: contributed });
+
     const admin: MenuItems = [{ key: '/admin/entity-manager', icon: <KeyOutlined />, label: <Link to="/admin/entity-manager">Entity Manager</Link> }];
     if (principal?.type === 'admin') {
       admin.push({ key: '/admin/audit-log', icon: <FileSearchOutlined />, label: <Link to="/admin/audit-log">Audit Log</Link> });
       admin.push({ key: '/admin/jobs', icon: <ThunderboltOutlined />, label: <Link to="/admin/jobs">Jobs</Link> });
+      admin.push({ key: '/admin/extensions', icon: <ApiOutlined />, label: <Link to="/admin/extensions">Extensions</Link> });
     }
     groups.push({ type: 'group', key: 'grp-admin', label: 'Administration', children: admin });
     return groups;
-  }, [metadata.data, principal?.type]);
+  }, [metadata.data, principal?.type, extensionNav.data]);
 
   const selectedKey = useMemo(() => {
     const segments = location.pathname.split('/').filter(Boolean);

@@ -1,0 +1,19 @@
+{
+  "name": "CaroCRM Extension: Webhook Integration",
+  "id": "webhook-integration",
+  "version": "1.0.0",
+  "description": "Registers outbound webhook endpoints and delivers entity events to them from the worker.",
+  "minPlatformVersion": "1.0.0",
+  "order": 250,
+  "permissions": ["entity.read", "admin"],
+  "metadata": "metadata",
+  "migrations": "migrations",
+  "backend": {
+    "entry": "src/index.ts"
+  },
+  "frontend": {
+    "nav": [
+      { "route": "/admin/webhook-endpoints", "label": "Webhooks", "icon": "ApiOutlined", "adminOnly": true, "order": 10 }
+    ]
+  }
+}

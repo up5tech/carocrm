@@ -1,0 +1,17 @@
+{
+  "name": "@carocrm-ext/account-health-fields",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample extension package: metadata-only Account health fields.",
+  "main": "dist/index.js",
+  "dependencies": {
+    "@carocrm/extension-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  }
+}

@@ -1,2 +1,9 @@
-// Placeholder: implemented in a later phase (see PLAN.md section 72 priority matrix).
-export {};
+export * from './errors/index.js';
+export * from './host/index.js';
+export * from './load/index.js';
+export * from './loader/index.js';
+export * from './manifest/index.js';
+export * from './metadata/index.js';
+export * from './resolver/index.js';
+export * from './semver/index.js';
+export * from './types/index.js';

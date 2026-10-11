@@ -5,6 +5,7 @@ import { dirname,resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { log } from '@carocrm/core/logger/index.js';
+import { ExtensionHost as ExtensionHostClass, loadExtensions } from '@carocrm/extension-sdk';
 import * as cookie from '@fastify/cookie';
 import * as cors from '@fastify/cors';
 import * as helmet from '@fastify/helmet';
@@ -17,10 +18,29 @@ import { FastifyAdapter } from '@nestjs/platform-fastify';
 import type { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 
-import { AppModule } from './app.module.js';
 import { GlobalExceptionFilter } from './common/global-exception.filter.js';
 import type { AppConfig } from './config.js';
 import { buildConfig } from './config.js';
+import type { ExtensionHost as ExtensionHostType } from './extensions/extension-host.js';
+import { setExtensionHost } from './extensions/extension-host.js';
+import { createExtensionHostModule } from './extensions/extension-host.module.js';
+import { readInstalledExtensions } from './extensions/extension-store.js';
+
+/**
+ * Reads the installed extensions and assembles the host for this process (PLAN §38.3).
+ * Failures are never swallowed: a broken package graph must stop the boot instead of silently
+ * changing metadata precedence.
+ */
+export async function loadExtensionHost(config: AppConfig): Promise<ExtensionHostType> {
+  const state = await readInstalledExtensions(config.databaseUrl);
+  if (state.enabled.size === 0) return new ExtensionHostClass([]);
+  return loadExtensions({
+    directory: config.extensionsDir,
+    platformVersion: config.platformVersion,
+    enabledIds: state.enabled,
+    disabledIds: state.disabled,
+  });
+}
 
 function migrationsDir(): string {
   let dir = dirname(fileURLToPath(import.meta.url));
@@ -76,6 +96,8 @@ function asPlugin(mod: unknown): FastifyPluginLike {
 
 export interface CreateAppOptions {
   skipMigrations?: boolean;
+  /** Pre-built extension host (tests inject one); otherwise it is loaded from `EXTENSIONS_DIR`. */
+  extensions?: ExtensionHostType | undefined;
 }
 
 export async function createApp(
@@ -86,8 +108,14 @@ export async function createApp(
     await migrateDb(config.databaseUrl);
   }
 
+  // Extensions are assembled before Nest exists: providers, controllers and metadata precedence
+  // are fixed when the container is created, and the packages themselves come from disk
+  // (PLAN §38.3). An installation with no packages gets an empty host and behaves exactly as before.
+  const host = options.extensions ?? (await loadExtensionHost(config));
+  setExtensionHost(host);
+
   const adapter = new FastifyAdapter({ logger: false, bodyLimit: 32 * 1024 * 1024 });
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, { abortOnError: true });
+  const app = await NestFactory.create<NestFastifyApplication>(createExtensionHostModule(host), adapter, { abortOnError: true });
 
   await app.register(asPlugin(swagger), {
     routePrefix: 'docs',

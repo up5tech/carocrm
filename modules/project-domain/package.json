@@ -1,0 +1,20 @@
+{
+  "name": "@carocrm-ext/project-domain",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample extension package: a custom CRM domain module (Project) with a derived summary endpoint.",
+  "main": "dist/index.js",
+  "dependencies": {
+    "@carocrm/core": "workspace:*",
+    "@carocrm/extension-sdk": "workspace:*",
+    "@nestjs/common": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json"
+  }
+}

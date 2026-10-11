@@ -1,3 +1,5 @@
+import type { ExtensionAcl, ExtensionDb, ExtensionJobEnqueuer, ExtensionMetadataLookup, ExtensionPrincipal } from '@carocrm/extension-sdk';
+import { EXTENSION_ACL, EXTENSION_DATABASE, EXTENSION_JOB_ENQUEUER, EXTENSION_METADATA, EXTENSION_PRINCIPAL } from '@carocrm/extension-sdk';
 import type { MiddlewareConsumer, NestModule, OnApplicationBootstrap } from '@nestjs/common';
 import { Inject, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
@@ -26,9 +28,15 @@ import { ENTITY_STORE } from './entity/entity-record.store.js';
 import type { AfterSaveHook } from './entity/hooks.js';
 import { KERNEL_HOOKS_TOKEN } from './entity/hooks.js';
 import { DOMAIN_EVENT_CONTROLLERS, DOMAIN_EVENT_PROVIDERS, EntityEventHookService, registerEntityEventHook } from './events/index.js';
+import type { ExtensionHost as ExtensionHostType } from './extensions/extension-host.js';
+import { EXTENSION_HOST, extensionHost } from './extensions/extension-host.js';
+import { EXTENSION_CONTROLLERS, EXTENSION_PROVIDERS } from './extensions/index.js';
 import { HealthController } from './health/health.controller.js';
+import { HookRegistry } from './hooks/hook.registry.js';
 import { HOOK_CONTROLLERS, HOOK_PROVIDERS } from './hooks/index.js';
 import { JOB_CONTROLLERS, JOB_PROVIDERS } from './jobs/index.js';
+import { JobsService } from './jobs/jobs.service.js';
+import { FormulaService } from './logic/formula.service.js';
 import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
 import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.service.js';
@@ -59,6 +67,8 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     // Phase 12: `/api/v1/Search`, `/SavedFilter`, `/Dashboard` static prefixes plus
     // `:entity/action/{import,export}` — all before the generic `:entity` wildcard.
     ...SEARCH_CONTROLLERS,
+    // `/api/v1/Extension` is a static prefix and must be matched before `:entity`.
+    ...EXTENSION_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
     ...ENTITY_CONTROLLERS,
   ],
@@ -77,6 +87,7 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     ...EMAIL_PROVIDERS,
     ...LOGIC_PROVIDERS,
     ...SEARCH_PROVIDERS,
+    ...EXTENSION_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
     ...AUDIT_PROVIDERS,
@@ -116,6 +127,73 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
       provide: APP_GUARD,
       useExisting: AuthGuard,
     },
+    // The extension packages are assembled by the bootstrap loader before Nest starts, so the
+    // container reads them from the parked host instead of from a mutable static registry
+    // (PLAN §38.3). An installation with no `EXTENSIONS_DIR` gets an empty host.
+    { provide: EXTENSION_HOST, useFactory: (): ExtensionHostType => extensionHost() },
+    // Framework-neutral tokens an extension may inject, so a package never imports this application.
+    {
+      provide: EXTENSION_DATABASE,
+      inject: [DatabaseService],
+      useFactory: (database: DatabaseService): ExtensionDb => ({
+        query: async <Row>(sql: string, params?: readonly unknown[]) =>
+          (await database.pool.query(sql, params as unknown[])).rows as Row[],
+      }),
+    },
+    {
+      provide: EXTENSION_ACL,
+      inject: [AclApiService, ENTITY_STORE, METADATA_STORE],
+      useFactory: (acl: AclApiService, store: PostgresRecordStore): ExtensionAcl => ({
+        canAccess: async (entityType, action) => (await acl.canUser(entityType, action)) !== 'no',
+        canAccessRecord: async (entityType, action, recordId) => {
+          const record = await store.findById(entityType, recordId);
+          if (!record) return false;
+          const teams = Array.isArray(record.data['teams']) ? (record.data['teams'] as string[]) : undefined;
+          const decision = await acl.canAccessRecord(entityType, action, {
+            assignedUserId: record.assignedUserId,
+            createdById: record.createdById,
+            ...(teams !== undefined ? { teams } : {}),
+          });
+          return decision.allowed;
+        },
+      }),
+    },
+    {
+      provide: EXTENSION_METADATA,
+      inject: [METADATA_STORE],
+      useFactory: (store: MetadataStoreType): ExtensionMetadataLookup => () => store.getMetadata(),
+    },
+    {
+      provide: EXTENSION_JOB_ENQUEUER,
+      inject: [JobsService],
+      useFactory: (jobs: JobsService): ExtensionJobEnqueuer => async (job, data) => (await jobs.enqueue({ job, data: data ?? {} })).id,
+    },
+    {
+      provide: EXTENSION_PRINCIPAL,
+      inject: [REQUEST_SCOPE_TOKEN],
+      // Getters, not a snapshot: `RequestScope` is a singleton the auth guard fills per request,
+      // so a value captured at boot would answer for whoever was signed in at that moment.
+      useFactory: (scope: RequestScope): ExtensionPrincipal => ({
+        get userId(): string | undefined {
+          return scope.userId;
+        },
+        get userName(): string | undefined {
+          return scope.principal?.userName;
+        },
+        get userType(): string | undefined {
+          return scope.userType;
+        },
+        get isAdmin(): boolean {
+          return scope.isAdmin;
+        },
+        get roles(): readonly string[] {
+          return scope.roleIds();
+        },
+        get teams(): readonly string[] {
+          return scope.teamIds();
+        },
+      }),
+    },
   ],
   exports: [
     DatabaseService,
@@ -125,6 +203,16 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     REQUEST_SCOPE_TOKEN,
     KERNEL_HOOKS_TOKEN,
     METADATA_STORE,
+    AclApiService,
+    HookRegistry,
+    FormulaService,
+    JobsService,
+    EXTENSION_HOST,
+    EXTENSION_DATABASE,
+    EXTENSION_ACL,
+    EXTENSION_METADATA,
+    EXTENSION_JOB_ENQUEUER,
+    EXTENSION_PRINCIPAL,
   ],
 })
 export class AppModule implements NestModule, OnApplicationBootstrap {

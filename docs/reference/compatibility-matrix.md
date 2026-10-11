@@ -1,7 +1,8 @@
 # Compatibility matrix (PLAN §60)
 
 Baseline: EspoCRM 9.3.x behavior, observed through public documentation — clean-room,
-no upstream source used (PLAN §2). Status is as of 2026-10-11 (CRM Kernel Alpha + PLAN tasks 17–22).
+no upstream source used (PLAN §2). Status is as of 2026-10-11 (CRM Kernel Alpha + PLAN tasks 17–22,
+search/import/export/dashboards and the extension SDK).
 
 | Capability | Espo baseline | This implementation | Priority | State |
 |---|---|---|---|---|
@@ -21,16 +22,17 @@ no upstream source used (PLAN §2). Status is as of 2026-10-11 (CRM Kernel Alpha
 | OpenAPI | upstream has none for v1 API | generated `GET /api/v1/OpenApi` — additive | P1 | implemented |
 | Stream / followers | v9.3.x | `GET /Stream`, `GET /:type/:id/stream`, `POST /Note`, `PUT\|DELETE /:type/:id/subscription`, mentions→notifications, generated Update items | P1 | implemented |
 | Activities / Calendar | v9.3.x | Task/Call/Meeting/Reminder entities, `GET /Calendar` occurrences, recurrence expansion, reminder job, month-grid UI with drag reschedule | P1 | implemented |
-| Email | v9.3.x | not built | P1 | not started |
-| Global search | v9.3.x | query-engine filters only; no trigram/FTS index | P1 | not started |
-| Import / Export | v9.3.x | not built | P1 | not started |
-| Dashboards / dashlets | v9.3.x | not built | P1 | not started |
+| Email | v9.3.x | metadata `Email` entity + templates, per-account SMTP, queued delivery with a ledger, `InboundMailProvider` port | P1 | implemented (see note) |
+| Global search | v9.3.x | `/Search` over the query engine (ACL-aware) + trigram indexes; no OpenSearch stage 2 | P1 | implemented |
+| Import / Export | v9.3.x | CSV import with field mapping and a validation report, paged CSV export with formula neutralisation | P1 | implemented |
+| Dashboards / dashlets | v9.3.x | dashboards with list/chart/KPI dashlets driven by the query engine | P1 | implemented |
 | Frontend SPA | v9.3.x | React SPA: generic list/detail/edit/create, Entity Manager, audit, stream, calendar (Lizant theme) | P0 (product) | implemented |
 | Background jobs / scheduled jobs | v9.3.x | BullMQ worker, cron metadata, retries + backoff + dead letter, per-job progress and logs, cooperative cancellation, REST API and admin UI | P2 | implemented |
 | Formula engine | v9.3.x | sandboxed parser → AST → evaluator with an allowlisted function set and execution budgets (`@carocrm/formula`) | P2 | implemented |
 | Dynamic logic | v9.3.x | metadata `dynamicLogic.rules` evaluated in the SPA **and** on every API write | P2 | implemented |
 | Workflows / BPM / Reports / Portals | commercial/baseline | out of Alpha scope | P2 | not started |
 | Hooks / domain events | v9.3.x entity hooks + event bus | `HookRegistry` phases + transactional-outbox domain events consumed by a worker subscriber bus | P2 | implemented (see note) |
+| Extension SDK / modules | v9.3.x module/extension packages | `packages/extension-sdk` + host in API and worker: manifest, strict validation, dependency + `order` resolution, metadata contribution, providers/controllers/hooks/jobs, own migrations, SPA nav, admin API + UI | P1 | implemented (see note) |
 | Database | MySQL/MariaDB/PG | PostgreSQL only; MySQL/MariaDB later (PLAN §6.2) | — | PG first |
 | PHP source compatibility | — | explicitly a non-goal (PLAN §5) | — | N/A |
 
@@ -119,8 +121,10 @@ phase names and event payloads are PLAN §23.1/§23.2 plus our own design; the u
   `beforeDelete`, `beforeSave`, `afterCreate`, `whenCreated`, `whenUpdated`, `whenDeleted`,
   `afterSave`. There is no load/read phase yet (`afterLoad` upstream) and no `afterDelete` — soft
   delete reports `whenDeleted`.
-- Hooks are **code-registered** (a `HookRegistry` provider), not files dropped in an extension
-  directory; that belongs to the extension SDK (PLAN §38, task 31).
+- Hooks are **code-registered** (a `HookRegistry` provider). Extension packages contribute hooks
+  through the extension SDK (PLAN §38) — `manifest.json` + a backend module — which is also how a
+  hook is persisted upstream (in a module directory), so the mechanism matches even though the
+  file format does not.
 - EspoCRM exposes its event bus to extensions only; here `GET /api/v1/Hook` and
   `GET /api/v1/DomainEvent` publish the same facts over the API, which is additive, not upstream.
 - `entity.created|updated|deleted|restored` payloads (`{entityType, entityId, changed[], userId,
@@ -130,6 +134,36 @@ phase names and event payloads are PLAN §23.1/§23.2 plus our own design; the u
   transaction as well.
 - Outbox delivery is at-least-once with per-event retry/backoff and a `failed` dead-letter status;
   upstream runs job consumers through its own queue table.
+
+## Extension SDK (PLAN §38)
+
+Upstream documentation was **not reachable from this environment** while building, so the shapes below
+follow PLAN §38/§39 and our own design; parity with EspoCRM's module/extension contract (manifest
+keys, install directory layout, `metadata/` + `Migrations/` + `backend/` layout, the
+`ExtensionInstaller`/`Uninstaller` services) still needs a documentation pass.
+
+- **Package = directory with `manifest.json`**, read from one configured directory (`EXTENSIONS_DIR`).
+  Upstream installs by copying an uploaded zip into `data/upload/extensions/`; there is **no upload
+  endpoint here** — deployment places the directory, an administrator installs it. That removes an
+  entire class of "upload arbitrary code" risk (PLAN §38.4) at the cost of upstream's convenience.
+- **Install is explicit and needs a restart**: the activation row (`installed_extensions`), its SQL
+  migrations and then a process restart. Upstream performs the same actions in one request through
+  `ExtensionInstaller` and reloads metadata; it can add providers to a live container, which we
+  deliberately do not.
+- **Load order is ours and deterministic**: dependencies first, then ascending `order`, then id.
+  PLAN §39 asks for a module-order priority; upstream uses a per-module numeric `order` in
+  `metadata.json` too, but the exact resolution rule was not verifiable here.
+- **Version compatibility** is `minPlatformVersion` / `maxPlatformVersion` plus per-dependency
+  minimum versions, checked before anything is loaded. Upstream has its own compatibility check with
+  the platform version; the field names differ.
+- **Contributions**: metadata documents, Nest providers/controllers, entity-manager hooks, background
+  jobs, domain-event subscribers, SQL migrations and SPA navigation entries. Upstream modules also
+  register routes and jobs from PHP class registries — the concepts match, the mechanism does not.
+- **Frontend contributions are data only** (navigation entries, plus everything metadata already
+  drives). Shipping a React component from a package would need a build-time Vite plugin and is not
+  supported in this phase.
+- **No signature verification**: packages are trusted code installed by an administrator. PLAN §71
+  recommends signature checks; they remain a documented gap, not a silent omission.
 
 ## Attachments and file storage (PLAN §25)
 

@@ -9,13 +9,17 @@ calendar, the PLAN §21–§22 dynamic logic + formula engine, the PLAN §23 hoo
 domain-event bus, the PLAN §24 job system (progress, logs, cancellation, admin UI), the
 PLAN §25 attachment + file-storage layer (streaming uploads, S3/MinIO, malware-scan hook,
 chunked upload) and the PLAN §28 outbound email subsystem (transport port, SMTP + generic relay,
-delivery ledger, `system.sendEmail` worker job).**
+delivery ledger, `system.sendEmail` worker job), the PLAN §30/§32/§33 search, import/export and
+dashboard tooling, and the PLAN §38 extension SDK (`packages/extension-sdk` plus the three sample
+packages under `modules/`).**
 Backend: metadata engine, entity/query/ACL engines, attachments over a pluggable storage port,
 audit, jobs, sandboxed formula evaluation, declarative record rules, entity lifecycle hooks, a
 transactional-outbox event bus, a BullMQ background-job runner with progress, logs and
-cancellation, and email sent through a pluggable mail transport.
+cancellation, email sent through a pluggable mail transport, and an extension host that loads
+installed packages from disk.
 Frontend (`apps/web`): metadata-driven login, navigation, list/detail/edit views, the
-Entity Manager admin UI (including the rule builder), stream panel, calendar and the Jobs admin page.
+Entity Manager admin UI (including the rule builder), stream panel, calendar, the Jobs admin page
+and the Extensions admin page.
 Inbound mail, import/export, dashboards, workflows, BPM, reports and portals are not implemented yet.
 Full checklist and deviations: [docs/reference/alpha-status.md](docs/reference/alpha-status.md).
 
@@ -48,10 +52,11 @@ Copy `.env.example` to `.env` and adjust. `pnpm db:seed` creates the target data
 ```
 apps/api        NestJS + Fastify REST API (/api/v1)
 apps/worker     BullMQ worker, outbox poller, cron scheduler
-apps/web        placeholder for the metadata-driven React UI (post-Alpha)
-packages/       core, metadata, entity-engine, query-engine, acl, files, jobs, …
+apps/web        metadata-driven React SPA
+packages/       core, metadata, entity-engine, query-engine, acl, files, jobs, extension-sdk, …
+modules/        sample extension packages (field package, integration, CRM domain module)
 database/       SQL migrations, migration runner, seed data + entity metadata
-docs/           module guide (runtime rules), reference, operations
+docs/           module guide (runtime rules), extension SDK guide, reference, operations
 ```
 
 ## API surface (Alpha)
@@ -72,6 +77,10 @@ docs/           module guide (runtime rules), reference, operations
   `POST /api/v1/Email/:id/action/send`, `GET /api/v1/Email/:id/deliveries`
   (drafts are ordinary records: `POST /api/v1/Email`; delivery happens in the worker)
 - `GET /api/v1/OpenApi`, `GET /health/live`, `GET /health/ready`
+- `GET /api/v1/Extension`, `GET /api/v1/Extension/:id`,
+  `POST /api/v1/Extension/action/install`, `POST /api/v1/Extension/:id/action/{uninstall,enable,disable}`
+  (admin), `GET /api/v1/Extension/frontend` (any signed-in user) — see
+  [docs/extension-sdk.md](docs/extension-sdk.md)
 
 Auth: `Authorization: Bearer <jwt>`, `Authorization: ApiKey <keyId>:<secret>`, or the
 `CRM-SESSION` cookie (unsafe methods then require `x-csrf-token` matching the `CRM-CSRF` cookie).

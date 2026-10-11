@@ -61,6 +61,10 @@ const WorkerConfigSchema = z.object({
    * a full graceful shutdown without sending signals.
    */
   runForMs: z.coerce.number().int().min(0).max(86400000).default(0),
+  /** Directory holding extension packages (PLAN §38); must match the API's EXTENSIONS_DIR. */
+  extensionsDir: z.string().default('extensions'),
+  /** Version extension manifests are checked against. */
+  platformVersion: z.string().default('1.0.0'),
 });
 
 export type WorkerConfig = z.infer<typeof WorkerConfigSchema>;
@@ -131,6 +135,8 @@ export function buildWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerC
     mailTransport: env.MAIL_TRANSPORT,
     encryptionKey: env.ENCRYPTION_KEY,
     runForMs: env.WORKER_RUN_MS,
+    extensionsDir: env.EXTENSIONS_DIR,
+    platformVersion: env.PLATFORM_VERSION,
   });
 }
 

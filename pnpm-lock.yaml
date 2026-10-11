@@ -80,6 +80,9 @@ importers:
       '@carocrm/entity-engine':
         specifier: workspace:*
         version: link:../../packages/entity-engine
+      '@carocrm/extension-sdk':
+        specifier: workspace:*
+        version: link:../../packages/extension-sdk
       '@carocrm/files':
         specifier: workspace:*
         version: link:../../packages/files
@@ -256,6 +259,9 @@ importers:
       '@carocrm/entity-engine':
         specifier: workspace:*
         version: link:../../packages/entity-engine
+      '@carocrm/extension-sdk':
+        specifier: workspace:*
+        version: link:../../packages/extension-sdk
       '@carocrm/files':
         specifier: workspace:*
         version: link:../../packages/files
@@ -296,6 +302,57 @@ importers:
       tsx:
         specifier: ^4.19.0
         version: 4.23.12
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  modules/account-health-fields:
+    dependencies:
+      '@carocrm/extension-sdk':
+        specifier: workspace:*
+        version: link:../../packages/extension-sdk
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  modules/project-domain:
+    dependencies:
+      '@carocrm/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@carocrm/extension-sdk':
+        specifier: workspace:*
+        version: link:../../packages/extension-sdk
+      '@nestjs/common':
+        specifier: ^11.0.0
+        version: 11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  modules/webhook-integration:
+    dependencies:
+      '@carocrm/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@carocrm/extension-sdk':
+        specifier: workspace:*
+        version: link:../../packages/extension-sdk
+      '@carocrm/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
+      '@nestjs/common':
+        specifier: ^11.0.0
+        version: 11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -384,6 +441,12 @@ importers:
       '@carocrm/core':
         specifier: workspace:*
         version: link:../core
+      '@carocrm/entity-engine':
+        specifier: workspace:*
+        version: link:../entity-engine
+      '@carocrm/jobs':
+        specifier: workspace:*
+        version: link:../jobs
       '@carocrm/metadata':
         specifier: workspace:*
         version: link:../metadata

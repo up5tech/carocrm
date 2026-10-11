@@ -3,6 +3,7 @@ import { log } from '@carocrm/core/logger/index.js';
 import { WorkerApplication } from './app.js';
 import { errorMessage } from './db.js';
 import { loadWorkerConfig } from './env.js';
+import { describeExtensionFailure, loadWorkerExtensions } from './extensions.js';
 
 /**
  * Worker entrypoint: `pnpm --filter @carocrm/worker dev` (tsx watch) or
@@ -12,7 +13,14 @@ const config = loadWorkerConfig();
 // The shared logger is created at import time (before `.env` is read), so align its level now.
 log.level = config.logLevel;
 
-const app = new WorkerApplication(config, log);
+// Extension packages are assembled before the application exists (PLAN §38.3): a broken package
+// graph stops the process here rather than leaving a worker that ignores part of its queue.
+const extensions = await loadWorkerExtensions(config).catch((error: unknown) => {
+  log.error({ error: describeExtensionFailure(error) }, 'extensions could not be loaded');
+  process.exit(1);
+});
+
+const app = new WorkerApplication(config, log, extensions);
 
 let shuttingDown = false;
 

@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "Account": {
+      "fields": {
+        "healthTier": {
+          "type": "enum",
+          "values": ["Platinum", "Gold", "Silver", "At Risk"],
+          "defaultValue": "Silver",
+          "inList": true,
+          "inDetail": true,
+          "inEdit": true,
+          "audited": true,
+          "label": "Health tier"
+        },
+        "renewalDate": {
+          "type": "date",
+          "inDetail": true,
+          "inEdit": true,
+          "audited": true,
+          "label": "Renewal date"
+        },
+        "openOpportunityCount": {
+          "type": "int",
+          "inDetail": true,
+          "label": "Open opportunities"
+        },
+        "healthScore": {
+          "type": "formula",
+          "formula": "ifThen(equals(field(\"healthTier\"), \"Platinum\"), 90, ifThen(equals(field(\"healthTier\"), \"Gold\"), 75, ifThen(equals(field(\"healthTier\"), \"Silver\"), 60, 30)))",
+          "inDetail": true,
+          "inList": true,
+          "label": "Health score"
+        }
+      },
+      "layouts": {
+        "detail": [
+          {
+            "entity": "Account",
+            "type": "detail",
+            "panels": [
+              { "name": "overview", "label": "Overview", "fields": ["name", "website", "healthTier", "renewalDate", "healthScore"] },
+              { "name": "details", "label": "Details", "fields": ["industry", "type", "billingAddressCity", "billingAddressCountry", "description"] }
+            ]
+          }
+        ],
+        "edit": [
+          {
+            "entity": "Account",
+            "type": "edit",
+            "panels": [
+              { "name": "main", "label": "Account", "fields": ["name", "website", "industry", "billingAddressStreet", "billingAddressCity", "billingAddressCountry"] },
+              { "name": "health", "label": "Customer health", "fields": ["healthTier", "renewalDate"] }
+            ]
+          }
+        ]
+      },
+      "indexes": [
+        { "name": "idx_account_health_tier", "fields": ["healthTier"] }
+      ]
+    }
+  }
+}

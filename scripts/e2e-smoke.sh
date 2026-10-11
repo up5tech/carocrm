@@ -333,6 +333,18 @@ await p.query(\"DELETE FROM entity_records WHERE entity_type='Account' AND name 
 await p.end();})()" 2>/dev/null
 check 'search fixture removed' 404 "$(req GET "/api/v1/Account/${S_ID}" "$TOKEN")"
 
+echo '--- extensions (PLAN §38)'
+check 'extension administration is admin-only' 403 "$(req GET /api/v1/Extension "$OWN_TOKEN")"
+code=$(req GET /api/v1/Extension "$TOKEN")
+check 'GET /Extension 200 for admin' 200 "$code"
+# The sample packages live in `modules/`; this run leaves EXTENSIONS_DIR alone, so either the
+# packages are visible (directory configured) or the list is empty — never an error.
+check 'extension list is well formed' true "$(jq -r '.list | type == "array"' "$TMP/body" 2>/dev/null)"
+check 'uninstalling an unknown package is refused' 404 "$(req POST /api/v1/Extension/not-a-package/action/uninstall "$TOKEN")"
+code=$(req GET /api/v1/Extension/frontend "$TOKEN")
+check 'GET /Extension/frontend 200 for any user' 200 "$code"
+check 'frontend contributions are a list' true "$(jq -r '.nav | type == "array"' "$TMP/body" 2>/dev/null)"
+
 echo '--- audit'
 audit_code=$(req GET "/api/v1/AuditLog?entityType=Contact&maxSize=50" "$TOKEN")
 check 'GET /AuditLog 200 for admin' 200 "$audit_code"

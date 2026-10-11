@@ -1,6 +1,10 @@
 import type {
   AclDefinition,
   EntityDefinition,
+  ExtensionInstallResult,
+  ExtensionListResult,
+  ExtensionNavItem,
+  ExtensionRow,
   IndexDefinition,
   LayoutDefinition,
   ListResult,
@@ -451,4 +455,17 @@ export const api = {
       method: 'POST',
       body: '{}',
     }),
+
+  // Phase 14 — extension administration. `/Extension` is admin-only; `/Extension/frontend` is
+  // readable by any signed-in user and already filters admin-only entries server-side.
+  extensions: () => request<ExtensionListResult>('/Extension'),
+  extensionFrontend: () => request<{ nav: ExtensionNavItem[] }>('/Extension/frontend'),
+  installExtension: (id: string) =>
+    request<ExtensionInstallResult>('/Extension/action/install', { method: 'POST', body: JSON.stringify({ id }) }),
+  uninstallExtension: (id: string) =>
+    request<{ id: string; uninstalled: true; restartRequired: true }>(`/Extension/${encodeURIComponent(id)}/action/uninstall`, {
+      method: 'POST',
+    }),
+  setExtensionEnabled: (id: string, enabled: boolean) =>
+    request<ExtensionRow>(`/Extension/${encodeURIComponent(id)}/action/${enabled ? 'enable' : 'disable'}`, { method: 'POST' }),
 };

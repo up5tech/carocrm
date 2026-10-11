@@ -108,3 +108,54 @@ export interface LoginResult {
   role: string[];
   csrfToken: string;
 }
+
+/** Phase 14 — extension packages (PLAN §38). */
+export interface ExtensionNavItem {
+  route: string;
+  label: string;
+  icon?: string;
+  adminOnly: boolean;
+  order: number;
+  extension: string;
+  extensionOrder: number;
+}
+
+export interface ExtensionContributes {
+  entities: string[];
+  controllers: number;
+  hooks: string[];
+  jobs: string[];
+  migrations: string[];
+  navItems: number;
+}
+
+export interface ExtensionRow {
+  id: string;
+  name: string;
+  version: string;
+  description: string | null;
+  order: number;
+  installed: boolean;
+  enabled: boolean;
+  running: boolean;
+  path: string | null;
+  dependencies: { id: string; version?: string }[];
+  permissions: string[];
+  contributes: ExtensionContributes;
+  problem: string | null;
+  installedAt: string | null;
+}
+
+export interface ExtensionInstallResult {
+  id: string;
+  version: string;
+  installed: true;
+  migrations: { applied: string[]; skipped: string[] };
+  /** Providers, controllers and metadata precedence are fixed at process start (PLAN §38.3). */
+  restartRequired: true;
+}
+
+export interface ExtensionListResult {
+  list: ExtensionRow[];
+  total: number;
+}

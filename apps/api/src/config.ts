@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { PLATFORM_VERSION } from '@carocrm/extension-sdk';
 import { z } from 'zod';
 
 const ConfigSchema = z.object({
@@ -51,6 +52,14 @@ const ConfigSchema = z.object({
    * of silently writing plaintext. Generate with `openssl rand -hex 32`.
    */
   encryptionKey: z.string().default(''),
+  /**
+   * Directory holding extension packages (PLAN §38). Every direct child with a `manifest.json` is
+   * a package; only the ones an administrator installed (`installed_extensions`) are loaded. The
+   * directory is deployment-owned, so there is no upload path at runtime.
+   */
+  extensionsDir: z.string().default('extensions'),
+  /** Version extensions are checked against; mirrors the platform release. */
+  platformVersion: z.string().default(PLATFORM_VERSION),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
@@ -119,6 +128,8 @@ export function buildConfig(): AppConfig {
     jobAttempts: process.env.JOB_ATTEMPTS,
     jobBackoffBaseMs: process.env.JOB_BACKOFF_BASE_MS,
     encryptionKey: process.env.ENCRYPTION_KEY,
+    extensionsDir: process.env.EXTENSIONS_DIR,
+    platformVersion: process.env.PLATFORM_VERSION,
   });
 }
 

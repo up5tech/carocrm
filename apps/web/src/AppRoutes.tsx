@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { AppShell } from './components/AppShell.js';
 import { AdminAuditPage } from './pages/AdminAuditPage.js';
+import { AdminExtensionsPage } from './pages/AdminExtensionsPage.js';
 import { AdminJobsPage } from './pages/AdminJobsPage.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { DashboardsPage } from './pages/DashboardsPage.js';
@@ -60,6 +61,7 @@ export function AppRoutes() {
         <Route path="/admin/entity-manager" element={<EntityManagerPage />} />
         <Route path="/admin/audit-log" element={<AdminAuditPage />} />
         <Route path="/admin/jobs" element={<AdminJobsPage />} />
+        <Route path="/admin/extensions" element={<AdminExtensionsPage />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </AppShell>

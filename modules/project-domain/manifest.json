@@ -1,0 +1,18 @@
+{
+  "name": "CaroCRM Extension: Projects",
+  "id": "project-domain",
+  "version": "1.0.0",
+  "description": "A custom CRM domain module: the Project entity, its relations, ACL defaults and a summary endpoint.",
+  "minPlatformVersion": "1.0.0",
+  "order": 300,
+  "dependencies": [{ "id": "webhook-integration", "version": "1.0.0" }],
+  "permissions": ["entity.read"],
+  "metadata": "metadata",
+  "migrations": "migrations",
+  "backend": {
+    "entry": "src/index.ts"
+  },
+  "frontend": {
+    "nav": [{ "route": "/Project", "label": "Projects", "icon": "ProjectOutlined", "order": 10 }]
+  }
+}

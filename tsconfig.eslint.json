@@ -10,6 +10,7 @@
     "apps/worker/src/**/*.ts",
     "apps/*/test/**/*.ts",
     "packages/*/src/**/*.ts",
+    "modules/*/src/**/*.ts",
     "database/**/*.ts",
     "e2e/**/*.ts",
     "eslint.config.js",

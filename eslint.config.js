@@ -83,6 +83,15 @@ export default [
     },
   },
   {
+    // Extension packages (`modules/*`) are loaded by path at runtime through the SDK contract,
+    // which requires a default export from the backend entrypoint (PLAN §38.1). Everything else in
+    // this repository uses named exports only.
+    files: ['modules/*/src/**/*.ts'],
+    rules: {
+      'import/no-default-export': 'off',
+    },
+  },
+  {
     ignores: ['**/dist/**', '**/*.d.ts', 'node_modules', '.next', 'coverage', '**/*.config.ts', '.data/**', '.claude/**', 'graft/**'],
   },
 ];

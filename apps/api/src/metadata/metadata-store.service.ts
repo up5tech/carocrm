@@ -7,6 +7,8 @@ import { EntityDefinitionSchema } from '@carocrm/metadata/schemas/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service.js';
+import type { ExtensionHost } from '../extensions/extension-host.js';
+import { EXTENSION_HOST } from '../extensions/extension-host.js';
 import { FormulaService } from '../logic/formula.service.js';
 
 interface AppScopeData {
@@ -22,8 +24,19 @@ export class MetadataStoreService {
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(FormulaService) private readonly formulas: FormulaService,
+    @Inject(EXTENSION_HOST) private readonly extensions: ExtensionHost,
   ) {}
 
+  /**
+   * Loads metadata in the documented precedence order (PLAN §12.2):
+   *
+   * ```text
+   * core metadata_entries  →  extension packages (module `order`, PLAN §39)  →  admin overrides
+   * ```
+   *
+   * The last layer is `app_settings.entity`, which the Entity Manager writes, so an administrator's
+   * change always wins over whatever a package contributed.
+   */
   async load(): Promise<void> {
     this.registry.clear();
     const db = this.database.db;
@@ -40,6 +53,10 @@ export class MetadataStoreService {
 
     const byName = new Map<string, Record<string, unknown>>();
     for (const row of rows) byName.set(row.name, row.data as Record<string, unknown>);
+    const contributed = this.extensions.mergedMetadata();
+    for (const [name, data] of Object.entries(contributed.entities ?? {})) {
+      byName.set(name, mergeExtensionEntity(byName.get(name), data as Record<string, unknown>));
+    }
     for (const [name, data] of Object.entries(appEntities)) {
       byName.set(name, mergeEntityData(byName.get(name), data as Record<string, unknown>));
     }
@@ -59,7 +76,7 @@ export class MetadataStoreService {
 
     this.loaded = true;
     this.cache.invalidate();
-    log.info({ entities: this.registry.getEntities().length }, 'metadata loaded');
+    log.info({ entities: this.registry.getEntities().length, extensions: this.extensions.ids() }, 'metadata loaded');
   }
 
   ensureLoaded(): void {
@@ -93,6 +110,21 @@ export class MetadataStoreService {
   version(): number {
     return this.registry.getMetadataVersion();
   }
+}
+
+/**
+ * Merge for an extension contribution (PLAN §39).
+ *
+ * Same shape as the admin patch merge, except that `indexes` are **concatenated**: an extension
+ * adding an index to a core entity must not silently drop the indexes that entity already declares.
+ * Indexes are metadata declarations only — nothing here touches the physical schema (AGENTS.md §3.4).
+ */
+function mergeExtensionEntity(base: Record<string, unknown> | undefined, contribution: Record<string, unknown>): Record<string, unknown> {
+  const merged = mergeEntityData(base, contribution);
+  if (base !== undefined && Array.isArray(base['indexes']) && Array.isArray(contribution['indexes'])) {
+    merged['indexes'] = [...(base['indexes'] as unknown[]), ...(contribution['indexes'] as unknown[])];
+  }
+  return merged;
 }
 
 function mergeEntityData(base: Record<string, unknown> | undefined, patch: Record<string, unknown>): Record<string, unknown> {
