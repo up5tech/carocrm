@@ -7,6 +7,7 @@ import { api } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
 import { StreamPanel } from '../components/StreamPanel.js';
+import { evaluateEntityLogic } from '../state/logic.js';
 import { detailEntries, fieldLabel, recordLabel, useEntity, useMetadata } from '../state/metadata.js';
 
 interface PanelProps {
@@ -157,7 +158,14 @@ export function EntityDetailPage() {
     void load();
   }, [load]);
 
-  const entries = useMemo(() => detailEntries(definition.data), [definition.data]);
+  const logic = useMemo(
+    () => evaluateEntityLogic(definition.data, record ?? {}),
+    [definition.data, record],
+  );
+  const entries = useMemo(
+    () => detailEntries(definition.data).filter((entry) => logic.fields[entry.name]?.visible !== false),
+    [definition.data, logic],
+  );
   const relations = useMemo(() => Object.keys(definition.data?.relations ?? {}), [definition.data]);
 
   if (!entity || !id) return <Card>Missing route parameters.</Card>;

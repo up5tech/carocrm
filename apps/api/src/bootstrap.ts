@@ -103,7 +103,7 @@ export async function createApp(
     credentials: true,
   });
   await app.register(asPlugin(helmet), { global: true });
-  await app.register(asPlugin(rateLimit), { max: 300, timeWindow: '1 minute', global: true });
+  await app.register(asPlugin(rateLimit), { max: config.rateLimitMax, timeWindow: '1 minute', global: true });
   await app.register(asPlugin(multipart), {
     limits: { fileSize: 25 * 1024 * 1024, files: 10 },
   });

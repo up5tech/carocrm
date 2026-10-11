@@ -5,8 +5,37 @@ import { api } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition } from '../api/types.js';
 import { useMetadata } from '../state/metadata.js';
 
-const FIELD_TYPES = ['varchar', 'text', 'int', 'float', 'decimal', 'bool', 'date', 'datetime', 'enum', 'multiEnum', 'currency', 'url', 'email', 'phone', 'link', 'linkMultiple'];
+const FIELD_TYPES = ['varchar', 'text', 'int', 'float', 'decimal', 'bool', 'date', 'datetime', 'enum', 'multiEnum', 'currency', 'url', 'email', 'phone', 'link', 'linkMultiple', 'formula'];
 const RELATION_TYPES = ['oneToMany', 'manyToOne', 'manyToMany'];
+
+/** Criteria operators offered by the rule builder — the same list the engine accepts (PLAN §21). */
+const CRITERIA_OPERATORS = [
+  'equals',
+  'notEquals',
+  'contains',
+  'notContains',
+  'startsWith',
+  'endsWith',
+  'gt',
+  'gte',
+  'lt',
+  'lte',
+  'in',
+  'notIn',
+  'isEmpty',
+  'isNotEmpty',
+  'isTrue',
+  'isFalse',
+];
+const VALUELESS_OPERATORS = new Set(['isEmpty', 'isNotEmpty', 'isTrue', 'isFalse']);
+
+const RULE_ACTIONS = [
+  { value: 'setRequired', label: 'Make required' },
+  { value: 'hide', label: 'Hide fields' },
+  { value: 'show', label: 'Show fields' },
+  { value: 'setReadOnly', label: 'Make read-only' },
+  { value: 'error', label: 'Block the save' },
+];
 
 interface FieldDraft {
   name: string;
@@ -15,10 +44,23 @@ interface FieldDraft {
   required?: boolean | undefined;
   maxLength?: number | undefined;
   values?: string | undefined;
+  formula?: string | undefined;
   inList?: boolean | undefined;
   inDetail?: boolean | undefined;
   inEdit?: boolean | undefined;
 }
+
+interface RuleDraft {
+  name?: string | undefined;
+  whenField: string;
+  whenOperator: string;
+  whenValue?: string | undefined;
+  action: string;
+  targets?: string[] | undefined;
+  message?: string | undefined;
+}
+
+type LogicRule = Record<string, unknown>;
 
 function buildFieldDefinition(draft: FieldDraft): FieldDefinition {
   const field: FieldDefinition = { type: draft.type };
@@ -26,10 +68,62 @@ function buildFieldDefinition(draft: FieldDraft): FieldDefinition {
   if (draft.maxLength) field.maxLength = draft.maxLength;
   if (draft.entityKey) field.entityKey = draft.entityKey;
   if (draft.values && draft.values.trim() !== '') field.values = draft.values.split(',').map((value) => value.trim()).filter(Boolean);
+  if (draft.type === 'formula' && draft.formula && draft.formula.trim() !== '') field.formula = draft.formula.trim();
   field.inList = draft.inList !== false;
   field.inDetail = draft.inDetail !== false;
-  field.inEdit = draft.inEdit !== false;
+  // A computed field is filled in by the server, so it never belongs in an edit form.
+  field.inEdit = draft.type === 'formula' ? false : draft.inEdit !== false;
   return field;
+}
+
+function currentRules(definition: EntityDefinition | undefined): LogicRule[] {
+  const rules = definition?.dynamicLogic?.rules;
+  return Array.isArray(rules) ? (rules as LogicRule[]) : [];
+}
+
+function buildRule(draft: RuleDraft): LogicRule {
+  const criteria: Record<string, unknown> = { field: draft.whenField, operator: draft.whenOperator };
+  if (!VALUELESS_OPERATORS.has(draft.whenOperator)) {
+    const raw = draft.whenValue ?? '';
+    criteria.value = draft.whenOperator === 'in' || draft.whenOperator === 'notIn' ? raw.split(',').map((part) => part.trim()).filter(Boolean) : raw;
+  }
+  const targets = (draft.targets ?? []).filter((name) => name !== '');
+  const then: Record<string, unknown> = {};
+  if (draft.action === 'error') then.error = { message: draft.message ?? 'This record does not meet a validation rule.', ...(targets.length > 0 ? { fields: targets } : {}) };
+  else then[draft.action] = targets;
+  const rule: LogicRule = { when: criteria, then };
+  if (draft.name && draft.name.trim() !== '') rule.name = draft.name.trim();
+  return rule;
+}
+
+function describeWhen(when: unknown): string {
+  if (typeof when === 'string') return when;
+  if (when && typeof when === 'object') {
+    const node = when as Record<string, unknown>;
+    if (typeof node.field === 'string') {
+      const value = VALUELESS_OPERATORS.has(String(node.operator)) ? '' : ` ${JSON.stringify(node.value ?? '')}`;
+      return `${node.field} ${String(node.operator ?? '')}${value}`;
+    }
+    if (Array.isArray(node.all)) return `all (${node.all.length})`;
+    if (Array.isArray(node.any)) return `any (${node.any.length})`;
+  }
+  return JSON.stringify(when ?? '');
+}
+
+function describeThen(then: unknown): string {
+  if (!then || typeof then !== 'object') return '';
+  const actions = then as Record<string, unknown>;
+  const parts: string[] = [];
+  for (const key of ['setRequired', 'hide', 'show', 'setReadOnly', 'showPanels', 'hidePanels']) {
+    const list = actions[key];
+    if (Array.isArray(list) && list.length > 0) parts.push(`${key}: ${list.join(', ')}`);
+  }
+  if (actions.setValues && typeof actions.setValues === 'object') {
+    parts.push(`setValues: ${Object.entries(actions.setValues as Record<string, unknown>).map(([field, formula]) => `${field}=${String(formula)}`).join(', ')}`);
+  }
+  const error = actions.error;
+  if (error && typeof error === 'object') parts.push(`block: ${(error as { message?: string }).message ?? ''}`);
+  return parts.join(' · ');
 }
 
 export function EntityManagerPage() {
@@ -39,9 +133,13 @@ export function EntityManagerPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [fieldForm] = Form.useForm<FieldDraft>();
   const [entityForm] = Form.useForm<{ name: string; label: string }>();
+  const [ruleForm] = Form.useForm<RuleDraft>();
+  const fieldType = Form.useWatch('type', fieldForm);
 
   const entities = useMemo(() => Object.values(metadata.data ?? {}).sort((a, b) => a.name.localeCompare(b.name)), [metadata.data]);
   const active = useMemo(() => entities.find((entity) => entity.name === selected) ?? undefined, [entities, selected]);
+  const rules = useMemo(() => currentRules(active), [active]);
+  const fieldNames = useMemo(() => Object.keys(active?.fields ?? {}), [active]);
 
   const refresh = async () => {
     await metadata.refetch();
@@ -199,6 +297,11 @@ export function EntityManagerPage() {
               <Form.Item name="values">
                 <Input placeholder="enum values, comma" style={{ width: 160 }} />
               </Form.Item>
+              {fieldType === 'formula' ? (
+                <Form.Item name="formula" rules={[{ required: true, message: 'A formula field needs an expression.' }]}>
+                  <Input placeholder="concat(field('firstName'), ' ', field('lastName'))" style={{ width: 320 }} />
+                </Form.Item>
+              ) : null}
               <Form.Item name="required" valuePropName="checked">
                 <Switch size="small" />
               </Form.Item>
@@ -209,6 +312,82 @@ export function EntityManagerPage() {
                 Add field
               </Button>
             </Form>
+          </Card>
+
+          <Card className="lizant-card" size="small" title="Dynamic logic">
+            <Table
+              rowKey={(row, index) => String((row as LogicRule).name ?? `rule-${String(index)}`)}
+              size="small"
+              dataSource={rules}
+              pagination={false}
+              locale={{ emptyText: 'No rules yet. A rule can require, hide, compute or block a field when another field changes.' }}
+              columns={[
+                { title: 'Name', dataIndex: 'name', width: 140, render: (_: unknown, row: LogicRule) => String(row.name ?? '—') },
+                { title: 'When', key: 'when', render: (_: unknown, row: LogicRule) => <Typography.Text code>{describeWhen(row.when)}</Typography.Text> },
+                { title: 'Then', key: 'then', render: (_: unknown, row: LogicRule) => describeThen(row.then) },
+                {
+                  title: '',
+                  key: 'remove',
+                  width: 80,
+                  render: (_: unknown, row: LogicRule) => (
+                    <Button
+                      size="small"
+                      danger
+                      type="text"
+                      onClick={() => void patch(active.name, { dynamicLogic: { rules: rules.filter((rule) => rule !== row) } }, 'Rule removed.')}
+                    >
+                      Remove
+                    </Button>
+                  ),
+                },
+              ]}
+            />
+            <Form
+              form={ruleForm}
+              layout="inline"
+              style={{ marginTop: 12, rowGap: 8 }}
+              onFinish={async (values) => {
+                const draft = values as RuleDraft;
+                await patch(active.name, { dynamicLogic: { rules: [...rules, buildRule(draft)] } }, 'Rule added.');
+                ruleForm.resetFields();
+              }}
+            >
+              <Form.Item name="name">
+                <Input placeholder="rule name" style={{ width: 130 }} />
+              </Form.Item>
+              <Form.Item name="whenField" rules={[{ required: true }]}>
+                <Select style={{ width: 150 }} placeholder="when field" options={fieldNames.map((name) => ({ value: name, label: name }))} showSearch />
+              </Form.Item>
+              <Form.Item name="whenOperator" initialValue="equals">
+                <Select style={{ width: 120 }} options={CRITERIA_OPERATORS.map((operator) => ({ value: operator, label: operator }))} />
+              </Form.Item>
+              <Form.Item name="whenValue">
+                <Input placeholder="compare value" style={{ width: 130 }} />
+              </Form.Item>
+              <Form.Item name="action" initialValue="setRequired">
+                <Select style={{ width: 150 }} options={RULE_ACTIONS} />
+              </Form.Item>
+              <Form.Item name="targets">
+                <Select style={{ width: 200 }} mode="multiple" placeholder="then fields" options={fieldNames.map((name) => ({ value: name, label: name }))} />
+              </Form.Item>
+              <Form.Item name="message">
+                <Input placeholder="message for a blocked save" style={{ width: 200 }} />
+              </Form.Item>
+              <Button size="small" type="primary" htmlType="submit">
+                Add rule
+              </Button>
+            </Form>
+            {rules.length > 0 ? (
+              <Button
+                size="small"
+                danger
+                type="text"
+                style={{ marginTop: 8 }}
+                onClick={() => void patch(active.name, { dynamicLogic: { rules: [] } }, 'Rules cleared.')}
+              >
+                Clear all rules
+              </Button>
+            ) : null}
           </Card>
 
           <Card className="lizant-card" size="small" title="Relations">

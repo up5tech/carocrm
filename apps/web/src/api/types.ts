@@ -14,6 +14,7 @@ export interface FieldDefinition {
   inFilter?: boolean | undefined;
   sortable?: boolean | undefined;
   audited?: boolean | undefined;
+  formula?: string | undefined;
 }
 
 export interface RelationDefinition {
@@ -32,6 +33,8 @@ export interface EntityDefinition {
   relations: Record<string, RelationDefinition>;
   record?: { displayField?: string | undefined; nameField?: string | undefined } | undefined;
   client?: { web?: boolean | undefined } | undefined;
+  /** Declarative rules evaluated in the form and on the server (PLAN §21). */
+  dynamicLogic?: { rules: Record<string, unknown>[] } | undefined;
 }
 
 export type Metadata = Record<string, EntityDefinition>;

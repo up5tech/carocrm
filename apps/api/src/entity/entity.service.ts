@@ -17,6 +17,7 @@ import { OutboxService } from '../common/outbox.service.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
+import { RecordLogicService } from '../logic/record-logic.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import type { PostgresRecordStore, StoreFindQuery } from './entity-record.store.js';
@@ -81,6 +82,7 @@ export class EntityCrudService {
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(OutboxService) private readonly outbox: OutboxService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(RecordLogicService) private readonly logic: RecordLogicService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -174,10 +176,11 @@ export class EntityCrudService {
     // record scoping is driven by the read level ( EspoCRM: create "yes" + read "own")
     const scopeLevel = await this.acl.canUser(entity, 'read');
     const data = await this.prepareWrite(entity, body, scopeLevel);
+    const withLogic = this.logic.apply({ entity, data, supplied: data });
 
     const record = await this.em.create({
       entity,
-      data: this.withName(entity, data),
+      data: this.withName(entity, withLogic),
       ...(this.scope.userId !== undefined ? { userId: this.scope.userId } : {}),
     });
     await this.emit('entity.created', entity, record.id);
@@ -196,10 +199,13 @@ export class EntityCrudService {
       throw new ConcurrencyConflictError(entity, id);
     }
 
+    // Dynamic logic and formulas are evaluated against the record as it would be stored.
+    const withLogic = this.logic.apply({ entity, data: { ...existing.data, ...data }, supplied: data, previous: existing.data });
+
     const record = await this.em.update({
       entity,
       id,
-      data: this.withName(entity, data, existing),
+      data: this.withName(entity, withLogic, existing),
       ...(expectedVersion !== undefined ? { expectedVersion } : {}),
       ...(this.scope.userId !== undefined ? { userId: this.scope.userId } : {}),
     });

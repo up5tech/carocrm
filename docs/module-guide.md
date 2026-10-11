@@ -1,6 +1,7 @@
 # Module Guide (CRM Kernel Alpha)
 
-Read this before adding code. Scope: PLAN.md tasks 01–22 (CRM Kernel Alpha, PLAN §73, plus the SPA and stream/calendar).
+Read this before adding code. Scope: PLAN.md tasks 01–22 (CRM Kernel Alpha, PLAN §73, plus the SPA,
+stream/calendar and the PLAN §21–§22 dynamic logic + formula engine).
 
 ## Runtime rules (IMPORTANT)
 
@@ -33,6 +34,8 @@ Read this before adding code. Scope: PLAN.md tasks 01–22 (CRM Kernel Alpha, PL
 | Entities metadata | `database/seed-metadata.ts` | Account/Contact/Lead/Opportunity + activities (Task/Call/Meeting/Reminder), scope 'entity' |
 | Stream | `apps/api/src/stream/` | `StreamService`; routes `GET /Stream`, `GET /:type/:id/stream`, `POST /Note`, `PUT\|DELETE /:type/:id/subscription`, `GET /Notification` |
 | Calendar | `apps/api/src/calendar/` | `CalendarService` + pure `expandOccurrences()` in `recurrence.ts`; route `GET /Calendar` |
+| Formula engine | `packages/formula` (`@carocrm/formula`) | `FormulaEngine` (parser → AST → evaluator), `FunctionRegistry`, `DEFAULT_LIMITS`; pure, no I/O |
+| Dynamic logic | `apps/api/src/logic/` | `FormulaService` (metadata guard), `RecordLogicService` (write path), `POST /api/v1/Formula/{validate,evaluate}` (admin) |
 | Kernel hooks | `apps/api/src/entity/hooks.ts` | `KERNEL_HOOKS_TOKEN` → `AfterSaveHook[]`; audit and stream-update each register one |
 
 ## API conventions
@@ -84,6 +87,36 @@ Read this before adding code. Scope: PLAN.md tasks 01–22 (CRM Kernel Alpha, PL
   `ENTITY_CONTROLLERS`, whose `:entity/:id/:relation` wildcard would otherwise swallow them.
 - Activity reminders: `system.sendReminders` (apps/worker/src/handlers) scans due activities and
   writes `notifications`; the seed installs the `scheduledReminders` cron row (`* * * * *`).
+
+## Dynamic logic + formula contracts (PLAN §21, §22)
+
+- `@carocrm/formula` is **pure**: parser → AST → tree-walking evaluator. It never touches the
+  network, filesystem, `require`, `eval` or a host object. Functions come from an explicit allowlist
+  (`FunctionRegistry`), and every evaluation runs under `DEFAULT_LIMITS` (source length, node count,
+  nesting depth, step budget, produced string/array size). Custom functions can be registered with
+  `registry.register(fn)` — the extension SDK hook (PLAN §22.2 "later").
+- Dates are **context-driven**: `now()`/`currentDate()` read `FormulaContext.now` and the IANA
+  `timezone`, defaulting to UTC. Never pass an ambient clock into metadata evaluation.
+- Metadata carries the rules on the entity: `dynamicLogic: { rules: [...] }`. A rule is
+  `{ name?, description?, disabled?, when, then }` where `when` is either a formula string or the
+  criteria object `{ field, operator, value }` (composable with `all` / `any` / `not`), and `then`
+  is one or more of `show`, `hide`, `setRequired`, `setReadOnly`, `setValues` (field → formula),
+  `showPanels`, `hidePanels`, `error: { message, fields? }`. A metadata patch **replaces** the whole
+  rule list; send `{ dynamicLogic: { rules: [] } }` to clear it.
+- `FormulaService.validateDefinition()` runs on **every** metadata write and on `MetadataStoreService.load()`:
+  conditions and field formulas must parse, must only call allowlisted functions, and must only
+  reference fields that exist. `POST /Metadata/:entity` therefore answers 422 with an `issues` list.
+- `RecordLogicService.apply()` is the single write-path hook, called from `EntityCrudService.create`
+  and `.update` (so `massUpdate` inherits it): it fills rule `setValues`, evaluates `formula` fields,
+  rejects a client write that contradicts a computed/read-only field, enforces rule-required fields,
+  and turns `error` rules into a 422. Failures to evaluate a condition are fail-closed (the write is
+  rejected, never treated as "rule did not match").
+- Fields of type `formula` / `generated` are **not editable**: `editEntries()` in the SPA drops them,
+  `metadata.dynamicLogic` hides/shows the rest, and the detail view renders the stored value.
+- Controllers: `LOGIC_CONTROLLERS` owns `/api/v1/Formula/*` (static prefix) and must be spread
+  before `ENTITY_CONTROLLERS`, like stream/calendar.
+- `RATE_LIMIT_MAX` (`.env`, default 300 req/min) is the global HTTP limit; the browser suite raises
+  it because a single SPA screen issues many small calls.
 
 ## Test database policy (AGENTS.md §3 — mandatory)
 

@@ -25,6 +25,7 @@ import { ENTITY_STORE } from './entity/entity-record.store.js';
 import type { AfterSaveHook } from './entity/hooks.js';
 import { KERNEL_HOOKS_TOKEN } from './entity/hooks.js';
 import { HealthController } from './health/health.controller.js';
+import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
 import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.service.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
@@ -41,6 +42,8 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     // generic record controller treats the third segment as a relation name.
     ...STREAM_CONTROLLERS,
     ...CALENDAR_CONTROLLERS,
+    // `/api/v1/Formula/...` is a static prefix and must be matched before `:entity` too.
+    ...LOGIC_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
     ...ENTITY_CONTROLLERS,
   ],
@@ -53,6 +56,7 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     IdentityService,
     OutboxService,
     ...ACL_PROVIDERS,
+    ...LOGIC_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
     ...AUDIT_PROVIDERS,

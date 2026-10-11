@@ -61,3 +61,39 @@ export function countNodes(node: AstNode): number {
       return 1 + countNodes(node.object) + countNodes(node.index);
   }
 }
+
+/** Depth-first walk used to check every call/identifier against the allowlist before saving metadata. */
+export function forEachNode(node: AstNode, visit: (current: AstNode) => void): void {
+  visit(node);
+  switch (node.kind) {
+    case 'literal':
+    case 'identifier':
+      return;
+    case 'array':
+      for (const element of node.elements) forEachNode(element, visit);
+      return;
+    case 'unary':
+      forEachNode(node.operand, visit);
+      return;
+    case 'binary':
+    case 'logical':
+      forEachNode(node.left, visit);
+      forEachNode(node.right, visit);
+      return;
+    case 'conditional':
+      forEachNode(node.test, visit);
+      forEachNode(node.consequent, visit);
+      forEachNode(node.alternate, visit);
+      return;
+    case 'call':
+      for (const arg of node.args) forEachNode(arg, visit);
+      return;
+    case 'member':
+      forEachNode(node.object, visit);
+      return;
+    case 'index':
+      forEachNode(node.object, visit);
+      forEachNode(node.index, visit);
+      return;
+  }
+}

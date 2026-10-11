@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition, Metadata } from '../api/types.js';
+import { isComputedField } from './logic.js';
 
 export interface FieldEntry {
   name: string;
@@ -51,7 +52,8 @@ export function detailEntries(definition: EntityDefinition | undefined): FieldEn
 }
 
 export function editEntries(definition: EntityDefinition | undefined): FieldEntry[] {
-  return visibleEntries(definition, (field) => field.inEdit === false);
+  // Computed fields are filled in by the server, so an editor for them would only ever be rejected.
+  return visibleEntries(definition, (field) => field.inEdit === false || isComputedField(field.type));
 }
 
 export function filterEntries(definition: EntityDefinition | undefined): FieldEntry[] {

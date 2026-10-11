@@ -1,5 +1,5 @@
 import type { AstNode, BinaryOperator, LiteralValue, LogicalOperator, UnaryOperator } from '../ast/index.js';
-import { FormulaParseError, FormulaLimitError } from '../errors/index.js';
+import { FormulaLimitError,FormulaParseError } from '../errors/index.js';
 import type { FormulaLimits } from '../limits/index.js';
 
 type TokenKind = 'number' | 'string' | 'identifier' | 'operator' | 'punct' | 'eof';
@@ -86,12 +86,7 @@ function tokenize(source: string, limits: FormulaLimits): Token[] {
       index += 2;
       continue;
     }
-    if (OPERATORS.includes(char)) {
-      if (char === '!') {
-        tokens.push({ kind: 'operator', value: '!', start: index });
-        index += 1;
-        continue;
-      }
+    if (OPERATORS.includes(char) || char === '!') {
       tokens.push({ kind: 'operator', value: char, start: index });
       index += 1;
       continue;
@@ -137,11 +132,6 @@ class Parser {
     const token = this.peek();
     this.cursor += 1;
     return token;
-  }
-
-  private isOperator(value: string): boolean {
-    const token = this.peek();
-    return token.kind === 'operator' && token.value === value;
   }
 
   private isPunct(value: string): boolean {

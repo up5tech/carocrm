@@ -27,6 +27,8 @@ no upstream source used (PLAN §2). Status is as of 2026-10-11 (CRM Kernel Alpha
 | Dashboards / dashlets | v9.3.x | not built | P1 | not started |
 | Frontend SPA | v9.3.x | React SPA: generic list/detail/edit/create, Entity Manager, audit, stream, calendar (Lizant theme) | P0 (product) | implemented |
 | Background jobs / scheduled jobs | v9.3.x | BullMQ worker, cron metadata-driven, transactional outbox | P2 | implemented |
+| Formula engine | v9.3.x | sandboxed parser → AST → evaluator with an allowlisted function set and execution budgets (`@carocrm/formula`) | P2 | implemented |
+| Dynamic logic | v9.3.x | metadata `dynamicLogic.rules` evaluated in the SPA **and** on every API write | P2 | implemented |
 | Workflows / BPM / Reports / Portals | commercial/baseline | out of Alpha scope | P2 | not started |
 | Database | MySQL/MariaDB/PG | PostgreSQL only; MySQL/MariaDB later (PLAN §6.2) | — | PG first |
 | PHP source compatibility | — | explicitly a non-goal (PLAN §5) | — | N/A |
@@ -63,3 +65,34 @@ Confirmed against EspoCRM documentation on 2026-10-11:
 - Reminders deliver **in-app notifications** only. Upstream popup/email transports
   (`SendEmailReminders`, WebSocket topics) are not implemented; `reminderSentAt` on the
   activity is the idempotency marker used by `system.sendReminders`.
+
+## Formula and dynamic logic (PLAN §21–§22)
+
+**This section is our own contract, not verified upstream.** The EspoCRM formula/dynamic-logic
+documentation was not reachable from this environment while building, so the language, function
+names and metadata shape below come from PLAN §21/§22 and were designed here; they must be
+re-checked against upstream docs before claiming compatibility (PLAN §60).
+
+- Expression language: literals, `field('x')`/`recordId()` record access, arithmetic
+  (`+ - * / %`), comparison (`== != < <= > >=`), logical (`&& || !`), ternary `? :`, array
+  literals, `member`/`index` reads limited to plain data. No assignment, no statements, no
+  function definitions, no comments other than `#` to end of line, and `__proto__`,
+  `constructor`, `prototype` are rejected at parse time.
+- Values: string / number / boolean / null / arrays / plain objects only. Host functions, objects
+  and prototypes never reach a formula, and results are bounded by `maxStringLength` /
+  `maxArrayLength`.
+- Truthiness: `null`, `false`, `0`, `''`, `'0'` are false; everything else true.
+- Dates: computed from `FormulaContext.now` + an IANA zone (default UTC) through `Intl`, with
+  built-in English month/weekday names — output does not depend on the host locale or clock.
+- Rule metadata: `entity.dynamicLogic.rules[]`, `when` = formula string **or**
+  `{field, operator, value}` criteria (nested with `all`/`any`/`not`, 16 operators),
+  `then` = `show|hide|setRequired|setReadOnly|setValues|showPanels|hidePanels|error`.
+  A metadata patch replaces the rule list as a whole.
+- Enforcement: the same rule set runs in the SPA and on the server. The server rejects a write
+  that contradicts a computed field, blocks records that hit an `error` rule, and treats a
+  condition that cannot be evaluated as a failure of the write (fail closed) rather than
+  "rule did not match".
+- Layouts: `showPanels`/`hidePanels` are evaluated and returned, but the SPA has no panel layout
+  yet (PLAN §20 panels are still unwired), so panel rules have no visible effect today.
+- Cross-record reads inside a formula (`parent()`, `related()`) are **not** implemented: a formula
+  sees only the record it is evaluating.

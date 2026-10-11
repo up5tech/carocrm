@@ -1,20 +1,39 @@
-import { App as AntApp, Button, Card, Form, Space, Spin, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Form, Space, Spin, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { api, type RecordData } from '../api/client.js';
-import type { FieldDefinition } from '../api/types.js';
+import type { EntityDefinition, FieldDefinition } from '../api/types.js';
 import { FieldEditor } from '../components/fields.js';
+import { evaluateEntityLogic, isComputedField } from '../state/logic.js';
 import { editEntries, fieldLabel, useEntity, useMetadata } from '../state/metadata.js';
 
-/** Client-side rules derived from metadata (PLAN §13: metadata drives validation). */
-function fieldRules(name: string, field: FieldDefinition) {
+/** Client-side rules derived from metadata + dynamic logic (PLAN §13, §21). */
+function fieldRules(name: string, field: FieldDefinition, required: boolean) {
   const rules: object[] = [];
-  if (field.required === true) rules.push({ required: true, message: `${fieldLabel(name, field)} is required.` });
+  if (field.required === true || required) rules.push({ required: true, message: `${fieldLabel(name, field)} is required.` });
   if (field.maxLength) rules.push({ max: field.maxLength, message: `Max ${field.maxLength} characters.` });
   if (field.type === 'email') rules.push({ type: 'email', message: 'Enter a valid email address.' });
   if (field.type === 'url') rules.push({ type: 'url', message: 'Enter a valid URL.' });
   return rules;
+}
+
+interface VisibleEntry {
+  name: string;
+  field: FieldDefinition;
+  required: boolean;
+  readOnly: boolean;
+}
+
+function buildEntries(definition: EntityDefinition | undefined, logic: ReturnType<typeof evaluateEntityLogic>): VisibleEntry[] {
+  return editEntries(definition)
+    .filter((entry) => logic.fields[entry.name]?.visible !== false)
+    .map((entry) => ({
+      name: entry.name,
+      field: entry.field,
+      required: logic.fields[entry.name]?.required === true,
+      readOnly: logic.fields[entry.name]?.readOnly === true,
+    }));
 }
 
 export function EntityEditPage() {
@@ -28,7 +47,18 @@ export function EntityEditPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const entries = useMemo(() => editEntries(definition.data), [definition.data]);
+  // Dynamic logic re-runs on every keystroke: the rule set is small and the engine caches parsed
+  // formulas, so re-evaluating is cheaper than tracking which field each rule reads.
+  const watched = Form.useWatch([], form);
+  const logic = useMemo(() => evaluateEntityLogic(definition.data, watched ?? {}), [definition.data, watched]);
+  const entries = useMemo(() => buildEntries(definition.data, logic), [definition.data, logic]);
+  const computedNames = useMemo(() => Object.keys(logic.values), [logic.values]);
+
+  useEffect(() => {
+    for (const [name, value] of Object.entries(logic.values)) {
+      if (form.getFieldValue(name) !== value) form.setFieldValue(name, value);
+    }
+  }, [logic.values, form]);
 
   const load = useCallback(async () => {
     if (!entity || !id) return;
@@ -49,6 +79,7 @@ export function EntityEditPage() {
   if (!entity) return <Card>Missing entity.</Card>;
 
   const title = id ? `Edit ${definition.data?.label ?? entity}` : `Create ${definition.data?.label ?? entity}`;
+  const blocked = logic.errors.length > 0;
 
   // Editing must not start before the record is in the form: a late setFieldsValue would
   // otherwise overwrite whatever the user already typed.
@@ -62,15 +93,36 @@ export function EntityEditPage() {
 
   return (
     <Card className="lizant-card" title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{title}</Typography.Title>}>
+      {blocked ? (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="This record cannot be saved"
+          description={
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {logic.errors.map((error) => (
+                <li key={`${error.rule}-${error.message}`}>{error.message}</li>
+              ))}
+            </ul>
+          }
+        />
+      ) : null}
       <Form
         form={form}
         layout="vertical"
         initialValues={initial ?? {}}
         onFinish={async (values) => {
           if (!entity) return;
+          const payload: RecordData = { ...values };
+          // Values the rules or a field formula compute come from the server; sending them back
+          // would only risk a mismatch on a field the user cannot edit.
+          for (const name of computedNames) delete payload[name];
+          for (const [name, field] of Object.entries(definition.data?.fields ?? {})) {
+            if (isComputedField(field.type)) delete payload[name];
+          }
           setSaving(true);
           try {
-            const payload: RecordData = { ...values };
             const record = id ? await api.update(entity, id, payload) : await api.create(entity, payload);
             void message.success('Saved.');
             navigate(`/${entity}/${String(record['id'] ?? '')}`);
@@ -88,15 +140,15 @@ export function EntityEditPage() {
               key={entry.name}
               name={entry.name}
               label={fieldLabel(entry.name, entry.field, metadata.data)}
-              rules={fieldRules(entry.name, entry.field)}
+              rules={fieldRules(entry.name, entry.field, entry.required)}
               valuePropName={entry.field.type === 'bool' ? 'checked' : 'value'}
             >
-              <FieldEditor fieldName={entry.name} field={entry.field} value={undefined} onChange={() => undefined} />
+              <FieldEditor fieldName={entry.name} field={entry.field} value={undefined} disabled={entry.readOnly || computedNames.includes(entry.name)} onChange={() => undefined} />
             </Form.Item>
           ))}
         </div>
         <Space>
-          <Button type="primary" htmlType="submit" loading={saving}>
+          <Button type="primary" htmlType="submit" loading={saving} disabled={blocked}>
             Save
           </Button>
           <Button onClick={() => navigate(id ? `/${entity}/${id}` : `/${entity}`)}>Cancel</Button>

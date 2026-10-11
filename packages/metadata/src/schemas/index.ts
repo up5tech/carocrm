@@ -57,6 +57,8 @@ export const FieldDefinitionSchema = z.object({
   unique: z.boolean().optional(),
   audited: z.boolean().optional(),
   description: z.string().optional(),
+  /** Sandboxed expression that computes this field's value on save (PLAN §22, field type `formula`). */
+  formula: z.string().max(2000).optional(),
 });
 
 export type FieldDefinition = z.infer<typeof FieldDefinitionSchema>;
@@ -115,6 +117,16 @@ export const ClientDefinitionSchema = z.object({
 
 export type ClientDefinition = z.infer<typeof ClientDefinitionSchema>;
 
+/**
+ * Declarative UI/validation rules (PLAN §21). The section is guarded shallowly here; every rule is
+ * parsed and formula-checked by `@carocrm/formula` before metadata is accepted.
+ */
+export const DynamicLogicSectionSchema = z.object({
+  rules: z.array(z.record(z.unknown())).max(100),
+});
+
+export type DynamicLogicSection = { rules: Record<string, unknown>[] };
+
 export const EntityDefinitionSchema = z.object({
   name: z.string(),
   label: z.string(),
@@ -126,6 +138,7 @@ export const EntityDefinitionSchema = z.object({
   acl: AclDefinitionSchema.optional(),
   record: RecordDefinitionSchema.default({}),
   client: ClientDefinitionSchema.default({}),
+  dynamicLogic: DynamicLogicSectionSchema.optional(),
 });
 export type EntityDefinition = {
   name: string;
@@ -138,6 +151,7 @@ export type EntityDefinition = {
   acl?: AclDefinition | undefined;
   record: RecordDefinition;
   client: ClientDefinition;
+  dynamicLogic?: DynamicLogicSection | undefined;
 };
 
 export const LayoutPanelSchema = z.object({

@@ -30,6 +30,7 @@ export function toNumber(value: FormulaValue): number {
   }
   if (typeof value === 'boolean') return value ? 1 : 0;
   if (value === null) return 0;
+  if (typeof value !== 'string') throw new FormulaEvaluationError(`Cannot use ${describeValue(value)} as a number.`);
   const trimmed = value.trim();
   if (trimmed === '') throw new FormulaEvaluationError('Cannot use an empty string as a number.');
   const parsed = Number(trimmed);

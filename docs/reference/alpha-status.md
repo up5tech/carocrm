@@ -1,8 +1,10 @@
 # CRM Kernel Alpha — status report (PLAN §73)
 
 Date: 2026-10-10. Scope agreed with the user: **CRM Kernel Alpha only** (PLAN tasks 01–16, 19–20 of §87).
-Tasks 17–18 (generic React UI + Entity Manager) were completed afterwards; email,
-import/export, dashboards, formula, extension SDK, workflow, reports, BPM and portal remain unimplemented; see PLAN §72 for the remaining priority matrix.
+Tasks 17–18 (generic React UI + Entity Manager) were completed afterwards, together with stream,
+calendar and the PLAN §21–§22 dynamic logic + formula engine (see the sections at the end of this file);
+email, import/export, dashboards, extension SDK, workflow, reports, BPM and portal remain
+unimplemented; see PLAN §72 for the remaining priority matrix.
 
 ## Checklist from PLAN §73
 
@@ -37,10 +39,10 @@ pnpm db:seed          # applies migrations and seeds admin/roles/metadata into t
 pnpm lint             # eslint, 0 warnings allowed
 pnpm typecheck        # tsc --noEmit over the whole workspace
 pnpm -r build         # all packages + api + worker
-npx vitest run        # integration tests against the configured DATABASE_URL (no extra database)
+npx vitest run        # 186 tests: 127 API/integration (apps/api/test) + 59 formula unit tests; runs on the configured DATABASE_URL, no extra database
 bash scripts/e2e-smoke.sh   # HTTP end-to-end checks against a booted server
 bash scripts/worker-smoke.sh # 14 checks: outbox, BullMQ jobs, cron scheduler, graceful shutdown
-npx playwright test    # 6 browser specs (CRUD/Entity Manager/relations/stream/calendar); starts API+SPA itself
+npx playwright test    # 7 browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic); starts API+SPA itself
 pnpm --filter @carocrm/worker test  # 70 worker tests (jobs, scheduler, outbox, reminder job)
 ```
 
@@ -72,6 +74,32 @@ audit of `updateTable` calls confirmed every mutation is keyed.
   `system.sendReminders` in the worker delivers due reminders as notifications.
 - SPA: Stream panel on every record page, `/stream` activity page, `/calendar` month grid with
   drag-to-reschedule.
+
+## Dynamic logic and the formula engine (PLAN §21–§22, added 2026-10-11)
+
+- New workspace package `packages/formula` (`@carocrm/formula`): tokenizer → recursive-descent parser
+  → typed AST → tree-walking evaluator, with an explicit function allowlist (`ifThen`, `concat`,
+  `substring`, `split`, `join`, `round`, `numberFormat`, `sum`, `avg`, `min`, `max`, `inArray`,
+  `arrayAddUnique`, `isEmpty`, `field`, `recordId`, `now`, `currentDate`, `addDays`, `addMonths`,
+  `diffDays`, `formatDate`, `yearOf`, `weekdayOf`, …) and hard budgets for source length, node count,
+  nesting depth, evaluation steps and produced value size. Date/time output comes from the injected
+  context clock plus an IANA zone, so it is deterministic and never reads the host clock.
+- Declarative rules live on entity metadata as `dynamicLogic.rules`. Conditions accept either a formula
+  string or the structured `{field, operator, value}` shape from PLAN §21 (composable with
+  `all`/`any`/`not`). Actions: `show`, `hide`, `setRequired`, `setReadOnly`, `setValues`,
+  `showPanels`, `hidePanels`, `error`.
+- Enforcement is doubled on purpose: `POST /Metadata/:entity` refuses rules that do not parse or
+  reference unknown fields, and `RecordLogicService.apply()` re-evaluates the same rule set on every
+  create/update (and through it, mass update) — required fields, computed values, read-only fields
+  and blocking business conditions all fail closed with `422 VALIDATION_FAILED`.
+- Field type `formula` with a `formula` expression is computed server-side; such fields are excluded
+  from the generated edit form and a client-supplied value that contradicts the computation is rejected.
+- Admin tooling: `POST /api/v1/Formula/validate` and `POST /api/v1/Formula/evaluate` (admin only),
+  plus a rule builder in Entity Manager and a formula-field type in the add-field form.
+- SPA: `apps/web/src/state/logic.ts` evaluates the same rules from live form values, so fields hide,
+  become required, lock or fill themselves while the user types; the detail view hides invisible fields.
+- Config: the global HTTP rate limit is now `RATE_LIMIT_MAX` (default 300/min, unchanged); the browser
+  suite raises it because seven specs share one server.
 
 ## Web UI theme (Lizant)
 

@@ -9,6 +9,7 @@ import type { FastifyReply } from 'fastify';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
+import { FormulaService } from '../logic/formula.service.js';
 import type { MetadataStoreService } from "./metadata-store.service.js";
 import { METADATA_STORE } from "./metadata-store.service.js";
 
@@ -22,6 +23,7 @@ export class MetadataController {
     @Inject(METADATA_STORE) private readonly store: MetadataStoreService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(FormulaService) private readonly formulas: FormulaService,
   ) {}
 
   @Get()
@@ -83,6 +85,7 @@ export class MetadataController {
       indexes: [],
       record: { displayField: 'name', removable: true, ...(isRecord(patch['record']) ? patch['record'] : {}) },
       client: { ...(isRecord(patch['client']) ? patch['client'] : {}) },
+      ...(isRecord(patch['dynamicLogic']) || Array.isArray(patch['dynamicLogic']) ? { dynamicLogic: patch['dynamicLogic'] } : {}),
     };
 
     const parsed = EntityDefinitionSchema.safeParse(definition);
@@ -91,6 +94,7 @@ export class MetadataController {
         issues: parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
       });
     }
+    this.formulas.validateDefinition(parsed.data as EntityDefinition);
 
     await this.store.persistEntityOverride(entity, definition);
     this.store.registry.registerEntity(parsed.data as EntityDefinition);
@@ -136,6 +140,7 @@ export class MetadataController {
       });
     }
     const definition = parsed.data as EntityDefinition;
+    this.formulas.validateDefinition(definition);
 
     await this.store.persistEntityOverride(entity, patch);
     this.store.registry.registerEntity(definition);

@@ -83,6 +83,9 @@ importers:
       '@carocrm/files':
         specifier: workspace:*
         version: link:../../packages/files
+      '@carocrm/formula':
+        specifier: workspace:*
+        version: link:../../packages/formula
       '@carocrm/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
@@ -183,6 +186,9 @@ importers:
       '@carocrm/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@carocrm/formula':
+        specifier: workspace:*
+        version: link:../../packages/formula
       '@carocrm/metadata':
         specifier: workspace:*
         version: link:../../packages/metadata
@@ -397,6 +403,15 @@ importers:
       zod:
         specifier: ^3.24.0
         version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/formula:
     devDependencies:
       '@types/node':
         specifier: ^22.10.0

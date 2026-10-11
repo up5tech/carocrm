@@ -103,6 +103,7 @@ export class MetadataRegistry {
         record: def.record,
         client: def.client,
         acl: this.getAcl(name),
+        dynamicLogic: def.dynamicLogic,
       };
     }
     return result;

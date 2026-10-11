@@ -15,6 +15,8 @@ const ConfigSchema = z.object({
   storageRoot: z.string().default('.data/files'),
   logLevel: z.string().default('info'),
   corsOrigins: z.string().default(''),
+  /** Global API rate limit per minute; the SPA spends many small calls per screen. */
+  rateLimitMax: z.coerce.number().int().positive().default(300),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
@@ -59,6 +61,7 @@ export function buildConfig(): AppConfig {
     storageRoot: process.env.STORAGE_ROOT,
     logLevel: process.env.LOG_LEVEL,
     corsOrigins: process.env.CORS_ORIGINS,
+    rateLimitMax: process.env.RATE_LIMIT_MAX,
   });
 }
 

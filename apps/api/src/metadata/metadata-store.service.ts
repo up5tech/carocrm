@@ -7,6 +7,7 @@ import { EntityDefinitionSchema } from '@carocrm/metadata/schemas/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service.js';
+import { FormulaService } from '../logic/formula.service.js';
 
 interface AppScopeData {
   entity?: Record<string, unknown>;
@@ -18,7 +19,10 @@ export class MetadataStoreService {
   readonly cache = new MetadataCache(this.registry);
   private loaded = false;
 
-  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+  constructor(
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(FormulaService) private readonly formulas: FormulaService,
+  ) {}
 
   async load(): Promise<void> {
     this.registry.clear();
@@ -48,7 +52,9 @@ export class MetadataStoreService {
           issues: parsed.error.issues.map((i) => i.message),
         });
       }
-      this.registry.registerEntity(parsed.data as EntityDefinition);
+      const definition = parsed.data as EntityDefinition;
+      this.formulas.validateDefinition(definition);
+      this.registry.registerEntity(definition);
     }
 
     this.loaded = true;
