@@ -169,6 +169,49 @@ export interface AuditLogTable {
   created_at: Date;
 }
 
+export interface StreamItemsTable {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  type: string;
+  data: unknown;
+  post: string | null;
+  created_by_id: string | null;
+  created_at: Date;
+  modified_at: Date;
+  is_deleted: boolean;
+}
+
+export interface StreamMentionsTable {
+  id: string;
+  stream_item_id: string;
+  user_id: string;
+  char_offset: number | null;
+}
+
+export interface StreamFollowersTable {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  user_id: string;
+  created_at: Date;
+}
+
+export interface StreamAttachmentsTable {
+  id: string;
+  stream_item_id: string;
+  attachment_id: string;
+}
+
+export interface NotificationsTable {
+  id: string;
+  type: string;
+  user_id: string;
+  data: unknown;
+  is_read: boolean;
+  created_at: Date;
+}
+
 export interface OutboxEventsTable {
   id: string;
   event_type: string;
@@ -232,6 +275,11 @@ export interface Database {
   entity_links: EntityLinksTable;
   attachments: AttachmentsTable;
   audit_log: AuditLogTable;
+  stream_items: StreamItemsTable;
+  stream_mentions: StreamMentionsTable;
+  stream_followers: StreamFollowersTable;
+  stream_attachments: StreamAttachmentsTable;
+  notifications: NotificationsTable;
   outbox_events: OutboxEventsTable;
   jobs: JobsTable;
   scheduled_jobs: ScheduledJobsTable;

@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
+import { StreamPanel } from '../components/StreamPanel.js';
 import { detailEntries, fieldLabel, recordLabel, useEntity, useMetadata } from '../state/metadata.js';
 
 interface PanelProps {
@@ -218,6 +219,8 @@ export function EntityDetailPage() {
             targetDefinition={metadata.data?.[definition.data?.relations[relation]?.target ?? ''] ?? undefined}
           />
         ))}
+
+        <StreamPanel entity={entity} id={id} definition={definition.data} canPost />
       </Space>
     </Spin>
   );

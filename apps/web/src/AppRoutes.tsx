@@ -4,12 +4,14 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { AppShell } from './components/AppShell.js';
 import { AdminAuditPage } from './pages/AdminAuditPage.js';
+import { CalendarPage } from './pages/CalendarPage.js';
 import { EntityDetailPage } from './pages/EntityDetailPage.js';
 import { EntityEditPage } from './pages/EntityEditPage.js';
 import { EntityListPage } from './pages/EntityListPage.js';
 import { EntityManagerPage } from './pages/EntityManagerPage.js';
 import { HomePage } from './pages/HomePage.js';
 import { LoginPage } from './pages/LoginPage.js';
+import { StreamPage } from './pages/StreamPage.js';
 import { useSession } from './state/session.js';
 
 export function AppRoutes() {
@@ -43,6 +45,9 @@ export function AppRoutes() {
         <Route path="/home" element={<HomePage />} />
         {/* signed-in users must never hit the entity route with "login" as the entity name */}
         <Route path="/login" element={<Navigate to="/home" replace />} />
+        {/* declared before the entity wildcard so "stream" is never read as an entity name */}
+        <Route path="/stream" element={<StreamPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/:entity" element={<EntityListPage />} />
         <Route path="/:entity/create" element={<EntityEditPage />} />
         <Route path="/:entity/:id" element={<EntityDetailPage />} />

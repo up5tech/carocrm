@@ -40,7 +40,8 @@ pnpm -r build         # all packages + api + worker
 npx vitest run        # integration tests against the configured DATABASE_URL (no extra database)
 bash scripts/e2e-smoke.sh   # HTTP end-to-end checks against a booted server
 bash scripts/worker-smoke.sh # 14 checks: outbox, BullMQ jobs, cron scheduler, graceful shutdown
-npx playwright test    # 4 browser specs (login/CRUD/Entity Manager/relations); starts API+SPA itself
+npx playwright test    # 6 browser specs (CRUD/Entity Manager/relations/stream/calendar); starts API+SPA itself
+pnpm --filter @carocrm/worker test  # 70 worker tests (jobs, scheduler, outbox, reminder job)
 ```
 
 ## Deviations from PLAN (deliberate, for Alpha)
@@ -57,6 +58,20 @@ npx playwright test    # 4 browser specs (login/CRUD/Entity Manager/relations); 
 `PATCH /api/v1/User/:id {"isActive":false}` deactivated **every user row** in the database.
 Fixed, and the test suite now asserts that admin stays active after such a PATCH; a repo-wide
 audit of `updateTable` calls confirmed every mutation is keyed.
+
+## Stream and calendar (PLAN tasks 21–22, added 2026-10-11)
+
+- `database/migrations/002_stream.sql` adds `stream_items`, `stream_mentions`,
+  `stream_followers`, `stream_attachments` and `notifications`.
+- `apps/api/src/stream/` implements posts/notes, follow + global activity stream, @mentions
+  (which create notifications) and generated `Update` items from the per-field `audited` flag.
+  Posting needs the per-entity `stream` ACL action; reading a stream needs `read` on the record,
+  and global-stream items are dropped when the parent record is not readable.
+- `apps/api/src/calendar/` adds Task/Call/Meeting/Reminder metadata, `GET /Calendar` with
+  recurrence expansion (`recurrence.ts`, pure and unit-tested) and IANA day bucketing.
+  `system.sendReminders` in the worker delivers due reminders as notifications.
+- SPA: Stream panel on every record page, `/stream` activity page, `/calendar` month grid with
+  drag-to-reschedule.
 
 ## Web UI theme (Lizant)
 

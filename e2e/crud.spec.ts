@@ -136,4 +136,72 @@ test.describe('CaroCRM UI', () => {
     const contactsPanel = page.locator('.ant-card').filter({ hasText: 'contacts' }).first();
     await expect(contactsPanel.getByText(contact)).toBeVisible();
   });
+
+  test('record stream: post, follow, and see it in the global stream', async ({ page }) => {
+    await login(page);
+    const text = `PW stream note ${runId}`;
+    await createRecord(page, 'Task', { name: `PW Stream Task ${runId}` });
+    const taskUrl = new URL(page.url()).pathname;
+
+    const panel = page.locator('.ant-card').filter({ has: page.locator('.ant-card-head-title', { hasText: /^Stream$/ }) });
+    await expect(panel).toBeVisible();
+    await panel.getByPlaceholder(/Write to the stream/).fill(text);
+    await panel.getByRole('button', { name: 'Post' }).click();
+    await expect(panel.getByText(text)).toBeVisible();
+
+    await panel.getByRole('button', { name: /Follow/ }).click();
+    await expect(panel.getByRole('button', { name: /Following/ })).toBeVisible();
+
+    await page.goto('/stream');
+    await expect(page.getByText(text)).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Task' }).first()).toBeVisible();
+
+    // an audited field change must surface as a generated update entry
+    await page.goto(`${taskUrl}/edit`);
+    const statusItem = page
+      .locator('.ant-form-item')
+      .filter({ has: page.locator('label', { hasText: /^Status$/ }) })
+      .first();
+    await statusItem.locator('.ant-select-selector').click();
+    // the enum select has no search box, so pick the option directly
+    await page.locator('.ant-select-item-option', { hasText: /^Started$/ }).first().click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await page.goto(taskUrl);
+    await expect(page.getByText('Status → Started').first()).toBeVisible();
+  });
+
+  test('calendar: renders activities and drag reschedules one', async ({ page, request }) => {
+    await login(page);
+    const token = await page.evaluate(() => window.localStorage.getItem('carocrm.accessToken'));
+    expect(token).toBeTruthy();
+    const headers = { authorization: `Bearer ${token ?? ''}` };
+
+    const start = new Date();
+    start.setHours(9, 0, 0, 0);
+    const end = new Date(start.getTime() + 45 * 60_000);
+    const created = await request.post('/api/v1/Meeting', {
+      headers,
+      data: { name: `PW Calendar Meeting ${runId}`, status: 'Planned', dateStart: start.toISOString(), dateEnd: end.toISOString() },
+    });
+    expect(created.ok()).toBe(true);
+    const meeting = (await created.json()) as { id: string; version: number };
+
+    await page.goto('/calendar');
+    const chip = page.locator('.lizant-cal-tag', { hasText: `PW Calendar Meeting ${runId}` });
+    await expect(chip).toBeVisible();
+
+    const todayCell = chip.locator('xpath=ancestor::td[1]');
+    const targetCell = todayCell.locator('xpath=following-sibling::td[1]');
+    await chip.dragTo(targetCell);
+    await expect(page.getByText(/Moved to/)).toBeVisible({ timeout: 15_000 });
+
+    const after = await request.get(`/api/v1/Meeting/${meeting.id}`, { headers });
+    const moved = (await after.json()) as { dateStart: string };
+    const movedDate = new Date(moved.dateStart);
+    expect(movedDate.toDateString()).not.toBe(start.toDateString());
+    // the wall-clock time of day is preserved
+    expect(movedDate.getHours()).toBe(start.getHours());
+
+    await request.delete(`/api/v1/Meeting/${meeting.id}`, { headers });
+  });
 });

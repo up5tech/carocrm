@@ -94,6 +94,74 @@ function listQuery(params: ListParams): string {
   return encoded === '' ? '' : `?${encoded}`;
 }
 
+function simpleQuery(params: Record<string, string | number | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) query.set(key, String(value));
+  }
+  const encoded = query.toString();
+  return encoded === '' ? '' : `?${encoded}`;
+}
+
+export interface StreamUser {
+  userId: string;
+  userName: string;
+  firstName: string | null;
+  lastName: string | null;
+}
+
+export interface StreamItem {
+  id: string;
+  entityType: string;
+  entityId: string;
+  type: string;
+  data: Record<string, unknown>;
+  post: string | null;
+  createdById: string | null;
+  createdBy: StreamUser | null;
+  createdAt: string;
+  mentions: StreamUser[];
+  attachmentIds: string[];
+}
+
+export interface StreamListResult {
+  list: StreamItem[];
+  offset: number;
+  count: number;
+  total?: number | undefined;
+}
+
+export interface NotificationItem {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface CalendarEvent {
+  activityType: string;
+  activityId: string;
+  name: string | null;
+  status: string | null;
+  start: string;
+  end: string | null;
+  day: string;
+  allDay: boolean;
+  assignedUserId: string | null;
+  recurring: boolean;
+  base: boolean;
+  duration: number | null;
+}
+
+export interface CalendarResult {
+  list: CalendarEvent[];
+  from: string;
+  to: string;
+  timeZone: string;
+  count: number;
+}
+
 export const api = {
   login: (userName: string, password: string) =>
     request<LoginResult>('/Authentication', { method: 'POST', body: JSON.stringify({ userName, password }) }),
@@ -140,4 +208,48 @@ export const api = {
     if (params.maxSize !== undefined) query.set('maxSize', String(params.maxSize));
     return request<ListResult>(`/AuditLog?${query.toString()}`);
   },
+
+  streamFor: (entity: string, id: string, params: { maxSize?: number; offset?: number; order?: 'asc' | 'desc' } = {}) =>
+    request<StreamListResult>(
+      `/${encodeURIComponent(entity)}/${encodeURIComponent(id)}/stream${simpleQuery({
+        maxSize: params.maxSize,
+        offset: params.offset,
+        order: params.order,
+      })}`,
+    ),
+  postNote: (entity: string, id: string, post: string) =>
+    request<StreamItem>('/Note', { method: 'POST', body: JSON.stringify({ type: 'Post', parentType: entity, parentId: id, post }) }),
+  deleteNote: (itemId: string) => request<unknown>(`/Note/${encodeURIComponent(itemId)}`, { method: 'DELETE' }),
+  follow: (entity: string, id: string) =>
+    request<{ status: boolean }>(`/${encodeURIComponent(entity)}/${encodeURIComponent(id)}/subscription`, { method: 'PUT' }),
+  unfollow: (entity: string, id: string) =>
+    request<{ status: boolean }>(`/${encodeURIComponent(entity)}/${encodeURIComponent(id)}/subscription`, { method: 'DELETE' }),
+  isFollowed: (entity: string, id: string) =>
+    request<{ followed: boolean }>(`/${encodeURIComponent(entity)}/${encodeURIComponent(id)}/subscription`),
+  activityStream: (params: { view?: 'all' | 'followed' | 'own'; maxSize?: number; offset?: number } = {}) =>
+    request<StreamListResult>(`/Stream${simpleQuery({ view: params.view, maxSize: params.maxSize, offset: params.offset })}`),
+  notifications: (params: { unreadOnly?: boolean; maxSize?: number } = {}) =>
+    request<ListResult & { list: NotificationItem[] }>(
+      `/Notification${simpleQuery({ unreadOnly: params.unreadOnly ? 'true' : undefined, maxSize: params.maxSize })}`,
+    ),
+  markNotificationRead: (id: string) => request<unknown>(`/Notification/${encodeURIComponent(id)}/Read`, { method: 'POST' }),
+
+  calendar: (params: {
+    from: string;
+    to: string;
+    timeZone?: string | undefined;
+    entities?: string[] | undefined;
+    userId?: string | undefined;
+    maxSize?: number | undefined;
+  }) =>
+    request<CalendarResult>(
+      `/Calendar${simpleQuery({
+        from: params.from,
+        to: params.to,
+        ...(params.timeZone !== undefined ? { timeZone: params.timeZone } : {}),
+        ...(params.entities !== undefined && params.entities.length > 0 ? { entities: params.entities.join(',') } : {}),
+        ...(params.userId !== undefined ? { userId: params.userId } : {}),
+        ...(params.maxSize !== undefined ? { maxSize: params.maxSize } : {}),
+      })}`,
+    ),
 };

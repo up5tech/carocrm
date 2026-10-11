@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { Logger } from '@carocrm/core/logger/index.js';
 import type { JobContext, JobHandler } from '@carocrm/jobs';
 import { JobRegistry } from '@carocrm/jobs';
@@ -82,11 +84,87 @@ export function pruneSessionsJob(deps: SystemJobDeps): JobHandler {
   };
 }
 
+export const DEFAULT_REMINDER_BATCH = 100;
+/** Activities whose reminder is due but not yet delivered (PLAN §27). */
+export const REMINDER_SCAN_SQL = `
+  SELECT id,
+         entity_type,
+         name,
+         COALESCE(NULLIF(attrs->>'assignedUserId', ''), created_by_id) AS recipient_id,
+         (attrs->>'dateStart')::timestamptz AS date_start
+    FROM entity_records
+   WHERE entity_type IN ('Task', 'Call', 'Meeting')
+     AND deleted_at IS NULL
+     AND attrs->>'reminder' = 'true'
+     AND jsonb_typeof(attrs->'dateStart') = 'string'
+     AND attrs->>'dateStart' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
+     AND (attrs->>'reminderSentAt' IS NULL)
+     AND COALESCE(attrs->>'status', '') NOT IN ('Completed', 'Canceled', 'Deferred', 'Held', 'Not Held')
+     AND (attrs->>'dateStart')::timestamptz
+           - make_interval(mins => CASE WHEN attrs->>'reminderTime' ~ '^-?[0-9]+$'
+                                        THEN (attrs->>'reminderTime')::int ELSE 0 END) <= now()
+     AND (attrs->>'dateStart')::timestamptz >= now() - interval '24 hours'
+   ORDER BY (attrs->>'dateStart')::timestamptz
+   LIMIT $1
+`;
+
+export const REMINDER_INSERT_SQL = `
+  INSERT INTO notifications (id, type, user_id, data, is_read, created_at)
+  VALUES ($1, 'Reminder', $2, $3, FALSE, now())
+`;
+
+/** Idempotency marker; the extra predicate keeps a concurrent worker from double-firing. */
+export const REMINDER_MARK_SQL = `
+  UPDATE entity_records
+     SET attrs = jsonb_set(attrs, '{reminderSentAt}', to_jsonb(now()::text))
+   WHERE id = $1
+     AND attrs->>'reminderSentAt' IS NULL
+     AND attrs->>'reminder' = 'true'
+  RETURNING id
+`;
+
+/**
+ * Delivers activity reminders as in-app notifications. EspoCRM's email/popup transports
+ * are not implemented here; the notification row is the delivery seam (PLAN §26/§27).
+ */
+export function sendRemindersJob(deps: SystemJobDeps): JobHandler {
+  return async (context: JobContext) => {
+    const limit = retentionDays(context.data, 'batchSize', DEFAULT_REMINDER_BATCH);
+    const found = await deps.db.query(REMINDER_SCAN_SQL, [limit]);
+    const rows = found.rows as Array<Record<string, unknown>>;
+    let delivered = 0;
+
+    for (const row of rows) {
+      const recipient = row['recipient_id'];
+      const activityId = row['id'];
+      if (typeof recipient !== 'string' || recipient === '' || typeof activityId !== 'string') continue;
+      const data = JSON.stringify({
+        activityId,
+        activityType: String(row['entity_type'] ?? ''),
+        activityName: row['name'] === null || row['name'] === undefined ? null : String(row['name']),
+        dateStart: row['date_start'] instanceof Date ? row['date_start'].toISOString() : String(row['date_start'] ?? ''),
+      });
+      await deps.db.query(REMINDER_INSERT_SQL, [randomUUID(), recipient, data]);
+      const marked = await deps.db.query(REMINDER_MARK_SQL, [activityId]);
+      const updated = marked.rows.length > 0 || (marked.rowCount ?? 0) > 0;
+      if (updated) delivered += 1;
+    }
+
+    deps.log.info({ scanned: rows.length, delivered }, 'activity reminders delivered');
+    return {
+      status: 'completed',
+      message: `Delivered ${String(delivered)} reminders`,
+      result: { scanned: rows.length, delivered },
+    };
+  };
+}
+
 /** Registers the kernel jobs. Modules register theirs alongside this call. */
 export function registerSystemJobs(registry: JobRegistry, deps: SystemJobDeps): void {
   registry.register('system.noop', noopJob());
   registry.register('system.cleanupOutbox', cleanupOutboxJob(deps));
   registry.register('system.pruneSessions', pruneSessionsJob(deps));
+  registry.register('system.sendReminders', sendRemindersJob(deps));
 }
 
 export function createSystemJobRegistry(deps: SystemJobDeps): JobRegistry {

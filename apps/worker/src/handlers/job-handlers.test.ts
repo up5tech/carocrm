@@ -10,6 +10,9 @@ import {
   DEFAULT_SESSION_RETENTION_DAYS,
   PRUNE_SESSIONS_SQL,
   registerSystemJobs,
+  REMINDER_INSERT_SQL,
+  REMINDER_MARK_SQL,
+  REMINDER_SCAN_SQL,
   retentionDays,
 } from './job-handlers.js';
 
@@ -23,12 +26,59 @@ function harness() {
   return { db, logger, registry };
 }
 
+const REMINDER_SCAN_FRAGMENT = 'from entity_records';
+const REMINDER_INSERT_FRAGMENT = 'insert into notifications';
+const REMINDER_MARK_FRAGMENT = 'set attrs = jsonb_set';
+
+describe('system.sendReminders', () => {
+  it('notifies the recipient and marks the activity so it fires once', async () => {
+    const { db, registry } = harness();
+    const due = new Date(Date.now() - 60_000);
+    db.returns(REMINDER_SCAN_FRAGMENT, [
+      { id: 'task-1', entity_type: 'Task', name: 'Call back', recipient_id: 'user-9', date_start: due },
+    ]);
+    db.returns(REMINDER_INSERT_FRAGMENT, []);
+    db.returns(REMINDER_MARK_FRAGMENT, [{ id: 'task-1' }], 1);
+
+    const outcome = await registry.get('system.sendReminders')?.({ data: {} });
+
+    expect(outcome?.status).toBe('completed');
+    expect(outcome?.result).toEqual({ scanned: 1, delivered: 1 });
+    const insert = db.lastCall(REMINDER_INSERT_FRAGMENT);
+    expect(insert?.params[1]).toBe('user-9');
+    const payload = JSON.parse(String(insert?.params[2])) as Record<string, unknown>;
+    expect(payload).toMatchObject({ activityId: 'task-1', activityType: 'Task', activityName: 'Call back' });
+    expect(db.lastCall(REMINDER_MARK_FRAGMENT)?.params).toEqual(['task-1']);
+  });
+
+  it('skips rows without a recipient and reports nothing delivered', async () => {
+    const { db, registry } = harness();
+    db.returns(REMINDER_SCAN_FRAGMENT, [{ id: 'task-2', entity_type: 'Task', name: null, recipient_id: null, date_start: new Date() }]);
+    const outcome = await registry.get('system.sendReminders')?.({ data: { batchSize: 5 } });
+    expect(outcome?.result).toEqual({ scanned: 1, delivered: 0 });
+    expect(db.lastCall(REMINDER_SCAN_FRAGMENT)?.params).toEqual([5]);
+    expect(db.calls.some((call) => call.sql.toLowerCase().includes('insert into notifications'))).toBe(false);
+  });
+
+  it('only selects reminder-flagged, unfinished activities with a valid date', () => {
+    const sql = REMINDER_SCAN_SQL.toLowerCase();
+    expect(sql).toContain("attrs->>'reminder' = 'true'");
+    expect(sql).toContain("attrs->>'remindersentat' is null");
+    expect(sql).toContain("not in ('completed', 'canceled', 'deferred', 'held', 'not held')");
+    expect(sql).toContain("jsonb_typeof(attrs->'datestart') = 'string'");
+    expect(sql).toContain('make_interval(mins =>');
+    expect(REMINDER_INSERT_SQL.toLowerCase()).toContain('insert into notifications');
+    expect(REMINDER_MARK_SQL.toLowerCase()).toContain("attrs->>'remindersentat' is null");
+  });
+});
+
 describe('kernel job registry', () => {
   it('registers the system jobs by name', () => {
     expect(createSystemJobRegistry({ db: new FakeDb(), log: createTestLogger().log }).list()).toEqual([
       'system.cleanupOutbox',
       'system.noop',
       'system.pruneSessions',
+      'system.sendReminders',
     ]);
   });
 

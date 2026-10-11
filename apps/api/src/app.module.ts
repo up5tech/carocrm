@@ -13,6 +13,7 @@ import { AuthGuard } from './auth/auth.guard.js';
 import { AuthService } from './auth/auth.service.js';
 import { IdentityController } from './auth/identity.controller.js';
 import { IdentityService } from './auth/identity.service.js';
+import { CALENDAR_CONTROLLERS, CALENDAR_PROVIDERS } from './calendar/index.js';
 import { OutboxService } from './common/outbox.service.js';
 import { RequestContextMiddleware } from './common/request-context.middleware.js';
 import { REQUEST_SCOPE_TOKEN,RequestScope } from './common/request-scope.js';
@@ -26,6 +27,8 @@ import { KERNEL_HOOKS_TOKEN } from './entity/hooks.js';
 import { HealthController } from './health/health.controller.js';
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
 import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.service.js';
+import type { StreamEntityMetadataLookup } from './stream/index.js';
+import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, STREAM_PROVIDERS, StreamUpdateHookService } from './stream/index.js';
 
 @Module({
   controllers: [
@@ -34,6 +37,10 @@ import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.s
     IdentityController,
     ...ATTACHMENT_CONTROLLERS,
     ...AUDIT_CONTROLLERS,
+    // `/api/v1/:entityType/:entityId/{stream,subscription}` must be matched before the
+    // generic record controller treats the third segment as a relation name.
+    ...STREAM_CONTROLLERS,
+    ...CALENDAR_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
     ...ENTITY_CONTROLLERS,
   ],
@@ -49,6 +56,14 @@ import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.s
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
     ...AUDIT_PROVIDERS,
+    ...STREAM_PROVIDERS,
+    ...CALENDAR_PROVIDERS,
+    {
+      provide: STREAM_METADATA_LOOKUP,
+      inject: [METADATA_STORE],
+      useFactory: (store: MetadataStoreType): StreamEntityMetadataLookup => (entity: string) =>
+        store.registry.getEntity(entity)?.fields,
+    },
     {
       provide: AUDIT_METADATA_LOOKUP,
       inject: [METADATA_STORE],
@@ -93,6 +108,7 @@ export class AppModule implements NestModule, OnApplicationBootstrap {
     @Inject(METADATA_STORE) private readonly metadataStore: MetadataStoreType,
     @Inject(KERNEL_HOOKS_TOKEN) private readonly hooks: AfterSaveHook[],
     @Inject(AuditHookService) private readonly auditHook: AuditHookService,
+    @Inject(StreamUpdateHookService) private readonly streamHook: StreamUpdateHookService,
   ) {}
 
   configure(consumer: MiddlewareConsumer): void {
@@ -101,6 +117,7 @@ export class AppModule implements NestModule, OnApplicationBootstrap {
 
   async onApplicationBootstrap(): Promise<void> {
     registerAuditHook(this.hooks, this.auditHook);
+    registerStreamUpdateHook(this.hooks, this.streamHook);
     await this.metadataStore.load();
   }
 }

@@ -17,6 +17,43 @@ const standardFields: Record<string, Record<string, unknown>> = {
   deletedAt: { type: 'datetime' },
 };
 
+/**
+ * Fields shared by the calendar activities (PLAN §27): Task, Call and Meeting.
+ * Times are stored in UTC; the SPA renders them in the viewer's zone.
+ */
+const activityFields = (extra: Record<string, Record<string, unknown>> = {}): Record<string, Record<string, unknown>> => ({
+  ...standardFields,
+  name: { ...standardFields.name, required: true },
+  status: { type: 'enum', values: ['Planned', 'Held', 'Not Held'], defaultValue: 'Planned', inList: true, inDetail: true, inEdit: true, audited: true },
+  dateStart: { type: 'datetime', inList: true, inDetail: true, inEdit: true, sortable: true },
+  dateEnd: { type: 'datetime', inList: true, inDetail: true, inEdit: true, sortable: true },
+  duration: { type: 'int', inDetail: true, inEdit: true },
+  isAllDay: { type: 'bool', inDetail: true, inEdit: true },
+  description: standardFields['description'] ?? { type: 'text', inDetail: true, inEdit: true },
+  reminder: { type: 'bool', inEdit: true },
+  reminderTime: { type: 'int', defaultValue: 0, inEdit: true },
+  reminderAt: { type: 'datetime' },
+  reminderSentAt: { type: 'datetime' },
+  repeatType: { type: 'enum', values: ['Daily', 'Weekly', 'Monthly', 'Yearly'], inDetail: true, inEdit: true },
+  repeatEvery: { type: 'int', defaultValue: 1, inEdit: true },
+  repeatEndDate: { type: 'date', inDetail: true, inEdit: true },
+  repeatDayOfWeek: {
+    type: 'multiEnum',
+    values: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+    inEdit: true,
+  },
+  repeatByMonth: { type: 'enum', values: ['Day of month', 'Day of week'], inEdit: true },
+  ...extra,
+});
+
+/** Relations every activity exposes: related records plus participants and reminders. */
+const activityRelations: Record<string, Record<string, unknown>> = {
+  accounts: { type: 'manyMany', target: 'Account' },
+  contacts: { type: 'manyMany', target: 'Contact' },
+  users: { type: 'manyMany', target: 'User' },
+  reminders: { type: 'manyMany', target: 'Reminder' },
+};
+
 export const coreMetadata: MetadataSeedEntry[] = [
   {
     scope: 'entity',
@@ -144,32 +181,92 @@ export const coreMetadata: MetadataSeedEntry[] = [
       name: 'Task',
       label: 'Task',
       isEntity: true,
-      fields: {
-        ...standardFields,
-        name: { ...standardFields.name, required: true },
+      fields: activityFields({
         status: {
           type: 'enum',
-          values: ['Not Started', 'Started', 'Completed', 'Deferred'],
+          values: ['Not Started', 'Started', 'Completed', 'Canceled', 'Deferred'],
           defaultValue: 'Not Started',
           inList: true,
           inDetail: true,
           inEdit: true,
+          audited: true,
         },
         priority: {
           type: 'enum',
-          values: ['Low', 'Normal', 'High'],
+          values: ['Low', 'Normal', 'High', 'Urgent'],
           defaultValue: 'Normal',
           inList: true,
           inDetail: true,
           inEdit: true,
         },
-        dateStart: { type: 'datetime', inList: true, inDetail: true, inEdit: true },
-        dateEnd: { type: 'datetime', inList: true, inDetail: true, inEdit: true },
-      },
-      relations: {},
+        dateCompleted: { type: 'datetime', inDetail: true },
+      }),
+      relations: activityRelations,
       indexes: [],
       record: { displayField: 'name', removable: true },
       client: {},
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'Call',
+    data: {
+      name: 'Call',
+      label: 'Call',
+      isEntity: true,
+      fields: activityFields({
+        direction: { type: 'enum', values: ['Internal', 'Outbound', 'Inbound'], defaultValue: 'Internal', inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: activityRelations,
+      indexes: [],
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'Meeting',
+    data: {
+      name: 'Meeting',
+      label: 'Meeting',
+      isEntity: true,
+      fields: activityFields({
+        acceptanceStatus: {
+          type: 'enum',
+          values: ['None', 'Accepted', 'Tentative', 'Declined'],
+          defaultValue: 'None',
+          inDetail: true,
+          inEdit: true,
+        },
+      }),
+      relations: activityRelations,
+      indexes: [],
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'Reminder',
+    data: {
+      name: 'Reminder',
+      label: 'Reminder',
+      isEntity: true,
+      fields: {
+        ...standardFields,
+        type: { type: 'enum', values: ['Popup', 'Email'], defaultValue: 'Popup', inList: true, inDetail: true, inEdit: true },
+        before: { type: 'int', defaultValue: 0, inDetail: true, inEdit: true },
+        timeUnit: { type: 'enum', values: ['minutes', 'hours', 'days'], defaultValue: 'minutes', inDetail: true, inEdit: true },
+        attribute: { type: 'varchar', inDetail: true, inEdit: true },
+        remindAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+        isActivity: { type: 'bool', defaultValue: true, inDetail: true },
+        isActive: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+        minutes: { type: 'int', inDetail: true },
+      },
+      relations: {},
+      indexes: [],
+      record: { displayField: 'type', removable: true },
+      client: { web: false },
     },
   },
 ];

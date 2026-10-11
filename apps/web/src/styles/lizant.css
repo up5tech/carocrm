@@ -333,3 +333,91 @@ body {
   font-weight: 400;
 }
 
+/* ---- stream ---- */
+.lizant-stream-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.lizant-stream-item {
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.lizant-stream-item:last-child {
+  border-bottom: 0;
+}
+
+
+
+/* ---- calendar ---- */
+.lizant-cal-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  min-height: 92px;
+}
+
+.lizant-cal-cell[data-drag-over='true'] {
+  background: #f0f8ff;
+}
+
+.lizant-cal-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.lizant-cal-tag {
+  cursor: grab;
+  margin-inline-end: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lizant-cal-tag a {
+  color: inherit;
+}
+
+/* antd stretches the selected day's background across the whole cell row; keep it a pill.
+   The selector is deliberately specific: antd injects its CSS-in-JS after this file. */
+.ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-selected .ant-picker-cell-inner,
+.ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-today .ant-picker-cell-inner {
+  background: transparent;
+  color: inherit;
+}
+
+.ant-picker-calendar .ant-picker-cell-selected .ant-picker-calendar-date-value,
+.ant-picker-calendar .ant-picker-cell-today .ant-picker-calendar-date-value,
+.ant-picker-calendar .ant-picker-cell-selected .ant-picker-cell-inner .ant-picker-calendar-date-value {
+  background: #438eff;
+  border-radius: 10px;
+  color: #fff;
+  display: inline-block;
+  line-height: 18px;
+  min-width: 20px;
+  padding: 1px 7px;
+  text-align: center;
+}
+
+.ant-picker-calendar .ant-picker-cell-in-view .ant-picker-calendar-date-value {
+  font-weight: 500;
+}
+
+/* size the selected/today inner to its number so antd's ring becomes a pill */
+.ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-selected .ant-picker-cell-inner,
+.ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-today .ant-picker-cell-inner {
+  align-self: flex-start;
+  display: inline-block;
+  height: 24px;
+  line-height: 22px;
+  min-width: 24px;
+  padding: 0 6px;
+  text-align: center;
+  width: auto;
+}

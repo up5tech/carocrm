@@ -1,6 +1,6 @@
 # Module Guide (CRM Kernel Alpha)
 
-Read this before adding code. Scope: PLAN.md tasks 01–16, 19–20 (CRM Kernel Alpha, PLAN §73).
+Read this before adding code. Scope: PLAN.md tasks 01–22 (CRM Kernel Alpha, PLAN §73, plus the SPA and stream/calendar).
 
 ## Runtime rules (IMPORTANT)
 
@@ -30,7 +30,10 @@ Read this before adding code. Scope: PLAN.md tasks 01–16, 19–20 (CRM Kernel 
 | Auth | `apps/api/src/auth/*` | `AuthService`, `AuthGuard` (global APP_GUARD), `@Public()` decorator |
 | Outbox | `apps/api/src/common/outbox.service.ts` | `OutboxService.insertMany(txOrDb, events)` |
 | Errors | `@carocrm/core/errors/index.js` | `AppError` subclasses; `GlobalExceptionFilter` renders PLAN §47 envelope |
-| Entities metadata | `database/seed-metadata.ts` | Account/Contact/Lead/Opportunity/Task definitions (scope 'entity') |
+| Entities metadata | `database/seed-metadata.ts` | Account/Contact/Lead/Opportunity + activities (Task/Call/Meeting/Reminder), scope 'entity' |
+| Stream | `apps/api/src/stream/` | `StreamService`; routes `GET /Stream`, `GET /:type/:id/stream`, `POST /Note`, `PUT\|DELETE /:type/:id/subscription`, `GET /Notification` |
+| Calendar | `apps/api/src/calendar/` | `CalendarService` + pure `expandOccurrences()` in `recurrence.ts`; route `GET /Calendar` |
+| Kernel hooks | `apps/api/src/entity/hooks.ts` | `KERNEL_HOOKS_TOKEN` → `AfterSaveHook[]`; audit and stream-update each register one |
 
 ## API conventions
 
@@ -74,6 +77,13 @@ Read this before adding code. Scope: PLAN.md tasks 01–16, 19–20 (CRM Kernel 
 - `STORAGE_ROOT` comes from `AppConfig.storageRoot`.
 - Each module exposes `export const <NAME>_PROVIDERS: Provider[]` and `<NAME>_CONTROLLERS: unknown[]`
   from its barrel file; the integrator adds them to AppModule once.
+- `STREAM_METADATA_LOOKUP` mirrors `AUDIT_METADATA_LOOKUP`: AppModule supplies the entity field
+  definitions, and the default provider returns `undefined` (no generated Update items).
+- Controller order matters: `STREAM_CONTROLLERS` and `CALENDAR_CONTROLLERS` declare
+  `/api/v1/:entityType/:entityId/{stream,subscription}` routes and MUST be spread before
+  `ENTITY_CONTROLLERS`, whose `:entity/:id/:relation` wildcard would otherwise swallow them.
+- Activity reminders: `system.sendReminders` (apps/worker/src/handlers) scans due activities and
+  writes `notifications`; the seed installs the `scheduledReminders` cron row (`* * * * *`).
 
 ## Test database policy (AGENTS.md §3 — mandatory)
 

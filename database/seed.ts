@@ -63,6 +63,13 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
       await pool.query(`INSERT INTO users_teams (user_id, team_id) VALUES ('demoUserId', 'teamSales') ON CONFLICT DO NOTHING`);
     }
 
+    // Activity reminders (PLAN §27): the worker scans due reminders on this schedule.
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('scheduledReminders', 'system.sendReminders', '* * * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+
     for (const entry of coreMetadata) {
       await pool.query(
         `INSERT INTO metadata_entries (scope, name, data) VALUES ($1, $2, $3)

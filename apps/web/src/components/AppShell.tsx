@@ -1,4 +1,4 @@
-import { AppstoreOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SearchOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, CalendarOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, SearchOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
@@ -22,6 +22,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const navItems = useMemo<MenuItems>(() => {
     const groups: MenuItems = [{ key: '/home', icon: <AppstoreOutlined />, label: <Link to="/home">Home</Link> }];
+    groups.push({ key: '/stream', icon: <NotificationOutlined />, label: <Link to="/stream">Stream</Link> });
+    groups.push({ key: '/calendar', icon: <CalendarOutlined />, label: <Link to="/calendar">Calendar</Link> });
 
     const records: MenuItems = navEntities(metadata.data, principal?.type).map((entity) => ({
       key: `/${entity.name}`,

@@ -133,7 +133,11 @@ describe('generic entity API — query grammar', () => {
     const list = res.body['list'] as Record<string, unknown>[];
     expect(list.some((item) => item['id'] === accountId)).toBe(true);
 
-    const exact = encodeURIComponent(JSON.stringify([{ field: 'industry', operator: 'equals', value: 'Software' }]));
+    // ANDed with this record's id so shared-database rows cannot page it out (§3.3)
+    const exact = encodeURIComponent(JSON.stringify([
+      { field: 'id', operator: 'equals', value: accountId },
+      { field: 'industry', operator: 'equals', value: 'Software' },
+    ]));
     const exactRes = await call('GET', `/api/v1/Account?where=${exact}`);
     const exactList = exactRes.body['list'] as Record<string, unknown>[];
     expect(exactList.every((item) => item['industry'] === 'Software')).toBe(true);
@@ -210,18 +214,31 @@ describe('generic entity API — query grammar', () => {
     expect(low.status).toBe(201);
     expect(high.status).toBe(201);
 
-    const where = encodeURIComponent(JSON.stringify([{ field: 'probability', operator: 'greaterThanOrEqual', value: 50 }]));
+    // restricted to this test's two records so shared-database rows cannot page them out (§3.3)
+    const where = encodeURIComponent(
+      JSON.stringify([
+        {
+          or: [
+            { field: 'id', operator: 'equals', value: String(low.body['id']) },
+            { field: 'id', operator: 'equals', value: String(high.body['id']) },
+          ],
+        },
+        { field: 'probability', operator: 'greaterThanOrEqual', value: 50 },
+      ]),
+    );
     const res = await call('GET', `/api/v1/Opportunity?where=${where}&orderBy=-probability`);
     expect(res.status).toBe(200);
     const list = res.body['list'] as Record<string, unknown>[];
-    expect(list.some((item) => item['id'] === String(high.body['id']))).toBe(true);
-    expect(list.some((item) => item['id'] === String(low.body['id']))).toBe(false);
+    expect(list.map((item) => String(item['id']))).toEqual([String(high.body['id'])]);
     expect(Number(list[0]?.['probability'])).toBeGreaterThanOrEqual(50);
   });
 
   it('supports or-groups in a where array', async () => {
     const where = encodeURIComponent(
-      JSON.stringify([{ or: [{ field: 'industry', operator: 'equals', value: 'Software' }, { field: 'industry', operator: 'equals', value: 'Mining' }] }]),
+      JSON.stringify([
+        { field: 'id', operator: 'equals', value: accountId },
+        { or: [{ field: 'industry', operator: 'equals', value: 'Software' }, { field: 'industry', operator: 'equals', value: 'Mining' }] },
+      ]),
     );
     const res = await call('GET', `/api/v1/Account?where=${where}`);
     expect(res.status).toBe(200);
