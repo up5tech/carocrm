@@ -270,14 +270,24 @@ HTTP request → EntityManager phases → PostgresRecordStore.withTransaction
   `Message-Id`, `Received`, …) and any header value containing CR/LF are rejected — that is SMTP header
   injection, treated as untrusted input like everything else. `SMTP_STRICT_FROM` (default true) refuses
   a From address that is not the configured account.
-- **Secrets stay in the environment**: there is no SMTP credential column in any table, so nothing
-  sensitive is stored at rest to encrypt (PLAN §28.3). `parseSmtpSettings` runs at boot: `smtp` without
-  a host, a half-set credential pair, or an out-of-range port/pool is a startup failure, not a
-  first-send failure.
-- **Inbound (PLAN §28.2: IMAP / POP3 / Graph / Gmail) is not implemented** — PLAN lists it under
-  "later". The record model already carries `direction`, `threadId` and `inReplyTo` for it.
-- Tests: `packages/mail/src/{index,message,smtp,offline,record}/*.test.ts` (63 unit tests with a fake
-  sender, no socket), `apps/api/test/email.test.ts` (validation, ledger, queueing, ACL, cleanup),
+- **Email accounts (Phase 11).** `email_accounts` (migration `007`) is one row per sending mailbox
+  (address, host/port/security mode, username, signature, default flag), managed through
+  `api/v1/EmailAccount` (admin-only). Credentials are encrypted at rest with `ENCRYPTION_KEY`
+  (AES-256-GCM, `@carocrm/core` crypto helper); the password is write-only and no read path ever
+  returns it — only `hasPassword`. A record's `emailAccountId` (else the default account) selects
+  the sending mailbox: the API validates against that account's transport, the job carries the
+  account id, and the worker decrypts and builds a per-account SMTP transport in memory only.
+- **Templates and signature (Phase 11).** `EmailTemplate` is a metadata entity record (`subject`,
+  `body`, `bodyHtml` with `{{variable}}` placeholders); at queue time the service renders it with the
+  draft's own fields and persists the rendered subject/body on the record, so the worker sends
+  exactly what was validated. The sending account's `signature` is appended once (`--` footer block).
+- **Inbound is a normalized pipeline plus a provider port (PLAN §28.2).** `InboundMailProvider`
+  (`poll()` → `InboundMailMessage[]`) defaults to `NullInboundProvider` (safe no-op); a future
+  IMAP/Graph adapter implements the port. `POST /api/v1/Email/action/pollInbound` stores new
+  messages as `Inbound` Email records, deduped on `messageId`.
+- Tests: `packages/mail/src/{index,message,smtp,offline,record,template}/*.test.ts` (unit, incl. template
+  rendering), `apps/api/test/email.test.ts` (validation, ledger, queueing, ACL, cleanup),
+  `apps/api/test/email-accounts.test.ts` (encrypted accounts, templates, signature, inbound poll).
   `apps/worker/src/handlers/mail-handlers.test.ts` (20 job tests), the email block in
   `scripts/e2e-smoke.sh`, section 6 of `scripts/worker-smoke.sh` and the `e2e/email.spec.ts` browser spec.
 

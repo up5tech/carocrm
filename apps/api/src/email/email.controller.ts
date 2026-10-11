@@ -39,6 +39,16 @@ export class EmailController {
     return this.emails.verifyTransport();
   }
 
+  /**
+   * Inbound poll (PLAN §28.2): runs the normalized inbound pipeline once. With the default
+   * `NullInboundProvider` this is a safe no-op; an installed IMAP/Graph adapter makes it collect.
+   */
+  @HttpCode(200)
+  @Post('action/pollInbound')
+  pollInbound(): Promise<{ fetched: number; stored: number; skipped: number }> {
+    return this.emails.pollInbound();
+  }
+
   @HttpCode(200)
   @Post(':id/action/send')
   async send(@Param('id') id: string): Promise<QueuedEmail> {

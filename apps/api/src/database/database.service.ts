@@ -311,6 +311,26 @@ export interface EmailDeliveriesTable {
   sent_at: Date | null;
 }
 
+export interface EmailAccountsTable {
+  id: string;
+  name: string;
+  email_address: string;
+  from_name: string | null;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_security: string;
+  smtp_username: string | null;
+  /** AES-256-GCM payload from @carocrm/core encryptSecret; never the plaintext password. */
+  smtp_password_encrypted: string | null;
+  signature: string | null;
+  is_active: boolean;
+  is_default: boolean;
+  is_deleted: boolean;
+  created_by_id: string | null;
+  created_at: Date;
+  modified_at: Date;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
@@ -328,6 +348,7 @@ export interface Database {
   attachments: AttachmentsTable;
   file_uploads: FileUploadsTable;
   email_deliveries: EmailDeliveriesTable;
+  email_accounts: EmailAccountsTable;
   audit_log: AuditLogTable;
   stream_items: StreamItemsTable;
   stream_mentions: StreamMentionsTable;

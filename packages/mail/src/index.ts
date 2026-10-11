@@ -5,8 +5,8 @@
  * the `MailTransport` port. Nothing in this package knows about Nest, the database or HTTP: the API
  * and the worker each build a transport from their own configuration through `createMailTransport`.
  *
- * Inbound collection (PLAN §28.2: IMAP / Graph / Gmail) is explicitly "later" in PLAN §28 and is not
- * implemented; only the outbound side (§28.1) exists.
+ * Inbound (PLAN §28.2) is a normalized pipeline plus the `InboundMailProvider` port; IMAP/Graph/Gmail
+ * adapters are "later" per §28.2 and plug into that port without changes here.
  */
 import { ValidationError } from '@carocrm/core/errors/index.js';
 
@@ -14,6 +14,18 @@ import type { MailTransport } from './message/index.js';
 import { DisabledTransport, MemoryTransport, type OfflineTransportOptions } from './offline/index.js';
 import { createSmtpRelayTransport, createSmtpTransport, parseSmtpRelaySettings, parseSmtpSettings, type SmtpSettings } from './smtp/index.js';
 
+export {
+  type AccountSmtpConfig,
+  accountSmtpSettings,
+  createAccountSmtpTransport,
+} from './account/index.js';
+export {
+  type InboundMailMessage,
+  type InboundMailProvider,
+  type InboundPollOptions,
+  inboundToEmailRecord,
+  NullInboundProvider,
+} from './inbound/index.js';
 export type {
   MailAddress,
   MailAttachment,
@@ -56,6 +68,7 @@ export {
   type SmtpSettings,
   SmtpTransport,
 } from './smtp/index.js';
+export { renderTemplate, renderTemplateParts,type TemplateVariables } from './template/index.js';
 
 /** `MAIL_TRANSPORT` values. `none` is the default so an unconfigured install cannot send mail. */
 export const MAIL_TRANSPORT_MODES = ['none', 'memory', 'smtp', 'relay'] as const;

@@ -295,7 +295,7 @@ export const coreMetadata: MetadataSeedEntry[] = [
         name: { ...standardFields.name, label: 'Subject', required: true, maxLength: 998, audited: true },
         status: {
           type: 'enum',
-          values: ['Draft', 'Queued', 'Sending', 'Sent', 'Failed'],
+          values: ['Draft', 'Queued', 'Sending', 'Sent', 'Failed', 'Inbound'],
           defaultValue: 'Draft',
           inList: true,
           inDetail: true,
@@ -303,6 +303,10 @@ export const coreMetadata: MetadataSeedEntry[] = [
           audited: true,
         },
         direction: { type: 'enum', values: ['Outbound', 'Inbound'], defaultValue: 'Outbound', inList: true, inDetail: true },
+        /** Sending mailbox (PLAN Phase 11 "Email accounts"); empty = the configured default transport. */
+        emailAccountId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+        /** Template applied when the send is queued (PLAN Phase 11 "Email templates"). */
+        templateId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
         fromAddress: { type: 'varchar', maxLength: 512, inList: true, inDetail: true, inEdit: true },
         toAddressList: { type: 'varchar', maxLength: 4000, label: 'To', inList: true, inDetail: true, inEdit: true },
         ccAddressList: { type: 'varchar', maxLength: 4000, label: 'Cc', inDetail: true, inEdit: true },
@@ -321,6 +325,28 @@ export const coreMetadata: MetadataSeedEntry[] = [
       },
       relations: emailRelations,
       indexes: [{ name: 'idx_email_message_id', fields: ['messageId'] }, { name: 'idx_email_thread_id', fields: ['threadId'] }],
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'EmailTemplate',
+    data: {
+      name: 'EmailTemplate',
+      label: 'Email Template',
+      isEntity: true,
+      fields: {
+        ...standardFields,
+        name: { ...standardFields.name, label: 'Name', required: true },
+        subject: { type: 'varchar', maxLength: 998, required: true, inList: true, inDetail: true, inEdit: true, audited: true },
+        body: { type: 'text', label: 'Body', inDetail: true, inEdit: true },
+        bodyHtml: { type: 'text', label: 'Html Body', inDetail: true, inEdit: true },
+        /** Comma-separated categories for the picker; free text, no enum. */
+        category: { type: 'varchar', maxLength: 100, inList: true, inDetail: true, inEdit: true },
+      },
+      relations: {},
+      indexes: [],
       record: { displayField: 'name', removable: true },
       client: {},
     },

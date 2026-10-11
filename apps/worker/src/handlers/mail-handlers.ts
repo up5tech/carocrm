@@ -10,10 +10,11 @@
 import { randomUUID } from 'node:crypto';
 
 import type { Logger } from '@carocrm/core/logger/index.js';
+import { decryptSecret } from '@carocrm/core/utils/crypto.js';
 import type { FileStorage } from '@carocrm/files';
 import type { JobContext, JobHandler, JobRegistry } from '@carocrm/jobs';
 import type { MailAttachment, MailMessage, MailTransport, SendResult } from '@carocrm/mail';
-import { classifySmtpError, emailRecordToMessageInput, sentRecordPatch } from '@carocrm/mail';
+import { classifySmtpError, createAccountSmtpTransport, emailRecordToMessageInput, sentRecordPatch } from '@carocrm/mail';
 
 import type { Queryable } from '../db.js';
 
@@ -25,6 +26,8 @@ export interface MailJobDeps {
   transport: MailTransport;
   /** Attachment bytes live in the same storage the API writes to; without it, attachments fail. */
   storage?: FileStorage;
+  /** ENCRYPTION_KEY: decrypts per-account credentials (PLAN §28.3); empty disables account sending. */
+  encryptionKey?: string;
 }
 
 export const EMAIL_RECORD_SQL = `
@@ -51,6 +54,16 @@ export const EMAIL_ATTACHMENTS_SQL = `
    WHERE parent_type = 'Email'
      AND parent_id = $1
    ORDER BY created_at
+`;
+
+/** One sending mailbox row; the password column is the AES-GCM payload, decrypted below. */
+export const EMAIL_ACCOUNT_SQL = `
+  SELECT id, name, email_address, from_name, smtp_host, smtp_port, smtp_security,
+         smtp_username, smtp_password_encrypted, signature
+    FROM email_accounts
+   WHERE id = $1
+     AND is_active = TRUE
+     AND is_deleted = FALSE
 `;
 
 /**
@@ -99,6 +112,37 @@ function emailIdOf(data: Record<string, unknown> | undefined): string | null {
   const value = data?.['emailId'] ?? data?.['id'];
   if (typeof value !== 'string' || value.trim() === '') return null;
   return value.trim();
+}
+
+/**
+ * The transport for one send: the job's `emailAccountId` (or the record's own), when present,
+ * becomes an SMTP transport built from that mailbox's stored settings; otherwise the worker's
+ * configured transport is used. The credential is decrypted here, in memory only (§28.3).
+ */
+async function resolveTransport(
+  deps: MailJobDeps,
+  accountId: string | null,
+): Promise<{ transport: MailTransport; fallbackFrom: string | null }> {
+  if (accountId === null || deps.encryptionKey === undefined || deps.encryptionKey.trim() === '') {
+    return { transport: deps.transport, fallbackFrom: deps.transport.info.fromAddress };
+  }
+  const found = await deps.db.query(EMAIL_ACCOUNT_SQL, [accountId]);
+  const row = (found.rows ?? [])[0];
+  if (row === undefined) {
+    deps.log.warn({ accountId }, 'email account is missing or inactive; falling back to the default transport');
+    return { transport: deps.transport, fallbackFrom: deps.transport.info.fromAddress };
+  }
+  const encrypted = column(row, 'smtp_password_encrypted');
+  const transport = createAccountSmtpTransport({
+    emailAddress: column(row, 'email_address') ?? '',
+    fromName: column(row, 'from_name'),
+    smtpHost: column(row, 'smtp_host') ?? '',
+    smtpPort: Number(column(row, 'smtp_port') ?? 587),
+    smtpSecurity: column(row, 'smtp_security') ?? 'starttls',
+    smtpUsername: column(row, 'smtp_username'),
+    smtpPassword: encrypted === null ? null : decryptSecret(encrypted, deps.encryptionKey),
+  });
+  return { transport, fallbackFrom: column(row, 'email_address') };
 }
 
 /** Which header list an address came from, for the ledger. */
@@ -202,15 +246,21 @@ export function sendEmailJob(deps: MailJobDeps): JobHandler {
       return { status: 'cancelled', message: 'Cancelled before the transport was called.' };
     }
 
-    context.progress(10, `sending via ${deps.transport.name}`);
+    // Phase 11: an account-scoped send builds that mailbox's SMTP transport; otherwise the
+    // worker's own configured transport is used (PLAN §28.1).
+    const jobAccountId = typeof context.data?.['emailAccountId'] === 'string' ? (context.data['emailAccountId'] as string) : null;
+    const recordAccountId = column(attrs, 'emailAccountId');
+    const { transport, fallbackFrom } = await resolveTransport(deps, jobAccountId ?? recordAccountId);
+
+    context.progress(10, `sending via ${transport.name}`);
     await patchRecord(deps, emailId, { status: 'Sending' });
 
     let message: MailMessage;
     try {
-      message = deps.transport.prepare(
+      message = transport.prepare(
         emailRecordToMessageInput(
           { id: emailId, data: attrs },
-          { attachments: await loadAttachments(deps, emailId), fallbackFrom: deps.transport.info.fromAddress },
+          { attachments: await loadAttachments(deps, emailId), fallbackFrom },
         ),
       );
     } catch (error: unknown) {
@@ -225,7 +275,7 @@ export function sendEmailJob(deps: MailJobDeps): JobHandler {
 
     let result: SendResult;
     try {
-      result = await deps.transport.send(message);
+      result = await transport.send(message);
     } catch (error: unknown) {
       const reason = error instanceof Error ? error.message : String(error);
       if (classifySmtpError(error) === 'transient') {
@@ -234,7 +284,7 @@ export function sendEmailJob(deps: MailJobDeps): JobHandler {
         deps.log.warn({ emailId, error: reason }, 'smtp attempt failed, retrying');
         throw error;
       }
-      await writeDeliveries(deps, emailId, types, deps.transport.name, null,
+      await writeDeliveries(deps, emailId, types, transport.name, null,
         addresses.map((address) => ({ address, status: 'failed', reason })), null);
       await patchRecord(deps, emailId, { ...sentRecordPatch(message), status: 'Failed', deliveryError: reason });
       deps.log.error({ emailId, error: reason }, 'email delivery failed permanently');

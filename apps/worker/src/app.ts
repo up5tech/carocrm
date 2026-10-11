@@ -66,6 +66,8 @@ export class WorkerApplication {
       log: this.log,
       transport: createMailTransportForWorker(this.config),
       storage,
+      // Per-account sends decrypt stored credentials with this key (PLAN §28.3).
+      encryptionKey: this.config.encryptionKey,
     });
 
     const outbox = createKernelOutboxSetup(this.log);

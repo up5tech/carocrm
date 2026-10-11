@@ -52,6 +52,11 @@ const WorkerConfigSchema = z.object({
    */
   mailTransport: z.enum(['none', 'memory', 'smtp', 'relay']).default('none'),
   /**
+   * 32-byte hex key that decrypts email-account credentials at send time (PLAN §28.3); must match
+   * the API's ENCRYPTION_KEY. Empty means account-based sending is unavailable in this worker.
+   */
+  encryptionKey: z.string().default(''),
+  /**
    * Auto-stop after N ms (0 = run forever). Lets smoke tests and one-shot container runs get
    * a full graceful shutdown without sending signals.
    */
@@ -124,6 +129,7 @@ export function buildWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerC
     s3ForcePathStyle: env.S3_FORCE_PATH_STYLE,
     uploadExpiryHours: env.WORKER_UPLOAD_EXPIRY_HOURS,
     mailTransport: env.MAIL_TRANSPORT,
+    encryptionKey: env.ENCRYPTION_KEY,
     runForMs: env.WORKER_RUN_MS,
   });
 }
