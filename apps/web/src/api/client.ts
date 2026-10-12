@@ -24,6 +24,7 @@ import type {
   ReportDefinitionShape,
   ReportRow,
   ReportRunResult,
+  ReportScheduleRow,
   Role,
   WorkflowActionSpec,
   WorkflowDefinitionShape,
@@ -490,6 +491,12 @@ export const api = {
   runReport: (id: string) =>
     request<{ report: ReportRow; result: ReportRunResult }>(`/Report/${encodeURIComponent(id)}/action/run`, { method: 'POST', body: '{}' }),
   exportReport: (id: string) => request<ReportCsv>(`/Report/${encodeURIComponent(id)}/action/export`),
+  reportSchedule: (id: string) => request<ReportScheduleRow | null>(`/Report/${encodeURIComponent(id)}/schedule`),
+  saveReportSchedule: (id: string, input: { cron: string; enabled?: boolean }) =>
+    request<ReportScheduleRow>(`/Report/${encodeURIComponent(id)}/schedule`, { method: 'POST', body: JSON.stringify(input) }),
+  setReportScheduleEnabled: (id: string, enabled: boolean) =>
+    request<ReportScheduleRow>(`/Report/${encodeURIComponent(id)}/schedule/${enabled ? 'enable' : 'disable'}`, { method: 'POST', body: '{}' }),
+  deleteReportSchedule: (id: string) => request<{ reportId: string; deleted: true }>(`/Report/${encodeURIComponent(id)}/schedule`, { method: 'DELETE' }),
 
   // Phase 14 — extension administration. `/Extension` is admin-only; `/Extension/frontend` is
   // readable by any signed-in user and already filters admin-only entries server-side.

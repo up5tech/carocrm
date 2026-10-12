@@ -51,6 +51,10 @@ const WorkerConfigSchema = z.object({
    * `@carocrm/mail` from the environment.
    */
   mailTransport: z.enum(['none', 'memory', 'smtp', 'relay']).default('none'),
+  /** Internal API base URL used only for owner-authorized scheduled report execution. */
+  apiBaseUrl: z.string().url().default('http://127.0.0.1:3030'),
+  /** Shared with the API; an empty key disables report delivery jobs. */
+  reportWorkerSecret: z.string().default(''),
   /**
    * 32-byte hex key that decrypts email-account credentials at send time (PLAN §28.3); must match
    * the API's ENCRYPTION_KEY. Empty means account-based sending is unavailable in this worker.
@@ -133,6 +137,8 @@ export function buildWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerC
     s3ForcePathStyle: env.S3_FORCE_PATH_STYLE,
     uploadExpiryHours: env.WORKER_UPLOAD_EXPIRY_HOURS,
     mailTransport: env.MAIL_TRANSPORT,
+    apiBaseUrl: env.REPORT_WORKER_API_URL,
+    reportWorkerSecret: env.REPORT_WORKER_SECRET,
     encryptionKey: env.ENCRYPTION_KEY,
     runForMs: env.WORKER_RUN_MS,
     extensionsDir: env.EXTENSIONS_DIR,

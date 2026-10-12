@@ -178,6 +178,12 @@ export class JobsService {
     return toScheduleView(row);
   }
 
+  async removeSchedule(id: string): Promise<void> {
+    const scheduleId = requireScheduleId(id);
+    const removed = await this.database.db.deleteFrom('scheduled_jobs').where('id', '=', scheduleId).returning('id').executeTakeFirst();
+    if (!removed) throw new NotFoundError(`Schedule "${scheduleId}" does not exist.`);
+  }
+
   /** Runs a schedule immediately, outside its cron boundary (PLAN §24 "one-off" of a scheduled job). */
   async runScheduleNow(id: string): Promise<JobView> {
     const scheduleId = requireScheduleId(id);

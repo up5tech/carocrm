@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const REPORT_KINDS = ['list', 'summary', 'grouped', 'chart', 'kpi'] as const;
+export const REPORT_KINDS = ['list', 'summary', 'grouped', 'chart', 'matrix', 'kpi'] as const;
 export const REPORT_AGGREGATIONS = ['count', 'sum', 'avg', 'min', 'max'] as const;
 export const REPORT_CALCULATIONS = ['add', 'subtract', 'multiply', 'divide', 'percentOf'] as const;
 export const REPORT_DATE_GRAINS = ['day', 'month', 'year'] as const;
@@ -11,7 +11,7 @@ export const MAX_REPORT_GROUPS = 100;
 export const MAX_REPORT_SCAN = 2_000;
 export const REPORT_PAGE_SIZE = 500;
 
-const fieldName = z.string().trim().min(1).max(64).regex(/^[A-Za-z][A-Za-z0-9_]*$/);
+const fieldName = z.string().trim().min(1).max(130).regex(/^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)?$/);
 const metricName = z.string().trim().min(1).max(32).regex(/^[A-Za-z][A-Za-z0-9_]*$/);
 
 const MetricSchema = z.object({
@@ -34,13 +34,16 @@ const CalculationSchema = z.object({
   right: metricName,
 }).strict();
 
+const DimensionSchema = z.object({ field: fieldName, grain: z.enum(REPORT_DATE_GRAINS).optional() }).strict();
+
 export const ReportDefinitionSchema = z.object({
   version: z.literal(1).default(1),
   entityType: z.string().trim().min(2).max(50).regex(/^[A-Z][A-Za-z0-9]{1,49}$/),
   kind: z.enum(REPORT_KINDS),
   filters: z.array(z.unknown()).max(MAX_REPORT_FILTERS).default([]),
   columns: z.array(fieldName).max(MAX_REPORT_COLUMNS).default([]),
-  groupBy: z.object({ field: fieldName, grain: z.enum(REPORT_DATE_GRAINS).optional() }).strict().optional(),
+  groupBy: DimensionSchema.optional(),
+  matrix: z.object({ rows: DimensionSchema, columns: DimensionSchema }).strict().optional(),
   metrics: z.array(MetricSchema).max(MAX_REPORT_METRICS).default([]),
   calculatedMetrics: z.array(CalculationSchema).max(MAX_REPORT_METRICS).default([]),
 }).strict().superRefine((definition, context) => {
@@ -52,6 +55,15 @@ export const ReportDefinitionSchema = z.object({
   }
   if (definition.kind === 'list' && (definition.metrics.length > 0 || definition.calculatedMetrics.length > 0)) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: 'List reports cannot declare metrics.', path: ['metrics'] });
+  }
+  if (definition.kind === 'matrix' && definition.matrix === undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Matrix reports need row and column dimensions.', path: ['matrix'] });
+  }
+  if (definition.kind !== 'matrix' && definition.matrix !== undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Only matrix reports may declare two dimensions.', path: ['matrix'] });
+  }
+  if (definition.kind === 'matrix' && definition.groupBy !== undefined) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Matrix reports use row and column dimensions instead of groupBy.', path: ['groupBy'] });
   }
   if ((definition.kind === 'summary' || definition.kind === 'kpi') && definition.groupBy !== undefined) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: `${definition.kind} reports cannot group rows.`, path: ['groupBy'] });
@@ -123,13 +135,21 @@ export function validateReportDefinition(
   };
 
   for (const name of definition.columns) requireField(name, 'report columns');
-  if (definition.groupBy !== undefined) {
-    const type = requireField(definition.groupBy.field, 'grouping');
-    if ((type === 'date' || type === 'datetime') && definition.groupBy.grain === undefined) {
-      throw new Error(`Date grouping field "${definition.groupBy.field}" needs a day, month or year grain.`);
+  const validateDimension = (dimension: z.infer<typeof DimensionSchema>): void => {
+    const type = requireField(dimension.field, 'grouping');
+    if ((type === 'date' || type === 'datetime') && dimension.grain === undefined) {
+      throw new Error(`Date grouping field "${dimension.field}" needs a day, month or year grain.`);
     }
-    if (type !== 'date' && type !== 'datetime' && definition.groupBy.grain !== undefined) {
-      throw new Error(`A date grain can only be used with a date field ("${definition.groupBy.field}").`);
+    if (type !== 'date' && type !== 'datetime' && dimension.grain !== undefined) {
+      throw new Error(`A date grain can only be used with a date field ("${dimension.field}").`);
+    }
+  };
+  if (definition.groupBy !== undefined) validateDimension(definition.groupBy);
+  if (definition.matrix !== undefined) {
+    validateDimension(definition.matrix.rows);
+    validateDimension(definition.matrix.columns);
+    if (definition.matrix.rows.field === definition.matrix.columns.field && definition.matrix.rows.grain === definition.matrix.columns.grain) {
+      throw new Error('Matrix row and column dimensions must be different.');
     }
   }
   for (const metric of definition.metrics) {
@@ -146,16 +166,31 @@ export interface ReportGroup {
   readonly metrics: Readonly<Record<string, number | null>>;
 }
 
+export interface ReportMatrixCell {
+  readonly rowKey: string;
+  readonly columnKey: string;
+  readonly count: number;
+  readonly metrics: Readonly<Record<string, number | null>>;
+}
+
 export interface ReportResult {
   readonly entityType: string;
   readonly kind: ReportKind;
-  readonly scanned: number;
+  /** Null when the database performed an exact aggregate without materializing source rows. */
+  readonly scanned: number | null;
   readonly total: number;
   readonly truncated: boolean;
   readonly columns?: readonly string[];
   readonly rows?: readonly Readonly<Record<string, unknown>>[];
   readonly metrics?: Readonly<Record<string, number | null>>;
   readonly groups?: readonly ReportGroup[];
+  readonly matrix?: { readonly rowField: string; readonly columnField: string; readonly cells: readonly ReportMatrixCell[] };
+}
+
+export interface AggregateReportGroup {
+  readonly keys: readonly string[];
+  readonly count: number;
+  readonly metrics: Readonly<Record<string, number | null>>;
 }
 
 /** Apply saved, validated metrics to the bounded rows returned through EntityCrudService. */
@@ -222,12 +257,48 @@ function calculateMetrics(definition: ReportDefinition, rows: readonly Readonly<
     else if (metric.operation === 'min') values[metric.name] = samples.length === 0 ? null : Math.min(...samples);
     else values[metric.name] = samples.length === 0 ? null : Math.max(...samples);
   }
-  for (const calculation of definition.calculatedMetrics) {
-    const left = values[calculation.left];
-    const right = values[calculation.right];
-    values[calculation.name] = calculate(calculation.operation, left, right);
+  return addCalculatedMetrics(definition, values);
+}
+
+/** Format exact database aggregation output; the source rows were never loaded into application memory. */
+export function executeAggregateReport(
+  definition: ReportDefinition,
+  total: number,
+  aggregates: readonly AggregateReportGroup[],
+): ReportResult {
+  if (definition.kind === 'list') throw new Error('List reports cannot use aggregate execution.');
+  if (aggregates.length > MAX_REPORT_GROUPS) throw new Error(`Report exceeds the ${String(MAX_REPORT_GROUPS)}-group result limit.`);
+  const base = { entityType: definition.entityType, kind: definition.kind, scanned: null, total, truncated: false } as const;
+  if (definition.kind === 'summary' || definition.kind === 'kpi') {
+    const metrics = addCalculatedMetrics(definition, { ...(aggregates[0]?.metrics ?? {}) });
+    return { ...base, metrics };
   }
-  return values;
+  if (definition.kind === 'matrix') {
+    const matrix = definition.matrix;
+    if (matrix === undefined) throw new Error('Matrix definition is missing dimensions.');
+    const cells = aggregates.map((aggregate) => ({
+      rowKey: aggregate.keys[0] ?? '(empty)',
+      columnKey: aggregate.keys[1] ?? '(empty)',
+      count: aggregate.count,
+      metrics: addCalculatedMetrics(definition, { ...aggregate.metrics }),
+    }));
+    return { ...base, matrix: { rowField: matrix.rows.field, columnField: matrix.columns.field, cells } };
+  }
+  const dimension = definition.groupBy;
+  if (dimension === undefined) throw new Error('Grouped report definition is missing its dimension.');
+  const groups = aggregates.map((aggregate) => ({
+    key: aggregate.keys[0] ?? '(empty)',
+    count: aggregate.count,
+    metrics: addCalculatedMetrics(definition, { ...aggregate.metrics }),
+  }));
+  return { ...base, groups };
+}
+
+function addCalculatedMetrics(definition: ReportDefinition, base: Record<string, number | null>): Record<string, number | null> {
+  for (const calculation of definition.calculatedMetrics) {
+    base[calculation.name] = calculate(calculation.operation, base[calculation.left], base[calculation.right]);
+  }
+  return base;
 }
 
 function calculate(operation: ReportCalculation, left: number | null | undefined, right: number | null | undefined): number | null {

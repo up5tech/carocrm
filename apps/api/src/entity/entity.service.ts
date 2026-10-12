@@ -19,7 +19,7 @@ import { HookRegistry } from '../hooks/hook.registry.js';
 import { RecordLogicService } from '../logic/record-logic.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
-import type { PostgresRecordStore, StoreFindQuery } from './entity-record.store.js';
+import type { PostgresRecordStore, StoreFindQuery, StoreReportAggregateResult, StoreReportRelation } from './entity-record.store.js';
 import { ENTITY_STORE } from './entity-record.store.js';
 
 /** PLAN §16.2 list envelope always carries `total`; `?total=false` opts out (cheap lists). */
@@ -39,6 +39,13 @@ export interface ListQuery {
   maxSize?: unknown;
   limit?: unknown;
   total?: unknown;
+}
+
+export interface EntityAggregateQuery {
+  where?: unknown;
+  dimensions: { field: string; fieldType: string; grain?: 'day' | 'month' | 'year'; relation?: StoreReportRelation }[];
+  metrics: { name: string; operation: 'count' | 'sum' | 'avg' | 'min' | 'max'; field?: string; fieldType?: string; relation?: StoreReportRelation }[];
+  maxGroups: number;
 }
 
 export interface ListEnvelope {
@@ -99,6 +106,21 @@ export class EntityCrudService {
       count: result.count,
       ...(countTotal ? { total: result.total } : {}),
     };
+  }
+
+  /** Aggregate through the same validated Query Engine and record ACL predicate as list reads. */
+  async aggregate(entity: string, query: EntityAggregateQuery): Promise<StoreReportAggregateResult> {
+    this.assertEntity(entity);
+    await this.acl.assertAccess(entity, 'read');
+    const translated = this.translate(entity, { where: query.where });
+    const acl = await this.acl.recordPredicate(entity, 'read');
+    return this.store.aggregateReport(entity, {
+      translated,
+      acl,
+      dimensions: query.dimensions,
+      metrics: query.metrics,
+      maxGroups: query.maxGroups,
+    });
   }
 
   async get(entity: string, id: string, select?: string): Promise<Record<string, unknown>> {

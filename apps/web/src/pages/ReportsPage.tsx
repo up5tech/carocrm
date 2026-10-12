@@ -4,7 +4,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '../api/client.js';
-import type { ReportDefinitionShape, ReportKind, ReportRow, ReportRunResult } from '../api/types.js';
+import type { ReportDefinitionShape, ReportKind, ReportRow, ReportRunResult, ReportScheduleRow } from '../api/types.js';
 import { fieldLabel, navEntities, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
 
@@ -19,6 +19,7 @@ const KINDS: { value: ReportKind; label: string }[] = [
   { value: 'summary', label: 'Summary' },
   { value: 'grouped', label: 'Grouped' },
   { value: 'chart', label: 'Chart' },
+  { value: 'matrix', label: 'Matrix / pivot' },
   { value: 'kpi', label: 'KPI' },
 ];
 const SCALAR_TYPES = new Set(['varchar', 'text', 'email', 'phone', 'url', 'enum', 'multiEnum', 'bool', 'int', 'float', 'decimal', 'currency', 'date', 'datetime']);
@@ -35,6 +36,7 @@ export function ReportsPage() {
   const [kind, setKind] = useState<ReportKind>('list');
   const [columns, setColumns] = useState<string[]>([]);
   const [groupField, setGroupField] = useState('');
+  const [matrixColumnField, setMatrixColumnField] = useState('');
   const [grain, setGrain] = useState<'day' | 'month' | 'year'>('month');
   const [metricOperation, setMetricOperation] = useState<'count' | 'sum' | 'avg' | 'min' | 'max'>('count');
   const [metricField, setMetricField] = useState('');
@@ -42,19 +44,31 @@ export function ReportsPage() {
   const [filters, setFilters] = useState<FilterRow[]>([]);
   const [visibility, setVisibility] = useState<'private' | 'shared'>('private');
   const [result, setResult] = useState<ReportRunResult | null>(null);
+  const [schedule, setSchedule] = useState<ReportScheduleRow | null>(null);
+  const [scheduleCron, setScheduleCron] = useState('0 8 * * 1');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const entities = useMemo(() => navEntities(metadata.data, principal?.type), [metadata.data, principal?.type]);
   const selectedEntity = entities.find((item) => item.name === entityType);
-  const fields = useMemo(
-    () => Object.entries(selectedEntity?.fields ?? {}).filter(([, field]) => SCALAR_TYPES.has(field.type)).map(([field, definition]) => ({
-      value: field,
-      label: fieldLabel(field, definition, metadata.data),
-      type: definition.type,
-    })),
-    [metadata.data, selectedEntity],
-  );
+  const activeReport = reports.find((item) => item.id === reportId);
+  const canManageReport = activeReport !== undefined && (principal?.type === 'admin' || activeReport.userId === principal?.id);
+  const fields = useMemo(() => {
+    const direct = Object.entries(selectedEntity?.fields ?? {})
+      .filter(([, field]) => SCALAR_TYPES.has(field.type))
+      .map(([field, definition]) => ({ value: field, label: fieldLabel(field, definition, metadata.data), type: definition.type }));
+    const related = Object.entries(selectedEntity?.fields ?? {})
+      .filter(([, field]) => ['link', 'linkOne', 'foreign'].includes(field.type) && field.entityKey !== undefined)
+      .flatMap(([linkField, linkDefinition]) => Object.entries(metadata.data?.[linkDefinition.entityKey ?? '']?.fields ?? {})
+        .filter(([, field]) => SCALAR_TYPES.has(field.type))
+        .map(([targetField, field]) => ({
+          value: `${linkField}.${targetField}`,
+          label: `${fieldLabel(linkField, linkDefinition, metadata.data)} · ${fieldLabel(targetField, field, metadata.data)}`,
+          type: field.type,
+        })));
+    return [...direct, ...related];
+  }, [metadata.data, selectedEntity]);
+  const directFields = useMemo(() => fields.filter((field) => !field.value.includes('.')), [fields]);
   const fieldByName = useMemo(() => new Map(fields.map((field) => [field.value, field])), [fields]);
   const numericFields = fields.filter((field) => NUMERIC_TYPES.has(field.type));
   const groupFieldType = fieldByName.get(groupField)?.type;
@@ -84,12 +98,15 @@ export function ReportsPage() {
     setKind('list');
     setColumns([]);
     setGroupField('');
+    setMatrixColumnField('');
     setMetricOperation('count');
     setMetricField('');
     setMetricName('records');
     setFilters([]);
     setVisibility('private');
     setResult(null);
+    setSchedule(null);
+    setScheduleCron('0 8 * * 1');
   }, []);
 
   const selectReport = useCallback((report: ReportRow) => {
@@ -99,8 +116,9 @@ export function ReportsPage() {
     setEntityType(definition.entityType);
     setKind(definition.kind);
     setColumns(definition.columns ?? []);
-    setGroupField(definition.groupBy?.field ?? '');
-    setGrain(definition.groupBy?.grain ?? 'month');
+    setGroupField(definition.groupBy?.field ?? definition.matrix?.rows.field ?? '');
+    setMatrixColumnField(definition.matrix?.columns.field ?? '');
+    setGrain(definition.groupBy?.grain ?? definition.matrix?.rows.grain ?? definition.matrix?.columns.grain ?? 'month');
     const metric = definition.metrics[0];
     setMetricOperation(metric?.operation ?? 'count');
     setMetricField(metric?.field ?? '');
@@ -114,7 +132,14 @@ export function ReportsPage() {
     }));
     setVisibility(report.visibility);
     setResult(null);
-  }, []);
+    setSchedule(null);
+    void api.reportSchedule(report.id).then((current) => {
+      setSchedule(current);
+      if (current) setScheduleCron(current.cron);
+    }).catch((error: unknown) => {
+      void message.error(error instanceof Error ? error.message : 'Failed to load report schedule.');
+    });
+  }, [message]);
 
   const definition = useCallback((): ReportDefinitionShape => {
     const next: ReportDefinitionShape = {
@@ -131,8 +156,15 @@ export function ReportsPage() {
         ...((groupFieldType === 'date' || groupFieldType === 'datetime') ? { grain } : {}),
       };
     }
+    if (kind === 'matrix' && groupField !== '' && matrixColumnField !== '') {
+      const columnFieldType = fieldByName.get(matrixColumnField)?.type;
+      next.matrix = {
+        rows: { field: groupField, ...((groupFieldType === 'date' || groupFieldType === 'datetime') ? { grain } : {}) },
+        columns: { field: matrixColumnField, ...((columnFieldType === 'date' || columnFieldType === 'datetime') ? { grain } : {}) },
+      };
+    }
     return next;
-  }, [columns, entityType, filters, grain, groupField, groupFieldType, kind, metricField, metricName, metricOperation]);
+  }, [columns, entityType, fieldByName, filters, grain, groupField, groupFieldType, kind, matrixColumnField, metricField, metricName, metricOperation]);
 
   const runPreview = useCallback(async () => {
     setLoading(true);
@@ -193,13 +225,52 @@ export function ReportsPage() {
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = file.filename;
+      document.body.appendChild(anchor);
       anchor.click();
-      URL.revokeObjectURL(url);
+      anchor.remove();
+      // Revoking synchronously can cancel the download in Chromium; release later.
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
       if (file.truncated) void message.warning(`Export contains a bounded partial result (${String(file.rows)} rows/groups).`);
     } catch (error) {
       void message.error(error instanceof Error ? error.message : 'CSV export failed.');
     }
   }, [message, reportId]);
+
+  const saveSchedule = useCallback(async () => {
+    if (reportId === null) {
+      void message.warning('Save the report before scheduling delivery.');
+      return;
+    }
+    try {
+      const updated = await api.saveReportSchedule(reportId, { cron: scheduleCron.trim(), enabled: true });
+      setSchedule(updated);
+      void message.success('Scheduled delivery saved. It sends only to the report owner.');
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : 'Schedule could not be saved.');
+    }
+  }, [message, reportId, scheduleCron]);
+
+  const toggleSchedule = useCallback(async () => {
+    if (reportId === null || schedule === null) return;
+    try {
+      const updated = await api.setReportScheduleEnabled(reportId, !schedule.enabled);
+      setSchedule(updated);
+      void message.success(updated.enabled ? 'Scheduled delivery enabled.' : 'Scheduled delivery paused.');
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : 'Schedule could not be updated.');
+    }
+  }, [message, reportId, schedule]);
+
+  const removeSchedule = useCallback(async () => {
+    if (reportId === null || schedule === null) return;
+    try {
+      await api.deleteReportSchedule(reportId);
+      setSchedule(null);
+      void message.success('Scheduled delivery removed.');
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : 'Schedule could not be removed.');
+    }
+  }, [message, reportId, schedule]);
 
   const remove = useCallback(async () => {
     if (reportId === null) return;
@@ -223,6 +294,15 @@ export function ReportsPage() {
         ellipsis: true,
       }));
     }
+    if (result.matrix !== undefined) {
+      const metricNames = Object.keys(result.matrix.cells[0]?.metrics ?? {});
+      return [
+        { title: fieldLabel(result.matrix.rowField, selectedEntity?.fields[result.matrix.rowField], metadata.data), dataIndex: 'rowKey', key: 'rowKey' },
+        { title: fieldLabel(result.matrix.columnField, selectedEntity?.fields[result.matrix.columnField], metadata.data), dataIndex: 'columnKey', key: 'columnKey' },
+        { title: 'Records', dataIndex: 'count', key: 'count' },
+        ...metricNames.map((metric) => ({ title: metric, dataIndex: ['metrics', metric], key: metric })),
+      ] as ColumnsType<Record<string, unknown>>;
+    }
     if (result.groups !== undefined) {
       const metricNames = Object.keys(result.groups[0]?.metrics ?? result.metrics ?? {});
       return [
@@ -234,7 +314,7 @@ export function ReportsPage() {
     return [];
   }, [groupField, metadata.data, result, selectedEntity]);
 
-  const tableData = result?.rows ?? result?.groups?.map((group) => ({ key: group.key, count: group.count, metrics: group.metrics })) ?? [];
+  const tableData = result?.rows ?? result?.groups?.map((group) => ({ key: group.key, count: group.count, metrics: group.metrics })) ?? result?.matrix?.cells.map((cell) => ({ ...cell, key: `${cell.rowKey}::${cell.columnKey}` })) ?? [];
   const chartValues = result?.groups ?? [];
   const chartMetric = Object.keys(chartValues[0]?.metrics ?? {})[0];
   const chartMax = chartMetric === undefined ? 0 : Math.max(1, ...chartValues.map((group) => Math.abs(group.metrics[chartMetric] ?? 0)));
@@ -244,13 +324,13 @@ export function ReportsPage() {
       <div className="lizant-page-head">
         <div>
           <h1 className="lizant-page-title">Reports</h1>
-          <p className="lizant-page-sub">Build saved list, summary, grouped, chart and KPI reports without SQL.</p>
+          <p className="lizant-page-sub">Build saved list, summary, grouped, chart, matrix and KPI reports without SQL.</p>
         </div>
         <Space wrap>
           <Button icon={<PlusOutlined />} onClick={resetBuilder}>New report</Button>
           <Button icon={<PlayCircleOutlined />} loading={loading} onClick={() => void runSaved()}>Run / preview</Button>
           <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => void save()}>Save</Button>
-          <Button icon={<DownloadOutlined />} disabled={reportId === null} onClick={() => void exportCsv()}>CSV</Button>
+          <Button icon={<DownloadOutlined />} aria-label="Export CSV" disabled={reportId === null} onClick={() => void exportCsv()}>CSV</Button>
           {reportId !== null ? (
             <Popconfirm title="Delete this report?" onConfirm={() => void remove()} okText="Delete">
               <Button danger icon={<DeleteOutlined />} aria-label="Delete report" />
@@ -281,7 +361,7 @@ export function ReportsPage() {
               </Col>
               <Col xs={24} md={6}>
                 <label htmlFor="report-entity">Entity</label>
-                <Select id="report-entity" style={{ width: '100%' }} value={entityType || undefined} options={entities.map((entity) => ({ value: entity.name, label: entity.label }))} onChange={(value) => { setEntityType(value ?? ''); setColumns([]); setGroupField(''); setFilters([]); }} showSearch optionFilterProp="label" />
+                <Select id="report-entity" style={{ width: '100%' }} value={entityType || undefined} options={entities.map((entity) => ({ value: entity.name, label: entity.label }))} onChange={(value) => { setEntityType(value ?? ''); setColumns([]); setGroupField(''); setMatrixColumnField(''); setFilters([]); }} showSearch optionFilterProp="label" />
               </Col>
               <Col xs={24} md={6}>
                 <label htmlFor="report-kind">Report type</label>
@@ -291,13 +371,19 @@ export function ReportsPage() {
                 <label htmlFor="report-columns">Columns (list reports)</label>
                 <Select id="report-columns" mode="multiple" style={{ width: '100%' }} value={columns} options={fields.map(({ value, label }) => ({ value, label }))} onChange={setColumns} disabled={kind !== 'list'} placeholder="Choose fields to show" />
               </Col>
-              {(kind === 'grouped' || kind === 'chart') ? (
+              {(kind === 'grouped' || kind === 'chart' || kind === 'matrix') ? (
                 <>
-                  <Col xs={24} md={12}>
-                    <label htmlFor="report-group">Group by</label>
+                  <Col xs={24} md={kind === 'matrix' ? 12 : 24}>
+                    <label htmlFor="report-group">{kind === 'matrix' ? 'Row dimension' : 'Group by'}</label>
                     <Select id="report-group" style={{ width: '100%' }} value={groupField || null} options={fields.map(({ value, label }) => ({ value, label }))} onChange={(value) => setGroupField(value ?? '')} showSearch optionFilterProp="label" placeholder="Choose a dimension" />
                   </Col>
-                  {(groupFieldType === 'date' || groupFieldType === 'datetime') ? (
+                  {kind === 'matrix' ? (
+                    <Col xs={24} md={12}>
+                      <label htmlFor="report-matrix-column">Column dimension</label>
+                      <Select id="report-matrix-column" style={{ width: '100%' }} value={matrixColumnField || null} options={fields.map(({ value, label }) => ({ value, label }))} onChange={(value) => setMatrixColumnField(value ?? '')} showSearch optionFilterProp="label" placeholder="Choose a different dimension" />
+                    </Col>
+                  ) : null}
+                  {(groupFieldType === 'date' || groupFieldType === 'datetime' || (kind === 'matrix' && ['date', 'datetime'].includes(fieldByName.get(matrixColumnField)?.type ?? ''))) ? (
                     <Col xs={24} md={12}>
                       <label htmlFor="report-grain">Date bucket (UTC)</label>
                       <Select id="report-grain" style={{ width: '100%' }} value={grain} options={[{ value: 'day', label: 'Day' }, { value: 'month', label: 'Month' }, { value: 'year', label: 'Year' }]} onChange={setGrain} />
@@ -329,7 +415,7 @@ export function ReportsPage() {
                 <Space direction="vertical" style={{ width: '100%', marginTop: 8 }}>
                   {filters.map((filter, index) => (
                     <Space key={`filter-${String(index)}`} wrap>
-                      <Select aria-label={`Filter field ${String(index + 1)}`} style={{ minWidth: 180 }} value={filter.field || undefined} options={fields.map(({ value, label }) => ({ value, label }))} onChange={(value) => setFilters((current) => current.map((item, i) => i === index ? { ...item, field: value ?? '' } : item))} placeholder="Field" />
+                      <Select aria-label={`Filter field ${String(index + 1)}`} style={{ minWidth: 180 }} value={filter.field || undefined} options={directFields.map(({ value, label }) => ({ value, label }))} onChange={(value) => setFilters((current) => current.map((item, i) => i === index ? { ...item, field: value ?? '' } : item))} placeholder="Field" />
                       <Select aria-label={`Filter operator ${String(index + 1)}`} style={{ width: 150 }} value={filter.operator} options={[{ value: 'equals', label: 'Equals' }, { value: 'notEquals', label: 'Does not equal' }, { value: 'contains', label: 'Contains' }, { value: 'greaterThan', label: 'Greater than' }, { value: 'lessThan', label: 'Less than' }, { value: 'isNull', label: 'Is empty' }, { value: 'isNotNull', label: 'Is not empty' }]} onChange={(value) => setFilters((current) => current.map((item, i) => i === index ? { ...item, operator: value } : item))} />
                       <Input aria-label={`Filter value ${String(index + 1)}`} style={{ width: 180 }} value={filter.value} disabled={filter.operator === 'isNull' || filter.operator === 'isNotNull'} onChange={(event) => setFilters((current) => current.map((item, i) => i === index ? { ...item, value: event.target.value } : item))} placeholder="Value" />
                       <Button danger type="text" icon={<DeleteOutlined />} aria-label={`Remove filter ${String(index + 1)}`} onClick={() => setFilters((current) => current.filter((_, i) => i !== index))} />
@@ -341,6 +427,21 @@ export function ReportsPage() {
                 <label htmlFor="report-visibility">Visibility</label>
                 <Select id="report-visibility" style={{ width: '100%' }} value={visibility} options={[{ value: 'private', label: 'Private' }, { value: 'shared', label: 'Shared with users who can read the entity' }]} onChange={setVisibility} />
               </Col>
+              {reportId !== null && canManageReport ? (
+                <Col xs={24}>
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <strong>Scheduled delivery (to the report owner only)</strong>
+                    <Space wrap>
+                      <Input aria-label="Report schedule cron" value={scheduleCron} onChange={(event) => setScheduleCron(event.target.value)} style={{ width: 220 }} placeholder="0 8 * * 1" />
+                      <Button onClick={() => void saveSchedule()}>{schedule ? 'Update schedule' : 'Schedule CSV email'}</Button>
+                      {schedule ? <Tag color={schedule.enabled ? 'green' : 'default'}>{schedule.enabled ? `Enabled · ${schedule.cron}` : `Paused · ${schedule.cron}`}</Tag> : null}
+                      {schedule ? <Button onClick={() => void toggleSchedule()}>{schedule.enabled ? 'Pause' : 'Enable'}</Button> : null}
+                      {schedule ? <Button danger onClick={() => void removeSchedule()}>Remove schedule</Button> : null}
+                    </Space>
+                    <span style={{ color: '#737b85' }}>Five-field cron. Delivery is skipped if current permissions fail, the result is partial, or the CSV exceeds 5 MiB.</span>
+                  </Space>
+                </Col>
+              ) : null}
             </Row>
           </Card>
 
@@ -350,7 +451,7 @@ export function ReportsPage() {
                 {result.truncated ? <Alert type="warning" showIcon message={`Partial result: scanned ${String(result.scanned)} of ${String(result.total)} matching records, or the group limit was reached.`} style={{ marginBottom: 16 }} /> : null}
                 <Space style={{ marginBottom: 12 }} wrap>
                   <Tag>{String(result.total)} matching records</Tag>
-                  <Tag color={result.truncated ? 'orange' : 'green'}>{result.truncated ? `Scanned ${String(result.scanned)} (partial)` : `Scanned ${String(result.scanned)}`}</Tag>
+                  <Tag color={result.truncated ? 'orange' : 'green'}>{result.truncated ? `Scanned ${String(result.scanned)} (partial)` : result.scanned === null ? 'Exact database aggregate' : `Scanned ${String(result.scanned)}`}</Tag>
                 </Space>
                 {result.metrics ? (
                   <Row gutter={[12, 12]}>

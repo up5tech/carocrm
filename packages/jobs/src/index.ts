@@ -10,6 +10,9 @@ export type JobLogLevel = 'info' | 'warn' | 'error';
 
 export interface JobContext {
   userId?: string;
+  /** Present only when the scheduler enqueued this attempt from a cron boundary. */
+  scheduleId?: string;
+  scheduledForMs?: number;
   data?: Record<string, unknown>;
   /** Report 0..100 progress; the Admin UI reads it straight off the `jobs` row. */
   progress(percent: number, message?: string): void;

@@ -434,7 +434,7 @@ export interface ProcessTaskListResult {
 }
 
 /** Phase 17 — saved reports (PLAN §34). */
-export type ReportKind = 'list' | 'summary' | 'grouped' | 'chart' | 'kpi';
+export type ReportKind = 'list' | 'summary' | 'grouped' | 'chart' | 'matrix' | 'kpi';
 export type ReportAggregation = 'count' | 'sum' | 'avg' | 'min' | 'max';
 export interface ReportMetricShape {
   name: string;
@@ -448,6 +448,7 @@ export interface ReportDefinitionShape {
   filters: Record<string, unknown>[];
   columns: string[];
   groupBy?: { field: string; grain?: 'day' | 'month' | 'year' };
+  matrix?: { rows: { field: string; grain?: 'day' | 'month' | 'year' }; columns: { field: string; grain?: 'day' | 'month' | 'year' } };
   metrics: ReportMetricShape[];
   calculatedMetrics?: { name: string; operation: 'add' | 'subtract' | 'multiply' | 'divide' | 'percentOf'; left: string; right: string }[];
 }
@@ -470,13 +471,14 @@ export interface ReportGroup {
 export interface ReportRunResult {
   entityType: string;
   kind: ReportKind;
-  scanned: number;
+  scanned: number | null;
   total: number;
   truncated: boolean;
   columns?: string[];
   rows?: Record<string, unknown>[];
   metrics?: Record<string, number | null>;
   groups?: ReportGroup[];
+  matrix?: { rowField: string; columnField: string; cells: { rowKey: string; columnKey: string; count: number; metrics: Record<string, number | null> }[] };
 }
 export interface ReportCsv {
   reportId: string;
@@ -484,4 +486,12 @@ export interface ReportCsv {
   csv: string;
   rows: number;
   truncated: boolean;
+}
+export interface ReportScheduleRow {
+  id: string;
+  reportId: string;
+  cron: string;
+  enabled: boolean;
+  createdAt: string;
+  modifiedAt: string;
 }

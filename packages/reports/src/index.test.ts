@@ -30,6 +30,15 @@ describe('report definitions', () => {
     }, fields)).toThrow(/must be numeric/);
   });
 
+  it('validates a one-hop related field when the relation registry provides its type', () => {
+    const definition = validateReportDefinition({
+      entityType: 'Account',
+      kind: 'summary',
+      metrics: [{ name: 'sum', operation: 'sum', field: 'regionId.score' }],
+    }, { ...fields, 'regionId.score': { type: 'currency' } });
+    expect(definition.metrics[0]?.field).toBe('regionId.score');
+  });
+
   it('rejects a calculated metric that refers forward', () => {
     const parsed = ReportDefinitionSchema.safeParse({
       entityType: 'Account',

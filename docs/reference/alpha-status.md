@@ -7,8 +7,8 @@ calendar and the PLAN §21–§22 dynamic logic + formula engine, §23 hooks + d
 CSV import/export, dashboards — see the sections at the end of this file), Phase 14 (extension
 SDK, `packages/extension-sdk` + the `modules/` sample packages), Phase 15 (workflow engine,
 `packages/workflow` + the admin builder), and Phase 16 (BPM engine, `packages/bpm` + process admin
-and my-tasks UI). Phase 17 reporting is now **partially implemented**; scheduled delivery, matrix/pivot
-reports and related-field reporting remain open. Phase 18 portals remain unimplemented; see PLAN §72
+and my-tasks UI). Phase 17 reporting has a working first implementation; see its status section below
+for the bounded query model and remaining limitations. Phase 18 portals remain unimplemented; see PLAN §72
 for the remaining priority matrix.
 
 ## Checklist from PLAN §73
@@ -378,23 +378,49 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   and 1 browser spec (`e2e/processes.spec.ts`, written by convention, not executed in this
   environment).
 
-## Reports (Phase 17, PLAN §34, started 2026-10-12)
+## Reports (Phase 17, PLAN §34, completed first implementation 2026-10-12)
 
-- `packages/reports` now owns the versioned report-definition schema, metadata/type validation,
-  bounded grouped/summary calculations, date buckets (UTC), calculated metrics and non-finite guards.
-- The API exposes saved private/shared reports, preview/run and formula-safe CSV export at
-  `/api/v1/Report`; every save and execution revalidates metadata, entity read ACL, readable fields,
-  and the existing Query Engine filter grammar. The API scan is capped at 2,000 records and marks
-  partial outputs; groups are capped at 100.
-- The SPA has a `/reports` builder for list, summary, grouped, chart and KPI reports, simple AND
-  filters, saved visibility, previews and CSV export.
-- Additive migration `013_phase17_reports.sql` adds report-definition storage; it has **not** been
-  applied as part of this code change.
-- Still open: scheduled delivery (the worker does not yet rehydrate the owner's full ACL principal),
-  matrix/pivot reports, related-field joins, and database-level exact aggregation for large datasets.
-  Results beyond the scan budget are explicitly partial, not exact.
-- Verification added: `packages/reports/src/index.test.ts` covers schema semantics, UTC grouping,
-  calculations, list projection, finite-number handling and truncation.
+- `packages/reports` owns the versioned report-definition schema, metadata/type validation,
+  list/summary/grouped/chart/matrix/KPI results, UTC date dimensions, calculated metrics and finite-number guards.
+- The API exposes saved private/shared reports, preview/run and formula-safe CSV export at `/api/v1/Report`.
+  Saves and every execution revalidate metadata, entity/field ACL, current report visibility and filter grammar.
+- Summary/grouped/chart/matrix/KPI execute as exact SQL aggregates through `EntityCrudService.aggregate` and
+  `PostgresRecordStore`; the aggregate query carries the same record ACL and filter predicates as normal list reads.
+  It uses a repeatable-read snapshot, a 5-second statement timeout, at most 8 metrics and a 100-result-group cap;
+  over-cap results fail instead of being presented as complete. List reports stay on the entity list path, capped at
+  2,000 records and explicitly marked partial beyond that bound.
+- One-hop to-one related fields (`link`, `linkOne`, `foreign`) are supported for aggregate dimensions/metrics after
+  checking both entities, relationship-field visibility, target-field visibility, target record ACL and live-record status.
+  Related fields are deliberately not enabled for list projection or filter criteria; to-many joins remain unsupported.
+- The SPA `/reports` builder supports list, summary, grouped, chart, matrix/pivot and KPI, saved visibility, AND filters,
+  owner-only cron scheduling, preview, and CSV export.
+- Owner-only scheduled delivery uses additive migrations `014_phase17_schedules.sql` and
+  `015_phase17_report_deliveries.sql`, existing cron/job infrastructure and the worker's live mail transport.
+  The worker sends a schedule-bound API capability request; the API reloads the active owner's current roles/teams,
+  revalidates the saved report and reruns it under an isolated `AsyncLocalStorage` RequestScope. Delivery refuses partial
+  or >5 MiB CSV outputs. Recipient lists are not accepted; delivery is to the active report owner only.
+- SMTP cannot transact atomically with Postgres. The delivery ledger suppresses repeats for a cron boundary and marks
+  uncertain provider outcomes `ambiguous` (not automatically retried); pre-send failures are retryable. This avoids
+  claiming exactly-once delivery.
+- Additive migrations `013_phase17_reports.sql`, `014_phase17_schedules.sql`, and
+  `015_phase17_report_deliveries.sql` are applied to the configured local development database; the migration
+  ledger confirms all three. No new database was created.
+- Verification: PostgreSQL-backed API integration test creates tagged Account/Opportunity fixtures, proves exact
+  425.00 summary aggregation and matrix pivots by stage + related Account name, then tests owner schedule CRUD,
+  rejects an incorrect worker capability, runs an owner-authorized CSV delivery request, and cleans only its
+  fixture IDs. Unit tests cover definition/calculation/date/finite guards, ACL checks, matrix cost cap, worker
+  delivery ledger, cancellation, live transport and AsyncLocalStorage principal isolation.
+- Browser verification: `e2e/reports.spec.ts` was executed in this environment and passes — it creates an Account
+  plus a saved list report through the API, signs in through the SPA, opens the report in `/reports`, runs the
+  preview and downloads the CSV, asserting the fixture name is in the file and cleaning up its IDs. Executing it
+  required working around two sandbox constraints: the API must be started manually on `E2E_API_PORT` (Playwright's
+  own `webServer` command cannot run here) and the proxy variables `HTTP_PROXY`/`HTTPS_PROXY` must be cleared for
+  the Playwright process, otherwise localhost webServer probes are hijacked. Playwright's `test-results` cleanup
+  also trips the environment's bulk-delete guard unless the directory is moved aside before each run.
+- The browser pass surfaced and fixed two real defects: the CSV export revoked the blob URL synchronously after
+  `anchor.click()`, which cancels the download in Chromium (now revoked after 10 s with the anchor attached to
+  the DOM), and antd icon `aria-label`s made the export button's accessible name ambiguous (now explicitly
+  `aria-label="Export CSV"`, matching the existing delete-button pattern).
 
 ## Web UI theme (Lizant)
 

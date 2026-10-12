@@ -11,6 +11,7 @@ import { loadExtensionConfig } from './extensions.js';
 import { registerSystemJobs } from './handlers/job-handlers.js';
 import { registerMailJobs } from './handlers/mail-handlers.js';
 import { createKernelOutboxSetup } from './handlers/outbox-handlers.js';
+import { registerReportJobs } from './handlers/report-handlers.js';
 import { createMailTransportForWorker } from './mail.js';
 import { OutboxPoller } from './outbox/outbox-poller.js';
 import { OutboxHandlerRegistry } from './outbox/outbox-registry.js';
@@ -68,13 +69,21 @@ export class WorkerApplication {
       uploadExpiryHours: this.config.uploadExpiryHours,
     });
     // Email is delivered here, never in the API process; `none` keeps it inert until SMTP exists.
+    const mailTransport = createMailTransportForWorker(this.config);
     registerMailJobs(this.jobRegistry, {
       db: this.db,
       log: this.log,
-      transport: createMailTransportForWorker(this.config),
+      transport: mailTransport,
       storage,
       // Per-account sends decrypt stored credentials with this key (PLAN §28.3).
       encryptionKey: this.config.encryptionKey,
+    });
+    registerReportJobs(this.jobRegistry, {
+      db: this.db,
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
+      transport: mailTransport,
+      log: this.log,
     });
     this.registerExtensionJobs();
 

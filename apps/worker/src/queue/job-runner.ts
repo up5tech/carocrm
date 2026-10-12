@@ -69,6 +69,8 @@ export async function runJob(deps: JobRunnerDeps, request: JobRunRequest): Promi
   const tracker = createTracker(deps, row.id, meta);
   const context: JobContext = {
     data: payload.data,
+    ...(payload.scheduleId === undefined ? {} : { scheduleId: payload.scheduleId }),
+    ...(payload.scheduledForMs === undefined ? {} : { scheduledForMs: payload.scheduledForMs }),
     ...userIdContext(payload),
     progress: (percent, message) => tracker.progress(percent, message),
     log: (message, level) => tracker.log(message, level),

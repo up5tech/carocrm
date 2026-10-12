@@ -349,6 +349,17 @@ export interface ReportsTable {
   modified_at: Date;
 }
 
+export interface ReportSchedulesTable {
+  id: string;
+  report_id: string;
+  owner_user_id: string;
+  scheduled_job_id: string;
+  cron: string;
+  enabled: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
 /** One row per recipient of one Email record (PLAN §28.3 delivery status). */
 export interface EmailDeliveriesTable {
   id: string;
@@ -586,6 +597,7 @@ export interface Database {
   dashboards: DashboardsTable;
   dashlets: DashletsTable;
   reports: ReportsTable;
+  report_schedules: ReportSchedulesTable;
   installed_extensions: InstalledExtensionsTable;
   extension_migrations: ExtensionMigrationsTable;
   workflows: WorkflowsTable;
