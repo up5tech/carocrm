@@ -11,6 +11,15 @@ import type {
   LoginResult,
   Metadata,
   Principal,
+  ProcessCatalog,
+  ProcessDefinitionShape,
+  ProcessInstanceListResult,
+  ProcessInstanceView,
+  ProcessIssue,
+  ProcessListResult,
+  ProcessTaskListResult,
+  ProcessTaskView,
+  ProcessView,
   Role,
   WorkflowActionSpec,
   WorkflowDefinitionShape,
@@ -304,6 +313,8 @@ export const api = {
     request<EntityDefinition>(`/Metadata/${encodeURIComponent(name)}/Field/${encodeURIComponent(field)}`, { method: 'DELETE' }),
 
   roles: () => request<ListResult<Role>>('/Role'),
+  users: (params: { offset?: number | undefined; maxSize?: number | undefined; where?: string | undefined } = {}) =>
+    request<ListResult<{ id: string; name: string; userName: string; isActive: boolean }>>(`/User${simpleQuery(params)}`),
   patchRole: (id: string, patch: Record<string, unknown>) =>
     request<Role>(`/Role/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
@@ -494,4 +505,41 @@ export const api = {
   workflowRuns: (params: { workflowId?: string | undefined; status?: string | undefined; offset?: number | undefined; limit?: number | undefined } = {}) =>
     request<WorkflowRunListResult>(`/WorkflowRun${simpleQuery(params)}`),
   workflowRun: (id: string) => request<WorkflowRunView>(`/WorkflowRun/${encodeURIComponent(id)}`),
+
+  // Phase 16 — process engine (PLAN §36). `/Process` is admin-only; `/ProcessInstance` and
+  // `/ProcessTask` are usable by whoever owns the record / holds the task.
+  processes: () => request<ProcessListResult>('/Process'),
+  process: (id: string) => request<ProcessView>(`/Process/${encodeURIComponent(id)}`),
+  processCatalog: () => request<ProcessCatalog>('/Process/action/catalog'),
+  validateProcess: (definition: ProcessDefinitionShape) =>
+    request<{ valid: boolean; issues: ProcessIssue[] }>('/Process/action/validate', { method: 'POST', body: JSON.stringify({ definition }) }),
+  createProcess: (input: { key: string; name: string; description?: string; definition: ProcessDefinitionShape }) =>
+    request<ProcessView>('/Process', { method: 'POST', body: JSON.stringify(input) }),
+  updateProcess: (id: string, input: { name?: string; description?: string; definition?: ProcessDefinitionShape }) =>
+    request<ProcessView>(`/Process/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
+  publishProcess: (id: string) => request<ProcessView>(`/Process/${encodeURIComponent(id)}/action/publish`, { method: 'POST' }),
+  setProcessEnabled: (id: string, enabled: boolean) =>
+    request<ProcessView>(`/Process/${encodeURIComponent(id)}/action/${enabled ? 'enable' : 'disable'}`, { method: 'POST' }),
+  deleteProcess: (id: string) => request<unknown>(`/Process/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  processInstances: (params: { definitionId?: string | undefined; status?: string | undefined; offset?: number | undefined; limit?: number | undefined } = {}) =>
+    request<ProcessInstanceListResult>(`/ProcessInstance${simpleQuery(params)}`),
+  processInstance: (id: string) => request<ProcessInstanceView>(`/ProcessInstance/${encodeURIComponent(id)}`),
+  startProcess: (input: { processId?: string; processKey?: string; entityType: string; entityId: string }) =>
+    request<ProcessInstanceView>('/ProcessInstance', { method: 'POST', body: JSON.stringify(input) }),
+  cancelProcessInstance: (id: string) =>
+    request<ProcessInstanceView>(`/ProcessInstance/${encodeURIComponent(id)}/action/cancel`, { method: 'POST' }),
+
+  processTasks: (params: { status?: string | undefined; all?: boolean | undefined; offset?: number | undefined; limit?: number | undefined } = {}) =>
+    request<ProcessTaskListResult>(
+      `/ProcessTask${simpleQuery({
+        ...(params.status === undefined ? {} : { status: params.status }),
+        ...(params.all === undefined ? {} : { all: params.all ? 'true' : 'false' }),
+        ...(params.offset === undefined ? {} : { offset: params.offset }),
+        ...(params.limit === undefined ? {} : { limit: params.limit }),
+      })}`,
+    ),
+  processTask: (id: string) => request<ProcessTaskView>(`/ProcessTask/${encodeURIComponent(id)}`),
+  completeProcessTask: (id: string, input: { outcome: string; comment?: string }) =>
+    request<ProcessInstanceView>(`/ProcessTask/${encodeURIComponent(id)}/action/complete`, { method: 'POST', body: JSON.stringify(input) }),
 };

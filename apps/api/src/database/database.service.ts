@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Transaction as KyselyTransaction } from 'kysely';
+import type { Generated, Transaction as KyselyTransaction } from 'kysely';
 import { Kysely, PostgresDialect } from 'kysely';
 import pg from 'pg';
 
@@ -437,6 +437,88 @@ export interface WorkflowRunStepsTable {
 }
 
 /**
+ * Phase 16 BPM (PLAN §36). Versioned definitions exactly like workflows; an instance is the single
+ * token walking the graph, tasks are the human side of it (one row per parked user task, with the
+ * resolved assignee and the answer given), and events are the ordered audit trail.
+ */
+export interface ProcessDefinitionsTable {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  entity_type: string;
+  is_active: boolean;
+  current_version_id: string | null;
+  published_version_id: string | null;
+  is_deleted: boolean;
+  created_by_id: string | null;
+  modified_by_id: string | null;
+  created_at: Date;
+  modified_at: Date;
+}
+
+export interface ProcessDefinitionVersionsTable {
+  id: string;
+  definition_id: string;
+  version: number;
+  definition: unknown;
+  status: 'draft' | 'published' | 'archived';
+  created_by_id: string | null;
+  created_at: Date;
+  published_at: Date | null;
+}
+
+export interface ProcessInstancesTable {
+  id: string;
+  definition_id: string;
+  version_id: string;
+  entity_type: string;
+  entity_id: string;
+  status: 'running' | 'waiting' | 'completed' | 'cancelled' | 'failed';
+  current_node: string | null;
+  context: unknown;
+  outcome: string | null;
+  error: string | null;
+  initiated_by: string | null;
+  started_at: Date;
+  finished_at: Date | null;
+  created_at: Date;
+  modified_at: Date;
+}
+
+export interface ProcessTasksTable {
+  id: string;
+  instance_id: string;
+  node_id: string;
+  name: string;
+  status: 'open' | 'overdue' | 'escalated' | 'completed' | 'cancelled';
+  assignee_id: string | null;
+  assignee_role_id: string | null;
+  assignee_spec: unknown;
+  due_at: Date | null;
+  escalated_at: Date | null;
+  outcome: string | null;
+  comment: string | null;
+  completed_by_id: string | null;
+  created_at: Date;
+  completed_at: Date | null;
+  updated_at: Date;
+}
+
+export interface ProcessEventsTable {
+  id: string;
+  instance_id: string;
+  node_id: string | null;
+  type: string;
+  message: string;
+  actor_id: string | null;
+  data: unknown;
+  /** Ordering column: several events are written in one transaction, where now() is identical. */
+  seq: Generated<number>;
+  created_at: Date;
+}
+
+/**
  * Phase 14 extension installation state (PLAN §38.3). `manifest` keeps the manifest document the
  * package was installed from, so an admin can see what was granted without reading the directory.
  */
@@ -496,6 +578,11 @@ export interface Database {
   workflow_versions: WorkflowVersionsTable;
   workflow_runs: WorkflowRunsTable;
   workflow_run_steps: WorkflowRunStepsTable;
+  process_definitions: ProcessDefinitionsTable;
+  process_definition_versions: ProcessDefinitionVersionsTable;
+  process_instances: ProcessInstancesTable;
+  process_tasks: ProcessTasksTable;
+  process_events: ProcessEventsTable;
 }
 
 export type Db = Kysely<Database>;

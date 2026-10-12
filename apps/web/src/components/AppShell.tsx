@@ -1,4 +1,4 @@
-import { ApartmentOutlined, ApiOutlined, AppstoreOutlined, CalendarOutlined, DashboardOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, ProjectOutlined, SearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ApartmentOutlined, ApiOutlined, AppstoreOutlined, CalendarOutlined, CarryOutOutlined, DashboardOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, ProjectOutlined, SearchOutlined, ShareAltOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
@@ -41,6 +41,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     groups.push({ key: '/dashboards', icon: <DashboardOutlined />, label: <Link to="/dashboards">Dashboards</Link> });
     groups.push({ key: '/stream', icon: <NotificationOutlined />, label: <Link to="/stream">Stream</Link> });
     groups.push({ key: '/calendar', icon: <CalendarOutlined />, label: <Link to="/calendar">Calendar</Link> });
+    groups.push({ key: '/tasks', icon: <CarryOutOutlined />, label: <Link to="/tasks">My Tasks</Link> });
 
     const records: MenuItems = navEntities(metadata.data, principal?.type).map((entity) => ({
       key: `/${entity.name}`,
@@ -64,6 +65,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       admin.push({ key: '/admin/jobs', icon: <ThunderboltOutlined />, label: <Link to="/admin/jobs">Jobs</Link> });
       admin.push({ key: '/admin/extensions', icon: <ApiOutlined />, label: <Link to="/admin/extensions">Extensions</Link> });
       admin.push({ key: '/admin/workflows', icon: <ApartmentOutlined />, label: <Link to="/admin/workflows">Workflows</Link> });
+      admin.push({ key: '/admin/processes', icon: <ShareAltOutlined />, label: <Link to="/admin/processes">Processes</Link> });
     }
     groups.push({ type: 'group', key: 'grp-admin', label: 'Administration', children: admin });
     return groups;

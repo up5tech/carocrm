@@ -11,17 +11,22 @@ PLAN §25 attachment + file-storage layer (streaming uploads, S3/MinIO, malware-
 chunked upload) and the PLAN §28 outbound email subsystem (transport port, SMTP + generic relay,
 delivery ledger, `system.sendEmail` worker job), the PLAN §30/§32/§33 search, import/export and
 dashboard tooling, the PLAN §38 extension SDK (`packages/extension-sdk` plus the three sample packages
-under `modules/`), and the PLAN §35 workflow engine (`packages/workflow` with its admin UI).**
+under `modules/`), the PLAN §35 workflow engine (`packages/workflow` with its admin UI), and the
+PLAN §36 BPM engine (`packages/bpm` — multi-step process approvals with user tasks, timers,
+gateways and an audit trail, with an admin builder and a personal tasks page).**
 Backend: metadata engine, entity/query/ACL engines, attachments over a pluggable storage port,
 audit, jobs, sandboxed formula evaluation, declarative record rules, entity lifecycle hooks, a
 transactional-outbox event bus, a BullMQ background-job runner with progress, logs and
 cancellation, email sent through a pluggable mail transport, an extension host that loads
-installed packages from disk, and a workflow engine that automations run through the worker.
+installed packages from disk, a workflow engine that automations run through the worker, and a
+BPM engine whose approvals park on human tasks and advance when they are answered.
 Frontend (`apps/web`): metadata-driven login, navigation, list/detail/edit views, the
 Entity Manager admin UI (including the rule builder), stream panel, calendar, the Jobs admin page,
-the Extensions admin page and the workflow builder with its run history.
-Inbound mail collection, BPM, reports and portals are not implemented yet; workflows cover entity-event
-automation (triggers, conditions, branching, delays, actions, run history).
+the Extensions admin page, the workflow builder with its run history, the process builder with its
+instance audit trail, and the My Tasks page where approvals are answered.
+Inbound mail collection, reports and portals are not implemented yet; workflows cover entity-event
+automation (triggers, conditions, branching, delays, actions, run history) and processes cover
+human approvals (user tasks, escalation timers, exclusive gateways, per-person task lists).
 Full checklist and deviations: [docs/reference/alpha-status.md](docs/reference/alpha-status.md).
 
 ## Requirements
@@ -55,7 +60,7 @@ apps/api        NestJS + Fastify REST API (/api/v1)
 apps/worker     BullMQ worker, outbox poller, cron scheduler
 apps/web        metadata-driven React SPA
 packages/       core, metadata, entity-engine, query-engine, acl, files, jobs, extension-sdk,
-               workflow, formula, mail, search, reports, …
+               workflow, bpm, formula, mail, search, reports, …
 modules/        sample extension packages (field package, integration, CRM domain module)
 database/       SQL migrations, migration runner, seed data + entity metadata
 docs/           module guide (runtime rules), extension SDK guide, reference, operations

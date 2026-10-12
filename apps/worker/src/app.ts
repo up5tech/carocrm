@@ -3,6 +3,7 @@ import type { ExtensionHost } from '@carocrm/extension-sdk';
 import { ExtensionHost as EmptyHost } from '@carocrm/extension-sdk';
 import { JobRegistry } from '@carocrm/jobs';
 
+import { registerBpm } from './bpm/index.js';
 import { createPool, errorMessage, type Queryable } from './db.js';
 import type { WorkerConfig } from './env.js';
 import { DomainEventBus } from './events/domain-event-bus.js';
@@ -94,6 +95,7 @@ export class WorkerApplication {
 
     // After the queue exists: a workflow run is enqueued through it, like every other job.
     this.registerWorkflows();
+    this.registerBpm();
 
     this.jobConsumer = new JobConsumer({
       queueName: this.config.queueName,
@@ -160,6 +162,22 @@ export class WorkerApplication {
       log: this.log,
       registry: this.jobRegistry,
       domainEvents: this.domainEvents,
+      enqueue: async (job, data) => this.jobQueue.enqueue(job, data),
+    });
+  }
+
+  /**
+   * Wires the BPM jobs (PLAN §36).
+   *
+   * Registers `bpm.serviceTask` and `bpm.taskTimer` — the two things the API arms when a process
+   * moves: running a dispatched action, and firing a task's due/escalation timer. Both reuse the
+   * workflow action catalog and the ordinary §24 queue, so process work is background work too.
+   */
+  private registerBpm(): void {
+    registerBpm({
+      db: this.db,
+      log: this.log,
+      registry: this.jobRegistry,
       enqueue: async (job, data) => this.jobQueue.enqueue(job, data),
     });
   }

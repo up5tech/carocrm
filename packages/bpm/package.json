@@ -1,0 +1,32 @@
+{
+  "name": "@carocrm/bpm",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "description": "BPM process definitions, validation and the state machine that walks them (PLAN §36). Pure: no database, queue or network.",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@carocrm/formula": "workspace:*",
+    "@carocrm/workflow": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*",
+      "import": "./dist/*",
+      "default": "./dist/*"
+    }
+  }
+}

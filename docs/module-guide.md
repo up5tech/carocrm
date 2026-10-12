@@ -384,6 +384,35 @@ Full guide: [`docs/workflows.md`](workflows.md). What a module author needs to k
   the other static prefixes, just before `ENTITY_CONTROLLERS`.
 - `system.cleanupWorkflowRuns` is seeded daily (`25 4 * * *`); runs older than 30 days are pruned.
 
+## BPM engine (PLAN §36 — Phase 16)
+
+Full guide: [`docs/bpm.md`](bpm.md). What a module author needs to know:
+
+- **Pure engine in a package**: `packages/bpm` owns the definition types, validation and the
+  single-token `advance` function, every effect behind ports. It has no database, queue or network
+  dependency, which is why the API (validation + the state machine) and the worker (timers +
+  dispatched service tasks) can both use it without depending on each other.
+- **Validation includes liveness, not just shape**: cycles are legal — "request changes, back to
+  review" is the point of an approval — but every cycle must pass through a `userTask`. The check
+  is Tarjan's SCC, run at save and at publish, so a definition cannot be stored in a state that
+  would spin the worker dry.
+- **The API owns the state machine, the worker only reacts.** `start` / `completeTask` / `cancel`
+  lock the instance row (`FOR UPDATE`) and advance in-process until the flow parks on a user task
+  or ends; service tasks and timers are dispatched as §24 jobs (`bpm.serviceTask`,
+  `bpm.taskTimer`) whose handlers are status-guarded and idempotent — a redelivered timer or an
+  already-answered task is a no-op, never a double escalation.
+- **Versioning is the workflow rule, reused** (`process.service.ts`): `current_version_id` is the
+  editable draft, `published_version_id` is immutable, `is_active` gates only *starting new
+  instances*, and a running instance keeps the definition of the version it started on.
+- **Assignment resolves against live data**: user id, role name (candidate group) or a record
+  field; an unresolvable assignee fails the instance with the reason in `error` rather than
+  throwing — a broken process on one record is visible data, not a 500.
+- **Participant API, not admin API**: definitions are admin-only (a process runs actions with
+  system authority), but starting, listing and answering are scoped per person server-side, so the
+  tasks page needs no client-side filtering to be safe.
+- Controller order: `PROCESS_CONTROLLERS` (`/api/v1/Process`, `/api/v1/ProcessInstance`,
+  `/api/v1/ProcessTask`) sits with the other static prefixes, just before `ENTITY_CONTROLLERS`.
+
 ## Test database policy (AGENTS.md §3 — mandatory)
 
 Tests run against the **configured primary database** (`DATABASE_URL` from `.env`).

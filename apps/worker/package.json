@@ -27,7 +27,8 @@
     "zod": "^3.24.0",
     "@carocrm/files": "workspace:*",
     "@carocrm/mail": "workspace:*",
-    "@carocrm/workflow": "workspace:*"
+    "@carocrm/workflow": "workspace:*",
+    "@carocrm/bpm": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

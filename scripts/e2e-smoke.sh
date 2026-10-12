@@ -401,6 +401,131 @@ const {Pool}=require('pg');
 await p.query('DELETE FROM workflow_versions WHERE workflow_id=\$1',['${WF_ID}']);
 await p.query('DELETE FROM workflows WHERE id=\$1',['${WF_ID}']);await p.end();})()" 2>/dev/null
 
+echo '--- processes (PLAN §36)'
+# Author a multi-step approval exactly as the editor does: draft -> publish -> enable, start it on
+# a record, answer the task it parks on, and read the audit trail back.
+code=$(req GET /api/v1/AppUser/me "$TOKEN")
+check 'GET /AppUser/me 200 (needed for the assignee)' 200 "$code"
+ADMIN_USER_ID="$(jq_get .id)"
+check 'the admin user id is known' true "$([ -n "$ADMIN_USER_ID" ] && echo true || echo false)"
+
+PROC_KEY="smoke-process-${RUN_ID}"
+PROC_DEF="{\"entityType\":\"Account\",\"start\":\"review\",\"nodes\":[{\"id\":\"review\",\"type\":\"userTask\",\"name\":\"Review\",\"assignee\":{\"type\":\"user\",\"value\":\"${ADMIN_USER_ID}\"},\"dueSeconds\":3600,\"escalateAfterSeconds\":86400,\"escalateTo\":{\"type\":\"user\",\"value\":\"${ADMIN_USER_ID}\"},\"outcomes\":[{\"value\":\"approved\",\"label\":\"Approve\",\"next\":\"notify\"},{\"value\":\"rejected\",\"label\":\"Reject\",\"next\":\"stop\"}]},{\"id\":\"notify\",\"type\":\"serviceTask\",\"name\":\"Notify finance\",\"action\":\"createNotification\",\"params\":{\"userId\":\"${ADMIN_USER_ID}\",\"message\":\"Approved\"},\"next\":\"gate\"},{\"id\":\"gate\",\"type\":\"gateway\",\"name\":\"High value?\",\"branches\":[{\"when\":\"field('amount') > 1000\",\"next\":\"audit\"}],\"default\":\"done\"},{\"id\":\"audit\",\"type\":\"serviceTask\",\"name\":\"Flag for audit\",\"action\":\"updateRecord\",\"params\":{\"fields\":{\"industry\":\"Audited\"}},\"next\":\"done\"},{\"id\":\"done\",\"type\":\"end\",\"name\":\"Approved\",\"outcome\":\"approved\"},{\"id\":\"stop\",\"type\":\"end\",\"name\":\"Rejected\",\"outcome\":\"rejected\"}]}"
+
+code=$(req POST /api/v1/Process "$TOKEN" "{\"key\":\"${PROC_KEY}\",\"name\":\"smoke process ${RUN_ID}\",\"definition\":${PROC_DEF}}")
+check 'POST /Process 201 creates a draft' 201 "$code"
+check 'the draft is not active yet' true "$(jq_get '.isActive == false and .publishedVersion == null')"
+PROC_ID="$(jq_get .id)"
+check 'the created process is returned with an id' true "$([ -n "$PROC_ID" ] && echo true || echo false)"
+
+code=$(req POST /api/v1/Process/action/validate "$TOKEN" '{"definition":{"start":"a","nodes":[{"id":"a","type":"serviceTask","name":"A","action":"updateRecord","params":{"fields":{}},"next":"a"}]}}')
+check 'POST /Process/action/validate answers for a broken graph' 200 "$code"
+check 'a loop with nothing to wait for is refused' true "$(jq_get '([.issues[].code] | index("PROCESS_HOT_LOOP")) != null')"
+code=$(req POST /api/v1/Process/action/validate "$TOKEN" '{"definition":{"start":"a","nodes":[{"id":"a","type":"serviceTask","name":"A","action":"launchRockets","params":{},"next":"b"},{"id":"b","type":"end","name":"Done"}]}}')
+check 'an unknown action is refused' true "$(jq_get '([.issues[].code] | index("PROCESS_UNKNOWN_ACTION")) != null')"
+
+code=$(req POST "/api/v1/Process/does-not-exist/action/publish" "$TOKEN" '{}')
+check 'publishing an unknown process is refused' 404 "$code"
+code=$(req POST "/api/v1/Process/${PROC_ID}/action/publish" "$TOKEN" '{}')
+check 'publishing a draft 200' 200 "$code"
+check 'the published version is recorded' true "$(jq_get '.publishedVersion == 1')"
+code=$(req POST "/api/v1/Process/${PROC_ID}/action/publish" "$TOKEN" '{}')
+check 'publishing the same version twice is refused' 422 "$code"
+code=$(req POST "/api/v1/Process/${PROC_ID}/action/enable" "$TOKEN" '{}')
+check 'enabling a published process 200' 200 "$code"
+check 'the process is enabled' true "$(jq_get '.isActive == true')"
+
+code=$(req POST /api/v1/Account "$TOKEN" "{\"name\":\"E2E Process Account ${RUN_ID}\",\"industry\":\"Software\"}")
+check 'POST /Account 201 (the record under approval)' 201 "$code"
+PROC_ACC_ID="$(jq_get .id)"
+
+# The scoped user owns nothing here: starting needs read access to the record, which they lack —
+# and a record you may not read is reported as missing (404 hides its existence, as everywhere).
+code=$(req POST /api/v1/ProcessInstance "$OWN_TOKEN" "{\"processKey\":\"${PROC_KEY}\",\"entityType\":\"Account\",\"entityId\":\"${PROC_ACC_ID}\"}")
+check 'starting on an unreadable record is refused' 404 "$code"
+
+code=$(req POST /api/v1/ProcessInstance "$TOKEN" "{\"processKey\":\"${PROC_KEY}\",\"entityType\":\"Account\",\"entityId\":\"${PROC_ACC_ID}\"}")
+check 'POST /ProcessInstance 201 starts the approval' 201 "$code"
+check 'the instance parks at the first user task' waiting "$(jq_get '.status')"
+check 'it waits on the review step' review "$(jq_get '.currentNode')"
+check 'the audit trail opens with instance.started' instance.started "$(jq_get '.events[0].type')"
+PROC_INST_ID="$(jq_get .id)"
+PROC_TASK_ID="$(jq_get '.tasks[0].id')"
+check 'one open task was created' true "$([ -n "$PROC_TASK_ID" ] && echo true || echo false)"
+check 'the task is armed with a due timer' true "$(jq_get '.tasks[0].dueAt != null')"
+
+code=$(req GET /api/v1/ProcessTask "$OWN_TOKEN")
+check 'a stranger holds no tasks' 200 "$code"
+check 'their task list is empty' true "$(jq_get '.total == 0')"
+code=$(req GET "/api/v1/ProcessTask/${PROC_TASK_ID}" "$OWN_TOKEN")
+check 'a stranger cannot read the task' 403 "$code"
+code=$(req GET "/api/v1/ProcessInstance/${PROC_INST_ID}" "$OWN_TOKEN")
+check 'a stranger cannot read the instance' 403 "$code"
+code=$(req GET "/api/v1/ProcessTask/${PROC_TASK_ID}" "$TOKEN")
+check 'the admin (who holds it) can read the task' 200 "$code"
+code=$(req GET "/api/v1/ProcessInstance/${PROC_INST_ID}" "$TOKEN")
+check 'the admin can read the instance' 200 "$code"
+
+code=$(req POST "/api/v1/ProcessTask/${PROC_TASK_ID}/action/complete" "$OWN_TOKEN" '{"outcome":"approved"}')
+check 'a stranger cannot answer the task' 403 "$code"
+code=$(req POST "/api/v1/ProcessTask/${PROC_TASK_ID}/action/complete" "$TOKEN" '{"outcome":"maybe"}')
+check 'an outcome the task does not offer is refused' 422 "$code"
+
+code=$(req POST "/api/v1/ProcessTask/${PROC_TASK_ID}/action/complete" "$TOKEN" "{\"outcome\":\"approved\",\"comment\":\"Looks fine\"}")
+check 'answering the task 200' 200 "$code"
+check 'the instance moved past the human step' true "$(jq_get '.currentNode != "review"')"
+check 'the answer was recorded on the task' approved "$(jq_get '[.tasks[] | select(.outcome != null)][0].outcome')"
+check 'the trail recorded the decision' true "$(jq_get '([.events[].type] | index("task.outcome")) != null')"
+check 'the trail recorded the dispatch' true "$(jq_get '([.events[].type] | index("service.dispatched")) != null')"
+# amount is absent on this record, so the gateway takes its default and no audit dispatch happens.
+check 'the gateway took its default branch' true "$(jq_get '([.events[] | select(.type=="branch.selected")][0].data.matched) == null')"
+check 'the instance completed' true "$(jq_get '.status == "completed"')"
+check 'the instance reports the end outcome' approved "$(jq_get '.outcome')"
+
+code=$(req GET "/api/v1/ProcessInstance?status=completed&definitionId=${PROC_ID}" "$TOKEN")
+check 'GET /ProcessInstance?status=completed 200' 200 "$code"
+check 'the finished instance is listed' true "$(jq_get "[.list[] | select(.id == \"${PROC_INST_ID}\")] | length == 1")"
+code=$(req GET /api/v1/ProcessInstance?status=exploded "$TOKEN")
+check 'an unknown status filter is refused' 422 "$code"
+check 'process administration is admin-only' 403 "$(req GET /api/v1/Process "$OWN_TOKEN")"
+check 'the task list is per person, not a work queue for everyone' true "$(req GET /api/v1/ProcessTask?all=true "$OWN_TOKEN" >/dev/null; jq_get '.total == 0')"
+
+# A second instance, cancelled rather than answered — the cancellation is part of the trail.
+code=$(req POST /api/v1/ProcessInstance "$TOKEN" "{\"processKey\":\"${PROC_KEY}\",\"entityType\":\"Account\",\"entityId\":\"${PROC_ACC_ID}\"}")
+check 'starting a second instance 201' 201 "$code"
+PROC_INST2_ID="$(jq_get .id)"
+code=$(req POST "/api/v1/ProcessInstance/${PROC_INST2_ID}/action/cancel" "$OWN_TOKEN" '{}')
+check 'a stranger cannot cancel the instance' 403 "$code"
+code=$(req POST "/api/v1/ProcessInstance/${PROC_INST2_ID}/action/cancel" "$TOKEN" '{}')
+check 'the initiator cancels the instance 200' 200 "$code"
+check 'the cancelled instance reports cancelled' cancelled "$(jq_get '.status')"
+check 'its open task was cancelled with it' true "$(jq_get '[.tasks[] | select(.status == "cancelled")] | length == 1')"
+check 'the trail recorded the cancellation' true "$(jq_get '([.events[].type] | index("instance.cancelled")) != null')"
+code=$(req POST "/api/v1/ProcessInstance/${PROC_INST2_ID}/action/cancel" "$TOKEN" '{}')
+check 'cancelling twice is refused' 422 "$code"
+
+# A published-but-disabled process accepts no new instances.
+code=$(req POST "/api/v1/Process/${PROC_ID}/action/disable" "$TOKEN" '{}')
+check 'disabling a process 200' 200 "$code"
+code=$(req POST /api/v1/ProcessInstance "$TOKEN" "{\"processKey\":\"${PROC_KEY}\",\"entityType\":\"Account\",\"entityId\":\"${PROC_ACC_ID}\"}")
+check 'a disabled process starts no new instance' 422 "$code"
+
+# Only the rows this run created are removed (AGENTS.md §3.3).
+code=$(req DELETE "/api/v1/Process/${PROC_ID}" "$TOKEN")
+check 'deleting the smoke process 200' 200 "$code"
+node -e "
+const {Pool}=require('pg');
+(async()=>{const p=new Pool({connectionString:process.env.DATABASE_URL,max:1});
+await p.query('DELETE FROM process_tasks WHERE instance_id = ANY(\$1::text[])',[['${PROC_INST_ID}','${PROC_INST2_ID}']]);
+await p.query('DELETE FROM process_events WHERE instance_id = ANY(\$1::text[])',[['${PROC_INST_ID}','${PROC_INST2_ID}']]);
+await p.query('DELETE FROM process_instances WHERE id = ANY(\$1::text[])',[['${PROC_INST_ID}','${PROC_INST2_ID}']]);
+await p.query('DELETE FROM process_definition_versions WHERE definition_id=\$1',['${PROC_ID}']);
+await p.query('DELETE FROM process_definitions WHERE id=\$1',['${PROC_ID}']);
+await p.query('DELETE FROM notifications WHERE type = \'ProcessTask\' AND (data->>\'instanceId\') = ANY(\$1::text[])',[['${PROC_INST_ID}','${PROC_INST2_ID}']]);
+await p.query('DELETE FROM entity_records WHERE id = \$1',['${PROC_ACC_ID}']);
+await p.end();})()" 2>/dev/null
+check 'process fixture removed' 404 "$(req GET "/api/v1/Process/${PROC_ID}" "$TOKEN")"
+
 echo '--- audit'
 audit_code=$(req GET "/api/v1/AuditLog?entityType=Contact&maxSize=50" "$TOKEN")
 check 'GET /AuditLog 200 for admin' 200 "$audit_code"

@@ -14,8 +14,11 @@ import { EntityListPage } from './pages/EntityListPage.js';
 import { EntityManagerPage } from './pages/EntityManagerPage.js';
 import { HomePage } from './pages/HomePage.js';
 import { LoginPage } from './pages/LoginPage.js';
+import { ProcessEditorPage } from './pages/ProcessEditorPage.js';
+import { ProcessesPage } from './pages/ProcessesPage.js';
 import { SearchPage } from './pages/SearchPage.js';
 import { StreamPage } from './pages/StreamPage.js';
+import { TasksPage } from './pages/TasksPage.js';
 import { WorkflowEditorPage } from './pages/WorkflowEditorPage.js';
 import { WorkflowsPage } from './pages/WorkflowsPage.js';
 import { useSession } from './state/session.js';
@@ -56,6 +59,7 @@ export function AppRoutes() {
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/dashboards" element={<DashboardsPage />} />
+        <Route path="/tasks" element={<TasksPage />} />
         <Route path="/:entity" element={<EntityListPage />} />
         <Route path="/:entity/create" element={<EntityEditPage />} />
         <Route path="/:entity/:id" element={<EntityDetailPage />} />
@@ -66,6 +70,8 @@ export function AppRoutes() {
         <Route path="/admin/extensions" element={<AdminExtensionsPage />} />
         <Route path="/admin/workflows" element={<WorkflowsPage />} />
         <Route path="/admin/workflows/:id" element={<WorkflowEditorPage />} />
+        <Route path="/admin/processes" element={<ProcessesPage />} />
+        <Route path="/admin/processes/:id" element={<ProcessEditorPage />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </AppShell>

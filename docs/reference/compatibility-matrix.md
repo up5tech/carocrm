@@ -2,7 +2,7 @@
 
 Baseline: EspoCRM 9.3.x behavior, observed through public documentation — clean-room,
 no upstream source used (PLAN §2). Status is as of 2026-10-12 (CRM Kernel Alpha + PLAN tasks 17–22,
-search/import/export/dashboards, the extension SDK and the workflow engine).
+search/import/export/dashboards, the extension SDK, the workflow engine and the BPM engine).
 
 | Capability | Espo baseline | This implementation | Priority | State |
 |---|---|---|---|---|
@@ -31,7 +31,8 @@ search/import/export/dashboards, the extension SDK and the workflow engine).
 | Formula engine | v9.3.x | sandboxed parser → AST → evaluator with an allowlisted function set and execution budgets (`@carocrm/formula`) | P2 | implemented |
 | Dynamic logic | v9.3.x | metadata `dynamicLogic.rules` evaluated in the SPA **and** on every API write | P2 | implemented |
 | Workflows | v9.3.x (workflows module) | entity-event triggers, formula conditions, branching, delays, 5 actions, versioned definitions, run history + steps | P2 | implemented (see note) |
-| BPM / Reports / Portals | commercial/baseline | out of scope | P2 | not started |
+| BPM / process approval | v9.3.x (bpm module, commercial baseline) | process definitions with user tasks, exclusive gateways, service tasks, due/escalation timers, versioned definitions, per-person task lists, full audit trail | P2 | implemented subset (see note) |
+| Reports / Portals | commercial/baseline | out of scope | P2 | not started |
 | Hooks / domain events | v9.3.x entity hooks + event bus | `HookRegistry` phases + transactional-outbox domain events consumed by a worker subscriber bus | P2 | implemented (see note) |
 | Extension SDK / modules | v9.3.x module/extension packages | `packages/extension-sdk` + host in API and worker: manifest, strict validation, dependency + `order` resolution, metadata contribution, providers/controllers/hooks/jobs, own migrations, SPA nav, admin API + UI | P1 | implemented (see note) |
 | Database | MySQL/MariaDB/PG | PostgreSQL only; MySQL/MariaDB later (PLAN §6.2) | — | PG first |
@@ -161,6 +162,32 @@ history screen) still needs a documentation pass.
   exact table and screen were not verifiable here.
 - Not built: schedule (cron) triggers, relation-change triggers, a manual "run now", and per-workflow
   roles beyond administrator-only.
+
+## BPM / process approval (PLAN §36)
+
+Upstream documentation was **not reachable from this environment** while building either, so the
+shapes below follow PLAN §36 and our own design; parity with EspoCRM's BPM module (its process
+schema, flow elements, assignment rules, timer nodes) still needs a documentation pass. Upstream
+BPM is a **commercial** module; ours is built from the same documented concepts (process definition,
+instances, user tasks, gateways, audit trail).
+
+- **One token per instance**: no parallel fork/join; the exclusive gateway picks the first matching
+  branch, else the required default. Upstream offers parallel gateways and event-based gateways.
+- **Timers exist only on user tasks** (due + escalation). Upstream has standalone timer/date events
+  as flow elements ("wait three days, then continue"); we do not.
+- **Loops are first-class** — a cycle is legal when it passes through a user task (checked with
+  Tarjan on every save), because "request changes → back to review" is the canonical approval.
+- **Service tasks reuse the workflow action catalog** (5 actions) and are dispatched to the worker;
+  results deliberately never feed conditions. Upstream's service-task catalog is broader.
+- **Assignment** is user, role (candidate group resolved by role name) or a record field; a task
+  reached through a role is answerable by every member, first answer wins. Escalation re-resolves
+  its target against live data when the timer fires.
+- **Versioning matches workflows** (draft / immutable published / enable gates new instances) —
+  PLAN asks for versioning explicitly; upstream keeps one process document.
+- **Starting** is `POST /api/v1/ProcessInstance` (anyone who can read the record); upstream wires
+  starts to workflow/scheduled events. No definition triggers are built yet.
+- Not built: parallel gateways, timer flow elements, subprocesses, BPMN notation/import, process
+  reporting, per-process roles beyond administrator-only authoring.
 
 ## Extension SDK (PLAN §38)
 

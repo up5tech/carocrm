@@ -11,7 +11,7 @@ import { CONFIG_TOKEN } from '../config.js';
 export const JOB_QUEUE_NAME = 'crm-jobs';
 
 interface Producer {
-  add(name: string, data: Record<string, unknown>, jobId?: string): Promise<{ id?: string | number }>;
+  add(name: string, data: Record<string, unknown>, jobId?: string, delayMs?: number): Promise<{ id?: string | number }>;
   removeJob(id: string): Promise<boolean>;
   counts(): Promise<Record<string, number>>;
   close(): Promise<void>;
@@ -27,7 +27,14 @@ interface Producer {
  */
 export interface JobQueuePort {
   readonly queueName: string;
-  enqueue(input: { job: string; data: Record<string, unknown>; jobRowId?: string | undefined; jobId?: string | undefined }): Promise<string>;
+  enqueue(input: {
+    job: string;
+    data: Record<string, unknown>;
+    jobRowId?: string | undefined;
+    jobId?: string | undefined;
+    /** Delayed delivery (PLAN §36 timers): the job sits in the queue until this many ms elapse. */
+    delayMs?: number | undefined;
+  }): Promise<string>;
   remove(queueJobId: string | null): Promise<boolean>;
   counts(): Promise<Record<string, number>>;
 }
@@ -50,8 +57,11 @@ class BullMqProducer implements Producer {
     });
   }
 
-  async add(name: string, data: Record<string, unknown>, jobId?: string): Promise<{ id?: string | number }> {
-    return this.queue.add(name, data, jobId === undefined ? {} : { jobId });
+  async add(name: string, data: Record<string, unknown>, jobId?: string, delayMs?: number): Promise<{ id?: string | number }> {
+    const options: { jobId?: string; delay?: number } = {};
+    if (jobId !== undefined) options.jobId = jobId;
+    if (delayMs !== undefined && delayMs > 0) options.delay = delayMs;
+    return this.queue.add(name, data, options);
   }
 
   async removeJob(id: string): Promise<boolean> {
@@ -87,6 +97,7 @@ export class JobQueueService implements JobQueuePort {
     data: Record<string, unknown>;
     jobRowId?: string | undefined;
     jobId?: string | undefined;
+    delayMs?: number | undefined;
   }): Promise<string> {
     const payload: Record<string, unknown> = {
       job: input.job,
@@ -95,7 +106,7 @@ export class JobQueueService implements JobQueuePort {
     };
     let added: { id?: string | number };
     try {
-      added = await this.producer.add(input.job, payload, input.jobId);
+      added = await this.producer.add(input.job, payload, input.jobId, input.delayMs);
     } catch (error: unknown) {
       throw new InternalServerError(`Could not enqueue "${input.job}": the job queue is unreachable.`, {
         error: error instanceof Error ? error.message : String(error),

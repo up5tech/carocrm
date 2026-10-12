@@ -74,6 +74,9 @@ importers:
       '@carocrm/acl':
         specifier: workspace:*
         version: link:../../packages/acl
+      '@carocrm/bpm':
+        specifier: workspace:*
+        version: link:../../packages/bpm
       '@carocrm/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -256,6 +259,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@carocrm/bpm':
+        specifier: workspace:*
+        version: link:../../packages/bpm
       '@carocrm/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -387,6 +393,22 @@ importers:
       zod:
         specifier: ^3.24.0
         version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
+  packages/bpm:
+    dependencies:
+      '@carocrm/formula':
+        specifier: workspace:*
+        version: link:../formula
+      '@carocrm/workflow':
+        specifier: workspace:*
+        version: link:../workflow
     devDependencies:
       '@types/node':
         specifier: ^22.10.0

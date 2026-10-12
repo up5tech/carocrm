@@ -263,3 +263,172 @@ export interface WorkflowRunListResult {
   offset: number;
   count: number;
 }
+
+/** Phase 16 — BPM process engine (PLAN §36). */
+export type ProcessNodeType = 'userTask' | 'serviceTask' | 'gateway' | 'end';
+export type ProcessVersionStatus = 'draft' | 'published' | 'archived';
+export type ProcessInstanceStatus = 'running' | 'waiting' | 'completed' | 'cancelled' | 'failed';
+export type ProcessTaskStatus = 'open' | 'overdue' | 'escalated' | 'completed' | 'cancelled';
+
+/** How a task's responsible person is chosen; resolved against live data when the task is created. */
+export interface ProcessAssigneeSpec {
+  type: 'user' | 'role' | 'recordField';
+  value: string;
+}
+
+/** A human decision: what can be answered at a task and where the flow goes afterwards. */
+export interface ProcessOutcomeSpec {
+  value: string;
+  label: string;
+  next: string;
+}
+
+export interface ProcessGatewayBranch {
+  when: string;
+  next: string;
+}
+
+/**
+ * One step of a process, edited as an ordered list. Only the fields the node's `type` uses are
+ * meaningful; the server's engine validates the whole graph before it can be published.
+ */
+export interface ProcessNode {
+  id: string;
+  type: ProcessNodeType;
+  name: string;
+  /** userTask */
+  assignee?: ProcessAssigneeSpec | undefined;
+  outcomes?: ProcessOutcomeSpec[] | undefined;
+  dueSeconds?: number | undefined;
+  escalateAfterSeconds?: number | undefined;
+  escalateTo?: ProcessAssigneeSpec | undefined;
+  /** serviceTask */
+  action?: string | undefined;
+  params?: Record<string, unknown> | undefined;
+  onError?: 'fail' | 'continue' | undefined;
+  /** gateway */
+  branches?: ProcessGatewayBranch[] | undefined;
+  default?: string | undefined;
+  /** common targets */
+  next?: string | undefined;
+  /** end */
+  outcome?: string | undefined;
+}
+
+export interface ProcessDefinitionShape {
+  entityType?: string | undefined;
+  start: string;
+  nodes: ProcessNode[];
+}
+
+export interface ProcessIssue {
+  code: string;
+  message: string;
+  path?: string | undefined;
+}
+
+export interface ProcessVersionView {
+  id: string;
+  version: number;
+  status: ProcessVersionStatus;
+  definition: ProcessDefinitionShape;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface ProcessView {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  entityType: string;
+  isActive: boolean;
+  currentVersion: number | null;
+  currentVersionStatus: ProcessVersionStatus | null;
+  publishedVersion: number | null;
+  versions: ProcessVersionView[];
+  createdAt: string;
+  modifiedAt: string;
+  issues: ProcessIssue[];
+}
+
+export interface ProcessCatalog {
+  actions: WorkflowActionSpec[];
+  nodeTypes: { type: ProcessNodeType; label: string; description: string }[];
+  assigneeTypes: { type: ProcessAssigneeSpec['type']; label: string; description: string }[];
+}
+
+export interface ProcessListResult {
+  list: ProcessView[];
+  total: number;
+}
+
+export interface ProcessTaskView {
+  id: string;
+  instanceId: string;
+  nodeId: string;
+  name: string;
+  status: ProcessTaskStatus;
+  assigneeId: string | null;
+  assigneeRoleId: string | null;
+  assigneeSpec: unknown;
+  dueAt: string | null;
+  escalatedAt: string | null;
+  outcome: string | null;
+  comment: string | null;
+  completedById: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  updatedAt: string;
+  processId: string;
+  processName: string;
+  entityType: string;
+  entityId: string;
+  /** What the answer buttons offer, taken from the task's node. */
+  outcomes: { value: string; label: string }[];
+}
+
+export interface ProcessEventView {
+  id: string;
+  nodeId: string | null;
+  type: string;
+  message: string;
+  actorId: string | null;
+  data: unknown;
+  createdAt: string;
+}
+
+export interface ProcessInstanceView {
+  id: string;
+  definitionId: string;
+  processKey: string;
+  processName: string;
+  version: number | null;
+  entityType: string;
+  entityId: string;
+  status: ProcessInstanceStatus;
+  currentNode: string | null;
+  outcome: string | null;
+  error: string | null;
+  initiatedBy: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  createdAt: string;
+  modifiedAt: string;
+  tasks: ProcessTaskView[];
+  events: ProcessEventView[];
+}
+
+export interface ProcessInstanceListResult {
+  list: ProcessInstanceView[];
+  total: number;
+  offset: number;
+  count: number;
+}
+
+export interface ProcessTaskListResult {
+  list: ProcessTaskView[];
+  total: number;
+  offset: number;
+  count: number;
+}

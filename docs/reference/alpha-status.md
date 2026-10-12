@@ -6,8 +6,8 @@ calendar and the PLAN §21–§22 dynamic logic + formula engine, §23 hooks + d
 §25 attachments/file storage, the §28 outbound email subsystem, Phase 12 (search, saved filters,
 CSV import/export, dashboards — see the sections at the end of this file), Phase 14 (extension
 SDK, `packages/extension-sdk` + the `modules/` sample packages) and Phase 15 (workflow engine,
-`packages/workflow` + the admin builder);
-BPM, reports and portals remain
+`packages/workflow` + the admin builder) and Phase 16 (BPM engine, `packages/bpm` + process admin
+and my-tasks UI); reports and portals remain
 unimplemented; see PLAN §72 for the remaining priority matrix.
 
 ## Checklist from PLAN §73
@@ -36,6 +36,7 @@ unimplemented; see PLAN §72 for the remaining priority matrix.
 | Dashboards and dashlets working | done | `/api/v1/Dashboard` + dashlets (`list`/`chart`/`kpi`), SPA `/dashboards` |
 | Extension packages working | done | `packages/extension-sdk` + `modules/` sample packages, `/api/v1/Extension`, `/admin/extensions` |
 | Workflows working | done | `packages/workflow` engine, worker execution + run history, `/api/v1/Workflow`, `/admin/workflows` |
+| BPM (process approval) working | done | `packages/bpm` engine, `/api/v1/Process[Instance\|Task]`, worker timers + service tasks, `/admin/processes` + `/tasks` |
 | OpenAPI working | done | `GET /api/v1/OpenApi` (generated from controllers) |
 | API integration tests working | done | 300 vitest tests in `apps/api/test` (+193 package unit tests) |
 | Playwright login/CRUD tests working | done | `e2e/crud.spec.ts` (`npx playwright test`) |
@@ -338,6 +339,43 @@ entirely in the new `/admin/workflows` UI; nothing in the kernel knows they exis
   `docs/workflows.md`.
 - Verification: 42 engine unit tests, 27 worker tests, 19 API integration tests and 15 new
   `scripts/e2e-smoke.sh` checks.
+
+## BPM engine (Phase 16, PLAN §36, added 2026-10-12)
+
+`packages/bpm` is a pure engine — definition types, validation (including the Tarjan hot-loop
+check that keeps cycles safe) and the single-token advance function, every effect behind a port —
+and the API (`apps/api/src/processes`), worker (`apps/worker/src/bpm`) and SPA pages are thin
+wiring around it. A multi-step approval with a human loop, a timer and a condition branch can be
+built entirely in `/admin/processes` and answered in `/tasks`; nothing in the kernel knows it exists.
+
+- **Waiting is the feature**: the state machine parks on a `userTask`, the task row is created, its
+  assignee notified and its due timer armed in the same transaction; the answer at
+  `POST /ProcessTask/:id/action/complete` (row-locked, so two answers cannot both advance) moves the
+  token again. Every step lands in `process_events` — any decision can be explained afterwards.
+- **Loops are legal, spinning is not**: a cycle must pass through a user task (Tarjan SCC check at
+  save time), which is what makes "request changes → back to review" possible without a hot loop.
+- **Assignment** is user, role (candidate group, resolved by role *name*) or a record field; an
+  unresolvable assignee fails the instance with the reason in `error` — broken process on one record
+  is data, not a 500. Escalation re-resolves its target against live data when the timer fires.
+- **Execution split**: the API owns the state machine (transaction + `FOR UPDATE` instance lock);
+  the worker only runs dispatched service tasks (`bpm.serviceTask`) and fires due/escalation timers
+  (`bpm.taskTimer`) with status-guarded idempotent SQL — it never moves `current_node`.
+- **Versioning is the workflow rule, reused**: draft / immutable published / enable gates new
+  instances; a running instance keeps the definition of the version it started on.
+- **Service tasks** reuse the workflow action catalog and dispatch fire-and-forget; their results
+  deliberately never feed gateway conditions.
+- **Participant-facing API**: definitions are admin-only, but starting (any reader of the record),
+  listing and answering tasks are per-person server-side — a record you may not read is a 404.
+- **Deviation**: definition nodes live in `process_definition_versions.definition` (JSONB) rather
+  than separate node/edge tables, for the same atomic-snapshot reason as workflows.
+- Not built: parallel fork/join gateways, timer flow elements ("wait three days, then continue" as
+  a flow step), subprocesses, BPMN import/notation, process reporting, definition triggers
+  (start-on-event), and per-process roles beyond administrator-only authoring. Documentation:
+  `docs/bpm.md`.
+- Verification: 26 engine unit tests, 24 API integration tests (the Phase 16 acceptance test),
+  157 worker tests (14 new for BPM), 54 new `scripts/e2e-smoke.sh` checks (196 total, all green)
+  and 1 browser spec (`e2e/processes.spec.ts`, written by convention, not executed in this
+  environment).
 
 ## Web UI theme (Lizant)
 
