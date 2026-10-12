@@ -149,6 +149,7 @@ test.describe('dynamic logic in the generated form (PLAN §21)', () => {
       page.setDefaultTimeout(8000);
       await page.goto('/admin/entity-manager');
       await page.locator('.ant-table-row').filter({ hasText: 'E2E Author' }).first().click();
+      await page.getByRole('tab', { name: /^Logic/ }).click();
 
       await expect(page.getByRole('button', { name: 'Add rule' })).toBeVisible();
       await page.getByPlaceholder('rule name').fill('vatForCompany');

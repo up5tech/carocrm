@@ -27,7 +27,7 @@ for the remaining priority matrix.
 | Dynamic fields working | done | admin adds a field via metadata patch → usable in records without new code |
 | Dynamic relations working | done | link/linkMultiple fields + `/api/v1/:entity/:id/:relation` link/unlink/list |
 | Generic React CRUD UI working | done | `apps/web`: nav, list (filter/sort/paging/mass delete), detail with relationship panels, create/edit forms — all rendered from `GET /Metadata` |
-| Entity Manager admin UI working | done | `apps/web/src/pages/EntityManagerPage.tsx`: labels, add/disable fields, add relations, enable/disable and create entities |
+| Entity Manager admin UI working | done | `/admin/entity-manager` (`EntityManagerPage.tsx`) lists entity definitions; `/admin/entity-manager/:entity` (`EntityAdminPage.tsx`) edits one per tab — fields, relations, logic, layout, access, indexes, settings |
 | Attachments working | done | `POST /api/v1/Attachment/upload`, MIME/size/extension checks, local FS storage |
 | Outbound email working | done | `MailTransport` port (SMTP + generic relay + disabled/memory), `POST /api/v1/Email/:id/action/send` queues `system.sendEmail`, `email_deliveries` ledger; inbound (§28.2) not implemented |
 | Audit working | done | field-level rows in `audit_log`, `GET /api/v1/AuditLog`, secrets redacted |

@@ -82,7 +82,8 @@ test.describe('CaroCRM UI', () => {
     await page.goto('/admin/entity-manager');
     await expect(page.getByRole('heading', { name: 'Entity Manager' })).toBeVisible();
     await page.locator('.ant-table-tbody tr', { hasText: 'Account' }).first().click();
-
+    // picking an entity opens its editor page on the Fields tab
+    await expect(page).toHaveURL(/\/admin\/entity-manager\/Account$/);
     await page.getByPlaceholder('fieldName').fill(field);
     await page.getByRole('button', { name: 'Add field' }).click();
     await expect(page.locator('.ant-table-tbody').filter({ hasText: field }).first()).toBeVisible();
@@ -101,6 +102,9 @@ test.describe('CaroCRM UI', () => {
     await modal.getByLabel('Name (PascalCase)').fill(entity);
     await modal.getByLabel('Label').fill(entity);
     await modal.getByRole('button', { name: 'OK' }).click();
+    // creating an entity opens its editor page, so the admin goes straight to adding fields
+    await expect(page).toHaveURL(new RegExp(`/admin/entity-manager/${entity}$`));
+    await page.goto('/admin/entity-manager');
     await expect(page.locator('.ant-table-tbody tr', { hasText: entity }).first()).toBeVisible();
 
     await createRecord(page, entity, { name: `${entity} record` });

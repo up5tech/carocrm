@@ -8,6 +8,7 @@ import { AdminExtensionsPage } from './pages/AdminExtensionsPage.js';
 import { AdminJobsPage } from './pages/AdminJobsPage.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { DashboardsPage } from './pages/DashboardsPage.js';
+import { EntityAdminPage } from './pages/EntityAdminPage.js';
 import { EntityDetailPage } from './pages/EntityDetailPage.js';
 import { EntityEditPage } from './pages/EntityEditPage.js';
 import { EntityListPage } from './pages/EntityListPage.js';
@@ -67,6 +68,7 @@ export function AppRoutes() {
         <Route path="/:entity/:id" element={<EntityDetailPage />} />
         <Route path="/:entity/:id/edit" element={<EntityEditPage />} />
         <Route path="/admin/entity-manager" element={<EntityManagerPage />} />
+        <Route path="/admin/entity-manager/:entityName" element={<EntityAdminPage />} />
         <Route path="/admin/audit-log" element={<AdminAuditPage />} />
         <Route path="/admin/jobs" element={<AdminJobsPage />} />
         <Route path="/admin/extensions" element={<AdminExtensionsPage />} />
