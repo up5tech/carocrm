@@ -16,6 +16,8 @@ import { HomePage } from './pages/HomePage.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { SearchPage } from './pages/SearchPage.js';
 import { StreamPage } from './pages/StreamPage.js';
+import { WorkflowEditorPage } from './pages/WorkflowEditorPage.js';
+import { WorkflowsPage } from './pages/WorkflowsPage.js';
 import { useSession } from './state/session.js';
 
 export function AppRoutes() {
@@ -62,6 +64,8 @@ export function AppRoutes() {
         <Route path="/admin/audit-log" element={<AdminAuditPage />} />
         <Route path="/admin/jobs" element={<AdminJobsPage />} />
         <Route path="/admin/extensions" element={<AdminExtensionsPage />} />
+        <Route path="/admin/workflows" element={<WorkflowsPage />} />
+        <Route path="/admin/workflows/:id" element={<WorkflowEditorPage />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </AppShell>

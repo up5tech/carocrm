@@ -159,3 +159,107 @@ export interface ExtensionListResult {
   list: ExtensionRow[];
   total: number;
 }
+
+/** Phase 15 — workflows (PLAN §35). */
+export type WorkflowNodeType = 'action' | 'condition' | 'delay' | 'end';
+export type WorkflowVersionStatus = 'draft' | 'published' | 'archived';
+export type WorkflowRunStatus = 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+
+export interface WorkflowNode {
+  id: string;
+  type: WorkflowNodeType;
+  name: string;
+  /** action nodes only */
+  action?: string | undefined;
+  params?: Record<string, unknown> | undefined;
+  next?: string | undefined;
+  /** condition nodes only */
+  formula?: string | undefined;
+  then?: string | undefined;
+  otherwise?: string | undefined;
+  /** delay nodes only */
+  seconds?: number | undefined;
+}
+
+export interface WorkflowDefinitionShape {
+  trigger: { eventType: string; entityType: string };
+  start: string;
+  nodes: WorkflowNode[];
+}
+
+export interface WorkflowIssue {
+  code: string;
+  message: string;
+  path?: string | undefined;
+}
+
+export interface WorkflowVersionView {
+  id: string;
+  version: number;
+  status: WorkflowVersionStatus;
+  definition: WorkflowDefinitionShape;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
+export interface WorkflowView {
+  id: string;
+  name: string;
+  entityType: string;
+  eventType: string;
+  isActive: boolean;
+  currentVersion: number | null;
+  currentVersionStatus: WorkflowVersionStatus | null;
+  publishedVersion: number | null;
+  versions: WorkflowVersionView[];
+  createdAt: string;
+  modifiedAt: string;
+  issues: WorkflowIssue[];
+}
+
+export interface WorkflowActionSpec {
+  name: string;
+  label: string;
+  description: string;
+  mutatesRecords: boolean;
+}
+
+export interface WorkflowRunStepView {
+  nodeId: string;
+  nodeType: string;
+  name: string;
+  status: string;
+  attempt: number;
+  output: unknown;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface WorkflowRunView {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  version: number | null;
+  entityType: string;
+  entityId: string;
+  status: WorkflowRunStatus;
+  userId: string | null;
+  error: string | null;
+  attempt: number;
+  startedAt: string;
+  finishedAt: string | null;
+  steps: WorkflowRunStepView[];
+}
+
+export interface WorkflowListResult {
+  list: WorkflowView[];
+  total: number;
+}
+
+export interface WorkflowRunListResult {
+  list: WorkflowRunView[];
+  total: number;
+  offset: number;
+  count: number;
+}

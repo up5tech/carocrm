@@ -1,8 +1,8 @@
 # Compatibility matrix (PLAN §60)
 
 Baseline: EspoCRM 9.3.x behavior, observed through public documentation — clean-room,
-no upstream source used (PLAN §2). Status is as of 2026-10-11 (CRM Kernel Alpha + PLAN tasks 17–22,
-search/import/export/dashboards and the extension SDK).
+no upstream source used (PLAN §2). Status is as of 2026-10-12 (CRM Kernel Alpha + PLAN tasks 17–22,
+search/import/export/dashboards, the extension SDK and the workflow engine).
 
 | Capability | Espo baseline | This implementation | Priority | State |
 |---|---|---|---|---|
@@ -30,7 +30,8 @@ search/import/export/dashboards and the extension SDK).
 | Background jobs / scheduled jobs | v9.3.x | BullMQ worker, cron metadata, retries + backoff + dead letter, per-job progress and logs, cooperative cancellation, REST API and admin UI | P2 | implemented |
 | Formula engine | v9.3.x | sandboxed parser → AST → evaluator with an allowlisted function set and execution budgets (`@carocrm/formula`) | P2 | implemented |
 | Dynamic logic | v9.3.x | metadata `dynamicLogic.rules` evaluated in the SPA **and** on every API write | P2 | implemented |
-| Workflows / BPM / Reports / Portals | commercial/baseline | out of Alpha scope | P2 | not started |
+| Workflows | v9.3.x (workflows module) | entity-event triggers, formula conditions, branching, delays, 5 actions, versioned definitions, run history + steps | P2 | implemented (see note) |
+| BPM / Reports / Portals | commercial/baseline | out of scope | P2 | not started |
 | Hooks / domain events | v9.3.x entity hooks + event bus | `HookRegistry` phases + transactional-outbox domain events consumed by a worker subscriber bus | P2 | implemented (see note) |
 | Extension SDK / modules | v9.3.x module/extension packages | `packages/extension-sdk` + host in API and worker: manifest, strict validation, dependency + `order` resolution, metadata contribution, providers/controllers/hooks/jobs, own migrations, SPA nav, admin API + UI | P1 | implemented (see note) |
 | Database | MySQL/MariaDB/PG | PostgreSQL only; MySQL/MariaDB later (PLAN §6.2) | — | PG first |
@@ -134,6 +135,32 @@ phase names and event payloads are PLAN §23.1/§23.2 plus our own design; the u
   transaction as well.
 - Outbox delivery is at-least-once with per-event retry/backoff and a `failed` dead-letter status;
   upstream runs job consumers through its own queue table.
+
+## Workflows (PLAN §35)
+
+Upstream documentation was **not reachable from this environment** while building, so the shapes below
+follow PLAN §35 and our own design; parity with EspoCRM's workflow configuration (its `workflow.json`
+schema, `EntityBeforeCreate`/`EntityAfterUpdate`-style triggers, condition groups, action list, run
+history screen) still needs a documentation pass.
+
+- **Triggers** are entity lifecycle events (`entity.created|updated|deleted|restored` filtered by
+  entity type). Upstream also triggers on record-field changes, entity-create/update and record-field
+  conditions, plus before/after events and manual triggers; only the entity lifecycle subset is built,
+  and matching happens against the existing outbox stream rather than EspoCRM's own event system.
+- **Conditions** are sandboxed formulas from the PLAN §22 engine. Upstream stores a condition group
+  with `{type, entity, ...}` objects and AND/OR composition; we chose one expression per node,
+  because a second condition language would be a second thing to sandbox and test.
+- **Actions** are a closed catalog of five (`updateRecord`, `createRecord`, `createNotification`,
+  `sendEmail`, `runJob`). Upstream offers ~30 actions (create entity, create record, send email,
+  notifications, webhooks, create task, job manager, and extension-registered ones). `runJob` is our
+  extension point: a package registers a §24 job and any workflow can queue it.
+- **Versioning is a deliberate difference**: upstream stores one workflow document and applies edits
+  in place; here every save writes a draft and a published version is immutable, because a run that
+  started against version N must still find version N (PLAN §35 asks for versioning explicitly).
+- **Run history** exists on both sides (`GET /api/v1/WorkflowRun`, `/admin/workflows`); upstream's
+  exact table and screen were not verifiable here.
+- Not built: schedule (cron) triggers, relation-change triggers, a manual "run now", and per-workflow
+  roles beyond administrator-only.
 
 ## Extension SDK (PLAN §38)
 

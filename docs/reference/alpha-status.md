@@ -4,9 +4,10 @@ Date: 2026-10-10. Scope agreed with the user: **CRM Kernel Alpha only** (PLAN ta
 Tasks 17–18 (generic React UI + Entity Manager) were completed afterwards, together with stream,
 calendar and the PLAN §21–§22 dynamic logic + formula engine, §23 hooks + domain events, §24 jobs,
 §25 attachments/file storage, the §28 outbound email subsystem, Phase 12 (search, saved filters,
-CSV import/export, dashboards — see the sections at the end of this file) and Phase 14 (extension
-SDK, `packages/extension-sdk` + the `modules/` sample packages);
-workflow, reports, BPM and portal remain
+CSV import/export, dashboards — see the sections at the end of this file), Phase 14 (extension
+SDK, `packages/extension-sdk` + the `modules/` sample packages) and Phase 15 (workflow engine,
+`packages/workflow` + the admin builder);
+BPM, reports and portals remain
 unimplemented; see PLAN §72 for the remaining priority matrix.
 
 ## Checklist from PLAN §73
@@ -34,8 +35,9 @@ unimplemented; see PLAN §72 for the remaining priority matrix.
 | CSV import/export working | done | `POST /:entity/action/import`, `POST|GET /:entity/action/export`, formula-injection guarded |
 | Dashboards and dashlets working | done | `/api/v1/Dashboard` + dashlets (`list`/`chart`/`kpi`), SPA `/dashboards` |
 | Extension packages working | done | `packages/extension-sdk` + `modules/` sample packages, `/api/v1/Extension`, `/admin/extensions` |
+| Workflows working | done | `packages/workflow` engine, worker execution + run history, `/api/v1/Workflow`, `/admin/workflows` |
 | OpenAPI working | done | `GET /api/v1/OpenApi` (generated from controllers) |
-| API integration tests working | done | 281 vitest tests in `apps/api/test` (+151 package unit tests) |
+| API integration tests working | done | 300 vitest tests in `apps/api/test` (+193 package unit tests) |
 | Playwright login/CRUD tests working | done | `e2e/crud.spec.ts` (`npx playwright test`) |
 | Docker deployment working | partial | `docker-compose.yml` provides postgres/redis/api; images not built yet |
 | Backup and restore documented | done | `docs/operations/backup-restore.md` |
@@ -48,11 +50,11 @@ pnpm db:seed          # applies migrations and seeds admin/roles/metadata into t
 pnpm lint             # eslint, 0 warnings allowed
 pnpm typecheck        # tsc --noEmit over the whole workspace
 pnpm -r build         # all packages + api + worker
-npx vitest run        # 432 tests: 281 API/integration (apps/api/test) + 151 package unit; runs on the configured DATABASE_URL, no extra database
-bash scripts/e2e-smoke.sh   # 127 checks: HTTP end-to-end, incl. attachments, scan hook, chunked upload, outbound email, search/filters/import/export/dashboards, extensions
+npx vitest run        # 493 tests: 300 API/integration (apps/api/test) + 193 package unit; runs on the configured DATABASE_URL, no extra database
+bash scripts/e2e-smoke.sh   # 142 checks: HTTP end-to-end, incl. attachments, scan hook, chunked upload, outbound email, search/filters/import/export/dashboards, extensions, workflows
 bash scripts/worker-smoke.sh # 34 checks: outbox, BullMQ jobs, cron, graceful shutdown, job progress/logs/cancellation, upload cleanup, system.sendEmail
-npx playwright test    # browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic/jobs/email/phase-12 search+csv+dashboards/extensions); starts API+SPA itself
-pnpm --filter @carocrm/worker test  # 116 worker tests (jobs, scheduler, outbox, reminder job, upload cleanup, sendEmail job, domain-event subscribers, extension config)
+npx playwright test    # browser specs (CRUD/Entity Manager/relations/stream/calendar/dynamic logic/jobs/email/phase-12 search+csv+dashboards/extensions/workflows); starts API+SPA itself
+pnpm --filter @carocrm/worker test  # 143 worker tests (jobs, scheduler, outbox, reminder job, upload cleanup, sendEmail job, domain-event subscribers, extension config, workflow engine)
 ```
 
 ## Deviations from PLAN (deliberate, for Alpha)
@@ -306,6 +308,36 @@ three independent extensions without touching the core).
   (list → guard → install → restart → merge → CRUD → nav → uninstall), 5 worker tests, 6 new
   `scripts/e2e-smoke.sh` checks and 1 browser spec (`e2e/extensions.spec.ts`, not executed in this
   environment).
+
+## Workflow engine (Phase 15, PLAN §35, added 2026-10-12)
+
+`packages/workflow` is a pure engine — definition types, validation, trigger matching and the
+executor, with every effect behind a port — and the API (`apps/api/src/workflows`) and the worker
+(`apps/worker/src/workflows`) are thin wiring around it. Three sample automations can be built
+entirely in the new `/admin/workflows` UI; nothing in the kernel knows they exist.
+
+- **Triggers** are matched against the existing domain-event stream (`entity.created|updated|deleted|
+  restored` plus an entity type or `*`), so automation reuses the §23.2 outbox rather than adding a
+  second event mechanism.
+- **Conditions** reuse the §22 sandboxed formula engine rather than inventing a second expression
+  language; **actions** are a closed catalog (`updateRecord`, `createRecord`, `createNotification`,
+  `sendEmail`, `runJob`) with a schema per action, so unknown keys and unknown actions are refused.
+- **Delays** park a run (`waiting`) and enqueue `workflow.resume`, so a delayed automation survives a
+  worker restart; **branching** is the `then`/`otherwise` pair of a condition node.
+- **Versioning**: `current_version_id` is the editable draft, `published_version_id` is immutable and
+  is what runs execute, and editing a published workflow forks the next version. Validation runs at
+  save, at publish **and** at execution, so a hand-edited row cannot be half-run.
+- **Retries are idempotent**: `workflow_run_steps` is the ledger the executor reads before acting, so
+  a redelivered job resumes at the failed node instead of repeating completed ones — a notification
+  is not sent twice. `system.cleanupWorkflowRuns` prunes finished runs after 30 days.
+- **Execution is worker-only**; the trigger merely enqueues, so automation never slows a request.
+- **Deviation**: nodes/edges live in `workflow_versions.definition` (JSONB) rather than separate
+  node/edge tables, so a version is one atomic snapshot.
+- Not built: schedule/cron triggers, relation-change triggers, per-workflow ACL beyond admin-only,
+  manual "run now", and condition/action branching over relation queries. Documentation:
+  `docs/workflows.md`.
+- Verification: 42 engine unit tests, 27 worker tests, 19 API integration tests and 15 new
+  `scripts/e2e-smoke.sh` checks.
 
 ## Web UI theme (Lizant)
 

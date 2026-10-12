@@ -43,6 +43,7 @@ import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.s
 import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
 import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, STREAM_PROVIDERS, StreamUpdateHookService } from './stream/index.js';
+import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
 
 @Module({
   controllers: [
@@ -67,8 +68,9 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     // Phase 12: `/api/v1/Search`, `/SavedFilter`, `/Dashboard` static prefixes plus
     // `:entity/action/{import,export}` — all before the generic `:entity` wildcard.
     ...SEARCH_CONTROLLERS,
-    // `/api/v1/Extension` is a static prefix and must be matched before `:entity`.
+    // `/api/v1/Extension`, `/Workflow` and `/WorkflowRun` are static prefixes, matched before `:entity`.
     ...EXTENSION_CONTROLLERS,
+    ...WORKFLOW_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
     ...ENTITY_CONTROLLERS,
   ],
@@ -88,6 +90,7 @@ import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, S
     ...LOGIC_PROVIDERS,
     ...SEARCH_PROVIDERS,
     ...EXTENSION_PROVIDERS,
+    ...WORKFLOW_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
     ...AUDIT_PROVIDERS,

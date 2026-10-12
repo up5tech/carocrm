@@ -19,6 +19,7 @@ import { BullMqJobQueue } from './queue/job-queue.js';
 import { JobRepository } from './queue/job-repository.js';
 import { Scheduler } from './schedule/scheduler.js';
 import { createStorage } from './storage.js';
+import { registerWorkflows } from './workflows/index.js';
 
 /**
  * Composition root of the worker process.
@@ -91,6 +92,9 @@ export class WorkerApplication {
       backoffMaxMs: this.config.jobBackoffMaxMs,
     });
 
+    // After the queue exists: a workflow run is enqueued through it, like every other job.
+    this.registerWorkflows();
+
     this.jobConsumer = new JobConsumer({
       queueName: this.config.queueName,
       connection: this.workerRedis,
@@ -141,6 +145,23 @@ export class WorkerApplication {
       }
       this.jobRegistry.register(job.name, job.handler);
     }
+  }
+
+  /**
+   * Wires the workflow engine (PLAN §35).
+   *
+   * It subscribes to domain events and registers `workflow.run`, `workflow.resume` and
+   * `system.cleanupWorkflowRuns`, and it enqueues through this worker's own queue — so an automation
+   * is ordinary background work: retryable, cancellable and visible in the Jobs admin page.
+   */
+  private registerWorkflows(): void {
+    registerWorkflows({
+      db: this.db,
+      log: this.log,
+      registry: this.jobRegistry,
+      domainEvents: this.domainEvents,
+      enqueue: async (job, data) => this.jobQueue.enqueue(job, data),
+    });
   }
 
   /** Subscribes each extension's domain-event handlers (PLAN §23.2), namespaced by package id. */

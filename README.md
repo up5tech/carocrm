@@ -10,17 +10,18 @@ domain-event bus, the PLAN §24 job system (progress, logs, cancellation, admin 
 PLAN §25 attachment + file-storage layer (streaming uploads, S3/MinIO, malware-scan hook,
 chunked upload) and the PLAN §28 outbound email subsystem (transport port, SMTP + generic relay,
 delivery ledger, `system.sendEmail` worker job), the PLAN §30/§32/§33 search, import/export and
-dashboard tooling, and the PLAN §38 extension SDK (`packages/extension-sdk` plus the three sample
-packages under `modules/`).**
+dashboard tooling, the PLAN §38 extension SDK (`packages/extension-sdk` plus the three sample packages
+under `modules/`), and the PLAN §35 workflow engine (`packages/workflow` with its admin UI).**
 Backend: metadata engine, entity/query/ACL engines, attachments over a pluggable storage port,
 audit, jobs, sandboxed formula evaluation, declarative record rules, entity lifecycle hooks, a
 transactional-outbox event bus, a BullMQ background-job runner with progress, logs and
-cancellation, email sent through a pluggable mail transport, and an extension host that loads
-installed packages from disk.
+cancellation, email sent through a pluggable mail transport, an extension host that loads
+installed packages from disk, and a workflow engine that automations run through the worker.
 Frontend (`apps/web`): metadata-driven login, navigation, list/detail/edit views, the
-Entity Manager admin UI (including the rule builder), stream panel, calendar, the Jobs admin page
-and the Extensions admin page.
-Inbound mail, import/export, dashboards, workflows, BPM, reports and portals are not implemented yet.
+Entity Manager admin UI (including the rule builder), stream panel, calendar, the Jobs admin page,
+the Extensions admin page and the workflow builder with its run history.
+Inbound mail collection, BPM, reports and portals are not implemented yet; workflows cover entity-event
+automation (triggers, conditions, branching, delays, actions, run history).
 Full checklist and deviations: [docs/reference/alpha-status.md](docs/reference/alpha-status.md).
 
 ## Requirements
@@ -53,7 +54,8 @@ Copy `.env.example` to `.env` and adjust. `pnpm db:seed` creates the target data
 apps/api        NestJS + Fastify REST API (/api/v1)
 apps/worker     BullMQ worker, outbox poller, cron scheduler
 apps/web        metadata-driven React SPA
-packages/       core, metadata, entity-engine, query-engine, acl, files, jobs, extension-sdk, …
+packages/       core, metadata, entity-engine, query-engine, acl, files, jobs, extension-sdk,
+               workflow, formula, mail, search, reports, …
 modules/        sample extension packages (field package, integration, CRM domain module)
 database/       SQL migrations, migration runner, seed data + entity metadata
 docs/           module guide (runtime rules), extension SDK guide, reference, operations

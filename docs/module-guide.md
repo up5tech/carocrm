@@ -360,6 +360,30 @@ Full guide: [`docs/extension-sdk.md`](extension-sdk.md). What a module author ne
 - Sample packages live in `modules/` (field package, integration, custom domain module); point
   `EXTENSIONS_DIR=modules` to try them, then `POST /api/v1/Extension/action/install`.
 
+## Workflow engine (PLAN §35 — Phase 15)
+
+Full guide: [`docs/workflows.md`](workflows.md). What a module author needs to know:
+
+- **Pure engine in a package**: `packages/workflow` owns the definition types, validation, trigger
+  matching and the executor, with every effect behind a port (`WorkflowExecutorPorts`). It has no
+  database, queue or network dependency, which is why it can be tested exhaustively and reused by
+  the API (validation) and the worker (execution) without either depending on the other.
+- **Validation is the gate, and it is the same gate twice.** `POST /Workflow` and
+  `PUT /Workflow/:id` validate before storing, `publish()` re-validates what is actually stored, and
+  `executeWorkflow()` re-validates before running. A definition edited by hand in the database can
+  therefore never be half-executed.
+- **Versioning is the service's job** (`workflow.service.ts`): `current_version_id` is the editable
+  draft, `published_version_id` is what the worker loads, and editing a published workflow forks the
+  next version rather than mutating the live one.
+- **Execution lives in the worker** (`apps/worker/src/workflows/`), wired from
+  `WorkerApplication.registerWorkflows()` after the queue exists. The domain-event subscriber only
+  *enqueues*; nothing a workflow does can block an API request (PLAN §7.4).
+- **Retries are idempotent by construction**: `workflow_run_steps` is the ledger the executor reads
+  before acting, so a redelivered job resumes at the failed node instead of repeating earlier ones.
+- Controller order: `WORKFLOW_CONTROLLERS` (`/api/v1/Workflow`, `/api/v1/WorkflowRun`) sits with
+  the other static prefixes, just before `ENTITY_CONTROLLERS`.
+- `system.cleanupWorkflowRuns` is seeded daily (`25 4 * * *`); runs older than 30 days are pruned.
+
 ## Test database policy (AGENTS.md §3 — mandatory)
 
 Tests run against the **configured primary database** (`DATABASE_URL` from `.env`).

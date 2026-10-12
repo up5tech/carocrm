@@ -12,6 +12,13 @@ import type {
   Metadata,
   Principal,
   Role,
+  WorkflowActionSpec,
+  WorkflowDefinitionShape,
+  WorkflowIssue,
+  WorkflowListResult,
+  WorkflowRunListResult,
+  WorkflowRunView,
+  WorkflowView,
 } from './types.js';
 
 export class ApiError extends Error {
@@ -468,4 +475,23 @@ export const api = {
     }),
   setExtensionEnabled: (id: string, enabled: boolean) =>
     request<ExtensionRow>(`/Extension/${encodeURIComponent(id)}/action/${enabled ? 'enable' : 'disable'}`, { method: 'POST' }),
+
+  // Phase 15 — workflow authoring. `/Workflow` and `/WorkflowRun` are admin-only.
+  workflows: () => request<WorkflowListResult>('/Workflow'),
+  workflow: (id: string) => request<WorkflowView>(`/Workflow/${encodeURIComponent(id)}`),
+  workflowCatalog: () => request<{ events: string[]; actions: WorkflowActionSpec[] }>('/Workflow/action/catalog'),
+  createWorkflow: (input: { name: string; definition: WorkflowDefinitionShape }) =>
+    request<WorkflowView>('/Workflow', { method: 'POST', body: JSON.stringify(input) }),
+  updateWorkflow: (id: string, input: { name?: string; definition?: WorkflowDefinitionShape }) =>
+    request<WorkflowView>(`/Workflow/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
+  publishWorkflow: (id: string) => request<WorkflowView>(`/Workflow/${encodeURIComponent(id)}/action/publish`, { method: 'POST' }),
+  setWorkflowEnabled: (id: string, enabled: boolean) =>
+    request<WorkflowView>(`/Workflow/${encodeURIComponent(id)}/action/${enabled ? 'enable' : 'disable'}`, { method: 'POST' }),
+  deleteWorkflow: (id: string) => request<unknown>(`/Workflow/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  validateWorkflow: (definition: WorkflowDefinitionShape) =>
+    request<{ valid: boolean; issues: WorkflowIssue[] }>('/Workflow/action/validate', { method: 'POST', body: JSON.stringify({ definition }) }),
+
+  workflowRuns: (params: { workflowId?: string | undefined; status?: string | undefined; offset?: number | undefined; limit?: number | undefined } = {}) =>
+    request<WorkflowRunListResult>(`/WorkflowRun${simpleQuery(params)}`),
+  workflowRun: (id: string) => request<WorkflowRunView>(`/WorkflowRun/${encodeURIComponent(id)}`),
 };

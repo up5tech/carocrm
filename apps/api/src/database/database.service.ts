@@ -373,6 +373,70 @@ export interface EmailAccountsTable {
 }
 
 /**
+ * Phase 15 workflows (PLAN §35). `workflows` is identity and activation; `workflow_versions` holds
+ * the immutable/published definitions; runs and steps are the execution history.
+ */
+export interface WorkflowsTable {
+  id: string;
+  name: string;
+  entity_type: string;
+  event_type: string;
+  is_active: boolean;
+  current_version_id: string | null;
+  published_version_id: string | null;
+  is_deleted: boolean;
+  created_by_id: string | null;
+  modified_by_id: string | null;
+  created_at: Date;
+  modified_at: Date;
+}
+
+export interface WorkflowVersionsTable {
+  id: string;
+  workflow_id: string;
+  version: number;
+  definition: unknown;
+  status: 'draft' | 'published' | 'archived';
+  created_by_id: string | null;
+  created_at: Date;
+  published_at: Date | null;
+}
+
+export interface WorkflowRunsTable {
+  id: string;
+  workflow_id: string;
+  version_id: string;
+  entity_type: string;
+  entity_id: string;
+  status: 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+  current_node: string | null;
+  user_id: string | null;
+  error: string | null;
+  context: unknown;
+  attempt: number;
+  started_at: Date;
+  finished_at: Date | null;
+  created_at: Date;
+  modified_at: Date;
+}
+
+export interface WorkflowRunStepsTable {
+  id: string;
+  run_id: string;
+  node_id: string;
+  node_type: string;
+  name: string;
+  status: 'running' | 'completed' | 'failed' | 'skipped';
+  attempt: number;
+  output: unknown;
+  error: string | null;
+  started_at: Date;
+  finished_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
  * Phase 14 extension installation state (PLAN §38.3). `manifest` keeps the manifest document the
  * package was installed from, so an admin can see what was granted without reading the directory.
  */
@@ -428,6 +492,10 @@ export interface Database {
   dashlets: DashletsTable;
   installed_extensions: InstalledExtensionsTable;
   extension_migrations: ExtensionMigrationsTable;
+  workflows: WorkflowsTable;
+  workflow_versions: WorkflowVersionsTable;
+  workflow_runs: WorkflowRunsTable;
+  workflow_run_steps: WorkflowRunStepsTable;
 }
 
 export type Db = Kysely<Database>;
