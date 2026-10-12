@@ -1,14 +1,15 @@
 # CRM Kernel Alpha — status report (PLAN §73)
 
-Date: 2026-10-10. Scope agreed with the user: **CRM Kernel Alpha only** (PLAN tasks 01–16, 19–20 of §87).
+Date: 2026-10-12. Scope agreed with the user: **CRM Kernel Alpha** (PLAN tasks 01–16, 19–20 of §87).
 Tasks 17–18 (generic React UI + Entity Manager) were completed afterwards, together with stream,
 calendar and the PLAN §21–§22 dynamic logic + formula engine, §23 hooks + domain events, §24 jobs,
 §25 attachments/file storage, the §28 outbound email subsystem, Phase 12 (search, saved filters,
 CSV import/export, dashboards — see the sections at the end of this file), Phase 14 (extension
-SDK, `packages/extension-sdk` + the `modules/` sample packages) and Phase 15 (workflow engine,
-`packages/workflow` + the admin builder) and Phase 16 (BPM engine, `packages/bpm` + process admin
-and my-tasks UI); reports and portals remain
-unimplemented; see PLAN §72 for the remaining priority matrix.
+SDK, `packages/extension-sdk` + the `modules/` sample packages), Phase 15 (workflow engine,
+`packages/workflow` + the admin builder), and Phase 16 (BPM engine, `packages/bpm` + process admin
+and my-tasks UI). Phase 17 reporting is now **partially implemented**; scheduled delivery, matrix/pivot
+reports and related-field reporting remain open. Phase 18 portals remain unimplemented; see PLAN §72
+for the remaining priority matrix.
 
 ## Checklist from PLAN §73
 
@@ -376,6 +377,24 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   157 worker tests (14 new for BPM), 54 new `scripts/e2e-smoke.sh` checks (196 total, all green)
   and 1 browser spec (`e2e/processes.spec.ts`, written by convention, not executed in this
   environment).
+
+## Reports (Phase 17, PLAN §34, started 2026-10-12)
+
+- `packages/reports` now owns the versioned report-definition schema, metadata/type validation,
+  bounded grouped/summary calculations, date buckets (UTC), calculated metrics and non-finite guards.
+- The API exposes saved private/shared reports, preview/run and formula-safe CSV export at
+  `/api/v1/Report`; every save and execution revalidates metadata, entity read ACL, readable fields,
+  and the existing Query Engine filter grammar. The API scan is capped at 2,000 records and marks
+  partial outputs; groups are capped at 100.
+- The SPA has a `/reports` builder for list, summary, grouped, chart and KPI reports, simple AND
+  filters, saved visibility, previews and CSV export.
+- Additive migration `013_phase17_reports.sql` adds report-definition storage; it has **not** been
+  applied as part of this code change.
+- Still open: scheduled delivery (the worker does not yet rehydrate the owner's full ACL principal),
+  matrix/pivot reports, related-field joins, and database-level exact aggregation for large datasets.
+  Results beyond the scan budget are explicitly partial, not exact.
+- Verification added: `packages/reports/src/index.test.ts` covers schema semantics, UTC grouping,
+  calculations, list projection, finite-number handling and truncation.
 
 ## Web UI theme (Lizant)
 

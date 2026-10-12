@@ -336,6 +336,19 @@ export interface DashletsTable {
   modified_at: Date;
 }
 
+/** Saved, metadata-validated report definition (PLAN §34 / Phase 17). */
+export interface ReportsTable {
+  id: string;
+  name: string;
+  entity_type: string;
+  user_id: string;
+  definition: unknown;
+  visibility: string;
+  is_shared: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
 /** One row per recipient of one Email record (PLAN §28.3 delivery status). */
 export interface EmailDeliveriesTable {
   id: string;
@@ -572,6 +585,7 @@ export interface Database {
   saved_filters: SavedFiltersTable;
   dashboards: DashboardsTable;
   dashlets: DashletsTable;
+  reports: ReportsTable;
   installed_extensions: InstalledExtensionsTable;
   extension_migrations: ExtensionMigrationsTable;
   workflows: WorkflowsTable;

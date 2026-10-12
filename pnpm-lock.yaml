@@ -104,6 +104,9 @@ importers:
       '@carocrm/query-engine':
         specifier: workspace:*
         version: link:../../packages/query-engine
+      '@carocrm/reports':
+        specifier: workspace:*
+        version: link:../../packages/reports
       '@carocrm/workflow':
         specifier: workspace:*
         version: link:../../packages/workflow

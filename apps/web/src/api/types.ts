@@ -432,3 +432,56 @@ export interface ProcessTaskListResult {
   offset: number;
   count: number;
 }
+
+/** Phase 17 — saved reports (PLAN §34). */
+export type ReportKind = 'list' | 'summary' | 'grouped' | 'chart' | 'kpi';
+export type ReportAggregation = 'count' | 'sum' | 'avg' | 'min' | 'max';
+export interface ReportMetricShape {
+  name: string;
+  operation: ReportAggregation;
+  field?: string;
+}
+export interface ReportDefinitionShape {
+  version?: 1;
+  entityType: string;
+  kind: ReportKind;
+  filters: Record<string, unknown>[];
+  columns: string[];
+  groupBy?: { field: string; grain?: 'day' | 'month' | 'year' };
+  metrics: ReportMetricShape[];
+  calculatedMetrics?: { name: string; operation: 'add' | 'subtract' | 'multiply' | 'divide' | 'percentOf'; left: string; right: string }[];
+}
+export interface ReportRow {
+  id: string;
+  name: string;
+  entityType: string;
+  userId: string;
+  visibility: 'private' | 'shared';
+  isShared: boolean;
+  definition: ReportDefinitionShape;
+  createdAt: string;
+  modifiedAt: string;
+}
+export interface ReportGroup {
+  key: string;
+  count: number;
+  metrics: Record<string, number | null>;
+}
+export interface ReportRunResult {
+  entityType: string;
+  kind: ReportKind;
+  scanned: number;
+  total: number;
+  truncated: boolean;
+  columns?: string[];
+  rows?: Record<string, unknown>[];
+  metrics?: Record<string, number | null>;
+  groups?: ReportGroup[];
+}
+export interface ReportCsv {
+  reportId: string;
+  filename: string;
+  csv: string;
+  rows: number;
+  truncated: boolean;
+}

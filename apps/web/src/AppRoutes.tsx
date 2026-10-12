@@ -16,6 +16,7 @@ import { HomePage } from './pages/HomePage.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { ProcessEditorPage } from './pages/ProcessEditorPage.js';
 import { ProcessesPage } from './pages/ProcessesPage.js';
+import { ReportsPage } from './pages/ReportsPage.js';
 import { SearchPage } from './pages/SearchPage.js';
 import { StreamPage } from './pages/StreamPage.js';
 import { TasksPage } from './pages/TasksPage.js';
@@ -59,6 +60,7 @@ export function AppRoutes() {
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/dashboards" element={<DashboardsPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/:entity" element={<EntityListPage />} />
         <Route path="/:entity/create" element={<EntityEditPage />} />

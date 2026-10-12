@@ -41,6 +41,7 @@ import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
 import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.service.js';
 import { PROCESS_CONTROLLERS, PROCESS_PROVIDERS } from './processes/index.js';
+import { REPORT_CONTROLLERS, REPORT_PROVIDERS } from './reports/index.js';
 import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
 import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, STREAM_PROVIDERS, StreamUpdateHookService } from './stream/index.js';
@@ -69,6 +70,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 12: `/api/v1/Search`, `/SavedFilter`, `/Dashboard` static prefixes plus
     // `:entity/action/{import,export}` — all before the generic `:entity` wildcard.
     ...SEARCH_CONTROLLERS,
+    // Phase 17: saved report definitions, preview/run and CSV export routes.
+    ...REPORT_CONTROLLERS,
     // `/api/v1/Extension`, `/Workflow`, `/WorkflowRun`, `/Process`, `/ProcessInstance` and
     // `/ProcessTask` are static prefixes, matched before `:entity`.
     ...EXTENSION_CONTROLLERS,
@@ -92,6 +95,7 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...EMAIL_PROVIDERS,
     ...LOGIC_PROVIDERS,
     ...SEARCH_PROVIDERS,
+    ...REPORT_PROVIDERS,
     ...EXTENSION_PROVIDERS,
     ...WORKFLOW_PROVIDERS,
     ...PROCESS_PROVIDERS,

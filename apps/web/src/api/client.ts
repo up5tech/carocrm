@@ -20,6 +20,10 @@ import type {
   ProcessTaskListResult,
   ProcessTaskView,
   ProcessView,
+  ReportCsv,
+  ReportDefinitionShape,
+  ReportRow,
+  ReportRunResult,
   Role,
   WorkflowActionSpec,
   WorkflowDefinitionShape,
@@ -473,6 +477,19 @@ export const api = {
       method: 'POST',
       body: '{}',
     }),
+
+  // Phase 17 — saved reports; preview/run/export all execute through the server's ACL-aware Query Engine path.
+  reports: () => request<ReportRow[]>('/Report'),
+  createReport: (input: { name: string; definition: ReportDefinitionShape; visibility?: 'private' | 'shared' }) =>
+    request<ReportRow>('/Report', { method: 'POST', body: JSON.stringify(input) }),
+  updateReport: (id: string, input: Partial<{ name: string; definition: ReportDefinitionShape; visibility: 'private' | 'shared' }>) =>
+    request<ReportRow>(`/Report/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deleteReport: (id: string) => request<{ id: string; deleted: true }>(`/Report/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  previewReport: (definition: ReportDefinitionShape) =>
+    request<{ result: ReportRunResult }>('/Report/action/preview', { method: 'POST', body: JSON.stringify({ definition }) }),
+  runReport: (id: string) =>
+    request<{ report: ReportRow; result: ReportRunResult }>(`/Report/${encodeURIComponent(id)}/action/run`, { method: 'POST', body: '{}' }),
+  exportReport: (id: string) => request<ReportCsv>(`/Report/${encodeURIComponent(id)}/action/export`),
 
   // Phase 14 — extension administration. `/Extension` is admin-only; `/Extension/frontend` is
   // readable by any signed-in user and already filters admin-only entries server-side.
