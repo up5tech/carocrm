@@ -332,6 +332,8 @@ export class EmailService {
   private async assertCanEdit(record: Record<string, unknown>): Promise<void> {
     if (this.scope.isAdmin) return;
     const decision = await this.acl.canAccessRecord(EMAIL_ENTITY, 'edit', {
+      ...(typeof record['id'] === 'string' ? { id: record['id'] } : {}),
+      ...(typeof record['id'] === 'string' ? { data: record } : {}),
       assignedUserId: typeof record['assignedUserId'] === 'string' ? record['assignedUserId'] : undefined,
       createdById: typeof record['createdById'] === 'string' ? record['createdById'] : undefined,
       teams: teamIdsOf(record),

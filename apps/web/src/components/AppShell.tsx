@@ -7,6 +7,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { useExtensionNav } from '../state/extensions.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
+import { portalBase, usePortalContext } from '../state/portal.js';
 import { useSession } from '../state/session.js';
 
 const { Sider, Content, Footer } = Layout;
@@ -26,7 +27,18 @@ const EXTENSION_ICONS: Record<string, ReactNode> = {
   ThunderboltOutlined: <ThunderboltOutlined />,
 };
 
+/**
+ * Shell selector (PLAN §37): portal users get the portal chrome, everyone else the internal
+ * one. The user type resolves asynchronously (`/AppUser/me`), so the branch lives in its own
+ * component instead of an early return inside a hook-using render.
+ */
 export function AppShell({ children }: { children: ReactNode }) {
+  const { principal } = useSession();
+  if (principal?.type === 'portal') return <PortalShell>{children}</PortalShell>;
+  return <InternalShell>{children}</InternalShell>;
+}
+
+function InternalShell({ children }: { children: ReactNode }) {
   const { principal, signOut } = useSession();
   const metadata = useMetadata();
   const extensionNav = useExtensionNav();
@@ -68,6 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       admin.push({ key: '/admin/workflows', icon: <ApartmentOutlined />, label: <Link to="/admin/workflows">Workflows</Link> });
       admin.push({ key: '/admin/processes', icon: <ShareAltOutlined />, label: <Link to="/admin/processes">Processes</Link> });
     }
+    admin.push({ key: '/admin/portals', icon: <ProjectOutlined />, label: <Link to="/admin/portals">Portals</Link> });
     groups.push({ type: 'group', key: 'grp-admin', label: 'Administration', children: admin });
     return groups;
   }, [metadata.data, principal?.type, extensionNav.data]);
@@ -145,6 +158,88 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Layout>
           <Content className="lizant-content">{children}</Content>
           <Footer className="lizant-footer">CaroCRM ©{new Date().getFullYear()} — metadata-driven CRM kernel</Footer>
+        </Layout>
+      </Layout>
+    </Layout>
+  );
+}
+
+/**
+ * Phase 18 portal shell (PLAN §37): the portal's own name and navigation only. Internal
+ * entities appear solely when the portal's nav items name them, and every record read is
+ * portal-ACL scoped server-side, so this chrome grants nothing by itself.
+ */
+function PortalShell({ children }: { children: ReactNode }) {
+  const { principal, signOut } = useSession();
+  const context = usePortalContext();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { message } = AntApp.useApp();
+  const [collapsed, setCollapsed] = useState(false);
+  const base = portalBase(principal?.type);
+
+  const navItems = useMemo<MenuItems>(() => {
+    const items: MenuItems = [{ key: '/portal', icon: <AppstoreOutlined />, label: <Link to="/portal">Home</Link> }];
+    for (const item of context.data?.nav ?? []) {
+      items.push({
+        key: item.route ?? (item.entity ? `${base}/${item.entity}` : '/portal'),
+        icon: <DatabaseOutlined />,
+        label: <Link to={item.entity ? `${base}/${item.entity}` : (item.route ?? base)}>{item.label}</Link>,
+      });
+    }
+    return items;
+  }, [context.data?.nav, base]);
+
+  const selectedKey = useMemo(() => {
+    const segments = location.pathname.split('/').filter(Boolean);
+    if (segments.length <= 1) return '/portal';
+    return `/portal/${segments[1]}`;
+  }, [location.pathname]);
+
+  const userMenu: MenuItems = [
+    {
+      key: 'signout',
+      label: 'Sign out',
+      onClick: async () => {
+        await signOut();
+        void message.success('Signed out.');
+        navigate('/login', { replace: true });
+      },
+    },
+  ];
+
+  return (
+    <Layout style={{ minHeight: '100vh' }}>
+      <header className="lizant-header">
+        <div className="lizant-brand" title={context.data?.portal.name ?? 'Portal'}>
+          <span className="lizant-brand-mark">P</span>
+          {context.data?.portal.name ?? 'Portal'}
+        </div>
+        <div className="lizant-header-actions">
+          <Dropdown menu={{ items: userMenu }} trigger={['click']}>
+            <span className="lizant-avatar" title={principal?.userName}>
+              {(principal?.userName ?? '?').slice(0, 2).toUpperCase()}
+            </span>
+          </Dropdown>
+        </div>
+      </header>
+      <Layout>
+        <Sider
+          className="lizant-sider"
+          width={220}
+          collapsedWidth={72}
+          collapsible
+          collapsed={collapsed}
+          onCollapse={setCollapsed}
+          trigger={null}
+        >
+          <div className="lizant-sider-scroll">
+            <Menu mode="inline" items={navItems} selectedKeys={[selectedKey]} />
+          </div>
+        </Sider>
+        <Layout>
+          <Content className="lizant-content">{children}</Content>
+          <Footer className="lizant-footer">External portal — access limited to your records</Footer>
         </Layout>
       </Layout>
     </Layout>

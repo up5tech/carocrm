@@ -6,6 +6,7 @@ import { AppShell } from './components/AppShell.js';
 import { AdminAuditPage } from './pages/AdminAuditPage.js';
 import { AdminExtensionsPage } from './pages/AdminExtensionsPage.js';
 import { AdminJobsPage } from './pages/AdminJobsPage.js';
+import { AdminPortalsPage } from './pages/AdminPortalsPage.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { DashboardsPage } from './pages/DashboardsPage.js';
 import { EntityAdminPage } from './pages/EntityAdminPage.js';
@@ -15,6 +16,7 @@ import { EntityListPage } from './pages/EntityListPage.js';
 import { EntityManagerPage } from './pages/EntityManagerPage.js';
 import { HomePage } from './pages/HomePage.js';
 import { LoginPage } from './pages/LoginPage.js';
+import { PortalHomePage } from './pages/PortalHomePage.js';
 import { ProcessEditorPage } from './pages/ProcessEditorPage.js';
 import { ProcessesPage } from './pages/ProcessesPage.js';
 import { ReportsPage } from './pages/ReportsPage.js';
@@ -49,6 +51,27 @@ export function AppRoutes() {
     );
   }
 
+  // Phase 18: a portal user only ever sees the portal routes (PLAN §37). Internal routes —
+  // including the admin screens — redirect back to the portal home.
+  if (principal.type === 'portal') {
+    return (
+      <AppShell>
+        <Routes>
+          <Route path="/" element={<Navigate to="/portal" replace />} />
+          <Route path="/portal" element={<PortalHomePage />} />
+          {/* The generated list/detail pages read the `:entity`/`:id` params, so the portal
+              reuses them; every read they perform is portal-ACL scoped server-side. */}
+          <Route path="/portal/:entity" element={<EntityListPage />} />
+          <Route path="/portal/:entity/create" element={<EntityEditPage />} />
+          <Route path="/portal/:entity/:id" element={<EntityDetailPage />} />
+          <Route path="/portal/:entity/:id/edit" element={<EntityEditPage />} />
+          <Route path="/login" element={<Navigate to="/portal" replace />} />
+          <Route path="*" element={<Navigate to="/portal" replace />} />
+        </Routes>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell>
       <Routes>
@@ -76,6 +99,7 @@ export function AppRoutes() {
         <Route path="/admin/workflows/:id" element={<WorkflowEditorPage />} />
         <Route path="/admin/processes" element={<ProcessesPage />} />
         <Route path="/admin/processes/:id" element={<ProcessEditorPage />} />
+        <Route path="/admin/portals" element={<AdminPortalsPage />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </AppShell>

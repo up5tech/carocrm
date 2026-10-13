@@ -368,6 +368,11 @@ export class EntityCrudService {
   private async matchesPredicate(action: 'read' | 'edit' | 'delete', predicate: AclPredicate, record: EntityRecord): Promise<boolean> {
     if (predicate.kind === 'allowAll') return true;
     if (predicate.kind === 'denyAll') return false;
+    // Phase 18: portal visibility is decided from the loaded record, never from the generic
+    // own/team evaluator, so list and by-id reads agree.
+    if (predicate.kind === 'portal') {
+      return this.acl.portalRecordVisible(record.entityType, record.id, record.data);
+    }
     return (await this.acl.canAccessRecord(record.entityType, action, record.data)).allowed === true;
   }
 

@@ -16,6 +16,8 @@ import {
   useEntity,
   useMetadata,
 } from '../state/metadata.js';
+import { portalBase } from '../state/portal.js';
+import { useSession } from '../state/session.js';
 
 const GRID_STYLE: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0 16px' };
 
@@ -56,6 +58,8 @@ function buildEntries(definition: EntityDefinition | undefined, logic: ReturnTyp
 export function EntityEditPage() {
   const { entity, id } = useParams<{ entity: string; id?: string }>();
   const navigate = useNavigate();
+  const { principal } = useSession();
+  const base = portalBase(principal?.type);
   const { message } = AntApp.useApp();
   const definition = useEntity(entity);
   const metadata = useMetadata();
@@ -169,7 +173,7 @@ export function EntityEditPage() {
           try {
             const record = id ? await api.update(entity, id, payload) : await api.create(entity, payload);
             void message.success('Saved.');
-            navigate(`/${entity}/${String(record['id'] ?? '')}`);
+            navigate(`${base}/${entity}/${String(record['id'] ?? '')}`);
           } catch (error) {
             void message.error(error instanceof Error ? error.message : 'Save failed.');
           } finally {
@@ -192,7 +196,7 @@ export function EntityEditPage() {
           <Button type="primary" htmlType="submit" loading={saving} disabled={blocked}>
             Save
           </Button>
-          <Button onClick={() => navigate(id ? `/${entity}/${id}` : `/${entity}`)}>Cancel</Button>
+          <Button onClick={() => navigate(id ? `${base}/${entity}/${id}` : `${base}/${entity}`)}>Cancel</Button>
         </Space>
       </Form>
     </Card>

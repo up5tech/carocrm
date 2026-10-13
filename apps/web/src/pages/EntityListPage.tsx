@@ -6,6 +6,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, type SavedFilterRow, type WhereClause } from '../api/client.js';
 import { FieldValue } from '../components/fields.js';
 import { fieldLabel, filterEntries, layoutPanelsFor, listEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
+import { portalBase } from '../state/portal.js';
+import { useSession } from '../state/session.js';
 import type { FilterDraft } from '../types/views.js';
 
 const OPERATORS: { value: string; label: string }[] = [
@@ -21,6 +23,8 @@ const OPERATORS: { value: string; label: string }[] = [
 export function EntityListPage() {
   const { entity: entityName } = useParams<{ entity: string }>();
   const navigate = useNavigate();
+  const { principal } = useSession();
+  const base = portalBase(principal?.type);
   const { message } = AntApp.useApp();
   const metadata = useMetadata();
   const definition = useEntity(entityName);
@@ -222,7 +226,7 @@ export function EntityListPage() {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => navigate(`/${entityName}/create`)}
+            onClick={() => navigate(`${base}/${entityName}/create`)}
           >
             Create
           </Button>
@@ -316,7 +320,7 @@ export function EntityListPage() {
             sorter: entry.field.sortable !== false,
             render: (_: unknown, row: Record<string, unknown>) =>
               entry.name === displayField ? (
-                <Link className="lizant-row-link" to={`/${entityName}/${String(row['id'])}`}>
+                <Link className="lizant-row-link" to={`${base}/${entityName}/${String(row['id'])}`}>
                   {String(row[entry.name] ?? '')}
                 </Link>
               ) : (
@@ -334,7 +338,7 @@ export function EntityListPage() {
                   type="text"
                   aria-label="Edit record"
                   icon={<EditOutlined />}
-                  onClick={() => navigate(`/${entityName}/${String(row['id'])}/edit`)}
+                  onClick={() => navigate(`${base}/${entityName}/${String(row['id'])}/edit`)}
                 />
                 <Popconfirm
                   title="Delete this record?"

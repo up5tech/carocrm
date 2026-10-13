@@ -41,6 +41,7 @@ import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
 import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.service.js';
 import { PROCESS_CONTROLLERS, PROCESS_PROVIDERS } from './processes/index.js';
+import { PORTAL_CONTROLLERS, PORTAL_PROVIDERS } from './portal/index.js';
 import { REPORT_CONTROLLERS, REPORT_PROVIDERS } from './reports/index.js';
 import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
@@ -77,6 +78,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...EXTENSION_CONTROLLERS,
     ...WORKFLOW_CONTROLLERS,
     ...PROCESS_CONTROLLERS,
+    // Phase 18: `/api/v1/Portal` (portal user + admin) and `/api/v1/PortalRole` static prefixes.
+    ...PORTAL_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
     ...ENTITY_CONTROLLERS,
   ],
@@ -99,6 +102,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...EXTENSION_PROVIDERS,
     ...WORKFLOW_PROVIDERS,
     ...PROCESS_PROVIDERS,
+    // Phase 18: portal ACL policy (delegated to by AclApiService) + portal admin/portal-user services.
+    ...PORTAL_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
     ...AUDIT_PROVIDERS,
@@ -125,6 +130,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
           if (!record) return false;
           const teams = Array.isArray(record.data['teams']) ? (record.data['teams'] as string[]) : undefined;
           const decision = await acl.canAccessRecord(entityType, 'read', {
+            id: recordId,
+            data: record.data,
             assignedUserId: record.assignedUserId,
             createdById: record.createdById,
             ...(teams !== undefined ? { teams } : {}),
@@ -161,6 +168,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
           if (!record) return false;
           const teams = Array.isArray(record.data['teams']) ? (record.data['teams'] as string[]) : undefined;
           const decision = await acl.canAccessRecord(entityType, action, {
+            id: recordId,
+            data: record.data,
             assignedUserId: record.assignedUserId,
             createdById: record.createdById,
             ...(teams !== undefined ? { teams } : {}),

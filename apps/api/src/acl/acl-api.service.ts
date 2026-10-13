@@ -10,13 +10,10 @@ import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
+import { PortalPolicyService } from '../portal/portal-policy.service.js';
+import type { AclPredicate } from './predicate.js';
 
-/** Record-scope descriptor injected into list/detail queries by the record store. */
-export type AclPredicate =
-  | { readonly kind: 'allowAll' }
-  | { readonly kind: 'denyAll' }
-  | { readonly kind: 'own'; readonly userId: string }
-  | { readonly kind: 'team'; readonly userId: string; readonly teamIds: readonly string[] };
+export type { AclPredicate } from './predicate.js';
 
 export interface FieldAccess {
   readonly read: AclRoleLevel;
@@ -24,9 +21,13 @@ export interface FieldAccess {
 }
 
 export interface AclRecordLike {
+  /** Record id — the portal policy requires it to establish record visibility. */
+  readonly id?: string | undefined;
   readonly assignedUserId?: string | undefined;
   readonly createdById?: string | undefined;
   readonly teams?: readonly string[] | undefined;
+  /** Full record attributes when the caller already has them (portal link visibility). */
+  readonly data?: Record<string, unknown> | undefined;
 }
 
 interface RolePermissions {
@@ -71,10 +72,22 @@ export class AclApiService {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
+    @Inject(PortalPolicyService) private readonly portal: PortalPolicyService,
   ) {}
+
+  /**
+   * Phase 18 (PLAN §37): portal principals are decided by the portal policy provider, never by
+   * the internal role tables. Internal roles, teams and the sysAdmin role are all invisible to a
+   * portal session — `AuthService.principalFromUser` keeps `assigned_role_ids` empty for portal
+   * users and this branch ignores them even if a row still carries them.
+   */
+  private get isPortalPrincipal(): boolean {
+    return this.scope.userType === 'portal';
+  }
 
   /** Effective ACL level of the current principal for `entity`/`action`. */
   async canUser(entity: string, action: AclAction): Promise<AclRoleLevel> {
+    if (this.isPortalPrincipal) return this.portal.canUser(entity, action);
     const snapshot = await this.snapshot();
     if (snapshot.admin) return 'all';
     const levels = snapshot.roles.map((role) => roleLevel(role, entity, action));
@@ -92,6 +105,7 @@ export class AclApiService {
 
   /** Merged (max) field access across the principal's roles; unrestricted defaults to 'all'. */
   async fieldAccess(entity: string, field: string): Promise<FieldAccess> {
+    if (this.isPortalPrincipal) return this.portal.fieldAccess(entity, field);
     const snapshot = await this.snapshot();
     if (snapshot.admin) return { read: 'all', edit: 'all' };
     const camel = toCamelCase(field);
@@ -103,6 +117,7 @@ export class AclApiService {
 
   /** Every metadata field the principal may read (used by list/detail serialization). */
   async visibleFields(entity: string): Promise<string[]> {
+    if (this.isPortalPrincipal) return this.portal.visibleFields(entity);
     const snapshot = await this.snapshot();
     const fields = Object.keys(this.metadata.registry.getFields(entity));
     if (!fields.includes('id')) fields.unshift('id');
@@ -116,6 +131,7 @@ export class AclApiService {
 
   /** Remove fields the principal may not read from a serialized record. */
   async stripRestricted(entity: string, dto: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (this.isPortalPrincipal) return this.portal.stripRestricted(entity, dto);
     const snapshot = await this.snapshot();
     if (snapshot.admin) return dto;
     const evaluator = evaluatorFor(snapshot, entity);
@@ -134,6 +150,10 @@ export class AclApiService {
 
   /** Reject writes touching fields restricted with edit level 'no'. */
   async assertFieldWrites(entity: string, data: Record<string, unknown>): Promise<void> {
+    if (this.isPortalPrincipal) {
+      await this.portal.assertFieldWrites(entity, data);
+      return;
+    }
     const snapshot = await this.snapshot();
     if (snapshot.admin) return;
     const evaluator = evaluatorFor(snapshot, entity);
@@ -150,6 +170,7 @@ export class AclApiService {
 
   /** List/detail record-scope predicate derived from the entity level. */
   async recordPredicate(entity: string, action: AclAction): Promise<AclPredicate> {
+    if (this.isPortalPrincipal) return this.portal.recordPredicate(entity, action);
     const level = await this.canUser(entity, action);
     if (level === 'no') return { kind: 'denyAll' };
     if (level === 'all' || level === 'yes') return { kind: 'allowAll' };
@@ -159,8 +180,12 @@ export class AclApiService {
     return { kind: 'team', userId, teamIds: this.scope.teamIds() };
   }
 
-  /** Record level decision honouring own/team scoping. Used for get/update/delete. */
+  /**
+   * Record level decision honouring own/team scoping (internal) or portal contact/account
+   * visibility (Phase 18). Used for get/update/delete.
+   */
   async canAccessRecord(entity: string, action: AclAction, record: AclRecordLike): Promise<AclDecision> {
+    if (this.isPortalPrincipal) return this.portal.canAccessRecord(entity, action, record);
     const snapshot = await this.snapshot();
     if (snapshot.admin) return { allowed: true, scope: 'all' };
     if (snapshot.roleIds.length === 0) return { allowed: false, reason: 'No roles assigned' };
@@ -175,8 +200,24 @@ export class AclApiService {
     });
   }
 
+  /**
+   * Phase 18: portal record visibility for an already-loaded record (detail/write paths).
+   * A portal predicate can only exist for a portal principal, so anything else fails closed.
+   */
+  async portalRecordVisible(entity: string, recordId: string, data: Record<string, unknown>): Promise<boolean> {
+    if (!this.isPortalPrincipal) return false;
+    return this.portal.recordVisible(entity, recordId, data);
+  }
+
   /** 403 when the action is not permitted at entity level, 403 also when the record is out of scope. */
   async assertRecordAccess(entity: string, action: AclAction, record: AclRecordLike): Promise<boolean> {
+    if (this.isPortalPrincipal) {
+      const decision = await this.portal.canAccessRecord(entity, action, record);
+      if (!decision.allowed) {
+        throw new AuthorizationDeniedError(decision.reason ?? `No "${action}" access to this "${entity}" record.`, { entity, action });
+      }
+      return true;
+    }
     const level = await this.canUser(entity, action);
     if (level === 'no') {
       throw new AuthorizationDeniedError(`No "${action}" permission for "${entity}".`, { entity, action });
@@ -186,9 +227,10 @@ export class AclApiService {
     return decision.allowed === true;
   }
 
-  /** Drop any memoised role snapshot (call after modifying roles or teams). */
+  /** Drop any memoised role snapshot (call after modifying roles, teams or portal assignments). */
   invalidateSnapshotCache(): void {
     this.snapshots.clear();
+    this.portal.invalidateSnapshotCache();
   }
 
   private async snapshot(): Promise<AclSnapshot> {

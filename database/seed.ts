@@ -35,6 +35,76 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
       ['noAccess', {}],
     );
 
+    // Phase 18 — default portal, its portal role, navigation and dashboard (PLAN §37).
+    // The portal role grants entity-level read only; portal record visibility (contact/account
+    // one-hop) is enforced by the portal ACL policy, never by the internal role tables.
+    await pool.query(
+      `INSERT INTO portals (id, name, url_path, settings) VALUES ($1, 'Customer Portal', '/portal', '{}'::jsonb)
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
+      ['portalCustomer'],
+    );
+    await pool.query(
+      `INSERT INTO portal_roles (id, name, permissions) VALUES ($1, 'Portal Customer', $2)
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, permissions = EXCLUDED.permissions`,
+      [
+        'portalCustomerRole',
+        {
+          Account: { read: 'all', create: 'no', edit: 'no', delete: 'no', stream: 'no' },
+          Contact: { read: 'all', create: 'no', edit: 'no', delete: 'no', stream: 'no' },
+          Opportunity: { read: 'all', create: 'no', edit: 'no', delete: 'no', stream: 'no' },
+          Task: { read: 'all', create: 'no', edit: 'no', delete: 'no', stream: 'no' },
+          Email: { read: 'all', create: 'no', edit: 'no', delete: 'no', stream: 'no' },
+        },
+      ],
+    );
+    await pool.query(
+      `INSERT INTO portals_portal_roles (portal_id, portal_role_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      ['portalCustomer', 'portalCustomerRole'],
+    );
+    for (const item of [
+      { id: 'portalNavHome', label: 'Home', entity: null, route: '/portal', icon: 'home', position: 0 },
+      { id: 'portalNavAccount', label: 'My Account', entity: 'Account', route: null, icon: 'apartment', position: 1 },
+      { id: 'portalNavContacts', label: 'Contacts', entity: 'Contact', route: null, icon: 'contacts', position: 2 },
+      { id: 'portalNavOpportunities', label: 'Opportunities', entity: 'Opportunity', route: null, icon: 'fund', position: 3 },
+      { id: 'portalNavTasks', label: 'Tasks', entity: 'Task', route: null, icon: 'check', position: 4 },
+      { id: 'portalNavEmails', label: 'Emails', entity: 'Email', route: null, icon: 'mail', position: 5 },
+    ]) {
+      await pool.query(
+        `INSERT INTO portal_nav_items (id, portal_id, label, entity, route, icon, position)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING`,
+        [item.id, 'portalCustomer', item.label, item.entity, item.route, item.icon, item.position],
+      );
+    }
+    await pool.query(
+      `INSERT INTO portal_dashboards (id, portal_id, portal_role_id, name, layout, config, is_default)
+       VALUES ($1, $2, NULL, $3, '[]'::jsonb, '{}'::jsonb, TRUE) ON CONFLICT (id) DO NOTHING`,
+      ['portalCustomerDashboard', 'portalCustomer', 'Customer Portal'],
+    );
+    await pool.query(
+      `INSERT INTO portal_dashlets (id, dashboard_id, name, kind, position, config)
+       VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING`,
+      [
+        'portalDashletOpportunities',
+        'portalCustomerDashboard',
+        'Opportunities',
+        'list',
+        0,
+        { entity: 'Opportunity', maxSize: 10, where: [] },
+      ],
+    );
+    await pool.query(
+      `INSERT INTO portal_dashlets (id, dashboard_id, name, kind, position, config)
+       VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING`,
+      [
+        'portalDashletTasks',
+        'portalCustomerDashboard',
+        'Tasks',
+        'kpi',
+        1,
+        { entity: 'Task', maxSize: 10, where: [] },
+      ],
+    );
+
     await pool.query(
       `INSERT INTO teams (id, name) VALUES ($1, 'Sales') ON CONFLICT (id) DO NOTHING`,
       ['teamSales'],

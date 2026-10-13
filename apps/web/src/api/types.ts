@@ -495,3 +495,89 @@ export interface ReportScheduleRow {
   createdAt: string;
   modifiedAt: string;
 }
+
+/** Phase 18 — portals and external access (PLAN §37). */
+export type PortalLevel = 'yes' | 'all' | 'team' | 'own' | 'no';
+
+export interface PortalRow {
+  id: string;
+  name: string;
+  urlPath: string;
+  isActive: boolean;
+  settings: Record<string, unknown>;
+  userCount: number;
+  portalRoleIds: string[];
+  createdAt: string;
+  modifiedAt: string;
+}
+
+export interface PortalRoleRow {
+  id: string;
+  name: string;
+  permissions: Record<string, Record<string, PortalLevel>>;
+  fieldPermissions: Record<string, Record<string, Record<string, PortalLevel>>>;
+  createdAt: string;
+  modifiedAt: string;
+}
+
+export interface PortalNavItemRow {
+  id: string;
+  portalId: string;
+  label: string;
+  entity: string | null;
+  route: string | null;
+  icon: string | null;
+  position: number;
+  isActive: boolean;
+}
+
+export interface PortalDashboardRow {
+  id: string;
+  portalId: string;
+  portalRoleId: string | null;
+  name: string;
+  layout: unknown[];
+  config: Record<string, unknown>;
+  isDefault: boolean;
+  dashlets: { id: string; name: string; kind: string; position: number; config: Record<string, unknown> }[];
+  createdAt: string;
+  modifiedAt: string;
+}
+
+export interface PortalContext {
+  portal: { id: string; name: string; urlPath: string };
+  user: {
+    id: string;
+    userName: string;
+    firstName: string | null;
+    lastName: string | null;
+    emailAddress: string | null;
+    isActive: boolean;
+  };
+  contact: { id: string; name: string | null } | null;
+  roles: { id: string; name: string }[];
+  nav: { id: string; label: string; entity: string | null; route: string | null; icon: string | null; position: number }[];
+  dashboard: {
+    id: string;
+    name: string;
+    dashlets: { id: string; name: string; kind: string; position: number; config: Record<string, unknown> }[];
+  } | null;
+}
+
+export interface PortalUserRow {
+  id: string;
+  userName: string;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  emailAddress: string | null;
+  isAdmin: boolean;
+  isActive: boolean;
+  type: string;
+  roles: string[];
+  portalId: string | null;
+  contactId: string | null;
+  portalRoleIds: string[];
+  createdAt: string;
+  modifiedAt: string;
+}

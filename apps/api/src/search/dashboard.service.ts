@@ -34,6 +34,9 @@ export class DashboardService {
     if (!ENTITY_NAME.test(entity) || !this.metadata.registry.hasEntity(entity)) throw new NotFoundError(`Entity "${entity}" does not exist.`);
   }
   canSee(row: { user_id: string | null; is_shared: boolean }): boolean {
+    // Phase 18: a portal user only ever sees its own dashboards; the portal dashboard itself is
+    // served by `/api/v1/Portal/dashboard` (PLAN §37).
+    if (this.scope.userType === 'portal') return row.user_id !== null && row.user_id === this.scope.userId;
     if (this.scope.isAdmin) return true;
     if (row.user_id !== null && row.user_id === this.scope.userId) return true;
     return row.is_shared;

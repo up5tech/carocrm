@@ -20,6 +20,12 @@ export interface UsersTable {
   auth_method: string;
   password: string | null;
   assigned_role_ids: unknown;
+  /** Phase 18: the portal this user belongs to (portal users only, PLAN §37). */
+  portal_id: string | null;
+  /** Phase 18: the Contact record this portal user is (PLAN §37 contact/account relation). */
+  contact_id: string | null;
+  /** Phase 18: portal roles assigned directly to this user (on top of the portal's roles). */
+  portal_role_ids: unknown;
   title: string | null;
   phone: string | null;
   is_deleted: boolean;
@@ -397,6 +403,78 @@ export interface EmailAccountsTable {
 }
 
 /**
+ * Phase 18 portals (PLAN §37): the external site, its own role space, navigation and
+ * dashboards. Portal record visibility itself is not stored here — it is derived from the
+ * portal user's Contact/Account through the entity link store by the portal ACL policy.
+ */
+export interface PortalsTable {
+  id: string;
+  name: string;
+  url_path: string;
+  is_active: boolean;
+  settings: unknown;
+  is_deleted: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Portal role: the ONLY authority a portal user can have (separate from `roles`). */
+export interface PortalRolesTable {
+  id: string;
+  name: string;
+  permissions: unknown;
+  field_permissions: unknown;
+  is_deleted: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Roles every portal user of a portal holds (PLAN §18.2). */
+export interface PortalsPortalRolesTable {
+  portal_id: string;
+  portal_role_id: string;
+}
+
+/** One navigation entry of a portal: lists one entity, or points at a fixed route. */
+export interface PortalNavItemsTable {
+  id: string;
+  portal_id: string;
+  label: string;
+  entity: string | null;
+  route: string | null;
+  icon: string | null;
+  position: number;
+  is_active: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** A portal dashboard: role-specific, or the portal default when `portal_role_id` is null. */
+export interface PortalDashboardsTable {
+  id: string;
+  portal_id: string;
+  portal_role_id: string | null;
+  name: string;
+  layout: unknown;
+  config: unknown;
+  is_default: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** One dashboard widget; executed through the portal ACL policy, never raw SQL (PLAN §33). */
+export interface PortalDashletsTable {
+  id: string;
+  dashboard_id: string;
+  name: string;
+  kind: string;
+  position: number;
+  config: unknown;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/**
  * Phase 15 workflows (PLAN §35). `workflows` is identity and activation; `workflow_versions` holds
  * the immutable/published definitions; runs and steps are the execution history.
  */
@@ -609,6 +687,12 @@ export interface Database {
   process_instances: ProcessInstancesTable;
   process_tasks: ProcessTasksTable;
   process_events: ProcessEventsTable;
+  portals: PortalsTable;
+  portal_roles: PortalRolesTable;
+  portals_portal_roles: PortalsPortalRolesTable;
+  portal_nav_items: PortalNavItemsTable;
+  portal_dashboards: PortalDashboardsTable;
+  portal_dashlets: PortalDashletsTable;
 }
 
 export type Db = Kysely<Database>;

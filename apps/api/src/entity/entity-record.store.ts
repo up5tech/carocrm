@@ -8,7 +8,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { OperationNodeSource, RawBuilder } from 'kysely';
 import { sql } from 'kysely';
 
-import type { AclPredicate } from '../acl/acl-api.service.js';
+import type { AclPredicate } from '../acl/predicate.js';
 import type { Db, DbTx, EntityRecordsTable } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
@@ -409,6 +409,34 @@ export class PostgresRecordStore implements RecordStorePort {
     return rows.map((row) => row.record_id_b);
   }
 
+  /**
+   * Phase 18 portal visibility: whether a record is linked, in either direction, to any of
+   * `otherIds` (the portal user's contact/account) through the generic link store.
+   */
+  async hasLinkBetween(entity: string, id: string, otherIds: readonly string[]): Promise<boolean> {
+    if (otherIds.length === 0) return false;
+    const row = await this.db
+      .selectFrom('entity_links')
+      .select('id')
+      .where((eb) =>
+        eb.or([
+          eb.and([
+            eb('entity_type_b', '=', entity),
+            eb('record_id_b', '=', id),
+            eb('record_id_a', 'in', otherIds as string[]),
+          ]),
+          eb.and([
+            eb('entity_type_a', '=', entity),
+            eb('record_id_a', '=', id),
+            eb('record_id_b', 'in', otherIds as string[]),
+          ]),
+        ]),
+      )
+      .limit(1)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
   private async runHooks(
     record: EntityRecord,
     previous: Record<string, unknown> | undefined,
@@ -601,6 +629,7 @@ function orderClauses(translated?: TranslatedQuery): RawBuilder<unknown>[] {
 function aclSql(acl?: AclPredicate): RawBuilder<boolean> | undefined {
   if (!acl || acl.kind === 'allowAll') return undefined;
   if (acl.kind === 'denyAll') return sql<boolean>`false`;
+  if (acl.kind === 'portal') return portalVisibilitySql(acl, (column) => col(column));
   const assigned = sql`${col('assigned_user_id')} = ${acl.userId}`;
   if (acl.kind === 'own') {
     return sql<boolean>`( ${assigned} or ${col('created_by_id')} = ${acl.userId} )`;
@@ -716,11 +745,47 @@ function leftExprForAlias(alias: string, ref: ColumnRef, fieldType?: string): Ra
 function aclSqlForAlias(acl: AclPredicate, alias: string): RawBuilder<boolean> | undefined {
   if (acl.kind === 'allowAll') return undefined;
   if (acl.kind === 'denyAll') return sql<boolean>`false`;
+  if (acl.kind === 'portal') return portalVisibilitySql(acl, (column) => sql.id(alias, column));
   const assigned = sql`${sql.id(alias, 'assigned_user_id')} = ${acl.userId}`;
   const creator = sql`${sql.id(alias, 'created_by_id')} = ${acl.userId}`;
   if (acl.kind === 'own') return sql<boolean>`(${assigned} or ${creator})`;
   if (acl.teamIds.length === 0) return sql<boolean>`(${assigned} or ${creator})`;
   return sql<boolean>`(${sql.id(alias, 'team_ids')} ?| cast(${[...acl.teamIds]} as text[]) or ${assigned} or ${creator})`;
+}
+
+/**
+ * Phase 18 portal record visibility as SQL — the exact mirror of
+ * `PortalPolicyService.recordVisible`, so a list and a by-id read decide identically:
+ * the record IS the contact/account, carries a Contact/Account link attribute to it, or is
+ * linked through `entity_links` in either direction. Without a contact or account the
+ * predicate is `false`, never "allow".
+ */
+function portalVisibilitySql(
+  acl: Extract<AclPredicate, { kind: 'portal' }>,
+  column: (name: string) => RawBuilder<unknown>,
+): RawBuilder<boolean> {
+  const ids = [acl.contactId, acl.accountId].filter((id): id is string => typeof id === 'string' && id !== '');
+  if (ids.length === 0) return sql<boolean>`false`;
+  const clauses: RawBuilder<boolean>[] = ids.map((id) => sql<boolean>`${column('id')} = ${id}`);
+  for (const link of acl.linkFields) {
+    const attrs = column('attrs');
+    for (const id of ids) {
+      if (link.multiple) {
+        clauses.push(sql<boolean>`(${attrs} -> ${link.field}::text) @> ${JSON.stringify([id])}::jsonb`);
+      } else {
+        clauses.push(sql<boolean>`(${attrs} ->> ${link.field}::text) = ${id}`);
+      }
+    }
+  }
+  clauses.push(sql<boolean>`exists (
+    select 1 from entity_links l
+    where l.record_id_b = ${column('id')} and l.entity_type_b = ${acl.entity} and l.record_id_a in (${sql.join(ids)})
+  )`);
+  clauses.push(sql<boolean>`exists (
+    select 1 from entity_links l
+    where l.record_id_a = ${column('id')} and l.entity_type_a = ${acl.entity} and l.record_id_b in (${sql.join(ids)})
+  )`);
+  return sql<boolean>`( ${sql.join(clauses, sql` or `)} )`;
 }
 
 function reportRelationKey(relation: StoreReportRelation): string {

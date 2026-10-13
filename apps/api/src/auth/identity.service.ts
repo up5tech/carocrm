@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { RecordNotFoundError } from '@carocrm/core/errors/index.js';
+import { RecordNotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { ConflictException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
@@ -19,6 +19,11 @@ export const CreateUserSchema = z.object({
   isAdmin: z.boolean().optional(),
   isActive: z.boolean().optional(),
   assignedRoleIds: z.array(z.string()).optional(),
+  /** Phase 18: `portal` users get their authority from portal roles only (PLAN §37). */
+  type: z.enum(['admin', 'regular', 'portal']).optional(),
+  portalId: z.string().min(1).max(36).optional(),
+  contactId: z.string().min(1).max(36).optional(),
+  portalRoleIds: z.array(z.string().min(1).max(36)).max(100).optional(),
   title: z.string().max(128).optional(),
   phone: z.string().max(64).optional(),
 });
@@ -65,7 +70,7 @@ export class IdentityService {
       query = query.where('user_name', 'like', `%${where}%`);
     }
     const rows = await query
-      .select(['id', 'user_name', 'first_name', 'last_name', 'email_address', 'is_admin', 'is_active', 'type', 'assigned_role_ids', 'created_at', 'modified_at'])
+      .select(['id', 'user_name', 'first_name', 'last_name', 'email_address', 'is_admin', 'is_active', 'type', 'assigned_role_ids', 'portal_id', 'contact_id', 'portal_role_ids', 'created_at', 'modified_at'])
       .orderBy('user_name')
       .limit(limit)
       .offset(offset)
@@ -102,6 +107,11 @@ export class IdentityService {
     if (exists) {
       throw new ConflictException(`User name "${data.userName}" is already in use.`);
     }
+    const isPortal = (data.type ?? 'regular') === 'portal';
+    if (isPortal && (data.assignedRoleIds ?? []).length > 0) {
+      throw new ValidationError('Portal users are authorized by portal roles only; internal roles cannot be assigned.');
+    }
+    const portal = isPortal ? await this.resolvePortalFields(data) : { portalId: null, contactId: null, portalRoleIds: [] };
     await this.db
       .insertInto('users')
       .values({
@@ -110,12 +120,15 @@ export class IdentityService {
         first_name: data.firstName ?? null,
         last_name: data.lastName ?? null,
         email_address: data.emailAddress ?? null,
-        is_admin: data.isAdmin ?? false,
+        is_admin: isPortal ? false : (data.isAdmin ?? false),
         is_active: data.isActive ?? true,
-        type: data.isAdmin ? 'admin' : 'regular',
+        type: isPortal ? 'portal' : data.isAdmin ? 'admin' : (data.type ?? 'regular'),
         auth_method: 'password',
         password: null,
-        assigned_role_ids: JSON.stringify(data.assignedRoleIds ?? []),
+        assigned_role_ids: JSON.stringify(isPortal ? [] : (data.assignedRoleIds ?? [])),
+        portal_id: portal.portalId,
+        contact_id: portal.contactId,
+        portal_role_ids: JSON.stringify(portal.portalRoleIds),
         title: data.title ?? null,
         phone: data.phone ?? null,
         portal_types: JSON.stringify([]),
@@ -137,15 +150,30 @@ export class IdentityService {
     const data = UpdateUserSchema.parse(payload);
     const user = await this.db.selectFrom('users').select('id').where('id', '=', id).executeTakeFirst();
     if (!user) throw new RecordNotFoundError('User', id);
+    const existing = await this.db
+      .selectFrom('users')
+      .select(['type', 'portal_id', 'contact_id', 'portal_role_ids'])
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
+    const isPortal = (data.type ?? existing.type) === 'portal';
+    if (isPortal && (data.assignedRoleIds ?? []).length > 0) {
+      throw new ValidationError('Portal users are authorized by portal roles only; internal roles cannot be assigned.');
+    }
+    const portal = isPortal ? await this.resolvePortalFields(data, existing) : { portalId: null, contactId: null, portalRoleIds: [] };
     await this.db
       .updateTable('users')
       .set({
         ...(data.firstName !== undefined ? { first_name: data.firstName } : {}),
         ...(data.lastName !== undefined ? { last_name: data.lastName } : {}),
         ...(data.emailAddress !== undefined ? { email_address: data.emailAddress } : {}),
-        ...(data.isAdmin !== undefined ? { is_admin: data.isAdmin, type: data.isAdmin ? 'admin' : 'regular' } : {}),
+        ...(data.isAdmin !== undefined && !isPortal ? { is_admin: data.isAdmin, type: data.isAdmin ? 'admin' : 'regular' } : {}),
         ...(data.isActive !== undefined ? { is_active: data.isActive } : {}),
-        ...(data.assignedRoleIds !== undefined ? { assigned_role_ids: JSON.stringify(data.assignedRoleIds) } : {}),
+        ...(data.type !== undefined && !isPortal ? { type: data.type } : {}),
+        ...(isPortal ? { is_admin: false, type: 'portal', assigned_role_ids: JSON.stringify([]) } : {}),
+        ...(data.assignedRoleIds !== undefined && !isPortal ? { assigned_role_ids: JSON.stringify(data.assignedRoleIds) } : {}),
+        ...(isPortal
+          ? { portal_id: portal.portalId, contact_id: portal.contactId, portal_role_ids: JSON.stringify(portal.portalRoleIds) }
+          : { portal_id: null, contact_id: null, portal_role_ids: JSON.stringify([]) }),
         ...(data.title !== undefined ? { title: data.title } : {}),
         ...(data.phone !== undefined ? { phone: data.phone } : {}),
         modified_at: new Date(),
@@ -156,6 +184,51 @@ export class IdentityService {
       await this.auth.setPassword(id, data.password);
     }
     return this.getUser(id);
+  }
+
+  /**
+   * Phase 18 portal user linkage (PLAN §37). A portal user must point at an existing Contact
+   * record and an active portal, and may hold portal roles only — the two role spaces never
+   * mix. Partial updates keep existing linkage when the field is omitted.
+   */
+  private async resolvePortalFields(
+    data: { portalId?: string | undefined; contactId?: string | undefined; portalRoleIds?: string[] | undefined },
+    existing?: { portal_id: string | null; contact_id: string | null; portal_role_ids: unknown },
+  ): Promise<{ portalId: string | null; contactId: string | null; portalRoleIds: string[] }> {
+    const portalId = data.portalId ?? existing?.portal_id ?? null;
+    const contactId = data.contactId ?? existing?.contact_id ?? null;
+    if (!portalId) {
+      throw new ValidationError('A portal user must be assigned to a portal.');
+    }
+    if (!contactId) {
+      throw new ValidationError('A portal user must be linked to a contact record.');
+    }
+    const portal = await this.db.selectFrom('portals').select(['id', 'is_active', 'is_deleted']).where('id', '=', portalId).executeTakeFirst();
+    if (!portal || !portal.is_active || portal.is_deleted) {
+      throw new ValidationError(`Portal "${portalId}" does not exist or is not active.`);
+    }
+    const contact = await this.db
+      .selectFrom('entity_records')
+      .select('id')
+      .where('entity_type', '=', 'Contact')
+      .where('id', '=', contactId)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirst();
+    if (!contact) {
+      throw new ValidationError(`Contact "${contactId}" does not exist.`);
+    }
+    const portalRoleIds = data.portalRoleIds ?? this.asStringArray(existing?.portal_role_ids);
+    for (const roleId of portalRoleIds) {
+      const role = await this.db.selectFrom('portal_roles').select('id').where('id', '=', roleId).where('is_deleted', '=', false).executeTakeFirst();
+      if (!role) {
+        throw new ValidationError(`Portal role "${roleId}" does not exist.`);
+      }
+    }
+    return { portalId, contactId, portalRoleIds };
+  }
+
+  private asStringArray(value: unknown): string[] {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
   }
 
   async deleteUser(id: string) {
@@ -336,6 +409,9 @@ function toUserDto(row: {
   is_active: boolean;
   type: string;
   assigned_role_ids: unknown;
+  portal_id: string | null;
+  contact_id: string | null;
+  portal_role_ids: unknown;
   created_at: Date;
   modified_at: Date;
 }) {
@@ -350,6 +426,10 @@ function toUserDto(row: {
     isActive: row.is_active,
     type: row.type,
     roles: Array.isArray(row.assigned_role_ids) ? row.assigned_role_ids : [],
+    /** Phase 18: portal assignment + contact relation (PLAN §37); null for internal users. */
+    portalId: row.portal_id,
+    contactId: row.contact_id,
+    portalRoleIds: Array.isArray(row.portal_role_ids) ? row.portal_role_ids : [],
     createdAt: row.created_at.toISOString(),
     modifiedAt: row.modified_at.toISOString(),
   };

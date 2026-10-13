@@ -22,6 +22,10 @@ export interface PrincipalRecord {
   userType: 'admin' | 'regular' | 'api' | 'portal' | 'system';
   roles: string[];
   teams: string[];
+  /** Phase 18: portal assignment (PLAN §37). */
+  portalId?: string | undefined;
+  /** Phase 18: the Contact record a portal user is. */
+  contactId?: string | undefined;
 }
 
 @Injectable()
@@ -220,7 +224,19 @@ export class AuthService {
     const roles = Array.from(new Set([...directRoles, ...teamRoleRows.map((r) => r.role_id)]));
     const userType: PrincipalRecord['userType'] =
       user.type === 'admin' || user.is_admin ? 'admin' : user.type;
-    return { userId: user.id, userName: user.user_name, userType, roles, teams, ...(sessionId !== undefined ? { sessionId } : {}) };
+    // Portal linkage travels with the principal so the portal ACL policy never re-reads the user
+    // row and an internal role list can never be grafted onto a portal session.
+    const portal = user.type === 'portal';
+    return {
+      userId: user.id,
+      userName: user.user_name,
+      userType,
+      roles,
+      teams,
+      ...(sessionId !== undefined ? { sessionId } : {}),
+      ...(portal ? { portalId: user.portal_id ?? undefined } : {}),
+      ...(portal ? { contactId: user.contact_id ?? undefined } : {}),
+    };
   }
 
   async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {

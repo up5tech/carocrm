@@ -400,6 +400,8 @@ export class StreamService {
     const record = await this.store.findById(entityType, entityId);
     if (!record) return false;
     const decision = await this.acl.canAccessRecord(entityType, action, {
+      id: entityId,
+      data: record.data,
       assignedUserId: record.assignedUserId,
       createdById: record.createdById,
       ...(Array.isArray(record.data['teams']) ? { teams: record.data['teams'] as string[] } : {}),

@@ -133,7 +133,7 @@ export class AuthController {
     return {
       ...tokens,
       userId: principal.userId,
-      portalId: null,
+      portalId: principal.portalId ?? null,
       role: principal.roles,
       type: principal.userType,
       csrfToken: csrf,

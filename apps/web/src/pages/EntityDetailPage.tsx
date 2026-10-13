@@ -20,16 +20,20 @@ import {
   useEntity,
   useMetadata,
 } from '../state/metadata.js';
+import { portalBase } from '../state/portal.js';
+import { useSession } from '../state/session.js';
 
 interface PanelProps {
   parent: string;
   parentId: string;
   name: string;
   targetDefinition: EntityDefinition | undefined;
+  /** Route base of the current app: `/portal` for portal users (PLAN §37). */
+  base: string;
 }
 
 /** One relationship panel (PLAN §20 relationship panels) with link/unlink actions. */
-function RelationPanel({ parent, parentId, name, targetDefinition }: PanelProps) {
+function RelationPanel({ parent, parentId, name, targetDefinition, base }: PanelProps) {
   const { message } = AntApp.useApp();
   const navigate = useNavigate();
   const targetName = targetDefinition?.name;
@@ -96,7 +100,7 @@ function RelationPanel({ parent, parentId, name, targetDefinition }: PanelProps)
             Link
           </Button>
           {targetName ? (
-            <Button size="small" icon={<PlusOutlined />} onClick={() => navigate(`/${targetName}/create`)}>
+            <Button size="small" icon={<PlusOutlined />} onClick={() => navigate(`${base}/${targetName}/create`)}>
               New
             </Button>
           ) : null}
@@ -114,7 +118,7 @@ function RelationPanel({ parent, parentId, name, targetDefinition }: PanelProps)
             title: targetDefinition?.label ?? name,
             dataIndex: 'name',
             render: (_: unknown, row: Record<string, unknown>) => (
-              <Link to={`/${targetName ?? ''}/${String(row['id'])}`}>{recordLabel(row, targetDefinition)}</Link>
+              <Link to={`${base}/${targetName ?? ''}/${String(row['id'])}`}>{recordLabel(row, targetDefinition)}</Link>
             ),
           },
           {
@@ -146,6 +150,8 @@ function RelationPanel({ parent, parentId, name, targetDefinition }: PanelProps)
 export function EntityDetailPage() {
   const { entity, id } = useParams<{ entity: string; id: string }>();
   const navigate = useNavigate();
+  const { principal } = useSession();
+  const base = portalBase(principal?.type);
   const { message } = AntApp.useApp();
   const metadata = useMetadata();
   const definition = useEntity(entity);
@@ -208,7 +214,7 @@ export function EntityDetailPage() {
           }
           extra={
             <Space>
-              <Button icon={<EditOutlined />} type="primary" onClick={() => navigate(`/${entity}/${id}/edit`)}>
+              <Button icon={<EditOutlined />} type="primary" onClick={() => navigate(`${base}/${entity}/${id}/edit`)}>
                 Edit
               </Button>
               <Popconfirm
@@ -217,7 +223,7 @@ export function EntityDetailPage() {
                   try {
                     await api.remove(entity, id);
                     void message.success('Deleted.');
-                    navigate(`/${entity}`);
+                    navigate(`${base}/${entity}`);
                   } catch (error) {
                     void message.error(error instanceof Error ? error.message : 'Delete failed.');
                   }
@@ -270,6 +276,7 @@ export function EntityDetailPage() {
             parent={entity}
             parentId={id}
             name={relation}
+            base={base}
             targetDefinition={metadata.data?.[definition.data?.relations[relation]?.target ?? ''] ?? undefined}
           />
         ))}

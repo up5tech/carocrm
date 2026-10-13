@@ -10,6 +10,11 @@ import type {
   ListResult,
   LoginResult,
   Metadata,
+  PortalContext,
+  PortalDashboardRow,
+  PortalNavItemRow,
+  PortalRoleRow,
+  PortalRow,
   Principal,
   ProcessCatalog,
   ProcessDefinitionShape,
@@ -566,4 +571,69 @@ export const api = {
   processTask: (id: string) => request<ProcessTaskView>(`/ProcessTask/${encodeURIComponent(id)}`),
   completeProcessTask: (id: string, input: { outcome: string; comment?: string }) =>
     request<ProcessInstanceView>(`/ProcessTask/${encodeURIComponent(id)}/action/complete`, { method: 'POST', body: JSON.stringify(input) }),
+
+  // Phase 18 — portal user's own surface (PLAN §37). The internal shell never calls these;
+  // the portal shell does, and every record read behind them is portal-ACL scoped.
+  portalMe: () => request<PortalContext>('/Portal/me'),
+  portalNav: () => request<PortalContext['nav']>('/Portal/nav'),
+  portalDashboard: () => request<PortalContext['dashboard']>('/Portal/dashboard'),
+  runPortalDashlet: (dashletId: string) =>
+    request<Record<string, unknown>>(`/Portal/dashboard/dashlets/${encodeURIComponent(dashletId)}/action/run`, { method: 'POST', body: '{}' }),
+
+  // Phase 18 — portal administration (admin only).
+  portals: () => request<PortalRow[]>('/Portal'),
+  portal: (id: string) => request<PortalRow>(`/Portal/${encodeURIComponent(id)}`),
+  createPortal: (input: { name: string; urlPath?: string | undefined; isActive?: boolean | undefined; settings?: Record<string, unknown> | undefined }) =>
+    request<PortalRow>('/Portal', { method: 'POST', body: JSON.stringify(input) }),
+  updatePortal: (id: string, input: Partial<{ name: string; urlPath: string; isActive: boolean; settings: Record<string, unknown> }>) =>
+    request<PortalRow>(`/Portal/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deletePortal: (id: string) => request<{ id: string; deleted: boolean }>(`/Portal/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  setPortalRoles: (id: string, portalRoleIds: string[]) =>
+    request<{ portalId: string; portalRoleIds: string[] }>(`/Portal/${encodeURIComponent(id)}/roles`, {
+      method: 'POST',
+      body: JSON.stringify({ portalRoleIds }),
+    }),
+
+  portalRoles: () => request<PortalRoleRow[]>('/PortalRole'),
+  createPortalRole: (input: { name: string; permissions?: Record<string, Record<string, string>> | undefined; fieldPermissions?: Record<string, Record<string, Record<string, string>>> | undefined }) =>
+    request<PortalRoleRow>('/PortalRole', { method: 'POST', body: JSON.stringify(input) }),
+  updatePortalRole: (id: string, input: Partial<{ name: string; permissions: Record<string, Record<string, string>>; fieldPermissions: Record<string, Record<string, Record<string, string>>> }>) =>
+    request<PortalRoleRow>(`/PortalRole/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deletePortalRole: (id: string) => request<{ id: string; deleted: boolean }>(`/PortalRole/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  portalNavItems: (portalId: string) => request<PortalNavItemRow[]>(`/Portal/${encodeURIComponent(portalId)}/navigation`),
+  createPortalNavItem: (portalId: string, input: { label: string; entity?: string | null | undefined; route?: string | null | undefined; icon?: string | null | undefined; position?: number | undefined; isActive?: boolean | undefined }) =>
+    request<PortalNavItemRow>(`/Portal/${encodeURIComponent(portalId)}/navigation`, { method: 'POST', body: JSON.stringify(input) }),
+  updatePortalNavItem: (portalId: string, itemId: string, input: Partial<{ label: string; entity: string | null; route: string | null; icon: string | null; position: number; isActive: boolean }>) =>
+    request<PortalNavItemRow>(`/Portal/${encodeURIComponent(portalId)}/navigation/${encodeURIComponent(itemId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  deletePortalNavItem: (portalId: string, itemId: string) =>
+    request<{ id: string; deleted: boolean }>(`/Portal/${encodeURIComponent(portalId)}/navigation/${encodeURIComponent(itemId)}`, { method: 'DELETE' }),
+
+  portalDashboards: (portalId: string) => request<PortalDashboardRow[]>(`/Portal/${encodeURIComponent(portalId)}/dashboards`),
+  createPortalDashboard: (portalId: string, input: { name: string; portalRoleId?: string | null | undefined; layout?: unknown[] | undefined; config?: Record<string, unknown> | undefined; isDefault?: boolean | undefined }) =>
+    request<PortalDashboardRow>(`/Portal/${encodeURIComponent(portalId)}/dashboards`, { method: 'POST', body: JSON.stringify(input) }),
+  updatePortalDashboard: (portalId: string, dashboardId: string, input: Partial<{ name: string; portalRoleId: string | null; layout: unknown[]; config: Record<string, unknown>; isDefault: boolean }>) =>
+    request<PortalDashboardRow>(`/Portal/${encodeURIComponent(portalId)}/dashboards/${encodeURIComponent(dashboardId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  deletePortalDashboard: (portalId: string, dashboardId: string) =>
+    request<{ id: string; deleted: boolean }>(`/Portal/${encodeURIComponent(portalId)}/dashboards/${encodeURIComponent(dashboardId)}`, { method: 'DELETE' }),
+  createPortalDashlet: (portalId: string, dashboardId: string, input: { name: string; kind: string; position?: number | undefined; config: Record<string, unknown> }) =>
+    request<Record<string, unknown>>(`/Portal/${encodeURIComponent(portalId)}/dashboards/${encodeURIComponent(dashboardId)}/dashlets`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  updatePortalDashlet: (portalId: string, dashboardId: string, dashletId: string, input: Partial<{ name: string; kind: string; position: number; config: Record<string, unknown> }>) =>
+    request<Record<string, unknown>>(`/Portal/${encodeURIComponent(portalId)}/dashboards/${encodeURIComponent(dashboardId)}/dashlets/${encodeURIComponent(dashletId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  deletePortalDashlet: (portalId: string, dashboardId: string, dashletId: string) =>
+    request<{ id: string; deleted: boolean }>(`/Portal/${encodeURIComponent(portalId)}/dashboards/${encodeURIComponent(dashboardId)}/dashlets/${encodeURIComponent(dashletId)}`, {
+      method: 'DELETE',
+    }),
 };
