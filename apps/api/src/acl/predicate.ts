@@ -25,9 +25,37 @@ export type PortalPredicate = {
   readonly linkFields: readonly PortalLinkField[];
 };
 
+/**
+ * Phase 19 project-scoped access (PLAN_Phase_19_Projects.md §4.4, §9): the global own/team scope
+ * PLUS access granted by the current user's `ProjectRole` in the record's project. It is a union
+ * because the role is how a member reaches a colleague's task; it is bounded by membership, so a
+ * role can never open a record of a project the user does not belong to, and an entity-level 'no'
+ * still denies everything.
+ *
+ * Plain data only — the record store turns it into SQL and `ProjectPolicyService` evaluates the same
+ * rule for by-id reads, so a list and a detail read can never disagree.
+ */
+export type ProjectScopedPredicate = {
+  readonly kind: 'projectScoped';
+  readonly userId: string;
+  /** The global record scope the project rule is unioned with. */
+  readonly base: { readonly kind: 'own' | 'team'; readonly userId: string; readonly teamIds: readonly string[] };
+  /** Attribute holding the project id; `id` when the record IS the project. */
+  readonly projectAttr: string;
+  /** `null` = membership alone is enough, otherwise the `ProjectRole` field that decides. */
+  readonly roleField: string | null;
+  /** Role values granting the whole project. */
+  readonly allValues: readonly string[];
+  /** Role values granting tasks assigned to the user. */
+  readonly assignedValues: readonly string[];
+  /** Role values granting the user's own tasks (owner, assignee or collaborator). */
+  readonly ownValues: readonly string[];
+};
+
 export type AclPredicate =
   | { readonly kind: 'allowAll' }
   | { readonly kind: 'denyAll' }
   | { readonly kind: 'own'; readonly userId: string }
   | { readonly kind: 'team'; readonly userId: string; readonly teamIds: readonly string[] }
-  | PortalPredicate;
+  | PortalPredicate
+  | ProjectScopedPredicate;

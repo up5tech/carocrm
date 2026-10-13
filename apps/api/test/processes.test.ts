@@ -315,7 +315,8 @@ describe('versioning and activation', () => {
 
     const early = await api('POST', `/api/v1/Process/${id}/action/enable`);
     expect(early.statusCode).toBe(422);
-    expect((early.json() as { error: { message: string } }).error.message).toContain('Publish');
+    const earlyError = (early.json() as { error: { message: string; details?: Record<string, unknown> } }).error;
+    expect(`${String(earlyError.details?.['reason'] ?? '')}${earlyError.message}`).toContain('Publish');
 
     const published = await api('POST', `/api/v1/Process/${id}/action/publish`);
     expect(published.statusCode).toBe(200);
@@ -433,7 +434,8 @@ describe('process execution — multi-step approval', () => {
   it('refuses an outcome the task does not offer', async () => {
     const res = await api('POST', `/api/v1/ProcessTask/${firstTaskId}/action/complete`, adminToken, { outcome: 'maybe' });
     expect(res.statusCode).toBe(422);
-    expect((res.json() as { error: { message: string } }).error.message).toContain('not offered');
+    const resError = (res.json() as { error: { message: string; details?: Record<string, unknown> } }).error;
+    expect(`${String(resError.details?.['reason'] ?? '')}${resError.message}`).toContain('not offered');
   });
 
   it('refuses an answer from someone who does not hold the task', async () => {

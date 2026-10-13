@@ -47,8 +47,13 @@ function codeOf(result: CallResult): string {
   return String(((result.body['error'] ?? {}) as { code?: string }).code ?? '');
 }
 
+/**
+ * The message a caller acts on. `error.message` is localized to the generic face of the error code,
+ * so the specific text is read from `error.details.reason` first (see the global exception filter).
+ */
 function messageOf(result: CallResult): string {
-  return String(((result.body['error'] ?? {}) as { message?: string }).message ?? '');
+  const error = (result.body['error'] ?? {}) as { message?: string; details?: Record<string, unknown> };
+  return String(error.details?.['reason'] ?? error.message ?? '');
 }
 
 /** Draft an Email record through the generic entity API — the kernel owns Email CRUD. */

@@ -19,6 +19,11 @@ import { LoginPage } from './pages/LoginPage.js';
 import { PortalHomePage } from './pages/PortalHomePage.js';
 import { ProcessEditorPage } from './pages/ProcessEditorPage.js';
 import { ProcessesPage } from './pages/ProcessesPage.js';
+import { ProjectBoardPage } from './pages/projects/ProjectBoardPage.js';
+import { ProjectGanttPage } from './pages/projects/ProjectGanttPage.js';
+import { ProjectMembersPage } from './pages/projects/ProjectMembersPage.js';
+import { ProjectPlanPage } from './pages/projects/ProjectPlanPage.js';
+import { ProjectSettingsPage } from './pages/projects/ProjectSettingsPage.js';
 import { ReportsPage } from './pages/ReportsPage.js';
 import { SearchPage } from './pages/SearchPage.js';
 import { StreamPage } from './pages/StreamPage.js';
@@ -86,6 +91,12 @@ export function AppRoutes() {
         <Route path="/dashboards" element={<DashboardsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        {/* Phase 19: the Projects views are static routes, matched before the entity wildcard */}
+        <Route path="/Project/:id/plan" element={<ProjectPlanPage />} />
+        <Route path="/Project/:id/board" element={<ProjectBoardPage />} />
+        <Route path="/Project/:id/gantt" element={<ProjectGanttPage />} />
+        <Route path="/Project/:id/members" element={<ProjectMembersPage />} />
+        <Route path="/Project/:id/settings" element={<ProjectSettingsPage />} />
         <Route path="/:entity" element={<EntityListPage />} />
         <Route path="/:entity/create" element={<EntityEditPage />} />
         <Route path="/:entity/:id" element={<EntityDetailPage />} />

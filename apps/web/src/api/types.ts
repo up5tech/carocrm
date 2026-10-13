@@ -584,3 +584,83 @@ export interface PortalUserRow {
   createdAt: string;
   modifiedAt: string;
 }
+
+/** Phase 19 — Projects read models (PLAN_Phase_19_Projects.md §4.12, §7). */
+export interface ProjectTaskRow {
+  id: string;
+  name: string | null;
+  status: string | null;
+  stageId: string | null;
+  groupId: string | null;
+  parentTaskId: string | null;
+  taskType: string;
+  assigneeUserId: string | null;
+  ownerUserId: string | null;
+  priority: string | null;
+  dateStart: string | null;
+  dateEnd: string | null;
+  points: number | null;
+  estimateHours: number | null;
+  sortOrder: number;
+  version: number;
+}
+
+export interface ProjectStageRow {
+  id: string;
+  key: string;
+  name: string;
+  statusValue: string;
+  sortOrder: number;
+}
+
+export interface ProjectPlanGroup {
+  group: Record<string, unknown>;
+  tasks: ProjectTaskRow[];
+}
+
+export interface ProjectPlanView {
+  project: Record<string, unknown>;
+  stages: Record<string, unknown>[];
+  groups: ProjectPlanGroup[];
+  truncated: boolean;
+}
+
+export interface ProjectBoardView {
+  project: Record<string, unknown>;
+  group: Record<string, unknown> | null;
+  columns: { stage: Record<string, unknown>; tasks: ProjectTaskRow[] }[];
+  truncated: boolean;
+}
+
+export interface ProjectGanttView {
+  project: Record<string, unknown>;
+  groups: Record<string, unknown>[];
+  tasks: ProjectTaskRow[];
+  dependencies: { id: string; taskId: string; predecessorTaskId: string; dependencyType: string | null }[];
+  truncated: boolean;
+}
+
+export interface ProjectCapabilities {
+  projectId: string;
+  boardId: string | null;
+  isMember: boolean;
+  role: string | null;
+  roleName: string | null;
+  capabilities: Record<string, boolean>;
+  features: Record<string, boolean>;
+}
+
+export interface ProjectMemberRow {
+  id: string;
+  projectId: string;
+  userId: string;
+  userName: string | null;
+  projectRoleId: string | null;
+  roleName: string | null;
+}
+
+export interface CloneResult {
+  projectId: string;
+  name: string;
+  counts: Record<string, number>;
+}

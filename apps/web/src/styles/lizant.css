@@ -438,3 +438,139 @@ body {
   max-height: 60vh;
   overflow: auto;
 }
+
+/* ---------------------------------------------------------------------------
+ * Phase 19 — Projects: Plan, Kanban and Gantt views. Same compact light surface
+ * as the rest of the SPA (theme.ts tokens, no new palette).
+ * ------------------------------------------------------------------------ */
+.lizant-project-dates {
+  font-size: 12px;
+}
+.lizant-project-group-body {
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lizant-project-group-body.is-over {
+  outline: 1px dashed var(--ant-color-primary, #438eff);
+  outline-offset: 2px;
+}
+.lizant-project-empty-group {
+  font-size: 12px;
+  padding: 6px 0;
+}
+.lizant-project-task {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #eceff3;
+  border-radius: 8px;
+  background: #fff;
+}
+.lizant-project-task.is-dragging {
+  border-color: #438eff;
+  box-shadow: 0 2px 8px rgba(15, 34, 67, 0.12);
+}
+.lizant-project-task-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.lizant-project-task-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.lizant-project-task-name {
+  padding-inline: 4px;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lizant-project-drag-handle {
+  border: 0;
+  background: transparent;
+  color: #a7aeb8;
+  cursor: grab;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.lizant-project-drag-handle:focus-visible {
+  outline: 2px solid #438eff;
+  outline-offset: 1px;
+}
+.lizant-project-subtasks {
+  flex: 1 1 100%;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lizant-project-subtask {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.lizant-project-add-task {
+  width: 100%;
+  text-align: left;
+  margin-top: 6px;
+}
+.lizant-project-board {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.lizant-project-column {
+  flex: 0 0 260px;
+  background: #f7f9fb;
+  border: 1px solid #eceff3;
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 120px;
+}
+.lizant-project-column.is-over {
+  border-color: #438eff;
+}
+.lizant-project-column-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.lizant-project-card {
+  cursor: pointer;
+}
+.lizant-project-card.is-dragging {
+  box-shadow: 0 2px 8px rgba(15, 34, 67, 0.16);
+}
+.lizant-project-gantt {
+  border: 1px solid #eceff3;
+  border-radius: 8px;
+  background: #fff;
+  touch-action: none;
+}
+.lizant-project-gantt svg {
+  display: block;
+}
+.lizant-project-bulk-members {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #eceff3;
+  border-radius: 8px;
+  background: #fbfcfe;
+}

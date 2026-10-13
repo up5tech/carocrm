@@ -373,6 +373,10 @@ export class EntityCrudService {
     if (predicate.kind === 'portal') {
       return this.acl.portalRecordVisible(record.entityType, record.id, record.data);
     }
+    // Phase 19: project membership and role, decided by the same rule as the list SQL.
+    if (predicate.kind === 'projectScoped') {
+      return this.acl.projectScopedAllows(predicate, record.id, record.data);
+    }
     return (await this.acl.canAccessRecord(record.entityType, action, record.data)).allowed === true;
   }
 

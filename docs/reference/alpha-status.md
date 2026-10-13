@@ -449,6 +449,62 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   and `listRoles`/`getRole`/`listTeams`/`getTeam` missed `requireAdmin()` so a portal user
   could read internal roles.
 
+## Projects (Phase 19, PLAN_Phase_19_Projects.md, completed 2026-10-13)
+
+- Ten metadata entities (`Project`, `ProjectCategory`, `ProjectBoard`, `ProjectBoardStage`,
+  `ProjectRole`, `ProjectMember`, `ProjectGroup`, `ProjectTask`, `ProjectTaskCollaborator`,
+  `ProjectTaskDependency`) live in `database/seed-metadata.ts` and in the shared `entity_records`
+  store, so CRUD, field validation, field ACL, audit, stream, attachments and search are the
+  kernel's. The module (`apps/api/src/projects`) adds only what spans records.
+- `projectSchema`: the board is required at creation and immutable afterwards; a task's `status` is
+  always its stage's `statusValue` and a direct status write is refused; groups, stages and
+  milestones must belong to the record's own project; subtask and dependency graphs are acyclic;
+  a parent completes only when its subtasks are done; a disabled project feature is a write
+  refusal, not a data delete. Every rule sits in `ProjectGuardService`, i.e. on the Entity Engine
+  phases, so a generic `PUT /api/v1/ProjectTask/:id` cannot bypass a command.
+- Project roles narrow access inside a project and never widen it for an outsider: the global ACL
+  level is the first gate, and a member with a global level of `own`/`team` is additionally judged
+  by their `ProjectRole` (`projectScoped` ACL predicate, mirrored in SQL by `projectScopeSql` and
+  in JS by `ProjectPolicyService.allowsScoped`, exactly like the Phase 18 portal predicate).
+- Kernel seams this phase needed: an ambient transaction so a multi-record command stays atomic
+  (`apps/api/src/entity/tx-context.ts`); `required` is now enforced for link fields
+  (`EntityManager.validate`); `ProjectTask` joined the read-only calendar; `dashlets.kind` gained
+  `projectTasks` (migration 019); and a validation error keeps its specific text in
+  `error.details.reason`, because `error.message` is the localized face of the code.
+- SPA: `/Project/:id/{plan,board,gantt,members,settings}` with the detail page linking them, dnd-kit
+  drag and drop in Plan and Kanban, a hand-drawn SVG Gantt with drag/resize and editable dependency
+  lines, the clone dialog, the member table with bulk membership, and the `projectTasks` dashlet.
+  Views are drawn from `…/action/capabilities`, so a control appears exactly when the server accepts
+  it. i18n keys in `i18n/{en,vi}/web.json` under `web.projects.*`.
+- Shared UI touched on purpose: the calendar day cell now holds six chips instead of four and shows
+  a `+N` badge for the rest (`CELL_EVENTS` in `CalendarPage.tsx`), because a fourth calendar entity
+  made silent hiding visible. Nothing else in that page changed.
+- Additive migrations only (`018_phase19_projects.sql`, `019_phase19_dashlet_kind.sql`); no new
+  database, no reset, no truncate. Defaults (one board + seven stages + three roles) are seeded by
+  `database/seed.ts` with fixed ids and `ON CONFLICT DO NOTHING`, never on request paths.
+- The Phase 14 sample package `modules/project-domain` no longer defines its own `Project` entity:
+  it now contributes `budget`, `progress` and the `isOverdue` formula to the core entity (the same
+  shape `account-health-fields` uses), and its `/api/v1/Project/:id/summary` route still proves an
+  extension controller running ahead of the generic record routes.
+- Not built: working-time shading in the Gantt (no calendar engine to reuse), multi-select Gantt
+  moves, the two Plan-view keyboard shortcuts, cross-project dependencies, portals for projects.
+  Details in `docs/modules/projects/compatibility.md`.
+- Verification (run 2026-10-13): 66 new vitest checks — `projects-domain` (19 pure rules),
+  `projects` (21 records, groups, tasks, projections, settings), `projects-work` (10 transitions,
+  subtasks, all four dependency types, collaborators), `projects-security` (12 authorization and
+  leak tests), `projects-clone` (4) — each suite run as its own vitest process (see the caveat
+  below). Browser: `e2e/projects.spec.ts` passes (create → plan → complete → reload → kanban →
+  gantt → members → settings → clone → calendar, then it deletes what it made).
+  `pnpm test:e2e` = 196 ok / 0 fail. `pnpm lint`, `pnpm typecheck` and `pnpm -r build` are green.
+  Regressions checked by re-running `extensions` (17), `calendar` (7), `entity-crud` (19),
+  `email` (12), `jobs` (13), `dynamic-logic` (19), `phase12-search-import-dashboards` (12).
+- Known pre-existing failures found while verifying, NOT caused by Phase 19 and reproduced with the
+  Projects code and its kernel edits reverted to `HEAD`: the browser specs
+  `dynamic-logic` (2), `extensions`, `processes`, `search-import-dashboards`, `workflows` assert UI
+  text that the Phase 7A i18n work changed (the same `error.message` localization this phase exposed
+  through `details.reason`), and `attachments`/`audit` abort the vitest worker when another booting
+  suite shares the process, so `pnpm test` cannot run the whole suite in one process.
+
 ## Web UI theme (Lizant)
 
 `apps/web` follows the Lizant Ant Design admin look. Design tokens live in

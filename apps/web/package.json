@@ -10,11 +10,14 @@
     "lint": "eslint src --max-warnings=0"
   },
   "dependencies": {
+    "@ant-design/icons": "^5.5.0",
     "@carocrm/api-client": "workspace:*",
     "@carocrm/core": "workspace:*",
     "@carocrm/formula": "workspace:*",
     "@carocrm/metadata": "workspace:*",
-    "@ant-design/icons": "^5.5.0",
+    "@dnd-kit/core": "^6",
+    "@dnd-kit/sortable": "^10",
+    "@dnd-kit/utilities": "^3",
     "@tanstack/react-query": "^5.60.0",
     "antd": "^5.20.0",
     "dayjs": "^1.11.0",

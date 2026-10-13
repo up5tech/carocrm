@@ -135,7 +135,9 @@ describe('extension installation', () => {
     const res = await api('POST', '/api/v1/Extension/action/install', adminToken, { id: 'project-domain' });
     expect(res.statusCode).toBe(422);
     const body = res.json() as { error: { message: string; details: Record<string, unknown> } };
-    expect(body.error.message).toContain('webhook-integration');
+    // The catalog localizes `error.message` to the generic face of the code; the specific reason
+    // travels in `error.details.reason`.
+    expect(String((body.error.details as Record<string, unknown>)['reason'])).toContain('webhook-integration');
     expect(body.error.details['dependency']).toBe('webhook-integration');
   });
 
@@ -171,7 +173,7 @@ describe('extension installation', () => {
   it('is idempotent: installing twice is refused rather than re-running migrations', async () => {
     const again = await api('POST', '/api/v1/Extension/action/install', adminToken, { id: 'webhook-integration' });
     expect(again.statusCode).toBe(422);
-    expect((again.json() as { error: { message: string } }).error.message).toContain('already installed');
+    expect(String(((again.json() as { error: { details?: Record<string, unknown> } }).error.details ?? {})['reason'])).toContain('already installed');
   });
 
   it('records the install in the audit log', async () => {
@@ -201,25 +203,28 @@ describe('extension contributions after a restart', () => {
     const res = await api('GET', '/api/v1/Metadata');
     const metadata = res.json() as {
       Account: { fields: Record<string, { type: string }>; indexes: { name: string }[] };
-      Project: { fields: Record<string, { type: string }>; label: string };
+      Project: { fields: Record<string, { type: string }>; label: string; indexes: { name: string }[] };
     };
     // metadata-only package
     expect(metadata.Account.fields['healthTier']?.type).toBe('enum');
     expect(metadata.Account.fields['healthScore']?.type).toBe('formula');
-    // custom domain module
+    // Phase 19 owns the `Project` entity itself; this package only adds fields to it, so the core
+    // fields and the contributed ones must coexist after the merge.
     expect(metadata.Project.label).toBe('Project');
+    expect(metadata.Project.fields['dateEnd']?.type).toBe('date');
     expect(metadata.Project.fields['isOverdue']?.type).toBe('formula');
     // An extension index declaration is additive metadata; the core indexes survive the merge.
     expect(metadata.Account.indexes.map((index) => index.name)).toContain('idx_account_health_tier');
+    expect(metadata.Project.indexes.map((index) => index.name)).toContain('idx_project_progress');
   });
 
   it('serves a contributed entity through the generic CRUD API', async () => {
     const marker = `AGENT_TEST_PROJECT_${String(Date.now())}`;
     const created = await api('POST', '/api/v1/Project', adminToken, {
       name: marker,
-      status: 'Active',
+      boardId: 'projectBoardDefault',
       progress: 10,
-      dueDate: '2030-01-01',
+      dateEnd: '2030-01-01',
     });
     expect(created.statusCode).toBe(201);
     const id = (created.json() as { id: string }).id;
@@ -252,26 +257,29 @@ describe('extension contributions after a restart', () => {
     expect(res.statusCode).toBe(200);
     const nav = (res.json() as { nav: { route: string; label: string; adminOnly: boolean; extension: string }[] }).nav;
     // Sorted by the contributing package's `order`, so navigation follows metadata precedence.
+    // `project-domain` contributes none: `Project` is a core Phase 19 entity and already navigable.
     expect(nav).toEqual([
       { route: '/admin/webhook-endpoints', label: 'Webhooks', order: 10, adminOnly: true, icon: 'ApiOutlined', extension: 'webhook-integration', extensionOrder: 250 },
-      { route: '/Project', label: 'Projects', order: 10, adminOnly: false, icon: 'ProjectOutlined', extension: 'project-domain', extensionOrder: 300 },
     ]);
 
     const user = await createRegularUser('extension-nav');
     const userNav = await api('GET', '/api/v1/Extension/frontend', user.token);
-    const visible = (userNav.json() as { nav: { route: string }[] }).nav;
-    expect(visible.map((item) => item.route)).toEqual(['/Project']);
+    expect((userNav.json() as { nav: unknown[] }).nav).toEqual([]);
   });
 
   it('runs an extension controller route ahead of the generic record routes', async () => {
-    const created = await api('POST', '/api/v1/Project', adminToken, { name: `AGENT_TEST_SUMMARY_${String(Date.now())}`, status: 'Active' });
+    const created = await api('POST', '/api/v1/Project', adminToken, {
+      name: `AGENT_TEST_SUMMARY_${String(Date.now())}`,
+      boardId: 'projectBoardDefault',
+      dateEnd: '2030-01-01',
+    });
     const id = (created.json() as { id: string }).id;
 
     const res = await api('GET', `/api/v1/Project/${id}/summary`);
     expect(res.statusCode).toBe(200);
-    const summary = res.json() as { id: string; status: string; label: string; fieldCount: number };
+    const summary = res.json() as { id: string; dateEnd: string; label: string; fieldCount: number };
     expect(summary.id).toBe(id);
-    expect(summary.status).toBe('Active');
+    expect(summary.dateEnd).toBe('2030-01-01');
     expect(summary.label).toBe('Project');
     expect(summary.fieldCount).toBeGreaterThan(5);
 
@@ -289,7 +297,7 @@ describe('extension contributions after a restart', () => {
       events: ['entity.created'],
     });
     expect(privateUrl.statusCode).toBe(422);
-    expect((privateUrl.json() as { error: { message: string } }).error.message).toContain('https');
+    expect(String(((privateUrl.json() as { error: { details?: Record<string, unknown> } }).error.details ?? {})['reason'])).toContain('https');
 
     const endpoint = await api('POST', '/api/v1/WebhookEndpoint', adminToken, {
       name: `AGENT_TEST hook ${String(Date.now())}`,
@@ -338,8 +346,14 @@ describe('extension removal', () => {
 
     await restart();
 
-    const metadata = (await api('GET', '/api/v1/Metadata')).json() as { Project?: unknown; Account: { fields: Record<string, unknown> } };
-    expect(metadata.Project).toBeUndefined();
+    const metadata = (await api('GET', '/api/v1/Metadata')).json() as {
+      Project?: { fields: Record<string, unknown> };
+      Account: { fields: Record<string, unknown> };
+    };
+    // `Project` is core since Phase 19, so the entity itself stays; only the contributed fields go.
+    expect(metadata.Project?.fields['isOverdue']).toBeUndefined();
+    expect(metadata.Project?.fields['progress']).toBeUndefined();
+    expect(metadata.Project?.fields['dateEnd']).toBeDefined();
     expect(metadata.Account.fields['healthTier']).toBeUndefined();
 
     const list = await api('GET', '/api/v1/Extension');

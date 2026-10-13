@@ -8,9 +8,13 @@ import { Link } from 'react-router-dom';
 import { api, type CalendarEvent } from '../api/client.js';
 import { useSession } from '../state/session.js';
 
-const ACTIVITY_ENTITIES = ['Task', 'Call', 'Meeting'] as const;
+// Phase 19 adds ProjectTask: a project task with a date shows on the calendar, read-only (§4.13).
+const ACTIVITY_ENTITIES = ['Task', 'Call', 'Meeting', 'ProjectTask'] as const;
 
-const TYPE_COLOR: Record<string, string> = { Task: 'blue', Call: 'cyan', Meeting: 'purple' };
+const TYPE_COLOR: Record<string, string> = { Task: 'blue', Call: 'cyan', Meeting: 'purple', ProjectTask: 'geekblue' };
+
+/** A day cell shows this many events, then counts the rest instead of hiding them silently. */
+const CELL_EVENTS = 6;
 
 function timeOf(iso: string): string {
   return dayjs(iso).format('HH:mm');
@@ -144,7 +148,7 @@ export function CalendarPage() {
               >
                 {info.originNode}
                 <div className="lizant-cal-events">
-                  {dayEvents.slice(0, 4).map((event) => (
+                  {dayEvents.slice(0, CELL_EVENTS).map((event) => (
                     <Tag
                       key={`${event.activityType}-${event.activityId}-${event.start}`}
                       className="lizant-cal-tag"
@@ -158,7 +162,7 @@ export function CalendarPage() {
                       </Link>
                     </Tag>
                   ))}
-                  {dayEvents.length > 4 ? <Badge count={`+${String(dayEvents.length - 4)}`} /> : null}
+                  {dayEvents.length > CELL_EVENTS ? <Badge count={`+${String(dayEvents.length - CELL_EVENTS)}`} /> : null}
                 </div>
               </div>
             );

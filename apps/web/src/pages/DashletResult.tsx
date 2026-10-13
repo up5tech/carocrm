@@ -1,9 +1,62 @@
-import { Table, Typography } from 'antd';
+import { Table, Tag, Typography } from 'antd';
+import { Link } from 'react-router-dom';
 
 import type { DashletRow } from '../api/client.js';
 
+interface ProjectTaskRow {
+  id: string;
+  name: string | null;
+  status: string | null;
+  dateStart: string | null;
+  dateEnd: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  groupType: string | null;
+  relation: string | null;
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  'Not Started': 'default',
+  Started: 'processing',
+  Completed: 'success',
+  Canceled: 'warning',
+  Deferred: 'orange',
+};
+
 export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result: Record<string, unknown> | undefined }) {
   if (!result) return <Typography.Text type="secondary">Not run yet.</Typography.Text>;
+
+  if (dashlet.kind === 'projectTasks') {
+    const rows = (result['list'] ?? []) as ProjectTaskRow[];
+    if (rows.length === 0) return <Typography.Text type="secondary">Nothing due in this window.</Typography.Text>;
+    return (
+      <Table
+        size="small"
+        rowKey={(row) => row.id}
+        dataSource={rows}
+        pagination={false}
+        columns={[
+          {
+            title: 'Task',
+            dataIndex: 'name',
+            render: (_: unknown, row) => <Link to={`/ProjectTask/${row.id}`}>{row.name ?? row.id}</Link>,
+          },
+          {
+            title: 'Project',
+            dataIndex: 'projectName',
+            render: (_: unknown, row) => (row.projectId === null ? '—' : <Link to={`/Project/${row.projectId}`}>{row.projectName ?? row.projectId}</Link>),
+          },
+          { title: 'Due', dataIndex: 'dateEnd', render: (value: string | null) => value ?? '—' },
+          {
+            title: 'Status',
+            dataIndex: 'status',
+            render: (value: string | null) => <Tag color={STATUS_COLORS[value ?? ''] ?? 'default'}>{value ?? '—'}</Tag>,
+          },
+          { title: 'Group type', dataIndex: 'groupType', render: (value: string | null) => value ?? '—' },
+        ]}
+      />
+    );
+  }
   // A grouped dashlet aggregates over a bounded scan; say so instead of showing a silent cap.
   const hint =
     result['truncated'] === true ? (

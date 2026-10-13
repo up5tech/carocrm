@@ -198,7 +198,8 @@ describe('versioning and activation', () => {
     const { id } = await createWorkflow({ name: `${RUN} unpublished`, definition: definition() });
     const res = await api('POST', `/api/v1/Workflow/${id}/action/enable`);
     expect(res.statusCode).toBe(422);
-    expect((res.json() as { error: { message: string } }).error.message).toContain('Publish a version');
+    const error = (res.json() as { error: { message: string; details?: Record<string, unknown> } }).error;
+    expect(`${String(error.details?.['reason'] ?? '')}${error.message}`).toContain('Publish a version');
   });
 
   it('editing a published workflow forks a new version instead of mutating the live one', async () => {

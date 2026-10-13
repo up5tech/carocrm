@@ -284,3 +284,15 @@ documentation pass, and its templates, tags, mailbox accounts and feedback loop 
   no-op, so a duplicate queue entry cannot mail twice.
 - No email UI yet (no compose screen, mailbox list or thread view) and email notifications (§29) are
   not wired to this subsystem — reminders still deliver in-app notifications only.
+
+## Phase 19 — Projects (added 2026-10-13)
+
+| Capability | Espo baseline | This implementation | Priority | State |
+|---|---|---|---|---|
+| Projects domain | v9.3.x Project Management extension | `apps/api/src/projects` + ten metadata entities; behaviour matched, not ported | P1 | implemented, deviations in `docs/modules/projects/compatibility.md` |
+| Board stage → status mapping, several stages on one status | v9.3.x | `ProjectBoardStage.statusValue`; status derived on every write | P0 | implemented |
+| Project role composition with global ACL | upstream leaves it implicit | global level first, then the member's role narrows; a non-member is never widened | — | this implementation's contract, not upstream-verified |
+| Task type values | upstream `task`/`milestone` | capitalized `Task`/`Milestone` to match this codebase's enums | — | intentional deviation |
+| Non-member task collaborators | documented upstream | refused: collaborators must be project members | — | intentional deviation |
+| Gantt working-time shading | documented upstream | not built (no working-time calendar to reuse) | — | deferred |
+| Project cloning with date offset | documented upstream | transactional, id remapped, attachments copied after commit | P1 | implemented |

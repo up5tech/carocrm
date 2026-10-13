@@ -1,4 +1,4 @@
-import { DeleteOutlined, DisconnectOutlined, EditOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, DisconnectOutlined, EditOutlined, LinkOutlined, PlusOutlined, ProjectOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Card, Descriptions, Popconfirm, Select, Space, Spin, Table, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -214,6 +214,21 @@ export function EntityDetailPage() {
           }
           extra={
             <Space>
+              {/* Phase 19: a Project opens its own views; the tabs are navigation, not permission —
+                  the API decides what each one may show. */}
+              {entity === 'Project' && base !== '/portal'
+                ? [
+                    { key: 'plan', to: `/Project/${id}/plan`, label: t('web.projects.tabPlan') },
+                    { key: 'board', to: `/Project/${id}/board`, label: t('web.projects.tabBoard') },
+                    { key: 'gantt', to: `/Project/${id}/gantt`, label: t('web.projects.tabGantt') },
+                    { key: 'members', to: `/Project/${id}/members`, label: t('web.projects.tabMembers') },
+                    { key: 'settings', to: `/Project/${id}/settings`, label: t('web.projects.tabSettings') },
+                  ].map((view) => (
+                    <Button key={view.key} icon={<ProjectOutlined />} onClick={() => navigate(view.to)}>
+                      {view.label}
+                    </Button>
+                  ))
+                : null}
               <Button icon={<EditOutlined />} type="primary" onClick={() => navigate(`${base}/${entity}/${id}/edit`)}>
                 {t('web.detail.edit')}
               </Button>

@@ -42,7 +42,8 @@ function codeOf(body: Record<string, unknown>): string {
 
 /** Validation text lives on `error.message`; `details` carries the offending value. */
 function messageOf(body: Record<string, unknown>): string {
-  return String(((body['error'] ?? {}) as { message?: string }).message ?? '');
+  const error = (body['error'] ?? {}) as { message?: string; details?: Record<string, unknown> };
+  return String(error.details?.['reason'] ?? error.message ?? '');
 }
 
 async function runJob(job: string, data: Record<string, unknown> = {}): Promise<CallResult> {

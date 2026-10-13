@@ -18,6 +18,80 @@ export interface SeedOptions {
   demo?: boolean;
 }
 
+/**
+ * Phase 19 default configuration rows (PLAN_Phase_19_Projects.md §14.1): one default Project Board
+ * with its stages, and the three built-in project roles. They are ordinary `entity_records` rows so
+ * the Entity Engine, admin UI and ACL treat them like any other configuration record.
+ *
+ * Fixed ids + `ON CONFLICT DO NOTHING`: the seed runs on every boot and on every test run, and it
+ * must neither duplicate a row nor overwrite an administrator's edits.
+ */
+const DEFAULT_PROJECT_BOARD_ID = 'projectBoardDefault';
+
+const DEFAULT_PROJECT_STAGES: readonly { id: string; key: string; name: string; statusValue: string; sortOrder: number }[] = [
+  { id: 'projectStageNotStarted', key: 'notStarted', name: 'Not Started', statusValue: 'Not Started', sortOrder: 0 },
+  { id: 'projectStageInProgress', key: 'inProgress', name: 'In Progress', statusValue: 'Started', sortOrder: 10 },
+  { id: 'projectStageBlocked', key: 'blocked', name: 'Blocked', statusValue: 'Started', sortOrder: 20 },
+  { id: 'projectStageReview', key: 'review', name: 'Review', statusValue: 'Started', sortOrder: 30 },
+  { id: 'projectStageDone', key: 'done', name: 'Done', statusValue: 'Completed', sortOrder: 40 },
+  { id: 'projectStageCanceled', key: 'canceled', name: 'Canceled', statusValue: 'Canceled', sortOrder: 50 },
+  { id: 'projectStageDeferred', key: 'deferred', name: 'Deferred', statusValue: 'Deferred', sortOrder: 60 },
+];
+
+/** Built-in roles (PLAN §4.4). `isSystem` marks them as undeletable configuration, not user data. */
+const DEFAULT_PROJECT_ROLES: readonly { id: string; name: string; policy: Record<string, string> }[] = [
+  {
+    id: 'projectRoleOwner',
+    name: 'Owner',
+    policy: {
+      taskCreate: 'yes', assignmentScope: 'all', taskReadScope: 'all', taskStreamScope: 'all', taskEditScope: 'all',
+      stageMoveScope: 'all', taskDeleteScope: 'all', projectStreamAccess: 'yes', groupManage: 'yes', memberManage: 'yes', projectEdit: 'yes',
+    },
+  },
+  {
+    id: 'projectRoleEditor',
+    name: 'Editor',
+    policy: {
+      taskCreate: 'yes', assignmentScope: 'all', taskReadScope: 'all', taskStreamScope: 'all', taskEditScope: 'all',
+      stageMoveScope: 'all', taskDeleteScope: 'all', projectStreamAccess: 'yes', groupManage: 'yes', memberManage: 'no', projectEdit: 'yes',
+    },
+  },
+  {
+    id: 'projectRoleMember',
+    name: 'Member',
+    policy: {
+      taskCreate: 'yes', assignmentScope: 'all', taskReadScope: 'all', taskStreamScope: 'own', taskEditScope: 'own',
+      stageMoveScope: 'assigned', taskDeleteScope: 'no', projectStreamAccess: 'yes', groupManage: 'no', memberManage: 'no', projectEdit: 'no',
+    },
+  },
+];
+
+async function seedProjectSystemRows(pool: pg.Pool): Promise<void> {
+  const insert = async (id: string, entityType: string, name: string, attrs: Record<string, unknown>): Promise<void> => {
+    await pool.query(
+      `INSERT INTO entity_records (id, entity_type, name, attrs, created_at, modified_at, version)
+       VALUES ($1, $2, $3, $4, now(), now(), 1) ON CONFLICT (id) DO NOTHING`,
+      [id, entityType, name, JSON.stringify(attrs)],
+    );
+  };
+
+  await insert(DEFAULT_PROJECT_BOARD_ID, 'ProjectBoard', 'Default board', {
+    description: 'Seeded by the Projects module; stages define the task status mapping.',
+    isDefault: true,
+  });
+  for (const stage of DEFAULT_PROJECT_STAGES) {
+    await insert(stage.id, 'ProjectBoardStage', stage.name, {
+      boardId: DEFAULT_PROJECT_BOARD_ID,
+      key: stage.key,
+      sortOrder: stage.sortOrder,
+      statusValue: stage.statusValue,
+    });
+  }
+  for (const role of DEFAULT_PROJECT_ROLES) {
+    await insert(role.id, 'ProjectRole', role.name, { isSystem: true, ...role.policy });
+  }
+}
+
 export async function seed(connectionString: string, options: SeedOptions = {}): Promise<void> {
   await runMigrations(connectionString);
   const adminLogin = options.adminLogin ?? process.env.SEED_ADMIN_LOGIN ?? 'admin';
@@ -104,6 +178,11 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
         { entity: 'Task', maxSize: 10, where: [] },
       ],
     );
+
+    // Phase 19 — default Project Board with its stage rows and the built-in project roles
+    // (PLAN_Phase_19_Projects.md §14.1). Inserted once with fixed ids: re-running the seed never
+    // duplicates them and never overwrites an administrator's edits.
+    await seedProjectSystemRows(pool);
 
     await pool.query(
       `INSERT INTO teams (id, name) VALUES ($1, 'Sales') ON CONFLICT (id) DO NOTHING`,

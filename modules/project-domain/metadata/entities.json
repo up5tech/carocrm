@@ -1,81 +1,30 @@
 {
   "entities": {
     "Project": {
-      "name": "Project",
-      "label": "Project",
-      "isEntity": true,
       "fields": {
-        "id": { "type": "varchar" },
-        "name": { "type": "varchar", "required": true, "maxLength": 255, "inList": true, "inDetail": true, "inEdit": true, "sortable": true, "audited": true },
-        "description": { "type": "text", "inDetail": true, "inEdit": true },
-        "status": { "type": "enum", "values": ["Planned", "Active", "On Hold", "Completed", "Cancelled"], "defaultValue": "Planned", "inList": true, "inDetail": true, "inEdit": true, "audited": true },
-        "accountId": { "type": "link", "entityKey": "Account", "inList": true, "inDetail": true, "inEdit": true },
-        "startDate": { "type": "date", "inDetail": true, "inEdit": true },
-        "dueDate": { "type": "date", "inList": true, "inDetail": true, "inEdit": true, "sortable": true },
-        "budget": { "type": "currency", "inDetail": true, "inEdit": true },
-        "progress": { "type": "int", "defaultValue": 0, "inDetail": true, "inEdit": true },
-        "createdAt": { "type": "datetime", "audited": true },
-        "modifiedAt": { "type": "datetime", "audited": true },
-        "createdById": { "type": "link", "entityKey": "User" },
-        "modifiedById": { "type": "link", "entityKey": "User" },
-        "assignedUserId": { "type": "link", "entityKey": "User", "inList": true, "inDetail": true, "inEdit": true },
-        "teams": { "type": "linkMultiple", "entityKey": "Team" },
-        "deletedAt": { "type": "datetime" },
+        "budget": {
+          "type": "currency",
+          "inDetail": true,
+          "inEdit": true,
+          "label": "Budget"
+        },
+        "progress": {
+          "type": "int",
+          "defaultValue": 0,
+          "inList": true,
+          "inDetail": true,
+          "inEdit": true,
+          "label": "Progress"
+        },
         "isOverdue": {
           "type": "formula",
-          "formula": "not(equals(field(\"status\"), \"Completed\")) && isNotEmpty(field(\"dueDate\")) && field(\"dueDate\") < now()",
+          "formula": "isNotEmpty(field(\"dateEnd\")) && field(\"dateEnd\") < now()",
           "inList": true,
           "inDetail": true,
           "label": "Overdue"
         }
       },
-      "relations": {
-        "contacts": { "type": "manyMany", "target": "Contact", "label": "Contacts" },
-        "account": { "type": "manyToOne", "target": "Account", "label": "Account" }
-      },
-      "indexes": [{ "name": "idx_project_status", "fields": ["status"] }],
-      "layouts": {
-        "list": [
-          {
-            "entity": "Project",
-            "type": "list",
-            "panels": [
-              {
-                "name": "main",
-                "label": "Project",
-                "fields": ["name", "status", "accountId", "dueDate", "progress", "isOverdue", "assignedUserId", "modifiedAt"]
-              }
-            ]
-          }
-        ],
-        "detail": [
-          {
-            "entity": "Project",
-            "type": "detail",
-            "panels": [
-              { "name": "overview", "label": "Overview", "fields": ["name", "status", "accountId", "startDate", "dueDate", "isOverdue"] },
-              { "name": "details", "label": "Details", "fields": ["budget", "progress", "assignedUserId", "description", "createdAt", "modifiedAt"] }
-            ]
-          }
-        ],
-        "edit": [
-          {
-            "entity": "Project",
-            "type": "edit",
-            "panels": [
-              { "name": "main", "label": "Project", "fields": ["name", "status", "accountId", "startDate", "dueDate", "budget", "progress", "description"] },
-              { "name": "ownership", "label": "Ownership", "fields": ["assignedUserId", "teams"] }
-            ]
-          }
-        ]
-      },
-      "record": { "displayField": "name", "removable": true, "followable": true, "streamable": true, "audited": true },
-      "client": {},
-      "acl": {
-        "permissions": {
-          "Project": { "create": "yes", "read": "all", "edit": "own", "delete": "own", "stream": "own" }
-        }
-      }
+      "indexes": [{ "name": "idx_project_progress", "fields": ["progress"] }]
     }
   }
 }

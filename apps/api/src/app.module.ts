@@ -44,6 +44,7 @@ import type { MetadataStoreService as MetadataStoreType } from './metadata/metad
 import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.service.js';
 import { PORTAL_CONTROLLERS, PORTAL_PROVIDERS } from './portal/index.js';
 import { PROCESS_CONTROLLERS, PROCESS_PROVIDERS } from './processes/index.js';
+import { PROJECTS_CONTROLLERS, PROJECTS_PROVIDERS } from './projects/index.js';
 import { REPORT_CONTROLLERS, REPORT_PROVIDERS } from './reports/index.js';
 import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
@@ -85,6 +86,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...PROCESS_CONTROLLERS,
     // Phase 18: `/api/v1/Portal` (portal user + admin) and `/api/v1/PortalRole` static prefixes.
     ...PORTAL_CONTROLLERS,
+    // Phase 19: `/api/v1/Project/...` and `/api/v1/ProjectTask/...` domain commands, static
+    // prefixes matched before the generic `:entity` wildcard.
+    ...PROJECTS_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
     ...ENTITY_CONTROLLERS,
   ],
@@ -111,6 +115,7 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...PROCESS_PROVIDERS,
     // Phase 18: portal ACL policy (delegated to by AclApiService) + portal admin/portal-user services.
     ...PORTAL_PROVIDERS,
+    ...PROJECTS_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
     ...AUDIT_PROVIDERS,

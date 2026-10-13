@@ -11,7 +11,9 @@ import { DatabaseService } from '../database/database.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import { PortalPolicyService } from '../portal/portal-policy.service.js';
-import type { AclPredicate } from './predicate.js';
+import { ProjectPolicyService } from '../projects/project-policy.service.js';
+import { projectScopeFor } from '../projects/project-scope.js';
+import type { AclPredicate, ProjectScopedPredicate } from './predicate.js';
 
 export type { AclPredicate } from './predicate.js';
 
@@ -73,6 +75,7 @@ export class AclApiService {
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
     @Inject(PortalPolicyService) private readonly portal: PortalPolicyService,
+    @Inject(ProjectPolicyService) private readonly projects: ProjectPolicyService,
   ) {}
 
   /**
@@ -173,11 +176,36 @@ export class AclApiService {
     if (this.isPortalPrincipal) return this.portal.recordPredicate(entity, action);
     const level = await this.canUser(entity, action);
     if (level === 'no') return { kind: 'denyAll' };
+    // Phase 19: 'all' / 'yes' is the global policy explicitly permitting everything, so a project
+    // role does not narrow it; a restricted level is widened ONLY inside projects the user belongs
+    // to, and the role there narrows it further (§9 "a project role must never grant a permission
+    // denied by the global ACL").
     if (level === 'all' || level === 'yes') return { kind: 'allowAll' };
     const userId = this.scope.userId;
     if (!userId) return { kind: 'denyAll' };
-    if (level === 'own') return { kind: 'own', userId };
-    return { kind: 'team', userId, teamIds: this.scope.teamIds() };
+    const base = { kind: level === 'own' ? ('own' as const) : ('team' as const), userId, teamIds: this.scope.teamIds() };
+    const scope = projectScopeFor(entity, action);
+    if (scope === undefined) return base;
+    return {
+      kind: 'projectScoped',
+      userId,
+      base,
+      projectAttr: scope.projectAttr,
+      roleField: scope.roleField,
+      allValues: scope.allValues,
+      assignedValues: scope.assignedValues,
+      ownValues: scope.ownValues,
+    } satisfies ProjectScopedPredicate;
+  }
+
+  /**
+   * Phase 19: project-scoped access for an already-loaded record, evaluated by the same rule the
+   * record store puts into SQL. A `projectScoped` predicate can only exist for an internal
+   * principal, so anything else fails closed.
+   */
+  async projectScopedAllows(predicate: ProjectScopedPredicate, recordId: string, data: Record<string, unknown>): Promise<boolean> {
+    if (this.isPortalPrincipal) return false;
+    return this.projects.allowsScoped(predicate, recordId, data);
   }
 
   /**

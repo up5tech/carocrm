@@ -66,6 +66,27 @@ const emailRelations: Record<string, Record<string, unknown>> = {
   users: { type: 'manyMany', target: 'User' },
 };
 
+/**
+ * Phase 19 — Projects (PLAN §19 / PLAN_Phase_19_Projects.md §5).
+ *
+ * Every Project record lives in the generic `entity_records` store like any other CRM entity, so
+ * the Entity Engine provides CRUD, field validation, audit, stream, attachments and record ACL for
+ * free. The relational invariants that JSON alone cannot express (unique membership, one dependency
+ * edge, one stage key per board) are enforced by expression indexes in migration
+ * `018_phase19_projects.sql`.
+ */
+const PROJECT_TASK_STATUSES = ['Not Started', 'Started', 'Completed', 'Canceled', 'Deferred'];
+const PROJECT_GROUP_TYPES = ['Triage', 'Backlog', 'Work', 'Phase', 'Sprint'];
+const PROJECT_DEPENDENCY_TYPES = ['FinishToStart', 'FinishToFinish', 'StartToStart', 'StartToFinish'];
+const PROJECT_PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'];
+
+/** Standard fields shared by every Project entity, with the audit flags this module needs. */
+const projectFields = (extra: Record<string, Record<string, unknown>> = {}): Record<string, Record<string, unknown>> => ({
+  ...standardFields,
+  name: { ...standardFields.name, required: true, audited: true },
+  ...extra,
+});
+
 export const coreMetadata: MetadataSeedEntry[] = [
   {
     scope: 'entity',
@@ -349,6 +370,327 @@ export const coreMetadata: MetadataSeedEntry[] = [
       indexes: [],
       record: { displayField: 'name', removable: true },
       client: {},
+    },
+  },
+  // ---------------------------------------------------------------------------
+  // Phase 19 — Projects
+  // ---------------------------------------------------------------------------
+  {
+    scope: 'entity',
+    name: 'Project',
+    data: {
+      name: 'Project',
+      label: 'Project',
+      isEntity: true,
+      fields: projectFields({
+        description: { type: 'text', inDetail: true, inEdit: true },
+        dateStart: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true, audited: true },
+        dateEnd: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true, audited: true },
+        /** Accountable owner (PLAN §4.1) — distinct from `assignedUserId`, the CRM record owner. */
+        ownerUserId: { type: 'link', entityKey: 'User', inList: true, inDetail: true, inEdit: true, audited: true },
+        /** Immutable after creation (PLAN §4.1): enforced by the Projects domain hook. */
+        boardId: { type: 'link', entityKey: 'ProjectBoard', required: true, inList: true, inDetail: true, inEdit: true },
+        categoryId: { type: 'link', entityKey: 'ProjectCategory', inList: true, inDetail: true, inEdit: true },
+        activeGroupId: { type: 'link', entityKey: 'ProjectGroup', inDetail: true, inEdit: true },
+        // Project-level feature settings (PLAN §4.11). Disabling hides the control and the backend
+        // rejects writes; the stored values themselves are never erased.
+        dependenciesEnabled: { type: 'bool', defaultValue: false, inDetail: true, inEdit: true },
+        collaboratorsEnabled: { type: 'bool', defaultValue: false, inDetail: true, inEdit: true },
+        priorityEnabled: { type: 'bool', defaultValue: true, inDetail: true, inEdit: true },
+        pointsEnabled: { type: 'bool', defaultValue: false, inDetail: true, inEdit: true },
+        estimatedHoursEnabled: { type: 'bool', defaultValue: false, inDetail: true, inEdit: true },
+        ganttEnabled: { type: 'bool', defaultValue: true, inDetail: true, inEdit: true },
+      }),
+      relations: {
+        members: { type: 'oneToMany', target: 'ProjectMember', mappedBy: 'project' },
+        groups: { type: 'oneToMany', target: 'ProjectGroup', mappedBy: 'project' },
+        tasks: { type: 'oneToMany', target: 'ProjectTask', mappedBy: 'project' },
+        accounts: { type: 'manyMany', target: 'Account' },
+        contacts: { type: 'manyMany', target: 'Contact' },
+        meetings: { type: 'manyMany', target: 'Meeting' },
+        calls: { type: 'manyMany', target: 'Call' },
+        emails: { type: 'manyMany', target: 'Email' },
+      },
+      indexes: [{ name: 'idx_project_board', fields: ['boardId'] }, { name: 'idx_project_category', fields: ['categoryId'] }],
+      layouts: {
+        list: [{ entity: 'Project', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'dateStart', 'dateEnd', 'ownerUserId', 'categoryId', 'boardId', 'modifiedAt'] }] }],
+        detail: [
+          {
+            entity: 'Project',
+            type: 'detail',
+            panels: [
+              { name: 'overview', label: 'Overview', position: 0, fields: ['name', 'description', 'dateStart', 'dateEnd'] },
+              { name: 'structure', label: 'Board and category', position: 10, fields: ['boardId', 'categoryId', 'ownerUserId', 'activeGroupId', 'assignedUserId', 'teams'] },
+              { name: 'settings', label: 'Settings', position: 20, fields: ['dependenciesEnabled', 'collaboratorsEnabled', 'priorityEnabled', 'pointsEnabled', 'estimatedHoursEnabled', 'ganttEnabled'] },
+            ],
+          },
+        ],
+        edit: [
+          {
+            entity: 'Project',
+            type: 'edit',
+            panels: [
+              { name: 'main', label: 'Project', position: 0, fields: ['name', 'description', 'dateStart', 'dateEnd', 'boardId', 'categoryId'] },
+              { name: 'ownership', label: 'Ownership', position: 10, fields: ['ownerUserId', 'assignedUserId', 'teams'] },
+            ],
+          },
+        ],
+      },
+      record: { displayField: 'name', removable: true, followable: true, streamable: true },
+      client: {},
+      acl: {
+        permissions: { Project: { create: 'yes', read: 'all', edit: 'own', delete: 'own', stream: 'own' } },
+      },
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'ProjectCategory',
+    data: {
+      name: 'ProjectCategory',
+      label: 'Project Category',
+      isEntity: true,
+      fields: projectFields({
+        description: { type: 'text', inDetail: true, inEdit: true },
+        parentId: { type: 'link', entityKey: 'ProjectCategory', inList: true, inDetail: true, inEdit: true },
+        sortOrder: { type: 'int', defaultValue: 0, inList: true, inDetail: true, inEdit: true, sortable: true },
+      }),
+      relations: {
+        childCategories: { type: 'oneToMany', target: 'ProjectCategory', mappedBy: 'parent' },
+        projects: { type: 'oneToMany', target: 'Project', mappedBy: 'category' },
+      },
+      indexes: [{ name: 'idx_project_category_parent', fields: ['parentId'] }],
+      layouts: {
+        list: [{ entity: 'ProjectCategory', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'parentId', 'sortOrder'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+      acl: { permissions: { ProjectCategory: { create: 'yes', read: 'all', edit: 'all', delete: 'all', stream: 'no' } } },
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'ProjectBoard',
+    data: {
+      name: 'ProjectBoard',
+      label: 'Project Board',
+      isEntity: true,
+      fields: projectFields({
+        description: { type: 'text', inDetail: true, inEdit: true },
+        /** Deterministic fallback board for projects created without an explicit board. */
+        isDefault: { type: 'bool', defaultValue: false, inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: {
+        stages: { type: 'oneToMany', target: 'ProjectBoardStage', mappedBy: 'board' },
+        projects: { type: 'oneToMany', target: 'Project', mappedBy: 'board' },
+      },
+      indexes: [],
+      layouts: {
+        list: [{ entity: 'ProjectBoard', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'isDefault', 'modifiedAt'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+      acl: { permissions: { ProjectBoard: { create: 'yes', read: 'all', edit: 'all', delete: 'all', stream: 'no' } } },
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'ProjectBoardStage',
+    data: {
+      name: 'ProjectBoardStage',
+      label: 'Project Board Stage',
+      isEntity: true,
+      fields: projectFields({
+        boardId: { type: 'link', entityKey: 'ProjectBoard', required: true, inList: true, inDetail: true, inEdit: true },
+        /** Stable internal key; renaming the display `name` must never break task references. */
+        key: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true, inEdit: true },
+        sortOrder: { type: 'int', defaultValue: 0, inList: true, inDetail: true, inEdit: true, sortable: true },
+        statusValue: { type: 'enum', values: PROJECT_TASK_STATUSES, defaultValue: 'Not Started', required: true, inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_project_board_stage_board', fields: ['boardId'] }],
+      layouts: {
+        list: [{ entity: 'ProjectBoardStage', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'key', 'statusValue', 'sortOrder'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      // Managed as part of its board (PLAN §4.3); not a navigation target of its own.
+      client: { web: false },
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'ProjectRole',
+    data: {
+      name: 'ProjectRole',
+      label: 'Project Role',
+      isEntity: true,
+      fields: projectFields({
+        description: { type: 'text', inDetail: true, inEdit: true },
+        /** Built-in Owner/Editor/Member rows: never deletable and their scope fields stay editable only by an admin. */
+        isSystem: { type: 'bool', defaultValue: false, inList: true, inDetail: true },
+        taskCreate: { type: 'enum', values: ['yes', 'no'], defaultValue: 'yes', inList: true, inDetail: true, inEdit: true },
+        assignmentScope: { type: 'enum', values: ['all', 'own'], defaultValue: 'all', inDetail: true, inEdit: true },
+        taskReadScope: { type: 'enum', values: ['all', 'own'], defaultValue: 'all', inDetail: true, inEdit: true },
+        taskStreamScope: { type: 'enum', values: ['all', 'own'], defaultValue: 'all', inDetail: true, inEdit: true },
+        taskEditScope: { type: 'enum', values: ['all', 'assigned', 'own'], defaultValue: 'all', inList: true, inDetail: true, inEdit: true },
+        stageMoveScope: { type: 'enum', values: ['all', 'assigned', 'own'], defaultValue: 'all', inList: true, inDetail: true, inEdit: true },
+        taskDeleteScope: { type: 'enum', values: ['all', 'own', 'no'], defaultValue: 'own', inDetail: true, inEdit: true },
+        projectStreamAccess: { type: 'enum', values: ['yes', 'no'], defaultValue: 'yes', inDetail: true, inEdit: true },
+        groupManage: { type: 'enum', values: ['yes', 'no'], defaultValue: 'no', inDetail: true, inEdit: true },
+        memberManage: { type: 'enum', values: ['yes', 'no'], defaultValue: 'no', inDetail: true, inEdit: true },
+        projectEdit: { type: 'enum', values: ['yes', 'no'], defaultValue: 'no', inDetail: true, inEdit: true },
+      }),
+      relations: { members: { type: 'oneToMany', target: 'ProjectMember', mappedBy: 'projectRole' } },
+      indexes: [],
+      layouts: {
+        list: [{ entity: 'ProjectRole', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'taskEditScope', 'stageMoveScope', 'isSystem'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+      acl: { permissions: { ProjectRole: { create: 'yes', read: 'all', edit: 'all', delete: 'all', stream: 'no' } } },
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'ProjectMember',
+    data: {
+      name: 'ProjectMember',
+      label: 'Project Member',
+      isEntity: true,
+      fields: projectFields({
+        projectId: { type: 'link', entityKey: 'Project', required: true, inList: true, inDetail: true, inEdit: true },
+        userId: { type: 'link', entityKey: 'User', required: true, inList: true, inDetail: true, inEdit: true },
+        projectRoleId: { type: 'link', entityKey: 'ProjectRole', required: true, inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_project_member_project', fields: ['projectId'] }, { name: 'idx_project_member_user', fields: ['userId'] }],
+      record: { displayField: 'name', removable: true },
+      client: { web: false },
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'ProjectGroup',
+    data: {
+      name: 'ProjectGroup',
+      label: 'Project Group',
+      isEntity: true,
+      fields: projectFields({
+        projectId: { type: 'link', entityKey: 'Project', required: true, inList: true, inDetail: true, inEdit: true },
+        groupType: { type: 'enum', values: PROJECT_GROUP_TYPES, defaultValue: 'Work', required: true, inList: true, inDetail: true, inEdit: true, audited: true },
+        sortOrder: { type: 'int', defaultValue: 0, inList: true, inDetail: true, sortable: true },
+        color: { type: 'varchar', maxLength: 32, inDetail: true, inEdit: true },
+        newTaskPlacement: { type: 'enum', values: ['Top', 'Bottom'], defaultValue: 'Bottom', inDetail: true, inEdit: true },
+      }),
+      relations: {
+        tasks: { type: 'oneToMany', target: 'ProjectTask', mappedBy: 'group' },
+      },
+      indexes: [{ name: 'idx_project_group_project', fields: ['projectId', 'sortOrder'] }],
+      record: { displayField: 'name', removable: true },
+      client: { web: false },
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'ProjectTask',
+    data: {
+      name: 'ProjectTask',
+      label: 'Project Task',
+      isEntity: true,
+      fields: projectFields({
+        description: { type: 'text', inDetail: true, inEdit: true },
+        projectId: { type: 'link', entityKey: 'Project', required: true, inList: true, inDetail: true, inEdit: true },
+        groupId: { type: 'link', entityKey: 'ProjectGroup', inList: true, inDetail: true, inEdit: true, audited: true },
+        parentTaskId: { type: 'link', entityKey: 'ProjectTask', inDetail: true, inEdit: true },
+        taskType: { type: 'enum', values: ['Task', 'Milestone'], defaultValue: 'Task', inList: true, inDetail: true, inEdit: true },
+        stageId: { type: 'link', entityKey: 'ProjectBoardStage', inList: true, inDetail: true, inEdit: true, audited: true },
+        /** Derived from the board stage mapping; never written through generic CRUD (PLAN §4.3). */
+        status: { type: 'enum', values: PROJECT_TASK_STATUSES, defaultValue: 'Not Started', inList: true, inDetail: true, sortable: true, audited: true },
+        ownerUserId: { type: 'link', entityKey: 'User', inList: true, inDetail: true, inEdit: true, audited: true },
+        assigneeUserId: { type: 'link', entityKey: 'User', inList: true, inDetail: true, inEdit: true, audited: true },
+        dateStart: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true, audited: true },
+        dateEnd: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true, audited: true },
+        priority: { type: 'enum', values: PROJECT_PRIORITIES, defaultValue: 'Normal', inList: true, inDetail: true, inEdit: true, audited: true },
+        points: { type: 'int', inDetail: true, inEdit: true },
+        estimateHours: { type: 'float', inDetail: true, inEdit: true },
+        sortOrder: { type: 'int', defaultValue: 0, inDetail: true, sortable: true },
+      }),
+      relations: {
+        subtasks: { type: 'oneToMany', target: 'ProjectTask', mappedBy: 'parentTask' },
+        collaborators: { type: 'oneToMany', target: 'ProjectTaskCollaborator', mappedBy: 'task' },
+        dependencies: { type: 'oneToMany', target: 'ProjectTaskDependency', mappedBy: 'task' },
+      },
+      indexes: [
+        { name: 'idx_project_task_project_group', fields: ['projectId', 'groupId', 'sortOrder'] },
+        { name: 'idx_project_task_stage', fields: ['stageId'] },
+        { name: 'idx_project_task_assignee', fields: ['assigneeUserId'] },
+        { name: 'idx_project_task_dates', fields: ['dateStart', 'dateEnd'] },
+      ],
+      layouts: {
+        list: [{ entity: 'ProjectTask', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'status', 'projectId', 'groupId', 'assigneeUserId', 'dateStart', 'dateEnd', 'priority'] }] }],
+        detail: [
+          {
+            entity: 'ProjectTask',
+            type: 'detail',
+            panels: [
+              { name: 'overview', label: 'Overview', position: 0, fields: ['name', 'description', 'taskType', 'status', 'stageId', 'projectId', 'groupId', 'parentTaskId'] },
+              { name: 'people', label: 'People', position: 10, fields: ['ownerUserId', 'assigneeUserId', 'assignedUserId'] },
+              { name: 'planning', label: 'Planning', position: 20, fields: ['dateStart', 'dateEnd', 'priority', 'points', 'estimateHours'] },
+            ],
+          },
+        ],
+        edit: [
+          {
+            entity: 'ProjectTask',
+            type: 'edit',
+            panels: [
+              { name: 'main', label: 'Task', position: 0, fields: ['name', 'description', 'taskType', 'projectId', 'groupId', 'parentTaskId'] },
+              { name: 'planning', label: 'Planning', position: 10, fields: ['ownerUserId', 'assigneeUserId', 'dateStart', 'dateEnd', 'priority', 'points', 'estimateHours'] },
+            ],
+          },
+        ],
+      },
+      record: { displayField: 'name', removable: true, followable: true, streamable: true },
+      client: {},
+      acl: { permissions: { ProjectTask: { create: 'yes', read: 'all', edit: 'own', delete: 'own', stream: 'own' } } },
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'ProjectTaskCollaborator',
+    data: {
+      name: 'ProjectTaskCollaborator',
+      label: 'Project Task Collaborator',
+      isEntity: true,
+      fields: projectFields({
+        taskId: { type: 'link', entityKey: 'ProjectTask', required: true, inList: true, inDetail: true, inEdit: true },
+        userId: { type: 'link', entityKey: 'User', required: true, inList: true, inDetail: true, inEdit: true },
+        projectId: { type: 'link', entityKey: 'Project', inList: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_project_task_collaborator_task', fields: ['taskId'] }, { name: 'idx_project_task_collaborator_user', fields: ['userId'] }],
+      record: { displayField: 'name', removable: true },
+      client: { web: false },
+    },
+  },
+  {
+    scope: 'entity',
+    name: 'ProjectTaskDependency',
+    data: {
+      name: 'ProjectTaskDependency',
+      label: 'Project Task Dependency',
+      isEntity: true,
+      // `taskId` is the successor, `predecessorTaskId` the dependency it waits for (PLAN §4.8).
+      fields: projectFields({
+        taskId: { type: 'link', entityKey: 'ProjectTask', required: true, inList: true, inDetail: true, inEdit: true },
+        predecessorTaskId: { type: 'link', entityKey: 'ProjectTask', required: true, inList: true, inDetail: true, inEdit: true },
+        projectId: { type: 'link', entityKey: 'Project', required: true, inList: true },
+        dependencyType: { type: 'enum', values: PROJECT_DEPENDENCY_TYPES, inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_project_task_dependency_task', fields: ['taskId'] }, { name: 'idx_project_task_dependency_predecessor', fields: ['predecessorTaskId'] }],
+      record: { displayField: 'name', removable: true },
+      client: { web: false },
     },
   },
 ];

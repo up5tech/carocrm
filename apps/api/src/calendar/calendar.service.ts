@@ -1,9 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { AclApiService } from '../acl/acl-api.service.js';
 import { EntityCrudService } from '../entity/entity.service.js';
 import { expandOccurrences, type RecurrenceConfig } from './recurrence.js';
 
-export const DEFAULT_CALENDAR_ENTITIES = ['Task', 'Call', 'Meeting'] as const;
+/**
+ * Phase 19 adds `ProjectTask` as a read-only calendar entity (PLAN_Phase_19_Projects.md §4.13): a
+ * task with a start date appears on the calendar, and the calendar never writes it back.
+ */
+export const DEFAULT_CALENDAR_ENTITIES = ['Task', 'Call', 'Meeting', 'ProjectTask'] as const;
 
 export interface CalendarEventDto {
   activityType: string;
@@ -74,7 +79,10 @@ export function dayKeyInZone(instant: Date, timeZone: string): string {
  */
 @Injectable()
 export class CalendarService {
-  constructor(@Inject(EntityCrudService) private readonly entities: EntityCrudService) {}
+  constructor(
+    @Inject(EntityCrudService) private readonly entities: EntityCrudService,
+    @Inject(AclApiService) private readonly acl: AclApiService,
+  ) {}
 
   async query(input: CalendarQuery): Promise<CalendarEventDto[]> {
     const events: CalendarEventDto[] = [];
@@ -82,6 +90,8 @@ export class CalendarService {
     const upperBound = new Date(input.to.getTime() + DAY_MS).toISOString();
 
     for (const entity of input.entities) {
+      // An entity the reader has no permission for is simply absent, not a failed calendar query.
+      if ((await this.acl.canUser(entity, 'read')) === 'no') continue;
       const where: Record<string, unknown>[] = [
         { field: 'dateStart', operator: 'isNotNull' },
         { field: 'dateStart', operator: 'lessThanOrEqual', value: upperBound },

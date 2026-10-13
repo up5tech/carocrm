@@ -11,6 +11,8 @@ import type { ListQuery } from '../entity/entity.service.js';
 import { EntityCrudService } from '../entity/entity.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
+import { ProjectTaskDashletSchema } from '../projects/dto/project-shapes.js';
+import { ProjectDashletService } from '../projects/project-dashlet.service.js';
 import { safeJson } from './csv.js';
 import { DashboardInputSchema, DashletConfigSchema, DashletInputSchema, ENTITY_NAME, MAX_DASHBOARDS_LIMIT, MAX_DASHLET_SCAN, TEXTISH_TYPES } from './portal-shapes.js';
 import { SavedFilterService } from './saved-filter.service.js';
@@ -28,7 +30,8 @@ export class DashboardService {
     @Inject(AclApiService) private readonly acl: AclApiService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(SavedFilterService) private readonly filters: SavedFilterService,
-    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope) {}
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(ProjectDashletService) private readonly projectTasks: ProjectDashletService) {}
   assertEntity(entity: string): void {
     this.metadata.ensureLoaded();
     if (!ENTITY_NAME.test(entity) || !this.metadata.registry.hasEntity(entity)) throw new NotFoundError(`Entity "${entity}" does not exist.`);
@@ -99,7 +102,12 @@ export class DashboardService {
         config: typeof d.config === 'string' ? safeJson(d.config) : (d.config ?? {}) })),
       createdAt: row.created_at.toISOString(), modifiedAt: row.modified_at.toISOString() };
   }
-  assertDashletConfig(raw: Record<string, unknown>): void {
+  assertDashletConfig(raw: Record<string, unknown>, kind = 'list'): void {
+    if (kind === 'projectTasks') {
+      const scoped = ProjectTaskDashletSchema.safeParse(raw);
+      if (!scoped.success) throw new ValidationError('Invalid Project Task dashlet options.', { issues: scoped.error.issues.map((i) => i.message) });
+      return;
+    }
     const p = DashletConfigSchema.safeParse(raw);
     if (!p.success) throw new ValidationError('Invalid dashlet config.', { issues: p.error.issues.map((i) => i.message) });
     this.assertEntity(p.data.entity);
@@ -120,7 +128,7 @@ export class DashboardService {
     if (!this.scope.isAdmin && dashboard.user_id !== this.scope.userId) throw new AuthorizationDeniedError('Only the dashboard owner or an administrator may add dashlets.');
     const p = DashletInputSchema.safeParse(body ?? {});
     if (!p.success) throw new ValidationError('Invalid dashlet.', { issues: p.error.issues.map((i) => i.message) });
-    this.assertDashletConfig(p.data.config);
+    this.assertDashletConfig(p.data.config, p.data.kind);
     const id = generateId();
     const now = new Date();
     await this.database.db.insertInto('dashlets').values({ id, dashboard_id: dashboardId, name: p.data.name,
@@ -135,7 +143,7 @@ export class DashboardService {
     await this.requireDashlet(dashboardId, dashletId);
     const p = DashletInputSchema.partial().safeParse(body ?? {});
     if (!p.success) throw new ValidationError('Invalid dashlet.', { issues: p.error.issues.map((i) => i.message) });
-    if (p.data.config) this.assertDashletConfig(p.data.config);
+    if (p.data.config) this.assertDashletConfig(p.data.config, p.data.kind ?? (await this.requireDashlet(dashboardId, dashletId)).kind);
     await this.database.db.updateTable('dashlets').set({
       ...(p.data.name !== undefined ? { name: p.data.name } : {}),
       ...(p.data.kind !== undefined ? { kind: p.data.kind } : {}),
@@ -158,6 +166,14 @@ export class DashboardService {
     if (!this.canSee(dashboard)) throw new NotFoundError(`Dashboard "${dashboardId}" does not exist.`);
     const dashlet = await this.requireDashlet(dashboardId, dashletId);
     const raw = typeof dashlet.config === 'string' ? safeJson(dashlet.config) : (dashlet.config ?? {});
+    if (dashlet.kind === 'projectTasks') {
+      // Project access is decided by the entity list underneath, so a shared dashlet can only ever
+      // show what its reader could open in the Projects views (§4.16).
+      const scoped = ProjectTaskDashletSchema.safeParse(raw);
+      if (!scoped.success) throw new ValidationError('Project Task dashlet options are invalid.', { issues: scoped.error.issues.map((i) => i.message) });
+      const result = await this.projectTasks.run(scoped.data);
+      return { dashletId, kind: 'projectTasks', entity: 'ProjectTask', ...result };
+    }
     const p = DashletConfigSchema.safeParse(raw);
     if (!p.success) throw new ValidationError('Dashlet config is invalid.', { issues: p.error.issues.map((i) => i.message) });
     this.assertEntity(p.data.entity);

@@ -56,7 +56,9 @@ export const DashboardInputSchema = z.object({
 
 export const DashletInputSchema = z.object({
   name: z.string().trim().min(1).max(190),
-  kind: z.enum(['list', 'chart', 'kpi']),
+  // `projectTasks` is the Phase 19 Project Task dashlet (PLAN_Phase_19_Projects.md §4.16): the same
+  // three generic kinds cannot express "due in the next N days, owned or shared with me".
+  kind: z.enum(['list', 'chart', 'kpi', 'projectTasks']),
   position: z.number().int().min(0).max(10_000).default(0),
   config: z.record(z.string(), z.unknown()).default({}),
 });

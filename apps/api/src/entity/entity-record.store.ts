@@ -15,6 +15,7 @@ import type { MetadataStoreService } from '../metadata/metadata-store.service.js
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import type { AfterSaveHook, KernelMutation } from './hooks.js';
 import { KERNEL_HOOKS_TOKEN } from './hooks.js';
+import { currentTx, withTxContext } from './tx-context.js';
 
 export const ENTITY_STORE = Symbol('ENTITY_STORE');
 
@@ -126,8 +127,13 @@ export class PostgresRecordStore implements RecordStorePort {
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
   ) {}
 
-  private get db(): Db {
-    return this.database.db;
+  /**
+   * The ambient transaction of a domain command when there is one, otherwise the pooled connection.
+   * Every read and write in this store goes through it, so a multi-record command sees its own
+   * uncommitted writes instead of a stale snapshot from a second connection.
+   */
+  private get db(): Queryable {
+    return currentTx() ?? this.database.db;
   }
 
   private mapRow(row: EntityRow): EntityRecord {
@@ -285,7 +291,7 @@ export class PostgresRecordStore implements RecordStorePort {
 
   /** Exact entity-level aggregation with the same ACL and filter predicates as `findMany`. */
   async aggregateReport(entity: string, query: StoreReportAggregateQuery): Promise<StoreReportAggregateResult> {
-    return this.db.transaction().setIsolationLevel('repeatable read').execute(async (tx) => {
+    const run = async (tx: Queryable): Promise<StoreReportAggregateResult> => {
       // Bound expensive plans. The value is fixed by the application, not report input.
       await sql`select set_config('statement_timeout', ${'5000ms'}, true)`.execute(tx);
       const acl = aclSql(query.acl);
@@ -327,7 +333,15 @@ export class PostgresRecordStore implements RecordStorePort {
           : finiteNumberOrNull(row[`__metric_${String(index)}`])])),
       }));
       return { total, groups };
-    });
+    };
+    // Inside a domain command the ambient transaction already provides the snapshot; starting a
+    // second one would take a different pool connection and miss the command's own writes.
+    const ambient = currentTx();
+    if (ambient !== undefined) return run(ambient);
+    return this.database.db
+      .transaction()
+      .setIsolationLevel('repeatable read')
+      .execute((tx) => withTxContext(tx, () => run(tx)));
   }
 
   async linkRecord(options: {
@@ -460,8 +474,10 @@ export class PostgresRecordStore implements RecordStorePort {
    * hook is registered the statement executes on the pooled connection directly.
    */
   private async withTransaction<T>(work: (tx: Queryable) => Promise<T>): Promise<T> {
+    const ambient = currentTx();
+    if (ambient !== undefined) return work(ambient);
     if (this.hooks.length === 0) return work(this.db);
-    return this.db.transaction().execute(work);
+    return this.database.db.transaction().execute((tx) => withTxContext(tx, () => work(tx)));
   }
 }
 
@@ -630,6 +646,7 @@ function aclSql(acl?: AclPredicate): RawBuilder<boolean> | undefined {
   if (!acl || acl.kind === 'allowAll') return undefined;
   if (acl.kind === 'denyAll') return sql<boolean>`false`;
   if (acl.kind === 'portal') return portalVisibilitySql(acl, (column) => col(column));
+  if (acl.kind === 'projectScoped') return projectScopeSql(acl, TABLE);
   const assigned = sql`${col('assigned_user_id')} = ${acl.userId}`;
   if (acl.kind === 'own') {
     return sql<boolean>`( ${assigned} or ${col('created_by_id')} = ${acl.userId} )`;
@@ -746,11 +763,68 @@ function aclSqlForAlias(acl: AclPredicate, alias: string): RawBuilder<boolean> |
   if (acl.kind === 'allowAll') return undefined;
   if (acl.kind === 'denyAll') return sql<boolean>`false`;
   if (acl.kind === 'portal') return portalVisibilitySql(acl, (column) => sql.id(alias, column));
+  if (acl.kind === 'projectScoped') return projectScopeSql(acl, alias);
   const assigned = sql`${sql.id(alias, 'assigned_user_id')} = ${acl.userId}`;
   const creator = sql`${sql.id(alias, 'created_by_id')} = ${acl.userId}`;
   if (acl.kind === 'own') return sql<boolean>`(${assigned} or ${creator})`;
   if (acl.teamIds.length === 0) return sql<boolean>`(${assigned} or ${creator})`;
   return sql<boolean>`(${sql.id(alias, 'team_ids')} ?| cast(${[...acl.teamIds]} as text[]) or ${assigned} or ${creator})`;
+}
+
+/**
+ * Phase 19 project-scoped access as SQL — the exact mirror of `ProjectPolicyService.allowsScoped`,
+ * so a list, a calendar window and a by-id read decide identically. The global own/team scope is
+ * kept, and the project's own `ProjectMember` + `ProjectRole` rows are consulted for the same
+ * record. Role field names and their allowed values come from the application's allowlist
+ * (`projectScopeFor`), never from the request.
+ */
+function projectScopeSql(acl: Extract<AclPredicate, { kind: 'projectScoped' }>, table: string): RawBuilder<boolean> {
+  const attrs = sql.id(table, 'attrs');
+  const projectIdOfRecord = acl.projectAttr === 'id' ? sql.id(table, 'id') : sql`(${attrs} ->> ${acl.projectAttr}::text)`;
+  const ownerOrAssignee = sql`( (${attrs} ->> 'assigneeUserId'::text) = ${acl.userId} or (${attrs} ->> 'ownerUserId'::text) = ${acl.userId} )`;
+  const isCollaborator = sql`exists (
+    select 1 from entity_records c
+    where c.entity_type = 'ProjectTaskCollaborator' and c.deleted_at is null
+      and (c.attrs ->> 'userId') = ${acl.userId} and (c.attrs ->> 'taskId') = ${sql.id(table, 'id')}
+  )`;
+
+  const roleClauses: RawBuilder<boolean>[] = [];
+  if (acl.roleField === null) {
+    // Membership alone is the grant (the member list, the group list, the project itself).
+    roleClauses.push(sql<boolean>`true`);
+  } else {
+    const field = sql`(pr.attrs ->> ${acl.roleField}::text)`;
+    if (acl.allValues.length > 0) roleClauses.push(sql<boolean>`${field} = any(cast(${[...acl.allValues]} as text[]))`);
+    if (acl.assignedValues.length > 0) {
+      roleClauses.push(sql<boolean>`(${field} = any(cast(${[...acl.assignedValues]} as text[])) and ${ownerOrAssignee})`);
+    }
+    if (acl.ownValues.length > 0) {
+      roleClauses.push(sql<boolean>`(${field} = any(cast(${[...acl.ownValues]} as text[])) and (${ownerOrAssignee} or ${isCollaborator}))`);
+    }
+  }
+  const roleCondition = roleClauses.length === 0 ? sql<boolean>`false` : sql<boolean>`( ${sql.join(roleClauses, sql` or `)} )`;
+
+  const memberOf = (extra: RawBuilder<boolean>): RawBuilder<boolean> => sql`exists (
+    select 1 from entity_records pm
+    left join entity_records pr on pr.id = (pm.attrs ->> 'projectRoleId') and pr.entity_type = 'ProjectRole' and pr.deleted_at is null
+    where pm.entity_type = 'ProjectMember' and pm.deleted_at is null
+      and (pm.attrs ->> 'userId') = ${acl.userId}
+      and (pm.attrs ->> ${acl.projectAttr}::text) = ${projectIdOfRecord}
+      and ${extra}
+  )`;
+
+  const assigned = sql`${sql.id(table, 'assigned_user_id')} = ${acl.base.userId}`;
+  const created = sql`${sql.id(table, 'created_by_id')} = ${acl.base.userId}`;
+  const teams =
+    acl.base.kind === 'own' || acl.base.teamIds.length === 0
+      ? sql``
+      : sql`${sql.id(table, 'team_ids')} ?| cast(${[...acl.base.teamIds]} as text[]) or `;
+  const base = sql<boolean>`( ${teams}${assigned} or ${created} )`;
+
+  // A member is judged by their project role — which NARROWS what the global scope would allow, and
+  // is what lets a member reach a colleague's task. A non-member keeps the global scope untouched.
+  // Mirror of `ProjectPolicyService.allowsScoped`.
+  return sql<boolean>`( ( not ${memberOf(sql<boolean>`true`)} and ${base} ) or ${memberOf(roleCondition)} )`;
 }
 
 /**

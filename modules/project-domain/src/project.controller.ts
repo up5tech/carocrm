@@ -50,9 +50,12 @@ export class ProjectSummaryController {
     return {
       id: row.id,
       name: typeof attrs['name'] === 'string' ? attrs['name'] : '',
-      status: typeof attrs['status'] === 'string' ? attrs['status'] : 'Planned',
-      accountId: typeof attrs['accountId'] === 'string' ? attrs['accountId'] : null,
-      dueDate: typeof attrs['dueDate'] === 'string' ? attrs['dueDate'] : null,
+      // A `date` attribute is stored as an instant; the day part is what the field means.
+      dateStart: dayOf(attrs['dateStart']),
+      dateEnd: dayOf(attrs['dateEnd']),
+      boardId: typeof attrs['boardId'] === 'string' ? attrs['boardId'] : null,
+      ownerUserId: typeof attrs['ownerUserId'] === 'string' ? attrs['ownerUserId'] : null,
+      budget: numberOrNull(attrs['budget']),
       progress: numberOrZero(attrs['progress']),
       label: entity?.label ?? 'Project',
       fieldCount: Object.keys(entity?.fields ?? {}).length,
@@ -64,9 +67,11 @@ export class ProjectSummaryController {
 export interface ProjectSummary {
   id: string;
   name: string;
-  status: string;
-  accountId: string | null;
-  dueDate: string | null;
+  dateStart: string | null;
+  dateEnd: string | null;
+  boardId: string | null;
+  ownerUserId: string | null;
+  budget: number | null;
   progress: number;
   label: string;
   fieldCount: number;
@@ -93,8 +98,16 @@ function teamsOf(attrs: unknown): string[] {
   return Array.isArray(teams) ? teams.filter((team): team is string => typeof team === 'string') : [];
 }
 
+function dayOf(value: unknown): string | null {
+  return typeof value === 'string' && value !== '' ? value.slice(0, 10) : null;
+}
+
 function numberOrZero(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -21,6 +21,21 @@ import type {
 } from '../types/index.js';
 import { RecordValidator } from '../validation/index.js';
 
+/** Field types whose value is not shape-checked here; a link's target is validated by the API layer. */
+const NON_VALUE_TYPES: readonly string[] = [
+  'link',
+  'linkOne',
+  'linkMultiple',
+  'linkParent',
+  'foreign',
+  'file',
+  'image',
+  'attachmentMultiple',
+  'formula',
+  'generated',
+  'aggregationCount',
+];
+
 export interface EntityMetadataPort {
   getField(entity: string, field: string): FieldDefinition | undefined;
   getFields(entity: string): Record<string, FieldDefinition>;
@@ -214,7 +229,13 @@ export class EntityManager {
     const validator = new RecordValidator(fields);
     const errors: Record<string, string> = {};
     for (const [field, def] of Object.entries(fields)) {
-      if (['link', 'linkOne', 'linkMultiple', 'linkParent', 'foreign', 'file', 'image', 'attachmentMultiple', 'formula', 'generated', 'aggregationCount'].includes(def.type)) {
+      if (NON_VALUE_TYPES.includes(def.type)) {
+        // The value shape of a link is checked by the API layer, but `required` still means the
+        // record cannot exist without it (Phase 19: a Project without a board, a Task without a
+        // project).
+        if (def.required && (data[field] === undefined || data[field] === null || data[field] === '')) {
+          errors[field] = 'Field is required.';
+        }
         continue;
       }
       const result = validator.validateField(field, data[field]);

@@ -11,8 +11,5 @@
   "migrations": "migrations",
   "backend": {
     "entry": "src/index.ts"
-  },
-  "frontend": {
-    "nav": [{ "route": "/Project", "label": "Projects", "icon": "ProjectOutlined", "order": 10 }]
   }
 }

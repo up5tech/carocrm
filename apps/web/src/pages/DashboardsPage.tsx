@@ -1,5 +1,5 @@
 import { DeleteOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Card, Col, Form, Input, Modal, Popconfirm, Row, Select, Space } from 'antd';
+import { App as AntApp, Button, Card, Checkbox, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { api, type DashboardRow } from '../api/client.js';
@@ -19,6 +19,7 @@ export function DashboardsPage() {
   const [dashletOpen, setDashletOpen] = useState(false);
   const [form] = Form.useForm();
   const [dashletForm] = Form.useForm();
+  const dashletKind = Form.useWatch('kind', dashletForm);
 
   const entities = navEntities(metadata.data, principal?.type).map((entity) => ({ value: entity.name, label: entity.label }));
   const active = dashboards.find((item) => item.id === activeId) ?? null;
@@ -98,16 +99,28 @@ export function DashboardsPage() {
     if (!active) return;
     try {
       const values = await dashletForm.validateFields();
-      const created = await api.createDashlet(active.id, {
-        name: String(values.name),
-        kind: String(values.kind),
-        config: {
-          entity: String(values.entity),
-          maxSize: 25,
-          ...(typeof values.groupBy === 'string' && values.groupBy !== '' ? { groupBy: values.groupBy } : {}),
-          ...(typeof values.measure === 'string' && values.measure !== '' ? { measure: values.measure } : {}),
-        },
-      });
+      const kind = String(values.kind);
+      // The Project Task dashlet is configured by its own options, not by an entity + filter pair
+      // (PLAN_Phase_19_Projects.md §4.16).
+      const config =
+        kind === 'projectTasks'
+          ? {
+              entity: 'ProjectTask',
+              nextDays: Number(values.nextDays ?? 14),
+              includeOwned: values.includeOwned === true,
+              includeCollaboration: values.includeCollaboration === true,
+              excludeAssigned: values.excludeAssigned === true,
+              includeCompleted: values.includeCompleted === true,
+              groupTypes: Array.isArray(values.groupTypes) ? values.groupTypes : [],
+              maxSize: Number(values.maxSize ?? 20),
+            }
+          : {
+              entity: String(values.entity),
+              maxSize: 25,
+              ...(typeof values.groupBy === 'string' && values.groupBy !== '' ? { groupBy: values.groupBy } : {}),
+              ...(typeof values.measure === 'string' && values.measure !== '' ? { measure: values.measure } : {}),
+            };
+      const created = await api.createDashlet(active.id, { name: String(values.name), kind, config });
       await load();
       setDashletOpen(false);
       dashletForm.resetFields();
@@ -230,11 +243,45 @@ export function DashboardsPage() {
             <Input />
           </Form.Item>
           <Form.Item name="kind" label="Kind" rules={[{ required: true }]} initialValue="list">
-            <Select options={[{ value: 'list', label: 'List' }, { value: 'chart', label: 'Chart' }, { value: 'kpi', label: 'KPI' }]} />
+            <Select
+              options={[
+                { value: 'list', label: 'List' },
+                { value: 'chart', label: 'Chart' },
+                { value: 'kpi', label: 'KPI' },
+                { value: 'projectTasks', label: 'Project tasks (Phase 19)' },
+              ]}
+            />
           </Form.Item>
-          <Form.Item name="entity" label="Entity" rules={[{ required: true }]}>
-            <Select options={entities} showSearch optionFilterProp="label" />
+          <Form.Item name="entity" label="Entity" rules={[{ required: dashletKind !== 'projectTasks' }]}>
+            <Select options={entities} showSearch optionFilterProp="label" disabled={dashletKind === 'projectTasks'} />
           </Form.Item>
+          {dashletKind === 'projectTasks' ? (
+            <>
+              <Form.Item name="nextDays" label="Due within (days)" initialValue={14}>
+                <InputNumber min={1} max={365} />
+              </Form.Item>
+              <Form.Item name="maxSize" label="Rows" initialValue={20}>
+                <InputNumber min={1} max={100} />
+              </Form.Item>
+              <Form.Item name="groupTypes" label="Group types (empty = all)">
+                <Select mode="multiple" options={['Triage', 'Backlog', 'Work', 'Phase', 'Sprint'].map((value) => ({ value, label: value }))} />
+              </Form.Item>
+              <Space wrap>
+                <Form.Item name="includeOwned" valuePropName="checked" initialValue={true}>
+                  <Checkbox>Owned by me</Checkbox>
+                </Form.Item>
+                <Form.Item name="includeCollaboration" valuePropName="checked">
+                  <Checkbox>Shared with me</Checkbox>
+                </Form.Item>
+                <Form.Item name="excludeAssigned" valuePropName="checked">
+                  <Checkbox>Exclude assigned to me</Checkbox>
+                </Form.Item>
+                <Form.Item name="includeCompleted" valuePropName="checked">
+                  <Checkbox>Include completed</Checkbox>
+                </Form.Item>
+              </Space>
+            </>
+          ) : null}
           <Form.Item name="groupBy" label="Group by (chart / grouped KPI)">
             <Input placeholder="type" />
           </Form.Item>

@@ -1,5 +1,6 @@
 import type {
   AclDefinition,
+  CloneResult,
   EntityDefinition,
   ExtensionInstallResult,
   ExtensionListResult,
@@ -25,6 +26,12 @@ import type {
   ProcessTaskListResult,
   ProcessTaskView,
   ProcessView,
+  ProjectBoardView,
+  ProjectCapabilities,
+  ProjectGanttView,
+  ProjectMemberRow,
+  ProjectPlanView,
+  ProjectStageRow,
   ReportCsv,
   ReportDefinitionShape,
   ReportRow,
@@ -120,6 +127,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError(response.status, error?.code ?? 'INTERNAL_ERROR', error?.message ?? response.statusText, error?.details);
   }
   return payload as T;
+}
+
+/** A JSON POST — every Phase 19 domain command is an action POST (PLAN §7.2). */
+function post(input: unknown): RequestInit {
+  return { method: 'POST', body: JSON.stringify(input ?? {}) };
 }
 
 function listQuery(params: ListParams): string {
@@ -647,4 +659,74 @@ export const api = {
     request<{ id: string; deleted: boolean }>(`/Portal/${encodeURIComponent(portalId)}/dashboards/${encodeURIComponent(dashboardId)}/dashlets/${encodeURIComponent(dashletId)}`, {
       method: 'DELETE',
     }),
+
+  // Phase 19 — Projects domain commands (PLAN_Phase_19_Projects.md §7.2).
+  projectCapabilities: (projectId: string) =>
+    request<ProjectCapabilities>(`/Project/${encodeURIComponent(projectId)}/action/capabilities`),
+  projectPlan: (projectId: string) => request<ProjectPlanView>(`/Project/${encodeURIComponent(projectId)}/action/plan`),
+  projectBoard: (projectId: string, groupId?: string) =>
+    request<ProjectBoardView>(
+      `/Project/${encodeURIComponent(projectId)}/action/board${simpleQuery({ groupId })}`,
+    ),
+  projectGantt: (projectId: string, allGroupTypes?: boolean) =>
+    request<ProjectGanttView>(
+      `/Project/${encodeURIComponent(projectId)}/action/gantt${simpleQuery({ allGroupTypes: allGroupTypes === true ? 'true' : undefined })}`,
+    ),
+  projectStages: (projectId: string) =>
+    request<{ list: ProjectStageRow[] }>(`/Project/${encodeURIComponent(projectId)}/action/stages`),
+  projectMembers: (projectId: string) =>
+    request<{ list: ProjectMemberRow[] }>(`/Project/${encodeURIComponent(projectId)}/action/members`),
+  addProjectMember: (projectId: string, input: { userId: string; projectRoleId: string }) =>
+    request<Record<string, unknown>>(`/Project/${encodeURIComponent(projectId)}/action/members`, post(input)),
+  updateProjectMember: (projectId: string, input: { memberId: string; projectRoleId: string }) =>
+    request<Record<string, unknown>>(`/Project/${encodeURIComponent(projectId)}/action/memberUpdate`, post(input)),
+  removeProjectMember: (projectId: string, input: { memberId: string; transferToMemberId?: string }) =>
+    request<{ memberId: string; clearedTasks: number }>(`/Project/${encodeURIComponent(projectId)}/action/memberRemove`, post(input)),
+  bulkProjectMembers: (projectId: string, input: { projectIds: string[]; userIds: string[]; projectRoleId: string; operation: 'add' | 'remove' | 'role' }) =>
+    request<{ succeeded: string[]; failed: { projectId: string; message: string }[] }>(
+      `/Project/${encodeURIComponent(projectId)}/action/memberBulk`,
+      post(input),
+    ),
+  projectSettings: (projectId: string, input: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/Project/${encodeURIComponent(projectId)}/action/settings`, post(input)),
+  cloneProject: (projectId: string, input: Record<string, unknown>) =>
+    request<CloneResult>(`/Project/${encodeURIComponent(projectId)}/action/clone`, post(input)),
+  createProjectGroup: (projectId: string, input: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/Project/${encodeURIComponent(projectId)}/action/groupCreate`, post(input)),
+  updateProjectGroup: (projectId: string, input: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/Project/${encodeURIComponent(projectId)}/action/groupUpdate`, post(input)),
+  removeProjectGroup: (projectId: string, input: { groupId: string; moveToGroupId?: string }) =>
+    request<{ groupId: string; moved: number }>(`/Project/${encodeURIComponent(projectId)}/action/groupRemove`, post(input)),
+  reorderProjectGroups: (projectId: string, groupIds: string[]) =>
+    request<{ count: number }>(`/Project/${encodeURIComponent(projectId)}/action/groupReorder`, post({ groupIds })),
+  createProjectTask: (projectId: string, input: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/Project/${encodeURIComponent(projectId)}/action/taskCreate`, post(input)),
+  createProjectMilestone: (projectId: string, input: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/Project/${encodeURIComponent(projectId)}/action/milestone`, post(input)),
+  reorderProjectTasks: (projectId: string, input: { groupId?: string; parentTaskId?: string; taskIds: string[] }) =>
+    request<{ count: number }>(`/Project/${encodeURIComponent(projectId)}/action/taskReorder`, post(input)),
+  updateProjectTask: (taskId: string, input: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/ProjectTask/${encodeURIComponent(taskId)}/action/update`, post(input)),
+  moveProjectTask: (taskId: string, input: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/ProjectTask/${encodeURIComponent(taskId)}/action/move`, post(input)),
+  transitionProjectTask: (taskId: string, kind: 'start' | 'complete' | 'cancel') =>
+    request<Record<string, unknown>>(`/ProjectTask/${encodeURIComponent(taskId)}/action/transition`, post({ kind })),
+  bulkProjectTasks: (input: { ids: string[]; operation: 'complete' | 'cancel' | 'selfAssign' }) =>
+    request<{ succeeded: string[]; failed: { id: string; message: string }[] }>('/ProjectTask/action/bulk', post(input)),
+  projectTaskDependencies: (taskId: string) =>
+    request<{ predecessors: Record<string, unknown>[]; successors: Record<string, unknown>[] }>(
+      `/ProjectTask/${encodeURIComponent(taskId)}/action/dependencies`,
+    ),
+  addProjectTaskDependency: (taskId: string, input: { predecessorTaskId: string; dependencyType?: string | null }) =>
+    request<Record<string, unknown>>(`/ProjectTask/${encodeURIComponent(taskId)}/action/dependencies`, post(input)),
+  updateProjectTaskDependency: (taskId: string, input: { dependencyId: string; dependencyType: string | null }) =>
+    request<Record<string, unknown>>(`/ProjectTask/${encodeURIComponent(taskId)}/action/dependencyUpdate`, post(input)),
+  removeProjectTaskDependency: (taskId: string, dependencyId: string) =>
+    request<{ removed: boolean }>(`/ProjectTask/${encodeURIComponent(taskId)}/action/dependencyRemove`, post({ dependencyId })),
+  projectTaskCollaborators: (taskId: string) =>
+    request<{ list: { id: string; userId: string }[] }>(`/ProjectTask/${encodeURIComponent(taskId)}/action/collaborators`),
+  addProjectTaskCollaborator: (taskId: string, userId: string) =>
+    request<Record<string, unknown>>(`/ProjectTask/${encodeURIComponent(taskId)}/action/collaboratorAdd`, post({ userId })),
+  removeProjectTaskCollaborator: (taskId: string, userId: string) =>
+    request<{ removed: boolean }>(`/ProjectTask/${encodeURIComponent(taskId)}/action/collaboratorRemove`, post({ userId })),
 };
