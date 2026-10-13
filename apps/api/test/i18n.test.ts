@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { EntityDefinition } from '../../src/metadata/metadata-store.service.js';
-import { authHeader, bootApi, type ApiContext, shutdownApi } from './support/boot-api.js';
+import { type ApiContext, authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 describe('Phase 7A — internationalization (PLAN §41)', () => {
   let ctx: ApiContext;
@@ -92,6 +92,15 @@ describe('Phase 7A — internationalization (PLAN §41)', () => {
   });
 
   it('an Accept-Language outside the enabled list falls back to the instance default (vi catalog via header)', async () => {
+    // Clear the admin's stored locale so the Accept-Language header decides the language
+    // (§41.4): an authenticated user's own locale outranks the header, so it must be null here.
+    await ctx.app.inject({
+      method: 'PATCH',
+      url: '/api/v1/AppUser/me',
+      headers: authHeader(adminToken),
+      payload: { locale: null, timezone: null },
+    });
+
     const langHeaders = (accept: string): Record<string, string> => ({ ...authHeader(adminToken), 'accept-language': accept });
     const unsupported = await ctx.app.inject({ method: 'GET', url: '/api/v1/I18n', headers: langHeaders('fr-FR,fr') });
     expect((unsupported.json() as { locale: string }).locale).toBe('en');

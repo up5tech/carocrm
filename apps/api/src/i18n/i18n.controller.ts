@@ -1,6 +1,7 @@
 import { ValidationError } from '@carocrm/core/errors/index.js';
 import { Controller, Get, Inject, Query } from '@nestjs/common';
 
+import { Public } from '../auth/auth.guard.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import type { Catalog } from './i18n.service.js';
@@ -11,7 +12,13 @@ import { acceptLanguageLocale, I18nService } from './i18n.service.js';
  * `:entity` wildcard never shadows it. Resolution order (§41.4): `?locale=` → the
  * authenticated user's locale → `Accept-Language` → the instance default. A requested
  * locale outside the instance's enabled list is rejected (§41.5).
+ *
+ * Public (no bearer token) so the SPA can restore the locale and paint the sign-in page
+ * before authentication (§41.4). Only translation strings and the public instance
+ * locale/timezone settings are returned — never a user's own locale, which still requires
+ * an authenticated principal to resolve.
  */
+@Public()
 @Controller('api/v1/I18n')
 export class I18nController {
   constructor(

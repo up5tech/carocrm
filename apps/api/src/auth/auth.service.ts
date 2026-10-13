@@ -245,7 +245,7 @@ export class AuthService {
   }
 
   /** Phase 7A (PLAN §41.5): a user changes their own locale/timezone; `null` clears it back to the instance default (PLAN §41.6 nullable). */
-  async updatePreferences(userId: string, patch: { locale?: string | null; timezone?: string | null }): Promise<void> {
+  async updatePreferences(userId: string, patch: { locale?: string | null | undefined; timezone?: string | null | undefined }): Promise<void> {
     const db = this.database.db;
     await db
       .updateTable('users')

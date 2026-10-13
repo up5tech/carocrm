@@ -111,6 +111,31 @@ export async function activateLocale(locale: string): Promise<void> {
  * strings), then reconcile with the user's server-side preference once the session loads.
  */
 export async function initI18n(): Promise<void> {
+  if (!i18n.isInitialized) {
+    await i18n.init({
+      lng: storedLocale(),
+      fallbackLng: 'en',
+      keySeparator: '.',
+      nsSeparator: false,
+      interpolation: { escapeValue: false },
+      resources: {},
+      returnEmptyString: false,
+    });
+  }
+  const cached = storedCatalog(storedLocale());
+  if (cached) await applyCatalog(storedLocale(), cached.catalog);
+  await activateLocale(storedLocale());
+}
+
+/**
+ * Synchronous (network-free) bootstrap for the very first paint (PLAN §41.4). Initializes
+ * i18next and applies the locally cached catalog when one exists, so the app can mount with UI
+ * strings ready even before — or without — a successful `GET /I18n`. The subsequent live
+ * `initI18n()` reconciles against the instance; if the cache is absent the UI starts in the
+ * stored/`en` language and fills in once the network call succeeds.
+ */
+export async function initI18nFromCache(): Promise<void> {
+  if (i18n.isInitialized) return;
   await i18n.init({
     lng: storedLocale(),
     fallbackLng: 'en',
@@ -120,9 +145,12 @@ export async function initI18n(): Promise<void> {
     resources: {},
     returnEmptyString: false,
   });
-  const cached = storedCatalog(storedLocale());
-  if (cached) await applyCatalog(storedLocale(), cached.catalog);
-  await activateLocale(storedLocale());
+  const locale = storedLocale();
+  const cached = storedCatalog(locale);
+  if (cached) {
+    i18n.addResourceBundle(locale, 'translation', nestedFromFlat(cached.catalog), true, true);
+    activeLocale = locale;
+  }
 }
 
 /** Called by the session loader: the user's own locale/timezone now drive formatting. */

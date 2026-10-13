@@ -34,8 +34,8 @@ export interface LoginResult extends AuthTokens {
 }
 
 const PreferencesSchema = z.object({
-  locale: z.union([z.string(), z.null()]).min(2).optional(),
-  timezone: z.union([z.string(), z.null()]).min(1).max(64).optional(),
+  locale: z.string().min(2).nullable().optional(),
+  timezone: z.string().min(1).max(64).nullable().optional(),
 });
 
 @ApiTags('authentication')
@@ -132,7 +132,7 @@ export class AuthController {
     if (parsed.data.locale !== undefined && parsed.data.locale !== null && !settings.enabledLocales.includes(parsed.data.locale)) {
       throw new ValidationError(`Locale "${parsed.data.locale}" is not enabled on this instance.`, { enabledLocales: settings.enabledLocales });
     }
-    if (parsed.data.timezone !== undefined) {
+    if (parsed.data.timezone !== undefined && parsed.data.timezone !== null) {
       try {
         Intl.DateTimeFormat(undefined, { timeZone: parsed.data.timezone });
       } catch {
