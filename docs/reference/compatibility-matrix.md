@@ -32,7 +32,7 @@ search/import/export/dashboards, the extension SDK, the workflow engine and the 
 | Dynamic logic | v9.3.x | metadata `dynamicLogic.rules` evaluated in the SPA **and** on every API write | P2 | implemented |
 | Workflows | v9.3.x (workflows module) | entity-event triggers, formula conditions, branching, delays, 5 actions, versioned definitions, run history + steps | P2 | implemented (see note) |
 | BPM / process approval | v9.3.x (bpm module, commercial baseline) | process definitions with user tasks, exclusive gateways, service tasks, due/escalation timers, versioned definitions, per-person task lists, full audit trail | P2 | implemented subset (see note) |
-| Reports / Portals | commercial/baseline | out of scope | P2 | not started |
+| Reports / Portals | commercial/baseline | reports: exact aggregates + scheduled owner delivery; portals: separate role space + contact/account visibility + portal dashboard/nav | P2 | implemented (see note) |
 | Hooks / domain events | v9.3.x entity hooks + event bus | `HookRegistry` phases + transactional-outbox domain events consumed by a worker subscriber bus | P2 | implemented (see note) |
 | Extension SDK / modules | v9.3.x module/extension packages | `packages/extension-sdk` + host in API and worker: manifest, strict validation, dependency + `order` resolution, metadata contribution, providers/controllers/hooks/jobs, own migrations, SPA nav, admin API + UI | P1 | implemented (see note) |
 | Database | MySQL/MariaDB/PG | PostgreSQL only; MySQL/MariaDB later (PLAN §6.2) | — | PG first |

@@ -1,8 +1,8 @@
 import type { Provider, Type } from '@nestjs/common';
 
+import { PortalController } from './portal.controller.js';
 import { PortalAdminController } from './portal-admin.controller.js';
 import { PortalAdminService } from './portal-admin.service.js';
-import { PortalController } from './portal.controller.js';
 import { PortalFrontService } from './portal-front.service.js';
 import { PortalPolicyService } from './portal-policy.service.js';
 import { PortalRoleController } from './portal-role.controller.js';

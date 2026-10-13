@@ -6,7 +6,7 @@
  * configuration only; portal record visibility itself is enforced by
  * `PortalPolicyService` + the entity record store, never by these tables.
  */
-import { ConflictException, ForbiddenException, NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
+import { AuthorizationDeniedError, DuplicateRecordError, NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { generateId } from '@carocrm/core/utils/id.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
@@ -20,8 +20,8 @@ import { TEXTISH_TYPES } from '../search/portal-shapes.js';
 import {
   ENTITY_NAME,
   MAX_NAV_ITEMS,
-  MAX_PORTAL_DASHLETS,
   MAX_PORTAL_DASHBOARDS,
+  MAX_PORTAL_DASHLETS,
   MAX_PORTAL_ROLES,
   MAX_PORTALS,
   PortalDashboardInputSchema,
@@ -33,7 +33,7 @@ import {
   PortalRoleLinkSchema,
 } from './shapes.js';
 
-function parseOrThrow<T>(schema: z.ZodType<T>, body: unknown, label: string): T {
+function parseOrThrow<S extends z.ZodTypeAny>(schema: S, body: unknown, label: string): z.output<S> {
   const result = schema.safeParse(body ?? {});
   if (!result.success) {
     throw new ValidationError(`Invalid ${label}.`, { issues: result.error.issues.map((issue) => issue.message) });
@@ -59,7 +59,7 @@ export class PortalAdminService {
 
   private requireAdmin(): void {
     if (!this.scope.isAdmin) {
-      throw new ForbiddenException('Administrator access required.');
+      throw new AuthorizationDeniedError('Administrator access required.');
     }
   }
 
@@ -127,7 +127,7 @@ export class PortalAdminService {
     const data = parseOrThrow(PortalInputSchema, body, 'portal');
     const id = data.id ?? generateId();
     const exists = await this.db.selectFrom('portals').select('id').where('id', '=', id).executeTakeFirst();
-    if (exists) throw new ConflictException(`Portal "${id}" already exists.`);
+    if (exists) throw new DuplicateRecordError(`Portal "${id}" already exists.`);
     const count = await this.db.selectFrom('portals').select('id').where('is_deleted', '=', false).execute();
     if (count.length >= MAX_PORTALS) throw new ValidationError(`At most ${String(MAX_PORTALS)} portals are allowed.`);
     await this.db
@@ -169,7 +169,7 @@ export class PortalAdminService {
     await this.portalRow(id);
     const users = await this.db.selectFrom('users').select('id').where('portal_id', '=', id).where('is_deleted', '=', false).execute();
     if (users.length > 0) {
-      throw new ConflictException('Reassign or delete the portal users of this portal first.');
+      throw new DuplicateRecordError('Reassign or delete the portal users of this portal first.');
     }
     await this.db.updateTable('portals').set({ is_deleted: true, modified_at: new Date() }).where('id', '=', id).execute();
     return { id, deleted: true };

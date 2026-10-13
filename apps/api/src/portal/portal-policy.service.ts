@@ -18,6 +18,7 @@ import { AuthorizationDeniedError } from '@carocrm/core/errors/index.js';
 import { toCamelCase } from '@carocrm/query-engine/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
+import type { AclPredicate,PortalLinkField  } from '../acl/predicate.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
@@ -25,9 +26,8 @@ import type { PostgresRecordStore } from '../entity/entity-record.store.js';
 import { ENTITY_STORE } from '../entity/entity-record.store.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
-import type { PortalLinkField, PortalPredicate } from '../acl/predicate.js';
 
-export type { PortalLinkField, PortalPredicate } from '../acl/predicate.js';
+export type { PortalLinkField } from '../acl/predicate.js';
 
 /** Field access pair, mirroring the internal ACL vocabulary. */
 export interface PortalFieldAccess {
@@ -165,7 +165,7 @@ export class PortalPolicyService {
    * portal role with entity level `all` never sees a record outside its contact/account
    * one-hop neighbourhood (PLAN §37 "Restricted record visibility").
    */
-  async recordPredicate(entity: string, _action: AclAction): Promise<PortalPredicate> {
+  async recordPredicate(entity: string, _action: AclAction): Promise<AclPredicate> {
     const level = await this.canUser(entity, 'read');
     if (level === 'no') return { kind: 'denyAll' };
     const snapshot = await this.snapshot();
@@ -204,7 +204,8 @@ export class PortalPolicyService {
     if (!(await this.recordVisible(entity, id, data))) {
       return { allowed: false, reason: 'Record is not related to the portal contact or account' };
     }
-    return { allowed: true, scope: entityDecision.scope };
+    const scope = entityDecision.scope;
+    return scope === undefined ? { allowed: true } : { allowed: true, scope };
   }
 
   /**

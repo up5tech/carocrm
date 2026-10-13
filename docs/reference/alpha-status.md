@@ -8,8 +8,8 @@ CSV import/export, dashboards — see the sections at the end of this file), Pha
 SDK, `packages/extension-sdk` + the `modules/` sample packages), Phase 15 (workflow engine,
 `packages/workflow` + the admin builder), and Phase 16 (BPM engine, `packages/bpm` + process admin
 and my-tasks UI). Phase 17 reporting has a working first implementation; see its status section below
-for the bounded query model and remaining limitations. Phase 18 portals remain unimplemented; see PLAN §72
-for the remaining priority matrix.
+for the bounded query model and remaining limitations. Phase 18 portals are implemented;
+see the portals status section below and PLAN §72 for the remaining priority matrix.
 
 ## Checklist from PLAN §73
 
@@ -36,6 +36,7 @@ for the remaining priority matrix.
 | CSV import/export working | done | `POST /:entity/action/import`, `POST|GET /:entity/action/export`, formula-injection guarded |
 | Dashboards and dashlets working | done | `/api/v1/Dashboard` + dashlets (`list`/`chart`/`kpi`), SPA `/dashboards` |
 | Extension packages working | done | `packages/extension-sdk` + `modules/` sample packages, `/api/v1/Extension`, `/admin/extensions` |
+| Portals working | done | separate `portal_roles` role space, `GET /api/v1/Portal/me|nav|dashboard`, portal ACL policy (contact/account one-hop), `/portal` SPA + `/admin/portals` |
 | Workflows working | done | `packages/workflow` engine, worker execution + run history, `/api/v1/Workflow`, `/admin/workflows` |
 | BPM (process approval) working | done | `packages/bpm` engine, `/api/v1/Process[Instance\|Task]`, worker timers + service tasks, `/admin/processes` + `/tasks` |
 | OpenAPI working | done | `GET /api/v1/OpenApi` (generated from controllers) |
@@ -64,7 +65,8 @@ pnpm --filter @carocrm/worker test  # 143 worker tests (jobs, scheduler, outbox,
 - `docker-compose.yml` is dev-oriented (source mount, no built images); PLAN §65 production topology not built.
 - Query grammar is EspoCRM-like JSON criteria translated to Kysely; raw SQL is never accepted (PLAN §15.2).
 - Metadata overrides are stored in `metadata_entries` + `app_settings('entity')` rather than files.
-- Attachment parent-ACL check uses the record-level ACL predicate; portal/API-user policies are future work (PLAN §37).
+- Attachment parent-ACL check uses the record-level ACL predicate, including the portal
+  policy for portal principals (PLAN §37); API-user policies are future work.
 - Multi-tenancy columns are absent: repositories are single-tenant for Alpha (PLAN §43 wanted tenant-aware APIs — deferred).
 
 ## Notable bug found and fixed during build
@@ -421,6 +423,31 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   `anchor.click()`, which cancels the download in Chromium (now revoked after 10 s with the anchor attached to
   the DOM), and antd icon `aria-label`s made the export button's accessible name ambiguous (now explicitly
   `aria-label="Export CSV"`, matching the existing delete-button pattern).
+
+## Portals (Phase 18, PLAN §37, completed 2026-10-13)
+
+- Portal users are `users` rows with `type = 'portal'`, bound to one Contact record
+  (`portal_id` + `contact_id` + `portal_role_ids`). Their authority comes ONLY from
+  `portal_roles` — the internal `roles` table is never read for a portal principal, and an
+  internal role can never be assigned to a portal user (`IdentityService` rejects it).
+- Record visibility is contact/account-scoped: the portal user's own Contact/Account, records
+  carrying a Contact/Account link attribute to them, and records linked through `entity_links`
+  in either direction. List SQL (`portalVisibilitySql`) and by-id checks (`recordVisible`) decide
+  identically, so even a portal role with entity level `all` never sees outside the one-hop
+  neighbourhood; out-of-scope reads are 404 (no existence leak).
+- The portal surface is `GET /api/v1/Portal/me|nav|dashboard` plus dashlet runs through
+  `EntityCrudService` (same ACL path as any other read); dashboards, saved filters, search,
+  import/export and stream all scope to the portal principal. Administration is admin-only
+  (`/api/v1/Portal`, `/api/v1/PortalRole`) with the SPA at `/admin/portals`, while portal users
+  only ever see `/portal` (`PortalHomePage`, portal shell, portal-scoped list/detail/edit).
+- Additive migration `016_phase18_portal.sql`; no new database was created.
+- Verification: `apps/api/test/portal.test.ts` (8 tests) covers portal context, own
+  contact/account reads, stranger-record 404, neighbourhood list filtering, denied writes,
+  denied admin/identity endpoints (`/Portal`, `/PortalRole`, `/User`, `/Role`) and the
+  internal-role assignment refusal. The portal pass also fixed two real defects: portal code
+  imported non-existent Nest `ForbiddenException`/`ConflictException` (500 instead of 403),
+  and `listRoles`/`getRole`/`listTeams`/`getTeam` missed `requireAdmin()` so a portal user
+  could read internal roles.
 
 ## Web UI theme (Lizant)
 

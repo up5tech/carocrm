@@ -6,20 +6,19 @@
  * `EntityCrudService`, so entity/record/field ACL for the portal principal — including the
  * contact/account visibility rule — is enforced by the same code path as any other read.
  */
-import { AuthenticationRequiredError, ForbiddenException, NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
+import { AuthenticationRequiredError, AuthorizationDeniedError, NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
-import { EntityCrudService } from '../entity/entity.service.js';
 import type { ListQuery } from '../entity/entity.service.js';
+import { EntityCrudService } from '../entity/entity.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
-import { PortalDashletConfigSchema } from './shapes.js';
 import type { PortalContextView } from './shapes.js';
+import { PortalDashletConfigSchema } from './shapes.js';
 
-const MAX_DASHLET_SCAN = 2_000;
 const MAX_DASHBOARD_GROUPS = 100;
 
 function groupKey(value: unknown): string {
@@ -41,13 +40,13 @@ export class PortalFrontService {
     return this.database.db;
   }
 
-  private requirePortalPrincipal(): { userId: string; portalId: string | undefined; contactId: string | undefined } {
+  private requirePortalPrincipal(): { userId: string; portalId: string; contactId: string | undefined } {
     const principal = this.scope.principal;
     if (!principal || principal.userType !== 'portal') {
-      throw new ForbiddenException('Portal users only.');
+      throw new AuthorizationDeniedError('Portal users only.');
     }
     if (!principal.portalId) {
-      throw new ForbiddenException('This portal user is not assigned to a portal.');
+      throw new AuthorizationDeniedError('This portal user is not assigned to a portal.');
     }
     return { userId: principal.userId, portalId: principal.portalId, contactId: principal.contactId };
   }
@@ -61,7 +60,7 @@ export class PortalFrontService {
       .where('id', '=', portalId)
       .executeTakeFirst();
     if (!portal || !portal.is_active || portal.is_deleted) {
-      throw new ForbiddenException('This portal is not active.');
+      throw new AuthorizationDeniedError('This portal is not active.');
     }
     const user = await this.db
       .selectFrom('users')
@@ -97,7 +96,7 @@ export class PortalFrontService {
   async nav(): Promise<PortalContextView['nav']> {
     const { portalId } = this.requirePortalPrincipal();
     const portal = await this.db.selectFrom('portals').select(['id', 'is_active', 'is_deleted']).where('id', '=', portalId).executeTakeFirst();
-    if (!portal || !portal.is_active || portal.is_deleted) throw new ForbiddenException('This portal is not active.');
+    if (!portal || !portal.is_active || portal.is_deleted) throw new AuthorizationDeniedError('This portal is not active.');
     return this.navViews(portal.id);
   }
 
@@ -105,7 +104,7 @@ export class PortalFrontService {
   async dashboard(): Promise<PortalContextView['dashboard']> {
     const { portalId, userId } = this.requirePortalPrincipal();
     const portal = await this.db.selectFrom('portals').select(['id', 'is_active', 'is_deleted']).where('id', '=', portalId).executeTakeFirst();
-    if (!portal || !portal.is_active || portal.is_deleted) throw new ForbiddenException('This portal is not active.');
+    if (!portal || !portal.is_active || portal.is_deleted) throw new AuthorizationDeniedError('This portal is not active.');
     const roles = await this.roleViews(portal.id, userId);
     return this.dashboardView(portal.id, roles.map((role) => role.id));
   }
@@ -116,7 +115,6 @@ export class PortalFrontService {
    * contact/account neighbourhood exactly like any other list read.
    */
   async runDashlet(dashletId: string): Promise<Record<string, unknown>> {
-    const { portalId, userId } = this.requirePortalPrincipal();
     const dashboard = await this.dashboard();
     const dashlet = dashboard?.dashlets.find((entry) => entry.id === dashletId);
     if (!dashlet) throw new NotFoundError(`Dashlet "${dashletId}" is not on your portal dashboard.`);

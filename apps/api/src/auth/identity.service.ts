@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
-import { RecordNotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
-import { ConflictException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { AuthorizationDeniedError, DuplicateRecordError,RecordNotFoundError, ValidationError  } from '@carocrm/core/errors/index.js';
+import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
 import type { RequestScope } from '../common/request-scope.js';
@@ -55,7 +55,7 @@ export class IdentityService {
 
   private requireAdmin(): void {
     if (!this.scope.isAdmin) {
-      throw new ForbiddenException('Administrator access required.');
+      throw new AuthorizationDeniedError('Administrator access required.');
     }
   }
 
@@ -105,7 +105,7 @@ export class IdentityService {
     const id = data.id ?? randomUUID();
     const exists = await this.db.selectFrom('users').select('id').where('user_name', '=', data.userName).executeTakeFirst();
     if (exists) {
-      throw new ConflictException(`User name "${data.userName}" is already in use.`);
+      throw new DuplicateRecordError(`User name "${data.userName}" is already in use.`);
     }
     const isPortal = (data.type ?? 'regular') === 'portal';
     if (isPortal && (data.assignedRoleIds ?? []).length > 0) {
@@ -234,7 +234,7 @@ export class IdentityService {
   async deleteUser(id: string) {
     this.requireAdmin();
     if (id === this.scope.userId) {
-      throw new ConflictException('You cannot delete your own account.');
+      throw new DuplicateRecordError('You cannot delete your own account.');
     }
     await this.db.updateTable('users').set({ is_deleted: true, modified_at: new Date() }).where('id', '=', id).execute();
     await this.db.updateTable('user_sessions').set({ revoked_at: new Date() }).where('user_id', '=', id).where('revoked_at', 'is', null).execute();
@@ -242,6 +242,7 @@ export class IdentityService {
   }
 
   async listRoles(offset = 0, limit = 20) {
+    this.requireAdmin();
     const rows = await this.db
       .selectFrom('roles')
       .selectAll()
@@ -256,6 +257,7 @@ export class IdentityService {
   }
 
   async getRole(id: string) {
+    this.requireAdmin();
     const row = await this.db.selectFrom('roles').selectAll().where('id', '=', id).executeTakeFirst();
     if (!row) throw new RecordNotFoundError('Role', id);
     return toRoleDto(row);
@@ -298,6 +300,7 @@ export class IdentityService {
   }
 
   async listTeams(offset = 0, limit = 20) {
+    this.requireAdmin();
     const rows = await this.db.selectFrom('teams').selectAll().where('is_deleted', '=', false).orderBy('name').limit(limit).offset(offset).execute();
     const totalRow = await this.db.selectFrom('teams').where('is_deleted', '=', false).select((eb) => eb.fn.countAll<number>().as('total')).executeTakeFirst();
     const list = rows.map(toTeamDto);
@@ -305,6 +308,7 @@ export class IdentityService {
   }
 
   async getTeam(id: string) {
+    this.requireAdmin();
     const row = await this.db.selectFrom('teams').selectAll().where('id', '=', id).executeTakeFirst();
     if (!row) throw new RecordNotFoundError('Team', id);
     return toTeamDto(row);
