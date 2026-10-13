@@ -26,6 +26,9 @@ export interface PrincipalRecord {
   portalId?: string | undefined;
   /** Phase 18: the Contact record a portal user is. */
   contactId?: string | undefined;
+  /** Phase 7A (PLAN §41.6): the user's own locale/timezone; null falls back to instance defaults. */
+  locale?: string | undefined;
+  timezone?: string | undefined;
 }
 
 @Injectable()
@@ -236,7 +239,23 @@ export class AuthService {
       ...(sessionId !== undefined ? { sessionId } : {}),
       ...(portal ? { portalId: user.portal_id ?? undefined } : {}),
       ...(portal ? { contactId: user.contact_id ?? undefined } : {}),
+      ...(user.locale ? { locale: user.locale } : {}),
+      ...(user.timezone ? { timezone: user.timezone } : {}),
     };
+  }
+
+  /** Phase 7A (PLAN §41.5): a user changes their own locale/timezone; `null` clears it back to the instance default (PLAN §41.6 nullable). */
+  async updatePreferences(userId: string, patch: { locale?: string | null; timezone?: string | null }): Promise<void> {
+    const db = this.database.db;
+    await db
+      .updateTable('users')
+      .set({
+        ...(patch.locale !== undefined ? { locale: patch.locale } : {}),
+        ...(patch.timezone !== undefined ? { timezone: patch.timezone } : {}),
+        modified_at: new Date(),
+      })
+      .where('id', '=', userId)
+      .execute();
   }
 
   async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {

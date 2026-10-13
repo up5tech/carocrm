@@ -313,7 +313,18 @@ export const api = {
   login: (userName: string, password: string) =>
     request<LoginResult>('/Authentication', { method: 'POST', body: JSON.stringify({ userName, password }) }),
   me: () => request<Principal>('/AppUser/me'),
+  patchMyPreferences: (input: { locale?: string; timezone?: string }) =>
+    request<{ id: string; locale: string | null; timezone: string | null }>('/AppUser/me', { method: 'PATCH', body: JSON.stringify(input) }),
   logout: () => request<{ status: boolean }>('/Logout', { method: 'POST' }),
+
+  // Phase 7A (PLAN §41.5): merged translation catalog, cacheable by content hash.
+  i18nCatalog: (locale: string | undefined, clientCache?: string) => {
+    const params = new URLSearchParams();
+    if (locale) params.set('locale', locale);
+    if (clientCache) params.set('clientCache', clientCache);
+    const suffix = params.toString() === '' ? '' : `?${params.toString()}`;
+    return request<{ locale: string; instance: { defaultLocale: string; enabledLocales: string[]; defaultTimezone: string }; hash: string; catalog?: Record<string, unknown>; unchanged?: boolean }>(`/I18n${suffix}`);
+  },
 
   metadata: () => request<Metadata>('/Metadata'),
   entity: (name: string) => request<EntityDefinition>(`/Metadata/${encodeURIComponent(name)}`),

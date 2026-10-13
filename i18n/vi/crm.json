@@ -1,0 +1,12 @@
+{
+  "account": { "label": "Tài khoản" },
+  "contact": { "label": "Liên hệ", "fields": { "name": "Tên", "lastName": "Họ" } },
+  "lead": { "label": "Khách hàng tiềm năng" },
+  "opportunity": { "label": "Cơ hội bán hàng" },
+  "task": { "label": "Nhiệm vụ" },
+  "call": { "label": "Cuộc gọi" },
+  "meeting": { "label": "Cuộc họp" },
+  "email": { "label": "Email" },
+  "user": { "label": "Người dùng" },
+  "team": { "label": "Nhóm" }
+}

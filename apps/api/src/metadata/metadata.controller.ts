@@ -9,6 +9,7 @@ import type { FastifyReply } from 'fastify';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
+import { acceptLanguageLocale, I18nService } from '../i18n/i18n.service.js';
 import { FormulaService } from '../logic/formula.service.js';
 import type { MetadataStoreService } from "./metadata-store.service.js";
 import { METADATA_STORE } from "./metadata-store.service.js";
@@ -24,19 +25,41 @@ export class MetadataController {
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(FormulaService) private readonly formulas: FormulaService,
+    @Inject(I18nService) private readonly i18n: I18nService,
   ) {}
 
   @Get()
-  all(@Res({ passthrough: true }) reply: FastifyReply): Record<string, unknown> {
+  async all(@Res({ passthrough: true }) reply: FastifyReply): Promise<unknown> {
     reply.header('X-Metadata-Version', String(this.store.version()));
-    return this.store.getMetadata();
+    return this.translated(this.store.getMetadata() as Record<string, unknown>);
   }
 
   @Get(':entity')
-  one(@Param('entity') entity: string, @Res({ passthrough: true }) reply: FastifyReply): unknown {
+  async one(@Param('entity') entity: string, @Res({ passthrough: true }) reply: FastifyReply): Promise<unknown> {
     reply.header('X-Metadata-Version', String(this.store.version()));
-    const definition = this.definition(entity);
-    return definition;
+    const definition = this.definition(entity) as unknown as Record<string, unknown>;
+    return this.elementTranslation(entity, definition);
+  }
+
+  /**
+   * Labels resolve per request locale (PLAN §41.7): entity labels, field labels and layout
+   * panel labels come from the `crm.<entity>.…` catalog keys when translated; the literal
+   * metadata label stays the fallback. Response shape and metadata version are unchanged.
+   */
+  private async translated(metadata: Record<string, unknown>): Promise<unknown> {
+    const locale = await this.localeForRequest();
+    return this.i18n.translateMetadata(metadata, locale);
+  }
+
+  private async elementTranslation(entity: string, definition: Record<string, unknown>): Promise<unknown> {
+    const locale = await this.localeForRequest();
+    return this.i18n.translateMetadata({ [entity]: definition }, locale)[entity];
+  }
+
+  private async localeForRequest(): Promise<string> {
+    if (this.scope.locale) return this.scope.locale;
+    const settings = await this.i18n.settings();
+    return acceptLanguageLocale(this.scope.acceptLanguage, settings.enabledLocales) ?? settings.defaultLocale;
   }
 
   /**

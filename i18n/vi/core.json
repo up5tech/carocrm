@@ -1,0 +1,27 @@
+{
+  "app": {
+    "home": "Trang chủ",
+    "search": "Tìm kiếm",
+    "dashboards": "Bảng điều khiển",
+    "reports": "Báo cáo",
+    "stream": "Dòng hoạt động",
+    "calendar": "Lịch",
+    "myTasks": "Nhiệm vụ của tôi",
+    "records": "Bản ghi",
+    "extensions": "Tiện ích mở rộng",
+    "administration": "Quản trị",
+    "signOut": "Đăng xuất",
+    "signedOut": "Đã đăng xuất.",
+    "searchRecords": "Tìm kiếm bản ghi",
+    "expandSidebar": "Mở rộng thanh bên",
+    "collapseSidebar": "Thu gọn thanh bên"
+  },
+  "common": {
+    "action": "Thao tác",
+    "actions": "Thao tác",
+    "other": "Khác",
+    "yes": "Có",
+    "no": "Không",
+    "refresh": "Tải lại"
+  }
+}

@@ -34,14 +34,16 @@ import { EXTENSION_CONTROLLERS, EXTENSION_PROVIDERS } from './extensions/index.j
 import { HealthController } from './health/health.controller.js';
 import { HookRegistry } from './hooks/hook.registry.js';
 import { HOOK_CONTROLLERS, HOOK_PROVIDERS } from './hooks/index.js';
+import { I18nController } from './i18n/i18n.controller.js';
+import { I18nService } from './i18n/i18n.service.js';
 import { JOB_CONTROLLERS, JOB_PROVIDERS } from './jobs/index.js';
 import { JobsService } from './jobs/jobs.service.js';
 import { FormulaService } from './logic/formula.service.js';
 import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
 import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.service.js';
-import { PROCESS_CONTROLLERS, PROCESS_PROVIDERS } from './processes/index.js';
 import { PORTAL_CONTROLLERS, PORTAL_PROVIDERS } from './portal/index.js';
+import { PROCESS_CONTROLLERS, PROCESS_PROVIDERS } from './processes/index.js';
 import { REPORT_CONTROLLERS, REPORT_PROVIDERS } from './reports/index.js';
 import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
@@ -53,6 +55,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     HealthController,
     AuthController,
     IdentityController,
+    // Phase 7A (PLAN §41.5): `/api/v1/I18n` and `/api/v1/AppUser` are static prefixes,
+    // matched before the generic `:entity` wildcard.
+    I18nController,
     ...ATTACHMENT_CONTROLLERS,
     ...AUDIT_CONTROLLERS,
     // `/api/v1/:entityType/:entityId/{stream,subscription}` must be matched before the
@@ -88,6 +93,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     DatabaseService,
     { provide: METADATA_STORE, useClass: MetadataStoreService },
     { provide: REQUEST_SCOPE_TOKEN, useClass: RequestScope },
+    // Phase 7A (PLAN §41): catalog loader + translator, injected by metadata and error paths too.
+    I18nService,
     AuthService,
     IdentityService,
     OutboxService,
@@ -219,6 +226,7 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     DatabaseService,
     AuthService,
     IdentityService,
+    I18nService,
     OutboxService,
     REQUEST_SCOPE_TOKEN,
     KERNEL_HOOKS_TOKEN,

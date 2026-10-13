@@ -1,11 +1,12 @@
 import { ValidationError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, Inject, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
+import { I18nService } from '../i18n/i18n.service.js';
 import { Public } from './auth.guard.js';
 import type { AuthTokens } from './auth.service.js';
 import { AuthService } from './auth.service.js';
@@ -32,12 +33,18 @@ export interface LoginResult extends AuthTokens {
   csrfToken: string;
 }
 
+const PreferencesSchema = z.object({
+  locale: z.union([z.string(), z.null()]).min(2).optional(),
+  timezone: z.union([z.string(), z.null()]).min(1).max(64).optional(),
+});
+
 @ApiTags('authentication')
 @Controller('api/v1')
 export class AuthController {
   constructor(
     @Inject(AuthService) private readonly auth: AuthService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(I18nService) private readonly i18n: I18nService,
   ) {}
 
   @Public()
@@ -104,7 +111,40 @@ export class AuthController {
       type: principal.userType,
       roles: principal.roles,
       teams: principal.teams,
+      locale: principal.locale ?? null,
+      timezone: principal.timezone ?? null,
     };
+  }
+
+  /**
+   * Phase 7A (PLAN §41.5/§41.6): the signed-in user switches their own UI language and
+   * timezone here — never through the admin identity endpoints. A locale outside the
+   * instance's enabled list is rejected (§41.5); a timezone must be a valid IANA name.
+   */
+  @Patch('AppUser/me')
+  async updatePreferences(@Body() body: unknown): Promise<unknown> {
+    const principal = this.scope.requirePrincipal();
+    const parsed = PreferencesSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid preferences payload.', { issues: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) });
+    }
+    const settings = await this.i18n.settings();
+    if (parsed.data.locale !== undefined && parsed.data.locale !== null && !settings.enabledLocales.includes(parsed.data.locale)) {
+      throw new ValidationError(`Locale "${parsed.data.locale}" is not enabled on this instance.`, { enabledLocales: settings.enabledLocales });
+    }
+    if (parsed.data.timezone !== undefined) {
+      try {
+        Intl.DateTimeFormat(undefined, { timeZone: parsed.data.timezone });
+      } catch {
+        throw new ValidationError(`Unknown time zone "${parsed.data.timezone}".`, { timezone: parsed.data.timezone });
+      }
+    }
+    if (parsed.data.locale === undefined && parsed.data.timezone === undefined) {
+      throw new ValidationError('Nothing to update: provide "locale" and/or "timezone".');
+    }
+    await this.auth.updatePreferences(principal.userId, parsed.data);
+    const updated = await this.auth.principalFromUser(principal.userId, principal.sessionId);
+    return { id: principal.userId, locale: updated.locale ?? null, timezone: updated.timezone ?? null };
   }
 
   @Get('AppUser/current')

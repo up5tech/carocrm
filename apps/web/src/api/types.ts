@@ -97,6 +97,9 @@ export interface Principal {
   type: string;
   roles: string[];
   teams: string[];
+  /** Phase 7A (PLAN §41.6): the user's locale/timezone, null = instance default. */
+  locale: string | null;
+  timezone: string | null;
 }
 
 export interface LoginResult {

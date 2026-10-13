@@ -7,6 +7,7 @@ import { api } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
 import { StreamPanel } from '../components/StreamPanel.js';
+import { t } from '../state/i18n.js';
 import { evaluateEntityLogic } from '../state/logic.js';
 import {
   detailEntries,
@@ -73,7 +74,7 @@ function RelationPanel({ parent, parentId, name, targetDefinition, base }: Panel
           <Select
             size="small"
             style={{ width: 220 }}
-            placeholder="link existing"
+            placeholder={t('web.detail.linkExisting')}
             showSearch
             filterOption={false}
             onSearch={setTerm}
@@ -90,18 +91,18 @@ function RelationPanel({ parent, parentId, name, targetDefinition, base }: Panel
               try {
                 await api.link(parent, parentId, name, selected);
                 setSelected(undefined);
-                void message.success('Linked.');
+                void message.success(t('web.detail.linked'));
                 await load();
               } catch (error) {
-                void message.error(error instanceof Error ? error.message : 'Link failed.');
+                void message.error(error instanceof Error ? error.message : t('web.detail.linkFailed'));
               }
             }}
           >
-            Link
+            {t('web.detail.link')}
           </Button>
           {targetName ? (
             <Button size="small" icon={<PlusOutlined />} onClick={() => navigate(`${base}/${targetName}/create`)}>
-              New
+              {t('web.detail.new')}
             </Button>
           ) : null}
         </Space.Compact>
@@ -124,16 +125,15 @@ function RelationPanel({ parent, parentId, name, targetDefinition, base }: Panel
           {
             title: '',
             key: 'actions',
-            width: 60,
-            render: (_: unknown, row: Record<string, unknown>) => (
-              <Popconfirm
-                title="Unlink this record?"
-                onConfirm={async () => {
+            width: 60,          render: (_: unknown, row: Record<string, unknown>) => (
+            <Popconfirm
+              title={t('web.detail.unlink')}
+              onConfirm={async () => {
                   try {
                     await api.unlink(parent, parentId, name, String(row['id']));
                     await load();
                   } catch (error) {
-                    void message.error(error instanceof Error ? error.message : 'Unlink failed.');
+                    void message.error(error instanceof Error ? error.message : t('web.detail.unlinkFailed'));
                   }
                 }}
               >
@@ -164,7 +164,7 @@ export function EntityDetailPage() {
     try {
       setRecord(await api.get(entity, id));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Record not found.');
+      void message.error(error instanceof Error ? error.message : t('web.detail.notFound'));
       setRecord(undefined);
     } finally {
       setLoading(false);
@@ -199,7 +199,7 @@ export function EntityDetailPage() {
       children: <FieldValue field={entry.field} value={record?.[entry.name]} />,
     }));
 
-  if (!entity || !id) return <Card>Missing route parameters.</Card>;
+  if (!entity || !id) return <Card>{t('web.detail.missingParams')}</Card>;
 
   return (
     <Spin spinning={loading}>
@@ -215,22 +215,22 @@ export function EntityDetailPage() {
           extra={
             <Space>
               <Button icon={<EditOutlined />} type="primary" onClick={() => navigate(`${base}/${entity}/${id}/edit`)}>
-                Edit
+                {t('web.detail.edit')}
               </Button>
               <Popconfirm
-                title="Delete this record?"
+                title={t('web.detail.deleteThisRecord')}
                 onConfirm={async () => {
                   try {
                     await api.remove(entity, id);
-                    void message.success('Deleted.');
+                    void message.success(t('web.detail.deleted'));
                     navigate(`${base}/${entity}`);
                   } catch (error) {
-                    void message.error(error instanceof Error ? error.message : 'Delete failed.');
+                    void message.error(error instanceof Error ? error.message : t('web.detail.deleteFailed'));
                   }
                 }}
               >
                 <Button danger icon={<DeleteOutlined />}>
-                  Delete
+                  {t('web.detail.delete')}
                 </Button>
               </Popconfirm>
             </Space>
@@ -265,7 +265,7 @@ export function EntityDetailPage() {
         ))}
 
         {others.length > 0 ? (
-          <Card className="lizant-card" size="small" title={<Typography.Text strong>Other</Typography.Text>}>
+          <Card className="lizant-card" size="small" title={<Typography.Text strong>{t('core.common.other')}</Typography.Text>}>
             <Descriptions column={2} colon={false} labelStyle={labelStyle} contentStyle={contentStyle} items={describe(others)} />
           </Card>
         ) : null}

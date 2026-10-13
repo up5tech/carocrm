@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 
 import { AppRoutes } from './AppRoutes.js';
+import { initI18n } from './state/i18n.js';
 import { lizantTheme } from './theme.js';
 
 const queryClient = new QueryClient({
@@ -16,16 +17,19 @@ const queryClient = new QueryClient({
 const container = document.getElementById('root');
 if (!container) throw new Error('root element missing');
 
-createRoot(container).render(
-  <StrictMode>
-    <ConfigProvider theme={lizantTheme}>
-      <AntApp>
-        <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </QueryClientProvider>
-      </AntApp>
-    </ConfigProvider>
-  </StrictMode>,
-);
+/** Phase 7A (PLAN §41.4): the locale is restored before the first paint — no flash of English. */
+void initI18n().then(() => {
+  createRoot(container).render(
+    <StrictMode>
+      <ConfigProvider theme={lizantTheme}>
+        <AntApp>
+          <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </QueryClientProvider>
+        </AntApp>
+      </ConfigProvider>
+    </StrictMode>,
+  );
+});

@@ -1,3 +1,4 @@
+import { getRequestContext } from '@carocrm/core/context/index.js';
 import { AuthenticationRequiredError, AuthorizationDeniedError } from '@carocrm/core/errors/index.js';
 import { type CanActivate, type CustomDecorator, type ExecutionContext,Inject, SetMetadata } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -41,6 +42,7 @@ export class AuthGuard implements CanActivate {
         const claims = await this.auth.verifyAccessToken(value);
         const principal = await this.auth.principalFromUser(claims.sub as string, typeof claims.sid === 'string' ? claims.sid : undefined);
         this.scope.principal = principal;
+        applyPrincipalPreferences(this.scope, principal);
         return true;
       }
       if (scheme?.toLowerCase() === 'apikey') {
@@ -51,6 +53,7 @@ export class AuthGuard implements CanActivate {
         const principal = await this.auth.authenticateApiKey(keyId, secret);
         if (!principal) throw new AuthenticationRequiredError('Invalid API key.');
         this.scope.principal = principal;
+        applyPrincipalPreferences(this.scope, principal);
         return true;
       }
       throw new AuthenticationRequiredError('Unsupported authorization scheme.');
@@ -70,6 +73,7 @@ export class AuthGuard implements CanActivate {
         const claims = await this.auth.verifyAccessToken(sessionToken);
         const principal = await this.auth.principalFromUser(claims.sub as string, typeof claims.sid === 'string' ? claims.sid : undefined);
         this.scope.principal = principal;
+        applyPrincipalPreferences(this.scope, principal);
         return true;
       }
     }
@@ -77,6 +81,20 @@ export class AuthGuard implements CanActivate {
     void reply;
     throw new AuthenticationRequiredError();
   }
+}
+
+/**
+ * Phase 7A (PLAN §41.6): once the user is resolved, their locale/timezone outrank the
+ * Accept-Language fallback. The same values are mirrored into the request context so the
+ * logger, metadata serialization and the error filter all read one consistent locale.
+ */
+function applyPrincipalPreferences(scope: RequestScope, principal: { locale?: string | undefined; timezone?: string | undefined }): void {
+  if (principal.locale) scope.locale = principal.locale;
+  if (principal.timezone) scope.timezone = principal.timezone;
+  const context = getRequestContext();
+  if (!context) return;
+  if (context.locale === undefined || principal.locale) context.locale = principal.locale ?? context.locale;
+  if (context.timezone === undefined || principal.timezone) context.timezone = principal.timezone ?? context.timezone;
 }
 
 function parseCookies(header: string): Record<string, string> {

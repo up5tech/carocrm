@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
-import { DashletResult } from './DashletResult.js';
 import { portalBase, usePortalContext } from '../state/portal.js';
+import { DashletResult } from './DashletResult.js';
 
 /**
  * Phase 18 — the portal user's home (PLAN §37). Shows the contact the user is, the portal

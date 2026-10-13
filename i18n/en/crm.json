@@ -1,0 +1,12 @@
+{
+  "account": { "label": "Account" },
+  "contact": { "label": "Contact", "fields": { "name": "Name", "lastName": "Last name" } },
+  "lead": { "label": "Lead" },
+  "opportunity": { "label": "Opportunity" },
+  "task": { "label": "Task" },
+  "call": { "label": "Call" },
+  "meeting": { "label": "Meeting" },
+  "email": { "label": "Email" },
+  "user": { "label": "User" },
+  "team": { "label": "Team" }
+}

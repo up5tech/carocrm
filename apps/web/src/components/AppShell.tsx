@@ -5,12 +5,31 @@ import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
+import { api } from '../api/client.js';
 import { useExtensionNav } from '../state/extensions.js';
+import { activateLocale, localesEnabled, t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
 import { portalBase, usePortalContext } from '../state/portal.js';
 import { useSession } from '../state/session.js';
 
 const { Sider, Content, Footer } = Layout;
+
+/** Phase 7A (PLAN §41.5): the signed-in user switches UI language right from the avatar menu. */
+function useLanguageSwitch() {
+  const { message } = AntApp.useApp();
+  return (locale: string) => {
+    void (async () => {
+      try {
+        await api.patchMyPreferences({ locale });
+        window.localStorage.setItem('carocrm.locale', locale);
+        await activateLocale(locale);
+        void message.success(t('web.language.switched'));
+      } catch (error) {
+        void message.error(error instanceof Error ? error.message : 'Language change failed.');
+      }
+    })();
+  };
+}
 
 type MenuItems = Required<MenuProps>['items'];
 
@@ -48,20 +67,20 @@ function InternalShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
 
   const navItems = useMemo<MenuItems>(() => {
-    const groups: MenuItems = [{ key: '/home', icon: <AppstoreOutlined />, label: <Link to="/home">Home</Link> }];
-    groups.push({ key: '/search', icon: <SearchOutlined />, label: <Link to="/search">Search</Link> });
-    groups.push({ key: '/dashboards', icon: <DashboardOutlined />, label: <Link to="/dashboards">Dashboards</Link> });
-    groups.push({ key: '/reports', icon: <BarChartOutlined />, label: <Link to="/reports">Reports</Link> });
-    groups.push({ key: '/stream', icon: <NotificationOutlined />, label: <Link to="/stream">Stream</Link> });
-    groups.push({ key: '/calendar', icon: <CalendarOutlined />, label: <Link to="/calendar">Calendar</Link> });
-    groups.push({ key: '/tasks', icon: <CarryOutOutlined />, label: <Link to="/tasks">My Tasks</Link> });
+    const groups: MenuItems = [{ key: '/home', icon: <AppstoreOutlined />, label: <Link to="/home">{t('core.app.home')}</Link> }];
+    groups.push({ key: '/search', icon: <SearchOutlined />, label: <Link to="/search">{t('core.app.search')}</Link> });
+    groups.push({ key: '/dashboards', icon: <DashboardOutlined />, label: <Link to="/dashboards">{t('core.app.dashboards')}</Link> });
+    groups.push({ key: '/reports', icon: <BarChartOutlined />, label: <Link to="/reports">{t('core.app.reports')}</Link> });
+    groups.push({ key: '/stream', icon: <NotificationOutlined />, label: <Link to="/stream">{t('core.app.stream')}</Link> });
+    groups.push({ key: '/calendar', icon: <CalendarOutlined />, label: <Link to="/calendar">{t('core.app.calendar')}</Link> });
+    groups.push({ key: '/tasks', icon: <CarryOutOutlined />, label: <Link to="/tasks">{t('core.app.myTasks')}</Link> });
 
     const records: MenuItems = navEntities(metadata.data, principal?.type).map((entity) => ({
       key: `/${entity.name}`,
       icon: <DatabaseOutlined />,
       label: <Link to={`/${entity.name}`}>{entity.label}</Link>,
     }));
-    if (records.length > 0) groups.push({ type: 'group', key: 'grp-records', label: 'Records', children: records });
+    if (records.length > 0) groups.push({ type: 'group', key: 'grp-records', label: t('core.app.records'), children: records });
 
     // Entries contributed by installed extensions (PLAN §38). The server already filtered the ones
     // this user may not see, so the client renders them as-is.
@@ -70,7 +89,7 @@ function InternalShell({ children }: { children: ReactNode }) {
       icon: item.icon ? EXTENSION_ICONS[item.icon] ?? <DatabaseOutlined /> : <DatabaseOutlined />,
       label: <Link to={item.route}>{item.label}</Link>,
     }));
-    if (contributed.length > 0) groups.push({ type: 'group', key: 'grp-extensions', label: 'Extensions', children: contributed });
+    if (contributed.length > 0) groups.push({ type: 'group', key: 'grp-extensions', label: t('core.app.extensions'), children: contributed });
 
     const admin: MenuItems = [{ key: '/admin/entity-manager', icon: <KeyOutlined />, label: <Link to="/admin/entity-manager">Entity Manager</Link> }];
     if (principal?.type === 'admin') {
@@ -81,7 +100,7 @@ function InternalShell({ children }: { children: ReactNode }) {
       admin.push({ key: '/admin/processes', icon: <ShareAltOutlined />, label: <Link to="/admin/processes">Processes</Link> });
     }
     admin.push({ key: '/admin/portals', icon: <ProjectOutlined />, label: <Link to="/admin/portals">Portals</Link> });
-    groups.push({ type: 'group', key: 'grp-admin', label: 'Administration', children: admin });
+    groups.push({ type: 'group', key: 'grp-admin', label: t('core.app.administration'), children: admin });
     return groups;
   }, [metadata.data, principal?.type, extensionNav.data]);
 
@@ -92,13 +111,20 @@ function InternalShell({ children }: { children: ReactNode }) {
     return `/${segments[0]}`;
   }, [location.pathname]);
 
+  const switchLanguage = useLanguageSwitch();
+  const languageMenu: MenuItems = localesEnabled().map((locale) => ({
+    key: `lang:${locale}`,
+    label: t(`web.language.${locale}`),
+    onClick: () => switchLanguage(locale),
+  }));
   const userMenu: MenuItems = [
+    { key: 'language', label: t('web.language.label'), children: languageMenu },
     {
       key: 'signout',
-      label: 'Sign out',
+      label: t('core.app.signOut'),
       onClick: async () => {
         await signOut();
-        void message.success('Signed out.');
+        void message.success(t('core.app.signedOut'));
         navigate('/login', { replace: true });
       },
     },
@@ -114,7 +140,7 @@ function InternalShell({ children }: { children: ReactNode }) {
         <span
           role="button"
           tabIndex={0}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? t('core.app.expandSidebar') : t('core.app.collapseSidebar')}
           className="lizant-collapse-toggle"
           onClick={() => setCollapsed((value) => !value)}
           onKeyDown={(event) => {
@@ -126,7 +152,7 @@ function InternalShell({ children }: { children: ReactNode }) {
         <Input
           className="lizant-header-search"
           prefix={<SearchOutlined />}
-          placeholder="Search records"
+          placeholder={t('core.app.searchRecords')}
           variant="filled"
           onPressEnter={(event) => {
             const q = (event.target as HTMLInputElement).value.trim();

@@ -11,11 +11,18 @@ export interface AuthenticatedPrincipal {
   portalId?: string | undefined;
   /** Phase 18: the Contact record a portal user is (PLAN §37 contact/account relation). */
   contactId?: string | undefined;
+  /** Phase 7A (PLAN §41.6): the resolved user's own locale/timezone. */
+  locale?: string | undefined;
+  timezone?: string | undefined;
 }
 
 interface RequestScopeState {
   requestId: string;
   principal?: AuthenticatedPrincipal;
+  /** Phase 7A (PLAN §41): user locale/timezone after principal resolution, Accept-Language before it. */
+  locale?: string | undefined;
+  timezone?: string | undefined;
+  acceptLanguage?: string | undefined;
 }
 
 export class RequestScope {
@@ -73,6 +80,31 @@ export class RequestScope {
 
   teamIds(): string[] {
     return this.principal?.teams ?? [];
+  }
+
+  /** Phase 7A locale accessors (PLAN §41): user value wins, Accept-Language is only the pre-auth fallback. */
+  get locale(): string | undefined {
+    return (this.storage.getStore() ?? this.fallback).locale;
+  }
+
+  set locale(value: string | undefined) {
+    (this.storage.getStore() ?? this.fallback).locale = value;
+  }
+
+  get timezone(): string | undefined {
+    return (this.storage.getStore() ?? this.fallback).timezone;
+  }
+
+  set timezone(value: string | undefined) {
+    (this.storage.getStore() ?? this.fallback).timezone = value;
+  }
+
+  get acceptLanguage(): string | undefined {
+    return (this.storage.getStore() ?? this.fallback).acceptLanguage;
+  }
+
+  set acceptLanguage(value: string | undefined) {
+    (this.storage.getStore() ?? this.fallback).acceptLanguage = value;
   }
 }
 

@@ -5,6 +5,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { FieldDefinition } from '../api/types.js';
+import { formatDateTime, formatNumber, t } from '../state/i18n.js';
 import { fieldLabel, recordLabel } from '../state/metadata.js';
 
 const { Link } = Typography;
@@ -41,7 +42,7 @@ export function FieldValue({ field, value }: { field: FieldDefinition; value: un
 
   switch (field.type) {
     case 'bool':
-      return <span>{value ? 'Yes' : 'No'}</span>;
+      return <span>{value ? t('core.common.yes') : t('core.common.no')}</span>;
     case 'text':
       return <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>{String(value)}</Typography.Paragraph>;
     case 'url':
@@ -55,12 +56,15 @@ export function FieldValue({ field, value }: { field: FieldDefinition; value: un
     case 'currency':
     case 'int':
     case 'float':
-    case 'decimal':
-      return <span>{String(value)}</span>;
+    case 'decimal': {
+      // Numbers render with the user's locale (PLAN §41.6); currency keeps its own symbol.
+      const numeric = typeof value === 'number' ? value : Number(value);
+      return <span>{Number.isNaN(numeric) ? String(value) : formatNumber(numeric)}</span>;
+    }
     case 'date':
-      return <span>{dayjs(String(value)).format('YYYY-MM-DD')}</span>;
+      return <span>{formatDateTime(String(value), false)}</span>;
     case 'datetime':
-      return <span>{dayjs(String(value)).format('YYYY-MM-DD HH:mm')}</span>;
+      return <span>{formatDateTime(String(value))}</span>;
     case 'password':
       return <span>{'••••••'}</span>;
     case 'enum':

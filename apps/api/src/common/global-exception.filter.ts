@@ -1,8 +1,11 @@
+import { getLocale } from '@carocrm/core/context/index.js';
 import { AppError, InternalServerError } from '@carocrm/core/errors/index.js';
 import { log } from '@carocrm/core/logger/index.js';
 import type { ExecutionContext } from '@nestjs/common';
 import { Catch, HttpException } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+
+import { translateErrorMessage } from '../i18n/i18n.service.js';
 
 interface ErrorBody {
   error: {
@@ -39,7 +42,10 @@ export class GlobalExceptionFilter {
     const body: ErrorBody = {
       error: {
         code: error.code,
-        message: error.message,
+        // Phase 7A (PLAN §41.9): user-facing errors resolve through the catalog for the request
+        // locale; the original message stays the fallback when no translation exists. Details
+        // still carry the raw values — only the message string is localized.
+        message: translateErrorMessage(getLocale() ?? 'en', error.code, error.message),
       },
     };
     if (error.details !== undefined) body.error.details = error.details;

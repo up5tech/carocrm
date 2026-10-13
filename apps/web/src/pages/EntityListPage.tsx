@@ -5,20 +5,23 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api, type SavedFilterRow, type WhereClause } from '../api/client.js';
 import { FieldValue } from '../components/fields.js';
+import { t } from '../state/i18n.js';
 import { fieldLabel, filterEntries, layoutPanelsFor, listEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
 import { portalBase } from '../state/portal.js';
 import { useSession } from '../state/session.js';
 import type { FilterDraft } from '../types/views.js';
 
-const OPERATORS: { value: string; label: string }[] = [
-  { value: 'contains', label: 'contains' },
-  { value: 'equals', label: 'equals' },
-  { value: 'notEquals', label: 'not equals' },
-  { value: 'greaterThan', label: 'greater than' },
-  { value: 'lessThan', label: 'less than' },
-  { value: 'isNull', label: 'is empty' },
-  { value: 'isNotNull', label: 'is not empty' },
-];
+function operatorOptions(): { value: string; label: string }[] {
+  return [
+    { value: 'contains', label: t('web.list.contains') },
+    { value: 'equals', label: t('web.list.equals') },
+    { value: 'notEquals', label: t('web.list.notEquals') },
+    { value: 'greaterThan', label: t('web.list.greaterThan') },
+    { value: 'lessThan', label: t('web.list.lessThan') },
+    { value: 'isNull', label: t('web.list.isNull') },
+    { value: 'isNotNull', label: t('web.list.isNotNull') },
+  ];
+}
 
 export function EntityListPage() {
   const { entity: entityName } = useParams<{ entity: string }>();
@@ -73,7 +76,7 @@ export function EntityListPage() {
       setTotal(result.total ?? result.list.length);
       setLoadError(null);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Failed to load records.');
+      setLoadError(error instanceof Error ? error.message : t('web.edit.notFound'));
       setRows([]);
       setTotal(0);
     } finally {
@@ -133,9 +136,9 @@ export function EntityListPage() {
       setActiveFilterId(created.id);
       setFilterNameOpen(false);
       setFilterNameDraft('');
-      void message.success('Filter saved.');
+      void message.success(t('web.list.saved'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Save failed.');
+      void message.error(error instanceof Error ? error.message : t('web.list.saveFailed'));
     }
   }, [drafts, entityName, filterNameDraft, message]);
 
@@ -144,13 +147,15 @@ export function EntityListPage() {
     setImportBusy(true);
     try {
       const result = await api.importCsv(entityName, importText);
-      void message.success(`Imported: ${result.created} created, ${result.updated} updated, ${result.skipped} skipped.`);
-      if (result.errors.length > 0) void message.warning(`First error (row ${result.errors[0]?.row}): ${result.errors[0]?.message}`);
+      void message.success(t('web.list.imported', { created: result.created, updated: result.updated, skipped: result.skipped }));
+      if (result.errors.length > 0) {
+        void message.warning(t('web.list.importFirstError', { row: result.errors[0]?.row ?? '', message: result.errors[0]?.message ?? '' }));
+      }
       setImportOpen(false);
       setImportText('');
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Import failed.');
+      void message.error(error instanceof Error ? error.message : t('web.list.importFailed'));
     } finally {
       setImportBusy(false);
     }
@@ -168,7 +173,7 @@ export function EntityListPage() {
       const response = await fetch(`/api/v1/${encodeURIComponent(entityName)}/action/export?${params.toString()}`, {
         headers: token ? { authorization: `Bearer ${token}` } : {},
       });
-      if (!response.ok) throw new Error(`Export failed (${response.status}).`);
+      if (!response.ok) throw new Error(t('web.list.exportFailed'));
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -176,14 +181,14 @@ export function EntityListPage() {
       anchor.download = `${entityName}-export.csv`;
       anchor.click();
       URL.revokeObjectURL(url);
-      void message.success('Export downloaded.');
+      void message.success(t('web.list.exportDownloaded'));
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Export failed.');
+      void message.error(error instanceof Error ? error.message : t('web.list.exportFailed'));
     }
   }, [drafts, entityName, message]);
 
   if (metadata.isError || definition.isError) {
-    return <Card>Entity "{entityName}" is not available.</Card>;
+    return <Card>{t('web.list.notAvailable', { entity: entityName ?? '' })}</Card>;
   }
 
   const displayField = definition.data?.record?.displayField ?? 'name';
@@ -196,31 +201,31 @@ export function EntityListPage() {
         </Typography.Title>
         <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-            Refresh
+            {t('web.list.refresh')}
           </Button>
           <Button icon={<DownloadOutlined />} onClick={() => void runExport()}>
-            Export CSV
+            {t('web.list.exportCsv')}
           </Button>
           <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
-            Import CSV
+            {t('web.list.importCsv')}
           </Button>
           <Popconfirm
-            title={`Delete ${selected.length} selected records?`}
+            title={t('web.list.deleteConfirm', { count: selected.length })}
             disabled={selected.length === 0}
             onConfirm={async () => {
               if (!entityName) return;
               try {
                 await api.massDelete(entityName, selected);
-                void message.success('Deleted.');
+                void message.success(t('web.list.deleted'));
                 setSelected([]);
                 await load();
               } catch (error) {
-                void message.error(error instanceof Error ? error.message : 'Delete failed.');
+                void message.error(error instanceof Error ? error.message : t('web.list.deleteFailed'));
               }
             }}
           >
-            <Button danger icon={<DeleteOutlined />} disabled={selected.length === 0} aria-label="Delete selected">
-              Delete selected
+            <Button danger icon={<DeleteOutlined />} disabled={selected.length === 0} aria-label={t('web.list.deleteSelected')}>
+              {t('web.list.deleteSelected')}
             </Button>
           </Popconfirm>
           <Button
@@ -228,27 +233,27 @@ export function EntityListPage() {
             icon={<PlusOutlined />}
             onClick={() => navigate(`${base}/${entityName}/create`)}
           >
-            Create
+            {t('web.list.create')}
           </Button>
         </Space>
       </div>
 
       <Space.Compact style={{ width: '100%', marginBottom: 12 }}>
-        <Input prefix={<SearchOutlined />} placeholder="Text search (name, email, phone…)" value={textQuery} onChange={(event) => setTextQuery(event.target.value)} onPressEnter={() => { setOffset(0); void load(); }} allowClear />
+        <Input prefix={<SearchOutlined />} placeholder={t('web.list.textSearch')} value={textQuery} onChange={(event) => setTextQuery(event.target.value)} onPressEnter={() => { setOffset(0); void load(); }} allowClear />
         <Button type="primary" onClick={() => { setOffset(0); void load(); }}>
-          Search
+          {t('web.list.search')}
         </Button>
       </Space.Compact>
       <Space style={{ marginBottom: 12 }} wrap>
         <Select
           style={{ minWidth: 220 }}
-          placeholder="Saved filters"
+          placeholder={t('web.list.savedFilters')}
           allowClear
           value={activeFilterId}
-          options={savedFilters.map((filter) => ({ value: filter.id, label: `${filter.name}${filter.isShared ? ' (shared)' : ''}` }))}
+          options={savedFilters.map((filter) => ({ value: filter.id, label: `${filter.name}${filter.isShared ? ` ${t('web.list.shared')}` : ''}` }))}
           onChange={(value) => void applySavedFilter(savedFilters.find((filter) => filter.id === value) ?? null)}
         />
-        <Button onClick={() => setFilterNameOpen(true)}>Save current filters</Button>
+        <Button onClick={() => setFilterNameOpen(true)}>{t('web.list.saveCurrentFilters')}</Button>
       </Space>
 
       {filterable.length > 0 ? (
@@ -262,9 +267,9 @@ export function EntityListPage() {
                 <Space.Compact block>
                   <Select
                     style={{ width: '46%' }}
-                    placeholder="operator"
+                    placeholder={t('web.list.operator')}
                     value={drafts.find((d) => d.field === entry.name)?.operator}
-                    options={OPERATORS}
+                    options={operatorOptions()}
                     onChange={(operator) => {
                       setDrafts((current) => {
                         const rest = current.filter((d) => d.field !== entry.name);
@@ -274,7 +279,7 @@ export function EntityListPage() {
                   />
                   <Input
                     style={{ width: '54%' }}
-                    placeholder="value"
+                    placeholder={t('web.list.value')}
                     value={String(drafts.find((d) => d.field === entry.name)?.value ?? '')}
                     onChange={(event) => {
                       const value = event.target.value;
@@ -291,9 +296,9 @@ export function EntityListPage() {
           </Row>
           <div className="lizant-filter-actions">
             <Button type="primary" icon={<SearchOutlined />} onClick={() => { setOffset(0); void load(); }}>
-              Apply
+              {t('web.list.apply')}
             </Button>
-            <Button onClick={() => { setDrafts([]); setOffset(0); }}>Clear</Button>
+            <Button onClick={() => { setDrafts([]); setOffset(0); }}>{t('web.list.clear')}</Button>
           </div>
         </div>
       ) : null}
@@ -328,7 +333,7 @@ export function EntityListPage() {
               ),
           })),
           {
-            title: 'Action',
+            title: t('core.common.action'),
             key: 'actions',
             width: 100,
             render: (_: unknown, row: Record<string, unknown>) => (
@@ -336,25 +341,25 @@ export function EntityListPage() {
                 <Button
                   size="small"
                   type="text"
-                  aria-label="Edit record"
+                  aria-label={t('web.list.editRecord')}
                   icon={<EditOutlined />}
                   onClick={() => navigate(`${base}/${entityName}/${String(row['id'])}/edit`)}
                 />
                 <Popconfirm
-                  title="Delete this record?"
-                  okText="Confirm delete"
+                  title={t('web.list.deleteThisRecord')}
+                  okText={t('web.list.confirmDelete')}
                   onConfirm={async () => {
                     if (!entityName) return;
                     try {
                       await api.remove(entityName, String(row['id']));
-                      void message.success('Deleted.');
+                      void message.success(t('web.list.deleted'));
                       await load();
                     } catch (error) {
-                      void message.error(error instanceof Error ? error.message : 'Delete failed.');
+                      void message.error(error instanceof Error ? error.message : t('web.list.deleteFailed'));
                     }
                   }}
                 >
-                  <Button size="small" type="text" danger aria-label="Delete record" icon={<DeleteOutlined />} />
+                  <Button size="small" type="text" danger aria-label={t('web.list.deleteRecord')} icon={<DeleteOutlined />} />
                 </Popconfirm>
               </Space>
             ),
@@ -375,24 +380,24 @@ export function EntityListPage() {
           setOrderBy(`${String(field)},${single.order === 'ascend' ? 'asc' : 'desc'}`);
         }}
       />
-      <Modal title={`Import ${entityName} from CSV`} open={importOpen} onOk={() => void runImport()} onCancel={() => setImportOpen(false)} okText="Import" confirmLoading={importBusy}>
-        <Typography.Paragraph type="secondary">Header row with field names (e.g. name,website). Max 2,000 rows per import; rows with an id update the matching record.</Typography.Paragraph>
+      <Modal title={t('web.list.importTitle', { entity: entityName ?? '' })} open={importOpen} onOk={() => void runImport()} onCancel={() => setImportOpen(false)} okText={t('web.list.import')} confirmLoading={importBusy}>
+        <Typography.Paragraph type="secondary">{t('web.list.importHint')}</Typography.Paragraph>
         <Input.TextArea rows={8} placeholder={'name,website\nAcme,https://acme.example'} value={importText} onChange={(event) => setImportText(event.target.value)} />
       </Modal>
       <Modal
-        title="Save current filters"
+        title={t('web.list.saveFiltersTitle')}
         open={filterNameOpen}
         onOk={() => void saveCurrentFilter()}
         onCancel={() => setFilterNameOpen(false)}
-        okText="Save"
+        okText={t('web.edit.save')}
         okButtonProps={{ disabled: filterNameDraft.trim() === '' }}
       >
         <Typography.Paragraph type="secondary">
-          Stores the {drafts.length > 0 ? `${String(drafts.length)} active filter(s)` : 'the current (empty) filter set'} on this list as a reusable, shareable saved filter.
+          {t('web.list.saveFiltersHint', { count: drafts.length })}
         </Typography.Paragraph>
         <Input
           autoFocus
-          placeholder="Filter name"
+          placeholder={t('web.list.filterName')}
           value={filterNameDraft}
           onChange={(event) => setFilterNameDraft(event.target.value)}
           onPressEnter={() => void saveCurrentFilter()}

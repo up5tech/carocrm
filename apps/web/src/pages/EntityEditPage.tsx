@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api, type RecordData } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition } from '../api/types.js';
 import { FieldEditor } from '../components/fields.js';
+import { t } from '../state/i18n.js';
 import { evaluateEntityLogic, isComputedField } from '../state/logic.js';
 import {
   editEntries,
@@ -27,13 +28,14 @@ interface FieldSection {
   entries: VisibleEntry[];
 }
 
-/** Client-side rules derived from metadata + dynamic logic (PLAN §13, §21). */
+/** Client-side rules derived from metadata + dynamic logic (PLAN §13, §21, §41.9 messages). */
 function fieldRules(name: string, field: FieldDefinition, required: boolean) {
   const rules: object[] = [];
-  if (field.required === true || required) rules.push({ required: true, message: `${fieldLabel(name, field)} is required.` });
-  if (field.maxLength) rules.push({ max: field.maxLength, message: `Max ${field.maxLength} characters.` });
-  if (field.type === 'email') rules.push({ type: 'email', message: 'Enter a valid email address.' });
-  if (field.type === 'url') rules.push({ type: 'url', message: 'Enter a valid URL.' });
+  const label = fieldLabel(name, field);
+  if (field.required === true || required) rules.push({ required: true, message: t('web.edit.required', { field: label }) });
+  if (field.maxLength) rules.push({ max: field.maxLength, message: t('web.edit.maxLength', { max: field.maxLength }) });
+  if (field.type === 'email') rules.push({ type: 'email', message: t('web.edit.invalidEmail') });
+  if (field.type === 'url') rules.push({ type: 'url', message: t('web.edit.invalidUrl') });
   return rules;
 }
 
@@ -86,7 +88,7 @@ export function EntityEditPage() {
     }));
     const covered = layoutFieldNames(panels);
     const uncovered = ordered.filter((entry) => !covered.has(entry.name));
-    if (uncovered.length > 0) list.push({ key: '__uncovered', title: 'Other', entries: uncovered });
+    if (uncovered.length > 0) list.push({ key: '__uncovered', title: t('core.common.other'), entries: uncovered });
     return list;
   }, [panels, ordered]);
 
@@ -116,7 +118,7 @@ export function EntityEditPage() {
       form.setFieldsValue({ ...record });
     } catch (error) {
       setLoadFailed(true);
-      void message.error(error instanceof Error ? error.message : 'Record not found.');
+      void message.error(error instanceof Error ? error.message : t('web.edit.notFound'));
     }
   }, [entity, id, form, message]);
 
@@ -124,9 +126,10 @@ export function EntityEditPage() {
     void load();
   }, [load]);
 
-  if (!entity) return <Card>Missing entity.</Card>;
+  if (!entity) return <Card>{t('web.edit.missingEntity')}</Card>;
 
-  const title = id ? `Edit ${definition.data?.label ?? entity}` : `Create ${definition.data?.label ?? entity}`;
+  const entityLabel = definition.data?.label ?? entity;
+  const title = id ? t('web.edit.editTitle', { entity: entityLabel }) : t('web.edit.createTitle', { entity: entityLabel });
   const blocked = logic.errors.length > 0;
 
   // Editing must not start before the record is in the form: a late setFieldsValue would
@@ -146,7 +149,7 @@ export function EntityEditPage() {
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
-          message="This record cannot be saved"
+          message={t('web.edit.cannotSave')}
           description={
             <ul style={{ margin: 0, paddingLeft: 18 }}>
               {logic.errors.map((error) => (
@@ -168,14 +171,13 @@ export function EntityEditPage() {
           for (const name of computedNames) delete payload[name];
           for (const [name, field] of Object.entries(definition.data?.fields ?? {})) {
             if (isComputedField(field.type)) delete payload[name];
-          }
-          setSaving(true);
+          }            setSaving(true);
           try {
             const record = id ? await api.update(entity, id, payload) : await api.create(entity, payload);
-            void message.success('Saved.');
+            void message.success(t('web.edit.saved'));
             navigate(`${base}/${entity}/${String(record['id'] ?? '')}`);
           } catch (error) {
-            void message.error(error instanceof Error ? error.message : 'Save failed.');
+            void message.error(error instanceof Error ? error.message : t('web.edit.saveFailed'));
           } finally {
             setSaving(false);
           }
@@ -194,9 +196,9 @@ export function EntityEditPage() {
         )}
         <Space>
           <Button type="primary" htmlType="submit" loading={saving} disabled={blocked}>
-            Save
+            {t('web.edit.save')}
           </Button>
-          <Button onClick={() => navigate(id ? `${base}/${entity}/${id}` : `${base}/${entity}`)}>Cancel</Button>
+          <Button onClick={() => navigate(id ? `${base}/${entity}/${id}` : `${base}/${entity}`)}>{t('web.edit.cancel')}</Button>
         </Space>
       </Form>
     </Card>

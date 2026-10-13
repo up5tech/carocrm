@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { api, getStoredToken, refreshAccessToken, setStoredToken } from '../api/client.js';
 import type { Principal } from '../api/types.js';
+import { activateLocale, setActiveUserInfo } from './i18n.js';
 
 interface SessionState {
   token: string | null;
@@ -33,7 +34,15 @@ export const useSession = create<SessionState>((set, get) => ({
       return;
     }
     try {
-      set({ token, principal: await api.me(), restored: true });
+      const principal = await api.me();
+      // Phase 7A (PLAN §41.6): the user's own locale/timezone now drive catalog + formatting.
+      setActiveUserInfo(principal.locale, principal.timezone);
+      const stored = window.localStorage.getItem('carocrm.locale');
+      if (principal.locale && principal.locale !== (stored ?? '')) {
+        window.localStorage.setItem('carocrm.locale', principal.locale);
+        await activateLocale(principal.locale);
+      }
+      set({ token, principal, restored: true });
     } catch {
       setStoredToken(null);
       set({ token: null, principal: null, restored: true });

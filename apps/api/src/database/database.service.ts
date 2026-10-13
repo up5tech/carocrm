@@ -28,6 +28,10 @@ export interface UsersTable {
   portal_role_ids: unknown;
   title: string | null;
   phone: string | null;
+  /** Phase 7A (PLAN §41.6): per-user UI locale (IANA-ish tag), null = instance default. */
+  locale: string | null;
+  /** Phase 7A (PLAN §41.6): per-user IANA timezone, null = instance default. */
+  timezone: string | null;
   is_deleted: boolean;
   created_at: Date;
   modified_at: Date;

@@ -1776,20 +1776,28 @@ Extensions can register field types without modifying the core application.
 
 # 41. Internationalization
 
+Localization is a P0 capability, not a polish feature. Every user-visible string must be resolvable through a translation catalog, including strings produced by metadata and by the API.
+
+## 41.1 Scope
+
 Support:
 
 - UI translations.
 - Entity labels.
 - Field labels.
+- Layout labels.
+- Option-set labels.
 - Error messages.
 - Validation messages.
 - Email templates.
 - Date/number formatting.
 - User timezone.
 
-Translation keys should be stable and namespaced by module.
+Everything listed above must be translatable. A hard-coded user-visible string is a defect, not a shortcut.
 
-Example:
+## 41.2 Translation key naming
+
+Translation keys must be stable and namespaced by owning module:
 
 ```text
 core.user.label
@@ -1797,6 +1805,91 @@ crm.account.label
 crm.account.fields.name
 uaSales.quote.label
 ```
+
+Rules:
+
+- Dot-separated, lowercase, module-first.
+- The first segment is the owning package or module (`core`, `crm`, `bpm`, `reports`) or an extension id.
+- Entity labels use `<module>.<entity>.label`.
+- Field labels use `<module>.<entity>.fields.<fieldName>`.
+- Keys never change once shipped. Renaming a label keeps the old key as an alias.
+- Extensions own their namespace and must not emit keys outside it.
+
+## 41.3 Catalog layout
+
+```text
+i18n/
+  en/
+    core.json
+    crm.json
+    errors.json
+  vi/
+    core.json
+    crm.json
+    errors.json
+```
+
+Rules:
+
+- Catalogs are static files in version control, one JSON file per module.
+- One directory per locale. Never suffix filenames with locale codes.
+- An incomplete catalog is valid. Catalogs are never required to be 100% complete.
+- Adding a locale means adding a directory. Never add locale conditionals to application code.
+
+## 41.4 Resolution and fallback
+
+Resolution order for a key:
+
+1. Authenticated user's locale.
+2. `Accept-Language` request header.
+3. Instance default locale.
+4. Built-in `en` catalog.
+
+A missing key must never crash a request or render an empty label. The untranslated English source string is the last-resort fallback, then a humanized key name.
+
+Untranslated keys must stay observable: emit a structured warning carrying the key and the locale so catalog gaps are findable in logs and metrics.
+
+## 41.5 API
+
+```text
+GET /api/v1/I18n?locale=vi
+```
+
+Returns the merged catalog for the requested locale, already resolved against the fallback chain.
+
+Support a content hash or equivalent conditional request (`?clientCache=<hash>`) so the SPA can skip re-downloading unchanged catalogs. Catalogs are cached per locale (see section 51).
+
+A user's own locale is changed through the authenticated profile endpoint. Reject any locale outside the instance's enabled locale list.
+
+## 41.6 User locale and timezone
+
+- `users.locale` — per-user UI locale. Nullable; defaults to the instance default.
+- `users.timezone` — IANA timezone name. Nullable; defaults to the instance default.
+- Request context populates `locale` and `timezone` from the authenticated user first, and only then falls back to `Accept-Language`.
+- Timestamps are stored as UTC. Conversion and formatting happen at the presentation layer only.
+- Date, number, and currency formatting always go through the active locale. Never rely on the host or runtime default.
+
+## 41.7 Metadata integration
+
+Entity, field, and layout definitions in metadata accept either a literal label or a translation key.
+
+Resolution happens inside the metadata layer, so list, detail, search, export, email, and API paths all return the same label for the same record. Do not resolve labels ad hoc per screen.
+
+## 41.8 Extension contribution
+
+An extension may ship catalogs. Its manifest must declare:
+
+- The locale identifiers it contributes.
+- The catalog files it provides.
+
+Only declared files are loaded. Extension keys are namespaced by extension id and can never override core keys.
+
+## 41.9 Security and validation
+
+- Never build a translation key from untrusted input. Resolve keys from a validated, fixed set.
+- Metadata field names, sort keys, and filter parameters must not be concatenated into keys without an allowlist check.
+- Catalog content is static data, not a template engine. Do not evaluate expressions or embed user content in catalogs.
+- User-facing errors resolve through the catalog and must not leak stack traces, SQL, or internal identifiers.
 
 ---
 
@@ -2428,6 +2521,33 @@ An admin can create a custom entity and obtain a working CRUD UI from metadata a
 
 ---
 
+## Phase 7A — Internationalization
+
+Depends on: Phase 3 (user model), Phase 5 (metadata engine), Phase 7 (generic React UI).
+
+Implement:
+
+- Catalog layout and the `en` source catalog.
+- Key naming convention and its validation.
+- Fallback resolution chain with observable missing-key warnings.
+- `GET /api/v1/I18n` with conditional client caching.
+- i18next initialization in the SPA and language switching in the UI.
+- `users.locale` and `users.timezone` columns with instance defaults.
+- Request context locale and timezone resolution.
+- Metadata label resolution for entity, field, and layout labels.
+- Error and validation message keys.
+- Admin-facing locale switching.
+
+Acceptance:
+
+- Changing the user locale changes entity labels, field labels, form actions, and error messages without a rebuild.
+- `GET /api/v1/I18n` returns the merged catalog for the authenticated user and is cacheable by content hash.
+- A missing translation key falls back to the English source string and logs a warning; it never breaks rendering.
+- The generic CRUD UI contains no hard-coded user-visible strings.
+- Dates render in the user timezone and numbers in the user locale.
+
+---
+
 ## Phase 8 — Entity Manager Admin UI
 
 Implement:
@@ -2654,6 +2774,7 @@ Create a machine-readable endpoint registry:
 api-spec/
   authentication.yaml
   metadata.yaml
+  i18n.yaml
   users.yaml
   roles.yaml
   teams.yaml
@@ -2734,6 +2855,7 @@ Example:
 |---|---|---|---|
 | CRUD API | v9.3.x | Planned | P0 |
 | Metadata | v9.3.x | Planned | P0 |
+| Internationalization | v9.3.x | Planned | P0 |
 | ACL | v9.3.x | Planned | P0 |
 | Roles | v9.3.x | Planned | P0 |
 | Teams | v9.3.x | Planned | P0 |
@@ -3132,6 +3254,7 @@ Mitigation:
 - Entity Engine.
 - Query Engine.
 - REST API.
+- Internationalization.
 - Generic CRUD UI.
 - Attachments.
 - Administration.

@@ -1,0 +1,28 @@
+{
+  "app": {
+    "home": "Home",
+    "search": "Search",
+    "dashboards": "Dashboards",
+    "reports": "Reports",
+    "stream": "Stream",
+    "calendar": "Calendar",
+    "myTasks": "My Tasks",
+    "records": "Records",
+    "extensions": "Extensions",
+    "administration": "Administration",
+    "signOut": "Sign out",
+    "signedOut": "Signed out.",
+    "searchRecords": "Search records",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar"
+  },
+  "common": {
+    "action": "Action",
+    "actions": "Actions",
+    "other": "Other",
+    "yes": "Yes",
+    "no": "No",
+    "refresh": "Refresh",
+    "reload": "Reload"
+  }
+}

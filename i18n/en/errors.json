@@ -1,0 +1,17 @@
+{
+  "AUTHENTICATION_REQUIRED": "Authentication required.",
+  "AUTHENTICATION_FAILED": "Authentication failed.",
+  "AUTHORIZATION_DENIED": "You do not have permission to perform this action.",
+  "RECORD_NOT_FOUND": "Record not found.",
+  "VALIDATION_FAILED": "Validation failed.",
+  "DUPLICATE_RECORD": "Duplicate record.",
+  "CONCURRENCY_CONFLICT": "This record has been modified by someone else. Please refresh and try again.",
+  "INVALID_QUERY": "Invalid query.",
+  "RATE_LIMITED": "Rate limit exceeded. Please try again later.",
+  "FILE_TOO_LARGE": "The file is too large.",
+  "FEATURE_DISABLED": "This feature is disabled on this instance.",
+  "INTERNAL_ERROR": "Internal server error.",
+  "FORBIDDEN": "Forbidden.",
+  "NOT_FOUND": "Not found.",
+  "BAD_REQUEST": "Bad request."
+}
