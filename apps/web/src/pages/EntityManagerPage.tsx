@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
+import { t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 
 /**
@@ -31,10 +32,10 @@ export function EntityManagerPage() {
   const setEnabled = async (entity: EntityDefinition, enabled: boolean) => {
     try {
       await api.patchEntity(entity.name, { isEntity: enabled });
-      void message.success('Entity updated.');
+      void message.success(t('web.entityManager.updated'));
       await metadata.refetch();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Metadata change failed.');
+      void message.error(error instanceof Error ? error.message : t('web.entityManager.changeFailed'));
     }
   };
 
@@ -42,26 +43,26 @@ export function EntityManagerPage() {
     <>
       <div className="lizant-page-head">
         <div>
-          <h1 className="lizant-page-title">Entity Manager</h1>
-          <p className="lizant-page-sub">Every entity definition in this workspace. Pick one to edit its fields, logic, relations, layout and access.</p>
+          <h1 className="lizant-page-title">{t('web.entityManager.title')}</h1>
+          <p className="lizant-page-sub">{t('web.entityManager.subtitle')}</p>
         </div>
         <Space wrap>
           <Button icon={<ReloadOutlined />} loading={metadata.isFetching} onClick={() => void metadata.refetch()}>
-            Refresh
+            {t('core.common.refresh')}
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-            New entity
+            {t('web.entityManager.new')}
           </Button>
         </Space>
       </div>
 
-      <Card className="lizant-card" title="Entities" extra={<Typography.Text type="secondary">{`${String(rows.length)} of ${String(entities.length)} entity definition(s)`}</Typography.Text>}>
+      <Card className="lizant-card" title={t('web.entityManager.cardTitle')} extra={<Typography.Text type="secondary">{t('web.entityManager.count', { shown: String(rows.length), total: String(entities.length) })}</Typography.Text>}>
         <Input
           allowClear
           prefix={<SearchOutlined />}
           style={{ marginBottom: 12, maxWidth: 320 }}
-          placeholder="Filter by name or label"
-          aria-label="Filter entities"
+          placeholder={t('web.entityManager.filterPlaceholder')}
+          aria-label={t('web.entityManager.filterAria')}
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
         />
@@ -71,11 +72,11 @@ export function EntityManagerPage() {
           loading={metadata.isLoading}
           dataSource={rows}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
-          locale={{ emptyText: filter.trim() === '' ? 'No entity definitions yet — create one to get started.' : 'No entity matches this filter.' }}
+          locale={{ emptyText: filter.trim() === '' ? t('web.entityManager.empty') : t('web.entityManager.noMatch') }}
           onRow={(record) => ({ onClick: () => navigate(`/admin/entity-manager/${record.name}`), style: { cursor: 'pointer' } })}
           columns={[
             {
-              title: 'Entity',
+              title: t('web.entityManager.entity'),
               dataIndex: 'name',
               render: (name: string) => (
                 <Link className="lizant-row-link" to={`/admin/entity-manager/${name}`} onClick={(event) => event.stopPropagation()}>
@@ -83,18 +84,18 @@ export function EntityManagerPage() {
                 </Link>
               ),
             },
-            { title: 'Label', dataIndex: 'label' },
-            { title: 'Fields', key: 'fields', width: 90, render: (_: unknown, row: EntityDefinition) => String(Object.keys(row.fields).length) },
-            { title: 'Relations', key: 'relations', width: 100, render: (_: unknown, row: EntityDefinition) => String(Object.keys(row.relations).length) },
+            { title: t('web.entityManager.label'), dataIndex: 'label' },
+            { title: t('web.entityManager.fields'), key: 'fields', width: 90, render: (_: unknown, row: EntityDefinition) => String(Object.keys(row.fields).length) },
+            { title: t('web.entityManager.relations'), key: 'relations', width: 100, render: (_: unknown, row: EntityDefinition) => String(Object.keys(row.relations).length) },
             {
-              title: 'Enabled',
+              title: t('web.entityManager.enabled'),
               key: 'enabled',
               width: 100,
               render: (_: unknown, row: EntityDefinition) => (
                 <Switch
                   size="small"
                   checked={row.isEntity}
-                  aria-label={`${row.isEntity ? 'Disable' : 'Enable'} ${row.name}`}
+                  aria-label={t('web.entityManager.toggleAria', { action: row.isEntity ? t('web.entityManager.disable') : t('web.entityManager.enable'), name: row.name })}
                   onClick={(_, event) => {
                     event.stopPropagation();
                     void setEnabled(row, !row.isEntity);
@@ -107,28 +108,28 @@ export function EntityManagerPage() {
       </Card>
 
       <Modal
-        title="Create entity"
+        title={t('web.entityManager.createTitle')}
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={async () => {
           const values = await entityForm.validateFields();
           try {
             await api.patchEntity(values.name, { label: values.label, fields: { code: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true } } });
-            void message.success('Entity created.');
+            void message.success(t('web.entityManager.created'));
             setCreateOpen(false);
             await metadata.refetch();
             navigate(`/admin/entity-manager/${values.name}`);
           } catch (error) {
-            void message.error(error instanceof Error ? error.message : 'Create failed.');
+            void message.error(error instanceof Error ? error.message : t('web.entityManager.createFailed'));
           }
         }}
       >
         <Form form={entityForm} layout="vertical">
-          <Form.Item name="name" label="Name (PascalCase)" rules={[{ required: true, pattern: /^[A-Z][A-Za-z0-9]{1,49}$/, message: 'Use PascalCase, letters and digits only.' }]}>
-            <Input placeholder="Warehouse" />
+          <Form.Item name="name" label={t('web.entityManager.nameLabel')} rules={[{ required: true, pattern: /^[A-Z][A-Za-z0-9]{1,49}$/, message: t('web.entityManager.namePattern') }]}>
+            <Input placeholder={t('web.entityManager.namePlaceholder')} />
           </Form.Item>
-          <Form.Item name="label" label="Label" rules={[{ required: true }]}>
-            <Input placeholder="Warehouse" />
+          <Form.Item name="label" label={t('web.entityManager.label')} rules={[{ required: true }]}>
+            <Input placeholder={t('web.entityManager.labelPlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>

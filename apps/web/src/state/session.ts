@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import { api, getStoredToken, refreshAccessToken, setStoredToken } from '../api/client.js';
 import type { Principal } from '../api/types.js';
-import { activateLocale, setActiveUserInfo } from './i18n.js';
+import { activateLocale, setActiveUserInfo, t } from './i18n.js';
 
 interface SessionState {
   token: string | null;
@@ -58,7 +58,7 @@ export const useSession = create<SessionState>((set, get) => ({
       await get().loadPrincipal();
       return true;
     } catch (error) {
-      set({ loading: false, error: error instanceof Error ? error.message : 'Login failed.' });
+      set({ loading: false, error: error instanceof Error ? error.message : t('web.login.failed') });
       return false;
     }
   },

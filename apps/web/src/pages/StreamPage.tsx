@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 
 import { api, type StreamItem } from '../api/client.js';
 import { updateSummary } from '../components/StreamPanel.js';
+import { t } from '../state/i18n.js';
 import { useEntity, useMetadata } from '../state/metadata.js';
 
 type View = 'followed' | 'own' | 'all';
@@ -13,7 +14,7 @@ const PAGE = 30;
 
 function authorLabel(item: StreamItem): string {
   const name = item.createdBy;
-  if (!name) return 'Unknown user';
+  if (!name) return t('web.stream.unknownUser');
   const full = `${name.firstName ?? ''} ${name.lastName ?? ''}`.trim();
   return full !== '' ? full : name.userName;
 }
@@ -37,7 +38,7 @@ export function StreamPage() {
         setOffset(nextOffset + result.list.length);
         setExhausted(result.list.length < PAGE);
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : 'Failed to load the activity stream.');
+        void message.error(error instanceof Error ? error.message : t('web.stream.loadFailed'));
         if (replace) setItems([]);
         setExhausted(true);
       } finally {
@@ -54,20 +55,20 @@ export function StreamPage() {
   return (
     <Card
       className="lizant-card"
-      title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>Stream</Typography.Title>}
+      title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{t('web.stream.title')}</Typography.Title>}
       extra={
         <Space>
           <Segmented
             value={view}
             onChange={(value) => setView(value as View)}
             options={[
-              { value: 'followed', label: 'Following' },
-              { value: 'own', label: 'My posts' },
-              { value: 'all', label: 'All' },
+              { value: 'followed', label: t('web.stream.following') },
+              { value: 'own', label: t('web.stream.myPosts') },
+              { value: 'all', label: t('web.stream.all') },
             ]}
           />
           <Button icon={<ReloadOutlined />} onClick={() => void load(0, true)}>
-            Refresh
+            {t('core.common.refresh')}
           </Button>
         </Space>
       }
@@ -75,7 +76,7 @@ export function StreamPage() {
       {loading && items.length === 0 ? (
         <Spin />
       ) : items.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Nothing to show yet. Follow a record to see its activity here." />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.stream.empty')} />
       ) : (
         <div className="lizant-stream-list">
           {items.map((item) => (
@@ -86,7 +87,7 @@ export function StreamPage() {
       {items.length > 0 ? (
         <div style={{ marginTop: 16, textAlign: 'center' }}>
           <Button disabled={exhausted} loading={loading} onClick={() => void load(offset, false)}>
-            Load more
+            {t('web.stream.loadMore')}
           </Button>
         </div>
       ) : null}
@@ -106,7 +107,7 @@ function StreamRow({ item, label }: { item: StreamItem; label: string }) {
         <Space size={8} wrap>
           <Typography.Text strong>{authorLabel(item)}</Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            on
+            {t('web.stream.on')}
           </Typography.Text>
           <Link to={`/${item.entityType}/${item.entityId}`}>{label}</Link>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>

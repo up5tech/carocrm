@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api, type StreamItem } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
+import { t } from '../state/i18n.js';
 import { fieldLabel } from '../state/metadata.js';
 
 const { TextArea } = Input;
@@ -16,7 +17,7 @@ function initialsOf(item: StreamItem): string {
 
 function authorOf(item: StreamItem): string {
   const name = item.createdBy;
-  if (!name) return 'Unknown user';
+  if (!name) return t('web.stream.unknownUser');
   const full = `${name.firstName ?? ''} ${name.lastName ?? ''}`.trim();
   return full !== '' ? full : name.userName;
 }
@@ -28,13 +29,13 @@ function mentionText(text: string): string {
 /** Human sentence for a generated `Update` item (PLAN §26 record updates). */
 export function updateSummary(item: StreamItem, definition: EntityDefinition | undefined): string {
   const attributes = Array.isArray(item.data['attributes']) ? (item.data['attributes'] as Array<Record<string, unknown>>) : [];
-  if (attributes.length === 0) return 'Record updated.';
+  if (attributes.length === 0) return t('web.stream.recordUpdated');
   return attributes
     .map((attribute) => {
       const name = String(attribute['name'] ?? '');
       const label = fieldLabel(name, definition?.fields[name]);
       const value = attribute['value'];
-      const shown = value === null || value === undefined || value === '' ? 'empty' : String(value);
+      const shown = value === null || value === undefined || value === '' ? t('web.stream.emptyValue') : String(value);
       return `${label} → ${shown}`;
     })
     .join(', ');
@@ -53,18 +54,18 @@ export function StreamItemRow({ item, definition, onDelete }: {
       </Avatar>
       <div style={{ minWidth: 0, flex: 1 }}>
         <Space size={8} wrap>
-          <Typography.Text strong>{item.type === 'Update' ? 'System update' : authorOf(item)}</Typography.Text>
+          <Typography.Text strong>{item.type === 'Update' ? t('web.stream.systemUpdate') : authorOf(item)}</Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {new Date(item.createdAt).toLocaleString()}
           </Typography.Text>
           {onDelete ? (
-            <Button size="small" type="text" danger aria-label="Delete post" icon={<DeleteOutlined />} onClick={() => onDelete(item.id)} />
+            <Button size="small" type="text" danger aria-label={t('web.stream.deletePost')} icon={<DeleteOutlined />} onClick={() => onDelete(item.id)} />
           ) : null}
         </Space>
         <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>{body}</Typography.Paragraph>
         {item.mentions.length > 0 ? (
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            mentioned {item.mentions.map(mentionText2).join(', ')}
+            {t('web.stream.mentioned', { users: item.mentions.map(mentionText2).join(', ') })}
           </Typography.Text>
         ) : null}
       </div>
@@ -101,7 +102,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
       setItems(stream.list);
       setFollowed(status.followed);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Failed to load the stream.');
+      void message.error(error instanceof Error ? error.message : t('web.stream.panelLoadFailed'));
       setItems([]);
     } finally {
       setLoading(false);
@@ -121,7 +122,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
       setDraft('');
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Failed to post.');
+      void message.error(error instanceof Error ? error.message : t('web.stream.postFailed'));
     } finally {
       setPosting(false);
     }
@@ -137,7 +138,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
         setFollowed(true);
       }
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Failed to change the follow state.');
+      void message.error(error instanceof Error ? error.message : t('web.stream.followFailed'));
     }
   };
 
@@ -146,24 +147,24 @@ export function StreamPanel({ entity, id, definition, canPost }: {
       await api.deleteNote(itemId);
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Failed to delete the post.');
+      void message.error(error instanceof Error ? error.message : t('web.stream.deleteFailed'));
     }
   };
 
   return (
     <Card
       className="lizant-card"
-      title={<Typography.Text strong>Stream</Typography.Text>}
+      title={<Typography.Text strong>{t('web.stream.title')}</Typography.Text>}
       extra={
         <Button size="small" type="text" icon={followed ? <StarFilled style={{ color: '#f8ac59' }} /> : <StarOutlined />} onClick={() => void toggleFollow()}>
-          {followed ? 'Following' : 'Follow'}
+          {followed ? t('web.stream.following') : t('web.stream.follow')}
         </Button>
       }
     >
       {loading && items.length === 0 ? (
         <Spin />
       ) : items.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No activity yet" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.stream.noActivity')} />
       ) : (
         <div className="lizant-stream-list">
           {items.map((item) => (
@@ -181,7 +182,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
           <TextArea
             rows={2}
             value={draft}
-            placeholder="Write to the stream. Use @ to mention a colleague."
+            placeholder={t('web.stream.composerPlaceholder')}
             onChange={(event) => setDraft(event.target.value)}
             onPressEnter={(event) => {
               if (event.metaKey || event.ctrlKey) void submit();
@@ -189,10 +190,10 @@ export function StreamPanel({ entity, id, definition, canPost }: {
           />
           <Space style={{ marginTop: 8 }}>
             <Button type="primary" loading={posting} disabled={draft.trim() === ''} onClick={() => void submit()}>
-              Post
+              {t('web.stream.post')}
             </Button>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              ⌘/Ctrl + Enter to post
+              {t('web.stream.postHint')}
             </Typography.Text>
           </Space>
         </div>

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { ListResult } from '../api/types.js';
+import { t } from '../state/i18n.js';
 
 interface AuditRow {
   id: string;
@@ -56,7 +57,7 @@ export function AdminAuditPage() {
   }, [load]);
 
   return (
-    <Card className="lizant-card" title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>Audit Log</Typography.Title>}>
+    <Card className="lizant-card" title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{t('web.adminAudit.title')}</Typography.Title>}>
       <Table
         rowKey="id"
         size="small"
@@ -73,14 +74,14 @@ export function AdminAuditPage() {
           },
         }}
         columns={[
-          { title: 'When', dataIndex: 'createdAt', render: (value: string) => value.slice(0, 19).replace('T', ' ') },
-          { title: 'Entity', dataIndex: 'entityType' },
-          { title: 'Record', dataIndex: 'entityId', render: (value: string, row: AuditRow) => <a href={`/${row.entityType}/${value}`}>{value.slice(0, 8)}</a> },
-          { title: 'Action', dataIndex: 'action' },
-          { title: 'Field', dataIndex: 'fieldName' },
-          { title: 'Old', dataIndex: 'oldValue', render: (value: unknown) => (value === undefined ? '' : JSON.stringify(value)) },
-          { title: 'New', dataIndex: 'newValue', render: (value: unknown) => (value === undefined ? '' : JSON.stringify(value)) },
-          { title: 'By', dataIndex: 'username' },
+          { title: t('web.adminAudit.when'), dataIndex: 'createdAt', render: (value: string) => value.slice(0, 19).replace('T', ' ') },
+          { title: t('web.adminAudit.entity'), dataIndex: 'entityType' },
+          { title: t('web.adminAudit.record'), dataIndex: 'entityId', render: (value: string, row: AuditRow) => <a href={`/${row.entityType}/${value}`}>{value.slice(0, 8)}</a> },
+          { title: t('web.adminAudit.action'), dataIndex: 'action' },
+          { title: t('web.adminAudit.field'), dataIndex: 'fieldName' },
+          { title: t('web.adminAudit.old'), dataIndex: 'oldValue', render: (value: unknown) => (value === undefined ? '' : JSON.stringify(value)) },
+          { title: t('web.adminAudit.new'), dataIndex: 'newValue', render: (value: unknown) => (value === undefined ? '' : JSON.stringify(value)) },
+          { title: t('web.adminAudit.by'), dataIndex: 'username' },
         ]}
       />
     </Card>

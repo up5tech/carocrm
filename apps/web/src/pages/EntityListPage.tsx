@@ -264,7 +264,7 @@ export function EntityListPage() {
       </Space>
 
       {filterable.length > 0 ? (
-        <div className="lizant-filter" aria-label="Record filters">
+        <div className="lizant-filter" aria-label={t('web.list.filtersAria')}>
           <Row gutter={[12, 12]}>
             {filterable.slice(0, 5).map((entry) => (
               <Col key={entry.name} xs={24} sm={12} lg={8} xl={6}>

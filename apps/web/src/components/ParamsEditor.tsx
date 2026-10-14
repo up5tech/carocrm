@@ -1,5 +1,7 @@
 import { Input, Space, Typography } from 'antd';
 
+import { t } from '../state/i18n.js';
+
 /**
  * Structured parameter forms for the shared action catalog (PLAN §35 actions, reused by PLAN §36
  * service tasks).
@@ -18,7 +20,7 @@ export function ParamsEditor({
   onChange: (params: Record<string, unknown>) => void;
 }) {
   const fields = paramFieldsOf(action, params);
-  if (fields.length === 0) return <Typography.Text type="secondary">No parameters.</Typography.Text>;
+  if (fields.length === 0) return <Typography.Text type="secondary">{t('web.params.noParameters')}</Typography.Text>;
 
   return (
     <Space direction="vertical" size={4} style={{ width: '100%' }}>
@@ -49,25 +51,25 @@ export function ParamsEditor({
 function paramFieldsOf(action: string | undefined, params: Record<string, unknown>): { key: string; placeholder: string }[] {
   switch (action) {
     case 'updateRecord':
-      return [{ key: 'fields', placeholder: 'field=value, field2=value2' }];
+      return [{ key: 'fields', placeholder: t('web.params.fieldsHint') }];
     case 'createRecord':
       return [
-        { key: 'entityType', placeholder: 'entity type (Task)' },
-        { key: 'fields', placeholder: 'name=Follow up, status=Planned' },
+        { key: 'entityType', placeholder: t('web.params.createRecordEntityType') },
+        { key: 'fields', placeholder: t('web.params.createRecordFields') },
       ];
     case 'createNotification':
       return [
-        { key: 'userId', placeholder: 'user id, or {{assignedUserId}}' },
-        { key: 'message', placeholder: 'message' },
+        { key: 'userId', placeholder: t('web.params.userId') },
+        { key: 'message', placeholder: t('web.params.message') },
       ];
     case 'sendEmail':
       return [
-        { key: 'to', placeholder: 'to (use {{emailAddress}})' },
-        { key: 'subject', placeholder: 'subject' },
-        { key: 'body', placeholder: 'body' },
+        { key: 'to', placeholder: t('web.params.emailTo') },
+        { key: 'subject', placeholder: t('web.params.emailSubject') },
+        { key: 'body', placeholder: t('web.params.emailBody') },
       ];
     case 'runJob':
-      return [{ key: 'jobName', placeholder: 'job name' }];
+      return [{ key: 'jobName', placeholder: t('web.params.jobName') }];
     default:
       return Object.keys(params).map((key) => ({ key, placeholder: key }));
   }

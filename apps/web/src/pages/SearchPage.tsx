@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { api, type GlobalSearchResult } from '../api/client.js';
+import { t } from '../state/i18n.js';
 import { navEntities, recordLabel, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
 
@@ -34,7 +35,7 @@ export function SearchPage() {
   const runWith = async (raw: string, scoped: string[]) => {
     const q = raw.trim();
     if (q === '') {
-      void message.warning('Type a search query first.');
+      void message.warning(t('web.search.queryRequired'));
       return;
     }
     setLoading(true);
@@ -42,7 +43,7 @@ export function SearchPage() {
       const data = await api.globalSearch({ q, ...(scoped.length > 0 ? { entities: scoped.join(',') } : {}), limit: 10 });
       setResult(data);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Search failed.');
+      void message.error(error instanceof Error ? error.message : t('web.search.failed'));
     } finally {
       setLoading(false);
     }
@@ -63,28 +64,28 @@ export function SearchPage() {
     <Card className="lizant-card">
       <div className="lizant-page-head">
         <div>
-          <h1 className="lizant-page-title">Search</h1>
-          <p className="lizant-page-sub">Substring search across readable entities. Results honour record ACL.</p>
+          <h1 className="lizant-page-title">{t('web.search.title')}</h1>
+          <p className="lizant-page-sub">{t('web.search.subtitle')}</p>
         </div>
       </div>
       <Space.Compact style={{ width: '100%', marginBottom: 12 }}>
         <Input
           prefix={<SearchOutlined />}
-          placeholder="Search accounts, contacts, leads…"
+          placeholder={t('web.search.placeholder')}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onPressEnter={() => void run()}
           allowClear
         />
         <Button type="primary" loading={loading} onClick={() => void run()}>
-          Search
+          {t('web.search.submit')}
         </Button>
       </Space.Compact>
       <Select
         mode="multiple"
         allowClear
         style={{ width: '100%', marginBottom: 16 }}
-        placeholder="All entities (optional filter)"
+        placeholder={t('web.search.allEntities')}
         options={options}
         value={entities}
         onChange={setEntities}
@@ -92,7 +93,7 @@ export function SearchPage() {
       {result ? (
         <>
           <Typography.Text type="secondary">
-            {result.count} of {result.total} matches for “{result.query}”.
+            {t('web.search.matches', { count: result.count, total: result.total, query: result.query })}
           </Typography.Text>
           {[...grouped.entries()].map(([entityType, hits]) => (
             <div key={entityType} style={{ marginTop: 16 }}>

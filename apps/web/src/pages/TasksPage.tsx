@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { ProcessTaskView } from '../api/types.js';
+import { t } from '../state/i18n.js';
 import { useProcessTasks } from '../state/processes.js';
 import { useSession } from '../state/session.js';
 
@@ -49,7 +50,7 @@ export function TasksPage() {
     mutationFn: ({ task, outcome }: { task: ProcessTaskView; outcome: string }) =>
       api.completeProcessTask(task.id, { outcome, ...(comment.trim() === '' ? {} : { comment: comment.trim() }) }),
     onSuccess: (instance) => {
-      void message.success(`Answer recorded — the process is now ${instance.status}.`);
+      void message.success(t('web.tasks.answered', { status: instance.status }));
       setAnswering(null);
       setComment('');
       refresh();
@@ -63,7 +64,7 @@ export function TasksPage() {
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Card
-        title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>My tasks</Typography.Title>}
+        title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{t('web.tasks.title')}</Typography.Title>}
         extra={
           <Space>
             <Select
@@ -72,28 +73,27 @@ export function TasksPage() {
               style={{ width: 160 }}
               onChange={(value: 'answerable' | 'all' | 'completed') => setScope(value)}
               options={[
-                { value: 'answerable', label: 'Waiting for me' },
-                { value: 'completed', label: 'Answered' },
-                { value: 'all', label: 'Everything' },
+                { value: 'answerable', label: t('web.tasks.scopeWaiting') },
+                { value: 'completed', label: t('web.tasks.scopeAnswered') },
+                { value: 'all', label: t('web.tasks.scopeAll') },
               ]}
             />
             <Button size="small" icon={<ReloadOutlined />} onClick={refresh} loading={tasks.isFetching}>
-              Refresh
+              {t('core.common.refresh')}
             </Button>
           </Space>
         }
       >
         <Typography.Paragraph type="secondary">
-          Approvals assigned to you — directly, or to any role you are a member of. Answering moves the process
-          forward immediately; the person who started it sees the result on the record's process trail.
+          {t('web.tasks.subtitle')}
         </Typography.Paragraph>
 
         {overdue > 0 ? (
           <Alert
             style={{ marginBottom: 12 }}
             type="warning"
-            message={`${String(overdue)} task(s) are past their due time or escalated.`}
-            description="Escalated tasks have been reassigned to the escalation contact; answer them to stop the escalation."
+            message={t('web.tasks.overdue', { overdue })}
+            description={t('web.tasks.overdueHint')}
           />
         ) : null}
 
@@ -103,10 +103,10 @@ export function TasksPage() {
           loading={tasks.isFetching}
           dataSource={rows}
           pagination={{ pageSize: 20, hideOnSinglePage: true }}
-          locale={{ emptyText: 'Nothing is waiting for you.' }}
+          locale={{ emptyText: t('web.tasks.empty') }}
           columns={[
             {
-              title: 'Task',
+              title: t('web.common.task'),
               dataIndex: 'name',
               render: (name: string, row) => (
                 <Space direction="vertical" size={0}>
@@ -121,18 +121,18 @@ export function TasksPage() {
               ),
             },
             {
-              title: 'Status',
+              title: t('web.common.status'),
               width: 120,
               dataIndex: 'status',
               render: (status: string, row) => (
                 <Space direction="vertical" size={0}>
                   <Tag color={TASK_STATUS_COLORS[status] ?? 'default'}>{status}</Tag>
-                  {row.escalatedAt !== null ? <Typography.Text type="secondary">escalated</Typography.Text> : null}
+                  {row.escalatedAt !== null ? <Typography.Text type="secondary">{t('web.tasks.escalated')}</Typography.Text> : null}
                 </Space>
               ),
             },
             {
-              title: 'Due',
+              title: t('web.common.due'),
               width: 150,
               render: (_value: unknown, row) => {
                 if (row.dueAt === null) return '—';
@@ -144,7 +144,7 @@ export function TasksPage() {
               },
             },
             {
-              title: 'Answer',
+              title: t('web.tasks.columnAnswer'),
               width: 300,
               render: (_value: unknown, row) =>
                 row.status === 'completed' || row.status === 'cancelled' ? (
@@ -157,8 +157,8 @@ export function TasksPage() {
                     {row.outcomes.map((outcome) => (
                       <Popconfirm
                         key={outcome.value}
-                        title={`Answer “${outcome.label}”?`}
-                        description={outcome.label.toLowerCase().includes('reject') ? 'The process ends here for this record.' : 'The process continues with the next step.'}
+                        title={t('web.tasks.answerConfirm', { outcome: outcome.label })}
+                        description={outcome.label.toLowerCase().includes('reject') ? t('web.tasks.rejectHint') : t('web.tasks.continueHint')}
                         onConfirm={() => {
                           setComment('');
                           // The clicked answer travels with the row into the modal, so the OK
@@ -185,8 +185,8 @@ export function TasksPage() {
 
       <Modal
         open={answering !== null}
-        title={answering === null ? '' : `Answer: ${answering.name}`}
-        okText="Record answer"
+        title={answering === null ? '' : t('web.tasks.answerTitle', { task: answering.name })}
+        okText={t('web.tasks.recordAnswer')}
         okButtonProps={{ danger: answering !== null && answering.outcomes.some((outcome) => outcome.label.toLowerCase().includes('reject')) }}
         confirmLoading={complete.isPending}
         onCancel={() => setAnswering(null)}
@@ -203,7 +203,7 @@ export function TasksPage() {
               {answering.processName} · {answering.entityType}/{answering.entityId}
             </Typography.Text>
             <Typography.Paragraph>
-              Choose the answer, then add a comment if the next step needs one:
+              {t('web.tasks.chooseAnswer')}
             </Typography.Paragraph>
             <Select
               style={{ width: '100%' }}
@@ -214,14 +214,14 @@ export function TasksPage() {
             <Input.TextArea
               rows={3}
               value={comment}
-              placeholder="Why? (kept on the task for the audit trail)"
+              placeholder={t('web.tasks.commentPlaceholder')}
               onChange={(event) => setComment(event.target.value)}
             />
           </Space>
         )}
       </Modal>
 
-      {!principal ? <Alert type="error" message="Sign in to see your tasks." /> : null}
+      {!principal ? <Alert type="error" message={t('web.tasks.signIn')} /> : null}
     </Space>
   );
 }

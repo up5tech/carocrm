@@ -7,6 +7,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { WorkflowDefinitionShape, WorkflowNode, WorkflowRunView, WorkflowView } from '../api/types.js';
 import { defaultParamsOf,ParamsEditor } from '../components/ParamsEditor.js';
+import { t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
 import { editableDefinition, useWorkflow, useWorkflowCatalog, useWorkflowRuns } from '../state/workflows.js';
@@ -49,7 +50,7 @@ export function WorkflowEditorPage() {
   const save = useMutation({
     mutationFn: () => api.updateWorkflow(id ?? '', { name, ...(definition === undefined ? {} : { definition }) }),
     onSuccess: () => {
-      void message.success('Draft saved.');
+      void message.success(t('web.workflowEditor.draftSaved'));
       setDirty(false);
       void queryClient.invalidateQueries({ queryKey: ['workflows'] });
     },
@@ -59,15 +60,15 @@ export function WorkflowEditorPage() {
   const publish = useMutation({
     mutationFn: () => api.publishWorkflow(id ?? ''),
     onSuccess: (updated: WorkflowView) => {
-      void message.success(`Version ${String(updated.currentVersion)} published.`);
+      void message.success(t('web.workflowEditor.published', { version: String(updated.currentVersion) }));
       void queryClient.invalidateQueries({ queryKey: ['workflows'] });
     },
     onError: (error: Error) => void message.error(error.message),
   });
 
-  if (!admin) return <Alert type="error" message="Administrator access is required to edit workflows." />;
+  if (!admin) return <Alert type="error" message={t('web.admin.accessRequiredWorkflowEditor')} />;
   if (workflow.isLoading) return <Card loading />;
-  if (!workflow.data || !definition) return <Alert type="error" message="This workflow does not exist." />;
+  if (!workflow.data || !definition) return <Alert type="error" message={t('web.workflowEditor.notFound')} />;
 
   const actions = catalog.data?.actions ?? [];
   const issues = workflow.data.issues;
@@ -142,7 +143,7 @@ export function WorkflowEditorPage() {
     const node: WorkflowNode = {
       id: `c${Date.now().toString(36)}`,
       type: 'condition',
-      name: 'Condition',
+      name: t('web.workflowEditor.defaultConditionName'),
       formula: '',
       then: '',
     };
@@ -150,7 +151,7 @@ export function WorkflowEditorPage() {
   };
 
   const addDelay = (after: number): void => {
-    const node: WorkflowNode = { id: `d${Date.now().toString(36)}`, type: 'delay', name: 'Wait', seconds: 3600 };
+    const node: WorkflowNode = { id: `d${Date.now().toString(36)}`, type: 'delay', name: t('web.workflowEditor.defaultWaitName'), seconds: 3600 };
     insertAfter(after, node);
   };
 
@@ -173,7 +174,7 @@ export function WorkflowEditorPage() {
         extra={
           <Space>
             <Button icon={<SaveOutlined />} onClick={() => save.mutate()} loading={save.isPending} disabled={!dirty}>
-              Save draft
+              {t('web.workflowEditor.saveDraft')}
             </Button>
             <Button
               type="primary"
@@ -182,18 +183,18 @@ export function WorkflowEditorPage() {
               loading={publish.isPending}
               disabled={dirty || issues.length > 0}
             >
-              Publish
+              {t('web.workflows.publish')}
             </Button>
           </Space>
         }
       >
         <Row gutter={16}>
           <Col span={12}>
-            <Typography.Text type="secondary">Name</Typography.Text>
+            <Typography.Text type="secondary">{t('web.common.name')}</Typography.Text>
             <Input value={name} onChange={(event) => setName(event.target.value)} onBlur={() => setDirty(true)} />
           </Col>
           <Col span={6}>
-            <Typography.Text type="secondary">When</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflows.when')}</Typography.Text>
             <Select
               style={{ width: '100%' }}
               value={definition.trigger.eventType}
@@ -202,12 +203,12 @@ export function WorkflowEditorPage() {
             />
           </Col>
           <Col span={6}>
-            <Typography.Text type="secondary">Entity</Typography.Text>
+            <Typography.Text type="secondary">{t('web.reports.entityLabel')}</Typography.Text>
             <Select
               style={{ width: '100%' }}
               showSearch
               value={definition.trigger.entityType}
-              options={[{ value: '*', label: 'Any entity' }, ...entityOptions]}
+              options={[{ value: '*', label: t('web.workflows.anyEntity') }, ...entityOptions]}
               onChange={(entityType) => update({ ...definition, trigger: { ...definition.trigger, entityType } })}
             />
           </Col>
@@ -215,17 +216,17 @@ export function WorkflowEditorPage() {
 
         <Space style={{ marginTop: 12 }} wrap>
           <Tag color={workflow.data.currentVersionStatus === 'published' ? 'blue' : 'default'}>
-            draft v{workflow.data.currentVersion ?? '—'}
+            {t('web.workflows.draftVersion', { version: String(workflow.data.currentVersion ?? '—') })}
           </Tag>
-          {workflow.data.publishedVersion !== null ? <Tag color="blue">published v{workflow.data.publishedVersion}</Tag> : <Tag>not published</Tag>}
-          {dirty ? <Tag color="orange">unsaved changes</Tag> : null}
+          {workflow.data.publishedVersion !== null ? <Tag color="blue">{t('web.workflows.publishedVersion', { version: String(workflow.data.publishedVersion) })}</Tag> : <Tag>{t('web.workflows.notPublished')}</Tag>}
+          {dirty ? <Tag color="orange">{t('web.workflowEditor.unsaved')}</Tag> : null}
         </Space>
 
         {issues.length > 0 ? (
           <Alert
             style={{ marginTop: 12 }}
             type="error"
-            message="This definition cannot run"
+            message={t('web.workflowEditor.cannotRun')}
             description={
               <ul style={{ margin: 0, paddingLeft: 18 }}>
                 {issues.map((issue) => (
@@ -239,9 +240,9 @@ export function WorkflowEditorPage() {
         ) : null}
       </Card>
 
-      <Card title="Flow">
+      <Card title={t('web.workflowEditor.flow')}>
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          {nodes.length === 0 ? <Empty description="This workflow has no steps." /> : null}
+          {nodes.length === 0 ? <Empty description={t('web.workflowEditor.noSteps')} /> : null}
           {nodes.map((node, index) => (
             <NodeEditor
               key={node.id}
@@ -260,7 +261,7 @@ export function WorkflowEditorPage() {
         </Space>
       </Card>
 
-      <Card title="Run history">
+      <Card title={t('web.workflowEditor.runHistory')}>
         <RunTable runs={workflowRuns} />
       </Card>
     </Space>
@@ -291,16 +292,16 @@ function NodeEditor({
   onAddDelay: () => void;
 }) {
   return (
-    <Card size="small" style={{ width: '100%' }} title={<Space>{node.name}{isStart ? <Tag color="blue">start</Tag> : null}</Space>} extra={
+    <Card size="small" style={{ width: '100%' }} title={<Space>{node.name}{isStart ? <Tag color="blue">{t('web.workflowEditor.startTag')}</Tag> : null}</Space>} extra={
       <Space size={4}>
         <Button size="small" onClick={() => onMove(-1)}>
-          Up
+          {t('web.workflowEditor.up')}
         </Button>
         <Button size="small" onClick={() => onMove(1)}>
-          Down
+          {t('web.workflowEditor.down')}
         </Button>
-        <Button size="small" danger icon={<DeleteOutlined />} onClick={onRemove} aria-label={`Remove ${node.name}`}>
-          Remove
+        <Button size="small" danger icon={<DeleteOutlined />} onClick={onRemove} aria-label={t('web.workflowEditor.removeAria', { name: node.name })}>
+          {t('web.common.remove')}
         </Button>
       </Space>
     }>
@@ -309,13 +310,13 @@ function NodeEditor({
       ) : null}
 
       {node.type === 'end' ? (
-        <Typography.Text type="secondary">The flow ends here.</Typography.Text>
+        <Typography.Text type="secondary">{t('web.workflowEditor.flowEnds')}</Typography.Text>
       ) : null}
 
       {node.type === 'action' ? (
         <Row gutter={12}>
           <Col span={7}>
-            <Typography.Text type="secondary">Action</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflowEditor.action')}</Typography.Text>
             <Select
               style={{ width: '100%' }}
               value={node.action ?? null}
@@ -330,11 +331,11 @@ function NodeEditor({
             />
           </Col>
           <Col span={7}>
-            <Typography.Text type="secondary">Step name</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflowEditor.stepName')}</Typography.Text>
             <Input value={node.name} onChange={(event) => onChange({ name: event.target.value })} />
           </Col>
           <Col span={10}>
-            <Typography.Text type="secondary">Parameters</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflowEditor.parameters')}</Typography.Text>
             <ParamsEditor action={node.action ?? ''} params={node.params ?? {}} onChange={(params) => onChange({ params })} />
           </Col>
         </Row>
@@ -343,18 +344,18 @@ function NodeEditor({
       {node.type === 'condition' ? (
         <Row gutter={12}>
           <Col span={14}>
-            <Typography.Text type="secondary">Formula (condition must be true)</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflowEditor.formulaLabel')}</Typography.Text>
             <Input
               value={node.formula ?? ''}
               placeholder={'number(field("amount")) > 10000'}
               onChange={(event) => onChange({ formula: event.target.value })}
             />
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              The sandboxed formula language: <code>field('x')</code> reads the record, <code>now()</code> is the run time.
+              {t('web.workflowEditor.formulaHint')}
             </Typography.Text>
           </Col>
           <Col span={10}>
-            <Typography.Text type="secondary">Step name</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflowEditor.stepName')}</Typography.Text>
             <Input value={node.name} onChange={(event) => onChange({ name: event.target.value })} />
           </Col>
         </Row>
@@ -363,11 +364,11 @@ function NodeEditor({
       {node.type === 'delay' ? (
         <Row gutter={12}>
           <Col span={8}>
-            <Typography.Text type="secondary">Wait (seconds)</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflowEditor.waitSeconds')}</Typography.Text>
             <InputNumber min={0} value={node.seconds ?? 0} onChange={(value) => onChange({ seconds: Number(value ?? 0) })} />
           </Col>
           <Col span={8}>
-            <Typography.Text type="secondary">Step name</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflowEditor.stepName')}</Typography.Text>
             <Input value={node.name} onChange={(event) => onChange({ name: event.target.value })} />
           </Col>
         </Row>
@@ -377,7 +378,7 @@ function NodeEditor({
         <Select
           size="small"
           style={{ width: 200 }}
-          placeholder="Add a step after this one…"
+          placeholder={t('web.workflowEditor.addStep')}
           // A "picker" rather than a value: choosing an entry inserts that step after this node.
           value={null}
           onChange={(value: string) => {
@@ -386,14 +387,14 @@ function NodeEditor({
             else onAddAction(value);
           }}
           options={[
-            { value: '__condition', label: 'Condition (branch)' },
-            { value: '__delay', label: 'Wait (delay)' },
+            { value: '__condition', label: t('web.workflowEditor.conditionBranch') },
+            { value: '__delay', label: t('web.workflowEditor.waitDelay') },
             ...actions.map((action) => ({ value: action.name, label: action.label })),
           ]}
         />
-        <Tooltip title="The flow continues at the next step unless a node points somewhere else.">
+        <Tooltip title={t('web.workflowEditor.continueHint')}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            <DownOutlined /> continues to the step below
+            <DownOutlined /> {t('web.workflowEditor.continuesBelow')}
           </Typography.Text>
         </Tooltip>
       </Space>
@@ -406,7 +407,7 @@ function knownOr(start: string, nodes: readonly WorkflowNode[]): string {
 }
 
 function RunTable({ runs }: { runs: WorkflowRunView[] }) {
-  const summary = useMemo(() => (runs.length === 0 ? 'No run yet.' : `${String(runs.length)} recent run(s).`), [runs.length]);
+  const summary = useMemo(() => (runs.length === 0 ? t('web.workflowEditor.noRun') : t('web.workflowEditor.recentRuns', { runs: String(runs.length) })), [runs.length]);
   return (
     <Space direction="vertical" size="small" style={{ width: '100%' }}>
       <Typography.Text type="secondary">{summary}</Typography.Text>
@@ -415,7 +416,7 @@ function RunTable({ runs }: { runs: WorkflowRunView[] }) {
         size="small"
         dataSource={runs}
         pagination={false}
-        locale={{ emptyText: 'No run yet.' }}
+        locale={{ emptyText: t('web.workflowEditor.noRun') }}
         expandable={{
           expandedRowRender: (run) => (
             <Table
@@ -424,21 +425,21 @@ function RunTable({ runs }: { runs: WorkflowRunView[] }) {
               pagination={false}
               dataSource={run.steps}
               columns={[
-                { title: 'Step', dataIndex: 'name' },
-                { title: 'Type', dataIndex: 'nodeType' },
-                { title: 'Status', dataIndex: 'status' },
-                { title: 'Attempt', dataIndex: 'attempt' },
-                { title: 'Error', dataIndex: 'error', render: (error: string | null) => error ?? '—' },
+                { title: t('web.workflowEditor.step'), dataIndex: 'name' },
+                { title: t('web.workflowEditor.type'), dataIndex: 'nodeType' },
+                { title: t('web.common.status'), dataIndex: 'status' },
+                { title: t('web.workflowEditor.attempt'), dataIndex: 'attempt' },
+                { title: t('web.workflows.error'), dataIndex: 'error', render: (error: string | null) => error ?? '—' },
               ]}
             />
           ),
         }}
         columns={[
-          { title: 'Record', render: (_v: unknown, run) => `${run.entityType}/${run.entityId}` },
-          { title: 'Status', dataIndex: 'status' },
-          { title: 'Attempt', dataIndex: 'attempt' },
-          { title: 'Started', render: (_v: unknown, run) => run.startedAt.slice(0, 19).replace('T', ' ') },
-          { title: 'Error', dataIndex: 'error', render: (error: string | null) => error ?? '—' },
+          { title: t('web.adminAudit.record'), render: (_v: unknown, run) => `${run.entityType}/${run.entityId}` },
+          { title: t('web.common.status'), dataIndex: 'status' },
+          { title: t('web.workflowEditor.attempt'), dataIndex: 'attempt' },
+          { title: t('web.workflows.started'), render: (_v: unknown, run) => run.startedAt.slice(0, 19).replace('T', ' ') },
+          { title: t('web.workflows.error'), dataIndex: 'error', render: (error: string | null) => error ?? '—' },
         ]}
       />
     </Space>

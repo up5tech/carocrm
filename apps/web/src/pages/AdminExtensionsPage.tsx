@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { ExtensionRow } from '../api/types.js';
+import { t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
 
 /**
@@ -26,7 +27,7 @@ export function AdminExtensionsPage() {
       const result = await api.extensions();
       setRows(result.list);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Could not load extensions.');
+      void message.error(error instanceof Error ? error.message : t('web.adminExtensions.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -37,7 +38,7 @@ export function AdminExtensionsPage() {
   }, [load]);
 
   if (principal?.type !== 'admin') {
-    return <Alert type="error" message="Administrator access is required to manage extensions." />;
+    return <Alert type="error" message={t('web.admin.accessRequiredExtensions')} />;
   }
 
   const act = async (id: string, action: 'install' | 'uninstall' | 'enable' | 'disable', label: string) => {
@@ -46,35 +47,36 @@ export function AdminExtensionsPage() {
         const result = await api.installExtension(id);
         const applied = result.migrations.applied;
         void message.success(
-          `${label} installed${applied.length > 0 ? ` (migrations applied: ${applied.join(', ')})` : ''}. Restart the API and the worker to load it.`,
+          t('web.adminExtensions.installDone', {
+            label,
+            migrations: applied.length > 0 ? t('web.adminExtensions.migrationsApplied', { list: applied.join(', ') }) : '',
+          }),
         );
       } else if (action === 'uninstall') {
         await api.uninstallExtension(id);
-        void message.success(`${label} uninstalled. Restart the API and the worker.`);
+        void message.success(t('web.adminExtensions.uninstallDone', { label }));
       } else {
         await api.setExtensionEnabled(id, action === 'enable');
-        void message.success(`${label} ${action === 'enable' ? 'enabled' : 'disabled'}. Restart the API and the worker.`);
+        void message.success(t('web.adminExtensions.stateDone', { label, state: action === 'enable' ? t('web.adminExtensions.enabled') : t('web.adminExtensions.disabled') }));
       }
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : `Could not ${action} the extension.`);
+      void message.error(error instanceof Error ? error.message : t('web.adminExtensions.actionFailed'));
     }
   };
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Card
-        title="Extensions"
+        title={t('web.adminExtensions.title')}
         extra={
           <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
-            Refresh
+            {t('core.common.refresh')}
           </Button>
         }
       >
         <Typography.Paragraph type="secondary">
-          Packages are read from the configured <code>EXTENSIONS_DIR</code>. A package on disk is <em>available</em>;
-          it only runs once it is <em>installed</em> and the API and worker have been restarted — providers, controllers and
-          metadata precedence are fixed when the process starts.
+          {t('web.adminExtensions.hint', { dir: 'EXTENSIONS_DIR' })}
         </Typography.Paragraph>
         <Table<ExtensionRow>
           rowKey="id"
@@ -85,26 +87,26 @@ export function AdminExtensionsPage() {
           expandable={{
             expandedRowRender: (row) => (
               <Descriptions size="small" column={1} bordered>
-                <Descriptions.Item label="Package path">{row.path ?? '—'}</Descriptions.Item>
-                <Descriptions.Item label="Installed at">{row.installedAt ? row.installedAt.slice(0, 19).replace('T', ' ') : '—'}</Descriptions.Item>
-                <Descriptions.Item label="Order (metadata precedence)">{row.order}</Descriptions.Item>
-                <Descriptions.Item label="Dependencies">
+                <Descriptions.Item label={t('web.adminExtensions.packagePath')}>{row.path ?? '—'}</Descriptions.Item>
+                <Descriptions.Item label={t('web.adminExtensions.installedAt')}>{row.installedAt ? row.installedAt.slice(0, 19).replace('T', ' ') : '—'}</Descriptions.Item>
+                <Descriptions.Item label={t('web.adminExtensions.order')}>{row.order}</Descriptions.Item>
+                <Descriptions.Item label={t('web.adminExtensions.dependencies')}>
                   {row.dependencies.length === 0
                     ? '—'
                     : row.dependencies.map((dependency) => `${dependency.id}${dependency.version ? ` >= ${dependency.version}` : ''}`).join(', ')}
                 </Descriptions.Item>
-                <Descriptions.Item label="Permissions">{row.permissions.length === 0 ? '—' : row.permissions.join(', ')}</Descriptions.Item>
-                <Descriptions.Item label="Entities">{row.contributes.entities.length === 0 ? '—' : row.contributes.entities.join(', ')}</Descriptions.Item>
-                <Descriptions.Item label="Controllers / hooks">{row.contributes.controllers} / {row.contributes.hooks.length}</Descriptions.Item>
-                <Descriptions.Item label="Jobs">{row.contributes.jobs.length === 0 ? '—' : row.contributes.jobs.join(', ')}</Descriptions.Item>
-                <Descriptions.Item label="Migrations">{row.contributes.migrations.length === 0 ? '—' : row.contributes.migrations.join(', ')}</Descriptions.Item>
-                <Descriptions.Item label="Navigation">{row.contributes.navItems} item(s)</Descriptions.Item>
+                <Descriptions.Item label={t('web.adminExtensions.permissions')}>{row.permissions.length === 0 ? '—' : row.permissions.join(', ')}</Descriptions.Item>
+                <Descriptions.Item label={t('web.adminExtensions.entities')}>{row.contributes.entities.length === 0 ? '—' : row.contributes.entities.join(', ')}</Descriptions.Item>
+                <Descriptions.Item label={t('web.adminExtensions.controllers')}>{row.contributes.controllers} / {row.contributes.hooks.length}</Descriptions.Item>
+                <Descriptions.Item label={t('web.adminExtensions.jobs')}>{row.contributes.jobs.length === 0 ? '—' : row.contributes.jobs.join(', ')}</Descriptions.Item>
+                <Descriptions.Item label={t('web.adminExtensions.migrations')}>{row.contributes.migrations.length === 0 ? '—' : row.contributes.migrations.join(', ')}</Descriptions.Item>
+                <Descriptions.Item label={t('web.adminExtensions.navigation')}>{t('web.adminExtensions.navItems', { items: String(row.contributes.navItems) })}</Descriptions.Item>
               </Descriptions>
             ),
           }}
           columns={[
             {
-              title: 'Package',
+              title: t('web.adminExtensions.colPackage'),
               dataIndex: 'id',
               render: (id: string, row) => (
                 <Space direction="vertical" size={0}>
@@ -116,14 +118,14 @@ export function AdminExtensionsPage() {
               ),
             },
             {
-              title: 'State',
+              title: t('web.adminExtensions.colState'),
               render: (_value: unknown, row: ExtensionRow) => (
                 <Space size={4} wrap>
-                  {row.installed ? <Tag color="blue">installed</Tag> : <Tag>available</Tag>}
-                  {row.installed && !row.enabled ? <Tag color="warning">disabled</Tag> : null}
-                  {row.running ? <Tag color="green">running</Tag> : null}
+                  {row.installed ? <Tag color="blue">{t('web.adminExtensions.installed')}</Tag> : <Tag>{t('web.adminExtensions.available')}</Tag>}
+                  {row.installed && !row.enabled ? <Tag color="warning">{t('web.adminExtensions.disabled')}</Tag> : null}
+                  {row.running ? <Tag color="green">{t('web.adminExtensions.running')}</Tag> : null}
                   {row.problem ? <Tag color="error">{row.problem}</Tag> : null}
-                  {row.installed && !row.running ? <Tag color="orange">restart required</Tag> : null}
+                  {row.installed && !row.running ? <Tag color="orange">{t('web.adminExtensions.restartRequired')}</Tag> : null}
                 </Space>
               ),
             },
@@ -140,18 +142,18 @@ export function AdminExtensionsPage() {
                         onChange={(enabled) => void act(row.id, enabled ? 'enable' : 'disable', row.name)}
                       />
                       <Popconfirm
-                        title={`Uninstall ${row.name}?`}
-                        description="Tables it created are kept; uninstall only removes the activation record."
+                        title={t('web.adminExtensions.uninstallConfirm', { name: row.name })}
+                        description={t('web.adminExtensions.uninstallHint')}
                         onConfirm={() => void act(row.id, 'uninstall', row.name)}
                       >
                         <Button size="small" danger icon={<ApiOutlined />}>
-                          Uninstall
+                          {t('web.adminExtensions.uninstall')}
                         </Button>
                       </Popconfirm>
                     </>
                   ) : (
                     <Button size="small" type="primary" disabled={row.problem !== null} onClick={() => void act(row.id, 'install', row.name)}>
-                      Install
+                      {t('web.adminExtensions.install')}
                     </Button>
                   )}
                 </Space>

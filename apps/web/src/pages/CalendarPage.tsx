@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api, type CalendarEvent } from '../api/client.js';
+import { t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
 
 // Phase 19 adds ProjectTask: a project task with a date shows on the calendar, read-only (§4.13).
@@ -51,7 +52,7 @@ export function CalendarPage() {
       });
       setEvents(result.list);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Failed to load the calendar.');
+      void message.error(error instanceof Error ? error.message : t('web.calendar.loadFailed'));
       setEvents([]);
     } finally {
       setLoading(false);
@@ -89,17 +90,17 @@ export function CalendarPage() {
         if (durationSeconds > 0) payload['dateEnd'] = target.add(durationSeconds, 'second').toISOString();
       }
       await api.update(event.activityType, event.activityId, payload);
-      void message.success(`Moved to ${target.format('YYYY-MM-DD HH:mm')}.`);
+      void message.success(t('web.calendar.moved', { date: target.format('YYYY-MM-DD HH:mm') }));
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Failed to reschedule.');
+      void message.error(error instanceof Error ? error.message : t('web.calendar.moveFailed'));
     }
   };
 
   return (
     <Card
       className="lizant-card"
-      title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>Calendar</Typography.Title>}
+      title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{t('web.calendar.title')}</Typography.Title>}
       extra={
         <Space wrap size={12}>
           <Checkbox.Group
@@ -111,19 +112,19 @@ export function CalendarPage() {
             value={onlyMine ? 'mine' : 'all'}
             onChange={(value) => setOnlyMine(value === 'mine')}
             options={[
-              { value: 'all', label: 'Everyone' },
-              { value: 'mine', label: 'Only mine' },
+              { value: 'all', label: t('web.calendar.everyone') },
+              { value: 'mine', label: t('web.calendar.onlyMine') },
             ]}
           />
           <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-            Refresh
+            {t('core.common.refresh')}
           </Button>
         </Space>
       }
     >
       <Spin spinning={loading}>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          Time zone {zone}. Drag an entry onto another day to reschedule it.
+          {t('web.calendar.hint', { zone })}
         </Typography.Text>
         <Calendar
           value={current}
@@ -155,7 +156,7 @@ export function CalendarPage() {
                       color={TYPE_COLOR[event.activityType] ?? 'default'}
                       draggable
                       onDragStart={() => setDragging(event)}
-                      title={`${event.name ?? ''} · ${timeOf(event.start)}${event.recurring ? ' · recurring' : ''}`}
+                      title={`${event.name ?? ''} · ${timeOf(event.start)}${event.recurring ? t('web.calendar.recurringSuffix') : ''}`}
                     >
                       <Link to={`/${event.activityType}/${event.activityId}`} onClick={(e) => e.stopPropagation()}>
                         {timeOf(event.start)} {event.name ?? event.activityType}

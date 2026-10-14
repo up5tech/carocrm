@@ -117,7 +117,9 @@ export async function initI18n(): Promise<void> {
       fallbackLng: 'en',
       keySeparator: '.',
       nsSeparator: false,
-      interpolation: { escapeValue: false },
+      // The catalog is shared with the API, whose interpolator uses single braces (`{count}`);
+      // i18next defaults to `{{count}}`, so the delimiters are aligned here (PLAN §41.4).
+      interpolation: { escapeValue: false, prefix: '{', suffix: '}' },
       resources: {},
       returnEmptyString: false,
     });
@@ -141,7 +143,8 @@ export async function initI18nFromCache(): Promise<void> {
     fallbackLng: 'en',
     keySeparator: '.',
     nsSeparator: false,
-    interpolation: { escapeValue: false },
+    // See initI18n(): single-brace placeholders keep the SPA and the API on one catalog format.
+    interpolation: { escapeValue: false, prefix: '{', suffix: '}' },
     resources: {},
     returnEmptyString: false,
   });

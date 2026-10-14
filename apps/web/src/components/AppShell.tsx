@@ -7,7 +7,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import { useExtensionNav } from '../state/extensions.js';
-import { activateLocale, localesEnabled, t } from '../state/i18n.js';
+import { activateLocale, activeLocaleName, localesEnabled, t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
 import { portalBase, usePortalContext } from '../state/portal.js';
 import { useSession } from '../state/session.js';
@@ -25,7 +25,7 @@ function useLanguageSwitch() {
         await activateLocale(locale);
         void message.success(t('web.language.switched'));
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : 'Language change failed.');
+        void message.error(error instanceof Error ? error.message : t('web.language.changeFailed'));
       }
     })();
   };
@@ -65,6 +65,10 @@ function InternalShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
   const [collapsed, setCollapsed] = useState(false);
+
+  // The menu labels are translated at build time, so the memo has to be keyed on the locale —
+  // otherwise switching language would repaint the page but leave the sidebar in the old one.
+  const locale = activeLocaleName();
 
   const navItems = useMemo<MenuItems>(() => {
     const groups: MenuItems = [{ key: '/home', icon: <AppstoreOutlined />, label: <Link to="/home">{t('core.app.home')}</Link> }];
@@ -106,18 +110,18 @@ function InternalShell({ children }: { children: ReactNode }) {
     }));
     if (contributed.length > 0) groups.push({ type: 'group', key: 'grp-extensions', label: t('core.app.extensions'), children: contributed });
 
-    const admin: MenuItems = [{ key: '/admin/entity-manager', icon: <KeyOutlined />, label: <Link to="/admin/entity-manager">Entity Manager</Link> }];
+    const admin: MenuItems = [{ key: '/admin/entity-manager', icon: <KeyOutlined />, label: <Link to="/admin/entity-manager">{t('web.entityManager.title')}</Link> }];
     if (principal?.type === 'admin') {
-      admin.push({ key: '/admin/audit-log', icon: <FileSearchOutlined />, label: <Link to="/admin/audit-log">Audit Log</Link> });
-      admin.push({ key: '/admin/jobs', icon: <ThunderboltOutlined />, label: <Link to="/admin/jobs">Jobs</Link> });
-      admin.push({ key: '/admin/extensions', icon: <ApiOutlined />, label: <Link to="/admin/extensions">Extensions</Link> });
-      admin.push({ key: '/admin/workflows', icon: <ApartmentOutlined />, label: <Link to="/admin/workflows">Workflows</Link> });
-      admin.push({ key: '/admin/processes', icon: <ShareAltOutlined />, label: <Link to="/admin/processes">Processes</Link> });
+      admin.push({ key: '/admin/audit-log', icon: <FileSearchOutlined />, label: <Link to="/admin/audit-log">{t('web.adminAudit.title')}</Link> });
+      admin.push({ key: '/admin/jobs', icon: <ThunderboltOutlined />, label: <Link to="/admin/jobs">{t('web.adminJobs.title')}</Link> });
+      admin.push({ key: '/admin/extensions', icon: <ApiOutlined />, label: <Link to="/admin/extensions">{t('web.adminExtensions.title')}</Link> });
+      admin.push({ key: '/admin/workflows', icon: <ApartmentOutlined />, label: <Link to="/admin/workflows">{t('web.workflows.title')}</Link> });
+      admin.push({ key: '/admin/processes', icon: <ShareAltOutlined />, label: <Link to="/admin/processes">{t('web.processes.title')}</Link> });
     }
-    admin.push({ key: '/admin/portals', icon: <ProjectOutlined />, label: <Link to="/admin/portals">Portals</Link> });
+    admin.push({ key: '/admin/portals', icon: <ProjectOutlined />, label: <Link to="/admin/portals">{t('web.adminPortals.title')}</Link> });
     groups.push({ type: 'group', key: 'grp-admin', label: t('core.app.administration'), children: admin });
     return groups;
-  }, [metadata.data, principal?.type, extensionNav.data]);
+  }, [metadata.data, principal?.type, extensionNav.data, locale]);
 
   const selectedKey = useMemo(() => {
     const segments = location.pathname.split('/').filter(Boolean);
@@ -203,7 +207,7 @@ function InternalShell({ children }: { children: ReactNode }) {
         </Sider>
         <Layout>
           <Content className="lizant-content">{children}</Content>
-          <Footer className="lizant-footer">CaroCRM ©{new Date().getFullYear()} — metadata-driven CRM kernel</Footer>
+          <Footer className="lizant-footer">{t('web.shell.footer', { year: String(new Date().getFullYear()) })}</Footer>
         </Layout>
       </Layout>
     </Layout>
@@ -223,9 +227,11 @@ function PortalShell({ children }: { children: ReactNode }) {
   const { message } = AntApp.useApp();
   const [collapsed, setCollapsed] = useState(false);
   const base = portalBase(principal?.type);
+  // Same as the internal shell: the "Home" entry is translated, so the memo follows the locale.
+  const locale = activeLocaleName();
 
   const navItems = useMemo<MenuItems>(() => {
-    const items: MenuItems = [{ key: '/portal', icon: <AppstoreOutlined />, label: <Link to="/portal">Home</Link> }];
+    const items: MenuItems = [{ key: '/portal', icon: <AppstoreOutlined />, label: <Link to="/portal">{t('core.app.home')}</Link> }];
     for (const item of context.data?.nav ?? []) {
       items.push({
         key: item.route ?? (item.entity ? `${base}/${item.entity}` : '/portal'),
@@ -234,7 +240,7 @@ function PortalShell({ children }: { children: ReactNode }) {
       });
     }
     return items;
-  }, [context.data?.nav, base]);
+  }, [context.data?.nav, base, locale]);
 
   const selectedKey = useMemo(() => {
     const segments = location.pathname.split('/').filter(Boolean);
@@ -245,10 +251,10 @@ function PortalShell({ children }: { children: ReactNode }) {
   const userMenu: MenuItems = [
     {
       key: 'signout',
-      label: 'Sign out',
+      label: t('core.app.signOut'),
       onClick: async () => {
         await signOut();
-        void message.success('Signed out.');
+        void message.success(t('core.app.signedOut'));
         navigate('/login', { replace: true });
       },
     },
@@ -257,9 +263,9 @@ function PortalShell({ children }: { children: ReactNode }) {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <header className="lizant-header">
-        <div className="lizant-brand" title={context.data?.portal.name ?? 'Portal'}>
+        <div className="lizant-brand" title={context.data?.portal.name ?? t('web.portal.portal')}>
           <span className="lizant-brand-mark">P</span>
-          {context.data?.portal.name ?? 'Portal'}
+          {context.data?.portal.name ?? t('web.portal.portal')}
         </div>
         <div className="lizant-header-actions">
           <Dropdown menu={{ items: userMenu }} trigger={['click']}>
@@ -285,7 +291,7 @@ function PortalShell({ children }: { children: ReactNode }) {
         </Sider>
         <Layout>
           <Content className="lizant-content">{children}</Content>
-          <Footer className="lizant-footer">External portal — access limited to your records</Footer>
+          <Footer className="lizant-footer">{t('web.shell.portalFooter')}</Footer>
         </Layout>
       </Layout>
     </Layout>

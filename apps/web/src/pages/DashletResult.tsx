@@ -2,6 +2,7 @@ import { Table, Tag, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 
 import type { DashletRow } from '../api/client.js';
+import { t } from '../state/i18n.js';
 
 interface ProjectTaskRow {
   id: string;
@@ -24,11 +25,11 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result: Record<string, unknown> | undefined }) {
-  if (!result) return <Typography.Text type="secondary">Not run yet.</Typography.Text>;
+  if (!result) return <Typography.Text type="secondary">{t('web.dashboards.notRun')}</Typography.Text>;
 
   if (dashlet.kind === 'projectTasks') {
     const rows = (result['list'] ?? []) as ProjectTaskRow[];
-    if (rows.length === 0) return <Typography.Text type="secondary">Nothing due in this window.</Typography.Text>;
+    if (rows.length === 0) return <Typography.Text type="secondary">{t('web.dashboards.nothingDue')}</Typography.Text>;
     return (
       <Table
         size="small"
@@ -37,22 +38,22 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
         pagination={false}
         columns={[
           {
-            title: 'Task',
+            title: t('web.common.task'),
             dataIndex: 'name',
             render: (_: unknown, row) => <Link to={`/ProjectTask/${row.id}`}>{row.name ?? row.id}</Link>,
           },
           {
-            title: 'Project',
+            title: t('web.common.project'),
             dataIndex: 'projectName',
             render: (_: unknown, row) => (row.projectId === null ? '—' : <Link to={`/Project/${row.projectId}`}>{row.projectName ?? row.projectId}</Link>),
           },
-          { title: 'Due', dataIndex: 'dateEnd', render: (value: string | null) => value ?? '—' },
+          { title: t('web.common.due'), dataIndex: 'dateEnd', render: (value: string | null) => value ?? '—' },
           {
-            title: 'Status',
+            title: t('web.common.status'),
             dataIndex: 'status',
             render: (value: string | null) => <Tag color={STATUS_COLORS[value ?? ''] ?? 'default'}>{value ?? '—'}</Tag>,
           },
-          { title: 'Group type', dataIndex: 'groupType', render: (value: string | null) => value ?? '—' },
+          { title: t('web.common.groupType'), dataIndex: 'groupType', render: (value: string | null) => value ?? '—' },
         ]}
       />
     );
@@ -61,7 +62,7 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
   const hint =
     result['truncated'] === true ? (
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        Aggregated over the first {String(result['scanned'] ?? '0')} matching records; more exist.
+        {t('web.dashboards.truncated', { scanned: String(result['scanned'] ?? '0') })}
       </Typography.Text>
     ) : null;
   if (dashlet.kind === 'kpi') {
@@ -96,7 +97,7 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
   const list = (result['list'] ?? []) as Record<string, unknown>[];
   return (
     <div>
-      <Table size="small" rowKey={(row) => String(row['id'])} dataSource={list} pagination={false} columns={[{ title: 'Name', dataIndex: 'name' }]} />
+      <Table size="small" rowKey={(row) => String(row['id'])} dataSource={list} pagination={false} columns={[{ title: t('web.common.name'), dataIndex: 'name' }]} />
       {hint}
     </div>
   );

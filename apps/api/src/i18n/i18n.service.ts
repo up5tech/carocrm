@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync,readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import { ValidationError } from '@carocrm/core/errors/index.js';
 import { log } from '@carocrm/core/logger/index.js';
@@ -22,13 +22,35 @@ const LOCALE_RE = /^[a-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$/;
 const KEY_RE = /^[a-z][a-z0-9]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/;
 const SETTINGS_CACHE_MS = 30_000;
 
+/**
+ * Locates the catalog directory (PLAN §41.3). `process.cwd()` is **not** always the repository
+ * root: `pnpm --filter @carocrm/api dev` starts the API from `apps/api/`, while the Playwright
+ * config and `scripts/e2e-smoke.sh` run `node apps/api/dist/main.js` from the root. Resolving
+ * against `cwd` alone therefore found no catalog under `pnpm dev` and silently disabled every
+ * translation, which surfaced as raw keys (`web.login.submit`) in the SPA. Walking upwards — the
+ * same way `loadDotEnv()` finds `.env` — makes both launch modes resolve `<root>/i18n`, and an
+ * explicit `I18N_DIR` still wins so a deployment can point outside the source tree.
+ */
+function resolveCatalogDir(): string {
+  if (process.env.I18N_DIR) return process.env.I18N_DIR;
+  let dir = process.cwd();
+  for (let depth = 0; depth < 4; depth++) {
+    const candidate = join(dir, 'i18n');
+    if (existsSync(candidate)) return candidate;
+    const parent = resolve(dir, '..');
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return join(process.cwd(), 'i18n');
+}
+
 @Injectable()
 export class I18nService {
   private catalogs: Map<string, Catalog> | undefined;
   private locales: string[] | undefined;
   private warnings = new Set<string>();
   private settingsCache: { value: I18nSettings; loadedAt: number } | undefined;
-  private sourceDir = process.env.I18N_DIR ?? join(process.cwd(), 'i18n');
+  private sourceDir = resolveCatalogDir();
 
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {
     // The exception filter resolves error messages through this service instance; a self-referential

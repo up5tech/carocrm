@@ -3,6 +3,7 @@ import { App as AntApp, Button, Card, Checkbox, Col, Form, Input, InputNumber, M
 import { useCallback, useEffect, useState } from 'react';
 
 import { api, type DashboardRow } from '../api/client.js';
+import { t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
 import { DashletResult } from './DashletResult.js';
@@ -32,7 +33,7 @@ export function DashboardsPage() {
       setActiveId((prev) => (list.some((item) => item.id === prev) ? prev : (list[0]?.id ?? null)));
       return list;
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Failed to load dashboards.');
+      void message.error(error instanceof Error ? error.message : t('web.dashboards.loadFailed'));
       return [];
     } finally {
       setLoading(false);
@@ -51,7 +52,7 @@ export function DashboardsPage() {
         const entries = await Promise.all(dash.dashlets.map(async (dashlet) => [dashlet.id, await api.runDashlet(dash.id, dashlet.id)] as const));
         setResults(Object.fromEntries(entries));
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : 'Failed to run dashlets.');
+        void message.error(error instanceof Error ? error.message : t('web.dashboards.runFailed'));
       }
     },
     [message],
@@ -75,7 +76,7 @@ export function DashboardsPage() {
         const ran = await api.runDashlet(active.id, dashletId);
         setResults((prev) => ({ ...prev, [dashletId]: ran }));
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : 'Failed to run dashlet.');
+        void message.error(error instanceof Error ? error.message : t('web.dashboards.runOneFailed'));
       }
     },
     [active, message],
@@ -138,7 +139,7 @@ export function DashboardsPage() {
       setResults({});
       await load();
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : 'Failed to delete dashboard.');
+      void message.error(error instanceof Error ? error.message : t('web.dashboards.deleteFailed'));
     }
   }, [active, load, message]);
 
@@ -149,7 +150,7 @@ export function DashboardsPage() {
         await api.deleteDashlet(active.id, dashletId);
         await load();
       } catch (error) {
-        void message.error(error instanceof Error ? error.message : 'Failed to delete dashlet.');
+        void message.error(error instanceof Error ? error.message : t('web.dashboards.deleteDashletFailed'));
       }
     },
     [active, load, message],
@@ -159,15 +160,15 @@ export function DashboardsPage() {
     <>
       <div className="lizant-page-head">
         <div>
-          <h1 className="lizant-page-title">Dashboards</h1>
-          <p className="lizant-page-sub">List, chart and KPI dashlets queried through the shared Query Engine.</p>
+          <h1 className="lizant-page-title">{t('web.dashboards.title')}</h1>
+          <p className="lizant-page-sub">{t('web.dashboards.subtitle')}</p>
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void refresh()}>
-            Refresh
+            {t('core.common.refresh')}
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-            New dashboard
+            {t('web.dashboards.new')}
           </Button>
         </Space>
       </div>
@@ -182,15 +183,15 @@ export function DashboardsPage() {
         <>
           <div style={{ marginBottom: 12 }}>
             <Button icon={<PlusOutlined />} onClick={() => setDashletOpen(true)}>
-              Add dashlet
+              {t('web.dashboards.addDashlet')}
             </Button>
             <Popconfirm
-              title={`Delete dashboard "${active.name}" and its dashlets?`}
+              title={t('web.dashboards.deleteConfirm', { name: active.name })}
               onConfirm={() => void removeDashboard()}
-              okText="Delete"
+              okText={t('web.common.delete')}
             >
               <Button danger icon={<DeleteOutlined />} style={{ marginLeft: 8 }}>
-                Delete dashboard
+                {t('web.dashboards.deleteDashboard')}
               </Button>
             </Popconfirm>
           </div>
@@ -203,7 +204,7 @@ export function DashboardsPage() {
                   extra={
                     <Space>
                       <Button size="small" onClick={() => void runOne(dashlet.id)}>
-                        Run
+                        {t('web.common.run')}
                       </Button>
                       <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => void removeDashlet(dashlet.id)} />
                     </Space>
@@ -216,77 +217,77 @@ export function DashboardsPage() {
           </Row>
         </>
       ) : (
-        <Card className="lizant-card">No dashboards yet.</Card>
+        <Card className="lizant-card">{t('web.dashboards.empty')}</Card>
       )}
       <Modal
-        title="New dashboard"
+        title={t('web.dashboards.new')}
         open={createOpen}
         onOk={() => void submitDashboard()}
         onCancel={() => setCreateOpen(false)}
-        okText="Create"
+        okText={t('web.common.create')}
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="name" label="Name" rules={[{ required: true }]}>
-            <Input placeholder="Sales overview" />
+          <Form.Item name="name" label={t('web.common.name')} rules={[{ required: true }]}>
+            <Input placeholder={t('web.dashboards.namePlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>
       <Modal
-        title="Add dashlet"
+        title={t('web.dashboards.addDashlet')}
         open={dashletOpen}
         onOk={() => void submitDashlet()}
         onCancel={() => setDashletOpen(false)}
-        okText="Add"
+        okText={t('web.common.add')}
       >
         <Form form={dashletForm} layout="vertical">
-          <Form.Item name="name" label="Name" rules={[{ required: true }]}>
+          <Form.Item name="name" label={t('web.common.name')} rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="kind" label="Kind" rules={[{ required: true }]} initialValue="list">
+          <Form.Item name="kind" label={t('web.dashboards.kindLabel')} rules={[{ required: true }]} initialValue="list">
             <Select
               options={[
-                { value: 'list', label: 'List' },
-                { value: 'chart', label: 'Chart' },
-                { value: 'kpi', label: 'KPI' },
-                { value: 'projectTasks', label: 'Project tasks (Phase 19)' },
+                { value: 'list', label: t('web.reports.kindList') },
+                { value: 'chart', label: t('web.reports.kindChart') },
+                { value: 'kpi', label: t('web.reports.kindKpi') },
+                { value: 'projectTasks', label: t('web.dashboards.kindProjectTasks') },
               ]}
             />
           </Form.Item>
-          <Form.Item name="entity" label="Entity" rules={[{ required: dashletKind !== 'projectTasks' }]}>
+          <Form.Item name="entity" label={t('web.reports.entityLabel')} rules={[{ required: dashletKind !== 'projectTasks' }]}>
             <Select options={entities} showSearch optionFilterProp="label" disabled={dashletKind === 'projectTasks'} />
           </Form.Item>
           {dashletKind === 'projectTasks' ? (
             <>
-              <Form.Item name="nextDays" label="Due within (days)" initialValue={14}>
+              <Form.Item name="nextDays" label={t('web.dashboards.dueWithin')} initialValue={14}>
                 <InputNumber min={1} max={365} />
               </Form.Item>
-              <Form.Item name="maxSize" label="Rows" initialValue={20}>
+              <Form.Item name="maxSize" label={t('web.dashboards.rows')} initialValue={20}>
                 <InputNumber min={1} max={100} />
               </Form.Item>
-              <Form.Item name="groupTypes" label="Group types (empty = all)">
+              <Form.Item name="groupTypes" label={t('web.dashboards.groupTypes')}>
                 <Select mode="multiple" options={['Triage', 'Backlog', 'Work', 'Phase', 'Sprint'].map((value) => ({ value, label: value }))} />
               </Form.Item>
               <Space wrap>
                 <Form.Item name="includeOwned" valuePropName="checked" initialValue={true}>
-                  <Checkbox>Owned by me</Checkbox>
+                  <Checkbox>{t('web.dashboards.ownedByMe')}</Checkbox>
                 </Form.Item>
                 <Form.Item name="includeCollaboration" valuePropName="checked">
-                  <Checkbox>Shared with me</Checkbox>
+                  <Checkbox>{t('web.dashboards.sharedWithMe')}</Checkbox>
                 </Form.Item>
                 <Form.Item name="excludeAssigned" valuePropName="checked">
-                  <Checkbox>Exclude assigned to me</Checkbox>
+                  <Checkbox>{t('web.dashboards.excludeAssigned')}</Checkbox>
                 </Form.Item>
                 <Form.Item name="includeCompleted" valuePropName="checked">
-                  <Checkbox>Include completed</Checkbox>
+                  <Checkbox>{t('web.dashboards.includeCompleted')}</Checkbox>
                 </Form.Item>
               </Space>
             </>
           ) : null}
-          <Form.Item name="groupBy" label="Group by (chart / grouped KPI)">
-            <Input placeholder="type" />
+          <Form.Item name="groupBy" label={t('web.dashboards.groupByLabel')}>
+            <Input placeholder={t('web.dashboards.groupByPlaceholder')} />
           </Form.Item>
-          <Form.Item name="measure" label="Measure (numeric field, with sum/avg aggregation)">
-            <Input placeholder="amount" />
+          <Form.Item name="measure" label={t('web.dashboards.measureLabel')}>
+            <Input placeholder={t('web.dashboards.measurePlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>

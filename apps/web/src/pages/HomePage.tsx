@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
+import { t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
 
@@ -56,8 +57,8 @@ export function HomePage() {
     <>
       <div className="lizant-page-head">
         <div>
-          <h1 className="lizant-page-title">Dashboard</h1>
-          <p className="lizant-page-sub">Records available in this workspace, rendered from entity metadata.</p>
+          <h1 className="lizant-page-title">{t('web.home.title')}</h1>
+          <p className="lizant-page-sub">{t('web.home.subtitle')}</p>
         </div>
       </div>
       <Row gutter={[16, 16]}>
@@ -70,7 +71,7 @@ export function HomePage() {
                     <Link to={`/${tile.entity}`}>{tile.label}</Link>
                   </div>
                   <div className="lizant-stat-value">{tile.total === null ? '—' : tile.total.toLocaleString()}</div>
-                  <div className="lizant-stat-hint">records</div>
+                  <div className="lizant-stat-hint">{t('web.home.records')}</div>
                 </div>
                 <span className={`lizant-stat-icon lizant-stat-icon--${TONES[index % TONES.length]}`}>
                   {ICONS[tile.entity] ?? <DatabaseOutlined />}

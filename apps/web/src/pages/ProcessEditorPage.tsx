@@ -15,6 +15,7 @@ import type {
   ProcessView,
 } from '../api/types.js';
 import { defaultParamsOf,ParamsEditor } from '../components/ParamsEditor.js';
+import { t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { editableProcessDefinition, useProcess, useProcessCatalog, useProcessInstances } from '../state/processes.js';
 import { useSession } from '../state/session.js';
@@ -66,7 +67,7 @@ export function ProcessEditorPage() {
         ...(definition === undefined ? {} : { definition }),
       }),
     onSuccess: () => {
-      void message.success('Draft saved.');
+      void message.success(t('web.workflowEditor.draftSaved'));
       setDirty(false);
       void queryClient.invalidateQueries({ queryKey: ['processes'] });
     },
@@ -76,7 +77,7 @@ export function ProcessEditorPage() {
   const publish = useMutation({
     mutationFn: () => api.publishProcess(id ?? ''),
     onSuccess: (updated: ProcessView) => {
-      void message.success(`Version ${String(updated.currentVersion)} published.`);
+      void message.success(t('web.workflowEditor.published', { version: String(updated.currentVersion) }));
       void queryClient.invalidateQueries({ queryKey: ['processes'] });
     },
     onError: (error: Error) => void message.error(error.message),
@@ -85,15 +86,15 @@ export function ProcessEditorPage() {
   const toggle = useMutation({
     mutationFn: (enabled: boolean) => api.setProcessEnabled(id ?? '', enabled),
     onSuccess: (updated: ProcessView) => {
-      void message.success(`${updated.name} ${updated.isActive ? 'enabled' : 'disabled'}.`);
+      void message.success(updated.isActive ? t('web.processes.enabledNotice', { name: updated.name }) : t('web.processes.disabledNotice', { name: updated.name }));
       void queryClient.invalidateQueries({ queryKey: ['processes'] });
     },
     onError: (error: Error) => void message.error(error.message),
   });
 
-  if (!admin) return <Alert type="error" message="Administrator access is required to edit processes." />;
+  if (!admin) return <Alert type="error" message={t('web.admin.accessRequiredProcessEditor')} />;
   if (process.isLoading) return <Card loading />;
-  if (!process.data || !definition) return <Alert type="error" message="This process does not exist." />;
+  if (!process.data || !definition) return <Alert type="error" message={t('web.processEditor.notFound')} />;
 
   const actions = catalog.data?.actions ?? [];
   const issues = process.data.issues;
@@ -201,11 +202,11 @@ export function ProcessEditorPage() {
     insertAfter(after, {
       id: `u${Date.now().toString(36)}`,
       type: 'userTask',
-      name: 'Review',
+      name: t('web.processEditor.defaultUserTaskName'),
       // The record's own owner is the safest default assignee: it exists wherever the process runs
       // and the author can narrow it to a person or a role.
       assignee: { type: 'recordField', value: 'assignedUserId' },
-      outcomes: [{ value: 'approved', label: 'Approve', next: '' }],
+      outcomes: [{ value: 'approved', label: t('web.processEditor.defaultApprove'), next: '' }],
     });
   };
 
@@ -225,7 +226,7 @@ export function ProcessEditorPage() {
     insertAfter(after, {
       id: `g${Date.now().toString(36)}`,
       type: 'gateway',
-      name: 'Branch',
+      name: t('web.processEditor.defaultGatewayName'),
       // `true` keeps the draft valid — the author replaces it with the real condition; the branch
       // order decides which match wins.
       branches: [{ when: 'true', next: '' }],
@@ -234,7 +235,7 @@ export function ProcessEditorPage() {
   };
 
   const addEnd = (after: number): void => {
-    insertAfter(after, { id: `e${Date.now().toString(36)}`, type: 'end', name: 'Done' });
+    insertAfter(after, { id: `e${Date.now().toString(36)}`, type: 'end', name: t('web.processEditor.defaultEndName') });
   };
 
   const entityOptions = Object.values(metadata.data ?? {})
@@ -255,7 +256,7 @@ export function ProcessEditorPage() {
         extra={
           <Space>
             <Button icon={<SaveOutlined />} onClick={() => save.mutate()} loading={save.isPending} disabled={!dirty}>
-              Save draft
+              {t('web.workflowEditor.saveDraft')}
             </Button>
             <Button
               type="primary"
@@ -264,27 +265,27 @@ export function ProcessEditorPage() {
               loading={publish.isPending}
               disabled={dirty || issues.length > 0}
             >
-              Publish
+              {t('web.workflows.publish')}
             </Button>
           </Space>
         }
       >
         <Row gutter={16}>
           <Col span={8}>
-            <Typography.Text type="secondary">Name</Typography.Text>
+            <Typography.Text type="secondary">{t('web.common.name')}</Typography.Text>
             <Input value={name} onChange={(event) => setName(event.target.value)} onBlur={() => setDirty(true)} />
           </Col>
           <Col span={6}>
-            <Typography.Text type="secondary">Key</Typography.Text>
+            <Typography.Text type="secondary">{t('web.processes.key')}</Typography.Text>
             <Input value={process.data.key} disabled />
           </Col>
           <Col span={6}>
-            <Typography.Text type="secondary">Record type</Typography.Text>
+            <Typography.Text type="secondary">{t('web.processes.recordType')}</Typography.Text>
             <Select
               style={{ width: '100%' }}
               showSearch
               value={definition.entityType ?? '*'}
-              options={[{ value: '*', label: 'Any entity' }, ...entityOptions]}
+              options={[{ value: '*', label: t('web.workflows.anyEntity') }, ...entityOptions]}
               onChange={(entityType) => {
                 setDirty(true);
                 setDefinition({ ...definition, entityType });
@@ -292,7 +293,7 @@ export function ProcessEditorPage() {
             />
           </Col>
           <Col span={4}>
-            <Typography.Text type="secondary">Enabled</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflows.enabled')}</Typography.Text>
             <div>
               <Switch
                 size="small"
@@ -306,10 +307,10 @@ export function ProcessEditorPage() {
 
         <Row gutter={16} style={{ marginTop: 8 }}>
           <Col span={24}>
-            <Typography.Text type="secondary">Description</Typography.Text>
+            <Typography.Text type="secondary">{t('web.processEditor.description')}</Typography.Text>
             <Input
               value={description}
-              placeholder="What is this approval for?"
+              placeholder={t('web.processEditor.descriptionPlaceholder')}
               onChange={(event) => setDescription(event.target.value)}
               onBlur={() => setDirty(true)}
             />
@@ -318,17 +319,17 @@ export function ProcessEditorPage() {
 
         <Space style={{ marginTop: 12 }} wrap>
           <Tag color={process.data.currentVersionStatus === 'published' ? 'blue' : 'default'}>
-            draft v{process.data.currentVersion ?? '—'}
+            {t('web.workflows.draftVersion', { version: String(process.data.currentVersion ?? '—') })}
           </Tag>
-          {process.data.publishedVersion !== null ? <Tag color="blue">published v{process.data.publishedVersion}</Tag> : <Tag>not published</Tag>}
-          {dirty ? <Tag color="orange">unsaved changes</Tag> : null}
+          {process.data.publishedVersion !== null ? <Tag color="blue">{t('web.workflows.publishedVersion', { version: String(process.data.publishedVersion) })}</Tag> : <Tag>{t('web.workflows.notPublished')}</Tag>}
+          {dirty ? <Tag color="orange">{t('web.workflowEditor.unsaved')}</Tag> : null}
         </Space>
 
         {issues.length > 0 ? (
           <Alert
             style={{ marginTop: 12 }}
             type="error"
-            message="This definition cannot run"
+            message={t('web.workflowEditor.cannotRun')}
             description={
               <ul style={{ margin: 0, paddingLeft: 18 }}>
                 {issues.map((issue) => (
@@ -342,9 +343,9 @@ export function ProcessEditorPage() {
         ) : null}
       </Card>
 
-      <Card title="Flow">
+      <Card title={t('web.workflowEditor.flow')}>
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          {nodes.length === 0 ? <Empty description="This process has no steps." /> : null}
+          {nodes.length === 0 ? <Empty description={t('web.processEditor.noSteps')} /> : null}
           {nodes.map((node, index) => (
             <NodeEditor
               key={node.id}
@@ -365,7 +366,7 @@ export function ProcessEditorPage() {
         </Space>
       </Card>
 
-      <Card title="Instances">
+      <Card title={t('web.processEditor.instances')}>
         <InstanceMiniTable instances={instances.data?.list ?? []} loading={instances.isFetching} />
       </Card>
     </Space>
@@ -421,20 +422,20 @@ function NodeEditor({
       title={
         <Space>
           {node.name}
-          {isStart ? <Tag color="blue">start</Tag> : null}
+          {isStart ? <Tag color="blue">{t('web.workflowEditor.startTag')}</Tag> : null}
           <Tag>{node.type}</Tag>
         </Space>
       }
       extra={
         <Space size={4}>
-          <Button size="small" onClick={() => onMove(-1)} aria-label={`Move ${node.name} up`}>
-            Up
+          <Button size="small" onClick={() => onMove(-1)} aria-label={t('web.processEditor.moveUpAria', { name: node.name })}>
+            {t('web.workflowEditor.up')}
           </Button>
-          <Button size="small" onClick={() => onMove(1)} aria-label={`Move ${node.name} down`}>
-            Down
+          <Button size="small" onClick={() => onMove(1)} aria-label={t('web.processEditor.moveDownAria', { name: node.name })}>
+            {t('web.workflowEditor.down')}
           </Button>
-          <Button size="small" danger icon={<DeleteOutlined />} onClick={onRemove} aria-label={`Remove ${node.name}`} disabled={nodes.length <= 1}>
-            Remove
+          <Button size="small" danger icon={<DeleteOutlined />} onClick={onRemove} aria-label={t('web.workflowEditor.removeAria', { name: node.name })} disabled={nodes.length <= 1}>
+            {t('web.common.remove')}
           </Button>
         </Space>
       }
@@ -446,11 +447,11 @@ function NodeEditor({
       {node.type === 'end' ? (
         <Row gutter={12}>
           <Col span={8}>
-            <Typography.Text type="secondary">Step name</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflowEditor.stepName')}</Typography.Text>
             <Input value={node.name} onChange={(event) => onChange({ name: event.target.value })} />
           </Col>
           <Col span={8}>
-            <Typography.Text type="secondary">Outcome (reported on the instance)</Typography.Text>
+            <Typography.Text type="secondary">{t('web.processEditor.outcomeLabel')}</Typography.Text>
             <Input value={node.outcome ?? ''} placeholder="approved" onChange={(event) => onChange({ outcome: event.target.value })} />
           </Col>
         </Row>
@@ -460,15 +461,15 @@ function NodeEditor({
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
           <Row gutter={12}>
             <Col span={8}>
-              <Typography.Text type="secondary">Step name</Typography.Text>
+              <Typography.Text type="secondary">{t('web.workflowEditor.stepName')}</Typography.Text>
               <Input value={node.name} onChange={(event) => onChange({ name: event.target.value })} />
             </Col>
             <Col span={8}>
-              <Typography.Text type="secondary">Assigned to</Typography.Text>
+              <Typography.Text type="secondary">{t('web.processEditor.assignedTo')}</Typography.Text>
               <AssigneePicker spec={node.assignee} users={userOptions} roles={roleOptions} onChange={(assignee) => onChange({ assignee })} />
             </Col>
             <Col span={4}>
-              <Typography.Text type="secondary">Due after (seconds)</Typography.Text>
+              <Typography.Text type="secondary">{t('web.processEditor.dueAfter')}</Typography.Text>
               <InputNumber
                 style={{ width: '100%' }}
                 min={0}
@@ -477,7 +478,7 @@ function NodeEditor({
               />
             </Col>
             <Col span={4}>
-              <Typography.Text type="secondary">Escalate after (seconds)</Typography.Text>
+              <Typography.Text type="secondary">{t('web.processEditor.escalateAfter')}</Typography.Text>
               <InputNumber
                 style={{ width: '100%' }}
                 min={0}
@@ -490,7 +491,7 @@ function NodeEditor({
           {node.escalateAfterSeconds !== undefined ? (
             <Row gutter={12}>
               <Col span={8}>
-                <Typography.Text type="secondary">Escalate to</Typography.Text>
+                <Typography.Text type="secondary">{t('web.processEditor.escalateTo')}</Typography.Text>
                 <AssigneePicker
                   spec={node.escalateTo}
                   users={userOptions}
@@ -501,13 +502,13 @@ function NodeEditor({
               </Col>
               <Col span={16}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  Escalation reassigned the task to this person and marks it escalated; the assignee is notified again.
+                  {t('web.processEditor.escalateHint')}
                 </Typography.Text>
               </Col>
             </Row>
           ) : null}
 
-          <Typography.Text type="secondary">Answers</Typography.Text>
+          <Typography.Text type="secondary">{t('web.processEditor.answers')}</Typography.Text>
           {(node.outcomes ?? []).map((outcome, index) => (
             <Row key={`${node.id}-outcome-${String(index)}`} gutter={8} align="middle">
               <Col span={5}>
@@ -543,7 +544,7 @@ function NodeEditor({
                   size="small"
                   style={{ width: '100%' }}
                   value={outcome.next || null}
-                  placeholder="continues at…"
+                  placeholder={t('web.processEditor.continuesAtPlaceholder')}
                   options={targetOptions}
                   onChange={(next) => {
                     const outcomes = [...(node.outcomes ?? [])];
@@ -556,7 +557,7 @@ function NodeEditor({
               </Col>
               <Col span={6}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  goes to {(nodes.find((entry) => entry.id === outcome.next)?.name) || '…'}
+                  {t('web.processEditor.goesTo', { target: (nodes.find((entry) => entry.id === outcome.next)?.name) || '…' })}
                 </Typography.Text>
               </Col>
               <Col>
@@ -564,7 +565,7 @@ function NodeEditor({
                   size="small"
                   danger
                   icon={<DeleteOutlined />}
-                  aria-label={`Remove answer ${outcome.label}`}
+                  aria-label={t('web.processEditor.removeAnswerAria', { label: outcome.label })}
                   onClick={() => onChange({ outcomes: (node.outcomes ?? []).filter((_entry, position) => position !== index) })}
                 />
               </Col>
@@ -574,11 +575,11 @@ function NodeEditor({
             size="small"
             icon={<PlusOutlined />}
             onClick={() => {
-              const outcomes: ProcessOutcomeSpec[] = [...(node.outcomes ?? []), { value: 'new-answer', label: 'New answer', next: node.outcomes?.[0]?.next ?? '' }];
+              const outcomes: ProcessOutcomeSpec[] = [...(node.outcomes ?? []), { value: 'new-answer', label: t('web.processEditor.defaultAnswer'), next: node.outcomes?.[0]?.next ?? '' }];
               onChange({ outcomes });
             }}
           >
-            Add answer
+            {t('web.processEditor.addAnswer')}
           </Button>
         </Space>
       ) : null}
@@ -586,7 +587,7 @@ function NodeEditor({
       {node.type === 'serviceTask' ? (
         <Row gutter={12}>
           <Col span={6}>
-            <Typography.Text type="secondary">Action</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflowEditor.action')}</Typography.Text>
             <Select
               style={{ width: '100%' }}
               value={node.action ?? null}
@@ -597,31 +598,31 @@ function NodeEditor({
             />
           </Col>
           <Col span={5}>
-            <Typography.Text type="secondary">Step name</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflowEditor.stepName')}</Typography.Text>
             <Input value={node.name} onChange={(event) => onChange({ name: event.target.value })} />
           </Col>
           <Col span={7}>
-            <Typography.Text type="secondary">Parameters</Typography.Text>
+            <Typography.Text type="secondary">{t('web.workflowEditor.parameters')}</Typography.Text>
             <ParamsEditor action={node.action ?? ''} params={node.params ?? {}} onChange={(params) => onChange({ params })} />
           </Col>
           <Col span={4}>
-            <Typography.Text type="secondary">Continues at</Typography.Text>
+            <Typography.Text type="secondary">{t('web.processEditor.continuesAt')}</Typography.Text>
             <Select
               style={{ width: '100%' }}
               value={node.next || null}
-              placeholder="next step"
+              placeholder={t('web.processEditor.nextStepPlaceholder')}
               options={targetOptions}
               onChange={(next) => onChange({ next })}
             />
           </Col>
           <Col span={2}>
-            <Typography.Text type="secondary">On error</Typography.Text>
+            <Typography.Text type="secondary">{t('web.processEditor.onError')}</Typography.Text>
             <Select
               style={{ width: '100%' }}
               value={node.onError ?? 'fail'}
               options={[
-                { value: 'fail', label: 'Stop' },
-                { value: 'continue', label: 'Continue' },
+                { value: 'fail', label: t('web.processEditor.stop') },
+                { value: 'continue', label: t('web.processEditor.continueLabel') },
               ]}
               onChange={(onError: 'fail' | 'continue') => onChange({ onError })}
             />
@@ -633,15 +634,15 @@ function NodeEditor({
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
           <Row gutter={12}>
             <Col span={6}>
-              <Typography.Text type="secondary">Step name</Typography.Text>
+              <Typography.Text type="secondary">{t('web.workflowEditor.stepName')}</Typography.Text>
               <Input value={node.name} onChange={(event) => onChange({ name: event.target.value })} />
             </Col>
             <Col span={8}>
-              <Typography.Text type="secondary">When nothing matches, continue at</Typography.Text>
+              <Typography.Text type="secondary">{t('web.processEditor.defaultTarget')}</Typography.Text>
               <Select
                 style={{ width: '100%' }}
                 value={node.default || null}
-                placeholder="default step"
+                placeholder={t('web.processEditor.defaultStepPlaceholder')}
                 options={targetOptions}
                 onChange={(value) => onChange({ default: value })}
               />
@@ -668,7 +669,7 @@ function NodeEditor({
                   size="small"
                   style={{ width: '100%' }}
                   value={branch.next || null}
-                  placeholder="goes to…"
+                  placeholder={t('web.processEditor.goesToPlaceholder')}
                   options={targetOptions}
                   onChange={(next) => {
                     const branches = [...(node.branches ?? [])];
@@ -681,7 +682,7 @@ function NodeEditor({
               </Col>
               <Col span={4}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  first match wins
+                  {t('web.processEditor.firstMatchWins')}
                 </Typography.Text>
               </Col>
               <Col>
@@ -689,7 +690,7 @@ function NodeEditor({
                   size="small"
                   danger
                   icon={<DeleteOutlined />}
-                  aria-label={`Remove branch ${String(index + 1)}`}
+                  aria-label={t('web.processEditor.removeBranchAria', { index: String(index + 1) })}
                   onClick={() => onChange({ branches: (node.branches ?? []).filter((_entry, position) => position !== index) })}
                 />
               </Col>
@@ -700,10 +701,10 @@ function NodeEditor({
             icon={<PlusOutlined />}
             onClick={() => onChange({ branches: [...(node.branches ?? []), { when: '', next: node.default ?? '' }] })}
           >
-            Add condition
+            {t('web.processEditor.addCondition')}
           </Button>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            The sandboxed formula language: <code>field('x')</code> reads the record, <code>context()</code> the answers so far.
+            {t('web.processEditor.formulaHint')}
           </Typography.Text>
         </Space>
       ) : null}
@@ -712,7 +713,7 @@ function NodeEditor({
         <Select
           size="small"
           style={{ width: 220 }}
-          placeholder="Add a step after this one…"
+          placeholder={t('web.workflowEditor.addStep')}
           // A "picker" rather than a value: choosing an entry inserts that step after this node.
           value={null}
           onChange={(value: string) => {
@@ -722,15 +723,15 @@ function NodeEditor({
             else onAddServiceTask(value);
           }}
           options={[
-            { value: '__userTask', label: 'User task (wait for a person)' },
-            { value: '__gateway', label: 'Gateway (branch)' },
-            { value: '__end', label: 'End' },
-            ...(catalog?.actions ?? []).map((action) => ({ value: action.name, label: `Service task: ${action.label}` })),
+            { value: '__userTask', label: t('web.processEditor.addUserTask') },
+            { value: '__gateway', label: t('web.processEditor.addGateway') },
+            { value: '__end', label: t('web.processEditor.addEnd') },
+            ...(catalog?.actions ?? []).map((action) => ({ value: action.name, label: t('web.processEditor.addServiceTask', { label: action.label }) })),
           ]}
         />
-        <Tooltip title="Steps run in list order; answers and conditions name their own targets.">
+        <Tooltip title={t('web.processEditor.continueHint')}>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            ↓ continues to the step below
+            ↓ {t('web.processEditor.continuesBelow')}
           </Typography.Text>
         </Tooltip>
       </Space>
@@ -760,9 +761,9 @@ function AssigneePicker({
         style={{ width: '42%' }}
         value={type}
         options={[
-          { value: 'user', label: 'User' },
-          { value: 'role', label: 'Role' },
-          { value: 'recordField', label: 'Record field' },
+          { value: 'user', label: t('web.processEditor.assigneeUser') },
+          { value: 'role', label: t('web.processEditor.assigneeRole') },
+          { value: 'recordField', label: t('web.processEditor.assigneeRecordField') },
         ]}
         onChange={(nextType: ProcessAssigneeSpec['type']) => onChange({ type: nextType, value: spec?.value ?? '' })}
       />
@@ -779,10 +780,10 @@ function AssigneePicker({
           showSearch
           style={{ width: '58%' }}
           value={spec?.value || null}
-          placeholder={type === 'role' ? 'role name' : 'user'}
+          placeholder={type === 'role' ? t('web.processEditor.roleNamePlaceholder') : t('web.processEditor.userPlaceholder')}
           options={type === 'role' ? roleOptionsWithEmpty(roles, optional) : userOptionsWithEmpty(users, optional)}
           onChange={(value: string) => onChange({ type, value })}
-          notFoundContent={type === 'role' ? 'No roles' : 'No users'}
+          notFoundContent={type === 'role' ? t('web.processEditor.noRoles') : t('web.processEditor.noUsers')}
         />
       )}
     </Space.Compact>
@@ -807,11 +808,11 @@ function InstanceMiniTable({ instances, loading }: { instances: ProcessInstanceV
       loading={loading}
       dataSource={shown}
       pagination={false}
-      locale={{ emptyText: 'No instance of this process has run yet.' }}
+      locale={{ emptyText: t('web.processEditor.noInstances') }}
       columns={[
-        { title: 'Record', render: (_value: unknown, row) => `${row.entityType}/${row.entityId}` },
+        { title: t('web.adminAudit.record'), render: (_value: unknown, row) => `${row.entityType}/${row.entityId}` },
         {
-          title: 'Status',
+          title: t('web.common.status'),
           dataIndex: 'status',
           render: (status: string, row) => (
             <Space size={4}>
@@ -820,8 +821,8 @@ function InstanceMiniTable({ instances, loading }: { instances: ProcessInstanceV
             </Space>
           ),
         },
-        { title: 'Started', render: (_value: unknown, row) => row.startedAt.slice(0, 19).replace('T', ' ') },
-        { title: 'Error', dataIndex: 'error', render: (error: string | null) => error ?? '—' },
+        { title: t('web.workflows.started'), render: (_value: unknown, row) => row.startedAt.slice(0, 19).replace('T', ' ') },
+        { title: t('web.workflows.error'), dataIndex: 'error', render: (error: string | null) => error ?? '—' },
       ]}
     />
   );

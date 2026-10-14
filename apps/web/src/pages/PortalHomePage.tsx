@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
+import { t } from '../state/i18n.js';
 import { portalBase, usePortalContext } from '../state/portal.js';
 import { DashletResult } from './DashletResult.js';
 
@@ -42,7 +43,7 @@ export function PortalHomePage() {
     return <Skeleton active paragraph={{ rows: 6 }} />;
   }
   if (context.error || !context.data) {
-    return <Alert type="error" message="This portal is not available for your account." />;
+    return <Alert type="error" message={t('web.portal.unavailable')} />;
   }
 
   const { portal, user, contact, roles, nav } = context.data;
@@ -50,19 +51,19 @@ export function PortalHomePage() {
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Card className="lizant-card" title={`${portal.name} — Welcome, ${user.firstName ?? user.userName}`}>
+      <Card className="lizant-card" title={t('web.portal.welcome', { portal: portal.name, user: user.firstName ?? user.userName })}>
         <Descriptions size="small" column={2} bordered>
-          <Descriptions.Item label="Signed in as">{user.userName}</Descriptions.Item>
-          <Descriptions.Item label="Contact">
+          <Descriptions.Item label={t('web.portal.signedInAs')}>{user.userName}</Descriptions.Item>
+          <Descriptions.Item label={t('web.portal.contact')}>
             {contact ? `${contact.name ?? contact.id}` : '—'}
           </Descriptions.Item>
-          <Descriptions.Item label="Portal roles">{roles.length > 0 ? roles.map((role) => role.name).join(', ') : '—'}</Descriptions.Item>
-          <Descriptions.Item label="Portal">{portal.name}</Descriptions.Item>
+          <Descriptions.Item label={t('web.portal.roles')}>{roles.length > 0 ? roles.map((role) => role.name).join(', ') : '—'}</Descriptions.Item>
+          <Descriptions.Item label={t('web.portal.portal')}>{portal.name}</Descriptions.Item>
         </Descriptions>
       </Card>
 
       {nav.length > 0 ? (
-        <Card className="lizant-card" size="small" title="Navigate">
+        <Card className="lizant-card" size="small" title={t('web.portal.navigate')}>
           <Row gutter={[12, 12]}>
             {nav.map((item) => (
               <Col key={item.id} xs={12} sm={8} md={6}>
@@ -75,7 +76,7 @@ export function PortalHomePage() {
         </Card>
       ) : null}
 
-      <Card className="lizant-card" title={dashboard?.name ?? 'Dashboard'} loading={running}>
+      <Card className="lizant-card" title={dashboard?.name ?? t('web.portal.dashboard')} loading={running}>
         {dashboard && dashboard.dashlets.length > 0 ? (
           <Row gutter={[12, 12]}>
             {dashboard.dashlets.map((dashlet) => (
@@ -87,11 +88,11 @@ export function PortalHomePage() {
             ))}
           </Row>
         ) : (
-          <Empty description="No dashboard is configured for this portal yet." />
+          <Empty description={t('web.portal.noDashboard')} />
         )}
       </Card>
       <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-        You are signed in to an external portal. Only records related to your contact and account are visible here (PLAN §37).
+        {t('web.portal.footnote')}
       </Typography.Paragraph>
     </Space>
   );

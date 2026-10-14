@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { Metadata, ProcessInstanceView, ProcessView } from '../api/types.js';
+import { t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { useProcesses, useProcessInstances } from '../state/processes.js';
 import { useSession } from '../state/session.js';
@@ -70,21 +71,21 @@ export function ProcessesPage() {
             {
               id: 'review',
               type: 'userTask',
-              name: 'Review',
+              name: t('web.processEditor.defaultUserTaskName'),
               // Whoever the record points at reviews it — change the assignee in the editor.
               assignee: { type: 'recordField', value: 'assignedUserId' },
               outcomes: [
-                { value: 'approved', label: 'Approve', next: 'done' },
-                { value: 'rejected', label: 'Reject', next: 'rejected' },
+                { value: 'approved', label: t('web.processEditor.defaultApprove'), next: 'done' },
+                { value: 'rejected', label: t('web.processEditor.defaultReject'), next: 'rejected' },
               ],
             },
-            { id: 'done', type: 'end', name: 'Approved', outcome: 'approved' },
-            { id: 'rejected', type: 'end', name: 'Rejected', outcome: 'rejected' },
+            { id: 'done', type: 'end', name: t('web.processEditor.defaultApproved'), outcome: 'approved' },
+            { id: 'rejected', type: 'end', name: t('web.processEditor.defaultRejected'), outcome: 'rejected' },
           ],
         },
       }),
     onSuccess: (process) => {
-      void message.success(`Process "${process.name}" created as a draft.`);
+      void message.success(t('web.processes.created', { name: process.name }));
       setCreating(false);
       form.resetFields();
       refresh();
@@ -95,7 +96,7 @@ export function ProcessesPage() {
   const publish = useMutation({
     mutationFn: (id: string) => api.publishProcess(id),
     onSuccess: (process) => {
-      void message.success(`Version ${String(process.currentVersion)} published. Enable the process to let it start.`);
+      void message.success(t('web.processes.published', { version: String(process.currentVersion) }));
       refresh();
     },
     onError: (error: Error) => void message.error(error.message),
@@ -104,7 +105,7 @@ export function ProcessesPage() {
   const toggle = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => api.setProcessEnabled(id, enabled),
     onSuccess: (process) => {
-      void message.success(`${process.name} ${process.isActive ? 'enabled' : 'disabled'}.`);
+      void message.success(process.isActive ? t('web.processes.enabledNotice', { name: process.name }) : t('web.processes.disabledNotice', { name: process.name }));
       refresh();
     },
     onError: (error: Error) => void message.error(error.message),
@@ -113,14 +114,14 @@ export function ProcessesPage() {
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteProcess(id),
     onSuccess: () => {
-      void message.success('Process deleted. Its instances keep their history.');
+      void message.success(t('web.processes.deleted'));
       refresh();
     },
     onError: (error: Error) => void message.error(error.message),
   });
 
   if (!admin) {
-    return <Alert type="error" message="Administrator access is required to manage processes." />;
+    return <Alert type="error" message={t('web.admin.accessRequiredProcesses')} />;
   }
 
   const rows: ProcessView[] = processes.data?.list ?? [];
@@ -128,29 +129,27 @@ export function ProcessesPage() {
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Card
-        title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>Processes</Typography.Title>}
+        title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{t('web.processes.title')}</Typography.Title>}
         extra={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={refresh} loading={processes.isFetching || instances.isFetching}>
-              Refresh
+              {t('core.common.refresh')}
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
-              New process
+              {t('web.processes.new')}
             </Button>
           </Space>
         }
       >
         <Typography.Paragraph type="secondary">
-          A process is a multi-step approval: it parks at a <strong>user task</strong>, waits for a decision, then runs service
-          steps and branches on conditions until it ends. Nothing starts until the definition is <strong>published</strong> and the
-          process is <strong>enabled</strong>. Timers on a task mark it overdue and escalate it to someone else.
+          {t('web.processes.subtitle')}
         </Typography.Paragraph>
 
         <Tabs
           items={[
             {
               key: 'definitions',
-              label: `Definitions (${String(rows.length)})`,
+              label: t('web.processes.tabDefinitions', { n: String(rows.length) }),
               children: (
                 <Table<ProcessView>
                   rowKey="id"
@@ -158,10 +157,10 @@ export function ProcessesPage() {
                   loading={processes.isFetching}
                   dataSource={rows}
                   pagination={false}
-                  locale={{ emptyText: 'No processes yet. Create one to add a human approval to a record flow.' }}
+                  locale={{ emptyText: t('web.processes.noProcesses') }}
                   columns={[
                     {
-                      title: 'Process',
+                      title: t('web.processes.process'),
                       dataIndex: 'name',
                       render: (name: string, row) => (
                         <Space direction="vertical" size={0}>
@@ -173,32 +172,32 @@ export function ProcessesPage() {
                       ),
                     },
                     {
-                      title: 'Version',
+                      title: t('web.workflows.version'),
                       width: 180,
                       render: (_value: unknown, row) => (
                         <Space size={4} wrap>
-                          <Tag>draft v{row.currentVersion ?? '—'}</Tag>
+                          <Tag>{t('web.workflows.draftVersion', { version: String(row.currentVersion ?? '—') })}</Tag>
                           {row.publishedVersion !== null ? (
-                            <Tag color="blue">published v{row.publishedVersion}</Tag>
+                            <Tag color="blue">{t('web.workflows.publishedVersion', { version: String(row.publishedVersion) })}</Tag>
                           ) : (
-                            <Tag>not published</Tag>
+                            <Tag>{t('web.workflows.notPublished')}</Tag>
                           )}
                         </Space>
                       ),
                     },
                     {
-                      title: 'Problems',
+                      title: t('web.workflows.problems'),
                       render: (_value: unknown, row) =>
                         row.issues.length === 0 ? (
-                          <Tag color="green">valid</Tag>
+                          <Tag color="green">{t('web.workflows.valid')}</Tag>
                         ) : (
                           <Tag color="red" title={row.issues.map((issue) => issue.message).join('\n')}>
-                            {String(row.issues.length)} issue(s)
+                            {t('web.workflows.issues', { issues: String(row.issues.length) })}
                           </Tag>
                         ),
                     },
                     {
-                      title: 'Enabled',
+                      title: t('web.workflows.enabled'),
                       width: 110,
                       render: (_value: unknown, row) => (
                         <Switch
@@ -216,17 +215,17 @@ export function ProcessesPage() {
                         <Space>
                           <Link to={`/admin/processes/${row.id}`}>
                             <Button size="small" icon={<EditOutlined />}>
-                              Edit
+                              {t('web.workflows.edit')}
                             </Button>
                           </Link>
-                          <Popconfirm title="Publish this draft?" description="The published version becomes immutable and is what new instances run against.">
+                          <Popconfirm title={t('web.processes.publishConfirm')} description={t('web.processes.publishHint')}>
                             <Button size="small" icon={<ThunderboltOutlined />} disabled={row.issues.length > 0} onClick={() => publish.mutate(row.id)}>
-                              Publish
+                              {t('web.workflows.publish')}
                             </Button>
                           </Popconfirm>
-                          <Popconfirm title="Delete this process?" description="No new instances can start. Running instances keep their own copy of the version." >
+                          <Popconfirm title={t('web.processes.deleteConfirm')} description={t('web.processes.deleteHint')} >
                             <Button size="small" danger icon={<DeleteOutlined />} onClick={() => remove.mutate(row.id)}>
-                              Delete
+                              {t('web.common.delete')}
                             </Button>
                           </Popconfirm>
                         </Space>
@@ -238,7 +237,7 @@ export function ProcessesPage() {
             },
             {
               key: 'instances',
-              label: `Instances (${String(instances.data?.total ?? 0)})`,
+              label: t('web.processes.tabInstances', { n: String(instances.data?.total ?? 0) }),
               children: <InstanceTable instances={instances.data?.list ?? []} loading={instances.isFetching} onChanged={refresh} />,
             },
           ]}
@@ -247,8 +246,8 @@ export function ProcessesPage() {
 
       <Modal
         open={creating}
-        title="New process"
-        okText="Create draft"
+        title={t('web.processes.new')}
+        okText={t('web.workflows.createDraft')}
         onCancel={() => setCreating(false)}
         onOk={() => form.submit()}
         confirmLoading={create.isPending}
@@ -256,22 +255,22 @@ export function ProcessesPage() {
         <Form form={form} layout="vertical" onFinish={(values) => create.mutate(values)} initialValues={{ entityType: 'Account' }}>
           <Form.Item
             name="key"
-            label="Key"
+            label={t('web.processes.key')}
             rules={[
-              { required: true, message: 'The key is how instances name this process.' },
-              { pattern: /^[a-z][a-z0-9-]{1,63}$/, message: 'Lowercase letters, digits and dashes, starting with a letter.' },
+              { required: true, message: t('web.processes.keyHint') },
+              { pattern: /^[a-z][a-z0-9-]{1,63}$/, message: t('web.processes.keyPattern') },
             ]}
           >
             <Input placeholder="discount-approval" />
           </Form.Item>
-          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'A process needs a name.' }]}>
-            <Input placeholder="Discount approval" />
+          <Form.Item name="name" label={t('web.common.name')} rules={[{ required: true, message: t('web.processes.nameRequired') }]}>
+            <Input placeholder={t('web.processes.namePlaceholder')} />
           </Form.Item>
-          <Form.Item name="entityType" label="Record type" rules={[{ required: true }]}>
+          <Form.Item name="entityType" label={t('web.processes.recordType')} rules={[{ required: true }]}>
             <Select showSearch options={entityOptions(metadata.data)} />
           </Form.Item>
           <Typography.Text type="secondary">
-            The draft starts with one review step and two end states; the editor lets you add service steps, gateways and timers.
+            {t('web.processes.createHint')}
           </Typography.Text>
         </Form>
       </Modal>
@@ -293,7 +292,7 @@ function InstanceTable({ instances, loading, onChanged }: { instances: ProcessIn
   const cancel = useMutation({
     mutationFn: (id: string) => api.cancelProcessInstance(id),
     onSuccess: (instance) => {
-      void message.success('Process cancelled.');
+      void message.success(t('web.processes.cancelled'));
       setOpen(instance);
       onChanged();
     },
@@ -308,10 +307,10 @@ function InstanceTable({ instances, loading, onChanged }: { instances: ProcessIn
         loading={loading}
         dataSource={instances}
         pagination={false}
-        locale={{ emptyText: 'No process instances yet.' }}
+        locale={{ emptyText: t('web.processes.noInstances') }}
         columns={[
           {
-            title: 'Process',
+            title: t('web.processes.process'),
             dataIndex: 'processName',
             render: (name: string, row) => (
               <Space direction="vertical" size={0}>
@@ -323,22 +322,22 @@ function InstanceTable({ instances, loading, onChanged }: { instances: ProcessIn
             ),
           },
           {
-            title: 'Status',
+            title: t('web.common.status'),
             width: 130,
             render: (_value: unknown, row) => (
               <Space direction="vertical" size={0}>
                 <Tag color={INSTANCE_STATUS_COLORS[row.status] ?? 'default'}>{row.status}</Tag>
-                {row.outcome !== null ? <Typography.Text type="secondary">outcome: {row.outcome}</Typography.Text> : null}
+                {row.outcome !== null ? <Typography.Text type="secondary">{t('web.processes.outcome', { outcome: row.outcome })}</Typography.Text> : null}
               </Space>
             ),
           },
           {
-            title: 'Tasks',
+            title: t('web.processes.tasks'),
             width: 140,
             render: (_value: unknown, row) => {
               const openTasks = row.tasks.filter((task) => task.status === 'open' || task.status === 'overdue' || task.status === 'escalated');
               return openTasks.length === 0 ? (
-                <Typography.Text type="secondary">all answered</Typography.Text>
+                <Typography.Text type="secondary">{t('web.processes.allAnswered')}</Typography.Text>
               ) : (
                 <Space size={4} wrap>
                   {openTasks.map((task) => (
@@ -350,44 +349,44 @@ function InstanceTable({ instances, loading, onChanged }: { instances: ProcessIn
               );
             },
           },
-          { title: 'Started', width: 160, render: (_value: unknown, row) => row.startedAt.slice(0, 19).replace('T', ' ') },
-          { title: 'Error', dataIndex: 'error', render: (error: string | null) => error ?? '—' },
+          { title: t('web.workflows.started'), width: 160, render: (_value: unknown, row) => row.startedAt.slice(0, 19).replace('T', ' ') },
+          { title: t('web.workflows.error'), dataIndex: 'error', render: (error: string | null) => error ?? '—' },
           {
             title: '',
             width: 110,
             render: (_value: unknown, row) =>
               row.status === 'running' || row.status === 'waiting' ? (
-                <Popconfirm title="Cancel this process?" description="Open tasks are cancelled and the flow stops here.">
+                <Popconfirm title={t('web.processes.cancelConfirm')} description={t('web.processes.cancelHint')}>
                   <Button size="small" danger icon={<StopOutlined />} onClick={() => cancel.mutate(row.id)}>
-                    Cancel
+                    {t('web.processes.cancel')}
                   </Button>
                 </Popconfirm>
               ) : (
                 <Button size="small" onClick={() => setOpen(row)}>
-                  Trail
+                  {t('web.processes.trail')}
                 </Button>
               ),
           },
         ]}
       />
 
-      <Modal open={open !== null} title={open === null ? '' : `${open.processName} — audit trail`} footer={null} width={720} onCancel={() => setOpen(null)}>
+      <Modal open={open !== null} title={open === null ? '' : t('web.processes.auditTrail', { name: open.processName })} footer={null} width={720} onCancel={() => setOpen(null)}>
         {open === null ? null : (
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <Descriptions size="small" column={2} bordered>
-              <Descriptions.Item label="Status">
+              <Descriptions.Item label={t('web.common.status')}>
                 <Tag color={INSTANCE_STATUS_COLORS[open.status] ?? 'default'}>{open.status}</Tag>
                 {open.outcome !== null ? <Tag>{open.outcome}</Tag> : null}
               </Descriptions.Item>
-              <Descriptions.Item label="Record">
+              <Descriptions.Item label={t('web.adminAudit.record')}>
                 <Link to={`/${open.entityType}/${open.entityId}`}>
                   {open.entityType}/{open.entityId}
                 </Link>
               </Descriptions.Item>
-              <Descriptions.Item label="Version">v{open.version ?? '—'}</Descriptions.Item>
-              <Descriptions.Item label="Started">{open.startedAt.slice(0, 19).replace('T', ' ')}</Descriptions.Item>
+              <Descriptions.Item label={t('web.processes.version')}>{t('web.processes.versionValue', { version: String(open.version ?? '—') })}</Descriptions.Item>
+              <Descriptions.Item label={t('web.workflows.started')}>{open.startedAt.slice(0, 19).replace('T', ' ')}</Descriptions.Item>
               {open.error !== null ? (
-                <Descriptions.Item label="Error" span={2}>
+                <Descriptions.Item label={t('web.workflows.error')} span={2}>
                   <Typography.Text type="danger">{open.error}</Typography.Text>
                 </Descriptions.Item>
               ) : null}
@@ -397,19 +396,19 @@ function InstanceTable({ instances, loading, onChanged }: { instances: ProcessIn
               rowKey="id"
               size="small"
               pagination={false}
-              title={() => 'Tasks'}
+              title={() => t('web.processes.tasks')}
               dataSource={open.tasks}
-              locale={{ emptyText: 'No task was created.' }}
+              locale={{ emptyText: t('web.processes.noTasks') }}
               columns={[
-                { title: 'Step', dataIndex: 'name' },
+                { title: t('web.workflowEditor.step'), dataIndex: 'name' },
                 {
-                  title: 'Status',
+                  title: t('web.common.status'),
                   dataIndex: 'status',
                   render: (status: string) => <Tag color={TASK_STATUS_COLORS[status] ?? 'default'}>{status}</Tag>,
                 },
-                { title: 'Assignee', render: (_value: unknown, row) => row.assigneeId ?? row.assigneeRoleId ?? '—' },
+                { title: t('web.processes.assignee'), render: (_value: unknown, row) => row.assigneeId ?? row.assigneeRoleId ?? '—' },
                 {
-                  title: 'Answer',
+                  title: t('web.tasks.columnAnswer'),
                   render: (_value: unknown, row) =>
                     row.outcome === null ? (
                       '—'
@@ -420,7 +419,7 @@ function InstanceTable({ instances, loading, onChanged }: { instances: ProcessIn
                       </Space>
                     ),
                 },
-                { title: 'Due', render: (_value: unknown, row) => (row.dueAt === null ? '—' : row.dueAt.slice(0, 19).replace('T', ' ')) },
+                { title: t('web.common.due'), render: (_value: unknown, row) => (row.dueAt === null ? '—' : row.dueAt.slice(0, 19).replace('T', ' ')) },
               ]}
             />
 
@@ -428,13 +427,13 @@ function InstanceTable({ instances, loading, onChanged }: { instances: ProcessIn
               rowKey="id"
               size="small"
               pagination={false}
-              title={() => 'Events'}
+              title={() => t('web.processes.events')}
               dataSource={open.events}
-              locale={{ emptyText: 'No events recorded.' }}
+              locale={{ emptyText: t('web.processes.noEvents') }}
               columns={[
-                { title: 'When', width: 160, render: (_value: unknown, row) => row.createdAt.slice(0, 19).replace('T', ' ') },
-                { title: 'Event', dataIndex: 'type', width: 160, render: (type: string) => <Tag>{type}</Tag> },
-                { title: 'What happened', dataIndex: 'message' },
+                { title: t('web.adminAudit.when'), width: 160, render: (_value: unknown, row) => row.createdAt.slice(0, 19).replace('T', ' ') },
+                { title: t('web.processes.event'), dataIndex: 'type', width: 160, render: (type: string) => <Tag>{type}</Tag> },
+                { title: t('web.processes.whatHappened'), dataIndex: 'message' },
               ]}
             />
           </Space>

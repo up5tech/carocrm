@@ -2,6 +2,7 @@ import { Alert, Button, Form, Input } from 'antd';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
 
 export function LoginPage() {
@@ -17,7 +18,7 @@ export function LoginPage() {
           <span className="lizant-brand-mark">C</span>
           <span>CaroCRM</span>
         </div>
-        <p className="lizant-auth-sub">Sign in to your workspace</p>
+        <p className="lizant-auth-sub">{t('web.login.subtitle')}</p>
         <Form
           form={form}
           layout="vertical"
@@ -28,15 +29,15 @@ export function LoginPage() {
             if (ok) navigate('/home', { replace: true });
           }}
         >
-          <Form.Item name="userName" label="User name" rules={[{ required: true }]}>
+          <Form.Item name="userName" label={t('web.login.userName')} rules={[{ required: true }]}>
             <Input autoFocus autoComplete="username" size="large" />
           </Form.Item>
-          <Form.Item name="password" label="Password" rules={[{ required: true }]}>
+          <Form.Item name="password" label={t('web.login.password')} rules={[{ required: true }]}>
             <Input.Password autoComplete="current-password" size="large" />
           </Form.Item>
           {error ? <Alert type="error" showIcon message={error} style={{ marginBottom: 16 }} /> : null}
           <Button type="primary" htmlType="submit" size="large" block loading={submitting || loading}>
-            Sign in
+            {t('web.login.submit')}
           </Button>
         </Form>
       </div>

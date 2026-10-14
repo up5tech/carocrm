@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { Metadata, WorkflowRunStatus, WorkflowRunView, WorkflowView } from '../api/types.js';
+import { t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
 import { useWorkflowCatalog, useWorkflowRuns, useWorkflows } from '../state/workflows.js';
@@ -61,7 +62,7 @@ export function WorkflowsPage() {
             {
               id: 'start',
               type: 'action',
-              name: 'Update the record',
+              name: t('web.workflows.defaultActionName'),
               action: 'updateRecord',
               params: { fields: {} },
             },
@@ -69,7 +70,7 @@ export function WorkflowsPage() {
         },
       }),
     onSuccess: (workflow) => {
-      void message.success(`Workflow "${workflow.name}" created as a draft.`);
+      void message.success(t('web.workflows.created', { name: workflow.name }));
       setCreating(false);
       form.resetFields();
       refresh();
@@ -80,7 +81,7 @@ export function WorkflowsPage() {
   const publish = useMutation({
     mutationFn: (id: string) => api.publishWorkflow(id),
     onSuccess: (workflow) => {
-      void message.success(`Version ${String(workflow.currentVersion)} published. Enable the workflow to let it run.`);
+      void message.success(t('web.workflows.published', { version: String(workflow.currentVersion) }));
       refresh();
     },
     onError: (error: Error) => void message.error(error.message),
@@ -89,7 +90,7 @@ export function WorkflowsPage() {
   const toggle = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => api.setWorkflowEnabled(id, enabled),
     onSuccess: (workflow) => {
-      void message.success(`${workflow.name} ${workflow.isActive ? 'enabled' : 'disabled'}.`);
+      void message.success(workflow.isActive ? t('web.workflows.enabledNotice', { name: workflow.name }) : t('web.workflows.disabledNotice', { name: workflow.name }));
       refresh();
     },
     onError: (error: Error) => void message.error(error.message),
@@ -98,14 +99,14 @@ export function WorkflowsPage() {
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteWorkflow(id),
     onSuccess: () => {
-      void message.success('Workflow deleted.');
+      void message.success(t('web.workflows.deleted'));
       refresh();
     },
     onError: (error: Error) => void message.error(error.message),
   });
 
   if (!admin) {
-    return <Alert type="error" message="Administrator access is required to manage workflows." />;
+    return <Alert type="error" message={t('web.admin.accessRequiredWorkflows')} />;
   }
 
   const rows: WorkflowView[] = workflows.data?.list ?? [];
@@ -113,11 +114,11 @@ export function WorkflowsPage() {
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Card
-        title="Workflows"
+        title={t('web.workflows.title')}
         extra={
           <Space>
             <Button icon={<ReloadOutlined />} onClick={refresh} loading={workflows.isFetching}>
-              Refresh
+              {t('core.common.refresh')}
             </Button>
             <Button
               type="primary"
@@ -125,15 +126,13 @@ export function WorkflowsPage() {
               onClick={() => setCreating(true)}
               disabled={(catalog.data?.events.length ?? 0) === 0}
             >
-              New workflow
+              {t('web.workflows.new')}
             </Button>
           </Space>
         }
       >
         <Typography.Paragraph type="secondary">
-          A workflow reacts to an entity event and runs a small graph of conditions and actions. Nothing runs until the
-          definition is <strong>published</strong> and the workflow is <strong>enabled</strong>; editing a published workflow creates a
-          new version and leaves the running one alone.
+          {t('web.workflows.subtitle')}
         </Typography.Paragraph>
 
         <Table<WorkflowView>
@@ -142,10 +141,10 @@ export function WorkflowsPage() {
           loading={workflows.isFetching}
           dataSource={rows}
           pagination={false}
-          locale={{ emptyText: 'No workflows yet. Create one to automate a recurring process.' }}
+          locale={{ emptyText: t('web.workflows.empty') }}
           columns={[
             {
-              title: 'Workflow',
+              title: t('web.workflows.workflow'),
               dataIndex: 'name',
               render: (name: string, row) => (
                 <Space direction="vertical" size={0}>
@@ -157,28 +156,28 @@ export function WorkflowsPage() {
               ),
             },
             {
-              title: 'Version',
+              title: t('web.workflows.version'),
               width: 180,
               render: (_value: unknown, row) => (
                 <Space size={4} wrap>
-                  <Tag>draft v{row.currentVersion ?? '—'}</Tag>
-                  {row.publishedVersion !== null ? <Tag color="blue">published v{row.publishedVersion}</Tag> : <Tag>not published</Tag>}
+                  <Tag>{t('web.workflows.draftVersion', { version: String(row.currentVersion ?? '—') })}</Tag>
+                  {row.publishedVersion !== null ? <Tag color="blue">{t('web.workflows.publishedVersion', { version: String(row.publishedVersion) })}</Tag> : <Tag>{t('web.workflows.notPublished')}</Tag>}
                 </Space>
               ),
             },
             {
-              title: 'Problems',
+              title: t('web.workflows.problems'),
               render: (_value: unknown, row) =>
                 row.issues.length === 0 ? (
-                  <Tag color="green">valid</Tag>
+                  <Tag color="green">{t('web.workflows.valid')}</Tag>
                 ) : (
                   <Tag color="red" title={row.issues.map((issue) => issue.message).join('\n')}>
-                    {String(row.issues.length)} issue(s)
+                    {t('web.workflows.issues', { issues: String(row.issues.length) })}
                   </Tag>
                 ),
             },
             {
-              title: 'Enabled',
+              title: t('web.workflows.enabled'),
               width: 110,
               render: (_value: unknown, row) => (
                 <Switch
@@ -196,17 +195,17 @@ export function WorkflowsPage() {
                 <Space>
                   <Link to={`/admin/workflows/${row.id}`}>
                     <Button size="small" icon={<EditOutlined />}>
-                      Edit
+                      {t('web.workflows.edit')}
                     </Button>
                   </Link>
-                  <Popconfirm title="Publish this draft?" description="The published version becomes immutable and is what runs use.">
+                  <Popconfirm title={t('web.workflows.publishConfirm')} description={t('web.workflows.publishHint')}>
                     <Button size="small" icon={<ThunderboltOutlined />} disabled={row.issues.length > 0} onClick={() => publish.mutate(row.id)}>
-                      Publish
+                      {t('web.workflows.publish')}
                     </Button>
                   </Popconfirm>
-                  <Popconfirm title="Delete this workflow?" description="Its run history is removed too. This cannot be undone.">
+                  <Popconfirm title={t('web.workflows.deleteConfirm')} description={t('web.workflows.deleteHint')}>
                     <Button size="small" danger icon={<DeleteOutlined />} onClick={() => remove.mutate(row.id)}>
-                      Delete
+                      {t('web.common.delete')}
                     </Button>
                   </Popconfirm>
                 </Space>
@@ -216,40 +215,40 @@ export function WorkflowsPage() {
         />
       </Card>
 
-      <Card title="Recent runs">
+      <Card title={t('web.workflows.recentRuns')}>
         <Table<WorkflowRunView>
           rowKey="id"
           size="small"
           loading={runs.isFetching}
           dataSource={runs.data?.list ?? []}
           pagination={false}
-          locale={{ emptyText: 'No workflow has run yet.' }}
+          locale={{ emptyText: t('web.workflows.noRuns') }}
           columns={[
-            { title: 'Workflow', dataIndex: 'workflowName' },
+            { title: t('web.workflows.workflow'), dataIndex: 'workflowName' },
             {
-              title: 'Record',
+              title: t('web.adminAudit.record'),
               render: (_value: unknown, row) => `${row.entityType}/${row.entityId}`,
             },
             {
-              title: 'Status',
+              title: t('web.common.status'),
               dataIndex: 'status',
               render: (status: WorkflowRunStatus, row: WorkflowRunView) => (
                 <Space size={4}>
                   <Tag color={RUN_STATUS_COLORS[status] ?? 'default'}>{status}</Tag>
-                  {row.attempt > 1 ? <Tag>attempt {row.attempt}</Tag> : null}
+                  {row.attempt > 1 ? <Tag>{t('web.workflows.attempt', { attempt: String(row.attempt) })}</Tag> : null}
                 </Space>
               ),
             },
-            { title: 'Started', render: (_v: unknown, row) => row.startedAt.slice(0, 19).replace('T', ' ') },
-            { title: 'Error', dataIndex: 'error', render: (error: string | null) => error ?? '—' },
+            { title: t('web.workflows.started'), render: (_v: unknown, row) => row.startedAt.slice(0, 19).replace('T', ' ') },
+            { title: t('web.workflows.error'), dataIndex: 'error', render: (error: string | null) => error ?? '—' },
           ]}
         />
       </Card>
 
       <Modal
         open={creating}
-        title="New workflow"
-        okText="Create draft"
+        title={t('web.workflows.new')}
+        okText={t('web.workflows.createDraft')}
         onCancel={() => setCreating(false)}
         onOk={() => form.submit()}
         confirmLoading={create.isPending}
@@ -260,21 +259,21 @@ export function WorkflowsPage() {
           onFinish={(values) => create.mutate(values)}
           initialValues={{ eventType: catalog.data?.events[0] ?? 'entity.created', entityType: '*' }}
         >
-          <Form.Item name="name" label="Name" rules={[{ required: true, message: 'A workflow needs a name.' }]}>
-            <Input placeholder="Notify owner on big deal" />
+          <Form.Item name="name" label={t('web.common.name')} rules={[{ required: true, message: t('web.workflows.nameRequired') }]}>
+            <Input placeholder={t('web.workflows.namePlaceholder')} />
           </Form.Item>
-          <Form.Item name="eventType" label="When" rules={[{ required: true }]}>
+          <Form.Item name="eventType" label={t('web.workflows.when')} rules={[{ required: true }]}>
             <Select
               options={(catalog.data?.events ?? []).map((event) => ({
                 value: event,
-                label: event === 'entity.created' ? 'A record is created' : event === 'entity.updated' ? 'A record is updated' : event === 'entity.deleted' ? 'A record is deleted' : 'A record is restored',
+                label: event === 'entity.created' ? t('web.workflows.eventCreated') : event === 'entity.updated' ? t('web.workflows.eventUpdated') : event === 'entity.deleted' ? t('web.workflows.eventDeleted') : t('web.workflows.eventRestored'),
               }))}
             />
           </Form.Item>
-          <Form.Item name="entityType" label="Entity type" rules={[{ required: true }]} help="Use * for every entity type.">
+          <Form.Item name="entityType" label={t('web.workflows.entityType')} rules={[{ required: true }]} help={t('web.workflows.entityTypeHint')}>
             <Select
               showSearch
-              options={[{ value: '*', label: 'Any entity' }, ...entityOptions(metadata.data)]}
+              options={[{ value: '*', label: t('web.workflows.anyEntity') }, ...entityOptions(metadata.data)]}
             />
           </Form.Item>
         </Form>
