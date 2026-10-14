@@ -1,12 +1,12 @@
-import { ArrowLeftOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, App as AntApp, Button, Card, Col, Empty, Form, Input, InputNumber, Popconfirm, Row, Select, Space, Switch, Table, Tabs, Tag, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Col, Empty, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Switch, Table, Tabs, Tag, Typography } from 'antd';
 import { useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition, IndexDefinition, LayoutDefinition, LayoutPanel, LayoutViewType, Role } from '../api/types.js';
-import { useMetadata } from '../state/metadata.js';
+import { fieldLabel, useMetadata } from '../state/metadata.js';
 
 const FIELD_TYPES = ['varchar', 'text', 'int', 'float', 'decimal', 'bool', 'date', 'datetime', 'enum', 'multiEnum', 'currency', 'url', 'email', 'phone', 'link', 'linkMultiple', 'formula'];
 const RELATION_TYPES = ['oneToMany', 'manyToOne', 'manyToMany'];
@@ -61,6 +61,7 @@ const RULE_ACTIONS = [
 
 interface FieldDraft {
   name: string;
+  label?: string | undefined;
   type: string;
   entityKey?: string | undefined;
   required?: boolean | undefined;
@@ -99,6 +100,7 @@ interface IndexDraft {
 
 function buildFieldDefinition(draft: FieldDraft): FieldDefinition {
   const field: FieldDefinition = { type: draft.type };
+  if (draft.label && draft.label.trim() !== '') field.label = draft.label.trim();
   if (draft.required) field.required = true;
   if (draft.maxLength) field.maxLength = draft.maxLength;
   if (draft.entityKey) field.entityKey = draft.entityKey;
@@ -256,12 +258,26 @@ function SettingsTab({ entity, patch }: { entity: EntityDefinition; patch: (body
   );
 }
 
-/** Field definitions of one entity (PLAN §8). */
+/** Field definitions of one entity (PLAN §8) — labels are managed here too: set on create, renamed per field below. */
 function FieldsTab({ entity, patch }: { entity: EntityDefinition; patch: (body: Record<string, unknown>, okText: string) => void }) {
   const { message } = AntApp.useApp();
   const metadata = useMetadata();
   const [form] = Form.useForm<FieldDraft>();
   const fieldType = Form.useWatch('type', form);
+  const [rename, setRename] = useState<{ name: string; label: string } | null>(null);
+
+  // The metadata patch replaces a field entry wholesale, so a label rename sends the whole
+  // definition back with only the label changed.
+  const renameField = () => {
+    if (!rename) return;
+    const label = rename.label.trim();
+    if (label === '') {
+      void message.warning('A label cannot be empty.');
+      return;
+    }
+    patch({ fields: { [rename.name]: { ...entity.fields[rename.name], label } } }, 'Field label updated.');
+    setRename(null);
+  };
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -274,6 +290,11 @@ function FieldsTab({ entity, patch }: { entity: EntityDefinition; patch: (body: 
         columns={[
           { title: 'Name', dataIndex: 'name' },
           {
+            title: 'Label',
+            dataIndex: 'label',
+            render: (value: string | undefined, row) => value ?? fieldLabel(row.name, row, metadata.data),
+          },
+          {
             title: 'Type',
             dataIndex: 'type',
             render: (type: string, row) => (
@@ -284,6 +305,18 @@ function FieldsTab({ entity, patch }: { entity: EntityDefinition; patch: (body: 
             ),
           },
           { title: 'Required', dataIndex: 'required', render: (value: boolean | undefined) => (value ? 'yes' : 'no') },
+          {
+            title: '',
+            key: 'rename',
+            render: (_: unknown, row) => (
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                aria-label={`Edit label of field ${row.name}`}
+                onClick={() => setRename({ name: row.name, label: row.label ?? '' })}
+              />
+            ),
+          },
           {
             title: '',
             key: 'disable',
@@ -303,6 +336,25 @@ function FieldsTab({ entity, patch }: { entity: EntityDefinition; patch: (body: 
           },
         ]}
       />
+      <Modal
+        title={rename ? `Field label — ${rename.name}` : 'Field label'}
+        open={rename !== null}
+        okText="Save"
+        cancelText="Cancel"
+        onOk={renameField}
+        onCancel={() => setRename(null)}
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+          The label is what lists, detail views and forms show instead of the technical field name.
+        </Typography.Paragraph>
+        <Input
+          aria-label="Field label"
+          value={rename?.label ?? ''}
+          placeholder={fieldLabel(rename?.name ?? '', rename ? entity.fields[rename.name] : undefined, metadata.data)}
+          onChange={(event) => setRename((current) => (current ? { ...current, label: event.target.value } : current))}
+          onPressEnter={renameField}
+        />
+      </Modal>
       <Form
         form={form}
         layout="vertical"
@@ -318,6 +370,11 @@ function FieldsTab({ entity, patch }: { entity: EntityDefinition; patch: (body: 
               <Input placeholder="fieldName" />
             </Form.Item>
           </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="label" label="Label">
+              <Input placeholder="display label" />
+            </Form.Item>
+          </Col>
           <Col xs={12} sm={6} md={4}>
             <Form.Item name="type" label="Type" initialValue="varchar">
               <Select style={{ width: '100%' }} options={FIELD_TYPES.map((type) => ({ value: type, label: type }))} />
@@ -328,12 +385,12 @@ function FieldsTab({ entity, patch }: { entity: EntityDefinition; patch: (body: 
               <Select style={{ width: '100%' }} placeholder="link entity" allowClear options={(metadata.data ? Object.keys(metadata.data) : []).map((name) => ({ value: name, label: name }))} />
             </Form.Item>
           </Col>
-          <Col xs={12} sm={6} md={3}>
+          <Col xs={12} sm={6} md={4}>
             <Form.Item name="maxLength" label="Max length">
               <InputNumber style={{ width: '100%' }} min={1} />
             </Form.Item>
           </Col>
-          <Col xs={12} sm={6} md={7}>
+          <Col xs={24} sm={12} md={8}>
             <Form.Item name="values" label="Enum values">
               <Input placeholder="enum values, comma" />
             </Form.Item>

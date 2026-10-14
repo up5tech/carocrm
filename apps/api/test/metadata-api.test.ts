@@ -14,6 +14,7 @@ interface CallResult {
 const runId = `m${Date.now().toString(36)}`;
 const newField = `contractEnd${runId.replace(/^\w/, (c) => c.toUpperCase())}`;
 const disableField = `legacyNote${runId.replace(/^\w/, (c) => c.toUpperCase())}`;
+const labelField = `serviceTier${runId.replace(/^\w/, (c) => c.toUpperCase())}`;
 
 let ctx: ApiContext;
 let adminToken = '';
@@ -129,6 +130,26 @@ describe('metadata API', () => {
     });
     expect(created.statusCode).toBe(201);
     expect(String((created.json() as Record<string, unknown>)[newField])).toContain('2026-12-31');
+  });
+
+  it('renames a field label via a metadata patch and keeps the rest of the definition', async () => {
+    await call('POST', '/api/v1/Metadata/Account', adminToken, { fields: { [labelField]: { type: 'varchar', inList: true } } });
+
+    const before = await call('GET', '/api/v1/Metadata/Account', adminToken);
+    const definition = fieldsOf(before.body)[labelField] as unknown as Record<string, unknown> | undefined;
+    expect(definition).toBeDefined();
+
+    // the Entity Manager sends the whole field definition back with only the label changed
+    const patched = await call('POST', '/api/v1/Metadata/Account', adminToken, {
+      fields: { [labelField]: { ...(definition ?? {}), label: 'Service tier' } },
+    });
+    expect(patched.status).toBe(200);
+    expect((fieldsOf(patched.body)[labelField] as { label?: string }).label).toBe('Service tier');
+    expect(fieldsOf(patched.body)[labelField]?.type).toBe('varchar');
+
+    const after = await call('GET', '/api/v1/Metadata/Account', adminToken);
+    expect((fieldsOf(after.body)[labelField] as { label?: string }).label).toBe('Service tier');
+    expect((fieldsOf(after.body)[labelField] as { inList?: boolean }).inList).toBe(true);
   });
 
   it('rejects an invalid patch without touching the registry', async () => {
