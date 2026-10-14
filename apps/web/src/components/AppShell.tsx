@@ -75,11 +75,26 @@ function InternalShell({ children }: { children: ReactNode }) {
     groups.push({ key: '/calendar', icon: <CalendarOutlined />, label: <Link to="/calendar">{t('core.app.calendar')}</Link> });
     groups.push({ key: '/tasks', icon: <CarryOutOutlined />, label: <Link to="/tasks">{t('core.app.myTasks')}</Link> });
 
-    const records: MenuItems = navEntities(metadata.data, principal?.type).map((entity) => ({
+    const recordItem = (entity: { name: string; label: string }): MenuItems[number] => ({
       key: `/${entity.name}`,
       icon: <DatabaseOutlined />,
       label: <Link to={`/${entity.name}`}>{entity.label}</Link>,
-    }));
+    });
+    // The Project entities form one submenu of their own instead of six entries in RECORDS; the
+    // group is named after the Project entity so the metadata label stays the source of truth.
+    const navList = navEntities(metadata.data, principal?.type);
+    const projectEntities = navList.filter((entity) => entity.name.startsWith('Project'));
+    const records: MenuItems = navList
+      .filter((entity) => !entity.name.startsWith('Project'))
+      .map((entity) => recordItem(entity));
+    if (projectEntities.length > 0) {
+      records.push({
+        key: 'sub-project',
+        icon: <ProjectOutlined />,
+        label: projectEntities.find((entity) => entity.name === 'Project')?.label ?? 'Project',
+        children: projectEntities.map((entity) => recordItem(entity)),
+      });
+    }
     if (records.length > 0) groups.push({ type: 'group', key: 'grp-records', label: t('core.app.records'), children: records });
 
     // Entries contributed by installed extensions (PLAN §38). The server already filtered the ones
@@ -178,7 +193,12 @@ function InternalShell({ children }: { children: ReactNode }) {
           trigger={null}
         >
           <div className="lizant-sider-scroll">
-            <Menu mode="inline" items={navItems} selectedKeys={[selectedKey]} />
+            <Menu
+              mode="inline"
+              items={navItems}
+              selectedKeys={[selectedKey]}
+              defaultOpenKeys={selectedKey.startsWith('/Project') ? ['sub-project'] : []}
+            />
           </div>
         </Sider>
         <Layout>

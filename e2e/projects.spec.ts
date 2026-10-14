@@ -117,6 +117,12 @@ test.describe('phase 19 projects', () => {
       { timeout: 15_000 },
     );
 
+    // --- Overview: the tab has to reach the project record. Its label used to carry a Link while
+    // Tabs fired its own onChange, and the two navigations raced to `/Project/<id>/overview`, which
+    // no route matches, so the click ended on the home page.
+    await page.getByRole('tab', { name: 'Overview' }).click();
+    await expect(page).toHaveURL(new RegExp(`\\/Project\\/${projectId}$`), { timeout: 15_000 });
+
     // --- Gantt: give the task dates, then see it drawn -------------------------------
     await page.goto(`/Project/${projectId}/plan`);
     await page.locator('.lizant-project-task-name').filter({ hasText: `E2E Task ${run}` }).first().click();

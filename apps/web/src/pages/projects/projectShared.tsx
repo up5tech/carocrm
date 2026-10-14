@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, App as AntApp, Card, Spin, Tabs, Typography } from 'antd';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { api } from '../../api/client.js';
 import type { ProjectCapabilities, ProjectPlanView, ProjectTaskRow } from '../../api/types.js';
@@ -88,13 +88,15 @@ export function ProjectShell({ project, capabilities, active, loading = false, e
   const projectId = String(project?.['id'] ?? '');
   const ganttEnabled = capabilities?.features['ganttEnabled'] === true;
 
+  // One navigation per tab: a `Link` inside a tab label and the `Tabs` onChange would both fire on a
+  // click, and the second one sent Overview to `/Project/<id>/overview`, which no route matches.
   const items = [
-    { key: 'overview', label: <Link to={`/Project/${encodeURIComponent(projectId)}`}>{t('web.projects.tabOverview')}</Link> },
-    { key: 'plan', label: <Link to={projectViewPath(projectId, 'plan')}>{t('web.projects.tabPlan')}</Link> },
-    { key: 'board', label: <Link to={projectViewPath(projectId, 'board')}>{t('web.projects.tabBoard')}</Link> },
-    ...(ganttEnabled ? [{ key: 'gantt', label: <Link to={projectViewPath(projectId, 'gantt')}>{t('web.projects.tabGantt')}</Link> }] : []),
-    { key: 'members', label: <Link to={projectViewPath(projectId, 'members')}>{t('web.projects.tabMembers')}</Link> },
-    { key: 'settings', label: <Link to={projectViewPath(projectId, 'settings')}>{t('web.projects.tabSettings')}</Link> },
+    { key: 'overview', label: t('web.projects.tabOverview') },
+    { key: 'plan', label: t('web.projects.tabPlan') },
+    { key: 'board', label: t('web.projects.tabBoard') },
+    ...(ganttEnabled ? [{ key: 'gantt', label: t('web.projects.tabGantt') }] : []),
+    { key: 'members', label: t('web.projects.tabMembers') },
+    { key: 'settings', label: t('web.projects.tabSettings') },
   ];
 
   return (
@@ -122,7 +124,18 @@ export function ProjectShell({ project, capabilities, active, loading = false, e
           </div>
         }
       >
-        <Tabs activeKey={active} items={items} onChange={(key) => { if (key !== active) navigate(`/Project/${encodeURIComponent(projectId)}/${key}`); }} />
+        <Tabs
+          activeKey={active}
+          items={items}
+          onChange={(key) => {
+            if (key === active) return;
+            navigate(
+              key === 'overview'
+                ? `/Project/${encodeURIComponent(projectId)}`
+                : projectViewPath(projectId, key as 'plan' | 'board' | 'gantt' | 'members' | 'settings'),
+            );
+          }}
+        />
       </Card>
 
       {error !== undefined && error !== null ? (
