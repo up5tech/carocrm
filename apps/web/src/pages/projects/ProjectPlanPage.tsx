@@ -1,4 +1,4 @@
-import { closestCorners, DndContext, type DragEndEvent,KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
+import { closestCorners, DndContext, DragOverlay, type DragEndEvent,KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
@@ -41,6 +41,8 @@ export function ProjectPlanPage() {
   const [editing, setEditing] = useState<ProjectTaskRow | null>(null);
   const [creating, setCreating] = useState<{ groupId: string; milestone: boolean } | null>(null);
   const [renaming, setRenaming] = useState<Record<string, unknown> | null>(null);
+  /** The row currently under the pointer, so the overlay can draw it above every group card. */
+  const [activeTask, setActiveTask] = useState<ProjectTaskRow | null>(null);
 
   const stages = useQuery({
     queryKey: [...projectQueryKey(id), 'stages'],
@@ -62,6 +64,9 @@ export function ProjectPlanPage() {
   const groups = plan.data?.groups ?? [];
   const canManageGroups = capabilities.data?.capabilities['manageGroups'] === true;
   const canCreate = capabilities.data?.capabilities['createTask'] === true;
+
+  const taskById = (taskId: string): ProjectTaskRow | undefined =>
+    groups.flatMap((entry) => entry.tasks).find((task) => task.id === taskId);
 
   const onDragEnd = async (event: DragEndEvent): Promise<void> => {
     const activeId = String(event.active.id);
@@ -111,7 +116,16 @@ export function ProjectPlanPage() {
 
   return (
     <ProjectShell project={plan.data?.project} capabilities={capabilities.data} active="plan" loading={plan.isLoading} error={plan.error}>
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={(event) => void onDragEnd(event)}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={(event) => setActiveTask(taskById(String(event.active.id)) ?? null)}
+        onDragCancel={() => setActiveTask(null)}
+        onDragEnd={(event) => {
+          setActiveTask(null);
+          void onDragEnd(event);
+        }}
+      >
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           {groups.length === 0 ? (
             <Card className="lizant-card">
@@ -141,6 +155,16 @@ export function ProjectPlanPage() {
             />
           ))}
         </Space>
+
+        {/*
+          The row is dragged through a portal: inside the list it would be painted under the next
+          group's opaque card the moment it crossed that card's edge, so it would look as if the row
+          had vanished until the drop. `dropAnimation={null}` because the screen is refetched from the
+          server on drop.
+        */}
+        <DragOverlay dropAnimation={null}>
+          {activeTask === null ? null : <TaskRowOverlay task={activeTask} />}
+        </DragOverlay>
       </DndContext>
 
       <ProjectTaskModal
@@ -321,7 +345,7 @@ function TaskRow({ task, subtasks, onEdit, onChanged }: TaskRowProps) {
       ref={sortable.setNodeRef}
     >
       <div className="lizant-project-task-main">
-        <button type="button" className="lizant-project-drag-handle" ref={sortable.setActivatorNodeRef} {...sortable.attributes} aria-label={t('web.projects.dragTask')}>
+        <button type="button" className="lizant-project-drag-handle" ref={sortable.setActivatorNodeRef} {...sortable.attributes} {...sortable.listeners} aria-label={t('web.projects.dragTask')}>
           ⠿
         </button>
         <Button type="text" size="small" className="lizant-project-task-name" onClick={() => onEdit(task)}>
@@ -357,6 +381,33 @@ function TaskRow({ task, subtasks, onEdit, onChanged }: TaskRowProps) {
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The row as the drag overlay draws it: the same shape as the row in the list, minus the transition
+ * buttons — the overlay is presentational, so controls inside it would be a lie (§8.3).
+ */
+function TaskRowOverlay({ task }: { task: ProjectTaskRow }) {
+  return (
+    <div className="lizant-project-task lizant-project-task-overlay">
+      <div className="lizant-project-task-main">
+        <span className="lizant-project-drag-handle" aria-hidden="true">
+          ⠿
+        </span>
+        <Typography.Text strong ellipsis style={{ minWidth: 0 }}>
+          {task.name}
+        </Typography.Text>
+        {statusTag(task.status)}
+        {task.taskType === 'Milestone' ? <Tag color="purple">{t('web.projects.milestone')}</Tag> : null}
+      </div>
+      <div className="lizant-project-task-meta">
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {formatDay(task.dateStart)}
+          {task.dateEnd !== null ? ` → ${formatDay(task.dateEnd)}` : ''}
+        </Typography.Text>
+      </div>
     </div>
   );
 }

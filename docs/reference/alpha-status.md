@@ -491,6 +491,20 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   then linked as the successor with a `FinishToStart` edge; the button appears only when the project
   enables dependencies and the role allows creating tasks. §4.5's "Group Type as a queryable metadata
   field" is recorded as a deliberate deviation instead — see `docs/modules/projects/compatibility.md`.
+- Follow-up defect fix (2026-10-14): drag and drop in the Kanban board and the Plan view never
+  worked. Both called `useSortable` and spread `sortable.attributes`, but never `sortable.listeners`
+  — dnd-kit puts the `onPointerDown`/`onKeyDown` handlers in `listeners`, while `attributes` only
+  carries ARIA/`role`/`tabIndex`. So no drag could start anywhere in the Projects UI, even though
+  `onDragEnd` and the move commands were correct. The Plan handle and the new Kanban card handle now
+  spread `listeners`; the Kanban handle is the sole activator so a click on the card still opens the
+  task, and `.lizant-project-drag-handle` gained `touch-action: none` so touch dragging works.
+- Follow-up defect fix (2026-10-14): with dragging working, the dragged item was occluded as soon as
+  it crossed into another column/group — it kept living inside its own container, so the *following*
+  containers (each with an opaque `#f7f9fb` background for the board, white cards for the Plan view)
+  painted over it, and the item appeared to vanish until the drop put it in the target. Both views
+  now render the dragged item through `DragOverlay`, which portals it above every container; the item
+  left in place is dimmed as a placeholder and `dropAnimation` is disabled because both views refetch
+  from the server on drop.
 - Not built: working-time shading in the Gantt (no calendar engine to reuse), multi-select Gantt
   moves, the two Plan-view keyboard shortcuts, cross-project dependencies, portals for projects.
   Details in `docs/modules/projects/compatibility.md`.

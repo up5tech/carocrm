@@ -471,8 +471,12 @@ body {
   background: #fff;
 }
 .lizant-project-task.is-dragging {
-  border-color: #438eff;
-  box-shadow: 0 2px 8px rgba(15, 34, 67, 0.12);
+  /* The drag overlay carries the visual; the row stays in its group as a dimmed placeholder. */
+  opacity: 0.45;
+}
+.lizant-project-task-overlay {
+  box-shadow: 0 8px 22px rgba(15, 34, 67, 0.22);
+  cursor: grabbing;
 }
 .lizant-project-task-main {
   display: flex;
@@ -499,9 +503,19 @@ body {
   background: transparent;
   color: #a7aeb8;
   cursor: grab;
+  font-family: inherit;
   font-size: 14px;
   line-height: 1;
   padding: 2px 4px;
+  /* dnd-kit's PointerSensor only receives touch gestures when the browser stops panning here. */
+  touch-action: none;
+}
+.lizant-project-drag-handle:active {
+  cursor: grabbing;
+}
+.lizant-project-drag-handle:disabled {
+  cursor: default;
+  opacity: 0.4;
 }
 .lizant-project-drag-handle:focus-visible {
   outline: 2px solid #438eff;
@@ -556,7 +570,13 @@ body {
   cursor: pointer;
 }
 .lizant-project-card.is-dragging {
-  box-shadow: 0 2px 8px rgba(15, 34, 67, 0.16);
+  /* The drag overlay carries the visual; the card stays in its column as a dimmed placeholder. */
+  opacity: 0.45;
+}
+.lizant-project-card-overlay {
+  /* dnd-kit sizes the overlay from the dragged card's rect; only the lift needs styling. */
+  box-shadow: 0 8px 22px rgba(15, 34, 67, 0.24);
+  cursor: grabbing;
 }
 .lizant-project-gantt {
   border: 1px solid #eceff3;

@@ -1,4 +1,4 @@
-import { closestCorners, DndContext, type DragEndEvent,KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
+import { closestCorners, DndContext, DragOverlay, type DragEndEvent,KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
@@ -25,6 +25,11 @@ import { ProjectTaskModal, statusTag } from './ProjectTaskModal.js';
  * A column drop is a stage change, which the server turns into the mapped status and guards with the
  * dependency, subtask and role rules. Dropping is therefore never the authority to move — the column
  * simply shows where the server agreed to put the card.
+ *
+ * The card being dragged is rendered through `DragOverlay`, not inside its own column. Without the
+ * overlay the card stays a child of its source column, so the following columns — each with an
+ * opaque `#f7f9fb` background — paint over it the moment it crosses their edge, and the card looks
+ * like it vanished until the drop puts it in the target column.
  */
 
 export function ProjectBoardPage() {
@@ -36,9 +41,16 @@ export function ProjectBoardPage() {
   const groups = plan.data?.groups ?? [];
   const [groupId, setGroupId] = useState<string | undefined>(undefined);
   const [editing, setEditing] = useState<ProjectTaskRow | null>(null);
+  /** The card currently under the pointer, so the overlay can draw it above every column. */
+  const [activeTask, setActiveTask] = useState<ProjectTaskRow | null>(null);
 
   const activeGroup = groupId ?? String(plan.data?.project['activeGroupId'] ?? groups[0]?.group['id'] ?? '');
   const canCreate = capabilities.data?.capabilities['createTask'] === true;
+  // `moveTask` is the project-wide flag (global `all`/`yes`, or a role whose `stageMoveScope` is
+  // `all`). A plain member holds a task-scoped scope (`assigned`), which the project-level flag
+  // cannot express — so membership also enables the handle, exactly as the Plan view does. The drop
+  // stays a request: the server refuses a card the role does not cover and the board refetches.
+  const canMove = capabilities.data?.capabilities['moveTask'] === true || capabilities.data?.isMember === true;
 
   const board = useQuery({
     queryKey: [...projectQueryKey(id), 'board', activeGroup],
@@ -63,6 +75,9 @@ export function ProjectBoardPage() {
   );
 
   const columns = board.data?.columns ?? [];
+
+  const taskById = (taskId: string): ProjectTaskRow | undefined =>
+    columns.flatMap((column) => column.tasks).find((task) => task.id === taskId);
 
   const onDragEnd = async (event: DragEndEvent): Promise<void> => {
     const activeId = String(event.active.id);
@@ -110,18 +125,40 @@ export function ProjectBoardPage() {
         ) : null}
       </Space>
 
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={(event) => void onDragEnd(event)}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={(event) => setActiveTask(taskById(String(event.active.id)) ?? null)}
+        onDragCancel={() => setActiveTask(null)}
+        onDragEnd={(event) => {
+          setActiveTask(null);
+          void onDragEnd(event);
+        }}
+      >
         <div className="lizant-project-board">
           {columns.map((column) => (
             <StageColumn
               key={String(column.stage['id'])}
               stage={column.stage}
               tasks={column.tasks}
-              canEdit={capabilities.data?.capabilities['moveTask'] === true}
+              canEdit={canMove}
               onEdit={setEditing}
             />
           ))}
         </div>
+
+        {/*
+          A portal at the document root, so the card stays visible over every column instead of being
+          painted under the next column's opaque background. `dropAnimation={null}` because the board
+          refetches from the server on drop — the card must not fly anywhere on its own.
+        */}
+        <DragOverlay dropAnimation={null}>
+          {activeTask === null ? null : (
+            <Card className="lizant-project-card lizant-project-card-overlay" size="small">
+              <BoardCardContent task={activeTask} />
+            </Card>
+          )}
+        </DragOverlay>
       </DndContext>
 
       <ProjectTaskModal
@@ -166,6 +203,29 @@ function StageColumn({ stage, tasks, canEdit, onEdit }: ColumnProps) {
   );
 }
 
+/** The card body, shared by the sortable card and its drag overlay so both look identical. */
+function BoardCardContent({ task, dragHandle }: { task: ProjectTaskRow; dragHandle?: React.ReactNode }) {
+  return (
+    <Space direction="vertical" size={2} style={{ width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+        {dragHandle ?? null}
+        <Typography.Text strong ellipsis style={{ minWidth: 0 }}>
+          {task.name}
+        </Typography.Text>
+      </div>
+      <Space size={4} wrap>
+        {statusTag(task.status)}
+        {task.priority !== null ? <Tag>{task.priority}</Tag> : null}
+        {task.taskType === 'Milestone' ? <Tag color="purple">{t('web.projects.milestone')}</Tag> : null}
+      </Space>
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        {formatDay(task.dateStart)}
+        {task.dateEnd !== null ? ` → ${formatDay(task.dateEnd)}` : ''}
+      </Typography.Text>
+    </Space>
+  );
+}
+
 function BoardCard({ task, disabled, onEdit }: { task: ProjectTaskRow; disabled: boolean; onEdit: (task: ProjectTaskRow) => void }) {
   const sortable = useSortable({ id: task.id, data: { stageId: task.stageId }, disabled });
   return (
@@ -176,20 +236,28 @@ function BoardCard({ task, disabled, onEdit }: { task: ProjectTaskRow; disabled:
       style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition }}
       onClick={() => onEdit(task)}
     >
-      <Space direction="vertical" size={2} style={{ width: '100%' }}>
-        <Typography.Text strong ellipsis>
-          {task.name}
-        </Typography.Text>
-        <Space size={4} wrap>
-          {statusTag(task.status)}
-          {task.priority !== null ? <Tag>{task.priority}</Tag> : null}
-          {task.taskType === 'Milestone' ? <Tag color="purple">{t('web.projects.milestone')}</Tag> : null}
-        </Space>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {formatDay(task.dateStart)}
-          {task.dateEnd !== null ? ` → ${formatDay(task.dateEnd)}` : ''}
-        </Typography.Text>
-      </Space>
+      <BoardCardContent
+        task={task}
+        dragHandle={
+          /*
+            dnd-kit starts a drag only from the element that carries `listeners` — `attributes` alone
+            is ARIA only. The handle is that element, so a click on the card still opens the task and
+            never turns into an accidental move. `stopPropagation` keeps the handle out of that click.
+          */
+          <button
+            type="button"
+            className="lizant-project-drag-handle"
+            ref={sortable.setActivatorNodeRef}
+            {...sortable.attributes}
+            {...(sortable.listeners ?? {})}
+            aria-label={t('web.projects.dragTask')}
+            disabled={disabled}
+            onClick={(event) => event.stopPropagation()}
+          >
+            ⠿
+          </button>
+        }
+      />
     </Card>
   );
 }
