@@ -7,6 +7,7 @@ import { AdminAuditPage } from './pages/AdminAuditPage.js';
 import { AdminExtensionsPage } from './pages/AdminExtensionsPage.js';
 import { AdminJobsPage } from './pages/AdminJobsPage.js';
 import { AdminPortalsPage } from './pages/AdminPortalsPage.js';
+import { AdminSettingsPage } from './pages/AdminSettingsPage.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { DashboardsPage } from './pages/DashboardsPage.js';
 import { EntityAdminPage } from './pages/EntityAdminPage.js';
@@ -119,6 +120,7 @@ export function AppRoutes() {
         <Route path="/admin/processes" element={<ProcessesPage />} />
         <Route path="/admin/processes/:id" element={<ProcessEditorPage />} />
         <Route path="/admin/portals" element={<AdminPortalsPage />} />
+        <Route path="/admin/settings" element={<AdminSettingsPage />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </AppShell>

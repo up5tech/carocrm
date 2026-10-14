@@ -55,6 +55,36 @@ body {
   width: 56px;
 }
 
+/* instance logo: replaces the letter mark in the header and on the sign-in page */
+.lizant-brand-logo {
+  border-radius: 8px;
+  display: block;
+  height: 26px;
+  object-fit: contain;
+  width: auto;
+}
+
+.lizant-brand-logo--auth {
+  height: 34px;
+}
+
+.lizant-logo-preview {
+  background: #f7f9fc;
+  border: 1px solid #eff2f7;
+  border-radius: 8px;
+  display: inline-grid;
+  height: 44px;
+  min-width: 88px;
+  padding: 0 8px;
+  place-items: center;
+}
+
+.lizant-logo-preview img {
+  max-height: 32px;
+  max-width: 120px;
+  object-fit: contain;
+}
+
 .lizant-collapse-toggle {
   cursor: pointer;
   color: #438eff;

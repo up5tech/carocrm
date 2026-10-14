@@ -1,4 +1,4 @@
-import { ApartmentOutlined, ApiOutlined, AppstoreOutlined, BarChartOutlined, CalendarOutlined, CarryOutOutlined, DashboardOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, ProjectOutlined, SearchOutlined, ShareAltOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ApartmentOutlined, ApiOutlined, AppstoreOutlined, BarChartOutlined, CalendarOutlined, CarryOutOutlined, DashboardOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, ProjectOutlined, SearchOutlined, SettingOutlined, ShareAltOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
@@ -12,6 +12,7 @@ import { activateLocale, activeLocaleName, localesEnabled, t } from '../state/i1
 import { navEntities, useMetadata } from '../state/metadata.js';
 import { portalBase, usePortalContext } from '../state/portal.js';
 import { useSession } from '../state/session.js';
+import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 import { entityIcon } from './entityIcons.js';
 
 const { Sider, Content, Footer } = Layout;
@@ -61,6 +62,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function InternalShell({ children }: { children: ReactNode }) {
   const { principal, signOut } = useSession();
+  const settings = useSettings();
   const metadata = useMetadata();
   const extensionNav = useExtensionNav();
   const location = useLocation();
@@ -120,6 +122,7 @@ function InternalShell({ children }: { children: ReactNode }) {
       admin.push({ key: '/admin/extensions', icon: <ApiOutlined />, label: <Link to="/admin/extensions">{t('web.adminExtensions.title')}</Link> });
       admin.push({ key: '/admin/workflows', icon: <ApartmentOutlined />, label: <Link to="/admin/workflows">{t('web.workflows.title')}</Link> });
       admin.push({ key: '/admin/processes', icon: <ShareAltOutlined />, label: <Link to="/admin/processes">{t('web.processes.title')}</Link> });
+      admin.push({ key: '/admin/settings', icon: <SettingOutlined />, label: <Link to="/admin/settings">{t('web.adminSettings.title')}</Link> });
     }
     admin.push({ key: '/admin/portals', icon: <ProjectOutlined />, label: <Link to="/admin/portals">{t('web.adminPortals.title')}</Link> });
     groups.push({ type: 'group', key: 'grp-admin', label: t('core.app.administration'), children: admin });
@@ -156,9 +159,13 @@ function InternalShell({ children }: { children: ReactNode }) {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <header className="lizant-header">
-        <div className={`lizant-brand${collapsed ? ' lizant-brand--compact' : ''}`} title="CaroCRM">
-          <span className="lizant-brand-mark">C</span>
-          {collapsed ? null : <span>CaroCRM</span>}
+        <div className={`lizant-brand${collapsed ? ' lizant-brand--compact' : ''}`} title={settings.data?.pageTitle ?? DEFAULT_BRAND}>
+          {settings.data?.logoUrl ? (
+            <img className="lizant-brand-logo" src={settings.data.logoUrl} alt="" />
+          ) : (
+            <span className="lizant-brand-mark">C</span>
+          )}
+          {collapsed ? null : <span>{settings.data?.pageTitle ?? DEFAULT_BRAND}</span>}
         </div>
         <span
           role="button"
@@ -215,7 +222,9 @@ function InternalShell({ children }: { children: ReactNode }) {
         </Sider>
         <Layout>
           <Content className="lizant-content">{children}</Content>
-          <Footer className="lizant-footer">{t('web.shell.footer', { year: String(new Date().getFullYear()) })}</Footer>
+          <Footer className="lizant-footer">
+            {settings.data?.footerText ?? t('web.shell.footer', { year: String(new Date().getFullYear()) })}
+          </Footer>
         </Layout>
       </Layout>
     </Layout>

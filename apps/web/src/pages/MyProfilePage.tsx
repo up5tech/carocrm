@@ -4,28 +4,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api, ApiError } from '../api/client.js';
+import { timezoneOptions } from '../components/timezones.js';
 import { activeLocaleName, localesEnabled, t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
-
-/** Time zones offered in the picker; the browser's own zone is added on top when it differs. */
-const COMMON_ZONES = [
-  'UTC',
-  'Europe/London',
-  'Europe/Berlin',
-  'Europe/Paris',
-  'Asia/Saigon',
-  'Asia/Bangkok',
-  'Asia/Singapore',
-  'Asia/Jakarta',
-  'Asia/Shanghai',
-  'Asia/Tokyo',
-  'Asia/Kolkata',
-  'Asia/Dubai',
-  'America/New_York',
-  'America/Chicago',
-  'America/Los_Angeles',
-  'Australia/Sydney',
-];
 
 interface ProfileForm {
   firstName?: string;
@@ -52,10 +33,7 @@ export function MyProfilePage() {
   const [uploading, setUploading] = useState(false);
   const locale = activeLocaleName();
 
-  const zones = useMemo(() => {
-    const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    return Array.from(new Set([local, ...COMMON_ZONES].filter(Boolean))).map((value) => ({ value, label: value }));
-  }, []);
+  const zones = useMemo(() => timezoneOptions(), []);
 
   const localeOptions = useMemo(
     () => localesEnabled().map((value) => ({ value, label: t(`web.language.${value}`) })),

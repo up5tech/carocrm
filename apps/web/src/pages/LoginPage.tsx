@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom';
 
 import { t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
+import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 
 export function LoginPage() {
   const { signIn, loading, error } = useSession();
+  const settings = useSettings();
   const navigate = useNavigate();
   const [form] = Form.useForm<{ userName: string; password: string }>();
   const [submitting, setSubmitting] = useState(false);
@@ -15,8 +17,12 @@ export function LoginPage() {
     <div className="lizant-auth">
       <div className="lizant-auth-card">
         <div className="lizant-auth-brand">
-          <span className="lizant-brand-mark">C</span>
-          <span>CaroCRM</span>
+          {settings.data?.logoUrl ? (
+            <img className="lizant-brand-logo lizant-brand-logo--auth" src={settings.data.logoUrl} alt="" />
+          ) : (
+            <span className="lizant-brand-mark">C</span>
+          )}
+          <span>{settings.data?.pageTitle ?? DEFAULT_BRAND}</span>
         </div>
         <p className="lizant-auth-sub">{t('web.login.subtitle')}</p>
         <Form

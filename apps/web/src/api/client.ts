@@ -41,6 +41,8 @@ import type {
   ReportRunResult,
   ReportScheduleRow,
   Role,
+  SettingsPatch,
+  SettingsView,
   WorkflowActionSpec,
   WorkflowDefinitionShape,
   WorkflowIssue,
@@ -353,6 +355,10 @@ export const api = {
     return upload<AttachmentInfo>('/Attachment/upload', form);
   },
   logout: () => request<{ status: boolean }>('/Logout', { method: 'POST' }),
+
+  // Instance settings (PLAN §12.2 `app_settings`): brand text, logo, footer, locale/timezone defaults.
+  settings: () => request<SettingsView>('/Settings'),
+  saveSettings: (input: SettingsPatch) => request<SettingsView>('/Settings', post(input)),
 
   // Phase 7A (PLAN §41.5): merged translation catalog, cacheable by content hash.
   i18nCatalog: (locale: string | undefined, clientCache?: string) => {

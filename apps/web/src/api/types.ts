@@ -85,6 +85,28 @@ export interface Role {
   modifiedAt: string;
 }
 
+/** Instance settings served by `GET /Settings` — public, so the sign-in page can paint the brand. */
+export interface SettingsView {
+  pageTitle: string | null;
+  footerText: string | null;
+  logoAttachmentId: string | null;
+  logoUrl: string | null;
+  availableLocales: string[];
+  defaultLocale: string;
+  enabledLocales: string[];
+  defaultTimezone: string;
+}
+
+/** What the administrator sends back; `null` clears a text field, omitting a key keeps it. */
+export interface SettingsPatch {
+  pageTitle?: string | null;
+  footerText?: string | null;
+  logoAttachmentId?: string | null;
+  defaultLocale?: string;
+  enabledLocales?: string[];
+  defaultTimezone?: string;
+}
+
 export type Metadata = Record<string, EntityDefinition>;
 
 export interface ListResult<T = Record<string, unknown>> {

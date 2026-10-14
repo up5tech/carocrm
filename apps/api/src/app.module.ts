@@ -47,6 +47,7 @@ import { PROCESS_CONTROLLERS, PROCESS_PROVIDERS } from './processes/index.js';
 import { PROJECTS_CONTROLLERS, PROJECTS_PROVIDERS } from './projects/index.js';
 import { REPORT_CONTROLLERS, REPORT_PROVIDERS } from './reports/index.js';
 import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
+import { SETTINGS_CONTROLLERS, SETTINGS_PROVIDERS } from './settings/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
 import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, STREAM_PROVIDERS, StreamUpdateHookService } from './stream/index.js';
 import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
@@ -59,6 +60,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 7A (PLAN §41.5): `/api/v1/I18n` and `/api/v1/AppUser` are static prefixes,
     // matched before the generic `:entity` wildcard.
     I18nController,
+    // `/api/v1/Settings` is a static prefix too: it must not fall through to `:entity`.
+    ...SETTINGS_CONTROLLERS,
     ...ATTACHMENT_CONTROLLERS,
     ...AUDIT_CONTROLLERS,
     // `/api/v1/:entityType/:entityId/{stream,subscription}` must be matched before the
@@ -118,6 +121,7 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...PROJECTS_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
+    ...SETTINGS_PROVIDERS,
     ...AUDIT_PROVIDERS,
     ...STREAM_PROVIDERS,
     ...CALENDAR_PROVIDERS,

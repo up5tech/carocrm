@@ -131,6 +131,49 @@ export class I18nService {
     this.settingsCache = undefined;
   }
 
+  /**
+   * Admin write of the instance defaults (the Settings page). Omitted keys keep their stored value.
+   * A locale has to exist as a catalog directory (§41.3) and the default has to be enabled, so the
+   * SPA can never be pointed at a language it cannot paint.
+   */
+  async saveSettings(
+    patch: {
+      defaultLocale?: string | undefined;
+      enabledLocales?: string[] | undefined;
+      defaultTimezone?: string | undefined;
+    },
+  ): Promise<I18nSettings> {
+    const current = await this.settings();
+    const available = this.localeList();
+    const next: I18nSettings = {
+      defaultLocale: patch.defaultLocale ?? current.defaultLocale,
+      enabledLocales: patch.enabledLocales && patch.enabledLocales.length > 0 ? patch.enabledLocales : current.enabledLocales,
+      defaultTimezone: patch.defaultTimezone ?? current.defaultTimezone,
+    };
+    if (!available.includes(next.defaultLocale)) {
+      throw new ValidationError(`Unknown locale "${next.defaultLocale}".`, { available });
+    }
+    const unknown = next.enabledLocales.filter((locale) => !available.includes(locale));
+    if (unknown.length > 0) {
+      throw new ValidationError('Enabled locales must exist in the catalog directory.', { unknown, available });
+    }
+    if (!next.enabledLocales.includes(next.defaultLocale)) {
+      throw new ValidationError('The default locale has to be one of the enabled locales.');
+    }
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: next.defaultTimezone });
+    } catch {
+      throw new ValidationError(`Unknown time zone "${next.defaultTimezone}".`, { defaultTimezone: next.defaultTimezone });
+    }
+    await this.database.db
+      .insertInto('app_settings')
+      .values({ name: 'i18n', data: JSON.stringify(next), modified_at: new Date() })
+      .onConflict((oc) => oc.column('name').doUpdateSet({ data: JSON.stringify(next), modified_at: new Date() }))
+      .execute();
+    this.invalidateSettings();
+    return next;
+  }
+
   /** Deep merged catalog: definitions from `en` under anything the requested locale overrides. */
   catalogFor(locale: string): Catalog {
     const catalogs = this.ensureCatalogs();
