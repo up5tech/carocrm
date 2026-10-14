@@ -31,6 +31,29 @@ export interface PrincipalRecord {
   timezone?: string | undefined;
 }
 
+/** What the signed-in user may change about themselves; `null` clears a value. */
+export interface ProfilePatch {
+  locale?: string | null | undefined;
+  timezone?: string | null | undefined;
+  firstName?: string | null | undefined;
+  lastName?: string | null | undefined;
+  emailAddress?: string | null | undefined;
+  phoneNumber?: string | null | undefined;
+  title?: string | null | undefined;
+  avatarId?: string | null | undefined;
+}
+
+export interface ProfileDto {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  name: string;
+  emailAddress: string | null;
+  phoneNumber: string | null;
+  title: string | null;
+  avatarId: string | null;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -146,7 +169,14 @@ export class AuthService {
   }
 
   async signAccessToken(claims: { sub: string; sid?: string; typ: string; scope: string; keyId?: string }): Promise<string> {
-    return new SignJWT({ typ: claims.typ, scope: claims.scope, ...(claims.keyId !== undefined ? { keyId: claims.keyId } : {}) })
+    // `sid` travels in the token so the guard can honour session revocation (logout, password
+    // change); without it a revoked session keeps working until the access token expires.
+    return new SignJWT({
+      typ: claims.typ,
+      scope: claims.scope,
+      ...(claims.sid !== undefined ? { sid: claims.sid } : {}),
+      ...(claims.keyId !== undefined ? { keyId: claims.keyId } : {}),
+    })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(claims.sub)
       .setIssuedAt()
@@ -244,18 +274,61 @@ export class AuthService {
     };
   }
 
-  /** Phase 7A (PLAN §41.5): a user changes their own locale/timezone; `null` clears it back to the instance default (PLAN §41.6 nullable). */
-  async updatePreferences(userId: string, patch: { locale?: string | null | undefined; timezone?: string | null | undefined }): Promise<void> {
+  /**
+   * Phase 7A (PLAN §41.5) + the profile page: a user edits their own preferences and contact
+   * details here — never through the admin identity endpoints. `null` clears a value back to the
+   * instance default (PLAN §41.6) or to no avatar.
+   */
+  async updatePreferences(userId: string, patch: ProfilePatch): Promise<void> {
     const db = this.database.db;
+    if (patch.avatarId) {
+      // The avatar is served straight to an <img>, so only a file this user uploaded may be named.
+      const owned = await db
+        .selectFrom('attachments')
+        .select('id')
+        .where('id', '=', patch.avatarId)
+        .where('created_by_id', '=', userId)
+        .executeTakeFirst();
+      if (!owned) throw new ValidationError('Avatar must be a file you uploaded yourself.');
+    }
     await db
       .updateTable('users')
       .set({
         ...(patch.locale !== undefined ? { locale: patch.locale } : {}),
         ...(patch.timezone !== undefined ? { timezone: patch.timezone } : {}),
+        ...(patch.firstName !== undefined ? { first_name: patch.firstName } : {}),
+        ...(patch.lastName !== undefined ? { last_name: patch.lastName } : {}),
+        ...(patch.emailAddress !== undefined ? { email_address: patch.emailAddress } : {}),
+        ...(patch.phoneNumber !== undefined ? { phone: patch.phoneNumber } : {}),
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.avatarId !== undefined ? { avatar_id: patch.avatarId } : {}),
         modified_at: new Date(),
       })
       .where('id', '=', userId)
       .execute();
+  }
+
+  /**
+   * The columns the profile page shows; authority (roles/teams) comes from the principal.
+   * Null for a principal that is not a `users` row — an API-key session has no profile.
+   */
+  async profile(userId: string): Promise<ProfileDto | null> {
+    const user = await this.database.db
+      .selectFrom('users')
+      .select(['id', 'user_name', 'first_name', 'last_name', 'email_address', 'phone', 'title', 'avatar_id'])
+      .where('id', '=', userId)
+      .executeTakeFirst();
+    if (!user) return null;
+    return {
+      id: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      name: [user.first_name, user.last_name].filter(Boolean).join(' ') || user.user_name,
+      emailAddress: user.email_address,
+      phoneNumber: user.phone,
+      title: user.title,
+      avatarId: user.avatar_id,
+    };
   }
 
   async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {

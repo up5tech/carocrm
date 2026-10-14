@@ -22,7 +22,7 @@ function useLanguageSwitch() {
   return (locale: string) => {
     void (async () => {
       try {
-        await api.patchMyPreferences({ locale });
+        await api.patchMyProfile({ locale });
         window.localStorage.setItem('carocrm.locale', locale);
         await activateLocale(locale);
         void message.success(t('web.language.switched'));
@@ -140,6 +140,7 @@ function InternalShell({ children }: { children: ReactNode }) {
     onClick: () => switchLanguage(locale),
   }));
   const userMenu: MenuItems = [
+    { key: 'profile', label: <Link to="/profile">{t('web.profile.title')}</Link> },
     { key: 'language', label: t('web.language.label'), children: languageMenu },
     {
       key: 'signout',
@@ -184,7 +185,11 @@ function InternalShell({ children }: { children: ReactNode }) {
         <div className="lizant-header-actions">
           <Dropdown menu={{ items: userMenu }} trigger={['click']}>
             <span className="lizant-avatar" title={principal?.userName}>
-              {(principal?.userName ?? '?').slice(0, 2).toUpperCase()}
+              {principal?.avatarId ? (
+                <img className="lizant-avatar-img" src={`/api/v1/Attachment/${principal.avatarId}/file`} alt="" />
+              ) : (
+                (principal?.userName ?? '?').slice(0, 2).toUpperCase()
+              )}
             </span>
           </Dropdown>
         </div>
@@ -273,7 +278,11 @@ function PortalShell({ children }: { children: ReactNode }) {
         <div className="lizant-header-actions">
           <Dropdown menu={{ items: userMenu }} trigger={['click']}>
             <span className="lizant-avatar" title={principal?.userName}>
-              {(principal?.userName ?? '?').slice(0, 2).toUpperCase()}
+              {principal?.avatarId ? (
+                <img className="lizant-avatar-img" src={`/api/v1/Attachment/${principal.avatarId}/file`} alt="" />
+              ) : (
+                (principal?.userName ?? '?').slice(0, 2).toUpperCase()
+              )}
             </span>
           </Dropdown>
         </div>

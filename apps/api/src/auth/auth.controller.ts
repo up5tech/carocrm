@@ -1,5 +1,5 @@
 import { ValidationError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, Inject, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -8,7 +8,7 @@ import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { I18nService } from '../i18n/i18n.service.js';
 import { Public } from './auth.guard.js';
-import type { AuthTokens } from './auth.service.js';
+import type { AuthTokens, PrincipalRecord } from './auth.service.js';
 import { AuthService } from './auth.service.js';
 
 const LoginSchema = z.object({
@@ -33,9 +33,20 @@ export interface LoginResult extends AuthTokens {
   csrfToken: string;
 }
 
-const PreferencesSchema = z.object({
+const ProfileSchema = z.object({
   locale: z.string().min(2).nullable().optional(),
   timezone: z.string().min(1).max(64).nullable().optional(),
+  firstName: z.string().max(100).nullable().optional(),
+  lastName: z.string().max(100).nullable().optional(),
+  emailAddress: z.string().email().max(255).nullable().optional(),
+  phoneNumber: z.string().max(64).nullable().optional(),
+  title: z.string().max(128).nullable().optional(),
+  avatarId: z.string().max(36).nullable().optional(),
+});
+
+const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8).max(256),
 });
 
 @ApiTags('authentication')
@@ -104,29 +115,21 @@ export class AuthController {
   @Get('AppUser/me')
   async me(@Query('view') view?: string): Promise<unknown> {
     void view;
-    const principal = this.scope.requirePrincipal();
-    return {
-      id: principal.userId,
-      userName: principal.userName,
-      type: principal.userType,
-      roles: principal.roles,
-      teams: principal.teams,
-      locale: principal.locale ?? null,
-      timezone: principal.timezone ?? null,
-    };
+    return this.profileResponse(this.scope.requirePrincipal());
   }
 
   /**
-   * Phase 7A (PLAN §41.5/§41.6): the signed-in user switches their own UI language and
-   * timezone here — never through the admin identity endpoints. A locale outside the
-   * instance's enabled list is rejected (§41.5); a timezone must be a valid IANA name.
+   * Phase 7A (PLAN §41.5/§41.6) and the profile page: the signed-in user edits their own language,
+   * timezone, name, contact details and avatar here — never through the admin identity endpoints.
+   * A locale outside the instance's enabled list is rejected (§41.5); a timezone must be a valid
+   * IANA name; an avatar must be a file this user uploaded.
    */
   @Patch('AppUser/me')
-  async updatePreferences(@Body() body: unknown): Promise<unknown> {
+  async updateProfile(@Body() body: unknown): Promise<unknown> {
     const principal = this.scope.requirePrincipal();
-    const parsed = PreferencesSchema.safeParse(body);
+    const parsed = ProfileSchema.safeParse(body);
     if (!parsed.success) {
-      throw new ValidationError('Invalid preferences payload.', { issues: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) });
+      throw new ValidationError('Invalid profile payload.', { issues: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) });
     }
     const settings = await this.i18n.settings();
     if (parsed.data.locale !== undefined && parsed.data.locale !== null && !settings.enabledLocales.includes(parsed.data.locale)) {
@@ -139,12 +142,27 @@ export class AuthController {
         throw new ValidationError(`Unknown time zone "${parsed.data.timezone}".`, { timezone: parsed.data.timezone });
       }
     }
-    if (parsed.data.locale === undefined && parsed.data.timezone === undefined) {
-      throw new ValidationError('Nothing to update: provide "locale" and/or "timezone".');
+    if (Object.keys(parsed.data).length === 0) {
+      throw new ValidationError('Nothing to update: provide at least one profile field.');
     }
     await this.auth.updatePreferences(principal.userId, parsed.data);
-    const updated = await this.auth.principalFromUser(principal.userId, principal.sessionId);
-    return { id: principal.userId, locale: updated.locale ?? null, timezone: updated.timezone ?? null };
+    return this.profileResponse(await this.auth.principalFromUser(principal.userId, principal.sessionId));
+  }
+
+  /**
+   * Changing one's own password. `changePassword` revokes every active session of this user, so the
+   * client signs out and logs in again with the new credentials.
+   */
+  @HttpCode(200)
+  @Post('AppUser/me/password')
+  async changePassword(@Body() body: unknown): Promise<{ status: boolean }> {
+    const principal = this.scope.requirePrincipal();
+    const parsed = ChangePasswordSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid password payload.', { issues: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) });
+    }
+    await this.auth.changePassword(principal.userId, parsed.data.currentPassword, parsed.data.newPassword);
+    return { status: true };
   }
 
   @Get('AppUser/current')
@@ -157,6 +175,23 @@ export class AuthController {
       type: principal.userType,
       roles: principal.roles,
       teams: principal.teams,
+    };
+  }
+
+  /**
+   * `GET /AppUser/me` and the profile patch answer with one shape: the authority fields of the
+   * principal plus the user's own profile columns (absent for an API-key session, which has none).
+   */
+  private async profileResponse(principal: PrincipalRecord): Promise<Record<string, unknown>> {
+    return {
+      ...(await this.auth.profile(principal.userId)),
+      id: principal.userId,
+      userName: principal.userName,
+      type: principal.userType,
+      roles: principal.roles,
+      teams: principal.teams,
+      locale: principal.locale ?? null,
+      timezone: principal.timezone ?? null,
     };
   }
 

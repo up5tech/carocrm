@@ -94,15 +94,48 @@ export interface ListResult<T = Record<string, unknown>> {
   count: number;
 }
 
-export interface Principal {
+/** The profile block `GET /AppUser/me` serves alongside the authority fields. */
+export interface ProfileInfo {
   id: string;
+  firstName: string | null;
+  lastName: string | null;
+  /** Display name: first + last, falling back to the user name. */
+  name: string;
+  emailAddress: string | null;
+  phoneNumber: string | null;
+  title: string | null;
+  /** Attachment id, or null for the initials avatar. */
+  avatarId: string | null;
+  /** Phase 7A (PLAN §41.6): the user's locale/timezone, null = instance default. */
+  locale: string | null;
+  timezone: string | null;
+}
+
+/** What the signed-in user may change about themselves; `null` clears a value. */
+export interface ProfilePatch {
+  locale?: string | null;
+  timezone?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  emailAddress?: string | null;
+  phoneNumber?: string | null;
+  title?: string | null;
+  avatarId?: string | null;
+}
+
+/** One stored file (`POST /Attachment/upload`); only the fields the UI reads are typed. */
+export interface AttachmentInfo {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface Principal extends ProfileInfo {
   userName: string;
   type: string;
   roles: string[];
   teams: string[];
-  /** Phase 7A (PLAN §41.6): the user's locale/timezone, null = instance default. */
-  locale: string | null;
-  timezone: string | null;
 }
 
 export interface LoginResult {

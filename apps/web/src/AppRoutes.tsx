@@ -17,6 +17,7 @@ import { EntityListPage } from './pages/EntityListPage.js';
 import { EntityManagerPage } from './pages/EntityManagerPage.js';
 import { HomePage } from './pages/HomePage.js';
 import { LoginPage } from './pages/LoginPage.js';
+import { MyProfilePage } from './pages/MyProfilePage.js';
 import { PortalHomePage } from './pages/PortalHomePage.js';
 import { ProcessEditorPage } from './pages/ProcessEditorPage.js';
 import { ProcessesPage } from './pages/ProcessesPage.js';
@@ -94,6 +95,8 @@ export function AppRoutes() {
         <Route path="/dashboards" element={<DashboardsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        {/* the signed-in user's own page, before the entity wildcard reads "profile" as an entity */}
+        <Route path="/profile" element={<MyProfilePage />} />
         {/* Phase 19: the Projects views are static routes, matched before the entity wildcard */}
         <Route path="/Project/:id/plan" element={<ProjectPlanPage />} />
         <Route path="/Project/:id/board" element={<ProjectBoardPage />} />

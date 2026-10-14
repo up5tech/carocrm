@@ -100,6 +100,21 @@ body {
   background: linear-gradient(135deg, #438eff, #6fa9ff);
 }
 
+.lizant-avatar-img {
+  border-radius: 50%;
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.lizant-avatar--large {
+  background: linear-gradient(135deg, #438eff, #6fa9ff);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
+}
+
 .lizant-footer {
   background: transparent;
   text-align: center;

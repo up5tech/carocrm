@@ -32,6 +32,8 @@ export interface UsersTable {
   locale: string | null;
   /** Phase 7A (PLAN §41.6): per-user IANA timezone, null = instance default. */
   timezone: string | null;
+  /** The user's own profile picture: an `attachments` row, cleared when that file is deleted. */
+  avatar_id: string | null;
   is_deleted: boolean;
   created_at: Date;
   modified_at: Date;

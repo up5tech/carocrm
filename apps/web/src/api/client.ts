@@ -1,5 +1,6 @@
 import type {
   AclDefinition,
+  AttachmentInfo,
   CloneResult,
   EntityDefinition,
   ExtensionInstallResult,
@@ -26,6 +27,8 @@ import type {
   ProcessTaskListResult,
   ProcessTaskView,
   ProcessView,
+  ProfileInfo,
+  ProfilePatch,
   ProjectBoardView,
   ProjectCapabilities,
   ProjectGanttView,
@@ -106,6 +109,19 @@ export async function refreshAccessToken(): Promise<string | null> {
 
 let refreshing: Promise<string | null> | null = null;
 
+async function unwrap<T>(response: Response): Promise<T> {
+  if (response.status === 204) return undefined as T;
+
+  const text = await response.text();
+  const payload: unknown = text === '' ? null : JSON.parse(text);
+
+  if (!response.ok) {
+    const error = (payload as { error?: { code?: string; message?: string; details?: Record<string, unknown> } })?.error;
+    throw new ApiError(response.status, error?.code ?? 'INTERNAL_ERROR', error?.message ?? response.statusText, error?.details);
+  }
+  return payload as T;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response = await rawRequest(path, init, getStoredToken());
 
@@ -117,16 +133,16 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (token) response = await rawRequest(path, init, token);
   }
 
-  if (response.status === 204) return undefined as T;
+  return unwrap<T>(response);
+}
 
-  const text = await response.text();
-  const payload: unknown = text === '' ? null : JSON.parse(text);
-
-  if (!response.ok) {
-    const error = (payload as { error?: { code?: string; message?: string; details?: Record<string, unknown> } })?.error;
-    throw new ApiError(response.status, error?.code ?? 'INTERNAL_ERROR', error?.message ?? response.statusText, error?.details);
-  }
-  return payload as T;
+/** Multipart upload: the browser must set the content type itself, so no JSON default is applied. */
+async function upload<T>(path: string, form: FormData): Promise<T> {
+  const headers = new Headers();
+  const token = getStoredToken();
+  if (token) headers.set('authorization', `Bearer ${token}`);
+  const response = await fetch(`/api/v1${path}`, { method: 'POST', body: form, headers, credentials: 'same-origin' });
+  return unwrap<T>(response);
 }
 
 /** A JSON POST — every Phase 19 domain command is an action POST (PLAN §7.2). */
@@ -325,8 +341,17 @@ export const api = {
   login: (userName: string, password: string) =>
     request<LoginResult>('/Authentication', { method: 'POST', body: JSON.stringify({ userName, password }) }),
   me: () => request<Principal>('/AppUser/me'),
-  patchMyPreferences: (input: { locale?: string; timezone?: string }) =>
-    request<{ id: string; locale: string | null; timezone: string | null }>('/AppUser/me', { method: 'PATCH', body: JSON.stringify(input) }),
+  patchMyProfile: (input: ProfilePatch) => request<ProfileInfo>('/AppUser/me', { method: 'PATCH', body: JSON.stringify(input) }),
+  changeMyPassword: (input: { currentPassword: string; newPassword: string }) =>
+    request<{ status: boolean }>('/AppUser/me/password', post(input)),
+  /** Streams one file into the configured storage; the caller links it to a record afterwards. */
+  uploadAttachment: (file: File, input?: { field?: string; role?: string }) => {
+    const form = new FormData();
+    form.append('file', file);
+    if (input?.field !== undefined) form.append('field', input.field);
+    if (input?.role !== undefined) form.append('role', input.role);
+    return upload<AttachmentInfo>('/Attachment/upload', form);
+  },
   logout: () => request<{ status: boolean }>('/Logout', { method: 'POST' }),
 
   // Phase 7A (PLAN §41.5): merged translation catalog, cacheable by content hash.
