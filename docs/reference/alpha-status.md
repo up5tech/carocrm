@@ -557,4 +557,41 @@ with the label above each `operator + value` control, then the table at antd's d
 (`th` `#fafafa` 14px/600 with 16px padding, `td` 12px/16px, row border `#f0f0f0`), the display
 column rendered as the record link, and right-aligned 32px pagination items with a 6px radius.
 
+## Board (Kanban) view for record lists (added 2026-10-14)
+
+A record list now has a second view. The **Board** button in the list header opens
+`/<Entity>/board` — one column per value of an enum field, one card per record, and dragging a
+card into another column writes that field. It appears only when the entity has a field the board
+can group by.
+
+- Nothing is entity-specific. The columns are the `values` of an enum field taken from
+  `GET /Metadata/:entity`; the group field is selectable on the page (default: `stage`, else
+  `status`/`state`, else the first enum field) and a card body is the record's scalar `inList`
+  fields. Opportunity therefore opens on its stage pipeline, Lead/Task/Email on their status, and
+  an entity contributed by an extension package gets a board with no code change (AGENTS §8).
+  The one naming convention is the *default* column choice — every enum field stays selectable,
+  so it is never a restriction.
+- Reads go through the same list and `/Search/:entity` paths as the table view, one request per
+  column, so entity/record/field ACL, the query engine and free-text search apply unchanged.
+- A drop is an ordinary `PATCH /:entity/:id` carrying the record's `version`, so validation,
+  dynamic logic, hooks, audit, optimistic locking and record ACL all apply. There is no
+  capability endpoint for the generic board, so the handle is always enabled and the server is
+  the authority: a refused move is reported and the board reloads, and a card never stays where
+  the server did not agree to put it.
+- Columns page independently (25 rows, then "Load more"). A column for records with no value is
+  rendered only when it holds records, so an unset field never hides a record. The dragged card
+  is drawn through a `DragOverlay` — a column has an opaque background, so the card would
+  otherwise be painted under the next column.
+- Files: `apps/web/src/pages/EntityBoardPage.tsx` (new), `AppRoutes.tsx` (`/:entity/board`,
+  declared before the `/:entity/:id` wildcard), `EntityListPage.tsx` (the view switch),
+  `state/metadata.ts` (`boardGroupFields` / `defaultBoardGroupField`), a `.lizant-board-*` block in
+  `styles/lizant.css`, and `web.board.*` keys in `i18n/{en,vi}/web.json`.
+- Not built: a board for portal users, per-column sorting, saved filters on the board, and inline
+  card editing (a card links to the record instead).
+- Verification: **not executed**. This environment exposes no shell, so `pnpm typecheck`,
+  `pnpm lint` and the browser suite could not be run for this change; the code was written against
+  the repo's strict flags (`exactOptionalPropertyTypes`, `noUncheckedIndexedAccess`) and the import
+  ordering `simple-import-sort` enforces, but that is a review, not a green run. No database
+  change was made — no migration, no seed, no new database, no writes to the configured one.
+
 

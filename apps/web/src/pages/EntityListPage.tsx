@@ -1,4 +1,4 @@
-import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Card, Col, Input, Modal, Popconfirm, Row, Select, Space, Table, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, type SavedFilterRow, type WhereClause } from '../api/client.js';
 import { FieldValue } from '../components/fields.js';
 import { t } from '../state/i18n.js';
-import { fieldLabel, filterEntries, layoutPanelsFor, listEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
+import { boardGroupFields, fieldLabel, filterEntries, layoutPanelsFor, listEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
 import { portalBase } from '../state/portal.js';
 import { useSession } from '../state/session.js';
 import type { FilterDraft } from '../types/views.js';
@@ -192,6 +192,8 @@ export function EntityListPage() {
   }
 
   const displayField = definition.data?.record?.displayField ?? 'name';
+  // The board groups by an enum field, so an entity without one has no board to switch to.
+  const canBoard = boardGroupFields(definition.data).length > 0;
 
   return (
     <Card className="lizant-card lizant-list-card">
@@ -200,6 +202,11 @@ export function EntityListPage() {
           {definition.data?.label ?? entityName}
         </Typography.Title>
         <Space wrap>
+          {canBoard ? (
+            <Button icon={<AppstoreOutlined />} onClick={() => navigate(`${base}/${entityName}/board`)}>
+              {t('web.board.viewBoard')}
+            </Button>
+          ) : null}
           <Button icon={<ReloadOutlined />} onClick={() => void load()}>
             {t('web.list.refresh')}
           </Button>

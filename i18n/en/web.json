@@ -43,6 +43,19 @@
     "isNotNull": "is not empty",
     "shared": "(shared)"
   },
+  "board": {
+    "groupBy": "Group by",
+    "viewBoard": "Board",
+    "viewList": "List",
+    "loadMore": "Load {remaining} more",
+    "emptyColumn": "Nothing here",
+    "noValue": "No value",
+    "dragCard": "Drag record",
+    "moved": "Moved to {value}.",
+    "moveFailed": "Move failed.",
+    "loadFailed": "The board could not be loaded.",
+    "noGroupField": "{entity} has no field a board can group by."
+  },
   "detail": {
     "edit": "Edit",
     "delete": "Delete",

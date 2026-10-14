@@ -71,6 +71,36 @@ export function filterEntries(definition: EntityDefinition | undefined): FieldEn
     : [];
 }
 
+/**
+ * Enum fields a board view can build its columns from. The list comes from metadata — only a
+ * field that declares its own `values` can produce columns, so a free-text field is never
+ * offered and a new enum field needs no frontend change.
+ */
+export function boardGroupFields(definition: EntityDefinition | undefined): FieldEntry[] {
+  if (!definition) return [];
+  return Object.entries(definition.fields)
+    .filter(([name, field]) => !ALWAYS_HIDDEN.has(name) && field.type === 'enum' && enumValues(field).length > 0)
+    .map(([name, field]) => ({ name, field }));
+}
+
+export function enumValues(field: FieldDefinition): string[] {
+  return field.values ?? field.enum ?? [];
+}
+
+/**
+ * Conventional pipeline field names, tried in order before falling back to the first enum
+ * field. The CRM's own pipeline entities (Opportunity `stage`, Lead/Task/Email `status`) all
+ * use one of them, so a board opens on the column a sales reader expects; every enum field
+ * stays selectable on the page itself, so the guess is never a restriction.
+ */
+const BOARD_GROUP_PREFERENCE = ['stage', 'status', 'state'];
+
+export function defaultBoardGroupField(definition: EntityDefinition | undefined): string | undefined {
+  const entries = boardGroupFields(definition);
+  const preferred = BOARD_GROUP_PREFERENCE.find((name) => entries.some((entry) => entry.name === name));
+  return preferred ?? entries[0]?.name;
+}
+
 /** Views the generated record screens can lay out (PLAN §8). */
 type LayoutView = 'list' | 'detail' | 'edit';
 

@@ -722,3 +722,149 @@ body {
   border-radius: 8px;
   background: #fbfcfe;
 }
+
+/* ---------------------------------------------------------------------------
+ * Record board (Kanban) — the metadata-driven view of any entity list. It
+ * speaks the same Lizant board language as the Projects board: `#f7f9fb`
+ * columns, white rounded cards, a bold title and a muted meta row. The classes
+ * are separate on purpose, so neither view depends on the other's stylesheet.
+ * ------------------------------------------------------------------------ */
+.lizant-board {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.lizant-board-column {
+  flex: 0 0 260px;
+  background: #f7f9fb;
+  border: 1px solid #eceff3;
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 120px;
+}
+.lizant-board-column.is-over {
+  border-color: #438eff;
+}
+.lizant-board-column-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 2px 0;
+}
+.lizant-board-column-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #31373d;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lizant-board-column-count {
+  margin-left: auto;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #eef1f5;
+  color: #5b636d;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  text-align: center;
+}
+.lizant-board-column-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lizant-board-column-empty {
+  font-size: 12px;
+  color: #a7aeb8;
+  padding: 2px 4px;
+}
+.lizant-board-more {
+  color: #438eff;
+  font-size: 12px;
+  height: auto;
+  padding: 0;
+  text-align: left;
+}
+.lizant-board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+}
+.lizant-board-card:hover {
+  border-color: #dbe3ec;
+}
+.lizant-board-card.is-dragging {
+  /* The drag overlay carries the visual; the card stays in its column as a dimmed placeholder. */
+  opacity: 0.45;
+}
+.lizant-board-card-overlay {
+  /* dnd-kit sizes the overlay from the dragged card's rect; only the lift needs styling. */
+  box-shadow: 0 8px 22px rgba(15, 34, 67, 0.24);
+  cursor: grabbing;
+}
+.lizant-board-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.lizant-board-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #31373d;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.lizant-board-card-title:hover {
+  color: #438eff;
+}
+.lizant-board-card-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 12px;
+}
+.lizant-board-card-field {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.lizant-board-card-field-label {
+  flex: 0 0 auto;
+  color: #a7aeb8;
+}
+.lizant-board-drag-handle {
+  border: 0;
+  background: transparent;
+  color: #a7aeb8;
+  cursor: grab;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  /* dnd-kit's PointerSensor only receives touch gestures when the browser stops panning here. */
+  touch-action: none;
+}
+.lizant-board-drag-handle:active {
+  cursor: grabbing;
+}
+.lizant-board-drag-handle:focus-visible {
+  outline: 2px solid #438eff;
+  outline-offset: 1px;
+}

@@ -10,6 +10,7 @@ import { AdminPortalsPage } from './pages/AdminPortalsPage.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { DashboardsPage } from './pages/DashboardsPage.js';
 import { EntityAdminPage } from './pages/EntityAdminPage.js';
+import { EntityBoardPage } from './pages/EntityBoardPage.js';
 import { EntityDetailPage } from './pages/EntityDetailPage.js';
 import { EntityEditPage } from './pages/EntityEditPage.js';
 import { EntityListPage } from './pages/EntityListPage.js';
@@ -67,6 +68,8 @@ export function AppRoutes() {
           {/* The generated list/detail pages read the `:entity`/`:id` params, so the portal
               reuses them; every read they perform is portal-ACL scoped server-side. */}
           <Route path="/portal/:entity" element={<EntityListPage />} />
+          {/* the same generated board; every read it makes is portal-ACL scoped server-side */}
+          <Route path="/portal/:entity/board" element={<EntityBoardPage />} />
           <Route path="/portal/:entity/create" element={<EntityEditPage />} />
           <Route path="/portal/:entity/:id" element={<EntityDetailPage />} />
           <Route path="/portal/:entity/:id/edit" element={<EntityEditPage />} />
@@ -97,6 +100,8 @@ export function AppRoutes() {
         <Route path="/Project/:id/gantt" element={<ProjectGanttPage />} />
         <Route path="/Project/:id/members" element={<ProjectMembersPage />} />
         <Route path="/Project/:id/settings" element={<ProjectSettingsPage />} />
+        {/* declared before the entity wildcard so "board" is never read as a record id */}
+        <Route path="/:entity/board" element={<EntityBoardPage />} />
         <Route path="/:entity" element={<EntityListPage />} />
         <Route path="/:entity/create" element={<EntityEditPage />} />
         <Route path="/:entity/:id" element={<EntityDetailPage />} />

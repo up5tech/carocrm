@@ -43,6 +43,19 @@
     "isNotNull": "không trống",
     "shared": "(dùng chung)"
   },
+  "board": {
+    "groupBy": "Nhóm theo",
+    "viewBoard": "Bảng",
+    "viewList": "Danh sách",
+    "loadMore": "Tải thêm {remaining}",
+    "emptyColumn": "Chưa có bản ghi",
+    "noValue": "Chưa xác định",
+    "dragCard": "Kéo bản ghi",
+    "moved": "Đã chuyển sang {value}.",
+    "moveFailed": "Chuyển thất bại.",
+    "loadFailed": "Không tải được bảng.",
+    "noGroupField": "{entity} không có trường để nhóm bảng."
+  },
   "detail": {
     "edit": "Sửa",
     "delete": "Xóa",
