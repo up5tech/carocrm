@@ -142,7 +142,7 @@ export function ProjectShell({ project, capabilities, active, loading = false, e
         <Alert type="error" showIcon style={{ marginBlock: 12 }} message={t('web.projects.loadFailed')} description={String(error)} />
       ) : null}
 
-      <Spin spinning={loading}>{children}</Spin>
+      <Spin spinning={loading} wrapperClassName="lizant-project-body">{children}</Spin>
     </div>
   );
 }

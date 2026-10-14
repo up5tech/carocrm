@@ -646,6 +646,12 @@ body {
  * Phase 19 — Projects: Plan, Kanban and Gantt views. Same compact light surface
  * as the rest of the SPA (theme.ts tokens, no new palette).
  * ------------------------------------------------------------------------ */
+/* The view below the project header card needs its own air — with no gap the toolbar read as
+   part of the card. */
+.lizant-project-body {
+  margin-top: 16px;
+}
+
 .lizant-project-dates {
   font-size: 12px;
 }
