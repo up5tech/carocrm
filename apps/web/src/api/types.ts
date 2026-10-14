@@ -22,7 +22,8 @@ export interface RelationDefinition {
   target: string;
   mappedBy?: string | undefined;
   foreign?: string | undefined;
-  label?: string | undefined;
+  /** Display name for the relation panel; null means "cleared back to the relation name". */
+  label?: string | null | undefined;
 }
 
 /** One index declaration (PLAN §8). Declarative metadata only — no physical index is auto-created. */
@@ -60,6 +61,8 @@ export interface AclDefinition {
 export interface EntityDefinition {
   name: string;
   label: string;
+  /** Icon name from the SPA's fixed `ENTITY_ICONS` set; null means "cleared back to the default". */
+  icon?: string | null | undefined;
   isEntity: boolean;
   fields: Record<string, FieldDefinition>;
   relations: Record<string, RelationDefinition>;

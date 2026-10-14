@@ -124,6 +124,7 @@ export class MetadataRegistry {
       result[name] = {
         name: def.name,
         label: def.label,
+        icon: def.icon,
         isEntity: def.isEntity,
         fields: this.getFields(name),
         relations: this.getRelations(name),

@@ -68,7 +68,8 @@ export const RelationDefinitionSchema = z.object({
   target: z.string(),
   mappedBy: z.string().optional(),
   inverseBy: z.string().optional(),
-  label: z.string().optional(),
+  /** Display name for the relation panel; null clears it back to the humanized relation name. */
+  label: z.string().max(120).nullish(),
   required: z.boolean().default(false),
   removable: z.boolean().default(true),
   straight: z.boolean().default(false),
@@ -148,6 +149,8 @@ export type DynamicLogicSection = { rules: Record<string, unknown>[] };
 export const EntityDefinitionSchema = z.object({
   name: z.string(),
   label: z.string(),
+  /** Icon name resolved against the SPA's fixed `ENTITY_ICONS` set; null clears the choice. */
+  icon: z.string().max(40).nullish(),
   table: z.string().optional(),
   isEntity: z.boolean().default(true),
   fields: z.record(z.string(), FieldDefinitionSchema),
@@ -166,6 +169,7 @@ export const EntityDefinitionSchema = z.object({
 export type EntityDefinition = {
   name: string;
   label: string;
+  icon?: string | null | undefined;
   table?: string | undefined;
   isEntity: boolean;
   fields: Record<string, FieldDefinition>;

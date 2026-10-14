@@ -28,13 +28,15 @@ interface PanelProps {
   parent: string;
   parentId: string;
   name: string;
+  /** Admin-supplied display name for this relation; falls back to the humanized relation name. */
+  label?: string | null | undefined;
   targetDefinition: EntityDefinition | undefined;
   /** Route base of the current app: `/portal` for portal users (PLAN §37). */
   base: string;
 }
 
 /** One relationship panel (PLAN §20 relationship panels) with link/unlink actions. */
-function RelationPanel({ parent, parentId, name, targetDefinition, base }: PanelProps) {
+function RelationPanel({ parent, parentId, name, label, targetDefinition, base }: PanelProps) {
   const { message } = AntApp.useApp();
   const navigate = useNavigate();
   const targetName = targetDefinition?.name;
@@ -68,7 +70,7 @@ function RelationPanel({ parent, parentId, name, targetDefinition, base }: Panel
     <Card
       className="lizant-card"
       size="small"
-      title={<Typography.Text strong>{fieldLabel(name)}</Typography.Text>}
+      title={<Typography.Text strong>{label ?? fieldLabel(name)}</Typography.Text>}
       extra={
         <Space.Compact>
           <Select
@@ -291,6 +293,7 @@ export function EntityDetailPage() {
             parent={entity}
             parentId={id}
             name={relation}
+            label={definition.data?.relations[relation]?.label}
             base={base}
             targetDefinition={metadata.data?.[definition.data?.relations[relation]?.target ?? ''] ?? undefined}
           />

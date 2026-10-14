@@ -6,11 +6,13 @@ import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
+import type { EntityDefinition } from '../api/types.js';
 import { useExtensionNav } from '../state/extensions.js';
 import { activateLocale, activeLocaleName, localesEnabled, t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
 import { portalBase, usePortalContext } from '../state/portal.js';
 import { useSession } from '../state/session.js';
+import { entityIcon } from './entityIcons.js';
 
 const { Sider, Content, Footer } = Layout;
 
@@ -79,9 +81,9 @@ function InternalShell({ children }: { children: ReactNode }) {
     groups.push({ key: '/calendar', icon: <CalendarOutlined />, label: <Link to="/calendar">{t('core.app.calendar')}</Link> });
     groups.push({ key: '/tasks', icon: <CarryOutOutlined />, label: <Link to="/tasks">{t('core.app.myTasks')}</Link> });
 
-    const recordItem = (entity: { name: string; label: string }): MenuItems[number] => ({
+    const recordItem = (entity: EntityDefinition): MenuItems[number] => ({
       key: `/${entity.name}`,
-      icon: <DatabaseOutlined />,
+      icon: entityIcon(entity.icon),
       label: <Link to={`/${entity.name}`}>{entity.label}</Link>,
     });
     // The Project entities form one submenu of their own instead of six entries in RECORDS; the
@@ -92,10 +94,11 @@ function InternalShell({ children }: { children: ReactNode }) {
       .filter((entity) => !entity.name.startsWith('Project'))
       .map((entity) => recordItem(entity));
     if (projectEntities.length > 0) {
+      const project = projectEntities.find((entity) => entity.name === 'Project');
       records.push({
         key: 'sub-project',
-        icon: <ProjectOutlined />,
-        label: projectEntities.find((entity) => entity.name === 'Project')?.label ?? 'Project',
+        icon: project?.icon ? entityIcon(project.icon) : <ProjectOutlined />,
+        label: project?.label ?? 'Project',
         children: projectEntities.map((entity) => recordItem(entity)),
       });
     }

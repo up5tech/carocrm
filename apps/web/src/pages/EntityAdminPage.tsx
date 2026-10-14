@@ -1,11 +1,12 @@
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, App as AntApp, Button, Card, Col, Empty, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Switch, Table, Tabs, Tag, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Col, Empty, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Switch, Table, Tabs, Tag, Typography } from 'antd';
 import { useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition, IndexDefinition, LayoutDefinition, LayoutPanel, LayoutViewType, Role } from '../api/types.js';
+import { ENTITY_ICONS } from '../components/entityIcons.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, useMetadata } from '../state/metadata.js';
 
@@ -222,24 +223,39 @@ interface MetadataTabProps {
   save: (body: Record<string, unknown>, okText: string) => void;
 }
 
-/** Label and entity-enabled state — the two flags that decide whether the entity is usable at all. */
+/** Label, icon and entity-enabled state — the flags that decide how the entity looks and is usable. */
 function SettingsTab({ entity, patch }: { entity: EntityDefinition; patch: (body: Record<string, unknown>, okText: string) => void }) {
-  const [form] = Form.useForm<{ label: string }>();
+  const [form] = Form.useForm<{ label: string; icon: string }>();
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Form form={form} layout="vertical" initialValues={{ label: entity.label }} onFinish={(values: { label: string }) => void patch({ label: values.label }, t('web.entityAdmin.labelUpdated'))}>
+      <Form
+        form={form}
+        layout="vertical"
+        initialValues={{ label: entity.label, icon: entity.icon ?? '' }}
+        onFinish={(values: { label: string; icon: string }) =>
+          void patch({ label: values.label, icon: values.icon === '' ? null : values.icon }, t('web.entityAdmin.settingsUpdated'))
+        }
+      >
         <Row gutter={[12, 12]}>
           <Col xs={24} md={8}>
             <Form.Item name="label" label={t('web.entityAdmin.label')} rules={[{ required: true, message: t('web.entityAdmin.labelRequired') }]} extra={t('web.entityAdmin.technicalName', { name: entity.name })}>
               <Input />
             </Form.Item>
           </Col>
-          <Col xs={24} md={16}>
-            <Button type="primary" icon={<SaveOutlined />} htmlType="submit">
-              {t('web.entityAdmin.rename')}
-            </Button>
-          </Col>
         </Row>
+        <Form.Item name="icon" label={t('web.entityAdmin.iconLabel')} extra={t('web.entityAdmin.iconHint')}>
+          <Radio.Group className="lizant-icon-picker" optionType="button">
+            <Radio.Button value="">{t('web.entityAdmin.iconDefault')}</Radio.Button>
+            {Object.entries(ENTITY_ICONS).map(([name, icon]) => (
+              <Radio.Button key={name} value={name} aria-label={name}>
+                {icon}
+              </Radio.Button>
+            ))}
+          </Radio.Group>
+        </Form.Item>
+        <Button type="primary" icon={<SaveOutlined />} htmlType="submit">
+          {t('web.common.save')}
+        </Button>
       </Form>
 
       <div>
@@ -522,6 +538,18 @@ function LogicTab({ entity, patch }: { entity: EntityDefinition; patch: (body: R
 /** Relations of one entity (PLAN §8). */
 function RelationsTab({ entity, patch }: { entity: EntityDefinition; patch: (body: Record<string, unknown>, okText: string) => void }) {
   const metadata = useMetadata();
+  const [rename, setRename] = useState<{ name: string; label: string } | null>(null);
+
+  // A relation patch replaces the whole entry, so a label edit sends the definition back with only
+  // its label changed. An empty label clears it, and the panel falls back to the relation name.
+  const renameRelation = () => {
+    const relation = rename ? entity.relations[rename.name] : undefined;
+    if (!rename || !relation) return;
+    const label = rename.label.trim();
+    patch({ relations: { [rename.name]: { ...relation, ...(label === '' ? { label: null } : { label }) } } }, t('web.entityAdmin.relationLabelUpdated'));
+    setRename(null);
+  };
+
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Table
@@ -532,16 +560,53 @@ function RelationsTab({ entity, patch }: { entity: EntityDefinition; patch: (bod
         locale={{ emptyText: t('web.entityAdmin.noRelations') }}
         columns={[
           { title: t('web.common.name'), dataIndex: 'name' },
+          {
+            title: t('web.entityAdmin.label'),
+            dataIndex: 'label',
+            render: (value: string | undefined, row) => value ?? fieldLabel(row.name),
+          },
           { title: t('web.entityAdmin.type'), dataIndex: 'type' },
           { title: t('web.entityAdmin.target'), dataIndex: 'target' },
           { title: t('web.entityAdmin.mappedBy'), dataIndex: 'mappedBy' },
+          {
+            title: '',
+            key: 'rename',
+            render: (_: unknown, row) => (
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                aria-label={t('web.entityAdmin.editRelationLabelAria', { name: row.name })}
+                onClick={() => setRename({ name: row.name, label: row.label ?? '' })}
+              />
+            ),
+          },
         ]}
       />
+      <Modal
+        title={rename ? t('web.entityAdmin.relationLabelTitle', { name: rename.name }) : t('web.entityAdmin.relationLabel')}
+        open={rename !== null}
+        okText={t('web.common.save')}
+        cancelText={t('web.entityAdmin.cancel')}
+        onOk={renameRelation}
+        onCancel={() => setRename(null)}
+      >
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+          {t('web.entityAdmin.relationLabelHint')}
+        </Typography.Paragraph>
+        <Input
+          aria-label={t('web.entityAdmin.relationLabel')}
+          value={rename?.label ?? ''}
+          placeholder={fieldLabel(rename?.name ?? '')}
+          onChange={(event) => setRename((current) => (current ? { ...current, label: event.target.value } : current))}
+          onPressEnter={renameRelation}
+        />
+      </Modal>
       <Form
         layout="vertical"
         onFinish={(values) => {
-          const draft = values as { name: string; type: string; target: string; mappedBy?: string };
-          void patch({ relations: { [draft.name]: { type: draft.type, target: draft.target, ...(draft.mappedBy ? { mappedBy: draft.mappedBy } : {}) } } }, t('web.entityAdmin.relationAdded'));
+          const draft = values as { name: string; type: string; target: string; mappedBy?: string; label?: string };
+          const label = draft.label?.trim() ?? '';
+          void patch({ relations: { [draft.name]: { type: draft.type, target: draft.target, ...(label !== '' ? { label } : {}), ...(draft.mappedBy ? { mappedBy: draft.mappedBy } : {}) } } }, t('web.entityAdmin.relationAdded'));
         }}
       >
         <Row gutter={[12, 12]}>
@@ -550,17 +615,24 @@ function RelationsTab({ entity, patch }: { entity: EntityDefinition; patch: (bod
               <Input placeholder="relationName" />
             </Form.Item>
           </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Form.Item name="label" label={t('web.entityAdmin.label')}>
+              <Input placeholder={t('web.entityAdmin.displayLabelPlaceholder')} />
+            </Form.Item>
+          </Col>
           <Col xs={12} md={5}>
             <Form.Item name="type" label={t('web.entityAdmin.type')} initialValue="oneToMany">
               <Select style={{ width: '100%' }} options={RELATION_TYPES.map((type) => ({ value: type, label: type }))} />
             </Form.Item>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={12} md={7}>
             <Form.Item name="target" label={t('web.entityAdmin.targetEntity')} rules={[{ required: true }]}>
               <Select style={{ width: '100%' }} placeholder={t('web.entityAdmin.targetEntityPlaceholder')} options={(metadata.data ? Object.keys(metadata.data) : []).map((name) => ({ value: name, label: name }))} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={7}>
+        </Row>
+        <Row gutter={[12, 12]}>
+          <Col xs={24} md={12}>
             <Form.Item name="mappedBy" label={t('web.entityAdmin.mappedBy')}>
               <Input placeholder="mappedBy" />
             </Form.Item>
@@ -963,7 +1035,7 @@ export function EntityAdminPage() {
             { key: 'layout', label: t('web.entityAdmin.tabLayout'), children: <LayoutTab entity={entity} save={patch} /> },
             { key: 'access', label: t('web.entityAdmin.tabAccess'), children: <AccessTab entity={entity} /> },
             { key: 'indexes', label: t('web.entityAdmin.tabIndexes'), children: <IndexTab entity={entity} save={patch} /> },
-            { key: 'settings', label: t('web.entityAdmin.tabSettings'), children: <SettingsTab entity={entity} patch={patch} /> },
+            { key: 'settings', label: t('web.entityAdmin.tabSettings'), children: <SettingsTab key={entity.name} entity={entity} patch={patch} /> },
           ]}
         />
       </Card>

@@ -113,3 +113,40 @@ describe('Phase 8 — entity ACL metadata', () => {
     expect(errorOf(bad.body)).toBe('VALIDATION_FAILED');
   });
 });
+
+describe('entity appearance metadata', () => {
+  it('stores an entity icon and lets it be cleared back to the default', async () => {
+    const set = await call('POST', `/api/v1/Metadata/${ENTITY}`, adminToken, { icon: 'StarOutlined' });
+    expect(set.status).toBe(200);
+    expect(set.body['icon']).toBe('StarOutlined');
+
+    const cleared = await call('POST', `/api/v1/Metadata/${ENTITY}`, adminToken, { icon: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body['icon']).toBeNull();
+  });
+
+  it('rejects an icon name that is not a plain short string', async () => {
+    const bad = await call('POST', `/api/v1/Metadata/${ENTITY}`, adminToken, { icon: 'x'.repeat(80) });
+    expect(bad.status).toBe(422);
+    expect(errorOf(bad.body)).toBe('VALIDATION_FAILED');
+  });
+
+  it('labels an existing relation and clears the label again', async () => {
+    const read = await call('GET', `/api/v1/Metadata/${ENTITY}`, adminToken);
+    const relations = (read.body['relations'] ?? {}) as Record<string, Record<string, unknown>>;
+    const name = Object.keys(relations)[0];
+    expect(name).toBeDefined();
+
+    const labelled = await call('POST', `/api/v1/Metadata/${ENTITY}`, adminToken, {
+      relations: { [name as string]: { ...relations[name as string], label: 'Related accounts' } },
+    });
+    expect(labelled.status).toBe(200);
+    expect((labelled.body['relations'] as Record<string, { label?: string }>)[name as string]?.label).toBe('Related accounts');
+
+    const cleared = await call('POST', `/api/v1/Metadata/${ENTITY}`, adminToken, {
+      relations: { [name as string]: { ...relations[name as string], label: null } },
+    });
+    expect(cleared.status).toBe(200);
+    expect((cleared.body['relations'] as Record<string, { label?: string | null }>)[name as string]?.label).toBeNull();
+  });
+});
