@@ -110,6 +110,7 @@
     "cloneTitle": "Clone this project",
     "close": "Close",
     "create": "Create",
+    "createDependentItem": "Create dependent item",
     "currentStatus": "Status",
     "datesUpdated": "Dates updated.",
     "defaultGroup": "Default group for new tasks",

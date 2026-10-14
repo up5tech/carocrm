@@ -4,9 +4,10 @@ import { useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { api } from '../../api/client.js';
-import type { ProjectTaskRow } from '../../api/types.js';
+import type { ProjectMemberRow, ProjectStageRow, ProjectTaskRow } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
 import { projectQueryKey, ProjectShell,useErrorReporter, useProjectCapabilities, useProjectPlan, useProjectRefresh  } from './projectShared.js';
+import { ProjectTaskModal } from './ProjectTaskModal.js';
 
 /**
  * Gantt view (PLAN_Phase_19_Projects.md §4.12): a hand-drawn SVG timeline — bars for dated tasks, a
@@ -44,8 +45,21 @@ export function ProjectGanttPage() {
   const [dayWidth, setDayWidth] = useState(26);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [selected, setSelected] = useState<ProjectTaskRow | null>(null);
+  const [creating, setCreating] = useState<{ groupId: string | null; predecessorTaskId: string } | null>(null);
   const [dependency, setDependency] = useState<{ id: string; dependencyType: string | null; label: string } | null>(null);
   const surface = useRef<HTMLDivElement | null>(null);
+
+  const stages = useQuery({
+    queryKey: [...projectQueryKey(id), 'stages'],
+    queryFn: async () => (await api.projectStages(id)).list as unknown as ProjectStageRow[],
+  });
+  const members = useQuery({
+    queryKey: [...projectQueryKey(id), 'members'],
+    queryFn: async () => {
+      const rows = (await api.projectMembers(id)).list as ProjectMemberRow[];
+      return rows.map((row) => ({ value: row.userId, label: row.userName ?? row.userId }));
+    },
+  });
 
   const gantt = useQuery({
     queryKey: [...projectQueryKey(id), 'gantt', allGroupTypes],
@@ -266,7 +280,32 @@ export function ProjectGanttPage() {
       <DependencyModal dependency={dependency} projectId={id} onClose={() => setDependency(null)} onChanged={() => { setDependency(null); refresh(); }} />
 
       {selected !== null ? (
-        <Modal open onCancel={() => setSelected(null)} title={selected.name} footer={<Button onClick={() => setSelected(null)}>{t('web.projects.close')}</Button>}>
+        <Modal
+          open
+          onCancel={() => setSelected(null)}
+          title={selected.name}
+          footer={[
+            // §4.12: with one task selected, offer "create dependent item after selected item". The
+            // new task becomes the successor, so the dependency only exists if the project allows it.
+            ...(capabilities.data?.features['dependenciesEnabled'] === true && capabilities.data?.capabilities['createTask'] === true
+              ? [
+                  <Button
+                    key="dependent"
+                    onClick={() => {
+                      const predecessor = selected;
+                      setSelected(null);
+                      setCreating({ groupId: predecessor.groupId, predecessorTaskId: predecessor.id });
+                    }}
+                  >
+                    {t('web.projects.createDependentItem')}
+                  </Button>,
+                ]
+              : []),
+            <Button key="close" onClick={() => setSelected(null)}>
+              {t('web.projects.close')}
+            </Button>,
+          ]}
+        >
           <Space direction="vertical">
             <Typography.Text>
               {t('web.projects.fieldStart')}: {selected.dateStart ?? '—'} · {t('web.projects.fieldEnd')}: {selected.dateEnd ?? '—'}
@@ -275,6 +314,19 @@ export function ProjectGanttPage() {
           </Space>
         </Modal>
       ) : null}
+
+      <ProjectTaskModal
+        projectId={id}
+        plan={plan.data}
+        stages={stages.data ?? []}
+        capabilities={capabilities.data}
+        task={null}
+        defaultGroupId={creating?.groupId ?? undefined}
+        predecessorTaskId={creating?.predecessorTaskId}
+        open={creating !== null}
+        onClose={() => setCreating(null)}
+        users={members.data ?? []}
+      />
     </ProjectShell>
   );
 }

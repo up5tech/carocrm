@@ -486,6 +486,11 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   it now contributes `budget`, `progress` and the `isOverdue` formula to the core entity (the same
   shape `account-health-fields` uses), and its `/api/v1/Project/:id/summary` route still proves an
   extension controller running ahead of the generic record routes.
+- Follow-up (2026-10-14, not part of the verified 2026-10-13 run): the Gantt selected-task panel now
+  offers the documented "create dependent item" action (§4.12). The new task is created first and
+  then linked as the successor with a `FinishToStart` edge; the button appears only when the project
+  enables dependencies and the role allows creating tasks. §4.5's "Group Type as a queryable metadata
+  field" is recorded as a deliberate deviation instead — see `docs/modules/projects/compatibility.md`.
 - Not built: working-time shading in the Gantt (no calendar engine to reuse), multi-select Gantt
   moves, the two Plan-view keyboard shortcuts, cross-project dependencies, portals for projects.
   Details in `docs/modules/projects/compatibility.md`.

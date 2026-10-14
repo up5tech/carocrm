@@ -14,6 +14,7 @@ reference only. Nothing was copied from upstream PHP, assets, translations or ic
 | Project members hold a project role; Owner / Editor / Member built in, custom roles possible | `ProjectRole` with eleven dimensions; three `isSystem` roles seeded |
 | Plan, Board and Gantt views; group types Triage/Backlog/Work/Phase/Sprint; Gantt defaults to Work/Phase/Sprint | `/Project/:id/{plan,board,gantt}`, `groupType`, `GANTT_GROUP_TYPES` |
 | Dependencies of four types plus an untyped, informational edge; cycles and self-edges refused; enforcement per type | `dependencyBlockFor`, `wouldCreateCycle`, table `CHECK` against a self-edge |
+| With a task selected in the Gantt, create the next item as its dependent | the selected-task panel offers "Create dependent item"; the new task is created and then linked as the successor with a `FinishToStart` edge |
 | A parent cannot complete while a subtask is open | guard `subtasksAllowCompletion` |
 | Per-project settings for dependencies, collaborators, priority, points, hours, Gantt; disabling never deletes data | six flags, enforced in `assertNotDisabled`, values kept |
 | Cloning with optional content and a date offset | `ProjectCloneService` |
@@ -42,6 +43,14 @@ reference only. Nothing was copied from upstream PHP, assets, translations or ic
 7. **Group reordering and the Plan view are hand-drawn** with `dnd-kit` (approved for this phase)
    rather than a bundled project-management widget; the Gantt is SVG written in this repo, with no
    third-party chart dependency.
+8. **Group type is resolved at read time, not exposed as a metadata `foreign` field.** §4.5 asks for
+   the related Group Type to be queryable "for filters and dashboard options". This platform's
+   `foreign` field type is an ID link, not a computed value, so a `ProjectTask.groupType` field
+   would either be a stored duplicate that can drift from its group or need a new kernel feature.
+   The supported query paths are the dashlet's `groupTypes` option and the Gantt's group-type
+   filter; both read the group row itself, so a client cannot supply a value that disagrees with
+   the actual group. Filtering the *generic* `ProjectTask` list by group type is therefore not
+   available.
 
 ## Deferred (not built in this phase)
 

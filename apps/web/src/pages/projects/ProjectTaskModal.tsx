@@ -41,6 +41,8 @@ interface Props {
   defaultGroupId?: string | undefined;
   /** Set when creating a subtask: sent to the server as the parent. */
   parentTaskId?: string | null | undefined;
+  /** Set by the Gantt "create dependent item after selected item" action (§4.12). */
+  predecessorTaskId?: string | null | undefined;
   milestone?: boolean;
   open: boolean;
   onClose: () => void;
@@ -57,7 +59,7 @@ function toDayjs(value: string | null | undefined): Dayjs | null {
   return dayjs(String(value).slice(0, 10));
 }
 
-export function ProjectTaskModal({ projectId, plan, stages, capabilities, task, defaultGroupId, parentTaskId, milestone = false, open, onClose, users }: Props) {
+export function ProjectTaskModal({ projectId, plan, stages, capabilities, task, defaultGroupId, parentTaskId, predecessorTaskId, milestone = false, open, onClose, users }: Props) {
   const { message } = AntApp.useApp();
   const report = useErrorReporter();
   const refresh = useProjectRefresh(projectId);
@@ -119,7 +121,18 @@ export function ProjectTaskModal({ projectId, plan, stages, capabilities, task, 
         });
         void message.success(t('web.projects.milestoneCreated'));
       } else {
-        await api.createProjectTask(projectId, { projectId, ...payload });
+        const created = await api.createProjectTask(projectId, { projectId, ...payload });
+        const createdId = created['id'];
+        // §4.12: "create dependent item after selected item" — the new task becomes the successor of
+        // the task it was created from. The dependency is added only after the id exists, and its own
+        // refusal (a cycle, a disabled feature) is reported without discarding the task just created.
+        if (typeof createdId === 'string' && predecessorTaskId !== undefined && predecessorTaskId !== null && predecessorTaskId !== '') {
+          try {
+            await api.addProjectTaskDependency(createdId, { predecessorTaskId, dependencyType: 'FinishToStart' });
+          } catch (error) {
+            report(error);
+          }
+        }
         void message.success(t('web.projects.taskCreated'));
       }
       refresh();
