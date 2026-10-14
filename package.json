@@ -20,6 +20,8 @@
     "dev:all": "concurrently \"pnpm -r --filter @carocrm/api dev\" \"pnpm -r --filter @carocrm/web dev\"",
     "db:migrate": "tsx database/migrate.ts",
     "db:seed": "tsx database/seed.ts",
+    "demo:projects": "tsx scripts/projects-demo.ts",
+    "demo:projects:purge": "tsx scripts/projects-demo.ts --purge",
     "test:e2e": "bash scripts/e2e-smoke.sh"
   },
   "devDependencies": {

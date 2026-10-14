@@ -13,6 +13,7 @@
     "modules/*/src/**/*.ts",
     "database/**/*.ts",
     "e2e/**/*.ts",
+    "scripts/**/*.ts",
     "eslint.config.js",
     "vitest.config.ts"
   ],

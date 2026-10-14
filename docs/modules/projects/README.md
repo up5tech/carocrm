@@ -63,6 +63,20 @@ Records themselves are ordinary metadata entities in `entity_records`, so the En
 CRUD, validation, field ACL, audit, stream, attachments and search; the module adds the rules that
 span more than one record. Nothing in `apps/api/src/projects` reimplements a kernel subsystem.
 
+## Demo data
+
+`pnpm demo:projects` fills the configured database with a coherent sample: three projects on two
+boards, categories with a child, five `demo.*` users, 11 groups, 37 tasks with subtasks, milestones,
+priorities, points and estimates, 11 dependencies of all four types, collaborators and bulk
+membership. Dates are offsets from the day it runs, so the Gantt, the calendar and the task dashlet
+always show live work.
+
+Every record is created through the real HTTP API of the booted application, never with raw SQL, so
+the guards derive the statuses and refuse anything inconsistent — a successful run means valid data.
+All of it carries a `demo` id prefix (or a `projectId` pointing at one), which is what
+`pnpm demo:projects:purge` deletes; it removes exactly this set and leaves the seeded board, stages
+and roles alone. Re-running `demo:projects` purges first, so it is idempotent.
+
 ## Verification
 
 `pnpm vitest run apps/api/test/projects-domain.test.ts apps/api/test/projects.test.ts
