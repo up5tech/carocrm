@@ -6,7 +6,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition, IndexDefinition, LayoutDefinition, LayoutPanel, LayoutViewType, Role } from '../api/types.js';
-import { ENTITY_ICONS } from '../components/entityIcons.js';
+import { defaultIconName,ENTITY_ICONS } from '../components/entityIcons.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, useMetadata } from '../state/metadata.js';
 
@@ -226,14 +226,17 @@ interface MetadataTabProps {
 /** Label, icon and entity-enabled state — the flags that decide how the entity looks and is usable. */
 function SettingsTab({ entity, patch }: { entity: EntityDefinition; patch: (body: Record<string, unknown>, okText: string) => void }) {
   const [form] = Form.useForm<{ label: string; icon: string }>();
+  const builtInIcon = defaultIconName(entity.name);
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Form
         form={form}
         layout="vertical"
-        initialValues={{ label: entity.label, icon: entity.icon ?? '' }}
+        initialValues={{ label: entity.label, icon: entity.icon ?? builtInIcon ?? '' }}
         onFinish={(values: { label: string; icon: string }) =>
-          void patch({ label: values.label, icon: values.icon === '' ? null : values.icon }, t('web.entityAdmin.settingsUpdated'))
+          // Picking the entity's built-in icon is the same as having no choice at all, so it is
+          // stored as null and stays a default rather than an override.
+          void patch({ label: values.label, icon: values.icon === '' || values.icon === builtInIcon ? null : values.icon }, t('web.entityAdmin.settingsUpdated'))
         }
       >
         <Row gutter={[12, 12]}>

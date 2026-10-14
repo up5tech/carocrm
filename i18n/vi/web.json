@@ -718,7 +718,7 @@
     "relationLabelUpdated": "Đã cập nhật nhãn quan hệ.",
     "editRelationLabelAria": "Sửa nhãn của quan hệ {name}",
     "iconLabel": "Biểu tượng",
-    "iconHint": "Hiển thị ở thanh bên cạnh các bản ghi của entity.",
+    "iconHint": "Hiển thị ở thanh bên cạnh các bản ghi của entity. Chọn Mặc định để dùng biểu tượng dựng sẵn cho entity này.",
     "iconDefault": "Mặc định",
     "view": "Màn hình",
     "panelCount": "{panels} bảng được bố trí cho màn hình {view}.",

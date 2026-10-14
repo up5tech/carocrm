@@ -718,7 +718,7 @@
     "relationLabelUpdated": "Relation label updated.",
     "editRelationLabelAria": "Edit label of relation {name}",
     "iconLabel": "Icon",
-    "iconHint": "Shown in the sidebar next to the entity's records.",
+    "iconHint": "Shown in the sidebar next to the entity's records. Default keeps the icon built in for this entity.",
     "iconDefault": "Default",
     "view": "View",
     "panelCount": "{panels} panel(s) laid out for the {view} view.",

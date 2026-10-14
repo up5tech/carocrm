@@ -83,7 +83,7 @@ function InternalShell({ children }: { children: ReactNode }) {
 
     const recordItem = (entity: EntityDefinition): MenuItems[number] => ({
       key: `/${entity.name}`,
-      icon: entityIcon(entity.icon),
+      icon: entityIcon(entity.icon, entity.name),
       label: <Link to={`/${entity.name}`}>{entity.label}</Link>,
     });
     // The Project entities form one submenu of their own instead of six entries in RECORDS; the
@@ -97,7 +97,7 @@ function InternalShell({ children }: { children: ReactNode }) {
       const project = projectEntities.find((entity) => entity.name === 'Project');
       records.push({
         key: 'sub-project',
-        icon: project?.icon ? entityIcon(project.icon) : <ProjectOutlined />,
+        icon: entityIcon(project?.icon, project?.name ?? 'Project'),
         label: project?.label ?? 'Project',
         children: projectEntities.map((entity) => recordItem(entity)),
       });

@@ -1,10 +1,9 @@
-import { DatabaseOutlined, TeamOutlined, TrophyOutlined, UserOutlined } from '@ant-design/icons';
 import { Card, Col, Row } from 'antd';
-import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
+import { entityIcon } from '../components/entityIcons.js';
 import { t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
@@ -16,13 +15,6 @@ interface Count {
 }
 
 const TONES = ['blue', 'green', 'cyan', 'yellow', 'purple'] as const;
-const ICONS: Record<string, ReactNode> = {
-  Account: <TeamOutlined />,
-  Contact: <UserOutlined />,
-  Lead: <DatabaseOutlined />,
-  Opportunity: <TrophyOutlined />,
-};
-
 /** Landing page: one Lizant stat tile per enabled entity, counts from the generic list API. */
 export function HomePage() {
   const metadata = useMetadata();
@@ -74,7 +66,7 @@ export function HomePage() {
                   <div className="lizant-stat-hint">{t('web.home.records')}</div>
                 </div>
                 <span className={`lizant-stat-icon lizant-stat-icon--${TONES[index % TONES.length]}`}>
-                  {ICONS[tile.entity] ?? <DatabaseOutlined />}
+                  {entityIcon(metadata.data?.[tile.entity]?.icon, tile.entity)}
                 </span>
               </div>
             </Card>
