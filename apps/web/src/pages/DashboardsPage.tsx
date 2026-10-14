@@ -1,4 +1,4 @@
-import { DeleteOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Card, Checkbox, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -172,13 +172,18 @@ export function DashboardsPage() {
           </Button>
         </Space>
       </div>
-      <Space style={{ marginBottom: 16 }} wrap>
-        {dashboards.map((item) => (
-          <Button key={item.id} type={item.id === activeId ? 'primary' : 'default'} onClick={() => setActiveId(item.id)}>
-            {item.name} ({item.dashlets.length})
-          </Button>
-        ))}
-      </Space>
+      {dashboards.length > 0 ? (
+        <Select
+          className="lizant-dashboard-picker"
+          value={activeId}
+          onChange={(value: string) => setActiveId(value)}
+          options={dashboards.map((item) => ({ value: item.id, label: `${item.name} (${item.dashlets.length})` }))}
+          placeholder={t('web.dashboards.pick')}
+          showSearch
+          optionFilterProp="label"
+          suffixIcon={<AppstoreOutlined />}
+        />
+      ) : null}
       {active ? (
         <>
           <div style={{ marginBottom: 12 }}>

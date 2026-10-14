@@ -186,6 +186,13 @@ body {
   font-size: 13px;
 }
 
+/* dashboard switcher on /dashboards */
+.lizant-dashboard-picker {
+  margin-bottom: 16px;
+  max-width: 420px;
+  min-width: 240px;
+}
+
 .lizant-card {
   border: 1px solid #f0f0f0;
   border-radius: 8px;

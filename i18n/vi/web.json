@@ -325,6 +325,7 @@
     "deleteDashboard": "Xóa bảng điều khiển",
     "deleteConfirm": "Xóa bảng điều khiển \"{name}\" và các dashlet của nó?",
     "empty": "Chưa có bảng điều khiển nào.",
+    "pick": "Chọn bảng điều khiển",
     "namePlaceholder": "Tổng quan bán hàng",
     "kindLabel": "Loại",
     "kindProjectTasks": "Công việc dự án (Phase 19)",

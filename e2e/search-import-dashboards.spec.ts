@@ -153,6 +153,7 @@ test.describe('phase 12 — search, saved filters, csv and dashboards', () => {
 
     await page.getByRole('button', { name: 'Delete dashboard' }).click();
     await page.locator('.ant-popconfirm:visible, .ant-popover:visible').getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByRole('button', { name: new RegExp(`PW Dashboard ${runId}`) })).toHaveCount(0);
+    // The picker is a Select now, so check both its current label and any rendered option.
+    await expect(page.locator('.lizant-dashboard-picker, .ant-select-item-option', { hasText: `PW Dashboard ${runId}` })).toHaveCount(0);
   });
 });

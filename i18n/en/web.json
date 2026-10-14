@@ -325,6 +325,7 @@
     "deleteDashboard": "Delete dashboard",
     "deleteConfirm": "Delete dashboard \"{name}\" and its dashlets?",
     "empty": "No dashboards yet.",
+    "pick": "Choose a dashboard",
     "namePlaceholder": "Sales overview",
     "kindLabel": "Kind",
     "kindProjectTasks": "Project tasks (Phase 19)",
