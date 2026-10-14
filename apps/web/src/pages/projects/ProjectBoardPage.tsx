@@ -1,8 +1,9 @@
+import { ClockCircleOutlined, FieldTimeOutlined, TrophyOutlined } from '@ant-design/icons';
 import { closestCorners, DndContext, DragOverlay, type DragEndEvent,KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, Select, Space, Tag, Typography } from 'antd';
+import { Avatar, Button, Select, Space } from 'antd';
 import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -16,7 +17,7 @@ import {
   useProjectCapabilities,
   useProjectPlan,
   useProjectRefresh } from './projectShared.js';
-import { ProjectTaskModal, statusTag } from './ProjectTaskModal.js';
+import { ProjectTaskModal } from './ProjectTaskModal.js';
 
 /**
  * Kanban board (PLAN_Phase_19_Projects.md §4.12): one column per stage of the project's board, one
@@ -68,6 +69,10 @@ export function ProjectBoardPage() {
       return rows.map((row) => ({ value: row.userId, label: row.userName ?? row.userId }));
     },
   });
+  /** The board card shows the assignee's initials, so the id has to resolve to a name here. */
+  const memberNames = new Map<string, string>(
+    (members.data ?? []).map((member): [string, string] => [member.value, member.label]),
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -142,6 +147,7 @@ export function ProjectBoardPage() {
               stage={column.stage}
               tasks={column.tasks}
               canEdit={canMove}
+              memberNames={memberNames}
               onEdit={setEditing}
             />
           ))}
@@ -154,9 +160,12 @@ export function ProjectBoardPage() {
         */}
         <DragOverlay dropAnimation={null}>
           {activeTask === null ? null : (
-            <Card className="lizant-project-card lizant-project-card-overlay" size="small">
-              <BoardCardContent task={activeTask} />
-            </Card>
+            <div className="lizant-project-card lizant-project-card-overlay">
+              <BoardCardContent
+                task={activeTask}
+                assigneeName={activeTask.assigneeUserId === null ? undefined : memberNames.get(activeTask.assigneeUserId)}
+              />
+            </div>
           )}
         </DragOverlay>
       </DndContext>
@@ -180,64 +189,175 @@ interface ColumnProps {
   stage: Record<string, unknown>;
   tasks: ProjectTaskRow[];
   canEdit: boolean;
+  memberNames: Map<string, string>;
   onEdit: (task: ProjectTaskRow) => void;
 }
 
-function StageColumn({ stage, tasks, canEdit, onEdit }: ColumnProps) {
+function StageColumn({ stage, tasks, canEdit, memberNames, onEdit }: ColumnProps) {
   const stageId = String(stage['id']);
   const drop = useDroppable({ id: `column:${stageId}`, data: { stageId } });
+  const statusValue = String(stage['statusValue'] ?? '');
 
   return (
     <div className={`lizant-project-column${drop.isOver ? ' is-over' : ''}`} ref={drop.setNodeRef}>
       <div className="lizant-project-column-head">
-        <Typography.Text strong>{String(stage['name'] ?? '')}</Typography.Text>
-        <Tag>{String(stage['statusValue'] ?? '')}</Tag>
-        <Typography.Text type="secondary">{String(tasks.length)}</Typography.Text>
+        <span className="lizant-project-column-title">{String(stage['name'] ?? '')}</span>
+        <span className={`lizant-project-pill ${PILL_TONE[statusValue] ?? 'is-gray'}`}>{statusValue}</span>
+        <span className="lizant-project-column-count">{String(tasks.length)}</span>
       </div>
       <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
         {tasks.map((task) => (
-          <BoardCard key={task.id} task={task} disabled={!canEdit} onEdit={onEdit} />
+          <BoardCard
+            key={task.id}
+            task={task}
+            disabled={!canEdit}
+            assigneeName={task.assigneeUserId === null ? undefined : memberNames.get(task.assigneeUserId)}
+            onEdit={onEdit}
+          />
         ))}
       </SortableContext>
     </div>
   );
 }
 
-/** The card body, shared by the sortable card and its drag overlay so both look identical. */
-function BoardCardContent({ task, dragHandle }: { task: ProjectTaskRow; dragHandle?: React.ReactNode }) {
+/**
+ * Soft pill tones, keyed by the value the API returns. The Lizant board colours its card tags with a
+ * pale tint plus a saturated label rather than a bordered tag, so status and priority share one
+ * palette and the tone is the only difference between them.
+ */
+const PILL_TONE: Readonly<Record<string, string>> = {
+  'Not Started': 'is-gray',
+  Started: 'is-blue',
+  Completed: 'is-green',
+  Canceled: 'is-gray',
+  Deferred: 'is-amber',
+  Low: 'is-gray',
+  Normal: 'is-blue',
+  High: 'is-amber',
+  Urgent: 'is-red',
+};
+
+/** `Ada Lovelace` → `AL`; the board has no avatar image, so the initials stand in for it. */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter((part) => part !== '');
+  const first = parts[0];
+  if (first === undefined) return '?';
+  const last = parts.length > 1 ? parts[parts.length - 1] : undefined;
+  return `${first.slice(0, 1)}${last === undefined ? '' : last.slice(0, 1)}`.toUpperCase();
+}
+
+/**
+ * The card body, shared by the sortable card and its drag overlay so both look identical. The shape
+ * follows the Lizant board card: a bold title with a `⋯` affordance, a row of soft pills with the
+ * assignee pushed to the right, then a divider and an icon meta footer.
+ *
+ * The reference card also carries a description and a progress bar; a `ProjectTask` row has neither,
+ * so the footer shows the fields the record actually has (dates, points, estimate) instead of
+ * inventing a completion percentage.
+ */
+function BoardCardContent({
+  task,
+  dragHandle,
+  assigneeName,
+  onOpen,
+}: {
+  task: ProjectTaskRow;
+  dragHandle?: React.ReactNode;
+  assigneeName?: string | null | undefined;
+  onOpen?: (() => void) | undefined;
+}) {
   return (
-    <Space direction="vertical" size={2} style={{ width: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+    <>
+      <div className="lizant-project-card-head">
         {dragHandle ?? null}
-        <Typography.Text strong ellipsis style={{ minWidth: 0 }}>
-          {task.name}
-        </Typography.Text>
+        <span className="lizant-project-card-title">{task.name}</span>
+        {onOpen === undefined ? (
+          <span className="lizant-project-card-menu" aria-hidden="true">
+            ⋯
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="lizant-project-card-menu"
+            aria-label={t('web.projects.editTask')}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen();
+            }}
+          >
+            ⋯
+          </button>
+        )}
       </div>
-      <Space size={4} wrap>
-        {statusTag(task.status)}
-        {task.priority !== null ? <Tag>{task.priority}</Tag> : null}
-        {task.taskType === 'Milestone' ? <Tag color="purple">{t('web.projects.milestone')}</Tag> : null}
-      </Space>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        {formatDay(task.dateStart)}
-        {task.dateEnd !== null ? ` → ${formatDay(task.dateEnd)}` : ''}
-      </Typography.Text>
-    </Space>
+
+      <div className="lizant-project-card-tags">
+        {task.status === null ? null : (
+          <span className={`lizant-project-pill ${PILL_TONE[task.status] ?? 'is-gray'}`}>{task.status}</span>
+        )}
+        {task.priority === null ? null : (
+          <span className={`lizant-project-pill ${PILL_TONE[task.priority] ?? 'is-gray'}`}>{task.priority}</span>
+        )}
+        {task.taskType === 'Milestone' ? <span className="lizant-project-pill is-purple">{t('web.projects.milestone')}</span> : null}
+        {assigneeName === null || assigneeName === undefined || assigneeName === '' ? null : (
+          // The tint is inline: antd injects its Avatar styles after lizant.css, so a class of equal
+          // specificity would lose the background/colour.
+          <Avatar
+            size={24}
+            className="lizant-project-card-avatar"
+            style={{ background: '#e8f1ff', color: '#2f7ff0', fontSize: 11, fontWeight: 600 }}
+            title={assigneeName}
+          >
+            {initials(assigneeName)}
+          </Avatar>
+        )}
+      </div>
+
+      <div className="lizant-project-card-footer">
+        <span className="lizant-project-card-meta">
+          <ClockCircleOutlined />
+          {formatDay(task.dateStart)}
+          {task.dateEnd === null ? '' : ` → ${formatDay(task.dateEnd)}`}
+        </span>
+        {task.points === null ? null : (
+          <span className="lizant-project-card-meta">
+            <TrophyOutlined />
+            {String(task.points)}
+          </span>
+        )}
+        {task.estimateHours === null ? null : (
+          <span className="lizant-project-card-meta">
+            <FieldTimeOutlined />
+            {`${String(task.estimateHours)}h`}
+          </span>
+        )}
+      </div>
+    </>
   );
 }
 
-function BoardCard({ task, disabled, onEdit }: { task: ProjectTaskRow; disabled: boolean; onEdit: (task: ProjectTaskRow) => void }) {
+function BoardCard({
+  task,
+  disabled,
+  assigneeName,
+  onEdit,
+}: {
+  task: ProjectTaskRow;
+  disabled: boolean;
+  assigneeName?: string | undefined;
+  onEdit: (task: ProjectTaskRow) => void;
+}) {
   const sortable = useSortable({ id: task.id, data: { stageId: task.stageId }, disabled });
   return (
-    <Card
+    <div
       className={`lizant-project-card${sortable.isDragging ? ' is-dragging' : ''}`}
-      size="small"
       ref={sortable.setNodeRef}
       style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition }}
       onClick={() => onEdit(task)}
     >
       <BoardCardContent
         task={task}
+        assigneeName={assigneeName}
+        onOpen={() => onEdit(task)}
         dragHandle={
           /*
             dnd-kit starts a drag only from the element that carries `listeners` — `attributes` alone
@@ -258,6 +378,6 @@ function BoardCard({ task, disabled, onEdit }: { task: ProjectTaskRow; disabled:
           </button>
         }
       />
-    </Card>
+    </div>
   );
 }

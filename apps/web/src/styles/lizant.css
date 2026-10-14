@@ -550,11 +550,11 @@ body {
   flex: 0 0 260px;
   background: #f7f9fb;
   border: 1px solid #eceff3;
-  border-radius: 8px;
-  padding: 8px;
+  border-radius: 10px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   min-height: 120px;
 }
 .lizant-project-column.is-over {
@@ -564,10 +564,44 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  padding: 2px 2px 0;
 }
+.lizant-project-column-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #31373d;
+}
+.lizant-project-column-count {
+  margin-left: auto;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #eef1f5;
+  color: #5b636d;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+ * Board card — follows the Lizant board card: a white rounded card, a bold
+ * title with a `⋯` affordance, a row of soft pills with the assignee avatar
+ * pushed right, then a divider and an icon meta footer.
+ * ------------------------------------------------------------------------ */
 .lizant-project-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
   cursor: pointer;
+}
+.lizant-project-card:hover {
+  border-color: #dbe3ec;
 }
 .lizant-project-card.is-dragging {
   /* The drag overlay carries the visual; the card stays in its column as a dimmed placeholder. */
@@ -577,6 +611,100 @@ body {
   /* dnd-kit sizes the overlay from the dragged card's rect; only the lift needs styling. */
   box-shadow: 0 8px 22px rgba(15, 34, 67, 0.24);
   cursor: grabbing;
+}
+.lizant-project-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.lizant-project-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #31373d;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.lizant-project-card-menu {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
+  color: #a7aeb8;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.lizant-project-card-menu:hover {
+  color: #5b636d;
+}
+.lizant-project-card-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lizant-project-card-avatar {
+  /* Colour is set inline on the Avatar — antd injects its own styles after this file. */
+  margin-left: auto;
+}
+.lizant-project-card-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 12px;
+  color: #737b85;
+}
+.lizant-project-card-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.lizant-project-card-meta .anticon {
+  color: #a7aeb8;
+}
+
+/* Soft pills: a pale tint with a saturated label, shared by status, priority and milestone. */
+.lizant-project-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+.lizant-project-pill.is-gray {
+  background: #eef1f5;
+  color: #5b636d;
+}
+.lizant-project-pill.is-blue {
+  background: #e8f1ff;
+  color: #2f7ff0;
+}
+.lizant-project-pill.is-green {
+  background: #e3f7ec;
+  color: #2f9e63;
+}
+.lizant-project-pill.is-amber {
+  background: #fdf3e3;
+  color: #c9821f;
+}
+.lizant-project-pill.is-red {
+  background: #fdecec;
+  color: #e04b54;
+}
+.lizant-project-pill.is-purple {
+  background: #f0ebfd;
+  color: #7b52d6;
 }
 .lizant-project-gantt {
   border: 1px solid #eceff3;

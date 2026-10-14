@@ -505,6 +505,15 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   now render the dragged item through `DragOverlay`, which portals it above every container; the item
   left in place is dimmed as a placeholder and `dropAnimation` is disabled because both views refetch
   from the server on drop.
+- Follow-up (2026-10-14): the board card was restyled to the Lizant board card supplied as a
+  screenshot — a white 10px-radius card on the `#f7f9fb` column, a bold `#31373d` title with a `⋯`
+  affordance, a row of soft pills (pale tint + saturated label; one palette shared by status and
+  priority, purple for milestone) with the assignee's initials avatar pushed right, then a `#f0f0f0`
+  divider and a 12px `#737b85` icon footer (clock + dates, trophy + points, field-time + estimate).
+  The column header uses the same pill for the stage's status value plus a rounded count badge.
+  The reference card's description and progress bar have no counterpart on a `ProjectTask` row, so
+  they were left out rather than faked. The Plan view's row keeps the older bordered status tag —
+  unifying it would mean moving the pill helper into `projectShared.tsx` first.
 - Not built: working-time shading in the Gantt (no calendar engine to reuse), multi-select Gantt
   moves, the two Plan-view keyboard shortcuts, cross-project dependencies, portals for projects.
   Details in `docs/modules/projects/compatibility.md`.
