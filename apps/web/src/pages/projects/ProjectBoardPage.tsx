@@ -1,5 +1,5 @@
 import { ClockCircleOutlined, FieldTimeOutlined, TrophyOutlined } from '@ant-design/icons';
-import { closestCorners, DndContext, DragOverlay, type DragEndEvent,KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
+import { closestCorners, DndContext, type DragEndEvent,DragOverlay, KeyboardSensor, PointerSensor, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
@@ -301,12 +301,7 @@ function BoardCardContent({
         {assigneeName === null || assigneeName === undefined || assigneeName === '' ? null : (
           // The tint is inline: antd injects its Avatar styles after lizant.css, so a class of equal
           // specificity would lose the background/colour.
-          <Avatar
-            size={24}
-            className="lizant-project-card-avatar"
-            style={{ background: '#e8f1ff', color: '#2f7ff0', fontSize: 11, fontWeight: 600 }}
-            title={assigneeName}
-          >
+          <Avatar size={24} className="lizant-project-card-avatar" style={{ background: '#e8f1ff', color: '#2f7ff0', fontSize: 11, fontWeight: 600 }} alt={assigneeName}>
             {initials(assigneeName)}
           </Avatar>
         )}

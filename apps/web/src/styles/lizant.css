@@ -1107,3 +1107,63 @@ body {
   outline: 2px solid #438eff;
   outline-offset: 1px;
 }
+
+/* entity-manager layout editor: full-width field rows, group blocks and the disabled pool */
+.lizant-layout-row-wrap {
+  touch-action: none;
+}
+.lizant-layout-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lizant-layout-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  cursor: grab;
+  user-select: none;
+}
+.lizant-layout-group {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fafbfc;
+  padding: 8px 10px;
+}
+.lizant-layout-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lizant-layout-group-name {
+  font-weight: 600;
+}
+.lizant-layout-group-count {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+.lizant-layout-group-body {
+  margin-top: 8px;
+}
+.lizant-layout-append {
+  margin-top: 8px;
+  padding: 14px;
+  text-align: center;
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  color: #8c8c8c;
+  font-size: 13px;
+  transition: background 0.15s ease;
+}
+.lizant-layout-pool {
+  min-height: 120px;
+  padding: 8px;
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
