@@ -283,7 +283,14 @@
     "everyone": "Everyone",
     "onlyMine": "Only mine",
     "hint": "Time zone {zone}. Drag an entry onto another day to reschedule it.",
-    "recurringSuffix": " · recurring"
+    "recurringSuffix": " · recurring",
+    "allDay": "All day",
+    "today": "Today",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "entries": "{count} entries",
+    "more": "+{count} more",
+    "dayEmpty": "Nothing scheduled on this day."
   },
   "stream": {
     "title": "Stream",

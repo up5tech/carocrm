@@ -283,7 +283,14 @@
     "everyone": "Mọi người",
     "onlyMine": "Chỉ của tôi",
     "hint": "Múi giờ {zone}. Kéo một mục sang ngày khác để đổi lịch.",
-    "recurringSuffix": " · lặp lại"
+    "recurringSuffix": " · lặp lại",
+    "allDay": "Cả ngày",
+    "today": "Hôm nay",
+    "prevMonth": "Tháng trước",
+    "nextMonth": "Tháng sau",
+    "entries": "{count} mục",
+    "more": "+{count} nữa",
+    "dayEmpty": "Không có mục nào trong ngày này."
   },
   "stream": {
     "title": "Dòng hoạt động",

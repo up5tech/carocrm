@@ -352,74 +352,239 @@ body {
 
 
 
-/* ---- calendar ---- */
-.lizant-cal-cell {
+/* ---- calendar ----
+   antd injects its CSS-in-JS after this file, so every rule that has to beat a built-in
+   state (selected, today, hover) repeats the .ant-picker-calendar-full .ant-picker-panel chain. */
+.lizant-cal-header {
+  align-items: center;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  height: 100%;
-  min-height: 92px;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 12px;
 }
 
-.lizant-cal-cell[data-drag-over='true'] {
-  background: #f0f8ff;
+.lizant-cal-month {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  min-width: 140px;
 }
 
-.lizant-cal-events {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  overflow: hidden;
+.lizant-cal-total {
+  font-size: 12px;
+  margin-inline-start: auto;
 }
 
-.lizant-cal-tag {
-  cursor: grab;
-  margin-inline-end: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.lizant-cal-legend {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
 }
 
-.lizant-cal-tag a {
+.lizant-cal-dot {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  height: 8px;
+  width: 8px;
+}
+
+.lizant-cal-dot--task { background: #438eff; }
+.lizant-cal-dot--call { background: #13c2c2; }
+.lizant-cal-dot--meeting { background: #722ed1; }
+.lizant-cal-dot--project-task { background: #2f54eb; }
+
+/* the grid replaces antd's month/year selects and its own cell chrome */
+.ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel {
+  border-top: 0;
+  text-align: start;
+}
+
+.ant-picker-calendar .ant-picker-content th {
+  color: #737b85;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 30px;
+  padding-inline-start: 8px;
+  text-align: start;
+}
+
+.ant-picker-calendar .ant-picker-content td {
+  border-top: 1px solid #f2f5f9;
+  vertical-align: top;
+}
+
+.ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-inner {
+  background: transparent;
+  border-radius: 0;
   color: inherit;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: start;
 }
 
-/* antd stretches the selected day's background across the whole cell row; keep it a pill.
-   The selector is deliberately specific: antd injects its CSS-in-JS after this file. */
 .ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-selected .ant-picker-cell-inner,
 .ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-today .ant-picker-cell-inner {
   background: transparent;
   color: inherit;
 }
 
-.ant-picker-calendar .ant-picker-cell-selected .ant-picker-calendar-date-value,
-.ant-picker-calendar .ant-picker-cell-today .ant-picker-calendar-date-value,
-.ant-picker-calendar .ant-picker-cell-selected .ant-picker-cell-inner .ant-picker-calendar-date-value {
-  background: #438eff;
-  border-radius: 10px;
-  color: #fff;
-  display: inline-block;
-  line-height: 18px;
-  min-width: 20px;
-  padding: 1px 7px;
-  text-align: center;
+.ant-picker-calendar .ant-picker-cell-today .ant-picker-cell-inner::before {
+  border-color: transparent;
 }
 
-.ant-picker-calendar .ant-picker-cell-in-view .ant-picker-calendar-date-value {
-  font-weight: 500;
+.lizant-cal-cell {
+  container-type: inline-size;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  min-height: 104px;
+  padding: 6px 8px 8px;
+  transition: background-color 0.15s ease;
 }
 
-/* size the selected/today inner to its number so antd's ring becomes a pill */
-.ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-selected .ant-picker-cell-inner,
-.ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel .ant-picker-cell-today .ant-picker-cell-inner {
+.ant-picker-calendar .ant-picker-cell:hover .lizant-cal-cell {
+  background: #f8fbff;
+}
+
+.lizant-cal-cell--out {
+  cursor: default;
+}
+
+.lizant-cal-cell--selected,
+.lizant-cal-cell--selected:hover {
+  background: #f0f8ff;
+  box-shadow: inset 0 0 0 1px #dbeaff;
+}
+
+.lizant-cal-cell[data-drag-over='true'] {
+  background: #e8f3ff;
+  box-shadow: inset 0 0 0 1px #438eff;
+}
+
+.lizant-cal-day {
   align-self: flex-start;
-  display: inline-block;
-  height: 24px;
+  border-radius: 999px;
+  color: #737b85;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 500;
   line-height: 22px;
   min-width: 24px;
-  padding: 0 6px;
+  padding: 0 7px;
   text-align: center;
-  width: auto;
+}
+
+.lizant-cal-cell--out .lizant-cal-day {
+  color: #c1c7ce;
+}
+
+.lizant-cal-cell--selected .lizant-cal-day {
+  box-shadow: inset 0 0 0 1px #438eff;
+  color: #438eff;
+}
+
+.lizant-cal-cell--today .lizant-cal-day,
+.lizant-cal-cell--today:hover .lizant-cal-day {
+  background: #438eff;
+  color: #fff;
+}
+
+.lizant-cal-events {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+  text-align: start;
+}
+
+.lizant-cal-event {
+  border: 1px solid #eff2f7;
+  border-left: 3px solid #d5dbe3;
+  border-radius: 6px;
+  cursor: grab;
+  font-size: 12px;
+  line-height: 18px;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.lizant-cal-event:hover {
+  background: #f8fbff;
+  border-color: #dbeaff;
+  border-left-color: inherit;
+}
+
+.lizant-cal-event--task { border-left-color: #438eff; }
+.lizant-cal-event--call { border-left-color: #13c2c2; }
+.lizant-cal-event--meeting { border-left-color: #722ed1; }
+.lizant-cal-event--project-task { border-left-color: #2f54eb; }
+
+.lizant-cal-event a {
+  color: #31373d;
+  display: block;
+  overflow: hidden;
+  padding: 1px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lizant-cal-event-time {
+  color: #737b85;
+  margin-inline-end: 5px;
+}
+
+/* In a narrow column the entry name matters more than its start time. */
+@container (max-width: 130px) {
+  .lizant-cal-event-time {
+    display: none;
+  }
+}
+
+.lizant-cal-event-repeat {
+  color: #9aa2ab;
+  margin-inline-start: 4px;
+}
+
+.lizant-cal-more {
+  color: #438eff;
+  font-size: 12px;
+  font-weight: 500;
+  padding-inline-start: 4px;
+}
+
+.lizant-cal-day-panel {
+  border: 1px solid #eff2f7;
+  border-radius: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+}
+
+.lizant-cal-day-panel-title {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  text-transform: capitalize;
+}
+
+.lizant-cal-day-list {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+@media only screen and (max-width: 768px) {
+  .lizant-cal-cell {
+    min-height: 76px;
+    padding: 4px;
+  }
+
+  .lizant-cal-event-time,
+  .lizant-cal-total {
+    display: none;
+  }
 }
 
 /* Jobs admin: the log viewer stays a plain monospace block (PLAN §24 job logs). */
