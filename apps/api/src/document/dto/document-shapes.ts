@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 /** Request shapes for the `document` module's commands. Every schema is `.strict()`. */
 
@@ -14,7 +14,7 @@ export const CreateDocumentTemplateSchema = z
     subject: z.string().trim().max(255).optional(),
     body: z.string().trim().min(1).max(200_000),
     /** Rendering target: `html` bodies are escaped per placeholder, `text` bodies are not. */
-    format: z.enum(['html', 'text']).default('html'),
+    format: z.enum(["html", "text"]).default("html"),
     locale: z.string().trim().min(2).max(8).optional(),
     active: z.boolean().default(true),
     /** The template used when a caller does not name one. Only one default per entity type. */
@@ -27,7 +27,7 @@ export const UpdateDocumentTemplateSchema = z
     name: z.string().trim().min(1).max(255).optional(),
     subject: z.string().trim().max(255).nullable().optional(),
     body: z.string().trim().min(1).max(200_000).optional(),
-    format: z.enum(['html', 'text']).optional(),
+    format: z.enum(["html", "text"]).optional(),
     locale: z.string().trim().min(2).max(8).nullable().optional(),
     active: z.boolean().optional(),
     isDefault: z.boolean().optional(),
@@ -42,6 +42,10 @@ export const PreviewDocumentSchema = z
   })
   .strict();
 
-export type CreateDocumentTemplateInput = z.infer<typeof CreateDocumentTemplateSchema>;
-export type UpdateDocumentTemplateInput = z.infer<typeof UpdateDocumentTemplateSchema>;
+export type CreateDocumentTemplateInput = z.infer<
+  typeof CreateDocumentTemplateSchema
+>;
+export type UpdateDocumentTemplateInput = z.infer<
+  typeof UpdateDocumentTemplateSchema
+>;
 export type PreviewDocumentInput = z.infer<typeof PreviewDocumentSchema>;

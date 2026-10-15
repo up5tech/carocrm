@@ -1,17 +1,37 @@
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual } from "node:crypto";
 
-import { AuthenticationFailedError, AuthorizationDeniedError, InvalidQueryError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Delete, Get, Headers, HttpCode, Inject, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
-import type { ZodTypeAny } from 'zod';
+import {
+  AuthenticationFailedError,
+  AuthorizationDeniedError,
+  InvalidQueryError,
+} from "@carocrm/core/errors/index.js";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from "@nestjs/common";
+import { ApiTags } from "@nestjs/swagger";
+import type { ZodTypeAny } from "zod";
 
-import { Public } from '../auth/auth.guard.js';
-import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
-import { CONFIG_TOKEN, type AppConfig } from '../config.js';
-import { requireDocumentKind } from './document/descriptors.js';
-import { SalesDocumentService } from './document/document.service.js';
-import { SalesNumberingService } from './document/numbering.service.js';
-import { SalesQuoteSendService } from './document/quote-send.service.js';
+import { Public } from "../auth/auth.guard.js";
+import {
+  REQUEST_SCOPE_TOKEN,
+  type RequestScope,
+} from "../common/request-scope.js";
+import { type AppConfig, CONFIG_TOKEN } from "../config.js";
+import { requireDocumentKind } from "./document/descriptors.js";
+import { SalesDocumentService } from "./document/document.service.js";
+import { SalesNumberingService } from "./document/numbering.service.js";
+import { SalesQuoteSendService } from "./document/quote-send.service.js";
+import type { SalesAuditContext } from "./document/types.js";
 import {
   AllocatePaymentSchema,
   BulkPriceUpdateSchema,
@@ -33,16 +53,15 @@ import {
   TodaySchema,
   UpdateDocumentSchema,
   UpdatePaymentSchema,
-} from './dto/sales-shapes.js';
-import { AllocationService } from './payments/allocation.service.js';
-import { PaymentService } from './payments/payment.service.js';
-import { BulkPriceService } from './pricing/bulk-price.service.js';
-import { PriceResolutionService } from './pricing/price-resolution.service.js';
-import { SalesModuleHealthService } from './sales-module-health.service.js';
-import { SalesSettingsService } from './sales-settings.service.js';
-import { runAsSalesInternal } from './sales-internal.js';
-import { SalesTaxService } from './tax/tax.service.js';
-import type { SalesAuditContext } from './document/types.js';
+} from "./dto/sales-shapes.js";
+import { AllocationService } from "./payments/allocation.service.js";
+import { PaymentService } from "./payments/payment.service.js";
+import { BulkPriceService } from "./pricing/bulk-price.service.js";
+import { PriceResolutionService } from "./pricing/price-resolution.service.js";
+import { runAsSalesInternal } from "./sales-internal.js";
+import { SalesModuleHealthService } from "./sales-module-health.service.js";
+import { SalesSettingsService } from "./sales-settings.service.js";
+import { SalesTaxService } from "./tax/tax.service.js";
 
 /**
  * Phase 19-S.1 – 19-S.12 — Sales domain commands (`/api/v1/Sales`).
@@ -57,18 +76,24 @@ import type { SalesAuditContext } from './document/types.js';
  * Route order: this controller is registered before `ENTITY_CONTROLLERS` in `AppModule`, so the
  * static `Sales` prefix can never be swallowed by the generic `:entity` wildcard.
  */
-@ApiTags('sales')
-@Controller('api/v1/Sales')
+@ApiTags("sales")
+@Controller("api/v1/Sales")
 export class SalesController {
   constructor(
-    @Inject(SalesModuleHealthService) private readonly health: SalesModuleHealthService,
-    @Inject(SalesSettingsService) private readonly settings: SalesSettingsService,
-    @Inject(SalesNumberingService) private readonly numbering: SalesNumberingService,
-    @Inject(SalesDocumentService) private readonly documents: SalesDocumentService,
-    @Inject(SalesQuoteSendService) private readonly quoteSend: SalesQuoteSendService,
+    @Inject(SalesModuleHealthService)
+    private readonly health: SalesModuleHealthService,
+    @Inject(SalesSettingsService)
+    private readonly settings: SalesSettingsService,
+    @Inject(SalesNumberingService)
+    private readonly numbering: SalesNumberingService,
+    @Inject(SalesDocumentService)
+    private readonly documents: SalesDocumentService,
+    @Inject(SalesQuoteSendService)
+    private readonly quoteSend: SalesQuoteSendService,
     @Inject(PaymentService) private readonly payments: PaymentService,
     @Inject(AllocationService) private readonly allocations: AllocationService,
-    @Inject(PriceResolutionService) private readonly prices: PriceResolutionService,
+    @Inject(PriceResolutionService)
+    private readonly prices: PriceResolutionService,
     @Inject(BulkPriceService) private readonly bulkPrices: BulkPriceService,
     @Inject(SalesTaxService) private readonly tax: SalesTaxService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
@@ -76,37 +101,37 @@ export class SalesController {
   ) {}
 
   /** Module diagnostics: dependencies, optional integrations, features and checks. Admin only. */
-  @Get('action/health')
+  @Get("action/health")
   async moduleHealth() {
-    this.requireAdmin('module diagnostics');
+    this.requireAdmin("module diagnostics");
     return this.health.health();
   }
 
   /** The validated settings document plus the computed defaults and warnings. */
-  @Get('action/settings')
+  @Get("action/settings")
   async readSettings() {
     return this.settings.read();
   }
 
   /** Update settings; high-impact policy is administrator-only (§13). */
   @HttpCode(200)
-  @Post('action/settings')
+  @Post("action/settings")
   async updateSettings(@Body() body: unknown) {
-    this.requireAdmin('changing Sales settings');
+    this.requireAdmin("changing Sales settings");
     parse(SalesSettingsPatchSchema, body);
     return this.settings.update(body);
   }
 
   /** Number series with the next unallocated number — allocation itself happens at issuance. */
-  @Get('action/numbering')
+  @Get("action/numbering")
   async numberingState() {
-    this.requireAdmin('document numbering');
+    this.requireAdmin("document numbering");
     return { list: await this.numbering.list() };
   }
 
   /** Resolve one line's price, with the explanation of which source won (§4.3). */
   @HttpCode(200)
-  @Post('action/resolvePrice')
+  @Post("action/resolvePrice")
   async resolvePrice(@Body() body: unknown) {
     const input = parse(ResolvePriceSchema, body);
     return this.prices.resolve(input);
@@ -114,7 +139,7 @@ export class SalesController {
 
   /** Preview or apply a bulk price change; `apply` is audited and bounded (§4.3). */
   @HttpCode(200)
-  @Post('action/bulkPriceUpdate')
+  @Post("action/bulkPriceUpdate")
   async bulkPriceUpdate(@Body() body: unknown) {
     const input = parse(BulkPriceUpdateSchema, body);
     return this.bulkPrices.run(input);
@@ -122,7 +147,7 @@ export class SalesController {
 
   /** Server-calculated totals: discounts, shipping, tax breakdown and rounding policy (§4.12, §5.7). */
   @HttpCode(200)
-  @Post('action/previewTotals')
+  @Post("action/previewTotals")
   async previewTotals(@Body() body: unknown) {
     const input = parse(PreviewTotalsSchema, body);
     return this.tax.preview(input);
@@ -139,7 +164,7 @@ export class SalesController {
 
   /** Create a draft quote/order/invoice/credit note/delivery/return with typed line items. */
   @HttpCode(201)
-  @Post('document')
+  @Post("document")
   async createDocument(@Body() body: unknown) {
     const input = parse(CreateDocumentSchema, body);
     return await runAsSalesInternal(() =>
@@ -153,15 +178,19 @@ export class SalesController {
   }
 
   /** A document with its items, its totals, and the actions its current state allows. */
-  @Get('document/:kind/:id')
-  async readDocument(@Param('kind') kind: string, @Param('id') id: string) {
+  @Get("document/:kind/:id")
+  async readDocument(@Param("kind") kind: string, @Param("id") id: string) {
     return this.documents.view(requireDocumentKind(kind), id);
   }
 
   /** Update a draft. A locked document refuses changes to its protected fields, by name (§4.7). */
   @HttpCode(200)
-  @Patch('document/:kind/:id')
-  async updateDocument(@Param('kind') kind: string, @Param('id') id: string, @Body() body: unknown) {
+  @Patch("document/:kind/:id")
+  async updateDocument(
+    @Param("kind") kind: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
     const input = parse(UpdateDocumentSchema, body);
     return await runAsSalesInternal(() =>
       this.documents.update(requireDocumentKind(kind), id, {
@@ -174,8 +203,12 @@ export class SalesController {
 
   /** Apply a named transition; the issuing one allocates the number and freezes the snapshot. */
   @HttpCode(200)
-  @Post('document/:kind/:id/transition')
-  async transitionDocument(@Param('kind') kind: string, @Param('id') id: string, @Body() body: unknown) {
+  @Post("document/:kind/:id/transition")
+  async transitionDocument(
+    @Param("kind") kind: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
     const input = parse(DocumentTransitionSchema, body);
     return await runAsSalesInternal(() =>
       this.documents.transition(requireDocumentKind(kind), id, input.action, {
@@ -187,34 +220,65 @@ export class SalesController {
 
   /** Privileged unlock of an issued document: dedicated permission plus an audited reason (§4.7). */
   @HttpCode(200)
-  @Post('document/:kind/:id/unlock')
-  async unlockDocument(@Param('kind') kind: string, @Param('id') id: string, @Body() body: unknown) {
+  @Post("document/:kind/:id/unlock")
+  async unlockDocument(
+    @Param("kind") kind: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
     const input = parse(DocumentUnlockSchema, body);
-    return await runAsSalesInternal(() => this.documents.unlock(requireDocumentKind(kind), id, input.reason, this.audit(undefined)));
+    return await runAsSalesInternal(() =>
+      this.documents.unlock(
+        requireDocumentKind(kind),
+        id,
+        input.reason,
+        this.audit(undefined),
+      ),
+    );
   }
 
   /** Convert to another document kind, copying values by value and idempotent on `correlationId`. */
   @HttpCode(201)
-  @Post('document/:kind/:id/convert')
-  async convertDocument(@Param('kind') kind: string, @Param('id') id: string, @Body() body: unknown) {
+  @Post("document/:kind/:id/convert")
+  async convertDocument(
+    @Param("kind") kind: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
     const input = parse(DocumentConvertSchema, body);
     return await runAsSalesInternal(() =>
-      this.documents.convert(requireDocumentKind(kind), id, input.action, this.audit(input.correlationId), input.overrides ?? {}),
+      this.documents.convert(
+        requireDocumentKind(kind),
+        id,
+        input.action,
+        this.audit(input.correlationId),
+        input.overrides ?? {},
+      ),
     );
   }
 
   /** Recalculate from the server's own numbers. An issued document is never rewritten by this. */
   @HttpCode(200)
-  @Post('document/:kind/:id/recalculate')
-  async recalculateDocument(@Param('kind') kind: string, @Param('id') id: string) {
-    return await runAsSalesInternal(() => this.documents.recalculate(requireDocumentKind(kind), id));
+  @Post("document/:kind/:id/recalculate")
+  async recalculateDocument(
+    @Param("kind") kind: string,
+    @Param("id") id: string,
+  ) {
+    return await runAsSalesInternal(() =>
+      this.documents.recalculate(requireDocumentKind(kind), id),
+    );
   }
 
   /** Delete a **draft** only; an issued document is voided or credited instead (§4.9). */
   @HttpCode(204)
-  @Delete('document/:kind/:id')
-  async deleteDocument(@Param('kind') kind: string, @Param('id') id: string): Promise<void> {
-    await runAsSalesInternal(() => this.documents.removeDraft(requireDocumentKind(kind), id));
+  @Delete("document/:kind/:id")
+  async deleteDocument(
+    @Param("kind") kind: string,
+    @Param("id") id: string,
+  ): Promise<void> {
+    await runAsSalesInternal(() =>
+      this.documents.removeDraft(requireDocumentKind(kind), id),
+    );
   }
 
   // -------------------------------------------------------------------------------------------
@@ -231,8 +295,8 @@ export class SalesController {
    * built-in block layout is rendered instead, which is a valid install rather than a failure.
    */
   @HttpCode(200)
-  @Post('quote/:id/render')
-  async renderQuote(@Param('id') id: string, @Body() body: unknown) {
+  @Post("quote/:id/render")
+  async renderQuote(@Param("id") id: string, @Body() body: unknown) {
     const input = parse(RenderQuoteSchema, body);
     return await this.quoteSend.render(id, input.templateCode);
   }
@@ -245,10 +309,12 @@ export class SalesController {
    * address) and a configured mail transport are both required — the quote is not issued otherwise.
    */
   @HttpCode(200)
-  @Post('quote/:id/send')
-  async sendQuote(@Param('id') id: string, @Body() body: unknown) {
+  @Post("quote/:id/send")
+  async sendQuote(@Param("id") id: string, @Body() body: unknown) {
     const input = parse(SendQuoteSchema, body);
-    return await runAsSalesInternal(() => this.quoteSend.send(id, { ...input }));
+    return await runAsSalesInternal(() =>
+      this.quoteSend.send(id, { ...input }),
+    );
   }
 
   // -------------------------------------------------------------------------------------------
@@ -261,43 +327,43 @@ export class SalesController {
 
   /** Record an incoming or outgoing payment. Its balances are derived, never supplied. */
   @HttpCode(201)
-  @Post('payment')
+  @Post("payment")
   async createPayment(@Body() body: unknown) {
     const input = parse(CreatePaymentSchema, body);
     return await this.payments.create({ ...input });
   }
 
   /** A payment with its live balance, recomputed from its allocation rows. */
-  @Get('payment/:id')
-  async readPayment(@Param('id') id: string) {
+  @Get("payment/:id")
+  async readPayment(@Param("id") id: string) {
     return await this.payments.view(id);
   }
 
   @HttpCode(200)
-  @Patch('payment/:id')
-  async updatePayment(@Param('id') id: string, @Body() body: unknown) {
+  @Patch("payment/:id")
+  async updatePayment(@Param("id") id: string, @Body() body: unknown) {
     const input = parse(UpdatePaymentSchema, body);
     return await this.payments.update(id, { ...input });
   }
 
   /** `confirm` makes a payment allocatable; `cancel` is refused while it has allocations. */
   @HttpCode(200)
-  @Post('payment/:id/transition')
-  async transitionPayment(@Param('id') id: string, @Body() body: unknown) {
+  @Post("payment/:id/transition")
+  async transitionPayment(@Param("id") id: string, @Body() body: unknown) {
     const input = parse(PaymentTransitionSchema, body);
     return await this.payments.transition(id, input.action, input.reason);
   }
 
   /** The payment's allocation history. */
-  @Get('payment/:id/allocations')
-  async paymentAllocations(@Param('id') id: string) {
+  @Get("payment/:id/allocations")
+  async paymentAllocations(@Param("id") id: string) {
     return { list: await this.allocations.forPayment(id) };
   }
 
   /** Apply part of a payment to an issued invoice. Over-allocation is refused with both remainders. */
   @HttpCode(201)
-  @Post('payment/:id/allocate')
-  async allocatePayment(@Param('id') id: string, @Body() body: unknown) {
+  @Post("payment/:id/allocate")
+  async allocatePayment(@Param("id") id: string, @Body() body: unknown) {
     const input = parse(AllocatePaymentSchema, body);
     return await this.allocations.allocate({
       paymentId: id,
@@ -310,43 +376,54 @@ export class SalesController {
 
   /** A payment-to-payment transfer (a refund or a moved unapplied amount), as its own record. */
   @HttpCode(200)
-  @Post('payment/:id/transfer')
-  async transferPayment(@Param('id') id: string, @Body() body: unknown) {
+  @Post("payment/:id/transfer")
+  async transferPayment(@Param("id") id: string, @Body() body: unknown) {
     const input = parse(PaymentTransferSchema, body);
     return await this.allocations.transfer(id, input.toPaymentId, input.amount);
   }
 
   /** Remove an allocation. Both sides recompute; the removal is evented, never silent. */
   @HttpCode(204)
-  @Delete('allocation/:id')
-  async unallocate(@Param('id') id: string): Promise<void> {
+  @Delete("allocation/:id")
+  async unallocate(@Param("id") id: string): Promise<void> {
     await this.allocations.unallocate(id);
   }
 
   /** The invoices a payment may be allocated to, with what each still owes. */
-  @Get('allocatableInvoices')
-  async allocatableInvoices(@Query('direction') direction?: string, @Query('accountId') accountId?: string) {
-    return { list: await this.payments.allocatableInvoices(direction === 'outgoing' ? 'outgoing' : 'incoming', accountId ?? null) };
+  @Get("allocatableInvoices")
+  async allocatableInvoices(
+    @Query("direction") direction?: string,
+    @Query("accountId") accountId?: string,
+  ) {
+    return {
+      list: await this.payments.allocatableInvoices(
+        direction === "outgoing" ? "outgoing" : "incoming",
+        accountId ?? null,
+      ),
+    };
   }
 
   /** A provider-neutral request for a customer to pay. No gateway call happens here. */
   @HttpCode(201)
-  @Post('paymentRequest')
+  @Post("paymentRequest")
   async createPaymentRequest(@Body() body: unknown) {
     const input = parse(CreatePaymentRequestSchema, body);
     return await this.payments.createRequest({ ...input });
   }
 
   @HttpCode(200)
-  @Post('paymentRequest/:id/transition')
-  async transitionPaymentRequest(@Param('id') id: string, @Body() body: unknown) {
+  @Post("paymentRequest/:id/transition")
+  async transitionPaymentRequest(
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
     const input = parse(PaymentTransitionSchema, body);
     return await this.payments.transitionRequest(id, input.action);
   }
 
   /** Ingest one provider event. A duplicate delivery changes nothing and says so. */
   @HttpCode(200)
-  @Post('providerEvent')
+  @Post("providerEvent")
   async providerEvent(@Body() body: unknown) {
     const input = parse(ProviderEventSchema, body);
     return await this.payments.ingestProviderEvent({ ...input });
@@ -354,11 +431,13 @@ export class SalesController {
 
   /** Expire quotes past their validity date. Idempotent — an administrator may run it by hand. */
   @HttpCode(200)
-  @Post('action/expireQuotes')
+  @Post("action/expireQuotes")
   async expireQuotes(@Body() body: unknown) {
-    this.requireAdmin('expiring quotes');
+    this.requireAdmin("expiring quotes");
     const input = parse(ExpireQuotesSchema, body);
-    return await runAsSalesInternal(() => this.documents.expireOverdueQuotes(input.today));
+    return await runAsSalesInternal(() =>
+      this.documents.expireOverdueQuotes(input.today),
+    );
   }
 
   /**
@@ -375,11 +454,16 @@ export class SalesController {
    */
   @Public()
   @HttpCode(200)
-  @Post('action/expire-quotes')
-  async expireQuotesForWorker(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
+  @Post("action/expire-quotes")
+  async expireQuotesForWorker(
+    @Body() body: unknown,
+    @Headers("x-worker-secret") secret?: string,
+  ) {
     this.assertWorkerSecret(secret);
     const input = parse(ExpireQuotesSchema, body);
-    return await runAsSalesInternal(() => this.documents.expireOverdueQuotes(input.today));
+    return await runAsSalesInternal(() =>
+      this.documents.expireOverdueQuotes(input.today),
+    );
   }
 
   /**
@@ -389,39 +473,49 @@ export class SalesController {
    * for versus what its confirmed deliveries actually moved. Idempotent.
    */
   @HttpCode(200)
-  @Post('salesOrder/:id/refreshFulfilment')
-  async refreshFulfilment(@Param('id') id: string) {
+  @Post("salesOrder/:id/refreshFulfilment")
+  async refreshFulfilment(@Param("id") id: string) {
     return await runAsSalesInternal(() => this.documents.refreshFulfilment(id));
   }
 
   /** Mark issued invoices past their due date as overdue, emitting one event each (19-S.9). */
   @HttpCode(200)
-  @Post('action/markOverdueInvoices')
+  @Post("action/markOverdueInvoices")
   async markOverdueInvoices(@Body() body: unknown) {
-    this.requireAdmin('overdue detection');
+    this.requireAdmin("overdue detection");
     const input = parse(TodaySchema, body);
-    return await runAsSalesInternal(() => this.documents.markOverdueInvoices(input.today));
+    return await runAsSalesInternal(() =>
+      this.documents.markOverdueInvoices(input.today),
+    );
   }
 
   /** The same operation for the scheduled job, authorised by the worker capability. */
   @Public()
   @HttpCode(200)
-  @Post('action/mark-overdue-invoices')
-  async markOverdueInvoicesForWorker(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
+  @Post("action/mark-overdue-invoices")
+  async markOverdueInvoicesForWorker(
+    @Body() body: unknown,
+    @Headers("x-worker-secret") secret?: string,
+  ) {
     this.assertWorkerSecret(secret);
     const input = parse(TodaySchema, body);
-    return await runAsSalesInternal(() => this.documents.markOverdueInvoices(input.today));
+    return await runAsSalesInternal(() =>
+      this.documents.markOverdueInvoices(input.today),
+    );
   }
 
   private assertWorkerSecret(supplied: string | undefined): void {
     const expected = this.config.reportWorkerSecret;
-    if (expected === '' || supplied === undefined) {
-      throw new AuthenticationFailedError('Invalid worker capability.');
+    if (expected === "" || supplied === undefined) {
+      throw new AuthenticationFailedError("Invalid worker capability.");
     }
     const expectedBytes = Buffer.from(expected);
     const suppliedBytes = Buffer.from(supplied);
-    if (expectedBytes.length !== suppliedBytes.length || !timingSafeEqual(expectedBytes, suppliedBytes)) {
-      throw new AuthenticationFailedError('Invalid worker capability.');
+    if (
+      expectedBytes.length !== suppliedBytes.length ||
+      !timingSafeEqual(expectedBytes, suppliedBytes)
+    ) {
+      throw new AuthenticationFailedError("Invalid worker capability.");
     }
   }
 
@@ -435,15 +529,19 @@ export class SalesController {
 
   private requireAdmin(action: string): void {
     if (!this.scope.isAdmin) {
-      throw new AuthorizationDeniedError(`Administrator access is required for ${action}.`);
+      throw new AuthorizationDeniedError(
+        `Administrator access is required for ${action}.`,
+      );
     }
   }
 }
 
-function parse<T extends ZodTypeAny>(schema: T, body: unknown): T['_output'] {
+function parse<T extends ZodTypeAny>(schema: T, body: unknown): T["_output"] {
   const parsed = schema.safeParse(body ?? {});
   if (!parsed.success) {
-    throw new InvalidQueryError('The request is not valid.', { issues: parsed.error.issues.map((issue) => issue.message) });
+    throw new InvalidQueryError("The request is not valid.", {
+      issues: parsed.error.issues.map((issue) => issue.message),
+    });
   }
   return parsed.data;
 }

@@ -1,10 +1,19 @@
-import { ValidationError } from '@carocrm/core/errors/index.js';
+import { ValidationError } from "@carocrm/core/errors/index.js";
 
-import { validateDateWindow } from '../catalog/product-rules.js';
-import type { Money } from '../money/currency.js';
-import { moneyDecimal } from '../money/currency.js';
-import type { Decimal, RoundingMode } from '../money/decimal.js';
-import { compare, divideTo, format, isNegative, multiply, parseDecimal, rescale, subtract } from '../money/decimal.js';
+import { validateDateWindow } from "../catalog/product-rules.js";
+import type { Money } from "../money/currency.js";
+import { moneyDecimal } from "../money/currency.js";
+import type { Decimal, RoundingMode } from "../money/decimal.js";
+import {
+  compare,
+  divideTo,
+  format,
+  isNegative,
+  multiply,
+  parseDecimal,
+  rescale,
+  subtract,
+} from "../money/decimal.js";
 
 /**
  * Phase 19-S.4 — declarative price rules (PLAN_Phase_19_Sales.md §4.3).
@@ -26,11 +35,15 @@ export interface PriceRuleCriteria {
 }
 
 export type PriceRuleAction =
-  | { readonly type: 'percentAdjustment'; readonly percent: string }
-  | { readonly type: 'fixedAdjustment'; readonly amount: string }
-  | { readonly type: 'setPrice'; readonly amount: string };
+  | { readonly type: "percentAdjustment"; readonly percent: string }
+  | { readonly type: "fixedAdjustment"; readonly amount: string }
+  | { readonly type: "setPrice"; readonly amount: string };
 
-export const PRICE_RULE_ACTIONS = ['percentAdjustment', 'fixedAdjustment', 'setPrice'] as const;
+export const PRICE_RULE_ACTIONS = [
+  "percentAdjustment",
+  "fixedAdjustment",
+  "setPrice",
+] as const;
 
 export interface PriceRuleInput {
   readonly id: string;
@@ -55,25 +68,35 @@ export interface PriceRuleContext {
 const MAX_LIST_ENTRIES = 500;
 
 /** Validation issues as data, so the same list feeds a 422 response and the admin rule form. */
-export function priceRuleIssues(input: { criteria: PriceRuleCriteria; action: PriceRuleAction }): string[] {
+export function priceRuleIssues(input: {
+  criteria: PriceRuleCriteria;
+  action: PriceRuleAction;
+}): string[] {
   const issues: string[] = [];
-  for (const key of ['productIds', 'categoryIds', 'accountIds'] as const) {
+  for (const key of ["productIds", "categoryIds", "accountIds"] as const) {
     const list = input.criteria[key];
     if (list === undefined) continue;
-    if (!Array.isArray(list) || list.length === 0 || list.length > MAX_LIST_ENTRIES) {
+    if (
+      !Array.isArray(list) ||
+      list.length === 0 ||
+      list.length > MAX_LIST_ENTRIES
+    ) {
       issues.push(`"${key}" must list 1–${MAX_LIST_ENTRIES} record ids.`);
       continue;
     }
-    if (list.some((item) => typeof item !== 'string' || item.trim() === '')) {
+    if (list.some((item) => typeof item !== "string" || item.trim() === "")) {
       issues.push(`"${key}" contains an empty id.`);
     }
   }
-  for (const key of ['minQuantity', 'maxQuantity'] as const) {
+  for (const key of ["minQuantity", "maxQuantity"] as const) {
     const value = input.criteria[key];
     if (value === undefined) continue;
     try {
       const parsed = parseDecimal(value);
-      if (isNegative(parsed) || compare(parsed, parseDecimal('0')) === 0 && key === 'minQuantity') {
+      if (
+        isNegative(parsed) ||
+        (compare(parsed, parseDecimal("0")) === 0 && key === "minQuantity")
+      ) {
         issues.push(`"${key}" must be a positive decimal.`);
       }
     } catch {
@@ -84,26 +107,28 @@ export function priceRuleIssues(input: { criteria: PriceRuleCriteria; action: Pr
   const max = input.criteria.maxQuantity;
   if (min !== undefined && max !== undefined) {
     try {
-      if (compare(parseDecimal(min), parseDecimal(max)) >= 0) issues.push('"minQuantity" must be less than "maxQuantity".');
+      if (compare(parseDecimal(min), parseDecimal(max)) >= 0)
+        issues.push('"minQuantity" must be less than "maxQuantity".');
     } catch {
       // Individually invalid values are already reported above.
     }
   }
   if (Object.values(input.criteria).every((value) => value === undefined)) {
-    issues.push('A price rule needs at least one criterion.');
+    issues.push("A price rule needs at least one criterion.");
   }
   switch (input.action.type) {
-    case 'percentAdjustment': {
+    case "percentAdjustment": {
       try {
         const percent = parseDecimal(input.action.percent);
-        if (isNegative(percent) || compare(percent, parseDecimal('100')) > 0) issues.push('"percent" must be between 0 and 100.');
+        if (isNegative(percent) || compare(percent, parseDecimal("100")) > 0)
+          issues.push('"percent" must be between 0 and 100.');
       } catch {
         issues.push('"percent" must be a canonical decimal string.');
       }
       break;
     }
-    case 'fixedAdjustment':
-    case 'setPrice': {
+    case "fixedAdjustment":
+    case "setPrice": {
       try {
         const amount = parseDecimal(input.action.amount);
         if (isNegative(amount)) issues.push('"amount" must not be negative.');
@@ -113,33 +138,67 @@ export function priceRuleIssues(input: { criteria: PriceRuleCriteria; action: Pr
       break;
     }
     default: {
-      issues.push(`Unknown action "${String((input.action as { type?: unknown }).type)}".`);
+      issues.push(
+        `Unknown action "${String((input.action as { type?: unknown }).type)}".`,
+      );
     }
   }
   return issues;
 }
 
-export function validatePriceRule(input: { criteria: PriceRuleCriteria; action: PriceRuleAction; effectiveFrom?: string | null; effectiveTo?: string | null }): void {
+export function validatePriceRule(input: {
+  criteria: PriceRuleCriteria;
+  action: PriceRuleAction;
+  effectiveFrom?: string | null;
+  effectiveTo?: string | null;
+}): void {
   const issues = priceRuleIssues(input);
-  if (issues.length > 0) throw new ValidationError('Invalid price rule.', { issues });
+  if (issues.length > 0)
+    throw new ValidationError("Invalid price rule.", { issues });
   validateDateWindow(input);
 }
 
-function withinWindow(effectiveFrom: string | null, effectiveTo: string | null, date: string): boolean {
+function withinWindow(
+  effectiveFrom: string | null,
+  effectiveTo: string | null,
+  date: string,
+): boolean {
   if (effectiveFrom !== null && date < effectiveFrom) return false;
   if (effectiveTo !== null && date > effectiveTo) return false;
   return true;
 }
 
-export function matchesPriceRule(rule: PriceRuleInput, context: PriceRuleContext): boolean {
+export function matchesPriceRule(
+  rule: PriceRuleInput,
+  context: PriceRuleContext,
+): boolean {
   if (!rule.active) return false;
-  if (!withinWindow(rule.effectiveFrom, rule.effectiveTo, context.date)) return false;
-  const { productIds, categoryIds, accountIds, minQuantity, maxQuantity } = rule.criteria;
-  if (productIds !== undefined && !productIds.includes(context.productId)) return false;
-  if (categoryIds !== undefined && (context.categoryId === null || !categoryIds.includes(context.categoryId))) return false;
-  if (accountIds !== undefined && (context.accountId === null || !accountIds.includes(context.accountId))) return false;
-  if (minQuantity !== undefined && compare(parseDecimal(context.quantity), parseDecimal(minQuantity)) < 0) return false;
-  if (maxQuantity !== undefined && compare(parseDecimal(context.quantity), parseDecimal(maxQuantity)) >= 0) return false;
+  if (!withinWindow(rule.effectiveFrom, rule.effectiveTo, context.date))
+    return false;
+  const { productIds, categoryIds, accountIds, minQuantity, maxQuantity } =
+    rule.criteria;
+  if (productIds !== undefined && !productIds.includes(context.productId))
+    return false;
+  if (
+    categoryIds !== undefined &&
+    (context.categoryId === null || !categoryIds.includes(context.categoryId))
+  )
+    return false;
+  if (
+    accountIds !== undefined &&
+    (context.accountId === null || !accountIds.includes(context.accountId))
+  )
+    return false;
+  if (
+    minQuantity !== undefined &&
+    compare(parseDecimal(context.quantity), parseDecimal(minQuantity)) < 0
+  )
+    return false;
+  if (
+    maxQuantity !== undefined &&
+    compare(parseDecimal(context.quantity), parseDecimal(maxQuantity)) >= 0
+  )
+    return false;
   return true;
 }
 
@@ -153,7 +212,11 @@ export function priceRuleSpecificity(rule: PriceRuleInput): number {
   if (rule.criteria.productIds !== undefined) score += 8;
   if (rule.criteria.categoryIds !== undefined) score += 4;
   if (rule.criteria.accountIds !== undefined) score += 2;
-  if (rule.criteria.minQuantity !== undefined || rule.criteria.maxQuantity !== undefined) score += 1;
+  if (
+    rule.criteria.minQuantity !== undefined ||
+    rule.criteria.maxQuantity !== undefined
+  )
+    score += 1;
   return score;
 }
 
@@ -167,11 +230,15 @@ export interface OrderedPriceRules {
  * Deterministic rule ordering (PLAN_Phase_19_Sales.md §4.3): lower `priority` first, then narrower
  * `specificity`, then `id` ascending. Applicable rules are never ordered by database row order.
  */
-export function orderPriceRules(rules: readonly PriceRuleInput[], context: PriceRuleContext): OrderedPriceRules {
+export function orderPriceRules(
+  rules: readonly PriceRuleInput[],
+  context: PriceRuleContext,
+): OrderedPriceRules {
   const applicable = rules.filter((rule) => matchesPriceRule(rule, context));
   const ordered = [...applicable].sort((left, right) => {
     if (left.priority !== right.priority) return left.priority - right.priority;
-    const specificity = priceRuleSpecificity(right) - priceRuleSpecificity(left);
+    const specificity =
+      priceRuleSpecificity(right) - priceRuleSpecificity(left);
     if (specificity !== 0) return specificity;
     return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
   });
@@ -180,7 +247,10 @@ export function orderPriceRules(rules: readonly PriceRuleInput[], context: Price
     const previous = ordered[index - 1];
     const current = ordered[index];
     if (previous === undefined || current === undefined) continue;
-    if (previous.priority === current.priority && priceRuleSpecificity(previous) === priceRuleSpecificity(current)) {
+    if (
+      previous.priority === current.priority &&
+      priceRuleSpecificity(previous) === priceRuleSpecificity(current)
+    ) {
       ties.push([previous, current]);
     }
   }
@@ -193,33 +263,63 @@ export function orderPriceRules(rules: readonly PriceRuleInput[], context: Price
  * A `fixedAdjustment` cannot drive the price below zero — that is a rule configuration error, not a
  * free product, so it is refused instead of clamped.
  */
-export function applyPriceRuleAction(base: Money, action: PriceRuleAction, mode: RoundingMode = 'half-up'): Money {
+export function applyPriceRuleAction(
+  base: Money,
+  action: PriceRuleAction,
+  mode: RoundingMode = "half-up",
+): Money {
   const scale = base.scale;
   const baseValue: Decimal = moneyDecimal(base);
   switch (action.type) {
-    case 'percentAdjustment': {
+    case "percentAdjustment": {
       // (base × (100 − percent)) / 100, rounded exactly once at the currency scale.
-      const remaining = subtract(parseDecimal('100'), parseDecimal(action.percent));
+      const remaining = subtract(
+        parseDecimal("100"),
+        parseDecimal(action.percent),
+      );
       const exact = multiply(baseValue, remaining);
-      const adjusted = divideTo(exact, parseDecimal('100'), scale, mode);
-      return { amount: format(adjusted, scale), currency: base.currency, scale };
+      const adjusted = divideTo(exact, parseDecimal("100"), scale, mode);
+      return {
+        amount: format(adjusted, scale),
+        currency: base.currency,
+        scale,
+      };
     }
-    case 'fixedAdjustment': {
-      const adjusted = rescale(subtract(baseValue, parseDecimal(action.amount)), scale, mode);
+    case "fixedAdjustment": {
+      const adjusted = rescale(
+        subtract(baseValue, parseDecimal(action.amount)),
+        scale,
+        mode,
+      );
       if (isNegative(adjusted)) {
-        throw new ValidationError('A fixed price adjustment would make the price negative.', { base: base.amount, adjustment: action.amount });
+        throw new ValidationError(
+          "A fixed price adjustment would make the price negative.",
+          { base: base.amount, adjustment: action.amount },
+        );
       }
-      return { amount: format(adjusted, scale), currency: base.currency, scale };
+      return {
+        amount: format(adjusted, scale),
+        currency: base.currency,
+        scale,
+      };
     }
-    case 'setPrice': {
+    case "setPrice": {
       const resolved = rescale(parseDecimal(action.amount), scale, mode);
       if (isNegative(resolved)) {
-        throw new ValidationError('A price cannot be negative.', { amount: action.amount });
+        throw new ValidationError("A price cannot be negative.", {
+          amount: action.amount,
+        });
       }
-      return { amount: format(resolved, scale), currency: base.currency, scale };
+      return {
+        amount: format(resolved, scale),
+        currency: base.currency,
+        scale,
+      };
     }
     default: {
-      throw new ValidationError(`Unknown price action "${String((action as { type?: unknown }).type)}".`);
+      throw new ValidationError(
+        `Unknown price action "${String((action as { type?: unknown }).type)}".`,
+      );
     }
   }
 }

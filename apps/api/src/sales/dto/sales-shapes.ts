@@ -1,6 +1,6 @@
-import { z } from 'zod';
+import { z } from "zod";
 
-import { IMPLEMENTED_DOCUMENT_KINDS } from '../document/descriptors.js';
+import { IMPLEMENTED_DOCUMENT_KINDS } from "../document/descriptors.js";
 
 /**
  * Phase 19-S.2 – 19-S.5 — request shapes for the `/api/v1/Sales` domain commands.
@@ -17,9 +17,15 @@ export const DecimalStringSchema = z
   .trim()
   .min(1)
   .max(40)
-  .regex(/^-?\d+(\.\d+)?$/, 'Must be a canonical decimal string like "10" or "10.25".');
+  .regex(
+    /^-?\d+(\.\d+)?$/,
+    'Must be a canonical decimal string like "10" or "10.25".',
+  );
 
-const DaySchema = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be a YYYY-MM-DD date.');
+const DaySchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a YYYY-MM-DD date.");
 
 export const ResolvePriceSchema = z
   .object({
@@ -35,11 +41,11 @@ export const ResolvePriceSchema = z
 
 export const BulkPriceUpdateSchema = z
   .object({
-    mode: z.enum(['preview', 'apply']),
+    mode: z.enum(["preview", "apply"]),
     priceBookId: z.string().trim().min(1).max(64),
     adjustment: z
       .object({
-        type: z.enum(['percent', 'fixed', 'set']),
+        type: z.enum(["percent", "fixed", "set"]),
         value: DecimalStringSchema,
       })
       .strict(),
@@ -132,13 +138,17 @@ export const DocumentTransitionSchema = z
   })
   .strict();
 
-export const DocumentUnlockSchema = z.object({ reason: z.string().trim().min(1).max(500) }).strict();
+export const DocumentUnlockSchema = z
+  .object({ reason: z.string().trim().min(1).max(500) })
+  .strict();
 
 /**
  * Expire the quotes whose validity window has passed (19-S.7). `today` is injectable so the behaviour
  * can be exercised without waiting for a clock.
  */
-export const ExpireQuotesSchema = z.object({ today: DaySchema.optional() }).strict();
+export const ExpireQuotesSchema = z
+  .object({ today: DaySchema.optional() })
+  .strict();
 
 /** The date-driven operations all take the same shape: an optional day, so they are testable. */
 export const TodaySchema = z.object({ today: DaySchema.optional() }).strict();
@@ -185,6 +195,8 @@ export const SendQuoteSchema = z
     /** Sending mailbox; the configured default account is used when omitted. */
     emailAccountId: z.string().trim().min(1).max(64).optional(),
     correlationId: z.string().trim().min(1).max(128).optional(),
+    /** Attach a rendered PDF of the issued quote to the stored email (19-S.7 task 5). */
+    attachPdf: z.boolean().optional(),
   })
   .strict();
 
@@ -204,7 +216,7 @@ export const CreatePaymentSchema = z
   .object({
     amount: DecimalStringSchema,
     currency: z.string().trim().min(3).max(3).optional(),
-    direction: z.enum(['incoming', 'outgoing']),
+    direction: z.enum(["incoming", "outgoing"]),
     date: DaySchema.optional(),
     paymentMethodId: IdSchema.nullish(),
     paymentChannelId: IdSchema.nullish(),
@@ -238,10 +250,15 @@ export const AllocatePaymentSchema = z
   })
   .strict();
 
-export const PaymentTransferSchema = z.object({ toPaymentId: IdSchema, amount: DecimalStringSchema }).strict();
+export const PaymentTransferSchema = z
+  .object({ toPaymentId: IdSchema, amount: DecimalStringSchema })
+  .strict();
 
 export const PaymentTransitionSchema = z
-  .object({ action: z.string().trim().min(1).max(40), reason: z.string().trim().min(1).max(500).optional() })
+  .object({
+    action: z.string().trim().min(1).max(40),
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
   .strict();
 
 export const CreatePaymentRequestSchema = z
@@ -275,7 +292,9 @@ export type UpdatePaymentInput = z.infer<typeof UpdatePaymentSchema>;
 export type AllocatePaymentInput = z.infer<typeof AllocatePaymentSchema>;
 export type PaymentTransferInput = z.infer<typeof PaymentTransferSchema>;
 export type PaymentTransitionInput = z.infer<typeof PaymentTransitionSchema>;
-export type CreatePaymentRequestInput = z.infer<typeof CreatePaymentRequestSchema>;
+export type CreatePaymentRequestInput = z.infer<
+  typeof CreatePaymentRequestSchema
+>;
 export type ProviderEventInput = z.infer<typeof ProviderEventSchema>;
 
 export type ResolvePriceInput = z.infer<typeof ResolvePriceSchema>;

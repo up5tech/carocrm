@@ -1,9 +1,9 @@
-import { ValidationError } from '@carocrm/core/errors/index.js';
-import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
+import { ValidationError } from "@carocrm/core/errors/index.js";
+import { Inject, Injectable } from "@nestjs/common";
+import { sql } from "kysely";
 
-import { DatabaseService } from '../database/database.service.js';
-import { currentTx } from '../entity/tx-context.js';
+import { DatabaseService } from "../database/database.service.js";
+import { currentTx } from "../entity/tx-context.js";
 
 /**
  * Structural reads for the Sales domain services.
@@ -29,42 +29,42 @@ export interface SalesRow {
 /** Entity types this module owns; nothing else may be read through here. */
 export const SALES_ENTITY_TYPES = [
   // 19-S.3 – 19-S.5: catalog, pricing and tax master data.
-  'Product',
-  'ProductCategory',
-  'PriceBook',
-  'PriceBookEntry',
-  'PriceRule',
-  'Supplier',
-  'SupplierProductPrice',
-  'TaxClass',
-  'TaxCode',
-  'TaxRate',
-  'TaxRule',
+  "Product",
+  "ProductCategory",
+  "PriceBook",
+  "PriceBookEntry",
+  "PriceRule",
+  "Supplier",
+  "SupplierProductPrice",
+  "TaxClass",
+  "TaxCode",
+  "TaxRate",
+  "TaxRule",
   // 19-S.6 – 19-S.12: commercial documents and their child line items.
-  'Quote',
-  'QuoteItem',
-  'SalesOrder',
-  'SalesOrderItem',
-  'Invoice',
-  'InvoiceItem',
-  'CreditNote',
-  'CreditNoteItem',
-  'DeliveryOrder',
-  'DeliveryOrderItem',
-  'ReturnOrder',
-  'ReturnOrderItem',
+  "Quote",
+  "QuoteItem",
+  "SalesOrder",
+  "SalesOrderItem",
+  "Invoice",
+  "InvoiceItem",
+  "CreditNote",
+  "CreditNoteItem",
+  "DeliveryOrder",
+  "DeliveryOrderItem",
+  "ReturnOrder",
+  "ReturnOrderItem",
   // 19-S.6: the payment-term policy a document can reference.
-  'PaymentTermProfile',
+  "PaymentTermProfile",
   // 19-S.10 – 19-S.11: money received/sent, and the records that adjust a balance.
-  'PaymentMethod',
-  'PaymentChannel',
-  'Payment',
-  'PaymentAllocation',
-  'PaymentTransferAllocation',
-  'PaymentRequest',
-  'PaymentProviderEventLog',
-  'CreditNoteAllocation',
-  'WriteOff',
+  "PaymentMethod",
+  "PaymentChannel",
+  "Payment",
+  "PaymentAllocation",
+  "PaymentTransferAllocation",
+  "PaymentRequest",
+  "PaymentProviderEventLog",
+  "CreditNoteAllocation",
+  "WriteOff",
 ] as const;
 
 export type SalesEntityType = (typeof SALES_ENTITY_TYPES)[number];
@@ -81,14 +81,19 @@ export function isSalesEntityType(value: string): value is SalesEntityType {
 
 @Injectable()
 export class SalesRecords {
-  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+  constructor(
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+  ) {}
 
   /** A domain command reads its own transaction; without one, the pooled connection. */
   private get db() {
     return currentTx() ?? this.database.db;
   }
 
-  async byId(entity: SalesEntityType, id: string): Promise<SalesRow | undefined> {
+  async byId(
+    entity: SalesEntityType,
+    id: string,
+  ): Promise<SalesRow | undefined> {
     const rows = await sql<SalesRowShape>`
       select id, version, name, attrs from entity_records
       where entity_type = ${entity} and id = ${id} and deleted_at is null
@@ -98,7 +103,10 @@ export class SalesRecords {
     return row === undefined ? undefined : toRow(row);
   }
 
-  async byIds(entity: SalesEntityType, ids: readonly string[]): Promise<SalesRow[]> {
+  async byIds(
+    entity: SalesEntityType,
+    ids: readonly string[],
+  ): Promise<SalesRow[]> {
     if (ids.length === 0) return [];
     const rows = await sql<SalesRowShape>`
       select id, version, name, attrs from entity_records
@@ -108,8 +116,15 @@ export class SalesRecords {
   }
 
   /** Equality over `attrs` text values; keys are validated, values are bound. */
-  async find(entity: SalesEntityType, filters: Readonly<Record<string, string>>, limit = SALES_STRUCTURAL_SCAN_LIMIT): Promise<SalesRow[]> {
-    const clauses = [sql<boolean>`entity_type = ${entity}`, sql<boolean>`deleted_at is null`];
+  async find(
+    entity: SalesEntityType,
+    filters: Readonly<Record<string, string>>,
+    limit = SALES_STRUCTURAL_SCAN_LIMIT,
+  ): Promise<SalesRow[]> {
+    const clauses = [
+      sql<boolean>`entity_type = ${entity}`,
+      sql<boolean>`deleted_at is null`,
+    ];
     for (const [field, value] of Object.entries(filters)) {
       attributeKey(field);
       clauses.push(sql<boolean>`(attrs ->> ${field}::text) = ${value}`);
@@ -127,7 +142,12 @@ export class SalesRecords {
    * Every live row of `entity` whose `field` holds one of `values` — a single query for a list page,
    * so loading the items of many documents never becomes one query per document (§16.1).
    */
-  async findByIdsIn(entity: SalesEntityType, field: string, values: readonly string[], limit = SALES_STRUCTURAL_SCAN_LIMIT): Promise<SalesRow[]> {
+  async findByIdsIn(
+    entity: SalesEntityType,
+    field: string,
+    values: readonly string[],
+    limit = SALES_STRUCTURAL_SCAN_LIMIT,
+  ): Promise<SalesRow[]> {
     if (values.length === 0) return [];
     attributeKey(field);
     const rows = await sql<SalesRowShape>`
@@ -140,7 +160,13 @@ export class SalesRecords {
   }
 
   /** Case-insensitive equality — the shape a SKU/code lookup needs. */
-  async findByCode(entity: SalesEntityType, field: string, value: string, limit = 10): Promise<SalesRow[]> {    attributeKey(field);
+  async findByCode(
+    entity: SalesEntityType,
+    field: string,
+    value: string,
+    limit = 10,
+  ): Promise<SalesRow[]> {
+    attributeKey(field);
     const rows = await sql<SalesRowShape>`
       select id, version, name, attrs from entity_records
       where entity_type = ${entity} and deleted_at is null and lower(attrs ->> ${field}::text) = ${value.trim().toLowerCase()}
@@ -151,7 +177,10 @@ export class SalesRecords {
   }
 
   /** Every live row of a module-owned entity, bounded. Used by price/tax resolution. */
-  async allLive(entity: SalesEntityType, limit = SALES_STRUCTURAL_SCAN_LIMIT): Promise<SalesRow[]> {
+  async allLive(
+    entity: SalesEntityType,
+    limit = SALES_STRUCTURAL_SCAN_LIMIT,
+  ): Promise<SalesRow[]> {
     const rows = await sql<SalesRowShape>`
       select id, version, name, attrs from entity_records
       where entity_type = ${entity} and deleted_at is null
@@ -162,7 +191,11 @@ export class SalesRecords {
   }
 
   /** Ids of every live row matching one attribute equality — cheap existence checks. */
-  async idsMatching(entity: SalesEntityType, field: string, value: string): Promise<string[]> {
+  async idsMatching(
+    entity: SalesEntityType,
+    field: string,
+    value: string,
+  ): Promise<string[]> {
     attributeKey(field);
     const rows = await sql<{ id: string }>`
       select id from entity_records
@@ -180,7 +213,7 @@ interface SalesRowShape {
   attrs: unknown;
 }
 
-const PHYSICAL_NAME = 'name';
+const PHYSICAL_NAME = "name";
 
 function toRow(row: SalesRowShape): SalesRow {
   const data = isRecord(row.attrs) ? { ...row.attrs } : {};
@@ -191,15 +224,18 @@ function toRow(row: SalesRowShape): SalesRow {
 /** Shown to every caller: the entity name is the guard, not the string interpolation. */
 export function requireSalesEntity(entity: string): SalesEntityType {
   if (!isSalesEntityType(entity)) {
-    throw new ValidationError(`"${entity}" is not a Sales-owned entity type.`, { entity });
+    throw new ValidationError(`"${entity}" is not a Sales-owned entity type.`, {
+      entity,
+    });
   }
   return entity;
 }
 
 function attributeKey(field: string): void {
-  if (!ATTRIBUTE_PATTERN.test(field)) throw new ValidationError(`Illegal attribute name "${field}".`, { field });
+  if (!ATTRIBUTE_PATTERN.test(field))
+    throw new ValidationError(`Illegal attribute name "${field}".`, { field });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

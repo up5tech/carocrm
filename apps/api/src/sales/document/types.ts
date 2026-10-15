@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash } from "node:crypto";
 
 /**
  * Phase 19-S.2 — contracts every Sales document type reuses.
@@ -25,12 +25,14 @@ export interface SalesAuditContext {
  * The key is a digest of the *meaningful* inputs only — never a random value and never a timestamp —
  * so a retried request produces the same key and a different request produces a different one.
  */
-export function idempotencyKey(parts: Readonly<Record<string, string>>): string {
+export function idempotencyKey(
+  parts: Readonly<Record<string, string>>,
+): string {
   const canonical = Object.keys(parts)
     .sort()
-    .map((key) => `${key}=${parts[key] ?? ''}`)
-    .join('\u0000');
-  return `sales-idem-${createHash('sha256').update(canonical).digest('hex').slice(0, 40)}`;
+    .map((key) => `${key}=${parts[key] ?? ""}`)
+    .join("\u0000");
+  return `sales-idem-${createHash("sha256").update(canonical).digest("hex").slice(0, 40)}`;
 }
 
 /** One requested line, before calculation. Amounts and quantities are canonical decimal strings. */
@@ -50,7 +52,8 @@ export interface LineItemInput {
 }
 
 /** Where a line's tax rate came from — the explainability half of the tax engine (§4.12). */
-export type TaxResolutionSource = 'line' | 'taxRule' | 'taxCode' | 'zero' | 'none';
+export type TaxResolutionSource =
+  "line" | "taxRule" | "taxCode" | "zero" | "none";
 
 export interface TaxLineResolution {
   readonly taxCodeId: string | null;

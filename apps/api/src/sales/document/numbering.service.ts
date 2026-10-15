@@ -1,12 +1,20 @@
-import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
-import { generateId } from '@carocrm/core/utils/id.js';
-import { Inject, Injectable } from '@nestjs/common';
+import { NotFoundError, ValidationError } from "@carocrm/core/errors/index.js";
+import { generateId } from "@carocrm/core/utils/id.js";
+import { Inject, Injectable } from "@nestjs/common";
 
-import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../../common/request-scope.js';
-import { DatabaseService } from '../../database/database.service.js';
-import { runInTransaction } from '../../entity/tx-context.js';
-import { type AllocationTiming, DEFAULT_NUMBER_SERIES, formatDocumentNumber, type NumberSeriesSeed } from './number-series-defaults.js';
-import type { SalesAuditContext } from './types.js';
+import {
+  REQUEST_SCOPE_TOKEN,
+  type RequestScope,
+} from "../../common/request-scope.js";
+import { DatabaseService } from "../../database/database.service.js";
+import { runInTransaction } from "../../entity/tx-context.js";
+import {
+  type AllocationTiming,
+  DEFAULT_NUMBER_SERIES,
+  formatDocumentNumber,
+  type NumberSeriesSeed,
+} from "./number-series-defaults.js";
+import type { SalesAuditContext } from "./types.js";
 
 /**
  * Phase 19-S.2 — commercial document numbering (PLAN_Phase_19_Sales.md §4.4, §8.3).
@@ -26,8 +34,14 @@ import type { SalesAuditContext } from './types.js';
  * Nothing here sends mail, prints a PDF or touches another module's tables.
  */
 
-export type { AllocationTiming, NumberSeriesSeed } from './number-series-defaults.js';
-export { DEFAULT_NUMBER_SERIES, formatDocumentNumber } from './number-series-defaults.js';
+export type {
+  AllocationTiming,
+  NumberSeriesSeed,
+} from "./number-series-defaults.js";
+export {
+  DEFAULT_NUMBER_SERIES,
+  formatDocumentNumber,
+} from "./number-series-defaults.js";
 
 export interface NumberSeriesView {
   readonly id: string;
@@ -73,9 +87,9 @@ export class SalesNumberingService {
   /** Every series with its unallocated next value — what the admin screen shows. */
   async list(): Promise<NumberSeriesView[]> {
     const rows = await this.database.db
-      .selectFrom('sales_number_series')
+      .selectFrom("sales_number_series")
       .selectAll()
-      .orderBy('code', 'asc')
+      .orderBy("code", "asc")
       .execute();
     return rows.map((row) => this.toView(row));
   }
@@ -83,11 +97,12 @@ export class SalesNumberingService {
   /** The next number a series would produce, consuming nothing. */
   async preview(code: string): Promise<NumberSeriesView> {
     const row = await this.database.db
-      .selectFrom('sales_number_series')
+      .selectFrom("sales_number_series")
       .selectAll()
-      .where('code', '=', requireSeriesCode(code))
+      .where("code", "=", requireSeriesCode(code))
       .executeTakeFirst();
-    if (row === undefined) throw new NotFoundError(`Number series "${code}" does not exist.`);
+    if (row === undefined)
+      throw new NotFoundError(`Number series "${code}" does not exist.`);
     return this.toView(row);
   }
 
@@ -99,33 +114,49 @@ export class SalesNumberingService {
    * the lock is released. A unique-constraint race is a domain outcome the caller can retry, not a
    * silent success (PLAN_Phase_19_Sales.md §6.3).
    */
-  async allocate(code: string, input: AllocateNumberInput = {}): Promise<NumberAllocation> {
+  async allocate(
+    code: string,
+    input: AllocateNumberInput = {},
+  ): Promise<NumberAllocation> {
     const seriesCode = requireSeriesCode(code);
     const documentType = input.documentType?.trim();
     const documentId = input.documentId?.trim();
-    if ((documentType === undefined || documentType === '') !== (documentId === undefined || documentId === '')) {
-      throw new ValidationError('A document number allocation needs both `documentType` and `documentId`, or neither.', {
-        documentType: input.documentType,
-        documentId: input.documentId,
-      });
+    if (
+      (documentType === undefined || documentType === "") !==
+      (documentId === undefined || documentId === "")
+    ) {
+      throw new ValidationError(
+        "A document number allocation needs both `documentType` and `documentId`, or neither.",
+        {
+          documentType: input.documentType,
+          documentId: input.documentId,
+        },
+      );
     }
 
     return runInTransaction(this.database.db, async (tx) => {
       const locked = await tx
-        .selectFrom('sales_number_series')
+        .selectFrom("sales_number_series")
         .selectAll()
-        .where('code', '=', seriesCode)
+        .where("code", "=", seriesCode)
         .forUpdate()
         .executeTakeFirst();
-      if (locked === undefined) throw new NotFoundError(`Number series "${seriesCode}" does not exist.`);
-      if (!locked.active) throw new ValidationError(`Number series "${seriesCode}" is inactive.`, { code: seriesCode });
+      if (locked === undefined)
+        throw new NotFoundError(
+          `Number series "${seriesCode}" does not exist.`,
+        );
+      if (!locked.active)
+        throw new ValidationError(
+          `Number series "${seriesCode}" is inactive.`,
+          { code: seriesCode },
+        );
 
       if (documentType !== undefined && documentId !== undefined) {
         const existing = await tx
-          .selectFrom('sales_document_numbers')
+          .selectFrom("sales_document_numbers")
           .selectAll()
-          .where('document_type', '=', documentType)
-          .where('document_id', '=', documentId)
+          .where("document_type", "=", documentType)
+          .where("document_id", "=", documentId)
           .executeTakeFirst();
         if (existing !== undefined) {
           return {
@@ -143,14 +174,18 @@ export class SalesNumberingService {
 
       const allocated = locked.next_number;
       await tx
-        .updateTable('sales_number_series')
+        .updateTable("sales_number_series")
         .set({ next_number: allocated + 1, modified_at: new Date() })
-        .where('id', '=', locked.id)
+        .where("id", "=", locked.id)
         .execute();
-      const formatted = formatDocumentNumber(locked.prefix, allocated, locked.padding);
+      const formatted = formatDocumentNumber(
+        locked.prefix,
+        allocated,
+        locked.padding,
+      );
       const allocatedAt = new Date();
       await tx
-        .insertInto('sales_document_numbers')
+        .insertInto("sales_document_numbers")
         .values({
           id: `sdn_${generateId()}`,
           series_id: locked.id,
@@ -180,18 +215,27 @@ export class SalesNumberingService {
    * Provision series rows (install/bootstrap). Idempotent: an existing code keeps its counter, its
    * prefix and its padding — a re-run never resets a sequence (PLAN_Phase_19_Sales.md §17.1).
    */
-  async ensureSeries(series: readonly NumberSeriesSeed[] = DEFAULT_NUMBER_SERIES): Promise<number> {
+  async ensureSeries(
+    series: readonly NumberSeriesSeed[] = DEFAULT_NUMBER_SERIES,
+  ): Promise<number> {
     let created = 0;
     for (const entry of series) {
       const code = requireSeriesCode(entry.code);
       const prefix = entry.prefix.trim();
       const padding = entry.padding ?? 6;
-      if (prefix.length > 16) throw new ValidationError(`A number series prefix must be at most 16 characters.`, { code });
+      if (prefix.length > 16)
+        throw new ValidationError(
+          `A number series prefix must be at most 16 characters.`,
+          { code },
+        );
       if (!Number.isInteger(padding) || padding < 1 || padding > 12) {
-        throw new ValidationError('A number series padding must be an integer between 1 and 12.', { code, padding });
+        throw new ValidationError(
+          "A number series padding must be an integer between 1 and 12.",
+          { code, padding },
+        );
       }
       const result = await this.database.db
-        .insertInto('sales_number_series')
+        .insertInto("sales_number_series")
         .values({
           id: `sns_${code}`,
           code,
@@ -199,12 +243,12 @@ export class SalesNumberingService {
           prefix,
           padding,
           next_number: 1,
-          allocation: entry.allocation ?? 'issuance',
+          allocation: entry.allocation ?? "issuance",
           active: true,
           created_at: new Date(),
           modified_at: new Date(),
         })
-        .onConflict((oc) => oc.column('code').doNothing())
+        .onConflict((oc) => oc.column("code").doNothing())
         .executeTakeFirst();
       created += Number(result.numInsertedOrUpdatedRows ?? 0n);
     }
@@ -229,18 +273,25 @@ export class SalesNumberingService {
       prefix: row.prefix,
       padding: row.padding,
       nextNumber: row.next_number,
-      allocation: row.allocation === 'creation' ? 'creation' : 'issuance',
+      allocation: row.allocation === "creation" ? "creation" : "issuance",
       active: row.active,
       modifiedAt: row.modified_at,
-      nextPreview: formatDocumentNumber(row.prefix, row.next_number, row.padding),
+      nextPreview: formatDocumentNumber(
+        row.prefix,
+        row.next_number,
+        row.padding,
+      ),
     };
   }
 }
 
 function requireSeriesCode(code: string): string {
-  const trimmed = typeof code === 'string' ? code.trim() : '';
+  const trimmed = typeof code === "string" ? code.trim() : "";
   if (!SERIES_CODE_PATTERN.test(trimmed)) {
-    throw new ValidationError('A number series code is 1–41 letters/digits starting with a letter.', { code });
+    throw new ValidationError(
+      "A number series code is 1–41 letters/digits starting with a letter.",
+      { code },
+    );
   }
   return trimmed;
 }

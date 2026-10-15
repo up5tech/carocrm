@@ -43,7 +43,7 @@ export interface SalesOptionalIntegration {
  *  - `column`  the owning `table.column` exists (a table alone does not prove field granularity)
  *  - `hookPhase` the hook registry dispatches the phase
  */
-export type PlatformEvidenceKind = 'entity' | 'table' | 'column' | 'hookPhase';
+export type PlatformEvidenceKind = "entity" | "table" | "column" | "hookPhase";
 
 export interface PlatformEvidence {
   readonly kind: PlatformEvidenceKind;
@@ -66,166 +66,166 @@ export interface SalesPlatformCapability {
 export const REQUIRED_PLATFORM_CAPABILITIES: readonly SalesPlatformCapability[] =
   [
     {
-      id: 'entity-engine',
-      label: 'Entity Engine (metadata-driven records)',
+      id: "entity-engine",
+      label: "Entity Engine (metadata-driven records)",
       evidence: [
-        { kind: 'entity', value: 'Account' },
-        { kind: 'table', value: 'entity_records' },
+        { kind: "entity", value: "Account" },
+        { kind: "table", value: "entity_records" },
       ],
     },
     {
-      id: 'crm-core-records',
-      label: 'CRM core records',
+      id: "crm-core-records",
+      label: "CRM core records",
       evidence: [
-        { kind: 'entity', value: 'Account' },
-        { kind: 'entity', value: 'Contact' },
-        { kind: 'entity', value: 'Opportunity' },
-        { kind: 'table', value: 'users' },
-        { kind: 'table', value: 'teams' },
+        { kind: "entity", value: "Account" },
+        { kind: "entity", value: "Contact" },
+        { kind: "entity", value: "Opportunity" },
+        { kind: "table", value: "users" },
+        { kind: "table", value: "teams" },
       ],
     },
     {
-      id: 'acl',
-      label: 'ACL (roles and field permissions)',
+      id: "acl",
+      label: "ACL (roles and field permissions)",
       evidence: [
-        { kind: 'table', value: 'roles' },
-        { kind: 'table', value: 'users_roles' },
-        { kind: 'column', value: 'roles.field_permissions' },
+        { kind: "table", value: "roles" },
+        { kind: "table", value: "users_roles" },
+        { kind: "column", value: "roles.field_permissions" },
       ],
     },
     {
-      id: 'hooks',
-      label: 'Hook registry',
+      id: "hooks",
+      label: "Hook registry",
       evidence: [
-        { kind: 'hookPhase', value: 'beforeValidate' },
-        { kind: 'hookPhase', value: 'afterSave' },
+        { kind: "hookPhase", value: "beforeValidate" },
+        { kind: "hookPhase", value: "afterSave" },
       ],
     },
     {
-      id: 'audit-stream',
-      label: 'Audit log and stream',
+      id: "audit-stream",
+      label: "Audit log and stream",
       evidence: [
-        { kind: 'table', value: 'audit_log' },
-        { kind: 'table', value: 'stream_items' },
-        { kind: 'table', value: 'outbox_events' },
+        { kind: "table", value: "audit_log" },
+        { kind: "table", value: "stream_items" },
+        { kind: "table", value: "outbox_events" },
       ],
     },
     {
-      id: 'jobs',
-      label: 'Background jobs',
+      id: "jobs",
+      label: "Background jobs",
       evidence: [
-        { kind: 'table', value: 'jobs' },
-        { kind: 'table', value: 'scheduled_jobs' },
-        { kind: 'table', value: 'job_logs' },
+        { kind: "table", value: "jobs" },
+        { kind: "table", value: "scheduled_jobs" },
+        { kind: "table", value: "job_logs" },
       ],
     },
   ];
 
 export const OPTIONAL_INTEGRATIONS: readonly SalesOptionalIntegration[] = [
   {
-    id: 'stripe-integration',
-    label: 'Stripe payments',
-    provides: 'Provider payment events and payment requests',
-    markerEntity: 'PaymentProviderEvent',
+    id: "stripe-integration",
+    label: "Stripe payments",
+    provides: "Provider payment events and payment requests",
+    markerEntity: "PaymentProviderEvent",
   },
   {
-    id: 'accounting-integration',
-    label: 'Accounting',
-    provides: 'Ledger export of invoices, payments and credits',
-    markerEntity: 'AccountingExport',
+    id: "accounting-integration",
+    label: "Accounting",
+    provides: "Ledger export of invoices, payments and credits",
+    markerEntity: "AccountingExport",
   },
   {
-    id: 'customer-success',
-    label: 'Customer Success',
-    provides: 'Customer health, renewal tracking (consumer of Sales summaries)',
-    markerEntity: 'CustomerSuccessProfile',
+    id: "customer-success",
+    label: "Customer Success",
+    provides: "Customer health, renewal tracking (consumer of Sales summaries)",
+    markerEntity: "CustomerSuccessProfile",
   },
   {
-    id: 'projects',
-    label: 'Projects',
-    provides: 'Delivery milestones linked to sales orders',
-    markerEntity: 'Project',
+    id: "projects",
+    label: "Projects",
+    provides: "Delivery milestones linked to sales orders",
+    markerEntity: "Project",
   },
 ];
 
 export const SALES_FEATURES: readonly SalesFeatureDescriptor[] = [
   {
-    key: 'productPrices',
-    label: 'Product-level prices',
-    settingsPath: 'features.productPrices',
+    key: "productPrices",
+    label: "Product-level prices",
+    settingsPath: "features.productPrices",
     requires: [],
   },
   {
-    key: 'taxInclusivePrices',
-    label: 'Tax-inclusive pricing by default',
-    settingsPath: 'features.taxInclusivePrices',
+    key: "taxInclusivePrices",
+    label: "Tax-inclusive pricing by default",
+    settingsPath: "features.taxInclusivePrices",
     requires: [],
   },
   {
-    key: 'priceBooks',
-    label: 'Price books and price rules',
-    settingsPath: 'features.priceBooks',
+    key: "priceBooks",
+    label: "Price books and price rules",
+    settingsPath: "features.priceBooks",
     requires: [],
   },
   {
-    key: 'productVariants',
-    label: 'Product variants',
-    settingsPath: 'features.productVariants',
+    key: "productVariants",
+    label: "Product variants",
+    settingsPath: "features.productVariants",
     requires: [],
   },
   {
-    key: 'supplierPrices',
-    label: 'Supplier purchase prices',
-    settingsPath: 'features.supplierPrices',
+    key: "supplierPrices",
+    label: "Supplier purchase prices",
+    settingsPath: "features.supplierPrices",
     requires: [],
   },
   {
-    key: 'purchases',
-    label: 'Purchases',
-    settingsPath: 'features.purchases',
-    requires: ['supplierPrices'],
+    key: "purchases",
+    label: "Purchases",
+    settingsPath: "features.purchases",
+    requires: ["supplierPrices"],
   },
   {
-    key: 'inventory',
-    label: 'Inventory',
-    settingsPath: 'features.inventory',
+    key: "inventory",
+    label: "Inventory",
+    settingsPath: "features.inventory",
     requires: [],
   },
   {
-    key: 'subscriptions',
-    label: 'Subscriptions',
-    settingsPath: 'features.subscriptions',
+    key: "subscriptions",
+    label: "Subscriptions",
+    settingsPath: "features.subscriptions",
     requires: [],
   },
   {
-    key: 'paymentRequests',
-    label: 'Payment requests',
-    settingsPath: 'features.paymentRequests',
+    key: "paymentRequests",
+    label: "Payment requests",
+    settingsPath: "features.paymentRequests",
     requires: [],
   },
   {
-    key: 'multiCurrency',
-    label: 'Multi-currency documents',
-    settingsPath: 'features.multiCurrency',
+    key: "multiCurrency",
+    label: "Multi-currency documents",
+    settingsPath: "features.multiCurrency",
     requires: [],
   },
   {
-    key: 'issuanceLocking',
-    label: 'Issuance locking',
-    settingsPath: 'features.issuanceLocking',
+    key: "issuanceLocking",
+    label: "Issuance locking",
+    settingsPath: "features.issuanceLocking",
     requires: [],
   },
 ];
 
 export const SALES_MODULE = {
-  id: 'sales',
-  name: 'Sales & Commercial Operations',
-  version: '1.0.0',
-  minPlatformVersion: '1.0.0',
+  id: "sales",
+  name: "Sales & Commercial Operations",
+  version: "1.0.0",
+  minPlatformVersion: "1.0.0",
   /** Kernel module directories load in this order; Sales runs after the kernel and Projects. */
   loadOrder: 320,
   /** API prefix owned by the module's domain commands; entity CRUD stays on `/api/v1/:entity`. */
-  apiPrefix: '/api/v1/Sales',
+  apiPrefix: "/api/v1/Sales",
   /**
    * Phases implemented so far (PLAN_Phase_19_Sales.md §14).
    *
@@ -240,7 +240,19 @@ export const SALES_MODULE = {
    * needs the attachment storage path, which is not built. See `docs/modules/sales/README.md` for the
    * per-phase detail.
    */
-  implementedPhases: ['19-S.0', '19-S.1', '19-S.2', '19-S.3', '19-S.4', '19-S.5', '19-S.6', '19-S.7', '19-S.8', '19-S.9', '19-S.10'],
+  implementedPhases: [
+    "19-S.0",
+    "19-S.1",
+    "19-S.2",
+    "19-S.3",
+    "19-S.4",
+    "19-S.5",
+    "19-S.6",
+    "19-S.7",
+    "19-S.8",
+    "19-S.9",
+    "19-S.10",
+  ],
 } as const;
 
 export type SalesModuleDescriptor = typeof SALES_MODULE;

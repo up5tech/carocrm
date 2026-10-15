@@ -1,4 +1,7 @@
-import { AuthorizationDeniedError, ValidationError } from '@carocrm/core/errors/index.js';
+import {
+  AuthorizationDeniedError,
+  ValidationError,
+} from "@carocrm/core/errors/index.js";
 
 /**
  * Phase 19-S.2 — issuance locking, as a contract the later document phases enforce (19-S.9+).
@@ -11,59 +14,83 @@ import { AuthorizationDeniedError, ValidationError } from '@carocrm/core/errors/
  */
 
 export type SalesDocumentKind =
-  | 'quote'
-  | 'salesOrder'
-  | 'invoice'
-  | 'creditNote'
-  | 'deliveryOrder'
-  | 'returnOrder'
-  | 'purchaseOrder'
-  | 'receiptOrder'
-  | 'bill'
-  | 'billCredit';
+  | "quote"
+  | "salesOrder"
+  | "invoice"
+  | "creditNote"
+  | "deliveryOrder"
+  | "returnOrder"
+  | "purchaseOrder"
+  | "receiptOrder"
+  | "bill"
+  | "billCredit";
 
 export const SALES_DOCUMENT_KINDS: readonly SalesDocumentKind[] = [
-  'quote',
-  'salesOrder',
-  'invoice',
-  'creditNote',
-  'deliveryOrder',
-  'returnOrder',
-  'purchaseOrder',
-  'receiptOrder',
-  'bill',
-  'billCredit',
+  "quote",
+  "salesOrder",
+  "invoice",
+  "creditNote",
+  "deliveryOrder",
+  "returnOrder",
+  "purchaseOrder",
+  "receiptOrder",
+  "bill",
+  "billCredit",
 ];
 
 /** Commercial fields that produced the document's numbers; they never change after issuance. */
 const COMMERCIAL_FIELDS: readonly string[] = [
-  'number',
-  'accountId',
-  'contactId',
-  'supplierId',
-  'currency',
-  'exchangeRateSnapshot',
-  'items',
-  'subtotal',
-  'discountTotal',
-  'shippingAmount',
-  'taxTotal',
-  'netTotal',
-  'grossTotal',
+  "number",
+  "accountId",
+  "contactId",
+  "supplierId",
+  "currency",
+  "exchangeRateSnapshot",
+  "items",
+  "subtotal",
+  "discountTotal",
+  "shippingAmount",
+  "taxTotal",
+  "netTotal",
+  "grossTotal",
 ];
 
 /** Extra fields protected per document kind, on top of the commercial core. */
-const EXTRA_PROTECTED_FIELDS: Readonly<Record<SalesDocumentKind, readonly string[]>> = {
-  quote: ['validUntil', 'priceBookId'],
-  salesOrder: ['orderDate', 'priceBookId', 'paymentTermId', 'warehouseId'],
-  invoice: ['invoiceDate', 'deliveryDate', 'servicePeriodStart', 'servicePeriodEnd', 'paymentTermId', 'dueDate', 'amountDue', 'issuedAt', 'issuedBy'],
-  creditNote: ['creditDate', 'invoiceId', 'amountDue', 'issuedAt', 'issuedBy'],
-  deliveryOrder: ['deliveryDate', 'warehouseId'],
-  returnOrder: ['returnDate', 'warehouseId', 'deliveryOrderId'],
-  purchaseOrder: ['orderDate', 'expectedDeliveryDate', 'paymentTermId', 'warehouseId'],
-  receiptOrder: ['receiptDate', 'warehouseId'],
-  bill: ['billDate', 'dueDate', 'paymentTermId', 'amountDue', 'issuedAt', 'issuedBy'],
-  billCredit: ['creditDate', 'billId', 'amountDue', 'issuedAt', 'issuedBy'],
+const EXTRA_PROTECTED_FIELDS: Readonly<
+  Record<SalesDocumentKind, readonly string[]>
+> = {
+  quote: ["validUntil", "priceBookId"],
+  salesOrder: ["orderDate", "priceBookId", "paymentTermId", "warehouseId"],
+  invoice: [
+    "invoiceDate",
+    "deliveryDate",
+    "servicePeriodStart",
+    "servicePeriodEnd",
+    "paymentTermId",
+    "dueDate",
+    "amountDue",
+    "issuedAt",
+    "issuedBy",
+  ],
+  creditNote: ["creditDate", "invoiceId", "amountDue", "issuedAt", "issuedBy"],
+  deliveryOrder: ["deliveryDate", "warehouseId"],
+  returnOrder: ["returnDate", "warehouseId", "deliveryOrderId"],
+  purchaseOrder: [
+    "orderDate",
+    "expectedDeliveryDate",
+    "paymentTermId",
+    "warehouseId",
+  ],
+  receiptOrder: ["receiptDate", "warehouseId"],
+  bill: [
+    "billDate",
+    "dueDate",
+    "paymentTermId",
+    "amountDue",
+    "issuedAt",
+    "issuedBy",
+  ],
+  billCredit: ["creditDate", "billId", "amountDue", "issuedAt", "issuedBy"],
 };
 
 export function protectedFields(kind: SalesDocumentKind): readonly string[] {
@@ -80,7 +107,10 @@ export interface DocumentLockPolicy {
   readonly unlockRequiresPermission: boolean;
 }
 
-export const DEFAULT_LOCK_POLICY: DocumentLockPolicy = { lockOnIssue: true, unlockRequiresPermission: true };
+export const DEFAULT_LOCK_POLICY: DocumentLockPolicy = {
+  lockOnIssue: true,
+  unlockRequiresPermission: true,
+};
 
 /** The lock-relevant slice of a document row. Timestamps are ISO strings or null. */
 export interface DocumentLockState {
@@ -95,14 +125,25 @@ export interface DocumentLockState {
 }
 
 export function emptyLockState(kind: SalesDocumentKind): DocumentLockState {
-  return { kind, issuedAt: null, issuedBy: null, lockedAt: null, lockedBy: null, unlockedAt: null, unlockedBy: null };
+  return {
+    kind,
+    issuedAt: null,
+    issuedBy: null,
+    lockedAt: null,
+    lockedBy: null,
+    unlockedAt: null,
+    unlockedBy: null,
+  };
 }
 
 export function isIssued(state: DocumentLockState): boolean {
   return state.issuedAt !== null;
 }
 
-export function isLocked(state: DocumentLockState, policy: DocumentLockPolicy = DEFAULT_LOCK_POLICY): boolean {
+export function isLocked(
+  state: DocumentLockState,
+  policy: DocumentLockPolicy = DEFAULT_LOCK_POLICY,
+): boolean {
   if (state.lockedAt !== null) return true;
   return policy.lockOnIssue && isIssued(state);
 }
@@ -129,8 +170,13 @@ export function assertDocumentEditable(
   const violations = protectedFieldViolations(state, changedFields, policy);
   if (violations.length === 0) return;
   throw new ValidationError(
-    `This ${state.kind} is ${state.lockedAt !== null ? 'locked' : 'issued'}; ${violations.join(', ')} cannot be changed. Use a credit note or the documented correction flow.`,
-    { kind: state.kind, fields: violations, issuedAt: state.issuedAt, lockedAt: state.lockedAt },
+    `This ${state.kind} is ${state.lockedAt !== null ? "locked" : "issued"}; ${violations.join(", ")} cannot be changed. Use a credit note or the documented correction flow.`,
+    {
+      kind: state.kind,
+      fields: violations,
+      issuedAt: state.issuedAt,
+      lockedAt: state.lockedAt,
+    },
   );
 }
 
@@ -144,12 +190,17 @@ export function assertUnlockAllowed(
   policy: DocumentLockPolicy = DEFAULT_LOCK_POLICY,
 ): void {
   if (!isLocked(state, policy)) {
-    throw new ValidationError(`This ${state.kind} is not locked.`, { kind: state.kind });
-  }
-  if (policy.unlockRequiresPermission && !actor.isAdmin && !actor.canUnlock) {
-    throw new AuthorizationDeniedError('Unlocking an issued document requires the "unlock issued documents" permission.', {
+    throw new ValidationError(`This ${state.kind} is not locked.`, {
       kind: state.kind,
     });
+  }
+  if (policy.unlockRequiresPermission && !actor.isAdmin && !actor.canUnlock) {
+    throw new AuthorizationDeniedError(
+      'Unlocking an issued document requires the "unlock issued documents" permission.',
+      {
+        kind: state.kind,
+      },
+    );
   }
 }
 
@@ -159,13 +210,26 @@ export interface UnlockResult {
   readonly reason: string;
 }
 
-export function applyUnlock(state: DocumentLockState, actor: { userId: string }, reason: string, at: string): UnlockResult {
+export function applyUnlock(
+  state: DocumentLockState,
+  actor: { userId: string },
+  reason: string,
+  at: string,
+): UnlockResult {
   const trimmed = reason.trim();
-  if (trimmed === '') {
-    throw new ValidationError('Unlocking an issued document requires a reason.');
+  if (trimmed === "") {
+    throw new ValidationError(
+      "Unlocking an issued document requires a reason.",
+    );
   }
   return {
-    state: { ...state, lockedAt: null, lockedBy: null, unlockedAt: at, unlockedBy: actor.userId },
+    state: {
+      ...state,
+      lockedAt: null,
+      lockedBy: null,
+      unlockedAt: at,
+      unlockedBy: actor.userId,
+    },
     reason: trimmed,
   };
 }

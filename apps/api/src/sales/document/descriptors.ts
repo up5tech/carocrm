@@ -1,7 +1,7 @@
-import { ValidationError } from '@carocrm/core/errors/index.js';
+import { ValidationError } from "@carocrm/core/errors/index.js";
 
-import type { SalesEntityType } from '../sales-records.js';
-import { DEFAULT_LOCK_POLICY, type DocumentLockPolicy } from './lock.js';
+import type { SalesEntityType } from "../sales-records.js";
+import { DEFAULT_LOCK_POLICY, type DocumentLockPolicy } from "./lock.js";
 
 /**
  * Phase 19-S.6 — the document-type descriptors every commercial document is driven by.
@@ -23,19 +23,24 @@ import { DEFAULT_LOCK_POLICY, type DocumentLockPolicy } from './lock.js';
 
 /** The document kinds this module actually serves today, in the order the plan delivers them. */
 export const IMPLEMENTED_DOCUMENT_KINDS = [
-  'quote',
-  'salesOrder',
-  'invoice',
-  'creditNote',
-  'deliveryOrder',
-  'returnOrder',
+  "quote",
+  "salesOrder",
+  "invoice",
+  "creditNote",
+  "deliveryOrder",
+  "returnOrder",
 ] as const;
 
-export type ImplementedDocumentKind = (typeof IMPLEMENTED_DOCUMENT_KINDS)[number];
+export type ImplementedDocumentKind =
+  (typeof IMPLEMENTED_DOCUMENT_KINDS)[number];
 
-const IMPLEMENTED_SET: ReadonlySet<string> = new Set(IMPLEMENTED_DOCUMENT_KINDS);
+const IMPLEMENTED_SET: ReadonlySet<string> = new Set(
+  IMPLEMENTED_DOCUMENT_KINDS,
+);
 
-export function isImplementedDocumentKind(value: string): value is ImplementedDocumentKind {
+export function isImplementedDocumentKind(
+  value: string,
+): value is ImplementedDocumentKind {
   return IMPLEMENTED_SET.has(value);
 }
 
@@ -104,15 +109,15 @@ export interface SalesDocumentDescriptor {
 
 /** Fields every commercial document copies from its source; each descriptor may extend it. */
 const PARTY_FIELDS: readonly string[] = [
-  'accountId',
-  'contactId',
-  'currency',
-  'priceBookId',
-  'paymentTermId',
-  'shippingAddress',
-  'billingAddress',
-  'shippingAmount',
-  'documentDiscountAmount',
+  "accountId",
+  "contactId",
+  "currency",
+  "priceBookId",
+  "paymentTermId",
+  "shippingAddress",
+  "billingAddress",
+  "shippingAmount",
+  "documentDiscountAmount",
 ];
 
 const MAX_ITEMS = 500;
@@ -125,79 +130,117 @@ const MAX_ITEMS = 500;
  * privileged unlock (audited, with a reason) or a new quote — never a quiet edit.
  */
 const QUOTE: SalesDocumentDescriptor = {
-  kind: 'quote',
-  label: 'Quote',
-  entity: 'Quote',
-  itemEntity: 'QuoteItem',
-  itemParentField: 'quoteId',
-  seriesCode: 'quote',
-  states: ['draft', 'sent', 'accepted', 'rejected', 'expired', 'converted', 'cancelled'],
-  initialState: 'draft',
+  kind: "quote",
+  label: "Quote",
+  entity: "Quote",
+  itemEntity: "QuoteItem",
+  itemParentField: "quoteId",
+  seriesCode: "quote",
+  states: [
+    "draft",
+    "sent",
+    "accepted",
+    "rejected",
+    "expired",
+    "converted",
+    "cancelled",
+  ],
+  initialState: "draft",
   transitions: [
-    { action: 'send', label: 'Send', from: ['draft'], to: 'sent', issues: true },
-    { action: 'accept', label: 'Accept', from: ['sent'], to: 'accepted' },
-    { action: 'reject', label: 'Reject', from: ['sent'], to: 'rejected' },
-    { action: 'expire', label: 'Expire', from: ['sent'], to: 'expired' },
-    { action: 'cancel', label: 'Cancel', from: ['draft', 'sent'], to: 'cancelled', requiresReason: true },
+    {
+      action: "send",
+      label: "Send",
+      from: ["draft"],
+      to: "sent",
+      issues: true,
+    },
+    { action: "accept", label: "Accept", from: ["sent"], to: "accepted" },
+    { action: "reject", label: "Reject", from: ["sent"], to: "rejected" },
+    { action: "expire", label: "Expire", from: ["sent"], to: "expired" },
+    {
+      action: "cancel",
+      label: "Cancel",
+      from: ["draft", "sent"],
+      to: "cancelled",
+      requiresReason: true,
+    },
   ],
   conversions: [
     {
-      action: 'convertToOrder',
-      label: 'Convert to sales order',
-      toKind: 'salesOrder',
-      from: ['accepted'],
-      copyFields: [...PARTY_FIELDS, 'opportunityId', 'validUntil'],
+      action: "convertToOrder",
+      label: "Convert to sales order",
+      toKind: "salesOrder",
+      from: ["accepted"],
+      copyFields: [...PARTY_FIELDS, "opportunityId", "validUntil"],
     },
     {
       // §4.7 lists a quote as a valid invoice source. The service refuses this while a generated sales
       // order exists, because invoicing from both sides of the same acceptance is double billing.
-      action: 'convertToInvoice',
-      label: 'Create invoice',
-      toKind: 'invoice',
-      from: ['accepted'],
-      copyFields: [...PARTY_FIELDS, 'opportunityId'],
+      action: "convertToInvoice",
+      label: "Create invoice",
+      toKind: "invoice",
+      from: ["accepted"],
+      copyFields: [...PARTY_FIELDS, "opportunityId"],
     },
   ],
   lockPolicy: DEFAULT_LOCK_POLICY,
   minItems: 1,
   maxItems: MAX_ITEMS,
-  dateField: 'quoteDate',
+  dateField: "quoteDate",
 };
 
 /** Sales order — §4.6. Confirmation issues the order and freezes what was promised. */
 const SALES_ORDER: SalesDocumentDescriptor = {
-  kind: 'salesOrder',
-  label: 'Sales Order',
-  entity: 'SalesOrder',
-  itemEntity: 'SalesOrderItem',
-  itemParentField: 'salesOrderId',
-  seriesCode: 'salesOrder',
-  states: ['draft', 'confirmed', 'partiallyFulfilled', 'fulfilled', 'cancelled'],
-  initialState: 'draft',
+  kind: "salesOrder",
+  label: "Sales Order",
+  entity: "SalesOrder",
+  itemEntity: "SalesOrderItem",
+  itemParentField: "salesOrderId",
+  seriesCode: "salesOrder",
+  states: [
+    "draft",
+    "confirmed",
+    "partiallyFulfilled",
+    "fulfilled",
+    "cancelled",
+  ],
+  initialState: "draft",
   transitions: [
-    { action: 'confirm', label: 'Confirm', from: ['draft'], to: 'confirmed', issues: true },
-    { action: 'cancel', label: 'Cancel', from: ['draft', 'confirmed'], to: 'cancelled', requiresReason: true },
+    {
+      action: "confirm",
+      label: "Confirm",
+      from: ["draft"],
+      to: "confirmed",
+      issues: true,
+    },
+    {
+      action: "cancel",
+      label: "Cancel",
+      from: ["draft", "confirmed"],
+      to: "cancelled",
+      requiresReason: true,
+    },
   ],
   conversions: [
     {
-      action: 'convertToInvoice',
-      label: 'Create invoice',
-      toKind: 'invoice',
-      from: ['confirmed', 'partiallyFulfilled', 'fulfilled'],
-      copyFields: [...PARTY_FIELDS, 'opportunityId'],
+      action: "convertToInvoice",
+      label: "Create invoice",
+      toKind: "invoice",
+      from: ["confirmed", "partiallyFulfilled", "fulfilled"],
+      copyFields: [...PARTY_FIELDS, "opportunityId"],
     },
     {
-      action: 'convertToDeliveryOrder',
-      label: 'Create delivery order',
-      toKind: 'deliveryOrder',
-      from: ['confirmed', 'partiallyFulfilled'],
-      copyFields: [...PARTY_FIELDS, 'warehouseId'],
+      action: "convertToDeliveryOrder",
+      label: "Create delivery order",
+      toKind: "deliveryOrder",
+      from: ["confirmed", "partiallyFulfilled"],
+      copyFields: [...PARTY_FIELDS, "warehouseId"],
     },
   ],
   lockPolicy: DEFAULT_LOCK_POLICY,
   minItems: 1,
   maxItems: MAX_ITEMS,
-  dateField: 'orderDate',
+  dateField: "orderDate",
 };
 
 /**
@@ -207,91 +250,146 @@ const SALES_ORDER: SalesDocumentDescriptor = {
  * "paid", which is a derived `paymentStatus` maintained by the allocation services.
  */
 const INVOICE: SalesDocumentDescriptor = {
-  kind: 'invoice',
-  label: 'Invoice',
-  entity: 'Invoice',
-  itemEntity: 'InvoiceItem',
-  itemParentField: 'invoiceId',
-  seriesCode: 'invoice',
-  states: ['draft', 'issued', 'voided'],
-  initialState: 'draft',
+  kind: "invoice",
+  label: "Invoice",
+  entity: "Invoice",
+  itemEntity: "InvoiceItem",
+  itemParentField: "invoiceId",
+  seriesCode: "invoice",
+  states: ["draft", "issued", "voided"],
+  initialState: "draft",
   transitions: [
-    { action: 'issue', label: 'Issue', from: ['draft'], to: 'issued', issues: true },
-    { action: 'void', label: 'Void', from: ['issued'], to: 'voided', requiresReason: true },
+    {
+      action: "issue",
+      label: "Issue",
+      from: ["draft"],
+      to: "issued",
+      issues: true,
+    },
+    {
+      action: "void",
+      label: "Void",
+      from: ["issued"],
+      to: "voided",
+      requiresReason: true,
+    },
   ],
   conversions: [],
   lockPolicy: DEFAULT_LOCK_POLICY,
   minItems: 1,
   maxItems: MAX_ITEMS,
-  dateField: 'invoiceDate',
-  dueDateField: 'dueDate',
+  dateField: "invoiceDate",
+  dueDateField: "dueDate",
 };
 
 /** Credit note — §4.9. Reduces a receivable through an explicit allocation, never a silent edit. */
 const CREDIT_NOTE: SalesDocumentDescriptor = {
-  kind: 'creditNote',
-  label: 'Credit Note',
-  entity: 'CreditNote',
-  itemEntity: 'CreditNoteItem',
-  itemParentField: 'creditNoteId',
-  seriesCode: 'creditNote',
-  states: ['draft', 'issued', 'voided'],
-  initialState: 'draft',
+  kind: "creditNote",
+  label: "Credit Note",
+  entity: "CreditNote",
+  itemEntity: "CreditNoteItem",
+  itemParentField: "creditNoteId",
+  seriesCode: "creditNote",
+  states: ["draft", "issued", "voided"],
+  initialState: "draft",
   transitions: [
-    { action: 'issue', label: 'Issue', from: ['draft'], to: 'issued', issues: true },
-    { action: 'void', label: 'Void', from: ['issued'], to: 'voided', requiresReason: true },
+    {
+      action: "issue",
+      label: "Issue",
+      from: ["draft"],
+      to: "issued",
+      issues: true,
+    },
+    {
+      action: "void",
+      label: "Void",
+      from: ["issued"],
+      to: "voided",
+      requiresReason: true,
+    },
   ],
   conversions: [],
   lockPolicy: DEFAULT_LOCK_POLICY,
   minItems: 1,
   maxItems: MAX_ITEMS,
-  dateField: 'creditDate',
+  dateField: "creditDate",
 };
 
 /** Delivery order — §4.10. Confirmation is the stock-moving action and is idempotent. */
 const DELIVERY_ORDER: SalesDocumentDescriptor = {
-  kind: 'deliveryOrder',
-  label: 'Delivery Order',
-  entity: 'DeliveryOrder',
-  itemEntity: 'DeliveryOrderItem',
-  itemParentField: 'deliveryOrderId',
-  seriesCode: 'deliveryOrder',
-  states: ['draft', 'confirmed', 'delivered', 'cancelled'],
-  initialState: 'draft',
+  kind: "deliveryOrder",
+  label: "Delivery Order",
+  entity: "DeliveryOrder",
+  itemEntity: "DeliveryOrderItem",
+  itemParentField: "deliveryOrderId",
+  seriesCode: "deliveryOrder",
+  states: ["draft", "confirmed", "delivered", "cancelled"],
+  initialState: "draft",
   transitions: [
-    { action: 'confirm', label: 'Confirm shipment', from: ['draft'], to: 'confirmed', issues: true },
-    { action: 'markDelivered', label: 'Mark delivered', from: ['confirmed'], to: 'delivered' },
-    { action: 'cancel', label: 'Cancel', from: ['draft', 'confirmed'], to: 'cancelled', requiresReason: true },
+    {
+      action: "confirm",
+      label: "Confirm shipment",
+      from: ["draft"],
+      to: "confirmed",
+      issues: true,
+    },
+    {
+      action: "markDelivered",
+      label: "Mark delivered",
+      from: ["confirmed"],
+      to: "delivered",
+    },
+    {
+      action: "cancel",
+      label: "Cancel",
+      from: ["draft", "confirmed"],
+      to: "cancelled",
+      requiresReason: true,
+    },
   ],
   conversions: [],
   lockPolicy: DEFAULT_LOCK_POLICY,
   minItems: 1,
   maxItems: MAX_ITEMS,
-  dateField: 'deliveryDate',
+  dateField: "deliveryDate",
 };
 
 /** Return order — §4.10. Confirmation records the return; restocking follows the item disposition. */
 const RETURN_ORDER: SalesDocumentDescriptor = {
-  kind: 'returnOrder',
-  label: 'Return Order',
-  entity: 'ReturnOrder',
-  itemEntity: 'ReturnOrderItem',
-  itemParentField: 'returnOrderId',
-  seriesCode: 'returnOrder',
-  states: ['draft', 'confirmed', 'cancelled'],
-  initialState: 'draft',
+  kind: "returnOrder",
+  label: "Return Order",
+  entity: "ReturnOrder",
+  itemEntity: "ReturnOrderItem",
+  itemParentField: "returnOrderId",
+  seriesCode: "returnOrder",
+  states: ["draft", "confirmed", "cancelled"],
+  initialState: "draft",
   transitions: [
-    { action: 'confirm', label: 'Confirm return', from: ['draft'], to: 'confirmed', issues: true },
-    { action: 'cancel', label: 'Cancel', from: ['draft'], to: 'cancelled', requiresReason: true },
+    {
+      action: "confirm",
+      label: "Confirm return",
+      from: ["draft"],
+      to: "confirmed",
+      issues: true,
+    },
+    {
+      action: "cancel",
+      label: "Cancel",
+      from: ["draft"],
+      to: "cancelled",
+      requiresReason: true,
+    },
   ],
   conversions: [],
   lockPolicy: DEFAULT_LOCK_POLICY,
   minItems: 1,
   maxItems: MAX_ITEMS,
-  dateField: 'returnDate',
+  dateField: "returnDate",
 };
 
-export const DOCUMENT_DESCRIPTORS: Readonly<Record<ImplementedDocumentKind, SalesDocumentDescriptor>> = {
+export const DOCUMENT_DESCRIPTORS: Readonly<
+  Record<ImplementedDocumentKind, SalesDocumentDescriptor>
+> = {
   quote: QUOTE,
   salesOrder: SALES_ORDER,
   invoice: INVOICE,
@@ -300,58 +398,93 @@ export const DOCUMENT_DESCRIPTORS: Readonly<Record<ImplementedDocumentKind, Sale
   returnOrder: RETURN_ORDER,
 };
 
-export function documentDescriptor(kind: ImplementedDocumentKind): SalesDocumentDescriptor {
+export function documentDescriptor(
+  kind: ImplementedDocumentKind,
+): SalesDocumentDescriptor {
   return DOCUMENT_DESCRIPTORS[kind];
 }
 
 /** The descriptor that owns an entity name, or `undefined` when the entity is not a document. */
-export function descriptorForEntity(entity: string): SalesDocumentDescriptor | undefined {
-  return IMPLEMENTED_DOCUMENT_KINDS.map((kind) => DOCUMENT_DESCRIPTORS[kind]).find((descriptor) => descriptor.entity === entity);
+export function descriptorForEntity(
+  entity: string,
+): SalesDocumentDescriptor | undefined {
+  return IMPLEMENTED_DOCUMENT_KINDS.map(
+    (kind) => DOCUMENT_DESCRIPTORS[kind],
+  ).find((descriptor) => descriptor.entity === entity);
 }
 
 /** The transition a command names, or `undefined` when the document type has no such command. */
-export function findTransition(descriptor: SalesDocumentDescriptor, action: string): DocumentTransition | undefined {
-  return descriptor.transitions.find((transition) => transition.action === action);
+export function findTransition(
+  descriptor: SalesDocumentDescriptor,
+  action: string,
+): DocumentTransition | undefined {
+  return descriptor.transitions.find(
+    (transition) => transition.action === action,
+  );
 }
 
 /** The conversion a command names, or `undefined`. */
-export function findConversion(descriptor: SalesDocumentDescriptor, action: string): DocumentConversion | undefined {
-  return descriptor.conversions.find((conversion) => conversion.action === action);
+export function findConversion(
+  descriptor: SalesDocumentDescriptor,
+  action: string,
+): DocumentConversion | undefined {
+  return descriptor.conversions.find(
+    (conversion) => conversion.action === action,
+  );
 }
 
 /**
  * Whether a transition may run from the document's current state. Returns the reason instead of a
  * bare `false`, because "why can't I confirm this order" is the question a user actually asks.
  */
-export function transitionRefusal(descriptor: SalesDocumentDescriptor, action: string, currentState: string): string | null {
+export function transitionRefusal(
+  descriptor: SalesDocumentDescriptor,
+  action: string,
+  currentState: string,
+): string | null {
   const transition = findTransition(descriptor, action);
   if (transition === undefined) {
     return `A ${descriptor.label.toLowerCase()} has no "${action}" action.`;
   }
   if (!transition.from.includes(currentState)) {
-    return `"${transition.label}" is not allowed from the "${currentState}" state of a ${descriptor.label.toLowerCase()}; allowed from: ${transition.from.join(', ')}.`;
+    return `"${transition.label}" is not allowed from the "${currentState}" state of a ${descriptor.label.toLowerCase()}; allowed from: ${transition.from.join(", ")}.`;
   }
   return null;
 }
 
 /** Same question for a conversion, so the error names the state the user is stuck in. */
-export function conversionRefusal(descriptor: SalesDocumentDescriptor, action: string, currentState: string): string | null {
+export function conversionRefusal(
+  descriptor: SalesDocumentDescriptor,
+  action: string,
+  currentState: string,
+): string | null {
   const conversion = findConversion(descriptor, action);
   if (conversion === undefined) {
     return `A ${descriptor.label.toLowerCase()} cannot be converted with "${action}".`;
   }
   if (!conversion.from.includes(currentState)) {
-    return `"${conversion.label}" needs a ${descriptor.label.toLowerCase()} in one of these states: ${conversion.from.join(', ')}; this one is "${currentState}".`;
+    return `"${conversion.label}" needs a ${descriptor.label.toLowerCase()} in one of these states: ${conversion.from.join(", ")}; this one is "${currentState}".`;
   }
   return null;
 }
 
 /** Every conversion that targets a kind, used to reject an unsupported destination early. */
-export function conversionsToKind(toKind: ImplementedDocumentKind): readonly { readonly from: SalesDocumentDescriptor; readonly conversion: DocumentConversion }[] {
-  const found: { from: SalesDocumentDescriptor; conversion: DocumentConversion }[] = [];
-  for (const descriptor of IMPLEMENTED_DOCUMENT_KINDS.map((kind) => DOCUMENT_DESCRIPTORS[kind])) {
+export function conversionsToKind(
+  toKind: ImplementedDocumentKind,
+): readonly {
+  readonly from: SalesDocumentDescriptor;
+  readonly conversion: DocumentConversion;
+}[] {
+  const found: {
+    from: SalesDocumentDescriptor;
+    conversion: DocumentConversion;
+  }[] = [];
+  for (const descriptor of IMPLEMENTED_DOCUMENT_KINDS.map(
+    (kind) => DOCUMENT_DESCRIPTORS[kind],
+  )) {
     for (const conversion of descriptor.conversions) {
-      if (conversion.toKind === toKind) found.push({ from: descriptor, conversion });
+      if (conversion.toKind === toKind)
+        found.push({ from: descriptor, conversion });
     }
   }
   return found;
@@ -360,10 +493,13 @@ export function conversionsToKind(toKind: ImplementedDocumentKind): readonly { r
 /** Narrow an arbitrary string to an implemented kind, refusing anything else with a clear message. */
 export function requireDocumentKind(value: string): ImplementedDocumentKind {
   if (!isImplementedDocumentKind(value)) {
-    throw new ValidationError(`"${value}" is not an implemented Sales document kind.`, {
-      kind: value,
-      implemented: IMPLEMENTED_DOCUMENT_KINDS,
-    });
+    throw new ValidationError(
+      `"${value}" is not an implemented Sales document kind.`,
+      {
+        kind: value,
+        implemented: IMPLEMENTED_DOCUMENT_KINDS,
+      },
+    );
   }
   return value;
 }

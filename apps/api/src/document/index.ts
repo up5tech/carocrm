@@ -1,7 +1,7 @@
-import type { Provider, Type } from '@nestjs/common';
+import type { Provider, Type } from "@nestjs/common";
 
-import { DocumentController } from './document.controller.js';
-import { DocumentTemplateService } from './document-template.service.js';
+import { DocumentController } from "./document.controller.js";
+import { DocumentTemplateService } from "./document-template.service.js";
 
 /**
  * The `document` module — the kernel-owned way a record becomes a document.
@@ -15,5 +15,8 @@ export const DOCUMENT_CONTROLLERS: Type<unknown>[] = [DocumentController];
 
 export const DOCUMENT_PROVIDERS: Provider[] = [DocumentTemplateService];
 
-export { DocumentController } from './document.controller.js';
-export { DocumentTemplateService, type DocumentRenderResult } from './document-template.service.js';
+export { DocumentController } from "./document.controller.js";
+export {
+  type DocumentRenderResult,
+  DocumentTemplateService,
+} from "./document-template.service.js";

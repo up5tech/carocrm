@@ -1,15 +1,23 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
+import { Inject, Injectable } from "@nestjs/common";
+import { sql } from "kysely";
 
-import { DatabaseService } from '../database/database.service.js';
-import { HookRegistry } from '../hooks/hook.registry.js';
-import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
-import { METADATA_STORE } from '../metadata/metadata-store.service.js';
-import { SalesNumberingService } from './document/numbering.service.js';
-import type { PlatformEvidence } from './sales-module.js';
-import { OPTIONAL_INTEGRATIONS, REQUIRED_PLATFORM_CAPABILITIES, SALES_FEATURES, SALES_MODULE } from './sales-module.js';
-import { SALES_ENTITY_TYPES } from './sales-records.js';
-import { type SalesSettings,SalesSettingsService } from './sales-settings.service.js';
+import { DatabaseService } from "../database/database.service.js";
+import { HookRegistry } from "../hooks/hook.registry.js";
+import type { MetadataStoreService } from "../metadata/metadata-store.service.js";
+import { METADATA_STORE } from "../metadata/metadata-store.service.js";
+import { SalesNumberingService } from "./document/numbering.service.js";
+import type { PlatformEvidence } from "./sales-module.js";
+import {
+  OPTIONAL_INTEGRATIONS,
+  REQUIRED_PLATFORM_CAPABILITIES,
+  SALES_FEATURES,
+  SALES_MODULE,
+} from "./sales-module.js";
+import { SALES_ENTITY_TYPES } from "./sales-records.js";
+import {
+  type SalesSettings,
+  SalesSettingsService,
+} from "./sales-settings.service.js";
 
 /**
  * Phase 19-S.1 — module health and diagnostics.
@@ -25,7 +33,11 @@ export interface ModuleDependencyView {
   readonly label: string;
   readonly present: boolean;
   /** Every declared fact, with the result of checking it in this running instance. */
-  readonly evidence: readonly { readonly kind: string; readonly value: string; readonly present: boolean }[];
+  readonly evidence: readonly {
+    readonly kind: string;
+    readonly value: string;
+    readonly present: boolean;
+  }[];
   readonly missing: readonly string[];
 }
 
@@ -34,7 +46,7 @@ export interface OptionalIntegrationView {
   readonly label: string;
   readonly provides: string;
   readonly present: boolean;
-  readonly status: 'available' | 'unavailable';
+  readonly status: "available" | "unavailable";
 }
 
 export interface ModuleFeatureView {
@@ -59,16 +71,26 @@ export interface ModuleHealthView {
   readonly dependencies: readonly ModuleDependencyView[];
   readonly optionalIntegrations: readonly OptionalIntegrationView[];
   readonly features: readonly ModuleFeatureView[];
-  readonly settings: { readonly version: number; readonly updatedAt: string | null; readonly warnings: readonly string[] };
-  readonly checks: readonly { readonly name: string; readonly ok: boolean; readonly detail: string }[];
+  readonly settings: {
+    readonly version: number;
+    readonly updatedAt: string | null;
+    readonly warnings: readonly string[];
+  };
+  readonly checks: readonly {
+    readonly name: string;
+    readonly ok: boolean;
+    readonly detail: string;
+  }[];
 }
 
 @Injectable()
 export class SalesModuleHealthService {
   constructor(
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
-    @Inject(SalesSettingsService) private readonly settings: SalesSettingsService,
-    @Inject(SalesNumberingService) private readonly numbering: SalesNumberingService,
+    @Inject(SalesSettingsService)
+    private readonly settings: SalesSettingsService,
+    @Inject(SalesNumberingService)
+    private readonly numbering: SalesNumberingService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(HookRegistry) private readonly hooks: HookRegistry,
   ) {}
@@ -81,58 +103,85 @@ export class SalesModuleHealthService {
 
     const present = (item: PlatformEvidence): boolean => {
       switch (item.kind) {
-        case 'entity':
+        case "entity":
           return registered.has(item.value);
-        case 'table':
+        case "table":
           return schema.tables.has(item.value);
-        case 'column':
+        case "column":
           return schema.columns.has(item.value);
-        case 'hookPhase':
+        case "hookPhase":
           return phases.has(item.value);
         default: {
           const exhaustive: never = item.kind;
-          throw new Error(`Unsupported capability evidence kind "${String(exhaustive)}".`);
+          throw new Error(
+            `Unsupported capability evidence kind "${String(exhaustive)}".`,
+          );
         }
       }
     };
 
-    const dependencies: ModuleDependencyView[] = REQUIRED_PLATFORM_CAPABILITIES.map((capability) => {
-      const evidence = capability.evidence.map((item) => ({ kind: item.kind, value: item.value, present: present(item) }));
-      const missing = evidence.filter((item) => !item.present).map((item) => `${item.kind}:${item.value}`);
-      return { id: capability.id, label: capability.label, present: missing.length === 0, evidence, missing };
-    });
+    const dependencies: ModuleDependencyView[] =
+      REQUIRED_PLATFORM_CAPABILITIES.map((capability) => {
+        const evidence = capability.evidence.map((item) => ({
+          kind: item.kind,
+          value: item.value,
+          present: present(item),
+        }));
+        const missing = evidence
+          .filter((item) => !item.present)
+          .map((item) => `${item.kind}:${item.value}`);
+        return {
+          id: capability.id,
+          label: capability.label,
+          present: missing.length === 0,
+          evidence,
+          missing,
+        };
+      });
 
-    const optionalIntegrations: OptionalIntegrationView[] = OPTIONAL_INTEGRATIONS.map((integration) => {
-      const present = registered.has(integration.markerEntity);
-      return {
-        id: integration.id,
-        label: integration.label,
-        provides: integration.provides,
-        present,
-        status: present ? 'available' : 'unavailable',
-      };
-    });
+    const optionalIntegrations: OptionalIntegrationView[] =
+      OPTIONAL_INTEGRATIONS.map((integration) => {
+        const present = registered.has(integration.markerEntity);
+        return {
+          id: integration.id,
+          label: integration.label,
+          provides: integration.provides,
+          present,
+          status: present ? "available" : "unavailable",
+        };
+      });
 
     const checks: { name: string; ok: boolean; detail: string }[] = [];
-    const missingSalesEntities = SALES_ENTITY_TYPES.filter((entity) => !registered.has(entity));
+    const missingSalesEntities = SALES_ENTITY_TYPES.filter(
+      (entity) => !registered.has(entity),
+    );
     checks.push({
-      name: 'entity-metadata',
+      name: "entity-metadata",
       ok: missingSalesEntities.length === 0,
-      detail: missingSalesEntities.length === 0 ? `${SALES_ENTITY_TYPES.length} Sales entities are registered.` : `Missing: ${missingSalesEntities.join(', ')}.`,
+      detail:
+        missingSalesEntities.length === 0
+          ? `${SALES_ENTITY_TYPES.length} Sales entities are registered.`
+          : `Missing: ${missingSalesEntities.join(", ")}.`,
     });
 
     try {
       const series = await this.numbering.list();
       checks.push({
-        name: 'numbering',
+        name: "numbering",
         ok: series.length > 0,
-        detail: series.length === 0 ? 'No document number series are provisioned.' : `${series.length} number series are available.`,
+        detail:
+          series.length === 0
+            ? "No document number series are provisioned."
+            : `${series.length} number series are available.`,
       });
     } catch (error: unknown) {
       checks.push({
-        name: 'numbering',
+        name: "numbering",
         ok: false,
-        detail: error instanceof Error ? error.message : 'Number series could not be read.',
+        detail:
+          error instanceof Error
+            ? error.message
+            : "Number series could not be read.",
       });
     }
 
@@ -146,7 +195,9 @@ export class SalesModuleHealthService {
         apiPrefix: SALES_MODULE.apiPrefix,
         implementedPhases: SALES_MODULE.implementedPhases,
       },
-      ok: dependencies.every((dependency) => dependency.present) && checks.every((check) => check.ok),
+      ok:
+        dependencies.every((dependency) => dependency.present) &&
+        checks.every((check) => check.ok),
       dependencies,
       optionalIntegrations,
       features: SALES_FEATURES.map((feature) => ({
@@ -170,14 +221,17 @@ export class SalesModuleHealthService {
    * The names come from the descriptor (never from a request) and are bound as parameters; a
    * missing table is reported as missing evidence rather than failing the whole endpoint.
    */
-  private async readSchemaFacts(): Promise<{ tables: Set<string>; columns: Set<string> }> {
+  private async readSchemaFacts(): Promise<{
+    tables: Set<string>;
+    columns: Set<string>;
+  }> {
     const wanted = new Set<string>();
     for (const capability of REQUIRED_PLATFORM_CAPABILITIES) {
       for (const item of capability.evidence) {
-        if (item.kind === 'table') wanted.add(item.value);
-        if (item.kind === 'column') {
-          const table = item.value.split('.')[0];
-          if (table !== undefined && table !== '') wanted.add(table);
+        if (item.kind === "table") wanted.add(item.value);
+        if (item.kind === "column") {
+          const table = item.value.split(".")[0];
+          if (table !== undefined && table !== "") wanted.add(table);
         }
       }
     }
@@ -199,6 +253,7 @@ export class SalesModuleHealthService {
 }
 
 function featureEnabled(settings: SalesSettings, key: string): boolean {
-  const features: Record<string, boolean> = settings.features as unknown as Record<string, boolean>;
+  const features: Record<string, boolean> =
+    settings.features as unknown as Record<string, boolean>;
   return features[key] === true;
 }

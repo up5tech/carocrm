@@ -1,19 +1,27 @@
-import { ValidationError } from '@carocrm/core/errors/index.js';
-import type { HookContext } from '@carocrm/entity-engine/types/index.js';
-import type { OnApplicationBootstrap } from '@nestjs/common';
-import { Inject, Injectable } from '@nestjs/common';
+import { ValidationError } from "@carocrm/core/errors/index.js";
+import type { HookContext } from "@carocrm/entity-engine/types/index.js";
+import type { OnApplicationBootstrap } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 
-import { HookRegistry } from '../hooks/hook.registry.js';
-import { documentDescriptor, descriptorForEntity, IMPLEMENTED_DOCUMENT_KINDS, type SalesDocumentDescriptor } from './document/descriptors.js';
-import { assertDocumentEditable, type DocumentLockState } from './document/lock.js';
-import { SalesRecords } from './sales-records.js';
+import { HookRegistry } from "../hooks/hook.registry.js";
+import {
+  descriptorForEntity,
+  documentDescriptor,
+  IMPLEMENTED_DOCUMENT_KINDS,
+  type SalesDocumentDescriptor,
+} from "./document/descriptors.js";
+import {
+  assertDocumentEditable,
+  type DocumentLockState,
+} from "./document/lock.js";
 import {
   changedKeys,
   isSalesInternalWrite,
   PAYMENT_ENTITIES,
   SERVER_OWNED_DOCUMENT_FIELDS,
   SERVER_OWNED_PAYMENT_FIELDS,
-} from './sales-internal.js';
+} from "./sales-internal.js";
+import { SalesRecords } from "./sales-records.js";
 
 /**
  * Phase 19-S.9 / 19-S.10 — the write guard for commercial records.
@@ -49,7 +57,11 @@ export class SalesWriteGuardService implements OnApplicationBootstrap {
 
   /** Named registration, so `GET /api/v1/Hook` shows exactly what this module contributes. */
   register(): void {
-    this.hooks.register({ name: 'sales.writeGuard', phase: 'beforeValidate', handler: (context) => this.validate(context) });
+    this.hooks.register({
+      name: "sales.writeGuard",
+      phase: "beforeValidate",
+      handler: (context) => this.validate(context),
+    });
   }
 
   private async validate(context: HookContext): Promise<void> {
@@ -70,60 +82,103 @@ export class SalesWriteGuardService implements OnApplicationBootstrap {
     }
 
     if (PAYMENT_ENTITIES.includes(context.entity)) {
-      refuseServerOwned(context.operation === 'create' ? Object.keys(data) : changedKeys(data, context.previous ?? {}), SERVER_OWNED_PAYMENT_FIELDS, context.entity);
+      refuseServerOwned(
+        context.operation === "create"
+          ? Object.keys(data)
+          : changedKeys(data, context.previous ?? {}),
+        SERVER_OWNED_PAYMENT_FIELDS,
+        context.entity,
+      );
     }
   }
 
-  private async validateDocument(context: HookContext, descriptor: SalesDocumentDescriptor, data: Record<string, unknown>): Promise<void> {
-    if (context.operation === 'create') {
-      refuseServerOwned(Object.keys(data), SERVER_OWNED_DOCUMENT_FIELDS, descriptor.entity);
+  private async validateDocument(
+    context: HookContext,
+    descriptor: SalesDocumentDescriptor,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    if (context.operation === "create") {
+      refuseServerOwned(
+        Object.keys(data),
+        SERVER_OWNED_DOCUMENT_FIELDS,
+        descriptor.entity,
+      );
       return;
     }
     const previous = context.previous ?? {};
     const changed = changedKeys(data, previous);
     refuseServerOwned(changed, SERVER_OWNED_DOCUMENT_FIELDS, descriptor.entity);
     // A locked document's commercial fields are immutable; the error names them (§4.7).
-    assertDocumentEditable(lockStateFrom(previous, descriptor), changed, descriptor.lockPolicy);
+    assertDocumentEditable(
+      lockStateFrom(previous, descriptor),
+      changed,
+      descriptor.lockPolicy,
+    );
   }
 
   /**
    * A line item is not itself locked, but the document it belongs to may be — and the item carries the
    * net, tax and gross amounts the document was issued with. So the guard asks the parent.
    */
-  private async validateItem(context: HookContext, descriptor: SalesDocumentDescriptor, data: Record<string, unknown>): Promise<void> {
+  private async validateItem(
+    context: HookContext,
+    descriptor: SalesDocumentDescriptor,
+    data: Record<string, unknown>,
+  ): Promise<void> {
     const parentId =
-      text(data[descriptor.itemParentField]) ?? (context.operation === 'update' ? text(context.previous?.[descriptor.itemParentField]) : undefined);
+      text(data[descriptor.itemParentField]) ??
+      (context.operation === "update"
+        ? text(context.previous?.[descriptor.itemParentField])
+        : undefined);
     if (parentId === undefined) return;
     const parent = await this.records.byId(descriptor.entity, parentId);
     if (parent === undefined) return;
-    assertDocumentEditable(lockStateFrom(parent.data, descriptor), ['items'], descriptor.lockPolicy);
+    assertDocumentEditable(
+      lockStateFrom(parent.data, descriptor),
+      ["items"],
+      descriptor.lockPolicy,
+    );
   }
 
   /** The document descriptor whose item entity this is, if any. */
-  private itemDescriptorFor(entity: string): SalesDocumentDescriptor | undefined {
-    return IMPLEMENTED_DOCUMENT_KINDS.map((kind) => documentDescriptor(kind)).find((descriptor) => descriptor.itemEntity === entity);
+  private itemDescriptorFor(
+    entity: string,
+  ): SalesDocumentDescriptor | undefined {
+    return IMPLEMENTED_DOCUMENT_KINDS.map((kind) =>
+      documentDescriptor(kind),
+    ).find((descriptor) => descriptor.itemEntity === entity);
   }
 }
 
-function lockStateFrom(data: Record<string, unknown>, descriptor: SalesDocumentDescriptor): DocumentLockState {
+function lockStateFrom(
+  data: Record<string, unknown>,
+  descriptor: SalesDocumentDescriptor,
+): DocumentLockState {
   return {
     kind: descriptor.kind,
-    issuedAt: isoOrNull(data['issuedAt']),
-    issuedBy: text(data['issuedBy']) ?? null,
-    lockedAt: isoOrNull(data['lockedAt']),
-    lockedBy: text(data['lockedBy']) ?? null,
-    unlockedAt: isoOrNull(data['unlockedAt']),
-    unlockedBy: text(data['unlockedBy']) ?? null,
+    issuedAt: isoOrNull(data["issuedAt"]),
+    issuedBy: text(data["issuedBy"]) ?? null,
+    lockedAt: isoOrNull(data["lockedAt"]),
+    lockedBy: text(data["lockedBy"]) ?? null,
+    unlockedAt: isoOrNull(data["unlockedAt"]),
+    unlockedBy: text(data["unlockedBy"]) ?? null,
   };
 }
 
-function refuseServerOwned(keys: readonly string[], owned: readonly string[], entity: string): void {
+function refuseServerOwned(
+  keys: readonly string[],
+  owned: readonly string[],
+  entity: string,
+): void {
   const offending = keys.filter((key) => owned.includes(key));
   if (offending.length === 0) return;
-  throw new ValidationError(`These fields on ${entity} are computed by the server and cannot be set through the record API: ${offending.join(', ')}.`, {
-    entity,
-    fields: offending,
-  });
+  throw new ValidationError(
+    `These fields on ${entity} are computed by the server and cannot be set through the record API: ${offending.join(", ")}.`,
+    {
+      entity,
+      fields: offending,
+    },
+  );
 }
 
 function isoOrNull(value: unknown): string | null {
@@ -132,7 +187,7 @@ function isoOrNull(value: unknown): string | null {
 }
 
 function text(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
+  if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
+  return trimmed === "" ? undefined : trimmed;
 }

@@ -110,10 +110,12 @@ export async function createPdfkitRenderer(): Promise<DocumentPdfRenderer> {
 interface PdfDocument {
   fontSize(points: number): PdfDocument;
   font(value: string): PdfDocument;
-  text(value: string, options?: Record<string, unknown>): PdfDocument;
+  text(value: string, x?: number, y?: number, options?: Record<string, unknown>): PdfDocument;
   moveDown(lines?: number): PdfDocument;
   info: Record<string, unknown>;
-  on(event: string, listener: (...args: unknown[]) => void): void;
+  on(event: 'data', listener: (chunk: Buffer) => void): void;
+  on(event: 'error', listener: (error: Error) => void): void;
+  on(event: 'end', listener: () => void): void;
   end(): void;
 }
 

@@ -1,18 +1,22 @@
-import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
-import { Inject, Injectable } from '@nestjs/common';
+import { NotFoundError, ValidationError } from "@carocrm/core/errors/index.js";
+import { Inject, Injectable } from "@nestjs/common";
 
-import { AclApiService } from '../../acl/acl-api.service.js';
-import { resolveDay } from '../clock.js';
-import type { LineItemInput, TaxLineResolution } from '../document/types.js';
-import type { ExchangeRateInput } from '../money/currency.js';
-import { normalizeCurrencyCode } from '../money/currency.js';
-import { parseDecimal } from '../money/decimal.js';
-import { SalesRecords, type SalesRow } from '../sales-records.js';
-import { SalesSettingsService } from '../sales-settings.service.js';
-import type { TaxContext, TaxRateInput, TaxRuleInput } from './tax-rules.js';
-import { orderTaxRules, selectTaxRate } from './tax-rules.js';
-import type { TotalsLine, TotalsResult, TotalsShipping } from './totals.js';
-import { computeTotals, requireAmount, requirePositiveQuantity } from './totals.js';
+import { AclApiService } from "../../acl/acl-api.service.js";
+import { resolveDay } from "../clock.js";
+import type { LineItemInput, TaxLineResolution } from "../document/types.js";
+import type { ExchangeRateInput } from "../money/currency.js";
+import { normalizeCurrencyCode } from "../money/currency.js";
+import { parseDecimal } from "../money/decimal.js";
+import { SalesRecords, type SalesRow } from "../sales-records.js";
+import { SalesSettingsService } from "../sales-settings.service.js";
+import type { TaxContext, TaxRateInput, TaxRuleInput } from "./tax-rules.js";
+import { orderTaxRules, selectTaxRate } from "./tax-rules.js";
+import type { TotalsLine, TotalsResult, TotalsShipping } from "./totals.js";
+import {
+  computeTotals,
+  requireAmount,
+  requirePositiveQuantity,
+} from "./totals.js";
 
 /**
  * Phase 19-S.5 — tax resolution and totals preview (PLAN_Phase_19_Sales.md §4.12, §7.2).
@@ -47,7 +51,12 @@ export interface TaxPreviewRequest {
   readonly accountId?: string | null | undefined;
   readonly jurisdiction?: string | null | undefined;
   readonly lines: readonly TaxPreviewLine[];
-  readonly shipping?: { readonly amount: string; readonly taxCodeId?: string | null | undefined } | undefined;
+  readonly shipping?:
+    | {
+        readonly amount: string;
+        readonly taxCodeId?: string | null | undefined;
+      }
+    | undefined;
   readonly documentDiscountAmount?: string | undefined;
   readonly exchangeRate?: ExchangeRateInput | undefined;
 }
@@ -56,7 +65,8 @@ export interface TaxPreviewRequest {
 export class SalesTaxService {
   constructor(
     @Inject(SalesRecords) private readonly records: SalesRecords,
-    @Inject(SalesSettingsService) private readonly settings: SalesSettingsService,
+    @Inject(SalesSettingsService)
+    private readonly settings: SalesSettingsService,
     @Inject(AclApiService) private readonly acl: AclApiService,
   ) {}
 
@@ -67,7 +77,9 @@ export class SalesTaxService {
    * then the matching tax rule. `null` means "nothing matched" — the caller applies the configured
    * missing-tax policy, which defaults to refusing the line.
    */
-  async resolveLineTax(input: TaxLineContext): Promise<TaxLineResolution | null> {
+  async resolveLineTax(
+    input: TaxLineContext,
+  ): Promise<TaxLineResolution | null> {
     const context: TaxContext = {
       date: input.date,
       productId: input.productId,
@@ -78,23 +90,26 @@ export class SalesTaxService {
     };
 
     const explicitRate = input.explicitRatePercent?.trim();
-    if (explicitRate !== undefined && explicitRate !== '') {
+    if (explicitRate !== undefined && explicitRate !== "") {
       parseDecimal(explicitRate);
       const code = input.explicitTaxCodeId?.trim();
-      const taxCode = code === undefined || code === '' ? undefined : await this.taxCode(code);
+      const taxCode =
+        code === undefined || code === ""
+          ? undefined
+          : await this.taxCode(code);
       return {
-        taxCodeId: code === undefined || code === '' ? null : code,
+        taxCodeId: code === undefined || code === "" ? null : code,
         taxCodeName: taxCode?.name ?? null,
         taxRatePercent: explicitRate,
-        source: 'line',
+        source: "line",
         ruleId: null,
         rateId: null,
       };
     }
 
     const explicitCode = input.explicitTaxCodeId?.trim();
-    if (explicitCode !== undefined && explicitCode !== '') {
-      return this.resolutionForCode(explicitCode, context, 'taxCode', null);
+    if (explicitCode !== undefined && explicitCode !== "") {
+      return this.resolutionForCode(explicitCode, context, "taxCode", null);
     }
 
     const rules = await this.taxRules();
@@ -103,37 +118,56 @@ export class SalesTaxService {
     if (winner !== undefined) {
       const tie = ordered.conflicts.find(([left]) => left.id === winner.id);
       if (tie !== undefined) {
-        throw new ValidationError('Two tax rules match this line with the same priority and specificity.', {
-          rules: [tie[0].id, tie[1].id],
-          productId: input.productId,
-        });
+        throw new ValidationError(
+          "Two tax rules match this line with the same priority and specificity.",
+          {
+            rules: [tie[0].id, tie[1].id],
+            productId: input.productId,
+          },
+        );
       }
       if (winner.taxCodeId === null) {
-        throw new ValidationError(`Tax rule "${winner.name ?? winner.id}" has no tax code.`, { ruleId: winner.id });
+        throw new ValidationError(
+          `Tax rule "${winner.name ?? winner.id}" has no tax code.`,
+          { ruleId: winner.id },
+        );
       }
-      return this.resolutionForCode(winner.taxCodeId, context, 'taxRule', winner.id);
+      return this.resolutionForCode(
+        winner.taxCodeId,
+        context,
+        "taxRule",
+        winner.id,
+      );
     }
     return null;
   }
 
   /** Product default tax code comes from the product row; the service keeps that lookup here. */
-  async resolveForProduct(product: SalesRow, context: Omit<TaxLineContext, 'productId' | 'categoryId' | 'taxClassId'>): Promise<TaxLineResolution | null> {
-    const defaultCode = text(product.data['defaultTaxCodeId']);
+  async resolveForProduct(
+    product: SalesRow,
+    context: Omit<TaxLineContext, "productId" | "categoryId" | "taxClassId">,
+  ): Promise<TaxLineResolution | null> {
+    const defaultCode = text(product.data["defaultTaxCodeId"]);
     if (defaultCode !== undefined) {
-      return this.resolutionForCode(defaultCode, {
-        date: context.date,
-        productId: product.id,
-        categoryId: text(product.data['categoryId']) ?? null,
-        accountId: context.accountId,
-        taxClassId: text(product.data['taxClassId']) ?? null,
-        jurisdiction: context.jurisdiction,
-      }, 'taxCode', null);
+      return this.resolutionForCode(
+        defaultCode,
+        {
+          date: context.date,
+          productId: product.id,
+          categoryId: text(product.data["categoryId"]) ?? null,
+          accountId: context.accountId,
+          taxClassId: text(product.data["taxClassId"]) ?? null,
+          jurisdiction: context.jurisdiction,
+        },
+        "taxCode",
+        null,
+      );
     }
     return this.resolveLineTax({
       ...context,
       productId: product.id,
-      categoryId: text(product.data['categoryId']) ?? null,
-      taxClassId: text(product.data['taxClassId']) ?? null,
+      categoryId: text(product.data["categoryId"]) ?? null,
+      taxClassId: text(product.data["taxClassId"]) ?? null,
     });
   }
 
@@ -144,74 +178,135 @@ export class SalesTaxService {
   async preview(request: TaxPreviewRequest): Promise<TotalsResult> {
     const settings = await this.settings.settings();
     const date = resolveDay(request.date);
-    const currency = normalizeCurrencyCode(request.currency ?? settings.currency.defaultCurrency);
+    const currency = normalizeCurrencyCode(
+      request.currency ?? settings.currency.defaultCurrency,
+    );
     const accountId = request.accountId?.trim() || null;
     const jurisdiction = request.jurisdiction?.trim() || null;
-    const taxInclusive = request.taxInclusive ?? settings.features.taxInclusivePrices;
+    const taxInclusive =
+      request.taxInclusive ?? settings.features.taxInclusivePrices;
 
-    const productIds = [...new Set(request.lines.map((line) => line.productId).filter((id): id is string => typeof id === 'string' && id.trim() !== ''))];
-    if (productIds.length > 0) await this.acl.assertAccess('Product', 'read');
-    const products = await this.records.byIds('Product', productIds);
+    const productIds = [
+      ...new Set(
+        request.lines
+          .map((line) => line.productId)
+          .filter(
+            (id): id is string => typeof id === "string" && id.trim() !== "",
+          ),
+      ),
+    ];
+    if (productIds.length > 0) await this.acl.assertAccess("Product", "read");
+    const products = await this.records.byIds("Product", productIds);
     const byId = new Map(products.map((row) => [row.id, row]));
     for (const id of productIds) {
-      if (!byId.has(id)) throw new NotFoundError(`Product "${id}" does not exist.`);
+      if (!byId.has(id))
+        throw new NotFoundError(`Product "${id}" does not exist.`);
     }
 
     const lines: TotalsLine[] = [];
     for (const [index, line] of request.lines.entries()) {
       const position = index + 1;
-      const product = line.productId === undefined ? undefined : byId.get(line.productId);
+      const product =
+        line.productId === undefined ? undefined : byId.get(line.productId);
       let tax: TaxLineResolution | null;
-      if (line.taxRatePercent !== undefined && line.taxRatePercent !== '') {
+      if (line.taxRatePercent !== undefined && line.taxRatePercent !== "") {
         tax = await this.resolveLineTax({
           date,
           productId: product?.id ?? null,
-          categoryId: product === undefined ? null : text(product.data['categoryId']) ?? null,
+          categoryId:
+            product === undefined
+              ? null
+              : (text(product.data["categoryId"]) ?? null),
           accountId,
-          taxClassId: product === undefined ? null : text(product.data['taxClassId']) ?? null,
+          taxClassId:
+            product === undefined
+              ? null
+              : (text(product.data["taxClassId"]) ?? null),
           jurisdiction,
           explicitTaxCodeId: line.taxCodeId ?? null,
           explicitRatePercent: line.taxRatePercent,
         });
-      } else if (line.taxCodeId !== undefined && line.taxCodeId !== '') {
+      } else if (line.taxCodeId !== undefined && line.taxCodeId !== "") {
         tax = await this.resolveLineTax({
           date,
           productId: product?.id ?? null,
-          categoryId: product === undefined ? null : text(product.data['categoryId']) ?? null,
+          categoryId:
+            product === undefined
+              ? null
+              : (text(product.data["categoryId"]) ?? null),
           accountId,
-          taxClassId: product === undefined ? null : text(product.data['taxClassId']) ?? null,
+          taxClassId:
+            product === undefined
+              ? null
+              : (text(product.data["taxClassId"]) ?? null),
           jurisdiction,
           explicitTaxCodeId: line.taxCodeId,
         });
       } else if (product !== undefined) {
-        tax = await this.resolveForProduct(product, { date, accountId, jurisdiction });
+        tax = await this.resolveForProduct(product, {
+          date,
+          accountId,
+          jurisdiction,
+        });
       } else {
-        tax = await this.resolveLineTax({ date, productId: null, categoryId: null, accountId, taxClassId: null, jurisdiction });
+        tax = await this.resolveLineTax({
+          date,
+          productId: null,
+          categoryId: null,
+          accountId,
+          taxClassId: null,
+          jurisdiction,
+        });
       }
       lines.push({
         ...line,
         tax,
       });
-      if (typeof line.quantity !== 'string' || line.quantity.trim() === '') {
-        throw new ValidationError(`Line ${position} is missing a quantity.`, { line: position });
+      if (typeof line.quantity !== "string" || line.quantity.trim() === "") {
+        throw new ValidationError(`Line ${position} is missing a quantity.`, {
+          line: position,
+        });
       }
-      requirePositiveQuantity(line.quantity, position, settings.quantityPrecision);
+      requirePositiveQuantity(
+        line.quantity,
+        position,
+        settings.quantityPrecision,
+      );
     }
 
     let shipping: TotalsShipping | undefined;
     if (request.shipping !== undefined) {
-      requireAmount(request.shipping.amount, 'shipping.amount');
-      const shippingCode = request.shipping.taxCodeId?.trim() || settings.tax.shippingTaxCode;
-      const tax = shippingCode === null || shippingCode === undefined || shippingCode === ''
-        ? null
-        : await this.resolutionForCode(shippingCode, { date, productId: null, categoryId: null, accountId, taxClassId: null, jurisdiction }, 'taxCode', null);
+      requireAmount(request.shipping.amount, "shipping.amount");
+      const shippingCode =
+        request.shipping.taxCodeId?.trim() || settings.tax.shippingTaxCode;
+      const tax =
+        shippingCode === null ||
+        shippingCode === undefined ||
+        shippingCode === ""
+          ? null
+          : await this.resolutionForCode(
+              shippingCode,
+              {
+                date,
+                productId: null,
+                categoryId: null,
+                accountId,
+                taxClassId: null,
+                jurisdiction,
+              },
+              "taxCode",
+              null,
+            );
       shipping = { amount: request.shipping.amount, tax };
     }
 
     return computeTotals({
       currency,
       taxInclusive,
-      rounding: { mode: settings.tax.roundingMode, stage: settings.tax.roundingStage },
+      rounding: {
+        mode: settings.tax.roundingMode,
+        stage: settings.tax.roundingStage,
+      },
       quantityPrecision: settings.quantityPrecision,
       missingTaxPolicy: settings.tax.missingTaxPolicy,
       lines,
@@ -225,31 +320,42 @@ export class SalesTaxService {
   private async resolutionForCode(
     taxCodeId: string,
     context: TaxContext,
-    source: 'taxRule' | 'taxCode',
+    source: "taxRule" | "taxCode",
     ruleId: string | null,
   ): Promise<TaxLineResolution> {
     const code = await this.taxCode(taxCodeId);
     if (code === undefined) {
-      throw new ValidationError(`Tax code "${taxCodeId}" does not exist.`, { taxCodeId });
+      throw new ValidationError(`Tax code "${taxCodeId}" does not exist.`, {
+        taxCodeId,
+      });
     }
-    const rows = await this.records.find('TaxRate', { taxCodeId }, 200);
+    const rows = await this.records.find("TaxRate", { taxCodeId }, 200);
     const rates = rows.map((row) => toRateInput(row));
     const selection = selectTaxRate(rates, taxCodeId, context);
     if (selection.conflict !== null) {
-      throw new ValidationError(`Tax code "${code.name ?? taxCodeId}" has two applicable rates starting on the same date.`, {
-        taxCodeId,
-        rates: [selection.conflict[0].id, selection.conflict[1].id],
-      });
+      throw new ValidationError(
+        `Tax code "${code.name ?? taxCodeId}" has two applicable rates starting on the same date.`,
+        {
+          taxCodeId,
+          rates: [selection.conflict[0].id, selection.conflict[1].id],
+        },
+      );
     }
     if (selection.rate === null) {
-      if (source === 'taxCode') {
-        throw new ValidationError(`Tax code "${code.name ?? taxCodeId}" has no rate applicable on ${context.date}.`, { taxCodeId, date: context.date });
+      if (source === "taxCode") {
+        throw new ValidationError(
+          `Tax code "${code.name ?? taxCodeId}" has no rate applicable on ${context.date}.`,
+          { taxCodeId, date: context.date },
+        );
       }
-      throw new ValidationError(`Tax rule "${ruleId ?? ''}" resolved to tax code "${code.name ?? taxCodeId}", which has no applicable rate on ${context.date}.`, {
-        taxCodeId,
-        ruleId,
-        date: context.date,
-      });
+      throw new ValidationError(
+        `Tax rule "${ruleId ?? ""}" resolved to tax code "${code.name ?? taxCodeId}", which has no applicable rate on ${context.date}.`,
+        {
+          taxCodeId,
+          ruleId,
+          date: context.date,
+        },
+      );
     }
     return {
       taxCodeId,
@@ -262,26 +368,27 @@ export class SalesTaxService {
   }
 
   private async taxCode(id: string): Promise<SalesRow | undefined> {
-    return this.records.byId('TaxCode', id);
+    return this.records.byId("TaxCode", id);
   }
 
   private async taxRules(): Promise<TaxRuleInput[]> {
-    const rows = await this.records.allLive('TaxRule');
+    const rows = await this.records.allLive("TaxRule");
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
-      active: row.data['active'] !== false,
-      priority: typeof row.data['priority'] === 'number' ? row.data['priority'] : 100,
-      taxCodeId: text(row.data['taxCodeId']) ?? null,
+      active: row.data["active"] !== false,
+      priority:
+        typeof row.data["priority"] === "number" ? row.data["priority"] : 100,
+      taxCodeId: text(row.data["taxCodeId"]) ?? null,
       criteria: {
-        taxClassIds: listOrUndefined(row.data['taxClassId']),
-        productIds: stringArray(row.data['productIds']),
-        categoryIds: stringArray(row.data['categoryIds']),
-        accountIds: stringArray(row.data['accountIds']),
-        jurisdictions: listOrUndefined(row.data['jurisdiction']),
+        taxClassIds: listOrUndefined(row.data["taxClassId"]),
+        productIds: stringArray(row.data["productIds"]),
+        categoryIds: stringArray(row.data["categoryIds"]),
+        accountIds: stringArray(row.data["accountIds"]),
+        jurisdictions: listOrUndefined(row.data["jurisdiction"]),
       },
-      effectiveFrom: text(row.data['effectiveFrom']) ?? null,
-      effectiveTo: text(row.data['effectiveTo']) ?? null,
+      effectiveFrom: text(row.data["effectiveFrom"]) ?? null,
+      effectiveTo: text(row.data["effectiveTo"]) ?? null,
     }));
   }
 }
@@ -290,27 +397,31 @@ function toRateInput(row: SalesRow): TaxRateInput {
   return {
     id: row.id,
     name: row.name,
-    active: row.data['active'] !== false,
-    taxCodeId: text(row.data['taxCodeId']) ?? null,
-    ratePercent: text(row.data['ratePercent']) ?? '0',
-    jurisdiction: text(row.data['jurisdiction']) ?? null,
-    effectiveFrom: text(row.data['effectiveFrom']) ?? null,
-    effectiveTo: text(row.data['effectiveTo']) ?? null,
+    active: row.data["active"] !== false,
+    taxCodeId: text(row.data["taxCodeId"]) ?? null,
+    ratePercent: text(row.data["ratePercent"]) ?? "0",
+    jurisdiction: text(row.data["jurisdiction"]) ?? null,
+    effectiveFrom: text(row.data["effectiveFrom"]) ?? null,
+    effectiveTo: text(row.data["effectiveTo"]) ?? null,
   };
 }
 
 function listOrUndefined(value: unknown): string[] | undefined {
-  return typeof value === 'string' && value.trim() !== '' ? [value.trim()] : undefined;
+  return typeof value === "string" && value.trim() !== ""
+    ? [value.trim()]
+    : undefined;
 }
 
 function stringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const items = value.filter((item): item is string => typeof item === 'string' && item.trim() !== '');
+  const items = value.filter(
+    (item): item is string => typeof item === "string" && item.trim() !== "",
+  );
   return items.length === 0 ? undefined : items;
 }
 
 function text(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
+  if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
+  return trimmed === "" ? undefined : trimmed;
 }

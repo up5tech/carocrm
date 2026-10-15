@@ -7,7 +7,7 @@
  * `YYYY-MM-DD` string is the canonical form at every boundary.
  */
 
-import { ValidationError } from '@carocrm/core/errors/index.js';
+import { ValidationError } from "@carocrm/core/errors/index.js";
 
 export function utcDay(date: Date = new Date()): string {
   return date.toISOString().slice(0, 10);
@@ -18,10 +18,15 @@ export function isDateOnly(value: string): boolean {
 }
 
 /** `date ?? today`, validated; a malformed date is refused rather than coerced. */
-export function resolveDay(value: string | undefined, fallback: Date = new Date()): string {
-  if (value === undefined || value === '') return utcDay(fallback);
+export function resolveDay(
+  value: string | undefined,
+  fallback: Date = new Date(),
+): string {
+  if (value === undefined || value === "") return utcDay(fallback);
   if (!isDateOnly(value)) {
-    throw new ValidationError(`"${value}" is not a YYYY-MM-DD date.`, { date: value });
+    throw new ValidationError(`"${value}" is not a YYYY-MM-DD date.`, {
+      date: value,
+    });
   }
   return value;
 }

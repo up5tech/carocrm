@@ -1,43 +1,56 @@
-import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
-import { Inject, Injectable } from '@nestjs/common';
+import { NotFoundError, ValidationError } from "@carocrm/core/errors/index.js";
+import { Inject, Injectable } from "@nestjs/common";
 
-import { AclApiService } from '../../acl/acl-api.service.js';
-import { OutboxService } from '../../common/outbox.service.js';
-import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../../common/request-scope.js';
-import { DatabaseService } from '../../database/database.service.js';
-import { EntityCrudService } from '../../entity/entity.service.js';
-import { currentTx, runInTransaction } from '../../entity/tx-context.js';
-import { resolveDay } from '../clock.js';
-import type { ExchangeRateInput } from '../money/currency.js';
-import { normalizeCurrencyCode } from '../money/currency.js';
-import { SalesRecords, type SalesRow } from '../sales-records.js';
-import { SERVER_OWNED_DOCUMENT_FIELDS } from '../sales-internal.js';
-import { SalesSettingsService, type SalesSettings } from '../sales-settings.service.js';
-import type { TotalsResult } from '../tax/totals.js';
-import { SalesTaxService } from '../tax/tax.service.js';
+import { AclApiService } from "../../acl/acl-api.service.js";
+import { OutboxService } from "../../common/outbox.service.js";
+import {
+  REQUEST_SCOPE_TOKEN,
+  type RequestScope,
+} from "../../common/request-scope.js";
+import { DatabaseService } from "../../database/database.service.js";
+import { EntityCrudService } from "../../entity/entity.service.js";
+import { currentTx, runInTransaction } from "../../entity/tx-context.js";
+import { resolveDay } from "../clock.js";
+import type { ExchangeRateInput } from "../money/currency.js";
+import { normalizeCurrencyCode } from "../money/currency.js";
+import {
+  runAsSalesInternal,
+  SERVER_OWNED_DOCUMENT_FIELDS,
+} from "../sales-internal.js";
+import { SalesRecords, type SalesRow } from "../sales-records.js";
+import {
+  type SalesSettings,
+  SalesSettingsService,
+} from "../sales-settings.service.js";
+import { SalesTaxService } from "../tax/tax.service.js";
+import type { TotalsResult } from "../tax/totals.js";
 import {
   conversionRefusal,
+  type DocumentConversion,
   documentDescriptor,
+  type DocumentTransition,
   findConversion,
   findTransition,
-  type DocumentConversion,
-  type DocumentTransition,
   type ImplementedDocumentKind,
   type SalesDocumentDescriptor,
-} from './descriptors.js';
-import { fulfilmentSummary, fulfilmentTransitionRefusal, type FulfilmentState, type FulfilmentSummary } from './fulfilment.js';
-import { dueDateFor, isOverdue, type PaymentTerms } from './terms.js';
+} from "./descriptors.js";
+import {
+  type FulfilmentState,
+  type FulfilmentSummary,
+  fulfilmentSummary,
+  fulfilmentTransitionRefusal,
+} from "./fulfilment.js";
 import {
   assertWithinRemaining,
   type ItemRecordPayload,
+  itemRecordPayloadFromStored,
   itemsToLineInputs,
   itemsToLineInputsWithSource,
   MAX_LINE_ITEMS,
   type RequestedLine,
   type StoredItem,
-  itemRecordPayloadFromStored,
   validateRequestedLines,
-} from './line-items.js';
+} from "./line-items.js";
 import {
   applyUnlock,
   assertDocumentEditable,
@@ -46,10 +59,16 @@ import {
   type DocumentLockState,
   isIssued,
   isLocked,
-} from './lock.js';
-import { SalesNumberingService } from './numbering.service.js';
-import { buildDocumentSnapshot, parseDocumentSnapshot, readDocumentSnapshot, type DocumentSnapshot } from './snapshot.js';
-import type { SalesAuditContext } from './types.js';
+} from "./lock.js";
+import { SalesNumberingService } from "./numbering.service.js";
+import {
+  buildDocumentSnapshot,
+  type DocumentSnapshot,
+  parseDocumentSnapshot,
+  readDocumentSnapshot,
+} from "./snapshot.js";
+import { dueDateFor, isOverdue, type PaymentTerms } from "./terms.js";
+import type { SalesAuditContext } from "./types.js";
 
 /**
  * Phase 19-S.6 – 19-S.12 — the engine every commercial document runs on.
@@ -150,9 +169,11 @@ const SERVER_OWNED_FIELDS = SERVER_OWNED_DOCUMENT_FIELDS;
 export class SalesDocumentService {
   constructor(
     @Inject(SalesRecords) private readonly records: SalesRecords,
-    @Inject(SalesSettingsService) private readonly settings: SalesSettingsService,
+    @Inject(SalesSettingsService)
+    private readonly settings: SalesSettingsService,
     @Inject(SalesTaxService) private readonly tax: SalesTaxService,
-    @Inject(SalesNumberingService) private readonly numbering: SalesNumberingService,
+    @Inject(SalesNumberingService)
+    private readonly numbering: SalesNumberingService,
     @Inject(AclApiService) private readonly acl: AclApiService,
     @Inject(EntityCrudService) private readonly entities: EntityCrudService,
     @Inject(OutboxService) private readonly outbox: OutboxService,
@@ -167,7 +188,7 @@ export class SalesDocumentService {
   /** A document with its items, its totals and the actions its current state allows. */
   async view(kind: ImplementedDocumentKind, id: string): Promise<DocumentView> {
     const descriptor = documentDescriptor(kind);
-    await this.acl.assertAccess(descriptor.entity, 'read');
+    await this.acl.assertAccess(descriptor.entity, "read");
     const row = await this.requireDocument(descriptor, id);
     const items = await this.itemsOf(descriptor, row.id);
     const snapshot = this.issuedSnapshot(descriptor, row);
@@ -183,7 +204,10 @@ export class SalesDocumentService {
    * The items of many documents at once, keyed by document id — one query for a list page, so a list
    * of invoices never becomes one query per row (§16.1).
    */
-  async itemsFor(descriptor: SalesDocumentDescriptor, documentIds: readonly string[]): Promise<Map<string, StoredItem[]>> {
+  async itemsFor(
+    descriptor: SalesDocumentDescriptor,
+    documentIds: readonly string[],
+  ): Promise<Map<string, StoredItem[]>> {
     const grouped = new Map<string, StoredItem[]>();
     if (documentIds.length === 0) return grouped;
     const rows = await this.records.findByIdsIn(
@@ -217,9 +241,12 @@ export class SalesDocumentService {
    * digest has been re-verified, so a tampered row cannot be rendered from. A draft has no snapshot,
    * which is also how the caller knows the document has not been issued yet.
    */
-  async issuedData(kind: ImplementedDocumentKind, id: string): Promise<CommercialSnapshot | undefined> {
+  async issuedData(
+    kind: ImplementedDocumentKind,
+    id: string,
+  ): Promise<CommercialSnapshot | undefined> {
     const descriptor = documentDescriptor(kind);
-    await this.acl.assertAccess(descriptor.entity, 'read');
+    await this.acl.assertAccess(descriptor.entity, "read");
     const row = await this.requireDocument(descriptor, id);
     const snapshot = this.issuedSnapshot(descriptor, row);
     return snapshot === undefined ? undefined : readDocumentSnapshot(snapshot);
@@ -232,7 +259,7 @@ export class SalesDocumentService {
   /** Create a draft. Totals are computed here, never taken from the caller (§5.7). */
   async create(input: CreateDocumentInput): Promise<DocumentView> {
     const descriptor = documentDescriptor(input.kind);
-    await this.acl.assertAccess(descriptor.entity, 'create');
+    await this.acl.assertAccess(descriptor.entity, "create");
     const settings = await this.settings.read();
     rejectServerOwned(input.data);
     const lines = validateRequestedLines(input.items, {
@@ -249,15 +276,27 @@ export class SalesDocumentService {
     const documentId = requireId(created, descriptor);
     try {
       const row = await this.requireDocument(descriptor, documentId);
-      await this.replaceItems(descriptor, documentId, row, lines, settings.settings);
+      await this.replaceItems(
+        descriptor,
+        documentId,
+        row,
+        lines,
+        settings.settings,
+      );
       const stored = await this.itemsOf(descriptor, documentId);
       const fresh = await this.requireDocument(descriptor, documentId);
       const totals = await this.totalsFor(descriptor, fresh, stored, false);
-      await this.entities.update(descriptor.entity, documentId, totalsPatch(totals, stored.length, settings));
+      await this.entities.update(
+        descriptor.entity,
+        documentId,
+        totalsPatch(totals, stored.length, settings),
+      );
       return await this.view(input.kind, documentId);
     } catch (error: unknown) {
       // A document whose lines failed validation must not survive as an empty draft.
-      await this.entities.remove(descriptor.entity, documentId).catch(() => undefined);
+      await this.entities
+        .remove(descriptor.entity, documentId)
+        .catch(() => undefined);
       throw error;
     }
   }
@@ -266,23 +305,38 @@ export class SalesDocumentService {
    * Update a document. A locked (issued) document refuses changes to its protected fields, and the
    * refusal **names** them (§4.7) — it never silently drops a field.
    */
-  async update(kind: ImplementedDocumentKind, id: string, input: UpdateDocumentInput): Promise<DocumentView> {
+  async update(
+    kind: ImplementedDocumentKind,
+    id: string,
+    input: UpdateDocumentInput,
+  ): Promise<DocumentView> {
     const descriptor = documentDescriptor(kind);
-    await this.acl.assertAccess(descriptor.entity, 'edit');
+    await this.acl.assertAccess(descriptor.entity, "edit");
     const settings = await this.settings.read();
     const row = await this.requireDocument(descriptor, id);
     const state = lockStateOf(descriptor, row);
     const patch = { ...(input.data ?? {}) };
     rejectServerOwned(patch);
     const changingItems = input.items !== undefined;
-    assertDocumentEditable(state, changingItems ? [...Object.keys(patch), 'items'] : Object.keys(patch), descriptor.lockPolicy);
+    assertDocumentEditable(
+      state,
+      changingItems ? [...Object.keys(patch), "items"] : Object.keys(patch),
+      descriptor.lockPolicy,
+    );
 
     // Header first, then lines: a line's currency, date and shipping context come from the header.
     if (Object.keys(patch).length > 0) {
       // Changing the terms or the document date re-derives the due date; an explicit one always wins.
-      const changedTerms = patch['paymentTermId'] !== undefined || patch[descriptor.dateField] !== undefined;
-      const withTerms = await this.withDueDate(descriptor, { ...row.data, ...patch }, changedTerms);
-      if (patch['dueDate'] === undefined && withTerms['dueDate'] !== undefined) patch['dueDate'] = withTerms['dueDate'];
+      const changedTerms =
+        patch["paymentTermId"] !== undefined ||
+        patch[descriptor.dateField] !== undefined;
+      const withTerms = await this.withDueDate(
+        descriptor,
+        { ...row.data, ...patch },
+        changedTerms,
+      );
+      if (patch["dueDate"] === undefined && withTerms["dueDate"] !== undefined)
+        patch["dueDate"] = withTerms["dueDate"];
       await this.entities.update(descriptor.entity, id, patch);
     }
     const header = await this.requireDocument(descriptor, id);
@@ -297,7 +351,11 @@ export class SalesDocumentService {
     }
     const stored = await this.itemsOf(descriptor, id);
     const totals = await this.totalsFor(descriptor, header, stored, false);
-    await this.entities.update(descriptor.entity, id, totalsPatch(totals, stored.length, settings));
+    await this.entities.update(
+      descriptor.entity,
+      id,
+      totalsPatch(totals, stored.length, settings),
+    );
     return await this.view(kind, id);
   }
 
@@ -311,16 +369,24 @@ export class SalesDocumentService {
    *
    * This is the operation a scheduled job runs; registering the cron entry is the remaining wiring.
    */
-  async expireOverdueQuotes(today?: string): Promise<{ expired: readonly string[]; skipped: number }> {
-    const descriptor = documentDescriptor('quote');
-    await this.acl.assertAccess(descriptor.entity, 'edit');
+  async expireOverdueQuotes(
+    today?: string,
+  ): Promise<{ expired: readonly string[]; skipped: number }> {
+    const descriptor = documentDescriptor("quote");
+    await this.acl.assertAccess(descriptor.entity, "edit");
     const day = resolveDay(today);
-    const candidates = await this.records.find(descriptor.entity, { status: 'sent' }, MAX_LINE_ITEMS);
+    const candidates = await this.records.find(
+      descriptor.entity,
+      { status: "sent" },
+      MAX_LINE_ITEMS,
+    );
     const expired: string[] = [];
     for (const quote of candidates) {
-      const validUntil = text(quote.data['validUntil']);
+      const validUntil = text(quote.data["validUntil"]);
       if (validUntil === undefined || validUntil >= day) continue;
-      await this.transition('quote', quote.id, 'expire', { reason: `Validity ended ${validUntil}.` });
+      await this.transition("quote", quote.id, "expire", {
+        reason: `Validity ended ${validUntil}.`,
+      });
       expired.push(quote.id);
     }
     return { expired, skipped: candidates.length - expired.length };
@@ -333,27 +399,47 @@ export class SalesDocumentService {
    * deliveries actually moved, so "partially fulfilled" cannot be set by hand and cannot be wrong.
    * Idempotent — a second run computes the same state, writes nothing and emits nothing.
    */
-  async refreshFulfilment(orderId: string): Promise<{ state: FulfilmentState; changed: boolean; summary: FulfilmentSummary }> {
-    const descriptor = documentDescriptor('salesOrder');
-    await this.acl.assertAccess(descriptor.entity, 'edit');
+  async refreshFulfilment(
+    orderId: string,
+  ): Promise<{
+    state: FulfilmentState;
+    changed: boolean;
+    summary: FulfilmentSummary;
+  }> {
+    const descriptor = documentDescriptor("salesOrder");
+    await this.acl.assertAccess(descriptor.entity, "edit");
     const order = await this.requireDocument(descriptor, orderId);
     const current = statusOf(order, descriptor);
-    if (current === 'draft' || current === 'cancelled') {
-      throw new ValidationError(`A ${current} order has no fulfilment state.`, { salesOrderId: orderId, status: current });
+    if (current === "draft" || current === "cancelled") {
+      throw new ValidationError(`A ${current} order has no fulfilment state.`, {
+        salesOrderId: orderId,
+        status: current,
+      });
     }
 
     const orderItems = await this.itemsOf(descriptor, orderId);
     const moved = await this.confirmedDeliveryQuantities(orderId);
     const summary = fulfilmentSummary(
-      orderItems.map((item) => ({ orderedQuantity: item.quantity, movedQuantities: moved.get(item.id) ?? [] })),
+      orderItems.map((item) => ({
+        orderedQuantity: item.quantity,
+        movedQuantities: moved.get(item.id) ?? [],
+      })),
     );
     const refusal = fulfilmentTransitionRefusal(current, summary.state);
-    if (refusal !== null) throw new ValidationError(refusal, { salesOrderId: orderId, state: current, next: summary.state });
-    if (current === summary.state) return { state: summary.state, changed: false, summary };
+    if (refusal !== null)
+      throw new ValidationError(refusal, {
+        salesOrderId: orderId,
+        state: current,
+        next: summary.state,
+      });
+    if (current === summary.state)
+      return { state: summary.state, changed: false, summary };
 
     await runAsSalesInternal(() =>
       runInTransaction(this.database.db, async () => {
-        await this.entities.update(descriptor.entity, orderId, { status: summary.state });
+        await this.entities.update(descriptor.entity, orderId, {
+          status: summary.state,
+        });
         await this.emit(descriptor, orderId, summary.state, {
           status: summary.state,
           fullyMovedLines: summary.fullyMovedLines,
@@ -371,24 +457,32 @@ export class SalesDocumentService {
    * Payment status is a *payment* concept, so the invoice's own `status` is untouched — an overdue
    * invoice is still an issued invoice (§4.7).
    */
-  async markOverdueInvoices(today?: string): Promise<{ overdue: readonly string[]; checked: number }> {
-    const descriptor = documentDescriptor('invoice');
-    await this.acl.assertAccess(descriptor.entity, 'edit');
+  async markOverdueInvoices(
+    today?: string,
+  ): Promise<{ overdue: readonly string[]; checked: number }> {
+    const descriptor = documentDescriptor("invoice");
+    await this.acl.assertAccess(descriptor.entity, "edit");
     const day = resolveDay(today);
-    const candidates = await this.records.find(descriptor.entity, { status: 'issued' }, MAX_LINE_ITEMS);
+    const candidates = await this.records.find(
+      descriptor.entity,
+      { status: "issued" },
+      MAX_LINE_ITEMS,
+    );
     const overdue: string[] = [];
     for (const invoice of candidates) {
-      const paymentStatus = text(invoice.data['paymentStatus']) ?? 'unpaid';
-      if (paymentStatus === 'overdue' || paymentStatus === 'paid') continue;
-      const dueDate = text(invoice.data['dueDate']);
+      const paymentStatus = text(invoice.data["paymentStatus"]) ?? "unpaid";
+      if (paymentStatus === "overdue" || paymentStatus === "paid") continue;
+      const dueDate = text(invoice.data["dueDate"]);
       if (!isOverdue(dueDate, day)) continue;
       await runAsSalesInternal(() =>
         runInTransaction(this.database.db, async () => {
-          await this.entities.update(descriptor.entity, invoice.id, { paymentStatus: 'overdue' });
-          await this.emit(descriptor, invoice.id, 'overdue', {
+          await this.entities.update(descriptor.entity, invoice.id, {
+            paymentStatus: "overdue",
+          });
+          await this.emit(descriptor, invoice.id, "overdue", {
             dueDate,
-            number: text(invoice.data['number']) ?? null,
-            amountDue: text(invoice.data['amountDue']) ?? '0',
+            number: text(invoice.data["number"]) ?? null,
+            amountDue: text(invoice.data["amountDue"]) ?? "0",
           });
         }),
       );
@@ -411,7 +505,7 @@ export class SalesDocumentService {
   ): Promise<Record<string, unknown>> {
     const field = descriptor.dueDateField;
     if (field === undefined) return data;
-    const terms = await this.paymentTermsFor(text(data['paymentTermId']));
+    const terms = await this.paymentTermsFor(text(data["paymentTermId"]));
     if (terms === null) return data;
     if (!recompute && text(data[field]) !== undefined) return data;
     const documentDate = text(data[descriptor.dateField]);
@@ -420,16 +514,23 @@ export class SalesDocumentService {
   }
 
   /** The terms a document references, or `null` when it references none. */
-  private async paymentTermsFor(paymentTermId: string | undefined): Promise<PaymentTerms | null> {
+  private async paymentTermsFor(
+    paymentTermId: string | undefined,
+  ): Promise<PaymentTerms | null> {
     if (paymentTermId === undefined) return null;
-    const row = await this.records.byId('PaymentTermProfile', paymentTermId);
-    if (row === undefined) throw new NotFoundError(`Payment terms "${paymentTermId}" do not exist.`);
-    if (row.data['active'] === false) {
-      throw new ValidationError(`Payment terms "${row.name ?? paymentTermId}" are inactive.`, { paymentTermId });
+    const row = await this.records.byId("PaymentTermProfile", paymentTermId);
+    if (row === undefined)
+      throw new NotFoundError(`Payment terms "${paymentTermId}" do not exist.`);
+    if (row.data["active"] === false) {
+      throw new ValidationError(
+        `Payment terms "${row.name ?? paymentTermId}" are inactive.`,
+        { paymentTermId },
+      );
     }
     return {
-      dueDays: typeof row.data['dueDays'] === 'number' ? row.data['dueDays'] : 30,
-      basis: text(row.data['basis']) === 'endOfMonth' ? 'endOfMonth' : 'net',
+      dueDays:
+        typeof row.data["dueDays"] === "number" ? row.data["dueDays"] : 30,
+      basis: text(row.data["basis"]) === "endOfMonth" ? "endOfMonth" : "net",
     };
   }
 
@@ -440,17 +541,28 @@ export class SalesDocumentService {
    * that was never confirmed moved nothing. This is the read the fulfilment state is derived from, and
    * the same read a stock reservation would use once inventory arrives in 19-S.14.
    */
-  private async confirmedDeliveryQuantities(orderId: string): Promise<Map<string, string[]>> {
+  private async confirmedDeliveryQuantities(
+    orderId: string,
+  ): Promise<Map<string, string[]>> {
     const moved = new Map<string, string[]>();
-    const deliveries = await this.records.find('DeliveryOrder', { salesOrderId: orderId, status: 'confirmed' }, MAX_LINE_ITEMS);
+    const deliveries = await this.records.find(
+      "DeliveryOrder",
+      { salesOrderId: orderId, status: "confirmed" },
+      MAX_LINE_ITEMS,
+    );
     if (deliveries.length === 0) return moved;
     const deliveryIds = deliveries.map((delivery) => delivery.id);
-    const items = await this.records.findByIdsIn('DeliveryOrderItem', 'deliveryOrderId', deliveryIds, MAX_LINE_ITEMS * deliveryIds.length);
+    const items = await this.records.findByIdsIn(
+      "DeliveryOrderItem",
+      "deliveryOrderId",
+      deliveryIds,
+      MAX_LINE_ITEMS * deliveryIds.length,
+    );
     for (const item of items) {
-      const sourceItemId = text(item.data['sourceItemId']);
+      const sourceItemId = text(item.data["sourceItemId"]);
       if (sourceItemId === undefined) continue;
       const list = moved.get(sourceItemId) ?? [];
-      list.push(text(item.data['quantity']) ?? '0');
+      list.push(text(item.data["quantity"]) ?? "0");
       moved.set(sourceItemId, list);
     }
     return moved;
@@ -470,7 +582,11 @@ export class SalesDocumentService {
     conversion: DocumentConversion,
   ): Promise<void> {
     const targetDescriptor = documentDescriptor(conversion.toKind);
-    const sameKind = await this.records.find(targetDescriptor.entity, { sourceEntity: descriptor.entity, sourceId: row.id }, 1);
+    const sameKind = await this.records.find(
+      targetDescriptor.entity,
+      { sourceEntity: descriptor.entity, sourceId: row.id },
+      1,
+    );
     const existing = sameKind[0];
     if (existing !== undefined) {
       throw new ValidationError(
@@ -478,12 +594,16 @@ export class SalesDocumentService {
         { kind: descriptor.kind, id: row.id, existingId: existing.id },
       );
     }
-    if (descriptor.kind === 'quote' && conversion.toKind === 'invoice') {
-      const orders = await this.records.find(documentDescriptor('salesOrder').entity, { sourceEntity: descriptor.entity, sourceId: row.id }, 1);
+    if (descriptor.kind === "quote" && conversion.toKind === "invoice") {
+      const orders = await this.records.find(
+        documentDescriptor("salesOrder").entity,
+        { sourceEntity: descriptor.entity, sourceId: row.id },
+        1,
+      );
       const order = orders[0];
       if (order !== undefined) {
         throw new ValidationError(
-          'This quote already became a sales order; invoice the order instead, so the same acceptance is not billed twice.',
+          "This quote already became a sales order; invoice the order instead, so the same acceptance is not billed twice.",
           { quoteId: row.id, salesOrderId: order.id },
         );
       }
@@ -491,15 +611,22 @@ export class SalesDocumentService {
   }
 
   /** Recalculate on demand. An issued document is never rewritten by this. */
-  async recalculate(kind: ImplementedDocumentKind, id: string): Promise<DocumentView> {
+  async recalculate(
+    kind: ImplementedDocumentKind,
+    id: string,
+  ): Promise<DocumentView> {
     const descriptor = documentDescriptor(kind);
-    await this.acl.assertAccess(descriptor.entity, 'read');
+    await this.acl.assertAccess(descriptor.entity, "read");
     const settings = await this.settings.read();
     const row = await this.requireDocument(descriptor, id);
     if (!isIssued(lockStateOf(descriptor, row))) {
       const stored = await this.itemsOf(descriptor, id);
       const totals = await this.totalsFor(descriptor, row, stored, false);
-      await this.entities.update(descriptor.entity, id, totalsPatch(totals, stored.length, settings));
+      await this.entities.update(
+        descriptor.entity,
+        id,
+        totalsPatch(totals, stored.length, settings),
+      );
     }
     return await this.view(kind, id);
   }
@@ -511,32 +638,50 @@ export class SalesDocumentService {
    * prices required, snapshot, allocate the number, record issuer/time, lock, emit the event. No
    * external call happens inside the transaction.
    */
-  async transition(kind: ImplementedDocumentKind, id: string, action: string, audit: SalesAuditContext = {}): Promise<DocumentView> {
+  async transition(
+    kind: ImplementedDocumentKind,
+    id: string,
+    action: string,
+    audit: SalesAuditContext = {},
+  ): Promise<DocumentView> {
     const descriptor = documentDescriptor(kind);
-    await this.acl.assertAccess(descriptor.entity, 'edit');
+    await this.acl.assertAccess(descriptor.entity, "edit");
     const settings = await this.settings.read();
     const row = await this.requireDocument(descriptor, id);
     const currentState = statusOf(row, descriptor);
 
     const transition = findTransition(descriptor, action);
     if (transition === undefined) {
-      throw new ValidationError(`A ${descriptor.label.toLowerCase()} has no "${action}" action.`, { kind, action });
+      throw new ValidationError(
+        `A ${descriptor.label.toLowerCase()} has no "${action}" action.`,
+        { kind, action },
+      );
     }
     if (!transition.from.includes(currentState)) {
       throw new ValidationError(
-        `"${transition.label}" is not allowed from the "${currentState}" state of a ${descriptor.label.toLowerCase()}; allowed from: ${transition.from.join(', ')}.`,
+        `"${transition.label}" is not allowed from the "${currentState}" state of a ${descriptor.label.toLowerCase()}; allowed from: ${transition.from.join(", ")}.`,
         { kind, action, state: currentState, allowedFrom: transition.from },
       );
     }
-    if (transition.requiresReason === true) requireReason(audit.reason, `"${transition.label}"`);
-    assertInventoryPolicy(descriptor, transition, settings.settings.features.inventory);
+    if (transition.requiresReason === true)
+      requireReason(audit.reason, `"${transition.label}"`);
+    assertInventoryPolicy(
+      descriptor,
+      transition,
+      settings.settings.features.inventory,
+    );
 
     if (transition.issues === true) {
       await this.issue(descriptor, row, transition, settings);
     } else {
       await runInTransaction(this.database.db, async () => {
-        await this.entities.update(descriptor.entity, id, { status: transition.to });
-        await this.emit(descriptor, id, action, { status: transition.to, reason: audit.reason ?? null });
+        await this.entities.update(descriptor.entity, id, {
+          status: transition.to,
+        });
+        await this.emit(descriptor, id, action, {
+          status: transition.to,
+          reason: audit.reason ?? null,
+        });
       });
     }
     return await this.view(kind, id);
@@ -546,13 +691,26 @@ export class SalesDocumentService {
    * Privileged unlock of an issued document (§4.7). Requires the dedicated permission (or an
    * administrator) plus a reason; both land in the audit trail and the event.
    */
-  async unlock(kind: ImplementedDocumentKind, id: string, reason: string, audit: SalesAuditContext = {}): Promise<DocumentView> {
+  async unlock(
+    kind: ImplementedDocumentKind,
+    id: string,
+    reason: string,
+    audit: SalesAuditContext = {},
+  ): Promise<DocumentView> {
     const descriptor = documentDescriptor(kind);
-    await this.acl.assertAccess(descriptor.entity, 'edit');
+    await this.acl.assertAccess(descriptor.entity, "edit");
     const row = await this.requireDocument(descriptor, id);
     const state = lockStateOf(descriptor, row);
-    assertUnlockAllowed(state, { isAdmin: this.scope.isAdmin, canUnlock: false });
-    const unlocked = applyUnlock(state, { userId: this.scope.userId ?? 'system' }, reason, new Date().toISOString());
+    assertUnlockAllowed(state, {
+      isAdmin: this.scope.isAdmin,
+      canUnlock: false,
+    });
+    const unlocked = applyUnlock(
+      state,
+      { userId: this.scope.userId ?? "system" },
+      reason,
+      new Date().toISOString(),
+    );
     await runInTransaction(this.database.db, async () => {
       await this.entities.update(descriptor.entity, id, {
         lockedAt: null,
@@ -560,7 +718,10 @@ export class SalesDocumentService {
         unlockedAt: unlocked.state.unlockedAt,
         unlockedBy: unlocked.state.unlockedBy,
       });
-      await this.emit(descriptor, id, 'unlocked', { reason: unlocked.reason, correlationId: audit.correlationId ?? null });
+      await this.emit(descriptor, id, "unlocked", {
+        reason: unlocked.reason,
+        correlationId: audit.correlationId ?? null,
+      });
     });
     return await this.view(kind, id);
   }
@@ -571,7 +732,7 @@ export class SalesDocumentService {
    */
   async removeDraft(kind: ImplementedDocumentKind, id: string): Promise<void> {
     const descriptor = documentDescriptor(kind);
-    await this.acl.assertAccess(descriptor.entity, 'delete');
+    await this.acl.assertAccess(descriptor.entity, "delete");
     const row = await this.requireDocument(descriptor, id);
     const state = lockStateOf(descriptor, row);
     if (isIssued(state)) {
@@ -606,33 +767,46 @@ export class SalesDocumentService {
     overrides: Record<string, unknown> = {},
   ): Promise<DocumentView> {
     const descriptor = documentDescriptor(kind);
-    await this.acl.assertAccess(descriptor.entity, 'read');
+    await this.acl.assertAccess(descriptor.entity, "read");
     const row = await this.requireDocument(descriptor, id);
     const currentState = statusOf(row, descriptor);
 
     const conversion = findConversion(descriptor, action);
     if (conversion === undefined) {
-      throw new ValidationError(`A ${descriptor.label.toLowerCase()} cannot be converted with "${action}".`, { kind, action });
+      throw new ValidationError(
+        `A ${descriptor.label.toLowerCase()} cannot be converted with "${action}".`,
+        { kind, action },
+      );
     }
     const refusal = conversionRefusal(descriptor, action, currentState);
-    if (refusal !== null) throw new ValidationError(refusal, { kind, action, state: currentState });
+    if (refusal !== null)
+      throw new ValidationError(refusal, { kind, action, state: currentState });
 
     const target = documentDescriptor(conversion.toKind);
-    await this.acl.assertAccess(target.entity, 'create');
+    await this.acl.assertAccess(target.entity, "create");
 
     // Idempotency first: a retry of the *same* conversion must return the document it already created,
     // not be refused by the duplicate guard below. The guard exists for a genuinely second conversion,
     // which is a different request with a different correlation id.
     const correlationId = audit.correlationId?.trim();
-    if (correlationId !== undefined && correlationId !== '') {
-      const existing = await this.findBySource(target, descriptor.entity, row.id, correlationId);
-      if (existing !== undefined) return await this.view(conversion.toKind, existing);
+    if (correlationId !== undefined && correlationId !== "") {
+      const existing = await this.findBySource(
+        target,
+        descriptor.entity,
+        row.id,
+        correlationId,
+      );
+      if (existing !== undefined)
+        return await this.view(conversion.toKind, existing);
     }
     await this.assertConvertible(descriptor, row, conversion);
 
     const sourceItems = await this.itemsOf(descriptor, id);
     if (sourceItems.length === 0) {
-      throw new ValidationError(`A ${descriptor.label.toLowerCase()} with no lines cannot be converted.`, { kind, id });
+      throw new ValidationError(
+        `A ${descriptor.label.toLowerCase()} with no lines cannot be converted.`,
+        { kind, id },
+      );
     }
 
     const header: Record<string, unknown> = {
@@ -646,7 +820,12 @@ export class SalesDocumentService {
       if (value !== undefined && value !== null) header[field] = value;
     }
 
-    return await this.create({ kind: conversion.toKind, data: header, items: itemsToLineInputsWithSource(sourceItems), audit });
+    return await this.create({
+      kind: conversion.toKind,
+      data: header,
+      items: itemsToLineInputsWithSource(sourceItems),
+      audit,
+    });
   }
 
   /** Remaining-quantity guard shared by delivery, return and partial invoicing (§4.10). */
@@ -657,7 +836,11 @@ export class SalesDocumentService {
     alreadyMoved: ReadonlyMap<string, readonly string[]>,
   ): Promise<void> {
     const items = await this.itemsOf(descriptor, sourceDocumentId);
-    assertWithinRemaining(requested, alreadyMoved, new Map(items.map((item) => [item.id, item.quantity])));
+    assertWithinRemaining(
+      requested,
+      alreadyMoved,
+      new Map(items.map((item) => [item.id, item.quantity])),
+    );
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -672,7 +855,7 @@ export class SalesDocumentService {
     descriptor: SalesDocumentDescriptor,
     row: SalesRow,
     transition: DocumentTransition,
-    settings: Awaited<ReturnType<SalesSettingsService['read']>>,
+    settings: Awaited<ReturnType<SalesSettingsService["read"]>>,
   ): Promise<void> {
     const items = await this.itemsOf(descriptor, row.id);
     // Prices are required at issuance: an unpriced line must not become an official document.
@@ -684,13 +867,15 @@ export class SalesDocumentService {
 
     const captured: CommercialSnapshot = {
       kind: descriptor.kind,
-      number: '',
+      number: "",
       status: transition.to,
       currency: totals.currency,
       exchangeRate: totals.exchangeRate,
       baseCurrency: totals.baseCurrency,
       parties,
-      items: items.map((item, index) => itemRecordPayloadFromStored(item, totals.lines[index] as never)),
+      items: items.map((item, index) =>
+        itemRecordPayloadFromStored(item, totals.lines[index] as never),
+      ),
       totals,
       policy: {
         settingsVersion: settings.version,
@@ -747,19 +932,23 @@ export class SalesDocumentService {
    * who may not read the customer cannot issue a document to them — a refusal, not a silent gap.
    */
   private async partySnapshot(row: SalesRow): Promise<DocumentPartySnapshot> {
-    const accountId = text(row.data['accountId']) ?? null;
-    const contactId = text(row.data['contactId']) ?? null;
+    const accountId = text(row.data["accountId"]) ?? null;
+    const contactId = text(row.data["contactId"]) ?? null;
     let accountName: string | null = null;
     let contactName: string | null = null;
-    if (accountId !== null) accountName = text((await this.entities.get('Account', accountId))['name']) ?? null;
-    if (contactId !== null) contactName = text((await this.entities.get('Contact', contactId))['name']) ?? null;
+    if (accountId !== null)
+      accountName =
+        text((await this.entities.get("Account", accountId))["name"]) ?? null;
+    if (contactId !== null)
+      contactName =
+        text((await this.entities.get("Contact", contactId))["name"]) ?? null;
     return {
       accountId,
       accountName,
       contactId,
       contactName,
-      billingAddress: text(row.data['billingAddress']) ?? null,
-      shippingAddress: text(row.data['shippingAddress']) ?? null,
+      billingAddress: text(row.data["billingAddress"]) ?? null,
+      shippingAddress: text(row.data["shippingAddress"]) ?? null,
     };
   }
 
@@ -781,13 +970,21 @@ export class SalesDocumentService {
       maxItems: descriptor.maxItems,
       requireUnitPrice: false,
     });
-    const totals = await this.totalsForRequested(descriptor, row, lines, settings);
+    const totals = await this.totalsForRequested(
+      descriptor,
+      row,
+      lines,
+      settings,
+    );
     await runInTransaction(this.database.db, async () => {
       await this.deleteItems(descriptor, documentId);
       for (const [index, line] of lines.entries()) {
         const lineTotals = totals.lines[index];
         if (lineTotals === undefined) {
-          throw new ValidationError(`Line ${String(index + 1)} could not be calculated.`, { line: index + 1 });
+          throw new ValidationError(
+            `Line ${String(index + 1)} could not be calculated.`,
+            { line: index + 1 },
+          );
         }
         await this.entities.create(descriptor.itemEntity, {
           position: lineTotals.position,
@@ -800,8 +997,8 @@ export class SalesDocumentService {
           discountPercent: line.discountPercent ?? null,
           discountAmount: lineTotals.discountAmount,
           taxCodeId: lineTotals.tax?.taxCodeId ?? null,
-          taxRatePercent: lineTotals.tax?.taxRatePercent ?? '0',
-          taxSource: lineTotals.tax?.source ?? 'none',
+          taxRatePercent: lineTotals.tax?.taxRatePercent ?? "0",
+          taxSource: lineTotals.tax?.source ?? "none",
           taxRuleId: lineTotals.tax?.ruleId ?? null,
           sourceItemId: line.sourceItemId ?? null,
           netAmount: lineTotals.netAmount,
@@ -813,9 +1010,17 @@ export class SalesDocumentService {
     });
   }
 
-  private async deleteItems(descriptor: SalesDocumentDescriptor, documentId: string): Promise<void> {
-    const rows = await this.records.find(descriptor.itemEntity, { [descriptor.itemParentField]: documentId }, MAX_LINE_ITEMS);
-    for (const row of rows) await this.entities.remove(descriptor.itemEntity, row.id);
+  private async deleteItems(
+    descriptor: SalesDocumentDescriptor,
+    documentId: string,
+  ): Promise<void> {
+    const rows = await this.records.find(
+      descriptor.itemEntity,
+      { [descriptor.itemParentField]: documentId },
+      MAX_LINE_ITEMS,
+    );
+    for (const row of rows)
+      await this.entities.remove(descriptor.itemEntity, row.id);
   }
 
   /** Recalculate from the document's stored items. */
@@ -853,49 +1058,77 @@ export class SalesDocumentService {
     settings: SalesSettings,
   ): Promise<TotalsResult> {
     const data = row.data;
-    const currency = normalizeCurrencyCode(text(data['currency']) ?? settings.currency.defaultCurrency);
+    const currency = normalizeCurrencyCode(
+      text(data["currency"]) ?? settings.currency.defaultCurrency,
+    );
     const date = resolveDay(text(data[descriptor.dateField]));
-    const shippingAmount = text(data['shippingAmount']);
+    const shippingAmount = text(data["shippingAmount"]);
     const shipping =
       shippingAmount === undefined || isZeroString(shippingAmount)
         ? undefined
-        : { amount: shippingAmount, taxCodeId: text(data['shippingTaxCodeId']) ?? null };
+        : {
+            amount: shippingAmount,
+            taxCodeId: text(data["shippingTaxCodeId"]) ?? null,
+          };
     return await this.tax.preview({
       currency,
       date,
-      taxInclusive: typeof data['taxInclusive'] === 'boolean' ? data['taxInclusive'] : undefined,
-      accountId: text(data['accountId']) ?? null,
-      jurisdiction: text(data['jurisdiction']) ?? null,
+      taxInclusive:
+        typeof data["taxInclusive"] === "boolean"
+          ? data["taxInclusive"]
+          : undefined,
+      accountId: text(data["accountId"]) ?? null,
+      jurisdiction: text(data["jurisdiction"]) ?? null,
       lines: lines.map((line) => ({ ...line })),
       shipping,
-      documentDiscountAmount: text(data['documentDiscountAmount']) ?? undefined,
-      exchangeRate: readExchangeRate(data['exchangeRateSnapshot']),
+      documentDiscountAmount: text(data["documentDiscountAmount"]) ?? undefined,
+      exchangeRate: readExchangeRate(data["exchangeRateSnapshot"]),
     });
   }
 
-  private async itemsOf(descriptor: SalesDocumentDescriptor, documentId: string): Promise<StoredItem[]> {
-    const rows = await this.records.find(descriptor.itemEntity, { [descriptor.itemParentField]: documentId }, MAX_LINE_ITEMS);
+  private async itemsOf(
+    descriptor: SalesDocumentDescriptor,
+    documentId: string,
+  ): Promise<StoredItem[]> {
+    const rows = await this.records.find(
+      descriptor.itemEntity,
+      { [descriptor.itemParentField]: documentId },
+      MAX_LINE_ITEMS,
+    );
     return orderByPosition(rows.map(toStoredItem));
   }
 
-  private async requireDocument(descriptor: SalesDocumentDescriptor, id: string): Promise<SalesRow> {
+  private async requireDocument(
+    descriptor: SalesDocumentDescriptor,
+    id: string,
+  ): Promise<SalesRow> {
     const row = await this.records.byId(descriptor.entity, id);
-    if (row === undefined) throw new NotFoundError(`${descriptor.label} "${id}" does not exist.`);
+    if (row === undefined)
+      throw new NotFoundError(`${descriptor.label} "${id}" does not exist.`);
     return row;
   }
 
   /** The frozen envelope of an issued document, integrity-checked before it is trusted. */
-  private issuedSnapshot(descriptor: SalesDocumentDescriptor, row: SalesRow): DocumentSnapshot<CommercialSnapshot> | undefined {
+  private issuedSnapshot(
+    descriptor: SalesDocumentDescriptor,
+    row: SalesRow,
+  ): DocumentSnapshot<CommercialSnapshot> | undefined {
     if (!isIssued(lockStateOf(descriptor, row))) return undefined;
-    const stored = row.data['snapshot'];
-    if (stored === undefined || stored === null || stored === '') return undefined;
+    const stored = row.data["snapshot"];
+    if (stored === undefined || stored === null || stored === "")
+      return undefined;
     try {
-      return parseDocumentSnapshot<CommercialSnapshot>(stored as string | DocumentSnapshot<CommercialSnapshot>);
+      return parseDocumentSnapshot<CommercialSnapshot>(
+        stored as string | DocumentSnapshot<CommercialSnapshot>,
+      );
     } catch {
-      throw new ValidationError('The stored document snapshot failed its integrity check; the document cannot be rendered from it.', {
-        kind: descriptor.kind,
-        id: row.id,
-      });
+      throw new ValidationError(
+        "The stored document snapshot failed its integrity check; the document cannot be rendered from it.",
+        {
+          kind: descriptor.kind,
+          id: row.id,
+        },
+      );
     }
   }
 
@@ -905,11 +1138,20 @@ export class SalesDocumentService {
     sourceId: string,
     correlationId: string,
   ): Promise<string | undefined> {
-    const rows = await this.records.find(target.entity, { sourceEntity, sourceId, correlationId }, 1);
+    const rows = await this.records.find(
+      target.entity,
+      { sourceEntity, sourceId, correlationId },
+      1,
+    );
     return rows[0]?.id;
   }
 
-  private async emit(descriptor: SalesDocumentDescriptor, id: string, action: string, payload: Record<string, unknown>): Promise<void> {
+  private async emit(
+    descriptor: SalesDocumentDescriptor,
+    id: string,
+    action: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
     const db = currentTx() ?? this.database.db;
     await this.outbox.insertMany(db, [
       {
@@ -960,8 +1202,10 @@ export class SalesDocumentService {
 }
 
 function requireReason(reason: string | undefined, what: string): void {
-  if (reason === undefined || reason.trim() === '') {
-    throw new ValidationError(`${what} requires a reason.`, { reason: reason ?? null });
+  if (reason === undefined || reason.trim() === "") {
+    throw new ValidationError(`${what} requires a reason.`, {
+      reason: reason ?? null,
+    });
   }
 }
 
@@ -973,9 +1217,18 @@ function requireReason(reason: string | undefined, what: string): void {
  * operator believing stock had been reserved when nothing was written (§4.6 "confirmation must not
  * decrement stock unless the configured policy explicitly says it does").
  */
-function assertInventoryPolicy(descriptor: SalesDocumentDescriptor, transition: DocumentTransition, inventoryEnabled: boolean): void {
+function assertInventoryPolicy(
+  descriptor: SalesDocumentDescriptor,
+  transition: DocumentTransition,
+  inventoryEnabled: boolean,
+): void {
   if (!inventoryEnabled || transition.issues !== true) return;
-  if (descriptor.kind !== 'salesOrder' && descriptor.kind !== 'deliveryOrder' && descriptor.kind !== 'returnOrder') return;
+  if (
+    descriptor.kind !== "salesOrder" &&
+    descriptor.kind !== "deliveryOrder" &&
+    descriptor.kind !== "returnOrder"
+  )
+    return;
   throw new ValidationError(
     `Inventory is enabled, but stock reservation and movement arrive with 19-S.14. Confirming this ${descriptor.label.toLowerCase()} would silently skip them, so it is refused.`,
     { kind: descriptor.kind, action: transition.action },
@@ -985,18 +1238,23 @@ function assertInventoryPolicy(descriptor: SalesDocumentDescriptor, transition: 
 /** A caller may not set a field the server owns — a crafted request must not be able to. */
 function rejectServerOwned(data: Record<string, unknown> | undefined): void {
   if (data === undefined) return;
-  const offending = Object.keys(data).filter((key) => SERVER_OWNED_FIELDS.includes(key));
+  const offending = Object.keys(data).filter((key) =>
+    SERVER_OWNED_FIELDS.includes(key),
+  );
   if (offending.length > 0) {
-    throw new ValidationError(`These fields are computed by the server and cannot be set: ${offending.join(', ')}.`, {
-      fields: offending,
-    });
+    throw new ValidationError(
+      `These fields are computed by the server and cannot be set: ${offending.join(", ")}.`,
+      {
+        fields: offending,
+      },
+    );
   }
 }
 
 function totalsPatch(
   totals: TotalsResult,
   itemsCount: number,
-  settings: Awaited<ReturnType<SalesSettingsService['read']>>,
+  settings: Awaited<ReturnType<SalesSettingsService["read"]>>,
 ): Record<string, unknown> {
   return {
     subtotal: totals.subtotal,
@@ -1018,59 +1276,76 @@ function totalsPatch(
   };
 }
 
-function lockStateOf(descriptor: SalesDocumentDescriptor, row: SalesRow): DocumentLockState {
+function lockStateOf(
+  descriptor: SalesDocumentDescriptor,
+  row: SalesRow,
+): DocumentLockState {
   return {
     kind: descriptor.kind,
-    issuedAt: isoOrNull(row.data['issuedAt']),
-    issuedBy: text(row.data['issuedBy']) ?? null,
-    lockedAt: isoOrNull(row.data['lockedAt']),
-    lockedBy: text(row.data['lockedBy']) ?? null,
-    unlockedAt: isoOrNull(row.data['unlockedAt']),
-    unlockedBy: text(row.data['unlockedBy']) ?? null,
+    issuedAt: isoOrNull(row.data["issuedAt"]),
+    issuedBy: text(row.data["issuedBy"]) ?? null,
+    lockedAt: isoOrNull(row.data["lockedAt"]),
+    lockedBy: text(row.data["lockedBy"]) ?? null,
+    unlockedAt: isoOrNull(row.data["unlockedAt"]),
+    unlockedBy: text(row.data["unlockedBy"]) ?? null,
   };
 }
 
 function statusOf(row: SalesRow, descriptor: SalesDocumentDescriptor): string {
-  return text(row.data['status']) ?? descriptor.initialState;
+  return text(row.data["status"]) ?? descriptor.initialState;
 }
 
 function toStoredItem(row: SalesRow): StoredItem {
   return {
     id: row.id,
-    position: numberOr(row.data['position'], 0),
-    productId: text(row.data['productId']) ?? null,
-    name: text(row.data['name']) ?? null,
-    sku: text(row.data['sku']) ?? null,
-    unit: text(row.data['unit']) ?? null,
-    quantity: text(row.data['quantity']) ?? '0',
-    unitPrice: text(row.data['unitPrice']) ?? '0',
-    discountPercent: text(row.data['discountPercent']) ?? null,
-    discountAmount: text(row.data['discountAmount']) ?? '0',
-    taxCodeId: text(row.data['taxCodeId']) ?? null,
-    taxRatePercent: text(row.data['taxRatePercent']) ?? null,
+    position: numberOr(row.data["position"], 0),
+    productId: text(row.data["productId"]) ?? null,
+    name: text(row.data["name"]) ?? null,
+    sku: text(row.data["sku"]) ?? null,
+    unit: text(row.data["unit"]) ?? null,
+    quantity: text(row.data["quantity"]) ?? "0",
+    unitPrice: text(row.data["unitPrice"]) ?? "0",
+    discountPercent: text(row.data["discountPercent"]) ?? null,
+    discountAmount: text(row.data["discountAmount"]) ?? "0",
+    taxCodeId: text(row.data["taxCodeId"]) ?? null,
+    taxRatePercent: text(row.data["taxRatePercent"]) ?? null,
   };
 }
 
 function orderByPosition(items: readonly StoredItem[]): StoredItem[] {
-  return [...items].sort((left, right) => left.position - right.position || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+  return [...items].sort(
+    (left, right) =>
+      left.position - right.position ||
+      (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  );
 }
 
 function readExchangeRate(value: unknown): ExchangeRateInput | undefined {
-  if (value === undefined || value === null || value === '') return undefined;
-  if (typeof value === 'string') {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value === "string") {
     try {
       return JSON.parse(value) as ExchangeRateInput;
     } catch {
-      throw new ValidationError('The stored exchange-rate snapshot is not valid JSON.');
+      throw new ValidationError(
+        "The stored exchange-rate snapshot is not valid JSON.",
+      );
     }
   }
-  if (typeof value === 'object') return value as ExchangeRateInput;
-  throw new ValidationError('The exchange-rate snapshot must be an object or a JSON string.');
+  if (typeof value === "object") return value as ExchangeRateInput;
+  throw new ValidationError(
+    "The exchange-rate snapshot must be an object or a JSON string.",
+  );
 }
 
-function requireId(created: Record<string, unknown>, descriptor: SalesDocumentDescriptor): string {
-  const id = text(created['id']);
-  if (id === undefined) throw new ValidationError(`Creating a ${descriptor.label.toLowerCase()} returned no id.`);
+function requireId(
+  created: Record<string, unknown>,
+  descriptor: SalesDocumentDescriptor,
+): string {
+  const id = text(created["id"]);
+  if (id === undefined)
+    throw new ValidationError(
+      `Creating a ${descriptor.label.toLowerCase()} returned no id.`,
+    );
   return id;
 }
 
@@ -1084,11 +1359,11 @@ function isoOrNull(value: unknown): string | null {
 }
 
 function numberOr(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function text(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
+  if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
-  return trimmed === '' ? undefined : trimmed;
+  return trimmed === "" ? undefined : trimmed;
 }

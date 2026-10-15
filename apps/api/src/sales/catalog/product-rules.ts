@@ -1,7 +1,7 @@
-import { ValidationError } from '@carocrm/core/errors/index.js';
+import { ValidationError } from "@carocrm/core/errors/index.js";
 
-import { normalizeCurrencyCode } from '../money/currency.js';
-import { compare, isNegative, parseDecimal } from '../money/decimal.js';
+import { normalizeCurrencyCode } from "../money/currency.js";
+import { compare, isNegative, parseDecimal } from "../money/decimal.js";
 
 /**
  * Phase 19-S.3 / 19-S.4 / 19-S.5 — pure catalog rules.
@@ -12,7 +12,7 @@ import { compare, isNegative, parseDecimal } from '../money/decimal.js';
  * through `PUT /api/v1/Product/:id` (PLAN_Phase_19_Sales.md §4.1, §4.4).
  */
 
-export const PRODUCT_TYPES = ['Goods', 'Service'] as const;
+export const PRODUCT_TYPES = ["Goods", "Service"] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
 
 /** SKU format: starts alphanumeric, then letters/digits/`.`/`_`/`-`, up to 64 characters. */
@@ -25,7 +25,10 @@ export function normalizeSku(sku: string): string {
 export function validateSku(sku: string): string {
   const normalized = normalizeSku(sku);
   if (!SKU_PATTERN.test(normalized)) {
-    throw new ValidationError('A SKU is 1–64 characters: letters, digits, dot, underscore or hyphen, starting alphanumeric.', { sku });
+    throw new ValidationError(
+      "A SKU is 1–64 characters: letters, digits, dot, underscore or hyphen, starting alphanumeric.",
+      { sku },
+    );
   }
   return normalized;
 }
@@ -34,25 +37,37 @@ export function validateSku(sku: string): string {
 export function validateAmount(value: string, field: string): string {
   const parsed = parseDecimal(value);
   if (isNegative(parsed)) {
-    throw new ValidationError(`"${field}" must not be negative.`, { field, value });
+    throw new ValidationError(`"${field}" must not be negative.`, {
+      field,
+      value,
+    });
   }
   return value;
 }
 
-export function validateRatePercent(value: string, field = 'ratePercent'): string {
+export function validateRatePercent(
+  value: string,
+  field = "ratePercent",
+): string {
   const parsed = parseDecimal(value);
-  if (isNegative(parsed) || compare(parsed, parseDecimal('100')) > 0) {
-    throw new ValidationError(`"${field}" must be between 0 and 100.`, { field, value });
+  if (isNegative(parsed) || compare(parsed, parseDecimal("100")) > 0) {
+    throw new ValidationError(`"${field}" must be between 0 and 100.`, {
+      field,
+      value,
+    });
   }
   return value;
 }
 
-export function validateCurrency(value: string, field = 'currency'): string {
+export function validateCurrency(value: string, field = "currency"): string {
   try {
     return normalizeCurrencyCode(value);
   } catch (error: unknown) {
     if (error instanceof ValidationError) {
-      throw new ValidationError(`"${field}" must be a supported currency code.`, { field, value });
+      throw new ValidationError(
+        `"${field}" must be a supported currency code.`,
+        { field, value },
+      );
     }
     throw error;
   }
@@ -69,13 +84,20 @@ export function validateDateWindow(input: DateWindowInput): void {
   const from = input.effectiveFrom ?? null;
   const to = input.effectiveTo ?? null;
   if (from !== null && !DATE_ONLY.test(from)) {
-    throw new ValidationError('"effectiveFrom" must be a YYYY-MM-DD date.', { effectiveFrom: from });
+    throw new ValidationError('"effectiveFrom" must be a YYYY-MM-DD date.', {
+      effectiveFrom: from,
+    });
   }
   if (to !== null && !DATE_ONLY.test(to)) {
-    throw new ValidationError('"effectiveTo" must be a YYYY-MM-DD date.', { effectiveTo: to });
+    throw new ValidationError('"effectiveTo" must be a YYYY-MM-DD date.', {
+      effectiveTo: to,
+    });
   }
   if (from !== null && to !== null && from > to) {
-    throw new ValidationError('"effectiveFrom" must not be after "effectiveTo".', { effectiveFrom: from, effectiveTo: to });
+    throw new ValidationError(
+      '"effectiveFrom" must not be after "effectiveTo".',
+      { effectiveFrom: from, effectiveTo: to },
+    );
   }
 }
 
@@ -93,16 +115,28 @@ export interface ProductWrite {
 
 export function validateProductWrite(input: ProductWrite): void {
   if (input.sku !== undefined) validateSku(input.sku);
-  if (input.productType !== undefined && !(PRODUCT_TYPES as readonly string[]).includes(input.productType)) {
-    throw new ValidationError(`"productType" must be one of: ${PRODUCT_TYPES.join(', ')}.`, { productType: input.productType });
+  if (
+    input.productType !== undefined &&
+    !(PRODUCT_TYPES as readonly string[]).includes(input.productType)
+  ) {
+    throw new ValidationError(
+      `"productType" must be one of: ${PRODUCT_TYPES.join(", ")}.`,
+      { productType: input.productType },
+    );
   }
-  if (input.unitPrice !== undefined) validateAmount(input.unitPrice, 'unitPrice');
-  if (input.listPrice !== undefined) validateAmount(input.listPrice, 'listPrice');
-  if (input.costPrice !== undefined) validateAmount(input.costPrice, 'costPrice');
-  for (const flag of ['active', 'isSellable', 'isPurchasable'] as const) {
+  if (input.unitPrice !== undefined)
+    validateAmount(input.unitPrice, "unitPrice");
+  if (input.listPrice !== undefined)
+    validateAmount(input.listPrice, "listPrice");
+  if (input.costPrice !== undefined)
+    validateAmount(input.costPrice, "costPrice");
+  for (const flag of ["active", "isSellable", "isPurchasable"] as const) {
     const value = input[flag];
-    if (value !== undefined && typeof value !== 'boolean') {
-      throw new ValidationError(`"${flag}" must be a boolean.`, { field: flag, value: String(value) });
+    if (value !== undefined && typeof value !== "boolean") {
+      throw new ValidationError(`"${flag}" must be a boolean.`, {
+        field: flag,
+        value: String(value),
+      });
     }
   }
 }
@@ -125,14 +159,30 @@ const ALLOWED: GateDecision = { allowed: true, reason: null };
 
 /** Never silently allow: every refusal names the reason the UI shows, and the API returns. */
 export function salesGate(product: ProductGateInput): GateDecision {
-  if (!product.active) return { allowed: false, reason: `Product "${product.name ?? product.id}" is inactive.` };
-  if (!product.isSellable) return { allowed: false, reason: `Product "${product.name ?? product.id}" is not sellable.` };
+  if (!product.active)
+    return {
+      allowed: false,
+      reason: `Product "${product.name ?? product.id}" is inactive.`,
+    };
+  if (!product.isSellable)
+    return {
+      allowed: false,
+      reason: `Product "${product.name ?? product.id}" is not sellable.`,
+    };
   return ALLOWED;
 }
 
 export function purchaseGate(product: ProductGateInput): GateDecision {
-  if (!product.active) return { allowed: false, reason: `Product "${product.name ?? product.id}" is inactive.` };
-  if (!product.isPurchasable) return { allowed: false, reason: `Product "${product.name ?? product.id}" is not purchasable.` };
+  if (!product.active)
+    return {
+      allowed: false,
+      reason: `Product "${product.name ?? product.id}" is inactive.`,
+    };
+  if (!product.isPurchasable)
+    return {
+      allowed: false,
+      reason: `Product "${product.name ?? product.id}" is not purchasable.`,
+    };
   return ALLOWED;
 }
 
@@ -141,16 +191,25 @@ export function purchaseGate(product: ProductGateInput): GateDecision {
  * own descendants. `ancestorIds` is the resolved chain of the *proposed parent* (parent, grandparent,
  * …); the check is pure so the caller only has to fetch the chain.
  */
-export function validateCategoryParent(categoryId: string, parentId: string | null | undefined, ancestorIds: readonly string[]): void {
+export function validateCategoryParent(
+  categoryId: string,
+  parentId: string | null | undefined,
+  ancestorIds: readonly string[],
+): void {
   if (parentId === null || parentId === undefined) return;
   if (parentId === categoryId) {
-    throw new ValidationError('A product category cannot be its own parent.', { categoryId });
+    throw new ValidationError("A product category cannot be its own parent.", {
+      categoryId,
+    });
   }
   if (ancestorIds.includes(categoryId)) {
-    throw new ValidationError('A product category cannot be moved under one of its own sub-categories.', {
-      categoryId,
-      parentId,
-    });
+    throw new ValidationError(
+      "A product category cannot be moved under one of its own sub-categories.",
+      {
+        categoryId,
+        parentId,
+      },
+    );
   }
 }
 
@@ -167,12 +226,15 @@ export interface PriceBookEntryWrite {
 }
 
 export function validatePriceBookEntryWrite(input: PriceBookEntryWrite): void {
-  if (input.unitPrice !== undefined) validateAmount(input.unitPrice, 'unitPrice');
+  if (input.unitPrice !== undefined)
+    validateAmount(input.unitPrice, "unitPrice");
   if (input.currency !== undefined) validateCurrency(input.currency);
   if (input.minQuantity !== undefined) {
     const quantity = parseDecimal(input.minQuantity);
-    if (compare(quantity, parseDecimal('0')) <= 0) {
-      throw new ValidationError('"minQuantity" must be greater than zero.', { minQuantity: input.minQuantity });
+    if (compare(quantity, parseDecimal("0")) <= 0) {
+      throw new ValidationError('"minQuantity" must be greater than zero.', {
+        minQuantity: input.minQuantity,
+      });
     }
   }
   validateDateWindow(input);
@@ -186,9 +248,18 @@ export interface PriceBookWrite {
 }
 
 export function validatePriceBookWrite(input: PriceBookWrite): void {
-  if (input.currency !== undefined && input.currency !== '') validateCurrency(input.currency);
-  if (input.priority !== undefined && (!Number.isInteger(input.priority) || input.priority < 0 || input.priority > 10_000)) {
-    throw new ValidationError('"priority" must be an integer between 0 and 10000.', { priority: input.priority });
+  if (input.currency !== undefined && input.currency !== "")
+    validateCurrency(input.currency);
+  if (
+    input.priority !== undefined &&
+    (!Number.isInteger(input.priority) ||
+      input.priority < 0 ||
+      input.priority > 10_000)
+  ) {
+    throw new ValidationError(
+      '"priority" must be an integer between 0 and 10000.',
+      { priority: input.priority },
+    );
   }
   validateDateWindow(input);
 }
@@ -205,7 +276,10 @@ export function validateTaxRateWrite(input: TaxRateWrite): void {
 }
 
 /** The most recent `effectiveFrom` wins among applicable rates; ties are a conflict, not a coin toss. */
-export function laterEffectiveFrom(left: string | null, right: string | null): string | null {
+export function laterEffectiveFrom(
+  left: string | null,
+  right: string | null,
+): string | null {
   if (left === null) return right;
   if (right === null) return left;
   return left >= right ? left : right;

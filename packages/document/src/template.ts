@@ -104,7 +104,7 @@ function renderBlock(source: string, frame: ContextFrame, warnings: string[], de
       const block = readEachBlock(source, cursor, token.name, warnings);
       if (block === undefined) break;
       cursor = block.end;
-      out += renderEach(block.body, block.name, frame, warnings, depth);
+      out += renderEach(block.body, token.name, frame, warnings, depth);
       continue;
     }
 

@@ -21,6 +21,7 @@ import { RequestContextMiddleware } from './common/request-context.middleware.js
 import { REQUEST_SCOPE_TOKEN,RequestScope } from './common/request-scope.js';
 import { buildConfig, CONFIG_TOKEN } from './config.js';
 import { DatabaseService } from './database/database.service.js';
+import { DOCUMENT_CONTROLLERS, DOCUMENT_PROVIDERS } from './document/index.js';
 import { EMAIL_CONTROLLERS, EMAIL_PROVIDERS } from './email/index.js';
 import { ENTITY_CONTROLLERS, ENTITY_PROVIDERS } from './entity/entity.module.js';
 import type { PostgresRecordStore } from './entity/entity-record.store.js';
@@ -46,7 +47,6 @@ import { PORTAL_CONTROLLERS, PORTAL_PROVIDERS } from './portal/index.js';
 import { PROCESS_CONTROLLERS, PROCESS_PROVIDERS } from './processes/index.js';
 import { PROJECTS_CONTROLLERS, PROJECTS_PROVIDERS } from './projects/index.js';
 import { REPORT_CONTROLLERS, REPORT_PROVIDERS } from './reports/index.js';
-import { DOCUMENT_CONTROLLERS, DOCUMENT_PROVIDERS } from './document/index.js';
 import { SALES_CONTROLLERS, SALES_PROVIDERS } from './sales/index.js';
 import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
 import { SETTINGS_CONTROLLERS, SETTINGS_PROVIDERS } from './settings/index.js';

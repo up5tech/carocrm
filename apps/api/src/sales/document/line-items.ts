@@ -1,8 +1,19 @@
-import { ValidationError } from '@carocrm/core/errors/index.js';
+import { ValidationError } from "@carocrm/core/errors/index.js";
 
-import { add, compare, format, parseDecimal, subtract, zero } from '../money/decimal.js';
-import type { Decimal } from '../money/decimal.js';
-import type { LineItemInput, LineItemTotals, TaxResolutionSource } from './types.js';
+import type { Decimal } from "../money/decimal.js";
+import {
+  add,
+  compare,
+  format,
+  parseDecimal,
+  subtract,
+  zero,
+} from "../money/decimal.js";
+import type {
+  LineItemInput,
+  LineItemTotals,
+  TaxResolutionSource,
+} from "./types.js";
 
 /**
  * Phase 19-S.6 — typed line items, shared by every commercial document (§4.4, §4.6).
@@ -56,36 +67,66 @@ export interface LineValidationLimits {
  * order *is* the document order, so reordering is an explicit act rather than a side effect of
  * however the rows came back.
  */
-export function validateRequestedLines(lines: readonly RequestedLine[], limits: LineValidationLimits): readonly RequestedLine[] {
+export function validateRequestedLines(
+  lines: readonly RequestedLine[],
+  limits: LineValidationLimits,
+): readonly RequestedLine[] {
   if (lines.length < limits.minItems) {
-    throw new ValidationError(`A document needs at least ${String(limits.minItems)} line(s).`, { lines: lines.length });
+    throw new ValidationError(
+      `A document needs at least ${String(limits.minItems)} line(s).`,
+      { lines: lines.length },
+    );
   }
   if (lines.length > limits.maxItems) {
-    throw new ValidationError(`A document supports at most ${String(limits.maxItems)} lines.`, {
-      lines: lines.length,
-      max: limits.maxItems,
-    });
+    throw new ValidationError(
+      `A document supports at most ${String(limits.maxItems)} lines.`,
+      {
+        lines: lines.length,
+        max: limits.maxItems,
+      },
+    );
   }
   for (const [index, line] of lines.entries()) {
     const position = index + 1;
     requirePositiveQuantity(line.quantity, position, limits.quantityPrecision);
-    if (limits.requireUnitPrice && (typeof line.unitPrice !== 'string' || line.unitPrice.trim() === '')) {
-      throw new ValidationError(`Line ${String(position)} has no unit price.`, { line: position });
+    if (
+      limits.requireUnitPrice &&
+      (typeof line.unitPrice !== "string" || line.unitPrice.trim() === "")
+    ) {
+      throw new ValidationError(`Line ${String(position)} has no unit price.`, {
+        line: position,
+      });
     }
-    if (line.unitPrice !== undefined && line.unitPrice.trim() !== '') {
+    if (line.unitPrice !== undefined && line.unitPrice.trim() !== "") {
       requireNonNegative(line.unitPrice, `lines[${String(index)}].unitPrice`);
     }
     if (line.discountPercent !== undefined) {
-      const percent = requireNonNegative(line.discountPercent, `lines[${String(index)}].discountPercent`);
-      if (compare(percent, parseDecimal('100')) > 0) {
-        throw new ValidationError(`Line ${String(position)} has a discount above 100%.`, { line: position });
+      const percent = requireNonNegative(
+        line.discountPercent,
+        `lines[${String(index)}].discountPercent`,
+      );
+      if (compare(percent, parseDecimal("100")) > 0) {
+        throw new ValidationError(
+          `Line ${String(position)} has a discount above 100%.`,
+          { line: position },
+        );
       }
     }
-    if (line.discountAmount !== undefined) requireNonNegative(line.discountAmount, `lines[${String(index)}].discountAmount`);
+    if (line.discountAmount !== undefined)
+      requireNonNegative(
+        line.discountAmount,
+        `lines[${String(index)}].discountAmount`,
+      );
     if (line.taxRatePercent !== undefined) {
-      const rate = requireNonNegative(line.taxRatePercent, `lines[${String(index)}].taxRatePercent`);
-      if (compare(rate, parseDecimal('100')) > 0) {
-        throw new ValidationError(`Line ${String(position)} has a tax rate above 100%.`, { line: position });
+      const rate = requireNonNegative(
+        line.taxRatePercent,
+        `lines[${String(index)}].taxRatePercent`,
+      );
+      if (compare(rate, parseDecimal("100")) > 0) {
+        throw new ValidationError(
+          `Line ${String(position)} has a tax rate above 100%.`,
+          { line: position },
+        );
       }
     }
   }
@@ -93,37 +134,56 @@ export function validateRequestedLines(lines: readonly RequestedLine[], limits: 
 }
 
 /** A quantity must be strictly positive and no more precise than the installation allows. */
-export function requirePositiveQuantity(value: string, position: number, precision: number): void {
+export function requirePositiveQuantity(
+  value: string,
+  position: number,
+  precision: number,
+): void {
   const parsed = parseQuantity(value, position);
-  if (compare(parsed, parseDecimal('0')) <= 0) {
-    throw new ValidationError(`Line ${String(position)} needs a quantity greater than zero.`, { line: position });
+  if (compare(parsed, parseDecimal("0")) <= 0) {
+    throw new ValidationError(
+      `Line ${String(position)} needs a quantity greater than zero.`,
+      { line: position },
+    );
   }
   if (parsed.scale > precision) {
-    throw new ValidationError(`Line ${String(position)} exceeds the configured quantity precision of ${String(precision)}.`, {
-      line: position,
-      precision,
-    });
+    throw new ValidationError(
+      `Line ${String(position)} exceeds the configured quantity precision of ${String(precision)}.`,
+      {
+        line: position,
+        precision,
+      },
+    );
   }
 }
 
 function parseQuantity(value: string, position: number): Decimal {
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new ValidationError(`Line ${String(position)} is missing a quantity.`, { line: position });
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new ValidationError(
+      `Line ${String(position)} is missing a quantity.`,
+      { line: position },
+    );
   }
   try {
     return parseDecimal(value);
   } catch {
-    throw new ValidationError(`Line ${String(position)} has a quantity that is not a canonical decimal string.`, {
-      line: position,
-      quantity: value,
-    });
+    throw new ValidationError(
+      `Line ${String(position)} has a quantity that is not a canonical decimal string.`,
+      {
+        line: position,
+        quantity: value,
+      },
+    );
   }
 }
 
 function requireNonNegative(value: string, field: string): Decimal {
   const parsed = parseDecimal(value);
-  if (compare(parsed, parseDecimal('0')) < 0) {
-    throw new ValidationError(`"${field}" must not be negative.`, { field, value });
+  if (compare(parsed, parseDecimal("0")) < 0) {
+    throw new ValidationError(`"${field}" must not be negative.`, {
+      field,
+      value,
+    });
   }
   return parsed;
 }
@@ -153,7 +213,10 @@ export interface ItemRecordPayload extends Record<string, unknown> {
 }
 
 /** Turn one calculated line into the record an item entity stores. */
-export function itemRecordPayload(input: LineItemInput, totals: LineItemTotals): ItemRecordPayload {
+export function itemRecordPayload(
+  input: LineItemInput,
+  totals: LineItemTotals,
+): ItemRecordPayload {
   return {
     position: totals.position,
     productId: totals.productId ?? input.productId ?? null,
@@ -165,8 +228,8 @@ export function itemRecordPayload(input: LineItemInput, totals: LineItemTotals):
     discountPercent: input.discountPercent ?? null,
     discountAmount: totals.discountAmount,
     taxCodeId: totals.tax?.taxCodeId ?? input.taxCodeId ?? null,
-    taxRatePercent: totals.tax?.taxRatePercent ?? input.taxRatePercent ?? '0',
-    taxSource: totals.tax?.source ?? 'none',
+    taxRatePercent: totals.tax?.taxRatePercent ?? input.taxRatePercent ?? "0",
+    taxSource: totals.tax?.source ?? "none",
     taxRuleId: totals.tax?.ruleId ?? null,
     netAmount: totals.netAmount,
     taxAmount: totals.taxAmount,
@@ -180,7 +243,10 @@ export function itemRecordPayload(input: LineItemInput, totals: LineItemTotals):
  * Used when a document is issued: the stored item already carries the product/name/SKU snapshots, so
  * they are carried forward unchanged and only the calculated money and tax facts are refreshed.
  */
-export function itemRecordPayloadFromStored(item: StoredItem, totals: LineItemTotals): ItemRecordPayload {
+export function itemRecordPayloadFromStored(
+  item: StoredItem,
+  totals: LineItemTotals,
+): ItemRecordPayload {
   return {
     position: totals.position,
     productId: item.productId,
@@ -192,8 +258,8 @@ export function itemRecordPayloadFromStored(item: StoredItem, totals: LineItemTo
     discountPercent: item.discountPercent,
     discountAmount: totals.discountAmount,
     taxCodeId: totals.tax?.taxCodeId ?? item.taxCodeId,
-    taxRatePercent: totals.tax?.taxRatePercent ?? item.taxRatePercent ?? '0',
-    taxSource: totals.tax?.source ?? 'none',
+    taxRatePercent: totals.tax?.taxRatePercent ?? item.taxRatePercent ?? "0",
+    taxSource: totals.tax?.source ?? "none",
     taxRuleId: totals.tax?.ruleId ?? null,
     netAmount: totals.netAmount,
     taxAmount: totals.taxAmount,
@@ -202,7 +268,8 @@ export function itemRecordPayloadFromStored(item: StoredItem, totals: LineItemTo
 }
 
 /** The item fields a recalculation reads back; anything else in the record is display-only. */
-export interface StoredItem {  readonly id: string;
+export interface StoredItem {
+  readonly id: string;
   readonly position: number;
   readonly productId: string | null;
   readonly name: string | null;
@@ -217,12 +284,20 @@ export interface StoredItem {  readonly id: string;
 }
 
 /** Ordered by `position`, so a recalculation reproduces the document's own order. */
-export function orderItems(items: readonly StoredItem[]): readonly StoredItem[] {
-  return [...items].sort((left, right) => left.position - right.position || (left.id < right.id ? -1 : left.id > right.id ? 1 : 0));
+export function orderItems(
+  items: readonly StoredItem[],
+): readonly StoredItem[] {
+  return [...items].sort(
+    (left, right) =>
+      left.position - right.position ||
+      (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+  );
 }
 
 /** Stored items back into the inputs the pricing/tax/totals engine consumes. */
-export function itemsToLineInputs(items: readonly StoredItem[]): readonly LineItemInput[] {
+export function itemsToLineInputs(
+  items: readonly StoredItem[],
+): readonly LineItemInput[] {
   return orderItems(items).map((item) => ({
     productId: item.productId ?? undefined,
     name: item.name ?? undefined,
@@ -231,7 +306,10 @@ export function itemsToLineInputs(items: readonly StoredItem[]): readonly LineIt
     quantity: item.quantity,
     unitPrice: item.unitPrice,
     discountPercent: item.discountPercent ?? undefined,
-    discountAmount: item.discountAmount === '0' || item.discountAmount === '' ? undefined : item.discountAmount,
+    discountAmount:
+      item.discountAmount === "0" || item.discountAmount === ""
+        ? undefined
+        : item.discountAmount,
     taxCodeId: item.taxCodeId ?? undefined,
     taxRatePercent: item.taxRatePercent ?? undefined,
   }));
@@ -243,7 +321,9 @@ export function itemsToLineInputs(items: readonly StoredItem[]): readonly LineIt
  * Used by a conversion: the destination's lines point back at the source's, so a delivery order can
  * move quantity against the exact order line it fulfils and the remaining quantity is answerable.
  */
-export function itemsToLineInputsWithSource(items: readonly StoredItem[]): readonly RequestedLine[] {
+export function itemsToLineInputsWithSource(
+  items: readonly StoredItem[],
+): readonly RequestedLine[] {
   return orderItems(items).map((item, index) => ({
     ...(itemsToLineInputs(items)[index] as LineItemInput),
     sourceItemId: item.id,
@@ -253,7 +333,8 @@ export function itemsToLineInputsWithSource(items: readonly StoredItem[]): reado
 /** Sum of the line quantities; the document's item count is a different number and is not derived here. */
 export function totalQuantity(items: readonly StoredItem[]): string {
   let total: Decimal = zero(0);
-  for (const item of orderItems(items)) total = add(total, parseDecimal(item.quantity));
+  for (const item of orderItems(items))
+    total = add(total, parseDecimal(item.quantity));
   return format(total);
 }
 
@@ -264,10 +345,14 @@ export function totalQuantity(items: readonly StoredItem[]): string {
  * caller already moved at least the ordered amount, which the callers report as "nothing left to
  * fulfil" rather than treating it as an error.
  */
-export function remainingQuantity(orderedQuantity: string, alreadyMoved: readonly string[]): string | null {
+export function remainingQuantity(
+  orderedQuantity: string,
+  alreadyMoved: readonly string[],
+): string | null {
   let remaining = parseDecimal(orderedQuantity);
-  for (const moved of alreadyMoved) remaining = subtract(remaining, parseDecimal(moved));
-  return compare(remaining, parseDecimal('0')) <= 0 ? null : format(remaining);
+  for (const moved of alreadyMoved)
+    remaining = subtract(remaining, parseDecimal(moved));
+  return compare(remaining, parseDecimal("0")) <= 0 ? null : format(remaining);
 }
 
 /**
@@ -286,18 +371,30 @@ export function assertWithinRemaining(
   for (const [itemId, quantity] of requested) {
     const orderedQuantity = ordered.get(itemId);
     if (orderedQuantity === undefined) {
-      throw new ValidationError(`Line "${itemId}" does not belong to the source document.`, { item: itemId });
+      throw new ValidationError(
+        `Line "${itemId}" does not belong to the source document.`,
+        { item: itemId },
+      );
     }
-    const remaining = remainingQuantity(orderedQuantity, alreadyMoved.get(itemId) ?? []);
+    const remaining = remainingQuantity(
+      orderedQuantity,
+      alreadyMoved.get(itemId) ?? [],
+    );
     if (remaining === null) {
-      throw new ValidationError('This line is already fully fulfilled; there is nothing left to move.', { item: itemId });
+      throw new ValidationError(
+        "This line is already fully fulfilled; there is nothing left to move.",
+        { item: itemId },
+      );
     }
     if (compare(parseDecimal(quantity), parseDecimal(remaining)) > 0) {
-      throw new ValidationError(`This line would move ${quantity}, more than the ${remaining} still outstanding.`, {
-        item: itemId,
-        requested: quantity,
-        remaining,
-      });
+      throw new ValidationError(
+        `This line would move ${quantity}, more than the ${remaining} still outstanding.`,
+        {
+          item: itemId,
+          requested: quantity,
+          remaining,
+        },
+      );
     }
   }
 }

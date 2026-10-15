@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
+import { AsyncLocalStorage } from "node:async_hooks";
 
 /**
  * Phase 19-S.10 — the "this write comes from a Sales domain service" marker, and the field lists the
@@ -37,40 +37,40 @@ export function isSalesInternalWrite(): boolean {
  * lock fields come from the transition (§5.7, §4.7).
  */
 export const SERVER_OWNED_DOCUMENT_FIELDS: readonly string[] = [
-  'subtotal',
-  'discountTotal',
-  'shippingTaxAmount',
-  'taxBreakdown',
-  'taxTotal',
-  'netTotal',
-  'grossTotal',
-  'amountDue',
-  'baseCurrency',
-  'exchangeRate',
-  'baseGrossTotal',
-  'roundingStage',
-  'roundingMode',
-  'taxInclusive',
-  'settingsVersion',
-  'itemsCount',
-  'number',
-  'status',
-  'issuedAt',
-  'issuedBy',
-  'lockedAt',
-  'lockedBy',
-  'unlockedAt',
-  'unlockedBy',
-  'snapshot',
+  "subtotal",
+  "discountTotal",
+  "shippingTaxAmount",
+  "taxBreakdown",
+  "taxTotal",
+  "netTotal",
+  "grossTotal",
+  "amountDue",
+  "baseCurrency",
+  "exchangeRate",
+  "baseGrossTotal",
+  "roundingStage",
+  "roundingMode",
+  "taxInclusive",
+  "settingsVersion",
+  "itemsCount",
+  "number",
+  "status",
+  "issuedAt",
+  "issuedBy",
+  "lockedAt",
+  "lockedBy",
+  "unlockedAt",
+  "unlockedBy",
+  "snapshot",
 ];
 
 /** Entities whose money the allocation services maintain, not the client. */
 export const PAYMENT_ENTITIES: readonly string[] = [
-  'Payment',
-  'PaymentAllocation',
-  'PaymentTransferAllocation',
-  'PaymentRequest',
-  'PaymentProviderEventLog',
+  "Payment",
+  "PaymentAllocation",
+  "PaymentTransferAllocation",
+  "PaymentRequest",
+  "PaymentProviderEventLog",
 ];
 
 /**
@@ -79,25 +79,39 @@ export const PAYMENT_ENTITIES: readonly string[] = [
  * settled without any allocation behind it (§4.8).
  */
 export const SERVER_OWNED_PAYMENT_FIELDS: readonly string[] = [
-  'allocatedAmount',
-  'unallocatedAmount',
-  'allocationStatus',
-  'processedAt',
-  'processedStatus',
-  'status',
+  "allocatedAmount",
+  "unallocatedAmount",
+  "allocationStatus",
+  "processedAt",
+  "processedStatus",
+  "status",
 ];
 
 /** Keys whose value actually differs from the stored record — a no-op save is not a change. */
-export function changedKeys(data: Record<string, unknown>, previous: Record<string, unknown>): string[] {
-  return Object.keys(data).filter((key) => !sameValue(data[key], previous[key]));
+export function changedKeys(
+  data: Record<string, unknown>,
+  previous: Record<string, unknown>,
+): string[] {
+  return Object.keys(data).filter(
+    (key) => !sameValue(data[key], previous[key]),
+  );
 }
 
 function sameValue(left: unknown, right: unknown): boolean {
   if (left === right) return true;
   if (left instanceof Date || right instanceof Date) {
-    return left instanceof Date && right instanceof Date && left.getTime() === right.getTime();
+    return (
+      left instanceof Date &&
+      right instanceof Date &&
+      left.getTime() === right.getTime()
+    );
   }
-  if (typeof left === 'object' && typeof right === 'object' && left !== null && right !== null) {
+  if (
+    typeof left === "object" &&
+    typeof right === "object" &&
+    left !== null &&
+    right !== null
+  ) {
     return JSON.stringify(left) === JSON.stringify(right);
   }
   return false;
