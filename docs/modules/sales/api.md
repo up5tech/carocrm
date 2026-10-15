@@ -32,7 +32,7 @@ Reports the module descriptor plus facts read from the running platform — neve
     "minPlatformVersion": "1.0.0",
     "loadOrder": 320,
     "apiPrefix": "/api/v1/Sales",
-    "implementedPhases": ["19-S.0", "19-S.1", "19-S.2", "19-S.3", "19-S.4", "19-S.5"]
+    "implementedPhases": ["19-S.0", "19-S.1", "19-S.2", "19-S.3", "19-S.4", "19-S.5", "19-S.6", "19-S.7", "19-S.8", "19-S.9", "19-S.10"]
   },
   "ok": true,
   "dependencies": [            // entity-engine, crm-core-records, acl, hooks, audit-stream, jobs
@@ -199,6 +199,90 @@ and `taxInclusive` policy used, and `warnings`.
 |---|---|
 | `422` | no lines; more than 500 lines; a line without a unit price; a non-positive quantity; a quantity with more fraction digits than `quantityPrecision`; a line discounted below zero; a discount larger than the document; a missing tax rate while `tax.missingTaxPolicy = error`; an exchange-rate snapshot whose `documentCurrency` is not the request currency |
 
+## `POST /api/v1/Sales/quote/:id/render`
+
+Render a quote against a `DocumentTemplate` — the preview the UI shows before anybody commits to
+sending. Rendering goes through the kernel `document` module, so the quote does not have its own
+template syntax. Read access on the quote is the gate; rendering a **named** template also needs read
+access on `DocumentTemplate`.
+
+```json
+{ "templateCode": "quote.default" }
+```
+
+`templateCode` is optional: the entity type's default template is used when it is omitted, and when
+the entity type has **no** active template the built-in block layout is rendered instead (a valid
+install, not an error).
+
+```json
+{
+  "quoteId": "q_123",
+  "number": "Q-000001",
+  "status": "sent",
+  "fromSnapshot": true,
+  "templateCode": "quote.default",
+  "format": "html",
+  "subject": "Quote Q-000001",
+  "body": "<h1>Quote Q-000001</h1>…",
+  "text": "QUOTE Q-000001\n==============\n…",
+  "blocks": [{ "kind": "heading", "text": "Quote Q-000001" }],
+  "warnings": [],
+  "pdf": { "available": false, "reason": "Cannot find package 'pdfkit'…" }
+}
+```
+
+* `fromSnapshot` is `true` for an issued quote: the numbers and the party names come from the frozen
+  envelope, so a price book or a renamed account cannot rewrite what was sent.
+* `text` is always the plain-text rendering of the block model; `blocks` is that model, which is what
+  a PDF renderer walks. `pdf.available` reports whether the optional `pdfkit` adapter can be loaded —
+  a PDF is never generated here.
+* `warnings` lists placeholders the template could not resolve. They are **left in the body**, never
+  blanked.
+
+## `POST /api/v1/Sales/quote/:id/send`
+
+Issue a draft quote and email it — or, for a quote that is already `sent`, re-render it and record
+another email.
+
+```json
+{
+  "to": ["buyer@example.com"],
+  "cc": [],
+  "bcc": [],
+  "templateCode": "quote.default",
+  "subject": "Your quote",
+  "message": "Here is the quote we discussed.",
+  "emailAccountId": "acc_1",
+  "correlationId": "req-1"
+}
+```
+
+Every field is optional. `to` defaults to the quote's contact's email address, then its account's.
+`message` is a covering note prepended to the rendered document. `emailAccountId` picks the sending
+mailbox; the configured default account is used otherwise.
+
+```json
+{
+  "quote": { "kind": "quote", "id": "q_123", "document": { "status": "sent", "number": "Q-000001" } },
+  "email": { "id": "em_9", "parentType": "Quote", "parentId": "q_123", "status": "Queued" },
+  "rendered": { "number": "Q-000001", "body": "…" },
+  "transport": { "name": "smtp", "mode": "live" },
+  "job": { "id": "…", "name": "system.sendEmail", "status": "pending" },
+  "issued": true
+}
+```
+
+| Status | When |
+|---|---|
+| `403` | no mail transport is configured (`FEATURE_DISABLED`); no `create`/`edit` access on `Email`; no `read` access on the quote |
+| `422` | the quote is in a state that cannot be sent (only `draft` and `sent` can); no recipient could be determined; the template is unknown or inactive |
+
+The email is a normal `Email` record linked through `parentType`/`parentId`, and `EmailService` owns
+its validation and the per-recipient delivery ledger. The API never opens a socket — the worker
+sends. Every refusal above happens **before** the quote is issued, so a quote is never marked `sent`
+with no email behind it; `issued: false` in the response means the document was already sent and only
+a new email was recorded.
+
 ## Errors
 
 All failures use the kernel error envelope. The Sales module raises `ValidationError` (→ `422`),
@@ -207,8 +291,18 @@ All failures use the kernel error envelope. The Sales module raises `ValidationE
 schema. Validation reasons are attached as `error.details.reason` or `error.details.issues`, which is
 what the tests assert on and what the UI shows.
 
-## Not yet exposed
+## Not documented here
 
-Quotes, sales orders, invoices, credit notes, payments, deliveries, purchases, inventory and
-subscriptions have no routes yet — those arrive with phases 19-S.6 onward. Their number series are
-already seeded so they do not need a migration later.
+The commercial **document commands** and the **payment commands** are also part of this prefix and are
+not repeated in this file: `POST /api/v1/Sales/document`, `GET|PATCH|DELETE
+/api/v1/Sales/document/:kind/:id`, `…/:id/transition`, `…/:id/unlock`, `…/:id/convert`,
+`…/:id/recalculate`, `POST /api/v1/Sales/action/expireQuotes` (and the worker-authorized
+`action/expire-quotes`), `action/markOverdueInvoices`, `salesOrder/:id/refreshFulfilment`,
+`/api/v1/Sales/payment*`, `/api/v1/Sales/allocation/:id`, `/api/v1/Sales/paymentRequest`,
+`/api/v1/Sales/providerEvent`. `kind` is one of `quote`, `salesOrder`, `invoice`, `creditNote`,
+`deliveryOrder`, `returnOrder`. The per-command behaviour is described in
+[README.md](README.md#document-engine-19-s6--19-s12-in-progress), and every request body is the Zod
+schema of the same name in `apps/api/src/sales/dto/sales-shapes.ts`.
+
+Credit notes (beyond their descriptor), delivery/return stock effects, purchases, inventory and
+subscriptions have no working routes yet — those arrive with 19-S.11 onward.

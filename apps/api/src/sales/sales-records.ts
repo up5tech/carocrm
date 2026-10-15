@@ -28,6 +28,7 @@ export interface SalesRow {
 
 /** Entity types this module owns; nothing else may be read through here. */
 export const SALES_ENTITY_TYPES = [
+  // 19-S.3 – 19-S.5: catalog, pricing and tax master data.
   'Product',
   'ProductCategory',
   'PriceBook',
@@ -39,6 +40,31 @@ export const SALES_ENTITY_TYPES = [
   'TaxCode',
   'TaxRate',
   'TaxRule',
+  // 19-S.6 – 19-S.12: commercial documents and their child line items.
+  'Quote',
+  'QuoteItem',
+  'SalesOrder',
+  'SalesOrderItem',
+  'Invoice',
+  'InvoiceItem',
+  'CreditNote',
+  'CreditNoteItem',
+  'DeliveryOrder',
+  'DeliveryOrderItem',
+  'ReturnOrder',
+  'ReturnOrderItem',
+  // 19-S.6: the payment-term policy a document can reference.
+  'PaymentTermProfile',
+  // 19-S.10 – 19-S.11: money received/sent, and the records that adjust a balance.
+  'PaymentMethod',
+  'PaymentChannel',
+  'Payment',
+  'PaymentAllocation',
+  'PaymentTransferAllocation',
+  'PaymentRequest',
+  'PaymentProviderEventLog',
+  'CreditNoteAllocation',
+  'WriteOff',
 ] as const;
 
 export type SalesEntityType = (typeof SALES_ENTITY_TYPES)[number];
@@ -97,9 +123,24 @@ export class SalesRecords {
     return rows.rows.map(toRow);
   }
 
-  /** Case-insensitive equality — the shape a SKU/code lookup needs. */
-  async findByCode(entity: SalesEntityType, field: string, value: string, limit = 10): Promise<SalesRow[]> {
+  /**
+   * Every live row of `entity` whose `field` holds one of `values` — a single query for a list page,
+   * so loading the items of many documents never becomes one query per document (§16.1).
+   */
+  async findByIdsIn(entity: SalesEntityType, field: string, values: readonly string[], limit = SALES_STRUCTURAL_SCAN_LIMIT): Promise<SalesRow[]> {
+    if (values.length === 0) return [];
     attributeKey(field);
+    const rows = await sql<SalesRowShape>`
+      select id, version, name, attrs from entity_records
+      where entity_type = ${entity} and deleted_at is null and (attrs ->> ${field}::text) in (${sql.join(values)})
+      order by id asc
+      limit ${limit}
+    `.execute(this.db);
+    return rows.rows.map(toRow);
+  }
+
+  /** Case-insensitive equality — the shape a SKU/code lookup needs. */
+  async findByCode(entity: SalesEntityType, field: string, value: string, limit = 10): Promise<SalesRow[]> {    attributeKey(field);
     const rows = await sql<SalesRowShape>`
       select id, version, name, attrs from entity_records
       where entity_type = ${entity} and deleted_at is null and lower(attrs ->> ${field}::text) = ${value.trim().toLowerCase()}

@@ -12,6 +12,7 @@ import { registerSystemJobs } from './handlers/job-handlers.js';
 import { registerMailJobs } from './handlers/mail-handlers.js';
 import { createKernelOutboxSetup } from './handlers/outbox-handlers.js';
 import { registerReportJobs } from './handlers/report-handlers.js';
+import { registerSalesJobs } from './handlers/sales-handlers.js';
 import { createMailTransportForWorker } from './mail.js';
 import { OutboxPoller } from './outbox/outbox-poller.js';
 import { OutboxHandlerRegistry } from './outbox/outbox-registry.js';
@@ -83,6 +84,13 @@ export class WorkerApplication {
       apiBaseUrl: this.config.apiBaseUrl,
       secret: this.config.reportWorkerSecret,
       transport: mailTransport,
+      log: this.log,
+    });
+    // Phase 19-S.7: quotes past their validity date are expired by the API, on this schedule. The job
+    // is inert when no worker capability is configured.
+    registerSalesJobs(this.jobRegistry, {
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
       log: this.log,
     });
     this.registerExtensionJobs();

@@ -52,6 +52,20 @@ The same mechanism gates price-book prices: `PriceBookEntry.unitPrice` (`read: n
 | `POST …/resolvePrice` | `Product: read`; plus `PriceBook: read` when a price book is supplied; plus `PriceBookEntry.unitPrice: read` when a book price would be used | `403` |
 | `POST …/bulkPriceUpdate` | `PriceBookEntry: read` for `preview`, **`edit`** for `apply` | `403` |
 | `POST …/previewTotals` | `Product: read` when any line names a product | `403` |
+| `POST …/document`, `…/document/:kind/:id/transition\|convert\|recalculate` | the document entity's `create` / `edit` (the descriptor's entity) | `403` |
+| `POST …/document/:kind/:id/unlock` | the document entity's `edit` **plus** the "unlock issued documents" permission, and a reason | `403` |
+| `DELETE …/document/:kind/:id` | the document entity's `delete`; only a **draft** is removable | `403` / `422` |
+| `POST …/quote/:id/render` | `Quote: read`; plus `DocumentTemplate: read` when a template is named or the default is used | `403` |
+| `POST …/quote/:id/send` | `Quote: read`, `DocumentTemplate: read`, `Email: create` and `Email: edit`; plus `read` on the referenced Account/Contact for a draft | `403` |
+| `POST …/action/expireQuotes`, `…/action/markOverdueInvoices` | administrator | `403` |
+| `POST …/action/expire-quotes`, `…/action/mark-overdue-invoices` | the shared worker capability header `x-worker-secret` (no session) | `401` |
+| `/api/v1/Sales/payment*`, `/allocation/:id` | the payment/allocation entity's own `create`/`edit`/`delete`, plus `Invoice: edit` to allocate against one | `403` |
+
+A quote **send** checks every one of its gates before it issues anything, so a caller who is refused
+never leaves a `sent` quote with no email behind it. The requirement that surprises people is
+`DocumentTemplate: read`: the template is what gets rendered, so a role that sends quotes needs it.
+The metadata's declared default for `DocumentTemplate` is `read: 'all'`, but that default is
+*declarative* — a field- or entity-level deny is real only once it is set on the role row itself.
 
 Worked examples, matching the API tests:
 
@@ -71,9 +85,9 @@ Entering a price by hand requires **both**:
 Without the setting the request fails with `422 This installation does not allow a manually entered
 price.`; without the field permission it fails with `422 This user may not enter a custom price.`
 
-## 5. Issued-document locking (primitives ready, documents arrive later)
+## 5. Issued-document locking
 
-`apps/api/src/sales/document/lock.ts` already defines the rules the invoice/credit phases will use:
+`apps/api/src/sales/document/lock.ts` defines the rules the document engine applies:
 
 * `protectedFields(kind)` names the fields that become immutable once a document is issued;
 * `assertDocumentEditable(state, changedFields, policy)` refuses a change to a protected field;

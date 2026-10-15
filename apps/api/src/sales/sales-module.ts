@@ -226,15 +226,21 @@ export const SALES_MODULE = {
   loadOrder: 320,
   /** API prefix owned by the module's domain commands; entity CRUD stays on `/api/v1/:entity`. */
   apiPrefix: '/api/v1/Sales',
-  /** Phases implemented so far (PLAN_Phase_19_Sales.md §14). */
-  implementedPhases: [
-    '19-S.0',
-    '19-S.1',
-    '19-S.2',
-    '19-S.3',
-    '19-S.4',
-    '19-S.5',
-  ],
+  /**
+   * Phases implemented so far (PLAN_Phase_19_Sales.md §14).
+   *
+   * `19-S.6` is the shared document infrastructure; `19-S.7` is quotes, including rendering a quote
+   * through the kernel `document` module and emailing it through the mail module; `19-S.8`/`19-S.9` are
+   * sales orders and invoices; `19-S.10` is payments and allocation. `19-S.11` and `19-S.12` have their
+   * descriptors and the generic engine but not their own remaining work (credit allocation and
+   * write-offs; stock movement for delivery and return).
+   *
+   * A PDF *attachment* on a sent document is still not produced: the block model and the optional
+   * `pdfkit` adapter exist (`@carocrm/document`), but wiring a rendered PDF into an outbound message
+   * needs the attachment storage path, which is not built. See `docs/modules/sales/README.md` for the
+   * per-phase detail.
+   */
+  implementedPhases: ['19-S.0', '19-S.1', '19-S.2', '19-S.3', '19-S.4', '19-S.5', '19-S.6', '19-S.7', '19-S.8', '19-S.9', '19-S.10'],
 } as const;
 
 export type SalesModuleDescriptor = typeof SALES_MODULE;

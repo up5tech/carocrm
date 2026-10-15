@@ -110,6 +110,11 @@ export const coreMetadata: MetadataSeedEntry[] = [
       relations: {
         contacts: { type: 'oneToMany', target: 'Contact', mappedBy: 'account' },
         opportunities: { type: 'oneToMany', target: 'Opportunity', mappedBy: 'account' },
+        // Phase 19-S: the commercial documents that belong to this customer (§4.5 relationship panels).
+        quotes: { type: 'oneToMany', target: 'Quote', mappedBy: 'account' },
+        salesOrders: { type: 'oneToMany', target: 'SalesOrder', mappedBy: 'account' },
+        invoices: { type: 'oneToMany', target: 'Invoice', mappedBy: 'account' },
+        payments: { type: 'oneToMany', target: 'Payment', mappedBy: 'account' },
       },
       indexes: [],
       record: { displayField: 'name', removable: true },
@@ -201,7 +206,11 @@ export const coreMetadata: MetadataSeedEntry[] = [
         accountId: { type: 'link', entityKey: 'Account', inDetail: true, inEdit: true },
         contactIds: { type: 'linkMultiple', entityKey: 'Contact', inDetail: true, inEdit: true },
       },
-      relations: {},
+      relations: {
+        // Phase 19-S.7: the quotes raised against this deal, so an Opportunity shows the commercial
+        // documents it produced. `mappedBy` resolves through `opportunityId` on Quote.
+        quotes: { type: 'oneToMany', target: 'Quote', mappedBy: 'opportunity' },
+      },
       indexes: [],
       record: { displayField: 'name', removable: true },
       client: {},
@@ -717,7 +726,107 @@ export const coreMetadata: MetadataSeedEntry[] = [
   salesTaxCodeEntity(),
   salesTaxRateEntity(),
   salesTaxRuleEntity(),
+
+  // -------------------------------------------------------------------------
+  // Phase 19-S.6 – 19-S.12 — commercial documents and their line items (`sales`)
+  // -------------------------------------------------------------------------
+  //
+  // A document and its items are ordinary metadata entities, exactly like the catalog records above:
+  // the Entity Engine keeps CRUD, validation, field ACL, audit, stream and search, and the Sales
+  // module adds the state machine, numbering, issuance snapshot and locking in
+  // `apps/api/src/sales/document`. Items are real records rather than one opaque JSON blob, so
+  // item-level filtering, reporting and custom fields keep working (PLAN_Phase_19_Sales.md §4.4).
+  //
+  // The state lists here mirror `apps/api/src/sales/document/descriptors.ts`; the descriptor is the
+  // authority, and a drift between the two is caught by the metadata health check.
+  salesQuoteEntity(),
+  salesQuoteItemEntity(),
+  salesSalesOrderEntity(),
+  salesSalesOrderItemEntity(),
+  salesInvoiceEntity(),
+  salesInvoiceItemEntity(),
+  salesCreditNoteEntity(),
+  salesCreditNoteItemEntity(),
+  salesDeliveryOrderEntity(),
+  salesDeliveryOrderItemEntity(),
+  salesReturnOrderEntity(),
+  salesReturnOrderItemEntity(),
+  salesPaymentTermProfileEntity(),
+
+  // -------------------------------------------------------------------------
+  // Phase 19-S.10 – 19-S.11 — payments, allocations, corrections (`sales`)
+  // -------------------------------------------------------------------------
+  //
+  // A payment is a recorded financial event, not a gateway object: amount, currency, direction, date,
+  // method, counterparty, reference. Everything provider-specific lives in a provider module, and this
+  // module's contract with it is a provider-neutral payment request plus an idempotent event log keyed
+  // by the provider's own event id (PLAN_Phase_19_Sales.md §4.8).
+  salesPaymentMethodEntity(),
+  salesPaymentChannelEntity(),
+  salesPaymentEntity(),
+  salesPaymentAllocationEntity(),
+  salesPaymentTransferAllocationEntity(),
+  salesPaymentRequestEntity(),
+  salesPaymentProviderEventLogEntity(),
+  salesCreditNoteAllocationEntity(),
+  salesWriteOffEntity(),
+
+  // -------------------------------------------------------------------------
+  // Phase 19 — the `document` module (kernel): a template is a record like any other
+  // -------------------------------------------------------------------------
+  coreDocumentTemplateEntity(),
 ];
+
+/**
+ * `DocumentTemplate` — the kernel-owned way a record becomes a document.
+ *
+ * A template is a record in the generic store rather than a settings blob, because a template must be
+ * listable, editable per entity type, audited, importable and exportable — and the engine in
+ * `@carocrm/document` renders it with placeholder names that resolve against whatever data the owning
+ * module hands in. See `docs/modules/document/README.md`.
+ */
+function coreDocumentTemplateEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'DocumentTemplate',
+    data: {
+      name: 'DocumentTemplate',
+      label: 'Document Template',
+      isEntity: true,
+      fields: salesFields({
+        code: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true, inEdit: true },
+        entityType: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true, inEdit: true },
+        subject: { type: 'varchar', maxLength: 255, inDetail: true, inEdit: true },
+        body: { type: 'text', required: true, inDetail: true, inEdit: true },
+        format: { type: 'enum', values: ['html', 'text'], defaultValue: 'html', inList: true, inDetail: true, inEdit: true },
+        locale: { type: 'varchar', maxLength: 8, inList: true, inDetail: true, inEdit: true },
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+        isDefault: { type: 'bool', defaultValue: false, inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_document_template_code', fields: ['code'] },
+        { name: 'idx_document_template_entity', fields: ['entityType'] },
+      ],
+      layouts: {
+        list: [{ entity: 'DocumentTemplate', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'code', 'entityType', 'format', 'locale', 'isDefault', 'active'] }] }],
+        detail: [{ entity: 'DocumentTemplate', type: 'detail', panels: [{ name: 'main', label: 'Template', position: 0, fields: ['name', 'description', 'code', 'entityType', 'subject', 'body', 'format', 'locale', 'isDefault', 'active'] }] }],
+        edit: [{ entity: 'DocumentTemplate', type: 'edit', panels: [{ name: 'main', label: 'Template', position: 0, fields: ['name', 'description', 'code', 'entityType', 'subject', 'body', 'format', 'locale', 'isDefault', 'active'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+      acl: {
+        permissions: { DocumentTemplate: { create: 'yes', read: 'all', edit: 'yes', delete: 'no', stream: 'all' } },
+        // Declarative default (PLAN §8): the body is template source, so a role that may read
+        // templates should see them, but a role that may not should not be able to read arbitrary
+        // HTML through the generic API either. The shape is the metadata contract — the *per-role*
+        // deny lives in the role row's own `field_permissions`, which is what the ACL evaluator
+        // reads at runtime.
+        fieldPermissions: { DocumentTemplate: { body: 'no' } },
+      },
+    },
+  };
+}
 
 /** Fields shared by every Sales entity, with the audit flags this module needs. */
 function salesFields(extra: Record<string, Record<string, unknown>> = {}): Record<string, Record<string, unknown>> {
@@ -1112,6 +1221,772 @@ function salesTaxRuleEntity(): MetadataSeedEntry {
         edit: [{ entity: 'TaxRule', type: 'edit', panels: [{ name: 'main', label: 'Tax rule', position: 0, fields: ['name', 'description', 'taxCodeId', 'priority', 'jurisdiction', 'active', 'effectiveFrom', 'effectiveTo'] }, { name: 'criteria', label: 'Criteria', position: 10, fields: ['taxClassId', 'productIds', 'categoryIds', 'accountIds'] }] }],
       },
       record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 19-S.6 – 19-S.12 — commercial documents
+// ---------------------------------------------------------------------------
+//
+// One builder per entity, driven by a small spec, so a new document type is a spec rather than
+// another hundred lines of field declarations. `states` must match
+// `apps/api/src/sales/document/descriptors.ts` — the descriptor is the authority for the state
+// machine; the enum here is what the Entity Engine validates a write against.
+
+interface DocumentSpec {
+  readonly entity: string;
+  readonly label: string;
+  readonly states: readonly string[];
+  readonly dateField: string;
+  readonly itemEntity: string;
+  readonly itemParentField: string;
+  readonly extraFields?: Record<string, Record<string, unknown>>;
+  readonly extraEditFields?: readonly string[];
+  /**
+   * Kind-specific relations, on top of the `items` relation every document gets.
+   *
+   * `mappedBy` names the *child field prefix*: `mappedBy: 'source'` resolves through `sourceId`, which
+   * is how a quote finds the sales orders generated from it and an order finds its invoices
+   * (PLAN_Phase_19_Sales.md §4.5 "relationship panels for related Opportunity, Sales Orders and
+   * generated documents").
+   */
+  readonly extraRelations?: Record<string, Record<string, unknown>>;
+}
+
+/** Fields every commercial document carries: identity, party, money, issuance and lock state. */
+function documentFields(spec: DocumentSpec): Record<string, Record<string, unknown>> {
+  return {
+    ...standardFields,
+    // A document's human-readable identity is its number; `name` stays optional and is never used as
+    // a substitute for it (§5.6 last bullet).
+    name: { ...standardFields['name'], required: false },
+    number: { type: 'varchar', maxLength: 32, inList: true, inDetail: true, sortable: true, audited: true },
+    status: {
+      type: 'enum',
+      values: spec.states,
+      defaultValue: spec.states[0],
+      inList: true,
+      inDetail: true,
+      inEdit: true,
+      audited: true,
+    },
+    accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true, inEdit: true },
+    contactId: { type: 'link', entityKey: 'Contact', inDetail: true, inEdit: true },
+    currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true, inEdit: true },
+    [spec.dateField]: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+    priceBookId: { type: 'link', entityKey: 'PriceBook', inDetail: true, inEdit: true },
+    paymentTermId: { type: 'link', entityKey: 'PaymentTermProfile', inDetail: true, inEdit: true },
+    billingAddress: { type: 'text', inDetail: true, inEdit: true },
+    shippingAddress: { type: 'text', inDetail: true, inEdit: true },
+    shippingAmount: decimalField({ inDetail: true, inEdit: true }),
+    shippingTaxCodeId: { type: 'link', entityKey: 'TaxCode', inDetail: true, inEdit: true },
+    documentDiscountAmount: decimalField({ inDetail: true, inEdit: true }),
+    taxInclusive: { type: 'bool', inDetail: true, inEdit: true },
+    jurisdiction: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+    // Server-computed: `inEdit` is omitted everywhere, and the engine rejects these keys a second time
+    // (`rejectServerOwned`), so a crafted request cannot set them.
+    exchangeRateSnapshot: { type: 'text', inDetail: true },
+    itemsCount: { type: 'int', inList: true, inDetail: true },
+    subtotal: decimalField({ inList: true, inDetail: true }),
+    discountTotal: decimalField({ inDetail: true }),
+    shippingTaxAmount: decimalField({ inDetail: true }),
+    taxTotal: decimalField({ inList: true, inDetail: true }),
+    netTotal: decimalField({ inDetail: true }),
+    grossTotal: decimalField({ inList: true, inDetail: true }),
+    amountDue: decimalField({ inList: true, inDetail: true }),
+    baseCurrency: { type: 'varchar', maxLength: 3, inDetail: true },
+    baseGrossTotal: decimalField({ inDetail: true }),
+    taxBreakdown: { type: 'text', inDetail: true },
+    roundingStage: { type: 'varchar', maxLength: 16, inDetail: true },
+    roundingMode: { type: 'varchar', maxLength: 16, inDetail: true },
+    settingsVersion: { type: 'int', inDetail: true },
+    issuedAt: { type: 'datetime', inList: true, inDetail: true, audited: true },
+    issuedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+    lockedAt: { type: 'datetime', inDetail: true },
+    lockedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+    unlockedAt: { type: 'datetime', inDetail: true },
+    unlockedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+    /** The frozen commercial snapshot (JSON text). Written once, at issuance. */
+    snapshot: { type: 'text', inDetail: true },
+    sourceEntity: { type: 'varchar', maxLength: 64, inDetail: true },
+    sourceId: { type: 'varchar', maxLength: 64, inDetail: true },
+    correlationId: { type: 'varchar', maxLength: 128, inDetail: true },
+    ...(spec.extraFields ?? {}),
+  };
+}
+
+/** Fields every line item carries. Money and quantity are canonical decimal strings. */
+function documentItemFields(spec: DocumentSpec): Record<string, Record<string, unknown>> {
+  return {
+    ...standardFields,
+    name: { ...standardFields['name'], required: false },
+    [spec.itemParentField]: { type: 'link', entityKey: spec.entity, required: true, inList: true },
+    position: { type: 'int', required: true, inList: true, inDetail: true, sortable: true },
+    /**
+     * The line this one was copied from, whatever document kind that was (a quote line becoming an
+     * order line, an order line becoming a delivery line). It is what makes partial fulfilment
+     * derivable: a confirmed delivery moves quantity *against a specific order line* (§4.10).
+     */
+    sourceItemId: { type: 'varchar', maxLength: 64, inDetail: true },
+    productId: { type: 'link', entityKey: 'Product', inList: true, inDetail: true, inEdit: true },
+    sku: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+    unit: { type: 'varchar', maxLength: 32, inDetail: true },
+    quantity: decimalField({ required: true, inList: true, inDetail: true, inEdit: true }),
+    unitPrice: decimalField({ inList: true, inDetail: true, inEdit: true }),
+    discountPercent: decimalField({ inDetail: true, inEdit: true }),
+    discountAmount: decimalField({ inDetail: true }),
+    taxCodeId: { type: 'link', entityKey: 'TaxCode', inDetail: true, inEdit: true },
+    taxRatePercent: decimalField({ inDetail: true }),
+    taxSource: { type: 'varchar', maxLength: 16, inDetail: true },
+    taxRuleId: { type: 'varchar', maxLength: 64, inDetail: true },
+    netAmount: decimalField({ inList: true, inDetail: true }),
+    taxAmount: decimalField({ inDetail: true }),
+    grossAmount: decimalField({ inList: true, inDetail: true }),
+  };
+}
+
+function documentEntity(spec: DocumentSpec): MetadataSeedEntry {
+  const prefix = spec.entity.toLowerCase();
+  return {
+    scope: 'entity',
+    name: spec.entity,
+    data: {
+      name: spec.entity,
+      label: spec.label,
+      isEntity: true,
+      fields: documentFields(spec),
+      relations: {
+        // The document's own lines. `mappedBy` is the parent field without its `Id` suffix, which is
+        // the convention `attrMatchFor` resolves (`apps/api/src/entity/entity.service.ts`).
+        items: { type: 'oneToMany', target: spec.itemEntity, mappedBy: spec.itemParentField.replace(/Id$/, '') },
+        ...(spec.extraRelations ?? {}),
+      },
+      indexes: [
+        { name: `idx_${prefix}_status`, fields: ['status'] },
+        { name: `idx_${prefix}_account`, fields: ['accountId'] },
+        { name: `idx_${prefix}_number`, fields: ['number'] },
+      ],
+      layouts: {
+        list: [
+          {
+            entity: spec.entity,
+            type: 'list',
+            panels: [
+              {
+                name: 'list',
+                position: 0,
+                fields: ['number', 'status', 'accountId', spec.dateField, 'currency', 'grossTotal', 'amountDue', 'assignedUserId'],
+              },
+            ],
+          },
+        ],
+        detail: [
+          {
+            entity: spec.entity,
+            type: 'detail',
+            panels: [
+              {
+                name: 'main',
+                label: spec.label,
+                position: 0,
+                fields: ['number', 'status', 'accountId', 'contactId', spec.dateField, 'currency', 'description', 'assignedUserId'],
+              },
+              {
+                name: 'totals',
+                label: 'Totals',
+                position: 10,
+                fields: ['subtotal', 'discountTotal', 'shippingAmount', 'taxTotal', 'netTotal', 'grossTotal', 'amountDue'],
+              },
+              {
+                name: 'issuance',
+                label: 'Issuance',
+                position: 20,
+                fields: ['issuedAt', 'issuedBy', 'lockedAt', 'unlockedAt', 'settingsVersion', 'roundingStage', 'roundingMode'],
+              },
+            ],
+          },
+        ],
+        edit: [
+          {
+            entity: spec.entity,
+            type: 'edit',
+            panels: [
+              {
+                name: 'main',
+                label: spec.label,
+                position: 0,
+                fields: ['accountId', 'contactId', spec.dateField, 'currency', 'description', ...(spec.extraEditFields ?? [])],
+              },
+              {
+                name: 'terms',
+                label: 'Terms',
+                position: 10,
+                fields: ['priceBookId', 'paymentTermId', 'shippingAmount', 'shippingTaxCodeId', 'documentDiscountAmount', 'taxInclusive', 'billingAddress', 'shippingAddress'],
+              },
+            ],
+          },
+        ],
+      },
+      record: { displayField: 'number', removable: true },
+      client: {},
+      // Documents start from a usable default: everyone may read, an editor may create and change a
+      // draft, nobody deletes an issued one (the engine refuses that regardless of the role).
+      acl: { permissions: { [spec.entity]: { create: 'yes', read: 'all', edit: 'yes', delete: 'no', stream: 'all' } } },
+    },
+  };
+}
+
+function documentItemEntity(spec: DocumentSpec): MetadataSeedEntry {
+  const prefix = spec.itemEntity.toLowerCase();
+  return {
+    scope: 'entity',
+    name: spec.itemEntity,
+    data: {
+      name: spec.itemEntity,
+      label: `${spec.label} Item`,
+      isEntity: true,
+      fields: documentItemFields(spec),
+      relations: {},
+      indexes: [
+        { name: `idx_${prefix}_parent`, fields: [spec.itemParentField] },
+        { name: `idx_${prefix}_product`, fields: ['productId'] },
+      ],
+      layouts: {
+        list: [
+          {
+            entity: spec.itemEntity,
+            type: 'list',
+            panels: [{ name: 'list', position: 0, fields: ['position', 'name', 'sku', 'quantity', 'unitPrice', 'netAmount', 'grossAmount'] }],
+          },
+        ],
+        detail: [
+          {
+            entity: spec.itemEntity,
+            type: 'detail',
+            panels: [
+              { name: 'main', label: 'Line', position: 0, fields: ['position', 'productId', 'name', 'sku', 'unit', 'quantity', 'unitPrice', 'discountPercent', 'discountAmount'] },
+              { name: 'tax', label: 'Tax', position: 10, fields: ['taxCodeId', 'taxRatePercent', 'taxSource', 'netAmount', 'taxAmount', 'grossAmount'] },
+            ],
+          },
+        ],
+        edit: [
+          {
+            entity: spec.itemEntity,
+            type: 'edit',
+            panels: [
+              { name: 'main', label: 'Line', position: 0, fields: ['position', 'productId', 'name', 'sku', 'unit', 'quantity', 'unitPrice', 'discountPercent', 'discountAmount', 'taxCodeId'] },
+            ],
+          },
+        ],
+      },
+      record: { displayField: 'name', removable: true },
+      // Items are reached through their parent document's panel, not from the navigation.
+      client: { web: false },
+    },
+  };
+}
+
+/** Payment terms: a named policy a quote, order, invoice or bill can reference (§5.2). */
+function salesPaymentTermProfileEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'PaymentTermProfile',
+    data: {
+      name: 'PaymentTermProfile',
+      label: 'Payment Terms',
+      isEntity: true,
+      fields: salesFields({
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+        dueDays: { type: 'int', defaultValue: 30, inList: true, inDetail: true, inEdit: true },
+        /** `net` counts from the document date; `endOfMonth` counts from the end of that month. */
+        basis: { type: 'enum', values: ['net', 'endOfMonth'], defaultValue: 'net', inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_payment_term_profile_active', fields: ['active'] }],
+      layouts: {
+        list: [{ entity: 'PaymentTermProfile', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'dueDays', 'basis', 'active'] }] }],
+        detail: [{ entity: 'PaymentTermProfile', type: 'detail', panels: [{ name: 'main', label: 'Payment terms', position: 0, fields: ['name', 'description', 'dueDays', 'basis', 'active'] }] }],
+        edit: [{ entity: 'PaymentTermProfile', type: 'edit', panels: [{ name: 'main', label: 'Payment terms', position: 0, fields: ['name', 'description', 'dueDays', 'basis', 'active'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+function salesQuoteEntity(): MetadataSeedEntry {
+  return documentEntity({
+    entity: 'Quote',
+    label: 'Quote',
+    states: ['draft', 'sent', 'accepted', 'rejected', 'expired', 'converted', 'cancelled'],
+    dateField: 'quoteDate',
+    itemEntity: 'QuoteItem',
+    itemParentField: 'quoteId',
+    extraFields: {
+      validUntil: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+      opportunityId: { type: 'link', entityKey: 'Opportunity', inDetail: true, inEdit: true },
+    },
+    extraEditFields: ['validUntil', 'opportunityId'],
+    extraRelations: { salesOrders: { type: 'oneToMany', target: 'SalesOrder', mappedBy: 'source' } },
+  });
+}
+
+function salesQuoteItemEntity(): MetadataSeedEntry {
+  return documentItemEntity({ entity: 'Quote', label: 'Quote', states: ['draft'], dateField: 'quoteDate', itemEntity: 'QuoteItem', itemParentField: 'quoteId' });
+}
+
+function salesSalesOrderEntity(): MetadataSeedEntry {
+  return documentEntity({
+    entity: 'SalesOrder',
+    label: 'Sales Order',
+    states: ['draft', 'confirmed', 'partiallyFulfilled', 'fulfilled', 'cancelled'],
+    dateField: 'orderDate',
+    itemEntity: 'SalesOrderItem',
+    itemParentField: 'salesOrderId',
+    extraFields: {
+      opportunityId: { type: 'link', entityKey: 'Opportunity', inDetail: true, inEdit: true },
+      requiredDeliveryDate: { type: 'date', inList: true, inDetail: true, inEdit: true },
+      // Promoted to a link to `Warehouse` in 19-S.14, when the inventory entities exist.
+      warehouseId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+    },
+    extraEditFields: ['requiredDeliveryDate', 'warehouseId', 'opportunityId'],
+    extraRelations: {
+      invoices: { type: 'oneToMany', target: 'Invoice', mappedBy: 'source' },
+      deliveryOrders: { type: 'oneToMany', target: 'DeliveryOrder', mappedBy: 'salesOrder' },
+      returnOrders: { type: 'oneToMany', target: 'ReturnOrder', mappedBy: 'salesOrder' },
+    },
+  });
+}
+
+function salesSalesOrderItemEntity(): MetadataSeedEntry {
+  return documentItemEntity({
+    entity: 'SalesOrder',
+    label: 'Sales Order',
+    states: ['draft'],
+    dateField: 'orderDate',
+    itemEntity: 'SalesOrderItem',
+    itemParentField: 'salesOrderId',
+  });
+}
+
+function salesInvoiceEntity(): MetadataSeedEntry {
+  return documentEntity({
+    entity: 'Invoice',
+    label: 'Invoice',
+    states: ['draft', 'issued', 'voided'],
+    dateField: 'invoiceDate',
+    itemEntity: 'InvoiceItem',
+    itemParentField: 'invoiceId',
+    extraFields: {
+      dueDate: { type: 'date', inList: true, inDetail: true, sortable: true },
+      deliveryDate: { type: 'date', inDetail: true, inEdit: true },
+      servicePeriodStart: { type: 'date', inDetail: true, inEdit: true },
+      servicePeriodEnd: { type: 'date', inDetail: true, inEdit: true },
+      /**
+       * Payment state is a **separate concept** from document status (§4.7): `status` says whether the
+       * document is a draft or issued, `paymentStatus` says how much of it has been settled. Neither
+       * stands in for the other.
+       */
+      paymentStatus: { type: 'enum', values: ['unpaid', 'partiallyPaid', 'paid', 'overdue'], defaultValue: 'unpaid', inList: true, inDetail: true },
+      salesOrderId: { type: 'link', entityKey: 'SalesOrder', inDetail: true },
+    },
+    extraEditFields: ['dueDate', 'deliveryDate', 'servicePeriodStart', 'servicePeriodEnd'],
+    extraRelations: {
+      // The payment history panel: every allocation that settles this invoice (§4.8).
+      allocations: { type: 'oneToMany', target: 'PaymentAllocation', mappedBy: 'document' },
+      creditAllocations: { type: 'oneToMany', target: 'CreditNoteAllocation', mappedBy: 'invoice' },
+      writeOffs: { type: 'oneToMany', target: 'WriteOff', mappedBy: 'invoice' },
+    },
+  });
+}
+
+function salesInvoiceItemEntity(): MetadataSeedEntry {
+  return documentItemEntity({ entity: 'Invoice', label: 'Invoice', states: ['draft'], dateField: 'invoiceDate', itemEntity: 'InvoiceItem', itemParentField: 'invoiceId' });
+}
+
+function salesCreditNoteEntity(): MetadataSeedEntry {
+  return documentEntity({
+    entity: 'CreditNote',
+    label: 'Credit Note',
+    states: ['draft', 'issued', 'voided'],
+    dateField: 'creditDate',
+    itemEntity: 'CreditNoteItem',
+    itemParentField: 'creditNoteId',
+    extraFields: {
+      invoiceId: { type: 'link', entityKey: 'Invoice', inList: true, inDetail: true, inEdit: true },
+      reason: { type: 'varchar', maxLength: 255, inDetail: true, inEdit: true },
+      /** Credit not yet allocated to an invoice; visible and reportable (§4.9). */
+      unallocatedAmount: decimalField({ inList: true, inDetail: true }),
+    },
+    extraEditFields: ['invoiceId', 'reason'],
+    extraRelations: { allocations: { type: 'oneToMany', target: 'CreditNoteAllocation', mappedBy: 'creditNote' } },
+  });
+}
+
+function salesCreditNoteItemEntity(): MetadataSeedEntry {
+  return documentItemEntity({ entity: 'CreditNote', label: 'Credit Note', states: ['draft'], dateField: 'creditDate', itemEntity: 'CreditNoteItem', itemParentField: 'creditNoteId' });
+}
+
+function salesDeliveryOrderEntity(): MetadataSeedEntry {
+  return documentEntity({
+    entity: 'DeliveryOrder',
+    label: 'Delivery Order',
+    states: ['draft', 'confirmed', 'delivered', 'cancelled'],
+    dateField: 'deliveryDate',
+    itemEntity: 'DeliveryOrderItem',
+    itemParentField: 'deliveryOrderId',
+    extraFields: {
+      salesOrderId: { type: 'link', entityKey: 'SalesOrder', inList: true, inDetail: true },
+      trackingNumber: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+      warehouseId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+    },
+    extraEditFields: ['trackingNumber', 'warehouseId'],
+  });
+}
+
+function salesDeliveryOrderItemEntity(): MetadataSeedEntry {
+  return documentItemEntity({
+    entity: 'DeliveryOrder',
+    label: 'Delivery Order',
+    states: ['draft'],
+    dateField: 'deliveryDate',
+    itemEntity: 'DeliveryOrderItem',
+    itemParentField: 'deliveryOrderId',
+  });
+}
+
+function salesReturnOrderEntity(): MetadataSeedEntry {
+  return documentEntity({
+    entity: 'ReturnOrder',
+    label: 'Return Order',
+    states: ['draft', 'confirmed', 'cancelled'],
+    dateField: 'returnDate',
+    itemEntity: 'ReturnOrderItem',
+    itemParentField: 'returnOrderId',
+    extraFields: {
+      salesOrderId: { type: 'link', entityKey: 'SalesOrder', inList: true, inDetail: true },
+      deliveryOrderId: { type: 'link', entityKey: 'DeliveryOrder', inList: true, inDetail: true, inEdit: true },
+      warehouseId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+      reason: { type: 'varchar', maxLength: 255, inDetail: true, inEdit: true },
+    },
+    extraEditFields: ['deliveryOrderId', 'warehouseId', 'reason'],
+  });
+}
+
+function salesReturnOrderItemEntity(): MetadataSeedEntry {
+  return documentItemEntity({
+    entity: 'ReturnOrder',
+    label: 'Return Order',
+    states: ['draft'],
+    dateField: 'returnDate',
+    itemEntity: 'ReturnOrderItem',
+    itemParentField: 'returnOrderId',
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 19-S.10 – 19-S.11 — payments and the records that adjust a balance
+// ---------------------------------------------------------------------------
+
+/** A configurable lookup (payment method or channel) a payment may reference. */
+function lookupEntity(entity: string, label: string, extra: Record<string, Record<string, unknown>> = {}): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: entity,
+    data: {
+      name: entity,
+      label,
+      isEntity: true,
+      fields: salesFields({
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+        ...extra,
+      }),
+      relations: {},
+      indexes: [{ name: `idx_${entity.toLowerCase()}_active`, fields: ['active'] }],
+      layouts: {
+        list: [{ entity, type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'active', 'modifiedAt'] }] }],
+        detail: [{ entity, type: 'detail', panels: [{ name: 'main', label, position: 0, fields: ['name', 'description', 'active'] }] }],
+        edit: [{ entity, type: 'edit', panels: [{ name: 'main', label, position: 0, fields: ['name', 'description', 'active'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+function salesPaymentMethodEntity(): MetadataSeedEntry {
+  return lookupEntity('PaymentMethod', 'Payment Method', {
+    /** Some methods carry a reference the operator must record (a cheque number, a transfer id). */
+    requiresReference: { type: 'bool', defaultValue: false, inList: true, inDetail: true, inEdit: true },
+  });
+}
+
+function salesPaymentChannelEntity(): MetadataSeedEntry {
+  return lookupEntity('PaymentChannel', 'Payment Channel', {
+    /** Which provider-neutral channel this is (bank, cash, an online provider). Never a secret. */
+    provider: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true },
+  });
+}
+
+function salesPaymentEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'Payment',
+    data: {
+      name: 'Payment',
+      label: 'Payment',
+      isEntity: true,
+      fields: salesFields({
+        amount: decimalField({ required: true, inList: true, inDetail: true, inEdit: true }),
+        currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true, inEdit: true },
+        direction: { type: 'enum', values: ['incoming', 'outgoing'], defaultValue: 'incoming', inList: true, inDetail: true, inEdit: true },
+        paymentDate: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+        paymentMethodId: { type: 'link', entityKey: 'PaymentMethod', inList: true, inDetail: true, inEdit: true },
+        paymentChannelId: { type: 'link', entityKey: 'PaymentChannel', inDetail: true, inEdit: true },
+        accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true, inEdit: true },
+        contactId: { type: 'link', entityKey: 'Contact', inDetail: true, inEdit: true },
+        reference: { type: 'varchar', maxLength: 128, inList: true, inDetail: true, inEdit: true },
+        memo: { type: 'text', inDetail: true, inEdit: true },
+        status: { type: 'enum', values: ['draft', 'confirmed', 'cancelled'], defaultValue: 'draft', inList: true, inDetail: true, audited: true },
+        // Derived from the allocation rows. Never settable by a client: the write guard refuses them.
+        allocatedAmount: decimalField({ inList: true, inDetail: true }),
+        unallocatedAmount: decimalField({ inList: true, inDetail: true }),
+        allocationStatus: { type: 'enum', values: ['unallocated', 'partiallyAllocated', 'allocated'], defaultValue: 'unallocated', inList: true, inDetail: true },
+      }),
+      relations: {
+        // What this payment settles, and what it transfers to/from.
+        allocations: { type: 'oneToMany', target: 'PaymentAllocation', mappedBy: 'payment' },
+        transfersOut: { type: 'oneToMany', target: 'PaymentTransferAllocation', mappedBy: 'fromPayment' },
+        transfersIn: { type: 'oneToMany', target: 'PaymentTransferAllocation', mappedBy: 'toPayment' },
+      },
+      indexes: [
+        { name: 'idx_payment_status', fields: ['status'] },
+        { name: 'idx_payment_account', fields: ['accountId'] },
+        { name: 'idx_payment_date', fields: ['paymentDate'] },
+      ],
+      layouts: {
+        list: [{ entity: 'Payment', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'paymentDate', 'direction', 'accountId', 'amount', 'currency', 'allocationStatus', 'status'] }] }],
+        detail: [
+          { entity: 'Payment', type: 'detail', panels: [{ name: 'main', label: 'Payment', position: 0, fields: ['name', 'direction', 'status', 'paymentDate', 'accountId', 'contactId', 'amount', 'currency', 'paymentMethodId', 'paymentChannelId', 'reference', 'memo'] }] },
+          { entity: 'Payment', type: 'detail', panels: [{ name: 'allocation', label: 'Allocation', position: 10, fields: ['allocatedAmount', 'unallocatedAmount', 'allocationStatus'] }] },
+        ],
+        edit: [{ entity: 'Payment', type: 'edit', panels: [{ name: 'main', label: 'Payment', position: 0, fields: ['direction', 'paymentDate', 'accountId', 'contactId', 'amount', 'currency', 'paymentMethodId', 'paymentChannelId', 'reference', 'memo'] }] }],
+      },
+      record: { displayField: 'name', removable: false },
+      client: {},
+      acl: { permissions: { Payment: { create: 'yes', read: 'all', edit: 'yes', delete: 'no', stream: 'all' } } },
+    },
+  };
+}
+
+function salesPaymentAllocationEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'PaymentAllocation',
+    data: {
+      name: 'PaymentAllocation',
+      label: 'Payment Allocation',
+      isEntity: true,
+      fields: salesFields({
+        paymentId: { type: 'link', entityKey: 'Payment', required: true, inList: true, inDetail: true },
+        /** The document this allocation settles. `Invoice` today; `Bill` arrives with 19-S.13. */
+        documentEntity: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+        documentId: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+        amount: decimalField({ required: true, inList: true, inDetail: true }),
+        currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true },
+        allocatedAt: { type: 'datetime', inList: true, inDetail: true },
+        allocatedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        correlationId: { type: 'varchar', maxLength: 128, inDetail: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_payment_allocation_payment', fields: ['paymentId'] },
+        { name: 'idx_payment_allocation_document', fields: ['documentId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'PaymentAllocation', type: 'list', panels: [{ name: 'list', position: 0, fields: ['paymentId', 'documentEntity', 'documentId', 'amount', 'currency', 'allocatedAt'] }] }],
+        detail: [{ entity: 'PaymentAllocation', type: 'detail', panels: [{ name: 'main', label: 'Allocation', position: 0, fields: ['paymentId', 'documentEntity', 'documentId', 'amount', 'currency', 'allocatedAt', 'allocatedBy'] }] }],
+        edit: [],
+      },
+      record: { displayField: 'name', removable: false },
+      client: { web: false },
+    },
+  };
+}
+
+function salesPaymentTransferAllocationEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'PaymentTransferAllocation',
+    data: {
+      name: 'PaymentTransferAllocation',
+      label: 'Payment Transfer',
+      isEntity: true,
+      fields: salesFields({
+        fromPaymentId: { type: 'link', entityKey: 'Payment', required: true, inList: true, inDetail: true },
+        toPaymentId: { type: 'link', entityKey: 'Payment', required: true, inList: true, inDetail: true },
+        amount: decimalField({ required: true, inList: true, inDetail: true }),
+        currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true },
+        transferredAt: { type: 'datetime', inList: true, inDetail: true },
+        transferredBy: { type: 'varchar', maxLength: 64, inDetail: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_payment_transfer_from', fields: ['fromPaymentId'] },
+        { name: 'idx_payment_transfer_to', fields: ['toPaymentId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'PaymentTransferAllocation', type: 'list', panels: [{ name: 'list', position: 0, fields: ['fromPaymentId', 'toPaymentId', 'amount', 'currency', 'transferredAt'] }] }],
+        detail: [{ entity: 'PaymentTransferAllocation', type: 'detail', panels: [{ name: 'main', label: 'Transfer', position: 0, fields: ['fromPaymentId', 'toPaymentId', 'amount', 'currency', 'transferredAt', 'transferredBy'] }] }],
+        edit: [],
+      },
+      record: { displayField: 'name', removable: false },
+      client: { web: false },
+    },
+  };
+}
+
+function salesPaymentRequestEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'PaymentRequest',
+    data: {
+      name: 'PaymentRequest',
+      label: 'Payment Request',
+      isEntity: true,
+      fields: salesFields({
+        amount: decimalField({ required: true, inList: true, inDetail: true, inEdit: true }),
+        currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true, inEdit: true },
+        accountId: { type: 'link', entityKey: 'Account', required: true, inList: true, inDetail: true, inEdit: true },
+        invoiceId: { type: 'link', entityKey: 'Invoice', inList: true, inDetail: true, inEdit: true },
+        salesOrderId: { type: 'link', entityKey: 'SalesOrder', inDetail: true, inEdit: true },
+        expiresAt: { type: 'datetime', inDetail: true, inEdit: true },
+        /** The provider's own reference once one exists. Never a secret, never card data. */
+        providerReference: { type: 'varchar', maxLength: 128, inList: true, inDetail: true },
+        status: { type: 'enum', values: ['pending', 'paid', 'failed', 'expired', 'cancelled'], defaultValue: 'pending', inList: true, inDetail: true, audited: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_payment_request_status', fields: ['status'] },
+        { name: 'idx_payment_request_account', fields: ['accountId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'PaymentRequest', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'accountId', 'amount', 'currency', 'status', 'expiresAt'] }] }],
+        detail: [{ entity: 'PaymentRequest', type: 'detail', panels: [{ name: 'main', label: 'Payment request', position: 0, fields: ['name', 'accountId', 'invoiceId', 'amount', 'currency', 'status', 'expiresAt', 'providerReference'] }] }],
+        edit: [{ entity: 'PaymentRequest', type: 'edit', panels: [{ name: 'main', label: 'Payment request', position: 0, fields: ['accountId', 'invoiceId', 'amount', 'currency', 'expiresAt'] }] }],
+      },
+      record: { displayField: 'name', removable: false },
+      client: {},
+    },
+  };
+}
+
+/**
+ * The idempotency log for provider events. `providerEventId` is unique, so a webhook delivered twice
+ * finds the existing row instead of settling an invoice twice (§4.8, §6.3). The payload is a summary:
+ * card data, mandates and reusable secrets are refused before they reach this row.
+ */
+function salesPaymentProviderEventLogEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'PaymentProviderEventLog',
+    data: {
+      name: 'PaymentProviderEventLog',
+      label: 'Payment Provider Event',
+      isEntity: true,
+      fields: salesFields({
+        provider: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+        providerEventId: { type: 'varchar', maxLength: 191, required: true, inList: true, inDetail: true },
+        eventType: { type: 'varchar', maxLength: 128, required: true, inList: true, inDetail: true },
+        paymentRequestId: { type: 'link', entityKey: 'PaymentRequest', inList: true, inDetail: true },
+        payload: { type: 'text', inDetail: true },
+        processedStatus: { type: 'enum', values: ['received', 'processed', 'ignored'], defaultValue: 'received', inList: true, inDetail: true },
+        processedAt: { type: 'datetime', inList: true, inDetail: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_payment_provider_event_id', fields: ['providerEventId'] },
+        { name: 'idx_payment_provider_event_request', fields: ['paymentRequestId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'PaymentProviderEventLog', type: 'list', panels: [{ name: 'list', position: 0, fields: ['provider', 'eventType', 'processedStatus', 'processedAt'] }] }],
+        detail: [{ entity: 'PaymentProviderEventLog', type: 'detail', panels: [{ name: 'main', label: 'Provider event', position: 0, fields: ['provider', 'providerEventId', 'eventType', 'paymentRequestId', 'processedStatus', 'processedAt', 'payload'] }] }],
+        edit: [],
+      },
+      record: { displayField: 'name', removable: false },
+      client: { web: false },
+    },
+  };
+}
+
+/** A credit note applied to an invoice — the record that reduces a receivable (§4.9). */
+function salesCreditNoteAllocationEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'CreditNoteAllocation',
+    data: {
+      name: 'CreditNoteAllocation',
+      label: 'Credit Note Allocation',
+      isEntity: true,
+      fields: salesFields({
+        creditNoteId: { type: 'link', entityKey: 'CreditNote', required: true, inList: true, inDetail: true },
+        invoiceId: { type: 'link', entityKey: 'Invoice', required: true, inList: true, inDetail: true },
+        amount: decimalField({ required: true, inList: true, inDetail: true }),
+        currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true },
+        allocatedAt: { type: 'datetime', inList: true, inDetail: true },
+        allocatedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        reversedAt: { type: 'datetime', inDetail: true },
+        reversedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        reversalReason: { type: 'varchar', maxLength: 255, inDetail: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_credit_note_allocation_note', fields: ['creditNoteId'] },
+        { name: 'idx_credit_note_allocation_invoice', fields: ['invoiceId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'CreditNoteAllocation', type: 'list', panels: [{ name: 'list', position: 0, fields: ['creditNoteId', 'invoiceId', 'amount', 'currency', 'allocatedAt'] }] }],
+        detail: [{ entity: 'CreditNoteAllocation', type: 'detail', panels: [{ name: 'main', label: 'Credit allocation', position: 0, fields: ['creditNoteId', 'invoiceId', 'amount', 'currency', 'allocatedAt', 'allocatedBy', 'reversedAt', 'reversalReason'] }] }],
+        edit: [],
+      },
+      record: { displayField: 'name', removable: false },
+      client: { web: false },
+    },
+  };
+}
+
+/** An approved balance adjustment. Never disguised as a payment (§4.9). */
+function salesWriteOffEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'WriteOff',
+    data: {
+      name: 'WriteOff',
+      label: 'Write-off',
+      isEntity: true,
+      fields: salesFields({
+        invoiceId: { type: 'link', entityKey: 'Invoice', required: true, inList: true, inDetail: true, inEdit: true },
+        amount: decimalField({ required: true, inList: true, inDetail: true, inEdit: true }),
+        currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true, inEdit: true },
+        reason: { type: 'varchar', maxLength: 255, required: true, inDetail: true, inEdit: true },
+        status: { type: 'enum', values: ['pending', 'approved', 'rejected'], defaultValue: 'pending', inList: true, inDetail: true, audited: true },
+        requestedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        approvedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        approvedAt: { type: 'datetime', inList: true, inDetail: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_write_off_invoice', fields: ['invoiceId'] },
+        { name: 'idx_write_off_status', fields: ['status'] },
+      ],
+      layouts: {
+        list: [{ entity: 'WriteOff', type: 'list', panels: [{ name: 'list', position: 0, fields: ['invoiceId', 'amount', 'currency', 'status', 'approvedAt'] }] }],
+        detail: [{ entity: 'WriteOff', type: 'detail', panels: [{ name: 'main', label: 'Write-off', position: 0, fields: ['invoiceId', 'amount', 'currency', 'reason', 'status', 'requestedBy', 'approvedBy', 'approvedAt'] }] }],
+        edit: [{ entity: 'WriteOff', type: 'edit', panels: [{ name: 'main', label: 'Write-off', position: 0, fields: ['invoiceId', 'amount', 'currency', 'reason'] }] }],
+      },
+      record: { displayField: 'name', removable: false },
       client: {},
     },
   };

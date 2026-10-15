@@ -16,7 +16,7 @@ recurring subscriptions and purchasing/inventory.
 | Domain-command prefix | `/api/v1/Sales` |
 | Load order | 320 (after the kernel and Projects) |
 | Version | 1.0.0 |
-| Implemented phases | 19-S.0 – 19-S.5 (`sales-module.ts` → `implementedPhases`) |
+| Implemented phases | 19-S.0 – 19-S.10 (`sales-module.ts` → `implementedPhases`; 19-S.11 – 19-S.20 are not claimed) |
 
 ## 2. Module boundary — who owns what
 

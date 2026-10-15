@@ -250,6 +250,22 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
        ON CONFLICT (id) DO NOTHING`,
     );
 
+    // Quote validity (PLAN_Phase_19_Sales.md 19-S.7): a quote whose valid-until date has passed is
+    // expired once a day. The operation is idempotent, so a re-run or a retry changes nothing.
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('expireQuotes', 'sales.expireQuotes', '20 1 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+
+    // Invoice ageing (PLAN_Phase_19_Sales.md 19-S.9): an issued invoice past its due date is marked
+    // overdue once a day, emitting one event per invoice. Idempotent, so a re-run emits nothing.
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('markOverdueInvoices', 'sales.markOverdueInvoices', '35 1 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+
     for (const entry of coreMetadata) {
       await pool.query(
         `INSERT INTO metadata_entries (scope, name, data) VALUES ($1, $2, $3)
