@@ -77,14 +77,14 @@ Every feature specification must identify its baseline version. Do not silently 
 
 Compatibility should be categorized as:
 
-| Level | Meaning |
-|---|---|
-| API-compatible | Request/response shape and semantics match the documented contract closely enough for clients to work. |
-| Behavioral-compatible | User-visible behavior is equivalent even if the internal implementation differs. |
-| Metadata-compatible | Metadata concepts map to the new implementation. |
-| Extension-compatible | A documented concept has a corresponding extension point, not necessarily identical PHP class names. |
-| Database-compatible | Not required for v1. The new system has its own schema. |
-| Source-compatible | Explicitly out of scope. Do not attempt PHP source compatibility. |
+| Level                 | Meaning                                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------------------------ |
+| API-compatible        | Request/response shape and semantics match the documented contract closely enough for clients to work. |
+| Behavioral-compatible | User-visible behavior is equivalent even if the internal implementation differs.                       |
+| Metadata-compatible   | Metadata concepts map to the new implementation.                                                       |
+| Extension-compatible  | A documented concept has a corresponding extension point, not necessarily identical PHP class names.   |
+| Database-compatible   | Not required for v1. The new system has its own schema.                                                |
+| Source-compatible     | Explicitly out of scope. Do not attempt PHP source compatibility.                                      |
 
 ---
 
@@ -317,7 +317,7 @@ Do not log secrets, access tokens, passwords, or sensitive message bodies by def
 # 8. Target Repository Structure
 
 ```text
-ua-crm/
+crm/
 ├── apps/
 │   ├── api/
 │   │   ├── src/
@@ -1708,7 +1708,7 @@ Example:
 
 ```json
 {
-  "id": "ua-sales",
+  "id": "sales",
   "order": 300
 }
 ```
@@ -1803,7 +1803,7 @@ Translation keys must be stable and namespaced by owning module:
 core.user.label
 crm.account.label
 crm.account.fields.name
-uaSales.quote.label
+sales.quote.label
 ```
 
 Rules:
@@ -2851,23 +2851,23 @@ Do not store upstream copyrighted source code in this folder.
 
 Example:
 
-| Capability | Espo baseline | New implementation | Priority |
-|---|---|---|---|
-| CRUD API | v9.3.x | Planned | P0 |
-| Metadata | v9.3.x | Planned | P0 |
-| Internationalization | v9.3.x | Planned | P0 |
-| ACL | v9.3.x | Planned | P0 |
-| Roles | v9.3.x | Planned | P0 |
-| Teams | v9.3.x | Planned | P0 |
-| Attachments | v9.3.x | Planned | P0 |
-| Stream | v9.3.x | Planned | P1 |
-| Calendar | v9.3.x | Planned | P1 |
-| Email | v9.3.x | Planned | P1 |
-| Workflows | selected baseline | Planned | P2 |
-| BPM | selected baseline | Planned | P2 |
-| Reports | selected baseline | Planned | P2 |
-| Portals | selected baseline | Planned | P2 |
-| Extension SDK | new design | Planned | P1 |
+| Capability           | Espo baseline     | New implementation | Priority |
+| -------------------- | ----------------- | ------------------ | -------- |
+| CRUD API             | v9.3.x            | Planned            | P0       |
+| Metadata             | v9.3.x            | Planned            | P0       |
+| Internationalization | v9.3.x            | Planned            | P0       |
+| ACL                  | v9.3.x            | Planned            | P0       |
+| Roles                | v9.3.x            | Planned            | P0       |
+| Teams                | v9.3.x            | Planned            | P0       |
+| Attachments          | v9.3.x            | Planned            | P0       |
+| Stream               | v9.3.x            | Planned            | P1       |
+| Calendar             | v9.3.x            | Planned            | P1       |
+| Email                | v9.3.x            | Planned            | P1       |
+| Workflows            | selected baseline | Planned            | P2       |
+| BPM                  | selected baseline | Planned            | P2       |
+| Reports              | selected baseline | Planned            | P2       |
+| Portals              | selected baseline | Planned            | P2       |
+| Extension SDK        | new design        | Planned            | P1       |
 
 This matrix must be kept current throughout the project.
 
@@ -2961,7 +2961,7 @@ Provide:
 Configuration categories:
 
 ```text
-APP_* 
+APP_*
 DATABASE_*
 REDIS_*
 AUTH_*
@@ -3371,7 +3371,7 @@ The primary success criterion is that a sales team can use the system daily with
 [ ] Custom ACL providers
 ```
 
-At this point the NestJS CRM should be capable of hosting independently developed modules such as `UaSales`, `UaProjects`, `UaWorkflows`, `UaBpm`, `UaReports`, `UaIntelligence`, `UaMarketingAutomation`, `UaCustomerSuccess`, and `UaServiceDesk` without modifying the kernel.
+At this point the NestJS CRM should be capable of hosting independently developed modules such as `Sales`, `Projects`, `Workflows`, `Bpm`, `Reports`, `Intelligence`, `MarketingAutomation`, `CustomerSuccess`, and `ServiceDesk` without modifying the kernel.
 
 ---
 
@@ -3573,25 +3573,25 @@ The ACL injection must happen below controllers so custom endpoints cannot accid
 
 # 82. Migration From PHP Concepts to NestJS Concepts
 
-| EspoCRM concept | NestJS implementation |
-|---|---|
-| Application bootstrap | NestFactory bootstrap |
-| Dependency Injection | NestJS DI container |
-| Service classes | Injectable application/domain services |
-| Controllers | NestJS controllers |
-| API actions | NestJS route handlers / application services |
-| ORM EntityManager | Custom EntityManager abstraction |
-| Repository | Repository/query provider |
-| Metadata | TypeScript/JSON Schema metadata registry |
-| Hooks | Domain hooks + events |
-| Scheduled Jobs | BullMQ repeatable jobs + cron metadata |
-| Entry Points | Dedicated controllers/public routes |
-| Module | NestJS module + platform extension manifest |
-| ACL | Guard + centralized authorization service |
-| File Storage Manager | FileStorage abstraction |
-| Formula | Sandboxed AST expression engine |
-| Frontend metadata | React UI schema/metadata registry |
-| Extension package | npm/package/archive module SDK |
+| EspoCRM concept       | NestJS implementation                        |
+| --------------------- | -------------------------------------------- |
+| Application bootstrap | NestFactory bootstrap                        |
+| Dependency Injection  | NestJS DI container                          |
+| Service classes       | Injectable application/domain services       |
+| Controllers           | NestJS controllers                           |
+| API actions           | NestJS route handlers / application services |
+| ORM EntityManager     | Custom EntityManager abstraction             |
+| Repository            | Repository/query provider                    |
+| Metadata              | TypeScript/JSON Schema metadata registry     |
+| Hooks                 | Domain hooks + events                        |
+| Scheduled Jobs        | BullMQ repeatable jobs + cron metadata       |
+| Entry Points          | Dedicated controllers/public routes          |
+| Module                | NestJS module + platform extension manifest  |
+| ACL                   | Guard + centralized authorization service    |
+| File Storage Manager  | FileStorage abstraction                      |
+| Formula               | Sandboxed AST expression engine              |
+| Frontend metadata     | React UI schema/metadata registry            |
+| Extension package     | npm/package/archive module SDK               |
 
 This mapping is intentionally conceptual rather than source-compatible.
 

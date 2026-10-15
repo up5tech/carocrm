@@ -693,4 +693,426 @@ export const coreMetadata: MetadataSeedEntry[] = [
       client: { web: false },
     },
   },
+
+  // -------------------------------------------------------------------------
+  // Phase 19-S — Sales & Commercial Operations (`sales`)
+  // -------------------------------------------------------------------------
+  //
+  // The catalog, pricing and tax entities (PLAN_Phase_19_Sales.md §5.1, §5.4). They are ordinary
+  // metadata entities in `entity_records`, served by the generic API/Entity Engine like every other
+  // record; the Sales module adds the cross-record rules in `apps/api/src/sales` and the expression
+  // indexes in `database/migrations/021_phase19_sales.sql`.
+  //
+  // Money and quantities use the `currency` field type: it is the platform's only field type that
+  // stores a **canonical decimal string** and is cast to `numeric` by the query/report engine, so
+  // amounts never become binary floating point on their way through the API (audit §5).
+  salesProductEntity(),
+  salesProductCategoryEntity(),
+  salesPriceBookEntity(),
+  salesPriceBookEntryEntity(),
+  salesPriceRuleEntity(),
+  salesSupplierEntity(),
+  salesSupplierPriceEntity(),
+  salesTaxClassEntity(),
+  salesTaxCodeEntity(),
+  salesTaxRateEntity(),
+  salesTaxRuleEntity(),
 ];
+
+/** Fields shared by every Sales entity, with the audit flags this module needs. */
+function salesFields(extra: Record<string, Record<string, unknown>> = {}): Record<string, Record<string, unknown>> {
+  return {
+    ...standardFields,
+    name: { ...standardFields['name'], required: true, audited: true },
+    ...extra,
+  };
+}
+
+/**
+ * A decimal-as-string field (money, quantity, rate) the query engine can aggregate.
+ *
+ * Declared as a hoisted function, not a `const`: `coreMetadata` below is evaluated at module load
+ * and calls the Sales entity builders, which call this — a `const` would still be in its temporal
+ * dead zone at that moment.
+ */
+function decimalField(extra: Record<string, unknown> = {}): Record<string, unknown> {
+  return { type: 'currency', ...extra };
+}
+
+function salesProductEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'Product',
+    data: {
+      name: 'Product',
+      label: 'Product',
+      isEntity: true,
+      fields: salesFields({
+        sku: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true, inEdit: true, sortable: true, audited: true },
+        productType: { type: 'enum', values: ['Goods', 'Service'], defaultValue: 'Goods', inList: true, inDetail: true, inEdit: true, audited: true },
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true, audited: true },
+        isSellable: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+        isPurchasable: { type: 'bool', defaultValue: true, inDetail: true, inEdit: true },
+        unit: { type: 'varchar', maxLength: 32, defaultValue: 'unit', inDetail: true, inEdit: true },
+        categoryId: { type: 'link', entityKey: 'ProductCategory', inList: true, inDetail: true, inEdit: true },
+        taxClassId: { type: 'link', entityKey: 'TaxClass', inDetail: true, inEdit: true },
+        defaultTaxCodeId: { type: 'link', entityKey: 'TaxCode', inDetail: true, inEdit: true },
+        unitPrice: decimalField({ inDetail: true, inEdit: true }),
+        listPrice: decimalField({ inDetail: true, inEdit: true }),
+        costPrice: decimalField({ inDetail: true, inEdit: true }),
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_product_sku', fields: ['sku'] },
+        { name: 'idx_product_category', fields: ['categoryId'] },
+        { name: 'idx_product_active', fields: ['active'] },
+      ],
+      layouts: {
+        list: [{ entity: 'Product', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'sku', 'productType', 'categoryId', 'active', 'unitPrice', 'modifiedAt'] }] }],
+        detail: [
+          {
+            entity: 'Product',
+            type: 'detail',
+            panels: [
+              { name: 'overview', label: 'Product', position: 0, fields: ['name', 'description', 'sku', 'productType', 'categoryId', 'unit', 'active'] },
+              { name: 'pricing', label: 'Pricing', position: 10, fields: ['unitPrice', 'listPrice', 'costPrice'] },
+              { name: 'tax', label: 'Tax', position: 20, fields: ['taxClassId', 'defaultTaxCodeId'] },
+              { name: 'ownership', label: 'Ownership', position: 30, fields: ['assignedUserId', 'teams'] },
+            ],
+          },
+        ],
+        edit: [
+          {
+            entity: 'Product',
+            type: 'edit',
+            panels: [
+              { name: 'main', label: 'Product', position: 0, fields: ['name', 'description', 'sku', 'productType', 'categoryId', 'unit'] },
+              { name: 'pricing', label: 'Pricing', position: 10, fields: ['unitPrice', 'listPrice', 'costPrice'] },
+              { name: 'configuration', label: 'Configuration', position: 20, fields: ['active', 'isSellable', 'isPurchasable', 'taxClassId', 'defaultTaxCodeId', 'assignedUserId', 'teams'] },
+            ],
+          },
+        ],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+      // Declarative defaults (PLAN §8): a role reads products broadly, but the cost price is a
+      // sensitive field a restricted role can be denied. The shape is the metadata contract —
+      // `fieldPermissions` is keyed by entity, then by field, then by level (`AclDefinitionSchema`);
+      // the *per-role* deny lives in the role row's own `field_permissions`, which is what the ACL
+      // evaluator reads at runtime.
+      acl: {
+        permissions: { Product: { create: 'yes', read: 'all', edit: 'yes', delete: 'no', stream: 'all' } },
+        fieldPermissions: { Product: { costPrice: 'no' } },
+      },
+    },
+  };
+}
+
+function salesProductCategoryEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'ProductCategory',
+    data: {
+      name: 'ProductCategory',
+      label: 'Product Category',
+      isEntity: true,
+      fields: salesFields({
+        parentId: { type: 'link', entityKey: 'ProductCategory', inList: true, inDetail: true, inEdit: true },
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+        sortOrder: { type: 'int', defaultValue: 0, inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_product_category_parent', fields: ['parentId'] }],
+      layouts: {
+        list: [{ entity: 'ProductCategory', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'parentId', 'active', 'sortOrder', 'modifiedAt'] }] }],
+        detail: [{ entity: 'ProductCategory', type: 'detail', panels: [{ name: 'main', label: 'Category', position: 0, fields: ['name', 'description', 'parentId', 'active', 'sortOrder'] }] }],
+        edit: [{ entity: 'ProductCategory', type: 'edit', panels: [{ name: 'main', label: 'Category', position: 0, fields: ['name', 'description', 'parentId', 'active', 'sortOrder'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+function salesPriceBookEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'PriceBook',
+    data: {
+      name: 'PriceBook',
+      label: 'Price Book',
+      isEntity: true,
+      fields: salesFields({
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+        currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true, inEdit: true },
+        accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true, inEdit: true },
+        priority: { type: 'int', defaultValue: 100, inList: true, inDetail: true, inEdit: true },
+        effectiveFrom: { type: 'date', inDetail: true, inEdit: true },
+        effectiveTo: { type: 'date', inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_price_book_account', fields: ['accountId'] },
+        { name: 'idx_price_book_active', fields: ['active'] },
+      ],
+      layouts: {
+        list: [{ entity: 'PriceBook', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'currency', 'accountId', 'priority', 'active', 'modifiedAt'] }] }],
+        detail: [{ entity: 'PriceBook', type: 'detail', panels: [{ name: 'main', label: 'Price book', position: 0, fields: ['name', 'description', 'currency', 'accountId', 'priority', 'active', 'effectiveFrom', 'effectiveTo'] }] }],
+        edit: [{ entity: 'PriceBook', type: 'edit', panels: [{ name: 'main', label: 'Price book', position: 0, fields: ['name', 'description', 'currency', 'accountId', 'priority', 'active', 'effectiveFrom', 'effectiveTo'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+function salesPriceBookEntryEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'PriceBookEntry',
+    data: {
+      name: 'PriceBookEntry',
+      label: 'Price Book Entry',
+      isEntity: true,
+      fields: {
+        ...standardFields,
+        name: { ...standardFields['name'], required: false },
+        priceBookId: { type: 'link', entityKey: 'PriceBook', required: true, inList: true, inDetail: true, inEdit: true },
+        productId: { type: 'link', entityKey: 'Product', required: true, inList: true, inDetail: true, inEdit: true },
+        unitPrice: decimalField({ required: true, inList: true, inDetail: true, inEdit: true }),
+        minQuantity: decimalField({ inDetail: true, inEdit: true }),
+        unit: { type: 'varchar', maxLength: 32, inDetail: true, inEdit: true },
+        currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true, inEdit: true },
+        effectiveFrom: { type: 'date', inList: true, inDetail: true, inEdit: true },
+        effectiveTo: { type: 'date', inDetail: true, inEdit: true },
+      },
+      relations: {},
+      indexes: [
+        { name: 'idx_price_book_entry_book', fields: ['priceBookId'] },
+        { name: 'idx_price_book_entry_product', fields: ['productId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'PriceBookEntry', type: 'list', panels: [{ name: 'list', position: 0, fields: ['productId', 'priceBookId', 'unitPrice', 'currency', 'minQuantity', 'effectiveFrom', 'effectiveTo'] }] }],
+        detail: [{ entity: 'PriceBookEntry', type: 'detail', panels: [{ name: 'main', label: 'Entry', position: 0, fields: ['priceBookId', 'productId', 'unitPrice', 'currency', 'minQuantity', 'unit', 'effectiveFrom', 'effectiveTo'] }] }],
+        edit: [{ entity: 'PriceBookEntry', type: 'edit', panels: [{ name: 'main', label: 'Entry', position: 0, fields: ['priceBookId', 'productId', 'unitPrice', 'currency', 'minQuantity', 'unit', 'effectiveFrom', 'effectiveTo'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+function salesPriceRuleEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'PriceRule',
+    data: {
+      name: 'PriceRule',
+      label: 'Price Rule',
+      isEntity: true,
+      fields: salesFields({
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+        priority: { type: 'int', defaultValue: 100, inList: true, inDetail: true, inEdit: true },
+        priceBookId: { type: 'link', entityKey: 'PriceBook', required: true, inList: true, inDetail: true, inEdit: true },
+        actionType: { type: 'enum', values: ['percentAdjustment', 'fixedAdjustment', 'setPrice'], defaultValue: 'percentAdjustment', inList: true, inDetail: true, inEdit: true },
+        actionValue: decimalField({ inList: true, inDetail: true, inEdit: true }),
+        productIds: { type: 'linkMultiple', entityKey: 'Product', inDetail: true, inEdit: true },
+        categoryIds: { type: 'linkMultiple', entityKey: 'ProductCategory', inDetail: true, inEdit: true },
+        accountIds: { type: 'linkMultiple', entityKey: 'Account', inDetail: true, inEdit: true },
+        minQuantity: decimalField({ inDetail: true, inEdit: true }),
+        maxQuantity: decimalField({ inDetail: true, inEdit: true }),
+        effectiveFrom: { type: 'date', inDetail: true, inEdit: true },
+        effectiveTo: { type: 'date', inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_price_rule_book', fields: ['priceBookId'] }],
+      layouts: {
+        list: [{ entity: 'PriceRule', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'priceBookId', 'actionType', 'actionValue', 'priority', 'active'] }] }],
+        detail: [{ entity: 'PriceRule', type: 'detail', panels: [{ name: 'main', label: 'Rule', position: 0, fields: ['name', 'description', 'priceBookId', 'actionType', 'actionValue', 'priority', 'active', 'effectiveFrom', 'effectiveTo'] }, { name: 'criteria', label: 'Criteria', position: 10, fields: ['productIds', 'categoryIds', 'accountIds', 'minQuantity', 'maxQuantity'] }] }],
+        edit: [{ entity: 'PriceRule', type: 'edit', panels: [{ name: 'main', label: 'Rule', position: 0, fields: ['name', 'description', 'priceBookId', 'actionType', 'actionValue', 'priority', 'active', 'effectiveFrom', 'effectiveTo'] }, { name: 'criteria', label: 'Criteria', position: 10, fields: ['productIds', 'categoryIds', 'accountIds', 'minQuantity', 'maxQuantity'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+function salesSupplierEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'Supplier',
+    data: {
+      name: 'Supplier',
+      label: 'Supplier',
+      isEntity: true,
+      fields: salesFields({
+        code: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true },
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+        emailAddress: { type: 'email', inList: true, inDetail: true, inEdit: true },
+        phoneNumber: { type: 'phone', inDetail: true, inEdit: true },
+        website: { type: 'url', inDetail: true, inEdit: true },
+        currency: { type: 'varchar', maxLength: 3, inDetail: true, inEdit: true },
+        taxId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_supplier_code', fields: ['code'] }],
+      layouts: {
+        list: [{ entity: 'Supplier', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'code', 'emailAddress', 'currency', 'active', 'modifiedAt'] }] }],
+        detail: [{ entity: 'Supplier', type: 'detail', panels: [{ name: 'main', label: 'Supplier', position: 0, fields: ['name', 'description', 'code', 'emailAddress', 'phoneNumber', 'website', 'currency', 'taxId', 'active', 'assignedUserId', 'teams'] }] }],
+        edit: [{ entity: 'Supplier', type: 'edit', panels: [{ name: 'main', label: 'Supplier', position: 0, fields: ['name', 'description', 'code', 'emailAddress', 'phoneNumber', 'website', 'currency', 'taxId', 'active', 'assignedUserId', 'teams'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+function salesSupplierPriceEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'SupplierProductPrice',
+    data: {
+      name: 'SupplierProductPrice',
+      label: 'Supplier Price',
+      isEntity: true,
+      fields: {
+        ...standardFields,
+        name: { ...standardFields['name'], required: false },
+        supplierId: { type: 'link', entityKey: 'Supplier', required: true, inList: true, inDetail: true, inEdit: true },
+        productId: { type: 'link', entityKey: 'Product', required: true, inList: true, inDetail: true, inEdit: true },
+        unitPrice: decimalField({ required: true, inList: true, inDetail: true, inEdit: true }),
+        currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true, inEdit: true },
+        supplierProductCode: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+        minOrderQuantity: decimalField({ inDetail: true, inEdit: true }),
+        effectiveFrom: { type: 'date', inDetail: true, inEdit: true },
+        effectiveTo: { type: 'date', inDetail: true, inEdit: true },
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+      },
+      relations: {},
+      indexes: [
+        { name: 'idx_supplier_price_supplier', fields: ['supplierId'] },
+        { name: 'idx_supplier_price_product', fields: ['productId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'SupplierProductPrice', type: 'list', panels: [{ name: 'list', position: 0, fields: ['productId', 'supplierId', 'unitPrice', 'currency', 'supplierProductCode', 'active'] }] }],
+        detail: [{ entity: 'SupplierProductPrice', type: 'detail', panels: [{ name: 'main', label: 'Supplier price', position: 0, fields: ['supplierId', 'productId', 'unitPrice', 'currency', 'supplierProductCode', 'minOrderQuantity', 'effectiveFrom', 'effectiveTo', 'active'] }] }],
+        edit: [{ entity: 'SupplierProductPrice', type: 'edit', panels: [{ name: 'main', label: 'Supplier price', position: 0, fields: ['supplierId', 'productId', 'unitPrice', 'currency', 'supplierProductCode', 'minOrderQuantity', 'effectiveFrom', 'effectiveTo', 'active'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+function salesTaxClassEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'TaxClass',
+    data: {
+      name: 'TaxClass',
+      label: 'Tax Class',
+      isEntity: true,
+      fields: salesFields({
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [],
+      layouts: {
+        list: [{ entity: 'TaxClass', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'active', 'modifiedAt'] }] }],
+        detail: [{ entity: 'TaxClass', type: 'detail', panels: [{ name: 'main', label: 'Tax class', position: 0, fields: ['name', 'description', 'active'] }] }],
+        edit: [{ entity: 'TaxClass', type: 'edit', panels: [{ name: 'main', label: 'Tax class', position: 0, fields: ['name', 'description', 'active'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+function salesTaxCodeEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'TaxCode',
+    data: {
+      name: 'TaxCode',
+      label: 'Tax Code',
+      isEntity: true,
+      fields: salesFields({
+        code: { type: 'varchar', maxLength: 32, required: true, inList: true, inDetail: true, inEdit: true },
+        // Mapping metadata for an e-invoicing adapter, never a legal classification (plan §4.12).
+        externalCode: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true },
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_tax_code_code', fields: ['code'] }],
+      layouts: {
+        list: [{ entity: 'TaxCode', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'code', 'externalCode', 'active', 'modifiedAt'] }] }],
+        detail: [{ entity: 'TaxCode', type: 'detail', panels: [{ name: 'main', label: 'Tax code', position: 0, fields: ['name', 'code', 'externalCode', 'description', 'active'] }] }],
+        edit: [{ entity: 'TaxCode', type: 'edit', panels: [{ name: 'main', label: 'Tax code', position: 0, fields: ['name', 'code', 'externalCode', 'description', 'active'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+function salesTaxRateEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'TaxRate',
+    data: {
+      name: 'TaxRate',
+      label: 'Tax Rate',
+      isEntity: true,
+      fields: salesFields({
+        taxCodeId: { type: 'link', entityKey: 'TaxCode', required: true, inList: true, inDetail: true, inEdit: true },
+        ratePercent: decimalField({ required: true, inList: true, inDetail: true, inEdit: true }),
+        jurisdiction: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true },
+        effectiveFrom: { type: 'date', inList: true, inDetail: true, inEdit: true },
+        effectiveTo: { type: 'date', inDetail: true, inEdit: true },
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_tax_rate_code', fields: ['taxCodeId'] }],
+      layouts: {
+        list: [{ entity: 'TaxRate', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'taxCodeId', 'ratePercent', 'jurisdiction', 'effectiveFrom', 'effectiveTo', 'active'] }] }],
+        detail: [{ entity: 'TaxRate', type: 'detail', panels: [{ name: 'main', label: 'Tax rate', position: 0, fields: ['name', 'taxCodeId', 'ratePercent', 'jurisdiction', 'effectiveFrom', 'effectiveTo', 'active'] }] }],
+        edit: [{ entity: 'TaxRate', type: 'edit', panels: [{ name: 'main', label: 'Tax rate', position: 0, fields: ['name', 'taxCodeId', 'ratePercent', 'jurisdiction', 'effectiveFrom', 'effectiveTo', 'active'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+function salesTaxRuleEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'TaxRule',
+    data: {
+      name: 'TaxRule',
+      label: 'Tax Rule',
+      isEntity: true,
+      fields: salesFields({
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+        priority: { type: 'int', defaultValue: 10, inList: true, inDetail: true, inEdit: true },
+        taxCodeId: { type: 'link', entityKey: 'TaxCode', required: true, inList: true, inDetail: true, inEdit: true },
+        taxClassId: { type: 'link', entityKey: 'TaxClass', inDetail: true, inEdit: true },
+        productIds: { type: 'linkMultiple', entityKey: 'Product', inDetail: true, inEdit: true },
+        categoryIds: { type: 'linkMultiple', entityKey: 'ProductCategory', inDetail: true, inEdit: true },
+        accountIds: { type: 'linkMultiple', entityKey: 'Account', inDetail: true, inEdit: true },
+        jurisdiction: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true },
+        effectiveFrom: { type: 'date', inDetail: true, inEdit: true },
+        effectiveTo: { type: 'date', inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_tax_rule_code', fields: ['taxCodeId'] }],
+      layouts: {
+        list: [{ entity: 'TaxRule', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'taxCodeId', 'priority', 'jurisdiction', 'active'] }] }],
+        detail: [{ entity: 'TaxRule', type: 'detail', panels: [{ name: 'main', label: 'Tax rule', position: 0, fields: ['name', 'description', 'taxCodeId', 'priority', 'jurisdiction', 'active', 'effectiveFrom', 'effectiveTo'] }, { name: 'criteria', label: 'Criteria', position: 10, fields: ['taxClassId', 'productIds', 'categoryIds', 'accountIds'] }] }],
+        edit: [{ entity: 'TaxRule', type: 'edit', panels: [{ name: 'main', label: 'Tax rule', position: 0, fields: ['name', 'description', 'taxCodeId', 'priority', 'jurisdiction', 'active', 'effectiveFrom', 'effectiveTo'] }, { name: 'criteria', label: 'Criteria', position: 10, fields: ['taxClassId', 'productIds', 'categoryIds', 'accountIds'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}

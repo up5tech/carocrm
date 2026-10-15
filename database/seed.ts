@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import argon2 from 'argon2';
 import pg from 'pg';
 
+import { DEFAULT_NUMBER_SERIES } from '../apps/api/src/sales/document/number-series-defaults.js';
 import { getDatabaseUrl,loadEnv } from './env.js';
 import { runMigrations } from './migrate.js';
 import { coreMetadata } from './seed-metadata.js';
@@ -65,6 +66,17 @@ const DEFAULT_PROJECT_ROLES: readonly { id: string; name: string; policy: Record
     },
   },
 ];
+
+async function seedSalesNumberSeries(pool: pg.Pool): Promise<void> {
+  for (const series of DEFAULT_NUMBER_SERIES) {
+    await pool.query(
+      `INSERT INTO sales_number_series (id, code, label, prefix, padding, next_number, allocation, active, created_at, modified_at)
+       VALUES ($1, $2, $3, $4, $5, 1, $6, TRUE, now(), now())
+       ON CONFLICT (code) DO NOTHING`,
+      [`sns_${series.code}`, series.code, series.label, series.prefix, series.padding ?? 6, series.allocation ?? 'issuance'],
+    );
+  }
+}
 
 async function seedProjectSystemRows(pool: pg.Pool): Promise<void> {
   const insert = async (id: string, entityType: string, name: string, attrs: Record<string, unknown>): Promise<void> => {
@@ -183,6 +195,11 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
     // (PLAN_Phase_19_Projects.md §14.1). Inserted once with fixed ids: re-running the seed never
     // duplicates them and never overwrites an administrator's edits.
     await seedProjectSystemRows(pool);
+
+    // Phase 19-S — the document number series the Sales module allocates from
+    // (PLAN_Phase_19_Sales.md §4.4). `ON CONFLICT (code) DO NOTHING`: a series keeps its counter,
+    // prefix and padding once it exists, so re-running the seed can never reset a sequence.
+    await seedSalesNumberSeries(pool);
 
     await pool.query(
       `INSERT INTO teams (id, name) VALUES ($1, 'Sales') ON CONFLICT (id) DO NOTHING`,

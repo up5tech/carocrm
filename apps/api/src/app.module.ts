@@ -46,6 +46,7 @@ import { PORTAL_CONTROLLERS, PORTAL_PROVIDERS } from './portal/index.js';
 import { PROCESS_CONTROLLERS, PROCESS_PROVIDERS } from './processes/index.js';
 import { PROJECTS_CONTROLLERS, PROJECTS_PROVIDERS } from './projects/index.js';
 import { REPORT_CONTROLLERS, REPORT_PROVIDERS } from './reports/index.js';
+import { SALES_CONTROLLERS, SALES_PROVIDERS } from './sales/index.js';
 import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
 import { SETTINGS_CONTROLLERS, SETTINGS_PROVIDERS } from './settings/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
@@ -92,6 +93,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 19: `/api/v1/Project/...` and `/api/v1/ProjectTask/...` domain commands, static
     // prefixes matched before the generic `:entity` wildcard.
     ...PROJECTS_CONTROLLERS,
+    // Phase 19-S: `/api/v1/Sales/action/...` domain commands (health, settings, numbering,
+    // price resolution, bulk price update, totals preview) — also before `:entity`.
+    ...SALES_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
     ...ENTITY_CONTROLLERS,
   ],
@@ -119,6 +123,7 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 18: portal ACL policy (delegated to by AclApiService) + portal admin/portal-user services.
     ...PORTAL_PROVIDERS,
     ...PROJECTS_PROVIDERS,
+    ...SALES_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
     ...SETTINGS_PROVIDERS,

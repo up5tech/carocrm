@@ -648,6 +648,39 @@ export interface ExtensionMigrationsTable {
   applied_at: Date;
 }
 
+/**
+ * Phase 19-S.2 — Sales document number series (PLAN_Phase_19_Sales.md §4.4, §8.3).
+ *
+ * One row per commercial document series. `next_number` is the *unallocated* next value; allocation
+ * increments it inside a row-locked transaction, which is what makes concurrent issuance safe.
+ */
+export interface SalesNumberSeriesTable {
+  id: string;
+  code: string;
+  label: string;
+  prefix: string;
+  padding: number;
+  /** INTEGER on purpose: pg returns BIGINT as a string, and numbers this large are unreachable. */
+  next_number: number;
+  allocation: string;
+  active: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Ledger of every allocated document number; the unique constraints live in migration 021. */
+export interface SalesDocumentNumbersTable {
+  id: string;
+  series_id: string;
+  number: number;
+  formatted: string;
+  document_type: string | null;
+  document_id: string | null;
+  allocated_by: string | null;
+  correlation_id: string | null;
+  allocated_at: Date;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
@@ -699,6 +732,8 @@ export interface Database {
   portal_nav_items: PortalNavItemsTable;
   portal_dashboards: PortalDashboardsTable;
   portal_dashlets: PortalDashletsTable;
+  sales_number_series: SalesNumberSeriesTable;
+  sales_document_numbers: SalesDocumentNumbersTable;
 }
 
 export type Db = Kysely<Database>;
