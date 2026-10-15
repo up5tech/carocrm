@@ -15,9 +15,12 @@ import {
   type DocumentLockState,
 } from "./document/lock.js";
 import {
+  ADJUSTMENT_ENTITIES,
   changedKeys,
+  DECIDED_WRITE_OFF_FIELDS,
   isSalesInternalWrite,
   PAYMENT_ENTITIES,
+  SERVER_OWNED_ADJUSTMENT_FIELDS,
   SERVER_OWNED_DOCUMENT_FIELDS,
   SERVER_OWNED_PAYMENT_FIELDS,
 } from "./sales-internal.js";
@@ -89,7 +92,52 @@ export class SalesWriteGuardService implements OnApplicationBootstrap {
         SERVER_OWNED_PAYMENT_FIELDS,
         context.entity,
       );
+      return;
     }
+
+    if (ADJUSTMENT_ENTITIES.includes(context.entity)) {
+      this.validateAdjustment(context, data);
+    }
+  }
+
+  /**
+   * 19-S.11 correction records. The client path may not touch the decision fields (`status`,
+   * approver/reversal trail), and a write-off that has been decided is frozen: its amount, invoice
+   * and reason can no longer be rewritten — the supported route is a reversal or a new request
+   * (§4.9 "credit/write-off allocations must be reversible only through a supported compensating
+   * action").
+   */
+  private validateAdjustment(
+    context: HookContext,
+    data: Record<string, unknown>,
+  ): void {
+    const previous = context.previous ?? {};
+    const changed =
+      context.operation === "create"
+        ? Object.keys(data)
+        : changedKeys(data, previous);
+    refuseServerOwned(
+      changed,
+      SERVER_OWNED_ADJUSTMENT_FIELDS,
+      context.entity,
+    );
+    if (context.entity !== "WriteOff" || context.operation !== "update") {
+      return;
+    }
+    const status = text(previous["status"]) ?? "pending";
+    if (status === "pending") return;
+    const violations = changed.filter((field) =>
+      DECIDED_WRITE_OFF_FIELDS.includes(field),
+    );
+    if (violations.length === 0) return;
+    throw new ValidationError(
+      `This write-off is "${status}"; ${violations.join(", ")} can no longer be changed. Reverse the write-off or request a new one.`,
+      {
+        entity: context.entity,
+        status,
+        fields: violations,
+      },
+    );
   }
 
   private async validateDocument(

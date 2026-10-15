@@ -108,9 +108,10 @@ refused (`422`) naming the competing rules, rather than a coin toss between them
 | `fixedAdjustment` | `base − amount` | `amount ≥ 0`; a result below zero is **refused**, not clamped |
 | `setPrice` | the amount itself (usable with no entry at all) | `amount ≥ 0` |
 
-A rule needs at least one criterion, and each id list holds 1 – 500 entries. There is **no SQL, no
-JavaScript and no formula string** in a price rule: an administrator cannot make the server execute
-arbitrary code through pricing.
+A rule with no criteria is **book-wide**: it applies to every product the price book resolves, which
+is a documented configuration (§4.3 lists criteria as supported conditions, not a requirement). Each
+id list, when present, holds 1 – 500 entries. There is **no SQL, no JavaScript and no formula string**
+in a price rule: an administrator cannot make the server execute arbitrary code through pricing.
 
 ## 4. Bulk price update (`BulkPriceService`)
 

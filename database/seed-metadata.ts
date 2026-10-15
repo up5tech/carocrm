@@ -795,7 +795,11 @@ function coreDocumentTemplateEntity(): MetadataSeedEntry {
       isEntity: true,
       fields: salesFields({
         code: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true, inEdit: true },
-        entityType: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true, inEdit: true },
+        // The entity type this template renders. The field is *not* called `entityType`: that name is
+        // reserved by the record store (the `entity_type` column and the query engine's physical
+        // keys), so an attribute under it would be silently dropped on write. The API keeps accepting
+        // `entityType` as its request/query name and maps it here.
+        targetEntity: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true, inEdit: true },
         subject: { type: 'varchar', maxLength: 255, inDetail: true, inEdit: true },
         body: { type: 'text', required: true, inDetail: true, inEdit: true },
         format: { type: 'enum', values: ['html', 'text'], defaultValue: 'html', inList: true, inDetail: true, inEdit: true },
@@ -806,12 +810,12 @@ function coreDocumentTemplateEntity(): MetadataSeedEntry {
       relations: {},
       indexes: [
         { name: 'idx_document_template_code', fields: ['code'] },
-        { name: 'idx_document_template_entity', fields: ['entityType'] },
+        { name: 'idx_document_template_entity', fields: ['targetEntity'] },
       ],
       layouts: {
-        list: [{ entity: 'DocumentTemplate', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'code', 'entityType', 'format', 'locale', 'isDefault', 'active'] }] }],
-        detail: [{ entity: 'DocumentTemplate', type: 'detail', panels: [{ name: 'main', label: 'Template', position: 0, fields: ['name', 'description', 'code', 'entityType', 'subject', 'body', 'format', 'locale', 'isDefault', 'active'] }] }],
-        edit: [{ entity: 'DocumentTemplate', type: 'edit', panels: [{ name: 'main', label: 'Template', position: 0, fields: ['name', 'description', 'code', 'entityType', 'subject', 'body', 'format', 'locale', 'isDefault', 'active'] }] }],
+        list: [{ entity: 'DocumentTemplate', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'code', 'targetEntity', 'format', 'locale', 'isDefault', 'active'] }] }],
+        detail: [{ entity: 'DocumentTemplate', type: 'detail', panels: [{ name: 'main', label: 'Template', position: 0, fields: ['name', 'description', 'code', 'targetEntity', 'subject', 'body', 'format', 'locale', 'isDefault', 'active'] }] }],
+        edit: [{ entity: 'DocumentTemplate', type: 'edit', panels: [{ name: 'main', label: 'Template', position: 0, fields: ['name', 'description', 'code', 'targetEntity', 'subject', 'body', 'format', 'locale', 'isDefault', 'active'] }] }],
       },
       record: { displayField: 'name', removable: true },
       client: {},
@@ -1810,7 +1814,10 @@ function salesPaymentAllocationEntity(): MetadataSeedEntry {
         detail: [{ entity: 'PaymentAllocation', type: 'detail', panels: [{ name: 'main', label: 'Allocation', position: 0, fields: ['paymentId', 'documentEntity', 'documentId', 'amount', 'currency', 'allocatedAt', 'allocatedBy'] }] }],
         edit: [],
       },
-      record: { displayField: 'name', removable: false },
+      // Unallocation *is* a removal in 19-S.10 (the link disappears, both sides recompute), so the
+      // record guard must allow the domain command's delete. Credit allocations and write-offs are
+      // corrected by reversal instead, which is why theirs stays `false`.
+      record: { displayField: 'name', removable: true },
       client: { web: false },
     },
   };
@@ -1971,10 +1978,14 @@ function salesWriteOffEntity(): MetadataSeedEntry {
         amount: decimalField({ required: true, inList: true, inDetail: true, inEdit: true }),
         currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true, inEdit: true },
         reason: { type: 'varchar', maxLength: 255, required: true, inDetail: true, inEdit: true },
-        status: { type: 'enum', values: ['pending', 'approved', 'rejected'], defaultValue: 'pending', inList: true, inDetail: true, audited: true },
+        /** `pending` is a request; only `approved` reduces the invoice. `reversed` compensates an approval. */
+        status: { type: 'enum', values: ['pending', 'approved', 'rejected', 'reversed'], defaultValue: 'pending', inList: true, inDetail: true, audited: true },
         requestedBy: { type: 'varchar', maxLength: 64, inDetail: true },
         approvedBy: { type: 'varchar', maxLength: 64, inDetail: true },
         approvedAt: { type: 'datetime', inList: true, inDetail: true },
+        reversedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        reversedAt: { type: 'datetime', inDetail: true },
+        reversalReason: { type: 'varchar', maxLength: 255, inDetail: true },
       }),
       relations: {},
       indexes: [
@@ -1983,11 +1994,14 @@ function salesWriteOffEntity(): MetadataSeedEntry {
       ],
       layouts: {
         list: [{ entity: 'WriteOff', type: 'list', panels: [{ name: 'list', position: 0, fields: ['invoiceId', 'amount', 'currency', 'status', 'approvedAt'] }] }],
-        detail: [{ entity: 'WriteOff', type: 'detail', panels: [{ name: 'main', label: 'Write-off', position: 0, fields: ['invoiceId', 'amount', 'currency', 'reason', 'status', 'requestedBy', 'approvedBy', 'approvedAt'] }] }],
+        detail: [{ entity: 'WriteOff', type: 'detail', panels: [{ name: 'main', label: 'Write-off', position: 0, fields: ['invoiceId', 'amount', 'currency', 'reason', 'status', 'requestedBy', 'approvedBy', 'approvedAt', 'reversedAt', 'reversalReason'] }] }],
         edit: [{ entity: 'WriteOff', type: 'edit', panels: [{ name: 'main', label: 'Write-off', position: 0, fields: ['invoiceId', 'amount', 'currency', 'reason'] }] }],
       },
       record: { displayField: 'name', removable: false },
       client: {},
+      // A write-off is *requested* through the record or the command; approval, rejection and
+      // reversal are domain commands (administrator-gated), and never disguised as an edit.
+      acl: { permissions: { WriteOff: { create: 'yes', read: 'all', edit: 'yes', delete: 'no', stream: 'all' } } },
     },
   };
 }

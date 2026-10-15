@@ -31,6 +31,22 @@ export function resolveDay(
   return value;
 }
 
+/**
+ * A stored date attribute as its `YYYY-MM-DD` day.
+ *
+ * The Entity Engine may hand a `date` field back as an ISO instant (`2026-10-15T00:00:00.000Z`) when
+ * the record was written through a path that coerced it to a `Date`. A commercial date is a calendar
+ * day, so both forms are accepted and the UTC day is taken — the same rule Projects applies with
+ * `dayValue` (`apps/api/src/projects/project-domain.ts`).
+ */
+export function storedDay(value: unknown): string | undefined {
+  if (value instanceof Date) return utcDay(value);
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed === "") return undefined;
+  return trimmed.slice(0, 10);
+}
+
 export function nowIso(): string {
   return new Date().toISOString();
 }

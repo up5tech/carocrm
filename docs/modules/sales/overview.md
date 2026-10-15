@@ -16,7 +16,7 @@ recurring subscriptions and purchasing/inventory.
 | Domain-command prefix | `/api/v1/Sales` |
 | Load order | 320 (after the kernel and Projects) |
 | Version | 1.0.0 |
-| Implemented phases | 19-S.0 – 19-S.10 (`sales-module.ts` → `implementedPhases`; 19-S.11 – 19-S.20 are not claimed) |
+| Implemented phases | 19-S.0 – 19-S.11 (`sales-module.ts` → `implementedPhases`; 19-S.12 – 19-S.20 are not claimed) |
 
 ## 2. Module boundary — who owns what
 
@@ -40,8 +40,8 @@ Later tiers must not contradict Tier-1 invariants.
 
 | Tier | Contents | Status |
 |---|---|---|
-| **Tier 1 — Commercial foundation** | Products, price selection, tax/total engine, quotes, sales orders, invoices, basic payments/allocations, ACL, audit, PDF/email, API | **Partially delivered:** catalog, pricing, tax and the shared money/document primitives are done (19-S.0 – 19-S.5). Quotes/orders/invoices/payments are not. |
-| **Tier 2 — Lifecycle completeness** | Credit notes, write-offs, delivery orders, returns, advanced price books, multi-currency documents, payment terms, issuance locking | Not started (19-S.11 – 19-S.12) |
+| **Tier 1 — Commercial foundation** | Products, price selection, tax/total engine, quotes, sales orders, invoices, basic payments/allocations, ACL, audit, PDF/email, API | **Delivered** (19-S.0 – 19-S.10), with PDF *attachments* on a sent document still open (the block model and renderer exist). |
+| **Tier 2 — Lifecycle completeness** | Credit notes, write-offs, delivery orders, returns, advanced price books, multi-currency documents, payment terms, issuance locking | **Credit notes and write-offs done** (19-S.11: allocation, reversal, request/approve, render); payment terms, issuance locking and multi-currency foundations done earlier; delivery/return orders remain (19-S.12). |
 | **Tier 3 — Procurement and inventory** | Suppliers, purchase orders, receipts, supplier bills/credits, warehouses, stock ledger, transfers, reservations, batches/serials | Not started (19-S.13 – 19-S.15); the `Supplier` and `SupplierProductPrice` *master data* already exists |
 | **Tier 4 — Recurring and advanced** | Subscriptions, recurring invoice jobs, payment requests, payment-to-payment allocations, advanced reporting, e-invoicing adapters | Not started (19-S.16 – 19-S.19) |
 

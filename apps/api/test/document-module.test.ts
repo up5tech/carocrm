@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { authHeader, bootApi, createTestRole, createTestUser, purgeEntityEvents, shutdownApi, type ApiContext } from './support/boot-api.js';
+import { type ApiContext,authHeader, bootApi, createTestRole, createTestUser, purgeEntityEvents, shutdownApi } from './support/boot-api.js';
 
 /**
  * Kernel `document` module — `DocumentTemplate` records, the default-template rule and render preview.
@@ -92,7 +92,7 @@ describe('document templates', () => {
     expect(result.status, JSON.stringify(result.body)).toBe(201);
     const template = result.body;
     expect(template['code']).toMatch(/^agentTest/);
-    expect(template['entityType']).toBe('Quote');
+    expect(template['targetEntity']).toBe('Quote');
     expect(template['subject']).toBe('Quote {{number}}');
     expect(template['body']).toBe('Hello {{name}}');
     // Defaults from the CreateDocumentTemplateSchema, not from the caller.
@@ -186,8 +186,9 @@ describe('render preview', () => {
     });
     expect(result.status).toBe(200);
     expect(result.body['body']).toBe('Dear &lt;b&gt;Acme&lt;/b&gt;, ref {{missing}}');
-    // A subject nobody can answer is dropped rather than sent as "Quote {{missing}}", and reported.
-    expect(result.body['subject']).toBe('');
+    // The unresolved placeholder is dropped from the subject (never sent as "Quote {{missing}}")
+    // and reported; the static part of the line stays. Same rule as the package's own subject test.
+    expect(result.body['subject']).toBe('Quote');
     const warnings = result.body['warnings'] as string[];
     expect(warnings.some((warning) => warning.includes('{{missing}}'))).toBe(true);
     expect(warnings.some((warning) => warning.includes('subject line'))).toBe(true);

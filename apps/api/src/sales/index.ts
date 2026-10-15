@@ -5,7 +5,10 @@ import { SalesDocumentService } from "./document/document.service.js";
 import { SalesNumberingService } from "./document/numbering.service.js";
 import { SalesQuoteSendService } from "./document/quote-send.service.js";
 import { AllocationService } from "./payments/allocation.service.js";
+import { SalesBalanceService } from "./payments/balance.service.js";
+import { CreditNoteService } from "./payments/credit-note.service.js";
 import { PaymentService } from "./payments/payment.service.js";
+import { WriteOffService } from "./payments/write-off.service.js";
 import { BulkPriceService } from "./pricing/bulk-price.service.js";
 import { PriceResolutionService } from "./pricing/price-resolution.service.js";
 import { SalesController } from "./sales.controller.js";
@@ -38,6 +41,9 @@ export const SALES_PROVIDERS: Provider[] = [
   SalesQuoteSendService,
   PaymentService,
   AllocationService,
+  SalesBalanceService,
+  CreditNoteService,
+  WriteOffService,
   PriceResolutionService,
   BulkPriceService,
   SalesTaxService,
@@ -45,6 +51,11 @@ export const SALES_PROVIDERS: Provider[] = [
 ];
 
 export { SalesCatalogGuardService } from "./catalog/sales-guard.service.js";
+export {
+  creditNoteBlocks,
+  creditNoteTemplateData,
+  creditNoteText,
+} from "./document/credit-note-document.js";
 export {
   DOCUMENT_DESCRIPTORS,
   documentDescriptor,
@@ -77,11 +88,16 @@ export {
 } from "./document/snapshot.js";
 export { AllocationService } from "./payments/allocation.service.js";
 export {
+  assertCreditAllocatable,
+  assertWriteOffAmount,
   documentOutstanding,
   invoicePaymentStatus,
   paymentBalance,
 } from "./payments/allocation-math.js";
+export { SalesBalanceService } from "./payments/balance.service.js";
+export { CreditNoteService } from "./payments/credit-note.service.js";
 export { PaymentService } from "./payments/payment.service.js";
+export { WriteOffService } from "./payments/write-off.service.js";
 export { BulkPriceService } from "./pricing/bulk-price.service.js";
 export { PriceResolutionService } from "./pricing/price-resolution.service.js";
 export { SalesController } from "./sales.controller.js";

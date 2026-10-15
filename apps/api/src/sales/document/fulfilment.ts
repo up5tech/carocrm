@@ -69,11 +69,11 @@ export function fulfilmentSummary(
 
     if (compare(moved, ordered) > 0) {
       throw new ValidationError(
-        `Line ${String(index + 1)} has moved ${format(moved)} against an ordered quantity of ${line.orderedQuantity}.`,
+        `Line ${String(index + 1)} has moved ${format(moved, moved.scale)} against an ordered quantity of ${line.orderedQuantity}.`,
         {
           line: index + 1,
           ordered: line.orderedQuantity,
-          moved: format(moved),
+          moved: format(moved, moved.scale),
         },
       );
     }
@@ -81,7 +81,7 @@ export function fulfilmentSummary(
     summaries.push({
       index,
       ordered: line.orderedQuantity,
-      moved: format(moved),
+      moved: format(moved, moved.scale),
       remaining: remainingQuantity(line.orderedQuantity, line.movedQuantities),
     });
   }

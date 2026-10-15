@@ -10,7 +10,7 @@ import {
 import { DatabaseService } from "../../database/database.service.js";
 import { EntityCrudService } from "../../entity/entity.service.js";
 import { currentTx, runInTransaction } from "../../entity/tx-context.js";
-import { resolveDay } from "../clock.js";
+import { resolveDay, storedDay } from "../clock.js";
 import type { ExchangeRateInput } from "../money/currency.js";
 import { normalizeCurrencyCode } from "../money/currency.js";
 import {
@@ -382,7 +382,7 @@ export class SalesDocumentService {
     );
     const expired: string[] = [];
     for (const quote of candidates) {
-      const validUntil = text(quote.data["validUntil"]);
+      const validUntil = storedDay(quote.data["validUntil"]);
       if (validUntil === undefined || validUntil >= day) continue;
       await this.transition("quote", quote.id, "expire", {
         reason: `Validity ended ${validUntil}.`,
@@ -472,7 +472,7 @@ export class SalesDocumentService {
     for (const invoice of candidates) {
       const paymentStatus = text(invoice.data["paymentStatus"]) ?? "unpaid";
       if (paymentStatus === "overdue" || paymentStatus === "paid") continue;
-      const dueDate = text(invoice.data["dueDate"]);
+      const dueDate = storedDay(invoice.data["dueDate"]);
       if (!isOverdue(dueDate, day)) continue;
       await runAsSalesInternal(() =>
         runInTransaction(this.database.db, async () => {
@@ -508,7 +508,7 @@ export class SalesDocumentService {
     const terms = await this.paymentTermsFor(text(data["paymentTermId"]));
     if (terms === null) return data;
     if (!recompute && text(data[field]) !== undefined) return data;
-    const documentDate = text(data[descriptor.dateField]);
+    const documentDate = storedDay(data[descriptor.dateField]);
     if (documentDate === undefined) return data;
     return { ...data, [field]: dueDateFor(documentDate, terms) };
   }
@@ -819,6 +819,9 @@ export class SalesDocumentService {
       const value = row.data[field];
       if (value !== undefined && value !== null) header[field] = value;
     }
+    if (conversion.linkToSource !== undefined) {
+      header[conversion.linkToSource.field] = row.id;
+    }
 
     return await this.create({
       kind: conversion.toKind,
@@ -899,6 +902,11 @@ export class SalesDocumentService {
       );
       await this.entities.update(descriptor.entity, row.id, {
         ...totalsPatch(totals, items.length, settings),
+        // A freshly issued credit note has its whole value unallocated; `SalesBalanceService` owns
+        // this balance from here on (§4.9, 19-S.11).
+        ...(descriptor.kind === "creditNote"
+          ? { unallocatedAmount: totals.grossTotal }
+          : {}),
         number: allocation.formatted,
         status: transition.to,
         issuedAt,
@@ -1061,7 +1069,7 @@ export class SalesDocumentService {
     const currency = normalizeCurrencyCode(
       text(data["currency"]) ?? settings.currency.defaultCurrency,
     );
-    const date = resolveDay(text(data[descriptor.dateField]));
+    const date = resolveDay(storedDay(data[descriptor.dateField]));
     const shippingAmount = text(data["shippingAmount"]);
     const shipping =
       shippingAmount === undefined || isZeroString(shippingAmount)
@@ -1186,7 +1194,11 @@ export class SalesDocumentService {
         seriesCode: descriptor.seriesCode,
         states: descriptor.states,
       },
-      document: { ...row.data, id: row.id, status: currentState },
+      document: dateOnlyDocument({
+        ...row.data,
+        id: row.id,
+        status: currentState,
+      }),
       items,
       totals,
       lock: { ...state, locked: isLocked(state, descriptor.lockPolicy) },
@@ -1199,6 +1211,38 @@ export class SalesDocumentService {
         .map((conversion) => conversion.action),
     };
   }
+}
+
+/**
+ * Every `date` attribute a commercial document carries. A view exposes them as `YYYY-MM-DD` again,
+ * even though the record store keeps the engine's coerced instant — a caller receives the calendar
+ * day it wrote, not `2026-10-15T00:00:00.000Z`.
+ */
+const DOCUMENT_DATE_FIELDS: readonly string[] = [
+  "quoteDate",
+  "orderDate",
+  "invoiceDate",
+  "creditDate",
+  "deliveryDate",
+  "returnDate",
+  "validUntil",
+  "requiredDeliveryDate",
+  "dueDate",
+  "servicePeriodStart",
+  "servicePeriodEnd",
+];
+
+function dateOnlyDocument(
+  data: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...data };
+  for (const field of DOCUMENT_DATE_FIELDS) {
+    const day = storedDay(out[field]);
+    if (day !== undefined) out[field] = day;
+  }
+  // A draft's number is `null` in the view, never absent — callers test it directly.
+  if (out["number"] === undefined) out["number"] = null;
+  return out;
 }
 
 function requireReason(reason: string | undefined, what: string): void {
@@ -1299,6 +1343,7 @@ function toStoredItem(row: SalesRow): StoredItem {
   return {
     id: row.id,
     position: numberOr(row.data["position"], 0),
+    sourceItemId: text(row.data["sourceItemId"]) ?? null,
     productId: text(row.data["productId"]) ?? null,
     name: text(row.data["name"]) ?? null,
     sku: text(row.data["sku"]) ?? null,

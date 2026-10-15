@@ -1,14 +1,22 @@
 import { blocksToText, type DocumentBlock } from "@carocrm/document";
 
-import type { LineItemTotals } from "./types.js";
+import {
+  type DocumentRenderLine,
+  documentRenderLine,
+  type DocumentRenderTotals,
+  LINE_COLUMNS,
+  lineColumnsRow,
+  pushFact,
+  totalsRows,
+} from "./render-blocks.js";
 
 /**
  * Phase 19-S.7 — a quote as a document.
  *
  * The kernel's `document` module renders a template and lays a block model out; it deliberately knows
  * nothing about quotes (PLAN_Phase_19_Sales.md §4.4 keeps the document engine type-agnostic). So the
- * block model of a *quote* is this module's job, and it is built from the same facts the engine
- * already froze: the document's own totals.
+ * block model of a *quote* is this module's job, built from the shared block vocabulary in
+ * `render-blocks.ts` and from the same facts the engine already froze: the document's own totals.
  *
  * Two rules this file exists to keep:
  *
@@ -21,31 +29,10 @@ import type { LineItemTotals } from "./types.js";
  */
 
 /** One rendered line: the money facts of `LineItemTotals`, flattened for a template or a table. */
-export interface QuoteRenderLine {
-  readonly position: number;
-  readonly name: string;
-  readonly sku: string;
-  readonly unit: string;
-  readonly quantity: string;
-  readonly unitPrice: string;
-  readonly discountAmount: string;
-  readonly taxRatePercent: string;
-  readonly netAmount: string;
-  readonly taxAmount: string;
-  readonly grossAmount: string;
-}
+export type QuoteRenderLine = DocumentRenderLine;
 
 /** The document-level totals, already rounded by the totals engine at the document's own stage. */
-export interface QuoteRenderTotals {
-  readonly subtotal: string;
-  readonly discountTotal: string;
-  readonly shippingAmount: string;
-  readonly shippingTaxAmount: string;
-  readonly taxTotal: string;
-  readonly netTotal: string;
-  readonly grossTotal: string;
-  readonly currency: string;
-}
+export type QuoteRenderTotals = DocumentRenderTotals;
 
 export interface QuoteRenderInput {
   /** The official number; `null` while the quote is still a draft and has not been issued. */
@@ -63,34 +50,7 @@ export interface QuoteRenderInput {
 }
 
 /** The line facts a render needs, taken straight from the engine's calculated lines. */
-export function quoteRenderLine(line: LineItemTotals): QuoteRenderLine {
-  return {
-    position: line.position,
-    name: line.name ?? "",
-    sku: line.sku ?? "",
-    unit: line.unit ?? "",
-    quantity: line.quantity,
-    unitPrice: line.unitPrice,
-    discountAmount: line.discountAmount,
-    taxRatePercent: line.tax?.taxRatePercent ?? "0",
-    netAmount: line.netAmount,
-    taxAmount: line.taxAmount,
-    grossAmount: line.grossAmount,
-  };
-}
-
-const LINE_COLUMNS: readonly string[] = [
-  "#",
-  "Item",
-  "SKU",
-  "Qty",
-  "Unit price",
-  "Discount",
-  "Tax %",
-  "Net",
-  "Tax",
-  "Gross",
-];
+export const quoteRenderLine = documentRenderLine;
 
 /**
  * The quote as a block model: an identity heading, the party facts, the priced lines, the totals.
@@ -123,18 +83,7 @@ export function quoteBlocks(input: QuoteRenderInput): DocumentBlock[] {
   blocks.push({
     kind: "table",
     columns: LINE_COLUMNS,
-    rows: input.lines.map((line) => [
-      String(line.position),
-      line.name,
-      line.sku,
-      line.quantity,
-      line.unitPrice,
-      line.discountAmount,
-      line.taxRatePercent,
-      line.netAmount,
-      line.taxAmount,
-      line.grossAmount,
-    ]),
+    rows: input.lines.map(lineColumnsRow),
   });
 
   blocks.push({ kind: "spacer" });
@@ -193,28 +142,4 @@ export function quoteTitle(input: QuoteRenderInput): string {
 /** The default subject line, used when the template does not provide one. */
 export function quoteSubject(input: QuoteRenderInput): string {
   return input.number === null ? "Quote" : `Quote ${input.number}`;
-}
-
-function totalsRows(
-  totals: QuoteRenderTotals,
-): { key: string; value: string }[] {
-  return [
-    { key: "Subtotal", value: totals.subtotal },
-    { key: "Discount", value: totals.discountTotal },
-    { key: "Shipping", value: totals.shippingAmount },
-    { key: "Tax", value: totals.taxTotal },
-    { key: "Net total", value: totals.netTotal },
-    { key: `Gross total (${totals.currency})`, value: totals.grossTotal },
-  ];
-}
-
-function pushFact(
-  rows: { key: string; value: string }[],
-  key: string,
-  value: string | null,
-): void {
-  if (value === null) return;
-  const trimmed = value.trim();
-  if (trimmed === "") return;
-  rows.push({ key, value: trimmed });
 }

@@ -38,6 +38,8 @@ import {
   CreateDocumentSchema,
   CreatePaymentRequestSchema,
   CreatePaymentSchema,
+  CreditNoteAllocateSchema,
+  CreditNoteUnallocateSchema,
   DocumentConvertSchema,
   DocumentTransitionSchema,
   DocumentUnlockSchema,
@@ -46,6 +48,7 @@ import {
   PaymentTransitionSchema,
   PreviewTotalsSchema,
   ProviderEventSchema,
+  RenderCreditNoteSchema,
   RenderQuoteSchema,
   ResolvePriceSchema,
   SalesSettingsPatchSchema,
@@ -53,9 +56,15 @@ import {
   TodaySchema,
   UpdateDocumentSchema,
   UpdatePaymentSchema,
+  WriteOffApproveSchema,
+  WriteOffCreateSchema,
+  WriteOffRejectSchema,
+  WriteOffReverseSchema,
 } from "./dto/sales-shapes.js";
 import { AllocationService } from "./payments/allocation.service.js";
+import { CreditNoteService } from "./payments/credit-note.service.js";
 import { PaymentService } from "./payments/payment.service.js";
+import { WriteOffService } from "./payments/write-off.service.js";
 import { BulkPriceService } from "./pricing/bulk-price.service.js";
 import { PriceResolutionService } from "./pricing/price-resolution.service.js";
 import { runAsSalesInternal } from "./sales-internal.js";
@@ -92,6 +101,9 @@ export class SalesController {
     private readonly quoteSend: SalesQuoteSendService,
     @Inject(PaymentService) private readonly payments: PaymentService,
     @Inject(AllocationService) private readonly allocations: AllocationService,
+    @Inject(CreditNoteService)
+    private readonly creditNotes: CreditNoteService,
+    @Inject(WriteOffService) private readonly writeOffs: WriteOffService,
     @Inject(PriceResolutionService)
     private readonly prices: PriceResolutionService,
     @Inject(BulkPriceService) private readonly bulkPrices: BulkPriceService,
@@ -401,6 +413,109 @@ export class SalesController {
         accountId ?? null,
       ),
     };
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Credit notes and write-offs (19-S.11)
+  //
+  // The two supported ways a receivable is reduced without a payment. A credit note is allocated to
+  // invoices through explicit rows and locked recomputes, exactly like a payment — but its
+  // corrections are *reversals*: the allocation row is kept and marked, never deleted. A write-off is
+  // requested with a reason, approved (or rejected) by an administrator — only approval changes a
+  // balance — and reversed, if it must be undone, as a compensating state change with its own audit
+  // trail (§4.9).
+  // -------------------------------------------------------------------------------------------
+
+  /** Allocate part of an issued credit note to an issued invoice. Over-allocation is refused. */
+  @HttpCode(201)
+  @Post("creditNote/:id/allocate")
+  async allocateCreditNote(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(CreditNoteAllocateSchema, body);
+    return await this.creditNotes.allocate({
+      creditNoteId: id,
+      invoiceId: input.invoiceId,
+      amount: input.amount,
+      audit: this.audit(input.correlationId),
+    });
+  }
+
+  /** Reverse a credit-note allocation. The row is kept and marked; both balances recompute (§4.9). */
+  @HttpCode(200)
+  @Delete("creditNote/allocation/:id")
+  async unallocateCreditNote(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(CreditNoteUnallocateSchema, body);
+    return await this.creditNotes.unallocate(id, {
+      ...this.audit(input.correlationId),
+      reason: input.reason,
+    });
+  }
+
+  /** The issued invoices a credit note may be allocated to, with what each still owes. */
+  @Get("creditNote/allocatableInvoices")
+  async creditNoteAllocatableInvoices(
+    @Query("creditNoteId") creditNoteId?: string,
+    @Query("accountId") accountId?: string,
+  ) {
+    return {
+      list: await this.creditNotes.allocatableInvoices(
+        creditNoteId ?? null,
+        accountId ?? null,
+      ),
+    };
+  }
+
+  /** Render a credit note through the kernel `document` module — a named template, or the built-in layout. */
+  @HttpCode(200)
+  @Post("creditNote/:id/render")
+  async renderCreditNote(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(RenderCreditNoteSchema, body);
+    return await this.creditNotes.render(id, input.templateCode);
+  }
+
+  /** Request a write-off against an issued invoice. A request is `pending` and changes no balance. */
+  @HttpCode(201)
+  @Post("write-off")
+  async requestWriteOff(@Body() body: unknown) {
+    const input = parse(WriteOffCreateSchema, body);
+    return await this.writeOffs.request({
+      invoiceId: input.invoiceId,
+      amount: input.amount,
+      reason: input.reason,
+      audit: this.audit(input.correlationId),
+    });
+  }
+
+  /** Approve a pending write-off; administrator-only, and re-checked against the live balance. */
+  @HttpCode(200)
+  @Post("write-off/:id/approve")
+  async approveWriteOff(@Param("id") id: string, @Body() body: unknown) {
+    this.requireAdmin("approving write-offs");
+    const input = parse(WriteOffApproveSchema, body);
+    return await this.writeOffs.approve(id, this.audit(input.correlationId));
+  }
+
+  /** Reject a pending write-off. The request stays on record; the invoice is untouched. */
+  @HttpCode(200)
+  @Post("write-off/:id/reject")
+  async rejectWriteOff(@Param("id") id: string, @Body() body: unknown) {
+    this.requireAdmin("rejecting write-offs");
+    const input = parse(WriteOffRejectSchema, body);
+    return await this.writeOffs.reject(id, {
+      ...this.audit(input.correlationId),
+      reason: input.reason,
+    });
+  }
+
+  /** Reverse an approved write-off, restoring the invoice; the record keeps both entries (§4.9). */
+  @HttpCode(200)
+  @Post("write-off/:id/reverse")
+  async reverseWriteOff(@Param("id") id: string, @Body() body: unknown) {
+    this.requireAdmin("reversing write-offs");
+    const input = parse(WriteOffReverseSchema, body);
+    return await this.writeOffs.reverse(id, {
+      ...this.audit(input.correlationId),
+      reason: input.reason,
+    });
   }
 
   /** A provider-neutral request for a customer to pay. No gateway call happens here. */

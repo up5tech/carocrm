@@ -11,21 +11,21 @@
  * produces what gets sent.
  */
 
+export { blocksToText, type DocumentBlock,tableWidths } from './layout.js';
 export {
+  createPdfkitRenderer,
+  type DocumentPdfOptions,
+  type DocumentPdfRenderer,
+  pdfAvailable,
+  type PdfAvailableResult,
+} from './pdf.js';
+export {
+  escapeHtml,
+  renderTemplate,
   TEMPLATE_MAX_EACH_DEPTH,
   TEMPLATE_MAX_EACH_ITEMS,
   TEMPLATE_MAX_LENGTH,
-  escapeHtml,
-  renderTemplate,
   type TemplateData,
   type TemplateRenderOptions,
   type TemplateRenderResult,
 } from './template.js';
-export { blocksToText, tableWidths, type DocumentBlock } from './layout.js';
-export {
-  createPdfkitRenderer,
-  pdfAvailable,
-  type DocumentPdfOptions,
-  type DocumentPdfRenderer,
-  type PdfAvailableResult,
-} from './pdf.js';

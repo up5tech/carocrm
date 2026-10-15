@@ -40,8 +40,10 @@ interface AllocationResult {
   document: { amountDue: string; paymentStatus: string };
 }
 
+let invoiceSeq = 0;
 async function issueInvoice(amount: string): Promise<string> {
-  const product = await fix.createProduct({ sku: `AGENT-${fix.runId}-P${amount.replace('.', '')}`, unitPrice: amount });
+  invoiceSeq += 1;
+  const product = await fix.createProduct({ sku: `AGENT-${fix.runId}-P${invoiceSeq}`, unitPrice: amount });
   const created = await fix.call('POST', '/api/v1/Sales/document', {
     kind: 'invoice',
     data: { name: `AGENT_TEST_${fix.runId} Invoice`, currency: 'USD', invoiceDate: '2026-10-15' },
@@ -250,7 +252,8 @@ describe('provider events (19-S.10)', () => {
       invoiceId: null,
     });
     // `accountId` is required by the schema, so a request without one is refused — not silently created.
-    expect(request.status).toBe(422);
+    // A body that fails the request schema is the kernel's `INVALID_QUERY` (400), not a domain refusal.
+    expect(request.status).toBe(400);
 
     const eventId = `evt-${fix.runId}-1`;
     const first = await fix.call('POST', '/api/v1/Sales/providerEvent', {

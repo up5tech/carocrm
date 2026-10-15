@@ -231,9 +231,10 @@ export const SALES_MODULE = {
    *
    * `19-S.6` is the shared document infrastructure; `19-S.7` is quotes, including rendering a quote
    * through the kernel `document` module and emailing it through the mail module; `19-S.8`/`19-S.9` are
-   * sales orders and invoices; `19-S.10` is payments and allocation. `19-S.11` and `19-S.12` have their
-   * descriptors and the generic engine but not their own remaining work (credit allocation and
-   * write-offs; stock movement for delivery and return).
+   * sales orders and invoices; `19-S.10` is payments and allocation; `19-S.11` is credit notes and
+   * write-offs (allocation, soft reversal, request/approve/reject and the credit-note render path).
+   * `19-S.12` has its descriptors and the generic engine but not its own remaining work (stock
+   * movement for delivery and return).
    *
    * A PDF *attachment* on a sent document is still not produced: the block model and the optional
    * `pdfkit` adapter exist (`@carocrm/document`), but wiring a rendered PDF into an outbound message
@@ -252,6 +253,7 @@ export const SALES_MODULE = {
     "19-S.8",
     "19-S.9",
     "19-S.10",
+    "19-S.11",
   ],
 } as const;
 

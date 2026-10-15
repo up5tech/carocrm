@@ -145,7 +145,10 @@ export function isLocked(
   policy: DocumentLockPolicy = DEFAULT_LOCK_POLICY,
 ): boolean {
   if (state.lockedAt !== null) return true;
-  return policy.lockOnIssue && isIssued(state);
+  if (!policy.lockOnIssue || !isIssued(state)) return false;
+  // A privileged unlock is a *recorded exception* to the issue-time lock, not a new state: the
+  // document stays `issued`, and `unlockedAt`/`unlockedBy` name whose authority reopened it (§4.7).
+  return state.unlockedAt === null;
 }
 
 /**

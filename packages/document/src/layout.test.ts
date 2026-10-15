@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { blocksToText, tableWidths, type DocumentBlock } from './layout.js';
+import { blocksToText, type DocumentBlock,tableWidths } from './layout.js';
 
 /**
  * The block model's text rendering.

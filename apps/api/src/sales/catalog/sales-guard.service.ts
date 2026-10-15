@@ -7,6 +7,7 @@ import type { OnApplicationBootstrap } from "@nestjs/common";
 import { Inject, Injectable } from "@nestjs/common";
 
 import { HookRegistry } from "../../hooks/hook.registry.js";
+import { storedDay } from "../clock.js";
 import type {
   PriceRuleAction,
   PriceRuleCriteria,
@@ -74,8 +75,8 @@ export class SalesCatalogGuardService implements OnApplicationBootstrap {
       case "PriceBook":
         validatePriceBookWrite({
           currency: text(data["currency"]),
-          effectiveFrom: text(data["effectiveFrom"]) ?? null,
-          effectiveTo: text(data["effectiveTo"]) ?? null,
+          effectiveFrom: storedDay(data["effectiveFrom"]) ?? null,
+          effectiveTo: storedDay(data["effectiveTo"]) ?? null,
           priority: numberOrUndefined(data["priority"]),
         });
         break;
@@ -174,8 +175,8 @@ export class SalesCatalogGuardService implements OnApplicationBootstrap {
       unitPrice: text(data["unitPrice"]),
       minQuantity: text(data["minQuantity"]),
       currency: text(data["currency"]),
-      effectiveFrom: text(data["effectiveFrom"]) ?? null,
-      effectiveTo: text(data["effectiveTo"]) ?? null,
+      effectiveFrom: storedDay(data["effectiveFrom"]) ?? null,
+      effectiveTo: storedDay(data["effectiveTo"]) ?? null,
     });
     const priceBookId = text(data["priceBookId"]);
     const entryCurrency = text(data["currency"]);
@@ -202,13 +203,13 @@ export class SalesCatalogGuardService implements OnApplicationBootstrap {
   ): Promise<void> {
     const issues = taxRateIssues({
       ratePercent: text(data["ratePercent"]) ?? "",
-      effectiveFrom: text(data["effectiveFrom"]) ?? null,
-      effectiveTo: text(data["effectiveTo"]) ?? null,
+      effectiveFrom: storedDay(data["effectiveFrom"]) ?? null,
+      effectiveTo: storedDay(data["effectiveTo"]) ?? null,
     });
     if (issues.length > 0)
       throw new ValidationError("Invalid tax rate.", { issues });
     const taxCodeId = text(data["taxCodeId"]);
-    const effectiveFrom = text(data["effectiveFrom"]) ?? null;
+    const effectiveFrom = storedDay(data["effectiveFrom"]);
     if (taxCodeId === undefined) return;
     const selfId =
       context.operation === "update" ? context.record?.id : undefined;
@@ -218,7 +219,10 @@ export class SalesCatalogGuardService implements OnApplicationBootstrap {
       (row) =>
         row.id !== selfId &&
         (text(row.data["jurisdiction"]) ?? null) === jurisdiction &&
-        (text(row.data["effectiveFrom"]) ?? null) === effectiveFrom &&
+        // Stored and incoming dates are both normalized to their UTC day: the engine stores a `date`
+        // field as an instant, and a raw string comparison would never match.
+        (storedDay(row.data["effectiveFrom"]) ?? null) ===
+          (storedDay(effectiveFrom) ?? null) &&
         row.data["active"] !== false,
     );
     if (conflict !== undefined) {
@@ -282,8 +286,8 @@ function validatePriceRuleWrite(data: Record<string, unknown>): void {
   if (issues.length > 0)
     throw new ValidationError("Invalid price rule.", { issues });
   validateDateWindow({
-    effectiveFrom: text(data["effectiveFrom"]) ?? null,
-    effectiveTo: text(data["effectiveTo"]) ?? null,
+    effectiveFrom: storedDay(data["effectiveFrom"]) ?? null,
+    effectiveTo: storedDay(data["effectiveTo"]) ?? null,
   });
 }
 
@@ -296,8 +300,8 @@ function validateTaxRuleWrite(data: Record<string, unknown>): void {
   if (issues.length > 0)
     throw new ValidationError("Invalid tax rule.", { issues });
   validateDateWindow({
-    effectiveFrom: text(data["effectiveFrom"]) ?? null,
-    effectiveTo: text(data["effectiveTo"]) ?? null,
+    effectiveFrom: storedDay(data["effectiveFrom"]) ?? null,
+    effectiveTo: storedDay(data["effectiveTo"]) ?? null,
   });
   if (numberOrUndefined(data["priority"]) === undefined) data["priority"] = 10;
 }

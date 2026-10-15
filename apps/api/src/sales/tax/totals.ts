@@ -194,11 +194,13 @@ export function computeTotals(input: TotalsInput): TotalsResult {
       ? zero()
       : requireAmount(input.shipping.amount, "shipping.amount");
   const shippingRate = input.shipping?.tax ?? null;
-  const shippingResolution = resolveShippingTax(
-    shippingRate,
-    input.missingTaxPolicy,
-    warnings,
-  );
+  // No shipping charge on the document: there is nothing to tax, so the missing-tax policy does not
+  // apply and no warning is raised. The policy governs a shipping amount that *has no resolution*,
+  // which is the case `taxes shipping with its own tax code` covers.
+  const shippingResolution =
+    input.shipping === undefined
+      ? zeroResolution()
+      : resolveShippingTax(shippingRate, input.missingTaxPolicy, warnings);
   const shippingScale = currencyScale(currency);
   const shippingNetExact =
     input.shipping === undefined
@@ -548,7 +550,7 @@ export function distributeDocumentDiscount(
   const targetUnits = rescale(totalDiscount, scale, "half-up").units;
   if (targetUnits < 0n) {
     throw new ValidationError("A document discount must not be negative.", {
-      amount: format(totalDiscount),
+      amount: format(totalDiscount, totalDiscount.scale),
     });
   }
   const baseUnits = nets.map((net) => rescale(net, scale, "half-up").units);
@@ -561,7 +563,7 @@ export function distributeDocumentDiscount(
   if (targetUnits > baseTotal) {
     throw new ValidationError(
       "The document discount exceeds the document amount.",
-      { amount: format(totalDiscount) },
+      { amount: format(totalDiscount, totalDiscount.scale) },
     );
   }
   let distributed = 0n;

@@ -32,7 +32,7 @@ Reports the module descriptor plus facts read from the running platform — neve
     "minPlatformVersion": "1.0.0",
     "loadOrder": 320,
     "apiPrefix": "/api/v1/Sales",
-    "implementedPhases": ["19-S.0", "19-S.1", "19-S.2", "19-S.3", "19-S.4", "19-S.5", "19-S.6", "19-S.7", "19-S.8", "19-S.9", "19-S.10"]
+    "implementedPhases": ["19-S.0", "19-S.1", "19-S.2", "19-S.3", "19-S.4", "19-S.5", "19-S.6", "19-S.7", "19-S.8", "19-S.9", "19-S.10", "19-S.11"]
   },
   "ok": true,
   "dependencies": [            // entity-engine, crm-core-records, acl, hooks, audit-stream, jobs
@@ -304,5 +304,22 @@ not repeated in this file: `POST /api/v1/Sales/document`, `GET|PATCH|DELETE
 [README.md](README.md#document-engine-19-s6--19-s12-in-progress), and every request body is the Zod
 schema of the same name in `apps/api/src/sales/dto/sales-shapes.ts`.
 
-Credit notes (beyond their descriptor), delivery/return stock effects, purchases, inventory and
-subscriptions have no working routes yet — those arrive with 19-S.11 onward.
+The **credit-note and write-off commands** (19-S.11) follow the same pattern:
+
+```text
+POST   /api/v1/Sales/creditNote/:id/allocate        apply part of an issued credit note to an issued invoice
+DELETE /api/v1/Sales/creditNote/allocation/:id      reverse an allocation (the row is kept and marked, §4.9)
+GET    /api/v1/Sales/creditNote/allocatableInvoices ?creditNoteId= &accountId= — issued invoices with their outstanding
+POST   /api/v1/Sales/creditNote/:id/render          render through a DocumentTemplate (or the built-in block layout)
+POST   /api/v1/Sales/write-off                      request a write-off (status `pending`, no balance changes)
+POST   /api/v1/Sales/write-off/:id/approve          administrator only; re-checks the amount against the live balance
+POST   /api/v1/Sales/write-off/:id/reject           administrator only; the request stays on record
+POST   /api/v1/Sales/write-off/:id/reverse          administrator only; reason required, restores the receivable
+```
+
+`DocumentTemplate` templates for a credit note are ordinary records; the template's target entity is
+stored in `targetEntity` (the kernel reserves the attribute name `entityType`), while the create/query
+API keeps accepting `entityType` as the parameter name.
+
+Delivery/return stock effects, purchases, inventory and subscriptions have no working routes yet —
+those arrive with 19-S.12 onward.

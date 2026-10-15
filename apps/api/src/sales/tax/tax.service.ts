@@ -2,7 +2,7 @@ import { NotFoundError, ValidationError } from "@carocrm/core/errors/index.js";
 import { Inject, Injectable } from "@nestjs/common";
 
 import { AclApiService } from "../../acl/acl-api.service.js";
-import { resolveDay } from "../clock.js";
+import { resolveDay, storedDay } from "../clock.js";
 import type { LineItemInput, TaxLineResolution } from "../document/types.js";
 import type { ExchangeRateInput } from "../money/currency.js";
 import { normalizeCurrencyCode } from "../money/currency.js";
@@ -387,8 +387,8 @@ export class SalesTaxService {
         accountIds: stringArray(row.data["accountIds"]),
         jurisdictions: listOrUndefined(row.data["jurisdiction"]),
       },
-      effectiveFrom: text(row.data["effectiveFrom"]) ?? null,
-      effectiveTo: text(row.data["effectiveTo"]) ?? null,
+      effectiveFrom: storedDay(row.data["effectiveFrom"]) ?? null,
+      effectiveTo: storedDay(row.data["effectiveTo"]) ?? null,
     }));
   }
 }
@@ -401,8 +401,8 @@ function toRateInput(row: SalesRow): TaxRateInput {
     taxCodeId: text(row.data["taxCodeId"]) ?? null,
     ratePercent: text(row.data["ratePercent"]) ?? "0",
     jurisdiction: text(row.data["jurisdiction"]) ?? null,
-    effectiveFrom: text(row.data["effectiveFrom"]) ?? null,
-    effectiveTo: text(row.data["effectiveTo"]) ?? null,
+    effectiveFrom: storedDay(row.data["effectiveFrom"]) ?? null,
+    effectiveTo: storedDay(row.data["effectiveTo"]) ?? null,
   };
 }
 

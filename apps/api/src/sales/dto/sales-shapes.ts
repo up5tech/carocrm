@@ -182,6 +182,14 @@ export const RenderQuoteSchema = z
   })
   .strict();
 
+/** Render a credit note against a `DocumentTemplate` (or the built-in block layout). */
+export const RenderCreditNoteSchema = z
+  .object({
+    /** The `DocumentTemplate` code; the `CreditNote` default is used when omitted. */
+    templateCode: z.string().trim().min(1).max(64).optional(),
+  })
+  .strict();
+
 /** Send a quote: issue it if it is still a draft, then email it through the mail module. */
 export const SendQuoteSchema = z
   .object({
@@ -299,4 +307,66 @@ export type ProviderEventInput = z.infer<typeof ProviderEventSchema>;
 
 export type ResolvePriceInput = z.infer<typeof ResolvePriceSchema>;
 export type BulkPriceUpdateInput = z.infer<typeof BulkPriceUpdateSchema>;
+
+// ---------------------------------------------------------------------------------------------
+// Phase 19-S.11 — credit notes and write-offs
+// ---------------------------------------------------------------------------------------------
+
+/** Allocate part of a credit note (id in the path) to one issued invoice. */
+export const CreditNoteAllocateSchema = z
+  .object({
+    invoiceId: z.string().trim().min(1).max(64),
+    amount: DecimalStringSchema,
+    correlationId: z.string().trim().min(1).max(128).optional(),
+  })
+  .strict();
+
+/** Request a write-off; the reason is required and stays on the record (§4.9). */
+export const WriteOffCreateSchema = z
+  .object({
+    invoiceId: z.string().trim().min(1).max(64),
+    amount: DecimalStringSchema,
+    reason: z.string().trim().min(1).max(255),
+    correlationId: z.string().trim().min(1).max(128).optional(),
+  })
+  .strict();
+
+export const WriteOffApproveSchema = z
+  .object({
+    correlationId: z.string().trim().min(1).max(128).optional(),
+  })
+  .strict();
+
+/** A rejection note is optional; the decision itself is audited either way. */
+export const WriteOffRejectSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(255).optional(),
+    correlationId: z.string().trim().min(1).max(128).optional(),
+  })
+  .strict();
+
+/** Undoing an approved write-off is a privileged correction, so its reason is mandatory. */
+export const WriteOffReverseSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(255),
+    correlationId: z.string().trim().min(1).max(128).optional(),
+  })
+  .strict();
+
+/** Reversing a credit-note allocation records an optional reason in the audit trail. */
+export const CreditNoteUnallocateSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(255).optional(),
+    correlationId: z.string().trim().min(1).max(128).optional(),
+  })
+  .strict();
+
+export type CreditNoteAllocateInput = z.infer<typeof CreditNoteAllocateSchema>;
+export type WriteOffCreateInput = z.infer<typeof WriteOffCreateSchema>;
+export type WriteOffApproveInput = z.infer<typeof WriteOffApproveSchema>;
+export type WriteOffRejectInput = z.infer<typeof WriteOffRejectSchema>;
+export type WriteOffReverseInput = z.infer<typeof WriteOffReverseSchema>;
+export type CreditNoteUnallocateInput = z.infer<
+  typeof CreditNoteUnallocateSchema
+>;
 export type PreviewTotalsInput = z.infer<typeof PreviewTotalsSchema>;

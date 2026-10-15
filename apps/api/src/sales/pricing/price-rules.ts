@@ -113,9 +113,8 @@ export function priceRuleIssues(input: {
       // Individually invalid values are already reported above.
     }
   }
-  if (Object.values(input.criteria).every((value) => value === undefined)) {
-    issues.push("A price rule needs at least one criterion.");
-  }
+  // A rule with no criteria is *book-wide*: it applies to every product the price book resolves
+  // (PLAN_Phase_19_Sales.md §4.3 lists criteria as supported conditions, not a requirement).
   switch (input.action.type) {
     case "percentAdjustment": {
       try {

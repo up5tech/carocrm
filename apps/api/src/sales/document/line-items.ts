@@ -271,6 +271,8 @@ export function itemRecordPayloadFromStored(
 export interface StoredItem {
   readonly id: string;
   readonly position: number;
+  /** The line this one was copied from, whatever document kind that was (§4.10). */
+  readonly sourceItemId: string | null;
   readonly productId: string | null;
   readonly name: string | null;
   readonly sku: string | null;
@@ -335,7 +337,7 @@ export function totalQuantity(items: readonly StoredItem[]): string {
   let total: Decimal = zero(0);
   for (const item of orderItems(items))
     total = add(total, parseDecimal(item.quantity));
-  return format(total);
+  return format(total, total.scale);
 }
 
 /**
@@ -352,7 +354,9 @@ export function remainingQuantity(
   let remaining = parseDecimal(orderedQuantity);
   for (const moved of alreadyMoved)
     remaining = subtract(remaining, parseDecimal(moved));
-  return compare(remaining, parseDecimal("0")) <= 0 ? null : format(remaining);
+  return compare(remaining, parseDecimal("0")) <= 0
+    ? null
+    : format(remaining, remaining.scale);
 }
 
 /**

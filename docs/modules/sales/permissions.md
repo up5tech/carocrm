@@ -60,6 +60,11 @@ The same mechanism gates price-book prices: `PriceBookEntry.unitPrice` (`read: n
 | `POST …/action/expireQuotes`, `…/action/markOverdueInvoices` | administrator | `403` |
 | `POST …/action/expire-quotes`, `…/action/mark-overdue-invoices` | the shared worker capability header `x-worker-secret` (no session) | `401` |
 | `/api/v1/Sales/payment*`, `/allocation/:id` | the payment/allocation entity's own `create`/`edit`/`delete`, plus `Invoice: edit` to allocate against one | `403` |
+| `POST …/creditNote/:id/allocate`, `DELETE …/creditNote/allocation/:id` | `CreditNote: edit` **and** `Invoice: edit` (the allocation changes both records) | `403` |
+| `GET …/creditNote/allocatableInvoices` | `Invoice: read` | `403` |
+| `POST …/creditNote/:id/render` | `CreditNote: read`; plus `DocumentTemplate: read` when a template is named or the default is used | `403` |
+| `POST …/write-off` | `WriteOff: create` **and** `Invoice: edit`; the request stays `pending` | `403` |
+| `POST …/write-off/:id/approve\|reject\|reverse` | **administrator** — approval authority is not a record edit | `403 Administrator access is required for …` |
 
 A quote **send** checks every one of its gates before it issues anything, so a caller who is refused
 never leaves a `sent` quote with no email behind it. The requirement that surprises people is
@@ -90,12 +95,16 @@ price.`; without the field permission it fails with `422 This user may not enter
 `apps/api/src/sales/document/lock.ts` defines the rules the document engine applies:
 
 * `protectedFields(kind)` names the fields that become immutable once a document is issued;
-* `assertDocumentEditable(state, changedFields, policy)` refuses a change to a protected field;
+* `assertDocumentEditable(state, changedFields, policy)` refuses a change to a protected field —
+  through the record API **and** through item writes, since a line carries the money facts;
 * `assertUnlockAllowed(state, { isAdmin, canUnlock }, policy)` requires the dedicated
   **"unlock issued documents"** permission — an administrator counts, a normal editor does not — and
-  the caller must record a reason in the audit trail.
+  the caller must record a reason in the audit trail;
+* `isLocked(state, policy)` honours a privileged unlock: `unlockedAt`/`unlockedBy` are the recorded
+  exception to the issue-time lock, so an unlocked document is editable again until it is locked.
 
-No route exposes these yet, because no document type exists yet.
+`POST /api/v1/Sales/document/:kind/:id/unlock` exposes the privileged unlock (administrator plus
+reason), and the write guard applies the field rules on every record write.
 
 ## 6. Data-level safety rules the module follows
 

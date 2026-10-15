@@ -1,6 +1,5 @@
-import { NotFoundError, ValidationError } from "@carocrm/core/errors/index.js";
+import { ValidationError } from "@carocrm/core/errors/index.js";
 import { Inject, Injectable } from "@nestjs/common";
-import { sql } from "kysely";
 
 import { AclApiService } from "../../acl/acl-api.service.js";
 import { OutboxService } from "../../common/outbox.service.js";
@@ -8,21 +7,18 @@ import {
   REQUEST_SCOPE_TOKEN,
   type RequestScope,
 } from "../../common/request-scope.js";
-import { DatabaseService, type DbTx } from "../../database/database.service.js";
+import { DatabaseService } from "../../database/database.service.js";
 import { EntityCrudService } from "../../entity/entity.service.js";
 import { runInTransaction } from "../../entity/tx-context.js";
-import { resolveDay } from "../clock.js";
 import type { SalesAuditContext } from "../document/types.js";
 import { runAsSalesInternal } from "../sales-internal.js";
 import { SalesRecords, type SalesRow } from "../sales-records.js";
 import {
   assertAllocatable,
   assertSameCurrency,
-  documentOutstanding,
-  invoicePaymentStatus,
-  paymentBalance,
   type PaymentDirection,
 } from "./allocation-math.js";
+import { SalesBalanceService } from "./balance.service.js";
 
 /**
  * Phase 19-S.10 — allocation and unallocation (§4.8).
@@ -81,6 +77,7 @@ export class AllocationService {
     @Inject(OutboxService) private readonly outbox: OutboxService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(SalesBalanceService) private readonly balances: SalesBalanceService,
   ) {}
 
   /** Every allocation of a payment, newest first — the payment's history. */
@@ -124,8 +121,12 @@ export class AllocationService {
     return await runInTransaction(this.database.db, async (tx) => {
       // Lock order is fixed: payment, then document. Two concurrent commands therefore queue instead
       // of deadlocking, and both recompute inside the lock (§6.3).
-      const payment = await this.lockRow(tx, "Payment", input.paymentId);
-      const document = await this.lockRow(tx, documentEntity, input.documentId);
+      const payment = await this.balances.lockRow(tx, "Payment", input.paymentId);
+      const document = await this.balances.lockRow(
+        tx,
+        documentEntity,
+        input.documentId,
+      );
 
       const direction = directionOf(payment);
       if (direction !== "incoming") {
@@ -168,8 +169,8 @@ export class AllocationService {
           document.data["exchangeRateSnapshot"] !== null,
       });
 
-      const balance = await this.balanceOf(tx, payment);
-      const outstanding = await this.outstandingOf(tx, document);
+      const balance = await this.balances.paymentBalanceOf(tx, payment);
+      const outstanding = await this.balances.outstandingOf(tx, document);
       assertAllocatable({
         amount: input.amount,
         paymentRemaining: balance.unallocated,
@@ -196,8 +197,8 @@ export class AllocationService {
       if (allocationId === undefined)
         throw new ValidationError("Creating an allocation returned no id.");
 
-      const nextPayment = await this.syncPayment(tx, payment);
-      const nextDocument = await this.syncDocument(
+      const nextPayment = await this.balances.syncPayment(tx, payment);
+      const nextDocument = await this.balances.syncDocument(
         tx,
         documentEntity,
         document,
@@ -246,7 +247,7 @@ export class AllocationService {
   ): Promise<AllocationResult> {
     await this.acl.assertAccess("Payment", "edit");
     return await runInTransaction(this.database.db, async (tx) => {
-      const allocation = await this.lockRow(
+      const allocation = await this.balances.lockRow(
         tx,
         "PaymentAllocation",
         allocationId,
@@ -261,15 +262,19 @@ export class AllocationService {
           { allocationId },
         );
       }
-      const payment = await this.lockRow(tx, "Payment", paymentId);
-      const document = await this.lockRow(tx, documentEntity, documentId);
+      const payment = await this.balances.lockRow(tx, "Payment", paymentId);
+      const document = await this.balances.lockRow(
+        tx,
+        documentEntity,
+        documentId,
+      );
 
       await runAsSalesInternal(() =>
         this.entities.remove("PaymentAllocation", allocationId),
       );
 
-      const nextPayment = await this.syncPayment(tx, payment);
-      const nextDocument = await this.syncDocument(
+      const nextPayment = await this.balances.syncPayment(tx, payment);
+      const nextDocument = await this.balances.syncDocument(
         tx,
         documentEntity,
         document,
@@ -316,8 +321,8 @@ export class AllocationService {
       });
     }
     return await runInTransaction(this.database.db, async (tx) => {
-      const from = await this.lockRow(tx, "Payment", fromPaymentId);
-      const to = await this.lockRow(tx, "Payment", toPaymentId);
+      const from = await this.balances.lockRow(tx, "Payment", fromPaymentId);
+      const to = await this.balances.lockRow(tx, "Payment", toPaymentId);
       const fromCurrency = text(from.data["currency"]) ?? "USD";
       const toCurrency = text(to.data["currency"]) ?? "USD";
       if (fromCurrency !== toCurrency) {
@@ -329,7 +334,7 @@ export class AllocationService {
           },
         );
       }
-      const balance = await this.balanceOf(tx, from);
+      const balance = await this.balances.paymentBalanceOf(tx, from);
       assertAllocatable({
         amount,
         paymentRemaining: balance.unallocated,
@@ -365,133 +370,6 @@ export class AllocationService {
       return created;
     });
   }
-
-  // ---------------------------------------------------------------------------------------------
-  // Internals
-  // ---------------------------------------------------------------------------------------------
-
-  /**
-   * Lock one row of the generic record store. `FOR UPDATE` on the record itself — not on a shadow
-   * table — so the lock is taken by the same transaction that writes the allocation.
-   */
-  private async lockRow(
-    tx: DbTx,
-    entity: string,
-    id: string,
-  ): Promise<SalesRow> {
-    const locked = await tx
-      .selectFrom("entity_records")
-      .select(["id", "version", "name", "attrs"])
-      .where("entity_type", "=", entity)
-      .where("id", "=", id)
-      .where("deleted_at", "is", null)
-      .forUpdate()
-      .executeTakeFirst();
-    if (locked === undefined)
-      throw new NotFoundError(`${entity} "${id}" does not exist.`);
-    const data =
-      typeof locked.attrs === "object" && locked.attrs !== null
-        ? { ...(locked.attrs as Record<string, unknown>) }
-        : {};
-    if (data["name"] === undefined) data["name"] = locked.name;
-    return { id: locked.id, version: locked.version, name: locked.name, data };
-  }
-
-  private async balanceOf(tx: DbTx, payment: SalesRow) {
-    const rows = await this.rowsMatching(
-      tx,
-      "PaymentAllocation",
-      "paymentId",
-      payment.id,
-    );
-    return paymentBalance(text(payment.data["amount"]) ?? "0", rows);
-  }
-
-  private async outstandingOf(tx: DbTx, document: SalesRow): Promise<string> {
-    const [allocations, credits, writeOffs] = await Promise.all([
-      this.rowsMatching(tx, "PaymentAllocation", "documentId", document.id),
-      this.rowsMatching(tx, "CreditNoteAllocation", "invoiceId", document.id),
-      this.rowsMatching(tx, "WriteOff", "invoiceId", document.id),
-    ]);
-    return documentOutstanding(
-      text(document.data["grossTotal"]) ?? "0",
-      allocations,
-      credits,
-      writeOffs,
-    );
-  }
-
-  /**
-   * The allocation amounts on rows of `entity` whose `field` holds `id`.
-   *
-   * The attribute name is validated against an allowlist before it reaches SQL and the value is bound
-   * as a parameter, so no request value can become an identifier (AGENTS.md §5.2).
-   */
-  private async rowsMatching(
-    tx: DbTx,
-    entity: string,
-    field: string,
-    id: string,
-  ): Promise<string[]> {
-    assertAttribute(field);
-    const rows = await sql<{ amount: string | null }>`
-      select attrs ->> 'amount' as amount
-      from entity_records
-      where entity_type = ${entity}
-        and deleted_at is null
-        and (attrs ->> ${field}::text) = ${id}
-    `.execute(tx);
-    return rows.rows.map((row) => row.amount ?? "0");
-  }
-
-  /** Write the payment's derived balances. Always called inside the lock. */
-  private async syncPayment(
-    tx: DbTx,
-    payment: SalesRow,
-  ): Promise<{ allocated: string; unallocated: string; status: string }> {
-    const balance = await this.balanceOf(tx, payment);
-    await runAsSalesInternal(() =>
-      this.entities.update("Payment", payment.id, {
-        allocatedAmount: balance.allocated,
-        unallocatedAmount: balance.unallocated,
-        allocationStatus: balance.status,
-      }),
-    );
-    return {
-      allocated: balance.allocated,
-      unallocated: balance.unallocated,
-      status: balance.status,
-    };
-  }
-
-  /**
-   * Write the document's outstanding balance and its *payment* status. The document's own `status` is
-   * not touched: an invoice that is fully paid is still an issued invoice (§4.7).
-   */
-  private async syncDocument(
-    tx: DbTx,
-    entity: string,
-    document: SalesRow,
-  ): Promise<{ amountDue: string; paymentStatus: string }> {
-    const amountDue = await this.outstandingOf(tx, document);
-    const paymentStatus = invoicePaymentStatus({
-      grossTotal: text(document.data["grossTotal"]) ?? "0",
-      amountDue,
-      dueDate: text(document.data["dueDate"]) ?? null,
-      today: resolveDay(undefined),
-    });
-    await runAsSalesInternal(() =>
-      this.entities.update(entity, document.id, { amountDue, paymentStatus }),
-    );
-    return { amountDue, paymentStatus };
-  }
-}
-
-const ATTRIBUTE_PATTERN = /^[A-Za-z][A-Za-z0-9]{0,48}$/;
-
-function assertAttribute(field: string): void {
-  if (!ATTRIBUTE_PATTERN.test(field))
-    throw new ValidationError(`Illegal attribute name "${field}".`, { field });
 }
 
 function toAllocationView(row: {

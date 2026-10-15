@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertAllocatable,
+  assertCreditAllocatable,
   assertDirectionAllows,
   assertSameCurrency,
+  assertWriteOffAmount,
+  creditNoteOutstanding,
   documentOutstanding,
   invoicePaymentStatus,
   paymentBalance,
@@ -79,7 +82,7 @@ describe('assertAllocatable', () => {
 
   it('refuses a zero or negative allocation', () => {
     expect(() => assertAllocatable({ ...base, amount: '0.00' })).toThrow(/greater than zero/);
-    expect(() => assertAllocatable({ ...base, amount: '-1.00' })).toThrow(/must not be negative/);
+    expect(() => assertAllocatable({ ...base, amount: '-1.00' })).toThrow(/greater than zero/);
   });
 });
 
@@ -139,5 +142,67 @@ describe('assertDirectionAllows', () => {
 
   it('refuses a document type the direction does not settle', () => {
     expect(() => assertDirectionAllows('incoming', 'Bill')).toThrow(/is not one of them/);
+  });
+});
+
+describe('creditNoteOutstanding (19-S.11)', () => {
+  it('is the credit total minus its live allocations', () => {
+    expect(creditNoteOutstanding('40.00', [])).toBe('40.00');
+    expect(creditNoteOutstanding('40.00', ['15.00', '5.00'])).toBe('20.00');
+    expect(creditNoteOutstanding('40.00', ['40.00'])).toBe('0.00');
+  });
+
+  it('never goes negative — an over-allocated credit note reads as fully used', () => {
+    expect(creditNoteOutstanding('40.00', ['30.00', '30.00'])).toBe('0.00');
+  });
+
+  it('refuses a negative allocation amount', () => {
+    expect(() => creditNoteOutstanding('40.00', ['-1.00'])).toThrow(/must not be negative/);
+  });
+});
+
+describe('assertCreditAllocatable (19-S.11)', () => {
+  it('accepts an amount within both remainders', () => {
+    expect(() =>
+      assertCreditAllocatable({ amount: '30.00', creditRemaining: '40.00', invoiceRemaining: '70.00', creditNoteId: 'cn1', invoiceId: 'inv1' }),
+    ).not.toThrow();
+  });
+
+  it('refuses an amount beyond the credit note, naming the credit note (not a payment)', () => {
+    expect(() =>
+      assertCreditAllocatable({ amount: '50.00', creditRemaining: '40.00', invoiceRemaining: '70.00', creditNoteId: 'cn1', invoiceId: 'inv1' }),
+    ).toThrow(/still unallocated on credit note "cn1"/);
+  });
+
+  it('refuses an amount beyond what the invoice still owes', () => {
+    expect(() =>
+      assertCreditAllocatable({ amount: '80.00', creditRemaining: '100.00', invoiceRemaining: '70.00', creditNoteId: 'cn1', invoiceId: 'inv1' }),
+    ).toThrow(/still outstanding on "inv1"/);
+  });
+});
+
+describe('assertWriteOffAmount (19-S.11)', () => {
+  it('accepts a positive amount within what the invoice still owes', () => {
+    expect(() =>
+      assertWriteOffAmount({ amount: '25.00', documentRemaining: '100.00', documentId: 'inv1' }),
+    ).not.toThrow();
+    expect(() =>
+      assertWriteOffAmount({ amount: '100.00', documentRemaining: '100.00', documentId: 'inv1' }),
+    ).not.toThrow();
+  });
+
+  it('refuses an amount beyond the remaining balance, naming it', () => {
+    expect(() =>
+      assertWriteOffAmount({ amount: '150.00', documentRemaining: '100.00', documentId: 'inv1' }),
+    ).toThrow(/exceeds the 100\.00 still outstanding/);
+  });
+
+  it('refuses zero and negative amounts', () => {
+    expect(() =>
+      assertWriteOffAmount({ amount: '0.00', documentRemaining: '100.00', documentId: 'inv1' }),
+    ).toThrow(/must be greater than zero/);
+    expect(() =>
+      assertWriteOffAmount({ amount: '-5.00', documentRemaining: '100.00', documentId: 'inv1' }),
+    ).toThrow(/must be greater than zero/);
   });
 });

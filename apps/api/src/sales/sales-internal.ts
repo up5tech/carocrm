@@ -62,6 +62,9 @@ export const SERVER_OWNED_DOCUMENT_FIELDS: readonly string[] = [
   "unlockedAt",
   "unlockedBy",
   "snapshot",
+  // The credit note's derived remainder (19-S.11): written at issuance and by every allocation or
+  // reversal, never by a client.
+  "unallocatedAmount",
 ];
 
 /** Entities whose money the allocation services maintain, not the client. */
@@ -85,6 +88,36 @@ export const SERVER_OWNED_PAYMENT_FIELDS: readonly string[] = [
   "processedAt",
   "processedStatus",
   "status",
+];
+
+/**
+ * The 19-S.11 correction records whose lifecycle is driven by domain commands.
+ *
+ * `WriteOff` is grantable as a *request* (a `create` with the status left pending), but its approval,
+ * rejection and reversal — and the allocation reversal fields — are server-owned: a client must not
+ * be able to approve its own write-off or fabricate the reversal trail through the record API.
+ */
+export const ADJUSTMENT_ENTITIES: readonly string[] = [
+  "WriteOff",
+  "CreditNoteAllocation",
+];
+
+export const SERVER_OWNED_ADJUSTMENT_FIELDS: readonly string[] = [
+  "status",
+  "requestedBy",
+  "approvedBy",
+  "approvedAt",
+  "reversedBy",
+  "reversedAt",
+  "reversalReason",
+];
+
+/** Write-off request fields that stop being client-editable once the decision is made. */
+export const DECIDED_WRITE_OFF_FIELDS: readonly string[] = [
+  "invoiceId",
+  "amount",
+  "currency",
+  "reason",
 ];
 
 /** Keys whose value actually differs from the stored record — a no-op save is not a change. */

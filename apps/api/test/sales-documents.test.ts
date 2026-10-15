@@ -90,8 +90,10 @@ async function convert(
 }
 
 /** A quote with two priced lines, ready to be sent. */
+let draftSeq = 0;
 async function draftQuote(unitPrice = '10.00'): Promise<DocumentView> {
-  const product = await fix.createProduct({ sku: `AGENT-${fix.runId}-Q${unitPrice.replace('.', '')}`, unitPrice });
+  draftSeq += 1;
+  const product = await fix.createProduct({ sku: `AGENT-${fix.runId}-Q${draftSeq}`, unitPrice });
   return await createDocument(
     'quote',
     { name: `AGENT_TEST_${fix.runId} Quote`, currency: 'USD', quoteDate: '2026-10-15' },
@@ -182,7 +184,7 @@ describe('creating a document (19-S.6)', () => {
   it('refuses a document with no lines', async () => {
     const result = await fix.call('POST', '/api/v1/Sales/document', { kind: 'quote', data: { currency: 'USD' }, items: [] });
     expect(result.status).toBe(422);
-    expect(reasonOf(result)).toMatch(/at least 1 line/);
+    expect(reasonOf(result)).toMatch(/at least one line/);
   });
 });
 

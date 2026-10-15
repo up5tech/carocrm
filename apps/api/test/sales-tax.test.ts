@@ -5,7 +5,7 @@ import { SalesSettingsService } from '../src/sales/sales-settings.service.js';
 import type { ApiContext } from './support/boot-api.js';
 import { bootApi, shutdownApi } from './support/boot-api.js';
 import type { SalesFixture } from './support/sales-fixtures.js';
-import { salesFixture } from './support/sales-fixtures.js';
+import { reasonOf, salesFixture } from './support/sales-fixtures.js';
 
 /**
  * Phase 19-S.5 — tax codes, tax rules, rounding stages and totals.
@@ -17,6 +17,13 @@ import { salesFixture } from './support/sales-fixtures.js';
 
 let ctx: ApiContext;
 let fix: SalesFixture;
+
+/** The first element, asserted present — keeps the assertions below free of non-null assertions. */
+function first<T>(list: readonly T[]): T {
+  const value = list[0];
+  if (value === undefined) throw new Error('Expected at least one element.');
+  return value;
+}
 
 beforeAll(async () => {
   ctx = await bootApi();
@@ -66,9 +73,9 @@ describe('totals with explicit tax rates (19-S.5)', () => {
     expect(totals.grossTotal).toBe('238.00');
     expect(totals.amountDue).toBe('238.00');
     expect(totals.taxBreakdown).toHaveLength(1);
-    expect(totals.taxBreakdown[0]!.taxableBase).toBe('200.00');
-    expect(totals.taxBreakdown[0]!.taxAmount).toBe('38.00');
-    expect(totals.lines[0]!.tax?.source).toBe('line');
+    expect(first(totals.taxBreakdown).taxableBase).toBe('200.00');
+    expect(first(totals.taxBreakdown).taxAmount).toBe('38.00');
+    expect(first(totals.lines).tax?.source).toBe('line');
   });
 
   it('splits gross prices when the document is tax-inclusive', async () => {
@@ -101,9 +108,9 @@ describe('totals with explicit tax rates (19-S.5)', () => {
       currency: 'USD',
       lines: [{ name: 'AGENT_TEST discounted', quantity: '1', unitPrice: '100.00', discountPercent: '10', taxRatePercent: '19' }],
     });
-    expect(totals.lines[0]!.discountAmount).toBe('10.00');
-    expect(totals.lines[0]!.netAmount).toBe('90.00');
-    expect(totals.lines[0]!.taxAmount).toBe('17.10');
+    expect(first(totals.lines).discountAmount).toBe('10.00');
+    expect(first(totals.lines).netAmount).toBe('90.00');
+    expect(first(totals.lines).taxAmount).toBe('17.10');
     expect(totals.grossTotal).toBe('107.10');
     expect(totals.discountTotal).toBe('10.00');
   });
@@ -180,8 +187,8 @@ describe('rounding policy (19-S.5)', () => {
       lines: [{ name: 'AGENT_TEST yen', quantity: '1', unitPrice: '1000', taxRatePercent: '10' }],
     });
     expect(totals.currency).toBe('JPY');
-    expect(totals.lines[0]!.netAmount).toBe('1000');
-    expect(totals.lines[0]!.taxAmount).toBe('100');
+    expect(first(totals.lines).netAmount).toBe('1000');
+    expect(first(totals.lines).taxAmount).toBe('100');
     expect(totals.grossTotal).toBe('1100');
   });
 
@@ -205,9 +212,9 @@ describe('tax resolution from the configuration (19-S.5)', () => {
       currency: 'USD',
       lines: [{ productId, quantity: '1', unitPrice: '100.00' }],
     });
-    expect(totals.lines[0]!.tax?.source).toBe('taxCode');
-    expect(totals.lines[0]!.tax?.taxCodeId).toBe(taxCodeId);
-    expect(totals.lines[0]!.tax?.taxRatePercent).toBe('7.5');
+    expect(first(totals.lines).tax?.source).toBe('taxCode');
+    expect(first(totals.lines).tax?.taxCodeId).toBe(taxCodeId);
+    expect(first(totals.lines).tax?.taxRatePercent).toBe('7.5');
     expect(totals.taxTotal).toBe('7.50');
     void rateId;
   });
@@ -221,8 +228,8 @@ describe('tax resolution from the configuration (19-S.5)', () => {
       currency: 'USD',
       lines: [{ productId, quantity: '1', unitPrice: '100.00' }],
     });
-    expect(totals.lines[0]!.tax?.source).toBe('taxRule');
-    expect(totals.lines[0]!.tax?.taxRatePercent).toBe('5');
+    expect(first(totals.lines).tax?.source).toBe('taxRule');
+    expect(first(totals.lines).tax?.taxRatePercent).toBe('5');
     expect(totals.taxTotal).toBe('5.00');
     void ruleId;
   });
@@ -233,7 +240,7 @@ describe('tax resolution from the configuration (19-S.5)', () => {
       lines: [{ name: 'AGENT_TEST untaxed', quantity: '1', unitPrice: '100.00' }],
     });
     expect(result.status).toBe(422);
-    expect(String((result.body['error'] as { message?: string }).message)).toMatch(/no applicable tax rate/);
+    expect(reasonOf(result)).toMatch(/no applicable tax rate/);
   });
 
   it('records an explicit zero tax only under the configured policy', async () => {
@@ -246,7 +253,7 @@ describe('tax resolution from the configuration (19-S.5)', () => {
         lines: [{ name: 'AGENT_TEST zero policy', quantity: '1', unitPrice: '100.00' }],
       });
       expect(totals.taxTotal).toBe('0.00');
-      expect(totals.lines[0]!.tax?.source).toBe('zero');
+      expect(first(totals.lines).tax?.source).toBe('zero');
       expect(totals.warnings.some((warning) => warning.includes('zero tax'))).toBe(true);
     } finally {
       await settings.update({ tax: { missingTaxPolicy: before.settings.tax.missingTaxPolicy } });
@@ -263,7 +270,7 @@ describe('tax resolution from the configuration (19-S.5)', () => {
       lines: [{ name: 'AGENT_TEST future rate', quantity: '1', unitPrice: '100.00', taxCodeId }],
     });
     expect(result.status).toBe(422);
-    expect(String((result.body['error'] as { message?: string }).message)).toMatch(/no rate applicable/);
+    expect(reasonOf(result)).toMatch(/no rate applicable/);
   });
 
   it('refuses an ambiguous tax rate at save time', async () => {
@@ -277,7 +284,7 @@ describe('tax resolution from the configuration (19-S.5)', () => {
       active: true,
     });
     expect(duplicate.status).toBe(422);
-    expect(String((duplicate.body['error'] as { message?: string }).message)).toMatch(/Another active tax rate/);
+    expect(reasonOf(duplicate)).toMatch(/Another active tax rate/);
   });
 
   it('refuses an invalid tax rule at save time', async () => {

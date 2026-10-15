@@ -1,5 +1,5 @@
 import type { Logger } from '@carocrm/core/logger/index.js';
-import { JobRegistry, type JobContext } from '@carocrm/jobs';
+import { type JobContext,JobRegistry } from '@carocrm/jobs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { EXPIRE_QUOTES_JOB, EXPIRE_QUOTES_PATH, expireQuotesJob, registerSalesJobs } from './sales-handlers.js';

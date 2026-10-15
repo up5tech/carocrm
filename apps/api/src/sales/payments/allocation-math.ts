@@ -82,14 +82,14 @@ export function paymentBalance(
   const unallocated = subtract(total, allocated);
   if (isNegative(unallocated)) {
     throw new ValidationError(
-      `The allocations (${format(allocated)}) exceed the payment amount (${format(total)}). Allocate less, or record the excess as an unapplied amount.`,
-      { amount: format(total), allocated: format(allocated) },
+      `The allocations (${money(allocated)}) exceed the payment amount (${money(total)}). Allocate less, or record the excess as an unapplied amount.`,
+      { amount: money(total), allocated: money(allocated) },
     );
   }
   return {
-    amount: format(total),
-    allocated: format(allocated),
-    unallocated: format(unallocated),
+    amount: money(total),
+    allocated: money(allocated),
+    unallocated: money(unallocated),
     status: allocationStatus(total, allocated),
   };
 }
@@ -122,8 +122,8 @@ export function documentOutstanding(
   }
   const outstanding = subtract(total, settled);
   return isNegative(outstanding)
-    ? format(zero(total.scale))
-    : format(outstanding);
+    ? money(zero(total.scale))
+    : money(outstanding);
 }
 
 /**
@@ -151,21 +151,65 @@ export function assertAllocatable(input: {
 
   if (compare(amount, paymentRemaining) > 0) {
     throw new ValidationError(
-      `This allocation of ${format(amount)} exceeds the ${format(paymentRemaining)} still unallocated on payment "${input.paymentId}".`,
+      `This allocation of ${money(amount)} exceeds the ${money(paymentRemaining)} still unallocated on payment "${input.paymentId}".`,
       {
         paymentId: input.paymentId,
-        amount: format(amount),
-        remaining: format(paymentRemaining),
+        amount: money(amount),
+        remaining: money(paymentRemaining),
       },
     );
   }
   if (compare(amount, documentRemaining) > 0) {
     throw new ValidationError(
-      `This allocation of ${format(amount)} exceeds the ${format(documentRemaining)} still outstanding on "${input.documentId}".`,
+      `This allocation of ${money(amount)} exceeds the ${money(documentRemaining)} still outstanding on "${input.documentId}".`,
       {
         documentId: input.documentId,
-        amount: format(amount),
-        remaining: format(documentRemaining),
+        amount: money(amount),
+        remaining: money(documentRemaining),
+      },
+    );
+  }
+}
+
+/**
+ * The credit-note twin of `assertAllocatable`, with wording that names a credit, not a payment.
+ *
+ * Same two refusals — past the credit note's own remainder, or past what the invoice still owes —
+ * but the message a credit-note operator sees has to say "credit note" (§4.9).
+ */
+export function assertCreditAllocatable(input: {
+  readonly amount: string;
+  readonly creditRemaining: string;
+  readonly invoiceRemaining: string;
+  readonly creditNoteId: string;
+  readonly invoiceId: string;
+}): void {
+  const amount = requirePositive(input.amount, "allocation.amount");
+  const creditRemaining = requireNonNegative(
+    input.creditRemaining,
+    "creditRemaining",
+  );
+  const invoiceRemaining = requireNonNegative(
+    input.invoiceRemaining,
+    "invoiceRemaining",
+  );
+  if (compare(amount, creditRemaining) > 0) {
+    throw new ValidationError(
+      `This allocation of ${money(amount)} exceeds the ${money(creditRemaining)} still unallocated on credit note "${input.creditNoteId}".`,
+      {
+        creditNoteId: input.creditNoteId,
+        amount: money(amount),
+        remaining: money(creditRemaining),
+      },
+    );
+  }
+  if (compare(amount, invoiceRemaining) > 0) {
+    throw new ValidationError(
+      `This allocation of ${money(amount)} exceeds the ${money(invoiceRemaining)} still outstanding on "${input.invoiceId}".`,
+      {
+        invoiceId: input.invoiceId,
+        amount: money(amount),
+        remaining: money(invoiceRemaining),
       },
     );
   }
@@ -232,6 +276,56 @@ export function allocatableToDocument(
   credits: readonly string[] = [],
 ): string {
   return documentOutstanding(grossTotal, alreadyAllocated, credits);
+}
+
+/** The remaining unallocated balance on a credit note. */
+export function creditNoteOutstanding(
+  totalAmount: string,
+  allocatedAmounts: readonly string[],
+): string {
+  const total = requireNonNegative(totalAmount, "amount");
+  let allocated: Decimal = zero(total.scale);
+  for (const value of allocatedAmounts) {
+    allocated = add(allocated, requireNonNegative(value, "allocation.amount"));
+  }
+  const unallocated = subtract(total, allocated);
+  return isNegative(unallocated) ? money(zero(total.scale)) : money(unallocated);
+}
+
+/**
+ * A write-off covers balance that actually exists: it must be positive and must not exceed what the
+ * invoice still owes. Checked again at approval, because balances move between the request and the
+ * decision (§4.9).
+ */
+export function assertWriteOffAmount(input: {
+  readonly amount: string;
+  readonly documentRemaining: string;
+  readonly documentId: string;
+}): void {
+  const amount = requirePositive(input.amount, "writeOff.amount");
+  const remaining = requireNonNegative(
+    input.documentRemaining,
+    "documentRemaining",
+  );
+  if (compare(amount, remaining) > 0) {
+    throw new ValidationError(
+      `This write-off of ${money(amount)} exceeds the ${money(remaining)} still outstanding on "${input.documentId}".`,
+      {
+        documentId: input.documentId,
+        amount: money(amount),
+        remaining: money(remaining),
+      },
+    );
+  }
+}
+
+/**
+ * Money at its own scale: commercial amounts keep the fraction digits they were computed with, the
+ * same convention `moneyString` applies (`money/currency.ts`). The bare `format()` would trim
+ * `100.00` to `100`, which must never leak into a balance, a stored field or an error message.
+ */
+function money(value: Decimal): string {
+  return format(value, value.scale);
 }
 
 /** A payment direction decides which document types it may settle (§4.8). */

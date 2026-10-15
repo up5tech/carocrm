@@ -77,6 +77,11 @@ export interface DocumentConversion {
    * from the caller, so the destination never depends on the source staying unchanged (§4.6).
    */
   readonly copyFields: readonly string[];
+  /**
+   * A destination field that links back to the source row by id — the provenance link an issued
+   * credit note keeps to the invoice it credits (§4.9).
+   */
+  readonly linkToSource?: { readonly field: string };
 }
 
 export interface SalesDocumentDescriptor {
@@ -274,7 +279,16 @@ const INVOICE: SalesDocumentDescriptor = {
       requiresReason: true,
     },
   ],
-  conversions: [],
+  conversions: [
+    {
+      action: "convertToCreditNote",
+      label: "Create credit note",
+      toKind: "creditNote",
+      from: ["issued"],
+      copyFields: [...PARTY_FIELDS],
+      linkToSource: { field: "invoiceId" },
+    },
+  ],
   lockPolicy: DEFAULT_LOCK_POLICY,
   minItems: 1,
   maxItems: MAX_ITEMS,

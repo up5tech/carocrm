@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildDocumentSnapshot, readDocumentSnapshot, parseDocumentSnapshot, snapshotDigest } from '../src/sales/document/snapshot.js';
 import {
   assertDocumentEditable,
   assertUnlockAllowed,
@@ -8,20 +7,7 @@ import {
   isLocked,
   protectedFieldViolations,
 } from '../src/sales/document/lock.js';
-import {
-  add,
-  compare,
-  divideTo,
-  divideRounded,
-  format,
-  multiply,
-  netFromInclusive,
-  parseDecimal,
-  percentageOf,
-  rescale,
-  subtract,
-  sum,
-} from '../src/sales/money/decimal.js';
+import { buildDocumentSnapshot, parseDocumentSnapshot, readDocumentSnapshot, snapshotDigest } from '../src/sales/document/snapshot.js';
 import {
   addMoney,
   currencyScale,
@@ -33,6 +19,20 @@ import {
   toBaseCurrency,
   validateExchangeRateSnapshot,
 } from '../src/sales/money/currency.js';
+import {
+  add,
+  compare,
+  divideRounded,
+  divideTo,
+  format,
+  multiply,
+  netFromInclusive,
+  parseDecimal,
+  percentageOf,
+  rescale,
+  subtract,
+  sum,
+} from '../src/sales/money/decimal.js';
 
 describe('decimal engine (19-S.2)', () => {
   it('parses canonical decimal strings exactly, never through a float', () => {
@@ -169,11 +169,13 @@ describe('document snapshots (19-S.2)', () => {
     const source = { accountName: 'AGENT_TEST_ACME', lines: [{ sku: 'A-1', unitPrice: '10.00' }], total: '10.00' };
     const snapshot = buildDocumentSnapshot('Invoice:inv_1', source);
     source.accountName = 'Renamed';
-    source.lines[0]!.unitPrice = '99.00';
+    const sourceLine = source.lines[0];
+    if (sourceLine === undefined) throw new Error('The fixture lost its line.');
+    sourceLine.unitPrice = '99.00';
     expect(readDocumentSnapshot(snapshot).accountName).toBe('AGENT_TEST_ACME');
-    expect(readDocumentSnapshot(snapshot).lines[0]!.unitPrice).toBe('10.00');
+    expect(readDocumentSnapshot(snapshot).lines.at(0)?.unitPrice).toBe('10.00');
     expect(Object.isFrozen(snapshot.data)).toBe(true);
-    expect(Object.isFrozen(snapshot.data.lines[0])).toBe(true);
+    expect(Object.isFrozen(snapshot.data.lines.at(0))).toBe(true);
   });
 
   it('detects a tampered snapshot through its digest', () => {

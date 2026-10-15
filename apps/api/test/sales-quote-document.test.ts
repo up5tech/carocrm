@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   quoteBlocks,
+  type QuoteRenderInput,
   quoteRenderLine,
   quoteSubject,
   quoteTemplateData,
   quoteText,
   quoteTitle,
-  type QuoteRenderInput,
 } from '../src/sales/document/quote-document.js';
 
 /**

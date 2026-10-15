@@ -49,7 +49,7 @@ export class DocumentTemplateService {
       where:
         entityType === undefined
           ? undefined
-          : [{ field: "entityType", operator: "equals", value: entityType }],
+          : [{ field: "targetEntity", operator: "equals", value: entityType }],
     });
     return templates.list;
   }
@@ -64,7 +64,7 @@ export class DocumentTemplateService {
     return await this.entities.create("DocumentTemplate", {
       name: parsed.name,
       code: parsed.code,
-      entityType: parsed.entityType,
+      targetEntity: parsed.entityType,
       subject: parsed.subject ?? null,
       body: parsed.body,
       format: parsed.format,
@@ -102,11 +102,8 @@ export class DocumentTemplateService {
     data: TemplateData,
   ): Promise<DocumentRenderResult> {
     await this.acl.assertAccess("DocumentTemplate", "read");
-    const template = await this.requireByCode(templateCode);
-    const fields: Record<string, unknown> =
-      typeof template.data === "object" && template.data !== null
-        ? (template.data as Record<string, unknown>)
-        : {};
+    // `entities.get/list` return the record's fields flat — there is no nested `.data` on a DTO.
+    const fields = await this.requireByCode(templateCode);
     if (fields["active"] === false) {
       throw new ValidationError(`Template "${templateCode}" is inactive.`, {
         templateCode,
@@ -129,7 +126,7 @@ export class DocumentTemplateService {
     await this.acl.assertAccess("DocumentTemplate", "read");
     const templates = await this.entities.list("DocumentTemplate", {
       where: [
-        { field: "entityType", operator: "equals", value: entityType },
+        { field: "targetEntity", operator: "equals", value: entityType },
         { field: "active", operator: "equals", value: true },
       ],
     });
@@ -157,7 +154,7 @@ export class DocumentTemplateService {
   }
 
   private async entityTypeOf(id: string): Promise<string> {
-    return text((await this.requireTemplate(id))["entityType"]) ?? "Document";
+    return text((await this.requireTemplate(id))["targetEntity"]) ?? "Document";
   }
 
   private async assertCodeAvailable(code: string): Promise<void> {
@@ -176,7 +173,7 @@ export class DocumentTemplateService {
   private async clearDefault(entityType: string): Promise<void> {
     const templates = await this.entities.list("DocumentTemplate", {
       where: [
-        { field: "entityType", operator: "equals", value: entityType },
+        { field: "targetEntity", operator: "equals", value: entityType },
         { field: "isDefault", operator: "equals", value: true },
       ],
     });

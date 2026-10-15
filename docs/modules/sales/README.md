@@ -6,13 +6,14 @@ Implemented in `apps/api/src/sales` (backend) with metadata in `database/seed-me
 (<https://docs.espocrm.com/extensions/sales-pack/overview/>), reproduced as clean-room TypeScript
 behaviour.
 
-**Status: the commercial foundation (19-S.0 – 19-S.5), the shared document engine (19-S.6) and the
-quotes, sales orders, invoices and payments phases (19-S.7 – 19-S.10).** The authoritative scope and
-the phase-by-phase roadmap live in [`PLAN_Phase_19_Sales.md`](../../PLAN_Phase_19_Sales.md); the list
-of phases actually claimed is `SALES_MODULE.implementedPhases` in
-`apps/api/src/sales/sales-module.ts`, and `/api/v1/Sales/action/health` reports it. Credit notes,
-delivery/return orders, purchases, inventory and subscriptions have their descriptors and the generic
-engine but not their own remaining work, and are **not** claimed.
+**Status: the commercial foundation (19-S.0 – 19-S.5), the shared document engine (19-S.6), the
+quotes, sales orders, invoices and payments phases (19-S.7 – 19-S.10), and credit notes and
+write-offs (19-S.11).** The authoritative scope and the phase-by-phase roadmap live in
+[`PLAN_Phase_19_Sales.md`](../../PLAN_Phase_19_Sales.md); the list of phases actually claimed is
+`SALES_MODULE.implementedPhases` in `apps/api/src/sales/sales-module.ts`, and
+`/api/v1/Sales/action/health` reports it. Delivery/return orders, purchases, inventory and
+subscriptions have their descriptors and the generic engine but not their own remaining work, and
+are **not** claimed.
 
 ## What it gives a user
 
@@ -106,11 +107,12 @@ DELETE /api/v1/Sales/document/:kind/:id            delete a **draft** only
 **Implemented:** the engine, the six descriptors, the document + item metadata
 (`database/seed-metadata.ts`), migration `023_phase19_sales_documents.sql`, and the routes above.
 
-**Not implemented yet — and deliberately not claimed by `implementedPhases`:** credit allocation and
-write-offs (19-S.11), stock movement for delivery/return (19-S.12, with inventory still disabled),
-and PDF *attachments* on a sent document. A PDF renderer exists (`@carocrm/document`'s optional
-`pdfkit` adapter walks the same block model the text rendering uses), but turning a rendered PDF into
-an outbound attachment needs the attachment-storage path, which is not built.
+**Not implemented yet — and deliberately not claimed by `implementedPhases`:** stock movement for
+delivery/return (19-S.12, with inventory still disabled) and PDF *attachments* on a sent document. A
+PDF renderer exists (`@carocrm/document`'s optional `pdfkit` adapter walks the same block model the
+text rendering uses), and the credit-note render path (19-S.11) exposes the same block model a PDF
+renderer consumes, but turning a rendered PDF into an outbound attachment needs the
+attachment-storage path, which is not built.
 
 ### Sales orders (19-S.8) and invoices (19-S.9)
 
@@ -209,6 +211,50 @@ Commands: `POST /api/v1/Sales/payment`, `GET|PATCH /api/v1/Sales/payment/:id`,
 `GET /api/v1/Sales/allocatableInvoices`, `POST /api/v1/Sales/paymentRequest`,
 `…/paymentRequest/:id/transition`, `POST /api/v1/Sales/providerEvent`.
 
+## Credit notes and write-offs (19-S.11)
+
+The two supported ways a receivable is reduced without a payment (§4.9). Both are ordinary metadata
+entities (`CreditNote`, `CreditNoteItem`, `CreditNoteAllocation`, `WriteOff`), so list/detail,
+search, export and relationships come from the Entity Engine; the module adds the command semantics
+that a single record cannot express.
+
+| Piece | What it does |
+|---|---|
+| `payments/balance.service.ts` | the one place derived balances are computed and stored: a payment's allocation balance, an invoice's `amountDue`/`paymentStatus`, a credit note's `unallocatedAmount` — with the 19-S.11 filters (reversed credit allocations and un-approved write-offs never count) |
+| `payments/credit-note.service.ts` | allocate / **reverse** a credit allocation, list allocatable invoices, and render a credit note through the kernel `document` module |
+| `payments/write-off.service.ts` | request → approve / reject → reverse, with the amount re-checked against the live balance at approval |
+
+Key rules:
+
+* **A credit note reduces a receivable through an explicit allocation** to an issued invoice — never
+  by editing the invoice. The conversion `POST …/document/invoice/:id/convert` with
+  `action: convertToCreditNote` creates a linked draft (its lines re-snapshotted by value, one credit
+  note per invoice per conversion; further partial credits are manual documents).
+* **A freshly issued credit note is fully unallocated** (`unallocatedAmount = grossTotal`), and every
+  allocation or reversal recomputes that remainder from the live rows — a client cannot set it, and
+  neither can a crafted record-API call (the write guard refuses `unallocatedAmount`).
+* **Corrections are reversals, not deletions**: undoing a credit allocation marks the row
+  (`reversedAt`/`reversedBy`/`reversalReason`) and recomputes both sides; the original and the
+  replacement are both on record. Reversing twice is refused.
+* **A write-off is a two-step decision.** A request is `pending` and changes **no** balance; only an
+  administrator can approve (or reject), and approval re-checks the amount against what the invoice
+  still owes *at that moment* — an invoice paid in the meantime refuses the approval. Reversal
+  (`status: reversed` + reason) restores the receivable and keeps both entries.
+* **Write-off requests are grantable, decisions are not.** `WriteOff: create` + `Invoice: edit` may
+  request; approve/reject/reverse are administrator-gated (`403` otherwise), and the write guard
+  refuses client writes to `status`, the approver/reversal trail, and any field of a decided
+  write-off.
+* **Currency agreement is enforced** (`assertCreditAllocatable`): a cross-currency allocation needs a
+  conversion snapshot, and neither side may be over-allocated — the refusal names both remainders.
+* **Rendering reuses the kernel**: `POST /api/v1/Sales/creditNote/:id/render` renders a named
+  `DocumentTemplate` (entity `targetEntity: 'CreditNote'`) or the built-in block layout, from the
+  frozen snapshot once issued. The block model is shared with quotes (`document/render-blocks.ts`).
+
+Commands: `POST /api/v1/Sales/creditNote/:id/allocate`,
+`DELETE /api/v1/Sales/creditNote/allocation/:id`,
+`GET /api/v1/Sales/creditNote/allocatableInvoices`, `POST /api/v1/Sales/creditNote/:id/render`,
+`POST /api/v1/Sales/write-off`, `POST /api/v1/Sales/write-off/:id/approve|reject|reverse`.
+
 ## Verification
 
 ```bash
@@ -220,7 +266,8 @@ pnpm vitest run apps/api/test/sales-terms.test.ts apps/api/test/sales-fulfilment
 pnpm vitest run apps/api/test/sales-module.test.ts apps/api/test/sales-catalog.test.ts \
   apps/api/test/sales-pricing.test.ts apps/api/test/sales-tax.test.ts \
   apps/api/test/sales-money.test.ts apps/api/test/sales-documents.test.ts \
-  apps/api/test/sales-payments.test.ts apps/api/test/sales-quotes.test.ts
+  apps/api/test/sales-payments.test.ts apps/api/test/sales-quotes.test.ts \
+  apps/api/test/sales-credits.test.ts
 # The worker has its own vitest config, so its suites are not collected by the root one.
 cd apps/worker && pnpm vitest run src/handlers/sales-handlers.test.ts
 ```
@@ -239,9 +286,12 @@ what was and was not executed when this module was last touched.
 create → issue → lock → convert → void lifecycle and the write guard that stops a crafted request
 forging a computed field; `sales-quotes` covers rendering, the send side effects, the no-provider and
 ACL refusals, a price frozen at issuance, expiry and conversion retries; `sales-payments` covers
-allocation both ways, over-allocation, unallocation and provider-event idempotency; the worker suite
-covers the expiry job. Still **not** covered: 19-S.11 (credit notes and write-offs) and 19-S.12
-(delivery/return) beyond their descriptors, and the `markOverdueInvoices` job.
+allocation both ways, over-allocation, unallocation and provider-event idempotency; `sales-credits`
+covers invoice→credit-note conversion and linkage, allocation and its refusal paths (remainder,
+outstanding, cross-currency, draft), reversal keeping the row, write-off request/approve/reject/
+reverse with the administrator gate, approval-time re-check, forge refusals and the credit-note
+render; the worker suite covers the expiry job. Still **not** covered: 19-S.12 (delivery/return)
+beyond its descriptors, and the `markOverdueInvoices` job.
 
 ## Deeper documents
 

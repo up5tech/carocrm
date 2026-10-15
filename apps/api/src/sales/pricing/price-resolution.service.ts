@@ -3,7 +3,7 @@ import { Inject, Injectable } from "@nestjs/common";
 
 import { AclApiService } from "../../acl/acl-api.service.js";
 import { type ProductGateInput, salesGate } from "../catalog/product-rules.js";
-import { resolveDay } from "../clock.js";
+import { resolveDay, storedDay } from "../clock.js";
 import { currencyScale, normalizeCurrencyCode } from "../money/currency.js";
 import { compare, format, parseDecimal, rescale } from "../money/decimal.js";
 import { SalesRecords, type SalesRow } from "../sales-records.js";
@@ -610,8 +610,8 @@ function entryApplies(
   const entryCurrency =
     text(entry.data["currency"]) ?? text(book.data["currency"]);
   if (entryCurrency !== undefined && entryCurrency !== currency) return false;
-  const from = text(entry.data["effectiveFrom"]);
-  const to = text(entry.data["effectiveTo"]);
+  const from = storedDay(entry.data["effectiveFrom"]);
+  const to = storedDay(entry.data["effectiveTo"]);
   if (from !== undefined && date < from) return false;
   if (to !== undefined && date > to) return false;
   if (text(entry.data["unitPrice"]) === undefined) return false;
@@ -647,8 +647,8 @@ function toPriceRuleInput(row: SalesRow): PriceRuleInput {
       typeof row.data["priority"] === "number" ? row.data["priority"] : 100,
     criteria: ruleCriteria(row),
     action: ruleAction(row),
-    effectiveFrom: text(row.data["effectiveFrom"]) ?? null,
-    effectiveTo: text(row.data["effectiveTo"]) ?? null,
+    effectiveFrom: storedDay(row.data["effectiveFrom"]) ?? null,
+    effectiveTo: storedDay(row.data["effectiveTo"]) ?? null,
   };
 }
 

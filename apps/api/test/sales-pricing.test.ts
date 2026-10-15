@@ -4,7 +4,7 @@ import { SalesSettingsService } from '../src/sales/sales-settings.service.js';
 import type { ApiContext, TestUser } from './support/boot-api.js';
 import { bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
 import type { SalesFixture } from './support/sales-fixtures.js';
-import { salesFixture } from './support/sales-fixtures.js';
+import { reasonOf, salesFixture } from './support/sales-fixtures.js';
 
 /**
  * Phase 19-S.4 — price books, price rules, supplier prices and bulk price updates.
@@ -108,7 +108,9 @@ describe('price resolution (19-S.4)', () => {
     await fix.createEntry(bookId, productId, { unitPrice: '100.00' });
     const ruleId = await fix.createRule(bookId, { actionType: 'percentAdjustment', actionValue: '10' });
     const resolved = await resolvePrice({ productId, priceBookId: bookId });
-    expect(resolved.price).toBe('110.00');
+    // The documented formula (`docs/modules/sales/product-catalog-and-pricing.md`, §Rule actions):
+    // `base × (100 − percent) / 100` — a 10 percent *reduction* of the book price.
+    expect(resolved.price).toBe('90.00');
     expect(resolved.source).toBe('priceRule');
     expect(resolved.priceRuleId).toBe(ruleId);
   });
@@ -130,7 +132,7 @@ describe('price resolution (19-S.4)', () => {
     await fix.createRule(bookId, { productIds: [productId], priority: 5, actionType: 'percentAdjustment', actionValue: '20' });
     const result = await fix.call('POST', '/api/v1/Sales/action/resolvePrice', { productId, priceBookId: bookId });
     expect(result.status).toBe(422);
-    expect(String((result.body['error'] as { message?: string }).message)).toMatch(/same priority and specificity/);
+    expect(reasonOf(result)).toMatch(/same priority and specificity/);
   });
 
   it('surfaces a missing price instead of defaulting it to zero', async () => {
@@ -138,7 +140,7 @@ describe('price resolution (19-S.4)', () => {
     // A product with `unitPrice: null` stores no price; the default policy refuses the resolution.
     const result = await fix.call('POST', '/api/v1/Sales/action/resolvePrice', { productId });
     expect(result.status).toBe(422);
-    expect(String((result.body['error'] as { message?: string }).message)).toMatch(/No price could be resolved/);
+    expect(reasonOf(result)).toMatch(/No price could be resolved/);
 
     // With the explicit policy the same request returns an *unresolved* result, still never zero.
     const settings = ctx.app.get(SalesSettingsService);
