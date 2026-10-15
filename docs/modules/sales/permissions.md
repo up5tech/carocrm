@@ -14,9 +14,12 @@ Hiding a control in the UI is never the enforcement point; every check below run
 
 ## 1. Entity-level access
 
-Set permissions for the eleven entities in the normal role editor:
-`Product`, `ProductCategory`, `PriceBook`, `PriceBookEntry`, `PriceRule`, `Supplier`,
-`SupplierProductPrice`, `TaxClass`, `TaxCode`, `TaxRate`, `TaxRule`.
+Set permissions in the normal role editor. The catalog entities are `Product`, `ProductCategory`,
+`PriceBook`, `PriceBookEntry`, `PriceRule`, `Supplier`, `SupplierProductPrice`, `TaxClass`, `TaxCode`,
+`TaxRate`, `TaxRule`; the commercial ones are the document entities and their items (`Quote`,
+`SalesOrder`, `Invoice`, `CreditNote`, `DeliveryOrder`, `ReturnOrder`, `PurchaseOrder`, `ReceiptOrder`,
+`Bill`, `BillCredit` and each `…Item`), plus the money records (`Payment`, `PaymentAllocation`,
+`BillCreditAllocation`, `CreditNoteAllocation`, `WriteOff`, `PaymentTermProfile`).
 
 | Action | Meaning for Sales |
 |---|---|
@@ -65,6 +68,12 @@ The same mechanism gates price-book prices: `PriceBookEntry.unitPrice` (`read: n
 | `POST …/creditNote/:id/render` | `CreditNote: read`; plus `DocumentTemplate: read` when a template is named or the default is used | `403` |
 | `POST …/write-off` | `WriteOff: create` **and** `Invoice: edit`; the request stays `pending` | `403` |
 | `POST …/write-off/:id/approve\|reject\|reverse` | **administrator** — approval authority is not a record edit | `403 Administrator access is required for …` |
+| `POST …/action/resolveSupplierPrice` | `SupplierProductPrice: read` | `403` |
+| `POST …/document` with a purchasing `kind` | that entity's `create`, **and** `features.purchases` enabled | `403` |
+| `POST …/purchaseOrder/:id/refreshReceipt` | `PurchaseOrder: edit` | `403` |
+| `POST …/billCredit/:id/allocate`, `DELETE …/billCredit/allocation/:id` | `BillCredit: edit` **and** `Bill: edit` (the allocation changes both) | `403` |
+| `GET …/billCredit/allocatableBills`, `…/bill/:id/creditAllocations`, `…/allocatableDocuments` | `Bill: read` (the payment's own `read`/`edit` for the allocate/unallocate paths) | `403` |
+| `POST …/document/:kind/:id/render` (any kind) | that entity's `read`; plus `DocumentTemplate: read` when a template is named or the default is used | `403` |
 
 A quote **send** checks every one of its gates before it issues anything, so a caller who is refused
 never leaves a `sent` quote with no email behind it. The requirement that surprises people is
@@ -106,11 +115,40 @@ price.`; without the field permission it fails with `422 This user may not enter
 `POST /api/v1/Sales/document/:kind/:id/unlock` exposes the privileged unlock (administrator plus
 reason), and the write guard applies the field rules on every record write.
 
-## 6. Data-level safety rules the module follows
+## 6. Purchasing capability boundaries (19-S.12, 19-S.13)
+
+§4.12 asks for purchase-order management, receipt confirmation, bill issue, payment and stock
+adjustment to be **separate authorities**. The module does not invent a permission system for that: it
+uses the two the platform already has.
+
+| Capability | Grant |
+|---|---|
+| Raise and confirm purchase orders | `PurchaseOrder: create/edit` |
+| Confirm a receipt (the goods-arrived act) | `ReceiptOrder: edit` |
+| Issue a supplier bill or a bill credit | `Bill: edit`, `BillCredit: edit` |
+| Record and settle a supplier payment | `Payment: create/edit` + `Bill: edit` |
+| Ship goods, take a return | `DeliveryOrder: edit`, `ReturnOrder: edit` |
+| Adjust stock | **not grantable yet** — the ledger is 19-S.14, and with `features.inventory` on a stock-moving confirmation is refused |
+
+Two gates sit in front of all of them:
+
+* **`features.purchases`** (settings, administrator-changed): off means a purchasing document command
+  returns `403` with the feature named, so an installation that never enabled procurement does not
+  accumulate purchase orders by accident.
+* **`features.inventory`**: on means the confirmation of a *stock-moving* document (`salesOrder`,
+  `deliveryOrder`, `returnOrder`, `receiptOrder`) is refused until 19-S.14 exists, because silently
+  succeeding would leave an operator believing stock had moved.
+
+A clerk who may confirm receipts but never issue bills is therefore a role with `ReceiptOrder: edit`
+and `Bill: noAccess` — no module-specific switch, and the same answer through the domain command or a
+direct `PUT /api/v1/Bill/:id`.
+
+## 7. Data-level safety rules the module follows
 
 * Test data is created through the real API with `AGENT_TEST_<runId>` markers and deleted by exact id
   (`apps/api/test/support/sales-fixtures.ts`); no real customer record is ever used or modified.
-* No command in this module sends email, charges a card, moves stock or writes to another module's
-  tables.
+* No command in this module sends email beyond the mail module's own queue, charges a card, or applies
+  a stock effect: a confirmed delivery, return or receipt **records** the movement it stands for and
+  nothing acts on it until the 19-S.14 ledger exists. No command writes to another module's tables.
 * Structural reads (`SalesRecords`) allowlist the entity type and validate attribute names, and bind
   every value as a parameter — a request value can never become an SQL identifier.

@@ -31,9 +31,12 @@ import { requireDocumentKind } from "./document/descriptors.js";
 import { SalesDocumentService } from "./document/document.service.js";
 import { SalesNumberingService } from "./document/numbering.service.js";
 import { SalesQuoteSendService } from "./document/quote-send.service.js";
+import { SalesDocumentRenderService } from "./document/render.service.js";
 import type { SalesAuditContext } from "./document/types.js";
 import {
   AllocatePaymentSchema,
+  BillCreditAllocateSchema,
+  BillCreditUnallocateSchema,
   BulkPriceUpdateSchema,
   CreateDocumentSchema,
   CreatePaymentRequestSchema,
@@ -49,8 +52,10 @@ import {
   PreviewTotalsSchema,
   ProviderEventSchema,
   RenderCreditNoteSchema,
+  RenderDocumentSchema,
   RenderQuoteSchema,
   ResolvePriceSchema,
+  ResolveSupplierPriceSchema,
   SalesSettingsPatchSchema,
   SendQuoteSchema,
   TodaySchema,
@@ -62,18 +67,20 @@ import {
   WriteOffReverseSchema,
 } from "./dto/sales-shapes.js";
 import { AllocationService } from "./payments/allocation.service.js";
+import { BillCreditService } from "./payments/bill-credit.service.js";
 import { CreditNoteService } from "./payments/credit-note.service.js";
 import { PaymentService } from "./payments/payment.service.js";
 import { WriteOffService } from "./payments/write-off.service.js";
 import { BulkPriceService } from "./pricing/bulk-price.service.js";
 import { PriceResolutionService } from "./pricing/price-resolution.service.js";
+import { SupplierPriceService } from "./pricing/supplier-price.js";
 import { runAsSalesInternal } from "./sales-internal.js";
 import { SalesModuleHealthService } from "./sales-module-health.service.js";
 import { SalesSettingsService } from "./sales-settings.service.js";
 import { SalesTaxService } from "./tax/tax.service.js";
 
 /**
- * Phase 19-S.1 – 19-S.12 — Sales domain commands (`/api/v1/Sales`).
+ * Phase 19-S.1 – 19-S.13 — Sales domain commands (`/api/v1/Sales`).
  *
  * Entity CRUD stays on the generic `/api/v1/:entity` API — a Product or a QuoteItem is a metadata
  * record, and the Entity Engine already serves list/detail/create/edit/delete, relations, search and
@@ -99,13 +106,19 @@ export class SalesController {
     private readonly documents: SalesDocumentService,
     @Inject(SalesQuoteSendService)
     private readonly quoteSend: SalesQuoteSendService,
+    @Inject(SalesDocumentRenderService)
+    private readonly documentRender: SalesDocumentRenderService,
     @Inject(PaymentService) private readonly payments: PaymentService,
     @Inject(AllocationService) private readonly allocations: AllocationService,
     @Inject(CreditNoteService)
     private readonly creditNotes: CreditNoteService,
+    @Inject(BillCreditService)
+    private readonly billCredits: BillCreditService,
     @Inject(WriteOffService) private readonly writeOffs: WriteOffService,
     @Inject(PriceResolutionService)
     private readonly prices: PriceResolutionService,
+    @Inject(SupplierPriceService)
+    private readonly supplierPrices: SupplierPriceService,
     @Inject(BulkPriceService) private readonly bulkPrices: BulkPriceService,
     @Inject(SalesTaxService) private readonly tax: SalesTaxService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
@@ -149,6 +162,18 @@ export class SalesController {
     return this.prices.resolve(input);
   }
 
+  /**
+   * Resolve one line's **buying** price from a supplier, with the same explainability and the same
+   * "a missing price is never zero" rule (§4.11, §4.12). It reads `SupplierProductPrice` only, so it
+   * can neither return nor fall back to a sales price.
+   */
+  @HttpCode(200)
+  @Post("action/resolveSupplierPrice")
+  async resolveSupplierPrice(@Body() body: unknown) {
+    const input = parse(ResolveSupplierPriceSchema, body);
+    return this.supplierPrices.resolve(input);
+  }
+
   /** Preview or apply a bulk price change; `apply` is audited and bounded (§4.3). */
   @HttpCode(200)
   @Post("action/bulkPriceUpdate")
@@ -166,7 +191,7 @@ export class SalesController {
   }
 
   // -------------------------------------------------------------------------------------------
-  // Commercial documents (19-S.6 – 19-S.12)
+  // Commercial documents (19-S.6 – 19-S.13)
   //
   // Every handler below wraps its work in `runAsSalesInternal`: these are the module's own commands,
   // and they are the only callers allowed to move a computed field (`number`, `status`, `amountDue`,
@@ -269,7 +294,25 @@ export class SalesController {
     );
   }
 
-  /** Recalculate from the server's own numbers. An issued document is never rewritten by this. */
+  /** A document's printable rendering — a named `DocumentTemplate`, or the built-in block layout.
+   *  Every kind is served from its descriptor, so a delivery order or a supplier bill prints without
+   *  a per-kind service (19-S.12 task 7, 19-S.13 task 8). */
+  @HttpCode(200)
+  @Post("document/:kind/:id/render")
+  async renderDocument(
+    @Param("kind") kind: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const input = parse(RenderDocumentSchema, body);
+    return await this.documentRender.render(
+      requireDocumentKind(kind),
+      id,
+      input.templateCode,
+    );
+  }
+
+  /** Recalculate on the server's own numbers. An issued document is never rewritten by this. */
   @HttpCode(200)
   @Post("document/:kind/:id/recalculate")
   async recalculateDocument(
@@ -401,16 +444,20 @@ export class SalesController {
     await this.allocations.unallocate(id);
   }
 
-  /** The invoices a payment may be allocated to, with what each still owes. */
-  @Get("allocatableInvoices")
-  async allocatableInvoices(
+  /**
+   * The documents a payment may settle: issued invoices for an incoming payment, issued bills for an
+   * outgoing one, each with what it still owes (§4.8, §4.12).
+   */
+  @Get("allocatableDocuments")
+  async allocatableDocuments(
     @Query("direction") direction?: string,
     @Query("accountId") accountId?: string,
+    @Query("supplierId") supplierId?: string,
   ) {
     return {
-      list: await this.payments.allocatableInvoices(
+      list: await this.payments.allocatableDocuments(
         direction === "outgoing" ? "outgoing" : "incoming",
-        accountId ?? null,
+        { accountId: accountId ?? null, supplierId: supplierId ?? null },
       ),
     };
   }
@@ -516,6 +563,64 @@ export class SalesController {
       ...this.audit(input.correlationId),
       reason: input.reason,
     });
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Purchasing (19-S.13): the derived receipt state, and the credits that reduce a payable
+  // -------------------------------------------------------------------------------------------
+
+  /**
+   * Recompute a purchase order's receipt state from its confirmed receipt orders (§4.12). Derived,
+   * not typed, and idempotent — the purchasing twin of `refreshFulfilment`.
+   */
+  @HttpCode(200)
+  @Post("purchaseOrder/:id/refreshReceipt")
+  async refreshReceipt(@Param("id") id: string) {
+    return await runAsSalesInternal(() => this.documents.refreshReceipt(id));
+  }
+
+  /** Allocate part of an issued bill credit to an issued bill. Over-allocation is refused. */
+  @HttpCode(201)
+  @Post("billCredit/:id/allocate")
+  async allocateBillCredit(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(BillCreditAllocateSchema, body);
+    return await this.billCredits.allocate({
+      billCreditId: id,
+      billId: input.billId,
+      amount: input.amount,
+      audit: this.audit(input.correlationId),
+    });
+  }
+
+  /** Reverse a bill-credit allocation; the row is kept and marked (§4.12). */
+  @HttpCode(200)
+  @Delete("billCredit/allocation/:id")
+  async unallocateBillCredit(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(BillCreditUnallocateSchema, body);
+    return await this.billCredits.unallocate(id, {
+      ...this.audit(input.correlationId),
+      reason: input.reason,
+    });
+  }
+
+  /** The bill's credit history — live and reversed allocations both stay on record. */
+  @Get("bill/:id/creditAllocations")
+  async billCreditAllocations(@Param("id") id: string) {
+    return { list: await this.billCredits.forBill(id) };
+  }
+
+  /** The issued bills a bill credit may be allocated to, with what each still owes. */
+  @Get("billCredit/allocatableBills")
+  async billCreditAllocatableBills(
+    @Query("billCreditId") billCreditId?: string,
+    @Query("supplierId") supplierId?: string,
+  ) {
+    return {
+      list: await this.billCredits.allocatableBills(
+        billCreditId ?? null,
+        supplierId ?? null,
+      ),
+    };
   }
 
   /** A provider-neutral request for a customer to pay. No gateway call happens here. */

@@ -18,13 +18,13 @@ import { SalesRecords, type SalesRow } from "../sales-records.js";
 import { SalesSettingsService } from "../sales-settings.service.js";
 import {
   assertDirectionAllows,
-  documentOutstanding,
   PAYMENT_DIRECTIONS,
   PAYMENT_TRANSITIONS,
   type PaymentBalance,
   paymentBalance,
   type PaymentDirection,
 } from "./allocation-math.js";
+import { SalesBalanceService } from "./balance.service.js";
 
 /**
  * Phase 19-S.10 — payments, payment methods and channels, and payment requests (§4.8).
@@ -39,7 +39,8 @@ import {
  * What this service refuses outright, because a CRM must:
  *
  *  - any field that looks like card data or a reusable gateway secret, in a request or an event;
- *  - allocating an outgoing payment before the payable documents it would settle exist (19-S.13);
+ *  - a payment whose counterparty contradicts its direction — an outgoing payment pays a supplier, an
+ *    incoming one collects from a customer, and one that names both is ambiguous money (§4.12);
  *  - changing an amount or currency that already has allocations behind it.
  *
  * The balance arithmetic is not here — it is the pure pair in `allocation-math.ts`, so it can be tested
@@ -65,6 +66,8 @@ export interface CreatePaymentInput {
   readonly paymentChannelId?: string | null | undefined;
   readonly accountId?: string | null | undefined;
   readonly contactId?: string | null | undefined;
+  /** Who an outgoing payment went to (§4.12). A customer payment names an account, never both. */
+  readonly supplierId?: string | null | undefined;
   readonly reference?: string | null | undefined;
   readonly memo?: string | null | undefined;
 }
@@ -133,6 +136,7 @@ export class PaymentService {
     @Inject(EntityCrudService) private readonly entities: EntityCrudService,
     @Inject(OutboxService) private readonly outbox: OutboxService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(SalesBalanceService) private readonly balances: SalesBalanceService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -159,6 +163,24 @@ export class PaymentService {
     const balance = paymentBalance(input.amount, []);
     await this.requireLookup("PaymentMethod", input.paymentMethodId);
     await this.requireLookup("PaymentChannel", input.paymentChannelId);
+    // Which side of the ledger a payment belongs to is decided by its counterparty: a customer
+    // payment has an account, a supplier payment has a supplier, and a record that claims both is
+    // ambiguous money (§4.12 "preserve separate customer and supplier semantics").
+    const supplierId = input.supplierId ?? null;
+    if (supplierId !== null) {
+      if (input.direction !== "outgoing")
+        throw new ValidationError(
+          "Only an outgoing payment can name a supplier; an incoming one collects from a customer.",
+          { direction: input.direction, supplierId },
+        );
+      if (input.accountId !== undefined && input.accountId !== null)
+        throw new ValidationError(
+          "A payment names either an account or a supplier, not both.",
+          { accountId: input.accountId, supplierId },
+        );
+      if ((await this.records.byId("Supplier", supplierId)) === undefined)
+        throw new NotFoundError(`Supplier "${supplierId}" does not exist.`);
+    }
 
     const created = await runAsSalesInternal(() =>
       this.entities.create("Payment", {
@@ -171,6 +193,7 @@ export class PaymentService {
         paymentChannelId: input.paymentChannelId ?? null,
         accountId: input.accountId ?? null,
         contactId: input.contactId ?? null,
+        supplierId,
         reference: input.reference ?? null,
         memo: input.memo ?? null,
         status: "draft",
@@ -299,54 +322,50 @@ export class PaymentService {
   }
 
   /**
-   * The invoices an incoming payment may be allocated to, with what each still owes.
+   * The documents a payment may be allocated to, with what each still owes — the allocation editor's
+   * data source (§4.8, §4.12).
    *
-   * This is the allocation editor's data source: it returns issued invoices with a positive
-   * outstanding balance, in the payment's currency, newest due date first.
+   * Direction decides the side of the ledger: an incoming payment lists issued **invoices** it can
+   * collect, an outgoing one issued **bills** it can pay, filtered by the counterparty named in the
+   * query. Documents with nothing outstanding are omitted, so a "nothing to allocate" list means what
+   * it says.
    */
-  async allocatableInvoices(
+  async allocatableDocuments(
     direction: PaymentDirection,
-    accountId?: string | null,
+    filters: { readonly accountId?: string | null; readonly supplierId?: string | null } = {},
   ): Promise<readonly Record<string, unknown>[]> {
-    // An outgoing payment settles payable documents, which do not exist until 19-S.13 — refused here
-    // rather than silently returning an empty list the caller would misread as "nothing owed".
-    assertDirectionAllows(direction, "Invoice");
-    await this.acl.assertAccess("Invoice", "read");
-    const filters: Record<string, string> = { status: "issued" };
-    if (accountId !== undefined && accountId !== null && accountId !== "")
-      filters["accountId"] = accountId;
-    const invoices = await this.records.find("Invoice", filters, 500);
+    const entity = direction === "incoming" ? "Invoice" : "Bill";
+    assertDirectionAllows(direction, entity);
+    await this.acl.assertAccess(entity, "read");
+    const counterpartyField = direction === "incoming" ? "accountId" : "supplierId";
+    const counterpartyId =
+      direction === "incoming" ? filters.accountId : filters.supplierId;
+    const query: Record<string, string> = { status: "issued" };
+    if (counterpartyId !== undefined && counterpartyId !== null && counterpartyId !== "")
+      query[counterpartyField] = counterpartyId;
+    const documents = await this.records.find(entity, query, 500);
     const result: Record<string, unknown>[] = [];
-    for (const invoice of invoices) {
-      const outstanding = await this.outstandingOf(invoice);
-      if (compare(parseDecimal(outstanding), zero(0)) <= 0) continue;
+    for (const document of documents) {
+      const outstanding = await this.balances.outstandingOf(
+        this.database.db,
+        document,
+      );
+      const amount = parseDecimal(outstanding);
+      if (compare(amount, zero(amount.scale)) <= 0) continue;
       result.push({
-        id: invoice.id,
-        number: text(invoice.data["number"]) ?? null,
-        accountId: text(invoice.data["accountId"]) ?? null,
-        currency: text(invoice.data["currency"]) ?? null,
-        grossTotal: text(invoice.data["grossTotal"]) ?? "0",
-        dueDate: text(invoice.data["dueDate"]) ?? null,
+        id: document.id,
+        entity,
+        number: text(document.data["number"]) ?? null,
+        accountId: text(document.data["accountId"]) ?? null,
+        supplierId: text(document.data["supplierId"]) ?? null,
+        currency: text(document.data["currency"]) ?? null,
+        grossTotal: text(document.data["grossTotal"]) ?? "0",
+        dueDate: text(document.data["dueDate"]) ?? null,
         outstanding,
         direction,
       });
     }
     return result;
-  }
-
-  /** What an invoice still owes, from its allocation, credit and write-off rows. */
-  async outstandingOf(invoice: SalesRow): Promise<string> {
-    const [allocations, credits, writeOffs] = await Promise.all([
-      this.records.find("PaymentAllocation", { documentId: invoice.id }, 500),
-      this.records.find("CreditNoteAllocation", { invoiceId: invoice.id }, 500),
-      this.records.find("WriteOff", { invoiceId: invoice.id }, 500),
-    ]);
-    return documentOutstanding(
-      text(invoice.data["grossTotal"]) ?? "0",
-      allocations.map((row) => text(row.data["amount"]) ?? "0"),
-      credits.map((row) => text(row.data["amount"]) ?? "0"),
-      writeOffs.map((row) => text(row.data["amount"]) ?? "0"),
-    );
   }
 
   // ---------------------------------------------------------------------------------------------

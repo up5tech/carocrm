@@ -753,6 +753,19 @@ export const coreMetadata: MetadataSeedEntry[] = [
   salesReturnOrderItemEntity(),
   salesPaymentTermProfileEntity(),
 
+  // -----------------------------------------------------------------------
+  // Phase 19-S.13 — purchasing (`sales`)
+  // -----------------------------------------------------------------------
+  salesPurchaseOrderEntity(),
+  salesPurchaseOrderItemEntity(),
+  salesReceiptOrderEntity(),
+  salesReceiptOrderItemEntity(),
+  salesBillEntity(),
+  salesBillItemEntity(),
+  salesBillCreditEntity(),
+  salesBillCreditItemEntity(),
+  salesBillCreditAllocationEntity(),
+
   // -------------------------------------------------------------------------
   // Phase 19-S.10 – 19-S.11 — payments, allocations, corrections (`sales`)
   // -------------------------------------------------------------------------
@@ -1067,7 +1080,14 @@ function salesSupplierEntity(): MetadataSeedEntry {
         currency: { type: 'varchar', maxLength: 3, inDetail: true, inEdit: true },
         taxId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
       }),
-      relations: {},
+      relations: {
+        // Every purchasing document this supplier is the counterparty of (§4.12 relationship panels).
+        purchaseOrders: { type: 'oneToMany', target: 'PurchaseOrder', mappedBy: 'supplier' },
+        receiptOrders: { type: 'oneToMany', target: 'ReceiptOrder', mappedBy: 'supplier' },
+        bills: { type: 'oneToMany', target: 'Bill', mappedBy: 'supplier' },
+        billCredits: { type: 'oneToMany', target: 'BillCredit', mappedBy: 'supplier' },
+        payments: { type: 'oneToMany', target: 'Payment', mappedBy: 'supplier' },
+      },
       indexes: [{ name: 'idx_supplier_code', fields: ['code'] }],
       layouts: {
         list: [{ entity: 'Supplier', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'code', 'emailAddress', 'currency', 'active', 'modifiedAt'] }] }],
@@ -1246,8 +1266,17 @@ interface DocumentSpec {
   readonly dateField: string;
   readonly itemEntity: string;
   readonly itemParentField: string;
+  /**
+   * The counterparty field the document is *about*, used by the layouts. `accountId` for everything a
+   * customer signs; `supplierId` for the purchasing documents, where an account would be meaningless
+   * (§4.12).
+   */
+  readonly partyField?: 'accountId' | 'supplierId';
   readonly extraFields?: Record<string, Record<string, unknown>>;
   readonly extraEditFields?: readonly string[];
+  /** Extra fields on the line items (a return line's restock disposition, a receipt line's batch). */
+  readonly extraItemFields?: Record<string, Record<string, unknown>>;
+  readonly extraItemEditFields?: readonly string[];
   /**
    * Kind-specific relations, on top of the `items` relation every document gets.
    *
@@ -1348,11 +1377,13 @@ function documentItemFields(spec: DocumentSpec): Record<string, Record<string, u
     netAmount: decimalField({ inList: true, inDetail: true }),
     taxAmount: decimalField({ inDetail: true }),
     grossAmount: decimalField({ inList: true, inDetail: true }),
+    ...(spec.extraItemFields ?? {}),
   };
 }
 
 function documentEntity(spec: DocumentSpec): MetadataSeedEntry {
   const prefix = spec.entity.toLowerCase();
+  const party = spec.partyField ?? 'accountId';
   return {
     scope: 'entity',
     name: spec.entity,
@@ -1369,7 +1400,7 @@ function documentEntity(spec: DocumentSpec): MetadataSeedEntry {
       },
       indexes: [
         { name: `idx_${prefix}_status`, fields: ['status'] },
-        { name: `idx_${prefix}_account`, fields: ['accountId'] },
+        { name: `idx_${prefix}_account`, fields: [party] },
         { name: `idx_${prefix}_number`, fields: ['number'] },
       ],
       layouts: {
@@ -1381,7 +1412,7 @@ function documentEntity(spec: DocumentSpec): MetadataSeedEntry {
               {
                 name: 'list',
                 position: 0,
-                fields: ['number', 'status', 'accountId', spec.dateField, 'currency', 'grossTotal', 'amountDue', 'assignedUserId'],
+                fields: ['number', 'status', party, spec.dateField, 'currency', 'grossTotal', 'amountDue', 'assignedUserId'],
               },
             ],
           },
@@ -1395,7 +1426,7 @@ function documentEntity(spec: DocumentSpec): MetadataSeedEntry {
                 name: 'main',
                 label: spec.label,
                 position: 0,
-                fields: ['number', 'status', 'accountId', 'contactId', spec.dateField, 'currency', 'description', 'assignedUserId'],
+                fields: ['number', 'status', party, 'contactId', spec.dateField, 'currency', 'description', 'assignedUserId'],
               },
               {
                 name: 'totals',
@@ -1421,7 +1452,7 @@ function documentEntity(spec: DocumentSpec): MetadataSeedEntry {
                 name: 'main',
                 label: spec.label,
                 position: 0,
-                fields: ['accountId', 'contactId', spec.dateField, 'currency', 'description', ...(spec.extraEditFields ?? [])],
+                fields: [party, spec.dateField, 'currency', 'description', ...(spec.extraEditFields ?? [])],
               },
               {
                 name: 'terms',
@@ -1462,7 +1493,7 @@ function documentItemEntity(spec: DocumentSpec): MetadataSeedEntry {
           {
             entity: spec.itemEntity,
             type: 'list',
-            panels: [{ name: 'list', position: 0, fields: ['position', 'name', 'sku', 'quantity', 'unitPrice', 'netAmount', 'grossAmount'] }],
+            panels: [{ name: 'list', position: 0, fields: ['position', 'name', 'sku', 'quantity', 'unitPrice', 'netAmount', 'grossAmount', ...(spec.extraItemEditFields ?? [])] }],
           },
         ],
         detail: [
@@ -1470,7 +1501,7 @@ function documentItemEntity(spec: DocumentSpec): MetadataSeedEntry {
             entity: spec.itemEntity,
             type: 'detail',
             panels: [
-              { name: 'main', label: 'Line', position: 0, fields: ['position', 'productId', 'name', 'sku', 'unit', 'quantity', 'unitPrice', 'discountPercent', 'discountAmount'] },
+              { name: 'main', label: 'Line', position: 0, fields: ['position', 'productId', 'name', 'sku', 'unit', 'quantity', 'unitPrice', 'discountPercent', 'discountAmount', ...(spec.extraItemEditFields ?? [])] },
               { name: 'tax', label: 'Tax', position: 10, fields: ['taxCodeId', 'taxRatePercent', 'taxSource', 'netAmount', 'taxAmount', 'grossAmount'] },
             ],
           },
@@ -1480,7 +1511,7 @@ function documentItemEntity(spec: DocumentSpec): MetadataSeedEntry {
             entity: spec.itemEntity,
             type: 'edit',
             panels: [
-              { name: 'main', label: 'Line', position: 0, fields: ['position', 'productId', 'name', 'sku', 'unit', 'quantity', 'unitPrice', 'discountPercent', 'discountAmount', 'taxCodeId'] },
+              { name: 'main', label: 'Line', position: 0, fields: ['position', 'productId', 'name', 'sku', 'unit', 'quantity', 'unitPrice', 'discountPercent', 'discountAmount', 'taxCodeId', ...(spec.extraItemEditFields ?? [])] },
             ],
           },
         ],
@@ -1687,7 +1718,228 @@ function salesReturnOrderItemEntity(): MetadataSeedEntry {
     dateField: 'returnDate',
     itemEntity: 'ReturnOrderItem',
     itemParentField: 'returnOrderId',
+    /**
+     * What happens to the returned goods (19-S.12). `restock` is the only disposition that may
+     * produce an inbound stock movement; the rest of the line is still on record so the operator can
+     * see what was scrapped or quarantined next to what came back. The authority for the gate is
+     * `apps/api/src/sales/document/stock-movement.ts`, and both are unit-tested together.
+     */
+    extraItemFields: {
+      disposition: {
+        type: 'enum',
+        values: ['restock', 'scrap', 'quarantine'],
+        defaultValue: 'restock',
+        inList: true,
+        inDetail: true,
+      },
+    },
+    extraItemEditFields: ['disposition'],
   });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 19-S.13 — purchasing: purchase orders, receipt orders, supplier bills and bill credits
+// ---------------------------------------------------------------------------
+//
+// The purchasing documents are the same engine with the supplier in the account's seat. What they must
+// *not* share with the selling side is price: a purchase price is a `SupplierProductPrice`
+// (19-S.5), the sales engine never reads it, and the only copying that crosses the two is the
+// terms/address a purchase order references for its own totals (PLAN §4.12, acceptance criterion
+// "supplier prices never leak into sales pricing").
+
+function salesPurchaseOrderEntity(): MetadataSeedEntry {
+  return documentEntity({
+    entity: 'PurchaseOrder',
+    label: 'Purchase Order',
+    states: ['draft', 'confirmed', 'partiallyReceived', 'received', 'cancelled'],
+    dateField: 'orderDate',
+    itemEntity: 'PurchaseOrderItem',
+    itemParentField: 'purchaseOrderId',
+    partyField: 'supplierId',
+    extraFields: {
+      supplierId: { type: 'link', entityKey: 'Supplier', inList: true, inDetail: true, inEdit: true },
+      warehouseId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+      expectedDeliveryDate: { type: 'date', inList: true, inDetail: true, inEdit: true },
+    },
+    extraEditFields: ['supplierId', 'warehouseId', 'expectedDeliveryDate'],
+    extraRelations: {
+      // Receipt orders generated from this order, and the bills raised against it (§4.12).
+      receipts: { type: 'oneToMany', target: 'ReceiptOrder', mappedBy: 'purchaseOrder' },
+      bills: { type: 'oneToMany', target: 'Bill', mappedBy: 'purchaseOrder' },
+    },
+  });
+}
+
+function salesPurchaseOrderItemEntity(): MetadataSeedEntry {
+  return documentItemEntity({
+    entity: 'PurchaseOrder',
+    label: 'Purchase Order',
+    states: ['draft'],
+    dateField: 'orderDate',
+    itemEntity: 'PurchaseOrderItem',
+    itemParentField: 'purchaseOrderId',
+    /**
+     * Which supplier price this line was agreed at. Referenced by id so the number stays auditable
+     * after the price list changes, and never copied into sales pricing.
+     */
+    extraItemFields: {
+      supplierProductPriceId: { type: 'varchar', maxLength: 64, inDetail: true },
+    },
+    extraItemEditFields: ['supplierProductPriceId'],
+  });
+}
+
+function salesReceiptOrderEntity(): MetadataSeedEntry {
+  return documentEntity({
+    entity: 'ReceiptOrder',
+    label: 'Receipt Order',
+    states: ['draft', 'confirmed', 'cancelled'],
+    dateField: 'receiptDate',
+    itemEntity: 'ReceiptOrderItem',
+    itemParentField: 'receiptOrderId',
+    partyField: 'supplierId',
+    extraFields: {
+      supplierId: { type: 'link', entityKey: 'Supplier', inList: true, inDetail: true, inEdit: true },
+      purchaseOrderId: { type: 'link', entityKey: 'PurchaseOrder', inList: true, inDetail: true, inEdit: true },
+      warehouseId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+      trackingNumber: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+    },
+    extraEditFields: ['supplierId', 'purchaseOrderId', 'warehouseId', 'trackingNumber'],
+  });
+}
+
+function salesReceiptOrderItemEntity(): MetadataSeedEntry {
+  return documentItemEntity({
+    entity: 'ReceiptOrder',
+    label: 'Receipt Order',
+    states: ['draft'],
+    dateField: 'receiptDate',
+    itemEntity: 'ReceiptOrderItem',
+    itemParentField: 'receiptOrderId',
+    /**
+     * The receiving facts: which supplier price the line arrived at, and the batch/serial identity a
+     * physical receipt needs (§4.12 "link receipt lines to product/supplier price/warehouse/
+     * batch-serial").
+     */
+    extraItemFields: {
+      supplierProductPriceId: { type: 'varchar', maxLength: 64, inDetail: true },
+      batchNumber: { type: 'varchar', maxLength: 64, inDetail: true },
+      serialNumber: { type: 'varchar', maxLength: 128, inDetail: true },
+    },
+    extraItemEditFields: ['supplierProductPriceId', 'batchNumber', 'serialNumber'],
+  });
+}
+
+function salesBillEntity(): MetadataSeedEntry {
+  return documentEntity({
+    entity: 'Bill',
+    label: 'Bill',
+    states: ['draft', 'issued', 'voided'],
+    dateField: 'billDate',
+    itemEntity: 'BillItem',
+    itemParentField: 'billId',
+    partyField: 'supplierId',
+    extraFields: {
+      supplierId: { type: 'link', entityKey: 'Supplier', inList: true, inDetail: true, inEdit: true },
+      purchaseOrderId: { type: 'link', entityKey: 'PurchaseOrder', inDetail: true },
+      receiptOrderId: { type: 'link', entityKey: 'ReceiptOrder', inDetail: true },
+      /** Filled from `paymentTermId` exactly the way an invoice's is (19-S.9), never typed by hand. */
+      dueDate: { type: 'date', inList: true, inDetail: true, sortable: true },
+      /** The payable twin of an invoice's payment state: separate from `status`, derived from allocations (§4.7, §4.12). */
+      paymentStatus: { type: 'enum', values: ['unpaid', 'partiallyPaid', 'paid', 'overdue'], defaultValue: 'unpaid', inList: true, inDetail: true },
+      warehouseId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+    },
+    extraEditFields: ['supplierId', 'warehouseId', 'dueDate'],
+    extraRelations: {
+      // The payment history panel: every allocation that settles this bill (§4.12).
+      allocations: { type: 'oneToMany', target: 'PaymentAllocation', mappedBy: 'document' },
+      creditAllocations: { type: 'oneToMany', target: 'BillCreditAllocation', mappedBy: 'bill' },
+    },
+  });
+}
+
+function salesBillItemEntity(): MetadataSeedEntry {
+  return documentItemEntity({
+    entity: 'Bill',
+    label: 'Bill',
+    states: ['draft'],
+    dateField: 'billDate',
+    itemEntity: 'BillItem',
+    itemParentField: 'billId',
+    extraItemFields: {
+      supplierProductPriceId: { type: 'varchar', maxLength: 64, inDetail: true },
+    },
+    extraItemEditFields: ['supplierProductPriceId'],
+  });
+}
+
+function salesBillCreditEntity(): MetadataSeedEntry {
+  return documentEntity({
+    entity: 'BillCredit',
+    label: 'Bill Credit',
+    states: ['draft', 'issued', 'voided'],
+    dateField: 'creditDate',
+    itemEntity: 'BillCreditItem',
+    itemParentField: 'billCreditId',
+    partyField: 'supplierId',
+    extraFields: {
+      supplierId: { type: 'link', entityKey: 'Supplier', inList: true, inDetail: true, inEdit: true },
+      /** The bill this credit corrects; set by the `convertToBillCredit` conversion (§4.12). */
+      billId: { type: 'link', entityKey: 'Bill', inList: true, inDetail: true, inEdit: true },
+      reason: { type: 'varchar', maxLength: 255, inDetail: true, inEdit: true },
+      /** Credit not yet allocated to a bill; visible and reportable, derived like a credit note's. */
+      unallocatedAmount: decimalField({ inList: true, inDetail: true }),
+    },
+    extraEditFields: ['supplierId', 'billId', 'reason'],
+    extraRelations: { allocations: { type: 'oneToMany', target: 'BillCreditAllocation', mappedBy: 'billCredit' } },
+  });
+}
+
+function salesBillCreditItemEntity(): MetadataSeedEntry {
+  return documentItemEntity({ entity: 'BillCredit', label: 'Bill Credit', states: ['draft'], dateField: 'creditDate', itemEntity: 'BillCreditItem', itemParentField: 'billCreditId' });
+}
+
+/**
+ * A bill credit applied to a supplier bill — the record that reduces a payable (§4.12).
+ *
+ * The twin of `CreditNoteAllocation`, and deliberately a separate entity: the reversal trail, the
+ * audit fields and the "reversing twice is refused" rule are the same, but a record that settles a
+ * customer's receivable and a record that reduces what the organisation owes are not interchangeable
+ * rows in one table.
+ */
+function salesBillCreditAllocationEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'BillCreditAllocation',
+    data: {
+      name: 'BillCreditAllocation',
+      label: 'Bill Credit Allocation',
+      isEntity: true,
+      fields: salesFields({
+        billCreditId: { type: 'link', entityKey: 'BillCredit', required: true, inList: true, inDetail: true },
+        billId: { type: 'link', entityKey: 'Bill', required: true, inList: true, inDetail: true },
+        amount: decimalField({ required: true, inList: true, inDetail: true }),
+        currency: { type: 'varchar', maxLength: 3, inList: true, inDetail: true },
+        allocatedAt: { type: 'datetime', inList: true, inDetail: true },
+        allocatedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        reversedAt: { type: 'datetime', inDetail: true },
+        reversedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        reversalReason: { type: 'varchar', maxLength: 255, inDetail: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_bill_credit_allocation_note', fields: ['billCreditId'] },
+        { name: 'idx_bill_credit_allocation_bill', fields: ['billId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'BillCreditAllocation', type: 'list', panels: [{ name: 'list', position: 0, fields: ['billCreditId', 'billId', 'amount', 'currency', 'allocatedAt'] }] }],
+        detail: [{ entity: 'BillCreditAllocation', type: 'detail', panels: [{ name: 'main', label: 'Bill credit allocation', position: 0, fields: ['billCreditId', 'billId', 'amount', 'currency', 'allocatedAt', 'allocatedBy', 'reversedAt', 'reversalReason'] }] }],
+        edit: [],
+      },
+      record: { displayField: 'name', removable: false },
+      client: { web: false },
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1751,6 +2003,8 @@ function salesPaymentEntity(): MetadataSeedEntry {
         paymentChannelId: { type: 'link', entityKey: 'PaymentChannel', inDetail: true, inEdit: true },
         accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true, inEdit: true },
         contactId: { type: 'link', entityKey: 'Contact', inDetail: true, inEdit: true },
+        /** Who an outgoing payment went to (§4.12). A customer payment names an account, never both. */
+        supplierId: { type: 'link', entityKey: 'Supplier', inList: true, inDetail: true, inEdit: true },
         reference: { type: 'varchar', maxLength: 128, inList: true, inDetail: true, inEdit: true },
         memo: { type: 'text', inDetail: true, inEdit: true },
         status: { type: 'enum', values: ['draft', 'confirmed', 'cancelled'], defaultValue: 'draft', inList: true, inDetail: true, audited: true },
@@ -1768,15 +2022,16 @@ function salesPaymentEntity(): MetadataSeedEntry {
       indexes: [
         { name: 'idx_payment_status', fields: ['status'] },
         { name: 'idx_payment_account', fields: ['accountId'] },
+        { name: 'idx_payment_supplier', fields: ['supplierId'] },
         { name: 'idx_payment_date', fields: ['paymentDate'] },
       ],
       layouts: {
-        list: [{ entity: 'Payment', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'paymentDate', 'direction', 'accountId', 'amount', 'currency', 'allocationStatus', 'status'] }] }],
+        list: [{ entity: 'Payment', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'paymentDate', 'direction', 'accountId', 'supplierId', 'amount', 'currency', 'allocationStatus', 'status'] }] }],
         detail: [
-          { entity: 'Payment', type: 'detail', panels: [{ name: 'main', label: 'Payment', position: 0, fields: ['name', 'direction', 'status', 'paymentDate', 'accountId', 'contactId', 'amount', 'currency', 'paymentMethodId', 'paymentChannelId', 'reference', 'memo'] }] },
+          { entity: 'Payment', type: 'detail', panels: [{ name: 'main', label: 'Payment', position: 0, fields: ['name', 'direction', 'status', 'paymentDate', 'accountId', 'contactId', 'supplierId', 'amount', 'currency', 'paymentMethodId', 'paymentChannelId', 'reference', 'memo'] }] },
           { entity: 'Payment', type: 'detail', panels: [{ name: 'allocation', label: 'Allocation', position: 10, fields: ['allocatedAmount', 'unallocatedAmount', 'allocationStatus'] }] },
         ],
-        edit: [{ entity: 'Payment', type: 'edit', panels: [{ name: 'main', label: 'Payment', position: 0, fields: ['direction', 'paymentDate', 'accountId', 'contactId', 'amount', 'currency', 'paymentMethodId', 'paymentChannelId', 'reference', 'memo'] }] }],
+        edit: [{ entity: 'Payment', type: 'edit', panels: [{ name: 'main', label: 'Payment', position: 0, fields: ['direction', 'paymentDate', 'accountId', 'contactId', 'supplierId', 'amount', 'currency', 'paymentMethodId', 'paymentChannelId', 'reference', 'memo'] }] }],
       },
       record: { displayField: 'name', removable: false },
       client: {},

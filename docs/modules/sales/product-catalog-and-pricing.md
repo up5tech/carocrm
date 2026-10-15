@@ -87,8 +87,10 @@ overlapping configurations debuggable.
 * an entry whose price book currency differs from the document currency is ignored, with the trace
   stating it (`is in EUR, not USD`);
 * inactive products and non-sellable products are refused through `salesGate()` before any price work;
-* **`SupplierProductPrice` is never read here.** Buying prices live in a separate entity, so a
-  supplier price cannot leak into a sales document by an accidental fallback.
+* **`SupplierProductPrice` is never read here.** Buying prices live in a separate entity and are
+  resolved by their own command (`POST /api/v1/Sales/action/resolveSupplierPrice`, 19-S.13), so a
+  supplier price cannot leak into a sales document by an accidental fallback — and the buying resolver
+  reads nothing but `SupplierProductPrice`, so a price book can never be quoted to a supplier.
 
 **Rule ordering** (`orderPriceRules`), never database row order:
 

@@ -172,44 +172,50 @@ export function assertAllocatable(input: {
 }
 
 /**
- * The credit-note twin of `assertAllocatable`, with wording that names a credit, not a payment.
+ * The credit-side twin of `assertAllocatable`, with the wording of whichever credit is being applied.
  *
- * Same two refusals — past the credit note's own remainder, or past what the invoice still owes —
- * but the message a credit-note operator sees has to say "credit note" (§4.9).
+ * Same two refusals — past the credit's own remainder, or past what the payable document still owes —
+ * but the message an operator reads has to name their document: a credit note against an invoice
+ * (§4.9) and a bill credit against a bill (§4.12) are different halves of the ledger that must not be
+ * described in each other's words.
  */
 export function assertCreditAllocatable(input: {
   readonly amount: string;
   readonly creditRemaining: string;
-  readonly invoiceRemaining: string;
-  readonly creditNoteId: string;
-  readonly invoiceId: string;
+  readonly documentRemaining: string;
+  readonly creditId: string;
+  readonly documentId: string;
+  readonly creditNoun?: string | undefined;
+  readonly documentNoun?: string | undefined;
 }): void {
+  const creditNoun = input.creditNoun ?? "credit note";
+  const documentNoun = input.documentNoun ?? "invoice";
   const amount = requirePositive(input.amount, "allocation.amount");
   const creditRemaining = requireNonNegative(
     input.creditRemaining,
     "creditRemaining",
   );
-  const invoiceRemaining = requireNonNegative(
-    input.invoiceRemaining,
-    "invoiceRemaining",
+  const documentRemaining = requireNonNegative(
+    input.documentRemaining,
+    "documentRemaining",
   );
   if (compare(amount, creditRemaining) > 0) {
     throw new ValidationError(
-      `This allocation of ${money(amount)} exceeds the ${money(creditRemaining)} still unallocated on credit note "${input.creditNoteId}".`,
+      `This allocation of ${money(amount)} exceeds the ${money(creditRemaining)} still unallocated on ${creditNoun} "${input.creditId}".`,
       {
-        creditNoteId: input.creditNoteId,
+        creditId: input.creditId,
         amount: money(amount),
         remaining: money(creditRemaining),
       },
     );
   }
-  if (compare(amount, invoiceRemaining) > 0) {
+  if (compare(amount, documentRemaining) > 0) {
     throw new ValidationError(
-      `This allocation of ${money(amount)} exceeds the ${money(invoiceRemaining)} still outstanding on "${input.invoiceId}".`,
+      `This allocation of ${money(amount)} exceeds the ${money(documentRemaining)} still outstanding on ${documentNoun} "${input.documentId}".`,
       {
-        invoiceId: input.invoiceId,
+        documentId: input.documentId,
         amount: money(amount),
-        remaining: money(invoiceRemaining),
+        remaining: money(documentRemaining),
       },
     );
   }
@@ -328,14 +334,14 @@ function money(value: Decimal): string {
   return format(value, value.scale);
 }
 
-/** A payment direction decides which document types it may settle (§4.8). */
+/** A payment direction decides which document types it may settle (§4.8, §4.12). */
 export const PERMITTED_DOCUMENT_TYPES: Readonly<
   Record<PaymentDirection, readonly string[]>
 > = {
   // Money received settles what a customer owes.
   incoming: ["Invoice"],
-  // Money paid settles what the organisation owes. Supplier bills arrive with 19-S.13.
-  outgoing: [],
+  // Money paid settles what the organisation owes: a supplier bill, never a customer invoice.
+  outgoing: ["Bill"],
 };
 
 export function assertDirectionAllows(
@@ -343,22 +349,15 @@ export function assertDirectionAllows(
   documentEntity: string,
 ): void {
   const permitted = PERMITTED_DOCUMENT_TYPES[direction];
-  if (permitted.length === 0) {
-    throw new ValidationError(
-      `A ${direction} payment cannot be allocated yet: the payable documents it would settle arrive with 19-S.13 (supplier bills).`,
-      { direction, documentEntity },
-    );
-  }
-  if (!permitted.includes(documentEntity)) {
-    throw new ValidationError(
-      `A ${direction} payment settles ${permitted.join(", ")}; "${documentEntity}" is not one of them.`,
-      {
-        direction,
-        documentEntity,
-        permitted,
-      },
-    );
-  }
+  if (permitted.includes(documentEntity)) return;
+  throw new ValidationError(
+    `A ${direction} payment settles ${permitted.join(", ")}; "${documentEntity}" is not one of them. An outgoing payment pays a supplier and an incoming one collects from a customer.`,
+    {
+      direction,
+      documentEntity,
+      permitted,
+    },
+  );
 }
 
 function requireNonNegative(value: string, field: string): Decimal {

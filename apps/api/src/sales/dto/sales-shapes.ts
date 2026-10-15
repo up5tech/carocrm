@@ -39,6 +39,21 @@ export const ResolvePriceSchema = z
   })
   .strict();
 
+/**
+ * The **buying** price of one product from one supplier (19-S.13). A separate command from
+ * `resolvePrice` on purpose: the two read different entities and must never fall through to each
+ * other, so a supplier price cannot become a sales price by an accidental fallback.
+ */
+export const ResolveSupplierPriceSchema = z
+  .object({
+    supplierId: z.string().trim().min(1).max(64),
+    productId: z.string().trim().min(1).max(64),
+    quantity: DecimalStringSchema.optional(),
+    currency: z.string().trim().min(3).max(3).nullish(),
+    date: DaySchema.optional(),
+  })
+  .strict();
+
 export const BulkPriceUpdateSchema = z
   .object({
     mode: z.enum(["preview", "apply"]),
@@ -102,11 +117,24 @@ export const PreviewTotalsSchema = z
 export const SalesSettingsPatchSchema = z.record(z.string(), z.unknown());
 
 // ---------------------------------------------------------------------------------------------
-// Phase 19-S.6 – 19-S.12 — commercial document commands
+// Phase 19-S.6 – 19-S.13 — commercial document commands
 // ---------------------------------------------------------------------------------------------
 
-/** One requested line. The same shape the totals preview accepts; reused, not duplicated. */
-export const DocumentLineSchema = PreviewLineSchema;
+/** One requested line. The same shape the totals preview accepts, plus the kind-specific facts. */
+export const DocumentLineSchema = PreviewLineSchema.extend({
+  /**
+   * The source document's line this line moves against. A conversion writes it automatically; an
+   * operator editing a partial delivery or receipt names it, because without it there is no line to
+   * bound the quantity against (§4.10, §4.12).
+   */
+  sourceItemId: z.string().trim().min(1).max(64).optional(),
+  /** A return line's restock disposition — the only one that may bring stock back (19-S.12). */
+  disposition: z.enum(["restock", "scrap", "quarantine"]).optional(),
+  /** Which supplier price a purchasing line was agreed at (19-S.13). Never a sales price. */
+  supplierProductPriceId: z.string().trim().min(1).max(64).optional(),
+  batchNumber: z.string().trim().min(1).max(64).optional(),
+  serialNumber: z.string().trim().min(1).max(128).optional(),
+});
 
 export const DocumentKindSchema = z.enum(IMPLEMENTED_DOCUMENT_KINDS);
 
@@ -230,6 +258,8 @@ export const CreatePaymentSchema = z
     paymentChannelId: IdSchema.nullish(),
     accountId: IdSchema.nullish(),
     contactId: IdSchema.nullish(),
+    /** The payee of an outgoing payment (§4.12). */
+    supplierId: IdSchema.nullish(),
     reference: z.string().trim().min(1).max(128).nullish(),
     memo: z.string().trim().max(2000).nullish(),
   })
@@ -244,6 +274,7 @@ export const UpdatePaymentSchema = z
     paymentChannelId: IdSchema.nullish(),
     accountId: IdSchema.nullish(),
     contactId: IdSchema.nullish(),
+    supplierId: IdSchema.nullish(),
     reference: z.string().trim().min(1).max(128).nullish(),
     memo: z.string().trim().max(2000).nullish(),
   })
@@ -362,6 +393,39 @@ export const CreditNoteUnallocateSchema = z
   .strict();
 
 export type CreditNoteAllocateInput = z.infer<typeof CreditNoteAllocateSchema>;
+
+// ---------------------------------------------------------------------------------------------
+// Phase 19-S.13 — purchasing: the receipt state, supplier bills and the credits that reduce them
+// ---------------------------------------------------------------------------------------------
+
+/** Allocate part of an issued bill credit (id in the path) to one issued bill. */
+export const BillCreditAllocateSchema = z
+  .object({
+    billId: IdSchema,
+    amount: DecimalStringSchema,
+    correlationId: IdSchema.optional(),
+  })
+  .strict();
+
+/** Reversing a bill-credit allocation records an optional reason, like its customer-side twin. */
+export const BillCreditUnallocateSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(255).optional(),
+    correlationId: IdSchema.optional(),
+  })
+  .strict();
+
+/** Render any commercial document kind against a template, or the built-in block layout. */
+export const RenderDocumentSchema = z
+  .object({
+    /** The `DocumentTemplate` code; the entity type's default is used when omitted. */
+    templateCode: z.string().trim().min(1).max(64).optional(),
+  })
+  .strict();
+
+export type BillCreditAllocateInput = z.infer<typeof BillCreditAllocateSchema>;
+export type BillCreditUnallocateInput = z.infer<typeof BillCreditUnallocateSchema>;
+export type RenderDocumentInput = z.infer<typeof RenderDocumentSchema>;
 export type WriteOffCreateInput = z.infer<typeof WriteOffCreateSchema>;
 export type WriteOffApproveInput = z.infer<typeof WriteOffApproveSchema>;
 export type WriteOffRejectInput = z.infer<typeof WriteOffRejectSchema>;

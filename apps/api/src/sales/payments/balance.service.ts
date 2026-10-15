@@ -114,10 +114,13 @@ export class SalesBalanceService {
 
   /**
    * What a document still owes: its payable total minus live payment allocations, live credit
-   * allocations and **approved** write-offs. Never negative, returned as a canonical decimal string.
+   * allocations, **approved** write-offs and live bill-credit allocations.
+   *
+   * Every one of those is looked up by the document's own id, and ids are unique across entities, so
+   * a bill never picks up a customer credit note's rows and an invoice never picks up a bill credit's.
    */
   async outstandingOf(tx: BalanceExecutor, document: SalesRow): Promise<string> {
-    const [allocations, credits, writeOffs] = await Promise.all([
+    const [allocations, credits, writeOffs, billCredits] = await Promise.all([
       this.amountsMatching(
         tx,
         "PaymentAllocation",
@@ -130,12 +133,15 @@ export class SalesBalanceService {
       this.amountsMatching(tx, "WriteOff", "invoiceId", document.id, {
         status: "approved",
       }),
+      this.amountsMatching(tx, "BillCreditAllocation", "billId", document.id, {
+        notReversed: true,
+      }),
     ]);
     return documentOutstanding(
       text(document.data["grossTotal"]) ?? "0",
       allocations,
       credits,
-      writeOffs,
+      [...writeOffs, ...billCredits],
     );
   }
 
@@ -161,32 +167,39 @@ export class SalesBalanceService {
     return { amountDue, paymentStatus };
   }
 
-  /** How much of a credit note is still available to allocate — its live, unreversed remainder. */
-  async creditNoteUnallocated(
+  /**
+   * How much of an issued credit is still available to allocate — its live, unreversed remainder.
+   *
+   * The same rule for both sides of the ledger: a customer credit note (`CreditNoteAllocation`) and a
+   * supplier bill credit (`BillCreditAllocation`) each count only their own rows (§4.9, §4.12).
+   */
+  async creditUnallocated(
     tx: BalanceExecutor,
-    creditNote: SalesRow,
+    credit: SalesRow,
+    entity: "CreditNote" | "BillCredit",
   ): Promise<string> {
     const rows = await this.amountsMatching(
       tx,
-      "CreditNoteAllocation",
-      "creditNoteId",
-      creditNote.id,
+      entity === "CreditNote" ? "CreditNoteAllocation" : "BillCreditAllocation",
+      entity === "CreditNote" ? "creditNoteId" : "billCreditId",
+      credit.id,
       { notReversed: true },
     );
     return creditNoteOutstanding(
-      text(creditNote.data["grossTotal"]) ?? "0",
+      text(credit.data["grossTotal"]) ?? "0",
       rows,
     );
   }
 
-  /** Write the credit note's derived remainder. Always called inside the lock. */
-  async syncCreditNote(
+  /** Write the credit's derived remainder. Always called inside the lock. */
+  async syncCredit(
     tx: BalanceExecutor,
-    creditNote: SalesRow,
+    credit: SalesRow,
+    entity: "CreditNote" | "BillCredit",
   ): Promise<{ unallocated: string }> {
-    const unallocated = await this.creditNoteUnallocated(tx, creditNote);
+    const unallocated = await this.creditUnallocated(tx, credit, entity);
     await runAsSalesInternal(() =>
-      this.entities.update("CreditNote", creditNote.id, {
+      this.entities.update(entity, credit.id, {
         unallocatedAmount: unallocated,
       }),
     );

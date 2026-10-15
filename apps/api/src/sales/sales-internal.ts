@@ -100,6 +100,8 @@ export const SERVER_OWNED_PAYMENT_FIELDS: readonly string[] = [
 export const ADJUSTMENT_ENTITIES: readonly string[] = [
   "WriteOff",
   "CreditNoteAllocation",
+  // The supplier-side credit (19-S.13): the same lifecycle, its own records.
+  "BillCreditAllocation",
 ];
 
 export const SERVER_OWNED_ADJUSTMENT_FIELDS: readonly string[] = [

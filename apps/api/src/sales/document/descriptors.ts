@@ -17,8 +17,10 @@ import { DEFAULT_LOCK_POLICY, type DocumentLockPolicy } from "./lock.js";
  * while each document type still owns its own states and its own rules. Adding a document type is
  * adding a descriptor, not a new copy of the engine.
  *
- * Purchasing kinds (`purchaseOrder`, `receiptOrder`, `bill`, `billCredit`) already have a lock policy
- * in `lock.ts` but no descriptor yet: they arrive with 19-S.13, together with their entities.
+ * Purchasing kinds (`purchaseOrder`, `receiptOrder`, `bill`, `billCredit`) are the same shape of
+ * problem with the supplier in the account's seat: an entity, child items, a number series, states,
+ * transitions and conversions (§4.12). The descriptor registry is what makes adding all four a
+ * matter of data rather than four more services.
  */
 
 /** The document kinds this module actually serves today, in the order the plan delivers them. */
@@ -29,10 +31,37 @@ export const IMPLEMENTED_DOCUMENT_KINDS = [
   "creditNote",
   "deliveryOrder",
   "returnOrder",
+  "purchaseOrder",
+  "receiptOrder",
+  "bill",
+  "billCredit",
 ] as const;
 
 export type ImplementedDocumentKind =
   (typeof IMPLEMENTED_DOCUMENT_KINDS)[number];
+
+/**
+ * The kinds that belong to the purchasing half of the module, gated by the `purchases` feature
+ * (§4.13 "each sub-module gated by settings and permissions").
+ */
+export const PURCHASING_KINDS: readonly ImplementedDocumentKind[] = [
+  "purchaseOrder",
+  "receiptOrder",
+  "bill",
+  "billCredit",
+];
+
+/**
+ * The kinds whose confirmation stands for a physical stock change: a sale order reserves, a delivery
+ * ships out, a return and a receipt bring goods in (§4.10, §4.12). With `features.inventory` on and no
+ * ledger to apply the movement (19-S.14), confirming one is refused rather than pretended.
+ */
+export const STOCK_MOVING_KINDS: readonly ImplementedDocumentKind[] = [
+  "salesOrder",
+  "deliveryOrder",
+  "returnOrder",
+  "receiptOrder",
+];
 
 const IMPLEMENTED_SET: ReadonlySet<string> = new Set(
   IMPLEMENTED_DOCUMENT_KINDS,
@@ -61,8 +90,6 @@ export interface DocumentTransition {
   readonly issues?: boolean;
   /** A privileged correction (void, unlock-style actions) that must carry an audit reason. */
   readonly requiresReason?: boolean;
-  /** Dedicated permission, on top of the entity's normal `edit` access. */
-  readonly permission?: string;
 }
 
 /** A supported source → destination conversion. */
@@ -79,7 +106,8 @@ export interface DocumentConversion {
   readonly copyFields: readonly string[];
   /**
    * A destination field that links back to the source row by id — the provenance link an issued
-   * credit note keeps to the invoice it credits (§4.9).
+   * credit note keeps to the invoice it credits (§4.9), and the link a delivery order keeps to the
+   * order line it moves against (§4.10).
    */
   readonly linkToSource?: { readonly field: string };
 }
@@ -110,6 +138,13 @@ export interface SalesDocumentDescriptor {
    * left to an operator's arithmetic.
    */
   readonly dueDateField?: string;
+  /**
+   * True for the kinds one source can produce more than once, because each one moves part of it: a
+   * sales order ships in several deliveries, a purchase order arrives in several receipts (§4.10,
+   * §4.12). For every other kind a second generated document is the same commercial act twice, and
+   * the conversion refuses it; what bounds these is the remaining-quantity guard, not the count.
+   */
+  readonly multipleFromSource?: boolean;
 }
 
 /** Fields every commercial document copies from its source; each descriptor may extend it. */
@@ -118,6 +153,22 @@ const PARTY_FIELDS: readonly string[] = [
   "contactId",
   "currency",
   "priceBookId",
+  "paymentTermId",
+  "shippingAddress",
+  "billingAddress",
+  "shippingAmount",
+  "documentDiscountAmount",
+];
+
+/**
+ * The purchasing equivalent (§4.12): a supplier instead of an account, and no price book — a
+ * purchase price is a `SupplierProductPrice`, never a sales one. The distinction is what keeps
+ * supplier prices out of sales pricing: the two field lists do not overlap except in the terms and
+ * addresses that both sides genuinely share.
+ */
+const PURCHASE_PARTY_FIELDS: readonly string[] = [
+  "supplierId",
+  "currency",
   "paymentTermId",
   "shippingAddress",
   "billingAddress",
@@ -233,6 +284,7 @@ const SALES_ORDER: SalesDocumentDescriptor = {
       toKind: "invoice",
       from: ["confirmed", "partiallyFulfilled", "fulfilled"],
       copyFields: [...PARTY_FIELDS, "opportunityId"],
+      linkToSource: { field: "salesOrderId" },
     },
     {
       action: "convertToDeliveryOrder",
@@ -240,6 +292,17 @@ const SALES_ORDER: SalesDocumentDescriptor = {
       toKind: "deliveryOrder",
       from: ["confirmed", "partiallyFulfilled"],
       copyFields: [...PARTY_FIELDS, "warehouseId"],
+      linkToSource: { field: "salesOrderId" },
+    },
+    {
+      // A return against the order rather than one shipment: what bounds it is what was delivered,
+      // not what was ordered (§4.10).
+      action: "convertToReturnOrder",
+      label: "Create return order",
+      toKind: "returnOrder",
+      from: ["confirmed", "partiallyFulfilled", "fulfilled"],
+      copyFields: [...PARTY_FIELDS, "warehouseId"],
+      linkToSource: { field: "salesOrderId" },
     },
   ],
   lockPolicy: DEFAULT_LOCK_POLICY,
@@ -356,15 +419,29 @@ const DELIVERY_ORDER: SalesDocumentDescriptor = {
     {
       action: "cancel",
       label: "Cancel",
-      from: ["draft", "confirmed"],
+      // Confirmation is the stock-moving act, so it is not undone by a cancellation: the supported
+      // correction is a return order, and the order's fulfilment stays what was delivered (§4.10).
+      from: ["draft"],
       to: "cancelled",
       requiresReason: true,
     },
   ],
-  conversions: [],
+  conversions: [
+    {
+      // The customer sends part of a shipment back. The delivery's own order link is copied by value,
+      // so the return keeps both references (§4.10).
+      action: "convertToReturnOrder",
+      label: "Create return order",
+      toKind: "returnOrder",
+      from: ["confirmed", "delivered"],
+      copyFields: [...PARTY_FIELDS, "warehouseId", "salesOrderId"],
+      linkToSource: { field: "deliveryOrderId" },
+    },
+  ],
   lockPolicy: DEFAULT_LOCK_POLICY,
   minItems: 1,
   maxItems: MAX_ITEMS,
+  multipleFromSource: true,
   dateField: "deliveryDate",
 };
 
@@ -398,7 +475,185 @@ const RETURN_ORDER: SalesDocumentDescriptor = {
   lockPolicy: DEFAULT_LOCK_POLICY,
   minItems: 1,
   maxItems: MAX_ITEMS,
+  multipleFromSource: true,
   dateField: "returnDate",
+};
+
+/**
+ * Purchase order — §4.12. Confirming is the organisation's commitment; the receipt state
+ * (`partiallyReceived` / `received`) is **derived** from confirmed receipt orders, never typed.
+ *
+ * The permission boundary is the entity's own ACL: this command needs `edit` on `PurchaseOrder`, and
+ * nothing else — receipt confirmation is `ReceiptOrder`, bill issue is `Bill`, payment is `Payment`,
+ * so the five capabilities §4.12 separates are five independent grants rather than one flag.
+ */
+const PURCHASE_ORDER: SalesDocumentDescriptor = {
+  kind: "purchaseOrder",
+  label: "Purchase Order",
+  entity: "PurchaseOrder",
+  itemEntity: "PurchaseOrderItem",
+  itemParentField: "purchaseOrderId",
+  seriesCode: "purchaseOrder",
+  states: ["draft", "confirmed", "partiallyReceived", "received", "cancelled"],
+  initialState: "draft",
+  transitions: [
+    {
+      action: "confirm",
+      label: "Confirm",
+      from: ["draft"],
+      to: "confirmed",
+      issues: true,
+    },
+    {
+      action: "cancel",
+      label: "Cancel",
+      from: ["draft", "confirmed"],
+      to: "cancelled",
+      requiresReason: true,
+    },
+  ],
+  conversions: [
+    {
+      action: "convertToReceiptOrder",
+      label: "Create receipt order",
+      toKind: "receiptOrder",
+      from: ["confirmed", "partiallyReceived"],
+      copyFields: [...PURCHASE_PARTY_FIELDS, "warehouseId"],
+      linkToSource: { field: "purchaseOrderId" },
+    },
+  ],
+  lockPolicy: DEFAULT_LOCK_POLICY,
+  minItems: 1,
+  maxItems: MAX_ITEMS,
+  dateField: "orderDate",
+};
+
+/**
+ * Receipt order — §4.12. Confirmation is the receiving event; it is what a purchase order's receipt
+ * state is derived from, and the same confirmation guards against receiving more than a line ordered.
+ */
+const RECEIPT_ORDER: SalesDocumentDescriptor = {
+  kind: "receiptOrder",
+  label: "Receipt Order",
+  entity: "ReceiptOrder",
+  itemEntity: "ReceiptOrderItem",
+  itemParentField: "receiptOrderId",
+  seriesCode: "receiptOrder",
+  states: ["draft", "confirmed", "cancelled"],
+  initialState: "draft",
+  transitions: [
+    {
+      action: "confirm",
+      label: "Confirm receipt",
+      from: ["draft"],
+      to: "confirmed",
+      issues: true,
+    },
+    {
+      action: "cancel",
+      label: "Cancel",
+      from: ["draft"],
+      to: "cancelled",
+      requiresReason: true,
+    },
+  ],
+  conversions: [
+    {
+      // The bill for what arrived. Both references travel: `purchaseOrderId` by value from the
+      // receipt, `receiptOrderId` as the provenance link (§4.12 purchase-to-bill traceability).
+      action: "convertToBill",
+      label: "Create supplier bill",
+      toKind: "bill",
+      from: ["confirmed"],
+      copyFields: [...PURCHASE_PARTY_FIELDS, "purchaseOrderId", "warehouseId"],
+      linkToSource: { field: "receiptOrderId" },
+    },
+  ],
+  lockPolicy: DEFAULT_LOCK_POLICY,
+  minItems: 1,
+  maxItems: MAX_ITEMS,
+  multipleFromSource: true,
+  dateField: "receiptDate",
+};
+
+/**
+ * Supplier bill — §4.12. Issued from a receipt order or on its own; `dueDate` comes from the payment
+ * terms like every other payable, and what is still owed is a derived `amountDue` maintained by the
+ * allocation services (19-S.10's machinery, with the supplier as the counterparty).
+ */
+const BILL: SalesDocumentDescriptor = {
+  kind: "bill",
+  label: "Bill",
+  entity: "Bill",
+  itemEntity: "BillItem",
+  itemParentField: "billId",
+  seriesCode: "bill",
+  states: ["draft", "issued", "voided"],
+  initialState: "draft",
+  transitions: [
+    {
+      action: "issue",
+      label: "Issue",
+      from: ["draft"],
+      to: "issued",
+      issues: true,
+    },
+    {
+      action: "void",
+      label: "Void",
+      from: ["issued"],
+      to: "voided",
+      requiresReason: true,
+    },
+  ],
+  conversions: [
+    {
+      action: "convertToBillCredit",
+      label: "Create bill credit",
+      toKind: "billCredit",
+      from: ["issued"],
+      copyFields: [...PURCHASE_PARTY_FIELDS],
+      linkToSource: { field: "billId" },
+    },
+  ],
+  lockPolicy: DEFAULT_LOCK_POLICY,
+  minItems: 1,
+  maxItems: MAX_ITEMS,
+  dateField: "billDate",
+  dueDateField: "dueDate",
+};
+
+/** Bill credit (a debit note) — §4.12. Reduces a payable through an explicit allocation, never an edit. */
+const BILL_CREDIT: SalesDocumentDescriptor = {
+  kind: "billCredit",
+  label: "Bill Credit",
+  entity: "BillCredit",
+  itemEntity: "BillCreditItem",
+  itemParentField: "billCreditId",
+  seriesCode: "billCredit",
+  states: ["draft", "issued", "voided"],
+  initialState: "draft",
+  transitions: [
+    {
+      action: "issue",
+      label: "Issue",
+      from: ["draft"],
+      to: "issued",
+      issues: true,
+    },
+    {
+      action: "void",
+      label: "Void",
+      from: ["issued"],
+      to: "voided",
+      requiresReason: true,
+    },
+  ],
+  conversions: [],
+  lockPolicy: DEFAULT_LOCK_POLICY,
+  minItems: 1,
+  maxItems: MAX_ITEMS,
+  dateField: "creditDate",
 };
 
 export const DOCUMENT_DESCRIPTORS: Readonly<
@@ -410,6 +665,10 @@ export const DOCUMENT_DESCRIPTORS: Readonly<
   creditNote: CREDIT_NOTE,
   deliveryOrder: DELIVERY_ORDER,
   returnOrder: RETURN_ORDER,
+  purchaseOrder: PURCHASE_ORDER,
+  receiptOrder: RECEIPT_ORDER,
+  bill: BILL,
+  billCredit: BILL_CREDIT,
 };
 
 export function documentDescriptor(

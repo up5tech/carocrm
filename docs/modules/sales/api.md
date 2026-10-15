@@ -32,7 +32,7 @@ Reports the module descriptor plus facts read from the running platform — neve
     "minPlatformVersion": "1.0.0",
     "loadOrder": 320,
     "apiPrefix": "/api/v1/Sales",
-    "implementedPhases": ["19-S.0", "19-S.1", "19-S.2", "19-S.3", "19-S.4", "19-S.5", "19-S.6", "19-S.7", "19-S.8", "19-S.9", "19-S.10", "19-S.11"]
+    "implementedPhases": ["19-S.0", "19-S.1", "19-S.2", "19-S.3", "19-S.4", "19-S.5", "19-S.6", "19-S.7", "19-S.8", "19-S.9", "19-S.10", "19-S.11", "19-S.12", "19-S.13"]
   },
   "ok": true,
   "dependencies": [            // entity-engine, crm-core-records, acl, hooks, audit-stream, jobs
@@ -296,13 +296,14 @@ what the tests assert on and what the UI shows.
 The commercial **document commands** and the **payment commands** are also part of this prefix and are
 not repeated in this file: `POST /api/v1/Sales/document`, `GET|PATCH|DELETE
 /api/v1/Sales/document/:kind/:id`, `…/:id/transition`, `…/:id/unlock`, `…/:id/convert`,
-`…/:id/recalculate`, `POST /api/v1/Sales/action/expireQuotes` (and the worker-authorized
+`…/:id/render`, `…/:id/recalculate`, `POST /api/v1/Sales/action/expireQuotes` (and the worker-authorized
 `action/expire-quotes`), `action/markOverdueInvoices`, `salesOrder/:id/refreshFulfilment`,
-`/api/v1/Sales/payment*`, `/api/v1/Sales/allocation/:id`, `/api/v1/Sales/paymentRequest`,
-`/api/v1/Sales/providerEvent`. `kind` is one of `quote`, `salesOrder`, `invoice`, `creditNote`,
-`deliveryOrder`, `returnOrder`. The per-command behaviour is described in
-[README.md](README.md#document-engine-19-s6--19-s12-in-progress), and every request body is the Zod
-schema of the same name in `apps/api/src/sales/dto/sales-shapes.ts`.
+`/api/v1/Sales/payment*`, `/api/v1/Sales/allocation/:id`, `/api/v1/Sales/allocatableDocuments`,
+`/api/v1/Sales/paymentRequest`, `/api/v1/Sales/providerEvent`. `kind` is one of `quote`, `salesOrder`,
+`invoice`, `creditNote`, `deliveryOrder`, `returnOrder`, `purchaseOrder`, `receiptOrder`, `bill`,
+`billCredit`. The per-command behaviour is described in
+[README.md](README.md#document-engine-19-s6--19-s13), and every request body is the Zod schema of the
+same name in `apps/api/src/sales/dto/sales-shapes.ts`.
 
 The **credit-note and write-off commands** (19-S.11) follow the same pattern:
 
@@ -317,9 +318,28 @@ POST   /api/v1/Sales/write-off/:id/reject           administrator only; the requ
 POST   /api/v1/Sales/write-off/:id/reverse          administrator only; reason required, restores the receivable
 ```
 
+The **purchasing commands** (19-S.13) are the same shapes on the payable side, and are refused with
+`403` while `features.purchases` is off:
+
+```text
+POST   /api/v1/Sales/purchaseOrder/:id/refreshReceipt   re-derive `partiallyReceived` / `received` from confirmed receipts
+POST   /api/v1/Sales/billCredit/:id/allocate            apply part of an issued bill credit to an issued bill
+DELETE /api/v1/Sales/billCredit/allocation/:id          reverse it; the row stays with the reversal trail
+GET    /api/v1/Sales/billCredit/allocatableBills        ?billCreditId= &supplierId= — issued bills and their outstanding
+GET    /api/v1/Sales/bill/:id/creditAllocations         the bill's credit history, live and reversed
+GET    /api/v1/Sales/allocatableDocuments?direction=outgoing&supplierId=  what a supplier payment can still settle
+POST   /api/v1/Sales/action/resolveSupplierPrice        the buying price from `SupplierProductPrice` only (§4.11)
+```
+
+A `Payment` names its counterparty by direction: `accountId`/`contactId` when it is incoming,
+`supplierId` when it is outgoing — a record that names both is refused. An allocation is accepted only
+when the direction matches the document: incoming settles `Invoice`, outgoing settles `Bill`.
+
 `DocumentTemplate` templates for a credit note are ordinary records; the template's target entity is
 stored in `targetEntity` (the kernel reserves the attribute name `entityType`), while the create/query
 API keeps accepting `entityType` as the parameter name.
 
-Delivery/return stock effects, purchases, inventory and subscriptions have no working routes yet —
-those arrive with 19-S.12 onward.
+Inventory (warehouses, the stock ledger, transfers, reservations, batch/serial tracking entities) and
+subscriptions still have no working routes: a confirmed delivery, return or receipt order freezes the
+movement it stands for in its snapshot and refuses to be confirmed at all when
+`features.inventory` is on, because applying it is 19-S.14.

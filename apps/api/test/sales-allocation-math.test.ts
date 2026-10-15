@@ -130,18 +130,16 @@ describe('invoicePaymentStatus', () => {
 });
 
 describe('assertDirectionAllows', () => {
-  it('lets an incoming payment settle an invoice', () => {
+  it('settles a bill with an outgoing payment and an invoice with an incoming one (19-S.13)', () => {
     expect(() => assertDirectionAllows('incoming', 'Invoice')).not.toThrow();
-  });
-
-  it('refuses an outgoing payment until the payable documents exist', () => {
-    // Silently returning "nothing to allocate" would read as "nothing is owed", which is a different
-    // and dangerous statement.
-    expect(() => assertDirectionAllows('outgoing', 'Invoice')).toThrow(/19-S\.13/);
+    expect(() => assertDirectionAllows('outgoing', 'Bill')).not.toThrow();
   });
 
   it('refuses a document type the direction does not settle', () => {
+    // The two halves of the ledger stay separate: a customer payment never settles a supplier bill
+    // and a supplier payment never settles a customer invoice (§4.12).
     expect(() => assertDirectionAllows('incoming', 'Bill')).toThrow(/is not one of them/);
+    expect(() => assertDirectionAllows('outgoing', 'Invoice')).toThrow(/is not one of them/);
   });
 });
 
@@ -161,23 +159,37 @@ describe('creditNoteOutstanding (19-S.11)', () => {
   });
 });
 
-describe('assertCreditAllocatable (19-S.11)', () => {
+describe('assertCreditAllocatable (19-S.11, 19-S.13)', () => {
   it('accepts an amount within both remainders', () => {
     expect(() =>
-      assertCreditAllocatable({ amount: '30.00', creditRemaining: '40.00', invoiceRemaining: '70.00', creditNoteId: 'cn1', invoiceId: 'inv1' }),
+      assertCreditAllocatable({ amount: '30.00', creditRemaining: '40.00', documentRemaining: '70.00', creditId: 'cn1', documentId: 'inv1' }),
     ).not.toThrow();
   });
 
   it('refuses an amount beyond the credit note, naming the credit note (not a payment)', () => {
     expect(() =>
-      assertCreditAllocatable({ amount: '50.00', creditRemaining: '40.00', invoiceRemaining: '70.00', creditNoteId: 'cn1', invoiceId: 'inv1' }),
+      assertCreditAllocatable({ amount: '50.00', creditRemaining: '40.00', documentRemaining: '70.00', creditId: 'cn1', documentId: 'inv1' }),
     ).toThrow(/still unallocated on credit note "cn1"/);
   });
 
   it('refuses an amount beyond what the invoice still owes', () => {
     expect(() =>
-      assertCreditAllocatable({ amount: '80.00', creditRemaining: '100.00', invoiceRemaining: '70.00', creditNoteId: 'cn1', invoiceId: 'inv1' }),
-    ).toThrow(/still outstanding on "inv1"/);
+      assertCreditAllocatable({ amount: '80.00', creditRemaining: '100.00', documentRemaining: '70.00', creditId: 'cn1', documentId: 'inv1' }),
+    ).toThrow(/still outstanding on invoice "inv1"/);
+  });
+
+  it('says "bill credit" and "bill" when that is the credit being applied (§4.12)', () => {
+    expect(() =>
+      assertCreditAllocatable({
+        amount: '80.00',
+        creditRemaining: '100.00',
+        documentRemaining: '70.00',
+        creditId: 'bc1',
+        documentId: 'bill1',
+        creditNoun: 'bill credit',
+        documentNoun: 'bill',
+      }),
+    ).toThrow(/still outstanding on bill "bill1"/);
   });
 });
 

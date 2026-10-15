@@ -254,6 +254,8 @@ export const SALES_MODULE = {
     "19-S.9",
     "19-S.10",
     "19-S.11",
+    "19-S.12",
+    "19-S.13",
   ],
 } as const;
 

@@ -1,4 +1,8 @@
-import { NotFoundError, ValidationError } from "@carocrm/core/errors/index.js";
+import {
+  AuthorizationDeniedError,
+  NotFoundError,
+  ValidationError,
+} from "@carocrm/core/errors/index.js";
 import { Inject, Injectable } from "@nestjs/common";
 
 import { AclApiService } from "../../acl/acl-api.service.js";
@@ -13,11 +17,19 @@ import { currentTx, runInTransaction } from "../../entity/tx-context.js";
 import { resolveDay, storedDay } from "../clock.js";
 import type { ExchangeRateInput } from "../money/currency.js";
 import { normalizeCurrencyCode } from "../money/currency.js";
+import type { Decimal } from "../money/decimal.js";
 import {
-  runAsSalesInternal,
-  SERVER_OWNED_DOCUMENT_FIELDS,
-} from "../sales-internal.js";
-import { SalesRecords, type SalesRow } from "../sales-records.js";
+  add,
+  format,
+  parseDecimal,
+  zero,
+} from "../money/decimal.js";
+import { runAsSalesInternal, SERVER_OWNED_DOCUMENT_FIELDS } from "../sales-internal.js";
+import {
+  type SalesEntityType,
+  SalesRecords,
+  type SalesRow,
+} from "../sales-records.js";
 import {
   type SalesSettings,
   SalesSettingsService,
@@ -32,7 +44,9 @@ import {
   findConversion,
   findTransition,
   type ImplementedDocumentKind,
+  PURCHASING_KINDS,
   type SalesDocumentDescriptor,
+  STOCK_MOVING_KINDS,
 } from "./descriptors.js";
 import {
   type FulfilmentState,
@@ -43,9 +57,11 @@ import {
 import {
   assertWithinRemaining,
   type ItemRecordPayload,
+  itemRecordPayload,
   itemRecordPayloadFromStored,
   itemsToLineInputs,
   itemsToLineInputsWithSource,
+  lineExtrasOf,
   MAX_LINE_ITEMS,
   type RequestedLine,
   type StoredItem,
@@ -62,16 +78,27 @@ import {
 } from "./lock.js";
 import { SalesNumberingService } from "./numbering.service.js";
 import {
+  type ReceiptSummary,
+  receiptSummary,
+  receiptTransitionRefusal,
+} from "./receipt.js";
+import {
   buildDocumentSnapshot,
   type DocumentSnapshot,
   parseDocumentSnapshot,
   readDocumentSnapshot,
 } from "./snapshot.js";
+import {
+  planDeliveryMovement,
+  planReceiptMovement,
+  planReturnMovement,
+  type StockMovementPlan,
+} from "./stock-movement.js";
 import { dueDateFor, isOverdue, type PaymentTerms } from "./terms.js";
 import type { SalesAuditContext } from "./types.js";
 
 /**
- * Phase 19-S.6 – 19-S.12 — the engine every commercial document runs on.
+ * Phase 19-S.6 – 19-S.13 — the engine every commercial document runs on.
  *
  * One implementation of the mechanics the plan describes once (§4.4): create a document with typed
  * line items, recalculate its totals **on the server for every save**, apply a named state
@@ -80,8 +107,11 @@ import type { SalesAuditContext } from "./types.js";
  * apply the lock policy and write the domain event, all in one transaction (§4.7).
  *
  * Deliberately **not** here: the per-document state machines (they are data in `descriptors.ts`),
- * payment allocation, credit allocation, stock movement, PDF/email and expiry jobs. Those live in the
- * services that own them, and none of them gets a back door into this one.
+ * payment allocation, credit allocation, PDF/email and expiry jobs. Those live in the services that
+ * own them, and none of them gets a back door into this one. Stock movement is the one deliberate
+ * exception in *contract* only: a confirmed delivery or return order records the movement it has
+ * confirmed (`stock-movement.ts`) inside the same frozen snapshot, and the ledger that will apply it
+ * (19-S.14) consumes that plan rather than reading records.
  *
  * Two rules this file exists to enforce:
  *
@@ -97,6 +127,9 @@ export interface DocumentPartySnapshot {
   readonly accountName: string | null;
   readonly contactId: string | null;
   readonly contactName: string | null;
+  /** The purchasing counterparty (19-S.13). `null` on every customer-facing document. */
+  readonly supplierId: string | null;
+  readonly supplierName: string | null;
   readonly billingAddress: string | null;
   readonly shippingAddress: string | null;
 }
@@ -121,6 +154,12 @@ export interface CommercialSnapshot {
     readonly quantityPrecision: number;
     readonly missingTaxPolicy: string;
   };
+  /**
+   * The stock movement this document's issuance confirmed (19-S.12, 19-S.13): a delivery ships out, a
+   * return brings goods back per line disposition, a receipt brings a purchase in. The ledger that
+   * applies all of them arrives with 19-S.14.
+   */
+  readonly stockMovement?: StockMovementPlan | undefined;
 }
 
 export interface DocumentView {
@@ -261,6 +300,7 @@ export class SalesDocumentService {
     const descriptor = documentDescriptor(input.kind);
     await this.acl.assertAccess(descriptor.entity, "create");
     const settings = await this.settings.read();
+    await this.assertKindAllowed(descriptor, settings);
     rejectServerOwned(input.data);
     const lines = validateRequestedLines(input.items, {
       quantityPrecision: settings.settings.quantityPrecision,
@@ -451,6 +491,302 @@ export class SalesDocumentService {
   }
 
   /**
+   * Refuse a quantity-moving confirmation that moves more than its source line still allows: a
+   * delivery against a sales-order line, a return against what was actually delivered, a receipt
+   * against a purchase-order line (§4.10, §4.12). Never silently clamped — a clamp would move a
+   * different quantity than the operator confirmed.
+   *
+   * A document whose lines carry no source lineage (an explicitly manual delivery or return, which
+   * §4.10 allows) moves what it says: there is no line for it to exceed.
+   */
+  private async assertMovementWithinRemaining(
+    descriptor: SalesDocumentDescriptor,
+    row: SalesRow,
+    items: readonly StoredItem[],
+  ): Promise<void> {
+    const requested = new Map<string, string>();
+    for (const item of items)
+      if (item.sourceItemId !== null)
+        requested.set(item.sourceItemId, item.quantity);
+    if (requested.size === 0) return;
+    const bound = await this.movementBound(descriptor, row);
+    if (bound === undefined) return;
+    assertWithinRemaining(requested, bound.moved, bound.allowed);
+  }
+
+  /**
+   * What a quantity-moving document may still move, per source line: the line's own quantity, less
+   * what the documents of the same kind already confirmed against it.
+   */
+  private async movementBound(
+    descriptor: SalesDocumentDescriptor,
+    row: SalesRow,
+  ): Promise<
+    | { readonly moved: Map<string, readonly string[]>; readonly allowed: Map<string, string> }
+    | undefined
+  > {
+    if (descriptor.kind === "deliveryOrder") {
+      const salesOrderId = text(row.data["salesOrderId"]);
+      if (salesOrderId === undefined) return undefined;
+      await this.assertSourceActive("salesOrder", salesOrderId);
+      const moved = await this.movedLineQuantities(
+        "DeliveryOrder",
+        "DeliveryOrderItem",
+        "deliveryOrderId",
+        "salesOrderId",
+        salesOrderId,
+        MOVED_DELIVERY_STATUSES,
+      );
+      return {
+        moved,
+        allowed: await this.lineQuantities("salesOrder", salesOrderId),
+      };
+    }
+    if (descriptor.kind === "returnOrder") {
+      const deliveryOrderId = text(row.data["deliveryOrderId"]);
+      if (deliveryOrderId !== undefined) {
+        await this.assertSourceActive("deliveryOrder", deliveryOrderId);
+        return {
+          moved: await this.movedLineQuantities(
+            "ReturnOrder",
+            "ReturnOrderItem",
+            "returnOrderId",
+            "deliveryOrderId",
+            deliveryOrderId,
+            MOVED_RETURN_STATUSES,
+          ),
+          allowed: await this.lineQuantities("deliveryOrder", deliveryOrderId),
+        };
+      }
+      const salesOrderId = text(row.data["salesOrderId"]);
+      if (salesOrderId === undefined) return undefined;
+      await this.assertSourceActive("salesOrder", salesOrderId);
+      // Against an order rather than a specific shipment, the most a line can return is what was
+      // delivered on it — not what was ordered (§4.10).
+      const delivered = await this.movedLineQuantities(
+        "DeliveryOrder",
+        "DeliveryOrderItem",
+        "deliveryOrderId",
+        "salesOrderId",
+        salesOrderId,
+        MOVED_DELIVERY_STATUSES,
+      );
+      const deliveredTotal = new Map<string, string>();
+      for (const [lineId, quantities] of delivered)
+        deliveredTotal.set(lineId, sumQuantities(quantities));
+      return {
+        moved: await this.movedLineQuantities(
+          "ReturnOrder",
+          "ReturnOrderItem",
+          "returnOrderId",
+          "salesOrderId",
+          salesOrderId,
+          MOVED_RETURN_STATUSES,
+        ),
+        allowed: deliveredTotal,
+      };
+    }
+    if (descriptor.kind === "receiptOrder") {
+      const purchaseOrderId = text(row.data["purchaseOrderId"]);
+      if (purchaseOrderId === undefined) return undefined;
+      await this.assertSourceActive("purchaseOrder", purchaseOrderId);
+      return {
+        moved: await this.movedLineQuantities(
+          "ReceiptOrder",
+          "ReceiptOrderItem",
+          "receiptOrderId",
+          "purchaseOrderId",
+          purchaseOrderId,
+          MOVED_RECEIPT_STATUSES,
+        ),
+        allowed: await this.lineQuantities(
+          "purchaseOrder",
+          purchaseOrderId,
+        ),
+      };
+    }
+    return undefined;
+  }
+
+  /** A source document that was never confirmed, or stands cancelled, cannot be moved against. */
+  private async assertSourceActive(
+    kind: ImplementedDocumentKind,
+    id: string,
+  ): Promise<void> {
+    const descriptor = documentDescriptor(kind);
+    const row = await this.records.byId(descriptor.entity, id);
+    if (row === undefined)
+      throw new NotFoundError(`${descriptor.label} "${id}" does not exist.`);
+    const status = statusOf(row, descriptor);
+    if (status === "draft" || status === "cancelled" || status === "voided") {
+      throw new ValidationError(
+        `A ${descriptor.label.toLowerCase()} in the "${status}" state has nothing to move against.`,
+        { entity: descriptor.entity, id, status },
+      );
+    }
+  }
+
+  /** The stored line quantities of one document, keyed by line id. */
+  private async lineQuantities(
+    kind: ImplementedDocumentKind,
+    id: string,
+  ): Promise<Map<string, string>> {
+    const descriptor = documentDescriptor(kind);
+    const items = await this.itemsOf(descriptor, id);
+    return new Map(items.map((item) => [item.id, item.quantity]));
+  }
+
+  /**
+   * Line quantities already moved by the documents of one kind that reference a source through
+   * `filterField` and are in one of `statuses`, keyed by the source line each moved against.
+   *
+   * A document that was never confirmed moved nothing; a delivery order that has since been marked
+   * delivered moved it for real, so both count (§4.10).
+   */
+  private async movedLineQuantities(
+    documentEntity: SalesEntityType,
+    itemEntity: SalesEntityType,
+    itemParentField: string,
+    filterField: string,
+    filterValue: string,
+    statuses: readonly string[],
+  ): Promise<Map<string, readonly string[]>> {
+    const moved = new Map<string, readonly string[]>();
+    const documents: SalesRow[] = [];
+    for (const status of statuses)
+      documents.push(
+        ...(await this.records.find(
+          documentEntity,
+          { [filterField]: filterValue, status },
+          MAX_LINE_ITEMS,
+        )),
+      );
+    if (documents.length === 0) return moved;
+    const documentsIds = documents.map((each) => each.id);
+    const items = await this.records.findByIdsIn(
+      itemEntity,
+      itemParentField,
+      documentsIds,
+      MAX_LINE_ITEMS * documentsIds.length,
+    );
+    for (const item of items) {
+      const sourceItemId = text(item.data["sourceItemId"]);
+      if (sourceItemId === undefined) continue;
+      moved.set(sourceItemId, [
+        ...(moved.get(sourceItemId) ?? []),
+        text(item.data["quantity"]) ?? "0",
+      ]);
+    }
+    return moved;
+  }
+
+  /**
+   * Recompute a purchase order's receipt state from its **confirmed** receipt orders (19-S.13).
+   *
+   * The purchasing twin of `refreshFulfilment`, and idempotent for the same reason: a second run
+   * computes the same state, writes nothing and emits nothing.
+   */
+  async refreshReceipt(
+    orderId: string,
+  ): Promise<{
+    state: string;
+    changed: boolean;
+    summary: ReceiptSummary;
+  }> {
+    const descriptor = documentDescriptor("purchaseOrder");
+    await this.acl.assertAccess(descriptor.entity, "edit");
+    const order = await this.requireDocument(descriptor, orderId);
+    const current = statusOf(order, descriptor);
+    if (current === "draft" || current === "cancelled") {
+      throw new ValidationError(`A ${current} purchase order has no receipt state.`, {
+        purchaseOrderId: orderId,
+        status: current,
+      });
+    }
+
+    const orderItems = await this.itemsOf(descriptor, orderId);
+    const received = await this.movedLineQuantities(
+      "ReceiptOrder",
+      "ReceiptOrderItem",
+      "receiptOrderId",
+      "purchaseOrderId",
+      orderId,
+      MOVED_RECEIPT_STATUSES,
+    );
+    const summary = receiptSummary(
+      orderItems.map((item) => ({
+        orderedQuantity: item.quantity,
+        receivedQuantities: received.get(item.id) ?? [],
+      })),
+    );
+    const refusal = receiptTransitionRefusal(current, summary.state);
+    if (refusal !== null)
+      throw new ValidationError(refusal, {
+        purchaseOrderId: orderId,
+        state: current,
+        next: summary.state,
+      });
+    if (current === summary.state)
+      return { state: summary.state, changed: false, summary };
+
+    await runAsSalesInternal(() =>
+      runInTransaction(this.database.db, async () => {
+        await this.entities.update(descriptor.entity, orderId, {
+          status: summary.state,
+        });
+        await this.emit(descriptor, orderId, summary.state, {
+          status: summary.state,
+          fullyReceivedLines: summary.fullyReceivedLines,
+          totalLines: summary.totalLines,
+        });
+      }),
+    );
+    return { state: summary.state, changed: true, summary };
+  }
+
+  /**
+   * Re-derive the state of the document a delivery or receipt belongs to, always in the same
+   * transaction as the move that caused it (§4.10, §4.12).
+   *
+   * A parent in `draft` or `cancelled` has no derived state to move — and a line was already refused
+   * against such a source by `assertSourceActive`, so skipping here is the same rule from the other
+   * side, not a swallowed error.
+   */
+  private async refreshDerivedState(parent: {
+    readonly state: "fulfilment" | "receipt";
+    readonly id: string;
+  }): Promise<void> {
+    const kind: ImplementedDocumentKind =
+      parent.state === "fulfilment" ? "salesOrder" : "purchaseOrder";
+    const descriptor = documentDescriptor(kind);
+    const row = await this.records.byId(descriptor.entity, parent.id);
+    if (row === undefined) return;
+    const status = statusOf(row, descriptor);
+    if (status === "draft" || status === "cancelled") return;
+    if (parent.state === "fulfilment") await this.refreshFulfilment(parent.id);
+    else await this.refreshReceipt(parent.id);
+  }
+
+  /**
+   * The module feature a document kind belongs to (§4.13 "gated by settings and permissions").
+   *
+   * Purchasing is off by default, so a purchase, receipt, bill or bill credit is refused rather than
+   * quietly creating records nobody configured. Delivery and return orders are part of selling and
+   * need no flag.
+   */
+  private async assertKindAllowed(
+    descriptor: SalesDocumentDescriptor,
+    settings: Awaited<ReturnType<SalesSettingsService["read"]>>,
+  ): Promise<void> {
+    if (!PURCHASING_KINDS.includes(descriptor.kind)) return;
+    if (settings.settings.features.purchases) return;
+    throw new AuthorizationDeniedError(
+      `${descriptor.label}s belong to purchasing, which is disabled. Enable the \`purchases\` feature in the Sales settings.`,
+      { kind: descriptor.kind, feature: "purchases" },
+    );
+  }
+
+  /**
    * Mark issued invoices past their due date as overdue, emitting one event each (19-S.9).
    *
    * Idempotent: an invoice already marked `overdue` is not a candidate, so a second run emits nothing.
@@ -535,46 +871,37 @@ export class SalesDocumentService {
   }
 
   /**
-   * How much of each order line the confirmed delivery orders have moved.
+   * How much of each order line the **confirmed** delivery orders have moved.
    *
    * A delivery order item names the source line it came from (`sourceItemId`), and a delivery order
    * that was never confirmed moved nothing. This is the read the fulfilment state is derived from, and
    * the same read a stock reservation would use once inventory arrives in 19-S.14.
    */
-  private async confirmedDeliveryQuantities(
+  private confirmedDeliveryQuantities(
     orderId: string,
-  ): Promise<Map<string, string[]>> {
-    const moved = new Map<string, string[]>();
-    const deliveries = await this.records.find(
+  ): Promise<Map<string, readonly string[]>> {
+    return this.movedLineQuantities(
       "DeliveryOrder",
-      { salesOrderId: orderId, status: "confirmed" },
-      MAX_LINE_ITEMS,
-    );
-    if (deliveries.length === 0) return moved;
-    const deliveryIds = deliveries.map((delivery) => delivery.id);
-    const items = await this.records.findByIdsIn(
       "DeliveryOrderItem",
       "deliveryOrderId",
-      deliveryIds,
-      MAX_LINE_ITEMS * deliveryIds.length,
+      "salesOrderId",
+      orderId,
+      MOVED_DELIVERY_STATUSES,
     );
-    for (const item of items) {
-      const sourceItemId = text(item.data["sourceItemId"]);
-      if (sourceItemId === undefined) continue;
-      const list = moved.get(sourceItemId) ?? [];
-      list.push(text(item.data["quantity"]) ?? "0");
-      moved.set(sourceItemId, list);
-    }
-    return moved;
   }
 
   /**
    * Refuse a conversion that would bill or fulfil the same thing twice (§4.5, §4.6).
    *
-   * Two rules: one generated document per (source, destination kind), and a quote that already became a
-   * sales order cannot also be invoiced directly — that is the same acceptance reaching the customer
-   * twice by two routes. A repeated call with the same `correlationId` never reaches here, because it
-   * returns the document that already exists.
+   * Two rules: one generated document per (source, destination kind) for the kinds where a second one
+   * would be the same commercial act twice, and a quote that already became a sales order cannot also
+   * be invoiced directly — that is the same acceptance reaching the customer by two routes. A repeated
+   * call with the same `correlationId` never reaches here, because it returns the document that
+   * already exists.
+   *
+   * The quantity-moving kinds (`multipleFromSource`) are deliberately exempt: a sales order that ships
+   * in three deliveries is not three billings, and what bounds each one is the remaining-quantity
+   * guard at confirmation, not the count of documents (§4.10, §4.12).
    */
   private async assertConvertible(
     descriptor: SalesDocumentDescriptor,
@@ -582,6 +909,7 @@ export class SalesDocumentService {
     conversion: DocumentConversion,
   ): Promise<void> {
     const targetDescriptor = documentDescriptor(conversion.toKind);
+    if (targetDescriptor.multipleFromSource === true) return;
     const sameKind = await this.records.find(
       targetDescriptor.entity,
       { sourceEntity: descriptor.entity, sourceId: row.id },
@@ -665,6 +993,7 @@ export class SalesDocumentService {
     }
     if (transition.requiresReason === true)
       requireReason(audit.reason, `"${transition.label}"`);
+    await this.assertKindAllowed(descriptor, settings);
     assertInventoryPolicy(
       descriptor,
       transition,
@@ -674,10 +1003,14 @@ export class SalesDocumentService {
     if (transition.issues === true) {
       await this.issue(descriptor, row, transition, settings);
     } else {
+      const parent = parentDocumentRefresh(descriptor, row);
       await runInTransaction(this.database.db, async () => {
         await this.entities.update(descriptor.entity, id, {
           status: transition.to,
         });
+        // Cancelling a delivery or a receipt moves the derived state back: a cancelled document
+        // counted nothing, so the order it belonged to is re-derived (§4.10, §4.12).
+        if (parent !== undefined) await this.refreshDerivedState(parent);
         await this.emit(descriptor, id, action, {
           status: transition.to,
           reason: audit.reason ?? null,
@@ -867,6 +1200,12 @@ export class SalesDocumentService {
     const issuedAt = new Date();
     const issuer = this.scope.principal?.userName ?? this.scope.userId ?? null;
     const locked = descriptor.lockPolicy.lockOnIssue;
+    // A quantity-moving line is checked against what the source line still allows (§4.10, §4.12),
+    // before the number is taken, so an over-move never leaves a confirmed document behind.
+    await this.assertMovementWithinRemaining(descriptor, row, items);
+    // A receipt that arrives against a purchase order moves the order's receipt state forward, just
+    // as a delivery moves a sales order's fulfilment (§4.12). Both are derived, both are idempotent.
+    const parentRefresh = parentDocumentRefresh(descriptor, row);
 
     const captured: CommercialSnapshot = {
       kind: descriptor.kind,
@@ -895,16 +1234,29 @@ export class SalesDocumentService {
         documentType: descriptor.entity,
         documentId: row.id,
       });
+      // The stock movement this confirmation stands for, frozen with the number it belongs to
+      // (`stock-movement.ts`). The key is derived from the document, not the request, so a retried
+      // confirmation asks for the same movement once.
+      const stockMovement = this.stockMovementFor(
+        descriptor,
+        row,
+        items,
+        allocation.formatted,
+      );
       const envelope = buildDocumentSnapshot<CommercialSnapshot>(
         `${descriptor.entity}:${row.id}`,
-        { ...captured, number: allocation.formatted },
+        {
+          ...captured,
+          number: allocation.formatted,
+          ...(stockMovement === undefined ? {} : { stockMovement }),
+        },
         issuedAt.toISOString(),
       );
       await this.entities.update(descriptor.entity, row.id, {
         ...totalsPatch(totals, items.length, settings),
-        // A freshly issued credit note has its whole value unallocated; `SalesBalanceService` owns
-        // this balance from here on (§4.9, 19-S.11).
-        ...(descriptor.kind === "creditNote"
+        // A freshly issued credit — against a receivable or a payable — has its whole value
+        // unallocated; `SalesBalanceService` owns that balance from here on (§4.9, §4.12).
+        ...(descriptor.kind === "creditNote" || descriptor.kind === "billCredit"
           ? { unallocatedAmount: totals.grossTotal }
           : {}),
         number: allocation.formatted,
@@ -915,6 +1267,10 @@ export class SalesDocumentService {
         lockedBy: locked ? issuer : null,
         snapshot: JSON.stringify(envelope),
       });
+      // The document this confirmation moved the derived state of: a receipt order advances a purchase
+      // order, a delivery order advances a sales order (§4.12, §4.10). Derived, never typed.
+      if (parentRefresh !== undefined)
+        await this.refreshDerivedState(parentRefresh);
       await this.outbox.insertMany(tx, [
         {
           eventType: `sales.${descriptor.kind}.${transition.action}`,
@@ -927,6 +1283,7 @@ export class SalesDocumentService {
             currency: totals.currency,
             grossTotal: totals.grossTotal,
             accountId: parties.accountId,
+            supplierId: parties.supplierId,
             actor: issuer,
             occurredAt: issuedAt.toISOString(),
           },
@@ -936,28 +1293,64 @@ export class SalesDocumentService {
   }
 
   /**
-   * Party data captured by value. Reading the Account/Contact goes through the record API, so a user
-   * who may not read the customer cannot issue a document to them — a refusal, not a silent gap.
+   * Party data captured by value. Reading the Account/Contact/Supplier goes through the record API,
+   * so a user who may not read the counterparty cannot issue a document to them — a refusal, not a
+   * silent gap.
    */
   private async partySnapshot(row: SalesRow): Promise<DocumentPartySnapshot> {
     const accountId = text(row.data["accountId"]) ?? null;
     const contactId = text(row.data["contactId"]) ?? null;
+    const supplierId = text(row.data["supplierId"]) ?? null;
     let accountName: string | null = null;
     let contactName: string | null = null;
+    let supplierName: string | null = null;
     if (accountId !== null)
       accountName =
         text((await this.entities.get("Account", accountId))["name"]) ?? null;
     if (contactId !== null)
       contactName =
         text((await this.entities.get("Contact", contactId))["name"]) ?? null;
+    if (supplierId !== null)
+      supplierName =
+        text((await this.entities.get("Supplier", supplierId))["name"]) ?? null;
     return {
       accountId,
       accountName,
       contactId,
       contactName,
+      supplierId,
+      supplierName,
       billingAddress: text(row.data["billingAddress"]) ?? null,
       shippingAddress: text(row.data["shippingAddress"]) ?? null,
     };
+  }
+
+  /**
+   * The stock plan a confirmed delivery, return or receipt order records (19-S.12, 19-S.13).
+   *
+   * Built from the *stored* lines — including their dispositions — inside the issuance transaction, so
+   * it is frozen with the totals and the number it belongs to. Nothing applies it yet: the ledger is
+   * 19-S.14, and its idempotency key is derived from this document, not from a request.
+   */
+  private stockMovementFor(
+    descriptor: SalesDocumentDescriptor,
+    row: SalesRow,
+    items: readonly StoredItem[],
+    number: string,
+  ): StockMovementPlan | undefined {
+    const shared = {
+      documentEntity: descriptor.entity,
+      documentId: row.id,
+      documentNumber: number,
+      warehouseId: text(row.data["warehouseId"]) ?? null,
+      items,
+    };
+    if (descriptor.kind === "deliveryOrder")
+      return planDeliveryMovement(shared);
+    if (descriptor.kind === "receiptOrder")
+      return planReceiptMovement(shared);
+    if (descriptor.kind === "returnOrder") return planReturnMovement(shared);
+    return undefined;
   }
 
   /**
@@ -995,23 +1388,7 @@ export class SalesDocumentService {
           );
         }
         await this.entities.create(descriptor.itemEntity, {
-          position: lineTotals.position,
-          productId: lineTotals.productId,
-          name: lineTotals.name ?? line.name ?? `Line ${String(index + 1)}`,
-          sku: lineTotals.sku,
-          unit: lineTotals.unit,
-          quantity: lineTotals.quantity,
-          unitPrice: lineTotals.unitPrice,
-          discountPercent: line.discountPercent ?? null,
-          discountAmount: lineTotals.discountAmount,
-          taxCodeId: lineTotals.tax?.taxCodeId ?? null,
-          taxRatePercent: lineTotals.tax?.taxRatePercent ?? "0",
-          taxSource: lineTotals.tax?.source ?? "none",
-          taxRuleId: lineTotals.tax?.ruleId ?? null,
-          sourceItemId: line.sourceItemId ?? null,
-          netAmount: lineTotals.netAmount,
-          taxAmount: lineTotals.taxAmount,
-          grossAmount: lineTotals.grossAmount,
+          ...itemRecordPayload(line, lineTotals),
           [descriptor.itemParentField]: documentId,
         });
       }
@@ -1227,6 +1604,9 @@ const DOCUMENT_DATE_FIELDS: readonly string[] = [
   "returnDate",
   "validUntil",
   "requiredDeliveryDate",
+  "expectedDeliveryDate",
+  "receiptDate",
+  "billDate",
   "dueDate",
   "servicePeriodStart",
   "servicePeriodEnd",
@@ -1254,12 +1634,52 @@ function requireReason(reason: string | undefined, what: string): void {
 }
 
 /**
- * Inventory is a feature flag, and the stock effects of a confirmation arrive with 19-S.14.
+ * The document statuses in which a line has really moved stock, per moving kind.
+ *
+ * A draft moved nothing and a cancellation moves nothing; a delivery order the carrier signed for
+ * (`delivered`) moved exactly what it confirmed (§4.10).
+ */
+const MOVED_DELIVERY_STATUSES: readonly string[] = ["confirmed", "delivered"];
+const MOVED_RETURN_STATUSES: readonly string[] = ["confirmed"];
+const MOVED_RECEIPT_STATUSES: readonly string[] = ["confirmed"];
+
+/** The sum of a line's moved quantities, as a canonical decimal string. */
+function sumQuantities(quantities: readonly string[]): string {
+  let total: Decimal = zero(0);
+  for (const quantity of quantities) total = add(total, parseDecimal(quantity));
+  return format(total, total.scale);
+}
+
+/**
+ * The document whose *derived* state a delivery or receipt moves: a sales order is fulfilled by its
+ * delivery orders, a purchase order received by its receipt orders (§4.10, §4.12).
+ */
+function parentDocumentRefresh(
+  descriptor: SalesDocumentDescriptor,
+  row: SalesRow,
+):
+  | { readonly state: "fulfilment" | "receipt"; readonly id: string }
+  | undefined {
+  const source =
+    descriptor.kind === "deliveryOrder"
+      ? ({ state: "fulfilment", field: "salesOrderId" } as const)
+      : descriptor.kind === "receiptOrder"
+        ? ({ state: "receipt", field: "purchaseOrderId" } as const)
+        : undefined;
+  if (source === undefined) return undefined;
+  const id = text(row.data[source.field]);
+  return id === undefined ? undefined : { state: source.state, id };
+}
+
+/**
+ * Inventory is a feature flag, and the ledger that applies a stock movement arrives with 19-S.14.
  *
  * With the flag off — the default — confirming a document has no stock consequence, and saying so is
  * honest. With the flag **on**, refusing is the only correct answer: silently confirming would leave an
  * operator believing stock had been reserved when nothing was written (§4.6 "confirmation must not
- * decrement stock unless the configured policy explicitly says it does").
+ * decrement stock unless the configured policy explicitly says it does"). The confirmed movement
+ * itself is still recorded in the snapshot either way (`stock-movement.ts`), so the refusal is a
+ * refusal to *apply* it, never a refusal to know about it.
  */
 function assertInventoryPolicy(
   descriptor: SalesDocumentDescriptor,
@@ -1267,14 +1687,9 @@ function assertInventoryPolicy(
   inventoryEnabled: boolean,
 ): void {
   if (!inventoryEnabled || transition.issues !== true) return;
-  if (
-    descriptor.kind !== "salesOrder" &&
-    descriptor.kind !== "deliveryOrder" &&
-    descriptor.kind !== "returnOrder"
-  )
-    return;
+  if (!STOCK_MOVING_KINDS.includes(descriptor.kind)) return;
   throw new ValidationError(
-    `Inventory is enabled, but stock reservation and movement arrive with 19-S.14. Confirming this ${descriptor.label.toLowerCase()} would silently skip them, so it is refused.`,
+    `Inventory is enabled, but the ledger that applies a stock movement arrives with 19-S.14. Confirming this ${descriptor.label.toLowerCase()} would silently skip it, so it is refused.`,
     { kind: descriptor.kind, action: transition.action },
   );
 }
@@ -1354,6 +1769,7 @@ function toStoredItem(row: SalesRow): StoredItem {
     discountAmount: text(row.data["discountAmount"]) ?? "0",
     taxCodeId: text(row.data["taxCodeId"]) ?? null,
     taxRatePercent: text(row.data["taxRatePercent"]) ?? null,
+    ...lineExtrasOf(row.data),
   };
 }
 

@@ -150,12 +150,13 @@ describe('recording a payment (19-S.10)', () => {
     expect(reasonOf(result)).toMatch(/Only an issued invoice/);
   });
 
-  it('refuses an outgoing payment until the payable documents exist', async () => {
+  it('refuses to settle a customer invoice with an outgoing payment (19-S.13)', async () => {
     const invoiceId = await issueInvoice('20.00');
     const payment = await confirmPayment((await recordPayment('20.00', 'outgoing')).id);
     const result = await allocate(payment.id, invoiceId, '20.00');
     expect(result.status).toBe(422);
-    expect(reasonOf(result)).toMatch(/19-S\.13/);
+    // The two halves of the ledger stay separate: money paid to a supplier pays a bill.
+    expect(reasonOf(result)).toMatch(/is not one of them/);
   });
 });
 
@@ -224,7 +225,7 @@ describe('allocating and unallocating (19-S.10)', () => {
     expect(history.status).toBe(200);
     expect((history.body['list'] as { documentId: string; amount: string }[])[0]).toMatchObject({ documentId: invoiceId, amount: '45.00' });
 
-    const open = await fix.call('GET', '/api/v1/Sales/allocatableInvoices?direction=incoming');
+    const open = await fix.call('GET', '/api/v1/Sales/allocatableDocuments?direction=incoming');
     expect(open.status).toBe(200);
     const list = open.body['list'] as { id: string; outstanding: string }[];
     // A fully settled invoice is not offered for allocation.

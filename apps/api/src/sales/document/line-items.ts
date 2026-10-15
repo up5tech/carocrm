@@ -9,6 +9,10 @@ import {
   subtract,
   zero,
 } from "../money/decimal.js";
+import {
+  parseRestockDisposition,
+  type RestockDisposition,
+} from "./stock-movement.js";
 import type {
   LineItemInput,
   LineItemTotals,
@@ -47,6 +51,16 @@ export interface RequestedLine {
    * (§4.10).
    */
   readonly sourceItemId?: string | undefined;
+  /**
+   * Kind-specific line facts (19-S.12, 19-S.13): what happens to a returned line, which supplier
+   * price a purchasing line was agreed at, and the batch/serial identity a physical receipt records.
+   * They carry no money, so the totals engine never reads them; the item entity that declares the
+   * field stores it, and an entity that does not drops it.
+   */
+  readonly disposition?: string | null | undefined;
+  readonly supplierProductPriceId?: string | null | undefined;
+  readonly batchNumber?: string | null | undefined;
+  readonly serialNumber?: string | null | undefined;
 }
 
 export interface LineValidationLimits {
@@ -189,13 +203,45 @@ function requireNonNegative(value: string, field: string): Decimal {
 }
 
 /**
+ * The kind-specific line facts, in the shape an item record stores them. Every document kind writes
+ * all four; an item entity that does not declare a field drops it in the Entity Engine, so a quote
+ * line never ends up with a disposition.
+ */
+export interface LineExtras {
+  readonly disposition: RestockDisposition | null;
+  readonly supplierProductPriceId: string | null;
+  readonly batchNumber: string | null;
+  readonly serialNumber: string | null;
+}
+
+/** The extras of a line, read from a requested line or from a stored item record. */
+export function lineExtrasOf(
+  line: Partial<Record<keyof LineExtras, unknown>>,
+): LineExtras {
+  return {
+    disposition: parseRestockDisposition(line["disposition"]),
+    supplierProductPriceId: bound(line["supplierProductPriceId"]),
+    batchNumber: bound(line["batchNumber"]),
+    serialNumber: bound(line["serialNumber"]),
+  };
+}
+
+function bound(value: unknown): string | null {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+/**
  * The stored shape of one item record. Every field a historical document needs is captured here, so
  * renaming or deactivating the product later cannot rewrite what the document says (§4.4 last
  * bullets, §5.8).
  */
-export interface ItemRecordPayload extends Record<string, unknown> {
+export interface ItemRecordPayload
+  extends LineExtras,
+    Record<string, unknown> {
   readonly position: number;
   readonly productId: string | null;
+  /** The line this one was copied from, whatever document kind that was (§4.10). */
+  readonly sourceItemId: string | null;
   readonly name: string | null;
   readonly sku: string | null;
   readonly unit: string | null;
@@ -212,15 +258,16 @@ export interface ItemRecordPayload extends Record<string, unknown> {
   readonly grossAmount: string;
 }
 
-/** Turn one calculated line into the record an item entity stores. */
+/** Turn one requested line plus its calculated totals into the record an item entity stores. */
 export function itemRecordPayload(
-  input: LineItemInput,
+  input: RequestedLine,
   totals: LineItemTotals,
 ): ItemRecordPayload {
   return {
     position: totals.position,
     productId: totals.productId ?? input.productId ?? null,
-    name: totals.name ?? input.name ?? null,
+    name:
+      totals.name ?? input.name ?? `Line ${String(totals.position)}`,
     sku: totals.sku ?? input.sku ?? null,
     unit: totals.unit ?? input.unit ?? null,
     quantity: totals.quantity,
@@ -231,9 +278,11 @@ export function itemRecordPayload(
     taxRatePercent: totals.tax?.taxRatePercent ?? input.taxRatePercent ?? "0",
     taxSource: totals.tax?.source ?? "none",
     taxRuleId: totals.tax?.ruleId ?? null,
+    sourceItemId: input.sourceItemId ?? null,
     netAmount: totals.netAmount,
     taxAmount: totals.taxAmount,
     grossAmount: totals.grossAmount,
+    ...lineExtrasOf(input),
   };
 }
 
@@ -261,14 +310,16 @@ export function itemRecordPayloadFromStored(
     taxRatePercent: totals.tax?.taxRatePercent ?? item.taxRatePercent ?? "0",
     taxSource: totals.tax?.source ?? "none",
     taxRuleId: totals.tax?.ruleId ?? null,
+    sourceItemId: item.sourceItemId,
     netAmount: totals.netAmount,
     taxAmount: totals.taxAmount,
     grossAmount: totals.grossAmount,
+    ...lineExtrasOf(item),
   };
 }
 
 /** The item fields a recalculation reads back; anything else in the record is display-only. */
-export interface StoredItem {
+export interface StoredItem extends LineExtras {
   readonly id: string;
   readonly position: number;
   /** The line this one was copied from, whatever document kind that was (§4.10). */
@@ -322,6 +373,8 @@ export function itemsToLineInputs(
  *
  * Used by a conversion: the destination's lines point back at the source's, so a delivery order can
  * move quantity against the exact order line it fulfils and the remaining quantity is answerable.
+ * The line's own kind-specific facts travel with it — a receipt that becomes a bill keeps the
+ * supplier price it was received at (§4.12).
  */
 export function itemsToLineInputsWithSource(
   items: readonly StoredItem[],
@@ -329,6 +382,7 @@ export function itemsToLineInputsWithSource(
   return orderItems(items).map((item, index) => ({
     ...(itemsToLineInputs(items)[index] as LineItemInput),
     sourceItemId: item.id,
+    ...lineExtrasOf(item),
   }));
 }
 
@@ -386,7 +440,7 @@ export function assertWithinRemaining(
     );
     if (remaining === null) {
       throw new ValidationError(
-        "This line is already fully fulfilled; there is nothing left to move.",
+        "This line has nothing left to move.",
         { item: itemId },
       );
     }

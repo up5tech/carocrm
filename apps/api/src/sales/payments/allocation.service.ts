@@ -15,6 +15,7 @@ import { runAsSalesInternal } from "../sales-internal.js";
 import { SalesRecords, type SalesRow } from "../sales-records.js";
 import {
   assertAllocatable,
+  assertDirectionAllows,
   assertSameCurrency,
   type PaymentDirection,
 } from "./allocation-math.js";
@@ -129,12 +130,9 @@ export class AllocationService {
       );
 
       const direction = directionOf(payment);
-      if (direction !== "incoming") {
-        throw new ValidationError(
-          `Only an incoming payment can be allocated to an ${documentEntity} today; outgoing payments settle supplier bills, which arrive with 19-S.13.`,
-          { paymentId: payment.id, direction },
-        );
-      }
+      // An incoming payment settles a customer invoice, an outgoing one a supplier bill — never the
+      // other way round (§4.12), and the refusal says which side each belongs to.
+      assertDirectionAllows(direction, documentEntity);
       const paymentStatus = text(payment.data["status"]) ?? "draft";
       if (paymentStatus !== "confirmed") {
         throw new ValidationError(

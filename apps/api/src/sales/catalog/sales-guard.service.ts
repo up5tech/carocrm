@@ -13,14 +13,21 @@ import type {
   PriceRuleCriteria,
 } from "../pricing/price-rules.js";
 import { priceRuleIssues } from "../pricing/price-rules.js";
-import { SalesRecords, type SalesRow } from "../sales-records.js";
+import { changedKeys } from "../sales-internal.js";
+import {
+  type SalesEntityType,
+  SalesRecords,
+  type SalesRow,
+} from "../sales-records.js";
 import {
   taxRateIssues,
   type TaxRuleCriteria,
   taxRuleIssues,
 } from "../tax/tax-rules.js";
 import {
+  assertSupplierEditable,
   MAX_CATEGORY_DEPTH,
+  SUPPLIER_IDENTITY_FIELDS,
   validateCategoryParent,
   validateDateWindow,
   validatePriceBookEntryWrite,
@@ -92,9 +99,47 @@ export class SalesCatalogGuardService implements OnApplicationBootstrap {
       case "TaxRule":
         validateTaxRuleWrite(data);
         break;
+      case "Supplier":
+        await this.validateSupplier(data, context);
+        break;
       default:
         break;
     }
+  }
+
+  /**
+   * §4.12: a supplier that an issued purchasing document already names keeps its identity, because
+   * renaming it or moving its currency or tax id would rewrite what that document said about the party
+   * it was raised against. The check runs on the record path too — the generic `PUT /api/v1/Supplier`
+   * is the same write.
+   */
+  private async validateSupplier(
+    data: Record<string, unknown>,
+    context: HookContext,
+  ): Promise<void> {
+    if (context.operation !== "update" || context.record === undefined) return;
+    const changed = changedKeys(data, context.previous ?? {});
+    if (!changed.some((field) => SUPPLIER_IDENTITY_FIELDS.includes(field)))
+      return;
+    const referenced = await this.supplierIsReferenced(context.record.id);
+    assertSupplierEditable({ referenced, changedFields: changed });
+  }
+
+  /** Whether any document that has committed money or goods already names this supplier. */
+  private async supplierIsReferenced(supplierId: string): Promise<boolean> {
+    const references: readonly [SalesEntityType, string][] = [
+      ["Bill", "issued"],
+      ["BillCredit", "issued"],
+      ["PurchaseOrder", "confirmed"],
+      ["PurchaseOrder", "partiallyReceived"],
+      ["PurchaseOrder", "received"],
+      ["ReceiptOrder", "confirmed"],
+    ];
+    for (const [entity, status] of references) {
+      const rows = await this.records.find(entity, { supplierId, status }, 1);
+      if (rows.length > 0) return true;
+    }
+    return false;
   }
 
   /** §4.1: SKU format and installation-wide, case-insensitive uniqueness, normalized on save. */

@@ -16,7 +16,7 @@ recurring subscriptions and purchasing/inventory.
 | Domain-command prefix | `/api/v1/Sales` |
 | Load order | 320 (after the kernel and Projects) |
 | Version | 1.0.0 |
-| Implemented phases | 19-S.0 – 19-S.11 (`sales-module.ts` → `implementedPhases`; 19-S.12 – 19-S.20 are not claimed) |
+| Implemented phases | 19-S.0 – 19-S.13 (`sales-module.ts` → `implementedPhases`; 19-S.14 – 19-S.20 are not claimed) |
 
 ## 2. Module boundary — who owns what
 
@@ -27,8 +27,8 @@ recurring subscriptions and purchasing/inventory.
 | Opportunities and pipelines | CRM core | Link opportunities to commercial documents; never create a competing Opportunity entity |
 | Products and prices | **`Sales`** | Catalog, price books, price rules, supplier prices, price selection |
 | Quotes and commercial orders | **`Sales`** | Documents, line items, totals, lifecycle (19-S.6+) |
-| Invoices, credits, payments | **`Sales`** | Document state, balances, allocations, audit trail (19-S.9 – 19-S.11) |
-| Purchases and inventory | **`Sales`** | Behind settings and permissions (19-S.13 – 19-S.15) |
+| Invoices, credits, payments | **`Sales`** | Document state, balances, allocations, audit trail (19-S.9 – 19-S.11, supplier side 19-S.13) |
+| Purchases and inventory | **`Sales`** | Purchasing delivered behind the `purchases` feature (19-S.13); warehouses, ledger, transfers and reservations remain (19-S.14 – 19-S.15) |
 | General ledger, tax filing, statutory accounting | Accounting module (absent) | Publish integration contracts; never claim accounting compliance |
 | Card gateway, bank connection | Payment provider module (absent) | Expose provider-neutral payment intents/events; never embed gateway secrets or SDK calls |
 | Customer lifecycle, churn | Customer Success module (absent) | Publish customer/invoice/subscription summary contracts; never implement health scoring here |
@@ -41,8 +41,8 @@ Later tiers must not contradict Tier-1 invariants.
 | Tier | Contents | Status |
 |---|---|---|
 | **Tier 1 — Commercial foundation** | Products, price selection, tax/total engine, quotes, sales orders, invoices, basic payments/allocations, ACL, audit, PDF/email, API | **Delivered** (19-S.0 – 19-S.10), with PDF *attachments* on a sent document still open (the block model and renderer exist). |
-| **Tier 2 — Lifecycle completeness** | Credit notes, write-offs, delivery orders, returns, advanced price books, multi-currency documents, payment terms, issuance locking | **Credit notes and write-offs done** (19-S.11: allocation, reversal, request/approve, render); payment terms, issuance locking and multi-currency foundations done earlier; delivery/return orders remain (19-S.12). |
-| **Tier 3 — Procurement and inventory** | Suppliers, purchase orders, receipts, supplier bills/credits, warehouses, stock ledger, transfers, reservations, batches/serials | Not started (19-S.13 – 19-S.15); the `Supplier` and `SupplierProductPrice` *master data* already exists |
+| **Tier 2 — Lifecycle completeness** | Credit notes, write-offs, delivery orders, returns, advanced price books, multi-currency documents, payment terms, issuance locking | **Delivered** (19-S.11 credit notes/write-offs; 19-S.12 delivery and return orders: partial moves, derived fulfilment, restock dispositions, one stock-movement plan per document). Payment terms, issuance locking and multi-currency foundations came earlier. |
+| **Tier 3 — Procurement and inventory** | Suppliers, purchase orders, receipts, supplier bills/credits, warehouses, stock ledger, transfers, reservations, batches/serials | **Purchasing delivered** (19-S.13, behind `features.purchases`): purchase orders, partial/full receipts with derived receipt state, supplier bills, supplier payments and bill credits, supplier price resolution. The stock *ledger*, transfers, reservations and batch/serial tracking remain (19-S.14 – 19-S.15); a confirmed document records the movement it stands for, and nothing applies it yet. |
 | **Tier 4 — Recurring and advanced** | Subscriptions, recurring invoice jobs, payment requests, payment-to-payment allocations, advanced reporting, e-invoicing adapters | Not started (19-S.16 – 19-S.19) |
 
 ## 4. What exists today, concretely
@@ -69,7 +69,8 @@ Delivered by 19-S.0 – 19-S.5:
    purchasable gating.
 6. **Pricing** — `PriceBook`, `PriceBookEntry`, `PriceRule`, `Supplier`, `SupplierProductPrice`;
    deterministic, explainable resolution; conflict detection; and a previewed, bounded, audited bulk
-   price update.
+   price update. The **buying** side resolves from `SupplierProductPrice` alone through its own command
+   (19-S.13), and the two resolvers never read each other's entities.
 7. **Tax and totals** — `TaxClass`, `TaxCode`, `TaxRate`, `TaxRule`; declarative matching with
    effective windows and priorities; tax-inclusive/exclusive handling; line vs document rounding; and
    a server-calculated subtotal → discount → shipping → tax → total → amount-due breakdown.

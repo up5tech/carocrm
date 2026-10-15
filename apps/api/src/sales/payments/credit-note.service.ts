@@ -144,17 +144,14 @@ export class CreditNoteService {
           invoice.data["exchangeRateSnapshot"] !== null,
       });
 
-      const unallocated = await this.balances.creditNoteUnallocated(
-        tx,
-        creditNote,
-      );
+      const unallocated = await this.balances.creditUnallocated(tx, creditNote, "CreditNote");
       const outstanding = await this.balances.outstandingOf(tx, invoice);
       assertCreditAllocatable({
         amount: input.amount,
         creditRemaining: unallocated,
-        invoiceRemaining: outstanding,
-        creditNoteId: creditNote.id,
-        invoiceId: invoice.id,
+        documentRemaining: outstanding,
+        creditId: creditNote.id,
+        documentId: invoice.id,
       });
 
       const created = await runAsSalesInternal(() =>
@@ -175,10 +172,7 @@ export class CreditNoteService {
           "Creating a credit note allocation returned no id.",
         );
 
-      const nextCreditNote = await this.balances.syncCreditNote(
-        tx,
-        creditNote,
-      );
+      const nextCreditNote = await this.balances.syncCredit(tx, creditNote, "CreditNote");
       const nextInvoice = await this.balances.syncDocument(
         tx,
         "Invoice",
@@ -269,10 +263,7 @@ export class CreditNoteService {
         }),
       );
 
-      const nextCreditNote = await this.balances.syncCreditNote(
-        tx,
-        creditNote,
-      );
+      const nextCreditNote = await this.balances.syncCredit(tx, creditNote, "CreditNote");
       const nextInvoice = await this.balances.syncDocument(
         tx,
         "Invoice",

@@ -4,13 +4,16 @@ import { SalesCatalogGuardService } from "./catalog/sales-guard.service.js";
 import { SalesDocumentService } from "./document/document.service.js";
 import { SalesNumberingService } from "./document/numbering.service.js";
 import { SalesQuoteSendService } from "./document/quote-send.service.js";
+import { SalesDocumentRenderService } from "./document/render.service.js";
 import { AllocationService } from "./payments/allocation.service.js";
 import { SalesBalanceService } from "./payments/balance.service.js";
+import { BillCreditService } from "./payments/bill-credit.service.js";
 import { CreditNoteService } from "./payments/credit-note.service.js";
 import { PaymentService } from "./payments/payment.service.js";
 import { WriteOffService } from "./payments/write-off.service.js";
 import { BulkPriceService } from "./pricing/bulk-price.service.js";
 import { PriceResolutionService } from "./pricing/price-resolution.service.js";
+import { SupplierPriceService } from "./pricing/supplier-price.js";
 import { SalesController } from "./sales.controller.js";
 import { SalesModuleHealthService } from "./sales-module-health.service.js";
 import { SalesRecords } from "./sales-records.js";
@@ -39,12 +42,15 @@ export const SALES_PROVIDERS: Provider[] = [
   SalesWriteGuardService,
   SalesDocumentService,
   SalesQuoteSendService,
+  SalesDocumentRenderService,
   PaymentService,
   AllocationService,
   SalesBalanceService,
   CreditNoteService,
+  BillCreditService,
   WriteOffService,
   PriceResolutionService,
+  SupplierPriceService,
   BulkPriceService,
   SalesTaxService,
   SalesModuleHealthService,
@@ -82,6 +88,7 @@ export {
   type SendQuoteInput,
   type SendQuoteResult,
 } from "./document/quote-send.service.js";
+export { SalesDocumentRenderService } from "./document/render.service.js";
 export {
   buildDocumentSnapshot,
   readDocumentSnapshot,
@@ -95,11 +102,13 @@ export {
   paymentBalance,
 } from "./payments/allocation-math.js";
 export { SalesBalanceService } from "./payments/balance.service.js";
+export { BillCreditService } from "./payments/bill-credit.service.js";
 export { CreditNoteService } from "./payments/credit-note.service.js";
 export { PaymentService } from "./payments/payment.service.js";
 export { WriteOffService } from "./payments/write-off.service.js";
 export { BulkPriceService } from "./pricing/bulk-price.service.js";
 export { PriceResolutionService } from "./pricing/price-resolution.service.js";
+export { SupplierPriceService } from "./pricing/supplier-price.js";
 export { SalesController } from "./sales.controller.js";
 export { SALES_MODULE } from "./sales-module.js";
 export { SALES_ENTITY_TYPES, SalesRecords } from "./sales-records.js";

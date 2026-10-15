@@ -275,6 +275,41 @@ export function validateTaxRateWrite(input: TaxRateWrite): void {
   validateDateWindow(input);
 }
 
+/**
+ * The fields that say *who* a supplier is and on what terms it is paid. Changing one after a
+ * commercial document was issued would silently rewrite what that document said about the party it
+ * was raised against (§4.12 "lock/edit rules for suppliers referenced by issued bills and documents").
+ *
+ * `active` is deliberately absent: deactivating a supplier stops it being chosen for new documents,
+ * which is a forward-looking decision, not a rewrite of history.
+ */
+export const SUPPLIER_IDENTITY_FIELDS: readonly string[] = [
+  "name",
+  "code",
+  "currency",
+  "taxId",
+];
+
+/**
+ * A supplier already referenced by an issued bill, a confirmed purchase order or a confirmed receipt
+ * keeps its identity. The supported route is a compensating document, the same rule every issued
+ * commercial record follows (§4.7, §4.9).
+ */
+export function assertSupplierEditable(input: {
+  readonly referenced: boolean;
+  readonly changedFields: readonly string[];
+}): void {
+  if (!input.referenced) return;
+  const violations = input.changedFields.filter((field) =>
+    SUPPLIER_IDENTITY_FIELDS.includes(field),
+  );
+  if (violations.length === 0) return;
+  throw new ValidationError(
+    `This supplier is referenced by issued purchasing documents; ${violations.join(", ")} can no longer be changed.`,
+    { fields: violations },
+  );
+}
+
 /** The most recent `effectiveFrom` wins among applicable rates; ties are a conflict, not a coin toss. */
 export function laterEffectiveFrom(
   left: string | null,

@@ -53,6 +53,16 @@ export const SALES_ENTITY_TYPES = [
   "DeliveryOrderItem",
   "ReturnOrder",
   "ReturnOrderItem",
+  // 19-S.13: the purchasing half, and the correction record a bill credit allocates to a bill.
+  "PurchaseOrder",
+  "PurchaseOrderItem",
+  "ReceiptOrder",
+  "ReceiptOrderItem",
+  "Bill",
+  "BillItem",
+  "BillCredit",
+  "BillCreditItem",
+  "BillCreditAllocation",
   // 19-S.6: the payment-term policy a document can reference.
   "PaymentTermProfile",
   // 19-S.10 – 19-S.11: money received/sent, and the records that adjust a balance.
