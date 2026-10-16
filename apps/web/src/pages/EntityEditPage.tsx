@@ -5,6 +5,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api, type RecordData } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition } from '../api/types.js';
 import { FieldEditor } from '../components/fields.js';
+import type { SalesLine, SalesLineTotals } from '../components/LineItemEditor.js';
+import { LineItemEditor, linePayload, SalesTotalsPanel } from '../components/LineItemEditor.js';
+import { useSalesPickers } from '../components/useSalesPickers.js';
+import { salesDocumentDate, salesDocumentKind } from '../sales/documents.js';
 import { t } from '../state/i18n.js';
 import { evaluateEntityLogic, isComputedField } from '../state/logic.js';
 import {
@@ -69,6 +73,22 @@ export function EntityEditPage() {
   const [initial, setInitial] = useState<RecordData | undefined>(undefined);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // A commercial document cannot be made by the generic form alone: its totals only exist once the
+  // server has priced, taxed and summed at least one line. So creating one carries the line editor and
+  // writes through the document command; an existing document edits its lines on its own detail screen.
+  const createKind = id === undefined ? salesDocumentKind(entity ?? '') : undefined;
+  const [lines, setLines] = useState<SalesLine[]>([]);
+  const [lineTotals, setLineTotals] = useState<SalesLineTotals | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const pickers = useSalesPickers();
+  // The same rule the server applies: a line that is not fully priced cannot be part of a document
+  // (§4.3 — a missing price is never zero), and a document needs at least one line.
+  const linesBlocked =
+    createKind !== undefined &&
+    (lines.length === 0 ||
+      lines.some((line) => line.productId === null && line.name.trim() === '') ||
+      lines.some((line) => line.unitPrice === null || line.unitPrice === ''));
 
   // Dynamic logic re-runs on every keystroke: the rule set is small and the engine caches parsed
   // formulas, so re-evaluating is cheaper than tracking which field each rule reads.
@@ -173,9 +193,13 @@ export function EntityEditPage() {
             if (isComputedField(field.type)) delete payload[name];
           }            setSaving(true);
           try {
-            const record = id ? await api.update(entity, id, payload) : await api.create(entity, payload);
+            const savedId = id
+              ? (await api.update(entity, id, payload))['id']
+              : createKind !== undefined
+                ? (await api.salesCreateDocument(createKind, { data: payload, items: lines.map(linePayload) })).id
+                : (await api.create(entity, payload))['id'];
             void message.success(t('web.edit.saved'));
-            navigate(`${base}/${entity}/${String(record['id'] ?? '')}`);
+            navigate(`${base}/${entity}/${String(savedId ?? '')}`);
           } catch (error) {
             void message.error(error instanceof Error ? error.message : t('web.edit.saveFailed'));
           } finally {
@@ -194,8 +218,37 @@ export function EntityEditPage() {
             </div>
           ))
         )}
+        {createKind !== undefined ? (
+          <div style={{ marginTop: 8 }}>
+            <Typography.Text strong>{t('sales.document.lines')}</Typography.Text>
+            <LineItemEditor
+              lines={lines}
+              onChange={setLines}
+              currency={String(watched?.['currency'] ?? 'USD')}
+              date={salesDocumentDate(createKind, watched ?? {})}
+              taxInclusive={watched?.['taxInclusive'] === true}
+              accountId={(watched?.['accountId'] as string | null) ?? null}
+              priceBookId={(watched?.['priceBookId'] as string | null) ?? null}
+              products={pickers.products}
+              taxCodes={pickers.taxCodes}
+              allowCustomLines
+              onTotalsChange={setLineTotals}
+              onPreviewError={setPreviewError}
+            />
+            {previewError !== null ? (
+              <Alert type="warning" showIcon style={{ marginTop: 8 }} message={previewError} />
+            ) : null}
+            {lineTotals !== null ? <SalesTotalsPanel totals={lineTotals} /> : null}
+          </div>
+        ) : null}
         <Space>
-          <Button type="primary" htmlType="submit" loading={saving} disabled={blocked}>
+          <Button
+            type="primary"
+            htmlType="submit"
+            loading={saving}
+            disabled={blocked || linesBlocked}
+            title={linesBlocked ? t('sales.document.linesRequired') : undefined}
+          >
             {t('web.edit.save')}
           </Button>
           <Button onClick={() => navigate(id ? `${base}/${entity}/${id}` : `${base}/${entity}`)}>{t('web.edit.cancel')}</Button>

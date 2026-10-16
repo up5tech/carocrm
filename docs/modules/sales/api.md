@@ -283,6 +283,35 @@ sends. Every refusal above happens **before** the quote is issued, so a quote is
 with no email behind it; `issued: false` in the response means the document was already sent and only
 a new email was recorded.
 
+## `POST /api/v1/Sales/document/:kind/:id/send`
+
+The same contract for the other nine kinds (19-S.17), driven by the descriptor instead of by one service
+per document type. The body is identical to the quote send's — `to`, `cc`, `bcc`, `templateCode`,
+`subject`, `message`, `emailAccountId`, `correlationId`, `attachPdf` — and so is the response, with
+`kind` and `document` where the quote answers `quote`.
+
+Three rules are specific to the wider surface:
+
+* **A stock-moving draft is not issued by sending it.** `salesOrder`, `deliveryOrder`, `returnOrder` and
+  `receiptOrder` move or reserve stock when they are confirmed (19-S.14), which is a warehouse act, not a
+  side effect of pressing "send". Sending one answers `422` with the reason and the action to run first;
+  sending an already-confirmed one is a re-send.
+* **The counterparty decides the default recipient.** A purchasing kind (`purchaseOrder`, `receiptOrder`,
+  `bill`, `billCredit`) goes to its **supplier's** address; a selling one to its contact, then its
+  account. With neither, the send is refused rather than mailed to nobody.
+* `kind: quote` is refused here with a pointer to `POST /Sales/quote/:id/send`, so an installation's
+  quote emails never change shape by accident.
+
+`attachPdf: true` renders the issued blocks with the optional `pdfkit` adapter and stores the result as
+an `Attachment` under the `Email` (`Invoice-INV-000042.pdf`, role `<kind>-pdf`), which the worker picks up
+without knowing Sales exists. If `pdfkit` is not installed the send is refused **before** issuance, so a
+document is never made official for an attachment that did not materialise.
+
+| Status | When |
+|---|---|
+| `403` | no mail transport (`FEATURE_DISABLED`); no `create`/`edit` on `Email`; no `read` on the document; the kind's feature is off (purchasing kinds and `purchases`) |
+| `422` | the kind is `quote`; the document is in a state that is neither its draft state nor its issued state; a stock-moving draft; no recipient; `attachPdf` without `pdfkit` |
+
 ## The conversion snapshot on a command (19-S.18)
 
 `POST /api/v1/Sales/document`, `PATCH /api/v1/Sales/document/:kind/:id`, `POST /api/v1/Sales/payment`

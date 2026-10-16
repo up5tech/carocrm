@@ -249,16 +249,18 @@ export const SALES_MODULE = {
    * subscriptions, their computed periods, and an idempotent run that issues one invoice per due
    * period.
    *
-   * A PDF *attachment* on a sent document is still not produced: the block model and the optional
-   * `pdfkit` adapter exist (`@carocrm/document`), but wiring a rendered PDF into an outbound message
-   * needs the attachment storage path, which is not built. See `docs/modules/sales/README.md` for the
-   * per-phase detail.
+   * Sending and printing are complete for every kind: `POST /Sales/quote/:id/send` (19-S.7) and
+   * `POST /Sales/document/:kind/:id/send` (19-S.17) render through the kernel `document` module, issue
+   * the draft through its own transition, and store the message as an `Email` the mail module queues —
+   * with an optional PDF built from the same block model the email body used.
    *
    * `19-S.18` is claimed out of order, deliberately and with its gaps stated: the reporting, dashboard,
    * operational and job-monitoring surface is delivered (and the §4.13 conversion snapshot that
-   * reporting depends on is now actually persisted), while `19-S.17`'s polish items — the attachment on
-   * a sent document and dedicated Sales screens over the generic metadata UI — are not. Claiming 18
-   * does not silently finish 17.
+   * reporting depends on is now actually persisted). `19-S.17` is **not** claimed even though its
+   * document work is delivered (line editor on create and detail, the send UI, the standard templates,
+   * the settings screen, the translations): its review tasks — a per-entity screen audit, module
+   * enablement in navigation, the responsive/keyboard pass and import/export mappings — are open. See
+   * `docs/implementation/sales-phase19-gap-report.md` §2 for the exact split.
    */
   implementedPhases: [
     "19-S.0",

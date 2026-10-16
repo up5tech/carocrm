@@ -31,6 +31,7 @@ import { ReportService } from "../reports/report.service.js";
 import { SalesDashletCatalogService } from "./dashboard/dashlet.js";
 import { requireDocumentKind } from "./document/descriptors.js";
 import { SalesDocumentService } from "./document/document.service.js";
+import { SalesDocumentSendService } from "./document/document-send.service.js";
 import { SalesNumberingService } from "./document/numbering.service.js";
 import { SalesQuoteSendService } from "./document/quote-send.service.js";
 import { SalesDocumentRenderService } from "./document/render.service.js";
@@ -67,6 +68,7 @@ import {
   SalesAccountingExportSchema,
   SalesCustomerSummarySchema,
   SalesSettingsPatchSchema,
+  SendDocumentSchema,
   SendQuoteSchema,
   TodaySchema,
   TransferTransitionSchema,
@@ -126,6 +128,8 @@ export class SalesController {
     private readonly documents: SalesDocumentService,
     @Inject(SalesQuoteSendService)
     private readonly quoteSend: SalesQuoteSendService,
+    @Inject(SalesDocumentSendService)
+    private readonly documentSend: SalesDocumentSendService,
     @Inject(SalesDocumentRenderService)
     private readonly documentRender: SalesDocumentRenderService,
     @Inject(PaymentService) private readonly payments: PaymentService,
@@ -410,6 +414,25 @@ export class SalesController {
       this.quoteSend.send(id, { ...input }),
     );
   }
+
+  /**
+   * Send a document by mail (19-S.17, §9.4): preview-render, issue a draft through its own
+   * transition, then record and queue the email. A stock-moving draft refuses to be issued by
+   * sending, and the response says which command does that.
+   */
+  @HttpCode(200)
+  @Post("document/:kind/:id/send")
+  async sendDocument(
+    @Param("kind") kind: string,
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const input = parse(SendDocumentSchema, body);
+    return await runAsSalesInternal(() =>
+      this.documentSend.send(kind, id, input),
+    );
+  }
+
 
   // -------------------------------------------------------------------------------------------
   // Payments, allocations and payment requests (19-S.10)

@@ -205,14 +205,13 @@ export const DEFAULT_DOCUMENT_TEMPLATES: readonly DocumentTemplateSeed[] = [
 <p>Contact: {{contactName}}</p>
 <p>Reason: {{reason}}</p>
 <table border="1" cellpadding="4" cellspacing="0">
-  <thead><tr><th>Product</th><th>SKU</th><th>Quantity</th><th>Restockable</th></tr></thead>
+  <thead><tr><th>Product</th><th>SKU</th><th>Quantity</th></tr></thead>
   <tbody>
   {{#each lines}}
     <tr>
       <td>{{name}}</td>
       <td>{{sku}}</td>
       <td>{{quantity}}</td>
-      <td>{{restockable}}</td>
     </tr>
   {{/each}}
   </tbody>

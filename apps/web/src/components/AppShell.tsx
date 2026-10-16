@@ -1,4 +1,4 @@
-import { ApartmentOutlined, ApiOutlined, AppstoreOutlined, BarChartOutlined, CalendarOutlined, CarryOutOutlined, DashboardOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, ProjectOutlined, SearchOutlined, SettingOutlined, ShareAltOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ApartmentOutlined, ApiOutlined, AppstoreOutlined, BarChartOutlined, CalendarOutlined, CarryOutOutlined, DashboardOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, ProjectOutlined, SearchOutlined, SettingOutlined, ShareAltOutlined, ShoppingCartOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
@@ -92,8 +92,20 @@ function InternalShell({ children }: { children: ReactNode }) {
     // group is named after the Project entity so the metadata label stays the source of truth.
     const navList = navEntities(metadata.data, principal?.type);
     const projectEntities = navList.filter((entity) => entity.name.startsWith('Project'));
+    // Phase 19-S.17 — Sales groups its own entities under one submenu instead of scattering thirteen
+    // entries across RECORDS, exactly the way Project does. The grouping is by **name sets over the
+    // metadata the user may already navigate**, so nothing is added to the menu that the entity list
+    // does not have, and a Sales entity renamed or hidden by metadata simply leaves the group instead
+    // of leaving a dead entry. Every other record entity stays where it was.
+    const salesGroups = SALES_NAV_GROUPS.map((group) => ({
+      ...group,
+      entities: group.entityNames
+        .map((name) => navList.find((entity) => entity.name === name))
+        .filter((entity): entity is EntityDefinition => entity !== undefined),
+    })).filter((group) => group.entities.length > 0);
+    const salesNames = new Set(salesGroups.flatMap((group) => group.entities.map((entity) => entity.name)));
     const records: MenuItems = navList
-      .filter((entity) => !entity.name.startsWith('Project'))
+      .filter((entity) => !entity.name.startsWith('Project') && !salesNames.has(entity.name))
       .map((entity) => recordItem(entity));
     if (projectEntities.length > 0) {
       const project = projectEntities.find((entity) => entity.name === 'Project');
@@ -102,6 +114,18 @@ function InternalShell({ children }: { children: ReactNode }) {
         icon: entityIcon(project?.icon, project?.name ?? 'Project'),
         label: project?.label ?? 'Project',
         children: projectEntities.map((entity) => recordItem(entity)),
+      });
+    }
+    if (salesGroups.length > 0) {
+      records.push({
+        key: 'sub-sales',
+        icon: <ShoppingCartOutlined />,
+        label: t('sales.nav.sales'),
+        children: salesGroups.map((group) => ({
+          key: `sub-sales-${group.key}`,
+          label: t(`sales.nav.${group.key}`),
+          children: group.entities.map((entity) => recordItem(entity)),
+        })),
       });
     }
     if (records.length > 0) groups.push({ type: 'group', key: 'grp-records', label: t('core.app.records'), children: records });
@@ -318,3 +342,14 @@ function PortalShell({ children }: { children: ReactNode }) {
     </Layout>
   );
 }
+
+/** The Sales submenu layout (19-S.17). Names are the metadata entity names; a name the installation
+ *  does not navigate to is skipped, so the menu never offers a record the user cannot open. */
+const SALES_NAV_GROUPS: readonly { key: string; entityNames: readonly string[] }[] = [
+  { key: 'sales', entityNames: ['Quote', 'SalesOrder', 'Invoice', 'CreditNote', 'DeliveryOrder', 'ReturnOrder'] },
+  { key: 'catalog', entityNames: ['Product', 'ProductCategory', 'PriceBook', 'PriceBookEntry', 'PriceRule', 'TaxClass', 'TaxCode', 'TaxRate', 'TaxRule'] },
+  { key: 'payments', entityNames: ['Payment', 'PaymentMethod', 'PaymentChannel', 'PaymentTermProfile', 'PaymentRequest', 'WriteOff'] },
+  { key: 'purchases', entityNames: ['Supplier', 'SupplierProductPrice', 'PurchaseOrder', 'ReceiptOrder', 'Bill', 'BillCredit'] },
+  { key: 'inventory', entityNames: ['Warehouse', 'InventoryTransaction', 'InventoryAdjustment', 'InventoryReservation', 'TransferOrder', 'InventoryBatch', 'InventorySerial'] },
+  { key: 'subscriptions', entityNames: ['Subscription', 'SubscriptionPeriod'] },
+];

@@ -1,31 +1,96 @@
 # Phase 19 — Customer Success Module (`CustomerSuccess`)
 
-> **Status:** Planned  
 > **Parent roadmap:** `PLAN.md` — Phase 19: Advanced Domains  
-> **Target runtime:** NestJS / TypeScript backend with the existing React SPA  
-> **Primary module key:** `customer-success` (use the repository's established module-key convention if it differs)  
-> **Suggested package/class name:** `CustomerSuccessModule` / `CustomerSuccessModule`  
-> **Persistence:** Existing PostgreSQL + Kysely (or the repository's explicitly adopted SQL abstraction)  
-> **Functional reference:** General customer-success management practices; EspoCRM's documented core CRM, ACL, metadata, Activities, API, jobs, and extension concepts  
-> **Implementation rule:** Build on capabilities completed in Phases 0–18. Do not reimplement kernel functionality inside this module.
+> **Priority:** Implement after `Sales` and `Projects`. Both are already shipped in this repository and are optional consumers of this module.  
+> **Module ID:** `CustomerSuccess`  
+> **Display name:** Customer Success  
+> **Primary stack:** NestJS, TypeScript, PostgreSQL, Kysely, React, and the existing CRM module/metadata systems.  
+> **Planning baseline:** EspoCRM 9.3.x for the core CRM compatibility baseline. There is no upstream first-party Customer Success extension; this is a project-specific domain module informed by common CSM practice (see §2.2).  
+> **Reference reviewed:** October 16, 2026.
 
 ---
 
-## 1. Purpose
+## 0. Instructions for the Coding Agent
 
-Implement a first-class **Customer Success Management (CSM)** domain module for the NestJS CRM. The module gives Customer Success Managers (CSMs), account owners, and team leads a consistent way to manage customer onboarding, desired outcomes, relationship health, adoption signals, risks, renewal readiness, success plans, and proactive engagement.
+Read these files before implementation:
 
-This is a **clean-room, domain-oriented implementation**. It must use this repository's module conventions and platform services rather than porting PHP code or duplicating generic CRM capabilities.
+1. `AGENTS.MD`
+2. `PLAN.md`
+3. `PLAN_Phase_19_Customer_Success.md` (this file)
+4. `PLAN_Phase_19_Sales.md` and `docs/implementation/sales-repository-audit.md` — the closest precedent, an already-shipped Phase 19 domain
+5. `docs/module-guide.md` — the runtime rules, API conventions and cross-module contracts
+6. `PLAN_Phase_19_Projects.md` and `docs/modules/projects/` — the second shipped Phase 19 domain
 
-### 1.1 Important reference boundary
+This plan describes target behavior, not proof that every prerequisite exists. **Start with Phase 19-CS.0 only.** §3 of this plan records what was verified in the working tree on the reference date; re-verify anything you depend on rather than trusting this document. Do not infer implementation from a plan alone.
 
-The official EspoCRM extension catalog and developer documentation are useful references for the CRM platform and extension architecture, but the official extension catalog does not currently list a first-party extension specifically named **Customer Success**. Therefore:
+### Non-negotiable implementation rules
 
-- Treat this plan as a custom domain module designed for this project, informed by common CSM workflows.
-- Do not claim exact feature parity with a non-existent or unverified upstream Customer Success extension.
-- Preserve EspoCRM-style architectural concepts where relevant: metadata-driven entities, REST APIs, ACL, activity integration, extension registration, hooks/events, scheduled jobs, and dashboards.
-- Record product-specific behavior as this project's own requirements in `docs/compatibility/customer-success.md`.
-- Do not copy upstream source code, translations, icons, UI assets, or branding.
+- Implement a clean-room TypeScript/NestJS module. Use official EspoCRM documentation to define observable behavior; do not copy or mechanically translate EspoCRM source code, frontend assets, translations, branding, or icons.
+- **`CustomerSuccess` is a kernel domain module, not an extension package.** It is a directory under `apps/api/src/customer-success` with a barrel exporting `CUSTOMER_SUCCESS_CONTROLLERS` and `CUSTOMER_SUCCESS_PROVIDERS`, registered once in `apps/api/src/app.module.ts`. `apps/api/src/sales/sales-module.ts` records the reasoning: the extension SDK deliberately exposes no entity CRUD facade, so a package that owned `CustomerSuccessProfile` records could only write them with raw SQL, bypassing ACL, validation, audit, stream and domain events (`AGENTS.md` §5.2). Do not create a `manifest.json` and do not add anything to `modules/`.
+- Reuse existing CRM Core entities and services. Do not create a second implementation of Accounts, Contacts, Opportunities, Subscriptions, Users, Teams, ACL, Activities, Attachments, Stream, Metadata, Entity Engine, Jobs, Reports, Workflows, or BPM. Do not create a second settings store, notification engine, dashboard engine, or queue.
+- Follow the repository's established metadata, API, response envelope, transaction, validation, logging and frontend conventions exactly. The Sales module (`apps/api/src/sales/`) and the Projects module (`apps/api/src/projects/`) are the reference implementations.
+- **`CustomerSuccessProfile` is a fixed name.** `apps/api/src/sales/sales-module.ts` declares Customer Success as an optional integration whose `markerEntity` is exactly `"CustomerSuccessProfile"`, and `SalesModuleHealthService` reports that marker as present/absent to an operator. Renaming that entity silently turns a shipped, already-tested integration into a permanently "unavailable" one. See §12.8.
+- Use PostgreSQL as the first-class target and the established SQL-first persistence layer (Kysely via `DatabaseService`).
+- **Do not create a test database, shadow database, temporary database, test schema, per-agent database, or per-run database.** Follow the exact database rules in `AGENTS.MD`; use the existing configured primary database for targeted, safe integration checks when needed.
+- Do not reset, truncate, drop, broadly delete, or replace existing data. Review every migration before applying it. Test writes must use explicit `AGENT_TEST_...` identifying values and cleanup may only remove records created by the current run and identified by exact IDs.
+- Never let tests send real email, trigger production webhooks, enqueue real payment activity, or create external side effects. In-app `notifications` rows are acceptable; outbound delivery is not.
+- Health scoring is a **pure, deterministic domain calculation**. It must be unit-testable without a database, must never execute user-authored SQL or JavaScript, and must never let a missing signal be scored as zero.
+- Do not report a sub-phase as complete until its acceptance criteria and verification evidence have been recorded.
+
+---
+
+## 1. Purpose and Product Outcome
+
+`CustomerSuccess` gives Customer Success Managers, account owners and team leads one place to manage onboarding, desired outcomes, relationship health, adoption, risk, renewal readiness, success plans and proactive engagement for each Account.
+
+It is a **domain module on top of the existing CRM**, not a second CRM. The Account stays the authoritative customer record; Activities stay the record of what actually happened; Health is a derived, explainable view over data the platform already holds.
+
+### 1.1 Primary outcomes
+
+At completion, authorized users must be able to:
+
+1. Maintain one Customer Success Profile per Account without duplicating the Account record.
+2. Assign a CSM and organize Accounts into a portfolio or segment.
+3. Track lifecycle stage, customer objectives, onboarding progress, adoption status, health status and renewal readiness.
+4. Calculate a configurable Customer Health Score from transparent, auditable signals.
+5. See the score's components, history, trend, freshness and the reason it changed.
+6. Create success plans with measurable goals, checkpoints, owners, dates and progress.
+7. Register CSM-specific risks, mitigations, escalation actions and resolution outcomes.
+8. Execute repeatable onboarding and engagement playbooks that create or link *existing* CRM activities.
+9. Record success reviews and touchpoints while reusing the platform's Task/Call/Meeting/Reminder/Email, Calendar, Stream and Notes.
+10. Use portfolio dashboards, actionable lists, filters, saved views and reports to prioritize customer work.
+11. Consume Sales, Subscriptions and Projects through detected, ACL-safe adapters — and work correctly when any of them is absent.
+12. Access everything through secure APIs and metadata-driven UI with the same ACL, audit and validation as the rest of the CRM.
+
+### 1.2 Module boundary: what `CustomerSuccess` owns
+
+| Capability | Owner | `CustomerSuccess` responsibility |
+|---|---|---|
+| Account identity, contacts, ownership | CRM Core | Reference through metadata relations only. Never copy Account fields onto the Profile for reporting. |
+| Activities (Task, Call, Meeting, Reminder, Email) | CRM Core | Link to and read them. Never create a second task/call/meeting entity or scheduler. |
+| Users, Teams, Roles | CRM Core | Reference `csmUserId` / `csmTeamId` as links. |
+| ACL, field permissions, admin bypass | `@carocrm/acl`, `AclApiService` | Consume. Never evaluate a rule locally. |
+| Metadata, relations, validation, serialization, audit, stream | Kernel | Register entities in `database/seed-metadata.ts` and use the generic Entity API. |
+| Instance settings | `app_settings` | One validated, versioned row named `customerSuccess`, mirroring Sales' `sales` row. |
+| Background jobs, scheduled jobs | Kernel jobs + `apps/worker` | Register handlers in `apps/worker/src/handlers/`, like `registerSalesJobs`. |
+| Dashboards, saved filters, search, import/export | `apps/api/src/search`, `apps/api/src/reports` | Contribute entity-list dashlets and reports through them. |
+| Workflows, BPM | Kernel | Emit domain events; let workflow/BPM consume them. Do not re-implement. |
+| Health scoring, lifecycle policy, success plans, goals, risks, playbooks, renewal readiness | **`CustomerSuccess`** | This is the module's actual content. |
+| Billing, invoicing, contracts | `Sales` | Read authorized renewal/commercial summary through a detected adapter. Never write an invoice. |
+| Support tickets | Service Desk (not built) | No support signals until that module exists (§12.6). |
+| Product usage analytics | External connector (not built) | Adapter contract only (§12.7). No vendor API calls from controllers or the scorer. |
+
+---
+
+## 2. Reference Boundary
+
+### 2.1 What is a reference and what is not
+
+The EspoCRM extension catalog and developer documentation are useful references for the **platform** and **extension architecture**. There is no official first-party Customer Success extension, so:
+
+- This plan is a project-specific domain module informed by common CSM workflow. Do not claim feature parity with an upstream extension.
+- Preserve EspoCRM-style architectural concepts where relevant: metadata-driven entities, REST APIs, ACL, activity integration, hooks/events, scheduled jobs and dashboards.
+- Do not copy upstream source code, translations, icons, UI assets or branding.
 
 Reference pages:
 
@@ -37,176 +102,160 @@ Reference pages:
 - EspoCRM API: https://docs.espocrm.com/development/api/
 - EspoCRM hooks: https://docs.espocrm.com/development/hooks/
 - EspoCRM scheduled jobs: https://docs.espocrm.com/development/scheduled-job/
-- EspoCRM attachments: https://docs.espocrm.com/development/attachments/
 
-### 1.2 Business outcomes
+### 2.2 Product principles
 
-At completion, authorized users must be able to:
-
-1. Maintain one Customer Success Profile for an Account without duplicating the Account record.
-2. Assign a CSM and organize the Account into a success portfolio or segment.
-3. Track lifecycle stage, customer objectives, onboarding progress, adoption status, health status, and renewal readiness.
-4. Calculate a configurable Customer Health Score from transparent, auditable signals.
-5. View the score's components, history, trend, freshness, and reasons for changes.
-6. Create success plans with measurable goals, checkpoints, owners, dates, and progress.
-7. Register customer-success-specific risks, mitigations, escalation actions, and resolution outcomes.
-8. Execute repeatable onboarding and engagement playbooks that create or link existing CRM activities.
-9. Record success reviews and touchpoints while reusing the platform's Activities, Calendar, Stream, and Notes where possible.
-10. Use portfolio dashboards, actionable lists, filters, saved views, and reports to prioritize customer work.
-11. Connect to existing Opportunities, Subscriptions, Cases/Service Desk, Projects, Notifications, and Jobs only when those modules actually exist.
-12. Access the module through secure APIs and metadata-driven UI with the same ACL, audit, validation, and conventions as the rest of the CRM.
-
-### 1.3 Product principles
-
-- **Account-centric:** Account remains the authoritative customer record.
-- **Explainable health:** Users must be able to answer why an Account is Healthy, At Risk, or Critical.
-- **No phantom data:** Missing signals are not treated as zero or as evidence of poor health.
-- **Actionable insights:** A warning should point to evidence and a next step, not merely display a red badge.
-- **Human override with history:** Authorized users may override health or lifecycle classification, but the system must preserve the calculated value, override reason, actor, and audit trail.
-- **Safe automation:** Background actions are idempotent, permission-aware, observable, and prevented from generating duplicate tasks or notifications.
-- **Configurable but bounded:** Admins may configure weights, thresholds, lifecycle options, playbooks, and rules within supported validation constraints.
-- **Composable:** Use existing platform services and domain modules through stable interfaces.
+- **Account-centric.** Account remains the authoritative customer record.
+- **Explainable health.** A user must be able to answer *why* an Account is Healthy, At Risk or Critical, and which signal drove the change.
+- **No phantom data.** A missing signal is `unknown`, never zero, and never evidence of poor health.
+- **Actionable insights.** A warning points to evidence and a next step, not just a red badge.
+- **Human override with history.** Authorized users may override health or lifecycle, but the calculated value, reason, actor and timestamp are preserved.
+- **Safe automation.** Background actions are idempotent, permission-aware, observable, and prevented from duplicating tasks or notifications.
+- **Configurable but bounded.** Admins configure weights, thresholds, lifecycle options and playbooks within server-validated constraints. No user-authored SQL or JavaScript.
+- **Composable.** Consume existing platform services and domain modules through stable, detected interfaces.
 
 ---
 
-## 2. Scope and Non-Goals
+## 3. Repository Audit — Verified Baseline
 
-### 2.1 In scope
+Read this section as *recorded facts from the working tree*, not as assumptions to skip verification. Re-check before relying on it.
 
-- Customer Success Profile associated one-to-one with an Account.
-- CSM portfolio and assignment management.
-- Lifecycle stages and customer segmentation.
-- Customer health rules, calculation, score snapshots, history, explainability, and recalculation.
-- Onboarding tracking and onboarding checklists/playbooks.
-- Success plans, success goals, milestones/checkpoints, and progress summaries.
-- Customer success risks, mitigation plans, escalation, and churn-risk workflow.
-- Renewal-readiness tracking and links to existing renewal Opportunities/Subscriptions when supported.
-- Success reviews/touchpoints with relevant Account/Contact/Activity links.
-- Playbook templates, execution instances, steps, and completion tracking.
-- Dashboards, portfolio views, health/risk queues, reminders, saved filters, and standard exports if supported by the platform.
-- CSM-specific permissions and team/record-level access.
-- REST endpoints, module metadata, migrations, module settings, seed/default configuration, translations, audit events, tests, and documentation.
+### 3.1 Module shape (verified)
 
-### 2.2 Explicit non-goals for this phase
+| Fact | Evidence |
+|---|---|
+| Phase 19 domains are kernel directories under `apps/api/src`, not extension packages | `apps/api/src/projects/index.ts`, `apps/api/src/sales/index.ts` |
+| Each exports `<NAME>_CONTROLLERS` and `<NAME>_PROVIDERS` from its barrel | same files |
+| The integrator registers them **once** in `apps/api/src/app.module.ts` | `docs/module-guide.md` → "Files to register new modules" |
+| Domain controllers must be spread **before** `ENTITY_CONTROLLERS` | `apps/api/src/app.module.ts` comments; `apps/api/src/projects/index.ts` header |
+| A module descriptor object gives the module a stable id, version, capabilities, optional integrations and feature flags | `apps/api/src/sales/sales-module.ts` → `SALES_MODULE`, `REQUIRED_PLATFORM_CAPABILITIES`, `OPTIONAL_INTEGRATIONS`, `SALES_FEATURES` |
+| A health endpoint reports that descriptor and checks each dependency against real platform state | `apps/api/src/sales/sales-module-health.service.ts`, served at `GET /api/v1/Sales/action/health` |
+| Kernel domain modules have `loadOrder`; Sales uses `320` | `sales-module.ts` |
 
-Do **not** build any of the following unless already present as a generic platform service and merely needed for integration:
+### 3.2 API conventions (verified)
 
-- A second Account, Contact, User, Team, Activity, Calendar, Notification, Stream, Attachment, or generic task implementation.
-- A separate billing/subscription engine, invoicing engine, payment gateway, or contract-signature system.
-- A product analytics ingestion platform, SDK for customer applications, event warehouse, or data lake.
-- A full customer-support ticketing system; integrate with Cases/Service Desk when available.
-- A full project-management engine; optionally link goals or onboarding actions to the Projects module if it has been implemented.
-- A full marketing automation engine, email campaign engine, or email delivery system.
-- A predictive AI churn model, generative AI assistant, or opaque AI-generated score as a required MVP capability.
-- A customer-facing portal or external user permissions model unless the platform's Portal module already supports this and a later sub-phase explicitly enables it.
-- Automatic renewal creation, billing changes, or customer communications without explicit rules and auditable approval.
-- PHP source compatibility or direct compatibility with an upstream Customer Success database schema.
+- Root `/api/v1`. Auth: `Authorization: Bearer <jwt>` or `Authorization: ApiKey <keyId>:<secret>`, or the `CRM-SESSION` cookie (unsafe methods also need `x-csrf-token` matching the `CRM-CSRF` cookie).
+- **Static PascalCase domain prefixes** are the convention: `/api/v1/Settings`, `/api/v1/Project`, `/api/v1/Sales/action/*`, `/api/v1/Report`. There is no kebab-case domain route anywhere in the repository.
+- Domain commands live under `/api/v1/<Domain>/action/*` (`docs/implementation/sales-repository-audit.md` §3).
+- Entity CRUD uses the **generic** `/api/v1/:entity` endpoint — a new metadata entity gets list/detail/create/update/delete/relations for free and needs no controller.
+- List envelope: `{ list, total, offset, count }`.
+- Errors: `{ "error": { "code", "message", "details?" } }`, produced by throwing `AppError` subclasses from `@carocrm/core`.
+- DTO validation uses **Zod** schemas; `.strict()` rejects unknown fields; parse failures return `422`. See `apps/api/src/sales/dto/sales-shapes.ts` and the `parse()` helper in `apps/api/src/sales/sales.controller.ts`.
+- `RequestScope.isAdmin` (user type `admin`) is the documented admin bypass.
 
-### 2.3 Optional feature dependencies
+### 3.3 Persistence and metadata (verified)
 
-The module must declare optional integration points and work sensibly when a provider is absent:
+- Every generic entity record lives in one table, `entity_records`: physical columns `id, entity_type, name, assigned_user_id, created_by_id, modified_by_id, created_at, modified_at, deleted_at, version, attrs (JSONB)`. `attrs` holds everything else.
+- `version` is the optimistic-concurrency column. `deleted_at` is soft delete.
+- Relations are link fields in `attrs` (`accountId`, `contactIds`); reverse relations resolve through metadata (`oneToMany` + `mappedBy`). `entity_links` backs explicit link/unlink endpoints.
+- **Kernel entity metadata lives in `database/seed-metadata.ts`** — 51 entities are registered there, including every Sales and Projects entity. Extension packages register metadata through `metadata/entities.json` instead (`modules/project-domain/metadata/entities.json`). A kernel domain module uses `seed-metadata.ts`.
+- Each entity entry carries `fields`, `relations`, `indexes` (declarations), `layouts` (list/detail/edit with `panels` + `position`), `record` and `acl.permissions`.
+- Index *declarations* in metadata are not DDL. Physical indexes are reviewed migrations.
+- The established physical-index pattern for a metadata attribute is a partial expression index over `entity_records ((attrs ->> 'field'))` filtered by `entity_type` (`docs/implementation/sales-repository-audit.md` §4).
 
-| Existing domain/service    | Use in Customer Success                                | Behavior if absent                                                                                                         |
-| -------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Accounts and Contacts      | Core account, stakeholder, and contact relationships   | Required prerequisite; do not duplicate them                                                                               |
-| Users and Teams            | CSM ownership, team portfolios, escalation             | Required prerequisite                                                                                                      |
-| Activities / Calendar      | Calls, meetings, tasks, reminders, reviews             | Use the platform's supported fallback or mark activity automation as unavailable; do not create a parallel activity system |
-| Notifications              | In-app alerts, reminders, escalation                   | Keep risk/task records visible; do not send direct external messages                                                       |
-| Stream / Notes             | Timeline and relationship context                      | Omit the panel or use a supported generic note link; do not create a new stream engine                                     |
-| Jobs / scheduler / queue   | Health recalculation, reminders, playbook automation   | Provide explicit manual actions for operations that cannot be scheduled; do not create a custom scheduler                  |
-| Dashboard / reports        | Portfolio dashboards and saved reports                 | Provide standard list views until the generic dashboard/report framework is available                                      |
-| Formula / dynamic logic    | Optional user-defined supported calculations           | Ship safe built-in rules first; do not execute arbitrary JavaScript/SQL from settings                                      |
-| Cases / Service Desk       | Ticket volume, severity, SLA, resolution trends        | Ignore unsupported support signals and disclose that the data source is unavailable                                        |
-| Sales / Opportunities      | Renewal opportunity and commercial status              | Allow manual renewal date/status; do not invent an Opportunity model                                                       |
-| Sales Pack / Subscriptions | Active subscription, term dates, payment/billing state | Treat as optional; never create subscription or invoice logic inside CSM                                                   |
-| Projects                   | Onboarding delivery and project milestones             | Store an optional reference only when Projects exists; do not require it for core onboarding                               |
-| Email integration          | Customer communications and email touchpoints          | Continue with Activities/manual logging; do not assume a provider exists                                                   |
-| Import/export              | Bulk portfolio administration                          | Use generic platform import/export if available; otherwise defer bulk workflows                                            |
+### 3.4 Migrations (verified)
 
----
+- Files live in `database/migrations/`, named `<NNN>_phase<NN>_<slug>.sql`. Currently `001_init.sql` … `031_phase19_sales_reporting.sql`.
+- **`032` is the next free number.** Name the CS migration `032_phase19_customer_success.sql`.
+- `database/migrate.ts` reads the directory, **sorts by filename**, skips files already in `schema_migrations`, and applies each remaining file inside a single transaction. A failure rolls back that file and aborts the run.
+- Migrations are additive: `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `CREATE UNIQUE INDEX IF NOT EXISTS`.
+- Do not edit an applied migration, mark a failed migration as applied, or regenerate schema to fix an error.
 
-## 3. Prerequisites and Repository Audit
+### 3.5 Platform capabilities available (verified)
 
-Before changing code, the coding agent MUST read `AGENTS.MD`, `PLAN.md`, and the existing module plans relevant to the features being integrated. Inspect the actual codebase: a planned subsystem is not necessarily implemented just because it appears in a plan.
+| Capability | Evidence |
+|---|---|
+| Entity Engine, metadata registry, relations, validation | `packages/entity-engine`, `packages/metadata`, `apps/api/src/entity/` |
+| ACL: roles, field permissions, record access | `packages/acl`, `apps/api/src/acl/acl-api.service.ts`, tables `roles`, `users_roles`, `roles.field_permissions` |
+| Hooks, phases `beforeValidate` / `afterSave` | `apps/api/src/hooks/`, `KERNEL_HOOKS_TOKEN` |
+| Audit log, Stream, transactional outbox | `apps/api/src/audit/`, `apps/api/src/stream/`, `apps/api/src/common/outbox.service.ts`, tables `audit_log`, `stream_items`, `outbox_events` |
+| Domain events | `apps/api/src/events/`, `apps/worker/src/events/domain-event-bus.ts` |
+| Jobs, scheduled jobs, job logs | `apps/api/src/jobs/`, `apps/worker/src/queue/`, tables `jobs`, `scheduled_jobs`, `job_logs` |
+| Activities | Metadata entities `Task`, `Call`, `Meeting`, `Reminder`, `Email` in `seed-metadata.ts`; reminders by the `system.sendReminders` job (seeded cron `scheduledReminders`, `* * * * *`) |
+| Calendar | `apps/api/src/calendar/` |
+| Search, saved filters, dashboards, import/export | `apps/api/src/search/` (`search.controller.ts`, `saved-filter.service.ts`, `dashboard.service.ts`, `import-export.service.ts`) |
+| Dashlets | An entity-list dashlet + option set; see `apps/api/src/projects/project-dashlet.service.ts` and migration `019_phase19_dashlet_kind.sql` |
+| Reports | `apps/api/src/reports/`, `packages/reports`, migrations `013`/`015` |
+| Attachments / file storage | `apps/api/src/attachment/`, `packages/files` |
+| Email | `apps/api/src/email/`, `packages/mail` |
+| Formula (sandboxed) | `packages/formula`; metadata `formula` fields evaluate on write, not editable by clients |
+| Workflows, BPM | `apps/api/src/workflows`, `apps/api/src/processes`, `packages/workflow`, `packages/bpm` |
+| Instance settings | table `app_settings`, `POST /api/v1/Settings`; Sales' validated row pattern is `apps/api/src/sales/sales-settings.service.ts` |
+| Portal | `apps/api/src/portal/` (Phase 18) |
+| i18n | `apps/api/src/i18n/`, migration `017_phase7a_i18n.sql` |
 
-### 3.1 Verify platform capabilities
+### 3.6 Platform capabilities **not** available (do not assume them)
 
-Record the existing implementation path and test command for each:
+- **No notification service.** There is no `apps/api/src/notification`. The `notifications` table exists and is written by a worker job (`apps/worker/src/handlers/job-handlers.ts:132`, the `system.sendReminders` handler). See §11.3 for the rule this implies.
+- **No Cases / Service Desk module.** No ticket entity, so no support-derived health signals. See §12.6.
+- **No external adoption-analytics connector.** No product-usage data source. See §12.7.
+- **No generic `Activity` entity.** Activities are four separate metadata entities; a "touchpoint" must name which of them it reads.
+- **No module-level toggle.** There is no platform facility that can disable a kernel domain directory. "The module can be disabled" (§16, Sales' pattern) is not available to a kernel module; §16.5 replaces it with feature flags inside the module's settings row.
+- **No `notification`/`dashlet`/`dashboard`/`saved-filter` directories** — these live under `apps/api/src/search` and `apps/api/src/projects`. Do not invent new top-level directories for them.
 
-- Module registration, manifests, module dependencies, and extension hooks.
-- Entity Engine, entity metadata, relationship metadata, custom fields, layouts, validation, and serialization.
-- PostgreSQL/Kysely migration, query, transaction, index, and JSONB conventions.
-- `/api/v1` route registration, DTO validation, error responses, pagination, filtering, sorting, and OpenAPI.
-- Authentication, request context, record ACL, global role ACL, field-level ACL, teams, ownership, and admin bypass rules.
-- Audit/history, domain events, hooks, Stream, Notes, Attachments, Activities, Calendar, Notifications, dashboard/dashlets, jobs, scheduler, search, reports, and formula/dynamic logic.
-- React routing, generic entity views, metadata-driven forms, list filters, record panels, timeline components, and reusable chart components.
-- Existing Account fields/relations and whether Account custom fields can be contributed through metadata safely.
-- Existing Sales, Projects, Service Desk/Cases, email integration, and subscription entities, if any.
-- Existing test lifecycle and `AGENTS.MD` database-safety requirements.
+### 3.7 Optional integrations this module can consume
 
-### 3.2 Audit output
+| Provider | Present? | Detection |
+|---|---|---|
+| Sales (renewal/commercial source) | **Yes** — `apps/api/src/sales` | metadata entity `Subscription` |
+| Projects (delivery milestones) | **Yes** — `apps/api/src/projects` | metadata entity `Project` |
+| Opportunities | **Yes** — core entity | metadata entity `Opportunity` |
+| Subscriptions | **Yes** — `Subscription`, `SubscriptionPeriod` | metadata entity `Subscription` |
+| Activities | **Yes** — `Task`/`Call`/`Meeting`/`Email` | metadata entities |
+| Cases / Service Desk | **No** | marker absent; report as unavailable |
+| Adoption analytics provider | **No** | no marker; do not attempt |
 
-Create or update `docs/implementation/customer-success-repository-audit.md` with:
+**Detect optional providers through the metadata registry, never by importing them.** `SalesModuleHealthService` reads `metadata.registry.getEntities()`; do the same. An absent optional module must never break startup.
 
-- Verified prerequisites and exact code locations.
-- Available module integration contracts.
-- Missing capabilities that block only optional features.
-- Any minimal reusable platform enhancement needed before the module.
-- Known data-model or API conventions.
-- A list of assumptions that were verified or rejected.
+### 3.8 Audit output
 
-Do not use this document to restate the whole master plan. Keep it specific to the codebase findings.
+Phase 19-CS.0 must create `docs/implementation/customer-success-repository-audit.md` recording: verified prerequisites with exact code locations, available module integration contracts, capabilities missing that block only optional features, any minimal reusable platform enhancement needed, and each assumption marked verified or rejected. Do not restate this plan there.
 
-### 3.3 Dependency handling
+### 3.9 Dependency handling
 
-If a required generic capability is missing:
+If a required generic capability is missing: identify the smallest missing abstraction, confirm no equivalent exists, decide whether it belongs in the kernel or in this module, and implement it in the kernel only if it is genuinely generic and reusable. Never duplicate ACL, activity management, jobs, metadata handling or dashboards inside `CustomerSuccess`.
 
-1. Identify the smallest missing abstraction and verify that no equivalent exists.
-2. Decide whether the implementation belongs in the platform kernel or the Customer Success module.
-3. If it is generic and reusable, implement it in the kernel only when necessary and keep its API minimal.
-4. Do not duplicate ACL, activity management, background jobs, metadata handling, or dashboards inside Customer Success.
-5. Document the resulting platform change separately from CSM domain features.
-
-### 3.4 Database safety
+### 3.10 Database safety
 
 Follow `AGENTS.MD` exactly:
 
 - Use the already-configured primary project database for targeted integration/API/smoke tests when database verification is needed.
-- Do **not** create `test_db`, `*_test`, `*_e2e`, shadow, temporary, per-agent, per-run, or other test databases or schemas.
-- Inspect test scripts and test-framework lifecycle hooks before executing them; disable or fix automatic database creation/reset logic if encountered.
-- Do not reset, truncate, drop, replace, or broadly delete database contents.
-- Use unmistakably marked records such as `AGENT_TEST_...`; clean up only records created by the current test run and identified by exact IDs/run markers.
-- Do not use real customers for tests; never send real emails, notifications, webhooks, or other outbound communications during tests.
-- Review every migration before applying it to the configured database. Prefer additive, backward-compatible migrations.
+- Do **not** create `test_db`, `*_test`, `*_e2e`, shadow, temporary, per-agent or per-run databases or schemas.
+- Inspect test scripts and framework lifecycle hooks before executing them.
+- Do not reset, truncate, drop, replace or broadly delete database contents.
+- Use unmistakably marked records such as `AGENT_TEST_...`; clean up only records created by the current run, by exact ID or run marker.
+- Do not use real customers for tests; never send real email, notifications or webhooks during tests.
+- Review every migration before applying it. Prefer additive, backward-compatible changes.
 
 ---
 
 ## 4. Domain Concepts and Terminology
 
-Use these concepts consistently in metadata, APIs, UI labels, code, and docs.
+Use these terms consistently in metadata, APIs, UI labels, code and docs.
 
-- **Account:** Existing CRM customer organization; remains the source of truth for the customer identity.
-- **Customer Success Profile:** CSM-specific operational profile for an Account.
-- **Customer Health Score:** Numeric value from 0 to 100 calculated from known and fresh signals under an enabled scoring configuration.
-- **Health Status:** Human-readable classification, such as Healthy, Monitor, At Risk, Critical, or Unknown, derived from thresholds unless an authorized override is active.
-- **Health Snapshot:** Immutable or append-only record of score/status/components at a point in time.
-- **Health Signal:** A normalized metric produced from an available data source, including freshness and source metadata.
-- **Lifecycle Stage:** Where the customer is in the relationship journey, for example Onboarding, Adoption, Value Realization, Renewal, or Churned. Options must be configurable but ship with validated defaults.
-- **Success Plan:** Time-bound plan for desired customer outcomes, goals, owners, dates, and checkpoints.
-- **Success Goal:** Measurable outcome in a plan, with a target, current value, unit, direction, due date, source, and progress calculation.
-- **Customer Success Risk:** A discrete problem or warning with severity, evidence, owner, mitigation, due date, and resolution.
-- **Playbook Template:** Reusable set of steps and trigger rules for a known customer scenario.
-- **Playbook Run:** A specific execution of a template against an Account/Profile.
-- **Touchpoint / Success Review:** Structured CSM interaction record or view linked to existing Activities, not a replacement for meetings, calls, or tasks.
-- **Renewal Readiness:** A summary view of the known renewal date, commercial references, health, risks, goals, and next actions; not a billing system.
-- **Portfolio:** Set of Accounts a CSM or team is responsible for.
+- **Account:** existing CRM customer organization; source of truth for customer identity.
+- **Customer Success Profile (`CustomerSuccessProfile`):** CSM-specific operational profile for one Account.
+- **Customer Health Score:** integer 0–100 calculated from known, fresh signals under an enabled scoring configuration; `null` when unknown.
+- **Health Status:** classification — `healthy`, `monitor`, `atRisk`, `critical`, `unknown` — derived from configured thresholds unless an authorized override is active.
+- **Health Snapshot:** append-only record of score, status, components and configuration version at a point in time.
+- **Health Signal:** a normalized metric from an available data source, carrying freshness and source metadata.
+- **Lifecycle Stage:** where the customer is in the journey — `onboarding`, `adoption`, `valueRealization`, `mature`, `renewal`, `atRisk`, `churned`. Configurable; ships with validated defaults.
+- **Success Plan (`CustomerSuccessPlan`):** time-bound plan of desired outcomes, goals, owners, dates and checkpoints.
+- **Success Goal (`CustomerSuccessGoal`):** measurable outcome with target, current value, unit, direction, due date and progress.
+- **Customer Success Risk (`CustomerSuccessRisk`):** discrete problem with severity, evidence, owner, mitigation, due date and resolution. A risk is *not* a health status.
+- **Playbook Template / Run / Step Run:** reusable recipe, one execution, one step's execution state.
+- **Touchpoint / Success Review:** CSM context layered on existing Task/Call/Meeting records; never a replacement for them.
+- **Renewal Readiness:** a summary view of renewal date, health, risks, goals and next actions. Not a billing system.
+- **Portfolio:** the set of Accounts a CSM or team is responsible for.
 
-### 4.1 Naming rules
+### 4.1 Naming rules (binding)
 
-- Use `CustomerSuccess...` prefixes for new domain entities and services to prevent collisions.
-- Follow established Entity Engine naming rules rather than inventing a parallel naming convention.
-- Use stable machine keys for lifecycle values, health states, risk types, event names, and API fields; display labels must be translatable.
-- Do not use display labels as internal identifiers.
+- **Module id is `CustomerSuccess`. No prefix.** Not `cs`, not `csm`, not `customer-success`, not `success`. Use `CustomerSuccess` as the module id, the barrel's exported constant names, the descriptor `id`, and the API prefix.
+- **Domain directory:** `apps/api/src/customer-success/` (directory names are kebab-case; module ids are PascalCase — this mirrors `apps/api/src/sales` / `id: "sales"`).
+- **Entity names keep the `CustomerSuccess` prefix** (`CustomerSuccessProfile`, `CustomerSuccessPlan`, `CustomerSuccessRisk`, …). §12.8 explains why this specific rule survives even though the module id does not use one: the shipped Sales module already hard-codes `CustomerSuccessProfile` as its detection marker.
+- Service names follow the same prefix: `CustomerSuccessProfileService`, `CustomerSuccessHealthService`, … matching `SalesSettingsService`, `SalesNumberingService`.
+- Use stable machine keys for lifecycle values, health states, risk types, event names and API fields. Display labels must be translatable through the i18n catalogs (`apps/api/src/i18n`, migration `017`).
+- **Never use a display label as an internal identifier.** Existing core entities use PascalCase enum values (`Planned`, `Held`, `Not Held`); new CS enums should match that style for display-facing values and use camelCase machine keys for event/API namespaces.
 
 ---
 
@@ -214,578 +263,444 @@ Use these concepts consistently in metadata, APIs, UI labels, code, and docs.
 
 ### 5.1 Customer Success Profile
 
-Create a profile associated with one existing Account. Prefer a one-to-one relation with a unique constraint on `accountId`, unless the repository's relation engine requires an equivalent mapping.
+One profile per Account, enforced by a unique constraint on `accountId`.
 
-Suggested fields:
-
-| Field                    | Type / behavior                                                                                                 | Required                          |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `accountId`              | Relation to Account; unique for active profiles                                                                 | Yes                               |
-| `csmUserId`              | Relation to User responsible for the Account                                                                    | Configurable; may be unassigned   |
-| `csmTeamId`              | Optional owner team/portfolio                                                                                   | No                                |
-| `lifecycleStage`         | Configurable lifecycle key                                                                                      | Yes; default from module settings |
-| `healthStatus`           | Calculated classification; can be overridden with permission                                                    | System managed                    |
-| `calculatedHealthStatus` | Latest status before any manual override                                                                        | System managed                    |
-| `healthScore`            | Latest calculated score 0–100 or null when unknown                                                              | System managed                    |
-| `healthScoreAt`          | Latest successful calculation time                                                                              | System managed                    |
-| `healthOverride`         | Optional manual override key                                                                                    | No                                |
-| `healthOverrideReason`   | Required when override is active                                                                                | Conditional                       |
-| `healthOverrideByUserId` | User who set override                                                                                           | System managed                    |
-| `healthOverrideAt`       | Timestamp of override                                                                                           | System managed                    |
-| `segment`                | Configurable segment such as SMB/Mid-Market/Enterprise                                                          | Optional                          |
-| `onboardingStatus`       | Derived from onboarding workflow or manually managed where no playbook exists                                   | Yes/default                       |
-| `onboardingStartedAt`    | Date/time                                                                                                       | No                                |
-| `onboardingTargetDate`   | Date                                                                                                            | No                                |
-| `onboardingCompletedAt`  | Date/time                                                                                                       | No                                |
-| `renewalDate`            | Optional manual date; may be enriched from an enabled source                                                    | No                                |
-| `renewalStatus`          | Unknown, Not Due, Preparing, In Progress, Renewed, At Risk, Churned (configurable only within validated states) | Default Unknown                   |
-| `lastMeaningfulTouchAt`  | Derived from qualifying, permitted activities/touchpoints                                                       | System managed                    |
-| `nextSuccessReviewAt`    | Date/time for next planned review                                                                               | No                                |
-| `lastHealthReviewAt`     | Date/time of last documented manual review                                                                      | No                                |
-| `customerSince`          | Optional, only if this does not conflict with Account fields                                                    | No                                |
-| `notes`                  | Use generic Notes/Stream when supported; avoid storing duplicate timeline text                                  | No                                |
-| Standard audit fields    | Follow Entity Engine convention                                                                                 | System managed                    |
+| Field | Type / behavior | Required |
+|---|---|---|
+| `accountId` | Relation to Account; unique | Yes |
+| `csmUserId` | Relation to User responsible for the Account | Configurable; may be unassigned |
+| `csmTeamId` | Optional owner team/portfolio | No |
+| `lifecycleStage` | Configurable lifecycle key | Yes; default from settings |
+| `healthStatus` | Calculated classification; overridable with permission | System managed |
+| `calculatedHealthStatus` | Latest status before any manual override | System managed |
+| `healthScore` | Latest calculated score 0–100, or null | System managed |
+| `healthScoreAt` | Latest successful calculation time | System managed |
+| `healthOverride` | Optional manual override key | No |
+| `healthOverrideReason` | Required while an override is active | Conditional |
+| `healthOverrideByUserId` | Actor | System managed |
+| `healthOverrideAt` | Timestamp | System managed |
+| `healthOverrideExpiresAt` | Optional review/expiry date | No |
+| `segment` | Configurable, e.g. SMB / Mid-Market / Enterprise | No |
+| `onboardingStatus` | Derived from the onboarding workflow, or manual where no playbook exists | Yes/default |
+| `onboardingStartedAt` / `onboardingTargetDate` / `onboardingCompletedAt` | Dates | No |
+| `renewalDate` | Manual date; enrichable from an enabled source | No |
+| `renewalStatus` | `unknown`, `notDue`, `preparing`, `inProgress`, `renewed`, `atRisk`, `churned` | Default `unknown` |
+| `renewalSource` / `renewalSyncedAt` | Which source supplied the date, and when | No |
+| `lastMeaningfulTouchAt` | Derived from qualifying, permitted activity | System managed |
+| `nextSuccessReviewAt` | Next planned review | No |
+| `lastHealthReviewAt` | Last documented manual review | No |
+| `customerSince` | Only if it does not conflict with Account fields | No |
 
 Functional rules:
 
 - Creating a profile must never create a duplicate Account.
-- A user may open the Account from a profile and the profile from an Account detail panel, subject to ACL.
-- The module must handle Accounts with no profile without breaking Account list/detail screens.
-- Profile creation must be idempotent where initiated by a workflow or migration.
-- Decide and document whether deleted Accounts cascade, restrict, or soft-delete linked CSM records according to established platform deletion semantics. Do not silently delete historical health snapshots or risk records.
-- Unassigning a CSM must be audited and may optionally trigger a reassignment task/notification based on settings.
-- Manual profile creation, automated profile creation, and backfill jobs must all pass through the same domain validation and access policy.
+- A user can open the Account from a profile and the profile from an Account panel, subject to ACL on both.
+- Accounts without a profile must not break Account list/detail screens.
+- Profile creation must be idempotent when initiated by a workflow, a job or a migration.
+- Decide and document cascade/restrict/soft-delete behavior for linked CSM records under the platform's existing soft-delete model (`deleted_at`). **Do not silently delete historical health snapshots or risk records.**
+- Unassigning a CSM is audited and may trigger a configured reassignment notification.
+- Manual creation, automated creation and backfill all pass through the same domain validation and access policy.
 
-### 5.2 Customer portfolio and ownership
+### 5.2 Portfolio and ownership
 
 Required views:
 
-- My Customer Portfolio.
-- Team Portfolio (subject to team/record ACL).
-- Unassigned Customers.
-- Customers with Unknown, Monitor, At Risk, or Critical health.
-- Customers onboarding now or overdue.
-- Customers with upcoming renewals.
-- Customers missing a success plan or next review.
+- My Customer Portfolio
+- Team Portfolio (subject to team/record ACL)
+- Unassigned Customers
+- Customers with `unknown` / `monitor` / `atRisk` / `critical` health
+- Customers onboarding now or overdue
+- Customers with upcoming renewals
+- Customers missing a success plan or a next review
 
 Capabilities:
 
-- Assign/reassign one or multiple profiles only if the actor has the relevant permission and may access those Accounts.
-- Bulk actions must validate every selected record, return per-record failures, and avoid partial silent failures.
-- Filter by CSM, team, Account, segment, lifecycle, health status, renewal window, onboarding status, last touch, next review, active risk, and available optional integration status.
-- Support saved filters and configurable list columns via the existing list/view system.
-- Provide sort by health score, renewal date, next review date, risk severity, overdue work, and Account name, where the chosen sort has an explicit null-ordering rule.
-- For each row, show actionable context: current health, trend, next action/date, renewal horizon, and number of open risks without leaking inaccessible related records.
+- Assign/reassign one or many profiles only if the actor holds the permission **and** may access each Account.
+- Bulk actions validate every selected record, return per-record successes and failures, and never fail partially silently.
+- Filter by CSM, team, Account, segment, lifecycle, health status, renewal window, onboarding status, last touch, next review, active risk, and available optional-integration status.
+- Support saved filters and configurable list columns via the existing `SavedFilter` / list-view system.
+- Sort by health score, renewal date, next review date, risk severity, overdue work and Account name, with an explicit null-ordering rule for each sort.
+- Each row shows actionable context: current health, trend, next action/date, renewal horizon, open-risk count — without leaking inaccessible related records.
 
 ### 5.3 Lifecycle management
 
-Ship default lifecycle keys that can be changed through module settings without code changes. Suggested defaults:
+Ship configurable default stage keys: `onboarding`, `adoption`, `valueRealization`, `mature`, `renewal`, `atRisk`, `churned`. These are a practical local design, not a claim about any upstream status list.
 
-1. `onboarding`
-2. `adoption`
-3. `value_realization`
-4. `mature`
-5. `renewal`
-6. `at_risk`
-7. `churned`
-
-Do not make the list unconditionally fixed in code. The final configured state model must be validated and versioned. The default lifecycle values are a practical local design, not a claim about EspoCRM's built-in status list.
-
-Requirements:
-
-- Configure enabled stage keys, labels, order, descriptions, and optional allowed transition rules.
-- Validate transitions on the server. A client-side dropdown is not sufficient.
-- For important transitions (e.g., to `churned`), require a reason and optionally a churn date based on settings.
-- Keep lifecycle and health separate: an Account can be in onboarding while Healthy, or Mature while At Risk.
-- Support manual transitions by authorized users and optional automation driven by explicit rules.
-- Record lifecycle changes in audit/history and publish a domain event.
-- Do not automatically move a customer to Churned merely because a Subscription or Opportunity is missing; only an enabled, configured source may drive such a transition.
-- Provide lifecycle-transition preview/explanation for bulk operations and automation when supported by the UI framework.
+- Configure enabled stage keys, labels, order, descriptions and allowed transitions through settings.
+- **Validate transitions server-side.** A client-side dropdown is not access control.
+- Require a reason (and optionally a churn date) for important transitions such as to `churned`.
+- Keep lifecycle and health separate: an Account can be onboarding while `healthy`, or `mature` while `atRisk`.
+- Support manual transitions by authorized users and optional rule-driven automation.
+- Record lifecycle changes in the audit stream and publish a domain event.
+- **Never move a customer to `churned` because a Subscription or Opportunity is missing.** Only an enabled, configured source may drive that transition.
+- Provide a transition preview for bulk operations and automation.
 
 ### 5.4 Customer Health Score engine
 
-Health scoring is the core feature and must be transparent, deterministic, testable, and auditable.
+The core feature. It must be transparent, deterministic, testable and auditable.
 
 #### 5.4.1 Score semantics
 
-- Score range: integer 0–100 for user-facing display; retain precise intermediate values only if the platform convention requires them.
-- `null` / Unknown means insufficient eligible data, not a score of zero.
-- A health status is derived from configurable thresholds, with validated non-overlapping ranges, for example:
-  - Healthy: 80–100
-  - Monitor: 60–79
-  - At Risk: 40–59
-  - Critical: 0–39
-  - Unknown: no valid score
-- These thresholds are defaults, not permanent constants. Settings must guarantee coverage from 0 to 100 and no gaps/overlaps.
-- A manual health override is independent from the calculated result. Show both the effective status and the underlying calculated score/status.
-- Whenever a manual override is set, store a non-empty reason, the actor, and timestamp. An override can have an optional expiry/review date. Expiry returns the effective classification to calculated status through an auditable transition.
+- User-facing score is an integer 0–100. Retain precise intermediate values only where the repository convention requires them.
+- `null` / `unknown` means insufficient eligible data — **not** a score of zero.
+- Status comes from configurable thresholds with validated, non-overlapping ranges. Default: `healthy` 80–100, `monitor` 60–79, `atRisk` 40–59, `critical` 0–39, `unknown` when there is no valid score.
+- Settings must guarantee coverage of 0–100 with no gaps and no overlaps.
+- A manual override is independent of the calculated result. Show both effective and calculated status.
+- An override stores a non-empty reason, the actor and a timestamp, plus an optional expiry. Expiry returns the effective status to the calculated status through an auditable transition.
 
 #### 5.4.2 Signals and component scores
 
-Provide an extensible `HealthSignalProvider` interface. Implement built-in providers only for existing platform data sources. Potential signal families:
+Provide an extensible `HealthSignalProvider` interface. Implement built-in providers **only** for data sources §3.7 confirms exist. Candidate signal families:
 
-- Engagement: time since last qualifying call/meeting/review; overdue customer-facing activities.
-- Success plan: progress against active goals, overdue goals, milestone completion, and goal recency.
-- Relationship coverage: presence of active customer contacts/stakeholders and a defined executive sponsor (only if the needed data is available).
-- Support: open severe cases, recently reopened cases, or resolution/SLA trends when a Cases/Service Desk module exists.
-- Adoption: manually entered adoption metrics or data from an explicitly configured provider. Do not invent usage metrics without a source.
-- Renewal/commercial: renewal horizon, known renewal risk, relevant Opportunity/Subscription state only when those providers exist.
-- Onboarding: completion ratio and overdue onboarding checkpoints.
-- Risks: open risk severity, age, and overdue mitigation actions.
+| Family | Source | Availability |
+|---|---|---|
+| Engagement | Time since last qualifying Task/Call/Meeting; overdue customer-facing activities | Available now |
+| Success plan | Progress against active goals, overdue goals, milestone completion | Available now |
+| Relationship coverage | Active customer contacts and a defined executive sponsor | Available now |
+| Onboarding | Completion ratio and overdue onboarding steps | Available now |
+| Risks | Open risk severity, age, overdue mitigations | Available now |
+| Renewal/commercial | Renewal horizon and renewal risk from the detected Sales/Subscription source | Available when the marker is present |
+| Support | Open severe cases, reopened cases, SLA trends | **Not available** — no Service Desk module |
+| Adoption | Product usage metrics | **Not available** — no connector; manual entry only |
 
-Each signal provider returns a normalized result with:
+Each provider returns a normalized result carrying: a stable signal key and label key; a raw or safely summarized value; a component score 0–100 when scoreable; its weight from the active configuration; measurement time and freshness/expiry; source module/entity/record references when accessible; an explanation code with safe display parameters; and an applicability state (`applicable`, `missing`, `stale`, `failed`).
 
-- stable signal key and label key;
-- raw/normalized value or a safe summarized representation;
-- component score in range 0–100 when scoreable;
-- weight from the active scoring configuration;
-- measurement time and freshness/expiry information;
-- source module/entity/record references if accessible;
-- explanation code and safe display parameters;
-- whether the signal is applicable, missing, stale, or failed.
-
-Do not include secrets or sensitive raw event payloads in the score explanation.
+Do not put secrets or raw event payloads in a score explanation.
 
 #### 5.4.3 Weighted score rules
 
-- Store scoring configurations as versioned configuration records or the repository's standard system-settings entity, not as arbitrary executable code.
-- Weights must be non-negative and normalized/validated by the server; configured applicable weights must sum to 100 or be safely normalized according to one documented policy.
-- If an input is absent or stale, apply the configured missing-data policy: exclude and renormalize, reduce confidence, or return Unknown when minimum coverage is not met. Never silently score missing data as zero.
-- A profile may have `Unknown` health when fewer than the configured minimum number/weight of signals are valid.
-- Calculate a score from the configuration version used. Store that version on the snapshot for explainability.
-- Define rounding consistently; use the same algorithm in the API, UI, job and tests.
-- Do not let signal providers query arbitrary table names or accept unvalidated SQL conditions from user settings.
-- Validate configuration changes and show a preview using a non-persistent sample/eligible record before activation, if practical.
+- Store scoring configuration as versioned configuration records, or as the module's versioned `app_settings` row. Never as arbitrary executable code.
+- Weights must be non-negative and normalized server-side. Configured applicable weights sum to 100, or are renormalized under one documented policy.
+- Missing or stale inputs follow the configured missing-data policy: exclude and renormalize, reduce confidence, or return `unknown` when minimum coverage is not met. **Never silently score missing data as zero.**
+- A profile is `unknown` when fewer than the configured minimum number/weight of signals are valid.
+- Store the configuration **version** used on the snapshot, so a historical score remains explainable after a rule changes.
+- Define rounding once and use the same algorithm in the API, the UI, jobs and tests.
+- Signal providers must not query arbitrary table names or accept unvalidated SQL conditions from settings.
+- Validate configuration changes and preview them against a non-persistent sample before activation.
 
 #### 5.4.4 Snapshots and history
 
-Create append-only Health Snapshot records (or an equivalent existing audit-history pattern if it supports all required fields). Each snapshot should record:
+Append-only `CustomerSuccessHealthSnapshot` records. Each records:
 
 - Profile and Account references;
 - score and calculated status;
-- effective status at calculation time, clearly separated from calculated status;
-- component scores, normalized inputs, weights, missing/stale signal states, and short explanation codes;
-- scoring configuration version;
+- effective status at calculation time, kept clearly separate;
+- component scores, normalized inputs, weights, missing/stale states, short explanation codes;
+- the scoring configuration version;
 - calculation source (`manual`, `scheduled`, `event`, `rebuild`);
-- calculated timestamp and duration;
-- result state (`success`, `partial`, `failed`) and safe error summary when appropriate;
-- deduplication/idempotency key when work is queued.
+- calculation timestamp and duration;
+- result state (`success`, `partial`, `failed`) with a safe error summary where appropriate;
+- a deduplication/idempotency key when the work was queued.
 
 Requirements:
 
-- Preserve previous snapshots; new calculations do not overwrite history.
-- Avoid generating a new snapshot if no material input, configuration, or status change occurred, unless an explicit periodic snapshot policy requires it.
-- Do not write sensitive customer content into a score history blob. Store only the minimum explanation necessary.
-- Provide a trend view and component-change explanation for authorized users.
-- A historical snapshot must reflect the configuration used at the time, even after a scoring rule changes.
+- Preserve previous snapshots; a new calculation never overwrites history.
+- Avoid writing a new snapshot when no material input, configuration or status change occurred, unless an explicit periodic-snapshot policy requires it.
+- Do not write sensitive customer content into a score-history blob. Store the minimum explanation needed.
+- Provide a trend view and a component-change explanation for authorized users.
+- A historical snapshot reflects the configuration in force at the time.
 
 #### 5.4.5 Recalculation modes
 
-Support:
+- On-demand, for one profile; permission-checked and rate-limited.
+- Scheduled batch, through the existing job/scheduler system.
+- Event-triggered, for qualifying activity completion, risk updates, goal updates, and Subscription/renewal changes where those events exist.
+- Admin-only, for a selected record set, with progress and error reporting.
 
-- On-demand recalculation for one profile, permission-checked and rate-limited.
-- Scheduled batch recalculation through the existing job/scheduler system.
-- Event-triggered recalculation for eligible changes such as qualifying activity completion, risk updates, plan goal updates, subscription/renewal changes, and Case changes when those event providers exist.
-- Admin-only recalculation for a selected set of records with progress and error reporting.
-
-Prevent event loops: writing a health snapshot must not itself trigger endless health recalculation. Use event filters, outbox/idempotency rules, or the established event architecture.
+**Prevent event loops:** writing a health snapshot must not itself trigger unbounded recalculation. Use event filters, the transactional outbox, or the established event architecture.
 
 ### 5.5 Onboarding
 
-Implement onboarding as an Account-specific process using playbooks/checklists and existing Activities wherever possible.
-
-Required capabilities:
+Onboarding is an Account-specific process built from playbooks/checklists plus existing Activities.
 
 - Start onboarding manually or through a configured, idempotent rule.
-- Record start date, target completion date, status, owner/CSM, and completion date.
-- Provide a checklist/playbook with ordered steps, due-date offsets, optional/required flags, dependencies, step owners, and completion criteria.
-- Create/link existing CRM tasks or activities for steps that require human work. Do not create a second generic task entity.
-- Track blockers, overdue steps, completion ratio, and next action.
-- Allow an authorized user to skip an optional step with a reason. Required steps need an explicit override permission and audit reason to bypass.
-- Permit pause/cancel/restart only through validated state transitions. Restart must not silently duplicate already completed steps.
-- Complete onboarding only when mandatory steps are complete or a properly permissioned override with reason is recorded.
-- Surface onboarding state on the Profile and Account views, portfolio list, dashboard, and health explanations.
-- Do not automatically email the customer unless an existing email integration and explicit, reviewed opt-in configuration are available.
+- Record start date, target date, status, owner/CSM and completion date.
+- Provide a checklist with ordered steps, due-date offsets, required/optional flags, dependencies, step owners and completion criteria.
+- Create or link **existing** CRM tasks/activities for steps needing human work. Never a second generic task entity.
+- Track blockers, overdue steps, completion ratio and next action.
+- An authorized user may skip an optional step with a reason. Bypassing a required step needs an explicit override permission and an audit reason.
+- Pause/cancel/restart only through validated transitions. Restart must not duplicate already-completed steps.
+- Complete onboarding only when mandatory steps are complete, or a properly permissioned override with a reason is recorded.
+- Surface onboarding state on the Profile, the Account, portfolio lists, dashboards and health explanations.
+- **Never email the customer automatically** unless an existing mail integration and explicit, reviewed opt-in configuration are present.
 
-Suggested onboarding states: `notStarted`, `inProgress`, `blocked`, `completed`, `canceled`. Keep the set configurable only to the extent supported by the current state-machine conventions.
+Suggested states: `notStarted`, `inProgress`, `blocked`, `completed`, `canceled`.
 
 ### 5.6 Success Plans
 
-A Success Plan documents the intended business outcomes for one Account over a defined period.
+Required fields: name; `profileId` and `accountId`; owner/CSM and optional collaborators; start/end date; status (`draft`, `active`, `onHold`, `completed`, `canceled`); plan type/template; customer-stated outcomes and baseline summary; executive sponsor and involved Contacts where relation metadata supports it; next review date; completion date and close-out summary; audit fields.
 
-Required fields:
-
-- name;
-- `profileId` and `accountId`;
-- owner/CSM and optional internal collaborators;
-- start/end date;
-- status (`draft`, `active`, `onHold`, `completed`, `canceled`, subject to the repository's enum conventions);
-- plan type/template;
-- customer-stated outcomes and baseline summary;
-- executive sponsor and involved Contacts if supported by relation metadata;
-- next review date;
-- completion date and close-out summary;
-- audit fields.
-
-Requirements:
-
-- Support multiple historical plans for the same Account but define whether more than one active plan is allowed (default: one primary active plan; any secondary plan behavior must be explicit).
+- Support multiple historical plans per Account, with at most one primary active plan by default; any secondary-plan behavior must be explicit.
 - Support plan templates with configurable default goals/checkpoints and owner suggestions.
 - Record plan state transitions in the audit stream.
-- Preserve completed/canceled plans as history; do not hard-delete them during routine cleanup.
-- Provide a copy-from-template operation and a safe duplicate-plan operation with new IDs and no copied completion metadata.
+- Preserve completed/canceled plans as history; routine cleanup must not hard-delete them.
+- Provide copy-from-template and a safe duplicate-plan that issues new IDs and copies no completion metadata.
 - Support an Account-level summary of active plan status and overall progress.
-- A Success Plan may optionally link to a Projects record or Project Task only if the Projects module is installed; the link is supplementary, never a hard dependency.
+- A plan may optionally link to a `Project` or `ProjectTask` **only when the Projects module is present**; the link is supplementary, never a hard dependency.
 
 ### 5.7 Success Goals and checkpoints
 
-Success Goals are measurable outcomes, not generic CRM Tasks.
-
-Suggested fields:
-
-- `successPlanId`, `profileId`, and `accountId`;
-- name and description;
-- goal category/type;
-- baseline value/date;
-- target value/date;
-- current value/date;
-- unit label/key;
-- direction (`increase`, `decrease`, `maintain`, `boolean`, `manual`);
-- owner and optional customer Contact;
-- source type (`manual`, `linkedEntity`, `provider`);
-- optional linked record/data-source configuration;
-- status (`notStarted`, `inProgress`, `achieved`, `missed`, `canceled`, `blocked`);
-- progress percentage and calculation timestamp;
-- checkpoint/milestone dates and notes;
-- audit fields.
+Suggested fields: `successPlanId`, `profileId`, `accountId`; name/description; category/type; baseline value+date; target value+date; current value+date; unit; direction (`increase`, `decrease`, `maintain`, `boolean`, `manual`); owner and optional customer Contact; source type (`manual`, `linkedEntity`, `provider`); optional linked record configuration; status (`notStarted`, `inProgress`, `achieved`, `missed`, `canceled`, `blocked`); progress percentage and calculation timestamp; checkpoint dates and notes; audit fields.
 
 Rules:
 
-- Validate numeric type, unit, direction, target, and baseline values.
-- Avoid division-by-zero and reversed-direction mistakes in progress calculation.
-- For an increase goal, calculate progress using baseline and target; for a decrease goal, reverse the direction safely; for `maintain`, use a configured tolerance range; for boolean goals, use explicit completion state; for manual goals, require controlled progress updates.
-- If the needed value cannot be read from a safe, authorized source, require a manual update rather than silently inventing a value.
-- Keep progress in the range 0–100 for UI purposes while exposing actual current/target values separately.
+- Validate numeric type, unit, direction, target and baseline.
+- Avoid division-by-zero and reversed-direction mistakes.
+- `increase` computes progress from baseline and target; `decrease` reverses direction safely; `maintain` uses a configured tolerance; `boolean` uses explicit completion state; `manual` requires a controlled progress update.
+- If a value cannot be read from a safe authorized source, require a manual update — never invent one.
+- Keep progress in 0–100 for display while exposing actual current/target values separately.
 - Goal completion and overdue behavior must be deterministic and unit-tested.
-- Changes to goal values, targets, statuses, or due dates must recalculate the plan summary and enqueue health recalculation only when relevant.
-- Provide goal checkpoint history or use the standard audit system if it retains prior values adequately.
+- Changes to goal values, targets, statuses or due dates recalculate the plan summary and enqueue health recalculation only when relevant.
+- Provide goal checkpoint history, or rely on the standard audit system if it retains prior values adequately.
 
-### 5.8 Customer Success Risks and churn prevention
+### 5.8 Risks and churn prevention
 
-Create a structured Customer Success Risk entity linked to a Profile and Account. A Risk is not the same as health status: a customer may have several specific risks that contribute to its overall health.
+`CustomerSuccessRisk` is linked to a Profile and an Account. A risk is not a health status: a customer may have several risks that together contribute to health.
 
-Suggested fields:
-
-- title and description;
-- `profileId`, `accountId`, optional `successPlanId`, related Contact, and optional linked Case/Opportunity/Subscription record;
-- stable risk type key (e.g. adoption, engagement, support, stakeholder, value-realization, renewal, commercial, implementation, competitor, unknown);
-- severity (`low`, `medium`, `high`, `critical`);
-- probability/impact fields only if the UI clearly explains them;
-- lifecycle status (`open`, `mitigating`, `escalated`, `resolved`, `accepted`, `closed`);
-- owner/assignee and optional escalation team;
-- detected date, next review date, target resolution date, resolved date;
-- evidence summary and source references;
-- mitigation plan and next action;
-- resolution/outcome reason;
-- whether it contributes to health scoring;
-- audit fields.
+Suggested fields: title/description; `profileId`, `accountId`, optional `successPlanId`, related Contact, and an optional linked Case/Opportunity/Subscription record when present; a stable risk type key (`adoption`, `engagement`, `support`, `stakeholder`, `valueRealization`, `renewal`, `commercial`, `implementation`, `competitor`, `unknown`); severity (`low`, `medium`, `high`, `critical`); optional probability/impact fields, only if the UI explains them clearly; lifecycle status (`open`, `mitigating`, `escalated`, `resolved`, `accepted`, `closed`); owner/assignee and optional escalation team; detected date, next review date, target resolution date, resolved date; evidence summary and source references; mitigation plan and next action; resolution/outcome reason; a flag for whether it contributes to health scoring; audit fields.
 
 Requirements:
 
-- A risk must have an accountable owner or explicitly be placed in an unassigned queue.
-- High/Critical risks require a mitigation action or documented reason for deferral.
-- Overdue unresolved risk items must appear in designated queues and optionally trigger a configured in-app notification.
-- Escalation must be permission-checked and idempotent.
-- Resolve/close operations must record the outcome; reopening preserves the earlier resolution history.
-- Risk severity, age, status, and due-date changes may trigger health recalculation.
-- Support manual risk creation and, later, rules-based detection using verified data sources.
-- Never automatically label an Account as Churned because a risk is Critical; health, lifecycle, and risk are separate concepts.
+- A risk must have an accountable owner, or be explicitly placed in an unassigned queue.
+- High/Critical risks require a mitigation action or a documented reason for deferral.
+- Overdue unresolved risks appear in designated queues and may trigger a configured in-app notification.
+- Escalation is permission-checked and idempotent.
+- Resolve/close records the outcome; reopening preserves earlier resolution history.
+- Severity, age, status and due-date changes may trigger health recalculation.
+- Support manual creation now, and rules-based detection later against verified data sources.
+- **Never automatically label an Account `churned` because a risk is Critical.** Health, lifecycle and risk are separate concepts.
 
 ### 5.9 Renewal readiness
 
-Renewal readiness provides visibility and workflow support. It is **not a replacement for Sales, Subscriptions, invoices, or contracts**.
+Renewal readiness provides visibility and workflow support. It is **not** a replacement for Sales, Subscriptions, invoices or contracts.
 
-Requirements:
-
-- Show known renewal date, days to renewal, renewal status, responsible CSM, commercial owner if available, active success plan, goal progress, health trend, open high/critical risks, and next action.
-- Allow authorized users to manually manage renewal date/status when no commercial source is installed.
-- If an Opportunity/Subscription/contract source exists, provide an adapter that reads only allowed fields and links to the source record.
-- Define data precedence for renewal date. A source-supplied date should not silently overwrite a manual date unless the setting explicitly defines that behavior. Show the source and last-sync time.
-- Provide configurable date windows (e.g. 30/60/90/120 days) and queues such as Upcoming, Needs Preparation, At Risk, Overdue, Renewed, and Churned.
-- A renewal alert should include actionable evidence and a recommended follow-up, not only a status.
-- Do not create or update an Opportunity, Subscription, invoice, or payment without an explicit, separately permissioned action.
-- A `Renewed` state must have a traceable source reference or a documented manual confirmation. Do not infer that the customer renewed merely because the renewal date changed.
-- Renewal data source failures must be visible and must not erase a previously valid value.
+- Show known renewal date, days to renewal, renewal status, responsible CSM, commercial owner where available, active plan, goal progress, health trend, open high/critical risks and next action.
+- Authorized users manage renewal date/status manually when no commercial source is installed.
+- If an Opportunity/Subscription source exists, provide an adapter that reads **only allowed fields** and links to the source record.
+- Define data precedence explicitly. A source-supplied date must not silently overwrite a manual date unless a setting says so. Always show the source and last-sync time.
+- Provide configurable date windows (e.g. 30/60/90/120 days) and queues: Upcoming, Needs Preparation, At Risk, Overdue, Renewed, Churned.
+- A renewal alert carries actionable evidence and a recommended follow-up, not only a status.
+- **Never create or update an Opportunity, Subscription, invoice or payment** without an explicit, separately permissioned action.
+- A `renewed` state requires a traceable source reference or a documented manual confirmation. Never infer renewal from a changed date.
+- A source failure must be visible and must not erase a previously valid value.
 
 ### 5.10 Touchpoints and success reviews
 
-Reuse existing Activity, Calendar, Stream, Notes, and Contact records. The module should add CSM context without forking generic collaboration features.
+Reuse existing Task, Call, Meeting, Email, Calendar, Stream and Contact records. The module adds CSM context without forking generic collaboration features.
 
-Requirements:
+- Show recent qualifying calls, meetings, completed tasks and notes in a unified Profile context.
+- Let a CSM schedule a Success Review by creating or linking an existing Meeting/Activity.
+- Provide an optional structured review template: objectives, outcomes achieved, open risks, goal progress, customer sentiment, action items, next review date.
+- Store customer sentiment only as a clearly labelled human-entered value unless an explicit compliant external source is configured.
+- Link a touchpoint/review to Account, Contacts, Profile, Plan, Goals and Risks **without duplicating the Activity record**.
+- Define what counts as a `meaningful touch` for health scoring. Exclude internal-only tasks, automated noise, and events without a customer/account link unless configuration says otherwise.
+- Distinguish activity **creation** date from activity **completion** date for recency calculations.
+- A user must never see an Activity or Note they could not otherwise read, even when it is connected to a visible Profile.
 
-- Show recent qualifying calls, meetings, completed tasks, customer reviews, and notes in a unified Account/CS Profile context if the platform provides these sources.
-- Allow a CSM to schedule a Success Review by creating or linking an existing Meeting/Activity.
-- Provide an optional structured review template with objectives, outcomes achieved, open risks, goal progress, customer sentiment, action items, and next review date.
-- Store customer sentiment only as a clearly labeled human-entered value unless an explicit compliant external source is configured.
-- Support links from a touchpoint/review to Account, relevant Contacts, Profile, Success Plan, Goals, and Risks without duplicating the actual Activity record.
-- Define what counts as a `meaningful touch` for health scoring; exclude internal-only tasks, automated noise, and events without a customer/account link unless configuration says otherwise.
-- Make a clear distinction between activity creation date and activity completion date for recency calculations.
-- Prevent users from seeing an Activity or Note they are not otherwise authorized to read, even if it is connected to a visible Profile.
-
-If the generic Activity model cannot support a structured review form safely, add a small `CustomerSuccessReview` record that links to an existing Activity rather than replacing the Activity. Do not build a standalone call/meeting/task scheduler.
+If the generic Activity model cannot carry a structured review form safely, add a small `CustomerSuccessReview` record that **links** to an existing Activity rather than replacing it. Do not build a standalone call/meeting/task scheduler.
 
 ### 5.11 Playbook templates and execution
 
-A playbook is a reusable checklist/automation recipe for onboarding, adoption, risk mitigation, renewal preparation, or executive reviews.
-
 #### 5.11.1 Template model
 
-A Playbook Template should define:
+A Playbook Template defines: name, description, type/category, version, active flag; a trigger mode (`manual`, `lifecycleTransition`, `healthTransition`, `renewalWindow`, `onboardingStarted`, or another explicitly supported domain event); validated trigger configuration; eligible segment/lifecycle/health criteria; steps in stable order with stable IDs/keys; a step type (`manual`, `createActivity`, `createTask`, `createRisk`, `createSuccessPlan`, `notifyOwner`, `waitUntil`, or another explicitly supported type); required/optional flag, offset due dates, assignee policy, dependencies, instructions and completion rule; template version and audit fields.
 
-- name, description, type/category, version, active flag;
-- trigger mode (`manual`, `lifecycleTransition`, `healthTransition`, `renewalWindow`, `onboardingStarted`, or another explicitly supported domain event);
-- validated trigger configuration;
-- eligible segment/lifecycle/health criteria;
-- steps in stable order, with stable IDs/keys;
-- step type (`manual`, `createActivity`, `createTask`, `createRisk`, `createSuccessPlan`, `notifyOwner`, `waitUntil`, or another explicitly supported type);
-- required/optional flag, offset due dates, assignee policy, dependencies, instructions, and completion rule;
-- template version and audit fields.
-
-Do not execute arbitrary code in a step or allow an administrator to type raw SQL or unrestricted JavaScript into a playbook. Step types are implemented as allow-listed providers with validated schemas.
+**Never execute arbitrary code in a step.** No raw SQL, no unrestricted JavaScript. Step types are allow-listed providers with validated schemas.
 
 #### 5.11.2 Run model
 
-A Playbook Run should store:
-
-- Profile/Account and template/version references;
-- trigger source and idempotency key;
-- start/end time, status, initiating actor or system source;
-- a snapshot of the template steps required for this run so edits to the template do not mutate in-flight work;
-- per-step status, due date, assignee, linked Activity/Task/record, completion time, skip reason, and safe error summary;
-- cancel/pause reason and run-level audit data.
+A Playbook Run stores: Profile/Account and template/version references; trigger source and idempotency key; start/end time, status, initiating actor or system source; **a snapshot of the template steps required for this run** so later template edits cannot mutate in-flight work; per-step status, due date, assignee, linked Activity/Task/record, completion time, skip reason and safe error summary; cancel/pause reason and run-level audit data.
 
 #### 5.11.3 Execution rules
 
-- Manual playbook start is supported in MVP; automated triggers may be enabled incrementally.
-- Every trigger must have a deterministic idempotency key to avoid duplicate runs after event retries.
-- Use the existing queue/job infrastructure for work that should not block a user request.
-- A repeated event must not duplicate tasks, risk records, or notifications.
-- Step failure must be visible and retryable without repeating completed external side effects.
+- Manual start in MVP; automated triggers enabled incrementally.
+- Every trigger has a deterministic idempotency key, so an event retry cannot create a duplicate run.
+- Non-blocking work uses the existing queue/job infrastructure.
+- A repeated event must not duplicate tasks, risk records or notifications.
+- Step failure is visible and retryable without repeating completed external side effects.
 - Support run cancellation and controlled retry; preserve partial progress and history.
-- Avoid hidden cascading automation. Show which trigger started a run and which actions it performed.
-- `waitUntil` must use the existing scheduler/queue abstraction and must not spawn in-memory timers.
-- Never send customer-facing mail or invoke external APIs unless an existing integration and explicit admin/user configuration permit it.
+- No hidden cascading automation. Show which trigger started a run and which actions it performed.
+- `waitUntil` uses the existing scheduler/queue abstraction — never in-memory timers.
+- Never send customer-facing mail or call external APIs unless an existing integration and explicit configuration permit it.
 
-### 5.12 Dashboards, reports, and operational queues
+### 5.12 Dashboards, reports and operational queues
 
-Contribute dashlets/widgets to the existing dashboard framework when it is implemented. Suggested views:
+Contribute dashlets to the existing dashboard framework. The established pattern is an entity-list dashlet plus an option set (`apps/api/src/projects/project-dashlet.service.ts`), ACL-filtered server-side. Suggested views:
 
-1. My portfolio health distribution.
-2. Health score trend over time.
-3. Customers with falling health scores.
-4. At Risk/Critical customers with no next action.
-5. Onboarding completion and overdue steps.
-6. Open risks by severity, owner, and age.
-7. Upcoming renewals by 30/60/90-day windows.
-8. Success-plan and goal progress.
-9. Overdue or missing customer reviews.
-10. Active playbook runs and failed steps.
-11. Unassigned profiles and portfolio workload.
+1. My portfolio health distribution
+2. Health score trend over time
+3. Customers with falling health scores
+4. At Risk/Critical customers with no next action
+5. Onboarding completion and overdue steps
+6. Open risks by severity, owner and age
+7. Upcoming renewals by 30/60/90-day window
+8. Success-plan and goal progress
+9. Overdue or missing customer reviews
+10. Active playbook runs and failed steps
+11. Unassigned profiles and portfolio workload
 
-Dashboard rules:
+Rules:
 
-- Every aggregate must respect record-level ACL, team scope, and field-level restrictions.
+- Every aggregate respects record-level ACL, team scope and field-level restrictions.
 - Do not leak counts or names of inaccessible Accounts through filters or chart tooltips.
 - Date-window definitions and timezone behavior must be explicit.
-- Health distributions must distinguish `Unknown` from a low score.
-- Dashlets should drill down to the exact filtered list when permitted.
-- Use existing Reports/Dashboard capabilities if available; do not add a new reporting engine just for this module.
-- If dashboards are not yet implemented in Phases 0–18, ship useful saved list views and a compact portfolio overview first, then add dashlets when the generic framework arrives.
+- Health distributions distinguish `unknown` from a low score.
+- Dashlets drill down to the exact filtered list when permitted.
+- Use the existing `Report` and `Dashboard` capabilities. Do not add a reporting engine.
+- Until a richer framework exists, saved list views plus a compact portfolio overview are an acceptable first delivery.
 
 ### 5.13 Configuration and administration
 
-Provide a Customer Success settings area through the existing administration/settings framework. At minimum configure:
+Provide a Customer Success settings area backed by one validated, versioned `app_settings` row named `customerSuccess`, mirroring `apps/api/src/sales/sales-settings.service.ts` (`GET`/`POST /api/v1/CustomerSuccess/action/settings`). Configure at minimum:
 
 - enabled lifecycle stages and valid transitions;
 - segment options;
 - default owner/assignment policy;
-- health thresholds and enabled scoring configuration;
-- signal weights, signal applicability, freshness windows, missing-data behavior, and minimum coverage;
-- manual override permissions, optional expiry, and review requirement;
+- health thresholds and the enabled scoring configuration;
+- signal weights, applicability, freshness windows, missing-data behavior, minimum coverage;
+- manual-override permissions, optional expiry and review requirement;
 - renewal windows and data-source precedence;
 - meaningful-touch definition and recency window;
 - playbook auto-trigger enablement and per-trigger guardrails;
 - notification/escalation rules;
 - default onboarding playbook and success-plan template;
-- job batch size/limits where appropriate.
+- module feature flags (§3.6: there is no platform-level module toggle, so optional behaviour is gated by flags here);
+- job batch size/limits.
 
-Configuration safeguards:
+Safeguards:
 
-- Validate all settings server-side.
-- Save new settings as a new version where the scoring/history model depends on historical reproducibility.
-- Preview changes before enabling potentially high-impact automations.
-- Keep system defaults idempotent and version-controlled.
-- Do not reset administrator settings on app start or routine migration.
-- Do not allow settings to weaken global ACL or make record-level access more permissive.
+- Validate all settings server-side with Zod; bump the version on every accepted change.
+- Preview changes before enabling high-impact automation.
+- System defaults are idempotent and version-controlled.
+- **Never reset administrator settings on app start or routine migration.**
+- Settings must never weaken global ACL or make record access more permissive.
 
-### 5.14 Search, filters, import/export, and bulk operations
+### 5.14 Search, filters, import/export and bulk operations
 
-- Register profile, success plan, goal, risk, playbook template/run, and review entities with the generic Entity Engine where appropriate.
-- Add searchable fields for Account name, profile owner, lifecycle, health state, segment, active risk title, goal name, and renewal date subject to existing search limits.
-- Register filters using the generic query/filter framework; do not concatenate client strings into SQL.
+- Register all CSM entities with the generic Entity Engine so search, import/export and the Entity Manager UI come for free.
+- Make searchable: Account name, profile owner, lifecycle, health state, segment, active risk title, goal name, renewal date — subject to existing search limits.
+- Register filters through the generic query/filter framework. Never concatenate client strings into SQL.
 - Support import/export only through the existing framework and its ACL checks.
-- If profile imports reference Account IDs, validate that the actor may access each Account and prevent duplicate active profiles.
-- Bulk actions include assignment, lifecycle transition, health recalculation, plan activation (where allowed), and playbook start only if the generic bulk-action contract supports per-record results.
-- Do not provide bulk destructive delete for health history, risks, plans, or playbook runs by default.
+- If a profile import references Account IDs, validate the actor may access each Account and prevent duplicate active profiles.
+- Bulk actions: assignment, lifecycle transition, health recalculation, plan activation, playbook start — only where the generic bulk-action contract supports per-record results.
+- No bulk destructive delete for health history, risks, plans or playbook runs by default.
 
 ---
 
 ## 6. Data Model and Persistence Design
 
-Use the Entity Engine for ordinary entity CRUD, metadata, relations, validation, and serialization. Use domain services for score calculation, state transitions, playbook execution, and other multi-record business operations. Do not create a second ORM or entity registry.
-
-The names below are logical recommendations. Adapt them to the actual naming strategy while preserving field semantics and constraints.
+Use the Entity Engine for ordinary CRUD, metadata, relations, validation and serialization. Use domain services for score calculation, state transitions and playbook execution. **Do not create a second ORM or entity registry.**
 
 ### 6.1 Required domain entities
 
-#### A. `CustomerSuccessProfile`
+**A. `CustomerSuccessProfile`** — one per Account. The portfolio-facing record: current lifecycle, CSM owner/team, latest health summary, onboarding/renewal summaries, override state. Latest values are a read-optimized summary; snapshots remain the source for explaining changes.
 
-- One profile per Account.
-- Main portfolio-facing record.
-- Holds current lifecycle, CSM owner/team, latest health summary, onboarding/renewal summaries, and manual override state.
-- Latest values are a read-optimized summary; snapshots/history remain the source for explaining changes.
+**B. `CustomerSuccessHealthSnapshot`** — append-only calculation result: score, calculated/effective state, source, configuration version, components, signal coverage, calculation time, result status. Index for profile/date and portfolio trend queries.
 
-#### B. `CustomerSuccessHealthSnapshot`
+**C. `CustomerSuccessScoringConfig`** (or a versioned slice of the module settings row) — signal definitions, weights, status thresholds, freshness windows, minimum coverage, missing-data policy, enabled state. No executable script bodies. Prefer the existing versioned `app_settings` store over a redundant table (§3.5).
 
-- Append-only calculation result.
-- Stores score, calculated/effective state, source, configuration version, components, signal coverage, calculation time, and result status.
-- Must have indexes for profile/date and common portfolio trend queries.
+**D. `CustomerSuccessPlan`** — Account/profile outcome plan with owner, timeframe, status, summary and optional template/source links.
 
-#### C. `CustomerSuccessScoringConfig` (or versioned system config)
+**E. `CustomerSuccessGoal`** — measurable goal inside a plan: baseline/target/current value, unit, direction, owner, due date, source, progress, status.
 
-- Holds versioned signal definitions, weights, status thresholds, freshness windows, minimum coverage, missing-data policy, and enabled/disabled state.
-- Do not store executable script bodies.
-- If the platform has a standard versioned system-settings store, use it instead of creating redundant configuration tables.
+**F. `CustomerSuccessRisk`** — risk/mitigation record with severity, type, owner, evidence, next action, due dates, status, resolution.
 
-#### D. `CustomerSuccessPlan`
+**G. `CustomerSuccessPlaybookTemplate`** — reusable, versioned template with validated step configuration.
 
-- Account/profile outcome plan with owner, timeframe, status, summary, and optional template/source links.
+**H. `CustomerSuccessPlaybookRun`** — execution instance with idempotency key, template version snapshot, status, and step-record relations.
 
-#### E. `CustomerSuccessGoal`
+**I. `CustomerSuccessPlaybookStepRun`** — individual step status, due date, assignee, linked record, completion/skip reason, retry-safe failure state.
 
-- Measurable goal inside a plan, including baseline/target/current value, unit, direction, owner, due date, source, progress, and status.
+**J. `CustomerSuccessReview`** *(conditional)* — only if generic Activities cannot safely represent structured success-review content. Must link to an existing Activity and must not duplicate scheduling/lifecycle semantics.
 
-#### F. `CustomerSuccessRisk`
+**K. Onboarding entities** *(conditional)* — prefer Playbook Run + Step Run. Do not create separate onboarding task/checklist tables if the playbook model already covers the use case. Add a dedicated onboarding record only if it materially simplifies status reporting and cannot be represented safely in Profile + Playbook Run.
 
-- Risk/mitigation record with severity, type, owner, evidence, next action, due dates, status, and resolution.
+### 6.2 Metadata registration
 
-#### G. `CustomerSuccessPlaybookTemplate`
+- Register all entities in **`database/seed-metadata.ts`** (§3.3), not in an extension `metadata/entities.json`.
+- Reuse the shared field helpers already there: `standardFields` for the common columns and `activityFields` when a CS entity links activities.
+- Define `relations` so the generic related-records endpoints resolve (`oneToMany` + `mappedBy`, `manyMany` to `Account`/`Contact`).
+- Declare `layouts` (list/detail/edit with `panels` and `position`) so the metadata-driven SPA renders them with no custom React.
+- Declare `acl.permissions` defaults per entity, following the `Project` example.
+- Declare `indexes` as metadata only; create physical indexes in the migration.
 
-- Reusable, versioned template and validated step configuration.
+### 6.3 Relationships
 
-#### H. `CustomerSuccessPlaybookRun`
+- Account 1 — 0..1 `CustomerSuccessProfile`
+- User 1 — many owned profiles; Team 1 — many profiles
+- Profile 1 — many HealthSnapshots, SuccessPlans, Risks, PlaybookRuns
+- SuccessPlan 1 — many SuccessGoals
+- PlaybookTemplate 1 — many PlaybookRuns; PlaybookRun 1 — many PlaybookStepRuns
+- A step run may link to an existing Activity/Task/Notification or to an allowed record produced by the step
+- Optional relations to Contact, Project, ProjectTask, Opportunity, Subscription, Case and Activity are registered **only when the target entity is present** (§3.7)
 
-- Execution instance with idempotency key, template version snapshot, status, and relationship to step records.
+All relations are checked server-side and obey ACL at both endpoints. A relationship to a visible Profile must never grant access to an otherwise inaccessible related record.
 
-#### I. `CustomerSuccessPlaybookStepRun`
+### 6.4 Database constraints and indexing
 
-- Individual step execution status, due date, assignee, linked record, completion/skip reason, and retry-safe failure state.
+In `032_phase19_customer_success.sql`:
 
-#### J. `CustomerSuccessReview` (conditional)
+- A **unique index on active Profile `accountId`**. Because records are soft-deleted (`deleted_at`), the index must be partial: exclude rows where `deleted_at IS NOT NULL`, so an archived profile does not block a new one.
+- FK/deletion behavior consistent with the platform's soft-delete model.
+- Partial expression indexes following the established pattern, e.g. `entity_records ((attrs ->> 'accountId')) WHERE entity_type = 'CustomerSuccessProfile' AND deleted_at IS NULL`.
+- Composite index for HealthSnapshot `(profileId, calculatedAt DESC)` or the closest supported equivalent.
+- Indexes for open risk lists by `(profileId, status, severity, dueDate)`, for open PlaybookStepRuns by assignee/status/due date, and for Goals by plan/status/due date, as query patterns justify.
+- Unique/idempotency constraint on a PlaybookRun trigger key where a trigger must run once per record/window/template version.
 
-- Add only if generic Activities cannot safely represent the structured success-review content. It must link to an existing Activity when one exists and must not duplicate its scheduling/lifecycle semantics.
+Do not over-index. Capture the query patterns and verify important indexes against the configured database's query plans when practical.
 
-#### K. Onboarding entities (conditional)
+### 6.5 JSON and structured fields
 
-- Prefer Playbook Run + Step Run for onboarding. Do not create separate onboarding task/checklist tables if the playbook model already covers the use cases.
-- Add a dedicated onboarding record only if it materially simplifies lifecycle/status reporting and cannot be represented safely in Profile + Playbook Run.
+JSONB (`attrs`) is the established storage for non-physical attributes. If it is used for versioned score components or playbook step snapshots:
 
-### 6.2 Relationships
+- Frequently filtered and joined fields stay typed metadata fields, not buried only in JSON.
+- Every JSON payload carries an explicit version field and a validated schema.
+- No raw unbounded activity bodies or large customer blobs in score snapshots.
+- No JSON value is ever interpolated into a SQL string.
+- Any JSONB index must be justified by a real query pattern.
 
-At minimum:
+### 6.6 Migration strategy
 
-- Account 1 — 0..1 CustomerSuccessProfile.
-- User 1 — many owned CustomerSuccessProfiles.
-- Team 1 — many profiles, where team ownership is supported.
-- Profile 1 — many HealthSnapshots.
-- Profile 1 — many SuccessPlans.
-- SuccessPlan 1 — many SuccessGoals.
-- Profile 1 — many CustomerSuccessRisks.
-- PlaybookTemplate 1 — many PlaybookRuns.
-- Profile 1 — many PlaybookRuns.
-- PlaybookRun 1 — many PlaybookStepRuns.
-- A playbook step run may link to an existing Activity/Task/Notification or an allowed record produced by the step.
-- Optional relations to Contact, Project, Project Task, Opportunity, Subscription, Case, and Activity must only be registered when the target entity is present.
-
-All relations must be checked server-side and obey ACL on both endpoints. A relationship to a visible Profile must not grant access to an otherwise inaccessible related record.
-
-### 6.3 Database constraints and indexing
-
-Add, where supported by the existing migration/query layer:
-
-- Unique constraint on active Profile `accountId`.
-- Foreign-key behavior consistent with the current repository's deletion/soft-deletion model.
-- Indexes on Profile owner/team, lifecycle, health status, segment, renewal date, onboarding state, and last-touch/next-review dates according to observed query patterns.
-- Composite index on HealthSnapshot `(profileId, calculatedAt DESC)` or the closest supported equivalent.
-- Indexes on active/open risk lists by `(profileId, status, severity, dueDate)` as query patterns justify.
-- Unique/idempotency constraint on PlaybookRun trigger key when a trigger must run once per record/window/template version.
-- Indexes for open PlaybookStepRuns by assignee/status/due date.
-- Indexes on SuccessGoal plan/status/due date.
-
-Do not over-index every field. Capture the query patterns and verify important indexes with the configured database's query plans when practical.
-
-### 6.4 JSON and structured fields
-
-If PostgreSQL JSONB is the repository's established pattern, it may be used for versioned score components or playbook step snapshots, with schema validation in TypeScript. However:
-
-- Frequently filtered and joined fields must remain typed columns/metadata fields, not buried only in JSON.
-- Every JSON payload needs an explicit version field and validated schema.
-- Do not store raw unbounded activity bodies or large customer data blobs in score snapshots.
-- Do not interpolate JSON values into SQL strings.
-- Any JSONB indexes must be justified by a real query pattern.
-
-### 6.5 Migration strategy
-
-- Use versioned, reviewable, additive migrations.
-- Register metadata and relation definitions through the existing metadata/migration mechanism.
+- One additive migration: `database/migrations/032_phase19_customer_success.sql`.
 - Prefer nullable fields and staged rollouts before introducing required values on populated tables.
-- Backfill CustomerSuccessProfile records only through an explicit, resumable, idempotent job or administrator-triggered command.
-- Do not silently create a profile for every Account on application boot.
-- Backfill jobs must support dry-run/preview if feasible, progress reporting, restartability, and per-record error reporting.
-- Seed default lifecycle/scoring/template records using idempotent keys and never overwrite user-modified settings.
-- Do not drop historical tables/columns as part of normal upgrade or module disable.
-- An uninstall/deactivation operation must not delete customer plans, risks, snapshots, or run history. If uninstall is supported, preserve domain tables and clearly document retained data.
+- **Do not silently create a Profile for every Account on application boot.** Backfill only through an explicit, resumable, idempotent job or an administrator-triggered command.
+- Backfill jobs support dry-run/preview where feasible, progress reporting, restartability and per-record error reporting.
+- Seed default lifecycle/scoring/template records under idempotent keys; never overwrite user-modified settings.
+- Never drop historical tables/columns during a normal upgrade or module deactivation.
 
 ---
 
 ## 7. Domain Services and Events
 
-Keep controllers thin. Implement business behavior in injected application/domain services and expose stable interfaces to jobs, event handlers, and the UI API.
+Keep controllers thin. Put business behavior in injected services and expose stable interfaces to jobs, event handlers and the UI API.
 
-### 7.1 Suggested services
+### 7.1 Services
 
-- `CustomerSuccessProfileService`: create/update, assignment, Account binding, lifecycle summary.
-- `CustomerSuccessPortfolioService`: portfolio queues and ACL-filtered aggregates.
-- `CustomerSuccessLifecycleService`: validated lifecycle transitions and reasons.
-- `CustomerHealthScoringService`: signal collection, weight normalization, score calculation, threshold classification, configuration version resolution.
-- `CustomerHealthSnapshotService`: history writes, deduplication, trend queries, and snapshot retention policy (retention must not delete required audit history).
-- `HealthSignalRegistry`: registers built-in and optional provider adapters.
-- `CustomerSuccessOnboardingService`: onboarding start, completion, pause, cancel, blocker, and progress summary.
-- `CustomerSuccessPlanService`: plan creation, transition, copy-from-template, summary.
-- `CustomerSuccessGoalService`: value updates, progress calculation, checkpoint, overdue logic.
-- `CustomerSuccessRiskService`: triage, ownership, mitigation, escalation, resolution, health impact.
-- `CustomerSuccessRenewalService`: renewal summary, source precedence, due windows, source references.
-- `CustomerSuccessTouchpointService`: meaningful-touch eligibility and structured review integration.
-- `CustomerSuccessPlaybookService`: template validation, start, run state transitions, cancellation, retry, and step linking.
-- `CustomerSuccessAutomationService`: guarded automation rules and idempotency.
-- `CustomerSuccessNotificationService`: create in-app notifications through the existing notification service only.
-- `CustomerSuccessSettingsService`: validated configuration and immutable/versioned scoring settings as required.
+Follow the barrel/provider convention: each service is `@Injectable()`, listed in `CUSTOMER_SUCCESS_PROVIDERS`, and constructed with explicit `DatabaseService`/`METADATA_STORE`/`REQUEST_SCOPE_TOKEN` injection as `SalesSettingsService` does.
 
-Use the project's established naming and module layering. Do not create a service solely to wrap one trivial repository call unless that is the repository convention.
+- `CustomerSuccessProfileService` — create/update, assignment, Account binding, lifecycle summary
+- `CustomerSuccessPortfolioService` — portfolio queues and ACL-filtered aggregates
+- `CustomerSuccessLifecycleService` — validated transitions and reasons
+- `CustomerSuccessHealthService` — signal collection, weight normalization, score calculation, threshold classification, configuration version resolution
+- `CustomerSuccessHealthSnapshotService` — history writes, deduplication, trend queries, retention policy that preserves required audit history
+- `HealthSignalRegistry` — registers built-in and optional provider adapters
+- `CustomerSuccessOnboardingService` — start, completion, pause, cancel, blockers, progress summary
+- `CustomerSuccessPlanService` — creation, transition, copy-from-template, summary
+- `CustomerSuccessGoalService` — value updates, progress calculation, checkpoints, overdue logic
+- `CustomerSuccessRiskService` — triage, ownership, mitigation, escalation, resolution, health impact
+- `CustomerSuccessRenewalService` — renewal summary, source precedence, due windows, source references
+- `CustomerSuccessTouchpointService` — meaningful-touch eligibility and structured review integration
+- `CustomerSuccessPlaybookService` — template validation, start, run transitions, cancellation, retry, step linking
+- `CustomerSuccessAutomationService` — guarded automation rules and idempotency
+- `CustomerSuccessSettingsService` — validated, versioned configuration in the `app_settings` row
+- `CustomerSuccessModuleHealthService` — dependency evidence, optional integrations, features, settings warnings, checks (mirror `SalesModuleHealthService`)
+- `CustomerSuccessModule` descriptor in `customer-success-module.ts` — `CUSTOMER_SUCCESS_MODULE`, `REQUIRED_PLATFORM_CAPABILITIES`, `OPTIONAL_INTEGRATIONS`, `CUSTOMER_SUCCESS_FEATURES`
 
-### 7.2 Suggested domain events
+Do not create a service that merely wraps one trivial repository call unless that is already the repository convention.
 
-Follow the existing domain-event naming and payload contract. Events should include stable IDs, timestamps, tenant/context where supported, and correlation IDs.
+### 7.2 Domain events
+
+Follow the existing event naming/payload contract: stable IDs, timestamps, context where supported, correlation IDs.
 
 - `customerSuccess.profile.created`
 - `customerSuccess.profile.assigned`
@@ -812,22 +727,20 @@ Follow the existing domain-event naming and payload contract. Events should incl
 
 Event requirements:
 
-- Publish only after the associated database transaction has committed, or use the repository's transactional outbox mechanism.
+- Publish only after the associated transaction commits, or through the transactional outbox (`apps/api/src/common/outbox.service.ts`).
 - Consumers must be idempotent.
-- Do not publish a payload that exposes fields the consumer's context is not allowed to access.
-- Avoid embedding full entities in events; prefer IDs and small, non-sensitive domain facts.
-- Define retry and poison-message handling using the existing queue conventions.
+- Never publish a payload exposing fields the consumer's context may not access.
+- Avoid embedding full entities; prefer IDs and small, non-sensitive facts.
+- Define retry and poison-message handling per the existing queue conventions.
 - Health update events must not recursively cause unbounded recalculation.
 
 ---
 
 ## 8. API Design
 
-Use the existing REST and CRUD conventions under `/api/v1`. Names below are illustrative; first inspect how the generic Entity Engine exposes entity endpoints and how custom domain actions are registered. Prefer generic entity endpoints for ordinary CRUD and dedicated actions only for business operations.
-
 ### 8.1 Entity resources
 
-Expose entities using the repository's standard route pattern, expected to be similar to:
+**No controller needed.** Entities registered in `seed-metadata.ts` are served by the generic `/api/v1/:entity` routes:
 
 - `/api/v1/CustomerSuccessProfile`
 - `/api/v1/CustomerSuccessHealthSnapshot` (read-only for normal users)
@@ -839,49 +752,54 @@ Expose entities using the repository's standard route pattern, expected to be si
 - `/api/v1/CustomerSuccessPlaybookStepRun`
 - `/api/v1/CustomerSuccessReview` only if conditionally implemented
 
-Do not expose internal storage table names as a separate external contract if the rest of the project is metadata-driven.
+Do not expose internal storage details as a separate external contract.
 
 ### 8.2 Domain actions
 
-Use consistent HTTP verbs, DTO validation, response formats, and error codes. Candidate action endpoints (adapt to the established action-routing pattern):
+Follow the shipped convention exactly: a **PascalCase static prefix** `/api/v1/CustomerSuccess/action/*` registered **before** `ENTITY_CONTROLLERS` in `app.module.ts`. There is no kebab-case route in this repository.
 
-- `POST /api/v1/customer-success/profiles/:id/recalculate-health`
-- `GET /api/v1/customer-success/profiles/:id/health-history`
-- `GET /api/v1/customer-success/profiles/:id/health-explanation`
-- `POST /api/v1/customer-success/profiles/:id/set-health-override`
-- `POST /api/v1/customer-success/profiles/:id/clear-health-override`
-- `POST /api/v1/customer-success/profiles/:id/transition-lifecycle`
-- `POST /api/v1/customer-success/profiles/:id/start-onboarding`
-- `POST /api/v1/customer-success/profiles/:id/start-playbook`
-- `GET /api/v1/customer-success/portfolio/summary`
-- `GET /api/v1/customer-success/portfolio/queues`
-- `POST /api/v1/customer-success/plans/:id/activate`
-- `POST /api/v1/customer-success/plans/:id/complete`
-- `POST /api/v1/customer-success/goals/:id/update-progress`
-- `POST /api/v1/customer-success/risks/:id/escalate`
-- `POST /api/v1/customer-success/risks/:id/resolve`
-- `GET /api/v1/customer-success/renewals/summary`
-- `POST /api/v1/customer-success/playbook-runs/:id/cancel`
-- `POST /api/v1/customer-success/playbook-runs/:id/retry-failed-steps`
-- `POST /api/v1/customer-success/admin/recalculate-health` (admin-only, async/batched)
+| Method | Route | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/api/v1/CustomerSuccess/action/health` | administrator | module descriptor, dependency evidence, optional integrations, features, settings warnings, checks |
+| `GET` | `/api/v1/CustomerSuccess/action/settings` | authenticated | validated settings document + computed defaults + warnings |
+| `POST` | `/api/v1/CustomerSuccess/action/settings` | administrator | validated patch; bumps the settings version |
+| `POST` | `/api/v1/CustomerSuccess/action/recalculateHealth` | record ACL | on-demand recalculation for one profile |
+| `GET` | `/api/v1/CustomerSuccess/action/healthHistory` | record ACL | score history for one profile |
+| `GET` | `/api/v1/CustomerSuccess/action/healthExplanation` | record ACL | component-level explanation |
+| `POST` | `/api/v1/CustomerSuccess/action/setHealthOverride` | elevated | set override with reason and optional expiry |
+| `POST` | `/api/v1/CustomerSuccess/action/clearHealthOverride` | elevated | clear override, audit the actor and reason |
+| `POST` | `/api/v1/CustomerSuccess/action/transitionLifecycle` | record ACL | validated lifecycle transition with reason |
+| `POST` | `/api/v1/CustomerSuccess/action/startOnboarding` | record ACL | start onboarding, idempotently |
+| `POST` | `/api/v1/CustomerSuccess/action/startPlaybook` | record ACL | start a playbook run, idempotently |
+| `GET` | `/api/v1/CustomerSuccess/action/portfolioSummary` | authenticated | ACL-filtered portfolio aggregate |
+| `GET` | `/api/v1/CustomerSuccess/action/portfolioQueues` | authenticated | the §5.2 queues |
+| `POST` | `/api/v1/CustomerSuccess/action/activatePlan` | record ACL | plan lifecycle transition |
+| `POST` | `/api/v1/CustomerSuccess/action/completePlan` | record ACL | plan lifecycle transition |
+| `POST` | `/api/v1/CustomerSuccess/action/updateGoalProgress` | record ACL | controlled goal measurement update |
+| `POST` | `/api/v1/CustomerSuccess/action/escalateRisk` | record ACL | idempotent escalation |
+| `POST` | `/api/v1/CustomerSuccess/action/resolveRisk` | record ACL | resolution with outcome reason |
+| `GET` | `/api/v1/CustomerSuccess/action/renewalSummary` | authenticated | renewal readiness view |
+| `POST` | `/api/v1/CustomerSuccess/action/cancelPlaybookRun` | record ACL | cancel a run, preserving history |
+| `POST` | `/api/v1/CustomerSuccess/action/retryFailedSteps` | record ACL | safe retry of failed steps only |
+| `POST` | `/api/v1/CustomerSuccess/action/bulkRecalculateHealth` | administrator | async/batched admin recalculation with progress |
 
-These are proposed domain actions, not an instruction to add duplicate controllers if the current API framework represents actions differently.
+Validate request bodies with **Zod** schemas in `dto/customer-success-shapes.ts`, `.strict()`, returning `422` in the kernel error envelope on failure — mirroring `apps/api/src/sales/dto/sales-shapes.ts`.
 
 ### 8.3 API rules
 
 - Authenticate every non-public route.
-- Apply the same global, team, record, and field-level ACL used by normal entity APIs.
-- Validate related IDs against the current actor's accessible records.
-- Validate every state transition on the server.
-- Use DTO schemas and reject unknown/unsupported fields per repository convention.
-- Use pagination and bounded page sizes on lists/history endpoints.
-- Add optimistic concurrency/version checks for state transitions if that pattern exists in the platform.
-- Use transactions for multi-record operations such as starting a playbook and generating the first step records.
-- Return stable error codes for permission denied, invalid transition, stale version, duplicate profile, configuration invalid, and missing integration.
-- Prevent IDOR: possession of a Profile ID must not grant access to its Account, Contacts, Activities, health snapshots, or external-linked records.
-- Health snapshot writes and calculated fields must not be accepted from ordinary create/update payloads.
-- Document endpoints in the existing OpenAPI system and add request/response examples without real customer data.
-- Avoid exposing stack traces, SQL, raw provider errors, or secret configuration in API responses.
+- Apply the same global, team, record and field-level ACL used by normal entity APIs, via `AclApiService` — never a local re-implementation.
+- Validate related IDs against the actor's accessible records.
+- Validate every state transition server-side.
+- Reject unknown/unsupported fields per repository convention.
+- Paginate lists and history with bounded page sizes.
+- Use optimistic concurrency on state transitions: the `version` column exists for exactly this (§3.3).
+- Use transactions for multi-record operations such as starting a playbook and creating its first step records.
+- Return stable error codes for: permission denied, invalid transition, stale version, duplicate profile, configuration invalid, missing integration.
+- Prevent IDOR: holding a Profile ID must not grant access to its Account, Contacts, Activities, health snapshots or external-linked records.
+- Health snapshot writes and calculated fields must never be accepted from an ordinary create/update payload.
+- Document endpoints in the existing OpenAPI system with synthetic examples — never real customer data.
+- Never expose stack traces, SQL, raw provider errors or secret configuration.
 
 ---
 
@@ -891,701 +809,649 @@ Authorization is a server-side requirement. UI hiding is not access control.
 
 ### 9.1 Permission scopes
 
-Register module scopes using the repository's role/ACL pattern. Suggested scopes:
+Register scopes using the repository's role/ACL pattern — entity-level permissions in `acl.permissions` plus field restrictions in `field_permissions`:
 
-- Customer Success Profile: read, create, edit, delete/archive if supported, assign CSM, bulk assign.
-- Health: read current health/history, request recalculation, set/clear override, manage scoring settings.
-- Success Plans: read, create, edit, activate, complete, cancel, copy template.
-- Success Goals: read, create, edit, update measurements, mark complete/blocked.
-- Risks: read, create, edit, assign, escalate, resolve, close/reopen.
-- Playbook Templates: read, create, edit, activate/deactivate.
-- Playbook Runs: read, start, cancel, retry, override a step.
-- Reviews: read/create/edit structured review if implemented.
-- Administration: configure lifecycle/scoring/renewal/playbook settings, manage module defaults, run bulk recalculation.
+- Profile: read, create, edit, delete/archive, assign CSM, bulk assign
+- Health: read current health/history, request recalculation, set/clear override, manage scoring settings
+- Success Plans: read, create, edit, activate, complete, cancel, copy template
+- Success Goals: read, create, edit, update measurements, mark complete/blocked
+- Risks: read, create, edit, assign, escalate, resolve, close/reopen
+- Playbook Templates: read, create, edit, activate/deactivate
+- Playbook Runs: read, start, cancel, retry, override a step
+- Reviews: read/create/edit structured review, if implemented
+- Administration: configure lifecycle/scoring/renewal/playbook settings, manage defaults, run bulk recalculation
 
-Use the established permission levels and naming; avoid a parallel ACL vocabulary if the platform already has a scope model.
+Use the established level vocabulary `yes | all | team | own | no` (`packages/acl`). Do not invent a parallel ACL vocabulary.
 
 ### 9.2 Record access policy
 
-- Admins access records according to existing platform admin semantics.
-- CSMs can access profiles assigned to them when that corresponds to current role rules.
-- Team leads can access team portfolios only where team ACL grants it.
-- Account owners may receive access through existing Account ACL; do not assume ownership means access if platform policy says otherwise.
-- Other users require role/team/record ACL permission.
-- Assignment or reassignment requires both permission to assign and permission to access the destination user/team and Account.
-- Related Activities, Contacts, Cases, Opportunities, Projects, and Subscriptions retain their own ACL.
-- Aggregate SQL must scope rows before aggregation, not filter inaccessible names after building the result.
+- Admins access records under existing platform admin semantics (`RequestScope.isAdmin`).
+- CSMs access profiles assigned to them where current role rules allow.
+- Team leads access team portfolios only where team ACL grants it.
+- Account owners may gain access through existing Account ACL; do not assume ownership implies access where platform policy says otherwise.
+- Other users need role/team/record ACL permission.
+- Assignment requires permission to assign **and** permission to access the destination user/team and the Account.
+- Related Activities, Contacts, Opportunities, Projects and Subscriptions keep their own ACL.
+- **Aggregate SQL must scope rows before aggregating**, never filter inaccessible names after building the result.
 
 ### 9.3 Field and operation security
 
-- Protect health overrides, scoring configuration, lifecycle policy, playbook automation, and source precedence with elevated permission.
-- A normal client cannot write calculated score, health snapshot, calculation state, audit actor, or system-managed timestamps.
-- A user cannot assign a risk or goal to an inaccessible User/Team or link to an inaccessible record.
-- Prevent users from executing arbitrary expressions, SQL, JavaScript, URLs, file paths, or provider calls through rules/configuration.
+- Protect health overrides, scoring configuration, lifecycle policy, playbook automation and source precedence with elevated permission.
+- A normal client cannot write a calculated score, health snapshot, calculation state, audit actor or system-managed timestamp.
+- A user cannot assign a risk or goal to an inaccessible User/Team, or link to an inaccessible record.
+- Prevent users from executing arbitrary expressions, SQL, JavaScript, URLs, file paths or provider calls through rules or configuration. The sandboxed `@carocrm/formula` engine is the only expression facility permitted, and only if a use case genuinely needs it.
 - Use safe escaping and parameterized queries for search and filters.
-- Validate uploaded artifacts using the existing Attachments/file policy if playbooks permit files; otherwise do not add upload handling.
+- Validate uploaded artifacts under the existing Attachments/file policy if playbooks permit files; otherwise do not add upload handling.
 - Keep a complete audit trail for security-sensitive operations.
 
 ### 9.4 Privacy and retention
 
-- Retain only information needed for operational CSM workflows.
-- Do not store credentials, access tokens, payment details, or raw third-party event payloads inside CSM entities.
-- Health explanations should identify a source by permitted label/reference and avoid displaying sensitive Activity/Case body content.
-- Follow platform data export, deletion, privacy, and retention behavior. Where audit requirements conflict with deleting operational content, use the system's established anonymization/retention policy rather than inventing ad hoc behavior.
+- Retain only what CSM workflows need.
+- Never store credentials, access tokens, payment details or raw third-party event payloads inside CSM entities.
+- Health explanations identify a source by a permitted label/reference and never display sensitive Activity/Case body content.
+- Follow platform export, deletion, privacy and retention behavior. Where audit requirements conflict with deleting operational content, use the established policy rather than inventing ad hoc behavior.
 
 ---
 
 ## 10. React UI and User Experience
 
-Use the existing React SPA, router, design system, metadata layouts, forms, field components, tables, filter engine, and permission hooks. Do not build a standalone frontend or second component system.
+Use the existing React SPA, router, design system, metadata layouts, forms, field components, tables, filter engine and permission hooks. **Do not build a standalone frontend or second component system.**
+
+Entities registered with `layouts` in `seed-metadata.ts` render through the generic metadata-driven UI with no custom React. Dedicated screens are optional polish, exactly as stated for Sales in `docs/modules/sales/README.md`.
 
 ### 10.1 Navigation
 
-Suggested top-level menu area: **Customer Success**. Register menu entries using the established module navigation metadata.
-
-Suggested pages:
-
-- Portfolio Overview
-- Customer Profiles
-- Onboarding
-- Success Plans
-- Goals
-- Risks
-- Renewals
-- Playbooks
-- Administration / Settings (permission-gated)
-
-Hide or disable unavailable optional features instead of navigating users to broken pages.
+Register entries using the established module navigation metadata. Suggested area: **Customer Success**, with pages for Portfolio Overview, Customer Profiles, Onboarding, Success Plans, Goals, Risks, Renewals, Playbooks, and a permission-gated Administration/Settings page. Hide or disable unavailable optional features instead of navigating to broken pages.
 
 ### 10.2 Customer profile experience
 
-Profile detail should contain a readable summary with:
+Profile detail should present a readable summary with: Account name and link; CSM and team; lifecycle stage and segment; effective health status and numeric score; calculated status vs manual override indicator; health trend and last calculation date; the most important score component explanations; active Success Plan and goal progress; onboarding state and next incomplete step; open risks and mitigation due dates; renewal date/window and renewal source; last meaningful touch and next planned review; and authorized quick actions (Recalculate Health, Create Success Plan, Start Playbook, Schedule Review, Assign CSM, Log Risk).
 
-- Account name and link;
-- CSM and team;
-- lifecycle stage and segment;
-- effective health status and numeric score;
-- calculated status vs manual override indicator;
-- health trend and last calculation date;
-- most important score component explanations;
-- active Success Plan and goal progress;
-- onboarding state and next incomplete step;
-- open risks and mitigation due dates;
-- renewal date/window and renewal source;
-- last meaningful touch and next planned review;
-- authorized quick actions such as Recalculate Health, Create Success Plan, Start Playbook, Schedule Review, Assign CSM, and Log Risk.
+Suggested panels/tabs: Overview; Health History; Success Plans & Goals; Risks; Onboarding / Playbooks; Activities & Reviews; Stream / Notes; Related Records.
 
-Suggested panels/tabs:
-
-- Overview
-- Health History
-- Success Plans & Goals
-- Risks
-- Onboarding / Playbooks
-- Activities & Reviews
-- Stream / Notes (reuse generic component)
-- Related Records
-
-Only render tabs when the data source is available and the user has permission to access it.
+Render a tab only when its data source is available and the user may access it.
 
 ### 10.3 Visual health explanation
 
-The health display must show more than a color. Include:
+Health must display more than a color: score/status; trend (improving/stable/declining/unknown) over a documented comparison window; last calculation time; valid signal coverage; the main positive/negative factors with explanatory labels; whether the status is manually overridden; and links to history and readable source records.
 
-- score/status;
-- trend (improving/stable/declining/unknown) based on a documented comparison window;
-- last calculation time;
-- valid signal coverage or completeness;
-- main positive/negative factors with explanatory labels;
-- whether the status is manually overridden;
-- link to history and relevant source records when readable.
-
-Do not use color alone to communicate health. Provide text/icon/accessible labels, keyboard support, and appropriate contrast.
+**Never use color alone.** Provide text/icon/accessible labels, keyboard support and adequate contrast.
 
 ### 10.4 Portfolio and queue UX
 
-- Default portfolio view should prioritize actionable records and allow user-selected filters.
-- Provide clear empty/loading/error states; do not represent provider failure as an empty healthy portfolio.
-- Add filters for CSM/team, health, lifecycle, segment, onboarding, renewal window, overdue risks, goals, last touch, and next review.
-- Use server-side filtering/pagination for portfolio-sized data; do not fetch all customers to the browser and filter locally.
+- Default to an actionable, user-filterable portfolio.
+- Clear empty/loading/error states; never represent provider failure as an empty healthy portfolio.
+- Filters for CSM/team, health, lifecycle, segment, onboarding, renewal window, overdue risks, goals, last touch and next review.
+- Server-side filtering and pagination; never fetch all customers and filter in the browser.
 - Preserve existing list conventions (column configuration, saved views, search, selection, row actions).
-- Bulk operations must preview scope and report failures per record.
+- Bulk operations preview scope and report failures per record.
 
 ### 10.5 Responsive and accessible behavior
 
-- Support existing desktop/tablet/mobile breakpoints.
-- Forms must be keyboard operable, labels associated with controls, and dynamic validation messages announced appropriately.
-- Do not rely only on green/yellow/red for status.
-- Ensure chart details are available through accessible legends/tooltips or equivalent data tables.
-- Confirm that long Account names, translated labels, large goal names, and missing data do not break layouts.
+- Support existing breakpoints.
+- Keyboard-operable forms, labels associated with controls, validation messages announced appropriately.
+- Status never conveyed only by green/yellow/red.
+- Chart details available through accessible legends/tooltips or an equivalent data table.
+- Long Account names, translated labels and missing data must not break layouts.
 
 ---
 
 ## 11. Notifications and Scheduled Jobs
 
-Use only the current platform job queue, scheduler, and notification system. Do not create per-feature worker processes or in-memory timers.
+Use only the current platform job queue, scheduler and notification storage. **Do not create per-feature worker processes or in-memory timers.**
 
 ### 11.1 Scheduled jobs
 
-Potential jobs (register only after confirming the scheduler contract):
+Register handlers in `apps/worker/src/handlers/` via a `registerCustomerSuccessJobs(registry, deps)` following `registerSalesJobs` (`apps/worker/src/handlers/sales-handlers.ts:170`). The seed installs the cron rows.
 
-1. `customerSuccess.recalculateHealthBatch` — recalculate profiles due for refresh using bounded batches.
-2. `customerSuccess.expireHealthOverrides` — expire overrides and restore effective calculated status with history.
-3. `customerSuccess.updateGoalOverdueState` — update overdue indicators without unnecessary row churn.
-4. `customerSuccess.evaluateRenewalWindows` — detect newly entered configured renewal windows.
-5. `customerSuccess.evaluateRiskEscalations` — find overdue/high-severity risks requiring review.
-6. `customerSuccess.evaluateReviewReminders` — notify owners about upcoming/overdue success reviews.
-7. `customerSuccess.processPlaybookWaitSteps` — resume runs whose wait steps are due.
-8. `customerSuccess.repairStalePlaybookRuns` — identify stuck runs; repair only through explicitly safe transitions.
+| Job | Purpose |
+|---|---|
+| `customerSuccess.recalculateHealthBatch` | recalculate profiles due for refresh, bounded batches |
+| `customerSuccess.expireHealthOverrides` | expire overrides, restore effective calculated status with history |
+| `customerSuccess.updateGoalOverdueState` | update overdue indicators without unnecessary row churn |
+| `customerSuccess.evaluateRenewalWindows` | detect newly entered configured renewal windows |
+| `customerSuccess.evaluateRiskEscalations` | find overdue/high-severity risks needing review |
+| `customerSuccess.evaluateReviewReminders` | remind owners about upcoming/overdue reviews |
+| `customerSuccess.processPlaybookWaitSteps` | resume runs whose wait steps are due |
+| `customerSuccess.repairStalePlaybookRuns` | identify stuck runs; repair only through explicitly safe transitions |
 
 Each job must:
 
-- Use bounded batch sizes and stable ordering/cursors.
-- Be idempotent and safe to retry.
-- Record start/end time, processed count, skipped count, errors, and duration without logging sensitive customer content.
-- Avoid selecting records the executor cannot access if job context enforces user-level access; system jobs must use the documented service authority model.
-- Never perform unbounded full-table work in a web request.
-- Support pause/disable through the normal operations/settings mechanism.
-- Use distributed locking or idempotency if the scheduler may run more than one instance.
-- Avoid recurring notifications for the same condition unless a reminder cadence is explicitly configured.
+- use bounded batch sizes and stable ordering/cursors;
+- be idempotent and safe to retry;
+- record start/end time, processed/skipped/error counts and duration, without logging sensitive customer content;
+- avoid selecting records the executor cannot access — system jobs use the documented service-authority model, not a user context;
+- never perform unbounded full-table work inside a web request;
+- be pausable through the normal operations/settings mechanism;
+- use distributed locking or idempotency if the scheduler may run more than one instance;
+- avoid recurring notifications for the same condition unless a cadence is explicitly configured.
 
-### 11.2 Notification rules
+### 11.2 Notification triggers
 
-Use in-app notifications initially. Candidate triggers:
+In-app notifications only. Candidates: health dropped to `atRisk`/`critical`; an override about to expire or needing review; a Critical risk created, escalated or overdue; onboarding overdue steps or an at-risk target date; a goal past its due date; a renewal window opened with no owner/action; a review due/overdue; a playbook run/step failed; a profile reassigned or left unassigned.
 
-- Health status dropped to At Risk/Critical.
-- Manual health override is about to expire or needs review.
-- A Critical risk was created, escalated, or became overdue.
-- Onboarding has overdue required steps or a target date is at risk.
-- A success goal passed its due date or target.
-- A renewal window opened and no owner/action is configured.
-- A success review is due/overdue.
-- A playbook run/step failed and requires intervention.
-- A Profile was reassigned or left unassigned.
+Every rule defines recipient selection, a deduplication key, severity, cadence, opt-out/admin setting where applicable, and deep-link ACL behavior. Never leak Account details through a notification preview to a user without access.
 
-Every rule must define recipient selection, deduplication key, severity, cadence, opt-out/admin setting where applicable, and deep link ACL behavior. Do not leak Account details through notification previews to users without access.
+### 11.3 Notification storage — read this before implementing
+
+There is **no notification service** in the platform (§3.6). The `notifications` table exists and the established writer is a worker job handler (`apps/worker/src/handlers/job-handlers.ts:132`). Therefore:
+
+- Do not invent `CustomerSuccessNotificationService` as a wrapper around a non-existent service.
+- Either write `notifications` rows from an established job handler following the `system.sendReminders` pattern, or add the smallest genuinely reusable notification writer to the kernel and document it as a platform change (§3.9).
+- Whichever is chosen, state it explicitly in the audit document.
+- **Tests may create `notifications` rows; they must never trigger real outbound delivery.**
 
 ---
 
 ## 12. Integrations with Other Modules
 
-Implement adapters so optional modules can be absent without breaking Customer Success. Avoid direct imports from an optional module in a way that creates a mandatory boot-time dependency.
+Implement adapters so optional modules can be absent without breaking Customer Success. **Detect through the metadata registry; never import an optional module in a way that creates a mandatory boot-time dependency.**
 
 ### 12.1 Accounts and Contacts
 
-- Required foundation.
-- Account remains the canonical customer company record.
-- Use Contacts for stakeholders, sponsor, and review participants.
-- Use current relations and field-level ACL.
+Required foundation. Account remains the canonical customer record. Contacts provide stakeholders, sponsor and review participants. Use existing relations and field-level ACL.
 
 ### 12.2 Activities and Calendar
 
-- Use existing Meetings, Calls, Tasks, reminders, and Calendar integration for work planning.
-- Define the qualifying touchpoint logic separately from generic Activity CRUD.
-- Keep the CSM context as additional relation/metadata, not a second scheduler.
+Use the existing `Task`, `Call`, `Meeting`, `Reminder` and `Email` entities plus Calendar integration. Define qualifying-touchpoint logic separately from generic Activity CRUD. Keep CSM context as an additional relation/metadata, never a second scheduler.
 
 ### 12.3 Sales and Subscriptions
 
-- If Sales/Opportunities exists, permit a link to a renewal Opportunity and show authorized summary fields.
-- If Subscriptions exists, use it as a commercial source for term and subscription state only through a defined adapter.
-- No duplicate price book, contract, invoice, or billing tables.
-- Do not let a CRM user infer payment details they are not permitted to view merely because a CSM Profile links to a subscription.
+Both are **present** in this repository (§3.7), so:
 
-### 12.4 Cases / Service Desk
+- Permit a link to a renewal Opportunity and show authorized summary fields.
+- Use `Subscription`/`SubscriptionPeriod` as a commercial source for term and subscription state only through a defined adapter.
+- **No duplicate price book, contract, invoice or billing tables.**
+- A CRM user must not infer payment details they may not view merely because a CSM Profile links to a subscription.
 
-- Register support-related health signals only when a provider exists and can apply its access policy.
-- Prefer aggregate, permission-safe values (open critical count, recent reopen count, SLA breach count) over copying ticket content into HealthSnapshot.
-- If data cannot be accessed or has never been synced, represent that signal as unavailable/unknown.
+### 12.4 Workflows and BPM
+
+Emit the §7.2 domain events so workflows and BPM can consume them; do not re-implement either. Map event → trigger explicitly and document which recalculation paths are event-driven.
 
 ### 12.5 Projects
 
-- If the Projects module from the adjacent Phase 19 plan is implemented, optionally link a Success Plan/onboarding step to a Project or Project Task.
-- Do not create Project/Task records in an inconsistent way; use the Projects module's public service/API contract.
-- Avoid bidirectional event loops between Project completion and CSM goal progress. Map events and idempotency explicitly.
-- If Projects is not installed, onboarding must still work with existing Activities/Playbook steps.
+Projects **is present**. Optionally link a Success Plan or onboarding step to a `Project` or `ProjectTask` through the Projects module's published contract. Do not create Project/Task records inconsistently. Avoid bidirectional event loops between Project completion and CSM goal progress — map events and idempotency explicitly. Onboarding must still work with Activities/Playbook steps alone.
 
-### 12.6 Stream, Notes, Attachments, Audit
+### 12.6 Cases / Service Desk — not available
 
-- Reuse generic panels and services.
-- Add only CSM-specific event types/labels and metadata.
-- Preserve ACL at the source record and attachment level.
+There is **no Service Desk module** in this repository. Therefore:
 
-### 12.7 External adoption analytics (future extension point)
+- No support-derived health signal is implemented.
+- The health configuration surface must still permit a future `support` signal family, reported as `unavailable` rather than `failed`.
+- Do not invent a `Case` entity or ticket storage as part of this phase.
 
-For product usage data, define an adapter contract before implementing a connector:
+### 12.7 External adoption analytics — future extension point
+
+Before implementing any connector, define an adapter contract:
 
 - source/provider ID;
 - last successful sync time;
 - customer/account mapping and mapping confidence;
-- normalized metric key, value, period, and unit;
+- normalized metric key, value, period and unit;
 - freshness and backfill behavior;
 - source permission and retention classification;
 - duplicate/out-of-order event handling.
 
-Do not make direct vendor API calls from controllers or score calculators. Any external connector must use the repository's integration/secrets/job infrastructure and must be an explicit later integration task.
+**Do not make vendor API calls from controllers or the score calculator.** Any connector must use the repository's integration/secrets/job infrastructure and be an explicit later task.
+
+### 12.8 Sales detection constraint — binding
+
+`apps/api/src/sales/sales-module.ts` already declares:
+
+```ts
+{
+  id: "customer-success",
+  label: "Customer Success",
+  provides: "Customer health, renewal tracking (consumer of Sales summaries)",
+  markerEntity: "CustomerSuccessProfile",
+}
+```
+
+`SalesModuleHealthService` resolves that marker against `metadata.registry.getEntities()` and reports the integration `available` or `unavailable` to an administrator on `GET /api/v1/Sales/action/health`. Its tests assert the absence case.
+
+Consequences for this module:
+
+1. **`CustomerSuccessProfile` must be registered as a metadata entity with exactly this name.** It is the shipped integration contract, not a stylistic choice.
+2. The module id `CustomerSuccess` carries **no prefix**; the entity names keep one. These are independent choices — §4.1 states both.
+3. Do not rename, alias or move the marker without also updating `sales-module.ts` **and** `sales-module-health.service.ts` **and** the Sales tests, in the same change. A silent rename turns a working integration into a permanently "unavailable" one with no error.
+4. Verify after implementation: with the module present, `GET /api/v1/Sales/action/health` reports Customer Success as `available`.
 
 ---
 
-## 13. Configuration, Events, and State-Machine Invariants
+## 13. Configuration, Events and State-Machine Invariants
 
-The following invariants must hold regardless of which UI or API path is used:
+These hold regardless of which UI or API path is used:
 
-1. One active CustomerSuccessProfile per Account.
-2. Health score is null/Unknown when configured minimum signal coverage is not met.
-3. A manual health override never overwrites the calculated score or calculated status.
-4. Health snapshots cannot be created/edited by normal CRUD requests.
-5. Every override has a reason, actor, timestamp, and configured review/expiry behavior.
-6. Lifecycle state transitions are validated and audited server-side.
-7. `Churned` is never inferred solely from a score, missing subscription, missing opportunity, or Critical risk.
-8. Success Goal progress is bounded and computed with the direction-specific algorithm.
+1. One active `CustomerSuccessProfile` per Account.
+2. Health score is null/`unknown` when the configured minimum signal coverage is not met.
+3. A manual override never overwrites the calculated score or calculated status.
+4. Health snapshots cannot be created or edited by normal CRUD requests.
+5. Every override has a reason, an actor, a timestamp and configured review/expiry behavior.
+6. Lifecycle transitions are validated and audited server-side.
+7. `churned` is never inferred solely from a score, a missing subscription, a missing opportunity or a Critical risk.
+8. Goal progress is bounded and computed with the direction-specific algorithm.
 9. Completing a plan does not automatically mark every goal achieved; goal outcomes remain explicit.
-10. Starting the same triggerable playbook twice with the same idempotency key does not create duplicate runs/steps/actions.
+10. Starting the same triggerable playbook twice with the same idempotency key creates no duplicate runs, steps or actions.
 11. A completed playbook step is not rerun when retrying a failed step.
-12. A failed optional integration signal does not cause the whole Profile read to fail.
+12. A failed optional-integration signal does not fail the whole Profile read.
 13. User-visible related records are independently authorization-checked.
-14. Events that initiate jobs are published after transaction commit or via transactional outbox.
-15. Background jobs do not send external customer communications by default.
+14. Events that initiate jobs are published after transaction commit or via the transactional outbox.
+15. Background jobs never send external customer communications by default.
 16. Seed/default operations are repeatable and never overwrite administrator-edited settings.
-17. Deactivating the module must not destroy customer success history by default.
+17. Feature-flag deactivation never destroys customer success history.
 
 ---
 
 ## 14. Implementation Roadmap — Phase 19-CS
 
-Build the module incrementally. Do not implement every feature in a single code-generation pass. Sub-phase identifiers use `19-CS.*` to coexist with the separate Projects sub-phase identifiers.
+Build incrementally, one sub-phase at a time. Sub-phase identifiers use `19-CS.*` so they coexist with `19-S.*` and the Projects identifiers. **Do not implement later phases in the same pass as an earlier one.**
 
 ### Phase 19-CS.0 — Repository Audit and Feature Contract
 
 Tasks:
-
-- Read `AGENTS.MD`, relevant `PLAN.md` sections, and relevant current module plans.
-- Inspect actual Entity Engine, API, ACL, event, Activity, Calendar, Job, Notification, Dashboard and settings implementations.
-- Verify whether Accounts/Contacts, Projects, Sales, Subscriptions, Cases/Service Desk, and health/score-related abstractions exist.
+- Read `AGENTS.MD`, the relevant `PLAN.md` sections, `docs/module-guide.md`, and the Sales and Projects plans plus their audit/module docs.
+- Re-verify §3 against the working tree; treat any drift as a finding.
+- Confirm which optional providers (§3.7) are present and how each is detected.
 - Write `docs/implementation/customer-success-repository-audit.md`.
-- Write/define `docs/compatibility/customer-success.md` with custom-module behavior and known differences.
-- Finalize the minimum CSM entities/relations using existing metadata conventions.
+- Define `docs/modules/customer-success/compatibility.md` recording custom-module behavior and known differences from the EspoCRM baseline.
+- Finalize the minimum CSM entity set using existing metadata conventions.
 
 Exit criteria:
-
 - No unsupported subsystem is assumed to exist.
-- All mandatory prerequisites are verified.
-- Optional integrations are clearly marked as installed/unavailable.
-- No code changes duplicate generic platform services.
+- All mandatory prerequisites are verified with exact code locations.
+- Optional integrations are clearly marked present/absent.
+- The Sales marker constraint (§12.8) is recorded.
 
 ### Phase 19-CS.1 — Module Scaffold and Registration
 
 Tasks:
-
-- Add module manifest/registration using the established extension SDK.
-- Register `CustomerSuccessModule` providers, controllers/actions, metadata, navigation entries, translations, and permissions.
-- Ensure module startup works when optional integration modules are absent.
-- Add module settings namespace and health checks/diagnostics if the platform supports them.
-- Add minimal module-level automated tests.
+- Create `apps/api/src/customer-success/` with a barrel exporting `CUSTOMER_SUCCESS_CONTROLLERS` and `CUSTOMER_SUCCESS_PROVIDERS`.
+- Add `customer-success-module.ts` with `CUSTOMER_SUCCESS_MODULE` (id `CustomerSuccess`, `loadOrder` after Sales' `320`), `REQUIRED_PLATFORM_CAPABILITIES`, `OPTIONAL_INTEGRATIONS` and `CUSTOMER_SUCCESS_FEATURES`.
+- Register providers and controllers in `apps/api/src/app.module.ts`, spreading controllers **before** `ENTITY_CONTROLLERS`.
+- Add `CustomerSuccessModuleHealthService` and expose `GET /api/v1/CustomerSuccess/action/health`.
+- Add the validated, versioned `app_settings` row named `customerSuccess` via `CustomerSuccessSettingsService`.
+- Confirm the app boots with optional integrations absent.
 
 Exit criteria:
+- The application boots with the module registered.
+- No duplicate providers or naming conflicts.
+- The health endpoint reports real evidence, never hard-coded `true`.
+- Controller ordering is verified against the generic `:entity` wildcard.
 
-- The application boots with the module enabled.
-- The module can be disabled or omitted without breaking core CRM startup.
-- No duplicate providers or naming conflicts are introduced.
-
-### Phase 19-CS.2 — Metadata, Schema, and Core Profile
+### Phase 19-CS.2 — Metadata, Schema and Core Profile
 
 Tasks:
-
-- Define Profile metadata, relation to Account, fields, layouts, ACL scope, validation, and unique active Account rule.
-- Add versioned additive migrations for required fields/indexes/tables only after reviewing actual platform conventions.
-- Register profile CRUD through the Entity Engine.
+- Define `CustomerSuccessProfile` metadata in `database/seed-metadata.ts`: fields, relations, layouts, ACL defaults, index declarations.
+- Write and review `database/migrations/032_phase19_customer_success.sql` with the partial unique index on active `accountId` and supporting expression indexes.
 - Implement server-side Account/owner/team relation validation.
 - Add safe, permission-aware Profile creation and update services.
-- Register idempotent initial settings/default lifecycle values without overwriting existing settings.
+- Register idempotent default settings that never overwrite existing values.
 
 Exit criteria:
-
-- A permitted user can create/read/update a Profile linked to an existing permitted Account.
-- Duplicate active profiles are blocked by both service validation and database constraint.
+- A permitted user can create/read/update a Profile for a permitted Account.
+- Duplicate active profiles are blocked by **both** service validation and a database constraint.
 - Ordinary API input cannot set system-calculated fields.
-- Schema migration preserves all existing CRM data.
+- The migration preserves all existing CRM data.
 
-### Phase 19-CS.3 — Portfolio, Assignment, and Lifecycle
+### Phase 19-CS.3 — Portfolio, Assignment and Lifecycle
 
 Tasks:
-
-- Implement CSM assignment and reassignment with audit/events.
-- Implement lifecycle configuration, server-side transition rules, reason requirements, and history.
-- Implement My Portfolio, Team Portfolio, Unassigned, and lifecycle queues through ACL-scoped queries.
-- Add filters, sort rules, pagination, saved views and bulk assignment/transition where supported.
-- Add per-record bulk-operation results and validation.
+- CSM assignment/reassignment with audit and events.
+- Lifecycle configuration, server-side transition rules, reason requirements, history.
+- My Portfolio, Team Portfolio, Unassigned and lifecycle queues via ACL-scoped queries.
+- Filters, sort rules, pagination, saved views, and bulk assignment/transition where supported.
+- Per-record bulk results.
 
 Exit criteria:
-
-- CSM, team lead, admin, and unauthorized-user tests pass.
+- CSM, team-lead, admin and unauthorized-user tests pass.
 - Lifecycle and assignment cannot be changed by bypassing UI rules.
-- Portfolio aggregates do not leak inaccessible Account records.
+- Portfolio aggregates do not leak inaccessible Accounts.
 
 ### Phase 19-CS.4 — Health Scoring Configuration and Built-in Signals
 
 Tasks:
-
-- Implement the HealthSignalProvider contract/registry.
-- Implement only signal providers backed by verified existing data.
-- Implement versioned scoring configuration, weight/threshold validation, freshness windows, missing-data policy, and minimum coverage.
-- Add deterministic weighted score computation and health classification.
-- Add unit tests for no-signal, stale-signal, partial-coverage, rounding, weight normalization, threshold boundaries, and invalid configuration.
+- `HealthSignalProvider` contract and `HealthSignalRegistry`.
+- Providers backed only by verified data (§5.4.2) — support and adoption stay unavailable.
+- Versioned scoring configuration with weight/threshold validation, freshness windows, missing-data policy and minimum coverage.
+- Deterministic weighted score computation and classification.
+- Unit tests for no-signal, stale-signal, partial-coverage, rounding, weight normalization, threshold boundaries and invalid configuration.
 
 Exit criteria:
-
-- Health score computation is a pure/testable domain operation where practical.
-- Unknown is not treated as zero.
-- Configuration invalidity is rejected with actionable errors.
+- Score computation is a pure, testable domain operation.
+- `unknown` is never treated as zero.
+- Invalid configuration is rejected with actionable errors.
 - No optional integration is assumed available.
 
-### Phase 19-CS.5 — Health Snapshots, Explanation, and History
+### Phase 19-CS.5 — Health Snapshots, Explanation and History
 
 Tasks:
-
-- Add append-only HealthSnapshot persistence and score-history queries.
-- Store configuration version, signal coverage, component values/weights, calculation source, and result state.
-- Implement snapshot deduplication/material-change rules.
-- Add manual on-demand recalculation and rate limits.
-- Add explanation and trend APIs; register read-only access controls.
-- Add manual health override/clear override flow with reason, audit, expiry/review policy, and separate calculated/effective status.
+- Append-only snapshot persistence and score-history queries.
+- Store configuration version, signal coverage, component values/weights, calculation source and result state.
+- Snapshot deduplication and material-change rules.
+- Manual on-demand recalculation with rate limits.
+- Explanation and trend actions; read-only access controls.
+- Manual override/clear flow with reason, audit, expiry policy and separate calculated/effective status.
 
 Exit criteria:
-
-- Users can explain a health result and trace it to permitted data sources.
-- A manual override does not rewrite the calculated score.
+- Users can explain a health result and trace it to permitted data.
+- An override never rewrites the calculated score.
 - Normal CRUD cannot forge or delete snapshots.
 - Repeated identical recalculation follows the documented deduplication policy.
 
 ### Phase 19-CS.6 — Success Plans and Goals
 
 Tasks:
-
-- Implement Success Plan and Success Goal metadata/entities, relationships, permissions, layouts, and API.
-- Add plan state transitions, one-primary-active-plan rule if selected, and plan templates/copy behavior.
-- Implement direction-aware goal progress calculations and checkpoint/audit history.
-- Recalculate plan summary and queue health updates on relevant changes.
-- Add Account/Profile related panels and goal/plan views.
+- `CustomerSuccessPlan` and `CustomerSuccessGoal` metadata, relationships, permissions, layouts and API.
+- Plan state transitions, one-primary-active-plan rule, templates and copy behavior.
+- Direction-aware goal progress and checkpoint/audit history.
+- Plan summary recalculation, with health updates queued only when relevant.
+- Account/Profile related panels.
 
 Exit criteria:
-
-- Goal metrics and progress behave correctly for increase, decrease, maintain, boolean, and manual goals.
+- Goal progress is correct for `increase`, `decrease`, `maintain`, `boolean` and `manual`, including edge cases.
 - Historical plans/goals remain auditable.
-- Optional Project links work only when Projects is available; the module works without Projects.
+- Project links work only when Projects is present, and the module works without it.
 
-### Phase 19-CS.7 — Risks, Mitigation, and Escalation
+### Phase 19-CS.7 — Risks, Mitigation and Escalation
 
 Tasks:
-
-- Implement CustomerSuccessRisk entity and transitions.
-- Add severity, owner, due dates, evidence references, mitigation action, escalation, resolution reason, and reopening behavior.
-- Add queues for High/Critical, overdue, unassigned, and recently changed risks.
-- Add health-signal adapter for open risks.
-- Add in-app alerts through the existing Notification service if available.
+- `CustomerSuccessRisk` entity and transitions.
+- Severity, owner, due dates, evidence, mitigation, escalation, resolution reason and reopening.
+- Queues for High/Critical, overdue, unassigned and recently changed risks.
+- Health-signal adapter for open risks.
+- In-app alerts per §11.3.
 
 Exit criteria:
-
-- Risk transitions are validated, permission-checked, and audited.
+- Risk transitions are validated, permission-checked and audited.
 - High/Critical risks have mitigation or a documented exception.
-- A risk may influence health but never automatically sets lifecycle to Churned.
+- A risk may influence health but never sets lifecycle to `churned`.
 
 ### Phase 19-CS.8 — Onboarding and Playbook Core
 
 Tasks:
-
-- Implement Playbook Template, Run, and Step Run entities/services.
-- Add step-schema validation and supported step-type registry.
-- Implement manual run start, snapshot of template version, step completion/skip, pause/cancel, and safe retry.
-- Add onboarding defaults and Profile onboarding summaries.
-- Link human-work steps to existing Activities/Tasks when supported.
-- Add idempotency keys and transaction-safe run creation.
+- Playbook Template, Run and Step Run entities and services.
+- Step-schema validation and a supported step-type registry.
+- Manual run start, template version snapshot, step completion/skip, pause/cancel, safe retry.
+- Onboarding defaults and Profile onboarding summaries.
+- Link human-work steps to existing Activities/Tasks.
+- Idempotency keys and transaction-safe run creation.
 
 Exit criteria:
-
-- A user can start and execute an onboarding playbook end-to-end.
-- Duplicate requests/events do not duplicate runs or tasks.
+- A user can start and execute an onboarding playbook end to end.
+- Duplicate requests/events create no duplicate runs or tasks.
 - Editing a template does not mutate an existing run.
-- No arbitrary script execution or direct external communication exists.
+- No arbitrary script execution and no direct external communication.
 
 ### Phase 19-CS.9 — Success Reviews and Touchpoint Integration
 
 Tasks:
-
-- Integrate generic Activities, Calendar, Stream, and Contacts.
+- Integrate the existing Activities, Calendar, Stream and Contacts.
 - Define and test meaningful-touch eligibility rules.
-- Add Success Review form/record only if generic Activities cannot represent structured review fields safely.
-- Link reviews to existing Activity records and track next review date.
-- Add recent activity, last meaningful touch, and next review summaries.
+- Add `CustomerSuccessReview` only if Activities cannot represent structured review fields safely.
+- Link reviews to existing Activity records; track next review date.
+- Recent-activity, last-meaningful-touch and next-review summaries.
 
 Exit criteria:
-
 - No duplicate scheduling or activity system exists.
 - Activity ACL remains intact across Profile/Account panels.
-- Engagement signals exclude unrelated/internal events according to the rule set.
+- Engagement signals exclude unrelated/internal events per the rule set.
 
-### Phase 19-CS.10 — Renewal Readiness and Optional Domain Adapters
+### Phase 19-CS.10 — Renewal Readiness and Domain Adapters
 
 Tasks:
-
-- Implement manual renewal readiness and window queries.
-- Define source precedence and freshness for external/commercial renewal dates.
-- Add adapters for Opportunity, Subscription, Case/Service Desk, and Projects only when the actual modules are present.
-- Add data-source health/diagnostic indicators and safe fallbacks.
-- Add renewal queues and source-record links.
+- Manual renewal readiness and window queries.
+- Source precedence and freshness for external/commercial renewal dates.
+- Adapters for Opportunity, Subscription and Projects — the modules that actually exist.
+- Data-source health indicators and safe fallbacks.
+- Renewal queues and source-record links.
 
 Exit criteria:
-
-- Customer Success works if every optional module is absent.
+- Renewal readiness works with manual fields alone.
 - Source errors never erase valid manual data.
-- CSM cannot view linked commercial/support details beyond existing ACL.
+- A CSM cannot view linked commercial/support details beyond existing ACL.
 
-### Phase 19-CS.11 — Jobs, Triggers, and Notifications
+### Phase 19-CS.11 — Jobs, Triggers and Notifications
 
 Tasks:
-
-- Register batch health recalculation, override expiry, overdue goal/risk/review evaluation, renewal windows, and playbook wait-step jobs as applicable.
-- Add event-triggered recalculation for supported sources.
-- Add transaction/outbox integration, idempotency, concurrency controls, retry and observability.
-- Configure notification deduplication and recipient rules.
-- Ensure tests disable outbound email/webhooks and use in-app notification records only.
+- Register the §11.1 jobs and their cron rows.
+- Event-triggered recalculation for supported sources.
+- Outbox integration, idempotency, concurrency controls, retry and observability.
+- Notification deduplication and recipient rules, following §11.3.
+- Ensure tests disable outbound email/webhooks and write only in-app `notifications` rows.
 
 Exit criteria:
-
-- Jobs are retry-safe, bounded, monitored, and can be paused through established operations controls.
-- No event recursion or notification storms occur in tests.
-- No in-memory timer/scheduler or custom queue is introduced.
+- Jobs are retry-safe, bounded, monitored and pausable through established controls.
+- No event recursion and no notification storms in tests.
+- No in-memory timer, custom scheduler or custom queue is introduced.
 
 ### Phase 19-CS.12 — React UI and Navigation
 
 Tasks:
-
-- Add navigation and Portfolio Overview using existing route/metadata conventions.
-- Implement Profile list/detail, health explanation/history, plan/goal panels, risk queues, onboarding/playbook views, review links, and renewal queues.
-- Add Admin configuration pages for stages, health scoring, playbook defaults, and renewal windows.
-- Add accessibility, loading/error/empty states, responsive behavior, and permission-gated quick actions.
-- Use existing design system and chart components.
+- Navigation and Portfolio Overview using existing route/metadata conventions.
+- Profile list/detail, health explanation/history, plan/goal panels, risk queues, onboarding/playbook views, review links, renewal queues.
+- Admin configuration pages for stages, health scoring, playbook defaults and renewal windows.
+- Accessibility, loading/error/empty states, responsive behavior, permission-gated quick actions.
+- Use the existing design system and chart components.
 
 Exit criteria:
-
-- Main CSM workflows can be completed through the SPA without manual API calls.
-- UI does not reveal unauthorized records or rely on colors alone.
+- Main CSM workflows complete through the SPA without manual API calls.
+- The UI never reveals unauthorized records and never relies on color alone.
 - All critical mutations are validated server-side.
 
-### Phase 19-CS.13 — Dashboards, Search, Bulk Operations, and Export
+### Phase 19-CS.13 — Dashboards, Search, Bulk Operations and Export
 
 Tasks:
-
-- Add CSM dashlets/portfolio summaries through the existing dashboard/report framework.
-- Register searchable/filterable fields and safe drill-down behavior.
-- Add bulk recalculate/assign/transition/playbook-start only where supported and safe.
-- Reuse generic import/export when available.
-- Add performance indexes based on measured query patterns.
+- CSM dashlets and portfolio summaries through the existing dashboard framework, following the `project-dashlet.service.ts` pattern.
+- Searchable/filterable fields and safe drill-down.
+- Bulk recalculate/assign/transition/playbook-start only where safe.
+- Reuse generic import/export.
+- Performance indexes based on measured query patterns.
 
 Exit criteria:
-
 - Dashboard aggregates honor ACL.
 - Large lists are paginated and filtered server-side.
-- Bulk operations return precise per-record success/failure results.
+- Bulk operations return precise per-record results.
 
-### Phase 19-CS.14 — Security, Compatibility, and Data Safety Review
+### Phase 19-CS.14 — Security, Compatibility and Data Safety Review
 
 Tasks:
-
 - Review every route/action for authorization bypass and IDOR.
-- Review scoring/configuration validation, query construction, JSON payloads, event consumers, and job authority.
-- Test migrations on the already-configured primary database after inspection; do not create another database.
-- Verify module disable/enable behavior and retention of CSM history.
-- Document custom behavior, optional integration status, limitations, and operator setup.
-- Run unit tests, type-check, lint, safe integration/API tests, and critical UI flows using the existing test lifecycle.
+- Review scoring/configuration validation, query construction, JSON payloads, event consumers and job authority.
+- Verify the §12.8 Sales marker actually reports `available`.
+- Test migrations against the already-configured primary database after inspection; **do not create another database**.
+- Verify feature-flag deactivation behavior and retention of CSM history.
+- Document custom behavior, optional-integration status, limitations and operator setup.
+- Run unit tests, type-check, lint and safe integration/API checks using the existing test lifecycle.
 
 Exit criteria:
-
-- Required acceptance criteria are met.
+- All required acceptance criteria are met.
 - No extra database has been created.
 - No destructive data change was made without explicit task-specific authorization.
-- Actual test commands and results are recorded in the implementation summary.
+- Actual test commands and results are recorded.
 
 ---
 
 ## 15. Testing Strategy
 
-All database-backed tests MUST follow `AGENTS.MD`. Do not create a new database to satisfy a test framework default.
+All database-backed tests MUST follow `AGENTS.MD` and `docs/module-guide.md` → "Test database policy". **Do not create a new database to satisfy a test framework default.**
+
+Verified test layout:
+
+- `vitest.config.ts` includes `apps/api/test/**/*.test.ts` and `packages/*/src/**/*.test.ts`. There is **no `globalSetup` and no `setupFiles`** — nothing in the runner creates, resets, drops or clones a database.
+- `pool: 'forks'`, `singleFork: true` — suites run serially. `testTimeout` / `hookTimeout` are 120 s.
+- Tests boot the API in-process (`apps/api/test/support/boot-api.ts`), create records through the **real HTTP API** with `AGENT_TEST_<runId>` markers, and delete exactly those IDs in `cleanup()`.
+
+A unit test placed in `apps/api/src/customer-success/*.test.ts` **will not run** — it is outside the include globs. Put pure-logic unit tests either in `apps/api/test/` (as the Sales module does: `apps/api/test/sales-money.test.ts`, `sales-allocation-math.test.ts`) or in a `packages/*/src/*.test.ts` file.
 
 ### 15.1 Unit tests
 
 Cover at least:
 
-- Health score normalization, weighted calculation, threshold edges, missing/stale signal policies, rounding, and configuration version selection.
-- Health `Unknown` behavior for absent/insufficient signals.
-- Manual override, expiry, calculated-vs-effective status separation, and reasons.
+- Score normalization, weighted calculation, threshold edges, missing/stale policies, rounding, configuration version selection.
+- `unknown` behavior for absent/insufficient signals.
+- Manual override, expiry, calculated-vs-effective separation, reasons.
 - Lifecycle transitions and required reasons.
-- Goal progress for all supported directions, zero/negative values, equal baseline/target, and overdue outcomes.
-- Plan summary calculations and active-plan rule.
+- Goal progress for every direction, zero/negative values, equal baseline/target, overdue outcomes.
+- Plan summary calculation and the active-plan rule.
 - Risk transition rules and required mitigation/resolution details.
-- Playbook template schema validation, run snapshotting, idempotency keys, step dependencies, retry behavior, and wait-step logic.
+- Playbook template validation, run snapshotting, idempotency keys, step dependencies, retry, wait-step logic.
 - Meaningful-touch qualification and recency calculation.
-- Renewal-window boundaries, timezone, null values, and source precedence.
+- Renewal-window boundaries, timezone, null values, source precedence.
 - Portfolio filter/sort semantics and privacy-safe aggregation rules.
 
 ### 15.2 Integration tests
 
-Using the already-configured primary database and the established migration lifecycle, verify:
+Against the already-configured primary database and the established migration lifecycle:
 
-- Profile-to-Account uniqueness and referential integrity.
+- Profile-to-Account uniqueness and referential integrity, including that a soft-deleted profile does not block a new one.
 - Health snapshot append-only behavior and profile summary update.
-- Transactions for starting playbooks and changing state.
+- Transactions for playbook start and state change.
 - Goal/plan/risk persistence and relation access.
 - Job idempotency and safe retry markers.
-- Event/outbox behavior if supported.
-- Optional integration adapters return an explicit unavailable state when no provider exists.
+- Event/outbox behavior.
+- Optional adapters return an explicit unavailable state when no provider exists.
 - Migrations are additive and do not alter unrelated records.
 
-Do not provision a separate database, shadow schema, per-test database, or database container.
+Do not provision a separate database, shadow schema, per-test database or container.
 
 ### 15.3 API/security tests
 
-For each key route, test success, invalid input, unauthenticated access, unauthorized access, inaccessible related ID, invalid state transition, stale/concurrent update where supported, and field-level restrictions.
+For each key route: success, invalid input, unauthenticated, unauthorized, inaccessible related ID, invalid transition, stale/concurrent update, field-level restriction.
 
-Specifically test:
+Specifically:
 
-- A user cannot query or update another CSM's profile when ACL prohibits it.
-- A user cannot access a HealthSnapshot by guessing its ID.
-- A user cannot link an inaccessible Contact, Activity, Case, Project, Opportunity, or Subscription.
-- A client cannot spoof calculated scores, audit actor, or system status.
+- A user cannot query or update another CSM's profile where ACL prohibits it.
+- A user cannot access a `CustomerSuccessHealthSnapshot` by guessing its ID.
+- A user cannot link an inaccessible Contact, Activity, Project, Opportunity or Subscription.
+- A client cannot spoof a calculated score, audit actor or system status.
 - Aggregation endpoints do not reveal names or counts outside the user's authorized scope.
-- Playbook retries do not duplicate already-completed actions.
+- Playbook retries do not duplicate completed actions.
 - Malformed JSONB/configuration payloads are rejected safely.
+- `GET /api/v1/Sales/action/health` reports the Customer Success integration as `available` once this module is registered (§12.8).
 
 ### 15.4 UI tests
 
-Use the already-configured browser test environment only if it does not create another database. Verify:
-
-- Create Profile, assign CSM, change lifecycle, and find it in portfolio.
-- View health explanation and history.
-- Create a Success Plan and Goal; update goal progress.
-- Create/mitigate/resolve a Risk.
-- Start and complete an onboarding/playbook run.
-- Schedule a Success Review using the existing Activity framework.
-- Review renewal readiness and drill into a source record only when permitted.
-- Check permission-based hiding/denial and mobile/responsive layout basics.
+Use the existing Playwright environment (`pnpm test:e2e`) only if it does not create another database. Verify: create a profile, assign a CSM, change lifecycle, find it in the portfolio; view a health explanation and history; create a plan and goal and update progress; create/mitigate/resolve a risk; run an onboarding playbook to completion; schedule a review through the existing Activity framework; review renewal readiness and drill into a source record only when permitted; check permission-based denial and responsive layout basics.
 
 ### 15.5 Regression tests
 
-- Core Accounts/Contacts CRUD remains unchanged.
-- Existing Entity Engine, API, ACL, Activities, Calendar, Stream, Notifications, and Jobs continue to work.
-- The module can boot with optional Sales, Projects, Cases, and Subscription modules not installed.
-- Turning off the Customer Success module does not delete historical data or prevent core CRM startup.
-- No existing Account or Contact is modified by test setup unless it was created specifically for that test run.
+- Core Account/Contact CRUD unchanged.
+- Existing Entity Engine, API, ACL, Activities, Calendar, Stream and Jobs keep working.
+- The module boots with optional Sales, Projects and Subscription data absent or marker-detected as missing.
+- Deactivating module features via settings does not delete historical data or break core startup.
+- No existing Account or Contact is modified by test setup unless the current run created it.
 
 ---
 
 ## 16. Acceptance Criteria
 
-The module is considered complete only when all required criteria below are met.
+The module is complete only when all required criteria below are met.
 
 ### 16.1 Core CSM
 
-- [ ] CustomerSuccessProfile is linked to Account and has a unique active profile constraint.
-- [ ] Portfolio views support CSM ownership, team scope, lifecycle, health, renewal, onboarding, and risk filters.
-- [ ] Lifecycle transitions are validated, auditable, and configurable.
+- [ ] `CustomerSuccessProfile` is linked to Account with a unique **active** profile constraint, and the name matches the shipped Sales marker exactly (§12.8).
+- [ ] Portfolio views support CSM ownership, team scope, lifecycle, health, renewal, onboarding and risk filters.
+- [ ] Lifecycle transitions are validated, auditable and configurable.
 - [ ] Customer-facing context is visible without duplicating the Account or Activity model.
 
 ### 16.2 Health scoring
 
-- [ ] Health scoring is deterministic, versioned, and configurable.
-- [ ] Missing signals are not silently interpreted as zero.
+- [ ] Scoring is deterministic, versioned and configurable.
+- [ ] Missing signals are never interpreted as zero.
 - [ ] Score/status explanation and snapshots are available to authorized users.
-- [ ] Manual overrides preserve the underlying calculated result and require a reason.
+- [ ] Manual overrides preserve the calculated result and require a reason.
 - [ ] Scheduled/event-triggered/on-demand calculation cannot produce an infinite loop or runaway writes.
 
 ### 16.3 Plans, goals, risks, onboarding
 
-- [ ] Success Plans support lifecycle, owners, timeframe, goals, and progress summary.
+- [ ] Success Plans support lifecycle, owners, timeframe, goals and a progress summary.
 - [ ] Goal progress is correct for all supported directions and edge cases.
-- [ ] Risks support owner, severity, mitigation, due date, escalation, resolution, and history.
-- [ ] Onboarding/playbooks can generate or link existing Activities without creating a duplicate generic task system.
-- [ ] Playbook execution is idempotent, observable, resumable, and safe to retry.
+- [ ] Risks support owner, severity, mitigation, due date, escalation, resolution and history.
+- [ ] Onboarding/playbooks create or link existing Activities without a duplicate task system.
+- [ ] Playbook execution is idempotent, observable, resumable and safe to retry.
 
 ### 16.4 Renewals and integration
 
 - [ ] Renewal readiness works with manual fields alone.
-- [ ] Optional domain integrations are feature-detected and ACL-safe.
-- [ ] Absence/failure of an optional provider does not break core Profile operations.
-- [ ] Customer Success is not a billing, support-ticketing, or project-management replacement.
+- [ ] Optional domain integrations are metadata-detected and ACL-safe.
+- [ ] Absence or failure of an optional provider never breaks core Profile operations.
+- [ ] Customer Success is not a billing, support-ticketing or project-management replacement.
 
-### 16.5 Security, data, and operations
+### 16.5 Security, data and operations
 
 - [ ] All API operations use server-side ACL and DTO validation.
-- [ ] Entity relations and aggregate queries prevent IDOR/information leakage.
-- [ ] Migrations are reviewed, versioned, additive where possible, and preserve existing CRM data.
-- [ ] Tests used only the already-configured database; no extra test database/schema was created.
-- [ ] No broad data cleanup, database reset, truncation, or drop was performed.
-- [ ] Unit tests, type checking, lint, targeted integration/API tests, and critical UI tests pass, or the report explains exactly what could not be run.
-- [ ] OpenAPI and module documentation are updated.
-- [ ] `docs/compatibility/customer-success.md` describes custom behaviors and known deviations.
+- [ ] Entity relations and aggregate queries prevent IDOR and information leakage.
+- [ ] Migrations are reviewed, versioned, additive and preserve existing CRM data.
+- [ ] Tests used only the already-configured database; no extra test database or schema was created.
+- [ ] No broad cleanup, reset, truncation or drop was performed.
+- [ ] Unit tests, type checking, lint and targeted integration/API tests pass, or the report states exactly what could not be run.
+- [ ] Module documentation is updated under `docs/modules/customer-success/`.
+- [ ] `docs/modules/customer-success/compatibility.md` describes custom behavior and known deviations.
 
 ---
 
-## 17. Performance, Reliability, and Observability
+## 17. Performance, Reliability and Observability
 
-- Portfolio pages must use server-side filtering, pagination, and authorized aggregates.
-- Score calculation must avoid N+1 queries; load signal data in batches where possible.
-- Health batch jobs must have bounded batch sizes, resumable cursors, and backpressure compatible with the existing queue.
-- Do not calculate every Profile synchronously during application startup or every portfolio page load.
-- Cache only where the project's caching conventions are established; invalidate on the events that can change the value.
-- Cache keys must include relevant ACL/user scope when caching authorization-dependent aggregates.
+- Portfolio pages use server-side filtering, pagination and authorized aggregates.
+- Score calculation avoids N+1 queries; load signal data in batches.
+- Health batch jobs use bounded batch sizes, resumable cursors and backpressure compatible with the existing queue.
+- **Never calculate every Profile synchronously during startup or on a portfolio page load.**
+- Cache only where the repository's caching conventions exist; invalidate on the events that change the value. Cache keys must include the ACL/user scope for authorization-dependent aggregates.
 - Use stable, bounded queries and add indexes based on measured plans.
-- Track job duration, processed/skipped/failed counts, retry counts, stale profiles, unknown-health count, and playbook failure count via the existing logging/metrics system.
-- Do not log customer message bodies, confidential notes, tokens, API keys, or full database connection URLs.
-- Handle deleted/inaccessible linked records without turning the entire portfolio page into a server error.
-- For partial scoring failure, preserve the last valid snapshot and separately mark that the last attempted calculation failed; do not silently replace a good score with an incorrect zero.
+- Track job duration, processed/skipped/failed counts, retry counts, stale profiles, unknown-health count and playbook failure count via the existing logging/metrics system.
+- Never log customer message bodies, confidential notes, tokens, API keys or full database connection URLs.
+- Handle deleted or inaccessible linked records without turning a portfolio page into a server error.
+- On partial scoring failure, **preserve the last valid snapshot** and separately mark that the last attempt failed. Never replace a good score with an incorrect zero.
 
 ---
 
-## 18. Operational Documentation and Deliverables
+## 18. Documentation and Deliverables
 
-The coding agent should deliver/update:
+The coding agent should deliver or update:
 
 - `docs/implementation/customer-success-repository-audit.md`
-- `docs/compatibility/customer-success.md`
-- Module README describing setup, entities, routes, permission scopes, scoring semantics, jobs, and optional integrations.
-- Metadata/entity definitions and versioned migrations.
-- REST/OpenAPI documentation and sample payloads using synthetic values.
-- Admin guide for scoring weights, thresholds, signal availability, lifecycle options, playbooks, notifications, and renewal windows.
-- Operator guide for scheduled jobs, failed playbook runs, recalculation, diagnostics, and migration rollback/forward-fix strategy.
-- Tests and test result summary.
-- A completion report mapping each sub-phase to files changed, migrations, checks actually run, results, unresolved gaps, and any data writes performed.
+- `docs/modules/customer-success/README.md` — setup, entities, routes, permission scopes, scoring semantics, jobs, optional integrations
+- `docs/modules/customer-success/api.md` — routes and payloads
+- `docs/modules/customer-success/data-model.md`
+- `docs/modules/customer-success/permissions.md`
+- `docs/modules/customer-success/compatibility.md` — custom behavior and deviations from the EspoCRM baseline
+- `database/migrations/032_phase19_customer_success.sql` (reviewed) and metadata registrations in `database/seed-metadata.ts`
+- REST/OpenAPI documentation with synthetic sample payloads
+- An admin guide for scoring weights, thresholds, signal availability, lifecycle options, playbooks, notifications and renewal windows
+- An operator guide for scheduled jobs, failed playbook runs, recalculation and diagnostics
+- Tests and a test result summary
+- A completion report mapping each sub-phase to files changed, migrations, checks actually run, results, unresolved gaps and any data writes performed
 
-Do not report a test as passed unless the command was actually executed and passed. Clearly separate completed work, skipped work, known issues, and recommendations.
+Do not report a test as passed unless the command actually ran and passed. Separate completed work, skipped work, known issues and recommendations.
 
 ---
 
 ## 19. Coding Agent Execution Rules
 
-1. Read `AGENTS.MD` and relevant `PLAN.md` sections before touching code.
+1. Read `AGENTS.MD` and the relevant `PLAN.md` sections before touching code.
 2. Begin with Phase 19-CS.0 and inspect the real repository before implementing assumptions.
-3. Implement one sub-phase at a time; keep each change reviewable and test it before moving on.
-4. Reuse generic platform services. Do not build a second ORM, ACL system, Activity scheduler, notification engine, job queue, dashboard framework, or settings store.
-5. Preserve existing code and user changes; inspect `git status` first and do not overwrite unrelated work.
-6. Follow existing TypeScript style, DTO conventions, migration conventions, error handling, and module registration patterns.
+3. Implement one sub-phase at a time; keep each change reviewable and tested before moving on.
+4. Reuse generic platform services. Do not build a second ORM, ACL system, Activity scheduler, notification engine, job queue, dashboard framework or settings store.
+5. Preserve existing code and user changes; inspect `git status` first and never overwrite unrelated work.
+6. Follow existing TypeScript style, DTO conventions, migration conventions, error handling and module registration patterns — the Sales and Projects modules are the reference.
 7. Do not introduce new third-party dependencies without checking existing packages and documenting the reason.
 8. Never trust UI-only authorization or client-provided calculated values.
-9. Inspect any script or command before running it if it may create/reset a database, run seeds, trigger external communication, or perform destructive migrations.
-10. Use the configured primary database for targeted integration verification when needed. **Do not create another database or schema for tests.**
+9. Inspect any script before running it if it may create/reset a database, run seeds, trigger external communication or perform destructive migrations.
+10. Use the configured primary database for targeted integration verification. **Do not create another database or schema for tests.**
 11. Test data must be identifiable, narrowly scoped, and cleaned up only by exact IDs/run markers created by the current run.
 12. Do not use real customer records or send real external communications in tests.
-13. Do not weaken assertions, bypass ACL, swallow errors, or mark failed migrations as applied to achieve a green test result.
-14. If a required capability is missing, document the gap and implement only the smallest reusable dependency needed; do not silently ship a degraded feature as if it works.
-15. Finish each sub-phase with a concise report: files changed, behavior delivered, migrations/seed changes, tests actually run, test results, and remaining work.
+13. Do not weaken assertions, bypass ACL, swallow errors, or mark a failed migration as applied to reach a green test.
+14. If a required capability is missing, document the gap and implement only the smallest reusable dependency needed; never ship a degraded feature as if it worked.
+15. Finish each sub-phase with a concise report: files changed, behavior delivered, migrations/seed changes, tests actually run, results and remaining work.
 
 ---
 
 ## 20. Definition of Done
 
-Phase 19 Customer Success is done when the module provides a secure, explainable, maintainable CSM workflow on the existing CRM platform: profiles and portfolios; lifecycle tracking; health scoring with auditable history; success plans and goals; risk mitigation; onboarding/playbooks; touchpoint and renewal readiness; useful portfolio UI; and optional integrations that degrade safely.
+Phase 19 Customer Success is done when the module provides a secure, explainable and maintainable CSM workflow on the existing CRM platform: profiles and portfolios; lifecycle tracking; health scoring with auditable history; success plans and goals; risk mitigation; onboarding/playbooks; touchpoint and renewal readiness; useful portfolio UI; and optional integrations that degrade safely.
 
-The implementation must use the established NestJS modular-monolith architecture, Entity Engine, `/api/v1` conventions, ACL, event/job infrastructure, React SPA, and configured database. It must preserve existing CRM data, avoid duplicate platform subsystems, and include tests/documentation for its domain behavior.
+The implementation must use the established NestJS modular-monolith architecture, the Entity Engine, `/api/v1` conventions, ACL, event/job infrastructure, the React SPA and the configured database. It must preserve existing CRM data, avoid duplicate platform subsystems, and include tests and documentation for its domain behavior.
 
 **Recommended coding-agent starting prompt:**
 
-> Read `AGENTS.MD`, `PLAN.md`, and `PLAN_Phase_19_Customer_Success.md`. Execute Phase 19-CS.0 only: audit the actual codebase, verify available kernel/domain capabilities and optional integrations, and write the repository audit plus compatibility contract. Do not implement later phases until the audit is complete. Do not create any database or schema. Preserve existing data and changes.
+> Read `AGENTS.MD`, `PLAN.md`, `docs/module-guide.md`, `PLAN_Phase_19_Customer_Success.md`, and `docs/implementation/sales-repository-audit.md`. Execute Phase 19-CS.0 only: re-verify the audit facts against the working tree, confirm which optional providers are present and how each is detected, and write `docs/implementation/customer-success-repository-audit.md` plus `docs/modules/customer-success/compatibility.md`. Note that `CustomerSuccessProfile` is a fixed entity name required by the shipped Sales integration marker. Do not implement later phases until the audit is complete. Do not create any database or schema. Preserve existing data and changes.

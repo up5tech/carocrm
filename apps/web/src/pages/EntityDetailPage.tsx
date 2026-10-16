@@ -6,7 +6,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
+import { SalesDocumentLinesPanel } from '../components/SalesDocumentLinesPanel.js';
 import { StreamPanel } from '../components/StreamPanel.js';
+import { salesDocumentKind } from '../sales/documents.js';
 import { t } from '../state/i18n.js';
 import { evaluateEntityLogic } from '../state/logic.js';
 import {
@@ -287,17 +289,24 @@ export function EntityDetailPage() {
           </Card>
         ) : null}
 
-        {relations.map((relation) => (
-          <RelationPanel
-            key={relation}
-            parent={entity}
-            parentId={id}
-            name={relation}
-            label={definition.data?.relations[relation]?.label}
-            base={base}
-            targetDefinition={metadata.data?.[definition.data?.relations[relation]?.target ?? ''] ?? undefined}
-          />
-        ))}
+        {relations.map((relation) => {
+          // A commercial document's lines are not a link list: they are the money the document is
+          // calculated from, and they can only be written through the document command. Every other
+          // relationship keeps the generic panel.
+          const documentKind = relation === 'items' ? salesDocumentKind(entity) : undefined;
+          if (documentKind !== undefined) return <SalesDocumentLinesPanel key={relation} kind={documentKind} id={id} />;
+          return (
+            <RelationPanel
+              key={relation}
+              parent={entity}
+              parentId={id}
+              name={relation}
+              label={definition.data?.relations[relation]?.label}
+              base={base}
+              targetDefinition={metadata.data?.[definition.data?.relations[relation]?.target ?? ''] ?? undefined}
+            />
+          );
+        })}
 
         <StreamPanel entity={entity} id={id} definition={definition.data} canPost />
       </Space>

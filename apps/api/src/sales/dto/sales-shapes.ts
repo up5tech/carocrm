@@ -379,6 +379,12 @@ export const SalesAccountingExportSchema = z
   })
   .strict();
 
+/**
+ * 19-S.17 — send any commercial document (§9.4). The same shape the quote send takes, because the
+ * contract is the same act: preview, confirm the recipients, then let the mail module deliver it.
+ */
+export const SendDocumentSchema = SendQuoteSchema;
+
 export type CreatePaymentInput = z.infer<typeof CreatePaymentSchema>;
 export type UpdatePaymentInput = z.infer<typeof UpdatePaymentSchema>;
 export type AllocatePaymentInput = z.infer<typeof AllocatePaymentSchema>;

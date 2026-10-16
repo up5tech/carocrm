@@ -49,7 +49,12 @@ verification evidence per suite. The list of phases actually claimed is
 | Stream, notes, attachments, audit history and field-level permissions | inherited from the kernel, no module code |
 
 Records are ordinary metadata entities, so list/detail/create/edit/delete, search, filters, saved
-filters, import/export and ACL come from the Entity Engine. Dedicated Sales screens are later work.
+filters, import/export and ACL come from the Entity Engine. The one screen the module adds is the
+**line-item panel** on a document's detail page: the shared editor writes the lines through the document
+command, shows the server's totals, tax breakdown and price explanation, blocks an unpriced line with the
+reason, and goes read-only once the document is issued. The instance settings page carries the Sales
+settings document (§13) as one form, warnings and version included. Everything else — a dedicated Sales
+create screen, a send action for the nine kinds that have no mail command yet — is still the generic UI.
 
 ## Module layout
 
@@ -158,11 +163,14 @@ DELETE /api/v1/Sales/document/:kind/:id            delete a **draft** only
 (`database/seed-metadata.ts`), migrations `023_phase19_sales_documents.sql`,
 `027_phase19_sales_purchasing.sql` and `028_phase19_sales_inventory.sql`, and the routes above.
 
-**Not implemented yet — and deliberately not claimed by `implementedPhases`:** PDF *attachments* on a
-sent document. A PDF renderer exists (`@carocrm/document`'s optional `pdfkit` adapter walks the same
-block model the text rendering uses), and every document kind exposes that block model through
-`…/render`, but turning a rendered PDF into an outbound attachment needs the attachment-storage path,
-which is not built. Stock is **not** in this list: the ledger that applies a movement plan arrived in
+**Delivered since:** a sent quote can carry a rendered PDF. `POST /api/v1/Sales/quote/:id/send` with
+`attachPdf: true` renders the *issued* blocks through `@carocrm/document`'s optional `pdfkit` adapter,
+stores the bytes as an `Attachment` under the created `Email` (`parentType: 'Email'`, so the worker's
+`system.sendEmail` picks it up on the §25 attachment path) and reports it as `pdfAttachment`. Both the
+missing `pdfkit` dependency and missing attachment storage are refused **before** the quote is issued,
+so a quote is never marked sent for an attachment that cannot be produced. Other kinds render PDF-able
+blocks through `…/render` but have no send command yet — the quote path is the only one wired to mail.
+Stock is **not** in this list: the ledger that applies a movement plan arrived in
 19-S.14 — see [Inventory](#inventory-19-s14) and [purchases-and-inventory.md](purchases-and-inventory.md).
 
 ### Sales orders (19-S.8) and invoices (19-S.9)
@@ -196,7 +204,7 @@ which is not built. Stock is **not** in this list: the ledger that applies a mov
 | Safe conversion to a sales order with lineage and duplicate protection | done (`convertToOrder`, idempotent on `correlationId`, unique index behind it) |
 | Idempotent expiry | **done** — `SalesDocumentService.expireOverdueQuotes()`, an administrator route (`POST /api/v1/Sales/action/expireQuotes`) and a worker-authorized one (`…/action/expire-quotes`), the `sales.expireQuotes` job in `apps/worker/src/handlers/sales-handlers.ts`, and a daily `scheduled_jobs` row seeded by `database/seed.ts`. Idempotent by construction: only a `sent` quote is a candidate, and expiring takes it out of that state. |
 | PDF template selection, preview, email-send action | **done** — `POST /api/v1/Sales/quote/:id/render` renders the quote through the kernel `document` module (a named `DocumentTemplate`, or the built-in block layout when the entity type has no template); `POST /api/v1/Sales/quote/:id/send` issues a draft quote and queues an `Email` through the mail module. See below. |
-| Line-item editor | frontend work, deferred to 19-S.17 |
+| Line-item editor | **done** (19-S.17) — `components/LineItemEditor.tsx` on both the create form and the document's detail screen; see "Sending and printing any document" below. |
 | Tests for expiry, stale prices, ACL, send side-effects, conversion retries | **written** — `apps/api/test/sales-quote-document.test.ts` (the block model, pure) and `apps/api/test/sales-quotes.test.ts` (render, send side effects, no-provider refusal, ACL, a frozen price after the price book moves, expiry, conversion retries). The worker's `sales-handlers` suite still covers the expiry job itself. |
 
 ### Rendering and sending a quote (19-S.7)
@@ -502,6 +510,36 @@ Deliberately **not** added here: a Sales-specific filter language, a Sales SQL p
 or stored report rows — a dataset the user wants to keep is saved through the generic `/api/v1/Report`
 API like any other report, and saved filters are the kernel's already.
 
+## Sending and printing any document (19-S.17)
+
+```text
+POST /api/v1/Sales/document/:kind/:id/render   preview the render a send would use
+POST /api/v1/Sales/document/:kind/:id/send     issue a draft through its own transition, then email it
+```
+
+`sales/document/document-send.service.ts` is the quote send's contract widened to the other nine kinds,
+with no per-kind copy: the render is the one `…/render` serves, the issuance is the descriptor's own
+`issues: true` transition (so the number, the snapshot, the lock and the outbox event come from the
+engine), and the message is an ordinary `Email` the mail module queues. `attachPdf` builds the PDF from
+the same block model the body used, so the attachment and the email cannot disagree.
+
+Three rules the wide surface forced, all of them refusals **before** anything is issued: a stock-moving
+draft (`salesOrder`, `deliveryOrder`, `returnOrder`, `receiptOrder`) says confirm-it-first, because an
+email button is not a warehouse act; a purchasing kind goes to its **supplier** while a selling one goes
+to its contact then its account, and a document with neither is refused; and with no mail transport, or
+no `pdfkit` behind an `attachPdf`, nothing is issued at all. `quote` is refused here and keeps its
+19-S.7 route. `test/sales-document-send.test.ts` pins all of it.
+
+On the screen side (`apps/web`): the create form mounts the line editor for a document kind and posts
+`{ data, items }` in one command (Save stays blocked, with the reason, until every line is priced); the
+detail screen's line panel carries **Send**, which opens `DocumentSendModal` — the server's own preview,
+the templates configured for that entity type, tag-entered recipients left empty on purpose so the
+backend derives the counterparty, and the PDF switch. A line with no tax code now also takes a percent,
+because `missingTaxPolicy: error` refuses an unanswered tax and an install with no `TaxCode` rows yet
+could otherwise not price a document at all. The standard templates (`document-template-defaults.ts`,
+seeded with `ON CONFLICT DO NOTHING` so an operator's edits survive) render without unresolved
+placeholders: `templateData` supplies the document fields by name and the per-line `lineTotal`/`tax`.
+
 ## Verification
 
 ```bash
@@ -579,8 +617,11 @@ lead time holding a period until its planned date, a visible failure with a safe
 stopping future billing, pause/resume, renewal and termination at a term end, the record-API refusals
 for a forged period or status, the authority separation a role must hold, and a
 run that issues no email. The worker suite covers the expiry job and the recurring billing job.
-Still **not** covered: the `markOverdueInvoices` job, and anything a UI would do —
-dedicated Sales screens are 19-S.17 work.
+Still **not** covered: the `markOverdueInvoices` job. On the UI side the send path, the create-with-lines
+form and the line panel were verified in the browser against the configured instance (a draft invoice
+typed, priced, saved, previewed and refused on send because this install has no mail transport — with the
+document left a draft), but the 19-S.17 **review** tasks remain: a per-entity pass over all 36 Sales
+layouts, navigation module enablement, and a systematic responsive/keyboard audit.
 
 ## Deeper documents
 

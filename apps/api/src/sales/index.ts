@@ -3,6 +3,7 @@ import type { Provider, Type } from "@nestjs/common";
 import { SalesCatalogGuardService } from "./catalog/sales-guard.service.js";
 import { SalesDashletCatalogService } from "./dashboard/dashlet.js";
 import { SalesDocumentService } from "./document/document.service.js";
+import { SalesDocumentSendService } from "./document/document-send.service.js";
 import { SalesNumberingService } from "./document/numbering.service.js";
 import { SalesQuoteSendService } from "./document/quote-send.service.js";
 import { SalesDocumentRenderService } from "./document/render.service.js";
@@ -49,6 +50,7 @@ export const SALES_PROVIDERS: Provider[] = [
   SalesWriteGuardService,
   SalesDocumentService,
   SalesQuoteSendService,
+  SalesDocumentSendService,
   SalesDocumentRenderService,
   InventoryService,
   InventoryOperationsService,
@@ -87,6 +89,8 @@ export {
   IMPLEMENTED_DOCUMENT_KINDS,
 } from "./document/descriptors.js";
 export { SalesDocumentService } from "./document/document.service.js";
+export type { DocumentPdfAttachment, SendDocumentInput, SendDocumentResult } from './document/document-send.service.js';
+export { SalesDocumentSendService } from "./document/document-send.service.js";
 export {
   assertDocumentEditable,
   isLocked,

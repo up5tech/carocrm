@@ -128,6 +128,14 @@ export class SalesDocumentRenderService {
         value: text(document[fact.field]) ?? null,
       })).filter((fact) => fact.value !== null),
       unallocatedAmount: text(document["unallocatedAmount"]) ?? null,
+      // The same optional facts a template asks for by their own name: `{{dueDate}}`, `{{reason}}`,
+      // `{{amountDue}}`. The block layout prints them under a label; a template addresses the field.
+      fields: Object.fromEntries(
+        [
+          ...OPTIONAL_FACTS.map((fact) => fact.field),
+          "amountDue",
+        ].map((field) => [field, text(document[field]) ?? ""]),
+      ),
       lines: view.totals.lines.map(documentRenderLine),
       totals: {
         subtotal: view.totals.subtotal,
@@ -181,6 +189,8 @@ interface DocumentRenderInput {
   readonly shippingAddress: string | null;
   readonly description: string | null;
   readonly facts: readonly { readonly label: string; readonly value: string | null }[];
+  /** The optional document fields, keyed by their own name, for a template that asks for them. */
+  readonly fields: Readonly<Record<string, string>>;
   readonly unallocatedAmount: string | null;
   readonly lines: readonly DocumentRenderLine[];
   readonly totals: DocumentRenderTotals;
@@ -270,13 +280,20 @@ function templateData(
     billingAddress: input.billingAddress ?? "",
     shippingAddress: input.shippingAddress ?? "",
     description: input.description ?? "",
+    ...input.fields,
     unallocatedAmount: input.unallocatedAmount ?? "",
     title:
       input.number === null
         ? `${descriptor.label} (draft)`
         : `${descriptor.label} ${input.number}`,
     facts: Object.fromEntries(input.facts.map((fact) => [fact.label, fact.value])),
-    lines: input.lines.map((line) => ({ ...line })),
+    // `lineTotal` and `tax` are the names a template reaches for; the block model calls them
+    // `grossAmount` and `taxAmount`, and the two aliases keep the shipped defaults warning-free.
+    lines: input.lines.map((line) => ({
+      ...line,
+      lineTotal: line.grossAmount,
+      tax: line.taxAmount,
+    })),
     totals: { ...input.totals },
     subtotal: input.totals.subtotal,
     discountTotal: input.totals.discountTotal,

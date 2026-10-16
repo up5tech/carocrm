@@ -1,35 +1,45 @@
 /**
- * Phase 19-S.17 — document send UI (PLAN_Phase_19_Sales.md §9.4, S.17 task 4).
+ * Phase 19-S.17 — sending a commercial document by mail (PLAN_Phase_19_Sales.md §9.4, S.17 task 4).
  *
- * A modal for previewing a document render and confirming recipients before sending. The backend
- * `quoteSend.send` issues a draft quote and queues the email in one transaction; this UI collects
- * explicit recipient intent and a cover message first.
+ * One modal for the ten document kinds. It previews the render the server would send, collects
+ * recipients and a cover note, and then calls the send command — which **issues** a draft through the
+ * kind's own transition and queues the email, all before this call returns. So the two rules this UI
+ * has to respect:
+ *
+ *  - recipients may be left empty: the backend derives the counterparty's address (the supplier for a
+ *    purchasing document, the contact then the account for a selling one) and refuses only when there
+ *    is genuinely nobody to mail. The refusal, not a client-side guess, is the guard.
+ *  - the preview is the server's render of the same template, placeholders and all. Nothing here sums
+ *    a total or composes a subject line locally, so what the user reads is byte-for-byte what goes out.
  */
 
-import type { ModalProps } from 'antd';
-import { Button, Input, Modal, Select, Space, Switch, Typography } from 'antd';
+import { Alert, Input, Modal, Select, Space, Switch, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../api/client.js';
+import type { SalesRenderResult } from '../api/types.js';
 import { t } from '../state/i18n.js';
 
 const { Text } = Typography;
 
-interface DocumentSendProps {
-  visible: boolean;
-  documentId: string;
-  onClose: () => void;
-  onSent?: (emailId: string) => void;
+const ADDRESS_SEPARATORS = [',', ';', ' '];
+
+interface DocumentSendModalProps {
+  readonly open: boolean;
+  /** The Sales document kind, e.g. `invoice`. A `quote` keeps its own documented route. */
+  readonly kind: string;
+  /** The metadata entity, used to list the templates configured for this document type. */
+  readonly entity: string;
+  readonly id: string;
+  readonly onClose: () => void;
+  readonly onSent?: (emailId: string) => void;
 }
 
-export function DocumentSendModal({
-  visible,
-  documentId,
-  onClose,
-  onSent,
-}: DocumentSendProps) {
-  const [preview, setPreview] = useState<{ subject: string; body: string; warnings: string[] } | null>(null);
-  const [recipients, setRecipients] = useState<string[]>([]);
+export function DocumentSendModal({ open, kind, entity, id, onClose, onSent }: DocumentSendModalProps) {
+  const [preview, setPreview] = useState<SalesRenderResult | null>(null);
+  const [templates, setTemplates] = useState<readonly { value: string; label: string }[]>([]);
+  const [templateCode, setTemplateCode] = useState<string | undefined>(undefined);
+  const [to, setTo] = useState<string[]>([]);
   const [cc, setCc] = useState<string[]>([]);
   const [bcc, setBcc] = useState<string[]>([]);
   const [subject, setSubject] = useState('');
@@ -37,81 +47,76 @@ export function DocumentSendModal({
   const [attachPdf, setAttachPdf] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [templateCode, setTemplateCode] = useState<string | undefined>(undefined);
 
-  const loadPreview = useCallback(async () => {
-    try {
-      const rendered = await api.salesRenderQuote(documentId, templateCode);
-      setPreview({
-        subject: rendered.subject,
-        body: rendered.text,
-        warnings: [...rendered.warnings],
-      });
-      setSubject(rendered.subject);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('sales.document.sendFailed'));
-    }
-  }, [documentId, templateCode]);
+  const loadPreview = useCallback(
+    async (code?: string) => {
+      try {
+        const rendered =
+          kind === 'quote'
+            ? await api.salesRenderQuote(id, code)
+            : await api.salesRenderDocument(kind, id, code);
+        setPreview(rendered);
+        setSubject(rendered.subject);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t('sales.document.sendFailed'));
+      }
+    },
+    [id, kind],
+  );
 
   useEffect(() => {
-    if (visible) void loadPreview();
-  }, [visible, loadPreview]);
-
-  const addRecipient = (field: 'to' | 'cc' | 'bcc', email: string) => {
-    const trimmed = email.trim();
-    if (!trimmed) return;
-    if (field === 'to') setRecipients((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
-    if (field === 'cc') setCc((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
-    if (field === 'bcc') setBcc((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
-  };
-
-  const removeRecipient = (field: 'to' | 'cc' | 'bcc', email: string) => {
-    if (field === 'to') setRecipients((prev) => prev.filter((e) => e !== email));
-    if (field === 'cc') setCc((prev) => prev.filter((e) => e !== email));
-    if (field === 'bcc') setBcc((prev) => prev.filter((e) => e !== email));
-  };
-
-  const recipientChips = (list: string[], field: 'to' | 'cc' | 'bcc') => (
-    <Space wrap>
-      {list.map((email) => (
-        <span key={email} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f6f8fa', border: '1px solid rgba(0,0,0,0.06)', borderRadius: 16, padding: '2px 10px', fontSize: 12 }}>
-          {email}
-          <Button
-            size="small"
-            type="text"
-            danger
-            icon={<Button /> as unknown as React.ReactNode}
-            onClick={() => removeRecipient(field, email)}
-            style={{ padding: 0, marginLeft: 4 }}
-          >
-            ×
-          </Button>
-        </span>
-      ))}
-    </Space>
-  );
+    if (!open) return;
+    void loadPreview(templateCode);
+    let active = true;
+    void (async () => {
+      try {
+        const list = await api.list('DocumentTemplate', {
+          maxSize: 100,
+          orderBy: 'name,asc',
+          where: [
+            { field: 'entityType', operator: 'equals', value: entity },
+            { field: 'active', operator: 'equals', value: true },
+          ],
+        });
+        if (!active) return;
+        setTemplates(
+          list.list
+            .map((row) => ({ value: String(row['code'] ?? ''), label: String(row['name'] ?? '') }))
+            .filter((option) => option.value !== ''),
+        );
+      } catch {
+        // With no template readable the server still renders its built-in layout, which is a valid send.
+        if (active) setTemplates([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+    // Opening the modal re-renders and re-reads the templates; changing the template is handled by the
+    // select itself, so this effect must not depend on `templateCode` or it would render twice.
+  }, [open, entity, id, loadPreview]);
 
   const send = async () => {
     setError(null);
     setSending(true);
+    const trimmedSubject = subject.trim();
+    const trimmedMessage = message.trim();
+    const input = {
+      ...(to.length > 0 ? { to } : {}),
+      ...(cc.length > 0 ? { cc } : {}),
+      ...(bcc.length > 0 ? { bcc } : {}),
+      ...(templateCode === undefined ? {} : { templateCode }),
+      ...(trimmedSubject === '' ? {} : { subject: trimmedSubject }),
+      ...(trimmedMessage === '' ? {} : { message: trimmedMessage }),
+      attachPdf,
+    };
     try {
-      const sendInput: {
-        to: string[];
-        cc: string[];
-        bcc: string[];
-        subject?: string;
-        message?: string;
-        attachPdf: boolean;
-      } = {
-        to: recipients,
-        cc,
-        bcc,
-        attachPdf,
-      };
-      if (subject) sendInput.subject = subject;
-      if (message) sendInput.message = message;
-      const result = await api.salesSendQuote(documentId, sendInput);
-      void onSent?.(String(result.email.id));
+      const result =
+        kind === 'quote'
+          ? await api.salesSendQuote(id, input)
+          : await api.salesSendDocument(kind, id, input);
+      onSent?.(String(result.email['id']));
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : t('sales.document.sendFailed'));
@@ -120,88 +125,100 @@ export function DocumentSendModal({
     }
   };
 
+  const addresses = (
+    label: string,
+    value: string[],
+    onChange: (next: string[]) => void,
+    placeholder?: string,
+  ) => (
+    <div style={{ flex: 1 }}>
+      <Text type="secondary" style={{ fontSize: 12 }}>
+        {label}
+      </Text>
+      <Select
+        mode="tags"
+        style={{ width: '100%' }}
+        value={value}
+        onChange={onChange}
+        tokenSeparators={ADDRESS_SEPARATORS}
+        open={false}
+        suffixIcon={null}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+
   return (
     <Modal
-      open={visible}
-      title={t('sales.document.send')}
+      open={open}
+      title={`${t('sales.document.send')} — ${entity}`}
       onCancel={onClose}
+      onOk={() => void send()}
+      okText={t('sales.document.send')}
       confirmLoading={sending}
-      footer={[
-        <Button key="cancel" onClick={onClose}>
-          {t('core.common.cancel')}
-        </Button>,
-        <Button key="send" type="primary" disabled={!recipients.length || sending} onClick={send}>
-          {t('core.common.send')}
-        </Button>,
-      ] as ModalProps['footer']}
       width={720}
     >
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
-        {error && <div style={{ color: '#cf1322', fontSize: 12 }}>{error}</div>}
+        {error !== null ? <Alert type="error" showIcon message={error} /> : null}
 
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <Space size={12} align="center" wrap>
           <Select
-            showSearch
-            placeholder={t('sales.document.template')}
-            options={[
-              { label: t('sales.document.defaultTemplate'), value: '' },
-              { label: 'Quote — default', value: 'quoteDefault' },
-            ]}
-            onChange={(val) => {
-              setTemplateCode(val === '' ? undefined : val);
-              void loadPreview();
+            style={{ minWidth: 240 }}
+            value={templateCode ?? ''}
+            placeholder={t('sales.document.defaultTemplate')}
+            options={[{ value: '', label: t('sales.document.defaultTemplate') }, ...templates]}
+            onChange={(value: string) => {
+              const next = value === '' ? undefined : value;
+              setTemplateCode(next);
+              void loadPreview(next);
             }}
           />
-          <Switch checkedChildren="" unCheckedChildren="" checked={attachPdf} onChange={setAttachPdf} />
-          <span style={{ fontSize: 12 }}>{t('sales.document.attachPdf')}</span>
+          <Switch checked={attachPdf} onChange={setAttachPdf} />
+          <Text style={{ fontSize: 12 }}>{t('sales.document.attachPdf')}</Text>
+        </Space>
+
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t('sales.document.recipientsHint')}
+          </Text>
+          <Space size={8} align="start" style={{ width: '100%' }}>
+            {addresses(t('sales.document.recipients'), to, setTo, 'name@example.com')}
+            <div style={{ flex: 1 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t('sales.document.subject')}
+              </Text>
+              <Input value={subject} onChange={(event) => setSubject(event.target.value)} />
+            </div>
+          </Space>
+          <Space size={8} style={{ width: '100%', marginTop: 8 }}>
+            {addresses('CC', cc, setCc)}
+            {addresses('BCC', bcc, setBcc)}
+          </Space>
         </div>
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'start' }}>
-          <div style={{ flex: 1 }}>
-            <Text style={{ color: 'rgba(0,0,0,0.65)', fontSize: 12 }}>{t('sales.document.recipients')}</Text>
-            {recipientChips(recipients, 'to')}
-            <Input.TextArea
-              showCount
-              placeholder={t('sales.lineItem.searchProduct')}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-                const text = e.target.value.trim();
-                const nativeEvent = e.nativeEvent as InputEvent & Event;
-                if (text && (nativeEvent.inputType === 'insertLineBreak' || nativeEvent.inputType === 'insertFromPaste')) {
-                  e.target.value = '';
-                  addRecipient('to', text.replace(/\s+/g, ' '));
-                }
-              }}
-              onPressEnter={() => {
-                const text = recipients[recipients.length - 1];
-                if (text) addRecipient('to', text);
-              }}
-              rows={1}
-            />
-          </div>
-          <div style={{ flex: 1 }}>
-            <Text style={{ color: 'rgba(0,0,0,0.65)', fontSize: 12 }}>{t('sales.document.subject')}</Text>
-            <Input value={subject} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubject(e.target.value)} />
-          </div>
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t('sales.document.message')}
+          </Text>
+          <Input.TextArea value={message} onChange={(event) => setMessage(event.target.value)} rows={3} />
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ flex: 1 }}>
-            <Text style={{ color: 'rgba(0,0,0,0.65)', fontSize: 12 }}>{t('sales.document.message')}</Text>
-            <Input.TextArea value={message} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(e.target.value)} rows={3} />
+        {preview !== null ? (
+          <div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {t('sales.document.preview')}
+            </Text>
+            <div className="sales-send-preview">{preview.text}</div>
+            {preview.warnings.length > 0 ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginTop: 8 }}
+                message={t('sales.document.warnings', { warnings: preview.warnings.join(', ') })}
+              />
+            ) : null}
           </div>
-        </div>
-
-        {preview && (
-          <div style={{ border: '1px solid rgba(0,0,0,0.06)', borderRadius: 4, padding: 12, marginTop: 8 }}>
-            <Text strong>{preview.subject}</Text>
-            <div style={{ whiteSpace: 'pre-wrap', marginTop: 4 }}>{preview.body}</div>
-            {preview.warnings.length > 0 && (
-              <div style={{ marginTop: 8, color: '#cf1322', fontSize: 12 }}>
-                {t('sales.document.warnings', { warnings: preview.warnings.join(', ') })}
-              </div>
-            )}
-          </div>
-        )}
+        ) : null}
       </Space>
     </Modal>
   );

@@ -1167,3 +1167,50 @@ body {
   border-radius: 6px;
   transition: background 0.15s ease;
 }
+
+/* Phase 19-S.17 — the document line-item totals panel (§9.3). Server figures only, right-aligned,
+   with the resolved tax breakdown under it so a user can see which code produced which amount. */
+.sales-totals-panel {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 13px;
+}
+.sales-totals-panel__rows {
+  min-width: 260px;
+}
+.sales-totals-panel__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 2px 0;
+}
+.sales-totals-panel__row--total {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid #d9d9d9;
+}
+.sales-totals-panel__tax {
+  min-width: 240px;
+  color: #595959;
+}
+.sales-totals-panel__tax ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.sales-send-preview {
+  max-height: 260px;
+  overflow: auto;
+  margin-top: 2px;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.5;
+}

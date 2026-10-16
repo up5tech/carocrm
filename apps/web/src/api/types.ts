@@ -778,6 +778,25 @@ export interface SalesSendResult {
   pdfAttachment: { id: string; filename: string; mimeType: string; size: number; checksum: string | null } | null;
 }
 
+/** What a send command takes: who to mail, which template, a cover note, and the optional PDF. */
+export interface SalesSendInput {
+  readonly to?: readonly string[];
+  readonly cc?: readonly string[];
+  readonly bcc?: readonly string[];
+  readonly templateCode?: string;
+  readonly subject?: string;
+  readonly message?: string;
+  readonly emailAccountId?: string;
+  readonly attachPdf?: boolean;
+  readonly correlationId?: string;
+}
+
+/** The same result for a document sent through `…/Sales/document/:kind/:id/send`. */
+export interface SalesSendDocumentResult extends Omit<SalesSendResult, 'quote'> {
+  kind: string;
+  document: SalesDocumentView;
+}
+
 export interface SalesNumberingSeries {
   id: string;
   code: string;
@@ -799,11 +818,27 @@ export interface SalesPriceResolutionResult {
   quantityBreak: { minQuantity: string; unitPrice: string } | null;
 }
 
+/**
+ * `POST /Sales/action/previewTotals` answers with the server's `TotalsResult` **flat**: the totals,
+ * the per-line amounts and the tax breakdown all sit beside `currency`. There is no nested `totals`
+ * object, and the per-line amounts are what the editor shows as a line's net/tax/gross.
+ */
 export interface SalesPreviewTotalsResult {
-  lines: readonly Record<string, unknown>[];
-  totals: Record<string, unknown>;
   currency: string;
+  lines: readonly Record<string, unknown>[];
+  subtotal: string;
+  discountTotal: string;
+  shippingAmount: string;
+  shippingTaxAmount: string;
+  taxTotal: string;
+  netTotal: string;
+  grossTotal: string;
+  amountDue: string;
+  baseCurrency: string | null;
+  baseGrossTotal: string | null;
+  taxInclusive: boolean;
   taxBreakdown: readonly Record<string, unknown>[];
+  warnings: readonly string[];
 }
 
 export interface SalesHealthView {

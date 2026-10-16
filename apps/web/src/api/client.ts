@@ -47,6 +47,8 @@ import type {
   SalesPreviewTotalsResult,
   SalesPriceResolutionResult,
   SalesRenderResult,
+  SalesSendDocumentResult,
+  SalesSendInput,
   SalesSendResult,
   SalesSettingsView,
   SettingsPatch,
@@ -824,8 +826,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ templateCode }),
     }),
-  salesSendQuote: (id: string, input: { to?: readonly string[]; cc?: readonly string[]; bcc?: readonly string[]; templateCode?: string; subject?: string; message?: string; emailAccountId?: string; attachPdf?: boolean; correlationId?: string }) =>
+  salesSendQuote: (id: string, input: SalesSendInput) =>
     request<SalesSendResult>(`/Sales/quote/${encodeURIComponent(id)}/send`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  salesSendDocument: (kind: string, id: string, input: SalesSendInput) =>
+    request<SalesSendDocumentResult>(`/Sales/document/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/send`, {
       method: 'POST',
       body: JSON.stringify(input),
     }),
