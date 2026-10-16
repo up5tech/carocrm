@@ -51,6 +51,12 @@ Inside an `#each` block a name resolves against the current element first, then 
 `{{name}}` means the product name inside a line and the document name outside it. Nesting is capped at 8
 levels and 2 000 items per block; a body is capped at 200 000 characters.
 
+**Escaping applies to the substituted value, not to the template text.** A template is markup somebody
+typed on purpose, so `<b>` in a body stays `<b>`; the untrusted half of the output is the record value,
+and that is what becomes `Acme &amp; Sons`. A value that is not a scalar — an array, an object, a
+non-finite number — is refused the same way an unknown name is: left in place, with a warning naming
+what it was.
+
 **An unresolved placeholder is left in place and reported in `warnings`** — never silently blanked. A
 document that says `{{contactName}}` is a bug somebody notices; a document that says "Dear ," is one
 nobody does. A subject line that cannot be resolved is dropped (an empty subject beats `Quote

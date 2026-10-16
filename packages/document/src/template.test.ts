@@ -9,12 +9,16 @@ import { renderTemplate } from './template.js';
  * unknown names, scoping inside a loop, and the difference between "no lines" and "no data".
  */
 describe('placeholders', () => {
-  it('substitutes a plain value and escapes it for HTML', () => {
+  it('substitutes a plain value and escapes it, while the template text stays markup', () => {
+    // The template is authored by somebody who means the `<b>` they typed — escaping it would make
+    // every template a wall of entities. What is escaped is the **value** that came from a record,
+    // which is the only untrusted part of the output. `{{{…}}}` is how an author asks for raw HTML
+    // from the data; the two rules are complementary, not contradictory.
     const result = renderTemplate('Hello <b>{{name}}</b>, total {{totals.grossTotal}}.', {
       name: 'Acme & Sons',
       totals: { grossTotal: '123.00' },
     });
-    expect(result.body).toBe('Hello &lt;b&gt;Acme &amp; Sons&lt;/b&gt;, total 123.00.');
+    expect(result.body).toBe('Hello <b>Acme &amp; Sons</b>, total 123.00.');
     expect(result.warnings).toEqual([]);
   });
 
@@ -48,13 +52,22 @@ describe('placeholders', () => {
     expect(renderTemplate('{{when}} / {{ok}}', { when: new Date(Date.UTC(2026, 9, 15)), ok: true }).body).toBe(
       '2026-10-15 / true',
     );
-    expect(() => renderTemplate('{{value}}', { value: Number.NaN }).body).toBeTypeOf('string');
+    // A NaN or Infinity is not a number a document may print: the placeholder stays, with a warning
+    // that names what it really was.
+    const nonFinite = renderTemplate('{{value}}', { value: Number.NaN });
+    expect(nonFinite.body).toBe('{{value}}');
+    expect(nonFinite.warnings).toEqual([
+      '"{{value}}" resolved to a non-finite number, which cannot be rendered in one placeholder.',
+    ]);
   });
 });
 
 describe('#each blocks', () => {
   const data = {
-    document: { number: 'Q-000042' },
+    // The shape Sales hands in: scalars at the root, the lines as an array of records
+    // (`quoteTemplateData`, `creditNoteTemplateData`), which is what `{{#each lines}}` walks.
+    number: 'Q-000042',
+    name: 'the document',
     items: [
       { name: 'Widget', quantity: '2', grossAmount: '20.00' },
       { name: 'Service', quantity: '1', grossAmount: '50.00' },
@@ -62,11 +75,13 @@ describe('#each blocks', () => {
   };
 
   it('repeats a block per item and resolves names against the current element first', () => {
+    // `name` exists on both the element and the root: inside the block the element's own value wins,
+    // which is exactly why `{{name}}` means the product line here and the document outside it.
     const result = renderTemplate(
-      '{{#each items}}- {{name}} x {{quantity}} = {{grossAmount}} ({{number}})\n{{/each}}',
+      '{{#each items}}- {{name}} x {{quantity}} = {{grossAmount}}\n{{/each}}| {{name}}',
       data,
     );
-    expect(result.body).toBe('- Widget x 2 = 20.00 (Q-000042)\n- Service x 1 = 50.00 (Q-000042)\n');
+    expect(result.body).toBe('- Widget x 2 = 20.00\n- Service x 1 = 50.00\n| the document');
     expect(result.warnings).toEqual([]);
   });
 
@@ -92,19 +107,28 @@ describe('#each blocks', () => {
     expect(result.warnings).toEqual(['"{{#each items}}" does not name an array, so the block was skipped.']);
   });
 
-  it('matches nested #each blocks by counting, and refuses runaway nesting', () => {
+  it('matches nested #each blocks by counting, and reports the shapes that cannot be', () => {
     const nested = renderTemplate('{{#each groups}}{{#each lines}}{{name}}; {{/each}}{{/each}}', {
       groups: [{ lines: [{ name: 'a' }] }, { lines: [{ name: 'b' }] }],
     });
-    expect(nested.body).toBe('a; b;');
+    // Each inner element emits its own `{{name}}; ` verbatim, including the separator's space.
+    expect(nested.body).toBe('a; b; ');
     expect(nested.warnings).toEqual([]);
 
-    const runaway = renderTemplate('{{#each a}}{{#each b}}{{#each c}}{{{/each}}{{{/each}}}{{{/each}}}', {
-      a: [],
-      b: [],
-      c: [],
-    });
-    expect(runaway.warnings).toContain('has no {{/each}}');
+    // A block with no closing tag is reported, and nothing is invented for the rest of the document.
+    expect(renderTemplate('{{#each items}}x', { items: [{ name: 'a' }] }).warnings).toEqual([
+      '"{{#each items}}" has no {{/each}}.',
+    ]);
+
+    // A closer with no opener is not silently swallowed either — it reads as an unresolvable name.
+    expect(renderTemplate('{{/each}}', {}).warnings).toEqual([
+      '"{{/each}}" could not be resolved from the data.',
+    ]);
+
+    // Nesting is bounded, so a template cannot become a denial-of-service payload. The levels keep
+    // finding `a` again through the root scope, so they really do render ten deep.
+    const deep = '{{#each a}}'.repeat(10) + '{{name}}' + '{{/each}}'.repeat(10);
+    expect(() => renderTemplate(deep, { a: [{ name: 'x' }] })).toThrow(/may not nest #each more than/);
   });
 });
 

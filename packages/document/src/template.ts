@@ -117,7 +117,7 @@ function renderBlock(source: string, frame: ContextFrame, warnings: string[], de
       }
       const text = stringify(value);
       if (text === undefined) {
-        warnings.push(`"${token.raw}" resolved to ${Array.isArray(value) ? 'an array' : 'an object'}, which cannot be rendered in one placeholder.`);
+        warnings.push(`"${token.raw}" resolved to ${describeValue(value)}, which cannot be rendered in one placeholder.`);
         out += token.raw;
         continue;
       }
@@ -231,6 +231,14 @@ function stringify(value: unknown): string | undefined {
   if (typeof value === 'boolean') return value ? 'true' : 'false';
   if (value instanceof Date) return value.toISOString().slice(0, 10);
   return undefined;
+}
+
+/** What a refused value actually was, so the warning never blames the wrong thing. */
+function describeValue(value: unknown): string {
+  if (Array.isArray(value)) return 'an array';
+  if (typeof value === 'number') return 'a non-finite number';
+  if (isRecord(value)) return 'an object';
+  return `a ${typeof value}`;
 }
 
 const HTML_ESCAPES: Readonly<Record<string, string>> = {
