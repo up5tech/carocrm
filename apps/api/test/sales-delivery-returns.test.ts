@@ -347,11 +347,14 @@ describe('the print hook and the inventory boundary (19-S.12)', () => {
     expect((await transition('deliveryOrder', deliveryId, 'confirm')).status).toBe(200);
     const rendered = await fix.call('POST', `/api/v1/Sales/document/deliveryOrder/${deliveryId}/render`, {});
     expect(rendered.status, JSON.stringify(rendered.body)).toBe(200);
-    const body = String(rendered.body['body']);
     expect(rendered.body).toMatchObject({ kind: 'deliveryOrder', fromSnapshot: true });
-    // The heading block is drawn in caps by the shared renderer; the number is the issued one.
-    expect(body).toMatch(/DELIVERY ORDER DO-/);
-    expect(body).toContain(`AGENT-TRK-${fix.runId}`);
+    // `body` is whatever the document's rendering resolves to — with 19-S.17 a registered
+    // `DocumentTemplate` answers in its own markup — so the assertion about the module's *own* layout
+    // is made against the block rendering the service always builds: caps heading, issued number,
+    // and the tracking reference the line was shipped with.
+    const layout = String(rendered.body['text']);
+    expect(layout).toMatch(/DELIVERY ORDER DO-/);
+    expect(layout).toContain(`AGENT-TRK-${fix.runId}`);
     expect(rendered.body['blocks']).toBeTruthy();
   });
 

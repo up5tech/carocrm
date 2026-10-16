@@ -17,7 +17,11 @@ import { currentTx, runInTransaction } from "../../entity/tx-context.js";
 import { resolveDay, storedDay } from "../clock.js";
 import { InventoryService } from "../inventory/inventory.service.js";
 import type { ExchangeRateInput } from "../money/currency.js";
-import { normalizeCurrencyCode } from "../money/currency.js";
+import {
+  freezeExchangeRateSnapshot,
+  normalizeCurrencyCode,
+  readFrozenExchangeRate,
+} from "../money/currency.js";
 import type { Decimal } from "../money/decimal.js";
 import {
   add,
@@ -189,6 +193,8 @@ export interface CreateDocumentInput {
   /** Header fields the caller supplies (account, dates, currency, addresses, …). */
   readonly data?: Record<string, unknown> | undefined;
   readonly items: readonly RequestedLine[];
+  /** The conversion to freeze on this document (§4.13); stored validated as `exchangeRateSnapshot`. */
+  readonly exchangeRate?: ExchangeRateInput | undefined;
   readonly audit?: SalesAuditContext | undefined;
 }
 
@@ -196,6 +202,8 @@ export interface UpdateDocumentInput {
   readonly data?: Record<string, unknown> | undefined;
   /** When present, the document's lines are replaced wholesale — the caller's order included. */
   readonly items?: readonly RequestedLine[] | undefined;
+  /** A new rate replaces the frozen snapshot; omitting it keeps the one the record already has. */
+  readonly exchangeRate?: ExchangeRateInput | undefined;
   readonly audit?: SalesAuditContext | undefined;
 }
 
@@ -314,6 +322,15 @@ export class SalesDocumentService {
 
     const created = await this.entities.create(descriptor.entity, {
       ...(await this.withDueDate(descriptor, { ...(input.data ?? {}) })),
+      // The conversion the caller asked to freeze, validated and stored as text; `calculate()` reads
+      // it back on every later save, so the base-currency figures survive a recalculation (§4.13).
+      ...(input.exchangeRate === undefined
+        ? {}
+        : {
+            exchangeRateSnapshot: freezeExchangeRateSnapshot(
+              input.exchangeRate,
+            ),
+          }),
       status: descriptor.initialState,
     });
     const documentId = requireId(created, descriptor);
@@ -360,6 +377,15 @@ export class SalesDocumentService {
     const state = lockStateOf(descriptor, row);
     const patch = { ...(input.data ?? {}) };
     rejectServerOwned(patch);
+    // The snapshot is a command field, not a header field: it is validated here and stored as text,
+    // so `calculate()` reuses *this* rate on every later save. `assertDocumentEditable` below then
+    // refuses it once the document is issued — the frozen conversion of an issued document is
+    // immutable, which is exactly what §4.13 asks for.
+    if (input.exchangeRate !== undefined) {
+      patch["exchangeRateSnapshot"] = freezeExchangeRateSnapshot(
+        input.exchangeRate,
+      );
+    }
     const changingItems = input.items !== undefined;
     assertDocumentEditable(
       state,
@@ -1523,7 +1549,7 @@ export class SalesDocumentService {
       lines: lines.map((line) => ({ ...line })),
       shipping,
       documentDiscountAmount: text(data["documentDiscountAmount"]) ?? undefined,
-      exchangeRate: readExchangeRate(data["exchangeRateSnapshot"]),
+      exchangeRate: readFrozenExchangeRate(data["exchangeRateSnapshot"]) ?? undefined,
     });
   }
 
@@ -1814,22 +1840,6 @@ function orderByPosition(items: readonly StoredItem[]): StoredItem[] {
   );
 }
 
-function readExchangeRate(value: unknown): ExchangeRateInput | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value === "string") {
-    try {
-      return JSON.parse(value) as ExchangeRateInput;
-    } catch {
-      throw new ValidationError(
-        "The stored exchange-rate snapshot is not valid JSON.",
-      );
-    }
-  }
-  if (typeof value === "object") return value as ExchangeRateInput;
-  throw new ValidationError(
-    "The exchange-rate snapshot must be an object or a JSON string.",
-  );
-}
 
 function requireId(
   created: Record<string, unknown>,

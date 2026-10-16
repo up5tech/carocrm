@@ -5,9 +5,11 @@ import { sql } from "kysely";
 import type { Db, DbTx } from "../../database/database.service.js";
 import { EntityCrudService } from "../../entity/entity.service.js";
 import { resolveDay, storedDay } from "../clock.js";
+import { readFrozenExchangeRate } from "../money/currency.js";
 import { runAsSalesInternal } from "../sales-internal.js";
 import type { SalesRow } from "../sales-records.js";
 import {
+  basePaymentBalance,
   creditNoteOutstanding,
   documentOutstanding,
   invoicePaymentStatus,
@@ -98,11 +100,29 @@ export class SalesBalanceService {
     payment: SalesRow,
   ): Promise<{ allocated: string; unallocated: string; status: string }> {
     const balance = await this.paymentBalanceOf(tx, payment);
+    // 19-S.18 — the base-currency half of the same balance, converted at the rate frozen on *this*
+    // payment (§4.13). A payment recorded without a conversion has no base figures at all rather than
+    // figures invented at whatever the rate happens to be today.
+    const base = basePaymentBalance({
+      baseAmount: text(payment.data["baseAmount"]) ?? null,
+      currency: text(payment.data["currency"]) ?? "USD",
+      snapshot: readFrozenExchangeRate(payment.data["exchangeRateSnapshot"]),
+      allocated: balance.allocated,
+    });
     await runAsSalesInternal(() =>
       this.entities.update("Payment", payment.id, {
         allocatedAmount: balance.allocated,
         unallocatedAmount: balance.unallocated,
         allocationStatus: balance.status,
+        ...(base === null
+          ? {
+              baseAllocatedAmount: null,
+              baseUnallocatedAmount: null,
+            }
+          : {
+              baseAllocatedAmount: base.allocated,
+              baseUnallocatedAmount: base.unallocated,
+            }),
       }),
     );
     return {

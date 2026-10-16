@@ -22,6 +22,7 @@ import {
 import { type DocumentView,SalesDocumentService } from "../document/document.service.js";
 import { documentRenderLine } from "../document/render-blocks.js";
 import type { SalesAuditContext } from "../document/types.js";
+import { baseFieldsFor } from "../money/currency.js";
 import { compare, parseDecimal, zero } from "../money/decimal.js";
 import { runAsSalesInternal } from "../sales-internal.js";
 import { SalesRecords, type SalesRow } from "../sales-records.js";
@@ -52,6 +53,9 @@ export interface CreditAllocationView {
   readonly invoiceId: string;
   readonly amount: string;
   readonly currency: string;
+  /** 19-S.18 — the credit applied at the credit note's frozen rate (§4.13). */
+  readonly baseCurrency: string | null;
+  readonly baseAmount: string | null;
   readonly allocatedAt: string | null;
   readonly allocatedBy: string | null;
   readonly reversedAt: string | null;
@@ -161,6 +165,12 @@ export class CreditNoteService {
           invoiceId: invoice.id,
           amount: input.amount,
           currency: creditCurrency,
+          // 19-S.18 — the credit's own frozen conversion, carried onto the row it settles with (§4.13).
+          ...baseFieldsFor(
+            input.amount,
+            creditCurrency,
+            creditNote.data["exchangeRateSnapshot"],
+          ),
           allocatedAt: new Date(),
           allocatedBy: this.actor(),
           correlationId: input.audit?.correlationId ?? null,
@@ -520,6 +530,8 @@ function toAllocationView(row: {
     invoiceId: text(row.data["invoiceId"]) ?? "",
     amount: text(row.data["amount"]) ?? "0",
     currency: text(row.data["currency"]) ?? "USD",
+    baseCurrency: text(row.data["baseCurrency"]) ?? null,
+    baseAmount: text(row.data["baseAmount"]) ?? null,
     allocatedAt: isoOrNull(row.data["allocatedAt"]),
     allocatedBy: text(row.data["allocatedBy"]) ?? null,
     reversedAt,

@@ -7,7 +7,11 @@ import type {
   TaxLineResolution,
   TaxResolutionSource,
 } from "../document/types.js";
-import type { ExchangeRateInput, Money } from "../money/currency.js";
+import type {
+  ExchangeRateInput,
+  ExchangeRateSnapshot,
+  Money,
+} from "../money/currency.js";
 import {
   currencyScale,
   normalizeCurrencyCode,
@@ -107,6 +111,12 @@ export interface TotalsResult {
   readonly baseCurrency: string | null;
   readonly exchangeRate: string | null;
   readonly baseGrossTotal: string | null;
+  /**
+   * The validated snapshot the base values above were computed from, or null. Persisted verbatim so a
+   * later recalculation reuses *this* rate instead of a newer one (§4.13 "never recompute old
+   * issued document base-currency values using a newer exchange rate").
+   */
+  readonly exchangeRateSnapshot: ExchangeRateSnapshot | null;
   readonly rounding: TotalsRounding;
   readonly taxInclusive: boolean;
   /** Non-fatal notes (for example an explicit zero tax where no rule matched). */
@@ -330,6 +340,7 @@ export function computeTotals(input: TotalsInput): TotalsResult {
     grossTotal: moneyString(rescale(grossTotal, scale, mode), scale),
     amountDue: moneyString(rescale(grossTotal, scale, mode), scale),
     baseCurrency: snapshot?.baseCurrency ?? null,
+    exchangeRateSnapshot: snapshot,
     exchangeRate: snapshot?.rate ?? null,
     baseGrossTotal,
     rounding: input.rounding,

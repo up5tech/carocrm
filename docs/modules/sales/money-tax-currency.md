@@ -47,6 +47,36 @@ platform currency module exists, this file states the contract explicitly.
   non-positive rate, a non-canonical decimal, or a missing rate date.
 * **`toBaseCurrency`** converts one money value through a snapshot, rounding once at the base scale.
   Historic documents are always converted through **their stored** snapshot, never a newer rate.
+* **`freezeExchangeRateSnapshot` / `readFrozenExchangeRate`** (19-S.18) are the persistence pair. The
+  first validates a caller-supplied rate and returns the exact JSON text stored on a record; the second
+  reads that text back and **re-validates** it, so a hand-edited or half-written snapshot is refused
+  instead of being trusted as a rate. `null` from the reader means "this record was never converted",
+  which reporting must show as an absence rather than as a zero.
+* **`baseAmountOf` / `baseFieldsFor`** turn one amount plus a record's stored snapshot into the
+  `baseCurrency` / `baseAmount` pair, and are how an allocation inherits the conversion of the money it
+  is applied from. No rate is ever looked up here: these functions only ever use the snapshot that is
+  already on the row.
+
+### 2.1 Where the snapshot is stored (19-S.18)
+
+| Record | Fields | Written by |
+|---|---|---|
+| Every document kind | `exchangeRateSnapshot` (JSON), `baseCurrency`, `baseGrossTotal` | `POST /Sales/document` and `…/:kind/:id` with `exchangeRate`, then carried by every recalculation; immutable once issued |
+| `Payment` | `exchangeRateSnapshot`, `baseCurrency`, `baseAmount`, `baseAllocatedAmount`, `baseUnallocatedAmount` | `POST /Sales/payment` / `PATCH /Sales/payment/:id` with `exchangeRate`; the two balances are recomputed by `SalesBalanceService.syncPayment` |
+| `PaymentAllocation` | `baseCurrency`, `baseAmount` | the allocation command, at the **payment's** frozen rate |
+| `CreditNoteAllocation`, `BillCreditAllocation` | `baseCurrency`, `baseAmount` | the credit-allocation command, at the **credit note / bill credit's** frozen rate |
+| `WriteOff` | `baseCurrency`, `baseAmount` | the write-off command, at the **invoice's** frozen rate |
+
+All of these are server-owned: the write guard (`sales-internal.ts`) refuses them on the generic
+`/api/v1/:entity` path, including through import, so a client cannot reprice settled money (§4.13,
+§4.15). A payment's base balances are derived as `baseAmount − baseAllocatedAmount`, so the base halves
+always add back to the stored total instead of drifting by a rounding unit.
+
+Before 19-S.18 the module **read** `exchangeRateSnapshot` in three places — the document
+recalculation, the cross-currency allocation gate and the bill-credit conversion — and nothing ever
+wrote it, so `baseCurrency`/`baseGrossTotal` were always null and a cross-currency allocation could
+never be authorised. That is the defect this phase closed; the round trip is pinned by
+`apps/api/test/sales-base-currency.test.ts`.
 
 Because the platform owns no currency module, a second module needing currency scales would duplicate
 `CURRENCY_SCALES`; when a platform currency module appears this file should become a thin adapter.
@@ -139,7 +169,7 @@ still state its own policy.
 | `netTotal` | Taxable base after all discounts, excluding tax |
 | `grossTotal` | Payable total including tax |
 | `amountDue` | `grossTotal` minus allocations; a freshly calculated document has none |
-| `baseCurrency`, `exchangeRate`, `baseGrossTotal` | Present only when an exchange-rate snapshot was supplied, and validated against the document currency |
+| `baseCurrency`, `exchangeRate`, `baseGrossTotal`, `exchangeRateSnapshot` | Present only when a conversion snapshot describes the document: either the one supplied with this command, or the one already frozen on the record. The snapshot is re-validated on read, so a stored value that no longer parses is refused instead of silently dropping the base figures |
 | `rounding`, `taxInclusive`, `warnings` | The policy the numbers were produced under, plus non-fatal notes |
 
 Guards: a document needs at least one line, at most **500** lines (`MAX_TOTALS_LINES`); each line needs

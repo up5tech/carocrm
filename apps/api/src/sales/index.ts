@@ -1,12 +1,15 @@
 import type { Provider, Type } from "@nestjs/common";
 
 import { SalesCatalogGuardService } from "./catalog/sales-guard.service.js";
+import { SalesDashletCatalogService } from "./dashboard/dashlet.js";
 import { SalesDocumentService } from "./document/document.service.js";
 import { SalesNumberingService } from "./document/numbering.service.js";
 import { SalesQuoteSendService } from "./document/quote-send.service.js";
 import { SalesDocumentRenderService } from "./document/render.service.js";
+import { SalesIntegrationService } from "./integrations/sales-integration.service.js";
 import { InventoryService } from "./inventory/inventory.service.js";
 import { InventoryOperationsService } from "./inventory/inventory-ops.service.js";
+import { SalesJobMonitorService } from "./job-monitoring/monitor.js";
 import { AllocationService } from "./payments/allocation.service.js";
 import { SalesBalanceService } from "./payments/balance.service.js";
 import { BillCreditService } from "./payments/bill-credit.service.js";
@@ -16,6 +19,7 @@ import { WriteOffService } from "./payments/write-off.service.js";
 import { BulkPriceService } from "./pricing/bulk-price.service.js";
 import { PriceResolutionService } from "./pricing/price-resolution.service.js";
 import { SupplierPriceService } from "./pricing/supplier-price.js";
+import { SalesReportCatalogService } from "./report/sales-report-catalog.service.js";
 import { SalesController } from "./sales.controller.js";
 import { SalesModuleHealthService } from "./sales-module-health.service.js";
 import { SalesRecords } from "./sales-records.js";
@@ -60,9 +64,18 @@ export const SALES_PROVIDERS: Provider[] = [
   SalesTaxService,
   SalesModuleHealthService,
   SubscriptionService,
+  SalesReportCatalogService,
+  SalesDashletCatalogService,
+  SalesJobMonitorService,
+  SalesIntegrationService,
 ];
 
 export { SalesCatalogGuardService } from "./catalog/sales-guard.service.js";
+export {
+  SALES_DASHLET_DEFINITIONS,
+  SalesDashletCatalogService,
+  type SalesDashletDefinition,
+} from "./dashboard/dashlet.js";
 export {
   creditNoteBlocks,
   creditNoteTemplateData,
@@ -99,6 +112,10 @@ export {
   buildDocumentSnapshot,
   readDocumentSnapshot,
 } from "./document/snapshot.js";
+export {
+  SALES_CONTRACT_VERSION,
+  SalesIntegrationService,
+} from "./integrations/sales-integration.service.js";
 export { InventoryService } from "./inventory/inventory.service.js";
 export { InventoryOperationsService } from "./inventory/inventory-ops.service.js";
 export {
@@ -110,6 +127,7 @@ export {
   stockLevel,
   TRANSFER_STATES,
 } from "./inventory/ledger.js";
+export { SALES_JOB_NAMES, SalesJobMonitorService } from "./job-monitoring/monitor.js";
 export { AllocationService } from "./payments/allocation.service.js";
 export {
   assertCreditAllocatable,
@@ -126,6 +144,12 @@ export { WriteOffService } from "./payments/write-off.service.js";
 export { BulkPriceService } from "./pricing/bulk-price.service.js";
 export { PriceResolutionService } from "./pricing/price-resolution.service.js";
 export { SupplierPriceService } from "./pricing/supplier-price.js";
+export {
+  SALES_REPORT_DATASETS,
+  type SalesMoneyBasis,
+  SalesReportCatalogService,
+  type SalesReportDataset,
+} from "./report/sales-report-catalog.service.js";
 export { SalesController } from "./sales.controller.js";
 export { SALES_MODULE } from "./sales-module.js";
 export { SALES_ENTITY_TYPES, SalesRecords } from "./sales-records.js";

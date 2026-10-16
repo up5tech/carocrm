@@ -12,6 +12,12 @@ import { EntityCrudService } from "../../entity/entity.service.js";
 import { runInTransaction } from "../../entity/tx-context.js";
 import { resolveDay } from "../clock.js";
 import { normalizeCurrencyCode } from "../money/currency.js";
+import {
+  baseAmountOf,
+  type ExchangeRateInput,
+  readFrozenExchangeRate,
+  validateExchangeRateSnapshot,
+} from "../money/currency.js";
 import { compare, isNegative, parseDecimal, zero } from "../money/decimal.js";
 import { runAsSalesInternal } from "../sales-internal.js";
 import { SalesRecords, type SalesRow } from "../sales-records.js";
@@ -53,6 +59,12 @@ export interface PaymentView {
   readonly direction: PaymentDirection;
   readonly amount: string;
   readonly currency: string;
+  /** 19-S.18 — the same money at the frozen conversion rate, or null when none was recorded (§4.13). */
+  readonly baseCurrency: string | null;
+  readonly baseAmount: string | null;
+  /** 19-S.18 — the derived balances at that same frozen rate; null when there is no rate. */
+  readonly baseAllocatedAmount: string | null;
+  readonly baseUnallocatedAmount: string | null;
   readonly balance: PaymentBalance;
   readonly payment: Record<string, unknown>;
 }
@@ -70,6 +82,11 @@ export interface CreatePaymentInput {
   readonly supplierId?: string | null | undefined;
   readonly reference?: string | null | undefined;
   readonly memo?: string | null | undefined;
+  /**
+   * The conversion to freeze on this payment (§4.13). Absent means "this payment has no base-currency
+   * figure", which reporting must then say rather than invent.
+   */
+  readonly exchangeRate?: ExchangeRateInput | undefined;
 }
 
 /** Payment request states (§4.8): the provider-neutral half of an online payment. */
@@ -161,6 +178,14 @@ export class PaymentService {
       input.currency ?? settings.currency.defaultCurrency,
     );
     const balance = paymentBalance(input.amount, []);
+    // 19-S.18 — freeze the conversion the caller supplies and derive the base amount from it, exactly
+    // the way a document does. `baseAmountOf` refuses a snapshot whose document currency is not this
+    // payment's currency, so a rate can never be attached to the wrong money (§4.13).
+    const snapshot =
+      input.exchangeRate === undefined
+        ? null
+        : validateExchangeRateSnapshot(input.exchangeRate);
+    const base = baseAmountOf(balance.amount, currency, snapshot);
     await this.requireLookup("PaymentMethod", input.paymentMethodId);
     await this.requireLookup("PaymentChannel", input.paymentChannelId);
     // Which side of the ledger a payment belongs to is decided by its counterparty: a customer
@@ -197,6 +222,13 @@ export class PaymentService {
         reference: input.reference ?? null,
         memo: input.memo ?? null,
         status: "draft",
+        exchangeRateSnapshot: snapshot === null ? null : JSON.stringify(snapshot),
+        baseCurrency: base?.baseCurrency ?? null,
+        baseAmount: base?.baseAmount ?? null,
+        baseAllocatedAmount:
+          baseAmountOf(balance.allocated, currency, snapshot)?.baseAmount ?? null,
+        baseUnallocatedAmount:
+          baseAmountOf(balance.unallocated, currency, snapshot)?.baseAmount ?? null,
         allocatedAmount: balance.allocated,
         unallocatedAmount: balance.unallocated,
         allocationStatus: balance.status,
@@ -216,6 +248,10 @@ export class PaymentService {
       direction: directionOf(row),
       amount: text(row.data["amount"]) ?? "0",
       currency: text(row.data["currency"]) ?? "USD",
+      baseCurrency: text(row.data["baseCurrency"]) ?? null,
+      baseAmount: text(row.data["baseAmount"]) ?? null,
+      baseAllocatedAmount: text(row.data["baseAllocatedAmount"]) ?? null,
+      baseUnallocatedAmount: text(row.data["baseUnallocatedAmount"]) ?? null,
       balance,
       payment: { ...row.data, id: row.id },
     };
@@ -266,6 +302,47 @@ export class PaymentService {
       patch["amount"] = next.amount;
       patch["unallocatedAmount"] = next.unallocated;
     }
+
+    // 19-S.18 — the conversion belongs to the money it describes. A supplied rate replaces the frozen
+    // snapshot (and is refused once allocations exist, exactly like the amount), and any change to the
+    // amount re-derives `baseAmount` from *that* snapshot rather than from a fresher quote (§4.13:
+    // "never recompute old base-currency values using a newer exchange rate").
+    const suppliedRate = patch["exchangeRate"];
+    delete patch["exchangeRate"];
+    if (suppliedRate !== undefined && compare(parseDecimal(balance.allocated), zero(0)) > 0) {
+      throw new ValidationError(
+        '"exchangeRate" cannot change while the payment has allocations; unallocate first.',
+        { paymentId: id, allocated: balance.allocated },
+      );
+    }
+    const snapshot =
+      suppliedRate === undefined
+        ? readFrozenExchangeRate(row.data["exchangeRateSnapshot"])
+        : validateExchangeRateSnapshot(suppliedRate as ExchangeRateInput);
+    const amountForBase =
+      typeof patch["amount"] === "string"
+        ? patch["amount"]
+        : (text(row.data["amount"]) ?? "0");
+    const currencyForBase = normalizeCurrencyCode(
+      typeof patch["currency"] === "string"
+        ? patch["currency"]
+        : (text(row.data["currency"]) ?? "USD"),
+    );
+    const base = baseAmountOf(amountForBase, currencyForBase, snapshot);
+    patch["exchangeRateSnapshot"] =
+      snapshot === null ? null : JSON.stringify(snapshot);
+    patch["baseCurrency"] = base?.baseCurrency ?? null;
+    patch["baseAmount"] = base?.baseAmount ?? null;
+    if (patch["amount"] !== undefined) {
+      // An amount may only change while nothing is allocated against it (refused above), so the base
+      // balances move with it one-for-one.
+      patch["baseAllocatedAmount"] =
+        base === null
+          ? null
+          : baseAmountOf("0", currencyForBase, snapshot)?.baseAmount ?? null;
+      patch["baseUnallocatedAmount"] = base?.baseAmount ?? null;
+    }
+
     await runAsSalesInternal(() => this.entities.update("Payment", id, patch));
     return await this.view(id);
   }

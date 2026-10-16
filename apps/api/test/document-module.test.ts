@@ -237,12 +237,14 @@ describe('render preview', () => {
 
 describe('default template selection', () => {
   it('returns the active template when none is marked default', async () => {
-    const active = await createTemplate({ entityType: 'CreditNote' });
-    const inactive = await createTemplate({ entityType: 'CreditNote', active: false });
+    // 19-S.17 registers a default template for every Sales document kind, so the "no default is
+    // marked" case has to be exercised on an entity none of those defaults cover.
+    const active = await createTemplate({ entityType: 'Opportunity' });
+    const inactive = await createTemplate({ entityType: 'Opportunity', active: false });
     expect(active.status).toBe(201);
     expect(inactive.status).toBe(201);
 
-    const result = await call('GET', '/api/v1/document/defaultTemplate?entityType=CreditNote');
+    const result = await call('GET', '/api/v1/document/defaultTemplate?entityType=Opportunity');
     expect(result.status).toBe(200);
     expect(result.body['code']).toBe(active.body['code']);
   });
@@ -285,16 +287,18 @@ describe('field-level access to the template body', () => {
     expect(created.status).toBe(201);
     const code = String(created.body['code']);
 
-    const asReader = await call('GET', '/api/v1/DocumentTemplate', undefined, reader.token);
+    // Read the record itself: with the Sales defaults registered (19-S.17) a bounded list no longer
+    // reliably contains a row this suite just created, and the assertion is about the field, not about
+    // which page it landed on.
+    const templateId = String(created.body['id']);
+    const asReader = await call('GET', `/api/v1/DocumentTemplate/${templateId}`, undefined, reader.token);
     expect(asReader.status).toBe(200);
-    const readerRow = (asReader.body['list'] as Record<string, unknown>[]).find((row) => row['code'] === code);
-    expect(readerRow).toBeDefined();
-    expect(readerRow).not.toHaveProperty('body');
-    // The protected field is not the only field: the template is still listable.
-    expect(readerRow).toHaveProperty('name');
+    expect(asReader.body['code']).toBe(code);
+    expect(asReader.body).not.toHaveProperty('body');
+    // The protected field is not the only field: the template is still readable.
+    expect(asReader.body).toHaveProperty('name');
 
-    const asAdmin = await call('GET', '/api/v1/DocumentTemplate');
-    const adminRow = (asAdmin.body['list'] as Record<string, unknown>[]).find((row) => row['code'] === code);
-    expect(adminRow).toHaveProperty('body', 'Secret template source');
+    const asAdmin = await call('GET', `/api/v1/DocumentTemplate/${templateId}`);
+    expect(asAdmin.body).toHaveProperty('body', 'Secret template source');
   });
 });

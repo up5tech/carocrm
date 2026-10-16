@@ -11,6 +11,7 @@ import { DatabaseService, type DbTx } from "../../database/database.service.js";
 import { EntityCrudService } from "../../entity/entity.service.js";
 import { runInTransaction } from "../../entity/tx-context.js";
 import type { SalesAuditContext } from "../document/types.js";
+import { baseFieldsFor } from "../money/currency.js";
 import { runAsSalesInternal } from "../sales-internal.js";
 import { assertWriteOffAmount } from "./allocation-math.js";
 import { SalesBalanceService } from "./balance.service.js";
@@ -104,6 +105,8 @@ export class WriteOffService {
           invoiceId: invoice.id,
           amount: input.amount,
           currency,
+          // 19-S.18 — the forgiven amount at the invoice's own frozen conversion (§4.13).
+          ...baseFieldsFor(input.amount, currency, invoice.data["exchangeRateSnapshot"]),
           reason: input.reason,
           status: "pending",
           requestedBy: this.actor(),

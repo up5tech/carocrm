@@ -10,12 +10,14 @@ import {
 import { buildDocumentSnapshot, parseDocumentSnapshot, readDocumentSnapshot, snapshotDigest } from '../src/sales/document/snapshot.js';
 import {
   addMoney,
+  baseFieldsFor,
   currencyScale,
   isKnownCurrency,
   lineAmount,
   moneyFromDecimal,
   normalizeCurrencyCode,
   parseMoney,
+  readFrozenExchangeRate,
   toBaseCurrency,
   validateExchangeRateSnapshot,
 } from '../src/sales/money/currency.js';
@@ -33,6 +35,7 @@ import {
   subtract,
   sum,
 } from '../src/sales/money/decimal.js';
+import { basePaymentBalance } from '../src/sales/payments/allocation-math.js';
 
 describe('decimal engine (19-S.2)', () => {
   it('parses canonical decimal strings exactly, never through a float', () => {
@@ -210,5 +213,64 @@ describe('issuance locking contract (19-S.2)', () => {
   it('does not lock when the policy says lockOnIssue is off', () => {
     expect(isLocked(state, { lockOnIssue: false, unlockRequiresPermission: true })).toBe(false);
     expect(protectedFieldViolations(state, ['number'], { lockOnIssue: false, unlockRequiresPermission: true })).toEqual([]);
+  });
+});
+
+describe('the frozen exchange-rate snapshot (19-S.18, §4.13)', () => {
+  const rate = validateExchangeRateSnapshot({
+    documentCurrency: 'USD',
+    baseCurrency: 'EUR',
+    rate: '0.9333',
+    rateDate: '2026-10-01',
+    source: 'unit test',
+  });
+
+  it('reads back the text a record stores, and treats absence as absence', () => {
+    expect(readFrozenExchangeRate(JSON.stringify(rate))).toEqual(rate);
+    expect(readFrozenExchangeRate(undefined)).toBeNull();
+    expect(readFrozenExchangeRate(null)).toBeNull();
+    expect(readFrozenExchangeRate('')).toBeNull();
+  });
+
+  it('refuses a stored snapshot that is not valid, instead of converting at a guessed rate', () => {
+    expect(() => readFrozenExchangeRate('{ not json')).toThrow(/not valid JSON/);
+    expect(() => readFrozenExchangeRate('{"documentCurrency":"USD"}')).toThrow(/incomplete/);
+    expect(() => readFrozenExchangeRate('[]')).toThrow(/object or a JSON string/);
+  });
+
+  it('derives base balances that always add back to the stored base total', () => {
+    const base = basePaymentBalance({
+      baseAmount: '93.33',
+      currency: 'USD',
+      snapshot: rate,
+      allocated: '100.00',
+    });
+    expect(base).not.toBeNull();
+    expect(base?.allocated).toBe('93.33');
+    // Rounding once at the base scale, then subtracting, keeps allocated + unallocated == amount.
+    expect(Number(base?.allocated) + Number(base?.unallocated)).toBe(Number('93.33'));
+  });
+
+  it('reports no base balance at all when the record has no frozen rate', () => {
+    expect(
+      basePaymentBalance({ baseAmount: null, currency: 'USD', snapshot: null, allocated: '10.00' }),
+    ).toBeNull();
+    // A frozen total with no snapshot behind it is contradictory, and is refused rather than trusted.
+    expect(
+      basePaymentBalance({ baseAmount: '93.33', currency: 'USD', snapshot: null, allocated: '0.00' }),
+    ).toBeNull();
+  });
+
+  it('converts an allocation at the payment rate, rounded at the base currency scale', () => {
+    expect(baseFieldsFor('40.00', 'USD', JSON.stringify(rate))).toEqual({
+      baseAmount: '37.33',
+      baseCurrency: 'EUR',
+    });
+    // No snapshot on the paying record: the row gets nulls, not a zero and not today's rate.
+    expect(baseFieldsFor('40.00', 'USD', null)).toEqual({
+      baseAmount: null,
+      baseCurrency: null,
+    });
+    expect(() => baseFieldsFor('40.00', 'GBP', JSON.stringify(rate))).toThrow(/converts USD, not GBP/);
   });
 });

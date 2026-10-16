@@ -88,6 +88,14 @@ export const SERVER_OWNED_PAYMENT_FIELDS: readonly string[] = [
   "processedAt",
   "processedStatus",
   "status",
+  // 19-S.18 — the conversion is frozen by the payment command, from a rate the caller supplied at
+  // that moment (§4.13). Letting the record API write these would let a client reprice settled money
+  // after the fact, which is the one thing a conversion snapshot exists to prevent.
+  "exchangeRateSnapshot",
+  "baseCurrency",
+  "baseAmount",
+  "baseAllocatedAmount",
+  "baseUnallocatedAmount",
 ];
 
 /**
@@ -112,6 +120,10 @@ export const SERVER_OWNED_ADJUSTMENT_FIELDS: readonly string[] = [
   "reversedBy",
   "reversedAt",
   "reversalReason",
+  // 19-S.18 — the base-currency figures come from the credit's or invoice's own frozen rate, so they
+  // belong to the allocation command, not to the record API (§4.13).
+  "baseCurrency",
+  "baseAmount",
 ];
 
 /**

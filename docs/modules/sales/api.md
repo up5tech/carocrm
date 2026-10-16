@@ -283,6 +283,29 @@ sends. Every refusal above happens **before** the quote is issued, so a quote is
 with no email behind it; `issued: false` in the response means the document was already sent and only
 a new email was recorded.
 
+## The conversion snapshot on a command (19-S.18)
+
+`POST /api/v1/Sales/document`, `PATCH /api/v1/Sales/document/:kind/:id`, `POST /api/v1/Sales/payment`
+and `PATCH /api/v1/Sales/payment/:id` accept one more top-level field:
+
+```json
+{ "exchangeRate": { "documentCurrency": "USD", "baseCurrency": "EUR",
+                    "rate": "0.9", "rateDate": "2026-10-01", "source": "ecb daily" } }
+```
+
+It is a command field, not a header field, because the resulting values are server-owned. The service
+validates the rate (`money/currency.ts`), stores the validated object as the record's
+`exchangeRateSnapshot`, and derives the base figures from it — `baseCurrency`/`baseGrossTotal` on a
+document, `baseCurrency`/`baseAmount`/`baseAllocatedAmount`/`baseUnallocatedAmount` on a payment,
+`baseCurrency`/`baseAmount` on every allocation and write-off. Later recalculations reuse **the stored**
+snapshot, never a fresher rate, and an issued document refuses a new one like any other protected field
+(§4.13). Omitting the field records no conversion at all: the base columns stay absent rather than
+being filled with a guessed number.
+
+A rate whose `documentCurrency` is not the record's own currency is refused with `422`, as is a new rate
+on a payment that already has allocations. None of these fields may be written through the generic
+`/api/v1/:entity` path or through import — see the write guard in `sales-internal.ts`.
+
 ## Errors
 
 All failures use the kernel error envelope. The Sales module raises `ValidationError` (→ `422`),
@@ -372,3 +395,39 @@ was reached and more periods wait for the next one. `Subscription` and `Subscrip
 generic `/api/v1/...` records, but the write guard refuses a client-created period and any write to a
 period's `status`, `invoiceId`, `invoiceDate`, `attemptCount`, `failureCode`, `retryState`, window or
 idempotency key — a period is a computed schedule row, and only the billing service may claim it.
+
+## Reporting, dashboards and monitoring (19-S.18)
+
+```text
+GET  /api/v1/Sales/action/reportCatalog      the curated datasets: key, label, description, moneyBasis
+POST /api/v1/Sales/report/:key/run           run one dataset as the current user
+GET  /api/v1/Sales/action/dashletCatalog     the standard Sales dashlets, ready for the dashboard route
+GET  /api/v1/Sales/action/jobMonitoring      Sales job attempts, schedules and queue depth (administrator)
+POST /api/v1/Sales/action/accountingExport   one document as an accounting consumer posts it (19-S.19)
+POST /api/v1/Sales/action/customerSummary    one account's commercial position (19-S.19)
+GET  /api/v1/Sales/inventory/valuation       on-hand stock valued at cost, with the unpriced quantity stated
+```
+
+`report/:key/run` deliberately owns **no** query engine. It hands the saved definition to the generic
+Report subsystem (`ReportService.preview`), so entity existence, the `read` permission, field-level
+visibility, the Query Engine's filter grammar and the report cost limits are applied there — the same
+rules that govern a report an analyst wrote by hand. The response is `{ key, definition, result }`, and
+`result` is the kernel's `ReportResult` (`groups`, `matrix`, `rows` or `metrics`, plus `truncated`).
+
+Every dataset states how its money should be read, because a total across two currencies is not a total
+(§12.4):
+
+| `moneyBasis` | Meaning |
+|---|---|
+| `base-snapshot` | Summed from the persisted conversion (`baseGrossTotal`, `baseAmount`). Only records that were issued or recorded with a rate contribute, so this is never the same number as the gross. |
+| `document-currency` | Summed per document currency, and the dataset groups by `currency` so no two currencies land in one bucket. |
+| `count` | No money is added up. |
+
+`action/dashletCatalog` returns objects the shared dashboard engine already accepts; a user places one
+with `POST /api/v1/Dashboard/:dashboardId/dashlets` and runs it with the ordinary
+`…/dashlets/:dashletId/action/run`. The Sales module stores no dashlet rows and reads no dashboard.
+
+`action/jobMonitoring` reads the kernel's `jobs`, `job_logs` and `scheduled_jobs` for the jobs this
+module registers (`sales.expireQuotes`, `sales.markOverdueInvoices`,
+`sales.generateSubscriptionInvoices`) and answers `{ runs, schedules, queue }`. It never enqueues or
+cancels: `POST /api/v1/Job` and `/api/v1/ScheduledJob` remain the only ways to start or stop work.

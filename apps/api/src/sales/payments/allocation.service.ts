@@ -11,6 +11,7 @@ import { DatabaseService } from "../../database/database.service.js";
 import { EntityCrudService } from "../../entity/entity.service.js";
 import { runInTransaction } from "../../entity/tx-context.js";
 import type { SalesAuditContext } from "../document/types.js";
+import { baseFieldsFor } from "../money/currency.js";
 import { runAsSalesInternal } from "../sales-internal.js";
 import { SalesRecords, type SalesRow } from "../sales-records.js";
 import {
@@ -45,6 +46,9 @@ export interface AllocationView {
   readonly documentId: string;
   readonly amount: string;
   readonly currency: string;
+  /** 19-S.18 — this allocation at the payment's frozen rate; null when the payment has none. */
+  readonly baseCurrency: string | null;
+  readonly baseAmount: string | null;
   readonly allocatedAt: string | null;
 }
 
@@ -185,6 +189,13 @@ export class AllocationService {
           documentId: document.id,
           amount: input.amount,
           currency: allocationCurrency,
+          // 19-S.18 — settled money keeps the conversion its payment was recorded with, so an
+          // allocation ledger can be totalled in base currency without a newer rate (§4.13).
+          ...baseFieldsFor(
+            input.amount,
+            allocationCurrency,
+            payment.data["exchangeRateSnapshot"],
+          ),
           allocatedAt: new Date(),
           allocatedBy:
             this.scope.principal?.userName ?? this.scope.userId ?? null,
@@ -383,6 +394,8 @@ function toAllocationView(row: {
     documentId: text(row.data["documentId"]) ?? "",
     amount: text(row.data["amount"]) ?? "0",
     currency: text(row.data["currency"]) ?? "USD",
+    baseCurrency: text(row.data["baseCurrency"]) ?? null,
+    baseAmount: text(row.data["baseAmount"]) ?? null,
     allocatedAt: isoOrNull(row.data["allocatedAt"]),
   };
 }

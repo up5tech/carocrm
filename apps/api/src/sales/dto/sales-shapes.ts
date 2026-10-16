@@ -70,6 +70,22 @@ export const BulkPriceUpdateSchema = z
   })
   .strict();
 
+/**
+ * The conversion snapshot a caller may freeze on a money-bearing record (§4.13). The convention is
+ * stated once in `money/currency.ts`: `rate` is base-currency units per one document-currency unit.
+ */
+export const ExchangeRateInputSchema = z
+  .object({
+    documentCurrency: z.string().trim().min(3).max(3),
+    baseCurrency: z.string().trim().min(3).max(3),
+    rate: DecimalStringSchema,
+    rateDate: DaySchema,
+    source: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict();
+
+export type ExchangeRateInputDto = z.infer<typeof ExchangeRateInputSchema>;
+
 const PreviewLineSchema = z
   .object({
     productId: z.string().trim().min(1).max(64).optional(),
@@ -101,16 +117,7 @@ export const PreviewTotalsSchema = z
       .strict()
       .optional(),
     documentDiscountAmount: DecimalStringSchema.optional(),
-    exchangeRate: z
-      .object({
-        documentCurrency: z.string().trim().min(3).max(3),
-        baseCurrency: z.string().trim().min(3).max(3),
-        rate: DecimalStringSchema,
-        rateDate: DaySchema,
-        source: z.string().trim().min(1).max(120).optional(),
-      })
-      .strict()
-      .optional(),
+    exchangeRate: ExchangeRateInputSchema.optional(),
   })
   .strict();
 
@@ -159,6 +166,13 @@ export const CreateDocumentSchema = z
     kind: DocumentKindSchema,
     data: z.record(z.string(), z.unknown()).optional(),
     items: z.array(DocumentLineSchema).max(500).default([]),
+    /**
+     * The conversion to freeze on this document (§4.13). It is a command field rather than a `data`
+     * key because `data` carries only editable header fields and the snapshot is server-owned: the
+     * engine validates it, stores it as `exchangeRateSnapshot`, and every later recalculation reuses
+     * *this* rate rather than a newer one.
+     */
+    exchangeRate: ExchangeRateInputSchema.optional(),
     correlationId: z.string().trim().min(1).max(128).optional(),
   })
   .strict();
@@ -167,6 +181,8 @@ export const UpdateDocumentSchema = z
   .object({
     data: z.record(z.string(), z.unknown()).optional(),
     items: z.array(DocumentLineSchema).max(500).optional(),
+    /** Supplying a rate replaces the frozen one; omitting it keeps what the record already has. */
+    exchangeRate: ExchangeRateInputSchema.optional(),
     correlationId: z.string().trim().min(1).max(128).optional(),
   })
   .strict();
@@ -276,6 +292,11 @@ export const CreatePaymentSchema = z
     supplierId: IdSchema.nullish(),
     reference: z.string().trim().min(1).max(128).nullish(),
     memo: z.string().trim().max(2000).nullish(),
+    /**
+     * The conversion to freeze on this payment (§4.13, 19-S.18). Without it the payment is money in
+     * its own currency and no base-currency figure is claimed for it.
+     */
+    exchangeRate: ExchangeRateInputSchema.optional(),
   })
   .strict();
 
@@ -291,6 +312,8 @@ export const UpdatePaymentSchema = z
     supplierId: IdSchema.nullish(),
     reference: z.string().trim().min(1).max(128).nullish(),
     memo: z.string().trim().max(2000).nullish(),
+    /** Replaces the frozen snapshot — only while the payment still has no allocations. */
+    exchangeRate: ExchangeRateInputSchema.optional(),
   })
   .strict();
 
@@ -337,6 +360,22 @@ export const ProviderEventSchema = z
     eventType: z.string().trim().min(1).max(128),
     paymentRequestId: IdSchema.nullish(),
     payload: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+
+/**
+ * 19-S.19 — the two read contracts other modules call (§11.3, §11.4). Both are read-only and both are
+ * answered with `contractVersion`, so a consumer can tell whether it is speaking to a shape it was
+ * written against.
+ */
+export const SalesCustomerSummarySchema = z
+  .object({ accountId: IdSchema })
+  .strict();
+
+export const SalesAccountingExportSchema = z
+  .object({
+    kind: DocumentKindSchema,
+    id: IdSchema,
   })
   .strict();
 

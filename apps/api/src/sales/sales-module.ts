@@ -253,6 +253,12 @@ export const SALES_MODULE = {
    * `pdfkit` adapter exist (`@carocrm/document`), but wiring a rendered PDF into an outbound message
    * needs the attachment storage path, which is not built. See `docs/modules/sales/README.md` for the
    * per-phase detail.
+   *
+   * `19-S.18` is claimed out of order, deliberately and with its gaps stated: the reporting, dashboard,
+   * operational and job-monitoring surface is delivered (and the §4.13 conversion snapshot that
+   * reporting depends on is now actually persisted), while `19-S.17`'s polish items — the attachment on
+   * a sent document and dedicated Sales screens over the generic metadata UI — are not. Claiming 18
+   * does not silently finish 17.
    */
   implementedPhases: [
     "19-S.0",
@@ -272,6 +278,7 @@ export const SALES_MODULE = {
     "19-S.14",
     "19-S.15",
     "19-S.16",
+    "19-S.18",
   ],
 } as const;
 

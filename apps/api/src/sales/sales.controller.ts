@@ -27,6 +27,8 @@ import {
   type RequestScope,
 } from "../common/request-scope.js";
 import { type AppConfig, CONFIG_TOKEN } from "../config.js";
+import { ReportService } from "../reports/report.service.js";
+import { SalesDashletCatalogService } from "./dashboard/dashlet.js";
 import { requireDocumentKind } from "./document/descriptors.js";
 import { SalesDocumentService } from "./document/document.service.js";
 import { SalesNumberingService } from "./document/numbering.service.js";
@@ -62,6 +64,8 @@ import {
   ReserveStockSchema,
   ResolvePriceSchema,
   ResolveSupplierPriceSchema,
+  SalesAccountingExportSchema,
+  SalesCustomerSummarySchema,
   SalesSettingsPatchSchema,
   SendQuoteSchema,
   TodaySchema,
@@ -73,11 +77,13 @@ import {
   WriteOffRejectSchema,
   WriteOffReverseSchema,
 } from "./dto/sales-shapes.js";
+import { SalesIntegrationService } from "./integrations/sales-integration.service.js";
 import {
   InventoryService,
   type MovementContext,
 } from "./inventory/inventory.service.js";
 import { InventoryOperationsService } from "./inventory/inventory-ops.service.js";
+import { SalesJobMonitorService } from "./job-monitoring/monitor.js";
 import { AllocationService } from "./payments/allocation.service.js";
 import { BillCreditService } from "./payments/bill-credit.service.js";
 import { CreditNoteService } from "./payments/credit-note.service.js";
@@ -86,6 +92,7 @@ import { WriteOffService } from "./payments/write-off.service.js";
 import { BulkPriceService } from "./pricing/bulk-price.service.js";
 import { PriceResolutionService } from "./pricing/price-resolution.service.js";
 import { SupplierPriceService } from "./pricing/supplier-price.js";
+import { SalesReportCatalogService } from "./report/sales-report-catalog.service.js";
 import { runAsSalesInternal } from "./sales-internal.js";
 import { SalesModuleHealthService } from "./sales-module-health.service.js";
 import { SalesSettingsService } from "./sales-settings.service.js";
@@ -138,6 +145,15 @@ export class SalesController {
     @Inject(InventoryService) private readonly inventory: InventoryService,
     @Inject(InventoryOperationsService)
     private readonly inventoryOps: InventoryOperationsService,
+    @Inject(SalesReportCatalogService)
+    private readonly reportCatalog: SalesReportCatalogService,
+    @Inject(SalesDashletCatalogService)
+    private readonly dashletCatalog: SalesDashletCatalogService,
+    @Inject(SalesJobMonitorService)
+    private readonly jobMonitor: SalesJobMonitorService,
+    @Inject(ReportService) private readonly reports: ReportService,
+    @Inject(SalesIntegrationService)
+    private readonly integrations: SalesIntegrationService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
@@ -226,6 +242,9 @@ export class SalesController {
         kind: input.kind,
         data: input.data,
         items: input.items,
+        ...(input.exchangeRate === undefined
+          ? {}
+          : { exchangeRate: input.exchangeRate }),
         audit: this.audit(input.correlationId),
       }),
     );
@@ -250,6 +269,9 @@ export class SalesController {
       this.documents.update(requireDocumentKind(kind), id, {
         data: input.data,
         items: input.items,
+        ...(input.exchangeRate === undefined
+          ? {}
+          : { exchangeRate: input.exchangeRate }),
         audit: this.audit(input.correlationId),
       }),
     );
@@ -781,6 +803,18 @@ export class SalesController {
     };
   }
 
+  /** On-hand stock valued at cost, with the unpriced quantity stated separately (19-S.18, §12.2). */
+  @Get("inventory/valuation")
+  async inventoryValuation(
+    @Query("warehouseId") warehouseId?: string,
+    @Query("productId") productId?: string,
+  ) {
+    return await this.inventory.valuation({
+      warehouseId: warehouseId ?? null,
+      productId: productId ?? null,
+    });
+  }
+
   /** Movement history, newest first. Never unbounded (§16.1). */
   @Get("inventory/history")
   async inventoryHistory(
@@ -1057,6 +1091,64 @@ export class SalesController {
     this.assertWorkerSecret(secret);
     const input = parse(TodaySchema, body);
     return await this.subscriptions.processDue(input.today);
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // 19-S.18 — reporting, dashboard and job monitoring
+  // -------------------------------------------------------------------------------------------
+
+  /**
+   * The curated Sales datasets (§12). Definitions only: running one is the generic Report
+   * subsystem's job, which is where the entity read permission, field-level visibility, the
+   * record-level ACL predicate and the cost limits are enforced.
+   */
+  @Get("action/reportCatalog")
+  reportCatalogView() {
+    return { list: this.reportCatalog.catalog() };
+  }
+
+  /** Run one curated dataset as the current user, with their own access applied to it. */
+  @HttpCode(200)
+  @Post("report/:key/run")
+  async runReport(@Param("key") key: string) {
+    const definition = this.reportCatalog.definition(key);
+    const { result } = await this.reports.preview({ definition });
+    return { key, definition, result };
+  }
+
+  /**
+   * The read contract for a module that shows a customer's commercial position (19-S.19, §11.4).
+   * Read-only, ACL-bound, and answered in the currency each record was recorded in.
+   */
+  @HttpCode(200)
+  @Post("action/customerSummary")
+  async customerSummary(@Body() body: unknown) {
+    const input = parse(SalesCustomerSummarySchema, body);
+    return await this.integrations.customerSummary(input.accountId);
+  }
+
+  /**
+   * The read contract for an accounting consumer (19-S.19, §11.3): the document as it was issued, with
+   * its tax breakdown, its conversion snapshot and the settlement rows standing against it.
+   */
+  @HttpCode(200)
+  @Post("action/accountingExport")
+  async accountingExport(@Body() body: unknown) {
+    const input = parse(SalesAccountingExportSchema, body);
+    return await this.integrations.accountingExport(input.kind, input.id);
+  }
+
+  /** Standard Sales dashlets, in the shape the shared dashboard route accepts. */
+  @Get("action/dashletCatalog")
+  dashletCatalogView() {
+    return { list: this.dashletCatalog.catalog() };
+  }
+
+  /** Recent attempts, schedules and queue depth of the Sales background jobs (§10.1). Admin only. */
+  @Get("action/jobMonitoring")
+  async jobMonitoring() {
+    this.requireAdmin("Sales job monitoring");
+    return this.jobMonitor.overview();
   }
 
   private movementContext(correlationId: string | undefined): MovementContext {

@@ -446,6 +446,102 @@ export function validateExchangeRateSnapshot(input: {
   };
 }
 
+/**
+ * Read the snapshot a server previously froze onto a record: the JSON text or object stored in
+ * `exchangeRateSnapshot`, re-validated so a hand-edited or half-written value is refused rather than
+ * used as a rate. `null` means the record was never converted, which is a different answer from
+ * "the conversion is 1".
+ */
+export function readFrozenExchangeRate(
+  value: unknown,
+): ExchangeRateSnapshot | null {
+  if (value === undefined || value === null || value === "") return null;
+  let raw: unknown = value;
+  if (typeof value === "string") {
+    try {
+      raw = JSON.parse(value) as unknown;
+    } catch {
+      throw new ValidationError(
+        "The stored exchange-rate snapshot is not valid JSON.",
+      );
+    }
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new ValidationError(
+      "The exchange-rate snapshot must be an object or a JSON string.",
+    );
+  }
+  const candidate = raw as Record<string, unknown>;
+  const documentCurrency = candidate["documentCurrency"];
+  const baseCurrency = candidate["baseCurrency"];
+  const rate = candidate["rate"];
+  const rateDate = candidate["rateDate"];
+  const source = candidate["source"];
+  if (
+    typeof documentCurrency !== "string" ||
+    typeof baseCurrency !== "string" ||
+    typeof rate !== "string" ||
+    typeof rateDate !== "string" ||
+    (source !== undefined && typeof source !== "string")
+  ) {
+    throw new ValidationError("The stored exchange-rate snapshot is incomplete.", {
+      keys: Object.keys(candidate).join(","),
+    });
+  }
+  return validateExchangeRateSnapshot({
+    documentCurrency,
+    baseCurrency,
+    rate,
+    rateDate,
+    ...(source === undefined ? {} : { source }),
+  });
+}
+
+/**
+ * Validate a caller-supplied rate and freeze it into the exact text stored on a record's
+ * `exchangeRateSnapshot`. Storing the *validated* object — not the caller's — is what lets a later
+ * recalculation reuse this rate instead of a newer one (§4.13).
+ */
+export function freezeExchangeRateSnapshot(input: ExchangeRateInput): string {
+  return JSON.stringify(validateExchangeRateSnapshot(input));
+}
+
+/** The base-currency pair one amount produces under a frozen snapshot, or nothing at all when the
+ *  record carries no snapshot: an unconverted amount is never silently reported as base money. */
+export function baseAmountOf(
+  amount: string,
+  currency: string,
+  snapshot: ExchangeRateSnapshot | null,
+  mode: RoundingMode = "half-up",
+): { readonly baseCurrency: string; readonly baseAmount: string } | null {
+  if (snapshot === null) return null;
+  const converted = toBaseCurrency(parseMoney(amount, currency), snapshot, mode);
+  return { baseCurrency: converted.currency, baseAmount: converted.amount };
+}
+
+/**
+ * The `baseCurrency`/`baseAmount` pair one amount produces against the snapshot *stored on a record*,
+ * ready to spread into a write. A row without a frozen rate gets nulls — the absence is the answer,
+ * and reporting labels it instead of converting at some rate nobody recorded.
+ */
+export function baseFieldsFor(
+  amount: string,
+  currency: string,
+  storedSnapshot: unknown,
+  mode: RoundingMode = "half-up",
+): Record<string, string | null> {
+  const base = baseAmountOf(
+    amount,
+    currency,
+    readFrozenExchangeRate(storedSnapshot),
+    mode,
+  );
+  return {
+    baseCurrency: base?.baseCurrency ?? null,
+    baseAmount: base?.baseAmount ?? null,
+  };
+}
+
 /** `amount × rate` into the base currency, rounded once at the base currency's scale. */
 export function toBaseCurrency(
   amount: Money,

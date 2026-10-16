@@ -2001,6 +2001,9 @@ function salesBillCreditAllocationEntity(): MetadataSeedEntry {
         reversedAt: { type: 'datetime', inDetail: true },
         reversedBy: { type: 'varchar', maxLength: 64, inDetail: true },
         reversalReason: { type: 'varchar', maxLength: 255, inDetail: true },
+        /** 19-S.18 — this credit applied at the credit note's own frozen rate (§4.13). */
+        baseCurrency: { type: 'varchar', maxLength: 3, inDetail: true },
+        baseAmount: decimalField({ inDetail: true }),
       }),
       relations: {},
       indexes: [
@@ -2567,6 +2570,17 @@ function salesPaymentEntity(): MetadataSeedEntry {
         allocatedAmount: decimalField({ inList: true, inDetail: true }),
         unallocatedAmount: decimalField({ inList: true, inDetail: true }),
         allocationStatus: { type: 'enum', values: ['unallocated', 'partiallyAllocated', 'allocated'], defaultValue: 'unallocated', inList: true, inDetail: true },
+        /**
+         * 19-S.18 — the conversion frozen on this money (§4.13). `exchangeRateSnapshot` is the
+         * validated JSON the payment command stored, `baseAmount` is `amount` converted at exactly
+         * that rate; a payment recorded without a rate has neither, and reporting says so instead of
+         * inventing a number. All three are server-written (see `sales-internal.ts`).
+         */
+        exchangeRateSnapshot: { type: 'text', inDetail: true },
+        baseCurrency: { type: 'varchar', maxLength: 3, inDetail: true },
+        baseAmount: decimalField({ inDetail: true }),
+        baseAllocatedAmount: decimalField({ inDetail: true }),
+        baseUnallocatedAmount: decimalField({ inDetail: true }),
       }),
       relations: {
         // What this payment settles, and what it transfers to/from.
@@ -2613,6 +2627,9 @@ function salesPaymentAllocationEntity(): MetadataSeedEntry {
         allocatedAt: { type: 'datetime', inList: true, inDetail: true },
         allocatedBy: { type: 'varchar', maxLength: 64, inDetail: true },
         correlationId: { type: 'varchar', maxLength: 128, inDetail: true },
+        /** 19-S.18 — this allocation at the payment's own frozen rate (§4.13), null without one. */
+        baseCurrency: { type: 'varchar', maxLength: 3, inDetail: true },
+        baseAmount: decimalField({ inDetail: true }),
       }),
       relations: {},
       indexes: [
@@ -2757,6 +2774,9 @@ function salesCreditNoteAllocationEntity(): MetadataSeedEntry {
         reversedAt: { type: 'datetime', inDetail: true },
         reversedBy: { type: 'varchar', maxLength: 64, inDetail: true },
         reversalReason: { type: 'varchar', maxLength: 255, inDetail: true },
+        /** 19-S.18 — this credit applied at the credit note's own frozen rate (§4.13), null without one. */
+        baseCurrency: { type: 'varchar', maxLength: 3, inDetail: true },
+        baseAmount: decimalField({ inDetail: true }),
       }),
       relations: {},
       indexes: [
@@ -2796,6 +2816,9 @@ function salesWriteOffEntity(): MetadataSeedEntry {
         reversedBy: { type: 'varchar', maxLength: 64, inDetail: true },
         reversedAt: { type: 'datetime', inDetail: true },
         reversalReason: { type: 'varchar', maxLength: 255, inDetail: true },
+        /** 19-S.18 — this forgiveness at the invoice's own frozen rate (§4.13), null without one. */
+        baseCurrency: { type: 'varchar', maxLength: 3, inDetail: true },
+        baseAmount: decimalField({ inDetail: true }),
       }),
       relations: {},
       indexes: [

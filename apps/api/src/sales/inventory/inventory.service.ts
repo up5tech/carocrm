@@ -13,6 +13,7 @@ import { EntityCrudService } from "../../entity/entity.service.js";
 import { runInTransaction } from "../../entity/tx-context.js";
 import { nowIso, storedDay, utcDay } from "../clock.js";
 import type { StockMovementPlan } from "../document/stock-movement.js";
+import { currencyScale } from "../money/currency.js";
 import {
   abs,
   add,
@@ -22,6 +23,7 @@ import {
   isNegative,
   isZero,
   parseDecimal,
+  rescale,
   subtract,
   sum,
   zero,
@@ -1390,6 +1392,72 @@ export class InventoryService {
       ...row,
       incoming: incoming.get(levelKey(row.productId, row.warehouseId)) ?? "0",
     }));
+  }
+
+  /**
+   * 19-S.18 — on-hand stock valued at each product's cost price (§12.2).
+   *
+   * This is a valuation *of the projection*, not a second ledger: it reads the same
+   * `sales_inventory_stock` rows `stockList` serves. A product whose cost price is missing or
+   * unparsable contributes its quantity to `unpricedOnHand` and nothing to `value`, so an incomplete
+   * catalog surfaces as a stated gap instead of silently cheap stock. Products carry no currency of
+   * their own, so the figure is expressed in the installation's default Sales currency and labelled
+   * with it. Cost visibility is enforced: a reader who cannot see `Product.costPrice` gets a refusal,
+   * not a derived total (§12.4).
+   */
+  async valuation(filters: {
+    readonly warehouseId?: string | null | undefined;
+    readonly productId?: string | null | undefined;
+  }): Promise<{
+    readonly currency: string;
+    readonly value: string;
+    readonly onHand: string;
+    readonly unpricedOnHand: string;
+    readonly levels: number;
+  }> {
+    await this.acl.assertAccess("Product", "read");
+    const visible = await this.acl.visibleFields("Product");
+    if (!visible.includes("costPrice")) {
+      throw new ValidationError(
+        "Stock valuation needs read access to the product cost price.",
+        { field: "costPrice" },
+      );
+    }
+    const settings = await this.requireEnabled();
+    const warehouse = text(filters.warehouseId ?? undefined);
+    const product = text(filters.productId ?? undefined);
+    const rows = await sql<{
+      levels: number;
+      on_hand: string;
+      unpriced: string;
+      value: string;
+    }>`
+      select count(*)::int as levels,
+             coalesce(sum(s.on_hand), 0)::text as on_hand,
+             coalesce(sum(case when cost.value is null
+                               then s.on_hand else 0 end), 0)::text as unpriced,
+             coalesce(sum(s.on_hand * cost.value), 0)::text as value
+      from sales_inventory_stock s
+      join entity_records p
+        on p.id = s.product_id
+       and p.entity_type = 'Product'
+       and p.deleted_at is null
+      left join lateral (
+        select (p.attrs ->> 'costPrice')::numeric as value
+        where p.attrs ->> 'costPrice' ~ '^-?[0-9]+(\\.[0-9]+)?$'
+      ) cost on true
+      where ${warehouse !== undefined ? sql`s.warehouse_id = ${warehouse}` : sql`true`}
+        and ${product !== undefined ? sql`s.product_id = ${product}` : sql`true`}
+    `.execute(this.db);
+    const row = rows.rows[0];
+    const scale = currencyScale(settings.currency.defaultCurrency);
+    return {
+      currency: settings.currency.defaultCurrency,
+      value: format(rescale(parseDecimal(row?.value ?? "0"), scale, "half-up"), scale),
+      onHand: format(parseDecimal(row?.on_hand ?? "0")),
+      unpricedOnHand: format(parseDecimal(row?.unpriced ?? "0")),
+      levels: row?.levels ?? 0,
+    };
   }
 
   /** Movement history for a product and/or warehouse, newest first. */

@@ -1,5 +1,7 @@
 import { ValidationError } from "@carocrm/core/errors/index.js";
 
+import type { ExchangeRateSnapshot } from "../money/currency.js";
+import { baseAmountOf, currencyScale } from "../money/currency.js";
 import type { Decimal } from "../money/decimal.js";
 import {
   add,
@@ -100,6 +102,44 @@ function allocationStatus(
 ): PaymentAllocationStatus {
   if (compare(allocated, zero(allocated.scale)) === 0) return "unallocated";
   return compare(allocated, amount) >= 0 ? "allocated" : "partiallyAllocated";
+}
+
+/** The base-currency side of a payment's derived balance (19-S.18). */
+export interface BasePaymentBalance {
+  readonly allocated: string;
+  readonly unallocated: string;
+}
+
+/**
+ * A payment's derived balances at the conversion **frozen on the payment itself** (§4.13, 19-S.18).
+ *
+ * Returns null when the payment has no frozen rate: money recorded without a conversion is not
+ * silently re-declared as base money at whatever the rate is today. The unallocated side is derived
+ * as `baseAmount − baseAllocated`, so the two always add back to the stored base total instead of
+ * drifting by a rounding unit each time a balance is recomputed.
+ */
+export function basePaymentBalance(input: {
+  readonly baseAmount: string | null;
+  readonly currency: string;
+  readonly snapshot: ExchangeRateSnapshot | null;
+  readonly allocated: string;
+}): BasePaymentBalance | null {
+  if (input.baseAmount === null || input.snapshot === null) return null;
+  const allocated = baseAmountOf(
+    input.allocated,
+    input.currency,
+    input.snapshot,
+  );
+  if (allocated === null) return null;
+  const scale = currencyScale(allocated.baseCurrency);
+  const unallocated = subtract(
+    parseDecimal(input.baseAmount),
+    parseDecimal(allocated.baseAmount),
+  );
+  return {
+    allocated: allocated.baseAmount,
+    unallocated: format(unallocated, scale),
+  };
 }
 
 /**
