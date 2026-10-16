@@ -83,6 +83,10 @@ export const SALES_ENTITY_TYPES = [
   "TransferOrder",
   "TransferOrderItem",
   "InventoryReservation",
+  // 19-S.15: stock identity — the lots a removal policy picks from and the serialised units whose
+  // state a movement walks.
+  "InventoryBatch",
+  "InventorySerial",
 ] as const;
 
 export type SalesEntityType = (typeof SALES_ENTITY_TYPES)[number];

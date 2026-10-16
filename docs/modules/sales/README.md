@@ -2,7 +2,7 @@
 
 Implemented in `apps/api/src/sales` (backend) with metadata in `database/seed-metadata.ts`, seeds in
 `database/seed.ts` and migrations `database/migrations/021_phase19_sales.sql` through
-`028_phase19_sales_inventory.sql`. Functional reference: EspoCRM Sales Pack documentation
+`029_phase19_sales_tracking.sql`. Functional reference: EspoCRM Sales Pack documentation
 (<https://docs.espocrm.com/extensions/sales-pack/overview/>), reproduced as clean-room TypeScript
 behaviour.
 
@@ -12,11 +12,13 @@ quotes, sales orders, invoices and payments phases (19-S.7 – 19-S.10), credit 
 receipt orders, supplier bills and bill credits (19-S.13) — and the inventory foundations (19-S.14):
 warehouses, the append-only stock ledger, reviewed adjustments, two-sided transfers and
 concurrency-safe reservations, which is what now applies the movement plans a confirmed document
-freezes.** The authoritative scope and the phase-by-phase roadmap live in
+freezes — and the stock identity those plans can carry (19-S.15): configurable product variants,
+lots and serialised units with expiry-validated dates, and the FIFO/FEFO/LIFO removal policy that
+decides which units an outbound movement consumes.** The authoritative scope and the
+phase-by-phase roadmap live in
 [`PLAN_Phase_19_Sales.md`](../../PLAN_Phase_19_Sales.md); the list of phases actually claimed is
 `SALES_MODULE.implementedPhases` in `apps/api/src/sales/sales-module.ts`, and
-`/api/v1/Sales/action/health` reports it. Batch/lot and serial tracking (19-S.15) and subscriptions
-(19-S.16) are **not** claimed.
+`/api/v1/Sales/action/health` reports it. Subscriptions (19-S.16) are **not** claimed.
 
 ## What it gives a user
 
@@ -57,7 +59,8 @@ apps/api/src/sales/
                                  number series, the shared block model and render/send services
   payments/                      payments, allocation, balances, credit notes, bill credits, write-offs
   inventory/                     the movement ledger and its projection, availability, reservations,
-                                 reviewed adjustments, two-sided transfers, reconciliation (19-S.14)
+                                 reviewed adjustments, two-sided transfers, reconciliation (19-S.14),
+                                 and the lot/serial removal policy (19-S.15, `picking.ts`)
   dto/sales-shapes.ts            Zod request shapes
 ```
 
@@ -105,7 +108,7 @@ document kind**, so a document type is data rather than a copy of the engine:
 | `line-items.ts` | typed line validation, item-record payloads, ordered items, remaining-quantity guards |
 | `document.service.ts` | create / update / recalculate / transition / issue / unlock / convert — every number server-calculated, every write through the Entity Engine |
 | `fulfilment.ts`, `receipt.ts` | the *derived* state of a sales order (from confirmed deliveries) and of a purchase order (from confirmed receipts) |
-| `stock-movement.ts` | the internal contract a confirmation freezes into its snapshot, and the return-restock gate — `inventory/inventory.service.ts` consumes it (19-S.14) |
+| `stock-movement.ts` | the internal contract a confirmation freezes into its snapshot — including the lot/serial identity each line carries (19-S.15) — and the return-restock gate; `inventory/inventory.service.ts` consumes it (19-S.14) |
 | `terms.ts` | due dates computed from the referenced payment terms |
 | `lock.ts`, `snapshot.ts` | protected fields, privileged unlock with a reason, and the frozen commercial snapshot an issued document is rendered from |
 | `render-blocks.ts`, `render.service.ts` | the block model every kind shares, and the print/PDF hook that draws any document from it |
@@ -317,9 +320,8 @@ document is refused with a clear 403 rather than quietly creating records nobody
 | Supplier prices are resolved by `POST /api/v1/Sales/action/resolveSupplierPrice`, which reads `SupplierProductPrice` only; the sales resolver never reads it, so a buying price cannot leak into a quote | `pricing/supplier-price.ts` |
 | Capabilities are separate grants, not one flag: purchase-order management is `edit` on `PurchaseOrder`, receipt confirmation on `ReceiptOrder`, bill issue on `Bill`, payment on `Payment`, all under the `purchases` feature | [permissions.md](permissions.md) |
 
-**Deferred, honestly:** bill overdue marking (the daily job covers invoices only), and batch/serial
-*tracking* entities until 19-S.15 — a receipt line stores the
-`batchNumber`/`serialNumber` the operator recorded, but no stock identity table validates it yet.
+**Deferred, honestly:** bill overdue marking (the daily job covers invoices only). Batch/serial
+*tracking* arrived with 19-S.15 — see [Inventory identity and removal](#inventory-identity-and-removal-19-s15).
 
 ## Inventory (19-S.14)
 
@@ -357,12 +359,44 @@ POST   /api/v1/Sales/inventory/transfer                               create a d
 GET    /api/v1/Sales/inventory/transfer/:id                           a transfer with its lines
 GET    /api/v1/Sales/inventory/transfers/inTransit?warehouseId=       dispatched but not received
 POST   /api/v1/Sales/inventory/transfer/:id/transition                confirm / receive / cancel
+GET    /api/v1/Sales/inventory/batches?productId=&warehouseId=        lots that hold stock, with dates
+GET    /api/v1/Sales/inventory/serials?productId=&warehouseId=&status= unit records by product/place/state
+GET    /api/v1/Sales/inventory/picking-suggestions?productId=&quantity= what the removal policy would pick
 ```
 
 Warehouses themselves are ordinary metadata records (`/api/v1/Warehouse`); `Warehouse`,
 `InventoryTransaction`, `InventoryAdjustment`, `TransferOrder`/`TransferOrderItem` and
-`InventoryReservation` are the six entities this phase registers, and the write guard refuses every
-client write to the ledger and every client-set lifecycle field on the others.
+`InventoryReservation` are the six entities 19-S.14 registers (19-S.15 adds `InventoryBatch` and
+`InventorySerial`), and the write guard refuses every client write to the ledger and every
+client-set lifecycle field on the others.
+
+## Inventory identity and removal (19-S.15)
+
+Off unless `features.inventory` is on, and inert per product until `Product.stockTracking` says
+otherwise — a product with `stockTracking: none` moves exactly as it did before this phase (the
+plan's "keep the non-batch/non-serial product path fully functional").
+
+| Rule | Where it lives |
+|---|---|
+| A lot (`InventoryBatch`) is identified by `(productId, batchNumber)`, case-insensitively and immutably — a unique index is the backstop, the guard turns a race into a clear 409. Its dates are the only client-editable facts. | migration 029, `catalog/sales-guard.service.ts`, `sales-write-guard.service.ts` |
+| Lot quantities live in `sales_inventory_batch_stock` (product, warehouse, lot), maintained only inside the transaction that already holds the pair's row lock — a second lock discipline, so attribution cannot drift through races. | `inventory.service.ts::applyBatchDelta` |
+| A serial (`InventorySerial`) is one unit, unique per product for the whole installation (single organization). The record API may never create one or change its state; only a movement may. | migration 029, `sales-write-guard.service.ts` |
+| **Inbound movements must name their identity**: a receipt/return/positive adjustment of a lot-tracked product must carry `batchNumber`, a serialised one must name every unit (`serialNumbers`, count = quantity, whole units only). There is nothing honest to pick from when goods arrive. | `inventory.service.ts::resolveIdentity` |
+| **Outbound movements pick deterministically** when the line named nothing: `inventory.removalPolicy` is `fifo` (oldest receipt), `fefo` (earliest expiry) or `lifo` (newest receipt); `inventory.excludeExpiredStock` (default on) keeps expired lots out; every ordering ends in the lot/serial number, so the same stock picture always suggests the same units. | `inventory/picking.ts` |
+| A shortage is a **refusal** naming the policy, the eligible stock and any unattributed remainder — only a reviewed `InventoryAdjustment` may leave an unattributed remainder, and the reconciliation then reports it. | `inventory.service.ts::batchShortageError` |
+| A transfer's receive side re-applies **exactly** the lot split and serials its dispatch recorded, so both halves name the same units. | `inventory-ops.service.ts::dispatchIdentity` |
+| `POST /inventory/reconcile` also compares physical on-hand with what lots/serials account for, per tracked pair — reported, never auto-corrected. | `inventory.service.ts::identityRows` |
+| A line editor asks `GET /inventory/picking-suggestions` for what the policy *would* pick; it never moves or reserves stock, and a shortage comes back as data. | `inventory.service.ts::pickingSuggestions` |
+
+Lot dates are validated wherever they are written — a lot cannot be made after it expires, and a
+later receive cannot silently re-date a lot (`validateLotDates`, `sales-guard.service.ts`).
+
+Product variants are the catalog half (§4.2): `features.productVariants` gates validation of
+`Product.variantFamily` + `Product.variantAttributes` against the attributes configured in Sales
+settings (`variants.attributes`, codes + labels, no hard-coded industry fields), refuse unknown
+codes, require the configured set (`variants.requireAllAttributes`) and refuse two products of one
+family with the same attribute combination. SKU uniqueness stays the installation-wide rule
+migration 021 already enforces — a variant's SKU is a product SKU.
 
 ## Verification
 
@@ -372,14 +406,15 @@ pnpm typecheck && pnpm lint
 pnpm vitest run apps/api/test/sales-terms.test.ts apps/api/test/sales-fulfilment.test.ts \
   apps/api/test/sales-allocation-math.test.ts apps/api/test/sales-quote-document.test.ts \
   apps/api/test/sales-stock-movement.test.ts apps/api/test/sales-supplier-price.test.ts \
-  apps/api/test/sales-inventory-ledger.test.ts
+  apps/api/test/sales-inventory-ledger.test.ts apps/api/test/sales-picking.test.ts
 # API, against the configured primary database (one invocation per suite — see the note below).
 pnpm vitest run apps/api/test/sales-module.test.ts apps/api/test/sales-catalog.test.ts \
   apps/api/test/sales-pricing.test.ts apps/api/test/sales-tax.test.ts \
   apps/api/test/sales-money.test.ts apps/api/test/sales-documents.test.ts \
   apps/api/test/sales-payments.test.ts apps/api/test/sales-quotes.test.ts \
   apps/api/test/sales-credits.test.ts apps/api/test/sales-delivery-returns.test.ts \
-  apps/api/test/sales-purchasing.test.ts apps/api/test/sales-inventory.test.ts
+  apps/api/test/sales-purchasing.test.ts apps/api/test/sales-inventory.test.ts \
+  apps/api/test/sales-tracking.test.ts
 # The worker has its own vitest config, so its suites are not collected by the root one.
 cd apps/worker && pnpm vitest run src/handlers/sales-handlers.test.ts
 ```
@@ -389,9 +424,10 @@ database, so parallel suites in one process fight over it.
 
 `sales-quotes.test.ts` boots the app with `MAIL_TRANSPORT=memory` and `SMTP_FROM` set, and stubs the
 BullMQ producer, so it never sends mail and never needs a Redis server; both env vars are restored in
-`afterAll`. `sales-delivery-returns.test.ts` and `sales-purchasing.test.ts` flip the `inventory` and
-`purchases` feature flags and put them back in `afterAll` — the settings row is shared, so leaving a
-flag set would change what the next suite sees.
+`afterAll`. `sales-delivery-returns.test.ts`, `sales-purchasing.test.ts` and
+`sales-tracking.test.ts` flip the `inventory`, `purchases` and `productVariants` feature flags and put
+them back in `afterAll` — the settings row is shared, so leaving a flag set would change what the next
+suite sees.
 
 The API suites target the configured primary database and create only `AGENT_TEST_<runId>` records that
 they delete again by exact id. See
@@ -422,7 +458,13 @@ shipped delivery (reserve → consume → release on cancel); `sales-purchasing`
 receipt state across partial receipts, over-receipt refusal, receipt batch facts, purchase→receipt→
 bill traceability, terms-computed bill due dates, supplier payment allocation with its direction and
 counterparty refusals, bill-credit allocate/reverse/remainder refusals with the row kept, the supplier
-identity freeze, buying-vs-selling price separation and the bill render. The worker suite covers the
+identity freeze, buying-vs-selling price separation and the bill render; `sales-picking` (19-S.15,
+pure) pins the FIFO/FEFO/LIFO ordering, the expired-lot gate, the deterministic tie-break and every
+lot/serial refusal with no database; `sales-tracking` (19-S.15) covers the variant rules and their
+refusal paths, lot dates and case-insensitive lot uniqueness, the inbound/outbound identity rules,
+expiry exclusion with an explicit operator override, serial uniqueness per product and its state walk,
+a two-sided transfer re-applying the dispatch's lot split and serials, a restocked return naming its
+lot, and the identity half of the reconciliation. The worker suite covers the
 expiry job. Still **not** covered: the `markOverdueInvoices` job, and anything a UI would do —
 dedicated Sales screens are 19-S.17 work.
 

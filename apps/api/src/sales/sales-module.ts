@@ -243,7 +243,9 @@ export const SALES_MODULE = {
    * `19-S.12`/`19-S.13` are delivery/return orders and the purchasing half; `19-S.14` is the inventory
    * foundations — warehouses, the append-only stock ledger, reviewed adjustments, two-sided transfers
    * and concurrency-safe reservations, which is what now applies the movement plans those phases froze
-   * into a document's snapshot.
+   * into a document's snapshot. `19-S.15` adds stock identity and removal: configurable variant
+   * attributes, lots and serialised units, expiry-validated dates, and the FIFO/FEFO/LIFO policy that
+   * decides which units an outbound movement consumes.
    *
    * A PDF *attachment* on a sent document is still not produced: the block model and the optional
    * `pdfkit` adapter exist (`@carocrm/document`), but wiring a rendered PDF into an outbound message
@@ -266,6 +268,7 @@ export const SALES_MODULE = {
     "19-S.12",
     "19-S.13",
     "19-S.14",
+    "19-S.15",
   ],
 } as const;
 

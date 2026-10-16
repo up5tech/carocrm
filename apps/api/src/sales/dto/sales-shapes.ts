@@ -116,6 +116,16 @@ export const PreviewTotalsSchema = z
 
 export const SalesSettingsPatchSchema = z.record(z.string(), z.unknown());
 
+/**
+ * The serials a line names (19-S.15): the array the API sends, or the JSON text a stored line holds.
+ * Membership and count rules belong to the domain (`picking.ts`), which refuses them with the reason
+ * the operator needs; this only bounds the shape.
+ */
+export const SerialNumbersInputSchema = z.union([
+  z.array(z.string().trim().min(1).max(128)).max(1_000),
+  z.string().max(64_000),
+]);
+
 // ---------------------------------------------------------------------------------------------
 // Phase 19-S.6 – 19-S.13 — commercial document commands
 // ---------------------------------------------------------------------------------------------
@@ -132,8 +142,12 @@ export const DocumentLineSchema = PreviewLineSchema.extend({
   disposition: z.enum(["restock", "scrap", "quarantine"]).optional(),
   /** Which supplier price a purchasing line was agreed at (19-S.13). Never a sales price. */
   supplierProductPriceId: z.string().trim().min(1).max(64).optional(),
+  /** 19-S.15 stock identity: the lot, the units, and the lot dates a receipt records. */
   batchNumber: z.string().trim().min(1).max(64).optional(),
   serialNumber: z.string().trim().min(1).max(128).optional(),
+  serialNumbers: SerialNumbersInputSchema.optional(),
+  manufacturingDate: DaySchema.optional(),
+  expiryDate: DaySchema.optional(),
 });
 
 export const DocumentKindSchema = z.enum(IMPLEMENTED_DOCUMENT_KINDS);
@@ -447,6 +461,9 @@ export const TransferLineSchema = z
     name: z.string().trim().min(1).max(255).optional(),
     sku: z.string().trim().min(1).max(64).optional(),
     unit: z.string().trim().min(1).max(32).optional(),
+    /** 19-S.15: what travels — or nothing, and the removal policy picks at dispatch. */
+    batchNumber: z.string().trim().min(1).max(64).optional(),
+    serialNumbers: SerialNumbersInputSchema.optional(),
   })
   .strict();
 
@@ -478,6 +495,9 @@ export const CreateAdjustmentSchema = z
     quantityDelta: DecimalStringSchema,
     reason: z.string().trim().min(1).max(255),
     warehouseId: IdSchema.nullish(),
+    /** 19-S.15: identity for a lot/serial-tracked product — required of an inbound correction. */
+    batchNumber: z.string().trim().min(1).max(64).nullish(),
+    serialNumbers: SerialNumbersInputSchema.nullish(),
   })
   .strict();
 

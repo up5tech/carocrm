@@ -1,5 +1,7 @@
 import { ValidationError } from "@carocrm/core/errors/index.js";
 
+import { storedDay } from "../clock.js";
+import { parseSerialNumbers } from "../inventory/picking.js";
 import type { Decimal } from "../money/decimal.js";
 import {
   add,
@@ -61,6 +63,11 @@ export interface RequestedLine {
   readonly supplierProductPriceId?: string | null | undefined;
   readonly batchNumber?: string | null | undefined;
   readonly serialNumber?: string | null | undefined;
+  /** 19-S.15: the units a serialised line moves — the array a request sent, or the JSON a stored item holds. */
+  readonly serialNumbers?: string | readonly string[] | null | undefined;
+  /** 19-S.15: the lot dates a receipt records with the lot it creates (`YYYY-MM-DD`). */
+  readonly manufacturingDate?: string | null | undefined;
+  readonly expiryDate?: string | null | undefined;
 }
 
 export interface LineValidationLimits {
@@ -212,6 +219,10 @@ export interface LineExtras {
   readonly supplierProductPriceId: string | null;
   readonly batchNumber: string | null;
   readonly serialNumber: string | null;
+  /** 19-S.15: JSON-encoded array of serials (the `serialNumbers` field is a text column), or null. */
+  readonly serialNumbers: string | null;
+  readonly manufacturingDate: string | null;
+  readonly expiryDate: string | null;
 }
 
 /** The extras of a line, read from a requested line or from a stored item record. */
@@ -223,11 +234,24 @@ export function lineExtrasOf(
     supplierProductPriceId: bound(line["supplierProductPriceId"]),
     batchNumber: bound(line["batchNumber"]),
     serialNumber: bound(line["serialNumber"]),
+    serialNumbers: serializeSerials(line["serialNumbers"]),
+    manufacturingDate: storedDay(line["manufacturingDate"]) ?? null,
+    expiryDate: storedDay(line["expiryDate"]) ?? null,
   };
 }
 
 function bound(value: unknown): string | null {
   return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+}
+
+/**
+ * Normalize the serials of one line to the JSON text the item record stores — validating them
+ * (whole units, no repeats) on the way in, so a malformed list fails the save rather than the
+ * confirmation that later tries to move stock.
+ */
+function serializeSerials(value: unknown): string | null {
+  const serials = parseSerialNumbers(value);
+  return serials.length === 0 ? null : JSON.stringify(serials);
 }
 
 /**

@@ -310,6 +310,165 @@ export function assertSupplierEditable(input: {
   );
 }
 
+// -----------------------------------------------------------------------------------------------
+// 19-S.15 — product variants (§4.2)
+// -----------------------------------------------------------------------------------------------
+
+/** What a variant attribute *is*, decided by configuration rather than hard-coded (§4.2). */
+export interface VariantAttributeDefinition {
+  readonly code: string;
+  readonly label: string;
+}
+
+const VARIANT_VALUE_MAX = 64;
+const FAMILY_MAX = 64;
+
+/** A family name: trimmed, bounded. It is a label, so unlike a SKU it carries no format rule. */
+export function normalizeVariantFamily(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") {
+    throw new ValidationError('"variantFamily" must be a string.', {
+      variantFamily: value,
+    });
+  }
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  if (trimmed.length > FAMILY_MAX) {
+    throw new ValidationError(
+      `"variantFamily" must be at most ${String(FAMILY_MAX)} characters.`,
+      { variantFamily: trimmed },
+    );
+  }
+  return trimmed;
+}
+
+/**
+ * The stored form of a product's variant attributes: canonical codes, sorted keys, non-empty values.
+ *
+ * The raw value may be the object the API sent or the JSON string a stored attribute holds. Unknown
+ * codes are refused — an attribute nobody configured would be invisible to every rule that reads the
+ * family — and, when the settings require it, every configured code must be present.
+ */
+export function normalizeVariantAttributes(input: {
+  readonly raw: unknown;
+  readonly definitions: readonly VariantAttributeDefinition[];
+  readonly requireAll: boolean;
+}): Record<string, string> {
+  const parsed = parseAttributeObject(input.raw);
+  const byCode = new Map<string, string>();
+  for (const definition of input.definitions)
+    byCode.set(definition.code.toLowerCase(), definition.code);
+  const canonical: Record<string, string> = {};
+  const unknown: string[] = [];
+  for (const [key, value] of Object.entries(parsed)) {
+    const code = byCode.get(key.toLowerCase());
+    if (code === undefined) {
+      unknown.push(key);
+      continue;
+    }
+    if (typeof value !== "string" || value.trim() === "") {
+      throw new ValidationError(
+        `Variant attribute "${code}" needs a value, or must be left out entirely.`,
+        { attribute: code },
+      );
+    }
+    const trimmed = value.trim();
+    if (trimmed.length > VARIANT_VALUE_MAX) {
+      throw new ValidationError(
+        `Variant attribute "${code}" must be at most ${String(VARIANT_VALUE_MAX)} characters.`,
+        { attribute: code },
+      );
+    }
+    canonical[code] = trimmed;
+  }
+  if (unknown.length > 0) {
+    const configured = input.definitions.map((each) => each.code).join(", ");
+    throw new ValidationError(
+      `Unknown variant attribute(s): ${unknown.join(", ")}. Configured attributes: ${configured || "none"}.`,
+      { attributes: unknown },
+    );
+  }
+  if (input.requireAll) {
+    const missing = input.definitions
+      .map((each) => each.code)
+      .filter((code) => canonical[code] === undefined);
+    if (missing.length > 0) {
+      throw new ValidationError(
+        `Missing variant attribute(s): ${missing.join(", ")}.`,
+        { attributes: missing },
+      );
+    }
+  }
+  if (input.definitions.length > 0 && Object.keys(canonical).length === 0 && input.requireAll) {
+    // Defensive: requireAll with definitions present always reports missing above; without
+    // requireAll an empty attribute set is legitimate.
+    throw new ValidationError("A product in a family needs at least one variant attribute.");
+  }
+  return sortAttributes(canonical);
+}
+
+/**
+ * A comparable signature of one product's variant attributes: canonical (case-insensitive codes,
+ * trimmed values, sorted), `{}` for none. The sibling-uniqueness check compares signatures, so a
+ * stored value written under an older configuration still compares honestly instead of throwing.
+ */
+export function variantAttributesSignature(raw: unknown): string {
+  let value: unknown = raw;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed === "") return "{}";
+    try {
+      value = JSON.parse(trimmed);
+    } catch {
+      // Unparseable stored text: its signature is itself, so it never equals a valid object's.
+      return trimmed;
+    }
+  }
+  if (value === null || value === undefined) return "{}";
+  if (typeof value !== "object" || Array.isArray(value)) return JSON.stringify(value);
+  const entries = Object.entries(value as Record<string, unknown>)
+    .map(
+      ([key, entry]) =>
+        [key.trim().toLowerCase(), String(entry ?? "").trim()] as const,
+    )
+    .filter(([, entry]) => entry !== "")
+    .sort((left, right) => left[0].localeCompare(right[0]));
+  return JSON.stringify(Object.fromEntries(entries));
+}
+
+/** Parse the raw attribute value into a plain object; a stored JSON string is read the same way. */
+function parseAttributeObject(raw: unknown): Record<string, unknown> {
+  if (raw === null || raw === undefined || raw === "") return {};
+  let value = raw;
+  if (typeof raw === "string") {
+    try {
+      value = JSON.parse(raw);
+    } catch {
+      throw new ValidationError(
+        '"variantAttributes" must be an object of attribute values (or its JSON form).',
+        { variantAttributes: raw },
+      );
+    }
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ValidationError(
+      '"variantAttributes" must be an object of attribute values.',
+      { variantAttributes: raw },
+    );
+  }
+  return value as Record<string, unknown>;
+}
+
+/** Keys sorted, so serialization and the sibling-uniqueness compare are stable. */
+function sortAttributes(value: Record<string, string>): Record<string, string> {
+  const sorted: Record<string, string> = {};
+  for (const key of Object.keys(value).sort()) {
+    const entry = value[key];
+    if (entry !== undefined) sorted[key] = entry;
+  }
+  return sorted;
+}
+
 /** The most recent `effectiveFrom` wins among applicable rates; ties are a conflict, not a coin toss. */
 export function laterEffectiveFrom(
   left: string | null,

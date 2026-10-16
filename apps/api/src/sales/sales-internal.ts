@@ -136,12 +136,48 @@ export const SERVER_OWNED_INVENTORY_FIELDS: readonly string[] = [
 /** The append-only ledger: a correction is a new compensating row, never an edit (§4.15). */
 export const INVENTORY_LEDGER_ENTITY = "InventoryTransaction";
 
+/**
+ * 19-S.15 — the stock-identity records, and the only lot fact a client may correct.
+ *
+ * A serial is created and walked (`inStock → inTransit → shipped → retired`) only by the movement
+ * that physically accounts for the unit: the write guard refuses *every* client write to
+ * `InventorySerial`, because a unit no ledger row stands for would break the identity
+ * reconciliation, and a status flipped through the record API would claim stock that never moved.
+ *
+ * A lot's identity is equally fixed (one `productId` + `batchNumber` is the same physical lot —
+ * migration 029 makes it unique), but its *dates* stay correctable: a mis-typed expiry is a fact to
+ * fix before it matters, not a movement. Nothing here touches quantities — those live in
+ * `sales_inventory_batch_stock` and are written only with the ledger.
+ */
+export const SERVER_OWNED_TRACKING_FIELDS: readonly string[] = [
+  "serialNumber",
+  "productId",
+  "warehouseId",
+  "status",
+  "receivedAt",
+  "lastMovementAt",
+  "sourceEntity",
+  "sourceId",
+  "sourceNumber",
+  "batchNumber",
+];
+
+/** The only lot facts a client may edit: the dates and the free-text note. */
+export const BATCH_EDITABLE_FIELDS: readonly string[] = [
+  "manufacturingDate",
+  "expiryDate",
+  "description",
+];
+
 /** Entities whose lifecycle the inventory service owns rather than the record API. */
 export const INVENTORY_MANAGED_ENTITIES: readonly string[] = [
   "InventoryAdjustment",
   "InventoryReservation",
   "TransferOrder",
   "TransferOrderItem",
+  // 19-S.15: stock identity — a serial never, a lot only as dates (see above).
+  "InventoryBatch",
+  "InventorySerial",
 ];
 
 /** Write-off request fields that stop being client-editable once the decision is made. */

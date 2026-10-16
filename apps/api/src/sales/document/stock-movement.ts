@@ -19,7 +19,15 @@
  * the plan: one document, one key, one movement.
  *
  * Pure: no database, no clock, no SQL. Everything the caller supplies is bound data.
+ *
+ * 19-S.15 extends the line with **stock identity**: the lot a line names (or `null`, meaning "pick
+ * it by the configured removal policy at confirmation"), the serials a serialised line names, and
+ * the lot dates a receipt records when it creates the lot. The plan freezes them with everything
+ * else, so the ledger row that applies the movement is traceable to the units the operator saw.
  */
+
+import { storedDay } from "../clock.js";
+import { parseSerialNumbers } from "../inventory/picking.js";
 
 /**
  * Why a returned line is (or is not) coming back into saleable stock.
@@ -68,6 +76,13 @@ export interface StockMovementLine {
   readonly restocked: boolean;
   /** The return line's own disposition, when one was recorded; `null` when absent or unrecognised. */
   readonly disposition?: RestockDisposition | null | undefined;
+  /** 19-S.15: the lot this line names, or `null` for "pick by the configured removal policy". */
+  readonly batchNumber: string | null;
+  /** 19-S.15: the units a serialised line moves; `null` for "pick by policy", `[]` for none. */
+  readonly serialNumbers: readonly string[] | null;
+  /** 19-S.15: the lot dates a receipt records when the movement creates the lot. */
+  readonly manufacturingDate: string | null;
+  readonly expiryDate: string | null;
 }
 
 /**
@@ -108,6 +123,49 @@ export interface MovementLineInput {
   readonly quantity: string;
   /** Only a return item carries one; `undefined` on a delivery line. */
   readonly disposition?: string | null | undefined;
+  /** 19-S.15 identity: the lot name as stored, or absent for "pick by policy". */
+  readonly batchNumber?: string | null | undefined;
+  /** The single-unit serial a 19-S.13 receipt line already carried (`serialNumbers` when several). */
+  readonly serialNumber?: string | null | undefined;
+  /** The serials as stored — a JSON string or the array a request sent. */
+  readonly serialNumbers?: string | readonly string[] | null | undefined;
+  /** Lot dates, as stored (an instant) or as sent (`YYYY-MM-DD`). */
+  readonly manufacturingDate?: string | Date | null | undefined;
+  readonly expiryDate?: string | Date | null | undefined;
+}
+
+/** The identity a plan line carries, resolved once for both the outbound and return paths. */
+function lineIdentityOf(line: MovementLineInput): {
+  readonly batchNumber: string | null;
+  readonly serialNumbers: readonly string[] | null;
+  readonly manufacturingDate: string | null;
+  readonly expiryDate: string | null;
+} {
+  // The singular `serialNumber` a 19-S.13 receipt line carries is one unit of the same list.
+  const singular =
+    typeof line.serialNumber === "string" && line.serialNumber.trim() !== ""
+      ? line.serialNumber.trim().toUpperCase()
+      : null;
+  const named =
+    line.serialNumbers === undefined || line.serialNumbers === null
+      ? singular === null
+        ? null
+        : parseSerialNumbers([singular])
+      : parseSerialNumbers(line.serialNumbers);
+  const serialNumbers =
+    named !== null && singular !== null && !named.includes(singular)
+      ? [...named, singular]
+      : named;
+  const batchNumber =
+    typeof line.batchNumber === "string" && line.batchNumber.trim() !== ""
+      ? line.batchNumber.trim()
+      : null;
+  return {
+    batchNumber,
+    serialNumbers,
+    manufacturingDate: storedDay(line.manufacturingDate ?? undefined) ?? null,
+    expiryDate: storedDay(line.expiryDate ?? undefined) ?? null,
+  };
 }
 
 interface MovementInput {
@@ -151,6 +209,7 @@ function planOutbound(
       quantity: item.quantity,
       warehouseId: input.warehouseId ?? null,
       restocked: true,
+      ...lineIdentityOf(item),
     })),
   };
 }
@@ -181,6 +240,7 @@ export function planReturnMovement(
       // Fail closed: a value this module does not recognise never becomes the default.
       restocked: admitsRestock(item.disposition),
       disposition: parseRestockDisposition(item.disposition),
+      ...lineIdentityOf(item),
     })),
   };
 }

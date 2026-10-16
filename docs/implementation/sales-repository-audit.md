@@ -380,3 +380,37 @@ against the configured primary database.
   applied case lives in `sales-inventory.test.ts`.
 * **Not** executed: any browser/UI check, and any external payment/email/shipment side effect — none
   is reachable from the inventory code paths.
+
+### 10.6 Phase 19-S.15 (product variants, batch/serial, removal policies) — executed checks
+
+Added when stock identity was built; every line below was actually run from a shell against the
+configured primary database.
+
+* `pnpm typecheck` (`tsc --noEmit` for the API and the web app) — clean.
+* `pnpm lint` (`eslint . --max-warnings=0`) — clean. Three import-sort violations left by the
+  in-progress change (`catalog/sales-guard.service.ts`, `inventory/inventory.service.ts`,
+  `inventory/picking.ts`) were fixed with `eslint --fix` on the touched files only.
+* `pnpm vitest run apps/api/test/sales-picking.test.ts` — 26 passed (pure: no database, no clock).
+* `pnpm vitest run apps/api/test/sales-tracking.test.ts` — 25 passed, in its own invocation, against
+  the configured primary database. Migration `029_phase19_sales_tracking.sql` (additive: one new table
+  `sales_inventory_batch_stock` plus identity/picking indexes) was applied by the harness's `migrateDb`
+  on the first run. Records are `AGENT_TEST_<runId>`-marked and cleaned by exact id plus a narrow
+  delete of the projection rows and internally-created movement/identity rows by the run's product and
+  warehouse ids; `features.inventory`, `features.purchases` and `features.productVariants` are restored
+  in `afterAll`.
+* Two test-consistency bugs in the new suite were fixed while completing the phase, not by weakening
+  an assertion: the return-restock case now tops up the lot it names before shipping from it (earlier
+  cases had drawn that lot down, so the delivery was correctly refused rather than restocked), and the
+  reconciliation case now checks the tracked pair *specifically* while still asserting that deliberate
+  unattributed stock is **reported** as a mismatch (never auto-corrected) — matching the design the
+  suite's own "no lot can cover" case establishes.
+* Every Sales suite was run after the change, each API suite in its own invocation — 21 files, 301
+  tests, all passing. API suites: `sales-tracking` (25),
+  `sales-inventory` (8), `sales-delivery-returns` (15), `sales-purchasing` (16), `sales-module` (11),
+  `sales-documents` (14), `sales-quotes` (9), `sales-credits` (16), `sales-payments` (13),
+  `sales-catalog` (10), `sales-pricing` (15), `sales-tax` (19). Pure, database-free suites:
+  `sales-picking` (26, 19-S.15), `sales-inventory-ledger` (15), `sales-money` (20),
+  `sales-allocation-math` (29), `sales-quote-document` (6), `sales-stock-movement` (8),
+  `sales-terms` (10), `sales-fulfilment` (9), `sales-supplier-price` (7).
+* **Not** executed: any browser/UI check, and any external payment/email/shipment side effect — none
+  is reachable from the stock-identity code paths.

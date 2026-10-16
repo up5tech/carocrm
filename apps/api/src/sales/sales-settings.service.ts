@@ -43,7 +43,7 @@ const FeatureSchema = z
     /** Prices are quoted tax-inclusive by default (documents may still state their own policy). */
     taxInclusivePrices: z.boolean().default(false),
     priceBooks: z.boolean().default(true),
-    /** Variants arrive in 19-S.15; the flag lets the catalog work without them. */
+    /** 19-S.15: variant fields are validated only while this is on; the catalog works without them. */
     productVariants: z.boolean().default(false),
     supplierPrices: z.boolean().default(true),
     purchases: z.boolean().default(false),
@@ -141,6 +141,63 @@ export const SalesSettingsSchema = z
           .default("hard"),
         /** Whether a stock adjustment needs an administrator's approval before it moves stock. */
         adjustmentApprovalRequired: z.boolean().default(true),
+        /**
+         * Which unit an outbound movement consumes when the document did not name one (19-S.15):
+         * `fifo` oldest receipt first, `fefo` earliest expiry first, `lifo` newest receipt first.
+         * The ordering is deterministic — ties fall back to the batch number — so the same stock
+         * picture always suggests the same units (§4.15 "deterministic ordering").
+         */
+        removalPolicy: z.enum(["fifo", "fefo", "lifo"]).default("fifo"),
+        /**
+         * Whether a lot whose expiry date has passed may be picked automatically. On by default:
+         * "expired lots are not selected when the configured policy forbids them" (§4.15); an
+         * operator who still wants to ship expired stock turns this off deliberately.
+         */
+        excludeExpiredStock: z.boolean().default(true),
+      })
+      .strict()
+      .default({}),
+    /**
+     * Product variants (19-S.15, §4.2). The attribute definitions are configuration, not code:
+     * "do not hard-code industry-specific attributes". Everything here is validated even while
+     * `features.productVariants` is off, so flipping the flag on never exposes a broken config.
+     */
+    variants: z
+      .object({
+        /** What a product that joins a family may specify: `code` is the stored key, `label` what the UI shows. */
+        attributes: z
+          .array(
+            z
+              .object({
+                code: z
+                  .string()
+                  .trim()
+                  .min(1)
+                  .max(24)
+                  .regex(/^[A-Za-z][A-Za-z0-9_]*$/,
+                    "A variant attribute code starts with a letter and contains only letters, digits or underscores."),
+                label: z.string().trim().min(1).max(64),
+              })
+              .strict(),
+          )
+          .max(20)
+          .superRefine((value, ctx) => {
+            const seen = new Set<string>();
+            for (const [index, attribute] of value.entries()) {
+              const key = attribute.code.toLowerCase();
+              if (seen.has(key)) {
+                ctx.addIssue({
+                  code: z.ZodIssueCode.custom,
+                  path: [index, "code"],
+                  message: `Variant attribute "${attribute.code}" is defined more than once.`,
+                });
+              }
+              seen.add(key);
+            }
+          })
+          .default([]),
+        /** Whether a product in a family must carry every configured attribute. */
+        requireAllAttributes: z.boolean().default(true),
       })
       .strict()
       .default({}),
@@ -230,6 +287,23 @@ export function settingsWarnings(settings: SalesSettings): SettingsWarning[] {
       code: "inventoryAllowsNegativeStock",
       message:
         "Negative stock is allowed: a movement will be written even when the warehouse holds less than it is asked to release.",
+    });
+  }
+  if (settings.features.productVariants && settings.variants.attributes.length === 0) {
+    warnings.push({
+      code: "productVariantsWithoutAttributes",
+      message:
+        "Product variants are enabled but no variant attributes are configured; a product cannot join a family yet.",
+    });
+  }
+  if (
+    !settings.features.inventory &&
+    settings.inventory.removalPolicy !== "fifo"
+  ) {
+    warnings.push({
+      code: "removalPolicyWithoutInventory",
+      message:
+        "A removal policy is configured while inventory is disabled; no picking will happen until it is on.",
     });
   }
   return warnings;

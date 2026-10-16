@@ -16,6 +16,7 @@ import {
 } from "./document/lock.js";
 import {
   ADJUSTMENT_ENTITIES,
+  BATCH_EDITABLE_FIELDS,
   changedKeys,
   DECIDED_WRITE_OFF_FIELDS,
   INVENTORY_LEDGER_ENTITY,
@@ -26,6 +27,7 @@ import {
   SERVER_OWNED_DOCUMENT_FIELDS,
   SERVER_OWNED_INVENTORY_FIELDS,
   SERVER_OWNED_PAYMENT_FIELDS,
+  SERVER_OWNED_TRACKING_FIELDS,
 } from "./sales-internal.js";
 import { SalesRecords } from "./sales-records.js";
 
@@ -173,6 +175,32 @@ export class SalesWriteGuardService implements OnApplicationBootstrap {
         throw new ValidationError(
           `A transfer in state "${status}" cannot have its lines changed.`,
           { entity, status, transferOrderId: parentId },
+        );
+      }
+      return;
+    }
+    // 19-S.15 — stock identity. A serialised unit exists only through the movement that accounts for
+    // it, so the record API may neither create one nor walk its state; a lot's identity is fixed
+    // while its dates stay correctable (§19-S.15 tasks 2/5, `sales-internal.ts`).
+    if (entity === "InventorySerial") {
+      throw new ValidationError(
+        "A serialised unit is created and moved only by a stock movement (receipt, delivery, return, transfer or adjustment); the record API may not invent a unit or change its state.",
+        { entity },
+      );
+    }
+    if (entity === "InventoryBatch") {
+      // Creating a lot ahead of its receipt is legitimate; its dates are validated by `sales.validate`.
+      if (context.operation === "create") return;
+      refuseServerOwned(changed, SERVER_OWNED_TRACKING_FIELDS, entity);
+      const offending = changed.filter(
+        (field) => !BATCH_EDITABLE_FIELDS.includes(field),
+      );
+      if (offending.length > 0) {
+        throw new ValidationError(
+          `A lot's identity and quantity are not editable; only ${BATCH_EDITABLE_FIELDS.join(
+            ", ",
+          )} may change through the record API (tried: ${offending.join(", ")}).`,
+          { entity, fields: offending },
         );
       }
     }

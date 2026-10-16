@@ -344,4 +344,10 @@ history, reservations, adjustments, transfers and reconciliation) on top of the 
 keep their generic `/api/v1/Warehouse`-style CRUD. A confirmed delivery, return or receipt order freezes
 the movement it stands for in its snapshot and, when `features.inventory` is on, applies it in the same
 transaction — with the flag off there is no stock consequence and the code says so rather than pretending.
-Batch/serial tracking entities and subscriptions still have no working routes (19-S.15 – 19-S.16).
+Since 19-S.15 the same prefix also serves the stock-identity routes: `inventory/batches` (lots holding
+stock with their dates), `inventory/serials` (unit records by product/place/state) and
+`inventory/picking-suggestions` (what the configured removal policy would pick for a line — never
+moves or reserves anything). The identity records are ordinary entities too (`InventoryBatch`,
+`InventorySerial` on `/api/v1/...`), but the write guard refuses every client write to a serial and
+all but a lot's dates, so no crafted request can invent a unit or walk its state. Subscriptions
+(19-S.16) still have no routes.

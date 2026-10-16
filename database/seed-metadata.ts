@@ -780,6 +780,17 @@ export const coreMetadata: MetadataSeedEntry[] = [
   salesTransferOrderItemEntity(),
   salesInventoryReservationEntity(),
 
+  // -----------------------------------------------------------------------
+  // Phase 19-S.15 — batch/serial stock identity (`sales`)
+  // -----------------------------------------------------------------------
+  //
+  // The lot and unit records a removal policy picks from (PLAN_Phase_19_Sales.md §4.15, §5.5).
+  // Their quantities live in `sales_inventory_batch_stock` (migration 029) and in the serials'
+  // own `status`, both maintained only by the inventory service — the record API may create a lot's
+  // metadata and correct its dates, but never its identity or a unit's state.
+  salesInventoryBatchEntity(),
+  salesInventorySerialEntity(),
+
   // -------------------------------------------------------------------------
   // Phase 19-S.10 – 19-S.11 — payments, allocations, corrections (`sales`)
   // -------------------------------------------------------------------------
@@ -900,8 +911,22 @@ function salesProductEntity(): MetadataSeedEntry {
         unitPrice: decimalField({ inDetail: true, inEdit: true }),
         listPrice: decimalField({ inDetail: true, inEdit: true }),
         costPrice: decimalField({ inDetail: true, inEdit: true }),
+        // 19-S.15 — variants (§4.2): a family label plus the configured attribute values, stored as
+        // a JSON object keyed by the attribute codes from Sales settings. The fields exist whether or
+        // not `features.productVariants` is on; the catalog guard validates them only when it is, so
+        // Tier 1 stays functional without variants (§4.2 last bullet).
+        variantFamily: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true, audited: true },
+        variantAttributes: { type: 'text', inDetail: true, inEdit: true },
+        // 19-S.15 — stock identity: which unit of measure this product's stock is counted in.
+        // `batch`/`serial` only take effect while `features.inventory` is on; a service line is never
+        // stock-managed regardless (`inventory.stockManagedProductTypes`).
+        stockTracking: { type: 'enum', values: ['none', 'batch', 'serial'], defaultValue: 'none', inList: true, inDetail: true, inEdit: true, audited: true },
       }),
-      relations: {},
+      relations: {
+        // 19-S.15 relationship panels: the lots and units this exact product/variant is held as.
+        batches: { type: 'oneToMany', target: 'InventoryBatch', mappedBy: 'product' },
+        serials: { type: 'oneToMany', target: 'InventorySerial', mappedBy: 'product' },
+      },
       indexes: [
         { name: 'idx_product_sku', fields: ['sku'] },
         { name: 'idx_product_category', fields: ['categoryId'] },
@@ -917,6 +942,7 @@ function salesProductEntity(): MetadataSeedEntry {
               { name: 'overview', label: 'Product', position: 0, fields: ['name', 'description', 'sku', 'productType', 'categoryId', 'unit', 'active'] },
               { name: 'pricing', label: 'Pricing', position: 10, fields: ['unitPrice', 'listPrice', 'costPrice'] },
               { name: 'tax', label: 'Tax', position: 20, fields: ['taxClassId', 'defaultTaxCodeId'] },
+              { name: 'variants', label: 'Variants & Tracking', position: 25, fields: ['variantFamily', 'variantAttributes', 'stockTracking'] },
               { name: 'ownership', label: 'Ownership', position: 30, fields: ['assignedUserId', 'teams'] },
             ],
           },
@@ -929,6 +955,7 @@ function salesProductEntity(): MetadataSeedEntry {
               { name: 'main', label: 'Product', position: 0, fields: ['name', 'description', 'sku', 'productType', 'categoryId', 'unit'] },
               { name: 'pricing', label: 'Pricing', position: 10, fields: ['unitPrice', 'listPrice', 'costPrice'] },
               { name: 'configuration', label: 'Configuration', position: 20, fields: ['active', 'isSellable', 'isPurchasable', 'taxClassId', 'defaultTaxCodeId', 'assignedUserId', 'teams'] },
+              { name: 'variants', label: 'Variants & Tracking', position: 25, fields: ['variantFamily', 'variantAttributes', 'stockTracking'] },
             ],
           },
         ],
@@ -1708,6 +1735,16 @@ function salesDeliveryOrderItemEntity(): MetadataSeedEntry {
     dateField: 'deliveryDate',
     itemEntity: 'DeliveryOrderItem',
     itemParentField: 'deliveryOrderId',
+    /**
+     * 19-S.15: which lot (or which serialised units) this line ships. Optional — an unlabelled line
+     * is picked by the configured removal policy at confirmation; a labelled one is the operator's
+     * explicit choice and is validated against attributed stock when the movement is applied.
+     */
+    extraItemFields: {
+      batchNumber: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+      serialNumbers: { type: 'text', inDetail: true, inEdit: true },
+    },
+    extraItemEditFields: ['batchNumber', 'serialNumbers'],
   });
 }
 
@@ -1751,8 +1788,12 @@ function salesReturnOrderItemEntity(): MetadataSeedEntry {
         inList: true,
         inDetail: true,
       },
+      // 19-S.15: a restocked return must name the lot (and the units) it comes back as — an inbound
+      // movement has nothing to pick from, so the operator records the identity with the disposition.
+      batchNumber: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+      serialNumbers: { type: 'text', inDetail: true, inEdit: true },
     },
-    extraItemEditFields: ['disposition'],
+    extraItemEditFields: ['disposition', 'batchNumber', 'serialNumbers'],
   });
 }
 
@@ -1842,10 +1883,17 @@ function salesReceiptOrderItemEntity(): MetadataSeedEntry {
      */
     extraItemFields: {
       supplierProductPriceId: { type: 'varchar', maxLength: 64, inDetail: true },
-      batchNumber: { type: 'varchar', maxLength: 64, inDetail: true },
+      batchNumber: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
       serialNumber: { type: 'varchar', maxLength: 128, inDetail: true },
+      // 19-S.15: a serialised receipt names every unit it creates — one JSON array of serial numbers
+      // (`serialNumbers`), because a line moves a count of units, not one identity. `serialNumber`
+      // stays for the single-unit line the 19-S.13 shape already carries.
+      serialNumbers: { type: 'text', inDetail: true, inEdit: true },
+      // 19-S.15: the lot's dates are recorded with the receipt that creates it (§4.15 expiry data).
+      manufacturingDate: { type: 'date', inDetail: true, inEdit: true },
+      expiryDate: { type: 'date', inDetail: true, inEdit: true },
     },
-    extraItemEditFields: ['supplierProductPriceId', 'batchNumber', 'serialNumber'],
+    extraItemEditFields: ['supplierProductPriceId', 'batchNumber', 'serialNumber', 'serialNumbers', 'manufacturingDate', 'expiryDate'],
   });
 }
 
@@ -2038,6 +2086,13 @@ function salesInventoryTransactionEntity(): MetadataSeedEntry {
         movementKey: { type: 'varchar', maxLength: 200, inDetail: true },
         /** Pairs the two sides of one transfer. */
         transferGroupId: { type: 'varchar', maxLength: 64, inDetail: true },
+        // 19-S.15 — stock identity, recorded with the movement it belongs to (§4.15 "batch/serial
+        // references"). `batchNumber` is the single-lot case for a fast filter; `batchAllocations`
+        // is the JSON breakdown when one line split across lots; `serialNumbers` is the JSON array of
+        // units this movement created or consumed.
+        batchNumber: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+        batchAllocations: { type: 'text', inDetail: true },
+        serialNumbers: { type: 'text', inDetail: true },
         reason: { type: 'varchar', maxLength: 255, inList: true, inDetail: true },
         occurredAt: { type: 'datetime', required: true, inList: true, inDetail: true, sortable: true },
         actor: { type: 'varchar', maxLength: 64, inDetail: true },
@@ -2050,7 +2105,7 @@ function salesInventoryTransactionEntity(): MetadataSeedEntry {
       ],
       layouts: {
         list: [{ entity: 'InventoryTransaction', type: 'list', panels: [{ name: 'list', position: 0, fields: ['occurredAt', 'transactionType', 'productId', 'warehouseId', 'quantityDelta', 'balanceAfter', 'sourceNumber'] }] }],
-        detail: [{ entity: 'InventoryTransaction', type: 'detail', panels: [{ name: 'main', label: 'Movement', position: 0, fields: ['occurredAt', 'transactionType', 'productId', 'warehouseId', 'quantityDelta', 'balanceAfter', 'sourceEntity', 'sourceId', 'sourceNumber', 'movementKey', 'transferGroupId', 'reason', 'actor'] }] }],
+        detail: [{ entity: 'InventoryTransaction', type: 'detail', panels: [{ name: 'main', label: 'Movement', position: 0, fields: ['occurredAt', 'transactionType', 'productId', 'warehouseId', 'quantityDelta', 'balanceAfter', 'sourceEntity', 'sourceId', 'sourceNumber', 'movementKey', 'transferGroupId', 'batchNumber', 'batchAllocations', 'serialNumbers', 'reason', 'actor'] }] }],
         edit: [],
       },
       // Append-only: a correction is a new compensating row, so a ledger row is never removed (§4.15).
@@ -2084,6 +2139,11 @@ function salesInventoryAdjustmentEntity(): MetadataSeedEntry {
         decisionReason: { type: 'varchar', maxLength: 255, inDetail: true },
         /** The ledger row the approval wrote; empty while the request is pending. */
         transactionId: { type: 'varchar', maxLength: 64, inDetail: true },
+        // 19-S.15: a reviewed correction on a tracked product names the lot (and, for a serialised
+        // product, the units) it applies to. An outbound correction without them is picked by the
+        // configured removal policy — the reason and the approval are what make it auditable.
+        batchNumber: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+        serialNumbers: { type: 'text', inDetail: true, inEdit: true },
       }),
       relations: {},
       indexes: [
@@ -2160,6 +2220,11 @@ function salesTransferOrderItemEntity(): MetadataSeedEntry {
         sku: { type: 'varchar', maxLength: 64, inDetail: true },
         unit: { type: 'varchar', maxLength: 32, inDetail: true },
         quantity: decimalField({ required: true, inList: true, inDetail: true }),
+        // 19-S.15: what travels on this line. Both are optional — an unlabelled line of a tracked
+        // product is picked at dispatch, and the receive side re-applies the very allocation the
+        // dispatch recorded, so both halves of the transfer stay traceable to the same units.
+        batchNumber: { type: 'varchar', maxLength: 64, inDetail: true },
+        serialNumbers: { type: 'text', inDetail: true },
       },
       relations: {},
       indexes: [
@@ -2168,7 +2233,7 @@ function salesTransferOrderItemEntity(): MetadataSeedEntry {
       ],
       layouts: {
         list: [{ entity: 'TransferOrderItem', type: 'list', panels: [{ name: 'list', position: 0, fields: ['position', 'productId', 'sku', 'quantity'] }] }],
-        detail: [{ entity: 'TransferOrderItem', type: 'detail', panels: [{ name: 'main', label: 'Line', position: 0, fields: ['position', 'productId', 'sku', 'unit', 'quantity'] }] }],
+        detail: [{ entity: 'TransferOrderItem', type: 'detail', panels: [{ name: 'main', label: 'Line', position: 0, fields: ['position', 'productId', 'sku', 'unit', 'quantity', 'batchNumber', 'serialNumbers'] }] }],
         edit: [],
       },
       record: { displayField: 'name', removable: false },
@@ -2228,6 +2293,103 @@ function salesInventoryReservationEntity(): MetadataSeedEntry {
 // ---------------------------------------------------------------------------
 
 /** A configurable lookup (payment method or channel) a payment may reference. */
+/**
+ * One lot of one product (19-S.15, §4.15 "lot/batch/serial number tracking and expiry data").
+ *
+ * The record holds the lot's *identity and dates*; its quantity lives in
+ * `sales_inventory_batch_stock` (migration 029), a projection the inventory service maintains while
+ * the (product, warehouse) level is locked. Identity (`productId` + `batchNumber`) is unique and
+ * immutable — a lot that could be renamed into another product's lot would split its stock — while
+ * the dates stay editable so an operator can correct a mis-typed expiry before it matters.
+ */
+function salesInventoryBatchEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'InventoryBatch',
+    data: {
+      name: 'InventoryBatch',
+      label: 'Inventory Batch',
+      isEntity: true,
+      fields: salesFields({
+        productId: { type: 'link', entityKey: 'Product', required: true, inList: true, inDetail: true },
+        /** The lot number as entered; uniqueness is case-insensitive and per product (migration 029). */
+        batchNumber: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true, sortable: true, audited: true },
+        /** The lot's dates (§4.15): both optional, but a lot cannot be made after it expires. */
+        manufacturingDate: { type: 'date', inList: true, inDetail: true, inEdit: true },
+        expiryDate: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+        /** When this lot first arrived — the age FIFO/LIFO orders by (§19-S.15 task 4). */
+        receivedAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+        /** The document that first created the lot, for "where did this come from?". */
+        sourceEntity: { type: 'varchar', maxLength: 64, inDetail: true },
+        sourceId: { type: 'varchar', maxLength: 64, inDetail: true },
+        sourceNumber: { type: 'varchar', maxLength: 64, inDetail: true },
+      }),
+      relations: {},
+      indexes: [{ name: 'idx_inventory_batch_product', fields: ['productId'] }],
+      layouts: {
+        list: [{ entity: 'InventoryBatch', type: 'list', panels: [{ name: 'list', position: 0, fields: ['productId', 'batchNumber', 'expiryDate', 'manufacturingDate', 'receivedAt', 'modifiedAt'] }] }],
+        detail: [{ entity: 'InventoryBatch', type: 'detail', panels: [{ name: 'main', label: 'Batch', position: 0, fields: ['productId', 'batchNumber', 'manufacturingDate', 'expiryDate', 'receivedAt', 'sourceEntity', 'sourceId', 'sourceNumber', 'description'] }] }],
+        // Identity is immutable and quantities are derived, so the only editable facts are the dates.
+        edit: [{ entity: 'InventoryBatch', type: 'edit', panels: [{ name: 'main', label: 'Batch', position: 0, fields: ['description', 'manufacturingDate', 'expiryDate'] }] }],
+      },
+      record: { displayField: 'batchNumber', removable: false },
+      client: {},
+      acl: { permissions: { InventoryBatch: { create: 'yes', read: 'all', edit: 'yes', delete: 'no', stream: 'all' } } },
+    },
+  };
+}
+
+/**
+ * One serialised unit (19-S.15 task 5).
+ *
+ * A serial is a *state*, not a quantity: `status` walks `inStock → inTransit → inStock` (transfer)
+ * and `inStock → shipped` (delivery) under the same movement that changes the ledger, and the record
+ * API may write neither the state nor the identity — a serial created outside a movement would claim
+ * a unit exists that no ledger row accounts for. Uniqueness is per product, case-insensitive, for the
+ * whole installation (single organization — migration 029).
+ */
+function salesInventorySerialEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'InventorySerial',
+    data: {
+      name: 'InventorySerial',
+      label: 'Inventory Serial',
+      isEntity: true,
+      fields: salesFields({
+        serialNumber: { type: 'varchar', maxLength: 128, required: true, inList: true, inDetail: true, sortable: true, audited: true },
+        productId: { type: 'link', entityKey: 'Product', required: true, inList: true, inDetail: true },
+        warehouseId: { type: 'link', entityKey: 'Warehouse', inList: true, inDetail: true },
+        status: { type: 'enum', values: ['inStock', 'inTransit', 'shipped', 'retired'], defaultValue: 'inStock', inList: true, inDetail: true, audited: true },
+        /** When this unit first arrived — the age FIFO/LIFO orders serials by. */
+        receivedAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+        lastMovementAt: { type: 'datetime', inList: true, inDetail: true },
+        sourceEntity: { type: 'varchar', maxLength: 64, inDetail: true },
+        sourceId: { type: 'varchar', maxLength: 64, inDetail: true },
+        sourceNumber: { type: 'varchar', maxLength: 64, inDetail: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_inventory_serial_product', fields: ['productId'] },
+        { name: 'idx_inventory_serial_status', fields: ['status'] },
+      ],
+      layouts: {
+        list: [{ entity: 'InventorySerial', type: 'list', panels: [{ name: 'list', position: 0, fields: ['serialNumber', 'productId', 'warehouseId', 'status', 'receivedAt', 'lastMovementAt'] }] }],
+        detail: [{ entity: 'InventorySerial', type: 'detail', panels: [{ name: 'main', label: 'Serial', position: 0, fields: ['serialNumber', 'productId', 'warehouseId', 'status', 'receivedAt', 'lastMovementAt', 'sourceEntity', 'sourceId', 'sourceNumber', 'description'] }] }],
+        edit: [],
+      },
+      record: { displayField: 'serialNumber', removable: false },
+      client: {},
+      // The record API must never create or move a unit — but the *permission* is open, because
+      // `EntityCrudService.create` asserts ACL for the inventory service too (it runs as the user who
+      // confirmed the document). The refusal for a client write is the `sales.writeGuard` hook
+      // (`sales-write-guard.service.ts`), which lets an internal movement through and names the rule
+      // for everything else — the same shape the ledger uses with its append-only guard.
+      acl: { permissions: { InventorySerial: { create: 'yes', read: 'all', edit: 'yes', delete: 'no', stream: 'all' } } },
+    },
+  };
+}
+
 function lookupEntity(entity: string, label: string, extra: Record<string, Record<string, unknown>> = {}): MetadataSeedEntry {
   return {
     scope: 'entity',

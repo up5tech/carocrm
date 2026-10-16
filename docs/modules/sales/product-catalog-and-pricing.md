@@ -128,7 +128,14 @@ in a price rule: an administrator cannot make the server execute arbitrary code 
 
 ## 5. What is deliberately not here yet
 
-* **Product variants** — `features.productVariants` defaults to `false`; variants arrive in 19-S.15.
+* **Product variants** — delivered in 19-S.15: a product may name a `variantFamily` and carry
+  `variantAttributes` (JSON keyed by the attribute codes configured in Sales settings under
+  `variants.attributes` — labels and codes are configuration, never hard-coded industry fields).
+  `features.productVariants` (default `false`) gates the validation: while it is off the fields are
+  inert and Tier 1 works unchanged; while it is on, unknown codes, a missing required attribute
+  (`variants.requireAllAttributes`), attributes without a family, and two products of one family
+  with the same attribute combination are all refused — and SKU uniqueness stays the
+  installation-wide rule migration 021 enforces, so a variant's SKU is a product SKU.
 * **Product-level pricing switch** — `features.productPrices` can be turned off, and the UI must not
   assume `unitPrice` exists.
 * **Customer-specific price books through Account metadata** — the association field exists on

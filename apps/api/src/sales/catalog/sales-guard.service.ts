@@ -7,7 +7,8 @@ import type { OnApplicationBootstrap } from "@nestjs/common";
 import { Inject, Injectable } from "@nestjs/common";
 
 import { HookRegistry } from "../../hooks/hook.registry.js";
-import { storedDay } from "../clock.js";
+import { storedDay, utcDay } from "../clock.js";
+import { normalizeIdentity, validateLotDates } from "../inventory/picking.js";
 import type {
   PriceRuleAction,
   PriceRuleCriteria,
@@ -19,6 +20,7 @@ import {
   SalesRecords,
   type SalesRow,
 } from "../sales-records.js";
+import { SalesSettingsService } from "../sales-settings.service.js";
 import {
   taxRateIssues,
   type TaxRuleCriteria,
@@ -27,6 +29,8 @@ import {
 import {
   assertSupplierEditable,
   MAX_CATEGORY_DEPTH,
+  normalizeVariantAttributes,
+  normalizeVariantFamily,
   SUPPLIER_IDENTITY_FIELDS,
   validateCategoryParent,
   validateDateWindow,
@@ -34,6 +38,7 @@ import {
   validatePriceBookWrite,
   validateProductWrite,
   validateSku,
+  variantAttributesSignature,
 } from "./product-rules.js";
 
 /**
@@ -54,6 +59,8 @@ export class SalesCatalogGuardService implements OnApplicationBootstrap {
   constructor(
     @Inject(HookRegistry) private readonly hooks: HookRegistry,
     @Inject(SalesRecords) private readonly records: SalesRecords,
+    @Inject(SalesSettingsService)
+    private readonly settings: SalesSettingsService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -101,6 +108,9 @@ export class SalesCatalogGuardService implements OnApplicationBootstrap {
         break;
       case "Supplier":
         await this.validateSupplier(data, context);
+        break;
+      case "InventoryBatch":
+        await this.validateBatch(data, context);
         break;
       default:
         break;
@@ -179,6 +189,128 @@ export class SalesCatalogGuardService implements OnApplicationBootstrap {
       active: booleanOrUndefined(data["active"]),
       isSellable: booleanOrUndefined(data["isSellable"]),
       isPurchasable: booleanOrUndefined(data["isPurchasable"]),
+    });
+    await this.validateVariants(data, context);
+  }
+
+  /**
+   * §4.2 / 19-S.15 task 1 — a product that joins a variant family carries the configured attribute
+   * values, and no two products of one family are the same variant.
+   *
+   * The rules run only while `features.productVariants` is on: with the flag off the fields are
+   * inert and Tier 1 cataloguing works exactly as before (§4.2 last bullet). SKU uniqueness itself
+   * stays the installation-wide, case-insensitive rule the database enforces (migration 021) — a
+   * variant's SKU *is* a product SKU, so it gets no separate scope.
+   */
+  private async validateVariants(
+    data: Record<string, unknown>,
+    context: HookContext,
+  ): Promise<void> {
+    const touchesFamily =
+      Object.prototype.hasOwnProperty.call(data, "variantFamily") ||
+      Object.prototype.hasOwnProperty.call(data, "variantAttributes");
+    if (!touchesFamily) return;
+    const settings = await this.settings.settings();
+    const previous = context.previous ?? {};
+    const family = Object.prototype.hasOwnProperty.call(data, "variantFamily")
+      ? normalizeVariantFamily(data["variantFamily"])
+      : normalizeVariantFamily(previous["variantFamily"]);
+    if (!settings.features.productVariants) {
+      // Flag off: store what was sent, unvalidated — the fields mean nothing until it is on.
+      if (family !== null) data["variantFamily"] = family;
+      return;
+    }
+    const raw = Object.prototype.hasOwnProperty.call(data, "variantAttributes")
+      ? data["variantAttributes"]
+      : previous["variantAttributes"];
+    if (family === null) {
+      if (raw !== undefined && raw !== null && variantAttributesSignature(raw) !== "{}" &&
+          variantAttributesSignature(raw) !== "") {
+        throw new ValidationError(
+          "Variant attributes need a variant family; set \"variantFamily\" first or clear the attributes.",
+          { field: "variantAttributes" },
+        );
+      }
+      data["variantFamily"] = null;
+      if (Object.prototype.hasOwnProperty.call(data, "variantAttributes"))
+        data["variantAttributes"] = null;
+      return;
+    }
+    const attributes = normalizeVariantAttributes({
+      raw,
+      definitions: settings.variants.attributes,
+      requireAll: settings.variants.requireAllAttributes,
+    });
+    const selfId =
+      context.operation === "update" ? context.record?.id : undefined;
+    const siblings = await this.records.find(
+      "Product",
+      { variantFamily: family },
+      500,
+    );
+    const conflict = siblings.find(
+      (row) =>
+        row.id !== selfId &&
+        variantAttributesSignature(row.data["variantAttributes"]) ===
+          variantAttributesSignature(attributes),
+    );
+    if (conflict !== undefined) {
+      throw new DuplicateRecordError(
+        `Another product of family "${family}" already has this exact combination of variant attributes.`,
+        { field: "variantAttributes", productId: conflict.id, variantFamily: family },
+      );
+    }
+    data["variantFamily"] = family;
+    data["variantAttributes"] = JSON.stringify(attributes);
+  }
+
+  /**
+   * 19-S.15 task 3 — a lot's dates must make sense together, against each other and against today.
+   * The check reads the stored dates for anything the patch does not carry, so an update that only
+   * moves the expiry cannot walk past the manufacturing date it already has.
+   */
+  private async validateBatch(
+    data: Record<string, unknown>,
+    context: HookContext,
+  ): Promise<void> {
+    const batchNumber = text(data["batchNumber"]);
+    if (batchNumber !== undefined) {
+      data["batchNumber"] = normalizeIdentity(batchNumber, "batchNumber");
+      if (text(data["name"]) === undefined)
+        data["name"] = data["batchNumber"];
+      // One lot per (product, number) — the database index (migration 029) is the backstop; this
+      // turns the race into the clear 409 the operator can act on.
+      const productId =
+        text(data["productId"]) ?? text(context.previous?.["productId"]);
+      const selfId =
+        context.operation === "update" ? context.record?.id : undefined;
+      if (productId !== undefined) {
+        const duplicates = await this.records.findByCode(
+          "InventoryBatch",
+          "batchNumber",
+          data["batchNumber"] as string,
+          10,
+        );
+        const conflict = duplicates.find(
+          (row) =>
+            row.id !== selfId && text(row.data["productId"]) === productId,
+        );
+        if (conflict !== undefined) {
+          throw new DuplicateRecordError(
+            `Lot "${String(data["batchNumber"])}" already exists for this product.`,
+            { field: "batchNumber", batchId: conflict.id },
+          );
+        }
+      }
+    }
+    const previous = context.previous ?? {};
+    validateLotDates({
+      manufacturingDate:
+        storedDay(data["manufacturingDate"]) ??
+        storedDay(previous["manufacturingDate"]),
+      expiryDate:
+        storedDay(data["expiryDate"]) ?? storedDay(previous["expiryDate"]),
+      today: utcDay(),
     });
   }
 

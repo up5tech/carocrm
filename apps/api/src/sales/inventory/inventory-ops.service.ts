@@ -23,6 +23,7 @@ import {
   signedQuantity,
   TRANSFER_TRANSITIONS,
 } from "./ledger.js";
+import { normalizeIdentity, parseSerialNumbers } from "./picking.js";
 
 /**
  * Phase 19-S.14 — the two operations that are more than a single movement: a reviewed adjustment and
@@ -44,6 +45,9 @@ export interface TransferItemInput {
   readonly name?: string | null | undefined;
   readonly sku?: string | null | undefined;
   readonly unit?: string | null | undefined;
+  /** 19-S.15: the lot/units this line moves; absent means "pick by the removal policy at dispatch". */
+  readonly batchNumber?: string | null | undefined;
+  readonly serialNumbers?: string | readonly string[] | null | undefined;
 }
 
 export interface CreateTransferInput {
@@ -68,6 +72,9 @@ export interface CreateAdjustmentInput {
   readonly quantityDelta: string;
   readonly reason: string;
   readonly warehouseId?: string | null | undefined;
+  /** 19-S.15: identity for a tracked product — an inbound correction must name the lot/units. */
+  readonly batchNumber?: string | null | undefined;
+  readonly serialNumbers?: string | readonly string[] | null | undefined;
 }
 
 export interface AdjustmentView {
@@ -131,6 +138,17 @@ export class InventoryOperationsService {
     }
     const actor = actorOf(context, this.scope);
     const autoApply = !settings.inventory.adjustmentApprovalRequired;
+    // 19-S.15: normalise the identity now, so a pending adjustment cannot hold a malformed lot list
+    // that only fails when an approver decides it. Whether the product *needs* it is checked when the
+    // movement applies (the product may be re-typed between request and approval).
+    const batchNumber =
+      text(input.batchNumber ?? undefined) === undefined
+        ? null
+        : normalizeIdentity(input.batchNumber, "batchNumber");
+    const serials =
+      input.serialNumbers === null || input.serialNumbers === undefined
+        ? []
+        : parseSerialNumbers(input.serialNumbers);
     const created = await runAsSalesInternal(() =>
       runInTransaction(this.database.db, async () =>
         await this.entities.create(ADJUSTMENT_ENTITY, {
@@ -143,6 +161,8 @@ export class InventoryOperationsService {
           requestedBy: actor,
           requestedAt: new Date(),
           ...(autoApply ? { decidedBy: actor, decidedAt: new Date() } : {}),
+          ...(batchNumber !== null ? { batchNumber } : {}),
+          ...(serials.length > 0 ? { serialNumbers: JSON.stringify(serials) } : {}),
         }),
       ),
     );
@@ -250,6 +270,13 @@ export class InventoryOperationsService {
       sourceId: id,
       sourceNumber: null,
       reason: text(data["reason"]) ?? null,
+      // 19-S.15: the identity recorded with the request — a positive correction on a tracked
+      // product must have brought its lot/units with it.
+      batchNumber: text(data["batchNumber"]) ?? null,
+      serialNumbers:
+        data["serialNumbers"] === undefined || data["serialNumbers"] === null
+          ? null
+          : parseSerialNumbers(data["serialNumbers"]),
     };
     const movements = await this.inventory.recordMovements([movement], context);
     const actor = actorOf(context, this.scope);
@@ -317,6 +344,10 @@ export class InventoryOperationsService {
         const id = String(order["id"] ?? "");
         let position = 0;
         for (const item of input.items) {
+          const serialNumbers =
+            item.serialNumbers === null || item.serialNumbers === undefined
+              ? []
+              : parseSerialNumbers(item.serialNumbers);
           await this.entities.create(TRANSFER_ITEM_ENTITY, {
             transferOrderId: id,
             position,
@@ -325,6 +356,17 @@ export class InventoryOperationsService {
             sku: text(item.sku ?? undefined) ?? null,
             unit: text(item.unit ?? undefined) ?? null,
             quantity: item.quantity,
+            ...(text(item.batchNumber ?? undefined) !== undefined
+              ? {
+                  batchNumber: normalizeIdentity(
+                    item.batchNumber,
+                    "batchNumber",
+                  ),
+                }
+              : {}),
+            ...(serialNumbers.length > 0
+              ? { serialNumbers: JSON.stringify(serialNumbers) }
+              : {}),
           });
           position += 1;
         }
@@ -443,13 +485,15 @@ export class InventoryOperationsService {
       const productId = text(item.data["productId"]);
       const quantity = text(item.data["quantity"]) ?? "0";
       if (productId === undefined || isZero(parseDecimal(quantity))) continue;
+      const position = Number(item.data["position"] ?? 0);
+      // 19-S.15: what travels on this line. Dispatch resolves (or takes) the identity; receipt
+      // re-applies exactly what the dispatch recorded, so both halves name the same lots/units — the
+      // acceptance criterion "transfers preserve batch/serial traceability".
+      const identity = confirm
+        ? identityFromItem(item.data)
+        : await this.dispatchIdentity(id, position, item.data);
       movements.push({
-        movementKey: movementKeyFor(
-          TRANSFER_ENTITY,
-          id,
-          type,
-          Number(item.data["position"] ?? 0),
-        ),
+        movementKey: movementKeyFor(TRANSFER_ENTITY, id, type, position),
         type,
         productId,
         warehouseId,
@@ -459,9 +503,60 @@ export class InventoryOperationsService {
         sourceNumber: text(data["name"]) ?? null,
         reason: text(data["reason"]) ?? null,
         transferGroupId: `${TRANSFER_ENTITY}:${id}`,
+        ...identity,
       });
     }
     return await this.inventory.recordMovements(movements, context);
+  }
+
+  /**
+   * The identity the dispatch half of this transfer recorded for one line — its lot split and the
+   * exact serials it moved. Falls back to the item's own fields for a dispatch that predates
+   * 19-S.15 (it recorded no identity), so the receive side can still name what it brings in.
+   */
+  private async dispatchIdentity(
+    transferId: string,
+    position: number,
+    item: Record<string, unknown>,
+  ): Promise<Pick<
+    LedgerMovement,
+    "batchNumber" | "batchAllocations" | "serialNumbers"
+  >> {
+    const rows = await this.records.idsMatching(
+      "InventoryTransaction",
+      "movementKey",
+      movementKeyFor(TRANSFER_ENTITY, transferId, "transferOut", position),
+    );
+    if (rows.length > 0) {
+      const dispatch = await this.records.byId("InventoryTransaction", rows[0] as string);
+      const allocations = jsonOrNull(dispatch?.data["batchAllocations"]);
+      const serials = dispatch?.data["serialNumbers"];
+      if (allocations !== null && allocations.length > 0) {
+        return {
+          batchNumber: null,
+          batchAllocations: allocations.map((allocation) => ({
+            batchNumber: String(allocation["batchNumber"] ?? ""),
+            quantity: String(allocation["quantity"] ?? "0"),
+          })),
+          serialNumbers:
+            serials === undefined || serials === null
+              ? null
+              : parseSerialNumbers(serials),
+        };
+      }
+      const single = text(dispatch?.data["batchNumber"]);
+      if (single !== undefined || (serials !== undefined && serials !== null)) {
+        return {
+          batchNumber: single ?? null,
+          batchAllocations: null,
+          serialNumbers:
+            serials === undefined || serials === null
+              ? null
+              : parseSerialNumbers(serials),
+        };
+      }
+    }
+    return identityFromItem(item);
   }
 
   /** Transfers awaiting receipt, for the in-transit view and the availability report. */
@@ -482,6 +577,39 @@ export class InventoryOperationsService {
 
 function emptyResult(): MovementResult {
   return { applied: 0, duplicates: 0, skipped: 0, transactionIds: [] };
+}
+
+/** The identity a stored transfer line names itself (19-S.15). */
+function identityFromItem(item: Record<string, unknown>): {
+  readonly batchNumber: string | null;
+  readonly batchAllocations: null;
+  readonly serialNumbers: string[] | null;
+} {
+  const serials =
+    item["serialNumbers"] === undefined || item["serialNumbers"] === null
+      ? null
+      : parseSerialNumbers(item["serialNumbers"]);
+  const batchNumber = text(item["batchNumber"]);
+  return {
+    batchNumber: batchNumber === undefined ? null : normalizeIdentity(batchNumber, "batchNumber"),
+    batchAllocations: null,
+    serialNumbers: serials !== null && serials.length === 0 ? null : serials,
+  };
+}
+
+/** A stored JSON array attribute as `unknown[]`, or `null` when absent/unparseable. */
+function jsonOrNull(value: unknown): Record<string, unknown>[] | null {
+  if (typeof value !== "string" || value.trim() === "") return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter(
+      (entry): entry is Record<string, unknown> =>
+        typeof entry === "object" && entry !== null && !Array.isArray(entry),
+    );
+  } catch {
+    return null;
+  }
 }
 
 function actorOf(context: MovementContext, scope: RequestScope): string | null {

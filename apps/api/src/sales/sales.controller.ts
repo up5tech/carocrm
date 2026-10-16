@@ -740,13 +740,15 @@ export class SalesController {
   }
 
   // -------------------------------------------------------------------------------------------
-  // Inventory (19-S.14)
+  // Inventory (19-S.14, 19-S.15)
   //
   // Warehouses, the movement ledger and reservations are metadata entities, so create/read/update
   // stay on `/api/v1/Warehouse` and friends. These routes are the operations a single record cannot
   // express: an availability figure that mixes on-hand, reserved and incoming; a reservation; a
-  // reviewed adjustment; a two-sided transfer; and the reconciliation of the projection against the
-  // ledger. Every one of them is refused outright while `features.inventory` is off.
+  // reviewed adjustment; a two-sided transfer; the reconciliation of the projection against the
+  // ledger; and (19-S.15) the lots/serials a tracked product is held as, plus the picking suggestion
+  // a line editor shows before the confirmation resolves it. Every one of them is refused outright
+  // while `features.inventory` is off.
   // -------------------------------------------------------------------------------------------
 
   /** On-hand, reserved, available and incoming for one product in one warehouse. */
@@ -801,6 +803,57 @@ export class SalesController {
     return await this.inventory.reconcile({
       warehouseId: input.warehouseId ?? null,
       productId: input.productId ?? null,
+    });
+  }
+
+  /** Lots that hold stock, with the dates FIFO/FEFO/LIFO order by (19-S.15). */
+  @Get("inventory/batches")
+  async inventoryBatches(
+    @Query("productId") productId?: string,
+    @Query("warehouseId") warehouseId?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return {
+      list: await this.inventory.batchStock({
+        productId: productId ?? null,
+        warehouseId: warehouseId ?? null,
+        limit: numberOrUndefined(limit),
+      }),
+    };
+  }
+
+  /** Serial records by product/warehouse/status — a unit's identity and where it last was (19-S.15). */
+  @Get("inventory/serials")
+  async inventorySerials(
+    @Query("productId") productId?: string,
+    @Query("warehouseId") warehouseId?: string,
+    @Query("status") status?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return {
+      list: await this.inventory.serialList({
+        productId: productId ?? null,
+        warehouseId: warehouseId ?? null,
+        status: status ?? null,
+        limit: numberOrUndefined(limit),
+      }),
+    };
+  }
+
+  /**
+   * What the configured removal policy would pick for this line right now — the availability a line
+   * editor shows before the confirmation resolves it for real (19-S.15 task 7). Never moves stock.
+   */
+  @Get("inventory/picking-suggestions")
+  async pickingSuggestions(
+    @Query("productId") productId?: string,
+    @Query("warehouseId") warehouseId?: string,
+    @Query("quantity") quantity?: string,
+  ) {
+    return await this.inventory.pickingSuggestions({
+      productId: requireQuery(productId, "productId"),
+      warehouseId: warehouseId ?? null,
+      quantity: requireQuery(quantity, "quantity"),
     });
   }
 

@@ -139,6 +139,9 @@ uses the two the platform already has.
 | Move stock as a physical act (ship, receive, return) | the document's own `edit` — the movement it stands for is written to the ledger in the same transaction |
 | Correct stock after the fact | `InventoryAdjustment: create`, and an **administrator** to approve it (19-S.14) |
 | Move stock between warehouses | `TransferOrder: create/edit`, with the dispatch as the audited side |
+| See what stock *is* (lots/units) | `InventoryBatch: read` / `InventorySerial: read` — listing or picking suggestions additionally require the `inventory` feature (19-S.15) |
+| Create or re-date a lot | `InventoryBatch: create` / `edit`; identity (`productId`, `batchNumber`) and quantities are refused for clients either way (19-S.15) |
+| Create a serialised unit, or walk its state | **never through the record API** — only a receipt, delivery, return, transfer or approved adjustment may, with the `inventory` feature on (19-S.15) |
 
 Two gates sit in front of all of them:
 

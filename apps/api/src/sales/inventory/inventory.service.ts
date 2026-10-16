@@ -11,9 +11,10 @@ import {
 import { DatabaseService, type DbTx } from "../../database/database.service.js";
 import { EntityCrudService } from "../../entity/entity.service.js";
 import { runInTransaction } from "../../entity/tx-context.js";
-import { nowIso } from "../clock.js";
+import { nowIso, storedDay, utcDay } from "../clock.js";
 import type { StockMovementPlan } from "../document/stock-movement.js";
 import {
+  abs,
   add,
   compare,
   type Decimal,
@@ -22,6 +23,7 @@ import {
   isZero,
   parseDecimal,
   subtract,
+  sum,
   zero,
 } from "../money/decimal.js";
 import { runAsSalesInternal } from "../sales-internal.js";
@@ -53,6 +55,19 @@ import {
   stockLevel,
   TRANSFER_TRANSITIONS,
 } from "./ledger.js";
+import {
+  allocateBatches,
+  allocateSerials,
+  assertSerialCountMatch,
+  type BatchAllocation,
+  type BatchCandidate,
+  isExpired,
+  normalizeIdentity,
+  parseSerialNumbers,
+  type RemovalPolicy,
+  type SerialCandidate,
+  validateLotDates,
+} from "./picking.js";
 
 /**
  * Phase 19-S.14 — the stock ledger and the projection it is reconciled against.
@@ -123,6 +138,53 @@ export interface ReconcileResult {
   readonly checked: number;
   readonly mismatches: readonly ReconciliationRow[];
   readonly ok: boolean;
+  /** 19-S.15: how many tracked (product, warehouse) pairs were compared against their identity. */
+  readonly identityChecked: number;
+  /** Lots/serials attributed versus physical on-hand — a difference is reported, never corrected. */
+  readonly identityMismatches: readonly IdentityRow[];
+  readonly identityOk: boolean;
+}
+
+/** 19-S.15 — physical on-hand versus the stock attributed to lots/serials for a tracked pair. */
+export interface IdentityRow {
+  readonly productId: string;
+  readonly warehouseId: string;
+  readonly tracking: "batch" | "serial";
+  /** Sum of lot stock (batch) or the count of units whose status is `inStock` (serial). */
+  readonly attributed: string;
+  readonly onHand: string;
+  readonly difference: string;
+  readonly ok: boolean;
+}
+
+/** How a product's stock is identified when it moves (19-S.15 `Product.stockTracking`). */
+export type ProductTracking = "none" | "batch" | "serial";
+
+/** A bounded page of lot stock with the lot's dates, for the stock/batch views (19-S.15). */
+export interface BatchStockRow {
+  readonly productId: string;
+  readonly warehouseId: string;
+  readonly batchNumber: string;
+  readonly onHand: string;
+  readonly expiryDate: string | null;
+  readonly manufacturingDate: string | null;
+  readonly receivedAt: string | null;
+}
+
+/** What the configured removal policy would pick right now — the line editor's suggestion (task 7). */
+export interface PickingSuggestionView {
+  readonly productId: string;
+  readonly warehouseId: string;
+  readonly tracking: ProductTracking;
+  readonly policy: RemovalPolicy;
+  readonly requested: string;
+  readonly allocations: readonly BatchAllocation[];
+  readonly serialNumbers: readonly string[];
+  /** Unfulfilled units (batches) or unit count (serials); `"0"` when the pick is complete. */
+  readonly shortage: string;
+  /** What the configured policy considers eligible right now (lots with stock / units in stock). */
+  readonly attributedAvailable: string;
+  readonly onHand: string;
 }
 
 interface StockLockRow {
@@ -132,7 +194,18 @@ interface StockLockRow {
 
 const LEDGER_ENTITY: SalesEntityType = "InventoryTransaction";
 const RESERVATION_ENTITY: SalesEntityType = "InventoryReservation";
+const BATCH_ENTITY: SalesEntityType = "InventoryBatch";
+const SERIAL_ENTITY: SalesEntityType = "InventorySerial";
 const SCAN_LIMIT = 2_000;
+
+/** Identity resolved for a movement whose product is not tracked — the 19-S.14 behaviour. */
+const NO_IDENTITY = { batches: null, serials: null } as const;
+
+interface ResolvedIdentity {
+  /** Positive lot quantities this movement accounts for, or `null` when the product is not lot-tracked. */
+  readonly batches: readonly BatchAllocation[] | null;
+  readonly serials: readonly string[] | null;
+}
 
 @Injectable()
 export class InventoryService {
@@ -278,6 +351,12 @@ export class InventoryService {
         sourceId: plan.documentId,
         sourceNumber: plan.documentNumber,
         reason: null,
+        // 19-S.15: the identity this line froze into the snapshot — the lot/units named on the
+        // document, or `null` for "pick by the configured removal policy when the movement applies".
+        batchNumber: line.batchNumber,
+        serialNumbers: line.serialNumbers,
+        manufacturingDate: line.manufacturingDate,
+        expiryDate: line.expiryDate,
       });
     }
     return await this.recordMovements(movements, context);
@@ -464,6 +543,10 @@ export class InventoryService {
               },
             );
           }
+          // 19-S.15 — stock identity. Resolved under the pair's lock, so a policy pick can never
+          // race another movement for the same lot/unit, and refused before the row is written
+          // (this transaction rolls the whole confirmation back).
+          const identity = await this.resolveIdentity(movement, delta, settings);
           const created = await this.entities.create(LEDGER_ENTITY, {
             name: `${movement.type} ${movement.quantityDelta}`,
             transactionType: movement.type,
@@ -479,6 +562,16 @@ export class InventoryService {
             reason: movement.reason,
             occurredAt: movement.occurredAt ?? occurredAt,
             actor,
+            ...(identity.batches !== null && identity.batches.length > 0
+              ? {
+                  // The first lot for a fast filter, the full split for the audit trail.
+                  batchNumber: identity.batches[0]?.batchNumber ?? null,
+                  batchAllocations: JSON.stringify(identity.batches),
+                }
+              : {}),
+            ...(identity.serials !== null
+              ? { serialNumbers: JSON.stringify(identity.serials) }
+              : {}),
           });
           const id = text(created["id"]);
           if (id !== undefined) transactionIds.push(id);
@@ -488,6 +581,7 @@ export class InventoryService {
             movement.warehouseId,
             nextOnHand,
           );
+          await this.applyIdentity(tx, movement, identity, delta, settings);
           await this.outbox.insertMany(tx, [
             {
               eventType: "sales.inventory.transaction.created",
@@ -503,6 +597,12 @@ export class InventoryService {
                 actor,
                 correlationId: context.correlationId ?? null,
                 occurredAt,
+                ...(identity.batches !== null && identity.batches.length > 0
+                  ? { batchNumber: identity.batches[0]?.batchNumber ?? null }
+                  : {}),
+                ...(identity.serials !== null
+                  ? { serialCount: identity.serials.length }
+                  : {}),
               },
             },
           ]);
@@ -515,6 +615,521 @@ export class InventoryService {
         };
       }),
     );
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Stock identity (19-S.15): lots and serials
+  // ---------------------------------------------------------------------------------------------
+
+  /** How this product's stock is identified — `Product.stockTracking`, defaulting to `none`. */
+  private async trackingOf(productId: string): Promise<ProductTracking> {
+    const product = await this.records.byId("Product", productId);
+    if (product === undefined) {
+      throw new ValidationError(`Product "${productId}" does not exist.`, {
+        productId,
+      });
+    }
+    const value = text(product.data["stockTracking"]);
+    return value === "batch" || value === "serial" ? value : "none";
+  }
+
+  /**
+   * Which lots/units this movement accounts for, decided while the pair's row lock is held.
+   *
+   * Rules (§4.15, §19-S.15):
+   *  - a product that is not tracked keeps the exact 19-S.14 behaviour — identity is ignored;
+   *  - an **inbound** movement must name its identity (there is nothing to pick from when goods
+   *    arrive), a lot for a lot-tracked product and every unit for a serialised one;
+   *  - an **outbound** movement that named nothing is split by the configured removal policy —
+   *    FIFO/FEFO/LIFO, expired lots excluded, ties broken by the lot number (deterministic);
+   *  - a shortage on a document movement is a refusal; only a reviewed *adjustment* may leave an
+   *    unattributed remainder, because unattributed stock is exactly what such a correction fixes —
+   *    and the identity reconciliation then reports the difference instead of hiding it.
+   */
+  private async resolveIdentity(
+    movement: LedgerMovement,
+    delta: Decimal,
+    settings: SalesSettings,
+  ): Promise<ResolvedIdentity> {
+    if (isZero(delta)) return NO_IDENTITY;
+    const tracking = await this.trackingOf(movement.productId);
+    if (tracking === "none") return NO_IDENTITY;
+    const inbound = !isNegative(delta);
+    const magnitude = format(abs(delta));
+    return tracking === "batch"
+      ? await this.resolveBatchIdentity(movement, inbound, magnitude, settings)
+      : await this.resolveSerialIdentity(movement, inbound, magnitude, settings);
+  }
+
+  private async resolveBatchIdentity(
+    movement: LedgerMovement,
+    inbound: boolean,
+    magnitude: string,
+    settings: SalesSettings,
+  ): Promise<ResolvedIdentity> {
+    const source = `${movement.sourceEntity} "${movement.sourceId}"`;
+    // A transfer receive re-applies exactly what its dispatch recorded — same lots, same splits —
+    // which is what keeps both halves traceable to the same units (§19-S.15 acceptance).
+    const preResolved = movement.batchAllocations;
+    if (preResolved !== null && preResolved !== undefined && preResolved.length > 0) {
+      const allocations: BatchAllocation[] = [];
+      let total = zero(0);
+      for (const allocation of preResolved) {
+        const batchNumber = normalizeIdentity(allocation.batchNumber, "batchNumber");
+        const quantity = parseDecimal(allocation.quantity);
+        if (isNegative(quantity) || isZero(quantity)) {
+          throw new ValidationError(
+            "A lot allocation must be a positive quantity.",
+            { batchNumber, quantity: allocation.quantity },
+          );
+        }
+        allocations.push({ batchNumber, quantity: format(quantity, quantity.scale) });
+        total = add(total, quantity);
+      }
+      if (compare(total, parseDecimal(magnitude)) !== 0) {
+        throw new ValidationError(
+          `The recorded lot split (${format(total)}) does not match the moved quantity (${magnitude}).`,
+          { movementKey: movement.movementKey },
+        );
+      }
+      if (inbound)
+        for (const allocation of allocations)
+          await this.ensureBatch(movement, allocation.batchNumber);
+      return { batches: allocations, serials: null };
+    }
+    const explicit = text(movement.batchNumber ?? undefined);
+    if (inbound) {
+      if (explicit === undefined) {
+        throw new ValidationError(
+          `Product "${movement.productId}" is lot-tracked: this "${movement.type}" movement must name the lot it brings stock into (batchNumber on ${source}).`,
+          {
+            productId: movement.productId,
+            movementKey: movement.movementKey,
+            batchNumber: null,
+          },
+        );
+      }
+      const batchNumber = normalizeIdentity(explicit, "batchNumber");
+      validateLotDates({
+        manufacturingDate: storedDay(movement.manufacturingDate ?? undefined),
+        expiryDate: storedDay(movement.expiryDate ?? undefined),
+        today: utcDay(),
+      });
+      await this.ensureBatch(movement, batchNumber);
+      return {
+        batches: [{ batchNumber, quantity: magnitude }],
+        serials: null,
+      };
+    }
+    if (explicit !== undefined) {
+      // An explicitly named lot is the operator's decision — including a lot the policy would not
+      // auto-pick. Its stock is still checked against the movement when the delta is applied.
+      return {
+        batches: [
+          { batchNumber: normalizeIdentity(explicit, "batchNumber"), quantity: magnitude },
+        ],
+        serials: null,
+      };
+    }
+    const candidates = await this.batchCandidates(
+      movement.productId,
+      movement.warehouseId,
+    );
+    const pick = allocateBatches(
+      settings.inventory.removalPolicy,
+      candidates,
+      magnitude,
+      {
+        today: utcDay(),
+        excludeExpired: settings.inventory.excludeExpiredStock,
+      },
+    );
+    if (compare(parseDecimal(pick.shortage), zero(0)) > 0) {
+      if (movement.type === "adjustment") {
+        return { batches: [...pick.allocations], serials: null };
+      }
+      throw await this.batchShortageError(
+        movement,
+        magnitude,
+        pick.shortage,
+        candidates,
+        settings,
+      );
+    }
+    return { batches: pick.allocations, serials: null };
+  }
+
+  /** The refusal an unattributable outbound document movement gets, worded for the operator. */
+  private async batchShortageError(
+    movement: LedgerMovement,
+    magnitude: string,
+    shortage: string,
+    candidates: readonly BatchCandidate[],
+    settings: SalesSettings,
+  ): Promise<ValidationError> {
+    const today = utcDay();
+    const inEligible = candidates.filter(
+      (candidate) =>
+        !settings.inventory.excludeExpiredStock ||
+        !isExpired(candidate.expiryDate, today),
+    );
+    const eligible = format(
+      sum(inEligible.map((candidate) => parseDecimal(candidate.onHand))),
+    );
+    const attributed = format(
+      sum(candidates.map((candidate) => parseDecimal(candidate.onHand))),
+    );
+    const level = await this.readLevel(
+      movement.productId,
+      movement.warehouseId,
+    );
+    const onHand = format(level.onHand);
+    const excluded =
+      settings.inventory.excludeExpiredStock &&
+      inEligible.length !== candidates.length
+        ? " Expired lots are excluded (inventory.excludeExpiredStock)."
+        : "";
+    const unattributed = subtract(level.onHand, parseDecimal(attributed));
+    const hint =
+      isNegative(unattributed) || isZero(unattributed)
+        ? ""
+        : ` Product on-hand is ${onHand}, so ${format(unattributed)} of it is not attributed to any lot — receive it with a batchNumber, or correct it with a reviewed adjustment that names the lot.`;
+    return new ValidationError(
+      `Under the "${settings.inventory.removalPolicy}" removal policy only ${eligible} of product "${movement.productId}" in warehouse "${movement.warehouseId}" sits in eligible lots, and the movement needs ${magnitude} (${shortage} short).${excluded}${hint}`,
+      {
+        productId: movement.productId,
+        warehouseId: movement.warehouseId,
+        requested: magnitude,
+        eligible,
+        attributed,
+        shortage,
+        policy: settings.inventory.removalPolicy,
+        movementKey: movement.movementKey,
+      },
+    );
+  }
+
+  private async resolveSerialIdentity(
+    movement: LedgerMovement,
+    inbound: boolean,
+    magnitude: string,
+    settings: SalesSettings,
+  ): Promise<ResolvedIdentity> {
+    const source = `${movement.sourceEntity} "${movement.sourceId}"`;
+    const explicit =
+      movement.serialNumbers === null || movement.serialNumbers === undefined
+        ? null
+        : parseSerialNumbers(movement.serialNumbers);
+    if (inbound) {
+      if (explicit === null || explicit.length === 0) {
+        throw new ValidationError(
+          `Product "${movement.productId}" is serial-tracked: this "${movement.type}" movement must name the serial numbers it creates (serialNumbers on ${source}).`,
+          {
+            productId: movement.productId,
+            movementKey: movement.movementKey,
+            serialNumbers: null,
+          },
+        );
+      }
+      assertSerialCountMatch(magnitude, explicit);
+      for (const serial of explicit) await this.assertInboundSerial(serial, movement);
+      return { batches: null, serials: explicit };
+    }
+    if (explicit === null) {
+      const candidates = await this.serialCandidates(
+        movement.productId,
+        movement.warehouseId,
+      );
+      const pick = allocateSerials(settings.inventory.removalPolicy, candidates, magnitude);
+      if (Number(pick.shortage) > 0) {
+        throw new ValidationError(
+          `Only ${String(candidates.length)} serialised unit(s) of product "${movement.productId}" are in stock in warehouse "${movement.warehouseId}" and this movement needs ${magnitude}; ${pick.shortage} unit(s) are not accounted for. Reconcile the serial records before moving stock.`,
+          {
+            productId: movement.productId,
+            warehouseId: movement.warehouseId,
+            requested: magnitude,
+            inStock: String(candidates.length),
+            shortage: pick.shortage,
+            movementKey: movement.movementKey,
+          },
+        );
+      }
+      return { batches: null, serials: pick.serialNumbers };
+    }
+    assertSerialCountMatch(magnitude, explicit);
+    for (const serial of explicit) await this.assertOutboundSerial(serial, movement);
+    return { batches: null, serials: explicit };
+  }
+
+  /** The stored serial record for one number within one product, case-insensitively. */
+  private async findSerialRecord(
+    serialNumber: string,
+    productId: string,
+  ): Promise<{ readonly id: string; readonly data: Record<string, unknown> } | undefined> {
+    const rows = await this.records.findByCode(
+      SERIAL_ENTITY,
+      "serialNumber",
+      serialNumber,
+      10,
+    );
+    const match = rows.find(
+      (row) =>
+        text(row.data["productId"]) === productId &&
+        (text(row.data["serialNumber"]) ?? "").toUpperCase() === serialNumber,
+    );
+    return match === undefined ? undefined : { id: match.id, data: match.data };
+  }
+
+  /** An inbound movement may only name units that are not already counted here (§19-S.15). */
+  private async assertInboundSerial(
+    serialNumber: string,
+    movement: LedgerMovement,
+  ): Promise<void> {
+    const existing = await this.findSerialRecord(serialNumber, movement.productId);
+    if (existing === undefined) return; // A new unit — the receive creates its record.
+    const status = text(existing.data["status"]) ?? "inStock";
+    if (status === "inStock") {
+      throw new ValidationError(
+        `Serial "${serialNumber}" is already in stock in warehouse "${text(existing.data["warehouseId"]) ?? "?"}"; receiving it again would count the unit twice.`,
+        {
+          serialNumber,
+          productId: movement.productId,
+          movementKey: movement.movementKey,
+        },
+      );
+    }
+    if (status === "retired") {
+      throw new ValidationError(
+        `Serial "${serialNumber}" was retired; a retired unit does not come back into stock. Receive it as a new serial, or record the movement that accounts for it.`,
+        {
+          serialNumber,
+          productId: movement.productId,
+          movementKey: movement.movementKey,
+        },
+      );
+    }
+    // `shipped` (a customer return) and `inTransit` (a transfer arriving) may come back in.
+  }
+
+  /** An outbound movement may only consume units that are in stock *here* (§19-S.15 task 5). */
+  private async assertOutboundSerial(
+    serialNumber: string,
+    movement: LedgerMovement,
+  ): Promise<void> {
+    const existing = await this.findSerialRecord(serialNumber, movement.productId);
+    if (existing === undefined) {
+      throw new ValidationError(
+        `Serial "${serialNumber}" does not exist for product "${movement.productId}"; a unit cannot leave stock without its record.`,
+        {
+          serialNumber,
+          productId: movement.productId,
+          movementKey: movement.movementKey,
+        },
+      );
+    }
+    const status = text(existing.data["status"]) ?? "inStock";
+    const warehouseId = text(existing.data["warehouseId"]);
+    if (status !== "inStock" || warehouseId !== movement.warehouseId) {
+      throw new ValidationError(
+        `Serial "${serialNumber}" is ${status}${warehouseId === null || warehouseId === undefined ? "" : ` in warehouse "${warehouseId}"`}, so it cannot move out of warehouse "${movement.warehouseId}".`,
+        {
+          serialNumber,
+          status,
+          serialWarehouseId: warehouseId ?? null,
+          movementKey: movement.movementKey,
+        },
+      );
+    }
+  }
+
+  /** Create the lot record a receive brings stock into, or reconcile its dates with the receive. */
+  private async ensureBatch(
+    movement: LedgerMovement,
+    batchNumber: string,
+  ): Promise<void> {
+    const manufacturing = storedDay(movement.manufacturingDate ?? undefined) ?? null;
+    const expiry = storedDay(movement.expiryDate ?? undefined) ?? null;
+    const productId = movement.productId;
+    const existing = (
+      await this.records.findByCode(BATCH_ENTITY, "batchNumber", batchNumber, 10)
+    ).find((row) => text(row.data["productId"]) === productId);
+    if (existing === undefined) {
+      await this.entities.create(BATCH_ENTITY, {
+        name: batchNumber,
+        productId,
+        batchNumber,
+        manufacturingDate: manufacturing,
+        expiryDate: expiry,
+        receivedAt: movement.occurredAt ?? nowIso(),
+        sourceEntity: movement.sourceEntity,
+        sourceId: movement.sourceId,
+        sourceNumber: movement.sourceNumber,
+      });
+      return;
+    }
+    const patch: Record<string, unknown> = {};
+    for (const [field, value] of [
+      ["manufacturingDate", manufacturing],
+      ["expiryDate", expiry],
+    ] as const) {
+      if (value === null) continue;
+      const stored = storedDay(existing.data[field]);
+      if (stored === undefined) {
+        patch[field] = value;
+      } else if (stored !== value) {
+        throw new ValidationError(
+          `Lot "${batchNumber}" was already recorded with ${field} ${stored}; a later receive cannot re-date it to ${value}. Correct the batch record deliberately instead.`,
+          {
+            batchNumber,
+            field,
+            receivedValue: value,
+            storedValue: stored,
+          },
+        );
+      }
+    }
+    if (Object.keys(patch).length > 0)
+      await this.entities.update(BATCH_ENTITY, existing.id, patch);
+  }
+
+  /** Write the lot/unit state changes the movement stands for — same transaction as the ledger row. */
+  private async applyIdentity(
+    tx: DbTx,
+    movement: LedgerMovement,
+    identity: ResolvedIdentity,
+    delta: Decimal,
+    settings: SalesSettings,
+  ): Promise<void> {
+    const inbound = !isNegative(delta);
+    if (identity.batches !== null) {
+      const sign: 1 | -1 = inbound ? 1 : -1;
+      for (const allocation of identity.batches) {
+        await this.applyBatchDelta(
+          tx,
+          movement.productId,
+          movement.warehouseId,
+          allocation.batchNumber,
+          signedQuantity(allocation.quantity, sign),
+          settings,
+        );
+      }
+    }
+    if (identity.serials !== null) {
+      const status = inbound
+        ? "inStock"
+        : movement.type === "delivery"
+          ? "shipped"
+          : movement.type === "transferOut"
+            ? "inTransit"
+            : "retired";
+      const occurredAt = movement.occurredAt ?? nowIso();
+      for (const serialNumber of identity.serials) {
+        const existing = await this.findSerialRecord(serialNumber, movement.productId);
+        const trail = {
+          status,
+          lastMovementAt: occurredAt,
+          sourceEntity: movement.sourceEntity,
+          sourceId: movement.sourceId,
+          sourceNumber: movement.sourceNumber,
+        };
+        if (existing === undefined) {
+          // Only an inbound movement reaches here — an outbound one was asserted to exist above.
+          await this.entities.create(SERIAL_ENTITY, {
+            name: serialNumber,
+            serialNumber,
+            productId: movement.productId,
+            warehouseId: movement.warehouseId,
+            receivedAt: occurredAt,
+            ...trail,
+          });
+        } else {
+          await this.entities.update(SERIAL_ENTITY, existing.id, {
+            ...trail,
+            // Inbound stock arrives *here*; outbound stock keeps its last known location until the
+            // receiving side of a transfer names the destination (§19-S.15 traceability).
+            ...(inbound ? { warehouseId: movement.warehouseId } : {}),
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Move a lot's attributed stock by a signed quantity (upsert), then hold it to the negative-stock
+   * policy. Called with the pair's row lock already held, so lot totals cannot drift through races.
+   */
+  private async applyBatchDelta(
+    tx: DbTx,
+    productId: string,
+    warehouseId: string,
+    batchNumber: string,
+    quantity: string,
+    settings: SalesSettings,
+  ): Promise<void> {
+    const rows = await sql<{ on_hand: string }>`
+      insert into sales_inventory_batch_stock (product_id, warehouse_id, batch_number, on_hand)
+      values (${productId}, ${warehouseId}, ${batchNumber}, ${quantity})
+      on conflict (product_id, warehouse_id, batch_number)
+      do update set on_hand = sales_inventory_batch_stock.on_hand + ${quantity},
+                    modified_at = now()
+      returning on_hand::text as on_hand
+    `.execute(tx);
+    const next = parseDecimal(rows.rows[0]?.on_hand ?? "0");
+    if (isNegative(next) && !settings.inventory.allowNegativeStock) {
+      throw new ValidationError(
+        `Lot "${batchNumber}" would go negative in warehouse "${warehouseId}": ${format(next)} after this movement. Pick another lot, name one that holds stock, or use a reviewed adjustment with negative stock enabled.`,
+        { productId, warehouseId, batchNumber, onHand: format(next) },
+      );
+    }
+  }
+
+  /** The lots of one product in one warehouse that hold stock, with the dates the policy orders by. */
+  private async batchCandidates(
+    productId: string,
+    warehouseId: string,
+  ): Promise<BatchCandidate[]> {
+    const rows = await sql<{ batch_number: string; on_hand: string }>`
+      select batch_number, on_hand::text as on_hand
+      from sales_inventory_batch_stock
+      where product_id = ${productId} and warehouse_id = ${warehouseId}
+        and on_hand > 0
+      order by batch_number asc
+    `.execute(this.db);
+    if (rows.rows.length === 0) return [];
+    const metadata = new Map<string, Record<string, unknown>>();
+    for (const record of await this.records.find(
+      BATCH_ENTITY,
+      { productId },
+      SCAN_LIMIT,
+    )) {
+      const number = text(record.data["batchNumber"]);
+      if (number !== undefined) metadata.set(number.toUpperCase(), record.data);
+    }
+    return rows.rows.map((row) => {
+      const lot = metadata.get(row.batch_number.toUpperCase());
+      return {
+        batchNumber: row.batch_number,
+        onHand: format(parseDecimal(row.on_hand)),
+        expiryDate: storedDay(lot?.["expiryDate"]) ?? null,
+        receivedAt: instantOf(lot?.["receivedAt"]),
+      };
+    });
+  }
+
+  /** The units of one product in one warehouse whose status is `inStock`. */
+  private async serialCandidates(
+    productId: string,
+    warehouseId: string,
+  ): Promise<SerialCandidate[]> {
+    const rows = await this.records.find(
+      SERIAL_ENTITY,
+      { productId, warehouseId, status: "inStock" },
+      SCAN_LIMIT,
+    );
+    return rows.map((row) => ({
+      serialNumber: text(row.data["serialNumber"]) ?? row.id,
+      receivedAt: instantOf(row.data["receivedAt"]),
+    }));
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -804,7 +1419,8 @@ export class InventoryService {
   }
 
   /**
-   * Compare the projection with the ledger, product by product (§4.15 task 10).
+   * Compare the projection with the ledger, product by product (§4.15 task 10), and the physical
+   * on-hand of every tracked pair with the stock its lots/serials account for (19-S.15).
    *
    * A discrepancy is reported, never corrected: writing a correction here would erase the evidence of
    * whatever caused it, and a stock correction must be an explicit, reviewed adjustment.
@@ -834,7 +1450,305 @@ export class InventoryService {
       ledger,
     );
     const mismatches = rows.filter((row) => !row.ok);
-    return { checked: rows.length, mismatches, ok: mismatches.length === 0 };
+    const identity = await this.identityRows(projection, input);
+    const identityMismatches = identity.filter((row) => !row.ok);
+    return {
+      checked: rows.length,
+      mismatches,
+      ok: mismatches.length === 0,
+      identityChecked: identity.length,
+      identityMismatches,
+      identityOk: identityMismatches.length === 0,
+    };
+  }
+
+  /**
+   * Attributed-versus-physical stock for lot/serial-tracked products (§19-S.15 acceptance:
+   * "inventory identity remains correct per product variant, batch or serial").
+   *
+   * A product that is not tracked is skipped — it has no attribution to compare. A difference means
+   * stock that no lot/unit accounts for (or the reverse) and is reported for review only.
+   */
+  private async identityRows(
+    projection: readonly {
+      readonly productId: string;
+      readonly warehouseId: string;
+      readonly onHand: string;
+    }[],
+    input: {
+      readonly warehouseId?: string | null | undefined;
+      readonly productId?: string | null | undefined;
+    },
+  ): Promise<IdentityRow[]> {
+    const tracked = new Map<string, "batch" | "serial">();
+    for (const mode of ["batch", "serial"] as const) {
+      for (const record of await this.records.find(
+        "Product",
+        { stockTracking: mode },
+        SCAN_LIMIT,
+      )) {
+        tracked.set(record.id, mode);
+      }
+    }
+    const product = text(input.productId ?? undefined);
+    const warehouse = text(input.warehouseId ?? undefined);
+    const batchTotals = new Map<string, Decimal>();
+    const serialTotals = new Map<string, Decimal>();
+    const register = (
+      target: Map<string, Decimal>,
+      key: string,
+      value: Decimal,
+    ): void => {
+      target.set(key, add(target.get(key) ?? zero(0), value));
+    };
+    const batchClauses = [sql<boolean>`true`];
+    if (product !== undefined) batchClauses.push(sql<boolean>`product_id = ${product}`);
+    if (warehouse !== undefined)
+      batchClauses.push(sql<boolean>`warehouse_id = ${warehouse}`);
+    const batchRows = await sql<{
+      product_id: string;
+      warehouse_id: string;
+      total: string;
+    }>`
+      select product_id, warehouse_id, sum(on_hand)::text as total
+      from sales_inventory_batch_stock
+      where ${sql.join(batchClauses, sql` and `)}
+      group by product_id, warehouse_id
+    `.execute(this.db);
+    for (const row of batchRows.rows)
+      register(
+        batchTotals,
+        levelKey(row.product_id, row.warehouse_id),
+        parseDecimal(row.total),
+      );
+    const serialClauses = [
+      sql<boolean>`entity_type = 'InventorySerial'`,
+      sql<boolean>`deleted_at is null`,
+      sql<boolean>`(attrs ->> 'status') = 'inStock'`,
+    ];
+    if (product !== undefined)
+      serialClauses.push(sql<boolean>`(attrs ->> 'productId') = ${product}`);
+    if (warehouse !== undefined)
+      serialClauses.push(sql<boolean>`(attrs ->> 'warehouseId') = ${warehouse}`);
+    const serialRows = await sql<{
+      product_id: string | null;
+      warehouse_id: string | null;
+      total: string;
+    }>`
+      select (attrs ->> 'productId') as product_id,
+             (attrs ->> 'warehouseId') as warehouse_id,
+             count(*)::text as total
+      from entity_records
+      where ${sql.join(serialClauses, sql` and `)}
+      group by (attrs ->> 'productId'), (attrs ->> 'warehouseId')
+    `.execute(this.db);
+    for (const row of serialRows.rows) {
+      if (row.product_id === null || row.warehouse_id === null) continue;
+      register(
+        serialTotals,
+        levelKey(row.product_id, row.warehouse_id),
+        parseDecimal(row.total),
+      );
+    }
+    const physical = new Map<string, string>();
+    for (const row of projection)
+      physical.set(levelKey(row.productId, row.warehouseId), row.onHand);
+    const keys = new Map<string, { productId: string; warehouseId: string }>();
+    for (const row of projection) {
+      if (tracked.has(row.productId))
+        keys.set(levelKey(row.productId, row.warehouseId), row);
+    }
+    for (const map of [batchTotals, serialTotals]) {
+      for (const key of map.keys()) {
+        if (keys.has(key)) continue;
+        const [productId, warehouseId] = key.split("\u0000");
+        if (productId !== undefined && warehouseId !== undefined && tracked.has(productId))
+          keys.set(key, { productId, warehouseId });
+      }
+    }
+    const rows: IdentityRow[] = [];
+    for (const [key, identity] of keys) {
+      const mode = tracked.get(identity.productId);
+      if (mode === undefined) continue;
+      const attributed =
+        mode === "batch"
+          ? batchTotals.get(key) ?? zero(0)
+          : serialTotals.get(key) ?? zero(0);
+      const onHand = parseDecimal(physical.get(key) ?? "0");
+      const difference = subtract(onHand, attributed);
+      rows.push({
+        productId: identity.productId,
+        warehouseId: identity.warehouseId,
+        tracking: mode,
+        attributed: format(attributed),
+        onHand: format(onHand),
+        difference: format(difference),
+        ok: isZero(difference),
+      });
+    }
+    return rows.sort(
+      (left, right) =>
+        left.productId.localeCompare(right.productId) ||
+        left.warehouseId.localeCompare(right.warehouseId),
+    );
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Lots, serials and picking suggestions (19-S.15)
+  // ---------------------------------------------------------------------------------------------
+
+  /** A bounded page of lot stock with the lot's dates — the batch view behind a product/warehouse. */
+  async batchStock(filters: {
+    readonly productId?: string | null | undefined;
+    readonly warehouseId?: string | null | undefined;
+    readonly limit?: number | undefined;
+  }): Promise<readonly BatchStockRow[]> {
+    await this.acl.assertAccess(BATCH_ENTITY, "read");
+    await this.requireEnabled();
+    const clauses = [sql<boolean>`on_hand > 0`];
+    const product = text(filters.productId ?? undefined);
+    const warehouse = text(filters.warehouseId ?? undefined);
+    if (product !== undefined) clauses.push(sql<boolean>`product_id = ${product}`);
+    if (warehouse !== undefined)
+      clauses.push(sql<boolean>`warehouse_id = ${warehouse}`);
+    const rows = await sql<{
+      product_id: string;
+      warehouse_id: string;
+      batch_number: string;
+      on_hand: string;
+    }>`
+      select product_id, warehouse_id, batch_number, on_hand::text as on_hand
+      from sales_inventory_batch_stock
+      where ${sql.join(clauses, sql` and `)}
+      order by product_id asc, batch_number asc
+      limit ${Math.min(filters.limit ?? 200, SCAN_LIMIT)}
+    `.execute(this.db);
+    if (rows.rows.length === 0) return [];
+    const metadata = new Map<string, Record<string, unknown>>();
+    for (const productId of [...new Set(rows.rows.map((row) => row.product_id))]) {
+      for (const record of await this.records.find(
+        BATCH_ENTITY,
+        { productId },
+        SCAN_LIMIT,
+      )) {
+        const number = text(record.data["batchNumber"]);
+        if (number !== undefined) metadata.set(number.toUpperCase(), record.data);
+      }
+    }
+    return rows.rows.map((row) => {
+      const lot = metadata.get(row.batch_number.toUpperCase());
+      return {
+        productId: row.product_id,
+        warehouseId: row.warehouse_id,
+        batchNumber: row.batch_number,
+        onHand: format(parseDecimal(row.on_hand)),
+        expiryDate: storedDay(lot?.["expiryDate"]) ?? null,
+        manufacturingDate: storedDay(lot?.["manufacturingDate"]) ?? null,
+        receivedAt: instantOf(lot?.["receivedAt"]),
+      };
+    });
+  }
+
+  /** Serial records by product/warehouse/status — the unit view for a tracked product. */
+  async serialList(filters: {
+    readonly productId?: string | null | undefined;
+    readonly warehouseId?: string | null | undefined;
+    readonly status?: string | null | undefined;
+    readonly limit?: number | undefined;
+  }): Promise<readonly Record<string, unknown>[]> {
+    await this.acl.assertAccess(SERIAL_ENTITY, "read");
+    await this.requireEnabled();
+    const query: Record<string, string> = {};
+    const product = text(filters.productId ?? undefined);
+    const warehouse = text(filters.warehouseId ?? undefined);
+    const status = text(filters.status ?? undefined);
+    if (product !== undefined) query["productId"] = product;
+    if (warehouse !== undefined) query["warehouseId"] = warehouse;
+    if (status !== undefined) query["status"] = status;
+    const rows = await this.records.find(
+      SERIAL_ENTITY,
+      query,
+      Math.min(filters.limit ?? 200, SCAN_LIMIT),
+    );
+    return rows.map((row) => ({ id: row.id, ...row.data }));
+  }
+
+  /**
+   * What the configured removal policy would pick for this line *right now* (§19-S.15 task 7:
+   * "expose availability/picking suggestions in the line editor when enabled").
+   *
+   * A suggestion never moves stock and never reserves it — it is the same pure allocation the
+   * confirmation will run, evaluated against current stock, so what the editor shows and what the
+   * ledger later writes agree. A shortage is returned as data, not thrown: an unfilled line is what
+   * the editor exists to show.
+   */
+  async pickingSuggestions(input: {
+    readonly productId: string;
+    readonly warehouseId?: string | null | undefined;
+    readonly quantity: string;
+  }): Promise<PickingSuggestionView> {
+    await this.acl.assertAccess(LEDGER_ENTITY, "read");
+    const settings = await this.requireEnabled();
+    const warehouseId = await this.requireWarehouse(input.warehouseId, settings);
+    const quantity = parseDecimal(input.quantity);
+    if (compare(quantity, zero(0)) <= 0) {
+      throw new ValidationError("A picking suggestion needs a positive quantity.", {
+        quantity: input.quantity,
+      });
+    }
+    const requested = format(quantity, quantity.scale);
+    const tracking = await this.trackingOf(input.productId);
+    const level = await this.readLevel(input.productId, warehouseId);
+    const policy = settings.inventory.removalPolicy;
+    if (tracking === "batch") {
+      const candidates = await this.batchCandidates(input.productId, warehouseId);
+      const pick = allocateBatches(policy, candidates, requested, {
+        today: utcDay(),
+        excludeExpired: settings.inventory.excludeExpiredStock,
+      });
+      return {
+        productId: input.productId,
+        warehouseId,
+        tracking,
+        policy,
+        requested,
+        allocations: pick.allocations,
+        serialNumbers: [],
+        shortage: pick.shortage,
+        attributedAvailable: format(
+          sum(candidates.map((candidate) => parseDecimal(candidate.onHand))),
+        ),
+        onHand: format(level.onHand),
+      };
+    }
+    if (tracking === "serial") {
+      const candidates = await this.serialCandidates(input.productId, warehouseId);
+      const pick = allocateSerials(policy, candidates, requested);
+      return {
+        productId: input.productId,
+        warehouseId,
+        tracking,
+        policy,
+        requested,
+        allocations: [],
+        serialNumbers: pick.serialNumbers,
+        shortage: pick.shortage,
+        attributedAvailable: String(candidates.length),
+        onHand: format(level.onHand),
+      };
+    }
+    return {
+      productId: input.productId,
+      warehouseId,
+      tracking,
+      policy,
+      requested,
+      allocations: [],
+      serialNumbers: [],
+      shortage: "0",
+      attributedAvailable: "0",
+      onHand: format(level.onHand),
+    };
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1180,4 +2094,11 @@ export function text(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed === "" ? undefined : trimmed;
+}
+
+/** A stored instant (a `Date` in memory, an ISO string after JSON round-trip), or `null`. */
+function instantOf(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string" && value.trim() !== "") return value.trim();
+  return null;
 }

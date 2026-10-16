@@ -142,6 +142,19 @@ export interface LedgerMovement {
   /** Pairs the two sides of one transfer, so neither half can be lost. */
   readonly transferGroupId?: string | null | undefined;
   readonly occurredAt?: string | undefined;
+  /**
+   * 19-S.15 — stock identity. Which lot/units this movement accounts for, or `undefined` for
+   * "resolve by the configured removal policy" (outbound) — inbound movements must always name
+   * their identity, because there is nothing to pick from when goods arrive. Resolved inside the
+   * same transaction that locks the (product, warehouse) level, so a pick cannot race a movement.
+   */
+  readonly batchNumber?: string | null | undefined;
+  /** Pre-resolved lot splits (a transfer receive re-applies exactly what its dispatch recorded). */
+  readonly batchAllocations?: readonly { readonly batchNumber: string; readonly quantity: string }[] | null | undefined;
+  readonly serialNumbers?: readonly string[] | null | undefined;
+  /** Lot dates a receipt records when the movement creates the lot. */
+  readonly manufacturingDate?: string | null | undefined;
+  readonly expiryDate?: string | null | undefined;
 }
 
 /** The idempotency key of a document's movement line: one document + one line + one direction. */

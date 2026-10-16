@@ -31,9 +31,8 @@ Capabilities are separate grants, not one flag: purchase-order management is `ed
 receipt confirmation on `ReceiptOrder`, bill issue on `Bill`, payment on `Payment`, all under
 `features.purchases`.
 
-Deferred: bill overdue marking (the daily job covers invoices only), and batch/serial *tracking*
-entities (19-S.15) — a receipt line stores the `batchNumber`/`serialNumber` the operator recorded, but
-no stock identity table validates it yet.
+Deferred: bill overdue marking (the daily job covers invoices only). Batch/serial *tracking* arrived
+with 19-S.15 — see the last section of this document.
 
 ## Inventory (19-S.14)
 
@@ -124,6 +123,49 @@ applies that plan **inside the same transaction** as the confirmation, so a refu
 confirmation back rather than leaving a confirmed document with no stock. With the flag off the plan
 stays a recorded intention, which is the honest state for an install that tracks no stock.
 
+## Batch/serial tracking and removal policies (19-S.15)
+
+The stock-identity layer, gated exactly like inventory itself: inert while `features.inventory` is
+off, and per product until `Product.stockTracking` is `batch` or `serial` (default `none`, so every
+existing product keeps the 19-S.14 path untouched).
+
+### Identity
+
+* **Lots** — `InventoryBatch` is one row per `(productId, batchNumber)`, upper-cased and unique
+  case-insensitively (migration 029). An inbound movement of a lot-tracked product must name its
+  lot; the record is created (or its blank dates filled) with the receipt that brings the stock.
+  A later receive that would *re-date* an existing lot is refused — correcting an expiry is a
+  deliberate edit of the batch record, which the record API allows (dates and the note only).
+  Quantities per (product, warehouse, lot) live in `sales_inventory_batch_stock`, written only
+  while the pair's row lock is held.
+* **Serials** — `InventorySerial` is one row per `(productId, serialNumber)` for the whole
+  installation (single organization; a warehouse scope would let one unit exist twice while it
+  travels). An inbound movement must name every unit (`serialNumbers`, count equal to the line's
+  quantity, whole units only); an outbound one either names them or is picked by the policy. Status
+  walks `inStock → inTransit → inStock` across a transfer and `inStock → shipped` on delivery;
+  `retired` (a negative correction) never comes back. The record API can neither create a unit nor
+  change its state — only a movement can.
+
+### Removal policy
+
+`inventory.removalPolicy` decides which units an outbound movement that named nothing consumes:
+`fifo` (oldest receipt first), `fefo` (earliest expiry first) or `lifo` (newest receipt first).
+`inventory.excludeExpiredStock` (default `on`) keeps lots whose expiry date has passed out of every
+automatic pick; a lot expiring *today* is still eligible (its expiry date is the last good day).
+Every ordering ends in the lot/serial number, so the same stock picture always yields the same
+suggestion — determinism is the point (§4.15), and `GET /inventory/picking-suggestions` returns
+exactly what the confirmation would later apply. A shortage is refused with the policy, the eligible
+stock and any unattributed remainder named; only a reviewed `InventoryAdjustment` may leave an
+unattributed remainder, and `POST /inventory/reconcile` then reports the identity difference per
+tracked pair.
+
+### Traceability
+
+Every ledger row records the identity it moved (`batchNumber`, the full `batchAllocations` split when
+a line spanned lots, `serialNumbers`), so "which units left on that delivery?" is a query, not an
+inference. A transfer's receive side re-applies exactly what its dispatch recorded; returns restock
+into the lot/units they name (or not at all, per disposition).
+
 ## Permissions
 
 * Warehouses are ordinary records: `create`/`read`/`edit`/`delete` on `Warehouse`.
@@ -133,8 +175,15 @@ stays a recorded intention, which is the honest state for an install that tracks
 * Adjustments may be *requested* with `create` on `InventoryAdjustment`; the decision is
   administrator-only.
 * Transfers need `create`/`edit` on `TransferOrder`; each side applies against the transfer's state.
+* Lots (`InventoryBatch`) are readable by everyone with inventory read; a client may create one and
+  correct its dates/note, never its identity. Serials (`InventorySerial`) are readable but never
+  client-writable — the `sales.writeGuard` hook names the rule for any write that is not an
+  internal movement.
 
 ## Verification
 
 See the block in [README.md](README.md#verification). `sales-inventory-ledger` is the pure suite;
-`sales-inventory` is the API suite and restores `features.inventory` in `afterAll`.
+`sales-inventory` is the API suite and restores `features.inventory` in `afterAll`. 19-S.15 adds
+`sales-picking` (pure: policy ordering, the expiry gate, allocation splits, lot/serial validation)
+and `sales-tracking` (API: variants, lot receipts and FEFO/FIFO picks, serial lifecycle, transfer
+traceability, identity reconciliation — restores every setting it flips).
