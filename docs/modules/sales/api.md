@@ -32,7 +32,7 @@ Reports the module descriptor plus facts read from the running platform — neve
     "minPlatformVersion": "1.0.0",
     "loadOrder": 320,
     "apiPrefix": "/api/v1/Sales",
-    "implementedPhases": ["19-S.0", "19-S.1", "19-S.2", "19-S.3", "19-S.4", "19-S.5", "19-S.6", "19-S.7", "19-S.8", "19-S.9", "19-S.10", "19-S.11", "19-S.12", "19-S.13"]
+    "implementedPhases": ["19-S.0", "19-S.1", "19-S.2", "19-S.3", "19-S.4", "19-S.5", "19-S.6", "19-S.7", "19-S.8", "19-S.9", "19-S.10", "19-S.11", "19-S.12", "19-S.13", "19-S.14"]
   },
   "ok": true,
   "dependencies": [            // entity-engine, crm-core-records, acl, hooks, audit-stream, jobs
@@ -339,7 +339,9 @@ when the direction matches the document: incoming settles `Invoice`, outgoing se
 stored in `targetEntity` (the kernel reserves the attribute name `entityType`), while the create/query
 API keeps accepting `entityType` as the parameter name.
 
-Inventory (warehouses, the stock ledger, transfers, reservations, batch/serial tracking entities) and
-subscriptions still have no working routes: a confirmed delivery, return or receipt order freezes the
-movement it stands for in its snapshot and refuses to be confirmed at all when
-`features.inventory` is on, because applying it is 19-S.14.
+Inventory has working routes since 19-S.14 (`/api/v1/Sales/inventory/*` for availability, stock levels,
+history, reservations, adjustments, transfers and reconciliation) on top of the metadata entities, which
+keep their generic `/api/v1/Warehouse`-style CRUD. A confirmed delivery, return or receipt order freezes
+the movement it stands for in its snapshot and, when `features.inventory` is on, applies it in the same
+transaction — with the flag off there is no stock consequence and the code says so rather than pretending.
+Batch/serial tracking entities and subscriptions still have no working routes (19-S.15 – 19-S.16).

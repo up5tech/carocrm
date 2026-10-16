@@ -75,6 +75,14 @@ export const SALES_ENTITY_TYPES = [
   "PaymentProviderEventLog",
   "CreditNoteAllocation",
   "WriteOff",
+  // 19-S.14: the inventory foundations — warehouses, the append-only movement ledger, reviewed
+  // adjustments, controlled transfers and the reservations an order places.
+  "Warehouse",
+  "InventoryTransaction",
+  "InventoryAdjustment",
+  "TransferOrder",
+  "TransferOrderItem",
+  "InventoryReservation",
 ] as const;
 
 export type SalesEntityType = (typeof SALES_ENTITY_TYPES)[number];

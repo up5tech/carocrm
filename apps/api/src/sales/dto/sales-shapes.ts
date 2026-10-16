@@ -434,3 +434,94 @@ export type CreditNoteUnallocateInput = z.infer<
   typeof CreditNoteUnallocateSchema
 >;
 export type PreviewTotalsInput = z.infer<typeof PreviewTotalsSchema>;
+
+// ---------------------------------------------------------------------------------------------
+// Phase 19-S.14 — inventory commands
+// ---------------------------------------------------------------------------------------------
+
+/** One transfer line. A positive magnitude; the direction is the transfer's, not the line's. */
+export const TransferLineSchema = z
+  .object({
+    productId: IdSchema,
+    quantity: DecimalStringSchema,
+    name: z.string().trim().min(1).max(255).optional(),
+    sku: z.string().trim().min(1).max(64).optional(),
+    unit: z.string().trim().min(1).max(32).optional(),
+  })
+  .strict();
+
+/** Create a draft warehouse transfer; `confirm`/`receive` move each side. */
+export const CreateTransferSchema = z
+  .object({
+    name: z.string().trim().min(1).max(255).optional(),
+    sourceWarehouseId: IdSchema,
+    destinationWarehouseId: IdSchema,
+    transferDate: DaySchema.optional(),
+    reason: z.string().trim().min(1).max(255).optional(),
+    trackingNumber: z.string().trim().min(1).max(64).optional(),
+    items: z.array(TransferLineSchema).min(1).max(500),
+  })
+  .strict();
+
+/** `confirm` dispatches (source outflow), `receive` completes it, `cancel` needs a reason. */
+export const TransferTransitionSchema = z
+  .object({
+    action: z.string().trim().min(1).max(40),
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+/** Request a stock correction. The reason is required; approval is a separate decision. */
+export const CreateAdjustmentSchema = z
+  .object({
+    productId: IdSchema,
+    quantityDelta: DecimalStringSchema,
+    reason: z.string().trim().min(1).max(255),
+    warehouseId: IdSchema.nullish(),
+  })
+  .strict();
+
+export const AdjustmentTransitionSchema = z
+  .object({
+    action: z.string().trim().min(1).max(40),
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+/** Place a reservation against a product/warehouse; the service applies the configured policy. */
+export const ReserveStockSchema = z
+  .object({
+    productId: IdSchema,
+    quantity: DecimalStringSchema,
+    warehouseId: IdSchema.nullish(),
+    sourceEntity: z.string().trim().min(1).max(64).nullish(),
+    sourceId: IdSchema.nullish(),
+    sourceNumber: z.string().trim().min(1).max(64).nullish(),
+    expiresAt: DaySchema.nullish(),
+  })
+  .strict();
+
+/** Release a reservation, freeing the stock it promised (id in the path). */
+export const ReleaseReservationSchema = z
+  .object({ reason: z.string().trim().min(1).max(255).optional() })
+  .strict();
+
+/** Compare the projection with the ledger, optionally narrowed to one warehouse/product. */
+export const InventoryReconcileSchema = z
+  .object({
+    warehouseId: IdSchema.nullish(),
+    productId: IdSchema.nullish(),
+  })
+  .strict();
+
+export type TransferLineInput = z.infer<typeof TransferLineSchema>;
+export type CreateTransferInput = z.infer<typeof CreateTransferSchema>;
+export type TransferTransitionInput = z.infer<typeof TransferTransitionSchema>;
+export type CreateAdjustmentInput = z.infer<typeof CreateAdjustmentSchema>;
+export type AdjustmentTransitionInput = z.infer<
+  typeof AdjustmentTransitionSchema
+>;
+export type ReserveStockInput = z.infer<typeof ReserveStockSchema>;
+export type ReleaseReservationInput = z.infer<
+  typeof ReleaseReservationSchema
+>;

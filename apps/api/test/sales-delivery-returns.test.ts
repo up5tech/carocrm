@@ -355,10 +355,12 @@ describe('the print hook and the inventory boundary (19-S.12)', () => {
     expect(rendered.body['blocks']).toBeTruthy();
   });
 
-  it('refuses to confirm a stock-moving document while inventory is enabled but has no ledger', async () => {
-    // The order and the shipment draft are prepared with inventory off, because with the flag on even
-    // *confirming the order* is refused — which is the point: nothing may claim a stock effect the
-    // ledger (19-S.14) cannot honour.
+  it('consults the stock ledger when inventory is enabled (19-S.14)', async () => {
+    // The order and the shipment draft are prepared with inventory off, so the confirmation below is
+    // the only thing that could move stock. With the flag on, confirming now *applies* the movement
+    // the snapshot froze — so a warehouse that does not exist is refused instead of the confirmation
+    // being recorded against nothing. The applied case, with a real warehouse and real stock, is
+    // `apps/api/test/sales-inventory.test.ts`.
     const orderId = await confirmedOrder('1');
     const deliveryId = await convertDelivery(orderId, '1');
     const enabled = await fix.call('POST', '/api/v1/Sales/action/settings', { features: { inventory: true } });
@@ -366,8 +368,13 @@ describe('the print hook and the inventory boundary (19-S.12)', () => {
     try {
       const refused = await transition('deliveryOrder', deliveryId, 'confirm');
       expect(refused.status).toBe(422);
-      expect(reasonOf(refused)).toMatch(/19-S\.14/);
-      expect(detailsOf(refused)).toMatchObject({ kind: 'deliveryOrder' });
+      expect(reasonOf(refused)).toMatch(/does not exist/);
+      expect(detailsOf(refused)).toMatchObject({ warehouseId: `AGENT_TEST_${fix.runId}-wh` });
+      // Nothing was applied: the document stayed a draft, and no number was consumed.
+      expect((await readDocument('deliveryOrder', deliveryId))['document']).toMatchObject({
+        status: 'draft',
+        number: null,
+      });
     } finally {
       await fix.call('POST', '/api/v1/Sales/action/settings', { features: { inventory: false } });
     }

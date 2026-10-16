@@ -53,8 +53,9 @@ export const PURCHASING_KINDS: readonly ImplementedDocumentKind[] = [
 
 /**
  * The kinds whose confirmation stands for a physical stock change: a sale order reserves, a delivery
- * ships out, a return and a receipt bring goods in (§4.10, §4.12). With `features.inventory` on and no
- * ledger to apply the movement (19-S.14), confirming one is refused rather than pretended.
+ * ships out, a return and a receipt bring goods in (§4.10, §4.12). With `features.inventory` on the
+ * ledger applies the movement the snapshot froze (19-S.14); a confirmation it cannot honour — no stock
+ * managed for the product, an over-issue, an unavailable warehouse — is refused rather than pretended.
  */
 export const STOCK_MOVING_KINDS: readonly ImplementedDocumentKind[] = [
   "salesOrder",

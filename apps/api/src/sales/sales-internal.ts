@@ -114,6 +114,36 @@ export const SERVER_OWNED_ADJUSTMENT_FIELDS: readonly string[] = [
   "reversalReason",
 ];
 
+/**
+ * Phase 19-S.14 — the inventory decision fields a client may never set.
+ *
+ * A reservation's status and its consumption/release trail, an adjustment's decision, and a
+ * transfer's lifecycle are all moved by the inventory service; the record API must not be a way to
+ * release a reservation nobody released or to mark a transfer received without the stock moving.
+ */
+export const SERVER_OWNED_INVENTORY_FIELDS: readonly string[] = [
+  "status",
+  "consumedQuantity",
+  "releasedAt",
+  "releasedBy",
+  "releaseReason",
+  "decidedBy",
+  "decidedAt",
+  "decisionReason",
+  "transactionId",
+];
+
+/** The append-only ledger: a correction is a new compensating row, never an edit (§4.15). */
+export const INVENTORY_LEDGER_ENTITY = "InventoryTransaction";
+
+/** Entities whose lifecycle the inventory service owns rather than the record API. */
+export const INVENTORY_MANAGED_ENTITIES: readonly string[] = [
+  "InventoryAdjustment",
+  "InventoryReservation",
+  "TransferOrder",
+  "TransferOrderItem",
+];
+
 /** Write-off request fields that stop being client-editable once the decision is made. */
 export const DECIDED_WRITE_OFF_FIELDS: readonly string[] = [
   "invoiceId",

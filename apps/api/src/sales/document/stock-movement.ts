@@ -1,11 +1,11 @@
 /**
  * Phase 19-S.12 / 19-S.13 — the internal contract for stock movement, and the return-restock disposition.
  *
- * Two things the plan asks for live here, and the real stock ledger (19-S.14) does **not**:
+ * Two things it owns, and the stock ledger (19-S.14) does **not**:
  *
  *  1. **A stable contract.** A confirmed delivery, return or receipt order changes stock, and the
- *     engine that owns the ledger will consume this shape rather than being passed records. The
- *     service that applies movements never has to know what a `DeliveryOrderItem` looks like.
+ *     engine that owns the ledger consumes this shape rather than being passed records. The service
+ *     that applies movements never has to know what a `DeliveryOrderItem` looks like.
  *  2. **The restock gate.** A returned line is not automatically saleable stock again: an operator
  *     records a *disposition* (`restock`, `scrap`, `quarantine`) per line, and only `restock` may
  *     become an inbound movement. The plan is explicit that "return items restocked only when
@@ -15,7 +15,7 @@
  * **Idempotency.** `movementKey` is derived from the document entity and id, never from a request
  * value, so a confirmation that is retried produces the *same* key and the ledger can refuse the
  * second application without a second row. The containing transition already refuses a second
- * confirm (the state machine), and this key is what makes that safe to rely on once 19-S.14 applies
+ * confirm (the state machine), and this key is what makes that safe to rely on as 19-S.14 applies
  * the plan: one document, one key, one movement.
  *
  * Pure: no database, no clock, no SQL. Everything the caller supplies is bound data.

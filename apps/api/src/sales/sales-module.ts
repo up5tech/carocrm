@@ -119,6 +119,13 @@ export const REQUIRED_PLATFORM_CAPABILITIES: readonly SalesPlatformCapability[] 
         { kind: "table", value: "job_logs" },
       ],
     },
+    {
+      id: "inventory-ledger",
+      label: "Inventory ledger projection",
+      // 19-S.14: the lockable projection the availability and reservation rules read. Its absence is
+      // reported rather than fatal — inventory is off by default, and every other Sales flow works.
+      evidence: [{ kind: "table", value: "sales_inventory_stock" }],
+    },
   ];
 
 export const OPTIONAL_INTEGRATIONS: readonly SalesOptionalIntegration[] = [
@@ -233,8 +240,10 @@ export const SALES_MODULE = {
    * through the kernel `document` module and emailing it through the mail module; `19-S.8`/`19-S.9` are
    * sales orders and invoices; `19-S.10` is payments and allocation; `19-S.11` is credit notes and
    * write-offs (allocation, soft reversal, request/approve/reject and the credit-note render path).
-   * `19-S.12` has its descriptors and the generic engine but not its own remaining work (stock
-   * movement for delivery and return).
+   * `19-S.12`/`19-S.13` are delivery/return orders and the purchasing half; `19-S.14` is the inventory
+   * foundations — warehouses, the append-only stock ledger, reviewed adjustments, two-sided transfers
+   * and concurrency-safe reservations, which is what now applies the movement plans those phases froze
+   * into a document's snapshot.
    *
    * A PDF *attachment* on a sent document is still not produced: the block model and the optional
    * `pdfkit` adapter exist (`@carocrm/document`), but wiring a rendered PDF into an outbound message
@@ -256,6 +265,7 @@ export const SALES_MODULE = {
     "19-S.11",
     "19-S.12",
     "19-S.13",
+    "19-S.14",
   ],
 } as const;
 

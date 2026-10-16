@@ -18,10 +18,13 @@ import {
   ADJUSTMENT_ENTITIES,
   changedKeys,
   DECIDED_WRITE_OFF_FIELDS,
+  INVENTORY_LEDGER_ENTITY,
+  INVENTORY_MANAGED_ENTITIES,
   isSalesInternalWrite,
   PAYMENT_ENTITIES,
   SERVER_OWNED_ADJUSTMENT_FIELDS,
   SERVER_OWNED_DOCUMENT_FIELDS,
+  SERVER_OWNED_INVENTORY_FIELDS,
   SERVER_OWNED_PAYMENT_FIELDS,
 } from "./sales-internal.js";
 import { SalesRecords } from "./sales-records.js";
@@ -97,6 +100,81 @@ export class SalesWriteGuardService implements OnApplicationBootstrap {
 
     if (ADJUSTMENT_ENTITIES.includes(context.entity)) {
       this.validateAdjustment(context, data);
+      return;
+    }
+
+    // 19-S.14 — the ledger is append-only and module-written, and the records that move stock have
+    // lifecycle fields only the inventory service may set.
+    if (context.entity === INVENTORY_LEDGER_ENTITY) {
+      throw new ValidationError(
+        "The inventory ledger is append-only and is written only by the inventory service; a correction is a new, compensating movement.",
+        { entity: context.entity },
+      );
+    }
+    if (INVENTORY_MANAGED_ENTITIES.includes(context.entity)) {
+      await this.validateInventory(context, data);
+    }
+  }
+
+  /**
+   * Inventory records the record API must not steer: an adjustment's decision, a reservation's
+   * lifecycle, and a transfer's state once it has started moving stock.
+   */
+  private async validateInventory(
+    context: HookContext,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    const changed =
+      context.operation === "create"
+        ? Object.keys(data)
+        : changedKeys(data, context.previous ?? {});
+    const entity = context.entity;
+    if (entity === "InventoryAdjustment") {
+      refuseServerOwned(changed, SERVER_OWNED_INVENTORY_FIELDS, entity);
+      const status = text(context.previous?.["status"]) ?? "pending";
+      if (context.operation === "update" && status !== "pending") {
+        throw new ValidationError(
+          `This adjustment is "${status}"; its decision is final, so record a new adjustment instead.`,
+          { entity, status },
+        );
+      }
+      return;
+    }
+    if (entity === "InventoryReservation") {
+      refuseServerOwned(changed, SERVER_OWNED_INVENTORY_FIELDS, entity);
+      if (context.operation === "create") {
+        throw new ValidationError(
+          "Reservations are placed through the Sales inventory command (`POST /api/v1/Sales/inventory/reserve`) or by confirming a sales order, never through the record API.",
+          { entity },
+        );
+      }
+      return;
+    }
+    if (entity === "TransferOrder") {
+      refuseServerOwned(changed, SERVER_OWNED_INVENTORY_FIELDS, entity);
+      const status = text(context.previous?.["status"]) ?? "draft";
+      if (context.operation === "update" && status !== "draft") {
+        throw new ValidationError(
+          `A transfer in state "${status}" can no longer be edited; its stock effects are already recorded.`,
+          { entity, status },
+        );
+      }
+      return;
+    }
+    if (entity === "TransferOrderItem") {
+      const parentId =
+        text(data["transferOrderId"]) ??
+        text(context.previous?.["transferOrderId"]);
+      if (parentId === undefined) return;
+      const parent = await this.records.byId("TransferOrder", parentId);
+      if (parent === undefined) return;
+      const status = text(parent.data["status"]) ?? "draft";
+      if (status !== "draft") {
+        throw new ValidationError(
+          `A transfer in state "${status}" cannot have its lines changed.`,
+          { entity, status, transferOrderId: parentId },
+        );
+      }
     }
   }
 

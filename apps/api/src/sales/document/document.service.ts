@@ -15,6 +15,7 @@ import { DatabaseService } from "../../database/database.service.js";
 import { EntityCrudService } from "../../entity/entity.service.js";
 import { currentTx, runInTransaction } from "../../entity/tx-context.js";
 import { resolveDay, storedDay } from "../clock.js";
+import { InventoryService } from "../inventory/inventory.service.js";
 import type { ExchangeRateInput } from "../money/currency.js";
 import { normalizeCurrencyCode } from "../money/currency.js";
 import type { Decimal } from "../money/decimal.js";
@@ -46,7 +47,6 @@ import {
   type ImplementedDocumentKind,
   PURCHASING_KINDS,
   type SalesDocumentDescriptor,
-  STOCK_MOVING_KINDS,
 } from "./descriptors.js";
 import {
   type FulfilmentState,
@@ -98,7 +98,7 @@ import { dueDateFor, isOverdue, type PaymentTerms } from "./terms.js";
 import type { SalesAuditContext } from "./types.js";
 
 /**
- * Phase 19-S.6 – 19-S.13 — the engine every commercial document runs on.
+ * Phase 19-S.6 – 19-S.14 — the engine every commercial document runs on.
  *
  * One implementation of the mechanics the plan describes once (§4.4): create a document with typed
  * line items, recalculate its totals **on the server for every save**, apply a named state
@@ -110,8 +110,9 @@ import type { SalesAuditContext } from "./types.js";
  * payment allocation, credit allocation, PDF/email and expiry jobs. Those live in the services that
  * own them, and none of them gets a back door into this one. Stock movement is the one deliberate
  * exception in *contract* only: a confirmed delivery or return order records the movement it has
- * confirmed (`stock-movement.ts`) inside the same frozen snapshot, and the ledger that will apply it
- * (19-S.14) consumes that plan rather than reading records.
+ * confirmed (`stock-movement.ts`) inside the same frozen snapshot, and `InventoryService` (19-S.14)
+ * applies that plan — as a ledger movement, under a per-product-and-warehouse row lock — rather than
+ * reading the document's records.
  *
  * Two rules this file exists to enforce:
  *
@@ -156,8 +157,9 @@ export interface CommercialSnapshot {
   };
   /**
    * The stock movement this document's issuance confirmed (19-S.12, 19-S.13): a delivery ships out, a
-   * return brings goods back per line disposition, a receipt brings a purchase in. The ledger that
-   * applies all of them arrives with 19-S.14.
+   * return brings goods back per line disposition, a receipt brings a purchase in. `InventoryService`
+   * applies it in the issuance transaction when `features.inventory` is on (19-S.14); with the flag
+   * off it stays a recorded intention, which is the honest state for an install that tracks no stock.
    */
   readonly stockMovement?: StockMovementPlan | undefined;
 }
@@ -213,6 +215,7 @@ export class SalesDocumentService {
     @Inject(SalesTaxService) private readonly tax: SalesTaxService,
     @Inject(SalesNumberingService)
     private readonly numbering: SalesNumberingService,
+    @Inject(InventoryService) private readonly inventory: InventoryService,
     @Inject(AclApiService) private readonly acl: AclApiService,
     @Inject(EntityCrudService) private readonly entities: EntityCrudService,
     @Inject(OutboxService) private readonly outbox: OutboxService,
@@ -874,8 +877,9 @@ export class SalesDocumentService {
    * How much of each order line the **confirmed** delivery orders have moved.
    *
    * A delivery order item names the source line it came from (`sourceItemId`), and a delivery order
-   * that was never confirmed moved nothing. This is the read the fulfilment state is derived from, and
-   * the same read a stock reservation would use once inventory arrives in 19-S.14.
+   * that was never confirmed moved nothing. This is the read the fulfilment state is derived from —
+   * and since 19-S.14 the stock ledger computes each line's reservation from the *order's* lines, so a
+   * confirmed shipment that moved stock cannot silently also be treated as still pending.
    */
   private confirmedDeliveryQuantities(
     orderId: string,
@@ -994,14 +998,9 @@ export class SalesDocumentService {
     if (transition.requiresReason === true)
       requireReason(audit.reason, `"${transition.label}"`);
     await this.assertKindAllowed(descriptor, settings);
-    assertInventoryPolicy(
-      descriptor,
-      transition,
-      settings.settings.features.inventory,
-    );
 
     if (transition.issues === true) {
-      await this.issue(descriptor, row, transition, settings);
+      await this.issue(descriptor, row, transition, settings, audit);
     } else {
       const parent = parentDocumentRefresh(descriptor, row);
       await runInTransaction(this.database.db, async () => {
@@ -1011,6 +1010,16 @@ export class SalesDocumentService {
         // Cancelling a delivery or a receipt moves the derived state back: a cancelled document
         // counted nothing, so the order it belonged to is re-derived (§4.10, §4.12).
         if (parent !== undefined) await this.refreshDerivedState(parent);
+        // A cancelled sales order no longer promises stock: its reservations are released, which is
+        // the supported way to undo a confirmation's soft hold (19-S.14).
+        if (descriptor.kind === "salesOrder" && action === "cancel") {
+          await this.inventory.releaseReservationsForSource(
+            descriptor.entity,
+            id,
+            audit.reason ?? null,
+            { correlationId: audit.correlationId ?? null },
+          );
+        }
         await this.emit(descriptor, id, action, {
           status: transition.to,
           reason: audit.reason ?? null,
@@ -1192,6 +1201,7 @@ export class SalesDocumentService {
     row: SalesRow,
     transition: DocumentTransition,
     settings: Awaited<ReturnType<SalesSettingsService["read"]>>,
+    audit: SalesAuditContext = {},
   ): Promise<void> {
     const items = await this.itemsOf(descriptor, row.id);
     // Prices are required at issuance: an unpriced line must not become an official document.
@@ -1271,6 +1281,47 @@ export class SalesDocumentService {
       // order, a delivery order advances a sales order (§4.12, §4.10). Derived, never typed.
       if (parentRefresh !== undefined)
         await this.refreshDerivedState(parentRefresh);
+      // The stock this confirmation stands for (19-S.14). With inventory off the movement plan stays a
+      // recorded intention and nothing is applied; with it on, the ledger applies the plan inside this
+      // same transaction, so a refused movement (a missing warehouse, a warehouse that would go
+      // negative) rolls the confirmation back rather than leaving a confirmed document with no stock.
+      const inventoryContext = {
+        actor: issuer,
+        correlationId: audit.correlationId ?? null,
+      };
+      if (settings.settings.features.inventory) {
+        if (stockMovement !== undefined) {
+          await this.inventory.applyMovementPlan(
+            stockMovement,
+            inventoryContext,
+          );
+          // A shipment fulfils the reservation the order placed; consuming it is what keeps
+          // `available` honest as the goods leave.
+          if (descriptor.kind === "deliveryOrder") {
+            const sourceOrderId = text(row.data["salesOrderId"]);
+            if (sourceOrderId !== undefined) {
+              await this.inventory.consumeReservationsForMove(
+                stockMovement,
+                { entity: "SalesOrder", id: sourceOrderId },
+                inventoryContext,
+              );
+            }
+          }
+        } else if (descriptor.kind === "salesOrder") {
+          // Confirming an order reserves what it promises (§6.2), which is a soft hold: it reduces
+          // `available` and never moves `on_hand`.
+          await this.inventory.reserveForSalesOrder(
+            row.id,
+            allocation.formatted,
+            text(row.data["warehouseId"]) ?? null,
+            items.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+            })),
+            inventoryContext,
+          );
+        }
+      }
       await this.outbox.insertMany(tx, [
         {
           eventType: `sales.${descriptor.kind}.${transition.action}`,
@@ -1326,11 +1377,12 @@ export class SalesDocumentService {
   }
 
   /**
-   * The stock plan a confirmed delivery, return or receipt order records (19-S.12, 19-S.13).
+   * The stock plan a confirmed delivery, return or receipt order records and the ledger applies.
    *
    * Built from the *stored* lines — including their dispositions — inside the issuance transaction, so
-   * it is frozen with the totals and the number it belongs to. Nothing applies it yet: the ledger is
-   * 19-S.14, and its idempotency key is derived from this document, not from a request.
+   * it is frozen with the totals and the number it belongs to. `InventoryService.applyMovementPlan`
+   * consumes it in that same transaction (19-S.14), and its idempotency key is derived from this
+   * document and line, never from a request, so a retried confirmation asks for the same movement once.
    */
   private stockMovementFor(
     descriptor: SalesDocumentDescriptor,
@@ -1669,29 +1721,6 @@ function parentDocumentRefresh(
   if (source === undefined) return undefined;
   const id = text(row.data[source.field]);
   return id === undefined ? undefined : { state: source.state, id };
-}
-
-/**
- * Inventory is a feature flag, and the ledger that applies a stock movement arrives with 19-S.14.
- *
- * With the flag off — the default — confirming a document has no stock consequence, and saying so is
- * honest. With the flag **on**, refusing is the only correct answer: silently confirming would leave an
- * operator believing stock had been reserved when nothing was written (§4.6 "confirmation must not
- * decrement stock unless the configured policy explicitly says it does"). The confirmed movement
- * itself is still recorded in the snapshot either way (`stock-movement.ts`), so the refusal is a
- * refusal to *apply* it, never a refusal to know about it.
- */
-function assertInventoryPolicy(
-  descriptor: SalesDocumentDescriptor,
-  transition: DocumentTransition,
-  inventoryEnabled: boolean,
-): void {
-  if (!inventoryEnabled || transition.issues !== true) return;
-  if (!STOCK_MOVING_KINDS.includes(descriptor.kind)) return;
-  throw new ValidationError(
-    `Inventory is enabled, but the ledger that applies a stock movement arrives with 19-S.14. Confirming this ${descriptor.label.toLowerCase()} would silently skip it, so it is refused.`,
-    { kind: descriptor.kind, action: transition.action },
-  );
 }
 
 /** A caller may not set a field the server owns — a crafted request must not be able to. */

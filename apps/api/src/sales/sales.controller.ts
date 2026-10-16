@@ -34,31 +34,38 @@ import { SalesQuoteSendService } from "./document/quote-send.service.js";
 import { SalesDocumentRenderService } from "./document/render.service.js";
 import type { SalesAuditContext } from "./document/types.js";
 import {
+  AdjustmentTransitionSchema,
   AllocatePaymentSchema,
   BillCreditAllocateSchema,
   BillCreditUnallocateSchema,
   BulkPriceUpdateSchema,
+  CreateAdjustmentSchema,
   CreateDocumentSchema,
   CreatePaymentRequestSchema,
   CreatePaymentSchema,
+  CreateTransferSchema,
   CreditNoteAllocateSchema,
   CreditNoteUnallocateSchema,
   DocumentConvertSchema,
   DocumentTransitionSchema,
   DocumentUnlockSchema,
   ExpireQuotesSchema,
+  InventoryReconcileSchema,
   PaymentTransferSchema,
   PaymentTransitionSchema,
   PreviewTotalsSchema,
   ProviderEventSchema,
+  ReleaseReservationSchema,
   RenderCreditNoteSchema,
   RenderDocumentSchema,
   RenderQuoteSchema,
+  ReserveStockSchema,
   ResolvePriceSchema,
   ResolveSupplierPriceSchema,
   SalesSettingsPatchSchema,
   SendQuoteSchema,
   TodaySchema,
+  TransferTransitionSchema,
   UpdateDocumentSchema,
   UpdatePaymentSchema,
   WriteOffApproveSchema,
@@ -66,6 +73,11 @@ import {
   WriteOffRejectSchema,
   WriteOffReverseSchema,
 } from "./dto/sales-shapes.js";
+import {
+  InventoryService,
+  type MovementContext,
+} from "./inventory/inventory.service.js";
+import { InventoryOperationsService } from "./inventory/inventory-ops.service.js";
 import { AllocationService } from "./payments/allocation.service.js";
 import { BillCreditService } from "./payments/bill-credit.service.js";
 import { CreditNoteService } from "./payments/credit-note.service.js";
@@ -80,7 +92,7 @@ import { SalesSettingsService } from "./sales-settings.service.js";
 import { SalesTaxService } from "./tax/tax.service.js";
 
 /**
- * Phase 19-S.1 – 19-S.13 — Sales domain commands (`/api/v1/Sales`).
+ * Phase 19-S.1 – 19-S.14 — Sales domain commands (`/api/v1/Sales`).
  *
  * Entity CRUD stays on the generic `/api/v1/:entity` API — a Product or a QuoteItem is a metadata
  * record, and the Entity Engine already serves list/detail/create/edit/delete, relations, search and
@@ -121,6 +133,9 @@ export class SalesController {
     private readonly supplierPrices: SupplierPriceService,
     @Inject(BulkPriceService) private readonly bulkPrices: BulkPriceService,
     @Inject(SalesTaxService) private readonly tax: SalesTaxService,
+    @Inject(InventoryService) private readonly inventory: InventoryService,
+    @Inject(InventoryOperationsService)
+    private readonly inventoryOps: InventoryOperationsService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
@@ -724,6 +739,182 @@ export class SalesController {
     );
   }
 
+  // -------------------------------------------------------------------------------------------
+  // Inventory (19-S.14)
+  //
+  // Warehouses, the movement ledger and reservations are metadata entities, so create/read/update
+  // stay on `/api/v1/Warehouse` and friends. These routes are the operations a single record cannot
+  // express: an availability figure that mixes on-hand, reserved and incoming; a reservation; a
+  // reviewed adjustment; a two-sided transfer; and the reconciliation of the projection against the
+  // ledger. Every one of them is refused outright while `features.inventory` is off.
+  // -------------------------------------------------------------------------------------------
+
+  /** On-hand, reserved, available and incoming for one product in one warehouse. */
+  @Get("inventory/availability")
+  async inventoryAvailability(
+    @Query("productId") productId?: string,
+    @Query("warehouseId") warehouseId?: string,
+  ) {
+    return await this.inventory.availability(
+      requireQuery(productId, "productId"),
+      warehouseId ?? null,
+    );
+  }
+
+  /** A bounded page of stock levels, optionally filtered by warehouse or product. */
+  @Get("inventory/stock")
+  async inventoryStock(
+    @Query("warehouseId") warehouseId?: string,
+    @Query("productId") productId?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return {
+      list: await this.inventory.stockList({
+        warehouseId: warehouseId ?? null,
+        productId: productId ?? null,
+        limit: numberOrUndefined(limit),
+      }),
+    };
+  }
+
+  /** Movement history, newest first. Never unbounded (§16.1). */
+  @Get("inventory/history")
+  async inventoryHistory(
+    @Query("productId") productId?: string,
+    @Query("warehouseId") warehouseId?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return {
+      list: await this.inventory.history({
+        productId: productId ?? null,
+        warehouseId: warehouseId ?? null,
+        limit: numberOrUndefined(limit),
+      }),
+    };
+  }
+
+  /** Compare the stock projection with the ledger; discrepancies are reported, never auto-corrected. */
+  @HttpCode(200)
+  @Post("inventory/reconcile")
+  async inventoryReconcile(@Body() body: unknown) {
+    const input = parse(InventoryReconcileSchema, body);
+    return await this.inventory.reconcile({
+      warehouseId: input.warehouseId ?? null,
+      productId: input.productId ?? null,
+    });
+  }
+
+  /** Active/released reservations, filtered. */
+  @Get("inventory/reservations")
+  async inventoryReservations(
+    @Query("productId") productId?: string,
+    @Query("warehouseId") warehouseId?: string,
+    @Query("status") status?: string,
+    @Query("sourceId") sourceId?: string,
+    @Query("limit") limit?: string,
+  ) {
+    return {
+      list: await this.inventory.listReservations({
+        productId: productId ?? null,
+        warehouseId: warehouseId ?? null,
+        status: status ?? null,
+        sourceId: sourceId ?? null,
+        limit: numberOrUndefined(limit),
+      }),
+    };
+  }
+
+  /** Place a reservation. Under the default `hard` policy an over-reservation is refused. */
+  @HttpCode(201)
+  @Post("inventory/reserve")
+  async reserveStock(@Body() body: unknown) {
+    const input = parse(ReserveStockSchema, body);
+    return await this.inventory.reserve({ ...input });
+  }
+
+  /** Release a reservation, freeing the stock it promised. */
+  @HttpCode(200)
+  @Post("inventory/reservation/:id/release")
+  async releaseReservation(
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const input = parse(ReleaseReservationSchema, body);
+    return await this.inventory.releaseReservation(id, input.reason ?? null);
+  }
+
+  /** Request a stock correction (reviewed, with a reason). */
+  @HttpCode(201)
+  @Post("inventory/adjustment")
+  async createAdjustment(@Body() body: unknown) {
+    const input = parse(CreateAdjustmentSchema, body);
+    return await this.inventoryOps.createAdjustment(
+      { ...input },
+      this.movementContext(undefined),
+    );
+  }
+
+  /** Approve (move the stock) or reject a pending adjustment. Administrator-only, audited. */
+  @HttpCode(200)
+  @Post("inventory/adjustment/:id/transition")
+  async transitionAdjustment(
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    this.requireAdmin("deciding inventory adjustments");
+    const input = parse(AdjustmentTransitionSchema, body);
+    const result = await this.inventoryOps.transitionAdjustment(
+      id,
+      input.action,
+      input.reason,
+      this.movementContext(undefined),
+    );
+    return result;
+  }
+
+  /** Create a draft transfer between two warehouses. */
+  @HttpCode(201)
+  @Post("inventory/transfer")
+  async createTransfer(@Body() body: unknown) {
+    const input = parse(CreateTransferSchema, body);
+    return await this.inventoryOps.createTransfer({ ...input });
+  }
+
+  /** A transfer with its lines. */
+  @Get("inventory/transfer/:id")
+  async readTransfer(@Param("id") id: string) {
+    return await this.inventoryOps.viewTransfer(id);
+  }
+
+  /** Transfers dispatched but not yet received — the safe intermediate state. */
+  @Get("inventory/transfers/inTransit")
+  async listInTransit(@Query("warehouseId") warehouseId?: string) {
+    return { list: await this.inventoryOps.listInTransit(warehouseId ?? null) };
+  }
+
+  /** `confirm` dispatches, `receive` completes, `cancel` needs a reason (draft only). */
+  @HttpCode(200)
+  @Post("inventory/transfer/:id/transition")
+  async transitionTransfer(
+    @Param("id") id: string,
+    @Body() body: unknown,
+  ) {
+    const input = parse(TransferTransitionSchema, body);
+    return await this.inventoryOps.transitionTransfer(
+      id,
+      input.action,
+      input.reason,
+      this.movementContext(undefined),
+    );
+  }
+
+  private movementContext(correlationId: string | undefined): MovementContext {
+    return {
+      actor: this.scope.principal?.userName ?? this.scope.userId ?? null,
+      correlationId: correlationId ?? null,
+    };
+  }
+
   private assertWorkerSecret(supplied: string | undefined): void {
     const expected = this.config.reportWorkerSecret;
     if (expected === "" || supplied === undefined) {
@@ -754,6 +945,22 @@ export class SalesController {
       );
     }
   }
+}
+
+/** A required query parameter, with the same validation error the body parser produces. */
+function requireQuery(value: string | undefined, name: string): string {
+  if (value === undefined || value.trim() === "") {
+    throw new InvalidQueryError(`The "${name}" query parameter is required.`, {
+      parameter: name,
+    });
+  }
+  return value.trim();
+}
+
+function numberOrUndefined(value: string | undefined): number | undefined {
+  if (value === undefined || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function parse<T extends ZodTypeAny>(schema: T, body: unknown): T["_output"] {

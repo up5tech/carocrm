@@ -188,7 +188,7 @@ error envelope with `422`. `parse()` in the controller rejects unknown shapes ra
 | Customer Success module | No | Optional; detected by the `CustomerSuccessProfile` marker |
 | Projects module | No | Present in this repository (`apps/api/src/projects`, `/api/v1/Project`); detected by the `Project` entity |
 | Product variants | No | Feature-flagged off by default (`features.productVariants`), delivered in 19-S.15 |
-| Purchases / inventory / subscriptions | No | Feature-flagged off by default; delivered in 19-S.13 / 19-S.14 / 19-S.16 |
+| Purchases / inventory / subscriptions | No | Feature-flagged off by default; purchasing delivered in 19-S.13 (`features.purchases`), inventory in 19-S.14 (`features.inventory`), subscriptions remain 19-S.16 |
 | Sales SPA screens | No | Records render through the generic metadata-driven UI; dedicated screens are 19-S.17 work |
 | Workflow / BPM events for Sales | No | Generic extension points exist; wiring is 19-S.19 work |
 
@@ -344,3 +344,39 @@ same pass removed the `ua-` prefix from the `OPTIONAL_INTEGRATIONS` ids and from
    installation's Sales settings row follows the rename.
 3. `app_settings` may hold an orphaned `uaSales` row on an installation where a `sales` row already
    existed when migration `022` ran. It is inert; deleting it is an operator decision.
+
+### 10.5 Phase 19-S.14 (inventory) — executed checks
+
+Added when the inventory foundations were built; every line below was actually run from a shell
+against the configured primary database.
+
+* `pnpm exec tsc --noEmit -p tsconfig.json` — clean.
+* `pnpm lint` (`eslint . --max-warnings=0`) — clean. (Two import-sort fixes and the removal of
+  needless escapes in `ledger.ts` were applied with `eslint --fix` on the touched files only.)
+* `pnpm vitest run apps/api/test/sales-inventory-ledger.test.ts` — 15 passed (pure: no database).
+* `pnpm vitest run apps/api/test/sales-inventory.test.ts` — 8 passed, each suite in its own
+  invocation, against the configured primary database. The eighth fires **two parallel** reservations
+  of the whole on-hand quantity at one warehouse and asserts exactly one `201` and one `422` with one
+  row and `reserved = onHand` afterwards — the plan's "concurrent reservations cannot overbook"
+  criterion; the mutual exclusion itself is the `SELECT … FOR UPDATE` on the (product, warehouse)
+  level row inside `placeReservation` (`inventory.service.ts`), taken for the length of the
+  transaction, and the pool is `max: 10` so the two requests really do run on separate connections.
+  Migration `028_phase19_sales_inventory.sql`
+  (additive: one new table `sales_inventory_stock` plus indexes) was applied by the test harness's
+  `migrateDb` on the first run. Records are `AGENT_TEST_<runId>`-marked and deleted by exact id, plus a
+  narrow delete of the projection rows and internally-created movement rows by the run's product and
+  warehouse ids; `features.inventory` is restored in `afterAll`.
+* The whole Sales suite was re-run after the change and still passes — `pnpm vitest run apps/api/test/sales-`:
+  19 files, 250 tests. Per suite: `sales-delivery-returns` (15), `sales-purchasing` (16),
+  `sales-module` (11), `sales-documents` (14), `sales-quotes` (9), `sales-credits` (16),
+  `sales-payments` (13), `sales-catalog` (10), `sales-pricing` (15), `sales-tax` (19),
+  `sales-inventory` (8), and the eight pure, database-free suites (104: `sales-inventory-ledger` 15,
+  `sales-money` 20, `sales-allocation-math` 29, `sales-quote-document` 6, `sales-stock-movement` 8,
+  `sales-terms` 10, `sales-fulfilment` 9, `sales-supplier-price` 7). The worker's `sales-handlers` (5)
+  passes separately.
+* `sales-delivery-returns.test.ts` had one assertion rewritten: with `features.inventory` on a
+  stock-moving confirmation is no longer *refused* (that was 19-S.14's placeholder); it now consults
+  the ledger and is refused only for a warehouse that does not exist, which the test asserts, and the
+  applied case lives in `sales-inventory.test.ts`.
+* **Not** executed: any browser/UI check, and any external payment/email/shipment side effect — none
+  is reachable from the inventory code paths.

@@ -1,21 +1,22 @@
 # Sales module (Phase 19-S)
 
 Implemented in `apps/api/src/sales` (backend) with metadata in `database/seed-metadata.ts`, seeds in
-`database/seed.ts` and migrations `database/migrations/021_phase19_sales.sql` +
-`022_phase19_sales_module_rename.sql`. Functional reference: EspoCRM Sales Pack documentation
+`database/seed.ts` and migrations `database/migrations/021_phase19_sales.sql` through
+`028_phase19_sales_inventory.sql`. Functional reference: EspoCRM Sales Pack documentation
 (<https://docs.espocrm.com/extensions/sales-pack/overview/>), reproduced as clean-room TypeScript
 behaviour.
 
 **Status: the commercial foundation (19-S.0 – 19-S.5), the shared document engine (19-S.6), the
 quotes, sales orders, invoices and payments phases (19-S.7 – 19-S.10), credit notes and write-offs
 (19-S.11), delivery and return orders (19-S.12) and the purchasing half — suppliers, purchase orders,
-receipt orders, supplier bills and bill credits (19-S.13).** The authoritative scope and the
-phase-by-phase roadmap live in [`PLAN_Phase_19_Sales.md`](../../PLAN_Phase_19_Sales.md); the list of
-phases actually claimed is `SALES_MODULE.implementedPhases` in
-`apps/api/src/sales/sales-module.ts`, and `/api/v1/Sales/action/health` reports it. Warehouses, the
-stock ledger, transfers, reservations and batch/serial tracking (19-S.14 – 19-S.15) and subscriptions
-(19-S.16) are **not** claimed: a confirmed document records the stock movement it stands for, and no
-ledger applies it yet.
+receipt orders, supplier bills and bill credits (19-S.13) — and the inventory foundations (19-S.14):
+warehouses, the append-only stock ledger, reviewed adjustments, two-sided transfers and
+concurrency-safe reservations, which is what now applies the movement plans a confirmed document
+freezes.** The authoritative scope and the phase-by-phase roadmap live in
+[`PLAN_Phase_19_Sales.md`](../../PLAN_Phase_19_Sales.md); the list of phases actually claimed is
+`SALES_MODULE.implementedPhases` in `apps/api/src/sales/sales-module.ts`, and
+`/api/v1/Sales/action/health` reports it. Batch/lot and serial tracking (19-S.15) and subscriptions
+(19-S.16) are **not** claimed.
 
 ## What it gives a user
 
@@ -55,6 +56,8 @@ apps/api/src/sales/
                                  the stock-movement contract, snapshots, locking, line items, terms,
                                  number series, the shared block model and render/send services
   payments/                      payments, allocation, balances, credit notes, bill credits, write-offs
+  inventory/                     the movement ledger and its projection, availability, reservations,
+                                 reviewed adjustments, two-sided transfers, reconciliation (19-S.14)
   dto/sales-shapes.ts            Zod request shapes
 ```
 
@@ -82,8 +85,9 @@ No demo products, price books or tax rules are ever created.
   order line, a return against what was delivered, a receipt against what was ordered. Over-moving is
   refused with the remainder attached, never clamped.
 * **Stock effects are recorded, never pretended** — a confirmed delivery/return/receipt freezes its
-  movement plan with one key per document; applying it is 19-S.14's job, and with
-  `features.inventory` on a stock-moving confirmation is refused instead of lying.
+  movement plan with one key per document, and since 19-S.14 `InventoryService` applies that plan in
+the same transaction when `features.inventory` is on. With the flag off the plan stays a recorded
+intention and no stock consequence is claimed.
 * **Two equally specific, equal-priority price rules are a conflict**, not an arbitrary winner.
 * **Numbers are allocated at issuance** by default, and a retried allocation for the same document
   returns its existing number instead of consuming a second one.
@@ -101,7 +105,7 @@ document kind**, so a document type is data rather than a copy of the engine:
 | `line-items.ts` | typed line validation, item-record payloads, ordered items, remaining-quantity guards |
 | `document.service.ts` | create / update / recalculate / transition / issue / unlock / convert — every number server-calculated, every write through the Entity Engine |
 | `fulfilment.ts`, `receipt.ts` | the *derived* state of a sales order (from confirmed deliveries) and of a purchase order (from confirmed receipts) |
-| `stock-movement.ts` | the internal contract a confirmation freezes into its snapshot, and the return-restock gate |
+| `stock-movement.ts` | the internal contract a confirmation freezes into its snapshot, and the return-restock gate — `inventory/inventory.service.ts` consumes it (19-S.14) |
 | `terms.ts` | due dates computed from the referenced payment terms |
 | `lock.ts`, `snapshot.ts` | protected fields, privileged unlock with a reason, and the frozen commercial snapshot an issued document is rendered from |
 | `render-blocks.ts`, `render.service.ts` | the block model every kind shares, and the print/PDF hook that draws any document from it |
@@ -125,14 +129,15 @@ DELETE /api/v1/Sales/document/:kind/:id            delete a **draft** only
 `purchaseOrder`, `receiptOrder`, `bill`, `billCredit`.
 
 **Implemented:** the engine, the ten descriptors, the document + item metadata
-(`database/seed-metadata.ts`), migrations `023_phase19_sales_documents.sql` and
-`027_phase19_sales_purchasing.sql`, and the routes above.
+(`database/seed-metadata.ts`), migrations `023_phase19_sales_documents.sql`,
+`027_phase19_sales_purchasing.sql` and `028_phase19_sales_inventory.sql`, and the routes above.
 
-**Not implemented yet — and deliberately not claimed by `implementedPhases`:** the stock *ledger* that
-applies a movement plan (19-S.14) and PDF *attachments* on a sent document. A PDF renderer exists
-(`@carocrm/document`'s optional `pdfkit` adapter walks the same block model the text rendering uses),
-and every document kind now exposes that block model through `…/render`, but turning a rendered PDF
-into an outbound attachment needs the attachment-storage path, which is not built.
+**Not implemented yet — and deliberately not claimed by `implementedPhases`:** PDF *attachments* on a
+sent document. A PDF renderer exists (`@carocrm/document`'s optional `pdfkit` adapter walks the same
+block model the text rendering uses), and every document kind exposes that block model through
+`…/render`, but turning a rendered PDF into an outbound attachment needs the attachment-storage path,
+which is not built. Stock is **not** in this list: the ledger that applies a movement plan arrived in
+19-S.14 — see [Inventory](#inventory-19-s14) and [purchases-and-inventory.md](purchases-and-inventory.md).
 
 ### Sales orders (19-S.8) and invoices (19-S.9)
 
@@ -149,7 +154,7 @@ into an outbound attachment needs the attachment-storage path, which is not buil
 | Overdue detection + notification event + job | done — `markOverdueInvoices()`, an admin route, a worker route and the `sales.markOverdueInvoices` job on a daily cron. Idempotent: an already-overdue invoice is not a candidate. |
 | Void/correction and privileged unlock | done (`void` with a reason; `unlock` needs the permission plus a reason) |
 | Conversion double-billing protection | done — one generated document per (source, destination kind), and a quote that already became an order cannot also be invoiced directly |
-| Stock effects on confirmation | **explicitly refused** while `features.inventory` is on, because reservations arrive with 19-S.14. With the flag off (the default) there is no stock consequence and the code says so rather than pretending. |
+| Stock effects on confirmation | applied by the ledger when `features.inventory` is on — the confirmation writes the movement its snapshot froze (a reservation on an order, an issue on a delivery, a re-entry on a return) in the same transaction, and is refused if it cannot honour it. With the flag off (the default) there is no stock consequence and the code says so rather than pretending. |
 | Creation from an Opportunity / a Subscription Period | not implemented (the subscription source arrives with 19-S.16) |
 | PDF / email / e-invoice adapter contracts | blocked — no document template system in the kernel |
 | Tests | not written for the API side |
@@ -312,9 +317,52 @@ document is refused with a clear 403 rather than quietly creating records nobody
 | Supplier prices are resolved by `POST /api/v1/Sales/action/resolveSupplierPrice`, which reads `SupplierProductPrice` only; the sales resolver never reads it, so a buying price cannot leak into a quote | `pricing/supplier-price.ts` |
 | Capabilities are separate grants, not one flag: purchase-order management is `edit` on `PurchaseOrder`, receipt confirmation on `ReceiptOrder`, bill issue on `Bill`, payment on `Payment`, all under the `purchases` feature | [permissions.md](permissions.md) |
 
-**Deferred, honestly:** bill overdue marking (the daily job covers invoices only), warehouse links
-until 19-S.14, and batch/serial *tracking* entities until 19-S.15 — a receipt line stores the
+**Deferred, honestly:** bill overdue marking (the daily job covers invoices only), and batch/serial
+*tracking* entities until 19-S.15 — a receipt line stores the
 `batchNumber`/`serialNumber` the operator recorded, but no stock identity table validates it yet.
+
+## Inventory (19-S.14)
+
+The stock ledger. `apps/api/src/sales/inventory` owns it, it is off unless `features.inventory` is on,
+and it is the only thing that changes a quantity — a confirmed delivery/return/receipt applies the
+plan its snapshot froze, and nothing else writes `on_hand`. See
+[purchases-and-inventory.md](purchases-and-inventory.md) for the detail.
+
+| Rule | Where it lives |
+|---|---|
+| The ledger (`InventoryTransaction`) is **append-only**: every physical change is a row with a signed delta whose sign is fixed by its `transactionType`, a source document and (for a correction) a reason; a fix is a **new compensating** row, never an edit | `inventory/ledger.ts`, `inventory/inventory.service.ts` |
+| Movements are **idempotent** by `movementKey`, derived from the source document and line — never from a request — and backed by a unique index | `movementKeyFor`, migration 028 |
+| Availability keeps four figures apart: `onHand` (the sum of the ledger), `reserved` (soft promises), `available` (`onHand − reserved`) and `incoming` (confirmed purchase orders net of receipts, plus in-transit transfers) | `stockLevel`, `inventory.service.availability` |
+| A **projection** (`sales_inventory_stock`) is the lock target and the fast read; `reconcile()` compares it with the ledger and **reports** a discrepancy rather than auto-correcting it | migration 028, `inventory.service.reconcile` |
+| Concurrent reservations cannot overbook: every read-modify-write takes `SELECT … FOR UPDATE` on the (product, warehouse) row | `lockLevel` |
+| A movement that would take a warehouse below zero is refused unless `inventory.allowNegativeStock` is deliberately on | `recordMovements` |
+| An **adjustment** is reviewed: `pending` → `applied` (the ledger row is written) or `rejected`, with a required reason; the decision is administrator-only | `inventory-ops.service.ts` |
+| A **transfer** moves stock in two linked steps — `confirm` dispatches (source outflow) and puts the goods `inTransit`, `receive` completes it (destination inflow). A dispatched transfer cannot be cancelled: what is in transit is visible as `incoming`, not lost | `inventory-ops.service.ts` |
+| Confirming a **sales order** reserves what it promises (a soft hold); a **delivery** consumes the reservation as it ships; **cancelling** a confirmed order releases it | `document.service.ts` → `InventoryService` |
+| Warehouse, ledger, transfer and reservation commands are refused outright while the feature is off, naming the setting | `InventoryService.requireEnabled` |
+
+Commands (all under the module's own prefix):
+
+```text
+GET    /api/v1/Sales/inventory/availability?productId=&warehouseId=   on-hand/reserved/available/incoming
+GET    /api/v1/Sales/inventory/stock?warehouseId=&productId=          a bounded page of levels
+GET    /api/v1/Sales/inventory/history?productId=&warehouseId=        the movement history, newest first
+POST   /api/v1/Sales/inventory/reconcile                              projection vs ledger
+GET    /api/v1/Sales/inventory/reservations?...                       active/released promises
+POST   /api/v1/Sales/inventory/reserve                                place a reservation
+POST   /api/v1/Sales/inventory/reservation/:id/release                release one
+POST   /api/v1/Sales/inventory/adjustment                             request a reviewed correction
+POST   /api/v1/Sales/inventory/adjustment/:id/transition              approve (moves stock) or reject
+POST   /api/v1/Sales/inventory/transfer                               create a draft transfer
+GET    /api/v1/Sales/inventory/transfer/:id                           a transfer with its lines
+GET    /api/v1/Sales/inventory/transfers/inTransit?warehouseId=       dispatched but not received
+POST   /api/v1/Sales/inventory/transfer/:id/transition                confirm / receive / cancel
+```
+
+Warehouses themselves are ordinary metadata records (`/api/v1/Warehouse`); `Warehouse`,
+`InventoryTransaction`, `InventoryAdjustment`, `TransferOrder`/`TransferOrderItem` and
+`InventoryReservation` are the six entities this phase registers, and the write guard refuses every
+client write to the ledger and every client-set lifecycle field on the others.
 
 ## Verification
 
@@ -323,14 +371,15 @@ pnpm typecheck && pnpm lint
 # Pure: no database, no clock, no socket.
 pnpm vitest run apps/api/test/sales-terms.test.ts apps/api/test/sales-fulfilment.test.ts \
   apps/api/test/sales-allocation-math.test.ts apps/api/test/sales-quote-document.test.ts \
-  apps/api/test/sales-stock-movement.test.ts apps/api/test/sales-supplier-price.test.ts
+  apps/api/test/sales-stock-movement.test.ts apps/api/test/sales-supplier-price.test.ts \
+  apps/api/test/sales-inventory-ledger.test.ts
 # API, against the configured primary database (one invocation per suite — see the note below).
 pnpm vitest run apps/api/test/sales-module.test.ts apps/api/test/sales-catalog.test.ts \
   apps/api/test/sales-pricing.test.ts apps/api/test/sales-tax.test.ts \
   apps/api/test/sales-money.test.ts apps/api/test/sales-documents.test.ts \
   apps/api/test/sales-payments.test.ts apps/api/test/sales-quotes.test.ts \
   apps/api/test/sales-credits.test.ts apps/api/test/sales-delivery-returns.test.ts \
-  apps/api/test/sales-purchasing.test.ts
+  apps/api/test/sales-purchasing.test.ts apps/api/test/sales-inventory.test.ts
 # The worker has its own vitest config, so its suites are not collected by the root one.
 cd apps/worker && pnpm vitest run src/handlers/sales-handlers.test.ts
 ```
@@ -362,7 +411,14 @@ reverse with the administrator gate, approval-time re-check, forge refusals and 
 render; `sales-delivery-returns` (19-S.12) covers lineage, partial and over-sized deliveries, the
 derived fulfilment state and its idempotent refresh, the confirmation-twice refusal, the frozen
 movement plan and its key, return dispositions through to the snapshot, the cancellation policy and
-the inventory-enabled refusal; `sales-purchasing` (19-S.13) covers the feature gate, the derived
+the ledger being consulted when inventory is enabled (19-S.14); `sales-inventory-ledger` tests the
+signed-quantity rules, availability, the reservation policy, both small state machines and the
+reconciliation with no database; `sales-inventory` (19-S.14) covers the feature gate, a reviewed
+adjustment (pending moves nothing, approval moves stock once), the append-only ledger, the
+negative-stock refusal, reserve/over-reserve/release, two **parallel** reservations of the whole
+quantity (one wins, one is refused, one row survives), both sides of a transfer with the in-transit
+state and a double-receive refusal, reconciliation, and stock moving with a confirmed order and
+shipped delivery (reserve → consume → release on cancel); `sales-purchasing` (19-S.13) covers the feature gate, the derived
 receipt state across partial receipts, over-receipt refusal, receipt batch facts, purchase→receipt→
 bill traceability, terms-computed bill due dates, supplier payment allocation with its direction and
 counterparty refusals, bill-credit allocate/reverse/remainder refusals with the row kept, the supplier
@@ -376,5 +432,6 @@ dedicated Sales screens are 19-S.17 work.
 * [product-catalog-and-pricing.md](product-catalog-and-pricing.md) — catalog, price books, rules, resolution
 * [money-tax-currency.md](money-tax-currency.md) — decimal rules, currency scales, tax engine, totals
 * [api.md](api.md) — the domain commands and their payloads
+* [purchases-and-inventory.md](purchases-and-inventory.md) — purchasing, warehouses, the stock ledger, reservations
 * [permissions.md](permissions.md) — who may do what, with worked examples
 * [../../implementation/sales-repository-audit.md](../../implementation/sales-repository-audit.md) — the 19-S.0 audit

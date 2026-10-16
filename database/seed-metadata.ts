@@ -766,6 +766,20 @@ export const coreMetadata: MetadataSeedEntry[] = [
   salesBillCreditItemEntity(),
   salesBillCreditAllocationEntity(),
 
+  // -----------------------------------------------------------------------
+  // Phase 19-S.14 — inventory (`sales`)
+  // -----------------------------------------------------------------------
+  //
+  // Warehouses, the append-only movement ledger, reviewed adjustments, controlled transfers and the
+  // reservations an order places (PLAN_Phase_19_Sales.md §4.15, §5.5). The state lists here mirror
+  // `apps/api/src/sales/inventory/ledger.ts`; that module is the authority.
+  salesWarehouseEntity(),
+  salesInventoryTransactionEntity(),
+  salesInventoryAdjustmentEntity(),
+  salesTransferOrderEntity(),
+  salesTransferOrderItemEntity(),
+  salesInventoryReservationEntity(),
+
   // -------------------------------------------------------------------------
   // Phase 19-S.10 – 19-S.11 — payments, allocations, corrections (`sales`)
   // -------------------------------------------------------------------------
@@ -1583,7 +1597,12 @@ function salesSalesOrderEntity(): MetadataSeedEntry {
     extraFields: {
       opportunityId: { type: 'link', entityKey: 'Opportunity', inDetail: true, inEdit: true },
       requiredDeliveryDate: { type: 'date', inList: true, inDetail: true, inEdit: true },
-      // Promoted to a link to `Warehouse` in 19-S.14, when the inventory entities exist.
+      //
+      // Deliberately a bare id (not a `link` to `Warehouse`): a draft may be prepared before a
+      // location is chosen, and an issued document must keep rendering after its warehouse is
+      // deactivated. 19-S.14 resolves and validates it against the registered `Warehouse` at the
+      // moment stock actually moves (`InventoryService.requireWarehouse`), which is where a bad id
+      // must be refused — not at draft save.
       warehouseId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
     },
     extraEditFields: ['requiredDeliveryDate', 'warehouseId', 'opportunityId'],
@@ -1938,6 +1957,268 @@ function salesBillCreditAllocationEntity(): MetadataSeedEntry {
       },
       record: { displayField: 'name', removable: false },
       client: { web: false },
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 19-S.14 — inventory: warehouses, the stock ledger, transfers and reservations
+// ---------------------------------------------------------------------------
+//
+// The ledger is an **append-only** record stream, not an editable entity: every physical quantity
+// change is a row with a signed delta, a transaction type, a source document and (where one is
+// needed) a reason, and a correction is a *new, compensating* row rather than an edit (§4.15
+// invariant 4). It is a metadata entity so list/detail/search/ACL/audit come from the Entity Engine;
+// the write guard refuses every client write, and only `InventoryService` writes it.
+//
+// Availability is *not* stored here: `on_hand` is the sum of the ledger, and the persisted projection
+// (`sales_inventory_stock`, migration 028) exists for locking and fast reads. Neither is a metadata
+// entity — the projection is module infrastructure, exactly like `sales_number_series`.
+
+/** A physical location stock is tracked at (§4.15). */
+function salesWarehouseEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'Warehouse',
+    data: {
+      name: 'Warehouse',
+      label: 'Warehouse',
+      isEntity: true,
+      fields: salesFields({
+        code: { type: 'varchar', maxLength: 32, inList: true, inDetail: true, inEdit: true, sortable: true, audited: true },
+        active: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true, audited: true },
+        address: { type: 'text', inDetail: true, inEdit: true },
+        sortOrder: { type: 'int', defaultValue: 0, inList: true, inDetail: true, inEdit: true },
+        /** The fallback when a stock-moving document names no warehouse and settings do not either. */
+        isDefault: { type: 'bool', defaultValue: false, inList: true, inDetail: true, inEdit: true },
+      }),
+      relations: {
+        // The movements recorded at this location.
+        transactions: { type: 'oneToMany', target: 'InventoryTransaction', mappedBy: 'warehouse' },
+      },
+      indexes: [
+        { name: 'idx_warehouse_code', fields: ['code'] },
+        { name: 'idx_warehouse_active', fields: ['active'] },
+      ],
+      layouts: {
+        list: [{ entity: 'Warehouse', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'code', 'active', 'isDefault', 'sortOrder', 'modifiedAt'] }] }],
+        detail: [{ entity: 'Warehouse', type: 'detail', panels: [{ name: 'main', label: 'Warehouse', position: 0, fields: ['name', 'description', 'code', 'address', 'active', 'isDefault', 'sortOrder', 'assignedUserId', 'teams'] }] }],
+        edit: [{ entity: 'Warehouse', type: 'edit', panels: [{ name: 'main', label: 'Warehouse', position: 0, fields: ['name', 'description', 'code', 'address', 'active', 'isDefault', 'sortOrder', 'assignedUserId', 'teams'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+    },
+  };
+}
+
+/**
+ * One immutable stock movement. `transactionType` values mirror `INVENTORY_TRANSACTION_TYPES` in
+ * `apps/api/src/sales/inventory/ledger.ts`; the sign of `quantityDelta` is fixed by the type.
+ */
+function salesInventoryTransactionEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'InventoryTransaction',
+    data: {
+      name: 'InventoryTransaction',
+      label: 'Inventory Transaction',
+      isEntity: true,
+      fields: salesFields({
+        transactionType: { type: 'enum', values: ['openingBalance', 'receipt', 'delivery', 'return', 'adjustment', 'transferOut', 'transferIn', 'correction'], required: true, inList: true, inDetail: true, sortable: true },
+        productId: { type: 'link', entityKey: 'Product', required: true, inList: true, inDetail: true },
+        warehouseId: { type: 'link', entityKey: 'Warehouse', required: true, inList: true, inDetail: true },
+        /** Signed: outbound movements are negative. Canonical decimal string, never a JSON number. */
+        quantityDelta: decimalField({ required: true, inList: true, inDetail: true }),
+        /** The projection's on-hand for the pair immediately after this row — a printed audit trail. */
+        balanceAfter: decimalField({ inList: true, inDetail: true }),
+        sourceEntity: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+        sourceId: { type: 'varchar', maxLength: 64, inDetail: true },
+        sourceNumber: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+        /** The idempotency key; unique across the ledger (migration 028). */
+        movementKey: { type: 'varchar', maxLength: 200, inDetail: true },
+        /** Pairs the two sides of one transfer. */
+        transferGroupId: { type: 'varchar', maxLength: 64, inDetail: true },
+        reason: { type: 'varchar', maxLength: 255, inList: true, inDetail: true },
+        occurredAt: { type: 'datetime', required: true, inList: true, inDetail: true, sortable: true },
+        actor: { type: 'varchar', maxLength: 64, inDetail: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_inventory_transaction_product', fields: ['productId'] },
+        { name: 'idx_inventory_transaction_warehouse', fields: ['warehouseId'] },
+        { name: 'idx_inventory_transaction_source', fields: ['sourceEntity', 'sourceId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'InventoryTransaction', type: 'list', panels: [{ name: 'list', position: 0, fields: ['occurredAt', 'transactionType', 'productId', 'warehouseId', 'quantityDelta', 'balanceAfter', 'sourceNumber'] }] }],
+        detail: [{ entity: 'InventoryTransaction', type: 'detail', panels: [{ name: 'main', label: 'Movement', position: 0, fields: ['occurredAt', 'transactionType', 'productId', 'warehouseId', 'quantityDelta', 'balanceAfter', 'sourceEntity', 'sourceId', 'sourceNumber', 'movementKey', 'transferGroupId', 'reason', 'actor'] }] }],
+        edit: [],
+      },
+      // Append-only: a correction is a new compensating row, so a ledger row is never removed (§4.15).
+      record: { displayField: 'name', removable: false },
+      client: {},
+      acl: { permissions: { InventoryTransaction: { create: 'yes', read: 'all', edit: 'no', delete: 'no', stream: 'all' } } },
+    },
+  };
+}
+
+/** A reviewed correction to a product/warehouse balance (§4.15 "reviewed corrections"). */
+function salesInventoryAdjustmentEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'InventoryAdjustment',
+    data: {
+      name: 'InventoryAdjustment',
+      label: 'Inventory Adjustment',
+      isEntity: true,
+      fields: salesFields({
+        productId: { type: 'link', entityKey: 'Product', required: true, inList: true, inDetail: true },
+        warehouseId: { type: 'link', entityKey: 'Warehouse', required: true, inList: true, inDetail: true },
+        /** Signed: a write-off is negative, a found-stock correction is positive. */
+        quantityDelta: decimalField({ required: true, inList: true, inDetail: true }),
+        reason: { type: 'varchar', maxLength: 255, required: true, inList: true, inDetail: true },
+        status: { type: 'enum', values: ['pending', 'applied', 'rejected'], defaultValue: 'pending', inList: true, inDetail: true, audited: true },
+        requestedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        requestedAt: { type: 'datetime', inList: true, inDetail: true },
+        decidedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        decidedAt: { type: 'datetime', inDetail: true },
+        decisionReason: { type: 'varchar', maxLength: 255, inDetail: true },
+        /** The ledger row the approval wrote; empty while the request is pending. */
+        transactionId: { type: 'varchar', maxLength: 64, inDetail: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_inventory_adjustment_status', fields: ['status'] },
+        { name: 'idx_inventory_adjustment_product', fields: ['productId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'InventoryAdjustment', type: 'list', panels: [{ name: 'list', position: 0, fields: ['status', 'productId', 'warehouseId', 'quantityDelta', 'reason', 'requestedAt'] }] }],
+        detail: [{ entity: 'InventoryAdjustment', type: 'detail', panels: [{ name: 'main', label: 'Adjustment', position: 0, fields: ['status', 'productId', 'warehouseId', 'quantityDelta', 'reason', 'requestedBy', 'requestedAt', 'decidedBy', 'decidedAt', 'decisionReason', 'transactionId'] }] }],
+        edit: [],
+      },
+      record: { displayField: 'name', removable: false },
+      client: {},
+    },
+  };
+}
+
+/**
+ * A controlled move of stock between two warehouses (§4.15 invariant 5).
+ *
+ * `inTransit` is the safe intermediate state: dispatch applies the source outflow and receipt
+ * applies the destination inflow, so one half is always visible rather than silently missing.
+ */
+function salesTransferOrderEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'TransferOrder',
+    data: {
+      name: 'TransferOrder',
+      label: 'Transfer Order',
+      isEntity: true,
+      fields: salesFields({
+        sourceWarehouseId: { type: 'link', entityKey: 'Warehouse', required: true, inList: true, inDetail: true, inEdit: true },
+        destinationWarehouseId: { type: 'link', entityKey: 'Warehouse', required: true, inList: true, inDetail: true, inEdit: true },
+        transferDate: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+        status: { type: 'enum', values: ['draft', 'inTransit', 'received', 'cancelled'], defaultValue: 'draft', inList: true, inDetail: true, audited: true },
+        reason: { type: 'varchar', maxLength: 255, inDetail: true, inEdit: true },
+        trackingNumber: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+        confirmedAt: { type: 'datetime', inDetail: true },
+        receivedAt: { type: 'datetime', inDetail: true },
+      }),
+      relations: {
+        items: { type: 'oneToMany', target: 'TransferOrderItem', mappedBy: 'transferOrder' },
+      },
+      indexes: [
+        { name: 'idx_transfer_order_status', fields: ['status'] },
+        { name: 'idx_transfer_order_destination', fields: ['destinationWarehouseId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'TransferOrder', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'status', 'sourceWarehouseId', 'destinationWarehouseId', 'transferDate', 'modifiedAt'] }] }],
+        detail: [{ entity: 'TransferOrder', type: 'detail', panels: [{ name: 'main', label: 'Transfer', position: 0, fields: ['name', 'description', 'status', 'sourceWarehouseId', 'destinationWarehouseId', 'transferDate', 'trackingNumber', 'reason', 'confirmedAt', 'receivedAt'] }] }],
+        edit: [{ entity: 'TransferOrder', type: 'edit', panels: [{ name: 'main', label: 'Transfer', position: 0, fields: ['name', 'description', 'sourceWarehouseId', 'destinationWarehouseId', 'transferDate', 'trackingNumber', 'reason'] }] }],
+      },
+      record: { displayField: 'name', removable: false },
+      client: {},
+    },
+  };
+}
+
+function salesTransferOrderItemEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'TransferOrderItem',
+    data: {
+      name: 'TransferOrderItem',
+      label: 'Transfer Order Item',
+      isEntity: true,
+      fields: {
+        ...standardFields,
+        name: { ...standardFields['name'], required: false },
+        transferOrderId: { type: 'link', entityKey: 'TransferOrder', required: true, inList: true, inDetail: true },
+        position: { type: 'int', defaultValue: 0, inList: true, inDetail: true },
+        productId: { type: 'link', entityKey: 'Product', required: true, inList: true, inDetail: true },
+        sku: { type: 'varchar', maxLength: 64, inDetail: true },
+        unit: { type: 'varchar', maxLength: 32, inDetail: true },
+        quantity: decimalField({ required: true, inList: true, inDetail: true }),
+      },
+      relations: {},
+      indexes: [
+        { name: 'idx_transfer_order_item_parent', fields: ['transferOrderId'] },
+        { name: 'idx_transfer_order_item_product', fields: ['productId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'TransferOrderItem', type: 'list', panels: [{ name: 'list', position: 0, fields: ['position', 'productId', 'sku', 'quantity'] }] }],
+        detail: [{ entity: 'TransferOrderItem', type: 'detail', panels: [{ name: 'main', label: 'Line', position: 0, fields: ['position', 'productId', 'sku', 'unit', 'quantity'] }] }],
+        edit: [],
+      },
+      record: { displayField: 'name', removable: false },
+      client: { web: false },
+    },
+  };
+}
+
+/**
+ * A soft promise of stock, distinct from the physical movement (§4.15 "reservations for outstanding
+ * orders"). It reduces `available` and never changes `on_hand`; shipping consumes it.
+ */
+function salesInventoryReservationEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'InventoryReservation',
+    data: {
+      name: 'InventoryReservation',
+      label: 'Inventory Reservation',
+      isEntity: true,
+      fields: salesFields({
+        productId: { type: 'link', entityKey: 'Product', required: true, inList: true, inDetail: true },
+        warehouseId: { type: 'link', entityKey: 'Warehouse', required: true, inList: true, inDetail: true },
+        /** The amount still reserved; consumption reduces it and records the total in `consumedQuantity`. */
+        quantity: decimalField({ required: true, inList: true, inDetail: true }),
+        consumedQuantity: decimalField({ inList: true, inDetail: true }),
+        sourceEntity: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+        sourceId: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+        sourceNumber: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+        status: { type: 'enum', values: ['active', 'consumed', 'released'], defaultValue: 'active', inList: true, inDetail: true },
+        reservedAt: { type: 'datetime', inList: true, inDetail: true },
+        reservedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        releasedAt: { type: 'datetime', inDetail: true },
+        releasedBy: { type: 'varchar', maxLength: 64, inDetail: true },
+        releaseReason: { type: 'varchar', maxLength: 255, inDetail: true },
+        expiresAt: { type: 'date', inDetail: true, inEdit: true },
+      }),
+      relations: {},
+      indexes: [
+        { name: 'idx_inventory_reservation_product', fields: ['productId'] },
+        { name: 'idx_inventory_reservation_source', fields: ['sourceEntity', 'sourceId'] },
+        { name: 'idx_inventory_reservation_status', fields: ['status'] },
+      ],
+      layouts: {
+        list: [{ entity: 'InventoryReservation', type: 'list', panels: [{ name: 'list', position: 0, fields: ['status', 'productId', 'warehouseId', 'quantity', 'consumedQuantity', 'sourceNumber', 'reservedAt'] }] }],
+        detail: [{ entity: 'InventoryReservation', type: 'detail', panels: [{ name: 'main', label: 'Reservation', position: 0, fields: ['status', 'productId', 'warehouseId', 'quantity', 'consumedQuantity', 'sourceEntity', 'sourceId', 'sourceNumber', 'reservedAt', 'reservedBy', 'releasedAt', 'releasedBy', 'releaseReason', 'expiresAt'] }] }],
+        edit: [],
+      },
+      record: { displayField: 'name', removable: false },
+      client: {},
     },
   };
 }

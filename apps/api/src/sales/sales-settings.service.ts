@@ -107,6 +107,43 @@ export const SalesSettingsSchema = z
       })
       .strict()
       .default({}),
+    /**
+     * Stock policy (19-S.14). Every value here changes what a stock movement does, so it is
+     * validated at the boundary and versioned with the rest of the document (§4.15, §13).
+     */
+    inventory: z
+      .object({
+        /** Used when a stock-moving document names no warehouse; null means one is required. */
+        defaultWarehouseId: z
+          .string()
+          .trim()
+          .min(1)
+          .max(64)
+          .nullable()
+          .default(null),
+        /** Which `Product.productType` values move stock. A service line never becomes inventory. */
+        stockManagedProductTypes: z
+          .array(z.string().trim().min(1).max(32))
+          .max(20)
+          .default(["Goods"]),
+        /**
+         * Whether a movement that would take a warehouse below zero is allowed. Refused by default
+         * (§4.15 invariant 3); turning it on is the explicit override an operator makes, and an
+         * adjustment that needs it still requires the reason and the permission.
+         */
+        allowNegativeStock: z.boolean().default(false),
+        /**
+         * `hard` refuses to promise more than is on hand, `soft` records the over-reservation and
+         * reports it, `none` disables reservations entirely (§4.15 invariant 7).
+         */
+        reservationPolicy: z
+          .enum(["none", "soft", "hard"])
+          .default("hard"),
+        /** Whether a stock adjustment needs an administrator's approval before it moves stock. */
+        adjustmentApprovalRequired: z.boolean().default(true),
+      })
+      .strict()
+      .default({}),
     /** Fraction digits accepted for quantities (server-side; clients may not exceed it). */
     quantityPrecision: z.number().int().min(0).max(6).default(2),
   })
@@ -173,6 +210,26 @@ export function settingsWarnings(settings: SalesSettings): SettingsWarning[] {
     warnings.push({
       code: "multiCurrencyWithoutBase",
       message: "Multi-currency is enabled but no base currency is configured.",
+    });
+  }
+  if (
+    settings.features.inventory &&
+    settings.inventory.stockManagedProductTypes.length === 0
+  ) {
+    warnings.push({
+      code: "inventoryWithoutStockManagedTypes",
+      message:
+        "Inventory is enabled but no product type is stock-managed; no document will move stock.",
+    });
+  }
+  if (
+    settings.features.inventory &&
+    settings.inventory.allowNegativeStock
+  ) {
+    warnings.push({
+      code: "inventoryAllowsNegativeStock",
+      message:
+        "Negative stock is allowed: a movement will be written even when the warehouse holds less than it is asked to release.",
     });
   }
   return warnings;

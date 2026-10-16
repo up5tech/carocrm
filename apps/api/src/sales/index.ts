@@ -5,6 +5,8 @@ import { SalesDocumentService } from "./document/document.service.js";
 import { SalesNumberingService } from "./document/numbering.service.js";
 import { SalesQuoteSendService } from "./document/quote-send.service.js";
 import { SalesDocumentRenderService } from "./document/render.service.js";
+import { InventoryService } from "./inventory/inventory.service.js";
+import { InventoryOperationsService } from "./inventory/inventory-ops.service.js";
 import { AllocationService } from "./payments/allocation.service.js";
 import { SalesBalanceService } from "./payments/balance.service.js";
 import { BillCreditService } from "./payments/bill-credit.service.js";
@@ -43,6 +45,8 @@ export const SALES_PROVIDERS: Provider[] = [
   SalesDocumentService,
   SalesQuoteSendService,
   SalesDocumentRenderService,
+  InventoryService,
+  InventoryOperationsService,
   PaymentService,
   AllocationService,
   SalesBalanceService,
@@ -93,6 +97,17 @@ export {
   buildDocumentSnapshot,
   readDocumentSnapshot,
 } from "./document/snapshot.js";
+export { InventoryService } from "./inventory/inventory.service.js";
+export { InventoryOperationsService } from "./inventory/inventory-ops.service.js";
+export {
+  ADJUSTMENT_STATES,
+  availableToPromise,
+  INVENTORY_TRANSACTION_TYPES,
+  reconcileStock,
+  RESERVATION_POLICIES,
+  stockLevel,
+  TRANSFER_STATES,
+} from "./inventory/ledger.js";
 export { AllocationService } from "./payments/allocation.service.js";
 export {
   assertCreditAllocatable,
