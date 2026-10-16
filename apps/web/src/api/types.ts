@@ -722,3 +722,104 @@ export interface CloneResult {
   name: string;
   counts: Record<string, number>;
 }
+
+/** Phase 19-S.17 — Sales domain command types (PLAN_Phase_19_Sales.md §7). */
+
+export interface SalesSettingsView {
+  settings: Record<string, unknown>;
+  version: number;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  defaults: Record<string, unknown>;
+  warnings: readonly { code: string; message: string }[];
+}
+
+export interface SalesDocumentView {
+  kind: string;
+  id: string;
+  descriptor: {
+    label: string;
+    entity: string;
+    seriesCode: string;
+    states: readonly string[];
+  };
+  document: Record<string, unknown>;
+  items: readonly Record<string, unknown>[];
+  totals: Record<string, unknown>;
+  lock: Record<string, unknown> & { locked: boolean };
+  fromSnapshot: boolean;
+  availableTransitions: readonly string[];
+  availableConversions: readonly string[];
+}
+
+export interface SalesRenderResult {
+  kind: string;
+  documentId: string;
+  number: string | null;
+  status: string;
+  fromSnapshot: boolean;
+  templateCode: string | null;
+  format: string;
+  subject: string;
+  body: string;
+  text: string;
+  blocks: readonly Record<string, unknown>[];
+  warnings: readonly string[];
+  pdf: { available: boolean; reason: string | null };
+}
+
+export interface SalesSendResult {
+  quote: SalesDocumentView;
+  email: Record<string, unknown>;
+  rendered: SalesRenderResult;
+  transport: { name: string };
+  job: { id: string; name: string; status: string };
+  issued: boolean;
+  pdfAttachment: { id: string; filename: string; mimeType: string; size: number; checksum: string | null } | null;
+}
+
+export interface SalesNumberingSeries {
+  id: string;
+  code: string;
+  label: string;
+  prefix: string;
+  padding: number;
+  nextNumber: number;
+  allocation: string;
+  active: boolean;
+}
+
+export interface SalesPriceResolutionResult {
+  price: string;
+  currency: string;
+  source: string;
+  entryId: string | null;
+  ruleId: string | null;
+  explanation: string;
+  quantityBreak: { minQuantity: string; unitPrice: string } | null;
+}
+
+export interface SalesPreviewTotalsResult {
+  lines: readonly Record<string, unknown>[];
+  totals: Record<string, unknown>;
+  currency: string;
+  taxBreakdown: readonly Record<string, unknown>[];
+}
+
+export interface SalesHealthView {
+  module: {
+    id: string;
+    name: string;
+    version: string;
+    minPlatformVersion: string;
+    loadOrder: number;
+    apiPrefix: string;
+    implementedPhases: readonly string[];
+  };
+  ok: boolean;
+  dependencies: readonly Record<string, unknown>[];
+  optionalIntegrations: readonly Record<string, unknown>[];
+  features: readonly Record<string, unknown>[];
+  settings: { version: number; updatedAt: string | null; warnings: readonly string[] };
+  checks: readonly Record<string, unknown>[];
+}

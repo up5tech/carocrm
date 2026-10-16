@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import argon2 from 'argon2';
 import pg from 'pg';
 
+import { DEFAULT_DOCUMENT_TEMPLATES } from '../apps/api/src/sales/document/document-template-defaults.js';
 import { DEFAULT_NUMBER_SERIES } from '../apps/api/src/sales/document/number-series-defaults.js';
 import { getDatabaseUrl,loadEnv } from './env.js';
 import { runMigrations } from './migrate.js';
@@ -200,6 +201,29 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
     // (PLAN_Phase_19_Sales.md §4.4). `ON CONFLICT (code) DO NOTHING`: a series keeps its counter,
     // prefix and padding once it exists, so re-running the seed can never reset a sequence.
     await seedSalesNumberSeries(pool);
+
+    // Phase 19-S.17 — default DocumentTemplate rows for every Sales document type
+    // (PLAN_Phase_19_Sales.md S.17 task 3). DocumentTemplate is an ordinary metadata entity stored
+    // in `entity_records`; `ON CONFLICT (id) DO NOTHING`: an operator's edits survive a seed re-run.
+    const insertTemplate = async (id: string, template: (typeof DEFAULT_DOCUMENT_TEMPLATES)[number]): Promise<void> => {
+      await pool.query(
+        `INSERT INTO entity_records (id, entity_type, name, attrs, created_at, modified_at, version)
+         VALUES ($1, 'DocumentTemplate', $2, $3, now(), now(), 1) ON CONFLICT (id) DO NOTHING`,
+        [id, template.name, JSON.stringify({
+          code: template.code,
+          targetEntity: template.targetEntity,
+          subject: template.subject,
+          body: template.body,
+          format: template.format,
+          locale: template.locale,
+          active: template.active,
+          isDefault: template.isDefault,
+        })],
+      );
+    };
+    for (const template of DEFAULT_DOCUMENT_TEMPLATES) {
+      await insertTemplate(`tpl_${template.code}`, template);
+    }
 
     await pool.query(
       `INSERT INTO teams (id, name) VALUES ($1, 'Sales') ON CONFLICT (id) DO NOTHING`,

@@ -41,6 +41,14 @@ import type {
   ReportRunResult,
   ReportScheduleRow,
   Role,
+  SalesDocumentView,
+  SalesHealthView,
+  SalesNumberingSeries,
+  SalesPreviewTotalsResult,
+  SalesPriceResolutionResult,
+  SalesRenderResult,
+  SalesSendResult,
+  SalesSettingsView,
   SettingsPatch,
   SettingsView,
   WorkflowActionSpec,
@@ -760,4 +768,65 @@ export const api = {
     request<Record<string, unknown>>(`/ProjectTask/${encodeURIComponent(taskId)}/action/collaboratorAdd`, post({ userId })),
   removeProjectTaskCollaborator: (taskId: string, userId: string) =>
     request<{ removed: boolean }>(`/ProjectTask/${encodeURIComponent(taskId)}/action/collaboratorRemove`, post({ userId })),
+
+  // Phase 19-S.17 — Sales domain commands (PLAN_Phase_19_Sales.md §7.2).
+  salesHealth: () => request<SalesHealthView>('/Sales/action/health'),
+  salesSettings: () => request<SalesSettingsView>('/Sales/action/settings'),
+  saveSalesSettings: (input: Record<string, unknown>) =>
+    request<SalesSettingsView>('/Sales/action/settings', post(input)),
+  salesNumbering: () => request<{ list: SalesNumberingSeries[] }>('/Sales/action/numbering'),
+  salesResolvePrice: (input: Record<string, unknown>) =>
+    request<SalesPriceResolutionResult>('/Sales/action/resolvePrice', post(input)),
+  salesResolveSupplierPrice: (input: Record<string, unknown>) =>
+    request<SalesPriceResolutionResult>('/Sales/action/resolveSupplierPrice', post(input)),
+  salesBulkPriceUpdate: (input: Record<string, unknown>) =>
+    request<{ preview: boolean; affected: number }>('/Sales/action/bulkPriceUpdate', post(input)),
+  salesPreviewTotals: (input: Record<string, unknown>) =>
+    request<SalesPreviewTotalsResult>('/Sales/action/previewTotals', post(input)),
+  salesCreateDocument: (kind: string, input: { data?: Record<string, unknown>; items: readonly Record<string, unknown>[] }) =>
+    request<SalesDocumentView>('/Sales/document', { method: 'POST', body: JSON.stringify({ kind, ...input }) }),
+  salesReadDocument: (kind: string, id: string) =>
+    request<SalesDocumentView>(`/Sales/document/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`),
+  salesUpdateDocument: (kind: string, id: string, input: { data?: Record<string, unknown>; items?: readonly Record<string, unknown>[] }) =>
+    request<SalesDocumentView>(`/Sales/document/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  salesTransitionDocument: (kind: string, id: string, input: { action: string; reason?: string; correlationId?: string }) =>
+    request<SalesDocumentView>(`/Sales/document/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/transition`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  salesUnlockDocument: (kind: string, id: string, reason: string) =>
+    request<SalesDocumentView>(`/Sales/document/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/unlock`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  salesConvertDocument: (kind: string, id: string, input: { action: string; correlationId?: string; overrides?: Record<string, unknown> }) =>
+    request<SalesDocumentView>(`/Sales/document/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/convert`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  salesRenderDocument: (kind: string, id: string, templateCode?: string) =>
+    request<SalesRenderResult>(`/Sales/document/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/render`, {
+      method: 'POST',
+      body: JSON.stringify({ templateCode }),
+    }),
+  salesRecalculateDocument: (kind: string, id: string) =>
+    request<SalesDocumentView>(`/Sales/document/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/recalculate`, {
+      method: 'POST',
+      body: '{}',
+    }),
+  salesDeleteDocument: (kind: string, id: string) =>
+    request<unknown>(`/Sales/document/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  salesRenderQuote: (id: string, templateCode?: string) =>
+    request<SalesRenderResult>(`/Sales/quote/${encodeURIComponent(id)}/render`, {
+      method: 'POST',
+      body: JSON.stringify({ templateCode }),
+    }),
+  salesSendQuote: (id: string, input: { to?: readonly string[]; cc?: readonly string[]; bcc?: readonly string[]; templateCode?: string; subject?: string; message?: string; emailAccountId?: string; attachPdf?: boolean; correlationId?: string }) =>
+    request<SalesSendResult>(`/Sales/quote/${encodeURIComponent(id)}/send`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
 };

@@ -1,6 +1,6 @@
 import { DeleteOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
-import { Alert, App as AntApp, Button, Card, Col, Form, Input, Row, Select, Space, Typography, Upload } from 'antd';
-import { useEffect, useState } from 'react';
+import { Alert, App as AntApp, Button, Card, Col, Collapse, Form, Input, Row, Select, Space, Switch, Typography, Upload } from 'antd';
+import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../api/client.js';
 import { timezoneOptions } from '../components/timezones.js';
@@ -27,6 +27,37 @@ export function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const view = settings.data;
   const logoId = Form.useWatch('logoAttachmentId', form);
+
+  // Sales settings state
+  const [salesSettings, setSalesSettings] = useState<Record<string, unknown> | undefined>(undefined);
+  const [salesSaving, setSalesSaving] = useState(false);
+
+  const loadSalesSettings = useCallback(async () => {
+    try {
+      const data = await api.salesSettings();
+      setSalesSettings(data.settings);
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('sales.settings.saveFailed'));
+    }
+  }, [message]);
+
+  useEffect(() => {
+    void loadSalesSettings();
+  }, [loadSalesSettings]);
+
+  const saveSalesSettings = async () => {
+    if (!salesSettings) return;
+    setSalesSaving(true);
+    try {
+      await api.saveSalesSettings(salesSettings);
+      void message.success(t('sales.settings.saved'));
+      await loadSalesSettings();
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('sales.settings.saveFailed'));
+    } finally {
+      setSalesSaving(false);
+    }
+  };
 
   // The settings arrive asynchronously, so the form is filled when they land rather than by
   // `initialValues` on first paint.
@@ -86,6 +117,19 @@ export function AdminSettingsPage() {
   }
 
   const localeOptions = (view?.availableLocales ?? []).map((value) => ({ value, label: t(`web.language.${value}`) }));
+
+  const salesFeatureOptions = [
+    { key: 'productPrices', label: t('sales.settings.features') + ' / Product prices' },
+    { key: 'priceBooks', label: t('sales.settings.features') + ' / Price books' },
+    { key: 'productVariants', label: t('sales.settings.features') + ' / Product variants' },
+    { key: 'supplierPrices', label: t('sales.settings.features') + ' / Supplier prices' },
+    { key: 'purchases', label: t('sales.settings.features') + ' / Purchases' },
+    { key: 'inventory', label: t('sales.settings.features') + ' / Inventory' },
+    { key: 'subscriptions', label: t('sales.settings.features') + ' / Subscriptions' },
+    { key: 'paymentRequests', label: t('sales.settings.features') + ' / Payment requests' },
+    { key: 'multiCurrency', label: t('sales.settings.features') + ' / Multi-currency' },
+    { key: 'issuanceLocking', label: t('sales.settings.features') + ' / Issuance locking' },
+  ];
 
   return (
     <>
@@ -158,6 +202,162 @@ export function AdminSettingsPage() {
           </Button>
         </div>
       </Form>
+
+      {/* Phase 19-S.17 — Sales settings panel. */}
+      <Collapse
+        defaultActiveKey={['sales']}
+        style={{ marginTop: 24 }}
+      >
+        <Collapse.Panel header={t('sales.settings.title')} key="sales" extra={t('sales.settings.subtitle')}>
+          <Card className="lizant-card" title={t('sales.settings.features')} extra={t('sales.settings.featuresHint')} style={{ marginBottom: 16 }}>
+            <Form
+              layout="vertical"
+              initialValues={salesSettings ? (salesSettings.features as Record<string, boolean>) : {}}
+              onFinish={async (values: Record<string, boolean>) => {
+                const patch = salesSettings ? { ...salesSettings, features: values } : { features: values };
+                setSalesSettings(patch);
+                await saveSalesSettings();
+              }}
+            >
+              <Space wrap>
+                {salesFeatureOptions.map((opt) => (
+                  <Form.Item key={opt.key} name={opt.key} valuePropName="checked">
+                    <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
+                  </Form.Item>
+                ))}
+              </Space>
+            </Form>
+          </Card>
+
+          <Card className="lizant-card" title={t('sales.settings.pricing')} extra={t('sales.settings.pricingHint')} style={{ marginBottom: 16 }}>
+            <Form layout="vertical" initialValues={salesSettings ? (salesSettings.pricing as Record<string, unknown>) : {}}>
+              <Form.Item
+                name="resolution"
+                label={t('sales.settings.resolution')}
+                extra={t('sales.settings.missingPricePolicyHint')}
+              >
+                <Select
+                  options={[
+                    { label: t('sales.settings.resolutionPriceBookFirst'), value: 'priceBookFirst' },
+                    { label: t('sales.settings.resolutionProductFirst'), value: 'productFirst' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="allowCustomPrice" label={t('sales.settings.allowCustomPrice')} valuePropName="checked">
+                <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
+              </Form.Item>
+              <Form.Item
+                name="missingPricePolicy"
+                label={t('sales.settings.missingPricePolicy')}
+                extra={t('sales.settings.missingPricePolicyError')}
+              >
+                <Select
+                  options={[
+                    { label: t('sales.settings.missingPricePolicyError'), value: 'error' },
+                    { label: t('sales.settings.missingPricePolicyAllow'), value: 'allowExplicit' },
+                  ]}
+                />
+              </Form.Item>
+            </Form>
+          </Card>
+
+          <Card className="lizant-card" title={t('sales.settings.tax')} extra={t('sales.settings.taxHint')} style={{ marginBottom: 16 }}>
+            <Form layout="vertical" initialValues={salesSettings ? (salesSettings.tax as Record<string, unknown>) : {}}>
+              <Form.Item
+                name="missingTaxPolicy"
+                label={t('sales.settings.missingTaxPolicy')}
+                extra={t('sales.settings.missingTaxPolicyError')}
+              >
+                <Select
+                  options={[
+                    { label: t('sales.settings.missingTaxPolicyError'), value: 'error' },
+                    { label: t('sales.settings.missingTaxPolicyZero'), value: 'zero' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="shippingTaxCode" label={t('sales.settings.shippingTaxCode')} extra={t('sales.settings.shippingTaxCodeHint')}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="roundingStage" label={t('sales.settings.roundingStage')}>
+                <Select
+                  options={[
+                    { label: t('sales.settings.roundingStageLine'), value: 'line' },
+                    { label: t('sales.settings.roundingStageDocument'), value: 'document' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="roundingMode" label={t('sales.settings.roundingMode')}>
+                <Select options={[{ label: 'Half-up', value: 'half-up' }, { label: 'Half-even', value: 'half-even' }]} />
+              </Form.Item>
+            </Form>
+          </Card>
+
+          <Card className="lizant-card" title={t('sales.settings.numbering')} extra={t('sales.settings.numberingHint')} style={{ marginBottom: 16 }}>
+            <Form layout="vertical" initialValues={salesSettings ? (salesSettings.numbering as Record<string, unknown>) : {}}>
+              <Form.Item name="allocation" label={t('sales.settings.allocation')}>
+                <Select
+                  options={[
+                    { label: t('sales.settings.allocationIssuance'), value: 'issuance' },
+                    { label: t('sales.settings.allocationCreation'), value: 'creation' },
+                  ]}
+                />
+              </Form.Item>
+            </Form>
+          </Card>
+
+          <Card className="lizant-card" title={t('sales.settings.inventory')} extra={t('sales.settings.inventoryHint')} style={{ marginBottom: 16 }}>
+            <Form layout="vertical" initialValues={salesSettings ? (salesSettings.inventory as Record<string, unknown>) : {}}>
+              <Form.Item name="allowNegativeStock" label={t('sales.settings.allowNegativeStock')} extra={t('sales.settings.allowNegativeStockHint')} valuePropName="checked">
+                <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
+              </Form.Item>
+              <Form.Item name="reservationPolicy" label={t('sales.settings.reservationPolicy')}>
+                <Select
+                  options={[
+                    { label: t('sales.settings.reservationPolicyNone'), value: 'none' },
+                    { label: t('sales.settings.reservationPolicySoft'), value: 'soft' },
+                    { label: t('sales.settings.reservationPolicyHard'), value: 'hard' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="adjustmentApprovalRequired" label={t('sales.settings.adjustmentApprovalRequired')} valuePropName="checked">
+                <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
+              </Form.Item>
+              <Form.Item name="removalPolicy" label={t('sales.settings.removalPolicy')}>
+                <Select
+                  options={[
+                    { label: t('sales.settings.removalPolicyFifo'), value: 'fifo' },
+                    { label: t('sales.settings.removalPolicyFefo'), value: 'fefo' },
+                    { label: t('sales.settings.removalPolicyLifo'), value: 'lifo' },
+                  ]}
+                />
+              </Form.Item>
+              <Form.Item name="excludeExpiredStock" label={t('sales.settings.excludeExpiredStock')} valuePropName="checked">
+                <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
+              </Form.Item>
+            </Form>
+          </Card>
+
+          <Card className="lizant-card" title={t('sales.settings.subscriptions')} extra={t('sales.settings.subscriptionsHint')}>
+            <Form layout="vertical" initialValues={salesSettings ? (salesSettings.subscriptions as Record<string, unknown>) : {}}>
+              <Form.Item name="horizonDays" label={t('sales.settings.horizonDays')} rules={[{ min: 1, max: 1095, message: '1 to 1095 days' }]}>
+                <Input type="number" />
+              </Form.Item>
+              <Form.Item name="maxPeriodsPerRun" label={t('sales.settings.maxPeriodsPerRun')} rules={[{ min: 1, max: 500, message: '1 to 500' }]}>
+                <Input type="number" />
+              </Form.Item>
+              <Form.Item name="maxInvoicesPerRun" label={t('sales.settings.maxInvoicesPerRun')} rules={[{ min: 1, max: 1000, message: '1 to 1000' }]}>
+                <Input type="number" />
+              </Form.Item>
+            </Form>
+          </Card>
+        </Collapse.Panel>
+      </Collapse>
+
+      <div style={{ marginTop: 16 }}>
+        <Button type="primary" loading={salesSaving} onClick={saveSalesSettings} disabled={!salesSettings}>
+          {t('sales.settings.saved')}
+        </Button>
+      </div>
     </>
   );
 }
