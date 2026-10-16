@@ -87,6 +87,9 @@ export const SALES_ENTITY_TYPES = [
   // state a movement walks.
   "InventoryBatch",
   "InventorySerial",
+  // 19-S.16
+  "Subscription",
+  "SubscriptionPeriod",
 ] as const;
 
 export type SalesEntityType = (typeof SALES_ENTITY_TYPES)[number];

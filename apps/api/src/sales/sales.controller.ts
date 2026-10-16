@@ -89,6 +89,7 @@ import { SupplierPriceService } from "./pricing/supplier-price.js";
 import { runAsSalesInternal } from "./sales-internal.js";
 import { SalesModuleHealthService } from "./sales-module-health.service.js";
 import { SalesSettingsService } from "./sales-settings.service.js";
+import { SubscriptionService } from "./subscriptions/subscription.service.js";
 import { SalesTaxService } from "./tax/tax.service.js";
 
 /**
@@ -133,6 +134,7 @@ export class SalesController {
     private readonly supplierPrices: SupplierPriceService,
     @Inject(BulkPriceService) private readonly bulkPrices: BulkPriceService,
     @Inject(SalesTaxService) private readonly tax: SalesTaxService,
+    @Inject(SubscriptionService) private readonly subscriptions: SubscriptionService,
     @Inject(InventoryService) private readonly inventory: InventoryService,
     @Inject(InventoryOperationsService)
     private readonly inventoryOps: InventoryOperationsService,
@@ -959,6 +961,102 @@ export class SalesController {
       input.reason,
       this.movementContext(undefined),
     );
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Subscriptions and recurring billing (19-S.16)
+  //
+  // Two shapes of command: an operator acting on **one** subscription (`/subscription/:id/…`) and the
+  // **run** that bills everything due (`/action/…`). The run is administrator-gated on the API and
+  // capability-gated for the worker, because it creates and issues invoices without a user present.
+  // Every path is idempotent: replaying a run bills nothing twice, and replaying a per-subscription
+  // command re-reports the periods it already owns (§4.14).
+  // -------------------------------------------------------------------------------------------
+
+  /** What this subscription would bill, without writing a period or an invoice. */
+  @HttpCode(200)
+  @Post("subscription/:id/previewPeriods")
+  async previewSubscriptionPeriods(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(TodaySchema, body);
+    return await this.subscriptions.previewPeriods(id, input.today);
+  }
+
+  @HttpCode(200)
+  @Post("subscription/:id/preview-periods")
+  async previewSubscriptionPeriodsAlt(@Param("id") id: string, @Body() body: unknown) {
+    return await this.previewSubscriptionPeriods(id, body);
+  }
+
+  /** Create the periods this subscription is missing, up to the configured horizon. */
+  @HttpCode(200)
+  @Post("subscription/:id/generatePeriods")
+  async generateSubscriptionPeriods(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(TodaySchema, body);
+    return await this.subscriptions.generatePeriods(id, input.today);
+  }
+
+  @HttpCode(200)
+  @Post("subscription/:id/generate-periods")
+  async generateSubscriptionPeriodsAlt(@Param("id") id: string, @Body() body: unknown) {
+    return await this.generateSubscriptionPeriods(id, body);
+  }
+
+  /** Pause, resume or cancel one subscription; cancelling also stops the periods that would bill. */
+  @HttpCode(200)
+  @Post("subscription/:id/pause")
+  async pauseSubscription(@Param("id") id: string) {
+    return await this.subscriptions.pauseSubscription(id);
+  }
+
+  @HttpCode(200)
+  @Post("subscription/:id/resume")
+  async resumeSubscription(@Param("id") id: string) {
+    return await this.subscriptions.resumeSubscription(id);
+  }
+
+  @HttpCode(200)
+  @Post("subscription/:id/cancel")
+  async cancelSubscription(@Param("id") id: string) {
+    return await this.subscriptions.cancelSubscription(id);
+  }
+
+  /** Re-run one period's billing after a failure. Never re-bills a period that has an invoice. */
+  @HttpCode(200)
+  @Post("subscriptionPeriod/:id/retry")
+  async retrySubscriptionPeriod(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(TodaySchema, body);
+    return await this.subscriptions.retryPeriod(id, input.today);
+  }
+
+  @HttpCode(200)
+  @Post("subscription-period/:id/retry")
+  async retrySubscriptionPeriodAlt(@Param("id") id: string, @Body() body: unknown) {
+    return await this.retrySubscriptionPeriod(id, body);
+  }
+
+  /**
+   * The recurring billing run: periods for every billable subscription, then one invoice per due
+   * period. Administrator-gated, and reports `enabled: false` rather than failing when the
+   * `subscriptions` feature is off, so a daily job on an installation without recurring billing is a
+   * no-op instead of a red one.
+   */
+  @HttpCode(200)
+  @Post("action/generateSubscriptionInvoices")
+  async generateSubscriptionInvoices(@Body() body: unknown) {
+    this.requireAdmin("subscription billing");
+    const input = parse(TodaySchema, body);
+    return await this.subscriptions.processDue(input.today);
+  }
+
+  @HttpCode(200)
+  @Post("action/generate-subscription-invoices")
+  async generateSubscriptionInvoicesWorker(
+    @Body() body: unknown,
+    @Headers("x-worker-secret") secret?: string,
+  ) {
+    this.assertWorkerSecret(secret);
+    const input = parse(TodaySchema, body);
+    return await this.subscriptions.processDue(input.today);
   }
 
   private movementContext(correlationId: string | undefined): MovementContext {

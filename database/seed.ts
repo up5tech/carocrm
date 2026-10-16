@@ -266,6 +266,15 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
        ON CONFLICT (id) DO NOTHING`,
     );
 
+    // Subscription billing (Phase 19-S.16): due subscription periods are invoiced once a day. The
+    // run is idempotent — a replay creates no duplicate period and no duplicate invoice — and it is
+    // a no-op when the `subscriptions` feature is off.
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('generateSubscriptionInvoices', 'sales.generateSubscriptionInvoices', '50 1 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+
     for (const entry of coreMetadata) {
       await pool.query(
         `INSERT INTO metadata_entries (scope, name, data) VALUES ($1, $2, $3)

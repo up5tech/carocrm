@@ -188,6 +188,39 @@ export const DECIDED_WRITE_OFF_FIELDS: readonly string[] = [
   "reason",
 ];
 
+/**
+ * Phase 19-S.16 — the subscription records, and what the record API may not forge.
+ *
+ * A period's status, its invoice link and its attempt trail are produced by the billing service. If a
+ * client could set them, it could mark a period `invoiced` with an `invoiceId` that no invoice backs
+ * — which is exactly the "the record says it was billed but nothing was issued" state that makes a
+ * billing run unsafe to retry (§4.14). So those fields are server-owned, like an allocation balance
+ * and an inventory decision.
+ *
+ * A subscription's `status` is server-owned for the same reason: the lifecycle is moved by the
+ * pause/resume/cancel commands, not by editing a record behind them.
+ */
+export const SUBSCRIPTION_ENTITIES: readonly string[] = [
+  "Subscription",
+  "SubscriptionPeriod",
+];
+
+export const SERVER_OWNED_SUBSCRIPTION_FIELDS: readonly string[] = [
+  "status",
+  // The period's billing outcome — only the billing service may claim or complete it.
+  "invoiceId",
+  "generatedInvoiceId",
+  "invoiceDate",
+  "attemptCount",
+  "failureCode",
+  "retryState",
+  // The window identity and its idempotency key: a period is a computed schedule, not a typed range.
+  "periodStart",
+  "periodEnd",
+  "plannedInvoiceDate",
+  "idempotencyKey",
+];
+
 /** Keys whose value actually differs from the stored record — a no-op save is not a change. */
 export function changedKeys(
   data: Record<string, unknown>,

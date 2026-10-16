@@ -27,7 +27,9 @@ import {
   SERVER_OWNED_DOCUMENT_FIELDS,
   SERVER_OWNED_INVENTORY_FIELDS,
   SERVER_OWNED_PAYMENT_FIELDS,
+  SERVER_OWNED_SUBSCRIPTION_FIELDS,
   SERVER_OWNED_TRACKING_FIELDS,
+  SUBSCRIPTION_ENTITIES,
 } from "./sales-internal.js";
 import { SalesRecords } from "./sales-records.js";
 
@@ -115,7 +117,41 @@ export class SalesWriteGuardService implements OnApplicationBootstrap {
     }
     if (INVENTORY_MANAGED_ENTITIES.includes(context.entity)) {
       await this.validateInventory(context, data);
+      return;
     }
+
+    // 19-S.16 — a subscription's lifecycle and a period's billing outcome are the billing service's.
+    if (SUBSCRIPTION_ENTITIES.includes(context.entity)) {
+      this.validateSubscription(context, data);
+    }
+  }
+
+  /**
+   * 19-S.16 — a period is a computed schedule and a client may not hand-write one.
+   *
+   * The whole billing guarantee rests on "a period exists only because the schedule said so, and its
+   * invoice exists only because the service created it". A crafted `PUT /api/v1/SubscriptionPeriod/:id`
+   * that set `status: invoiced` or pointed `invoiceId` at an arbitrary invoice would break exactly
+   * that, so those fields are refused by name. Creating a period through the record API is refused
+   * outright: its window, its planned invoice date and its idempotency key are all derived.
+   */
+  private validateSubscription(
+    context: HookContext,
+    data: Record<string, unknown>,
+  ): void {
+    if (context.entity === "SubscriptionPeriod" && context.operation === "create") {
+      throw new ValidationError(
+        "A subscription period is created by the Sales billing commands (`POST /api/v1/Sales/subscription/:id/generatePeriods`), never through the record API.",
+        { entity: context.entity },
+      );
+    }
+    refuseServerOwned(
+      context.operation === "create"
+        ? Object.keys(data)
+        : changedKeys(data, context.previous ?? {}),
+      SERVER_OWNED_SUBSCRIPTION_FIELDS,
+      context.entity,
+    );
   }
 
   /**

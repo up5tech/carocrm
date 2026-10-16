@@ -349,5 +349,26 @@ stock with their dates), `inventory/serials` (unit records by product/place/stat
 `inventory/picking-suggestions` (what the configured removal policy would pick for a line — never
 moves or reserves anything). The identity records are ordinary entities too (`InventoryBatch`,
 `InventorySerial` on `/api/v1/...`), but the write guard refuses every client write to a serial and
-all but a lot's dates, so no crafted request can invent a unit or walk its state. Subscriptions
-(19-S.16) still have no routes.
+all but a lot's dates, so no crafted request can invent a unit or walk its state.
+
+The **subscription commands** (19-S.16) bill a term without a user present, and are refused with `403`
+while `features.subscriptions` is off:
+
+```text
+POST   /api/v1/Sales/subscription/:id/previewPeriods   the windows a term would bill, writing nothing
+POST   /api/v1/Sales/subscription/:id/generatePeriods  create the missing periods (idempotent; reports `created`/`existing`)
+POST   /api/v1/Sales/subscription/:id/pause            stop billing; the periods stay
+POST   /api/v1/Sales/subscription/:id/resume           resume a paused term
+POST   /api/v1/Sales/subscription/:id/cancel           end the term; its unpaid periods become `cancelled`
+POST   /api/v1/Sales/subscriptionPeriod/:id/retry      re-run one failed period's billing
+POST   /api/v1/Sales/action/generateSubscriptionInvoices   administrator: periods, then one invoice per due period
+POST   /api/v1/Sales/action/generate-subscription-invoices  worker capability (`x-worker-secret`), same operation
+```
+
+Every body is `{ today?: "YYYY-MM-DD" }`, which is how a run is pointed at a specific day (and what the
+tests use); omitted, the run acts as of today. The run answers `{ enabled, runDay, subscriptions,
+periodsCreated, invoiced, failed, truncated, results }`, where `truncated: true` means a per-run budget
+was reached and more periods wait for the next one. `Subscription` and `SubscriptionPeriod` keep their
+generic `/api/v1/...` records, but the write guard refuses a client-created period and any write to a
+period's `status`, `invoiceId`, `invoiceDate`, `attemptCount`, `failureCode`, `retryState`, window or
+idempotency key — a period is a computed schedule row, and only the billing service may claim it.

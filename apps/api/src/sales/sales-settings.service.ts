@@ -201,6 +201,25 @@ export const SalesSettingsSchema = z
       })
       .strict()
       .default({}),
+    /**
+     * Recurring billing policy (19-S.16, §4.14). Every value here bounds how much work one billing
+     * run may do, so an installation can never be taken over by a long-dated or daily subscription:
+     * the run generates what is due and stops, and the next run picks up where it left off.
+     */
+    subscriptions: z
+      .object({
+        /**
+         * How far past the run day periods are generated for an open-ended term. The horizon moves
+         * forward with each run, so this is a batch size, not a term length.
+         */
+        horizonDays: z.number().int().min(1).max(1_095).default(365),
+        /** Periods one run may create for one subscription. Further windows wait for the next run. */
+        maxPeriodsPerRun: z.number().int().min(1).max(500).default(24),
+        /** Invoices one run may issue in total, across every subscription. */
+        maxInvoicesPerRun: z.number().int().min(1).max(1_000).default(50),
+      })
+      .strict()
+      .default({}),
     /** Fraction digits accepted for quantities (server-side; clients may not exceed it). */
     quantityPrecision: z.number().int().min(0).max(6).default(2),
   })

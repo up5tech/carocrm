@@ -245,7 +245,9 @@ export const SALES_MODULE = {
    * and concurrency-safe reservations, which is what now applies the movement plans those phases froze
    * into a document's snapshot. `19-S.15` adds stock identity and removal: configurable variant
    * attributes, lots and serialised units, expiry-validated dates, and the FIFO/FEFO/LIFO policy that
-   * decides which units an outbound movement consumes.
+   * decides which units an outbound movement consumes. `19-S.16` adds recurring billing:
+   * subscriptions, their computed periods, and an idempotent run that issues one invoice per due
+   * period.
    *
    * A PDF *attachment* on a sent document is still not produced: the block model and the optional
    * `pdfkit` adapter exist (`@carocrm/document`), but wiring a rendered PDF into an outbound message
@@ -269,6 +271,7 @@ export const SALES_MODULE = {
     "19-S.13",
     "19-S.14",
     "19-S.15",
+    "19-S.16",
   ],
 } as const;
 

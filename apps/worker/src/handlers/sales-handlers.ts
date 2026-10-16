@@ -32,6 +32,10 @@ export const EXPIRE_QUOTES_PATH = '/api/v1/Sales/action/expire-quotes';
 export const MARK_OVERDUE_INVOICES_JOB = 'sales.markOverdueInvoices';
 export const MARK_OVERDUE_INVOICES_PATH = '/api/v1/Sales/action/mark-overdue-invoices';
 
+/** 19-S.16 — generate due recurring invoices. */
+export const GENERATE_SUBSCRIPTION_INVOICES_JOB = 'sales.generateSubscriptionInvoices';
+export const GENERATE_SUBSCRIPTION_INVOICES_PATH = '/api/v1/Sales/action/generate-subscription-invoices';
+
 /**
  * Call a worker-authorized Sales operation and return what it reported.
  *
@@ -117,7 +121,54 @@ export function markOverdueInvoicesJob(deps: SalesJobDeps): JobHandler {
   };
 }
 
+/**
+ * Phase 19-S.16 — the recurring billing run.
+ *
+ * The job itself holds no billing logic: it asks the API to run the billing service and reports what
+ * it did. Two things are reported rather than swallowed — a run on an installation where the
+ * `subscriptions` feature is off comes back `enabled: false` (a configuration fact, not a failure),
+ * and a `truncated` run says work is still waiting for the next one.
+ */
+export function generateSubscriptionInvoicesJob(deps: SalesJobDeps): JobHandler {
+  return async (context: JobContext) => {
+    let outcome: Awaited<ReturnType<typeof callWorkerOperation>>;
+    try {
+      outcome = await callWorkerOperation(deps, context, { path: GENERATE_SUBSCRIPTION_INVOICES_PATH, label: 'generating subscription invoices' });
+    } catch (error: unknown) {
+      if (error instanceof CancelledBeforeCall) return { status: 'cancelled', message: 'Cancelled before subscription billing.' };
+      throw error;
+    }
+    if (outcome.disabled) {
+      return {
+        status: 'completed',
+        message: 'Subscription billing is disabled: no worker capability is configured.',
+        result: { disabled: true },
+      };
+    }
+    if (outcome.payload['enabled'] === false) {
+      return {
+        status: 'completed',
+        message: 'Subscription billing is disabled in the Sales settings: nothing was billed.',
+        result: { enabled: false },
+      };
+    }
+    const invoiced = typeof outcome.payload['invoiced'] === 'number' ? outcome.payload['invoiced'] : 0;
+    const failed = typeof outcome.payload['failed'] === 'number' ? outcome.payload['failed'] : 0;
+    const truncated = outcome.payload['truncated'] === true;
+    context.progress(100, `generated ${String(invoiced)} invoice(s)`);
+    deps.log.info(
+      { invoiced, failed, truncated, subscriptions: outcome.payload['subscriptions'] },
+      'sales subscription billing finished',
+    );
+    const message = truncated
+      ? `Generated ${String(invoiced)} invoice(s); more periods are still waiting for the next run`
+      : `Generated ${String(invoiced)} invoice(s)`;
+    return { status: 'completed', message, result: outcome.payload };
+  };
+}
+
 export function registerSalesJobs(registry: JobRegistry, deps: SalesJobDeps): void {
   registry.register(EXPIRE_QUOTES_JOB, expireQuotesJob(deps));
   registry.register(MARK_OVERDUE_INVOICES_JOB, markOverdueInvoicesJob(deps));
+  registry.register(GENERATE_SUBSCRIPTION_INVOICES_JOB, generateSubscriptionInvoicesJob(deps));
 }

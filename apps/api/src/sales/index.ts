@@ -21,6 +21,7 @@ import { SalesModuleHealthService } from "./sales-module-health.service.js";
 import { SalesRecords } from "./sales-records.js";
 import { SalesSettingsService } from "./sales-settings.service.js";
 import { SalesWriteGuardService } from "./sales-write-guard.service.js";
+import { SubscriptionService } from "./subscriptions/subscription.service.js";
 import { SalesTaxService } from "./tax/tax.service.js";
 
 /**
@@ -58,6 +59,7 @@ export const SALES_PROVIDERS: Provider[] = [
   BulkPriceService,
   SalesTaxService,
   SalesModuleHealthService,
+  SubscriptionService,
 ];
 
 export { SalesCatalogGuardService } from "./catalog/sales-guard.service.js";
@@ -131,5 +133,22 @@ export {
   DEFAULT_SALES_SETTINGS,
   SalesSettingsService,
 } from "./sales-settings.service.js";
+export {
+  BILLABLE_SUBSCRIPTION_STATUSES,
+  BILLING_INTERVALS,
+  type BillingInterval,
+  type PeriodWindow,
+  periodWindows,
+  SUBSCRIPTION_PERIOD_STATUSES,
+  SUBSCRIPTION_STATUSES,
+  subscriptionTransitionRefusal,
+} from "./subscriptions/schedule.js";
+export type {
+  GeneratePeriodsResult,
+  InvoicePeriodResult,
+  PeriodView,
+  ProcessDueResult,
+} from "./subscriptions/subscription.service.js";
+export { SubscriptionService } from "./subscriptions/subscription.service.js";
 export { SalesTaxService } from "./tax/tax.service.js";
 export { computeTotals } from "./tax/totals.js";

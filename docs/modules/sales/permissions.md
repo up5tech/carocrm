@@ -82,6 +82,13 @@ The same mechanism gates price-book prices: `PriceBookEntry.unitPrice` (`read: n
 | `POST …/inventory/adjustment/:id/transition` | **administrator** — approving a correction is a stock authority, not a record edit — plus `InventoryAdjustment: edit` | `403 Administrator access is required for deciding inventory adjustments.` |
 | `POST …/inventory/transfer`, `GET …/inventory/transfer/:id` | `TransferOrder: create` / `read` | `403` |
 | `POST …/inventory/transfer/:id/transition`, `GET …/inventory/transfers/inTransit` | `TransferOrder: edit` / `read` | `403` |
+| `POST …/subscription/:id/previewPeriods` | `Subscription: read`, **and** `features.subscriptions` enabled | `403` |
+| `POST …/subscription/:id/generatePeriods` | `Subscription: edit` **and** `SubscriptionPeriod: create`, plus the feature | `403` |
+| `POST …/subscription/:id/pause`, `…/resume`, `…/cancel` | `Subscription: edit`, plus the feature | `403` |
+| `POST …/subscriptionPeriod/:id/retry` | `SubscriptionPeriod: edit`, plus the feature | `403` |
+| `POST …/action/generateSubscriptionInvoices` | **administrator** — the run issues invoices with no user present | `403 Administrator access is required for subscription billing.` |
+| `POST …/action/generate-subscription-invoices` | the shared worker capability header `x-worker-secret` (no session) | `401` |
+| `/api/v1/SubscriptionPeriod` through the record API | **never** — a period is created and billed by the commands, and its status, invoice link and attempt trail are server-owned | `422` |
 
 A quote **send** checks every one of its gates before it issues anything, so a caller who is refused
 never leaves a `sent` quote with no email behind it. The requirement that surprises people is
@@ -162,6 +169,30 @@ so moving goods is not the same authority as paying for them.
 A clerk who may confirm receipts but never issue bills is therefore a role with `ReceiptOrder: edit`
 and `Bill: noAccess` — no module-specific switch, and the same answer through the domain command or a
 direct `PUT /api/v1/Bill/:id`.
+
+## 6a. Recurring billing authorities (19-S.16)
+
+Billing a customer repeatedly is its own authority, and §4.14 keeps it separate from both payment
+collection and document editing.
+
+| Capability | Grant |
+|---|---|
+| See a subscription and what it would bill | `Subscription: read` (a preview writes nothing) |
+| Create the periods a term owes | `Subscription: edit` + `SubscriptionPeriod: create` |
+| Turn a period into an issued invoice | the above **plus** `Invoice: create` — billing a period issues a real invoice |
+| Pause, resume or cancel a term | `Subscription: edit` |
+| Re-run one failed period | `SubscriptionPeriod: edit` |
+| Run billing for the whole installation | **administrator** on the API, or the worker capability header |
+| Hand-write a period, or set its status, invoice link or attempt count | **never** — the write guard refuses `status`, `invoiceId`, `invoiceDate`, `attemptCount`, `failureCode`, `retryState`, the window and the idempotency key |
+
+* **`features.subscriptions`** (settings, administrator-changed, off by default) gates every billing
+  command with a `403` naming the setting. The scheduled run is the one exception: it answers
+  `enabled: false` and bills nothing, so an installation that does not bill has a quiet daily job
+  rather than a failing one.
+* Generation **issues an invoice and stops**. It charges no payment method and sends no email — a
+  role that may run billing is not thereby a role that may collect money or contact a customer.
+* A subscription's `status` moves only through the pause/resume/cancel commands, so an operator cannot
+  cancel a term by editing a record and thereby leave its unpaid periods still billable.
 
 ## 7. Data-level safety rules the module follows
 

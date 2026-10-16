@@ -115,6 +115,7 @@ export const coreMetadata: MetadataSeedEntry[] = [
         salesOrders: { type: 'oneToMany', target: 'SalesOrder', mappedBy: 'account' },
         invoices: { type: 'oneToMany', target: 'Invoice', mappedBy: 'account' },
         payments: { type: 'oneToMany', target: 'Payment', mappedBy: 'account' },
+        subscriptions: { type: 'oneToMany', target: 'Subscription', mappedBy: 'accountId' },
       },
       indexes: [],
       record: { displayField: 'name', removable: true },
@@ -790,6 +791,12 @@ export const coreMetadata: MetadataSeedEntry[] = [
   // metadata and correct its dates, but never its identity or a unit's state.
   salesInventoryBatchEntity(),
   salesInventorySerialEntity(),
+
+  // -------------------------------------------------------------------------
+  // Phase 19-S.16 — subscriptions (`sales`)
+  // -------------------------------------------------------------------------
+  salesSubscriptionEntity(),
+  salesSubscriptionPeriodEntity(),
 
   // -------------------------------------------------------------------------
   // Phase 19-S.10 – 19-S.11 — payments, allocations, corrections (`sales`)
@@ -1672,6 +1679,8 @@ function salesInvoiceEntity(): MetadataSeedEntry {
        */
       paymentStatus: { type: 'enum', values: ['unpaid', 'partiallyPaid', 'paid', 'overdue'], defaultValue: 'unpaid', inList: true, inDetail: true },
       salesOrderId: { type: 'link', entityKey: 'SalesOrder', inDetail: true },
+      subscriptionId: { type: 'link', entityKey: 'Subscription', inDetail: true },
+      subscriptionPeriodId: { type: 'link', entityKey: 'SubscriptionPeriod', inDetail: true },
     },
     extraEditFields: ['dueDate', 'deliveryDate', 'servicePeriodStart', 'servicePeriodEnd'],
     extraRelations: {
@@ -2005,6 +2014,109 @@ function salesBillCreditAllocationEntity(): MetadataSeedEntry {
       },
       record: { displayField: 'name', removable: false },
       client: { web: false },
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 19-S.16 — subscriptions and recurring billing (`sales`)
+//
+// Two records and one rule. `Subscription` is the commercial agreement (who, what, how often, from
+// when); `SubscriptionPeriod` is one concrete billed window of it. Everything about a period is
+// *derived* — its window, its planned invoice date, its status, its invoice link — so those fields
+// are declared for reading and deliberately left out of the edit surface: the billing service owns
+// them (`sales-write-guard.service.ts`), which is what makes a replayed run idempotent (§4.14).
+// ---------------------------------------------------------------------------
+function salesSubscriptionEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'Subscription',
+    data: {
+      name: 'Subscription',
+      label: 'Subscription',
+      isEntity: true,
+      fields: salesFields({
+        status: { type: 'enum', values: ['pending', 'active', 'paused', 'ended', 'cancelled', 'billingFailed', 'renewed'], defaultValue: 'pending', inList: true, inDetail: true, audited: true },
+        accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true, inEdit: true },
+        contactId: { type: 'link', entityKey: 'Contact', inDetail: true, inEdit: true },
+        productId: { type: 'link', entityKey: 'Product', inList: true, inDetail: true, inEdit: true },
+        priceBookId: { type: 'link', entityKey: 'PriceBook', inDetail: true, inEdit: true },
+        paymentTermId: { type: 'link', entityKey: 'PaymentTermProfile', inDetail: true, inEdit: true },
+        taxCodeId: { type: 'link', entityKey: 'TaxCode', inDetail: true, inEdit: true },
+        quantity: decimalField({ defaultValue: '1', inList: true, inDetail: true, inEdit: true }),
+        unitPrice: decimalField({ inList: true, inDetail: true, inEdit: true }),
+        currency: { type: 'varchar', maxLength: 3, defaultValue: 'USD', inList: true, inDetail: true, inEdit: true },
+        /** Every interval is a whole number of days or months, so a period boundary is always exact. */
+        interval: { type: 'enum', values: ['daily', 'weekly', 'monthly', 'quarterly', 'halfYearly', 'annual'], defaultValue: 'monthly', inList: true, inDetail: true, inEdit: true },
+        startDate: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+        endDate: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+        renewalDate: { type: 'date', inDetail: true, inEdit: true },
+        /** Days a period's invoice is planned *before* the period starts; `0` plans it on day one. */
+        leadTimeDays: { type: 'int', defaultValue: 0, inDetail: true, inEdit: true },
+        autoRenew: { type: 'bool', defaultValue: true, inDetail: true, inEdit: true },
+        idempotencyKey: { type: 'varchar', maxLength: 128, inDetail: true },
+      }),
+      relations: {
+        periods: { type: 'oneToMany', target: 'SubscriptionPeriod', mappedBy: 'subscriptionId' },
+        invoices: { type: 'oneToMany', target: 'Invoice', mappedBy: 'subscriptionId' },
+      },
+      indexes: [{ name: 'idx_subscription_status', fields: ['status'] }],
+      layouts: {
+        list: [{ entity: 'Subscription', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'status', 'accountId', 'productId', 'interval', 'startDate', 'endDate', 'currency', 'unitPrice', 'quantity'] }] }],
+        detail: [{ entity: 'Subscription', type: 'detail', panels: [{ name: 'main', label: 'Subscription', position: 0, fields: ['name', 'status', 'accountId', 'contactId', 'productId', 'quantity', 'unitPrice', 'currency', 'interval', 'startDate', 'endDate', 'renewalDate', 'leadTimeDays', 'autoRenew', 'paymentTermId', 'taxCodeId'] }] }],
+        edit: [{ entity: 'Subscription', type: 'edit', panels: [{ name: 'main', label: 'Subscription', position: 0, fields: ['name', 'accountId', 'contactId', 'productId', 'priceBookId', 'quantity', 'unitPrice', 'currency', 'interval', 'startDate', 'endDate', 'renewalDate', 'leadTimeDays', 'autoRenew', 'paymentTermId', 'taxCodeId'] }] }],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+      // `status` moves through the Sales commands, not through a record edit; nobody deletes a term
+      // that produced invoices.
+      acl: { permissions: { Subscription: { create: 'yes', read: 'all', edit: 'yes', delete: 'no', stream: 'all' } } },
+    },
+  };
+}
+
+function salesSubscriptionPeriodEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'SubscriptionPeriod',
+    data: {
+      name: 'SubscriptionPeriod',
+      label: 'Subscription Period',
+      isEntity: true,
+      fields: salesFields({
+        status: { type: 'enum', values: ['pending', 'processing', 'invoiced', 'failed', 'skipped', 'cancelled'], defaultValue: 'pending', inList: true, inDetail: true, audited: true },
+        subscriptionId: { type: 'link', entityKey: 'Subscription', required: true, inList: true, inDetail: true },
+        // The window and its planned invoice date are computed by `subscriptions/schedule.ts`; the
+        // billing outcome below is computed by the billing service. None of them is editable.
+        periodStart: { type: 'date', required: true, inList: true, inDetail: true, sortable: true },
+        periodEnd: { type: 'date', required: true, inList: true, inDetail: true, sortable: true },
+        plannedInvoiceDate: { type: 'date', inList: true, inDetail: true, sortable: true },
+        invoiceDate: { type: 'date', inDetail: true, sortable: true },
+        invoiceId: { type: 'link', entityKey: 'Invoice', inList: true, inDetail: true },
+        generatedInvoiceId: { type: 'varchar', maxLength: 64, inDetail: true },
+        attemptCount: { type: 'int', defaultValue: 0, inList: true, inDetail: true },
+        failureCode: { type: 'varchar', maxLength: 255, inDetail: true },
+        retryState: { type: 'varchar', maxLength: 64, inDetail: true },
+        idempotencyKey: { type: 'varchar', maxLength: 128, inDetail: true },
+      }),
+      relations: {
+        subscription: { type: 'manyToOne', target: 'Subscription', foreignKey: 'subscriptionId' },
+        invoice: { type: 'manyToOne', target: 'Invoice', foreignKey: 'invoiceId' },
+        invoices: { type: 'oneToMany', target: 'Invoice', mappedBy: 'subscriptionPeriodId' },
+      },
+      indexes: [{ name: 'idx_subscription_period_subscription', fields: ['subscriptionId'] }],
+      layouts: {
+        list: [{ entity: 'SubscriptionPeriod', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'status', 'subscriptionId', 'periodStart', 'periodEnd', 'plannedInvoiceDate', 'invoiceDate', 'invoiceId', 'attemptCount'] }] }],
+        detail: [{ entity: 'SubscriptionPeriod', type: 'detail', panels: [{ name: 'main', label: 'Subscription period', position: 0, fields: ['name', 'status', 'subscriptionId', 'periodStart', 'periodEnd', 'plannedInvoiceDate', 'invoiceDate', 'invoiceId', 'attemptCount', 'failureCode', 'retryState', 'idempotencyKey'] }] }],
+        // Nothing about a period is hand-editable: it is a computed schedule row.
+        edit: [],
+      },
+      record: { displayField: 'name', removable: true },
+      client: {},
+      // A period's *record API* is closed by the write guard, not by the ACL: the billing commands
+      // are the sanctioned way to create one, so a role that may generate periods needs `create`
+      // here. Nobody deletes one — a period is the record of what was billed.
+      acl: { permissions: { SubscriptionPeriod: { create: 'yes', read: 'all', edit: 'yes', delete: 'no', stream: 'all' } } },
     },
   };
 }

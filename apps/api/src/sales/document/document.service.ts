@@ -1208,7 +1208,11 @@ export class SalesDocumentService {
     const totals = await this.totalsFor(descriptor, row, items, true);
     const parties = await this.partySnapshot(row);
     const issuedAt = new Date();
-    const issuer = this.scope.principal?.userName ?? this.scope.userId ?? null;
+    // The issuer is the actor the caller *claims* for this issuance. Every user-driven path passes
+    // its own principal (the controller's `audit()`), so this changes nothing for them; it exists so
+    // a domain service that issues on the platform's own behalf — the subscription billing run
+    // (19-S.16) — records the system, not whoever's token happened to trigger the job.
+    const issuer = audit.userName ?? this.scope.principal?.userName ?? this.scope.userId ?? null;
     const locked = descriptor.lockPolicy.lockOnIssue;
     // A quantity-moving line is checked against what the source line still allows (§4.10, §4.12),
     // before the number is taken, so an over-move never leaves a confirmed document behind.
