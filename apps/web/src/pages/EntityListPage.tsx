@@ -1,5 +1,5 @@
 import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Card, Col, Input, Modal, Popconfirm, Row, Select, Space, Table, Typography } from 'antd';
+import { App as AntApp, Button, Card, Col, Input, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -36,6 +36,7 @@ export function EntityListPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [inboxView, setInboxView] = useState<string>('all');
   const [pageSize, setPageSize] = useState(20);
   const [orderBy, setOrderBy] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<string[]>([]);
@@ -54,6 +55,23 @@ export function EntityListPage() {
   const panels = useMemo(() => layoutPanelsFor(definition.data, 'list'), [definition.data]);
   const columns = useMemo(() => orderByLayout(listEntries(definition.data), panels), [definition.data, panels]);
   const filterable = useMemo(() => filterEntries(definition.data), [definition.data]);
+
+  const caseInboxViews = useMemo(() => ([
+    { key: 'all', label: t('web.serviceDesk.inbox.all'), drafts: [] as FilterDraft[] },
+    { key: 'unassigned', label: t('web.serviceDesk.inbox.unassigned'), drafts: [{ field: 'assignedUserId', operator: 'isNull' }] },
+    { key: 'mine', label: t('web.serviceDesk.inbox.mine'), drafts: principal?.id ? [{ field: 'assignedUserId', operator: 'equals', value: principal.id }] : [] },
+    { key: 'waitingCustomer', label: t('web.serviceDesk.inbox.waitingCustomer'), drafts: [{ field: 'status', operator: 'equals', value: 'Pending Customer' }] },
+    { key: 'breached', label: t('web.serviceDesk.inbox.breached'), drafts: [{ field: 'slaState', operator: 'equals', value: 'Breached' }] },
+    { key: 'escalated', label: t('web.serviceDesk.inbox.escalated'), drafts: [{ field: 'isEscalated', operator: 'equals', value: true }] },
+  ]), [principal?.id]);
+
+  useEffect(() => {
+    if (entityName !== 'Case') return;
+    const view = caseInboxViews.find((v) => v.key === inboxView);
+    if (!view) return;
+    setDrafts(view.drafts);
+    setOffset(0);
+  }, [inboxView, entityName, caseInboxViews]);
 
   const load = useCallback(async () => {
     if (!entityName) return;
@@ -308,6 +326,10 @@ export function EntityListPage() {
             <Button onClick={() => { setDrafts([]); setOffset(0); }}>{t('web.list.clear')}</Button>
           </div>
         </div>
+      ) : null}
+
+      {entityName === 'Case' ? (
+        <Tabs activeKey={inboxView} onChange={setInboxView} items={caseInboxViews.map((v) => ({ key: v.key, label: v.label }))} style={{ marginBottom: 12 }} />
       ) : null}
 
       <Table

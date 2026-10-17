@@ -1104,6 +1104,14 @@
       "attach": "Attach file",
       "uploadFailed": "Could not upload the file.",
       "download": "Download attachment"
+    },
+    "inbox": {
+      "all": "All cases",
+      "unassigned": "Unassigned",
+      "mine": "My cases",
+      "waitingCustomer": "Waiting for customer",
+      "breached": "Breached SLA",
+      "escalated": "Escalated"
     }
   }
 }

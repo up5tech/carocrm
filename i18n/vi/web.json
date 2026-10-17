@@ -1104,6 +1104,14 @@
       "attach": "Đính kèm tệp",
       "uploadFailed": "Không tải tệp lên được.",
       "download": "Tải tệp đính kèm"
+    },
+    "inbox": {
+      "all": "Tất cả hồ sơ",
+      "unassigned": "Chưa gán",
+      "mine": "Hồ sơ của tôi",
+      "waitingCustomer": "Chờ khách hàng",
+      "breached": "Vi phạm SLA",
+      "escalated": "Đã chuyển cấp"
     }
   }
 }
