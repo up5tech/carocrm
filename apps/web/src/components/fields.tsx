@@ -15,7 +15,7 @@ function enumOptions(field: FieldDefinition): string[] {
 }
 
 /** Resolves a linked record id to its display label (PLAN §40.2 relationship-aware fields). */
-function LinkValue({ entity, id }: { entity: string; id: string }) {
+export function LinkValue({ entity, id }: { entity: string; id: string }) {
   const [label, setLabel] = useState<string | undefined>(undefined);
 
   useEffect(() => {

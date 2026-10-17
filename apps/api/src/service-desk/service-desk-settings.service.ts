@@ -17,6 +17,7 @@ import {
   CASE_TYPES,
   DEFAULT_CASE_DEFAULTS,
   DEFAULT_CASE_NUMBERING,
+  DEFAULT_RESOLUTION_CODES,
 } from "./service-desk-domain.js";
 
 /**
@@ -51,6 +52,7 @@ export const ServiceDeskSettingsSchema = z
         portal: z.boolean().default(false),
         knowledgeBase: z.boolean().default(false),
         csat: z.boolean().default(false),
+        notifications: z.boolean().default(false),
       })
       .strict()
       .default({}),
@@ -81,6 +83,23 @@ export const ServiceDeskSettingsSchema = z
       })
       .strict()
       .default({}),
+    resolution: z
+      .object({
+        requireCode: z.boolean().default(true),
+        requireSummary: z.boolean().default(false),
+        codes: z.array(z.string().trim().min(1).max(64)).max(50).default([...DEFAULT_RESOLUTION_CODES]),
+        /** 0 = no limit on reopening a resolved/closed case (§14.1 "allowed reopen window"). */
+        reopenWindowDays: z.number().int().min(0).max(3_650).default(0),
+      })
+      .strict()
+      .default({}),
+    assignment: z
+      .object({
+        /** Fallback queue for an unowned case when routing finds nothing else (§5.3). */
+        defaultQueueId: z.string().trim().min(1).max(64).nullable().default(null),
+      })
+      .strict()
+      .default({}),
   })
   .strict();
 
@@ -95,10 +114,10 @@ export interface SettingsWarning {
 
 /**
  * Honest configuration warnings: a feature an operator can switch on whose infrastructure is
- * delivered in a later sub-phase (SD.5–SD.12) is reported as pending rather than silently ignored.
+ * delivered in a later sub-phase (SD.6–SD.12) is reported as pending rather than silently ignored.
+ * `queues` left this list in SD.5, when the queue/routing infrastructure it names was delivered.
  */
 const PENDING_FEATURES: readonly { readonly key: keyof ServiceDeskSettings["features"]; readonly phase: string }[] = [
-  { key: "queues", phase: "19-SD.5" },
   { key: "sla", phase: "19-SD.8" },
   { key: "emailToCase", phase: "19-SD.7" },
   { key: "portal", phase: "19-SD.11" },

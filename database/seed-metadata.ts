@@ -124,6 +124,9 @@ const SD_CASE_SEVERITIES = ['Low', 'Normal', 'High', 'Critical'];
 const SD_CASE_TYPES = ['Question', 'Incident', 'Problem', 'Service Request'];
 const SD_CASE_SOURCES = ['Web', 'Email', 'Portal', 'API', 'Web Form', 'Workflow', 'Phone'];
 const SD_CASE_SLA_STATES = ['NotApplicable', 'OnTrack', 'Warning', 'Breached', 'Paused', 'Met'];
+/** Division-of-labour vocabulary shared by queues and routing rules (SD.5, §5.3). */
+const SD_ASSIGNMENT_STRATEGIES = ['manual', 'roundRobin', 'leastBusy'];
+const SD_FALLBACK_BEHAVIORS = ['unassigned', 'fallbackOwner'];
 
 export const coreMetadata: MetadataSeedEntry[] = [
   {
@@ -879,6 +882,8 @@ export const coreMetadata: MetadataSeedEntry[] = [
   // and the `service_desk_case_number_seq` sequence in `apps/api/src/service-desk` and
   // `database/migrations/033_phase19_service_desk.sql`.
   serviceDeskCaseEntity(),
+  ...serviceDeskQueueEntities(),
+  ...serviceDeskHistoryEntities(),
 ];
 
 /**
@@ -3415,6 +3420,11 @@ function serviceDeskCaseEntity(): MetadataSeedEntry {
         resolutionCode: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
         resolutionSummary: { type: 'text', inDetail: true, inEdit: true },
         resolvedById: { type: 'link', entityKey: 'User', inDetail: true },
+        // Routing and ownership (§5.3, SD.5). Server-owned: they are set only through the
+        // assignment/routing commands, which check eligibility and permission, never by the record API.
+        queueId: { type: 'link', entityKey: 'CaseQueue', inList: true, inDetail: true },
+        teamId: { type: 'link', entityKey: 'Team', inDetail: true },
+        routingRuleId: { type: 'link', entityKey: 'RoutingRule', inDetail: true },
         // Portal access (§5.9): a hidden case is never returned to a portal client.
         isHiddenFromPortal: { type: 'bool', defaultValue: false, inDetail: true, inEdit: true },
       },
@@ -3435,6 +3445,8 @@ function serviceDeskCaseEntity(): MetadataSeedEntry {
         { name: 'idx_entity_records_case_assignee', fields: ['assignedUserId', 'status'] },
         { name: 'idx_entity_records_case_account', fields: ['accountId'] },
         { name: 'idx_entity_records_case_contact', fields: ['contactId'] },
+        { name: 'idx_entity_records_case_queue', fields: ['queueId', 'status'] },
+        { name: 'idx_entity_records_case_team', fields: ['teamId', 'status'] },
       ],
       layouts: {
         list: [{ entity: 'Case', type: 'list', panels: [{ name: 'list', position: 0, fields: ['caseNumber', 'name', 'status', 'priority', 'type', 'accountId', 'assignedUserId', 'modifiedAt'] }] }],
@@ -3445,7 +3457,7 @@ function serviceDeskCaseEntity(): MetadataSeedEntry {
             panels: [
               { name: 'overview', label: 'Overview', position: 0, fields: ['caseNumber', 'name', 'description', 'status', 'priority', 'severity', 'type', 'source'] },
               { name: 'requester', label: 'Requester', position: 10, fields: ['accountId', 'contactId', 'leadId', 'requesterName', 'requesterEmail'] },
-              { name: 'ownership', label: 'Ownership', position: 20, fields: ['assignedUserId', 'teams'] },
+              { name: 'ownership', label: 'Ownership', position: 20, fields: ['assignedUserId', 'teamId', 'queueId', 'routingRuleId', 'teams'] },
               { name: 'timing', label: 'Timeline', position: 30, fields: ['lastActivityAt', 'firstResponseAt', 'lastCustomerResponseAt', 'lastAgentResponseAt', 'resolvedAt', 'closedAt', 'reopenedAt'] },
               { name: 'sla', label: 'SLA', position: 40, fields: ['slaPolicyId', 'slaState', 'isEscalated', 'escalationLevel', 'escalatedAt'] },
               { name: 'resolution', label: 'Resolution', position: 50, fields: ['resolutionCode', 'resolutionSummary', 'resolvedById', 'isHiddenFromPortal'] },
@@ -3473,4 +3485,224 @@ function serviceDeskCaseEntity(): MetadataSeedEntry {
       },
     },
   };
+}
+
+/**
+ * SD.5 — queue configuration: `CaseQueue`, its `QueueMember` join and the `RoutingRule` table
+ * (PLAN_Phase_19_ServiceDesk.md §5.3, §6.1).
+ *
+ * These are ordinary metadata records, so configuration is listable/auditable/importable through the
+ * generic API like any other entity, and the module's `beforeValidate` guard refuses writes while the
+ * `queues` capability is off. Configuration writes are administrator-scoped (`create/edit/delete:
+ * 'no'` for regular roles; an administrator bypasses) while `read: 'all'` lets a team-lead view pick
+ * a queue; the workload endpoint narrows *whose* numbers a viewer sees.
+ */
+function serviceDeskQueueEntities(): MetadataSeedEntry[] {
+  return [
+    {
+      scope: 'entity',
+      name: 'CaseQueue',
+      data: {
+        name: 'CaseQueue',
+        label: 'Case Queue',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, label: 'Name', required: true },
+          code: { type: 'varchar', maxLength: 32, required: true, inList: true, inDetail: true, inEdit: true },
+          description: { type: 'text', inDetail: true, inEdit: true },
+          isActive: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+          strategy: { type: 'enum', values: SD_ASSIGNMENT_STRATEGIES, defaultValue: 'manual', inList: true, inDetail: true, inEdit: true },
+          fallbackBehavior: { type: 'enum', values: SD_FALLBACK_BEHAVIORS, defaultValue: 'unassigned', inDetail: true, inEdit: true },
+          defaultTeamId: { type: 'link', entityKey: 'Team', inDetail: true, inEdit: true },
+          defaultAssignedUserId: { type: 'link', entityKey: 'User', inDetail: true, inEdit: true },
+          sortOrder: { type: 'int', defaultValue: 0, inList: true, inDetail: true, inEdit: true },
+          // Server-owned round-robin cursor, advanced under a row lock (never client-writable).
+          lastAssignedUserId: { type: 'link', entityKey: 'User', inDetail: true },
+          lastAssignedAt: { type: 'datetime', inDetail: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'uq_entity_records_case_queue_code', fields: ['code'], unique: true },
+          { name: 'idx_entity_records_case_queue_active', fields: ['isActive', 'sortOrder'] },
+        ],
+        layouts: {
+          list: [{ entity: 'CaseQueue', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'code', 'strategy', 'fallbackBehavior', 'defaultTeamId', 'isActive', 'sortOrder'] }] }],
+          detail: [
+            { entity: 'CaseQueue', type: 'detail', panels: [
+              { name: 'main', label: 'Queue', position: 0, fields: ['name', 'code', 'description', 'isActive', 'sortOrder'] },
+              { name: 'assignment', label: 'Assignment', position: 10, fields: ['strategy', 'fallbackBehavior', 'defaultTeamId', 'defaultAssignedUserId', 'lastAssignedUserId', 'lastAssignedAt'] },
+            ] },
+          ],
+          edit: [
+            { entity: 'CaseQueue', type: 'edit', panels: [
+              { name: 'main', label: 'Queue', position: 0, fields: ['name', 'code', 'description', 'isActive', 'sortOrder'] },
+              { name: 'assignment', label: 'Assignment', position: 10, fields: ['strategy', 'fallbackBehavior', 'defaultTeamId', 'defaultAssignedUserId'] },
+            ] },
+          ],
+        },
+        record: { displayField: 'name', removable: true, followable: false, streamable: false },
+        client: {},
+        acl: { permissions: { CaseQueue: { create: 'no', read: 'all', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'QueueMember',
+      data: {
+        name: 'QueueMember',
+        label: 'Queue Member',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, inList: false, inDetail: false, inEdit: false },
+          queueId: { type: 'link', entityKey: 'CaseQueue', required: true, inList: true, inDetail: true, inEdit: true },
+          userId: { type: 'link', entityKey: 'User', required: true, inList: true, inDetail: true, inEdit: true },
+          isActive: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+          priority: { type: 'int', defaultValue: 0, inList: true, inDetail: true, inEdit: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'uq_entity_records_queue_member', fields: ['queueId', 'userId'], unique: true },
+        ],
+        layouts: {
+          list: [{ entity: 'QueueMember', type: 'list', panels: [{ name: 'list', position: 0, fields: ['queueId', 'userId', 'priority', 'isActive'] }] }],
+          detail: [{ entity: 'QueueMember', type: 'detail', panels: [{ name: 'main', label: 'Membership', position: 0, fields: ['queueId', 'userId', 'priority', 'isActive'] }] }],
+          edit: [{ entity: 'QueueMember', type: 'edit', panels: [{ name: 'main', label: 'Membership', position: 0, fields: ['queueId', 'userId', 'priority', 'isActive'] }] }],
+        },
+        record: { displayField: 'name', removable: true, followable: false, streamable: false },
+        client: {},
+        acl: { permissions: { QueueMember: { create: 'no', read: 'all', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'RoutingRule',
+      data: {
+        name: 'RoutingRule',
+        label: 'Routing Rule',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, label: 'Name', required: true },
+          description: { type: 'text', inDetail: true, inEdit: true },
+          isActive: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+          sortOrder: { type: 'int', defaultValue: 0, inList: true, inDetail: true, inEdit: true },
+          // A JSON array of { field, operator, value } — validated at save time; never executable.
+          conditions: { type: 'text', required: true, inDetail: true, inEdit: true },
+          queueId: { type: 'link', entityKey: 'CaseQueue', inList: true, inDetail: true, inEdit: true },
+          teamId: { type: 'link', entityKey: 'Team', inDetail: true, inEdit: true },
+          userId: { type: 'link', entityKey: 'User', inDetail: true, inEdit: true },
+          strategy: { type: 'enum', values: SD_ASSIGNMENT_STRATEGIES, defaultValue: 'manual', inDetail: true, inEdit: true },
+          fallbackBehavior: { type: 'enum', values: SD_FALLBACK_BEHAVIORS, defaultValue: 'unassigned', inDetail: true, inEdit: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'idx_entity_records_routing_rule_active', fields: ['isActive', 'sortOrder'] },
+        ],
+        layouts: {
+          list: [{ entity: 'RoutingRule', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'isActive', 'sortOrder', 'queueId', 'teamId', 'userId', 'strategy'] }] }],
+          detail: [{ entity: 'RoutingRule', type: 'detail', panels: [{ name: 'main', label: 'Rule', position: 0, fields: ['name', 'description', 'isActive', 'sortOrder', 'conditions', 'queueId', 'teamId', 'userId', 'strategy', 'fallbackBehavior'] }] }],
+          edit: [{ entity: 'RoutingRule', type: 'edit', panels: [{ name: 'main', label: 'Rule', position: 0, fields: ['name', 'description', 'isActive', 'sortOrder', 'conditions', 'queueId', 'teamId', 'userId', 'strategy', 'fallbackBehavior'] }] }],
+        },
+        record: { displayField: 'name', removable: true, followable: false, streamable: false },
+        client: {},
+        acl: { permissions: { RoutingRule: { create: 'no', read: 'all', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+  ];
+}
+
+/**
+ * SD.4/SD.5 — durable case history: `CaseTransition` (the state machine) and `CaseAssignment`
+ * (ownership), PLAN_Phase_19_ServiceDesk.md §5.2, §5.3, §6.1.
+ *
+ * Generic audit records old/new field values with an actor and a timestamp, which is enough to prove
+ * *that* something happened — but it cannot carry a transition **reason**, the **command** that ran, a
+ * resolution code per cycle, or a routing **decision**. Those are exactly the facts the plan asks to
+ * keep, so they live in dedicated records written by the domain services under the service authority.
+ * They are not user-writable or user-visible: `read: 'no'` for regular roles, and the module reads
+ * them structurally for the authorised history endpoint.
+ */
+function serviceDeskHistoryEntities(): MetadataSeedEntry[] {
+  return [
+    {
+      scope: 'entity',
+      name: 'CaseTransition',
+      data: {
+        name: 'CaseTransition',
+        label: 'Case Transition',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, inList: false, inDetail: false, inEdit: false },
+          caseId: { type: 'link', entityKey: 'Case', required: true, inList: true, inDetail: true },
+          caseNumber: { type: 'varchar', maxLength: 32, inList: true, inDetail: true },
+          fromStatus: { type: 'enum', values: SD_CASE_STATUSES, inList: true, inDetail: true },
+          toStatus: { type: 'enum', values: SD_CASE_STATUSES, inList: true, inDetail: true },
+          command: { type: 'varchar', maxLength: 32, inList: true, inDetail: true },
+          reason: { type: 'text', inDetail: true },
+          resolutionCode: { type: 'varchar', maxLength: 64, inDetail: true },
+          resolutionSummary: { type: 'text', inDetail: true },
+          actorUserId: { type: 'link', entityKey: 'User', inDetail: true },
+          actorType: { type: 'varchar', maxLength: 16, inDetail: true },
+          occurredAt: { type: 'datetime', required: true, inList: true, inDetail: true, sortable: true },
+          idempotencyKey: { type: 'varchar', maxLength: 128, inDetail: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'idx_entity_records_case_transition_case', fields: ['caseId', 'occurredAt'] },
+          { name: 'uq_entity_records_case_transition_idem', fields: ['caseId', 'idempotencyKey'], unique: true },
+        ],
+        layouts: {
+          list: [{ entity: 'CaseTransition', type: 'list', panels: [{ name: 'list', position: 0, fields: ['caseNumber', 'fromStatus', 'toStatus', 'command', 'actorUserId', 'occurredAt'] }] }],
+          detail: [{ entity: 'CaseTransition', type: 'detail', panels: [{ name: 'main', label: 'Transition', position: 0, fields: ['caseId', 'fromStatus', 'toStatus', 'command', 'reason', 'resolutionCode', 'resolutionSummary', 'actorUserId', 'actorType', 'occurredAt', 'idempotencyKey'] }] }],
+        },
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: {},
+        acl: { permissions: { CaseTransition: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'CaseAssignment',
+      data: {
+        name: 'CaseAssignment',
+        label: 'Case Assignment',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, inList: false, inDetail: false, inEdit: false },
+          caseId: { type: 'link', entityKey: 'Case', required: true, inList: true, inDetail: true },
+          caseNumber: { type: 'varchar', maxLength: 32, inList: true, inDetail: true },
+          previousAssignedUserId: { type: 'link', entityKey: 'User', inList: true, inDetail: true },
+          // `assignedUserId` (from standardFields) is the *new* owner; the physical column also drives
+          // record-owner ACL on the history row itself.
+          previousTeamId: { type: 'link', entityKey: 'Team', inDetail: true },
+          teamId: { type: 'link', entityKey: 'Team', inDetail: true },
+          queueId: { type: 'link', entityKey: 'CaseQueue', inList: true, inDetail: true },
+          strategy: { type: 'varchar', maxLength: 32, inList: true, inDetail: true },
+          routingRuleId: { type: 'varchar', maxLength: 64, inDetail: true },
+          decision: { type: 'text', inDetail: true },
+          reason: { type: 'text', inDetail: true },
+          actorUserId: { type: 'link', entityKey: 'User', inDetail: true },
+          actorType: { type: 'varchar', maxLength: 16, inDetail: true },
+          occurredAt: { type: 'datetime', required: true, inList: true, inDetail: true, sortable: true },
+          idempotencyKey: { type: 'varchar', maxLength: 128, inDetail: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'idx_entity_records_case_assignment_case', fields: ['caseId', 'occurredAt'] },
+          { name: 'uq_entity_records_case_assignment_idem', fields: ['caseId', 'idempotencyKey'], unique: true },
+        ],
+        layouts: {
+          list: [{ entity: 'CaseAssignment', type: 'list', panels: [{ name: 'list', position: 0, fields: ['caseNumber', 'previousAssignedUserId', 'assignedUserId', 'queueId', 'strategy', 'actorUserId', 'occurredAt'] }] }],
+          detail: [{ entity: 'CaseAssignment', type: 'detail', panels: [{ name: 'main', label: 'Assignment', position: 0, fields: ['caseId', 'previousAssignedUserId', 'assignedUserId', 'previousTeamId', 'teamId', 'queueId', 'strategy', 'routingRuleId', 'decision', 'reason', 'actorUserId', 'actorType', 'occurredAt', 'idempotencyKey'] }] }],
+        },
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: {},
+        acl: { permissions: { CaseAssignment: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+  ];
 }

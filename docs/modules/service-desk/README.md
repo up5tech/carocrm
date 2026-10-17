@@ -1,17 +1,20 @@
 # Service Desk module (Phase 19-SD)
 
 Implemented in `apps/api/src/service-desk` (backend), registered once in `apps/api/src/app.module.ts`,
-with metadata in `database/seed-metadata.ts` and one additive migration,
-`database/migrations/033_phase19_service_desk.sql`. Functional reference: the documented product
-requirements in [`PLAN_Phase_19_ServiceDesk.md`](../../PLAN_Phase_19_ServiceDesk.md), reproduced as
-clean-room TypeScript behaviour — no upstream source, asset, translation or schema is copied.
+with metadata in `database/seed-metadata.ts` and two additive migrations,
+`database/migrations/033_phase19_service_desk.sql` and
+`database/migrations/034_phase19_service_desk_workflow.sql`. Functional reference: the documented
+product requirements in [`PLAN_Phase_19_ServiceDesk.md`](../../PLAN_Phase_19_ServiceDesk.md),
+reproduced as clean-room TypeScript behaviour — no upstream source, asset, translation or schema is
+copied.
 
-**Status: phases 19-SD.0 – 19-SD.3 are implemented.** The list of phases actually claimed is
-`SERVICE_DESK_MODULE.implementedPhases`
+**Status: phases 19-SD.0 – 19-SD.5 are implemented** (scaffold, persistence, Case CRUD/numbering,
+the state machine and resolution workflow, and assignment/queues/routing). The list of phases actually
+claimed is `SERVICE_DESK_MODULE.implementedPhases`
 (`apps/api/src/service-desk/service-desk-module.ts`), which `/api/v1/ServiceDesk/action/health`
-reports. Everything from 19-SD.4 onward (state machine, queues, email-to-case, SLA, portal
-self-service, Knowledge Base, CSAT, dedicated UI) is **not built yet**: the optional feature flags
-exist in settings, default **off**, and a settings warning says which phase delivers each one.
+reports. Everything from 19-SD.6 onward (conversation timeline, email-to-case, SLA clocks, portal
+self-service, Knowledge Base, CSAT) is **not built yet**: the optional feature flags exist in
+settings, default **off**, and a settings warning says which phase delivers each one.
 
 | Read next | What it answers |
 |---|---|
@@ -28,11 +31,15 @@ exist in settings, default **off**, and a settings warning says which phase deli
 | Server-owned fields a client cannot forge (case number, timeline stamps, SLA summary, escalation state) | `beforeValidate` write guard (`service-desk-write-guard.service.ts`) |
 | A case must carry a requester: a CRM record (Account/Contact/Lead) or a channel-supplied name/email | the same write guard |
 | List, search, filter, sort, pagination, export, stream, audit and record/field ACL | the generic Entity Engine and `AclApiService`, reused unchanged |
-| Validated module settings (numbering prefix/padding, defaults, optional feature flags) | `GET/POST /api/v1/ServiceDesk/action/settings` |
+| Validated module settings (numbering prefix/padding, defaults, resolution requirement, optional feature flags) | `GET/POST /api/v1/ServiceDesk/action/settings` |
+| The case **state machine**: `start`, `setPendingCustomer`, `setPendingInternal`, `escalate`, `deEscalate`, `resolve`, `close`, `reopen`, `cancel` — server-validated, atomic, with history and domain events | `POST /api/v1/ServiceDesk/action/case/:id/{transition,resolve,close,…}`; `GET …/capabilities`; `GET …/history` |
+| **Assignment, queues and routing**: manual/team assignment, round-robin, least-busy, declarative routing rules with safe fallback | `POST /api/v1/ServiceDesk/action/case/:id/{assign,route}`; `GET …/assignments`; `GET /action/queues`, `GET /action/queues/:id/workload` |
+| Case-lifecycle and queue-workload UI | `apps/web/src/components/CaseLifecycleActions.tsx`, `CaseQueueWorkload.tsx`, rendered by `EntityDetailPage.tsx` |
 | Module diagnostics: dependency evidence, optional-integration status, feature state, settings warnings | `GET /api/v1/ServiceDesk/action/health` |
 
 Entity CRUD stays on the generic `/api/v1/:entity` API. The module routes exist only for what a
-single record cannot express: diagnostics, the settings document and the numbering preview.
+single record cannot express: diagnostics, the settings document, the numbering preview, the case
+state machine and assignment/routing.
 
 ## The `Case` entity
 
@@ -48,11 +55,32 @@ agent recognises. Fields:
 - **SLA summary / escalation** (§5.6, §5.7, server-owned): `slaPolicyId`, `slaState`, `isEscalated`,
   `escalationLevel`, `escalatedAt`.
 - **Resolution**: `resolutionCode`, `resolutionSummary`, `resolvedById`, `isHiddenFromPortal`.
+- **Routing/ownership** (§5.3, SD.5, server-owned): `queueId`, `teamId`, `routingRuleId` — set only
+  through the assignment/routing commands, never by the record API.
 
 Relations: activity links (`emails`, `calls`, `meetings`, `tasks`) through `entity_links`, and
 `Account.relations.cases` / `Contact.relations.cases` on the other side. Audit, stream and field ACL
 come from the platform; the entity declares `acl.permissions.Case` defaults (`read: all`,
 `edit/delete/stream: own`) that an administrator narrows or widens per role.
+
+## Configuration and history records
+
+SD.5 adds four metadata records, all in `entity_records`, so configuration is listable, auditable and
+importable through the generic API like any entity:
+
+- **`CaseQueue`** — a queue: `code`, `strategy` (`manual`/`roundRobin`/`leastBusy`),
+  `fallbackBehavior` (`unassigned`/`fallbackOwner`), `defaultTeamId`, `defaultAssignedUserId`, the
+  server-owned round-robin cursor `lastAssignedUserId`/`lastAssignedAt`, `isActive`, `sortOrder`.
+- **`QueueMember`** — one membership per `(queueId, userId)` with `priority` and `isActive`.
+- **`RoutingRule`** — declarative conditions (a validated JSON array of `{ field, operator, value }`),
+  a target (`queueId`/`teamId`/`userId`), `strategy`, `fallbackBehavior`, `isActive`, `sortOrder`.
+- **`CaseTransition`** / **`CaseAssignment`** — the durable case history, written by the domain
+  services only (`read: no` for regular roles). Each carries the reason, the command, the resolution
+  code/summary and the routing decision, plus an optional `idempotencyKey`.
+
+Queue, membership and rule writes require the `queues` capability and are administrator-scoped; the
+routing-rule write guard parses and re-validates every condition at save time, so no stored rule can
+become executable code (§5.3).
 
 ## Numbering
 
@@ -68,14 +96,40 @@ One validated `serviceDesk` row in the existing `app_settings` store (no second 
 
 - `numbering`: `prefix`, `padding`.
 - `defaults`: `status`, `priority`, `type`, `source` applied by entity-metadata defaults.
-- `features`: `caseManagement` (on), and `queues`, `sla`, `emailToCase`, `portal`, `knowledgeBase`,
-  `csat` (**all off** until their sub-phase lands).
+- `resolution`: `requireCode` (on), `requireSummary` (off), `codes` (the configurable list of
+  resolution codes), `reopenWindowDays` (`0` = unlimited).
+- `assignment`: `defaultQueueId` (used by routing when no rule matches).
+- `features`: `caseManagement` (on), and `queues`, `sla`, `notifications`, `emailToCase`, `portal`,
+  `knowledgeBase`, `csat` (**all off** until their sub-phase lands).
 
 Turning an unimplemented feature on stores the flag and returns a warning naming the phase that
 delivers it; it never pretends the capability works.
+
+## State machine and assignment
+
+Status moves are **commands**, not field writes. `CaseLifecycleService` narrows a base transition map
+by the command's allowed source statuses, checks the resolution requirement, verifies the actor's
+record permission (the update runs as the actor, so a denied edit rolls the whole command back) and
+writes the case, a `CaseTransition` row and the domain events in one transaction. `reopen` never
+erases a prior `resolvedAt`/`closedAt`, so every resolve→reopen cycle stays auditable; an optional
+`idempotencyKey` makes a retried command a no-op.
+
+`CaseAssignmentService` converges manual, queue/team and routing assignment into one validated path:
+it checks the target exists, the user is an active internal user and is eligible under the target
+queue/team, and that the actor may assign within their scope. Round-robin advances a row-locked
+cursor on the queue (`SELECT … FOR UPDATE`) so concurrent claims cannot corrupt it; least-busy counts
+active cases. Routing matches declarative rules in `sortOrder` order, first match wins, and never
+drops a case when a queue has no eligible member — it is retained in the queue (or given the configured
+fallback owner) and the decision is recorded.
 
 ## Tests
 
 - `apps/api/test/service-desk.test.ts` — module health, settings, numbering preview, case CRUD,
   requester validation, server-owned-field refusal, list/filter, concurrent numbering, and record ACL.
-- `apps/api/test/service-desk-domain.test.ts` — the pure numbering/validation/change-detection helpers.
+- `apps/api/test/service-desk-workflow.test.ts` — the state machine and resolution workflow, reopen
+  history, idempotent transitions, version conflicts, manual/team/queue assignment, round-robin,
+  least-busy, safe fallback, declarative routing precedence, routing-rule validation, workload and
+  assignment notifications.
+- `apps/api/test/service-desk-domain.test.ts` — the pure numbering/validation/change-detection helpers,
+  the transition model, the resolution requirement, routing-condition validation/matching and the
+  round-robin/least-busy pickers.

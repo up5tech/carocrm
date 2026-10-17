@@ -104,7 +104,10 @@ Decision: `apps/api/test/service-desk.test.ts` (API/integration) and
 `apps/api/test/service-desk-domain.test.ts` (pure helpers) run against the existing configured
 database, create only marked records, and clean up by exact id. The number sequence is intentionally
 not reclaimed — gaps are normal for a ticket sequence and the consumed values are not this run's data
-to recover.
+to recover. `apps/api/test/service-desk-workflow.test.ts` follows the same rule: every entity it
+creates is prefixed `AGENT_TEST_<runId>` and deleted by exact id, and the module-written history,
+notification and outbox rows it produces are removed by the exact `caseId` the run used. The settings
+it switches on (`queues`, `notifications`) are restored to their prior value in `afterAll`.
 
 ## 8. Implementation sequence and status
 
@@ -114,4 +117,22 @@ to recover.
 | 19-SD.1 | module scaffold (`service-desk/` barrel, descriptor, controller, health), registration in `app.module.ts`, metadata, module smoke test, docs stub | done |
 | 19-SD.2 | additive migration `033`, defaults in metadata, settings document, no extra test database | done |
 | 19-SD.3 | `Case` metadata, sequence-backed numbering, `beforeValidate` write guard, CRUD/list/search via the generic API, ACL and audit (reused) | done |
-| 19-SD.4+ | state machine, queues, email-to-case, SLA, portal, KB, CSAT, UI | not started |
+| 19-SD.4 | case state machine and resolution workflow: transition commands, resolution requirement, reopen policy, `CaseTransition` history, domain events, `CaseLifecycleActions` UI | done |
+| 19-SD.5 | assignment, teams, queues and routing: `CaseQueue`/`QueueMember`/`RoutingRule`, `CaseAssignment` history, round-robin/least-busy, declarative routing with safe fallback, workload view, assignment notifications, migration `034` | done |
+| 19-SD.6+ | conversation timeline, email-to-case, SLA, portal, KB, CSAT | not started |
+
+### SD.4/SD.5 decisions recorded here
+
+- **History is a record, not a field audit.** Generic audit proves *that* a value changed; it cannot
+  carry the command, the reason or the resolution code of a cycle. So SD.4/SD.5 write `CaseTransition`
+  and `CaseAssignment` records (deny-by-default ACL, server-written), and reopening keeps the prior
+  `resolvedAt`/`closedAt` rather than clearing them.
+- **Ownership is server-owned.** `assignedUserId` was already command-writable through the generic
+  edit; `queueId`/`teamId`/`routingRuleId` are added to `SERVER_OWNED_CASE_FIELDS` and set only by the
+  assignment/routing commands, which re-check eligibility and the actor's scope.
+- **Queues were built, not borrowed.** The repository had no queue/routing abstraction covering
+  eligibility, strategies and declarative rules, so SD.5 adds the smallest one that does (task SD.5.1)
+  rather than stretching teams or saved filters.
+- **Ordering of history is deterministic.** `ServiceDeskRecords.find` orders by insertion
+  (`created_at`), not the random record id, so a history list reads oldest-first even when two rows
+  share a millisecond.

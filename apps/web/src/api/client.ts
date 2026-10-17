@@ -51,6 +51,12 @@ import type {
   SalesSendInput,
   SalesSendResult,
   SalesSettingsView,
+  ServiceDeskAssignmentResult,
+  ServiceDeskAssignmentRow,
+  ServiceDeskCapabilities,
+  ServiceDeskQueueWorkload,
+  ServiceDeskTransitionResult,
+  ServiceDeskTransitionRow,
   SettingsPatch,
   SettingsView,
   WorkflowActionSpec,
@@ -845,4 +851,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+
+  // Phase 19-SD.4/SD.5 — Service Desk commands (PLAN_Phase_19_ServiceDesk.md §8.2). Entity CRUD stays
+  // on the generic `/Case` API; these cover the state machine and assignment/routing only.
+  serviceDeskCapabilities: (caseId: string) =>
+    request<ServiceDeskCapabilities>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/capabilities`),
+  serviceDeskTransition: (caseId: string, input: Record<string, unknown>) =>
+    request<ServiceDeskTransitionResult>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/transition`, post(input)),
+  serviceDeskHistory: (caseId: string) =>
+    request<{ list: ServiceDeskTransitionRow[] }>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/history`),
+  serviceDeskAssign: (caseId: string, input: Record<string, unknown>) =>
+    request<ServiceDeskAssignmentResult>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/assign`, post(input)),
+  serviceDeskRoute: (caseId: string, input: Record<string, unknown> = {}) =>
+    request<ServiceDeskAssignmentResult>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/route`, post(input)),
+  serviceDeskAssignments: (caseId: string) =>
+    request<{ list: ServiceDeskAssignmentRow[] }>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/assignments`),
+  serviceDeskQueueWorkload: (queueId: string) =>
+    request<ServiceDeskQueueWorkload>(`/ServiceDesk/action/queues/${encodeURIComponent(queueId)}/workload`),
 };

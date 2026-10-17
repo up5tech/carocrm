@@ -876,3 +876,85 @@ export interface SalesHealthView {
   settings: { version: number; updatedAt: string | null; warnings: readonly string[] };
   checks: readonly Record<string, unknown>[];
 }
+
+/**
+ * Phase 19-SD.4/SD.5 — Service Desk command views (`/api/v1/ServiceDesk`, PLAN §5.2, §5.3).
+ *
+ * The server answers with the transitions the *current actor* may run and the facts the controls need
+ * (resolution requirement, assignment hint). The SPA renders what it is told and never assumes a
+ * command is allowed: the same rules are re-checked server-side on every command.
+ */
+export interface ServiceDeskCapabilities {
+  caseId: string;
+  status: string;
+  allowedCommands: readonly string[];
+  resolution: { requireCode: boolean; requireSummary: boolean; codes: readonly string[] };
+  assignment: { caseId: string; canAssign: boolean };
+}
+
+export interface ServiceDeskTransitionResult {
+  caseId: string;
+  from: string;
+  to: string;
+  command: string;
+  changed: boolean;
+  idempotent: boolean;
+  transitionId: string | null;
+}
+
+export interface ServiceDeskTransitionRow {
+  id: string;
+  caseId: string;
+  fromStatus: string;
+  toStatus: string;
+  command: string;
+  reason: string | null;
+  resolutionCode: string | null;
+  actorUserId: string | null;
+  actorType: string;
+  occurredAt: string | null;
+}
+
+export interface ServiceDeskAssignmentResult {
+  caseId: string;
+  assignedUserId: string | null;
+  teamId: string | null;
+  queueId: string | null;
+  strategy: string;
+  changed: boolean;
+  idempotent: boolean;
+  warnings: readonly string[];
+  assignmentId: string | null;
+}
+
+export interface ServiceDeskAssignmentRow {
+  id: string;
+  caseId: string;
+  previousAssignedUserId: string | null;
+  assignedUserId: string | null;
+  previousTeamId: string | null;
+  teamId: string | null;
+  queueId: string | null;
+  strategy: string;
+  routingRuleId: string | null;
+  reason: string | null;
+  actorUserId: string | null;
+  actorType: string;
+  occurredAt: string | null;
+}
+
+export interface ServiceDeskQueueWorkload {
+  queue: {
+    id: string;
+    name: string | null;
+    code: string | null;
+    strategy: string;
+    fallbackBehavior: string;
+    defaultTeamId: string | null;
+    defaultAssignedUserId: string | null;
+    isActive: boolean;
+  };
+  source: 'members' | 'team' | 'none';
+  members: readonly { userId: string; activeCases: number }[];
+  unassigned: number;
+}

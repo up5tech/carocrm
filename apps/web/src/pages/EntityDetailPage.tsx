@@ -5,6 +5,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
+import { CaseLifecycleActions } from '../components/CaseLifecycleActions.js';
+import { CaseQueueWorkload } from '../components/CaseQueueWorkload.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
 import { SalesDocumentLinesPanel } from '../components/SalesDocumentLinesPanel.js';
@@ -275,6 +277,12 @@ export function EntityDetailPage() {
             there goes through the Opportunity command so the party, the provenance and the
             double-billing guards all apply. */}
         {entity === 'Opportunity' && base !== '/portal' ? <OpportunityDocumentActions opportunityId={id} /> : null}
+
+        {/* Phase 19-SD.4/SD.5 — a Case carries the server-defined state machine and assignment entry
+            points: the buttons render exactly the commands the server says the actor may run, and a
+            CaseQueue shows who is available and how loaded they are. The server decides both. */}
+        {entity === 'Case' && base !== '/portal' ? <CaseLifecycleActions caseId={id} onChanged={load} /> : null}
+        {entity === 'CaseQueue' && base !== '/portal' ? <CaseQueueWorkload queueId={id} /> : null}
 
         {panels.map((panel) => (          <Card
             key={panel.name}

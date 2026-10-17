@@ -7,20 +7,20 @@ and no parity with any upstream extension is claimed.
 
 ## 1. Scope delivered so far
 
-Only **19-SD.0 – 19-SD.3** are implemented: the module scaffold, the additive persistence and
-defaults, and the canonical `Case` entity with numbering, validation and the standard Entity Engine
-CRUD/search/ACL surface. Everything from 19-SD.4 onward is a documented gap, not a silent one:
+**19-SD.0 – 19-SD.5** are implemented: the module scaffold, the additive persistence and defaults, the
+canonical `Case` entity with numbering/validation and the standard Entity Engine CRUD/search/ACL
+surface, the case **state machine and resolution workflow**, and **assignment, queues and routing**.
+Everything from 19-SD.6 onward is a documented gap, not a silent one:
 
 | Not built yet | Sub-phase | How it is reported |
 |---|---|---|
-| Case state machine and resolution workflow (resolve/close/reopen/cancel commands) | 19-SD.4 | `features` flags exist; `status` transitions are free-form metadata edits, not validated commands |
-| Queues and routing | 19-SD.5 | `features.queues` defaults off, with a warning naming the phase |
+| Conversation timeline, public replies and internal notes | 19-SD.6 | entity renders through the generic stream panel; no case-specific conversation model yet |
 | Email-to-case ingestion and idempotency | 19-SD.7 | `features.emailToCase` off; `email` integration detected as available for later use |
 | SLA policies, clocks and business calendars | 19-SD.8 | `features.sla` off; `Case.slaState` exists as a server-owned summary field but nothing computes it yet |
 | Knowledge Base integration | 19-SD.10 | `knowledge-base` integration reported **unavailable** (no `KnowledgeArticle` entity) |
 | Portal self-service case access | 19-SD.11 | `portal` integration reported **unavailable** (no `Portal` entity); `Case.isHiddenFromPortal` exists but no portal scope reads it yet |
 | CSAT surveys | 19-SD.14 | `features.csat` off |
-| Dedicated React screens | 19-SD.13 | entities render through the generic metadata-driven UI; a purpose-built workspace is not built |
+| A full case workspace | 19-SD.13 | entities render through the generic metadata-driven UI; the lifecycle and workload panels are purpose-built, but a complete agent workspace is not built |
 
 ## 2. Deliberate design decisions
 
@@ -31,7 +31,11 @@ CRUD/search/ACL surface. Everything from 19-SD.4 onward is a documented gap, not
 | `Case.name` is the subject (label "Subject"), no separate `subject` field | Mirrors the `Email` entity, whose display field is its subject; lists, search and stream read the display field directly. |
 | Numbering from a Postgres sequence, not a counter row or a count of existing cases | The plan (§5.1) explicitly allows "a sequence or a transaction-safe allocation service". A sequence's `nextval` is atomic and non-repeating; counting rows is not concurrency-safe. The sequence is **not gapless** — a failed create consumes a value — which is normal for ticket ids. |
 | Optional features default **off** | A fresh installation gets a working case desk, and nothing whose infrastructure lands in a later sub-phase (AGENTS.md §5.5). |
-| Deferred tables are not created speculatively | Queues, SLA policy versions, SLA clocks, business calendars and mail-idempotency mappings have no reader until their sub-phase; their tables ship with the migration of the phase that reads them. |
+| Deferred tables are not created speculatively | Queues, SLA policy versions, SLA clocks, business calendars and mail-idempotency mappings have no reader until their sub-phase; their tables ship with the migration of the phase that reads them. Queues landed with SD.5, which reads them. |
+| History in dedicated records, not the generic field audit | The generic audit proves *that* a field changed; it cannot carry a transition's command/reason/resolution code or an assignment's routing decision, which the plan asks to keep (§5.2, §5.3). `reopen` therefore keeps the prior `resolvedAt`/`closedAt` and the closed cycle remains in `CaseTransition`. |
+| `queueId`/`teamId`/`routingRuleId` are server-owned | Ownership is a server decision (§5.3): the write guard refuses a client write to them, and the assignment/routing commands re-check eligibility and the actor's scope before writing. |
+| Assignment notifications are written to the existing `notifications` store | The platform already owns in-app notifications and delivery; the module writes one row whose `dedupKey` is the assignment-history id, so a retried command never double-notifies (§12.3). Off by default. |
+| Round-robin history ordered by insertion, not record id | Record ids are random UUIDs; ordering by `created_at` keeps a history list oldest-first when two rows share a millisecond. |
 
 ## 3. Behaviour worth knowing (deviations from naive expectations)
 
@@ -42,9 +46,22 @@ CRUD/search/ACL surface. Everything from 19-SD.4 onward is a documented gap, not
   Zod request shape as `400 INVALID_QUERY`; a domain rule — an unknown settings key, a missing
   requester, a client write to a server-owned field — is `422 VALIDATION_FAILED`.
 - **Server-owned fields are refused by name.** A client write that sets `caseNumber`, a timeline
-  stamp, `resolvedById`, the SLA summary or the escalation state is rejected rather than silently
-  ignored. A Service Desk domain service marked with `runAsServiceDeskInternal` may set them; no such
-  service ships in 19-SD.1 – 19-SD.3 (future commands use the marker).
+  stamp, `resolvedById`, the SLA summary, the escalation state or the routing/ownership fields
+  (`queueId`, `teamId`, `routingRuleId`) is rejected rather than silently ignored. The Service Desk
+  domain services (`CaseLifecycleService`, `CaseAssignmentService`) run their `Case` writes under the
+  `runAsServiceDeskInternal` marker, so they may set them.
+- **A status move is a command, never a bare field edit.** `POST …/case/:id/transition` (and the named
+  verbs) validates the source→target pair, the resolution requirement and the actor's permission, then
+  writes the case, a `CaseTransition` row and the domain events in one transaction; a refusal leaves
+  the record untouched. `close` is only valid from `Resolved`; `reopen` is refused for a `Closed` or
+  `Cancelled` case unless the actor holds a broad edit permission.
+- **Queues off refuses queue configuration and routing, not case editing.** With `features.queues`
+  off, a non-internal write to `CaseQueue`/`QueueMember`/`RoutingRule` and a `route` command are
+  refused with `403 FEATURE_DISABLED`; queues do not need to be on to create and work a case by hand.
+- **Nothing stored in a routing rule is executed.** Conditions are parsed and validated against a
+  field/operator allowlist at save time and matched in `sortOrder` order, first match wins; an
+  unparseable rule is skipped, and a queue with no eligible member retains the case rather than
+  dropping it.
 - **Optional integrations are detected from metadata, never imported.** `email`, `projects` and
   `customer-success` report `available` because those entities are registered; `portal`,
   `knowledge-base` and `workflow` report `unavailable` because no such entity exists yet. An

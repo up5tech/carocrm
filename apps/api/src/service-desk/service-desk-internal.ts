@@ -24,8 +24,15 @@ export function isServiceDeskInternalWrite(): boolean {
   return storage.getStore() === true;
 }
 
-/** The Service Desk entities the write guard applies to. */
-export const SERVICE_DESK_ENTITY_TYPES = [CASE_ENTITY] as const;
+/** The Service Desk entities the module owns. `Case` is the record; the rest are its configuration and history. */
+export const SERVICE_DESK_ENTITY_TYPES = [
+  CASE_ENTITY,
+  "CaseQueue",
+  "QueueMember",
+  "RoutingRule",
+  "CaseTransition",
+  "CaseAssignment",
+] as const;
 export type ServiceDeskEntityType = (typeof SERVICE_DESK_ENTITY_TYPES)[number];
 
 /**
@@ -37,6 +44,9 @@ export type ServiceDeskEntityType = (typeof SERVICE_DESK_ENTITY_TYPES)[number];
  *    transition), never typed in.
  *  - SLA summary, escalation state and resolution actor are computed by the domain services that own
  *    those workflows (SD.4, SD.8, SD.9) and are surfaced read-only here.
+ *  - routing and ownership (`queueId`, `teamId`, `routingRuleId`) are set only through the assignment
+ *    and routing commands of SD.5, which check eligibility and permission; the generic record API
+ *    must not be a way around those checks.
  *
  * A client write that sets any of these is refused by name; a domain service marked with
  * `runAsServiceDeskInternal` may set them.
@@ -56,6 +66,9 @@ export const SERVER_OWNED_CASE_FIELDS: readonly string[] = [
   "isEscalated",
   "escalationLevel",
   "escalatedAt",
+  "queueId",
+  "teamId",
+  "routingRuleId",
 ];
 
 export { changedKeys } from "./service-desk-domain.js";
