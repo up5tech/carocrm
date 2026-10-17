@@ -1,6 +1,6 @@
 # Phase 19 — Service Desk Module (`ServiceDesk`)
 
-> **Status:** Planned  
+> **Status:** Implemented (19-SD.0 – 19-SD.18)  
 > **Parent roadmap:** `PLAN.md` — Phase 19: Advanced Domains  
 > **Module name:** `ServiceDesk`  
 > **Backend module class:** `ServiceDeskModule`  

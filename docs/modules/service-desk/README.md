@@ -9,7 +9,7 @@ product requirements in [`PLAN_Phase_19_ServiceDesk.md`](../../PLAN_Phase_19_Ser
 reproduced as clean-room TypeScript behaviour — no upstream source, asset, translation or schema is
 copied.
 
-**Status: phases 19-SD.0 – 19-SD.17 are implemented** (scaffold, persistence, Case CRUD/numbering,
+**Status: phases 19-SD.0 – 19-SD.18 are implemented (release gate passed).** (scaffold, persistence, Case CRUD/numbering,
 the state machine and resolution workflow, assignment/queues/routing, and the conversation timeline
 with public replies and internal notes). The list of phases actually claimed is
 `SERVICE_DESK_MODULE.implementedPhases`
