@@ -9,6 +9,8 @@ import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.
 import { CaseAssignmentService } from "./case-assignment.service.js";
 import { CaseConversationService } from "./case-conversation.service.js";
 import { CaseLifecycleService } from "./case-lifecycle.service.js";
+import { CaseMergeService } from "./case-merge.service.js";
+import { CsatService } from "./csat.service.js";
 import { CaseNumberingService } from "./case-numbering.service.js";
 import {
   CaseAssignSchema,
@@ -52,6 +54,8 @@ export class ServiceDeskController {
     @Inject(CaseConversationService) private readonly conversation: CaseConversationService,
     @Inject(EmailToCaseService) private readonly emailToCaseService: EmailToCaseService,
     @Inject(KnowledgeBaseService) private readonly knowledgeBase: KnowledgeBaseService,
+    @Inject(CaseMergeService) private readonly caseMerge: CaseMergeService,
+    @Inject(CsatService) private readonly csat: CsatService,
     @Inject(SlaService) private readonly slaService: SlaService,
     @Inject(WebToCaseService) private readonly webToCase: WebToCaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
@@ -291,6 +295,44 @@ export class ServiceDeskController {
       throw new ValidationError("Invalid intake payload.", { issues: parsed.error.issues.map((i) => i.message) });
     }
     return this.webToCase.submit({ ...parsed.data, clientIp: request?.ip });
+  }
+
+  /** Duplicate candidates for a case (P2). */
+  @Get("action/case/:id/duplicateCandidates")
+  async duplicateCandidates(@Param("id") id: string) {
+    return { caseId: id, candidates: await this.caseMerge.duplicateCandidates(id) };
+  }
+
+  /** Merge source case into target case. */
+  @Post("action/case/:id/merge")
+  @HttpCode(200)
+  async caseMergeCmd(@Param("id") id: string, @Body() body: unknown) {
+    const parsed = z.object({ intoCaseId: z.string().min(1) }).safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError("Invalid merge payload.", { issues: parsed.error.issues.map((i) => i.message) });
+    return this.caseMerge.merge(id, parsed.data.intoCaseId);
+  }
+
+  /** Create a CSAT invitation for a case. */
+  @Post("action/case/:id/csat/invite")
+  @HttpCode(200)
+  async csatInvite(@Param("id") id: string) {
+    return this.csat.createInvitation(id);
+  }
+
+  /** Submit a CSAT response (public, token-based). */
+  @Public()
+  @Post("action/csat/submit")
+  @HttpCode(200)
+  async csatSubmit(@Body() body: unknown) {
+    const parsed = z.object({ token: z.string().min(1), rating: z.coerce.number().int().min(1).max(5), feedback: z.string().max(4000).optional() }).safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError("Invalid CSAT payload.", { issues: parsed.error.issues.map((i) => i.message) });
+    return this.csat.submit(parsed.data.token, parsed.data.rating, parsed.data.feedback);
+  }
+
+  /** CSAT results for a case. */
+  @Get("action/case/:id/csat")
+  async csatResults(@Param("id") id: string) {
+    return this.csat.results(id);
   }
 
   private requireAdmin(action: string): void {

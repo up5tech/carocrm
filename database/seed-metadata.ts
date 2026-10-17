@@ -3427,6 +3427,7 @@ function serviceDeskCaseEntity(): MetadataSeedEntry {
         routingRuleId: { type: 'link', entityKey: 'RoutingRule', inDetail: true },
         // Portal access (§5.9): a hidden case is never returned to a portal client.
         isHiddenFromPortal: { type: 'bool', defaultValue: false, inDetail: true, inEdit: true },
+        mergedIntoCaseId: { type: 'link', entityKey: 'Case', inDetail: true },
       },
       relations: {
         // Activities reach a case through explicit `entity_links` rows (the generic related-record
@@ -3835,6 +3836,32 @@ function serviceDeskHistoryEntities(): MetadataSeedEntry[] {
       record: { displayField: 'name', removable: true },
       client: {},
       acl: { permissions: { KnowledgeArticle: { create: 'no', read: 'all', edit: 'no', delete: 'no', stream: 'no' } } },
+    },
+  },
+  // SD.14 — CSAT surveys.
+  {
+    scope: 'entity',
+    name: 'CsatSurvey',
+    data: {
+      name: 'CsatSurvey',
+      label: 'CSAT Survey',
+      isEntity: true,
+      fields: {
+        ...standardFields,
+        caseId: { type: 'link', entityKey: 'Case', required: true, inList: true, inDetail: true, inEdit: true },
+        cycle: { type: 'int', defaultValue: 1, inDetail: true, inEdit: true },
+        tokenHash: { type: 'varchar', maxLength: 128, inDetail: true, inEdit: true },
+        expiresAt: { type: 'datetime', inDetail: true, inEdit: true },
+        used: { type: 'bool', defaultValue: false, inDetail: true, inEdit: true },
+        rating: { type: 'int', inDetail: true, inEdit: true },
+        feedback: { type: 'text', inDetail: true, inEdit: true },
+        submittedAt: { type: 'datetime', inDetail: true, inEdit: true },
+        status: { type: 'enum', values: ['Pending', 'Submitted', 'Expired'], defaultValue: 'Pending', inList: true, inDetail: true, inEdit: true },
+      },
+      relations: {},
+      record: { displayField: 'name', removable: true },
+      client: {},
+      acl: { permissions: { CsatSurvey: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
     },
   },
   ];
