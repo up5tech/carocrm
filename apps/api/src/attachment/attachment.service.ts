@@ -25,6 +25,7 @@ import type { AppConfig } from '../config.js';
 import { CONFIG_TOKEN } from '../config.js';
 import type { AttachmentsTable } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
+import { canViewStreamVisibility, toStreamVisibility } from '../stream/stream-visibility.js';
 import type { ParentAclChecker } from './attachment.constants.js';
 import {
   FILE_STORAGE_TOKEN,
@@ -68,6 +69,8 @@ export interface AttachmentDto {
   parentType: string | null;
   field: string | null;
   role: string | null;
+  /** §5.4 visibility: `public` (customer-visible) or `internal` (staff-only). */
+  visibility: 'public' | 'internal' | 'system';
   createdById: string | null;
   createdAt: string;
 }
@@ -197,6 +200,9 @@ export class AttachmentService {
       parent_type: parentType,
       field: optionalText(input.field),
       role: optionalText(input.role),
+      // Uploads are customer-visible by default and governed by the parent record's ACL, exactly as
+      // before; linking the file to an internal message lowers it (§5.4).
+      visibility: 'public',
       created_by_id: principal.userId,
       created_at: now,
     };
@@ -287,6 +293,12 @@ export class AttachmentService {
   private async assertRowReadable(row: Selectable<AttachmentsTable>): Promise<void> {
     if (this.scope.isAdmin) return;
     const principal = this.scope.requirePrincipal();
+    // §5.4/§10.3 — an internal attachment never crosses the portal boundary, even when the parent
+    // case is readable: the visibility gate runs before the parent-ACL and author shortcuts.
+    const visibility = toStreamVisibility(row.visibility, 'internal');
+    if (!canViewStreamVisibility(visibility, principal)) {
+      throw new AuthorizationDeniedError('No access to this attachment.', { id: row.id });
+    }
     if (row.created_by_id !== null && row.created_by_id === principal.userId) return;
     if (row.parent_type !== null && row.parent_id !== null) {
       const allowed = await this.parentAcl.canReadParent(row.parent_type, row.parent_id, this.scope);
@@ -340,6 +352,7 @@ function toDto(row: Selectable<AttachmentsTable>): AttachmentDto {
     parentType: row.parent_type,
     field: row.field,
     role: row.role,
+    visibility: toStreamVisibility(row.visibility, 'public'),
     createdById: row.created_by_id,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
   };

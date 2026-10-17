@@ -1076,6 +1076,34 @@
     "workloadDenied": "Bạn không có quyền xem khối lượng công việc của hàng đợi này.",
     "workloadEmpty": "Không có dữ liệu khối lượng công việc.",
     "noEligibleMember": "Không có thành viên phù hợp.",
-    "workloadFailed": "Không tải được khối lượng công việc."
+    "workloadFailed": "Không tải được khối lượng công việc.",
+    "conversation": {
+      "title": "Hội thoại",
+      "modePublic": "Trả lời công khai",
+      "modeInternal": "Ghi chú nội bộ",
+      "publicPlaceholder": "Viết trả lời mà người yêu cầu sẽ thấy…",
+      "internalPlaceholder": "Viết ghi chú nội bộ chỉ nhân viên thấy…",
+      "publicHint": "Người yêu cầu sẽ thấy nội dung này.",
+      "internalHint": "Chỉ nội bộ — người yêu cầu không bao giờ thấy.",
+      "sendReply": "Gửi trả lời",
+      "addNote": "Thêm ghi chú nội bộ",
+      "confirmPublicTitle": "Gửi trả lời này cho người yêu cầu?",
+      "confirmPublicDesc": "Trả lời và tệp đính kèm sẽ hiển thị cho người yêu cầu.",
+      "confirmPublicOk": "Gửi",
+      "confirmCancel": "Hủy",
+      "replySent": "Đã gửi trả lời cho người yêu cầu.",
+      "noteAdded": "Đã thêm ghi chú nội bộ.",
+      "postFailed": "Không gửi được tin nhắn.",
+      "loadFailed": "Không tải được hội thoại.",
+      "empty": "Chưa có tin nhắn nào.",
+      "denied": "Bạn không có quyền truy cập hội thoại của hồ sơ này.",
+      "readOnly": "Bạn có thể đọc hội thoại nhưng không thể đăng.",
+      "publicBadge": "Công khai",
+      "internalBadge": "Nội bộ",
+      "systemBadge": "Hệ thống",
+      "attach": "Đính kèm tệp",
+      "uploadFailed": "Không tải tệp lên được.",
+      "download": "Tải tệp đính kèm"
+    }
   }
 }

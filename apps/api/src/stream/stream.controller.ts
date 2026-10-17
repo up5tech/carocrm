@@ -34,6 +34,11 @@ const NoteBodySchema = z.object({
   data: z.record(z.string(), z.unknown()).optional(),
   attachmentsIds: z.array(z.string().min(1)).optional(),
   idList: z.array(z.string().min(1)).optional(),
+  /**
+   * §5.4 explicit visibility. `public` is customer-visible; `internal` is staff-only and is the
+   * default. The service forces `public` for a portal principal and refuses a forged `system`.
+   */
+  visibility: z.enum(['public', 'internal']).optional(),
 });
 
 function parseOrThrow<S extends z.ZodTypeAny>(schema: S, query: unknown, message: string): z.output<S> {
@@ -77,6 +82,7 @@ export class NoteController {
       ...(parsed.data !== undefined ? { data: parsed.data } : {}),
       ...(parsed.idList !== undefined ? { mentionIds: parsed.idList } : {}),
       ...(parsed.attachmentsIds !== undefined ? { attachmentIds: parsed.attachmentsIds } : {}),
+      ...(parsed.visibility !== undefined ? { visibility: parsed.visibility } : {}),
     });
   }
 

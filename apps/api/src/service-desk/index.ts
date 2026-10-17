@@ -1,6 +1,7 @@
 import type { Provider, Type } from "@nestjs/common";
 
 import { CaseAssignmentService } from "./case-assignment.service.js";
+import { CaseConversationService } from "./case-conversation.service.js";
 import { CaseLifecycleService } from "./case-lifecycle.service.js";
 import { CaseNumberingService } from "./case-numbering.service.js";
 import { ServiceDeskController } from "./service-desk.controller.js";
@@ -36,10 +37,18 @@ export const SERVICE_DESK_PROVIDERS: Provider[] = [
   ServiceDeskWriteGuardService,
   CaseLifecycleService,
   CaseAssignmentService,
+  CaseConversationService,
   ServiceDeskModuleHealthService,
 ];
 
 export { type CaseAssignInput, type CaseAssignmentResult, CaseAssignmentService, type CaseRouteResult, type QueueWorkload } from "./case-assignment.service.js";
+export {
+  type CaseConversationCapabilities,
+  CaseConversationService,
+  type CaseConversationTimeline,
+  type CaseMessageInput,
+  type CaseMessageResult,
+} from "./case-conversation.service.js";
 export { type CaseCapabilities, CaseLifecycleService, type CaseTransitionRequest, type CaseTransitionResult } from "./case-lifecycle.service.js";
 export { CASE_NUMBER_SEQUENCE, type CaseNumberAllocation, CaseNumberingService, type CaseNumberPreview } from "./case-numbering.service.js";
 export { ServiceDeskController } from "./service-desk.controller.js";

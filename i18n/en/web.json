@@ -1076,6 +1076,34 @@
     "workloadDenied": "You do not have access to this queue's workload.",
     "workloadEmpty": "No workload data.",
     "noEligibleMember": "No eligible member.",
-    "workloadFailed": "Could not load the workload."
+    "workloadFailed": "Could not load the workload.",
+    "conversation": {
+      "title": "Conversation",
+      "modePublic": "Public reply",
+      "modeInternal": "Internal note",
+      "publicPlaceholder": "Write a reply the requester will see…",
+      "internalPlaceholder": "Write an internal note only staff can see…",
+      "publicHint": "Visible to the requester.",
+      "internalHint": "Internal only — the requester never sees this.",
+      "sendReply": "Send reply",
+      "addNote": "Add internal note",
+      "confirmPublicTitle": "Send this reply to the requester?",
+      "confirmPublicDesc": "The reply and its attachments become visible to the requester.",
+      "confirmPublicOk": "Send",
+      "confirmCancel": "Cancel",
+      "replySent": "Reply sent to the requester.",
+      "noteAdded": "Internal note added.",
+      "postFailed": "Could not post the message.",
+      "loadFailed": "Could not load the conversation.",
+      "empty": "No messages yet.",
+      "denied": "You do not have access to this case conversation.",
+      "readOnly": "You can read this conversation but not post to it.",
+      "publicBadge": "Public",
+      "internalBadge": "Internal",
+      "systemBadge": "System",
+      "attach": "Attach file",
+      "uploadFailed": "Could not upload the file.",
+      "download": "Download attachment"
+    }
   }
 }

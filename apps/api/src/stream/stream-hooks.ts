@@ -88,6 +88,7 @@ export class StreamUpdateHookService {
         entity_type: args.entityType,
         entity_id: args.record.id,
         type: 'Update',
+        visibility: 'system',
         data: { type: 'Updated', attributes },
         post: null,
         created_by_id: actorId,

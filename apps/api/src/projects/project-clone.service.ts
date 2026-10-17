@@ -214,8 +214,8 @@ export class ProjectCloneService {
    * external effect inside a transaction).
    */
   private async copyAttachments(projectId: string, clonedTaskIds: readonly string[], sourceParents: readonly string[]): Promise<number> {
-    const rows = await sql<{ id: string; name: string; mime_type: string; size: string; storage_key: string; parent_type: string; parent_id: string; field: string | null; role: string | null }>`
-      select id, name, mime_type, size::text, storage_key, parent_type, parent_id, field, role
+    const rows = await sql<{ id: string; name: string; mime_type: string; size: string; storage_key: string; parent_type: string; parent_id: string; field: string | null; role: string | null; visibility: string }>`
+      select id, name, mime_type, size::text, storage_key, parent_type, parent_id, field, role, visibility
       from attachments
       where parent_type in ('Project', 'ProjectTask') and parent_id in (${sql.join([...sourceParents])})
     `.execute(this.database.db);
@@ -252,6 +252,8 @@ export class ProjectCloneService {
             parent_type: row.parent_type,
             field: row.field,
             role: row.role,
+            // A clone copies the source attachment's visibility, so an internal-note file stays internal.
+            visibility: row.visibility,
             created_by_id: this.access.userId || null,
             created_at: new Date(),
           })

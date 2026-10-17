@@ -1,14 +1,17 @@
 import { AuthorizationDeniedError, InvalidQueryError } from "@carocrm/core/errors/index.js";
-import { Body, Controller, Get, HttpCode, Inject, Param, Post } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import type { ZodTypeAny } from "zod";
 
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
 import { CaseAssignmentService } from "./case-assignment.service.js";
+import { CaseConversationService } from "./case-conversation.service.js";
 import { CaseLifecycleService } from "./case-lifecycle.service.js";
 import { CaseNumberingService } from "./case-numbering.service.js";
 import {
   CaseAssignSchema,
+  CaseConversationQuerySchema,
+  CaseMessageSchema,
   CaseRouteSchema,
   CaseTransitionSchema,
   SettingsPatchSchema,
@@ -37,6 +40,7 @@ export class ServiceDeskController {
     @Inject(CaseNumberingService) private readonly numbering: CaseNumberingService,
     @Inject(CaseLifecycleService) private readonly lifecycle: CaseLifecycleService,
     @Inject(CaseAssignmentService) private readonly assignment: CaseAssignmentService,
+    @Inject(CaseConversationService) private readonly conversation: CaseConversationService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -70,14 +74,15 @@ export class ServiceDeskController {
   // Case state machine (§5.2, SD.4)
   // ---------------------------------------------------------------------------
 
-  /** What the current actor may do on this case: allowed commands and the resolution requirement. */
+  /** What the current actor may do on this case: allowed commands, resolution and conversation. */
   @Get("action/case/:id/capabilities")
   async caseCapabilities(@Param("id") id: string) {
-    const [lifecycle, assignment] = await Promise.all([
+    const [lifecycle, assignment, conversation] = await Promise.all([
       this.lifecycle.capabilities(id),
       this.assignment.capabilities(id),
+      this.conversation.capabilities(id),
     ]);
-    return { ...lifecycle, assignment };
+    return { ...lifecycle, assignment, conversation };
   }
 
   @Post("action/case/:id/transition")
@@ -132,6 +137,30 @@ export class ServiceDeskController {
   @Get("action/case/:id/history")
   async caseHistory(@Param("id") id: string) {
     return this.lifecycle.history(id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Conversation: public replies, internal notes, timeline (§5.4, SD.6)
+  // ---------------------------------------------------------------------------
+
+  /** Post a customer-visible reply to the case. */
+  @Post("action/case/:id/reply")
+  @HttpCode(200)
+  async caseReply(@Param("id") id: string, @Body() body: unknown) {
+    return this.conversation.reply(id, parse(CaseMessageSchema, body));
+  }
+
+  /** Post an internal-only note; it is never returned to a portal or customer-facing path. */
+  @Post("action/case/:id/note")
+  @HttpCode(200)
+  async caseNote(@Param("id") id: string, @Body() body: unknown) {
+    return this.conversation.note(id, parse(CaseMessageSchema, body));
+  }
+
+  /** The visibility-filtered conversation timeline, oldest first. */
+  @Get("action/case/:id/conversation")
+  async caseConversation(@Param("id") id: string, @Query() query: unknown) {
+    return this.conversation.timeline(id, parse(CaseConversationQuerySchema, query));
   }
 
   // ---------------------------------------------------------------------------

@@ -1,20 +1,22 @@
 # Service Desk module (Phase 19-SD)
 
 Implemented in `apps/api/src/service-desk` (backend), registered once in `apps/api/src/app.module.ts`,
-with metadata in `database/seed-metadata.ts` and two additive migrations,
-`database/migrations/033_phase19_service_desk.sql` and
-`database/migrations/034_phase19_service_desk_workflow.sql`. Functional reference: the documented
+with metadata in `database/seed-metadata.ts` and three additive migrations,
+`database/migrations/033_phase19_service_desk.sql`,
+`database/migrations/034_phase19_service_desk_workflow.sql` and
+`database/migrations/035_phase19_service_desk_conversation.sql`. Functional reference: the documented
 product requirements in [`PLAN_Phase_19_ServiceDesk.md`](../../PLAN_Phase_19_ServiceDesk.md),
 reproduced as clean-room TypeScript behaviour — no upstream source, asset, translation or schema is
 copied.
 
-**Status: phases 19-SD.0 – 19-SD.5 are implemented** (scaffold, persistence, Case CRUD/numbering,
-the state machine and resolution workflow, and assignment/queues/routing). The list of phases actually
-claimed is `SERVICE_DESK_MODULE.implementedPhases`
+**Status: phases 19-SD.0 – 19-SD.6 are implemented** (scaffold, persistence, Case CRUD/numbering,
+the state machine and resolution workflow, assignment/queues/routing, and the conversation timeline
+with public replies and internal notes). The list of phases actually claimed is
+`SERVICE_DESK_MODULE.implementedPhases`
 (`apps/api/src/service-desk/service-desk-module.ts`), which `/api/v1/ServiceDesk/action/health`
-reports. Everything from 19-SD.6 onward (conversation timeline, email-to-case, SLA clocks, portal
-self-service, Knowledge Base, CSAT) is **not built yet**: the optional feature flags exist in
-settings, default **off**, and a settings warning says which phase delivers each one.
+reports. Everything from 19-SD.7 onward (email-to-case, SLA clocks, portal self-service, Knowledge
+Base, CSAT) is **not built yet**: the optional feature flags exist in settings, default **off**, and a
+settings warning says which phase delivers each one.
 
 | Read next | What it answers |
 |---|---|
@@ -35,6 +37,7 @@ settings, default **off**, and a settings warning says which phase delivers each
 | The case **state machine**: `start`, `setPendingCustomer`, `setPendingInternal`, `escalate`, `deEscalate`, `resolve`, `close`, `reopen`, `cancel` — server-validated, atomic, with history and domain events | `POST /api/v1/ServiceDesk/action/case/:id/{transition,resolve,close,…}`; `GET …/capabilities`; `GET …/history` |
 | **Assignment, queues and routing**: manual/team assignment, round-robin, least-busy, declarative routing rules with safe fallback | `POST /api/v1/ServiceDesk/action/case/:id/{assign,route}`; `GET …/assignments`; `GET /action/queues`, `GET /action/queues/:id/workload` |
 | Case-lifecycle and queue-workload UI | `apps/web/src/components/CaseLifecycleActions.tsx`, `CaseQueueWorkload.tsx`, rendered by `EntityDetailPage.tsx` |
+| **Conversation timeline** (§5.4, SD.6): explicit public/internal/system visibility on every Stream item and attachment; `reply` (customer-visible) and `note` (internal-only) commands; visibility-safe timeline; attachments inherit their message's visibility; public replies stamp the response clocks, internal notes never do; in-app notifications for public replies (dedup by message/recipient) | `apps/api/src/service-desk/case-conversation.service.ts`; `apps/api/src/stream/stream-visibility.ts`; `apps/web/src/components/CaseConversation.tsx` |
 | Module diagnostics: dependency evidence, optional-integration status, feature state, settings warnings | `GET /api/v1/ServiceDesk/action/health` |
 
 Entity CRUD stays on the generic `/api/v1/:entity` API. The module routes exist only for what a
@@ -130,6 +133,10 @@ fallback owner) and the decision is recorded.
   history, idempotent transitions, version conflicts, manual/team/queue assignment, round-robin,
   least-busy, safe fallback, declarative routing precedence, routing-rule validation, workload and
   assignment notifications.
+- `apps/api/test/service-desk-conversation.test.ts` — reply/note visibility, response-clock stamping,
+  portal exclusion of internal notes and system updates, forged-visibility refusal, attachment
+  inheritance, read-only posting, reply notifications and idempotency, empty-entry rejection, plus the
+  pure visibility helper.
 - `apps/api/test/service-desk-domain.test.ts` — the pure numbering/validation/change-detection helpers,
   the transition model, the resolution requirement, routing-condition validation/matching and the
   round-robin/least-busy pickers.

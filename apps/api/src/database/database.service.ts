@@ -164,6 +164,8 @@ export interface AttachmentsTable {
   parent_type: string | null;
   field: string | null;
   role: string | null;
+  /** §5.4 visibility inherited from the message the attachment belongs to. */
+  visibility: string;
   created_by_id: string | null;
   created_at: Date;
 }
@@ -207,6 +209,8 @@ export interface StreamItemsTable {
   entity_type: string;
   entity_id: string;
   type: string;
+  /** §5.4 visibility: `public` | `internal` | `system`. */
+  visibility: string;
   data: unknown;
   post: string | null;
   created_by_id: string | null;

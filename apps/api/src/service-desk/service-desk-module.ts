@@ -173,7 +173,7 @@ export const SERVICE_DESK_FEATURES: readonly ServiceDeskFeatureDescriptor[] = [
   { key: "caseManagement", label: "Case management", settingsPath: "features.caseManagement", requires: [] },
   { key: "queues", label: "Queues and routing", settingsPath: "features.queues", requires: [] },
   { key: "sla", label: "SLA policies and clocks", settingsPath: "features.sla", requires: [] },
-  { key: "notifications", label: "Assignment notifications", settingsPath: "features.notifications", requires: [] },
+  { key: "notifications", label: "Case notifications", settingsPath: "features.notifications", requires: [] },
   { key: "emailToCase", label: "Email-to-case", settingsPath: "features.emailToCase", requires: ["caseManagement"], requiresIntegration: "email" },
   { key: "portal", label: "Customer portal access", settingsPath: "features.portal", requires: ["caseManagement"], requiresIntegration: "portal" },
   { key: "knowledgeBase", label: "Knowledge base", settingsPath: "features.knowledgeBase", requires: ["caseManagement"], requiresIntegration: "knowledge-base" },
@@ -189,7 +189,7 @@ export const SERVICE_DESK_MODULE = {
   loadOrder: 360,
   apiPrefix: "/api/v1/ServiceDesk",
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ["19-SD.0", "19-SD.1", "19-SD.2", "19-SD.3", "19-SD.4", "19-SD.5"],
+  implementedPhases: ["19-SD.0", "19-SD.1", "19-SD.2", "19-SD.3", "19-SD.4", "19-SD.5", "19-SD.6"],
   /** The canonical support-case entity and the configuration/history records this module owns. */
   entityTypes: ["Case", "CaseQueue", "QueueMember", "RoutingRule", "CaseTransition", "CaseAssignment"],
 } as const;

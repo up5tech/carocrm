@@ -37,6 +37,18 @@ export type {
   StreamUpdateHookLike,
 } from './stream-hooks.js';
 export { registerStreamUpdateHook, STREAM_METADATA_LOOKUP, StreamUpdateHookService } from './stream-hooks.js';
+export {
+  canViewStreamVisibility,
+  CLIENT_STREAM_VISIBILITIES,
+  type ClientStreamVisibility,
+  isClientStreamVisibility,
+  isInternalOnlyVisibility,
+  isStreamVisibility,
+  STREAM_VISIBILITIES,
+  type StreamVisibility,
+  toStreamVisibility,
+  type VisibilityPrincipal,
+} from './stream-visibility.js';
 
 export const STREAM_PROVIDERS: Provider[] = [
   // Default: no entity metadata ⇒ no generated Update items.

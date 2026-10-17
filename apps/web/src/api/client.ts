@@ -54,6 +54,7 @@ import type {
   ServiceDeskAssignmentResult,
   ServiceDeskAssignmentRow,
   ServiceDeskCapabilities,
+  ServiceDeskMessageResult,
   ServiceDeskQueueWorkload,
   ServiceDeskTransitionResult,
   ServiceDeskTransitionRow,
@@ -213,6 +214,8 @@ export interface StreamItem {
   entityType: string;
   entityId: string;
   type: string;
+  /** §5.4 visibility: `public` | `internal` | `system`. */
+  visibility: string;
   data: Record<string, unknown>;
   post: string | null;
   createdById: string | null;
@@ -363,13 +366,17 @@ export const api = {
   changeMyPassword: (input: { currentPassword: string; newPassword: string }) =>
     request<{ status: boolean }>('/AppUser/me/password', post(input)),
   /** Streams one file into the configured storage; the caller links it to a record afterwards. */
-  uploadAttachment: (file: File, input?: { field?: string; role?: string }) => {
+  uploadAttachment: (file: File, input?: { field?: string; role?: string; parentType?: string; parentId?: string }) => {
     const form = new FormData();
     form.append('file', file);
     if (input?.field !== undefined) form.append('field', input.field);
     if (input?.role !== undefined) form.append('role', input.role);
+    if (input?.parentType !== undefined) form.append('parentType', input.parentType);
+    if (input?.parentId !== undefined) form.append('parentId', input.parentId);
     return upload<AttachmentInfo>('/Attachment/upload', form);
   },
+  /** Metadata (name, size, visibility) of one stored file. */
+  attachment: (id: string) => request<AttachmentInfo & { visibility?: string }>(`/Attachment/${encodeURIComponent(id)}`),
   logout: () => request<{ status: boolean }>('/Logout', { method: 'POST' }),
 
   // Instance settings (PLAN §12.2 `app_settings`): brand text, logo, footer, locale/timezone defaults.
@@ -868,4 +875,18 @@ export const api = {
     request<{ list: ServiceDeskAssignmentRow[] }>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/assignments`),
   serviceDeskQueueWorkload: (queueId: string) =>
     request<ServiceDeskQueueWorkload>(`/ServiceDesk/action/queues/${encodeURIComponent(queueId)}/workload`),
+
+  // Phase 19-SD.6 — case conversation (PLAN_Phase_19_ServiceDesk.md §5.4). The reply/note commands
+  // fix the visibility server-side; the composer only chooses which command to send.
+  serviceDeskConversation: (caseId: string, params: { maxSize?: number; offset?: number } = {}) =>
+    request<StreamListResult>(
+      `/ServiceDesk/action/case/${encodeURIComponent(caseId)}/conversation${simpleQuery({
+        maxSize: params.maxSize,
+        offset: params.offset,
+      })}`,
+    ),
+  serviceDeskReply: (caseId: string, input: { text: string; attachmentIds?: string[]; mentionIds?: string[] }) =>
+    request<ServiceDeskMessageResult>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/reply`, post(input)),
+  serviceDeskNote: (caseId: string, input: { text: string; attachmentIds?: string[]; mentionIds?: string[] }) =>
+    request<ServiceDeskMessageResult>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/note`, post(input)),
 };

@@ -6,12 +6,19 @@ import type { Selectable } from 'kysely';
 import { sql } from 'kysely';
 
 import { AclApiService } from '../acl/acl-api.service.js';
-import type { RequestScope } from '../common/request-scope.js';
+import type { AuthenticatedPrincipal, RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import type { StreamItemsTable } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { PostgresRecordStore } from '../entity/entity-record.store.js';
 import { ENTITY_STORE } from '../entity/entity-record.store.js';
+import { currentTx } from '../entity/tx-context.js';
+import {
+  canViewStreamVisibility,
+  isStreamVisibility,
+  type StreamVisibility,
+  toStreamVisibility,
+} from './stream-visibility.js';
 
 export const STREAM_ITEM_TYPES = ['Note', 'Post', 'Update'] as const;
 export type StreamItemType = (typeof STREAM_ITEM_TYPES)[number];
@@ -28,6 +35,8 @@ export interface StreamItemDto {
   entityType: string;
   entityId: string;
   type: string;
+  /** §5.4 visibility classification: `public` | `internal` | `system`. */
+  visibility: StreamVisibility;
   data: Record<string, unknown>;
   post: string | null;
   createdById: string | null;
@@ -44,6 +53,14 @@ export interface CreateStreamItemInput {
   data?: Record<string, unknown> | undefined;
   attachmentIds?: string[] | undefined;
   mentionIds?: string[] | undefined;
+  /**
+   * The requested visibility. A caller may name `public` or `internal`; `system` is generated only.
+   * A portal principal may only create `public` content, and an internal caller defaults to
+   * `internal` — public visibility must always be explicit (§5.4, §10.3).
+   */
+  visibility?: StreamVisibility | undefined;
+  /** Persisted in `data` so a command can recognise and return its own prior write (§12.3). */
+  idempotencyKey?: string | undefined;
 }
 
 export interface StreamListOptions {
@@ -62,6 +79,7 @@ const STREAM_COLUMNS = [
   'entity_type',
   'entity_id',
   'type',
+  'visibility',
   'data',
   'post',
   'created_by_id',
@@ -91,10 +109,12 @@ function toUserDto(row: UserRow): StreamUserDto {
 }
 
 /**
- * Stream / timeline (PLAN §26).
+ * Stream / timeline (PLAN §26, §5.4).
  *
- * Visibility is bound to the parent record's read ACL: an item is only returned to a
- * caller that can read the record it belongs to, independent of who authored it.
+ * Two gates guard every item. The parent record's read ACL scopes *which record* a caller may see;
+ * the item's explicit `visibility` scopes *which entries* they may see within it. An internal
+ * principal sees every visibility; a portal principal sees only `public` entries — never internal
+ * notes or generated system updates (§5.4, §10.3).
  */
 @Injectable()
 export class StreamService {
@@ -106,7 +126,10 @@ export class StreamService {
   ) {}
 
   private get db() {
-    return this.database.db;
+    // A domain command runs several writes with one invariant inside `runInTransaction`; joining the
+    // ambient transaction keeps a stream item and its record stamps atomic. Outside one, this is the
+    // pool.
+    return currentTx() ?? this.database.db;
   }
 
   /** Loads the parent record and enforces the requested ACL action on it. */
@@ -128,6 +151,8 @@ export class StreamService {
     await this.assertParentAccess(entityType, entityId, 'read');
     await this.assertParentAccess(entityType, entityId, 'stream');
 
+    const visibility = resolveCreateVisibility(input.visibility, principal);
+
     const text = (input.post ?? input.notes ?? '').trim();
     if (text === '' && (input.attachmentIds?.length ?? 0) === 0) {
       throw new ValidationError('A stream item needs text content or an attachment.');
@@ -136,10 +161,15 @@ export class StreamService {
     const data = { ...asJsonObject(input.data) };
     if (input.type === 'Note' && input.notes !== undefined) data['notes'] = input.notes;
     if (input.attachmentIds?.length) data['fileIds'] = input.attachmentIds;
+    if (input.idempotencyKey !== undefined && input.idempotencyKey.trim() !== '') {
+      data['idempotencyKey'] = input.idempotencyKey.trim();
+    }
 
     const now = new Date();
     const id = generateId();
-    const mentions = await this.resolveMentions(input.post ?? '', input.mentionIds);
+    // Mentions are read from whichever field carries the text: a `Post` uses `post`, a `Note` uses
+    // `notes`. Both support `@[Name]` / `@userName` and an explicit id list.
+    const mentions = await this.resolveMentions(input.post ?? input.notes ?? '', input.mentionIds);
 
     await this.db
       .insertInto('stream_items')
@@ -148,6 +178,7 @@ export class StreamService {
         entity_type: entityType,
         entity_id: entityId,
         type: input.type,
+        visibility,
         data,
         post: input.post ?? null,
         created_by_id: principal.userId,
@@ -171,7 +202,7 @@ export class StreamService {
     }
 
     if (input.attachmentIds?.length) {
-      await this.linkAttachments(id, entityType, entityId, input.attachmentIds);
+      await this.linkAttachments(id, entityType, entityId, input.attachmentIds, visibility);
     }
 
     const created = await this.fetchItem(id);
@@ -179,6 +210,15 @@ export class StreamService {
     const [dto] = await this.hydrate([created]);
     if (!dto) throw new RecordNotFoundError('StreamItem', id);
     return dto;
+  }
+
+  /**
+   * Whether the current actor may post to this record — the SPA hint for a composer, never the
+   * check (each command re-runs it). Requires both record read and the `stream` action.
+   */
+  async canStream(entityType: string, entityId: string): Promise<boolean> {
+    if (!(await this.canAccessParent(entityType, entityId, 'read'))) return false;
+    return this.canAccessParent(entityType, entityId, 'stream');
   }
 
   /** Soft delete; only the author or an admin may remove an item. */
@@ -242,6 +282,7 @@ export class StreamService {
     options: StreamListOptions,
   ): Promise<{ list: StreamItemDto[]; total: number; offset: number; count: number }> {
     await this.assertParentAccess(entityType, entityId, 'read');
+    const principal = this.scope.requirePrincipal();
     let query = this.db
       .selectFrom('stream_items')
       .select(STREAM_COLUMNS)
@@ -249,18 +290,21 @@ export class StreamService {
       .where('entity_id', '=', entityId)
       .where('is_deleted', '=', false);
     if (options.types?.length) query = query.where('type', 'in', options.types);
+    // A portal principal may only ever see customer-visible entries (§5.4, §10.3).
+    if (principal.userType === 'portal') query = query.where('visibility', '=', 'public');
     const rows = await query
       .orderBy('created_at', options.order)
       .limit(options.maxSize)
       .offset(options.offset)
       .execute();
-    const totalRow = await this.db
+    let countQuery = this.db
       .selectFrom('stream_items')
       .select((eb) => eb.fn.countAll<string>().as('total'))
       .where('entity_type', '=', entityType)
       .where('entity_id', '=', entityId)
-      .where('is_deleted', '=', false)
-      .executeTakeFirst();
+      .where('is_deleted', '=', false);
+    if (principal.userType === 'portal') countQuery = countQuery.where('visibility', '=', 'public');
+    const totalRow = await countQuery.executeTakeFirst();
     const list = await this.hydrate(rows);
     return { list, total: Number(totalRow?.total ?? 0), offset: options.offset, count: list.length };
   }
@@ -296,6 +340,8 @@ export class StreamService {
     const visible: StreamRow[] = [];
     const accessCache = new Map<string, boolean>();
     for (const row of rows) {
+      // Same visibility rule as the record stream: a portal principal never sees internal/system.
+      if (!canViewStreamVisibility(toStreamVisibility(row.visibility), principal)) continue;
       const key = `${row.entity_type}:${row.entity_id}`;
       const inScope =
         options.view === 'own'
@@ -386,6 +432,7 @@ export class StreamService {
         entity_type: args.entityType,
         entity_id: args.entityId,
         type: 'Update',
+        visibility: 'system',
         data: { type: 'Updated', attributes: args.attributes },
         post: null,
         created_by_id: args.userId,
@@ -427,6 +474,7 @@ export class StreamService {
       entityType: row.entity_type,
       entityId: row.entity_id,
       type: row.type,
+      visibility: toStreamVisibility(row.visibility),
       data: asJsonObject(row.data),
       post: row.post ?? null,
       createdById: row.created_by_id ?? null,
@@ -483,8 +531,14 @@ export class StreamService {
     return result;
   }
 
-  /** Attachments must already belong to the record being streamed. */
-  private async linkAttachments(itemId: string, entityType: string, entityId: string, ids: string[]): Promise<void> {
+  /** Attachments must already belong to the record being streamed, and inherit the message visibility. */
+  private async linkAttachments(
+    itemId: string,
+    entityType: string,
+    entityId: string,
+    ids: string[],
+    visibility: StreamVisibility,
+  ): Promise<void> {
     const unique = [...new Set(ids)];
     const rows = await this.db
       .selectFrom('attachments')
@@ -503,6 +557,9 @@ export class StreamService {
       .insertInto('stream_attachments')
       .values(unique.map((attachmentId) => ({ id: generateId(), stream_item_id: itemId, attachment_id: attachmentId })))
       .execute();
+    // §5.4 "Attachments inherit the visibility of their message": an attachment on an internal note
+    // becomes internal, so the portal download gate refuses it even though the parent case is readable.
+    await this.db.updateTable('attachments').set({ visibility }).where('id', 'in', unique).execute();
   }
 
   private async resolveMentions(post: string, explicitIds?: string[]): Promise<ResolvedMention[]> {
@@ -546,9 +603,23 @@ export class StreamService {
   ): Promise<void> {
     const targets = mentions.filter((mention) => mention.userId !== context.actorId);
     if (targets.length === 0) return;
+    // Only internal staff are notified: a portal user must never receive a notification that points
+    // at an internal-only note they cannot open (§5.4).
+    const internalIds = new Set(
+      (
+        await this.db
+          .selectFrom('users')
+          .select('id')
+          .where('id', 'in', targets.map((mention) => mention.userId))
+          .where('type', 'in', ['regular', 'admin'])
+          .execute()
+      ).map((row) => row.id),
+    );
+    const internal = targets.filter((mention) => internalIds.has(mention.userId));
+    if (internal.length === 0) return;
     await this.db
       .insertInto('notifications')
-      .values(targets.map((mention) => ({
+      .values(internal.map((mention) => ({
         id: generateId(),
         type: 'Mention',
         user_id: mention.userId,
@@ -563,4 +634,28 @@ export class StreamService {
       })))
       .execute();
   }
+}
+
+/**
+ * The visibility a *new* entry gets (§5.4). A portal principal may only create customer-visible
+ * content; an internal caller must ask for `public` explicitly and otherwise gets `internal`. A
+ * client can never forge a `system` entry — those are generated from record changes.
+ */
+function resolveCreateVisibility(
+  requested: StreamVisibility | undefined,
+  principal: AuthenticatedPrincipal,
+): StreamVisibility {
+  if (principal.userType === 'portal') {
+    if (requested !== undefined && requested !== 'public') {
+      throw new AuthorizationDeniedError('Portal users may only create customer-visible messages.', {
+        requested,
+      });
+    }
+    return 'public';
+  }
+  if (requested === undefined) return 'internal';
+  if (!isStreamVisibility(requested) || requested === 'system') {
+    throw new ValidationError('System stream items are generated by the platform, not created directly.');
+  }
+  return requested;
 }

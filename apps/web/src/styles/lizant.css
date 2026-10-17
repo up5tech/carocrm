@@ -418,6 +418,41 @@ body {
   border-bottom: 0;
 }
 
+/* ---- case conversation (SD.6) ----
+   Posting mode must be unmistakable, so public/internal/system entries carry distinct left rails and
+   the composer itself tints with the selected mode. */
+.lizant-conversation-composer {
+  border-radius: 8px;
+  margin-top: 16px;
+  padding: 12px;
+}
+
+.lizant-conversation-composer.lizant-conversation-public {
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+}
+
+.lizant-conversation-composer.lizant-conversation-internal {
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+}
+
+.lizant-stream-item.lizant-conversation-public {
+  border-left: 3px solid #52c41a;
+  padding-left: 12px;
+}
+
+.lizant-stream-item.lizant-conversation-internal {
+  background: #fffbe6;
+  border-left: 3px solid #fa8c16;
+  padding-left: 12px;
+}
+
+.lizant-stream-item.lizant-conversation-system {
+  border-left: 3px solid #d9d9d9;
+  padding-left: 12px;
+}
+
 
 
 /* ---- calendar ----

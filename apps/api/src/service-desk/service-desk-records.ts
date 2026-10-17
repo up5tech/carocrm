@@ -138,6 +138,20 @@ export class ServiceDeskRecords {
   }
 
   /**
+   * The users following a record, from the kernel subscription table (§5.4 conversation recipients).
+   * `entityType` is a bind parameter, never an identifier, so the value cannot become SQL.
+   */
+  async followerIds(entityType: string, entityId: string): Promise<string[]> {
+    const rows = await this.database.db
+      .selectFrom("stream_followers")
+      .select("user_id")
+      .where("entity_type", "=", entityType)
+      .where("entity_id", "=", entityId)
+      .execute();
+    return rows.map((row) => row.user_id);
+  }
+
+  /**
    * How many active cases each of `userIds` currently owns. Status is an `attrs` value, the assignee
    * is the physical column; the status list is fixed literals, so only ids are bound parameters.
    */

@@ -79,3 +79,27 @@ export const CaseRouteSchema = z
   .strict();
 
 export type CaseRouteInput = z.infer<typeof CaseRouteSchema>;
+
+/**
+ * A conversation entry (§5.4, SD.6). The visibility is *not* a request field: `reply` and `note` fix
+ * it, so a caller can never post an "internal note" the customer sees or a hidden "reply". The text
+ * may be empty only when an attachment carries the entry, which the service enforces.
+ */
+export const CaseMessageSchema = z
+  .object({
+    text: z.string().trim().max(20_000).default(""),
+    attachmentIds: z.array(IdSchema).max(50).optional(),
+    mentionIds: z.array(IdSchema).max(50).optional(),
+    idempotencyKey: IdempotencyKeySchema.optional(),
+  })
+  .strict();
+
+export type CaseMessageRequest = z.infer<typeof CaseMessageSchema>;
+
+/** Paging for the case timeline. */
+export const CaseConversationQuerySchema = z.object({
+  maxSize: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+export type CaseConversationQuery = z.infer<typeof CaseConversationQuerySchema>;

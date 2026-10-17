@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
+import { CaseConversation } from '../components/CaseConversation.js';
 import { CaseLifecycleActions } from '../components/CaseLifecycleActions.js';
 import { CaseQueueWorkload } from '../components/CaseQueueWorkload.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
@@ -325,7 +326,14 @@ export function EntityDetailPage() {
           );
         })}
 
-        <StreamPanel entity={entity} id={id} definition={definition.data} canPost />
+        {/* Phase 19-SD.6 — a Case gets the visibility-aware conversation panel: an explicit public /
+            internal composer and a timeline that badges every entry's visibility. Other records keep
+            the generic stream panel (whose posts are internal by default). */}
+        {entity === 'Case' && base !== '/portal' ? (
+          <CaseConversation caseId={id} definition={definition.data} onChanged={load} />
+        ) : (
+          <StreamPanel entity={entity} id={id} definition={definition.data} canPost />
+        )}
       </div>
     </Spin>
   );

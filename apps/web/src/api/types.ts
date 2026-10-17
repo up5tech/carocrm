@@ -890,6 +890,21 @@ export interface ServiceDeskCapabilities {
   allowedCommands: readonly string[];
   resolution: { requireCode: boolean; requireSummary: boolean; codes: readonly string[] };
   assignment: { caseId: string; canAssign: boolean };
+  /** SD.6 — what the actor may do on the case conversation. */
+  conversation: {
+    caseId: string;
+    canReply: boolean;
+    canPostInternalNote: boolean;
+    canViewInternal: boolean;
+  };
+}
+
+/** SD.6 — the result of posting a public reply or an internal note. */
+export interface ServiceDeskMessageResult {
+  caseId: string;
+  messageId: string;
+  visibility: string;
+  created: boolean;
 }
 
 export interface ServiceDeskTransitionResult {
