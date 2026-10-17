@@ -19,6 +19,7 @@ import {
   SettingsPatchSchema,
 } from "./dto/service-desk-shapes.js";
 import { EmailToCaseService } from "./email-to-case.service.js";
+import { KnowledgeBaseService } from "./knowledge-base.service.js";
 import { SlaService } from "./sla.service.js";
 import { ServiceDeskModuleHealthService } from "./service-desk-module-health.service.js";
 import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
@@ -46,6 +47,7 @@ export class ServiceDeskController {
     @Inject(CaseAssignmentService) private readonly assignment: CaseAssignmentService,
     @Inject(CaseConversationService) private readonly conversation: CaseConversationService,
     @Inject(EmailToCaseService) private readonly emailToCaseService: EmailToCaseService,
+    @Inject(KnowledgeBaseService) private readonly knowledgeBase: KnowledgeBaseService,
     @Inject(SlaService) private readonly slaService: SlaService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
@@ -206,6 +208,34 @@ export class ServiceDeskController {
   @HttpCode(200)
   async slaRunScheduledCheck() {
     return this.slaService.runScheduledCheck();
+  }
+
+  /** Publish a knowledge article (admin). */
+  @Post("action/knowledge/:id/publish")
+  @HttpCode(200)
+  async kbPublish(@Param("id") id: string) {
+    this.requireAdmin("knowledge");
+    return this.knowledgeBase.publish(id);
+  }
+
+  /** Archive a knowledge article (admin). */
+  @Post("action/knowledge/:id/archive")
+  @HttpCode(200)
+  async kbArchive(@Param("id") id: string) {
+    this.requireAdmin("knowledge");
+    return this.knowledgeBase.archive(id);
+  }
+
+  /** Portal-safe published articles. */
+  @Get("action/knowledge/portal")
+  async kbPortal() {
+    return this.knowledgeBase.portalArticles();
+  }
+
+  /** Suggested articles for a case. */
+  @Get("action/case/:id/knowledgeSuggestions")
+  async kbSuggestions(@Param("id") id: string) {
+    return this.knowledgeBase.suggestForCase(id);
   }
 
   // ---------------------------------------------------------------------------

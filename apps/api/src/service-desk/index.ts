@@ -5,7 +5,9 @@ import { CaseConversationService } from "./case-conversation.service.js";
 import { CaseLifecycleService } from "./case-lifecycle.service.js";
 import { CaseNumberingService } from "./case-numbering.service.js";
 import { EmailToCaseService } from "./email-to-case.service.js";
+import { KnowledgeBaseService } from "./knowledge-base.service.js";
 export { SlaService } from "./sla.service.js";
+export { KnowledgeBaseService } from "./knowledge-base.service.js";
 import { ServiceDeskController } from "./service-desk.controller.js";
 import { ServiceDeskModuleHealthService } from "./service-desk-module-health.service.js";
 import { ServiceDeskNotificationService } from "./service-desk-notification.service.js";
@@ -31,6 +33,7 @@ export const SERVICE_DESK_PROVIDERS: Provider[] = [
   EmailToCaseService,
   ServiceDeskModuleHealthService,
   SlaService,
+  KnowledgeBaseService,
 ];
 
 export { type CaseAssignInput, type CaseAssignmentResult, CaseAssignmentService, type CaseRouteResult, type QueueWorkload } from "./case-assignment.service.js";

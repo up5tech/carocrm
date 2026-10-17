@@ -92,8 +92,8 @@ describe('module scaffold and diagnostics (§7.1)', () => {
     const integrations = res.body['optionalIntegrations'] as { id: string; status: string }[];
     // `Email` is a registered kernel entity, so the email-to-case integration is available.
     expect(integrations.find((entry) => entry.id === 'email')?.status).toBe('available');
-    // No Knowledge Base entity exists, so this is honestly unavailable rather than a fake capability.
-    expect(integrations.find((entry) => entry.id === 'knowledge-base')?.status).toBe('unavailable');
+    // SD.10 added the KnowledgeArticle entity, so the knowledge-base integration is now available.
+    expect(integrations.find((entry) => entry.id === 'knowledge-base')?.status).toBe('available');
     expect(res.body['ok']).toBe(true);
   });
 
