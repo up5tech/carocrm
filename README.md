@@ -4,7 +4,7 @@ Metadata-driven CRM platform: TypeScript + NestJS + Fastify + Kysely/PostgreSQL,
 reimplementation of EspoCRM concepts (no PHP runtime, no upstream source copied).
 Roadmap: [PLAN.md](PLAN.md); Phase 19 detail: [PLAN_Phase_19_Projects.md](PLAN_Phase_19_Projects.md).
 
-**Current state: CRM Kernel Alpha + domain modules (through Phase 19).**
+**Current state: CRM Kernel Alpha + domain modules (through Phase 19, including Sales 19-S, Customer Success 19-CS and Service Desk 19-SD).**
 
 _Kernel_ — metadata engine with DB-backed overrides, generic entity/query/ACL engines, a
 metadata-driven React SPA and Entity Manager, stream, calendar, dynamic logic + sandboxed formula
@@ -18,12 +18,14 @@ extension SDK plus three sample packages under `modules/` (Phase 14); workflow e
 history (Phase 15); BPM approvals with user tasks, timers, gateways and an audit trail (Phase 16);
 reports with preview, CSV export and owner-only scheduled delivery (Phase 17); portals with their
 own role space and one-hop visibility (Phase 18); projects with Plan/Kanban/Gantt views, members,
-dependencies and cloning (Phase 19); i18n catalogs for `en`/`vi` (Phase 7A).
-
+dependencies and cloning (Phase 19); sales pack with the document engine, pricing, inventory, payments,
+subscriptions and commercial analytics (Phase 19-S); customer success with lifecycle, health scoring,
+plans, risks, playbooks and renewals (Phase 19-CS); service desk with case numbering, state machine,
+assignment/queues/routing, conversation timeline, email-to-case, business calendars and SLA clocks
+(Phase 19-SD); i18n catalogs for `en`/`vi` (Phase 7A).
 Not built yet: real inbound mail collection (`POST /api/v1/Email/action/pollInbound` runs a null
 provider until an IMAP/Graph adapter is installed), API-user attachment policies, multi-tenancy.
 Full checklist, deviations and known failures: [docs/reference/alpha-status.md](docs/reference/alpha-status.md).
-
 ## Requirements
 
 - Node.js >= 22 (tested on 24) and pnpm >= 9
@@ -180,6 +182,16 @@ Projects (Phase 19; records are ordinary entities, these are the domain commands
   `POST /api/v1/ProjectTask/:id/action/(update|move|transition|dependencyUpdate|dependencyRemove|collaboratorAdd|collaboratorRemove)`,
   `GET|POST /api/v1/ProjectTask/:id/action/dependencies`, `GET /api/v1/ProjectTask/:id/action/collaborators`
 
+Domain modules (Sales, Customer Success, Service Desk):
+
+- Sales: `/api/v1/Sales/action/*` (documents, pricing, inventory, payments, subscriptions, reports,
+  dashlets, job monitoring) plus the ordinary `/api/v1/:entity` records (`Product`, `Quote`, `Invoice`,
+  …); see [docs/modules/sales/](docs/modules/sales/README.md)
+- Customer Success: `/api/v1/CustomerSuccess/action/*` plus `CustomerSuccessProfile` and related records;
+  see [docs/modules/customer-success/](docs/modules/customer-success/README.md)
+- Service Desk: `/api/v1/ServiceDesk/action/*` plus the `Case` entity and configuration records;
+  see [docs/modules/service-desk/](docs/modules/service-desk/README.md)
+
 Extensions and operations:
 
 - `GET /api/v1/Extension`, `GET /api/v1/Extension/frontend` (any signed-in user),
@@ -200,6 +212,9 @@ Auth: `Authorization: Bearer <jwt>`, `Authorization: ApiKey <keyId>:<secret>`, o
 | [docs/bpm.md](docs/bpm.md)                                                       | BPM processes, user tasks, gateways, timers, audit trail                                          |
 | [docs/extension-sdk.md](docs/extension-sdk.md)                                   | manifest, contributed metadata/providers/jobs/migrations, SPA entries                             |
 | [docs/modules/projects/](docs/modules/projects/README.md)                        | Projects module: data model, permissions, API, compatibility                                      |
+| [docs/modules/sales/](docs/modules/sales/README.md)                             | Sales module: document engine, pricing, inventory, payments, subscriptions                        |
+| [docs/modules/customer-success/](docs/modules/customer-success/README.md)        | Customer Success module: lifecycle, health scoring, plans, risks, playbooks, renewals              |
+| [docs/modules/service-desk/](docs/modules/service-desk/README.md)                | Service Desk module: cases, state machine, assignment, conversation, SLA                          |
 | [docs/reference/alpha-status.md](docs/reference/alpha-status.md)                 | what is built, deviations, verification actually run                                              |
 | [docs/reference/compatibility-matrix.md](docs/reference/compatibility-matrix.md) | behaviour compared against the EspoCRM 9.3.x baseline                                             |
 | [docs/operations/backup-restore.md](docs/operations/backup-restore.md)           | what to back up and how to restore it                                                             |

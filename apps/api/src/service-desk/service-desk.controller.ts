@@ -201,6 +201,13 @@ export class ServiceDeskController {
     return this.slaService.checkBreaches();
   }
 
+  /** Idempotent SLA scan: warnings, breaches, escalations, notifications (§5.7, SD.9). */
+  @Post("action/sla/runScheduledCheck")
+  @HttpCode(200)
+  async slaRunScheduledCheck() {
+    return this.slaService.runScheduledCheck();
+  }
+
   // ---------------------------------------------------------------------------
   // Assignment, queues and routing (§5.3, SD.5)
   // ---------------------------------------------------------------------------

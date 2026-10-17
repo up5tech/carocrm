@@ -1,29 +1,14 @@
-import type { OnApplicationBootstrap } from "@nestjs/common";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, type OnApplicationBootstrap } from "@nestjs/common";
 import { sql } from "kysely";
 
 import { DatabaseService } from "../database/database.service.js";
-import { currentTx } from "../entity/tx-context.js";
 import type { AfterSaveHook, AfterSaveHookArgs } from "../entity/hooks.js";
 import { KERNEL_HOOKS_TOKEN } from "../entity/hooks.js";
+import { currentTx } from "../entity/tx-context.js";
 import { CASE_ENTITY } from "./service-desk-domain.js";
-import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 import { ServiceDeskNotificationService } from "./service-desk-notification.service.js";
-
-/**
- * Phase 19-SD.8 — business calendars and SLA policy engine
- * (PLAN_Phase_19_ServiceDesk.md §5.6, §5.7, §7.1).
- *
- * Delivers: a business-time calculator (weekly intervals + holidays, timezone-aware via UTC offsets
- * stored per calendar), an SLA policy resolver (declarative conditions, first match by priority),
- * per-case/per-target clocks (first response, next response, resolution) with start/pause/resume/met/
- * breached transitions, a Case-level SLA summary state, and an idempotent breach-check pass that can
- * be driven by a job or called directly.
- *
- * Clocks are stored as `CaseSLAClock` entity records written through raw SQL (structural writes, like
- * `CaseTransition`/`CaseAssignment` history) so an agent without "create CaseSLAClock" permission
- * still gets clocks when their case is created.
- */
+import { ServiceDeskRecords } from "./service-desk-records.js";
+import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 
 export interface BusinessCalendar {
   readonly id: string;
@@ -46,19 +31,20 @@ export interface SLAPolicy {
   readonly priority: number;
 }
 
-export interface SLAStateSummary {
-  readonly state: "onTrack" | "warning" | "breached" | "paused" | "met" | "notApplicable";
-  readonly policyId: string | null;
-  readonly policyVersion: number | null;
-}
-
 @Injectable()
 export class SlaService implements OnApplicationBootstrap {
   constructor(
     @Inject(ServiceDeskSettingsService) private readonly settings: ServiceDeskSettingsService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(KERNEL_HOOKS_TOKEN) private readonly kernelHooks: AfterSaveHook[],
+    @Inject(ServiceDeskNotificationService) private readonly notifications: ServiceDeskNotificationService,
+    @Inject(ServiceDeskRecords) private readonly records: ServiceDeskRecords,
   ) {}
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private get db(): any {
+    return currentTx() ?? this.database.db;
+  }
 
   onApplicationBootstrap(): void {
     this.kernelHooks.push(async (args) => {
@@ -85,44 +71,6 @@ export class SlaService implements OnApplicationBootstrap {
     }
   }
 
-  async onPublicReply(caseId: string): Promise<void> {
-    const settings = await this.settings.settings();
-    if (!settings.features.sla) return;
-    await this.markMet(caseId, "firstResponse");
-    await this.markMet(caseId, "nextResponse");
-  }
-
-  async onResolved(caseId: string): Promise<void> {
-    const settings = await this.settings.settings();
-    if (!settings.features.sla) return;
-    await this.markMet(caseId, "resolution");
-  }
-
-  private async onStatusChanged(caseId: string, newStatus: string, data: Record<string, unknown>): Promise<void> {
-    // Pause clocks when waiting on customer/internal if the policy says so; resume otherwise.
-    const policy = await this.resolvePolicy(data);
-    if (policy === null) return;
-    if (newStatus === "Pending Customer" && policy.pauseOnCustomer) {
-      await sql`UPDATE entity_records SET attrs = attrs || '{"status":"paused"}'::jsonb, modified_at = now()
-        WHERE entity_type = 'CaseSLAClock' AND deleted_at IS NULL AND (attrs ->> 'caseId') = ${caseId}
-          AND (attrs ->> 'status') IN ('onTrack','warning')`.execute(this.db);
-    } else if (newStatus === "Pending Internal" && policy.pauseOnInternal) {
-      await sql`UPDATE entity_records SET attrs = attrs || '{"status":"paused"}'::jsonb, modified_at = now()
-        WHERE entity_type = 'CaseSLAClock' AND deleted_at IS NULL AND (attrs ->> 'caseId') = ${caseId}
-          AND (attrs ->> 'status') IN ('onTrack','warning')`.execute(this.db);
-    } else {
-      await sql`UPDATE entity_records SET attrs = attrs || '{"status":"onTrack"}'::jsonb, modified_at = now()
-        WHERE entity_type = 'CaseSLAClock' AND deleted_at IS NULL AND (attrs ->> 'caseId') = ${caseId}
-          AND (attrs ->> 'status') = 'paused'`.execute(this.db);
-    }
-    await this.recomputeCaseState(caseId);
-  }
-
-  private get db(): any {
-    return currentTx() ?? this.database.db;
-  }
-
-  /** Evaluate a declarative condition set against a case record (mirrors routing-condition matching). */
   conditionsMatch(conditions: readonly { field: string; operator: string; value: unknown }[], data: Record<string, unknown>): boolean {
     if (conditions.length === 0) return true;
     return conditions.every((c) => {
@@ -140,7 +88,6 @@ export class SlaService implements OnApplicationBootstrap {
     });
   }
 
-  /** Resolve the highest-priority active policy whose conditions match the case. */
   async resolvePolicy(data: Record<string, unknown>): Promise<SLAPolicy | null> {
     const settings = await this.settings.settings();
     if (!settings.features.sla) return null;
@@ -188,7 +135,6 @@ export class SlaService implements OnApplicationBootstrap {
     return candidates[0] ?? null;
   }
 
-  /** Load a business calendar by id. */
   async loadCalendar(id: string | null): Promise<BusinessCalendar | null> {
     if (id === null) return null;
     const row = await this.db
@@ -222,13 +168,11 @@ export class SlaService implements OnApplicationBootstrap {
     };
   }
 
-  /** Add `minutes` of business time to `start` using the calendar (or calendar minutes if none). */
   addBusinessMinutes(start: Date, minutes: number, calendar: BusinessCalendar | null): Date {
     if (minutes <= 0) return new Date(start);
     if (calendar === null || Object.keys(calendar.intervals).length === 0) {
       return new Date(start.getTime() + minutes * 60_000);
     }
-    // Minute-walking with a safety cap.
     let cursor = new Date(start);
     let remaining = minutes;
     let guard = 0;
@@ -243,12 +187,9 @@ export class SlaService implements OnApplicationBootstrap {
   }
 
   private isBusinessMinute(d: Date, calendar: BusinessCalendar): boolean {
-    // Convert to calendar timezone via a fixed offset approximation (UTC-based). For simplicity,
-    // holidays are matched on the UTC date string; intervals use UTC hours.
     const dateKey = d.toISOString().slice(0, 10);
     if (calendar.holidays.has(dateKey)) return false;
-    const day = String(d.getUTCDay());
-    const slots = calendar.intervals[day];
+    const slots = calendar.intervals[String(d.getUTCDay())];
     if (!slots || slots.length === 0) return false;
     const mins = d.getUTCHours() * 60 + d.getUTCMinutes();
     return slots.some((s) => {
@@ -264,13 +205,14 @@ export class SlaService implements OnApplicationBootstrap {
     });
   }
 
-  /** Start clocks for a newly created case. Called from the after-save hook. */
   async onCaseCreated(caseId: string, data: Record<string, unknown>): Promise<void> {
     const settings = await this.settings.settings();
-    const policy = await this.resolvePolicy(data);
-    if (policy === null) { await this.setCaseSlaState(caseId, "notApplicable", null, null); return; }
     if (!settings.features.sla) return;
-
+    const policy = await this.resolvePolicy(data);
+    if (policy === null) {
+      await this.setCaseSlaState(caseId, "notApplicable", null, null);
+      return;
+    }
     const calendar = await this.loadCalendar(policy.calendarId);
     const now = new Date();
     await this.setCaseSlaState(caseId, "onTrack", policy.id, policy.version);
@@ -298,7 +240,6 @@ export class SlaService implements OnApplicationBootstrap {
       })}::jsonb, 1, now(), now())`.execute(this.db);
   }
 
-  /** Mark a target as met (called on public reply / resolve). */
   async markMet(caseId: string, targetType: string): Promise<void> {
     const settings = await this.settings.settings();
     if (!settings.features.sla) return;
@@ -320,11 +261,45 @@ export class SlaService implements OnApplicationBootstrap {
     await this.recomputeCaseState(caseId);
   }
 
+  async onPublicReply(caseId: string): Promise<void> {
+    const settings = await this.settings.settings();
+    if (!settings.features.sla) return;
+    await this.markMet(caseId, "firstResponse");
+    await this.markMet(caseId, "nextResponse");
+  }
+
+  async onResolved(caseId: string): Promise<void> {
+    const settings = await this.settings.settings();
+    if (!settings.features.sla) return;
+    await this.markMet(caseId, "resolution");
+  }
+
   private async setCaseSlaState(caseId: string, state: string, policyId: string | null, _policyVersion: number | null): Promise<void> {
     const slaState = state === "notApplicable" ? "NotApplicable" : state === "onTrack" ? "OnTrack" : state === "warning" ? "Warning" : state === "breached" ? "Breached" : state === "paused" ? "Paused" : state === "met" ? "Met" : "NotApplicable";
     const patch: Record<string, unknown> = { slaState };
     if (policyId !== null) patch["slaPolicyId"] = policyId;
     await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify(patch)}::jsonb, modified_at = now() WHERE id = ${caseId}`.execute(this.db);
+  }
+
+  private async onStatusChanged(caseId: string, newStatus: string, data: Record<string, unknown>): Promise<void> {
+    const settings = await this.settings.settings();
+    if (!settings.features.sla) return;
+    const policy = await this.resolvePolicy(data);
+    if (policy === null) return;
+    if (newStatus === "Pending Customer" && policy.pauseOnCustomer) {
+      await sql`UPDATE entity_records SET attrs = attrs || '{"status":"paused"}'::jsonb, modified_at = now()
+        WHERE entity_type = 'CaseSLAClock' AND deleted_at IS NULL AND (attrs ->> 'caseId') = ${caseId}
+          AND (attrs ->> 'status') IN ('onTrack','warning')`.execute(this.db);
+    } else if (newStatus === "Pending Internal" && policy.pauseOnInternal) {
+      await sql`UPDATE entity_records SET attrs = attrs || '{"status":"paused"}'::jsonb, modified_at = now()
+        WHERE entity_type = 'CaseSLAClock' AND deleted_at IS NULL AND (attrs ->> 'caseId') = ${caseId}
+          AND (attrs ->> 'status') IN ('onTrack','warning')`.execute(this.db);
+    } else {
+      await sql`UPDATE entity_records SET attrs = attrs || '{"status":"onTrack"}'::jsonb, modified_at = now()
+        WHERE entity_type = 'CaseSLAClock' AND deleted_at IS NULL AND (attrs ->> 'caseId') = ${caseId}
+          AND (attrs ->> 'status') = 'paused'`.execute(this.db);
+    }
+    await this.recomputeCaseState(caseId);
   }
 
   private async recomputeCaseState(caseId: string): Promise<void> {
@@ -348,7 +323,6 @@ export class SlaService implements OnApplicationBootstrap {
     await this.setCaseSlaState(caseId, state, null, null);
   }
 
-  /** Idempotent breach/warning pass — drive from a job or call directly. */
   async checkBreaches(): Promise<{ checked: number; breached: number; warned: number }> {
     const settings = await this.settings.settings();
     if (!settings.features.sla) return { checked: 0, breached: 0, warned: 0 };
@@ -375,7 +349,6 @@ export class SlaService implements OnApplicationBootstrap {
         const caseId = String(a["caseId"] ?? "");
         if (caseId) await this.setCaseSlaState(caseId, "breached", null, null);
       } else {
-        // warning threshold: if within 25% of due time remaining? Simplified: mark warning if past first threshold.
         const start = a["startAt"] ? new Date(String(a["startAt"])) : null;
         if (start !== null) {
           const total = due.getTime() - start.getTime();
@@ -392,8 +365,7 @@ export class SlaService implements OnApplicationBootstrap {
     }
     return { checked, breached, warned };
   }
-}
-  /** Idempotent SLA scan: breaches + warnings + escalation actions (SD.9). */
+
   async runScheduledCheck(): Promise<{ checked: number; breached: number; warned: number; notified: number; escalated: number }> {
     const settings = await this.settings.settings();
     if (!settings.features.sla) return { checked: 0, breached: 0, warned: 0, notified: 0, escalated: 0 };
@@ -416,7 +388,6 @@ export class SlaService implements OnApplicationBootstrap {
       const breachNotified = a["breachNotified"] === true;
       const escalatedFlag = a["escalated"] === true;
 
-      // Warning notification: fire once when crossing 75% if not already.
       if (status === "warning" && !fired.includes(75)) {
         const recipients = await this.caseWatchers(caseId);
         const caseRow = await this.loadCase(caseId);
@@ -436,7 +407,6 @@ export class SlaService implements OnApplicationBootstrap {
         await sql`UPDATE entity_records SET attrs = attrs || '{"firedWarnings":[75]}'::jsonb, modified_at = now() WHERE id = ${clockId}`.execute(this.db);
       }
 
-      // Breach notification + escalation: fire once.
       if (status === "breached" && !breachNotified) {
         const recipients = await this.caseWatchers(caseId);
         const caseRow = await this.loadCase(caseId);
@@ -453,16 +423,14 @@ export class SlaService implements OnApplicationBootstrap {
           }).catch(() => undefined);
           notified += 1;
         }
-        // Mark escalated (idempotent).
         if (!escalatedFlag) {
-          await sql`UPDATE entity_records SET attrs = attrs || '{"isEscalated":true,"escalationLevel":1,"escalatedAt":${JSON.stringify(new Date().toISOString())}}'::jsonb, modified_at = now() WHERE id = ${caseId}`.execute(this.db);
+          await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify({ isEscalated: true, escalationLevel: 1, escalatedAt: new Date().toISOString() })}::jsonb, modified_at = now() WHERE id = ${caseId}`.execute(this.db);
           escalated += 1;
         }
         await sql`UPDATE entity_records SET attrs = attrs || '{"breachNotified":true,"escalated":true}'::jsonb, modified_at = now() WHERE id = ${clockId}`.execute(this.db);
       }
     }
 
-    // Persist last scan time in settings.
     try {
       const current = await this.settings.settings();
       await this.settings.update({ sla: { ...current.sla, lastScanAt: new Date().toISOString() } });
@@ -473,7 +441,6 @@ export class SlaService implements OnApplicationBootstrap {
   }
 
   private async caseWatchers(caseId: string): Promise<string[]> {
-    // Assigned user + followers (internal users only).
     const caseRow = await this.loadCase(caseId);
     const set = new Set<string>();
     if (caseRow?.assignedUserId) set.add(caseRow.assignedUserId);
@@ -500,5 +467,5 @@ export class SlaService implements OnApplicationBootstrap {
       assignedUserId: typeof a["assignedUserId"] === "string" ? (a["assignedUserId"] as string) : null,
     };
   }
-
+}
 
