@@ -190,6 +190,20 @@ Where the React frontend exists:
 - Make forms keyboard accessible and provide useful validation messages.
 - Avoid duplicating API requests or introducing hidden writes during rendering.
 
+Frontend Design Rules — Vite + React + Ant Design
+
+- Use the `frontend-design` skill when creating, redesigning, or significantly improving UI.
+- Preserve the existing Vite + React + Ant Design stack.
+- Use Ant Design components as the default UI primitives for forms, tables, modals, dropdowns, notifications, and other standard interactions.
+- Do not introduce Tailwind CSS, shadcn/ui, or another component library unless explicitly requested.
+- Prefer Ant Design theme tokens and `ConfigProvider` for consistent theming instead of scattered hardcoded styles.
+- Use custom CSS and purpose-built components when needed to achieve a distinctive, polished design.
+- Avoid making the application look like an unmodified Ant Design demo. Customize typography, spacing, layout, colors, navigation, and component styling to suit the product.
+- Keep component APIs, form validation, loading states, error handling, permissions, and business logic intact.
+- Ensure responsive behavior, keyboard accessibility, visible focus states, and clear empty/loading/error states.
+- Reuse existing project conventions and components before introducing new abstractions.
+- Run the existing build, lint, and relevant tests after implementation. Verify key interactions and responsive layouts in a browser when browser tooling is available.
+
 ## 9. Testing Expectations
 
 Choose the lowest-cost test that verifies the behavior, then add broader tests for important flows:
@@ -228,6 +242,7 @@ A task is complete when, as applicable:
 **Use the existing configured primary project database for direct development testing when database verification is needed. Do not create extra test databases. Never reset, truncate, drop, or broadly delete data to make a test pass. Keep all test writes identifiable and narrowly scoped, and preserve existing project data.**
 
 <!-- trail:start -->
+
 ## Trail — repo context graph
 
 This repo is indexed in `.trail/cache/`: small linked markdown nodes that explain each

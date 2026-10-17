@@ -205,6 +205,9 @@ export function SalesDocumentActions({ view, onChanged }: SalesDocumentActionsPr
         title={prompt === null ? '' : t('sales.document.reasonTitle', { action: prompt.label })}
         okText={prompt?.label ?? t('sales.document.actions')}
         okButtonProps={{ disabled: reason.trim() === '' }}
+        // Deliberately not "Cancel": the command being confirmed is often called Cancel, and two
+        // identically labelled buttons in one dialog is a coin toss for the operator.
+        cancelText={t('sales.document.reasonDismiss')}
         onOk={() => void submitReason()}
         onCancel={() => setPrompt(null)}
         destroyOnHidden

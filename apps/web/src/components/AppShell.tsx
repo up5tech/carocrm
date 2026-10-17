@@ -2,7 +2,7 @@ import { ApartmentOutlined, ApiOutlined, AppstoreOutlined, BarChartOutlined, Cal
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
@@ -60,6 +60,34 @@ export function AppShell({ children }: { children: ReactNode }) {
   return <InternalShell>{children}</InternalShell>;
 }
 
+/**
+ * Phase 19-S.17 task 8 — the sidebar as a rail on desktop and a drawer on a phone.
+ *
+ * Below 768px the shell used to render the same fixed 260px-rail Sider, which left the content area
+ * ~80px wide on a 390px screen (measured). Now the rail becomes an off-canvas drawer: fixed, fully
+ * translated off-screen until the operator opens it, with the content taking the whole viewport.
+ *
+ * The two breakpoints get **two state variables on purpose**. `collapsed` is the desktop rail's, and
+ * deriving the drawer from it (`!collapsed`) opens the drawer for one render when the viewport
+ * crosses into narrow — a flash of a 260px panel over the screen. `drawerOpen` is its own,
+ * initially-closed state, so a resize can never open it and only the header toggle (or a link, or
+ * Escape) does.
+ */
+function useSidebar() {
+  const [collapsed, setCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 768px)');
+    const onChange = (event: MediaQueryListEvent) => setNarrow(event.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return { collapsed, setCollapsed, drawerOpen, setDrawerOpen, narrow };
+}
+
 function InternalShell({ children }: { children: ReactNode }) {
   const { principal, signOut } = useSession();
   const settings = useSettings();
@@ -68,7 +96,30 @@ function InternalShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
-  const [collapsed, setCollapsed] = useState(false);
+  const { collapsed, setCollapsed, drawerOpen, setDrawerOpen, narrow } = useSidebar();
+
+  // Phase 19-S.17 task 5 — the module-visibility signal. The Sales submenu is built from metadata the
+  // browser has, so until now it appeared for every user; `GET /Sales/action/nav` answers from the
+  // platform's own ACL whether this caller may read anything in the domain at all, and the group is
+  // hidden when it does. Until the answer arrives the group is shown as it always was: hiding a menu
+  // item is presentation, never the enforcement, which stays server-side.
+  const [salesVisible, setSalesVisible] = useState<boolean | null>(null);
+  useEffect(() => {
+    let active = true;
+    void api
+      .salesNavigation()
+      .then((value) => {
+        if (active) setSalesVisible(value.visible);
+      })
+      .catch(() => {
+        // A module that refuses is a module the caller cannot see; showing the group as before is the
+        // honest fallback rather than hiding navigation that the roles may well allow.
+        if (active) setSalesVisible(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // The menu labels are translated at build time, so the memo has to be keyed on the locale —
   // otherwise switching language would repaint the page but leave the sidebar in the old one.
@@ -116,7 +167,7 @@ function InternalShell({ children }: { children: ReactNode }) {
         children: projectEntities.map((entity) => recordItem(entity)),
       });
     }
-    if (salesGroups.length > 0) {
+    if (salesGroups.length > 0 && salesVisible !== false) {
       records.push({
         key: 'sub-sales',
         icon: <ShoppingCartOutlined />,
@@ -151,7 +202,7 @@ function InternalShell({ children }: { children: ReactNode }) {
     admin.push({ key: '/admin/portals', icon: <ProjectOutlined />, label: <Link to="/admin/portals">{t('web.adminPortals.title')}</Link> });
     groups.push({ type: 'group', key: 'grp-admin', label: t('core.app.administration'), children: admin });
     return groups;
-  }, [metadata.data, principal?.type, extensionNav.data, locale]);
+  }, [metadata.data, principal?.type, extensionNav.data, salesVisible, locale]);
 
   const selectedKey = useMemo(() => {
     const segments = location.pathname.split('/').filter(Boolean);
@@ -180,28 +231,46 @@ function InternalShell({ children }: { children: ReactNode }) {
     },
   ];
 
+  // Navigating anywhere closes the drawer, so the link the operator picked is the screen they get.
+  useEffect(() => {
+    if (narrow) setDrawerOpen(false);
+  }, [location.pathname, narrow, setDrawerOpen]);
+
+  // Escape closes the drawer without a mouse - the same affordance the desktop rail has.
+  useEffect(() => {
+    if (!narrow || !drawerOpen) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDrawerOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [narrow, drawerOpen, setDrawerOpen]);
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <header className="lizant-header">
-        <div className={`lizant-brand${collapsed ? ' lizant-brand--compact' : ''}`} title={settings.data?.pageTitle ?? DEFAULT_BRAND}>
+        <div className={`lizant-brand${(narrow ? drawerOpen : collapsed) ? ' lizant-brand--compact' : ''}`} title={settings.data?.pageTitle ?? DEFAULT_BRAND}>
           {settings.data?.logoUrl ? (
             <img className="lizant-brand-logo" src={settings.data.logoUrl} alt="" />
           ) : (
             <span className="lizant-brand-mark">C</span>
           )}
-          {collapsed ? null : <span>{settings.data?.pageTitle ?? DEFAULT_BRAND}</span>}
+          {(narrow ? drawerOpen : collapsed) ? null : <span>{settings.data?.pageTitle ?? DEFAULT_BRAND}</span>}
         </div>
         <span
           role="button"
           tabIndex={0}
-          aria-label={collapsed ? t('core.app.expandSidebar') : t('core.app.collapseSidebar')}
+          aria-label={(narrow ? drawerOpen : collapsed) ? t('core.app.expandSidebar') : t('core.app.collapseSidebar')}
           className="lizant-collapse-toggle"
-          onClick={() => setCollapsed((value) => !value)}
+          onClick={() => (narrow ? setDrawerOpen(!drawerOpen) : setCollapsed(!collapsed))}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') setCollapsed((value) => !value);
+            if (event.key === 'Enter') {
+              if (narrow) setDrawerOpen(!drawerOpen);
+              else setCollapsed(!collapsed);
+            }
           }}
         >
-          {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          {(narrow ? drawerOpen : collapsed) ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
         </span>
         <Input
           className="lizant-header-search"
@@ -227,12 +296,14 @@ function InternalShell({ children }: { children: ReactNode }) {
       </header>
       <Layout>
         <Sider
-          className="lizant-sider"
+          className={`lizant-sider${narrow ? ` lizant-sider--drawer${drawerOpen ? ' is-open' : ''}` : ''}`}
           width={260}
           collapsedWidth={72}
-          collapsible
-          collapsed={collapsed}
-          onCollapse={setCollapsed}
+          collapsible={!narrow}
+          collapsed={collapsed && !narrow}
+          onCollapse={(value: boolean) => {
+            if (!narrow) setCollapsed(value);
+          }}
           trigger={null}
         >
           <div className="lizant-sider-scroll">
@@ -241,9 +312,16 @@ function InternalShell({ children }: { children: ReactNode }) {
               items={navItems}
               selectedKeys={[selectedKey]}
               defaultOpenKeys={selectedKey.startsWith('/Project') ? ['sub-project'] : []}
+              onClick={() => {
+                // Following a link closes the drawer; on desktop it does nothing.
+                if (narrow) setDrawerOpen(false);
+              }}
             />
           </div>
         </Sider>
+        {narrow && drawerOpen ? (
+          <div className="lizant-drawer-backdrop" onClick={() => setCollapsed(true)} aria-hidden="true" />
+        ) : null}
         <Layout>
           <Content className="lizant-content">{children}</Content>
           <Footer className="lizant-footer">

@@ -773,6 +773,8 @@ export const api = {
 
   // Phase 19-S.17 — Sales domain commands (PLAN_Phase_19_Sales.md §7.2).
   salesHealth: () => request<SalesHealthView>('/Sales/action/health'),
+  salesNavigation: () =>
+    request<{ visible: boolean; readableEntities: number; entities: readonly string[] }>('/Sales/action/nav'),
   salesSettings: () => request<SalesSettingsView>('/Sales/action/settings'),
   saveSalesSettings: (input: Record<string, unknown>) =>
     request<SalesSettingsView>('/Sales/action/settings', post(input)),
@@ -812,6 +814,7 @@ export const api = {
   salesCreateFromOpportunity: (input: {
     opportunityId: string;
     kind: string;
+    items?: readonly Record<string, unknown>[];
     overrides?: Record<string, unknown>;
     correlationId?: string;
   }) => request<SalesDocumentView>('/Sales/document/fromOpportunity', post(input)),

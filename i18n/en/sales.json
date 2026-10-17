@@ -12,6 +12,15 @@
     "inventory": "Inventory",
     "administration": "Sales Administration"
   },
+  "opportunity": {
+    "title": "Commercial documents",
+    "hint": "Raise a document from this deal. The customer, the contact and the link back to the deal are carried over; the lines are priced on the next screen, because a document needs at least one.",
+    "create": {
+      "quote": "Create quote",
+      "salesOrder": "Create sales order",
+      "invoice": "Create invoice"
+    }
+  },
   "entities": {
     "product": { "label": "Product", "fields": { "sku": "SKU", "name": "Name", "type": "Type", "category": "Category", "active": "Active", "sellable": "Sellable", "purchasable": "Purchasable" } },
     "productCategory": { "label": "Product Category" },
@@ -169,6 +178,7 @@
     "reasonTitle": "Reason for {action}",
     "reasonHint": "The reason is stored in the document's audit trail.",
     "reasonPlaceholder": "Why is this being done?",
+    "reasonDismiss": "Keep as is",
     "unlock": "Unlock",
     "unlockHint": "Unlocking re-opens an issued document for editing. It is audited and needs a reason.",
     "unlocked": "Document unlocked."

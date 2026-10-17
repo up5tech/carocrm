@@ -23,6 +23,7 @@ import { SupplierPriceService } from "./pricing/supplier-price.js";
 import { SalesReportCatalogService } from "./report/sales-report-catalog.service.js";
 import { SalesController } from "./sales.controller.js";
 import { SalesModuleHealthService } from "./sales-module-health.service.js";
+import { SalesNavigationService } from "./sales-navigation.service.js";
 import { SalesRecords } from "./sales-records.js";
 import { SalesSettingsService } from "./sales-settings.service.js";
 import { SalesWriteGuardService } from "./sales-write-guard.service.js";
@@ -65,6 +66,7 @@ export const SALES_PROVIDERS: Provider[] = [
   BulkPriceService,
   SalesTaxService,
   SalesModuleHealthService,
+  SalesNavigationService,
   SubscriptionService,
   SalesReportCatalogService,
   SalesDashletCatalogService,

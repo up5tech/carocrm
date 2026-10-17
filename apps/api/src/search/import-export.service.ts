@@ -24,10 +24,18 @@ function coerceCell(def: FieldDefinition, raw: string): unknown {
       if (!Number.isInteger(num)) throw new ValidationError(`Invalid integer "${raw}".`);
       return num;
     }
+    // A `decimal`/`currency` field is a canonical decimal **string** at every boundary (PLAN_Phase_19_Sales.md
+    // §5.7): the record store and the field validation both refuse a JS number, so handing one here made
+    // every product — which carries `unitPrice`/`listPrice`/`costPrice` — impossible to import. The text
+    // is validated as the decimal the field expects.
     case 'float': case 'decimal': case 'currency': {
-      const num = Number(text);
-      if (Number.isNaN(num)) throw new ValidationError(`Invalid number "${raw}".`);
-      return num;
+      if (def.type === 'float') {
+        const num = Number(text);
+        if (Number.isNaN(num)) throw new ValidationError(`Invalid number "${raw}".`);
+        return num;
+      }
+      if (!/^-?\d+(\.\d+)?$/.test(text)) throw new ValidationError(`Invalid decimal "${raw}".`);
+      return text;
     }
     case 'date': case 'datetime': {
       const date = new Date(text);

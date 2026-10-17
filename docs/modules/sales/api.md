@@ -199,6 +199,20 @@ and `taxInclusive` policy used, and `warnings`.
 |---|---|
 | `422` | no lines; more than 500 lines; a line without a unit price; a non-positive quantity; a quantity with more fraction digits than `quantityPrecision`; a line discounted below zero; a discount larger than the document; a missing tax rate while `tax.missingTaxPolicy = error`; an exchange-rate snapshot whose `documentCurrency` is not the request currency |
 
+## `GET /api/v1/Sales/action/nav`
+
+The navigation's module-visibility signal (19-S.17 task 5). Answers, for the calling principal only:
+
+```json
+{ "visible": true, "readableEntities": 36,
+  "entities": ["Product", "Quote", "…"] }
+```
+
+`visible` is "this caller may **read** at least one Sales entity", computed by the platform's own ACL
+(`AclApiService.canUser`) over the module's entity list. The SPA's Sales submenu is hidden when it is
+`false`, so a user with no access to the domain is not offered six categories of links that would each
+answer `403`. It is presentation, not enforcement: every route it hides is already refused server-side.
+
 ## `POST /api/v1/Sales/quote/:id/render`
 
 Render a quote against a `DocumentTemplate` — the preview the UI shows before anybody commits to
@@ -313,7 +327,6 @@ document is never made official for an attachment that did not materialise.
 | `422` | the kind is `quote`; the document is in a state that is neither its draft state nor its issued state; a stock-moving draft; no recipient; `attachPdf` without `pdfkit` |
 
 ## `POST /api/v1/Sales/document/fromOpportunity`
-
 Raises a draft from a CRM **Opportunity** (19-S.7, §4.5 – §4.7). Body:
 
 ```json

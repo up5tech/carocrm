@@ -12,6 +12,15 @@
     "inventory": "Kho hàng",
     "administration": "Quản trị Bán hàng"
   },
+  "opportunity": {
+    "title": "Chứng từ thương mại",
+    "hint": "Tạo chứng từ từ cơ hội này. Khách hàng, người liên hệ và liên kết về cơ hội được giữ nguyên; dòng hàng được nhập giá ở màn hình sau, vì chứng từ phải có ít nhất một dòng.",
+    "create": {
+      "quote": "Tạo báo giá",
+      "salesOrder": "Tạo đơn bán hàng",
+      "invoice": "Tạo hóa đơn"
+    }
+  },
   "entities": {
     "product": { "label": "Sản phẩm", "fields": { "sku": "Mã sản phẩm", "name": "Tên", "type": "Loại", "category": "Danh mục", "active": "Hoạt động", "sellable": "Có thể bán", "purchasable": "Có thể mua" } },
     "productCategory": { "label": "Danh mục sản phẩm" },
@@ -169,6 +178,7 @@
     "reasonTitle": "Lý do cho thao tác {action}",
     "reasonHint": "Lý do được ghi vào nhật ký kiểm toán của chứng từ.",
     "reasonPlaceholder": "Vì sao thực hiện thao tác này?",
+    "reasonDismiss": "Giữ nguyên",
     "unlock": "Mở khóa",
     "unlockHint": "Mở khóa để sửa lại một chứng từ đã phát hành. Thao tác được ghi nhật ký và bắt buộc có lý do.",
     "unlocked": "Đã mở khóa chứng từ."

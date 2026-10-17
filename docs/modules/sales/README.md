@@ -155,6 +155,7 @@ POST   /api/v1/Sales/document/:kind/:id/convert    convert to another kind, idem
 POST   /api/v1/Sales/document/:kind/:id/render     the printed rendering (template or built-in layout)
 POST   /api/v1/Sales/document/:kind/:id/recalculate server-side recalculation
 DELETE /api/v1/Sales/document/:kind/:id            delete a **draft** only
+GET    /api/v1/Sales/action/nav                    is this domain worth showing in the menu?
 ```
 
 `kind` is one of `quote`, `salesOrder`, `invoice`, `creditNote`, `deliveryOrder`, `returnOrder`,
@@ -175,6 +176,11 @@ with the draft, and the double-billing guards apply: a deal may be quoted repeat
 a commitment), a second order or invoice for it is refused, and so is invoicing a deal that already
 became an order — including an order that came from one of the deal's quotes. The lines are the
 caller's, because an Opportunity carries an amount rather than priced lines.
+
+
+The Opportunity detail page mounts that hand-off (`OpportunityDocumentActions.tsx`) and opens the create screen with `?opportunityId=…`, which seeds the deal's party and saves through this command.
+
+`GET …/action/nav` is the navigation's module-visibility signal: it answers whether the calling principal may read at least one Sales entity, so the shell can hide a category whose every link would answer `403`. It reports; it does not enforce.
 
 **Implemented:** the engine, the ten descriptors, the document + item metadata
 (`database/seed-metadata.ts`), migrations `023_phase19_sales_documents.sql`,

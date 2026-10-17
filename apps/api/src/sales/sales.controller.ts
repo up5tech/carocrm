@@ -98,6 +98,7 @@ import { SupplierPriceService } from "./pricing/supplier-price.js";
 import { SalesReportCatalogService } from "./report/sales-report-catalog.service.js";
 import { runAsSalesInternal } from "./sales-internal.js";
 import { SalesModuleHealthService } from "./sales-module-health.service.js";
+import { SalesNavigationService } from "./sales-navigation.service.js";
 import { SalesSettingsService } from "./sales-settings.service.js";
 import { SubscriptionService } from "./subscriptions/subscription.service.js";
 import { SalesTaxService } from "./tax/tax.service.js";
@@ -121,6 +122,8 @@ export class SalesController {
   constructor(
     @Inject(SalesModuleHealthService)
     private readonly health: SalesModuleHealthService,
+    @Inject(SalesNavigationService)
+    private readonly salesNav: SalesNavigationService,
     @Inject(SalesSettingsService)
     private readonly settings: SalesSettingsService,
     @Inject(SalesNumberingService)
@@ -168,6 +171,19 @@ export class SalesController {
   async moduleHealth() {
     this.requireAdmin("module diagnostics");
     return this.health.health();
+  }
+
+  /**
+   * The navigation's module-visibility signal (19-S.17 task 5).
+   *
+   * `visible` is "this caller may **read** at least one Sales entity", answered by the platform's own
+   * ACL. The shell hides the Sales menu when it is false, so a user with nothing to see is not offered
+   * six categories that would each answer `403`. It is a report and not a gate — every route it hides
+   * is already refused server-side.
+   */
+  @Get("action/nav")
+  async navigation() {
+    return await this.salesNav.visibility();
   }
 
   /** The validated settings document plus the computed defaults and warnings. */

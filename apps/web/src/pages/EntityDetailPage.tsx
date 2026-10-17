@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
+import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
 import { SalesDocumentLinesPanel } from '../components/SalesDocumentLinesPanel.js';
 import { StreamPanel } from '../components/StreamPanel.js';
 import { salesDocumentKind } from '../sales/documents.js';
@@ -207,7 +208,10 @@ export function EntityDetailPage() {
 
   return (
     <Spin spinning={loading}>
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
+      {/* A column stack rather than an antd `Space`: a flex item's default `min-width: auto` lets a
+          wide child (the line-item table) grow the page instead of scrolling inside its card. See
+          `.lizant-card-stack` in lizant.css. */}
+      <div className="lizant-card-stack">
         <Card
           className="lizant-card"
           title={
@@ -257,7 +261,7 @@ export function EntityDetailPage() {
         >
           {panels.length === 0 ? (
             <Descriptions
-              column={2}
+              column={{ xs: 1, md: 2 }}
               colon={false}
               labelStyle={labelStyle}
               contentStyle={contentStyle}
@@ -266,15 +270,20 @@ export function EntityDetailPage() {
           ) : null}
         </Card>
 
-        {panels.map((panel) => (
-          <Card
+        {/* Phase 19-S.7/19-S.17 — the commercial hand-off from a deal. The panel only navigates: the
+            document needs priced lines, which the create screen's line editor collects, and the save
+            there goes through the Opportunity command so the party, the provenance and the
+            double-billing guards all apply. */}
+        {entity === 'Opportunity' && base !== '/portal' ? <OpportunityDocumentActions opportunityId={id} /> : null}
+
+        {panels.map((panel) => (          <Card
             key={panel.name}
             className="lizant-card"
             size="small"
             title={<Typography.Text strong>{panel.label ?? panel.name}</Typography.Text>}
           >
             <Descriptions
-              column={2}
+              column={{ xs: 1, md: 2 }}
               colon={false}
               labelStyle={labelStyle}
               contentStyle={contentStyle}
@@ -285,7 +294,7 @@ export function EntityDetailPage() {
 
         {others.length > 0 ? (
           <Card className="lizant-card" size="small" title={<Typography.Text strong>{t('core.common.other')}</Typography.Text>}>
-            <Descriptions column={2} colon={false} labelStyle={labelStyle} contentStyle={contentStyle} items={describe(others)} />
+            <Descriptions column={{ xs: 1, md: 2 }} colon={false} labelStyle={labelStyle} contentStyle={contentStyle} items={describe(others)} />
           </Card>
         ) : null}
 
@@ -309,7 +318,7 @@ export function EntityDetailPage() {
         })}
 
         <StreamPanel entity={entity} id={id} definition={definition.data} canPost />
-      </Space>
+      </div>
     </Spin>
   );
 }

@@ -18,6 +18,7 @@ import { resolveDay, storedDay, utcDay } from "../clock.js";
 import { InventoryService } from "../inventory/inventory.service.js";
 import type { ExchangeRateInput } from "../money/currency.js";
 import {
+  currencyScale,
   freezeExchangeRateSnapshot,
   normalizeCurrencyCode,
   readFrozenExchangeRate,
@@ -279,7 +280,10 @@ export class SalesDocumentService {
       const data = readDocumentSnapshot(snapshot);
       return this.toView(descriptor, row, items, data.totals, true);
     }
-    const totals = await this.totalsFor(descriptor, row, items, false);
+    const totals =
+      items.length === 0
+        ? await this.emptyTotals(row)
+        : await this.totalsFor(descriptor, row, items, false);
     return this.toView(descriptor, row, items, totals, false);
   }
 
@@ -1012,7 +1016,10 @@ export class SalesDocumentService {
     const row = await this.requireDocument(descriptor, id);
     if (!isIssued(lockStateOf(descriptor, row))) {
       const stored = await this.itemsOf(descriptor, id);
-      const totals = await this.totalsFor(descriptor, row, stored, false);
+      const totals =
+        stored.length === 0
+          ? await this.emptyTotals(row)
+          : await this.totalsFor(descriptor, row, stored, false);
       await this.entities.update(
         descriptor.entity,
         id,
@@ -1715,6 +1722,48 @@ export class SalesDocumentService {
       requireUnitPrice,
     });
     return await this.calculate(descriptor, row, lines, settings);
+  }
+
+  /**
+   * The totals of a document that has **no lines yet** — one imported through the kernel's CSV path,
+   * or one whose lines were removed.
+   *
+   * Zero, obviously, and with nothing invented: there is no subtotal to fake and no tax to assume.
+   * Such a document cannot be *issued* (`minItems` applies there, and issuance also requires prices),
+   * but it must still be readable, because the screen that would let an operator add the missing lines
+   * is exactly what needs the document. `create` keeps refusing an empty line set: that is the UI's
+   * path, where an empty document is a mistake to state, not a state to accept.
+   */
+  private async emptyTotals(row: SalesRow): Promise<TotalsResult> {
+    const settings = (await this.settings.read()).settings;
+    const currency = normalizeCurrencyCode(
+      text(row.data["currency"]) ?? settings.currency.defaultCurrency,
+    );
+    // Zero at this currency's own scale, so the empty document reads the same way the priced one does.
+    const empty = format(zero(0), currencyScale(currency));
+    return {
+      currency,
+      lines: [],
+      subtotal: empty,
+      discountTotal: empty,
+      shippingAmount: empty,
+      shippingTaxAmount: empty,
+      taxBreakdown: [],
+      taxTotal: empty,
+      netTotal: empty,
+      grossTotal: empty,
+      amountDue: empty,
+      baseCurrency: null,
+      exchangeRate: null,
+      baseGrossTotal: null,
+      exchangeRateSnapshot: null,
+      rounding: {
+        mode: settings.tax.roundingMode,
+        stage: settings.tax.roundingStage,
+      },
+      taxInclusive: false,
+      warnings: [],
+    };
   }
 
   /** Calculate a set of requested lines in the document's own context. */

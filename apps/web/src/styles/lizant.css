@@ -1111,8 +1111,7 @@ body {
 /* entity-manager layout editor: full-width field rows, group blocks and the disabled pool */
 .lizant-layout-row-wrap {
   touch-action: none;
-}
-.lizant-layout-rows {
+}.lizant-layout-rows {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1213,4 +1212,79 @@ body {
   white-space: pre-wrap;
   font-size: 12px;
   line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------------------
+   Phase 19-S.17 task 8 — narrow-viewport behaviour of a record screen.
+
+   The detail screen is a stack of cards. It used to be an antd `Space`, whose
+   items are flex items with `min-width: auto`: a child that is intrinsically
+   wide — the line-item editor's table, which is deliberately 1150px and
+   scrolls horizontally — therefore grew the *page* instead of scrolling inside
+   its own card (measured: 259px of horizontal overflow at 390px). A plain
+   column with `min-width: 0` on each child is the fix: the table keeps its
+   width, the card stays the width of the screen, and the table scrolls.
+   --------------------------------------------------------------------------- */
+.lizant-card-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+.lizant-card-stack > * {
+  min-width: 0;
+}
+/* A card on a document screen holds a table wider than a phone, so its body is
+   the scroll container rather than the page. */
+.lizant-card-stack .ant-card-body {
+  overflow-x: auto;
+}
+.lizant-card-stack .ant-table-wrapper {
+  max-width: 100%;
+}
+.lizant-card-stack .ant-table-content,
+.lizant-card-stack .ant-table-body {
+  overflow-x: auto;
+}
+
+/* A CRM record is full of long, unbreakable values (ids, JSON snapshots, SKUs).
+   Without this they push a descriptions table wider than the phone it is read on. */
+.ant-descriptions-item-content {
+  word-break: break-word;
+}
+
+
+/* ---------------------------------------------------------------------------
+   Phase 19-S.17 task 8 - the narrow-viewport shell.
+
+   Below 768px the fixed 260px rail left ~80px of content on a 390px phone
+   (measured), so the rail becomes an off-canvas drawer: fixed, translated fully
+   off-screen until the header toggle opens it, with the content taking the whole
+   viewport. antd writes the sider width inline, hence the !important on
+   `position` only - width and height stay antd's.
+   --------------------------------------------------------------------------- */
+@media only screen and (max-width: 768px) {
+  .lizant-sider--drawer {
+    position: fixed !important;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  .lizant-sider--drawer.is-open {
+    transform: translateX(0);
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.18);
+  }
+  .lizant-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: rgba(0, 0, 0, 0.28);
+  }
+  .lizant-content {
+    padding: 12px;
+  }
 }

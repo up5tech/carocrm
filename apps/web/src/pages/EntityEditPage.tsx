@@ -1,6 +1,6 @@
 import { Alert, App as AntApp, Button, Card, Form, Space, Spin, Typography } from 'antd';
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { api, type RecordData } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition } from '../api/types.js';
@@ -50,6 +50,19 @@ interface VisibleEntry {
   readOnly: boolean;
 }
 
+/**
+ * The header fields worth sending as overrides for an Opportunity-sourced document: an input the
+ * operator left untouched must not blank the party the deal already gave.
+ */
+function overridesOf(payload: RecordData): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (value === undefined || value === null || value === '') continue;
+    out[key] = value;
+  }
+  return out;
+}
+
 function buildEntries(definition: EntityDefinition | undefined, logic: ReturnType<typeof evaluateEntityLogic>): VisibleEntry[] {
   return editEntries(definition)
     .filter((entry) => logic.fields[entry.name]?.visible !== false)
@@ -64,6 +77,7 @@ function buildEntries(definition: EntityDefinition | undefined, logic: ReturnTyp
 export function EntityEditPage() {
   const { entity, id } = useParams<{ entity: string; id?: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { principal } = useSession();
   const base = portalBase(principal?.type);
   const { message } = AntApp.useApp();
@@ -89,6 +103,14 @@ export function EntityEditPage() {
     (lines.length === 0 ||
       lines.some((line) => line.productId === null && line.name.trim() === '') ||
       lines.some((line) => line.unitPrice === null || line.unitPrice === ''));
+
+  /**
+   * Phase 19-S.7 — a document raised **from a CRM Opportunity**. The Opportunity screen links here with
+   * `?opportunityId=…`; the deal's party is seeded into the form so the operator sees who the document
+   * is for before pricing it, and the save goes through `POST /Sales/document/fromOpportunity`, which
+   * owns the provenance and the double-billing guards. Without the parameter nothing changes.
+   */
+  const opportunityId = id === undefined && createKind !== undefined ? searchParams.get('opportunityId') : null;
 
   // Dynamic logic re-runs on every keystroke: the rule set is small and the engine caches parsed
   // formulas, so re-evaluating is cheaper than tracking which field each rule reads.
@@ -146,6 +168,32 @@ export function EntityEditPage() {
     void load();
   }, [load]);
 
+  // Seed the deal's party into the create form. A deal the caller may not read seeds nothing — the
+  // command refuses the save with the reason, which is the answer the operator needs. Only fields this
+  // form actually renders are seeded: `name` is not on a document's edit layout, and the command
+  // copies the deal's title itself.
+  useEffect(() => {
+    if (opportunityId === null) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const deal = await api.get('Opportunity', opportunityId);
+        if (cancelled) return;
+        const seed: RecordData = {};
+        for (const name of ['accountId', 'contactId']) {
+          const value = deal[name];
+          if (value !== undefined && value !== null && value !== '') seed[name] = value;
+        }
+        form.setFieldsValue(seed);
+      } catch {
+        // See above: the refusal belongs to the save, not to the prefill.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [opportunityId, form]);
+
   if (!entity) return <Card>{t('web.edit.missingEntity')}</Card>;
 
   const entityLabel = definition.data?.label ?? entity;
@@ -196,7 +244,16 @@ export function EntityEditPage() {
             const savedId = id
               ? (await api.update(entity, id, payload))['id']
               : createKind !== undefined
-                ? (await api.salesCreateDocument(createKind, { data: payload, items: lines.map(linePayload) })).id
+                ? opportunityId !== null
+                  ? (
+                      await api.salesCreateFromOpportunity({
+                        opportunityId,
+                        kind: createKind,
+                        items: lines.map(linePayload),
+                        overrides: overridesOf(payload),
+                      })
+                    ).id
+                  : (await api.salesCreateDocument(createKind, { data: payload, items: lines.map(linePayload) })).id
                 : (await api.create(entity, payload))['id'];
             void message.success(t('web.edit.saved'));
             navigate(`${base}/${entity}/${String(savedId ?? '')}`);
