@@ -1112,6 +1112,20 @@
       "waitingCustomer": "Waiting for customer",
       "breached": "Breached SLA",
       "escalated": "Escalated"
+    },
+    "dashboard": {
+      "title": "Service desk dashboard",
+      "total": "Total cases",
+      "unassigned": "Unassigned",
+      "breached": "Breached SLA",
+      "escalated": "Escalated",
+      "recent": "Recently updated",
+      "subject": "Subject",
+      "status": "Status",
+      "priority": "Priority",
+      "assignee": "Assignee",
+      "modified": "Modified",
+      "loadFailed": "Could not load dashboard"
     }
   }
 }

@@ -29,6 +29,7 @@ import { ProjectPlanPage } from './pages/projects/ProjectPlanPage.js';
 import { ProjectSettingsPage } from './pages/projects/ProjectSettingsPage.js';
 import { ReportsPage } from './pages/ReportsPage.js';
 import { SearchPage } from './pages/SearchPage.js';
+import { ServiceDeskDashboardPage } from './pages/ServiceDeskDashboardPage.js';
 import { StreamPage } from './pages/StreamPage.js';
 import { TasksPage } from './pages/TasksPage.js';
 import { WorkflowEditorPage } from './pages/WorkflowEditorPage.js';
@@ -104,6 +105,7 @@ export function AppRoutes() {
         <Route path="/Project/:id/gantt" element={<ProjectGanttPage />} />
         <Route path="/Project/:id/members" element={<ProjectMembersPage />} />
         <Route path="/Project/:id/settings" element={<ProjectSettingsPage />} />
+        <Route path="/Case/dashboard" element={<ServiceDeskDashboardPage />} />
         {/* declared before the entity wildcard so "board" is never read as a record id */}
         <Route path="/:entity/board" element={<EntityBoardPage />} />
         <Route path="/:entity" element={<EntityListPage />} />

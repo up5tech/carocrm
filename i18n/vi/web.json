@@ -1112,6 +1112,20 @@
       "waitingCustomer": "Chờ khách hàng",
       "breached": "Vi phạm SLA",
       "escalated": "Đã chuyển cấp"
+    },
+    "dashboard": {
+      "title": "Bảng điều khiển dịch vụ",
+      "total": "Tổng hồ sơ",
+      "unassigned": "Chưa gán",
+      "breached": "Vi phạm SLA",
+      "escalated": "Đã chuyển cấp",
+      "recent": "Cập nhật gần đây",
+      "subject": "Chủ đề",
+      "status": "Trạng thái",
+      "priority": "Ưu tiên",
+      "assignee": "Người phụ trách",
+      "modified": "Sửa đổi",
+      "loadFailed": "Không tải được bảng điều khiển"
     }
   }
 }

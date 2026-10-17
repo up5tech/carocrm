@@ -189,7 +189,7 @@ export const SERVICE_DESK_MODULE = {
   loadOrder: 360,
   apiPrefix: "/api/v1/ServiceDesk",
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ["19-SD.0", "19-SD.1", "19-SD.2", "19-SD.3", "19-SD.4", "19-SD.5", "19-SD.6", "19-SD.7", "19-SD.8", "19-SD.9", "19-SD.10", "19-SD.11", "19-SD.12", "19-SD.13", "19-SD.14"],
+  implementedPhases: ["19-SD.0", "19-SD.1", "19-SD.2", "19-SD.3", "19-SD.4", "19-SD.5", "19-SD.6", "19-SD.7", "19-SD.8", "19-SD.9", "19-SD.10", "19-SD.11", "19-SD.12", "19-SD.13", "19-SD.14", "19-SD.15"],
   /** The canonical support-case entity and the configuration/history records this module owns. */
   entityTypes: ["Case", "CaseQueue", "QueueMember", "RoutingRule", "CaseTransition", "CaseAssignment"],
 } as const;
