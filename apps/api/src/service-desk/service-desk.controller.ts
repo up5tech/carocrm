@@ -19,6 +19,7 @@ import {
   SettingsPatchSchema,
 } from "./dto/service-desk-shapes.js";
 import { EmailToCaseService } from "./email-to-case.service.js";
+import { SlaService } from "./sla.service.js";
 import { ServiceDeskModuleHealthService } from "./service-desk-module-health.service.js";
 import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 
@@ -45,6 +46,7 @@ export class ServiceDeskController {
     @Inject(CaseAssignmentService) private readonly assignment: CaseAssignmentService,
     @Inject(CaseConversationService) private readonly conversation: CaseConversationService,
     @Inject(EmailToCaseService) private readonly emailToCaseService: EmailToCaseService,
+    @Inject(SlaService) private readonly slaService: SlaService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -190,6 +192,13 @@ export class ServiceDeskController {
   @HttpCode(200)
   async caseEmailReply(@Param("id") id: string, @Body() body: unknown) {
     return this.emailToCaseService.replyByEmail(id, parse(CaseEmailReplySchema, body));
+  }
+
+  /** Idempotent SLA breach/warning pass (§5.7, SD.8). Administrator or job. */
+  @Post("action/sla/checkBreaches")
+  @HttpCode(200)
+  async slaCheckBreaches() {
+    return this.slaService.checkBreaches();
   }
 
   // ---------------------------------------------------------------------------

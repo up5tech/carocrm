@@ -14,6 +14,7 @@ import { runAsServiceDeskInternal } from "./service-desk-internal.js";
 import { ServiceDeskNotificationService } from "./service-desk-notification.service.js";
 import { ServiceDeskRecords, type ServiceDeskRow } from "./service-desk-records.js";
 import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
+import { SlaService } from "./sla.service.js";
 
 /**
  * Phase 19-SD.6 — case conversation: public replies, internal notes and the visibility-safe timeline
@@ -76,6 +77,7 @@ export class CaseConversationService {
     @Inject(EventBus) private readonly events: EventBus,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(SlaService) private readonly sla: SlaService,
   ) {}
 
   /** Post a customer-visible reply (§8.2 `POST /cases/:id/reply`). */
@@ -177,6 +179,7 @@ export class CaseConversationService {
     // watchers. Generation is best-effort and outside the transaction, like assignment (§12.3).
     if (visibility === "public") {
       await this.notifyReply(caseId, row.data, messageId, actor.userId);
+      await this.sla.onPublicReply(caseId).catch(() => undefined);
     }
 
     return { caseId, messageId, visibility, created: true };

@@ -100,6 +100,13 @@ export const ServiceDeskSettingsSchema = z
       })
       .strict()
       .default({}),
+    sla: z
+      .object({
+        /** Last successful SLA scan timestamp (SD.9). */
+        lastScanAt: z.string().nullable().default(null),
+      })
+      .strict()
+      .default({}),
   })
   .strict();
 
@@ -118,7 +125,6 @@ export interface SettingsWarning {
  * `queues` left this list in SD.5, when the queue/routing infrastructure it names was delivered.
  */
 const PENDING_FEATURES: readonly { readonly key: keyof ServiceDeskSettings["features"]; readonly phase: string }[] = [
-  { key: "sla", phase: "19-SD.8" },
   { key: "portal", phase: "19-SD.11" },
   { key: "knowledgeBase", phase: "19-SD.10" },
   { key: "csat", phase: "19-SD.14" },

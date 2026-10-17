@@ -46,6 +46,17 @@ export interface CaseReplyNotification {
   readonly dedupKey: string;
 }
 
+export interface CaseSlaNotification {
+  readonly userId: string;
+  readonly caseId: string;
+  readonly caseNumber: string | null;
+  readonly subject: string | null;
+  readonly clockId: string;
+  readonly targetType: string;
+  readonly kind: "warning" | "breach";
+  readonly dedupKey: string;
+}
+
 export interface NotificationResult {
   readonly id: string;
   readonly created: boolean;
@@ -79,6 +90,30 @@ export class ServiceDeskNotificationService {
       subject: input.subject,
       title: (caseNumber) => (caseNumber === null ? "New reply on a case" : `New reply on case ${caseNumber}`),
       actorUserId: input.actorUserId,
+      dedupKey: input.dedupKey,
+    });
+  }
+
+  async slaWarning(input: CaseSlaNotification): Promise<NotificationResult> {
+    return this.write("ServiceDeskSlaWarning", {
+      userId: input.userId,
+      caseId: input.caseId,
+      caseNumber: input.caseNumber,
+      subject: input.subject,
+      title: (cn) => (cn === null ? "SLA warning" : `SLA warning on case ${cn}`),
+      actorUserId: "system",
+      dedupKey: input.dedupKey,
+    });
+  }
+
+  async slaBreach(input: CaseSlaNotification): Promise<NotificationResult> {
+    return this.write("ServiceDeskSlaBreach", {
+      userId: input.userId,
+      caseId: input.caseId,
+      caseNumber: input.caseNumber,
+      subject: input.subject,
+      title: (cn) => (cn === null ? "SLA breached" : `SLA breached on case ${cn}`),
+      actorUserId: "system",
       dedupKey: input.dedupKey,
     });
   }
