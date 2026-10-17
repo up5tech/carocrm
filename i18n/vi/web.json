@@ -1156,5 +1156,30 @@
     "thanks": "Cảm ơn phản hồi của bạn.",
     "failed": "Không gửi được khảo sát.",
     "missingToken": "Liên kết khảo sát thiếu mã xác thực."
+  },
+  "marketingAutomation": {
+    "lifecycle": "Vòng đời chiến dịch",
+    "noCommands": "Trạng thái này không có lệnh nào khả dụng.",
+    "commandDone": "Đã cập nhật chiến dịch.",
+    "duplicate": "Nhân bản thành bản nháp",
+    "duplicateDone": "Đã tạo chiến dịch nháp mới.",
+    "validate": "Kiểm tra điều kiện gửi",
+    "reason": "Lý do",
+    "reasonRequired": "Hủy chiến dịch sẽ dừng các tin nhắn, vì vậy cần nêu lý do.",
+    "blockedTitle": "Vì sao chưa thể chạy",
+    "warningTitle": "Cảnh báo",
+    "historyTitle": "Lịch sử lệnh",
+    "history": {
+      "command": "Lệnh",
+      "from": "Từ",
+      "to": "Đến",
+      "reason": "Lý do",
+      "actor": "Người thực hiện",
+      "occurredAt": "Thời điểm",
+      "validationHash": "Kiểm tra theo"
+    },
+    "staleReportHint": "Báo cáo đã lưu được tạo trước thay đổi gần nhất; hãy kiểm tra lại trước khi lên lịch.",
+    "confirm": "Xác nhận",
+    "cancel": "Hủy"
   }
 }

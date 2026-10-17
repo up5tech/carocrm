@@ -92,6 +92,10 @@ export const ENTITY_ICONS: Record<string, ReactNode> = {
 export const ENTITY_DEFAULT_ICONS: Record<string, string> = {
   Account: 'BankOutlined',
   Call: 'PhoneOutlined',
+  // Phase 19-MA — Marketing Automation. Defaults, not seed metadata: re-seeding would overwrite the
+  // overrides the Entity Manager writes, and the icon set is fixed in the SPA.
+  Campaign: 'NotificationOutlined',
+  TargetList: 'TeamOutlined',
   Contact: 'UserOutlined',
   Email: 'MailOutlined',
   EmailTemplate: 'ProfileOutlined',

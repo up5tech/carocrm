@@ -1156,5 +1156,30 @@
     "thanks": "Thank you for your feedback.",
     "failed": "Could not submit the survey.",
     "missingToken": "This survey link is missing its token."
+  },
+  "marketingAutomation": {
+    "lifecycle": "Campaign lifecycle",
+    "noCommands": "No lifecycle command is available for this status.",
+    "commandDone": "Campaign updated.",
+    "duplicate": "Duplicate as draft",
+    "duplicateDone": "A new draft campaign was created.",
+    "validate": "Check send readiness",
+    "reason": "Reason",
+    "reasonRequired": "Cancelling stops the campaign's messages, so a reason is required.",
+    "blockedTitle": "Why this cannot run yet",
+    "warningTitle": "Warnings",
+    "historyTitle": "Command history",
+    "history": {
+      "command": "Command",
+      "from": "From",
+      "to": "To",
+      "reason": "Reason",
+      "actor": "Actor",
+      "occurredAt": "When",
+      "validationHash": "Checked under"
+    },
+    "staleReportHint": "The stored report was produced before the last change; check again before scheduling.",
+    "confirm": "Confirm",
+    "cancel": "Cancel"
   }
 }

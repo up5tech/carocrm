@@ -128,6 +128,22 @@ const SD_CASE_SLA_STATES = ['NotApplicable', 'OnTrack', 'Warning', 'Breached', '
 const SD_ASSIGNMENT_STRATEGIES = ['manual', 'roundRobin', 'leastBusy'];
 const SD_FALLBACK_BEHAVIORS = ['unassigned', 'fallbackOwner'];
 
+/**
+ * Phase 19-MA — Marketing Automation vocabulary
+ * (PLAN_Phase_19_Marketing_Automation.md §5.1, §5.2, §6.1; audit §3).
+ *
+ * Declared above `coreMetadata`, which is evaluated at module load and calls `marketingCampaignEntity()`.
+ * These lists mirror `apps/api/src/marketing-automation/marketing-automation-domain.ts`, which is the
+ * authority for the server-side vocabulary; the module health endpoint's `entity-metadata` check and the
+ * metadata unit test catch any drift between the two.
+ */
+const MA_CAMPAIGN_STATUSES = ['Draft', 'Scheduled', 'Running', 'Paused', 'Completed', 'Failed', 'Archived'];
+const MA_CAMPAIGN_TYPES = ['Email', 'Newsletter', 'Informational', 'Other'];
+const MA_CAMPAIGN_PURPOSES = ['Newsletter', 'ProductMarketing', 'EventUpdate', 'ServiceNotice'];
+const MA_MEMBERSHIP_MODES = ['static', 'dynamic'];
+const MA_TARGET_LIST_STATUSES = ['Active', 'Archived'];
+const MA_TARGET_LIST_ENTRY_SOURCES = ['Manual', 'Import', 'Criteria', 'Api', 'Journey'];
+
 export const coreMetadata: MetadataSeedEntry[] = [
   {
     scope: 'entity',
@@ -884,6 +900,12 @@ export const coreMetadata: MetadataSeedEntry[] = [
   serviceDeskCaseEntity(),
   ...serviceDeskQueueEntities(),
   ...serviceDeskHistoryEntities(),
+
+  // -------------------------------------------------------------------------
+  // Phase 19-MA — Marketing Automation (`MarketingAutomation`): campaign and audience records
+  // (PLAN_Phase_19_Marketing_Automation.md §6.1; audit §3 for the ownership decisions).
+  // -------------------------------------------------------------------------
+  ...marketingAutomationEntities(),
 ];
 
 /**
@@ -3871,5 +3893,264 @@ function serviceDeskHistoryEntities(): MetadataSeedEntry[] {
       acl: { permissions: { CsatSurvey: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
     },
   },
+  ];
+}
+
+/**
+ * Phase 19-MA — Marketing Automation records
+ * (PLAN_Phase_19_Marketing_Automation.md §5.1, §5.2, §6.1, §15 `19-MA.2`–`19-MA.3`).
+ *
+ * Names are the canonical ones the audit fixes (`Campaign`, `TargetList`), not parallel `Marketing*`
+ * inventions beside an existing record: §0.2 and §5.1 ask for the platform's campaign and audience records,
+ * and this checkout had neither (audit §1), so these are those records — one per concern, in the generic
+ * `entity_records` store like every other CRM entity, so ACL, validation, field ACL, audit, stream, import,
+ * export and search stay in the engine.
+ *
+ * `TargetListEntry` and `CampaignTransition` are **not** navigable: they are evidence (who is in an
+ * audience, which command moved a campaign) and are read through the module's own endpoints, which apply the
+ * parent record's permission. Their `client.web: false` keeps the two of them out of the RECORDS menu rather
+ * than advertising a list of internal ids to a marketer.
+ */
+function marketingAutomationEntities(): MetadataSeedEntry[] {
+  return [
+    {
+      scope: 'entity',
+      name: 'Campaign',
+      data: {
+        name: 'Campaign',
+        label: 'Campaign',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, label: 'Name', required: true, inList: true, inDetail: true, inEdit: true, audited: true },
+          code: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true, audited: true },
+          description: { type: 'text', inDetail: true, inEdit: true },
+          // Classification (§5.1). `purpose` is the consent-bearing field and is deliberately independent of
+          // `type`, so relabelling a campaign cannot quietly change which consent its recipients need.
+          type: { type: 'enum', values: MA_CAMPAIGN_TYPES, inList: true, inDetail: true, inEdit: true, audited: true },
+          purpose: { type: 'enum', values: MA_CAMPAIGN_PURPOSES, inList: true, inDetail: true, inEdit: true, audited: true },
+          serviceNoticeAcknowledged: { type: 'bool', defaultValue: false, inDetail: true, inEdit: true },
+          status: { type: 'enum', values: MA_CAMPAIGN_STATUSES, defaultValue: 'Draft', inList: true, inDetail: true, inEdit: false, audited: true },
+          // Schedule (§5.1, §6.1).
+          startsAt: { type: 'datetime', inList: true, inDetail: true, inEdit: true, sortable: true, audited: true },
+          endsAt: { type: 'datetime', inDetail: true, inEdit: true, sortable: true, audited: true },
+          timezone: { type: 'varchar', maxLength: 64, label: 'Time zone', inDetail: true, inEdit: true },
+          objective: { type: 'text', inDetail: true, inEdit: true },
+          source: { type: 'varchar', maxLength: 100, inDetail: true, inEdit: true },
+          budgetAmount: { type: 'decimal', inDetail: true, inEdit: true },
+          budgetCurrency: { type: 'varchar', maxLength: 3, inDetail: true, inEdit: true },
+          // Audience references (§5.2): include and exclude, exclusion winning at resolution (MA.4).
+          includeTargetListId: { type: 'link', entityKey: 'TargetList', label: 'Audience', inList: true, inDetail: true, inEdit: true },
+          excludeTargetListId: { type: 'link', entityKey: 'TargetList', label: 'Excluded audience', inDetail: true, inEdit: true },
+          // Content and sender (§5.4, §13). The template stays the platform's `EmailTemplate`; marketing
+          // wraps it with immutable revisions in MA.6 rather than forking the renderer.
+          templateId: { type: 'link', entityKey: 'EmailTemplate', label: 'Email template', inDetail: true, inEdit: true },
+          emailAccountId: { type: 'varchar', maxLength: 64, label: 'Sending account', inDetail: true, inEdit: true },
+          // Tracking (§5.9, §9.3). No default on purpose: leaving a choice unmade must be visible as a
+          // gap in the validation report, not silently read as consent to track.
+          trackingOpen: { type: 'bool', label: 'Track opens', inDetail: true, inEdit: true },
+          trackingClick: { type: 'bool', label: 'Track clicks', inDetail: true, inEdit: true },
+          // Server-owned execution history (§6.1, §8.4). Read-only through the record API: the write guard
+          // refuses a client that sets them, so a status can never be claimed without its command.
+          scheduledAt: { type: 'datetime', inDetail: true, inEdit: false, sortable: true },
+          startedAt: { type: 'datetime', inDetail: true, inEdit: false, sortable: true },
+          pausedAt: { type: 'datetime', inDetail: true, inEdit: false },
+          resumedAt: { type: 'datetime', inDetail: true, inEdit: false },
+          completedAt: { type: 'datetime', inDetail: true, inEdit: false, sortable: true },
+          cancelledAt: { type: 'datetime', inDetail: true, inEdit: false },
+          archivedAt: { type: 'datetime', inDetail: true, inEdit: false, sortable: true },
+          failureReason: { type: 'text', inDetail: true, inEdit: false },
+          duplicatedFromId: { type: 'link', entityKey: 'Campaign', label: 'Duplicated from', inDetail: true, inEdit: false },
+          lastValidatedAt: { type: 'datetime', inDetail: true, inEdit: false, sortable: true },
+          validationHash: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: false },
+          validationReport: { type: 'text', label: 'Validation report (JSON)', inDetail: true, inEdit: false },
+        },
+        relations: {},
+        // Declarative only; the physical indexes are created by
+        // `database/migrations/037_phase19_marketing_automation.sql`, names kept in step. Only indexes a
+        // delivered query actually uses are declared — a campaign list filtered by schedule (MA.8) and an
+        // audience reverse-lookup (MA.4) get theirs when those reads exist, not before.
+        indexes: [
+          { name: 'uq_entity_records_campaign_code', fields: ['code'], unique: true },
+          { name: 'idx_entity_records_campaign_status', fields: ['status', 'modifiedAt'] },
+        ],
+        layouts: {
+          list: [{ entity: 'Campaign', type: 'list', panels: [{ name: 'list', position: 0, fields: ['code', 'name', 'status', 'type', 'purpose', 'startsAt', 'endsAt', 'includeTargetListId', 'assignedUserId', 'modifiedAt'] }] }],
+          detail: [
+            {
+              entity: 'Campaign',
+              type: 'detail',
+              panels: [
+                { name: 'overview', label: 'Overview', position: 0, fields: ['code', 'name', 'description', 'status', 'type', 'purpose', 'serviceNoticeAcknowledged', 'objective', 'source'] },
+                { name: 'schedule', label: 'Schedule', position: 10, fields: ['startsAt', 'endsAt', 'timezone'] },
+                { name: 'audience', label: 'Audience', position: 20, fields: ['includeTargetListId', 'excludeTargetListId'] },
+                { name: 'content', label: 'Content and sender', position: 30, fields: ['templateId', 'emailAccountId', 'trackingOpen', 'trackingClick'] },
+                { name: 'budget', label: 'Budget', position: 40, fields: ['budgetAmount', 'budgetCurrency'] },
+                { name: 'ownership', label: 'Ownership', position: 50, fields: ['assignedUserId', 'teams'] },
+                { name: 'lifecycle', label: 'Lifecycle', position: 60, fields: ['scheduledAt', 'startedAt', 'pausedAt', 'resumedAt', 'completedAt', 'cancelledAt', 'archivedAt', 'failureReason', 'duplicatedFromId'] },
+                { name: 'validation', label: 'Validation', position: 70, fields: ['lastValidatedAt', 'validationHash', 'validationReport'] },
+              ],
+            },
+          ],
+          edit: [
+            {
+              entity: 'Campaign',
+              type: 'edit',
+              panels: [
+                { name: 'main', label: 'Campaign', position: 0, fields: ['name', 'code', 'description', 'type', 'purpose', 'serviceNoticeAcknowledged', 'objective', 'source'] },
+                { name: 'schedule', label: 'Schedule', position: 10, fields: ['startsAt', 'endsAt', 'timezone'] },
+                { name: 'audience', label: 'Audience', position: 20, fields: ['includeTargetListId', 'excludeTargetListId'] },
+                { name: 'content', label: 'Content and sender', position: 30, fields: ['templateId', 'emailAccountId', 'trackingOpen', 'trackingClick'] },
+                { name: 'budget', label: 'Budget', position: 40, fields: ['budgetAmount', 'budgetCurrency'] },
+                { name: 'ownership', label: 'Ownership', position: 50, fields: ['assignedUserId', 'teams'] },
+              ],
+            },
+          ],
+          filter: [
+            { entity: 'Campaign', type: 'filter', panels: [{ name: 'filter', position: 0, fields: ['status', 'type', 'purpose', 'startsAt', 'endsAt', 'includeTargetListId', 'assignedUserId'] }] },
+          ],
+        },
+        record: { displayField: 'name', removable: true, followable: true, streamable: true, audited: true },
+        client: {},
+        acl: {
+          // Least privilege by default (§9.1): a marketer works their own and their team's campaigns, and an
+          // administrator widens it per role. `delete` is `no` for every non-admin because §5.1 retires a
+          // campaign by archiving it — a campaign is evidence of what was sent, not scratch work.
+          permissions: { Campaign: { create: 'yes', read: 'own', edit: 'own', delete: 'no', stream: 'own' } },
+        },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'TargetList',
+      data: {
+        name: 'TargetList',
+        label: 'Target List',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, required: true, inList: true, inDetail: true, inEdit: true, audited: true },
+          code: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true },
+          description: { type: 'text', inDetail: true, inEdit: true },
+          // §5.2: membership is either explicitly curated or resolved from validated criteria.
+          membershipMode: { type: 'enum', values: MA_MEMBERSHIP_MODES, defaultValue: 'static', inList: true, inDetail: true, inEdit: true },
+          // Record types this audience may name (MA.4 restricts to Contact/Lead by default). Stored as a
+          // comma-separated list of entity names, never as a join or a formula.
+          entityTypes: { type: 'varchar', maxLength: 120, defaultValue: 'Contact,Lead', inList: true, inDetail: true, inEdit: true },
+          // Declarative criteria, validated against field/operator allowlists at resolution (MA.4) and never
+          // executed as SQL (AGENTS.md §5.2). Versioned so a stored list can be re-interpreted later.
+          criteriaJson: { type: 'text', label: 'Criteria (JSON)', inDetail: true, inEdit: true },
+          criteriaVersion: { type: 'int', defaultValue: 1, inDetail: true, inEdit: false },
+          status: { type: 'enum', values: MA_TARGET_LIST_STATUSES, defaultValue: 'Active', inList: true, inDetail: true, inEdit: true },
+          refreshPolicy: { type: 'varchar', maxLength: 32, inDetail: true, inEdit: true },
+          // Server-owned resolution bookkeeping (MA.4). `resolvedCount` is a summary number, so an operator
+          // can size a campaign without reading a single recipient (§9.2).
+          resolvedCount: { type: 'int', defaultValue: 0, inList: true, inDetail: true, inEdit: false },
+          refreshStatus: { type: 'varchar', maxLength: 24, inDetail: true, inEdit: false },
+          lastRefreshedAt: { type: 'datetime', inDetail: true, inEdit: false, sortable: true },
+          lastErrorCode: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: false },
+        },
+        relations: {
+          entries: { type: 'oneToMany', target: 'TargetListEntry', mappedBy: 'targetListId' },
+        },
+        indexes: [
+          { name: 'uq_entity_records_target_list_code', fields: ['code'], unique: true },
+          { name: 'idx_entity_records_target_list_status', fields: ['status', 'membershipMode'] },
+        ],
+        layouts: {
+          list: [{ entity: 'TargetList', type: 'list', panels: [{ name: 'list', position: 0, fields: ['code', 'name', 'membershipMode', 'entityTypes', 'status', 'resolvedCount', 'lastRefreshedAt'] }] }],
+          detail: [
+            {
+              entity: 'TargetList',
+              type: 'detail',
+              panels: [
+                { name: 'main', label: 'Audience', position: 0, fields: ['code', 'name', 'description', 'membershipMode', 'entityTypes', 'status'] },
+                { name: 'criteria', label: 'Criteria', position: 10, fields: ['criteriaJson', 'criteriaVersion', 'refreshPolicy'] },
+                { name: 'resolution', label: 'Resolution', position: 20, fields: ['resolvedCount', 'refreshStatus', 'lastRefreshedAt', 'lastErrorCode'] },
+                { name: 'ownership', label: 'Ownership', position: 30, fields: ['assignedUserId', 'teams'] },
+              ],
+            },
+          ],
+          edit: [
+            { entity: 'TargetList', type: 'edit', panels: [{ name: 'main', label: 'Audience', position: 0, fields: ['name', 'code', 'description', 'membershipMode', 'entityTypes', 'status', 'criteriaJson', 'refreshPolicy'] }, { name: 'ownership', label: 'Ownership', position: 10, fields: ['assignedUserId', 'teams'] }] },
+          ],
+        },
+        record: { displayField: 'name', removable: true, followable: false, streamable: false },
+        client: {},
+        acl: { permissions: { TargetList: { create: 'yes', read: 'own', edit: 'own', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'TargetListEntry',
+      data: {
+        name: 'TargetListEntry',
+        label: 'Target List Entry',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, inList: false, inDetail: false, inEdit: false },
+          targetListId: { type: 'link', entityKey: 'TargetList', required: true, inList: true, inDetail: true },
+          // A reference to the canonical CRM record — identity is never copied in here (§1.2 "reuse over
+          // duplication"), and the pair is what the unique index in migration 037 constrains.
+          entityType: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+          entityId: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+          addedById: { type: 'link', entityKey: 'User', inDetail: true },
+          addedAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+          source: { type: 'enum', values: MA_TARGET_LIST_ENTRY_SOURCES, defaultValue: 'Manual', inList: true, inDetail: true },
+          // Removal is recorded, not deleted: §5.2 requires membership changes to be auditable.
+          removedById: { type: 'link', entityKey: 'User', inDetail: true },
+          removedAt: { type: 'datetime', inDetail: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'uq_entity_records_target_list_entry', fields: ['targetListId', 'entityType', 'entityId'], unique: true },
+          { name: 'idx_entity_records_target_list_entry_record', fields: ['entityType', 'entityId'] },
+        ],
+        layouts: {
+          list: [{ entity: 'TargetListEntry', type: 'list', panels: [{ name: 'list', position: 0, fields: ['targetListId', 'entityType', 'entityId', 'source', 'addedAt'] }] }],
+        },
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: { web: false },
+        acl: { permissions: { TargetListEntry: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'CampaignTransition',
+      data: {
+        name: 'CampaignTransition',
+        label: 'Campaign Transition',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, inList: false, inDetail: false, inEdit: false },
+          campaignId: { type: 'link', entityKey: 'Campaign', required: true, inList: true, inDetail: true },
+          campaignCode: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+          fromStatus: { type: 'enum', values: MA_CAMPAIGN_STATUSES, inList: true, inDetail: true },
+          toStatus: { type: 'enum', values: MA_CAMPAIGN_STATUSES, required: true, inList: true, inDetail: true },
+          command: { type: 'varchar', maxLength: 32, required: true, inList: true, inDetail: true },
+          reason: { type: 'text', inDetail: true },
+          actorUserId: { type: 'link', entityKey: 'User', inDetail: true },
+          actorType: { type: 'varchar', maxLength: 16, inDetail: true },
+          // The report the command passed (or was refused by), so a decision can be re-read later (§5.1).
+          validationHash: { type: 'varchar', maxLength: 64, inDetail: true },
+          occurredAt: { type: 'datetime', required: true, inList: true, inDetail: true, sortable: true },
+          idempotencyKey: { type: 'varchar', maxLength: 128, inDetail: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'idx_entity_records_campaign_transition_campaign', fields: ['campaignId', 'occurredAt'] },
+          { name: 'uq_entity_records_campaign_transition_idem', fields: ['idempotencyKey'], unique: true },
+        ],
+        layouts: {
+          list: [{ entity: 'CampaignTransition', type: 'list', panels: [{ name: 'list', position: 0, fields: ['campaignCode', 'fromStatus', 'toStatus', 'command', 'actorUserId', 'occurredAt'] }] }],
+          detail: [{ entity: 'CampaignTransition', type: 'detail', panels: [{ name: 'main', label: 'Transition', position: 0, fields: ['campaignId', 'fromStatus', 'toStatus', 'command', 'reason', 'actorUserId', 'actorType', 'validationHash', 'occurredAt', 'idempotencyKey'] }] }],
+        },
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: { web: false },
+        acl: { permissions: { CampaignTransition: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
   ];
 }

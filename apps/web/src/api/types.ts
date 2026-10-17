@@ -899,6 +899,68 @@ export interface ServiceDeskCapabilities {
   };
 }
 
+/**
+ * Phase 19-MA.3 — Marketing Automation campaign contracts
+ * (PLAN_Phase_19_Marketing_Automation.md §8.2, §8.4). The report shape is the server's, not a client-side
+ * guess: the SPA renders the findings it is given and never re-derives whether a campaign may run.
+ */
+export interface MarketingFinding {
+  code: string;
+  level: 'blocker' | 'warning';
+  message: string;
+  field?: string;
+}
+
+export interface MarketingValidationReport {
+  campaignId: string;
+  status: string;
+  valid: boolean;
+  blockers: MarketingFinding[];
+  warnings: MarketingFinding[];
+  checkedAt: string;
+  validationHash: string;
+}
+
+export interface MarketingCampaignCapabilities {
+  campaignId: string;
+  status: string;
+  mayEdit: boolean;
+  allowedCommands: readonly string[];
+  lastValidatedAt: string | null;
+  validationHash: string | null;
+  report: MarketingValidationReport;
+}
+
+export interface MarketingCampaignTransitionResult {
+  campaignId: string;
+  from: string;
+  to: string;
+  command: string;
+  changed: boolean;
+  idempotent: boolean;
+  transitionId: string | null;
+}
+
+export interface MarketingCampaignTransitionRow {
+  id: string;
+  campaignId: string;
+  fromStatus: string;
+  toStatus: string;
+  command: string;
+  reason: string | null;
+  actorUserId: string | null;
+  actorType: string;
+  validationHash: string | null;
+  idempotencyKey: string | null;
+  occurredAt: string | null;
+}
+
+export interface MarketingNavigationVisibility {
+  visible: boolean;
+  readableEntities: number;
+  entities: readonly string[];
+}
+
 /** SD.6 — the result of posting a public reply or an internal note. */
 export interface ServiceDeskMessageResult {
   caseId: string;

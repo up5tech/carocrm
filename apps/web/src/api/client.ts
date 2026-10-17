@@ -11,6 +11,11 @@ import type {
   LayoutDefinition,
   ListResult,
   LoginResult,
+  MarketingCampaignCapabilities,
+  MarketingCampaignTransitionResult,
+  MarketingCampaignTransitionRow,
+  MarketingNavigationVisibility,
+  MarketingValidationReport,
   Metadata,
   PortalContext,
   PortalDashboardRow,
@@ -892,6 +897,42 @@ export const api = {
     request<ServiceDeskMessageResult>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/reply`, post(input)),
   serviceDeskNote: (caseId: string, input: { text: string; attachmentIds?: string[]; mentionIds?: string[] }) =>
     request<ServiceDeskMessageResult>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/note`, post(input)),
+
+
+  // Phase 19-MA.1/MA.3 — Marketing Automation commands (PLAN_Phase_19_Marketing_Automation.md §8.1–§8.2).
+  // Campaign CRUD stays on the generic `/Campaign` API; these are the module surface and the state machine,
+  // and every command is re-validated server-side. `capabilities` is the answer the panel renders, so the
+  // buttons a user sees are the moves the server will accept for them.
+  marketingNavigation: () => request<MarketingNavigationVisibility>(`/MarketingAutomation/action/nav`),
+  marketingCampaignCapabilities: (campaignId: string) =>
+    request<MarketingCampaignCapabilities>(
+      `/MarketingAutomation/action/campaign/${encodeURIComponent(campaignId)}/capabilities`,
+    ),
+  marketingCampaignHistory: (campaignId: string) =>
+    request<{ list: MarketingCampaignTransitionRow[] }>(
+      `/MarketingAutomation/action/campaign/${encodeURIComponent(campaignId)}/history`,
+    ),
+  marketingCampaignValidate: (campaignId: string, as?: string) =>
+    request<MarketingValidationReport>(
+      `/MarketingAutomation/action/campaign/${encodeURIComponent(campaignId)}/validate${
+        as === undefined ? '' : simpleQuery({ as })
+      }`,
+      post({}),
+    ),
+  marketingCampaignCommand: (
+    campaignId: string,
+    command: 'schedule' | 'unschedule' | 'start' | 'pause' | 'resume' | 'complete' | 'cancel' | 'archive',
+    input: Record<string, unknown> = {},
+  ) =>
+    request<MarketingCampaignTransitionResult>(
+      `/MarketingAutomation/action/campaign/${encodeURIComponent(campaignId)}/${command}`,
+      post(input),
+    ),
+  marketingCampaignDuplicate: (campaignId: string, input: Record<string, unknown> = {}) =>
+    request<Record<string, unknown>>(
+      `/MarketingAutomation/action/campaign/${encodeURIComponent(campaignId)}/duplicateAsDraft`,
+      post(input),
+    ),
 
   // Phase 19-SD.11 — portal-safe Knowledge Base and CSAT entry points.
   serviceDeskKnowledgePortal: () =>

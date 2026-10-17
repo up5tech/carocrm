@@ -21,10 +21,15 @@ own role space and one-hop visibility (Phase 18); projects with Plan/Kanban/Gant
 dependencies and cloning (Phase 19); sales pack with the document engine, pricing, inventory, payments,
 subscriptions and commercial analytics (Phase 19-S); customer success with lifecycle, health scoring,
 plans, risks, playbooks and renewals (Phase 19-CS); service desk with case numbering, state machine,
-assignment/queues/routing, conversation timeline, email-to-case, business calendars and SLA clocks
-(Phase 19-SD); i18n catalogs for `en`/`vi` (Phase 7A).
+assignment/queues/routing, conversation timeline, email-to-case, business calendars, SLA clocks,
+Knowledge Base, portal self-service, CSAT and metrics (Phase 19-SD); marketing automation with campaign
+lifecycle, send-readiness validation, audience records and consent/provider contracts (Phase 19-MA);
+i18n catalogs for `en`/`vi` (Phase 7A).
 Not built yet: real inbound mail collection (`POST /api/v1/Email/action/pollInbound` runs a null
 provider until an IMAP/Graph adapter is installed), API-user attachment policies, multi-tenancy.
+Marketing Automation beyond Phase 19-MA.3 — audience resolution, consent and unsubscribe, sending and
+provider events, journeys, forms — is specified in `PLAN_Phase_19_Marketing_Automation.md` and not built;
+no campaign can send in this build.
 Full checklist, deviations and known failures: [docs/reference/alpha-status.md](docs/reference/alpha-status.md).
 ## Requirements
 

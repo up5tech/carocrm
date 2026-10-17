@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
+import { CampaignLifecycleActions } from '../components/CampaignLifecycleActions.js';
 import { CaseConversation } from '../components/CaseConversation.js';
 import { CaseLifecycleActions } from '../components/CaseLifecycleActions.js';
 import { CaseQueueWorkload } from '../components/CaseQueueWorkload.js';
@@ -291,6 +292,11 @@ export function EntityDetailPage() {
             CaseQueue shows who is available and how loaded they are. The server decides both. */}
         {entity === 'Case' && base !== '/portal' ? <CaseLifecycleActions caseId={id} onChanged={load} /> : null}
         {entity === 'CaseQueue' && base !== '/portal' ? <CaseQueueWorkload queueId={id} /> : null}
+
+        {/* Phase 19-MA.3 — a Campaign carries the server-defined lifecycle and its send-readiness report:
+            the buttons are exactly the commands the server says this actor may run in this status, and the
+            blockers are the server's findings, never a client-side re-derivation (§8.2, AGENTS.md §5.3). */}
+        {entity === 'Campaign' && base !== '/portal' ? <CampaignLifecycleActions campaignId={id} onChanged={load} /> : null}
 
         {panels.map((panel) => (          <Card
             key={panel.name}

@@ -121,6 +121,25 @@ function InternalShell({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Phase 19-MA.1 — the same visibility signal for Marketing Automation. The group is built from the
+  // metadata the browser already has, so without this every user would see campaign links that all answer
+  // 403. Hiding the entry is presentation only; enforcement stays server-side.
+  const [marketingVisible, setMarketingVisible] = useState<boolean | null>(null);
+  useEffect(() => {
+    let active = true;
+    void api
+      .marketingNavigation()
+      .then((value) => {
+        if (active) setMarketingVisible(value.visible);
+      })
+      .catch(() => {
+        if (active) setMarketingVisible(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // The menu labels are translated at build time, so the memo has to be keyed on the locale —
   // otherwise switching language would repaint the page but leave the sidebar in the old one.
   const locale = activeLocaleName();
@@ -155,8 +174,19 @@ function InternalShell({ children }: { children: ReactNode }) {
         .filter((entity): entity is EntityDefinition => entity !== undefined),
     })).filter((group) => group.entities.length > 0);
     const salesNames = new Set(salesGroups.flatMap((group) => group.entities.map((entity) => entity.name)));
+    // Phase 19-MA.1 — Marketing gets one submenu of its own, the way Project does. Membership is resolved
+    // from the navigable metadata by name, so an entity renamed or hidden by metadata leaves the group
+    // instead of leaving a dead link; the module's evidence rows (TargetListEntry, CampaignTransition) are
+    // not navigable at all, so they never appear here.
+    const marketingEntities = MARKETING_NAV_NAMES
+      .map((name) => navList.find((entity) => entity.name === name))
+      .filter((entity): entity is EntityDefinition => entity !== undefined);
+    const marketingNames = new Set(marketingEntities.map((entity) => entity.name));
     const records: MenuItems = navList
-      .filter((entity) => !entity.name.startsWith('Project') && !salesNames.has(entity.name))
+      .filter(
+        (entity) =>
+          !entity.name.startsWith('Project') && !salesNames.has(entity.name) && !marketingNames.has(entity.name),
+      )
       .map((entity) => recordItem(entity));
     if (projectEntities.length > 0) {
       const project = projectEntities.find((entity) => entity.name === 'Project');
@@ -177,6 +207,14 @@ function InternalShell({ children }: { children: ReactNode }) {
           label: t(`sales.nav.${group.key}`),
           children: group.entities.map((entity) => recordItem(entity)),
         })),
+      });
+    }
+    if (marketingEntities.length > 0 && marketingVisible !== false) {
+      records.push({
+        key: 'sub-marketing',
+        icon: <NotificationOutlined />,
+        label: t('marketing.nav.marketing'),
+        children: marketingEntities.map((entity) => recordItem(entity)),
       });
     }
     if (records.length > 0) groups.push({ type: 'group', key: 'grp-records', label: t('core.app.records'), children: records });
@@ -423,6 +461,12 @@ function PortalShell({ children }: { children: ReactNode }) {
 
 /** The Sales submenu layout (19-S.17). Names are the metadata entity names; a name the installation
  *  does not navigate to is skipped, so the menu never offers a record the user cannot open. */
+/**
+ * Phase 19-MA.1 — the entities the Marketing submenu names. These are navigable records only; a campaign's
+ * membership and history rows are read through the campaign itself (§9.2).
+ */
+const MARKETING_NAV_NAMES = ['Campaign', 'TargetList'] as const;
+
 const SALES_NAV_GROUPS: readonly { key: string; entityNames: readonly string[] }[] = [
   { key: 'sales', entityNames: ['Quote', 'SalesOrder', 'Invoice', 'CreditNote', 'DeliveryOrder', 'ReturnOrder'] },
   { key: 'catalog', entityNames: ['Product', 'ProductCategory', 'PriceBook', 'PriceBookEntry', 'PriceRule', 'TaxClass', 'TaxCode', 'TaxRate', 'TaxRule'] },

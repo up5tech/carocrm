@@ -1,0 +1,391 @@
+import { NotFoundError } from "@carocrm/core/errors/index.js";
+import { Inject, Injectable } from "@nestjs/common";
+
+import { EntityCrudService } from "../entity/entity.service.js";
+import {
+  blocker,
+  CAMPAIGN_ENTITY,
+  type CampaignFinding,
+  type CampaignStatus,
+  type CampaignValidationReport,
+  checkCampaignSendable,
+  fingerprint,
+  isCampaignPurpose,
+  isCampaignStatus,
+  isCampaignType,
+  isSupportedTimeZone,
+  purposeTypeMismatch,
+  SENDING_CAMPAIGN_TYPES,
+  serviceNoticeNeedsAcknowledgement,
+  warning,
+} from "./marketing-automation-domain.js";
+import { MarketingProviderRegistry } from "./marketing-automation-provider.js";
+import { MarketingAutomationRecords } from "./marketing-automation-records.js";
+import { MarketingAutomationSettingsService } from "./marketing-automation-settings.service.js";
+
+/**
+ * Phase 19-MA.3 — campaign send-readiness validation
+ * (PLAN_Phase_19_Marketing_Automation.md §5.1, §8.4, §9.3, §15 `19-MA.3`).
+ *
+ * §5.1 is the requirement: *"Prevent a campaign from becoming Scheduled/Running unless audience resolution,
+ * consent policy, template, sender/provider, tracking settings and required content validation pass."* This
+ * service is the single answer to that question, and the lifecycle commands call it instead of trusting the
+ * stored report — a report an operator pressed an hour ago is not evidence about the campaign as it is now.
+ *
+ * Two design decisions carry weight:
+ *
+ *  1. **The gates are per target state.** `schedule` demands that the campaign be *configured* correctly;
+ *     `start` additionally demands that the platform be able to *execute* it. That distinction is what lets
+ *     MA.3 ship a real lifecycle while §4.1 of the audit records consent (MA.5), audience resolution (MA.4)
+ *     and a live provider (MA.7) as prerequisites of an actual send. A blocker here never says "no": it names
+ *     the sub-phase that will clear it, so the refusal is honest and self-documenting.
+ *  2. **Only a campaign that could send is held to the sending rules.** `Other` is a documented non-email
+ *     campaign family (§2.1): an event or a programme has a lifecycle without a message, so refusing to
+ *     "start" it would be an invention. Its schedule and classification are still validated.
+ *
+ * Nothing here reads a recipient, resolves an audience, or touches the network. Reads of the linked audience
+ * and content go through `EntityCrudService`, so **the actor's own record ACL decides** whether an audience
+ * or template is usable — §9.2's requirement that a campaign author cannot lean on a record they may not read.
+ */
+
+@Injectable()
+export class MarketingCampaignValidationService {
+  constructor(
+    @Inject(MarketingAutomationRecords) private readonly records: MarketingAutomationRecords,
+    @Inject(MarketingAutomationSettingsService) private readonly settings: MarketingAutomationSettingsService,
+    @Inject(MarketingProviderRegistry) private readonly providers: MarketingProviderRegistry,
+    @Inject(EntityCrudService) private readonly entities: EntityCrudService,
+  ) {}
+
+  async report(
+    campaignId: string,
+    options: { readonly as?: CampaignStatus | undefined } = {},
+  ): Promise<CampaignValidationReport> {
+    const row = await this.records.byId(CAMPAIGN_ENTITY, campaignId);
+    if (row === undefined) throw new NotFoundError(`Campaign "${campaignId}" does not exist.`);
+    return this.build(campaignId, row.data, options);
+  }
+
+  /**
+   * Build the report for a stored campaign body. Exposed separately from `report()` so the lifecycle service
+   * can validate the row it already loaded inside its transaction, without a second read of the same record.
+   */
+  async build(
+    campaignId: string,
+    data: Record<string, unknown>,
+    options: { readonly as?: CampaignStatus | undefined } = {},
+  ): Promise<CampaignValidationReport> {
+    const settings = await this.settings.settings();
+    const status = isCampaignStatus(data["status"]) ? data["status"] : "Draft";
+    // `as` is the state the operator is asking about; a bare `validate` answers for the next move up.
+    const target = options.as ?? nextConfiguredStatus(status);
+    const demandsSending = target !== null && requiresExecution(target, data);
+
+    const blockers: CampaignFinding[] = [];
+    const warnings: CampaignFinding[] = [];
+
+    this.checkClassification(data, blockers, warnings);
+    this.checkSchedule(data, blockers);
+    this.checkBudget(data, blockers);
+    await this.checkAudience(data, blockers);
+    await this.checkContent(data, blockers);
+    await this.checkSender(data, settings.sender.defaultEmailAccountId, blockers, warnings);
+    this.checkTracking(data, warnings);
+
+    if (demandsSending) {
+      // Campaign-level execution gates (§5.1, §13). Each names the sub-phase that will clear it, so a
+      // refusal in MA.3 is a roadmap, not a mystery.
+      if (isSendingType(data["type"])) {
+        blockers.push(
+          blocker(
+            "AUDIENCE_ENGINE_PENDING",
+            "Audience resolution is delivered in phase 19-MA.4, so no recipient list can be built yet. The campaign can be Scheduled, but not Run.",
+            "includeTargetListId",
+          ),
+          blocker(
+            "CONSENT_NOT_CONFIGURED",
+            "The consent and suppression gate (§5.3) is delivered in phase 19-MA.5. §0.1 rule 8 makes it non-bypassable, so a send cannot begin before it exists.",
+            "purpose",
+          ),
+        );
+        const adapter = this.providers.resolve();
+        if (adapter.info.mode !== "live") {
+          blockers.push(
+            blocker(
+              "PROVIDER_NOT_BOUND",
+              `No live marketing provider is bound ("${adapter.info.key}" is ${adapter.info.mode}); phase 19-MA.7 attaches one.`,
+            ),
+          );
+        }
+        const sendable = checkCampaignSendable({
+          status: target,
+          globalSendPaused: settings.safety.globalSendPaused,
+        });
+        if (!sendable.sendable && sendable.code === "GLOBAL_SEND_PAUSED") {
+          blockers.push(blocker("GLOBAL_SEND_PAUSED", sendable.message));
+        }
+      }
+    }
+
+    return {
+      campaignId,
+      status,
+      valid: blockers.length === 0,
+      blockers,
+      warnings,
+      checkedAt: new Date().toISOString(),
+      validationHash: this.hash(data),
+    };
+  }
+
+  /**
+   * The facts a schedule/consent decision was made on (§5.5: a material change invalidates a prior
+   * approval). Classification, audience, content, sender, policy and timing — and deliberately **not** the
+   * name, description or budget, which an editor can fix without changing what would be sent.
+   */
+  hash(data: Record<string, unknown>): string {
+    return fingerprint({
+      type: text(data["type"]) ?? "",
+      purpose: text(data["purpose"]) ?? "",
+      serviceNoticeAcknowledged: data["serviceNoticeAcknowledged"] === true,
+      timezone: text(data["timezone"]) ?? "",
+      startsAt: text(data["startsAt"]) ?? "",
+      endsAt: text(data["endsAt"]) ?? "",
+      includeTargetListId: text(data["includeTargetListId"]) ?? "",
+      excludeTargetListId: text(data["excludeTargetListId"]) ?? "",
+      templateId: text(data["templateId"]) ?? "",
+      emailAccountId: text(data["emailAccountId"]) ?? "",
+      trackingOpen: data["trackingOpen"] ?? null,
+      trackingClick: data["trackingClick"] ?? null,
+    });
+  }
+
+  private checkClassification(
+    data: Record<string, unknown>,
+    blockers: CampaignFinding[],
+    warnings: CampaignFinding[],
+  ): void {
+    if ((text(data["name"]) ?? "") === "") {
+      blockers.push(blocker("NAME_REQUIRED", "A campaign needs a name.", "name"));
+    }
+    const type = isCampaignType(data["type"]) ? data["type"] : undefined;
+    if (type === undefined) {
+      blockers.push(
+        blocker("TYPE_REQUIRED", "A campaign needs a type; the type decides whether it may ever send.", "type"),
+      );
+    }
+    const purpose = isCampaignPurpose(data["purpose"]) ? data["purpose"] : undefined;
+    if (purpose === undefined) {
+      blockers.push(
+        blocker(
+          "PURPOSE_REQUIRED",
+          "A campaign needs a communication purpose, because consent is gated by purpose and not by content wording (§5.3).",
+          "purpose",
+        ),
+      );
+    }
+    if (type !== undefined && purpose !== undefined) {
+      const mismatch = purposeTypeMismatch(type, purpose);
+      if (mismatch !== undefined) blockers.push(blocker("PURPOSE_TYPE_MISMATCH", mismatch, "purpose"));
+      // §5.1: the informational label must not be a consent loophole. A mismatch between the two independent
+      // fields is surfaced instead of one silently overriding the other.
+      if (purpose !== "ServiceNotice" && type === "Informational") {
+        warnings.push(
+          warning(
+            "PURPOSE_TYPE_MISMATCH",
+            `This campaign is classified as Informational but carries the ${purpose} purpose, so marketing consent still applies to every recipient (§5.1).`,
+            "type",
+          ),
+        );
+      }
+    }
+    if (purpose !== undefined && serviceNoticeNeedsAcknowledgement(purpose)) {
+      if (data["serviceNoticeAcknowledged"] !== true) {
+        blockers.push(
+          blocker(
+            "SERVICE_NOTICE_UNACKNOWLEDGED",
+            "Claiming the ServiceNotice purpose exempts this campaign from marketing consent, so it must be acknowledged deliberately and is attributed to whoever acknowledged it (§5.1, §9.3).",
+            "serviceNoticeAcknowledged",
+          ),
+        );
+      }
+    }
+  }
+
+  private checkSchedule(data: Record<string, unknown>, blockers: CampaignFinding[]): void {
+    const timezone = text(data["timezone"]);
+    // An empty timezone is not a blocker: the deployment default (§13 `defaults.timezone`) is applied when
+    // the campaign is scheduled, and §5.1 lists timezone as a field, not a mandatory choice.
+    if (timezone !== undefined && !isSupportedTimeZone(timezone)) {
+      blockers.push(
+        blocker("TIMEZONE_INVALID", `"${timezone}" is not a time zone this runtime understands.`, "timezone"),
+      );
+    }
+    const startsAt = parseDate(data["startsAt"]);
+    const endsAt = parseDate(data["endsAt"]);
+    if (startsAt !== undefined && endsAt !== undefined && endsAt.getTime() <= startsAt.getTime()) {
+      blockers.push(
+        blocker("SCHEDULE_ORDER", "A campaign must end after it starts; an inverted window would schedule messages that can never run.", "endsAt"),
+      );
+    }
+  }
+
+  private checkBudget(data: Record<string, unknown>, blockers: CampaignFinding[]): void {
+    const amount = data["budgetAmount"];
+    if (amount === undefined || amount === null) return;
+    const value = typeof amount === "number" ? amount : Number(amount);
+    if (!Number.isFinite(value) || value < 0) {
+      blockers.push(blocker("BUDGET_INVALID", "A campaign budget, when set, must be a non-negative number.", "budgetAmount"));
+    }
+  }
+
+  private async checkAudience(
+    data: Record<string, unknown>,
+    blockers: CampaignFinding[],
+  ): Promise<void> {
+    if (!isSendingType(data["type"])) return;
+    const includeId = text(data["includeTargetListId"]);
+    if (includeId === undefined) {
+      blockers.push(
+        blocker("AUDIENCE_REQUIRED", "A sending campaign needs an audience: no target list means no recipient to evaluate.", "includeTargetListId"),
+      );
+      return;
+    }
+    const error = await this.readable("TargetList", includeId);
+    if (error !== undefined) {
+      blockers.push(
+        blocker("AUDIENCE_NOT_READABLE", `The audience target list cannot be used by this user: ${error}`, "includeTargetListId"),
+      );
+    }
+    const excludeId = text(data["excludeTargetListId"]);
+    if (excludeId !== undefined && excludeId === includeId) {
+      blockers.push(
+        blocker("AUDIENCE_NOT_READABLE", "The excluded audience is the same list as the included one, which would resolve to nobody.", "excludeTargetListId"),
+      );
+    }
+  }
+
+  private async checkContent(
+    data: Record<string, unknown>,
+    blockers: CampaignFinding[],
+  ): Promise<void> {
+    if (!isSendingType(data["type"])) return;
+    const templateId = text(data["templateId"]);
+    if (templateId === undefined) {
+      blockers.push(
+        blocker("CONTENT_REQUIRED", "A sending campaign needs message content: link an email template (MA.6 adds revisions and preview).", "templateId"),
+      );
+      return;
+    }
+    const error = await this.readable("EmailTemplate", templateId);
+    if (error !== undefined) {
+      blockers.push(blocker("CONTENT_NOT_READABLE", `The linked template cannot be used by this user: ${error}`, "templateId"));
+    }
+  }
+
+  private async checkSender(
+    data: Record<string, unknown>,
+    defaultAccountId: string | null,
+    blockers: CampaignFinding[],
+    warnings: CampaignFinding[],
+  ): Promise<void> {
+    if (!isSendingType(data["type"])) return;
+    const accountId = text(data["emailAccountId"]);
+    if (accountId === undefined) {
+      if (defaultAccountId === null) {
+        blockers.push(
+          blocker(
+            "SENDER_REQUIRED",
+            "No sending account is set on the campaign and the deployment has no default, so there is no address this could come from (§13).",
+            "emailAccountId",
+          ),
+        );
+        return;
+      }
+      warnings.push(
+        warning(
+          "SENDER_REQUIRED",
+          "The campaign inherits the deployment's default sending account. Name it explicitly before a large send (§13: an author must not exceed global policy by accident).",
+          "emailAccountId",
+        ),
+      );
+      return;
+    }
+    if (!(await this.records.emailAccountExists(accountId))) {
+      blockers.push(
+        blocker("SENDER_UNKNOWN", `The sending account "${accountId}" does not exist or was removed.`, "emailAccountId"),
+      );
+    }
+  }
+
+  private checkTracking(data: Record<string, unknown>, warnings: CampaignFinding[]): void {
+    if (!isSendingType(data["type"])) return;
+    if (data["trackingOpen"] === undefined || data["trackingClick"] === undefined) {
+      warnings.push(
+        warning(
+          "TRACKING_NOT_CONFIGURED",
+          "Open and click tracking have not been chosen for this campaign. §9.3: tracking is not permitted in every deployment, so leaving it unset is not consent to track.",
+          "trackingOpen",
+        ),
+      );
+    }
+    if (data["trackingOpen"] === true || data["trackingClick"] === true) {
+      warnings.push(
+        warning(
+          "TRACKING_DISCLOSURE",
+          "This campaign tracks engagement. Open tracking is not reliable (privacy proxies) and a notice may be required; MA.6 renders the disclosure and preference link into the content.",
+        ),
+      );
+    }
+  }
+
+  /** Can this actor read the linked record? The engine's own ACL answers; nothing is inferred. */
+  private async readable(entity: string, id: string): Promise<string | undefined> {
+    try {
+      await this.entities.get(entity, id);
+      return undefined;
+    } catch (error) {
+      if (error instanceof NotFoundError) return `no ${entity} "${id}" exists.`;
+      // Anything else is an access refusal: the engine never says *why*, so a report cannot leak a record
+      // the caller may not read (§9.2).
+      return "it is not readable by this user.";
+    }
+  }
+}
+
+/** Types that would put a message on the wire, and therefore carry the sending obligations (§5.1). */
+function isSendingType(value: unknown): boolean {
+  return isCampaignType(value) && SENDING_CAMPAIGN_TYPES.includes(value);
+}
+
+/**
+ * Does reaching this target state require the platform to *execute* anything?
+ * Only a sending campaign crossing into the live band does; a non-email campaign's `Running` is a
+ * programme being underway, and scheduling/validating any campaign is a configuration question.
+ */
+function requiresExecution(target: CampaignStatus, data: Record<string, unknown>): boolean {
+  if (target === "Draft" || target === "Archived") return false;
+  if (target === "Scheduled") return false;
+  return isSendingType(data["type"]);
+}
+
+/** The move an operator is most likely asking about, from the current state. */
+function nextConfiguredStatus(status: CampaignStatus): CampaignStatus | null {
+  if (status === "Draft") return "Scheduled";
+  if (status === "Scheduled") return "Running";
+  if (status === "Paused") return "Running";
+  return null;
+}
+
+function text(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+}
+
+function parseDate(value: unknown): Date | undefined {
+  if (value instanceof Date) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date;
+  }
+  return undefined;
+}

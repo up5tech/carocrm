@@ -42,6 +42,7 @@ import { JOB_CONTROLLERS, JOB_PROVIDERS } from './jobs/index.js';
 import { JobsService } from './jobs/jobs.service.js';
 import { FormulaService } from './logic/formula.service.js';
 import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
+import { MARKETING_AUTOMATION_CONTROLLERS, MARKETING_AUTOMATION_PROVIDERS } from './marketing-automation/index.js';
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
 import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.service.js';
 import { PORTAL_CONTROLLERS, PORTAL_PROVIDERS } from './portal/index.js';
@@ -104,6 +105,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 19-SD: `/api/v1/ServiceDesk/action/...` module commands (diagnostics, settings,
     // numbering). Case CRUD stays on the generic `:entity` API.
     ...SERVICE_DESK_CONTROLLERS,
+    // Phase 19-MA: `/api/v1/MarketingAutomation/action/...` module and campaign lifecycle commands.
+    // Case/record CRUD stays on the generic `:entity` API.
+    ...MARKETING_AUTOMATION_CONTROLLERS,
     // `/api/v1/DocumentTemplate` and `/api/v1/document/action/preview` are static prefixes too.
     ...DOCUMENT_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
@@ -136,6 +140,7 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...SALES_PROVIDERS,
     ...CUSTOMER_SUCCESS_PROVIDERS,
     ...SERVICE_DESK_PROVIDERS,
+    ...MARKETING_AUTOMATION_PROVIDERS,
     ...DOCUMENT_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,

@@ -1,0 +1,84 @@
+{
+  "module": {
+    "label": "Marketing Automation",
+    "description": "Chiến dịch, tệp khách hàng, sự đồng ý và hành trình nối hoạt động marketing với kết quả CRM."
+  },
+  "nav": {
+    "marketing": "Marketing",
+    "campaigns": "Chiến dịch",
+    "audience": "Tệp khách hàng"
+  },
+  "command": {
+    "schedule": "Lịch trình",
+    "unschedule": "Bỏ lịch trình",
+    "start": "Bắt đầu",
+    "pause": "Tạm dừng",
+    "resume": "Tiếp tục",
+    "complete": "Hoàn tất",
+    "cancel": "Hủy",
+    "archive": "Lưu trữ"
+  },
+  "status": {
+    "Draft": "Nháp",
+    "Scheduled": "Đã lên lịch",
+    "Running": "Đang chạy",
+    "Paused": "Tạm dừng",
+    "Completed": "Hoàn thành",
+    "Failed": "Thất bại",
+    "Archived": "Đã lưu trữ"
+  },
+  "type": {
+    "Email": "Email",
+    "Newsletter": "Bản tin",
+    "Informational": "Thông tin",
+    "Other": "Không gửi tin"
+  },
+  "purpose": {
+    "Newsletter": "Bản tin",
+    "ProductMarketing": "Tiếp thị sản phẩm",
+    "EventUpdate": "Thông báo sự kiện",
+    "ServiceNotice": "Thông báo bắt buộc về dịch vụ"
+  },
+  "entities": {
+    "campaign": {
+      "label": "Chiến dịch",
+      "fields": {
+        "code": "Mã",
+        "name": "Tên",
+        "type": "Loại",
+        "purpose": "Mục đích",
+        "status": "Trạng thái",
+        "startsAt": "Bắt đầu",
+        "endsAt": "Kết thúc",
+        "timezone": "Múi giờ",
+        "objective": "Mục tiêu",
+        "source": "Nguồn",
+        "budgetAmount": "Ngân sách",
+        "budgetCurrency": "Tiền tệ",
+        "includeTargetListId": "Tệp khách hàng",
+        "excludeTargetListId": "Tệp loại trừ",
+        "templateId": "Mẫu nội dung",
+        "emailAccountId": "Tài khoản gửi",
+        "trackingOpen": "Theo dõi lượt mở",
+        "trackingClick": "Theo dõi lượt nhấp",
+        "serviceNoticeAcknowledged": "Xác nhận thông báo dịch vụ",
+        "validationReport": "Báo cáo kiểm tra",
+        "validationHash": "Dấu kiểm tra",
+        "lastValidatedAt": "Kiểm tra lần cuối"
+      }
+    },
+    "targetList": {
+      "label": "Tệp khách hàng",
+      "fields": {
+        "code": "Mã",
+        "name": "Tên",
+        "membershipMode": "Kiểu thành viên",
+        "entityTypes": "Loại bản ghi",
+        "criteriaJson": "Điều kiện",
+        "status": "Trạng thái",
+        "resolvedCount": "Số bản ghi",
+        "lastRefreshedAt": "Làm mới lần cuối"
+      }
+    }
+  }
+}
