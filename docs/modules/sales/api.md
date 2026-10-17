@@ -312,6 +312,56 @@ document is never made official for an attachment that did not materialise.
 | `403` | no mail transport (`FEATURE_DISABLED`); no `create`/`edit` on `Email`; no `read` on the document; the kind's feature is off (purchasing kinds and `purchases`) |
 | `422` | the kind is `quote`; the document is in a state that is neither its draft state nor its issued state; a stock-moving draft; no recipient; `attachPdf` without `pdfkit` |
 
+## `POST /api/v1/Sales/document/fromOpportunity`
+
+Raises a draft from a CRM **Opportunity** (19-S.7, §4.5 – §4.7). Body:
+
+```json
+{ "opportunityId": "…", "kind": "quote",
+  "items": [{ "name": "Consulting", "quantity": "1", "unitPrice": "100.00", "taxRatePercent": "0" }],
+  "overrides": { "quoteDate": "2026-10-15" },
+  "correlationId": "deal-4711-quote" }
+```
+
+`kind` is `quote`, `salesOrder` or `invoice`; anything else is refused with the supported list. What the
+command writes, and what the caller may not:
+
+* **The party travels.** `accountId` and the first of the deal's `contactIds` become the draft's party,
+  the deal's `name` becomes the draft's working title, the document date defaults to today and the
+  currency to `settings.currency.defaultCurrency`.
+* **The provenance travels both ways.** `opportunityId` (on the kinds whose entity has that link —
+  `Quote`, `SalesOrder`) for the deal's own relationship panel, and `sourceEntity`/`sourceId` on every
+  kind, including `invoice`, whose entity has no opportunity link. `overrides` may refine header
+  fields; the three provenance fields are rewritten from the request's own `opportunityId` after the
+  merge, so a crafted body cannot point a draft at another deal.
+* **The lines are the caller's.** An Opportunity carries an amount, not priced lines, so no line is
+  invented from it — the deal's amount never becomes a document total (§4.3 rule 4).
+* **Idempotent on `correlationId`**: a retry returns the draft it already created.
+* **No double billing.** A deal may be quoted again; a second `salesOrder`/`invoice` for the same deal
+  is refused, and so is an `invoice` for a deal that already has an order. The deal's quotes are
+  checked too, because quote → order leaves the order pointing at the *quote*, not at the deal.
+
+| Status | When |
+|---|---|
+| `403` | the caller cannot read the Opportunity (record-level access applies), or cannot `create` the target entity |
+| `404` | the Opportunity does not exist |
+| `422` | the kind cannot be raised from a deal; the deal already produced that kind, or already became an order; the lines are missing or invalid (the engine's own rules) |
+
+## The document view's `actions` and `conversions` (19-S.17)
+
+`GET …/document/:kind/:id` and every command that returns a document answer two more arrays beside
+`availableTransitions`/`availableConversions`:
+
+```json
+"actions": [{ "action": "void", "label": "Void", "requiresReason": true, "issues": false, "to": "voided" }],
+"conversions": [{ "action": "convertToCreditNote", "label": "Create credit note", "toKind": "creditNote" }]
+```
+
+They are the descriptor's own labels and flags, filtered by the document's current state. `issues`
+marks the transition that allocates the number and freezes the snapshot, and `requiresReason` marks a
+command the server refuses without an audited reason — a screen asks for that reason **before** the
+request instead of surfacing a `422` afterwards.
+
 ## The conversion snapshot on a command (19-S.18)
 
 `POST /api/v1/Sales/document`, `PATCH /api/v1/Sales/document/:kind/:id`, `POST /api/v1/Sales/payment`

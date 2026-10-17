@@ -146,6 +146,7 @@ Commands (all under the module's own prefix):
 
 ```text
 POST   /api/v1/Sales/document                      create a draft with typed line items
+POST   /api/v1/Sales/document/fromOpportunity      raise a draft from a CRM Opportunity
 GET    /api/v1/Sales/document/:kind/:id            document + items + totals + allowed actions
 PATCH  /api/v1/Sales/document/:kind/:id            update a draft (header and/or lines)
 POST   /api/v1/Sales/document/:kind/:id/transition named transition (issue, confirm, send, void, …)
@@ -158,6 +159,22 @@ DELETE /api/v1/Sales/document/:kind/:id            delete a **draft** only
 
 `kind` is one of `quote`, `salesOrder`, `invoice`, `creditNote`, `deliveryOrder`, `returnOrder`,
 `purchaseOrder`, `receiptOrder`, `bill`, `billCredit`.
+
+`GET …/document/:kind/:id` answers the document, its lines, its totals **and what may happen next**:
+`availableTransitions`/`availableConversions` (the action names, for a script) and
+`actions`/`conversions` (the same commands described — label, whether the command issues, whether it
+requires an audited reason, the destination state or kind). The descriptions come from the descriptor,
+so a screen renders the state machine instead of re-implementing it; the Sales detail panel does
+exactly that (`apps/web/src/components/SalesDocumentActions.tsx`), which is what put `issue`, `void`,
+`confirm`, `cancel`, `markDelivered`, `accept`/`reject`/`expire`, every conversion and the privileged
+unlock in the UI rather than only in the API.
+
+`POST …/document/fromOpportunity` raises a draft from a CRM **Opportunity** (§4.5 – §4.7) — the deal
+is read through the Entity Engine under the caller's own access, the party and the provenance travel
+with the draft, and the double-billing guards apply: a deal may be quoted repeatedly (an offer is not
+a commitment), a second order or invoice for it is refused, and so is invoicing a deal that already
+became an order — including an order that came from one of the deal's quotes. The lines are the
+caller's, because an Opportunity carries an amount rather than priced lines.
 
 **Implemented:** the engine, the ten descriptors, the document + item metadata
 (`database/seed-metadata.ts`), migrations `023_phase19_sales_documents.sql`,

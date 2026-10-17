@@ -44,6 +44,7 @@ import {
   BulkPriceUpdateSchema,
   CreateAdjustmentSchema,
   CreateDocumentSchema,
+  CreateFromOpportunitySchema,
   CreatePaymentRequestSchema,
   CreatePaymentSchema,
   CreateTransferSchema,
@@ -334,6 +335,28 @@ export class SalesController {
         this.audit(input.correlationId),
         input.overrides ?? {},
       ),
+    );
+  }
+
+  /**
+   * Raise a draft from a CRM Opportunity (19-S.7, §4.5 – §4.7).
+   *
+   * The deal is CRM Core's, so it is read through the Entity Engine under the caller's own record
+   * access; the command writes only the commercial hand-off — party, provenance, and the double-
+   * billing guards. Registered before the `document/:kind/:id/…` routes because it is a static path.
+   */
+  @HttpCode(201)
+  @Post("document/fromOpportunity")
+  async createDocumentFromOpportunity(@Body() body: unknown) {
+    const input = parse(CreateFromOpportunitySchema, body);
+    return await runAsSalesInternal(() =>
+      this.documents.createFromOpportunity({
+        opportunityId: input.opportunityId,
+        kind: input.kind,
+        items: input.items,
+        overrides: input.overrides ?? {},
+        audit: this.audit(input.correlationId),
+      }),
     );
   }
 

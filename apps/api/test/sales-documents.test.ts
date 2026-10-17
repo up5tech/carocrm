@@ -43,6 +43,8 @@ interface DocumentView {
   fromSnapshot: boolean;
   availableTransitions: string[];
   availableConversions: string[];
+  actions: { action: string; label: string; requiresReason: boolean; issues: boolean; to: string }[];
+  conversions: { action: string; label: string; toKind: string }[];
 }
 
 const LINE_TAX_FREE = { taxRatePercent: '0' };
@@ -157,6 +159,35 @@ describe('creating a document (19-S.6)', () => {
     expect(quote.fromSnapshot).toBe(false);
     expect(quote.availableTransitions).toContain('send');
     expect(quote.availableConversions).toEqual([]);
+    // The same actions, described for a screen: the label comes from the descriptor, and the flag
+    // that says "this one issues" is what a UI needs to confirm before the click (19-S.17 task 8).
+    expect(quote.actions).toEqual([
+      { action: 'send', label: 'Send', requiresReason: false, issues: true, to: 'sent' },
+      { action: 'cancel', label: 'Cancel', requiresReason: true, issues: false, to: 'cancelled' },
+    ]);
+    expect(quote.conversions).toEqual([]);
+  });
+
+  it('describes an issued invoice’s corrections as commands that need a reason', async () => {
+    const invoice = await createDocument(
+      'invoice',
+      { currency: 'USD', invoiceDate: '2026-10-15' },
+      [{ name: 'line', quantity: '1', unitPrice: '100.00', ...LINE_TAX_FREE }],
+    );
+    expect(invoice.actions.map((action) => action.action)).toEqual(['issue']);
+    expect(invoice.actions[0]?.issues).toBe(true);
+
+    const issued = await transition('invoice', invoice.id, 'issue');
+    expect(issued.status, JSON.stringify(issued.body)).toBe(200);
+    const view = issued.body as unknown as DocumentView;
+    // Void and credit are the only ways out of `issued`, and both are described as such — a UI that
+    // offered "edit" here would be offering something the server refuses (§4.7, §4.9).
+    expect(view.actions).toEqual([
+      { action: 'void', label: 'Void', requiresReason: true, issues: false, to: 'voided' },
+    ]);
+    expect(view.conversions).toEqual([
+      { action: 'convertToCreditNote', label: 'Create credit note', toKind: 'creditNote' },
+    ]);
   });
 
   it('refuses a client-supplied total instead of trusting it', async () => {

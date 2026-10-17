@@ -146,7 +146,31 @@ export interface SalesDocumentDescriptor {
    * the conversion refuses it; what bounds these is the remaining-quantity guard, not the count.
    */
   readonly multipleFromSource?: boolean;
+  /**
+   * The field that links this kind back to the CRM **Opportunity** it was raised from (19-S.7,
+   * §4.5 "create quotes … from an Opportunity").
+   *
+   * Only the kinds whose entity carries that link declare it. A document that has no such field still
+   * records its provenance in `sourceEntity`/`sourceId` — the same two columns every generated
+   * document uses — but the Opportunity's own relationship panel can only list the kinds that point
+   * back at it, which is why an invoice raised from a deal is documented as visible from the invoice
+   * and not from the deal.
+   */
+  readonly opportunityField?: string;
 }
+
+/**
+ * The kinds an Opportunity may be turned into a draft of (§4.5 quotes, §4.6 sales orders, §4.7
+ * invoices). Purchase-side kinds are absent: a supplier is not a deal.
+ */
+export const OPPORTUNITY_SOURCE_KINDS: readonly ImplementedDocumentKind[] = [
+  "quote",
+  "salesOrder",
+  "invoice",
+];
+
+/** The CRM Core entity an Opportunity-sourced document records as its source. */
+export const OPPORTUNITY_ENTITY = "Opportunity";
 
 /** Fields every commercial document copies from its source; each descriptor may extend it. */
 const PARTY_FIELDS: readonly string[] = [
@@ -244,6 +268,7 @@ const QUOTE: SalesDocumentDescriptor = {
   minItems: 1,
   maxItems: MAX_ITEMS,
   dateField: "quoteDate",
+  opportunityField: "opportunityId",
 };
 
 /** Sales order — §4.6. Confirmation issues the order and freezes what was promised. */
@@ -310,6 +335,7 @@ const SALES_ORDER: SalesDocumentDescriptor = {
   minItems: 1,
   maxItems: MAX_ITEMS,
   dateField: "orderDate",
+  opportunityField: "opportunityId",
 };
 
 /**

@@ -14,7 +14,7 @@ import {
 import { DatabaseService } from "../../database/database.service.js";
 import { EntityCrudService } from "../../entity/entity.service.js";
 import { currentTx, runInTransaction } from "../../entity/tx-context.js";
-import { resolveDay, storedDay } from "../clock.js";
+import { resolveDay, storedDay, utcDay } from "../clock.js";
 import { InventoryService } from "../inventory/inventory.service.js";
 import type { ExchangeRateInput } from "../money/currency.js";
 import {
@@ -49,6 +49,8 @@ import {
   findConversion,
   findTransition,
   type ImplementedDocumentKind,
+  OPPORTUNITY_ENTITY,
+  OPPORTUNITY_SOURCE_KINDS,
   PURCHASING_KINDS,
   type SalesDocumentDescriptor,
 } from "./descriptors.js";
@@ -168,6 +170,33 @@ export interface CommercialSnapshot {
   readonly stockMovement?: StockMovementPlan | undefined;
 }
 
+/**
+ * One command a document's current state allows, described well enough that a caller does not have to
+ * know the state machine (19-S.17 task 8).
+ *
+ * `availableTransitions` already listed the action names, which is enough for a script and not enough
+ * for a screen: a button needs a label, and a privileged correction needs to know *before* the click
+ * that it will be asked for a reason. Both come from the descriptor, which is the single authority for
+ * them — a UI that hard-coded "Issue"/"Void" would be a second, silently diverging copy.
+ */
+export interface DocumentActionView {
+  readonly action: string;
+  readonly label: string;
+  /** True when the command refuses to run without an audited reason. */
+  readonly requiresReason: boolean;
+  /** True for the transition that issues: allocates the number, freezes the snapshot, applies the lock. */
+  readonly issues: boolean;
+  /** The state the document reaches. */
+  readonly to: string;
+}
+
+/** One conversion a document's current state allows, with its label and destination kind. */
+export interface DocumentConversionView {
+  readonly action: string;
+  readonly label: string;
+  readonly toKind: ImplementedDocumentKind;
+}
+
 export interface DocumentView {
   readonly kind: ImplementedDocumentKind;
   readonly id: string;
@@ -186,6 +215,10 @@ export interface DocumentView {
   /** Actions the current state allows right now — what a UI renders as buttons. */
   readonly availableTransitions: readonly string[];
   readonly availableConversions: readonly string[];
+  /** The same transitions, described (label, reason requirement, target state). */
+  readonly actions: readonly DocumentActionView[];
+  /** The same conversions, described (label, destination kind). */
+  readonly conversions: readonly DocumentConversionView[];
 }
 
 export interface CreateDocumentInput {
@@ -1199,6 +1232,182 @@ export class SalesDocumentService {
     });
   }
 
+  /**
+   * Raise a draft from a CRM **Opportunity** (19-S.7, §4.5 "create quotes … from an Opportunity";
+   * §4.6 the same for orders; §4.7 lists it as an invoice source).
+   *
+   * The deal belongs to CRM Core, so it is read through the Entity Engine: the caller's record-level
+   * access to it is exactly what the Opportunity screen applies, and nothing here duplicates the
+   * opportunity entity or its qualification logic. What this adds is the commercial hand-off — the
+   * party the deal is with, the provenance in both directions, and the guards that stop one deal
+   * being billed twice.
+   *
+   * The **lines are the caller's**, not the deal's: an Opportunity carries an amount, not priced
+   * lines, and turning that amount into one line would invent a quantity and a price nobody agreed
+   * to. So the command takes the same `items` the create command takes — normally what the line
+   * editor has just priced — and the engine's own rule decides whether a document may exist at all.
+   */
+  async createFromOpportunity(input: {
+    opportunityId: string;
+    kind: ImplementedDocumentKind;
+    items?: readonly RequestedLine[] | undefined;
+    overrides?: Record<string, unknown> | undefined;
+    audit?: SalesAuditContext | undefined;
+  }): Promise<DocumentView> {
+    const descriptor = documentDescriptor(input.kind);
+    if (!OPPORTUNITY_SOURCE_KINDS.includes(input.kind)) {
+      throw new ValidationError(
+        `A ${descriptor.label.toLowerCase()} cannot be raised from an opportunity; only a ${OPPORTUNITY_SOURCE_KINDS.map((kind) => documentDescriptor(kind).label.toLowerCase()).join(", a ")} can.`,
+        { kind: input.kind, supported: OPPORTUNITY_SOURCE_KINDS },
+      );
+    }
+    // `get` asserts `read` on Opportunity and applies record scoping, so a deal this caller may not
+    // see cannot become a document they can.
+    const opportunity = await this.entities.get(
+      OPPORTUNITY_ENTITY,
+      input.opportunityId,
+    );
+    await this.acl.assertAccess(descriptor.entity, "create");
+
+    // Idempotency first: a retried request returns the draft it already created rather than being
+    // refused by the double-billing guard below, which exists for a genuinely second document.
+    const correlationId = input.audit?.correlationId?.trim();
+    if (correlationId !== undefined && correlationId !== "") {
+      const existing = await this.findBySource(
+        descriptor,
+        OPPORTUNITY_ENTITY,
+        input.opportunityId,
+        correlationId,
+      );
+      if (existing !== undefined) return await this.view(input.kind, existing);
+    }
+    await this.assertOpportunityUnbilled(descriptor, input.opportunityId);
+
+    const settings = (await this.settings.read()).settings;
+    const header = this.opportunityHeader(
+      descriptor,
+      input.opportunityId,
+      opportunity,
+      settings,
+    );
+    // The caller may refine what it knows — a date, a price book, a currency — but it may not rewrite
+    // the provenance, which this command is the only writer of.
+    const data: Record<string, unknown> = {
+      ...header,
+      ...(input.overrides ?? {}),
+    };
+    data["sourceEntity"] = OPPORTUNITY_ENTITY;
+    data["sourceId"] = input.opportunityId;
+    // The idempotency key travels with the document, because that is what `findBySource` matches on
+    // the next time the same request arrives (the same contract `convert` uses).
+    data["correlationId"] = correlationId ?? null;
+    if (descriptor.opportunityField !== undefined) {
+      data[descriptor.opportunityField] = input.opportunityId;
+    }
+
+    return await this.create({
+      kind: input.kind,
+      data,
+      items: input.items ?? [],
+      audit: input.audit ?? {},
+    });
+  }
+
+  /**
+   * Refuse a deal that has already been billed, or one whose quote already was (§4.5, §4.6).
+   *
+   * A **quote** is exempt: an offer is not a commitment, and quoting a deal twice — a revision, a
+   * second option — is the normal commercial act, not a duplicate. An order or an invoice is the
+   * commitment, so a second one for the same deal is refused, and so is invoicing a deal directly
+   * once it has an order: that is the same acceptance reaching the customer by two routes.
+   *
+   * The deal's own quotes are checked too, because that is the realistic path to a double billing:
+   * quote → order leaves the order pointing at the *quote*, not at the deal, so a guard that only
+   * looked for deal-sourced documents would miss it.
+   */
+  private async assertOpportunityUnbilled(
+    descriptor: SalesDocumentDescriptor,
+    opportunityId: string,
+  ): Promise<void> {
+    if (descriptor.kind === "quote") return;
+    const sources: { entity: string; id: string; what: string }[] = [
+      { entity: OPPORTUNITY_ENTITY, id: opportunityId, what: "opportunity" },
+    ];
+    const quotes = await this.records.find("Quote", {
+      sourceEntity: OPPORTUNITY_ENTITY,
+      sourceId: opportunityId,
+    });
+    for (const quote of quotes) {
+      sources.push({ entity: "Quote", id: quote.id, what: "quote" });
+    }
+    for (const source of sources) {
+      const existing = (
+        await this.records.find(
+          descriptor.entity,
+          { sourceEntity: source.entity, sourceId: source.id },
+          1,
+        )
+      )[0];
+      if (existing !== undefined) {
+        throw new ValidationError(
+          `This ${source.what} already produced a ${descriptor.label.toLowerCase()}; a second one needs an explicit workflow that does not exist yet.`,
+          {
+            opportunityId,
+            kind: descriptor.kind,
+            sourceEntity: source.entity,
+            sourceId: source.id,
+            existingId: existing.id,
+          },
+        );
+      }
+    }
+    if (descriptor.kind !== "invoice") return;
+    for (const source of sources) {
+      const order = (
+        await this.records.find(
+          documentDescriptor("salesOrder").entity,
+          { sourceEntity: source.entity, sourceId: source.id },
+          1,
+        )
+      )[0];
+      if (order !== undefined) {
+        throw new ValidationError(
+          "This deal already became a sales order; invoice the order instead, so the same acceptance is not billed twice.",
+          { opportunityId, salesOrderId: order.id },
+        );
+      }
+    }
+  }
+
+  /**
+   * The header a document inherits from the deal it is raised from (§4.5): the party, the deal name
+   * as the draft's working title, and today as the document date. The currency is the installation's
+   * default because an Opportunity's `amount` carries no currency of its own in this platform.
+   */
+  private opportunityHeader(
+    descriptor: SalesDocumentDescriptor,
+    opportunityId: string,
+    opportunity: Record<string, unknown>,
+    settings: SalesSettings,
+  ): Record<string, unknown> {
+    const header: Record<string, unknown> = {
+      sourceEntity: OPPORTUNITY_ENTITY,
+      sourceId: opportunityId,
+      [descriptor.dateField]: utcDay(),
+      currency: settings.currency.defaultCurrency,
+    };
+    if (descriptor.opportunityField !== undefined) {
+      header[descriptor.opportunityField] = opportunityId;
+    }
+    const name = text(opportunity["name"]);
+    if (name !== undefined) header["name"] = name;
+    const accountId = text(opportunity["accountId"]);
+    if (accountId !== undefined) header["accountId"] = accountId;
+    const contactId = firstLinkId(opportunity["contactIds"]);
+    if (contactId !== undefined) header["contactId"] = contactId;
+    return header;
+  }
+
   /** Remaining-quantity guard shared by delivery, return and partial invoicing (§4.10). */
   async assertWithinRemaining(
     descriptor: SalesDocumentDescriptor,
@@ -1644,6 +1853,12 @@ export class SalesDocumentService {
   ): DocumentView {
     const state = lockStateOf(descriptor, row);
     const currentState = statusOf(row, descriptor);
+    const actions = descriptor.transitions.filter((transition) =>
+      transition.from.includes(currentState),
+    );
+    const conversions = descriptor.conversions.filter((conversion) =>
+      conversion.from.includes(currentState),
+    );
     return {
       kind: descriptor.kind,
       id: row.id,
@@ -1662,12 +1877,20 @@ export class SalesDocumentService {
       totals,
       lock: { ...state, locked: isLocked(state, descriptor.lockPolicy) },
       fromSnapshot,
-      availableTransitions: descriptor.transitions
-        .filter((transition) => transition.from.includes(currentState))
-        .map((transition) => transition.action),
-      availableConversions: descriptor.conversions
-        .filter((conversion) => conversion.from.includes(currentState))
-        .map((conversion) => conversion.action),
+      availableTransitions: actions.map((transition) => transition.action),
+      availableConversions: conversions.map((conversion) => conversion.action),
+      actions: actions.map((transition) => ({
+        action: transition.action,
+        label: transition.label,
+        requiresReason: transition.requiresReason === true,
+        issues: transition.issues === true,
+        to: transition.to,
+      })),
+      conversions: conversions.map((conversion) => ({
+        action: conversion.action,
+        label: conversion.label,
+        toKind: conversion.toKind,
+      })),
     };
   }
 }
@@ -1870,4 +2093,41 @@ function text(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed === "" ? undefined : trimmed;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The first id of a `linkMultiple` value, whatever shape the record store handed back: an array of
+ * ids, an array of `{ id }` objects, a bare id, or the JSON text of any of those.
+ *
+ * A contact link on an Opportunity is a multi-select, and a document's `contactId` is a single link.
+ * Taking the first one is the documented behaviour (§4.5 "copy relevant customer/contact") rather
+ * than refusing the hand-off because a deal has two contacts — the rest stay one click away on the
+ * deal itself.
+ */
+function firstLinkId(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed === "") return undefined;
+    if (!trimmed.startsWith("[")) return trimmed;
+    try {
+      return firstLinkId(JSON.parse(trimmed) as unknown);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!Array.isArray(value)) return undefined;
+  for (const entry of value) {
+    const id =
+      typeof entry === "string"
+        ? text(entry)
+        : isRecord(entry)
+          ? text(entry["id"])
+          : undefined;
+    if (id !== undefined) return id;
+  }
+  return undefined;
 }

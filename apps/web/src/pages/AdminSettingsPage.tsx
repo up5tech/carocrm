@@ -1,4 +1,4 @@
-import { DeleteOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, MinusCircleOutlined, PlusOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { Alert, App as AntApp, Button, Card, Col, Collapse, Form, Input, InputNumber, Row, Select, Space, Switch, Table, Typography, Upload } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -411,9 +411,46 @@ export function AdminSettingsPage() {
                   <Form.Item name={['variants', 'requireAllAttributes']} label={t('sales.settings.requireAllAttributes')} valuePropName="checked">
                     <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
                   </Form.Item>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    {t('sales.settings.attributesHint')}
-                  </Typography.Text>
+                  {/* 19-S.17 task 6 — the one settings group that had no screen. A variant attribute is
+                      configuration, not code (§4.2 "do not hard-code industry-specific attributes"), so
+                      an installation defines its own (size/colour/model) here; the server validates the
+                      code pattern and rejects a duplicate, and its refusal is shown rather than dropped. */}
+                  <Form.List name={['variants', 'attributes']}>
+                    {(fields, { add, remove }) => (
+                      <>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {t('sales.settings.attributesHint')}
+                        </Typography.Text>
+                        {fields.map((field) => (
+                          <Space key={field.key} align="baseline" style={{ display: 'flex', marginTop: 8 }}>
+                            <Form.Item
+                              name={[field.name, 'code']}
+                              rules={[{ required: true, message: t('web.adminSettings.fieldRequired') }]}
+                              style={{ marginBottom: 0 }}
+                            >
+                              <Input placeholder={t('sales.settings.attributeCode')} maxLength={24} style={{ width: 120 }} />
+                            </Form.Item>
+                            <Form.Item
+                              name={[field.name, 'label']}
+                              rules={[{ required: true, message: t('web.adminSettings.fieldRequired') }]}
+                              style={{ marginBottom: 0 }}
+                            >
+                              <Input placeholder={t('sales.settings.attributeLabel')} maxLength={64} style={{ width: 180 }} />
+                            </Form.Item>
+                            <Button
+                              type="text"
+                              icon={<MinusCircleOutlined />}
+                              aria-label={t('sales.settings.attributeRemove')}
+                              onClick={() => remove(field.name)}
+                            />
+                          </Space>
+                        ))}
+                        <Button type="dashed" icon={<PlusOutlined />} onClick={() => add({ code: '', label: '' })} style={{ marginTop: 8 }}>
+                          {t('sales.settings.attributeAdd')}
+                        </Button>
+                      </>
+                    )}
+                  </Form.List>
                 </Card>
               </Col>
             </Row>

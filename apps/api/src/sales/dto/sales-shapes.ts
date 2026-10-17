@@ -27,6 +27,13 @@ const DaySchema = z
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Must be a YYYY-MM-DD date.");
 
+/**
+ * A record id, as this module's commands name one. Declared here rather than beside its first user
+ * because a schema is built at import time: a `const` referenced before its own declaration would
+ * throw, not merely be undefined.
+ */
+const IdSchema = z.string().trim().min(1).max(64);
+
 export const ResolvePriceSchema = z
   .object({
     productId: z.string().trim().min(1).max(64),
@@ -221,6 +228,22 @@ export const DocumentConvertSchema = z
   })
   .strict();
 
+/**
+ * Raise a draft from a CRM Opportunity (19-S.7, §4.5 – §4.7). The deal is named by id and the kind by
+ * name; `items` are the lines the caller has priced (the deal has none of its own), `overrides` may
+ * refine header fields the caller knows better (a date, a price book), and the provenance is written
+ * by the command, never by the request.
+ */
+export const CreateFromOpportunitySchema = z
+  .object({
+    opportunityId: IdSchema,
+    kind: DocumentKindSchema,
+    items: z.array(DocumentLineSchema).max(500).default([]),
+    overrides: z.record(z.string(), z.unknown()).optional(),
+    correlationId: z.string().trim().min(1).max(128).optional(),
+  })
+  .strict();
+
 // ---------------------------------------------------------------------------------------------
 // Phase 19-S.7 — rendering and sending a quote
 // ---------------------------------------------------------------------------------------------
@@ -271,12 +294,13 @@ export type CreateDocumentInput = z.infer<typeof CreateDocumentSchema>;
 export type UpdateDocumentInput = z.infer<typeof UpdateDocumentSchema>;
 export type DocumentTransitionInput = z.infer<typeof DocumentTransitionSchema>;
 export type DocumentConvertInput = z.infer<typeof DocumentConvertSchema>;
+export type CreateFromOpportunityInput = z.infer<
+  typeof CreateFromOpportunitySchema
+>;
 
 // ---------------------------------------------------------------------------------------------
 // Phase 19-S.10 — payment commands
 // ---------------------------------------------------------------------------------------------
-
-const IdSchema = z.string().trim().min(1).max(64);
 
 export const CreatePaymentSchema = z
   .object({

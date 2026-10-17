@@ -56,6 +56,22 @@ Curated, long-lived notes. Daily logs live next to this file as `YYYY-MM-DD.md`.
 - A PDF **attachment** is still not produced: the blocks and the optional pdfkit adapter exist, but
   writing the PDF into an outbound message needs the attachment-storage path.
 
+## Sales document engine invariants (learned the hard way)
+
+- **A document cannot exist with zero lines**: `sales/tax/totals.ts#computeTotals` throws
+  "A document needs at least one line", so every create path (including
+  `POST /Sales/document/fromOpportunity`) must carry `items`. Don't design a "blank draft" flow.
+- A `DocumentView` carries both the action *names* (`availableTransitions`/`availableConversions`) and
+  their *descriptions* (`actions`/`conversions`: label, `issues`, `requiresReason`, `to`/`toKind`) built
+  from the descriptor. UIs must render the descriptions, never hard-code state machines.
+- Provenance on a generated document is `sourceEntity`/`sourceId`/`correlationId`; `findBySource` is the
+  idempotency lookup. Write `correlationId` into the record or a retry creates a second document.
+- Only `Quote` and `SalesOrder` have an `opportunityId` field (descriptor `opportunityField`); `Invoice`
+  does not, so its deal provenance lives in `sourceEntity`/`sourceId` only.
+- `apps/api/src/sales/dto/sales-shapes.ts` declares `IdSchema` **after** its first use in the document
+  section would be a TDZ crash (schemas evaluate at import) — it is hoisted near `DaySchema`; keep it
+  there if you add earlier schemas.
+
 ## Test seams for mail- and queue-touching suites
 
 - Any suite that exercises a send must set `MAIL_TRANSPORT=memory` **and** `SMTP_FROM=<addr>` before

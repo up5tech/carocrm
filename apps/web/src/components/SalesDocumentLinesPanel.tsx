@@ -28,6 +28,7 @@ import { t } from '../state/i18n.js';
 import { DocumentSendModal } from './DocumentSendModal.js';
 import type { SalesLine, SalesLineTotals } from './LineItemEditor.js';
 import { lineFromItem, LineItemEditor, linePayload } from './LineItemEditor.js';
+import { SalesDocumentActions } from './SalesDocumentActions.js';
 import { useSalesPickers } from './useSalesPickers.js';
 
 interface SalesDocumentLinesPanelProps {
@@ -181,6 +182,9 @@ export function SalesDocumentLinesPanel({ kind, id }: SalesDocumentLinesPanelPro
           description={t('sales.document.issuedFromSnapshot')}
         />
       ) : null}
+      {/* The document's own commands — issue, void, confirm, cancel, convert, unlock — come from the
+          server's descriptor, so this panel never has to know a state machine (§9.4). */}
+      {view ? <SalesDocumentActions view={view} onChanged={() => void load()} /> : null}
       {saveError !== null ? <Alert type="error" showIcon style={{ marginBottom: 12 }} message={saveError} /> : null}
       {unpriced.length > 0 ? (
         <Alert

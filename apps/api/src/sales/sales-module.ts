@@ -258,8 +258,10 @@ export const SALES_MODULE = {
    * operational and job-monitoring surface is delivered (and the §4.13 conversion snapshot that
    * reporting depends on is now actually persisted). `19-S.17` is **not** claimed even though its
    * document work is delivered (line editor on create and detail, the send UI, the standard templates,
-   * the settings screen, the translations): its review tasks — a per-entity screen audit, module
-   * enablement in navigation, the responsive/keyboard pass and import/export mappings — are open. See
+   * the settings screen — now including the variant attribute list — the translations, and the screen
+   * that drives every document command from the view's own `actions`/`conversions`): its review tasks —
+   * a per-entity screen audit, module enablement in navigation, the responsive/keyboard pass and
+   * import/export mappings — are open. See
    * `docs/implementation/sales-phase19-gap-report.md` §2 for the exact split.
    */
   implementedPhases: [

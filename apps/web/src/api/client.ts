@@ -809,6 +809,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+  salesCreateFromOpportunity: (input: {
+    opportunityId: string;
+    kind: string;
+    overrides?: Record<string, unknown>;
+    correlationId?: string;
+  }) => request<SalesDocumentView>('/Sales/document/fromOpportunity', post(input)),
   salesRenderDocument: (kind: string, id: string, templateCode?: string) =>
     request<SalesRenderResult>(`/Sales/document/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/render`, {
       method: 'POST',

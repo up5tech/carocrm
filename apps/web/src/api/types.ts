@@ -734,6 +734,22 @@ export interface SalesSettingsView {
   warnings: readonly { code: string; message: string }[];
 }
 
+/** One command the document's current state allows, as the server's descriptor describes it. */
+export interface SalesDocumentAction {
+  action: string;
+  label: string;
+  requiresReason: boolean;
+  issues: boolean;
+  to: string;
+}
+
+/** One conversion the document's current state allows. */
+export interface SalesDocumentConversion {
+  action: string;
+  label: string;
+  toKind: string;
+}
+
 export interface SalesDocumentView {
   kind: string;
   id: string;
@@ -750,6 +766,8 @@ export interface SalesDocumentView {
   fromSnapshot: boolean;
   availableTransitions: readonly string[];
   availableConversions: readonly string[];
+  actions: readonly SalesDocumentAction[];
+  conversions: readonly SalesDocumentConversion[];
 }
 
 export interface SalesRenderResult {
