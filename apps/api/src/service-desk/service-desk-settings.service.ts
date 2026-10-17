@@ -119,7 +119,6 @@ export interface SettingsWarning {
  */
 const PENDING_FEATURES: readonly { readonly key: keyof ServiceDeskSettings["features"]; readonly phase: string }[] = [
   { key: "sla", phase: "19-SD.8" },
-  { key: "emailToCase", phase: "19-SD.7" },
   { key: "portal", phase: "19-SD.11" },
   { key: "knowledgeBase", phase: "19-SD.10" },
   { key: "csat", phase: "19-SD.14" },

@@ -103,3 +103,22 @@ export const CaseConversationQuerySchema = z.object({
 });
 
 export type CaseConversationQuery = z.infer<typeof CaseConversationQuerySchema>;
+
+/** Email-to-Case: process a stored inbound email (§5.5, SD.7). */
+export const EmailToCaseSchema = z
+  .object({
+    emailId: IdSchema,
+  })
+  .strict();
+
+export type EmailToCaseRequest = z.infer<typeof EmailToCaseSchema>;
+
+/** Outbound email reply to a case (§5.5, SD.7). */
+export const CaseEmailReplySchema = z
+  .object({
+    text: z.string().trim().min(1).max(20_000),
+    attachmentIds: z.array(IdSchema).max(50).optional(),
+  })
+  .strict();
+
+export type CaseEmailReplyRequest = z.infer<typeof CaseEmailReplySchema>;

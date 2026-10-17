@@ -9,7 +9,7 @@ product requirements in [`PLAN_Phase_19_ServiceDesk.md`](../../PLAN_Phase_19_Ser
 reproduced as clean-room TypeScript behaviour — no upstream source, asset, translation or schema is
 copied.
 
-**Status: phases 19-SD.0 – 19-SD.6 are implemented** (scaffold, persistence, Case CRUD/numbering,
+**Status: phases 19-SD.0 – 19-SD.7 are implemented** (scaffold, persistence, Case CRUD/numbering,
 the state machine and resolution workflow, assignment/queues/routing, and the conversation timeline
 with public replies and internal notes). The list of phases actually claimed is
 `SERVICE_DESK_MODULE.implementedPhases`
@@ -38,6 +38,7 @@ settings warning says which phase delivers each one.
 | **Assignment, queues and routing**: manual/team assignment, round-robin, least-busy, declarative routing rules with safe fallback | `POST /api/v1/ServiceDesk/action/case/:id/{assign,route}`; `GET …/assignments`; `GET /action/queues`, `GET /action/queues/:id/workload` |
 | Case-lifecycle and queue-workload UI | `apps/web/src/components/CaseLifecycleActions.tsx`, `CaseQueueWorkload.tsx`, rendered by `EntityDetailPage.tsx` |
 | **Conversation timeline** (§5.4, SD.6): explicit public/internal/system visibility on every Stream item and attachment; `reply` (customer-visible) and `note` (internal-only) commands; visibility-safe timeline; attachments inherit their message's visibility; public replies stamp the response clocks, internal notes never do; in-app notifications for public replies (dedup by message/recipient) | `apps/api/src/service-desk/case-conversation.service.ts`; `apps/api/src/stream/stream-visibility.ts`; `apps/web/src/components/CaseConversation.tsx` |
+| **Email-to-Case** (§5.5, SD.7): inbound email processing into a `Case` (new thread) or appended as a customer-visible message (existing thread); idempotent by `messageId`/thread key; mail-loop/auto-reply/DSN skipping; contact resolution; outbound email reply command that queues a send through the kernel mail transport and records delivery status | `apps/api/src/service-desk/email-to-case.service.ts` |
 | Module diagnostics: dependency evidence, optional-integration status, feature state, settings warnings | `GET /api/v1/ServiceDesk/action/health` |
 
 Entity CRUD stays on the generic `/api/v1/:entity` API. The module routes exist only for what a
@@ -137,6 +138,8 @@ fallback owner) and the decision is recorded.
   portal exclusion of internal notes and system updates, forged-visibility refusal, attachment
   inheritance, read-only posting, reply notifications and idempotency, empty-entry rejection, plus the
   pure visibility helper.
+- `apps/api/test/service-desk-email.test.ts` — inbound processing into a new case, thread append,
+  idempotency, auto-reply skipping, outbound email reply, and feature gating.
 - `apps/api/test/service-desk-domain.test.ts` — the pure numbering/validation/change-detection helpers,
   the transition model, the resolution requirement, routing-condition validation/matching and the
   round-robin/least-busy pickers.

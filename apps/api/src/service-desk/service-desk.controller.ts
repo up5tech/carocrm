@@ -11,11 +11,14 @@ import { CaseNumberingService } from "./case-numbering.service.js";
 import {
   CaseAssignSchema,
   CaseConversationQuerySchema,
+  CaseEmailReplySchema,
   CaseMessageSchema,
   CaseRouteSchema,
   CaseTransitionSchema,
+  EmailToCaseSchema,
   SettingsPatchSchema,
 } from "./dto/service-desk-shapes.js";
+import { EmailToCaseService } from "./email-to-case.service.js";
 import { ServiceDeskModuleHealthService } from "./service-desk-module-health.service.js";
 import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 
@@ -41,6 +44,7 @@ export class ServiceDeskController {
     @Inject(CaseLifecycleService) private readonly lifecycle: CaseLifecycleService,
     @Inject(CaseAssignmentService) private readonly assignment: CaseAssignmentService,
     @Inject(CaseConversationService) private readonly conversation: CaseConversationService,
+    @Inject(EmailToCaseService) private readonly emailToCaseService: EmailToCaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -161,6 +165,31 @@ export class ServiceDeskController {
   @Get("action/case/:id/conversation")
   async caseConversation(@Param("id") id: string, @Query() query: unknown) {
     return this.conversation.timeline(id, parse(CaseConversationQuerySchema, query));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Email-to-Case (§5.5, SD.7)
+  // ---------------------------------------------------------------------------
+
+  /** Process a stored inbound email into a case (or append it to its thread). */
+  @Post("action/emailToCase")
+  @HttpCode(200)
+  async emailToCase(@Body() body: unknown) {
+    return this.emailToCaseService.processEmail(parse(EmailToCaseSchema, body).emailId);
+  }
+
+  /** Drive the kernel inbound poller and process every newly stored message. */
+  @Post("action/emailToCase/processInbound")
+  @HttpCode(200)
+  async processInbound() {
+    return this.emailToCaseService.processInbound();
+  }
+
+  /** Send a customer-visible reply to a case by email. */
+  @Post("action/case/:id/emailReply")
+  @HttpCode(200)
+  async caseEmailReply(@Param("id") id: string, @Body() body: unknown) {
+    return this.emailToCaseService.replyByEmail(id, parse(CaseEmailReplySchema, body));
   }
 
   // ---------------------------------------------------------------------------
