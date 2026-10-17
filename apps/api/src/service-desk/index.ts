@@ -8,11 +8,13 @@ import { EmailToCaseService } from "./email-to-case.service.js";
 import { KnowledgeBaseService } from "./knowledge-base.service.js";
 export { SlaService } from "./sla.service.js";
 export { KnowledgeBaseService } from "./knowledge-base.service.js";
+export { WebToCaseService } from "./web-to-case.service.js";
 import { ServiceDeskController } from "./service-desk.controller.js";
 import { ServiceDeskModuleHealthService } from "./service-desk-module-health.service.js";
 import { ServiceDeskNotificationService } from "./service-desk-notification.service.js";
 import { ServiceDeskRecords } from "./service-desk-records.js";
 import { SlaService } from "./sla.service.js";
+import { WebToCaseService } from "./web-to-case.service.js";
 import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 import { ServiceDeskWriteGuardService } from "./service-desk-write-guard.service.js";
 
@@ -34,6 +36,7 @@ export const SERVICE_DESK_PROVIDERS: Provider[] = [
   ServiceDeskModuleHealthService,
   SlaService,
   KnowledgeBaseService,
+  WebToCaseService,
 ];
 
 export { type CaseAssignInput, type CaseAssignmentResult, CaseAssignmentService, type CaseRouteResult, type QueueWorkload } from "./case-assignment.service.js";

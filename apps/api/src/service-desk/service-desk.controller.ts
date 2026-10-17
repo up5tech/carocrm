@@ -1,8 +1,10 @@
-import { AuthorizationDeniedError, InvalidQueryError } from "@carocrm/core/errors/index.js";
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from "@nestjs/common";
+import { AuthorizationDeniedError, InvalidQueryError, ValidationError } from "@carocrm/core/errors/index.js";
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import type { ZodTypeAny } from "zod";
+import { z } from "zod";
 
+import { Public } from "../auth/auth.guard.js";
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
 import { CaseAssignmentService } from "./case-assignment.service.js";
 import { CaseConversationService } from "./case-conversation.service.js";
@@ -12,6 +14,7 @@ import {
   CaseAssignSchema,
   CaseConversationQuerySchema,
   CaseEmailReplySchema,
+  // (web-to-case uses an inline shape)
   CaseMessageSchema,
   CaseRouteSchema,
   CaseTransitionSchema,
@@ -20,9 +23,10 @@ import {
 } from "./dto/service-desk-shapes.js";
 import { EmailToCaseService } from "./email-to-case.service.js";
 import { KnowledgeBaseService } from "./knowledge-base.service.js";
-import { SlaService } from "./sla.service.js";
 import { ServiceDeskModuleHealthService } from "./service-desk-module-health.service.js";
 import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
+import { SlaService } from "./sla.service.js";
+import { WebToCaseService } from "./web-to-case.service.js";
 
 /**
  * Phase 19-SD.1 – 19-SD.5 — Service Desk module commands (`/api/v1/ServiceDesk`, PLAN §8.2).
@@ -49,6 +53,7 @@ export class ServiceDeskController {
     @Inject(EmailToCaseService) private readonly emailToCaseService: EmailToCaseService,
     @Inject(KnowledgeBaseService) private readonly knowledgeBase: KnowledgeBaseService,
     @Inject(SlaService) private readonly slaService: SlaService,
+    @Inject(WebToCaseService) private readonly webToCase: WebToCaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -267,6 +272,25 @@ export class ServiceDeskController {
   @Get("action/queues/:id/workload")
   async queueWorkload(@Param("id") id: string) {
     return this.assignment.workload(id);
+  }
+
+  /** Public web-to-case intake (§5.10, SD.12). Unauthenticated; strict allowlist + abuse controls. */
+  @Public()
+  @Post("action/webToCase")
+  @HttpCode(200)
+  async webToCaseIntake(@Body() body: unknown, @Req() request: { ip?: string }) {
+    const parsed = z.object({
+      name: z.string().trim().min(1).max(255),
+      description: z.string().trim().max(10_000).optional(),
+      requesterName: z.string().trim().max(255).optional(),
+      requesterEmail: z.string().trim().max(255).optional(),
+      idempotencyKey: z.string().trim().min(1).max(128).optional(),
+      website: z.string().optional(),
+    }).safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new ValidationError("Invalid intake payload.", { issues: parsed.error.issues.map((i) => i.message) });
+    }
+    return this.webToCase.submit({ ...parsed.data, clientIp: request?.ip });
   }
 
   private requireAdmin(action: string): void {

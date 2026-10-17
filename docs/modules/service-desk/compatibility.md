@@ -7,7 +7,7 @@ and no parity with any upstream extension is claimed.
 
 ## 1. Scope delivered so far
 
-**19-SD.0 – 19-SD.11** are implemented: the module scaffold, the additive persistence and defaults, the
+**19-SD.0 – 19-SD.12** are implemented: the module scaffold, the additive persistence and defaults, the
 canonical `Case` entity with numbering/validation and the standard Entity Engine CRUD/search/ACL
 surface, the case **state machine and resolution workflow**, **assignment, queues and routing**, and
 the **conversation timeline with public replies and internal notes**. Everything from 19-SD.7 onward
