@@ -7,7 +7,7 @@ and no parity with any upstream extension is claimed.
 
 ## 1. Scope delivered so far
 
-**19-SD.0 – 19-SD.10** are implemented: the module scaffold, the additive persistence and defaults, the
+**19-SD.0 – 19-SD.11** are implemented: the module scaffold, the additive persistence and defaults, the
 canonical `Case` entity with numbering/validation and the standard Entity Engine CRUD/search/ACL
 surface, the case **state machine and resolution workflow**, **assignment, queues and routing**, and
 the **conversation timeline with public replies and internal notes**. Everything from 19-SD.7 onward
@@ -18,7 +18,7 @@ is a documented gap, not a silent one:
 | ~~Email-to-case ingestion and idempotency~~ | ~~19-SD.7~~ | **Delivered in 19-SD.7**: `EmailToCaseService` processes inbound emails into cases or appends to threads, idempotent by message/thread key, with mail-loop skipping and outbound email replies |
 | ~~SLA policies, clocks and business calendars~~ | ~~19-SD.8~~ | **Delivered in 19-SD.8**: `BusinessCalendar`, `SLAPolicy`, `CaseSLAClock` entities, business-time calculator, policy resolver, clock lifecycle (start/pause/resume/met/breached), Case-level SLA summary, idempotent breach-check pass |
 | ~~Knowledge Base integration~~ | ~~19-SD.10~~ | **Delivered in 19-SD.10**: `KnowledgeArticle` + `KnowledgeCategory` entities, publish/archive, portal-safe published list, case suggestions |
-| Portal self-service case access | 19-SD.11 | `portal` integration reported **unavailable** (no `Portal` entity); `Case.isHiddenFromPortal` exists but no portal scope reads it yet |
+| ~~Portal self-service case access~~ | ~~19-SD.11~~ | **Delivered in 19-SD.11**: portal-scoped Case reads (account/contact neighbourhood), hidden-case exclusion, portal-created cases forced to source `Portal` with privileged fields stripped, attachment visibility already gates downloads |
 | CSAT surveys | 19-SD.14 | `features.csat` off |
 | A full case workspace | 19-SD.13 | entities render through the generic metadata-driven UI; the lifecycle, workload and conversation panels are purpose-built, but a complete agent workspace is not built |
 

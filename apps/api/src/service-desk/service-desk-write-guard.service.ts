@@ -3,6 +3,7 @@ import type { HookContext } from "@carocrm/entity-engine/types/index.js";
 import type { OnApplicationBootstrap } from "@nestjs/common";
 import { Inject, Injectable } from "@nestjs/common";
 
+import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
 import { HookRegistry } from "../hooks/hook.registry.js";
 import { CaseNumberingService } from "./case-numbering.service.js";
 import {
@@ -44,6 +45,7 @@ export class ServiceDeskWriteGuardService implements OnApplicationBootstrap {
     @Inject(HookRegistry) private readonly hooks: HookRegistry,
     @Inject(CaseNumberingService) private readonly numbering: CaseNumberingService,
     @Inject(ServiceDeskSettingsService) private readonly settings: ServiceDeskSettingsService,
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -85,6 +87,20 @@ export class ServiceDeskWriteGuardService implements OnApplicationBootstrap {
           `These fields on Case are set by the Service Desk module and cannot be written through the record API: ${offending.join(", ")}.`,
           { entity: CASE_ENTITY, fields: offending },
         );
+      }
+    }
+
+    // SD.11: a portal principal may never set privileged internal fields, and the requester/account/
+    // contact context is derived from their identity rather than trusted from the payload.
+    if (this.scope.userType === "portal") {
+      const privileged = ["assignedUserId", "teamId", "queueId", "routingRuleId", "slaPolicyId", "slaState", "isEscalated", "escalationLevel", "escalatedAt", "source", "status"];
+      for (const key of privileged) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) delete data[key];
+      }
+      if (context.operation === "create") {
+        data["source"] = "Portal";
+        const contactId = this.scope.principal?.contactId;
+        if (contactId !== undefined) data["contactId"] = contactId;
       }
     }
 

@@ -217,6 +217,8 @@ export class PortalPolicyService {
     const snapshot = await this.snapshot();
     const { contactId, accountId } = snapshot;
     if (!contactId && !accountId) return false;
+    // SD.11: a case marked hidden from the portal is never visible, even in the contact/account neighbourhood.
+    if (entity === "Case" && data["isHiddenFromPortal"] === true) return false;
     if (recordId === contactId || recordId === accountId) return true;
     for (const link of this.linkFieldsFor(entity)) {
       const value = data[link.field];

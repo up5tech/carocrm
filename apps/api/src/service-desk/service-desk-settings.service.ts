@@ -125,7 +125,6 @@ export interface SettingsWarning {
  * `queues` left this list in SD.5, when the queue/routing infrastructure it names was delivered.
  */
 const PENDING_FEATURES: readonly { readonly key: keyof ServiceDeskSettings["features"]; readonly phase: string }[] = [
-  { key: "portal", phase: "19-SD.11" },
   { key: "csat", phase: "19-SD.14" },
 ];
 
