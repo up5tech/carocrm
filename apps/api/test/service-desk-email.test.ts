@@ -51,6 +51,7 @@ beforeAll(async () => {
   priorFeatures = (settings.body['settings'] as Record<string, unknown>)['features'] as Record<string, unknown>;
   const enabled = await call('POST', '/api/v1/ServiceDesk/action/settings', {
     features: { caseManagement: true, emailToCase: true },
+    email: { replyFromAddress: 'support@example.com' },
   });
   expect(enabled.status, JSON.stringify(enabled.body)).toBe(200);
 
@@ -67,7 +68,7 @@ beforeAll(async () => {
 
 
 afterAll(async () => {
-  await call('POST', '/api/v1/ServiceDesk/action/settings', { features: priorFeatures }).catch(() => undefined);
+  await call('POST', '/api/v1/ServiceDesk/action/settings', { features: priorFeatures, email: { replyFromAddress: '' } }).catch(() => undefined);
 
   // Module-written rows keyed by this run's case ids.
   if (caseIds.length > 0) {

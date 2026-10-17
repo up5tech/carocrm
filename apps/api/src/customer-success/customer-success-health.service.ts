@@ -517,6 +517,11 @@ export class CustomerSuccessHealthService {
       activeRunId === undefined
         ? []
         : await this.records.find("CustomerSuccessPlaybookStepRun", { runId: activeRunId }, { limit: 500 });
+    const supportSourceAvailable = this.metadata.registry.hasEntity("Case");
+    const cases =
+      accountId === null || !supportSourceAvailable
+        ? []
+        : await this.records.find("Case", { accountId }, { limit: 1_000 });
     return {
       accountId: accountId ?? "",
       profile,
@@ -526,7 +531,9 @@ export class CustomerSuccessHealthService {
       goals,
       risks,
       onboardingSteps,
+      cases,
       subscriptionSourceAvailable: this.metadata.registry.hasEntity("Subscription"),
+      supportSourceAvailable,
     };
   }
 

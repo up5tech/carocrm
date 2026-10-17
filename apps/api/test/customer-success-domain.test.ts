@@ -18,6 +18,7 @@ import {
   validateHealthThresholds,
   validatePlaybookSteps,
 } from '../src/customer-success/customer-success-domain.js';
+import { type HealthFacts, SupportSignalProvider } from '../src/customer-success/customer-success-signals.js';
 
 /**
  * Phase 19-CS unit tests (PLAN_Phase_19_Customer_Success.md §15.1).
@@ -306,5 +307,39 @@ describe('health trend (§5.4.4)', () => {
     expect(healthTrend(50, 55)).toBe('improving');
     expect(healthTrend(50, 44)).toBe('declining');
     expect(healthTrend(50, 52)).toBe('stable');
+  });
+});
+
+describe('support signal adapter (19-SD.16)', () => {
+  const facts = (cases: Record<string, unknown>[], supportSourceAvailable = true): HealthFacts =>
+    ({ cases: cases.map((data, index) => ({ id: `c${String(index)}`, entityType: 'Case', version: 1, name: null, data })), supportSourceAvailable }) as unknown as HealthFacts;
+  const provider = new SupportSignalProvider();
+
+  it('reports a missing source rather than failing when Service Desk is absent', () => {
+    const result = provider.collect(facts([], false), {} as never, new Date());
+    expect(result.applicability).toBe('missing');
+    expect(result.explanationCode).toBe('sourceUnavailable');
+  });
+
+  it('keeps healthy support history near full score', () => {
+    const result = provider.collect(facts([{ status: 'Resolved' }, { status: 'Closed' }]), {} as never, new Date());
+    expect(result.applicability).toBe('applicable');
+    expect(result.score).toBe(100);
+    expect(result.explanationCode).toBe('supportHealthy');
+  });
+
+  it('lowers the score for open, breached and escalated cases', () => {
+    const result = provider.collect(
+      facts([
+        { status: 'Open' },
+        { status: 'Open', slaState: 'Breached' },
+        { status: 'Escalated', isEscalated: true, reopenedAt: '2026-01-01T00:00:00.000Z' },
+      ]),
+      {} as never,
+      new Date(),
+    );
+    expect(result.applicability).toBe('applicable');
+    expect(result.explanationCode).toBe('supportBreaches');
+    expect(Number(result.score)).toBeLessThan(70);
   });
 });

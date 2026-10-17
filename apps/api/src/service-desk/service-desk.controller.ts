@@ -1,17 +1,20 @@
-import { AuthorizationDeniedError, InvalidQueryError, ValidationError } from "@carocrm/core/errors/index.js";
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from "@nestjs/common";
+import { timingSafeEqual } from "node:crypto";
+
+import { AuthenticationFailedError, AuthorizationDeniedError, InvalidQueryError, ValidationError } from "@carocrm/core/errors/index.js";
+import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Post, Query, Req } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 import type { ZodTypeAny } from "zod";
 import { z } from "zod";
 
 import { Public } from "../auth/auth.guard.js";
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
+import { type AppConfig, CONFIG_TOKEN } from "../config.js";
 import { CaseAssignmentService } from "./case-assignment.service.js";
 import { CaseConversationService } from "./case-conversation.service.js";
 import { CaseLifecycleService } from "./case-lifecycle.service.js";
 import { CaseMergeService } from "./case-merge.service.js";
-import { CsatService } from "./csat.service.js";
 import { CaseNumberingService } from "./case-numbering.service.js";
+import { CsatService } from "./csat.service.js";
 import {
   CaseAssignSchema,
   CaseConversationQuerySchema,
@@ -25,6 +28,8 @@ import {
 } from "./dto/service-desk-shapes.js";
 import { EmailToCaseService } from "./email-to-case.service.js";
 import { KnowledgeBaseService } from "./knowledge-base.service.js";
+import { runAsServiceDeskSystem } from "./service-desk-authority.js";
+import { ServiceDeskMetricsService } from "./service-desk-metrics.service.js";
 import { ServiceDeskModuleHealthService } from "./service-desk-module-health.service.js";
 import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 import { SlaService } from "./sla.service.js";
@@ -48,6 +53,7 @@ export class ServiceDeskController {
   constructor(
     @Inject(ServiceDeskModuleHealthService) private readonly health: ServiceDeskModuleHealthService,
     @Inject(ServiceDeskSettingsService) private readonly settings: ServiceDeskSettingsService,
+    @Inject(ServiceDeskMetricsService) private readonly metricsService: ServiceDeskMetricsService,
     @Inject(CaseNumberingService) private readonly numbering: CaseNumberingService,
     @Inject(CaseLifecycleService) private readonly lifecycle: CaseLifecycleService,
     @Inject(CaseAssignmentService) private readonly assignment: CaseAssignmentService,
@@ -59,6 +65,7 @@ export class ServiceDeskController {
     @Inject(SlaService) private readonly slaService: SlaService,
     @Inject(WebToCaseService) private readonly webToCase: WebToCaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
 
   @Get("action/health")
@@ -85,6 +92,24 @@ export class ServiceDeskController {
   async caseNumberPreview() {
     this.requireAdmin("case number configuration");
     return this.numbering.preview();
+  }
+
+  /**
+   * ACL-scoped service metrics (§13, SD.15). The range bounds case creation; every aggregate runs
+   * through the same record ACL as the list API, so counts never include an unreadable case.
+   */
+  @Get("action/metrics")
+  async metrics(@Query() query: unknown) {
+    const parsed = z
+      .object({ from: z.coerce.date().optional(), to: z.coerce.date().optional() })
+      .safeParse(query ?? {});
+    if (!parsed.success) {
+      throw new InvalidQueryError("Invalid metrics range.", { issues: parsed.error.issues.map((issue) => issue.message) });
+    }
+    return this.metricsService.metrics({
+      ...(parsed.data.from !== undefined ? { from: parsed.data.from.toISOString() } : {}),
+      ...(parsed.data.to !== undefined ? { to: parsed.data.to.toISOString() } : {}),
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -205,18 +230,38 @@ export class ServiceDeskController {
     return this.emailToCaseService.replyByEmail(id, parse(CaseEmailReplySchema, body));
   }
 
-  /** Idempotent SLA breach/warning pass (§5.7, SD.8). Administrator or job. */
+  /** Idempotent SLA breach/warning pass (§5.7, SD.8). Administrator only. */
   @Post("action/sla/checkBreaches")
   @HttpCode(200)
   async slaCheckBreaches() {
+    this.requireAdmin("running an SLA scan");
     return this.slaService.checkBreaches();
   }
 
-  /** Idempotent SLA scan: warnings, breaches, escalations, notifications (§5.7, SD.9). */
+  /**
+   * Idempotent SLA scan: warnings, breaches, escalations, notifications, knowledge expiry (§5.7,
+   * SD.9). Administrator only; the worker calls the `@Public()` route below with the shared
+   * worker→API capability.
+   */
   @Post("action/sla/runScheduledCheck")
   @HttpCode(200)
   async slaRunScheduledCheck() {
-    return this.slaService.runScheduledCheck();
+    this.requireAdmin("running a scheduled SLA scan");
+    return runAsServiceDeskSystem(this.scope, "sla-scan", () => this.slaService.runScheduledCheck());
+  }
+
+  /**
+   * The worker's twin of `runScheduledCheck`. The worker has no user session, so the shared
+   * worker→API capability (`x-worker-secret`, `REPORT_WORKER_SECRET`) is the authorisation,
+   * compared in constant time and refused when no capability is configured. The pass is
+   * idempotent by clock state and notification dedup keys, so a retry is safe (SD.9).
+   */
+  @Public()
+  @Post("action/sla/run-scheduled-check")
+  @HttpCode(200)
+  async slaRunScheduledCheckForWorker(@Headers("x-worker-secret") secret?: string) {
+    this.assertWorkerSecret(secret);
+    return runAsServiceDeskSystem(this.scope, "sla-scan", () => this.slaService.runScheduledCheck());
   }
 
   /** Publish a knowledge article (admin). */
@@ -338,6 +383,18 @@ export class ServiceDeskController {
   private requireAdmin(action: string): void {
     if (!this.scope.isAdmin) {
       throw new AuthorizationDeniedError(`Administrator access is required for ${action}.`);
+    }
+  }
+
+  private assertWorkerSecret(supplied: string | undefined): void {
+    const expected = this.config.reportWorkerSecret;
+    if (expected === "" || supplied === undefined) {
+      throw new AuthenticationFailedError("Invalid worker capability.");
+    }
+    const expectedBytes = Buffer.from(expected);
+    const suppliedBytes = Buffer.from(supplied);
+    if (expectedBytes.length !== suppliedBytes.length || !timingSafeEqual(expectedBytes, suppliedBytes)) {
+      throw new AuthenticationFailedError("Invalid worker capability.");
     }
   }
 }

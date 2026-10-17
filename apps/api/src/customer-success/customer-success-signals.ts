@@ -44,8 +44,12 @@ export interface HealthFacts {
   readonly risks: readonly CustomerSuccessRow[];
   /** Steps of the active onboarding playbook run, when there is one. */
   readonly onboardingSteps: readonly CustomerSuccessRow[];
+  /** Support cases of the account, when the Service Desk module is installed. */
+  readonly cases: readonly CustomerSuccessRow[];
   /** Whether a commercial renewal source (Subscription) exists in the metadata registry. */
   readonly subscriptionSourceAvailable: boolean;
+  /** Whether the Service Desk `Case` entity exists in the metadata registry. */
+  readonly supportSourceAvailable: boolean;
 }
 
 export interface HealthSignalResult {
@@ -372,13 +376,44 @@ export class AdoptionSignalProvider implements HealthSignalProvider {
 export class SupportSignalProvider implements HealthSignalProvider {
   readonly key = "support";
   readonly label = "Support health";
-  readonly available = false;
+  // The adapter reads the Service Desk `Case` entity when it is installed; a missing entity is
+  // reported as a missing source rather than a failed signal.
+  readonly available = true;
 
-  collect(): HealthSignalResult {
-    return missing(
+  collect(facts: HealthFacts, _settings: CustomerSuccessSettings, now: Date): HealthSignalResult {
+    if (!facts.supportSourceAvailable) {
+      return missing(
+        this.key,
+        "sourceUnavailable",
+        "The Service Desk module is not installed; support signals are unavailable.",
+      );
+    }
+    if (facts.cases.length === 0) {
+      return missing(this.key, "noSupportHistory", "No support cases are recorded for this account.");
+    }
+    const terminal = new Set(["Resolved", "Closed", "Cancelled"]);
+    const open = facts.cases.filter((row) => !terminal.has(String(row.data["status"] ?? "New"))).length;
+    const breached = facts.cases.filter((row) => row.data["slaState"] === "Breached").length;
+    const escalated = facts.cases.filter((row) => row.data["isEscalated"] === true).length;
+    const reopened = facts.cases.filter((row) => {
+      const value = row.data["reopenedAt"];
+      return typeof value === "string" && value !== "";
+    }).length;
+    const score = Math.max(
+      0,
+      100 - Math.min(30, open * 3) - Math.min(40, breached * 15) - Math.min(20, escalated * 10) - Math.min(10, reopened * 5),
+    );
+    const latest = facts.cases
+      .map((row) => Date.parse(String(row.data["modifiedAt"] ?? row.data["createdAt"] ?? "")))
+      .filter((value) => Number.isFinite(value))
+      .sort((left, right) => right - left)[0];
+    return applicable(
       this.key,
-      "unavailable",
-      "The Service Desk support-signal adapter is not implemented yet; support signals are unavailable.",
+      score,
+      breached > 0 ? "supportBreaches" : escalated > 0 ? "supportEscalations" : open > 0 ? "openSupportCases" : "supportHealthy",
+      `${String(facts.cases.length)} case(s): ${String(open)} open, ${String(breached)} breached, ${String(escalated)} escalated.`,
+      latest === undefined ? now.toISOString() : new Date(latest).toISOString(),
+      { entity: "Case", id: facts.cases[0]?.id ?? "" },
     );
   }
 }

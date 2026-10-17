@@ -1,5 +1,6 @@
 import { FeatureDisabledError } from "@carocrm/core/errors/index.js";
 import { Inject, Injectable } from "@nestjs/common";
+import { sql } from "kysely";
 
 import { DatabaseService } from "../database/database.service.js";
 import { EntityCrudService } from "../entity/entity.service.js";
@@ -81,6 +82,34 @@ export class KnowledgeBaseService {
       const hay = `${a.title} ${a.summary ?? ""}`.toLowerCase();
       return words.some((w) => hay.includes(w));
     }).slice(0, 10);
+  }
+
+  /**
+   * Scheduled lifecycle sweep (§5.8 "expiry behavior"): a published article whose expiry date has
+   * passed becomes `Expired`, so portal search stops serving it and the change is audited like any
+   * other editorial update. Idempotent: only `Published` rows are candidates.
+   */
+  async expireDueArticles(now = new Date()): Promise<number> {
+    const settings = await this.settings.settings();
+    if (!settings.features.knowledgeBase) return 0;
+    const rows = await this.database.db
+      .selectFrom("entity_records")
+      .select(["id", "attrs"])
+      .where("entity_type", "=", KB_ARTICLE)
+      .where("deleted_at", "is", null)
+      .where(sql`attrs ->> 'status'`, "=", "Published")
+      .where(sql`attrs ->> 'expiresAt'`, "is not", null)
+      .limit(500)
+      .execute();
+    let expired = 0;
+    for (const row of rows) {
+      const a = (row.attrs ?? {}) as Record<string, unknown>;
+      const expiresAt = new Date(String(a["expiresAt"]));
+      if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() > now.getTime()) continue;
+      await this.entities.update(KB_ARTICLE, String(row.id), { status: "Expired" });
+      expired += 1;
+    }
+    return expired;
   }
 
   private toView(record: Record<string, unknown>): KnowledgeArticleView;

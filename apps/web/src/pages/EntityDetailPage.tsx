@@ -10,9 +10,11 @@ import { CaseLifecycleActions } from '../components/CaseLifecycleActions.js';
 import { CaseQueueWorkload } from '../components/CaseQueueWorkload.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
+import { PortalCaseConversation } from '../components/PortalCaseConversation.js';
 import { SalesDocumentLinesPanel } from '../components/SalesDocumentLinesPanel.js';
 import { StreamPanel } from '../components/StreamPanel.js';
 import { salesDocumentKind } from '../sales/documents.js';
+import { PORTAL_HIDDEN_CASE_FIELDS } from '../service-desk/portal-case-fields.js';
 import { t } from '../state/i18n.js';
 import { evaluateEntityLogic } from '../state/logic.js';
 import {
@@ -188,8 +190,11 @@ export function EntityDetailPage() {
     [definition.data, record],
   );
   const entries = useMemo(
-    () => detailEntries(definition.data).filter((entry) => logic.fields[entry.name]?.visible !== false),
-    [definition.data, logic],
+    () =>
+      detailEntries(definition.data)
+        .filter((entry) => logic.fields[entry.name]?.visible !== false)
+        .filter((entry) => base !== '/portal' || entity !== 'Case' || !PORTAL_HIDDEN_CASE_FIELDS.has(entry.name)),
+    [definition.data, logic, base, entity],
   );
   // PLAN §8: an entity without a 'detail' layout keeps the single field-ordered Descriptions.
   const panels = useMemo(() => layoutPanelsFor(definition.data, 'detail'), [definition.data]);
@@ -243,22 +248,24 @@ export function EntityDetailPage() {
               <Button icon={<EditOutlined />} type="primary" onClick={() => navigate(`${base}/${entity}/${id}/edit`)}>
                 {t('web.detail.edit')}
               </Button>
-              <Popconfirm
-                title={t('web.detail.deleteThisRecord')}
-                onConfirm={async () => {
-                  try {
-                    await api.remove(entity, id);
-                    void message.success(t('web.detail.deleted'));
-                    navigate(`${base}/${entity}`);
-                  } catch (error) {
-                    void message.error(error instanceof Error ? error.message : t('web.detail.deleteFailed'));
-                  }
-                }}
-              >
-                <Button danger icon={<DeleteOutlined />}>
-                  {t('web.detail.delete')}
-                </Button>
-              </Popconfirm>
+              {base === '/portal' && entity === 'Case' ? null : (
+                <Popconfirm
+                  title={t('web.detail.deleteThisRecord')}
+                  onConfirm={async () => {
+                    try {
+                      await api.remove(entity, id);
+                      void message.success(t('web.detail.deleted'));
+                      navigate(`${base}/${entity}`);
+                    } catch (error) {
+                      void message.error(error instanceof Error ? error.message : t('web.detail.deleteFailed'));
+                    }
+                  }}
+                >
+                  <Button danger icon={<DeleteOutlined />}>
+                    {t('web.detail.delete')}
+                  </Button>
+                </Popconfirm>
+              )}
             </Space>
           }
         >
@@ -327,10 +334,16 @@ export function EntityDetailPage() {
         })}
 
         {/* Phase 19-SD.6 — a Case gets the visibility-aware conversation panel: an explicit public /
-            internal composer and a timeline that badges every entry's visibility. Other records keep
-            the generic stream panel (whose posts are internal by default). */}
-        {entity === 'Case' && base !== '/portal' ? (
-          <CaseConversation caseId={id} definition={definition.data} onChanged={load} />
+            internal composer and a timeline that badges every entry's visibility. SD.11 gives the
+            portal its own customer-safe conversation: public entries only, replies posted through
+            the generic Note endpoint that forces portal visibility. Other records keep the generic
+            stream panel (whose posts are internal by default). */}
+        {entity === 'Case' ? (
+          base === '/portal' ? (
+            <PortalCaseConversation caseId={id} />
+          ) : (
+            <CaseConversation caseId={id} definition={definition.data} onChanged={load} />
+          )
         ) : (
           <StreamPanel entity={entity} id={id} definition={definition.data} canPost />
         )}

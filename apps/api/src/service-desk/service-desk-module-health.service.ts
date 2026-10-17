@@ -118,7 +118,8 @@ export class ServiceDeskModuleHealthService {
     });
 
     const optionalIntegrations: OptionalIntegrationView[] = OPTIONAL_INTEGRATIONS.map((integration) => {
-      const found = registered.has(integration.markerEntity);
+      // The Portal is a platform table, not a metadata entity, so detect it by table presence.
+      const found = integration.id === "portal" ? schema.tables.has("portals") : registered.has(integration.markerEntity);
       return {
         id: integration.id,
         label: integration.label,

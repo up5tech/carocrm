@@ -6,6 +6,7 @@ import type { AfterSaveHook, AfterSaveHookArgs } from "../entity/hooks.js";
 import { KERNEL_HOOKS_TOKEN } from "../entity/hooks.js";
 import { currentTx, runInTransaction } from "../entity/tx-context.js";
 import { EventBus } from "../events/event-bus.js";
+import { KnowledgeBaseService } from "./knowledge-base.service.js";
 import { CASE_ENTITY } from "./service-desk-domain.js";
 import { ServiceDeskNotificationService } from "./service-desk-notification.service.js";
 import { ServiceDeskRecords } from "./service-desk-records.js";
@@ -32,6 +33,13 @@ export interface SLAPolicy {
   readonly priority: number;
 }
 
+/** Bounded scan size per run: a scheduler tick must never load the whole clock table (§12.2). */
+export const SLA_SCAN_BATCH_SIZE = 500;
+/** A corrupt calendar cannot make business-time arithmetic loop forever. */
+const MAX_MINUTE_SCAN = 200_000;
+const DEFAULT_WARNING_THRESHOLDS: readonly number[] = [75];
+const TERMINAL_CASE_STATUSES: ReadonlySet<string> = new Set(["Resolved", "Closed", "Cancelled"]);
+
 @Injectable()
 export class SlaService implements OnApplicationBootstrap {
   constructor(
@@ -40,6 +48,7 @@ export class SlaService implements OnApplicationBootstrap {
     @Inject(KERNEL_HOOKS_TOKEN) private readonly kernelHooks: AfterSaveHook[],
     @Inject(ServiceDeskNotificationService) private readonly notifications: ServiceDeskNotificationService,
     @Inject(ServiceDeskRecords) private readonly records: ServiceDeskRecords,
+    @Inject(KnowledgeBaseService) private readonly knowledgeBase: KnowledgeBaseService,
     @Inject(EventBus) private readonly events: EventBus,
   ) {}
 
@@ -69,7 +78,12 @@ export class SlaService implements OnApplicationBootstrap {
       const newStatus = String(data["status"] ?? "");
       if (prevStatus !== newStatus) {
         if (newStatus === "Resolved") await this.onResolved(String(args.record.id));
-        else await this.onStatusChanged(String(args.record.id), newStatus, data);
+        else {
+          await this.onStatusChanged(String(args.record.id), newStatus, data);
+          if (newStatus === "Open" && (prevStatus === "Resolved" || prevStatus === "Closed")) {
+            await this.onReopened(String(args.record.id), data);
+          }
+        }
       }
     }
   }
@@ -171,6 +185,7 @@ export class SlaService implements OnApplicationBootstrap {
     };
   }
 
+  /** Advance an instant by `minutes` of *business* time on the calendar (§5.6 time calculation). */
   addBusinessMinutes(start: Date, minutes: number, calendar: BusinessCalendar | null): Date {
     if (minutes <= 0) return new Date(start);
     if (calendar === null || Object.keys(calendar.intervals).length === 0) {
@@ -179,7 +194,7 @@ export class SlaService implements OnApplicationBootstrap {
     let cursor = new Date(start);
     let remaining = minutes;
     let guard = 0;
-    while (remaining > 0 && guard < 200_000) {
+    while (remaining > 0 && guard < MAX_MINUTE_SCAN) {
       guard += 1;
       if (this.isBusinessMinute(cursor, calendar)) {
         remaining -= 1;
@@ -189,12 +204,36 @@ export class SlaService implements OnApplicationBootstrap {
     return cursor;
   }
 
+  /**
+   * Business minutes actually elapsed between two instants. Used for warning thresholds, elapsed
+   * time and pause accounting; bounded so a corrupt calendar can never scan indefinitely.
+   */
+  businessMinutesBetween(start: Date, end: Date, calendar: BusinessCalendar | null): number {
+    if (end.getTime() <= start.getTime()) return 0;
+    if (calendar === null || Object.keys(calendar.intervals).length === 0) {
+      return Math.floor((end.getTime() - start.getTime()) / 60_000);
+    }
+    let count = 0;
+    let guard = 0;
+    let cursor = new Date(start);
+    while (cursor.getTime() < end.getTime() && guard < MAX_MINUTE_SCAN) {
+      if (this.isBusinessMinute(cursor, calendar)) count += 1;
+      cursor = new Date(cursor.getTime() + 60_000);
+      guard += 1;
+    }
+    return count;
+  }
+
+  /**
+   * The calendar is evaluated in its own IANA time zone, so weekly intervals and holidays follow
+   * local wall time and daylight-saving transitions instead of server UTC (PLAN §5.6).
+   */
   private isBusinessMinute(d: Date, calendar: BusinessCalendar): boolean {
-    const dateKey = d.toISOString().slice(0, 10);
-    if (calendar.holidays.has(dateKey)) return false;
-    const slots = calendar.intervals[String(d.getUTCDay())];
+    const local = zonedParts(d, calendar.timezone);
+    if (calendar.holidays.has(local.dateKey)) return false;
+    const slots = calendar.intervals[String(local.weekday)];
     if (!slots || slots.length === 0) return false;
-    const mins = d.getUTCHours() * 60 + d.getUTCMinutes();
+    const mins = local.hour * 60 + local.minute;
     return slots.some((s) => {
       const sp = s.start.split(":").map((n) => Number(n));
       const ep = s.end.split(":").map((n) => Number(n));
@@ -224,22 +263,59 @@ export class SlaService implements OnApplicationBootstrap {
     if (policy.resolutionMinutes > 0) await this.createClock(caseId, "resolution", policy, policy.resolutionMinutes, now, calendar);
   }
 
-  private async createClock(caseId: string, targetType: string, policy: SLAPolicy, minutes: number, start: Date, calendar: BusinessCalendar | null): Promise<void> {
+  /**
+   * A reopened case starts a new resolution cycle with a fresh clock. Prior cycles keep their
+   * `met` clock and history, so the earlier resolution remains auditable (§5.6 reopen semantics).
+   */
+  private async onReopened(caseId: string, data: Record<string, unknown>): Promise<void> {
+    const policy = await this.resolvePolicy(data);
+    if (policy === null || policy.resolutionMinutes <= 0) return;
+    const calendar = await this.loadCalendar(policy.calendarId);
+    const rows = await this.db
+      .selectFrom("entity_records")
+      .select("attrs")
+      .where("entity_type", "=", "CaseSLAClock")
+      .where("deleted_at", "is", null)
+      .where(sql`attrs ->> 'caseId'`, "=", caseId)
+      .where(sql`attrs ->> 'targetType'`, "=", "resolution")
+      .execute();
+    let cycle = 1;
+    for (const row of rows) {
+      const a = (row.attrs ?? {}) as Record<string, unknown>;
+      const value = typeof a["cycle"] === "number" ? (a["cycle"] as number) : 1;
+      if (value >= cycle) cycle = value + 1;
+    }
+    await this.createClock(caseId, "resolution", policy, policy.resolutionMinutes, new Date(), calendar, cycle);
+    await this.recomputeCaseState(caseId);
+  }
+
+  private async createClock(
+    caseId: string,
+    targetType: string,
+    policy: SLAPolicy,
+    minutes: number,
+    start: Date,
+    calendar: BusinessCalendar | null,
+    cycle = 1,
+  ): Promise<void> {
     if (minutes <= 0) return;
     const due = this.addBusinessMinutes(start, minutes, calendar);
-    const id = `slc_${caseId}_${targetType}_${Date.now().toString(36)}`;
+    const id = `slc_${caseId}_${targetType}_${Date.now().toString(36)}_${cycle}`;
     await sql`INSERT INTO entity_records (id, entity_type, attrs, version, created_at, modified_at)
       VALUES (${id}, 'CaseSLAClock', ${JSON.stringify({
-        name: `${targetType} clock`,
+        name: `${targetType} clock (cycle ${String(cycle)})`,
         caseId,
         targetType,
         policyId: policy.id,
         policyVersion: policy.version,
+        calendarId: policy.calendarId,
+        warningThresholds: policy.warningThresholds,
         startAt: start.toISOString(),
         dueAt: due.toISOString(),
         elapsedMinutes: 0,
+        totalPausedBusinessMinutes: 0,
         status: "onTrack",
-        cycle: 1,
+        cycle,
       })}::jsonb, 1, now(), now())`.execute(this.db);
   }
 
@@ -255,11 +331,20 @@ export class SlaService implements OnApplicationBootstrap {
       .where(sql`attrs ->> 'caseId'`, "=", caseId)
       .where(sql`attrs ->> 'targetType'`, "=", targetType)
       .execute();
+    const calendars = new Map<string, BusinessCalendar | null>();
+    const now = new Date();
     for (const r of rows) {
       const a = (r.attrs ?? {}) as Record<string, unknown>;
       const st = String(a["status"] ?? "");
       if (st !== "onTrack" && st !== "warning" && st !== "paused") continue;
-      await sql`UPDATE entity_records SET attrs = attrs || '{"status":"met"}'::jsonb, modified_at = now() WHERE id = ${String(r.id)}`.execute(this.db);
+      const calendar = await this.calendarFor(a, calendars);
+      const start = a["startAt"] ? new Date(String(a["startAt"])) : now;
+      const elapsed = this.businessMinutesBetween(start, now, calendar);
+      await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify({
+        status: "met",
+        metAt: now.toISOString(),
+        elapsedMinutes: elapsed,
+      })}::jsonb, modified_at = now() WHERE id = ${String(r.id)}`.execute(this.db);
     }
     await this.recomputeCaseState(caseId);
   }
@@ -289,20 +374,67 @@ export class SlaService implements OnApplicationBootstrap {
     if (!settings.features.sla) return;
     const policy = await this.resolvePolicy(data);
     if (policy === null) return;
-    if (newStatus === "Pending Customer" && policy.pauseOnCustomer) {
-      await sql`UPDATE entity_records SET attrs = attrs || '{"status":"paused"}'::jsonb, modified_at = now()
-        WHERE entity_type = 'CaseSLAClock' AND deleted_at IS NULL AND (attrs ->> 'caseId') = ${caseId}
-          AND (attrs ->> 'status') IN ('onTrack','warning')`.execute(this.db);
-    } else if (newStatus === "Pending Internal" && policy.pauseOnInternal) {
-      await sql`UPDATE entity_records SET attrs = attrs || '{"status":"paused"}'::jsonb, modified_at = now()
-        WHERE entity_type = 'CaseSLAClock' AND deleted_at IS NULL AND (attrs ->> 'caseId') = ${caseId}
-          AND (attrs ->> 'status') IN ('onTrack','warning')`.execute(this.db);
-    } else {
-      await sql`UPDATE entity_records SET attrs = attrs || '{"status":"onTrack"}'::jsonb, modified_at = now()
-        WHERE entity_type = 'CaseSLAClock' AND deleted_at IS NULL AND (attrs ->> 'caseId') = ${caseId}
-          AND (attrs ->> 'status') = 'paused'`.execute(this.db);
-    }
+    const pause =
+      (newStatus === "Pending Customer" && policy.pauseOnCustomer) ||
+      (newStatus === "Pending Internal" && policy.pauseOnInternal);
+    if (pause) await this.pauseClocks(caseId);
+    else await this.resumeClocks(caseId);
     await this.recomputeCaseState(caseId);
+  }
+
+  private async pauseClocks(caseId: string): Promise<void> {
+    const pausedAt = new Date().toISOString();
+    await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify({ status: "paused", pausedAt })}::jsonb, modified_at = now()
+      WHERE entity_type = 'CaseSLAClock' AND deleted_at IS NULL AND (attrs ->> 'caseId') = ${caseId}
+        AND (attrs ->> 'status') IN ('onTrack','warning')
+        AND (attrs ->> 'pausedAt') IS NULL`.execute(this.db);
+  }
+
+  /**
+   * Resume each paused clock by *shifting its deadline* by the business minutes spent paused, and
+   * keep that duration on the clock. The pause interval therefore stays inspectable and the
+   * original target is not silently shortened (§5.6 "pause intervals/state").
+   */
+  private async resumeClocks(caseId: string): Promise<void> {
+    const rows = await this.db
+      .selectFrom("entity_records")
+      .select(["id", "attrs"])
+      .where("entity_type", "=", "CaseSLAClock")
+      .where("deleted_at", "is", null)
+      .where(sql`attrs ->> 'caseId'`, "=", caseId)
+      .where(sql`attrs ->> 'status'`, "=", "paused")
+      .execute();
+    if (rows.length === 0) return;
+    const calendars = new Map<string, BusinessCalendar | null>();
+    const now = new Date();
+    for (const row of rows) {
+      const a = (row.attrs ?? {}) as Record<string, unknown>;
+      const pausedAt = a["pausedAt"] ? new Date(String(a["pausedAt"])) : null;
+      const dueAt = a["dueAt"] ? new Date(String(a["dueAt"])) : null;
+      const calendar = await this.calendarFor(a, calendars);
+      const pausedBusiness = pausedAt === null ? 0 : this.businessMinutesBetween(pausedAt, now, calendar);
+      const prior = typeof a["totalPausedBusinessMinutes"] === "number" ? (a["totalPausedBusinessMinutes"] as number) : 0;
+      const nextDue = dueAt === null ? null : this.addBusinessMinutes(dueAt, pausedBusiness, calendar);
+      await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify({
+        status: "onTrack",
+        pausedAt: null,
+        resumedAt: now.toISOString(),
+        totalPausedBusinessMinutes: prior + pausedBusiness,
+        ...(nextDue !== null ? { dueAt: nextDue.toISOString() } : {}),
+      })}::jsonb, modified_at = now() WHERE id = ${String(row.id)}`.execute(this.db);
+    }
+  }
+
+  private async calendarFor(
+    attrs: Record<string, unknown>,
+    cache: Map<string, BusinessCalendar | null>,
+  ): Promise<BusinessCalendar | null> {
+    const calendarId = typeof attrs["calendarId"] === "string" ? (attrs["calendarId"] as string) : null;
+    const key = calendarId ?? "";
+    if (cache.has(key)) return cache.get(key) ?? null;
+    const calendar = await this.loadCalendar(calendarId);
+    cache.set(key, calendar);
+    return calendar;
   }
 
   private async recomputeCaseState(caseId: string): Promise<void> {
@@ -326,28 +458,43 @@ export class SlaService implements OnApplicationBootstrap {
     await this.setCaseSlaState(caseId, state, null, null);
   }
 
-  async checkBreaches(): Promise<{ checked: number; breached: number; warned: number }> {
+  /**
+   * Mark clocks that reached a configured warning threshold or passed their business-time
+   * deadline. Paused clocks are skipped: a pause must never breach a target (§5.6). The scan is
+   * bounded and returns `truncated` when more clocks remain for the next tick.
+   */
+  async checkBreaches(): Promise<{ checked: number; breached: number; warned: number; truncated: boolean }> {
     const settings = await this.settings.settings();
-    if (!settings.features.sla) return { checked: 0, breached: 0, warned: 0 };
+    if (!settings.features.sla) return { checked: 0, breached: 0, warned: 0, truncated: false };
     const now = new Date();
     const rows = await this.db
       .selectFrom("entity_records")
       .select(["id", "attrs"])
       .where("entity_type", "=", "CaseSLAClock")
       .where("deleted_at", "is", null)
+      .limit(SLA_SCAN_BATCH_SIZE + 1)
       .execute();
+    const truncated = rows.length > SLA_SCAN_BATCH_SIZE;
+    const clocks = truncated ? rows.slice(0, SLA_SCAN_BATCH_SIZE) : rows;
+    const calendars = new Map<string, BusinessCalendar | null>();
     let checked = 0;
     let breached = 0;
     let warned = 0;
-    for (const r of rows) {
+    for (const r of clocks) {
       const a = (r.attrs ?? {}) as Record<string, unknown>;
       const status = String(a["status"] ?? "");
-      if (status === "met" || status === "breached") continue;
-      checked += 1;
+      if (status === "met" || status === "breached" || status === "paused") continue;
       const due = a["dueAt"] ? new Date(String(a["dueAt"])) : null;
       if (due === null) continue;
-      if (now.getTime() > due.getTime()) {
-        await sql`UPDATE entity_records SET attrs = attrs || '{"status":"breached"}'::jsonb, modified_at = now() WHERE id = ${String(r.id)}`.execute(this.db);
+      checked += 1;
+      const calendar = await this.calendarFor(a, calendars);
+      const progress = this.clockProgress(a, calendar, now);
+      if (now.getTime() >= due.getTime()) {
+        await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify({
+          status: "breached",
+          breachedAt: now.toISOString(),
+          elapsedMinutes: progress.elapsedBusinessMinutes,
+        })}::jsonb, modified_at = now() WHERE id = ${String(r.id)}`.execute(this.db);
         breached += 1;
         const caseId = String(a["caseId"] ?? "");
         if (caseId) {
@@ -356,96 +503,171 @@ export class SlaService implements OnApplicationBootstrap {
             await this.events.dispatchMany(tx, [{ type: "serviceDesk.case.slaBreached", payload: { caseId, clockId: String(r.id) } }]);
           });
         }
-      } else {
-        const start = a["startAt"] ? new Date(String(a["startAt"])) : null;
-        if (start !== null) {
-          const total = due.getTime() - start.getTime();
-          const elapsed = now.getTime() - start.getTime();
-          const pct = total > 0 ? elapsed / total : 0;
-          if (pct >= 0.75) {
-            await sql`UPDATE entity_records SET attrs = attrs || '{"status":"warning"}'::jsonb, modified_at = now() WHERE id = ${String(r.id)}`.execute(this.db);
-            warned += 1;
-            const caseId = String(a["caseId"] ?? "");
-            if (caseId) await this.setCaseSlaState(caseId, "warning", null, null);
-          }
-        }
+        continue;
+      }
+      const thresholds = this.warningThresholdsOf(a);
+      if (thresholds.some((threshold) => progress.percent * 100 >= threshold) && status !== "warning") {
+        await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify({
+          status: "warning",
+          elapsedMinutes: progress.elapsedBusinessMinutes,
+        })}::jsonb, modified_at = now() WHERE id = ${String(r.id)}`.execute(this.db);
+        warned += 1;
+        const caseId = String(a["caseId"] ?? "");
+        if (caseId) await this.setCaseSlaState(caseId, "warning", null, null);
       }
     }
-    return { checked, breached, warned };
+    return { checked, breached, warned, truncated };
   }
 
-  async runScheduledCheck(): Promise<{ checked: number; breached: number; warned: number; notified: number; escalated: number }> {
+  /**
+   * The scheduled SLA pass (§5.7, §12.1): warning/breach state, deduplicated notifications,
+   * escalation for active cases only, and Knowledge Base expiry. A retry creates no duplicate
+   * notification because a clock records the thresholds it fired and its breach notification flag.
+   */
+  async runScheduledCheck(): Promise<{
+    checked: number;
+    breached: number;
+    warned: number;
+    notified: number;
+    escalated: number;
+    expiredArticles: number;
+    truncated: boolean;
+  }> {
     const settings = await this.settings.settings();
-    if (!settings.features.sla) return { checked: 0, breached: 0, warned: 0, notified: 0, escalated: 0 };
+    if (!settings.features.sla) {
+      const expiredArticles = await this.knowledgeBase.expireDueArticles().catch(() => 0);
+      return { checked: 0, breached: 0, warned: 0, notified: 0, escalated: 0, expiredArticles, truncated: false };
+    }
     const breachResult = await this.checkBreaches();
-    let notified = 0;
-    let escalated = 0;
+    const now = new Date();
     const rows = await this.db
       .selectFrom("entity_records")
       .select(["id", "attrs"])
       .where("entity_type", "=", "CaseSLAClock")
       .where("deleted_at", "is", null)
+      .limit(SLA_SCAN_BATCH_SIZE + 1)
       .execute();
-    for (const r of rows) {
+    const clocks = rows.length > SLA_SCAN_BATCH_SIZE ? rows.slice(0, SLA_SCAN_BATCH_SIZE) : rows;
+    const calendars = new Map<string, BusinessCalendar | null>();
+    const caseCache = new Map<string, Awaited<ReturnType<SlaService["loadCase"]>>>();
+    const watcherCache = new Map<string, readonly string[]>();
+    let notified = 0;
+    let escalated = 0;
+
+    for (const r of clocks) {
       const a = (r.attrs ?? {}) as Record<string, unknown>;
       const caseId = String(a["caseId"] ?? "");
       if (caseId === "") continue;
       const clockId = String(r.id);
       const status = String(a["status"] ?? "");
-      const fired = Array.isArray(a["firedWarnings"]) ? (a["firedWarnings"] as number[]) : [];
-      const breachNotified = a["breachNotified"] === true;
-      const escalatedFlag = a["escalated"] === true;
+      if (status !== "warning" && status !== "breached") continue;
 
-      if (status === "warning" && !fired.includes(75)) {
-        const recipients = await this.caseWatchers(caseId);
-        const caseRow = await this.loadCase(caseId);
-        for (const userId of recipients) {
-          await this.notifications.slaWarning({
-            userId,
-            caseId,
-            caseNumber: caseRow?.caseNumber ?? null,
-            subject: caseRow?.name ?? null,
-            clockId,
-            targetType: String(a["targetType"] ?? ""),
-            kind: "warning",
-            dedupKey: `sla-warning:${clockId}:75`,
-          }).catch(() => undefined);
-          notified += 1;
+      if (!caseCache.has(caseId)) caseCache.set(caseId, await this.loadCase(caseId));
+      const caseRow = caseCache.get(caseId) ?? null;
+      const caseActive =
+        caseRow !== null &&
+        !TERMINAL_CASE_STATUSES.has(caseRow.status) &&
+        (caseRow.mergedIntoCaseId === null || caseRow.mergedIntoCaseId === "");
+      const calendar = await this.calendarFor(a, calendars);
+      const progress = this.clockProgress(a, calendar, now);
+      const fired = Array.isArray(a["firedWarnings"]) ? (a["firedWarnings"] as number[]) : [];
+
+      if (status === "warning" && caseActive) {
+        const pending = this.warningThresholdsOf(a).filter(
+          (threshold) => !fired.includes(threshold) && progress.percent * 100 >= threshold,
+        );
+        if (pending.length > 0) {
+          if (!watcherCache.has(caseId)) watcherCache.set(caseId, await this.caseWatchers(caseId));
+          for (const threshold of pending) {
+            for (const userId of watcherCache.get(caseId) ?? []) {
+              notified += await this.notifications
+                .slaWarning({
+                  userId,
+                  caseId,
+                  caseNumber: caseRow?.caseNumber ?? null,
+                  subject: caseRow?.name ?? null,
+                  clockId,
+                  targetType: String(a["targetType"] ?? ""),
+                  kind: "warning",
+                  dedupKey: `sla-warning:${clockId}:${String(threshold)}`,
+                })
+                .then(() => 1)
+                .catch(() => 0);
+            }
+          }
+          await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify({
+            firedWarnings: [...new Set([...fired, ...pending])],
+          })}::jsonb, modified_at = now() WHERE id = ${clockId}`.execute(this.db);
         }
-        await sql`UPDATE entity_records SET attrs = attrs || '{"firedWarnings":[75]}'::jsonb, modified_at = now() WHERE id = ${clockId}`.execute(this.db);
       }
 
-      if (status === "breached" && !breachNotified) {
-        const recipients = await this.caseWatchers(caseId);
-        const caseRow = await this.loadCase(caseId);
-        for (const userId of recipients) {
-          await this.notifications.slaBreach({
-            userId,
-            caseId,
-            caseNumber: caseRow?.caseNumber ?? null,
-            subject: caseRow?.name ?? null,
-            clockId,
-            targetType: String(a["targetType"] ?? ""),
-            kind: "breach",
-            dedupKey: `sla-breach:${clockId}`,
-          }).catch(() => undefined);
-          notified += 1;
+      if (status === "breached" && a["breachNotified"] !== true) {
+        if (caseActive) {
+          if (!watcherCache.has(caseId)) watcherCache.set(caseId, await this.caseWatchers(caseId));
+          for (const userId of watcherCache.get(caseId) ?? []) {
+            notified += await this.notifications
+              .slaBreach({
+                userId,
+                caseId,
+                caseNumber: caseRow?.caseNumber ?? null,
+                subject: caseRow?.name ?? null,
+                clockId,
+                targetType: String(a["targetType"] ?? ""),
+                kind: "breach",
+                dedupKey: `sla-breach:${clockId}`,
+              })
+              .then(() => 1)
+              .catch(() => 0);
+          }
+          if (a["escalated"] !== true) {
+            await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify({ isEscalated: true, escalationLevel: 1, escalatedAt: now.toISOString() })}::jsonb, modified_at = now() WHERE id = ${caseId}`.execute(this.db);
+            escalated += 1;
+          }
         }
-        if (!escalatedFlag) {
-          await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify({ isEscalated: true, escalationLevel: 1, escalatedAt: new Date().toISOString() })}::jsonb, modified_at = now() WHERE id = ${caseId}`.execute(this.db);
-          escalated += 1;
-        }
+        // Mark the clock whether or not the case was still active: a closed or merged case must not
+        // be re-notified on every tick (§5.7 "avoid escalating a resolved/closed/merged case").
         await sql`UPDATE entity_records SET attrs = attrs || '{"breachNotified":true,"escalated":true}'::jsonb, modified_at = now() WHERE id = ${clockId}`.execute(this.db);
       }
     }
 
-    try {
-      const current = await this.settings.settings();
-      await this.settings.update({ sla: { ...current.sla, lastScanAt: new Date().toISOString() } });
-    } catch {
-      // best effort
+    await this.settings.recordScanAt(now.toISOString()).catch(() => undefined);
+    const expiredArticles = await this.knowledgeBase.expireDueArticles().catch(() => 0);
+    return {
+      checked: breachResult.checked,
+      breached: breachResult.breached,
+      warned: breachResult.warned,
+      notified,
+      escalated,
+      expiredArticles,
+      truncated: breachResult.truncated || rows.length > SLA_SCAN_BATCH_SIZE,
+    };
+  }
+
+  /** Business minutes elapsed and the fraction of the target used, honouring pause bookkeeping. */
+  private clockProgress(
+    attrs: Record<string, unknown>,
+    calendar: BusinessCalendar | null,
+    now: Date,
+  ): { totalBusinessMinutes: number; elapsedBusinessMinutes: number; percent: number } {
+    const start = attrs["startAt"] ? new Date(String(attrs["startAt"])) : null;
+    const due = attrs["dueAt"] ? new Date(String(attrs["dueAt"])) : null;
+    if (start === null || due === null) return { totalBusinessMinutes: 0, elapsedBusinessMinutes: 0, percent: 0 };
+    const total = Math.max(0, this.businessMinutesBetween(start, due, calendar));
+    const paused =
+      typeof attrs["totalPausedBusinessMinutes"] === "number" ? (attrs["totalPausedBusinessMinutes"] as number) : 0;
+    const elapsed = Math.max(0, this.businessMinutesBetween(start, now, calendar) - paused);
+    const percent =
+      total > 0 ? elapsed / total : now.getTime() >= due.getTime() ? 1 : 0;
+    return { totalBusinessMinutes: total, elapsedBusinessMinutes: elapsed, percent };
+  }
+
+  private warningThresholdsOf(attrs: Record<string, unknown>): number[] {
+    const raw = attrs["warningThresholds"];
+    if (Array.isArray(raw)) {
+      const values = raw.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0);
+      if (values.length > 0) return values;
     }
-    return { checked: breachResult.checked, breached: breachResult.breached, warned: breachResult.warned, notified, escalated };
+    return [...DEFAULT_WARNING_THRESHOLDS];
   }
 
   private async caseWatchers(caseId: string): Promise<string[]> {
@@ -459,7 +681,13 @@ export class SlaService implements OnApplicationBootstrap {
     return [...active];
   }
 
-  private async loadCase(caseId: string): Promise<{ caseNumber: string | null; name: string | null; assignedUserId: string | null } | null> {
+  private async loadCase(caseId: string): Promise<{
+    caseNumber: string | null;
+    name: string | null;
+    assignedUserId: string | null;
+    status: string;
+    mergedIntoCaseId: string | null;
+  } | null> {
     const row = await this.db
       .selectFrom("entity_records")
       .select("attrs")
@@ -473,7 +701,60 @@ export class SlaService implements OnApplicationBootstrap {
       caseNumber: typeof a["caseNumber"] === "string" ? (a["caseNumber"] as string) : null,
       name: typeof a["name"] === "string" ? (a["name"] as string) : null,
       assignedUserId: typeof a["assignedUserId"] === "string" ? (a["assignedUserId"] as string) : null,
+      status: typeof a["status"] === "string" ? (a["status"] as string) : "New",
+      mergedIntoCaseId: typeof a["mergedIntoCaseId"] === "string" ? (a["mergedIntoCaseId"] as string) : null,
     };
   }
+}
+
+/** Weekday names `Intl` returns for `weekday: 'short'`, mapped to the calendar's `0..6` keys. */
+const WEEKDAY_INDEX: Readonly<Record<string, number>> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+const ZONED_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * Local calendar fields for an instant in an IANA time zone. `Intl` accounts for daylight-saving
+ * transitions, which is why the SLA calculator evaluates calendars through it rather than reading
+ * UTC getters (§5.6). An invalid time zone falls back to UTC instead of breaking the scan.
+ */
+function zonedParts(date: Date, timeZone: string): { weekday: number; hour: number; minute: number; dateKey: string } {
+  let formatter = ZONED_FORMATTERS.get(timeZone);
+  if (formatter === undefined) {
+    try {
+      formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        weekday: "short",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      });
+    } catch {
+      formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "UTC",
+        weekday: "short",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      });
+    }
+    ZONED_FORMATTERS.set(timeZone, formatter);
+  }
+  const parts = formatter.formatToParts(date);
+  const lookup = (type: Intl.DateTimeFormatPartTypes): string => parts.find((part) => part.type === type)?.value ?? "";
+  const year = lookup("year");
+  const month = lookup("month");
+  const day = lookup("day");
+  const rawHour = Number(lookup("hour"));
+  return {
+    weekday: WEEKDAY_INDEX[lookup("weekday")] ?? 0,
+    hour: rawHour === 24 ? 0 : rawHour,
+    minute: Number(lookup("minute")),
+    dateKey: `${year}-${month}-${day}`,
+  };
 }
 

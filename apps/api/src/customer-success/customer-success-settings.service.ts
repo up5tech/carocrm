@@ -260,13 +260,6 @@ export function settingsWarnings(settings: CustomerSuccessSettings): SettingsWar
       message: "Notification features are enabled but notification writing is off; no alerts will be raised.",
     });
   }
-  const supportSignal = settings.health.signals.find((signal) => signal.key === "support");
-  if (supportSignal?.enabled === true) {
-    warnings.push({
-      code: "supportSignalUnavailable",
-      message: "The support signal is enabled but the Service Desk support-signal adapter is not implemented yet; it will report unavailable.",
-    });
-  }
   const windows = [...settings.renewal.windows].sort((a, b) => a - b);
   if (windows.length === 0 && settings.features.renewalReadiness) {
     warnings.push({

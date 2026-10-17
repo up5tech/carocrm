@@ -69,6 +69,7 @@ export const SERVER_OWNED_CASE_FIELDS: readonly string[] = [
   "queueId",
   "teamId",
   "routingRuleId",
+  "mergedIntoCaseId",
 ];
 
 export { changedKeys } from "./service-desk-domain.js";

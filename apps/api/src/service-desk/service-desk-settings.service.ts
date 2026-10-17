@@ -107,6 +107,16 @@ export const ServiceDeskSettingsSchema = z
       })
       .strict()
       .default({}),
+    email: z
+      .object({
+        /**
+         * Optional sending identity for email-to-case replies. Empty means "use the sending
+         * account or the process-wide transport default" (§5.5 group reply address).
+         */
+        replyFromAddress: z.string().trim().email().or(z.literal("")).default(""),
+      })
+      .strict()
+      .default({}),
   })
   .strict();
 
@@ -230,6 +240,28 @@ export class ServiceDeskSettingsService {
   /** Only tests and explicit reloads call this; the row cache is otherwise write-through. */
   invalidate(): void {
     this.cache = undefined;
+  }
+
+  /**
+   * Record the last successful scheduled SLA scan. This is operational metadata, not a settings
+   * change: it must not bump the version an auditor uses to name the policy in force.
+   */
+  async recordScanAt(at: string): Promise<void> {
+    const current = await this.read();
+    const stored: StoredSettings = {
+      version: current.version,
+      settings: { ...current.settings, sla: { ...current.settings.sla, lastScanAt: at } },
+      updatedAt: current.updatedAt,
+      updatedBy: current.updatedBy,
+    };
+    await this.database.db
+      .insertInto("app_settings")
+      .values({ name: SETTINGS_ROW, data: JSON.stringify(stored), modified_at: new Date() })
+      .onConflict((oc) =>
+        oc.column("name").doUpdateSet({ data: JSON.stringify(stored), modified_at: new Date() }),
+      )
+      .execute();
+    this.cache = toView(stored);
   }
 }
 

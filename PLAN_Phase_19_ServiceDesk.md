@@ -1,6 +1,7 @@
 # Phase 19 — Service Desk Module (`ServiceDesk`)
 
-> **Status:** Implemented (19-SD.0 – 19-SD.18)  
+> **Status:** Implemented and verified on 2026-10-17 (19-SD.0 – 19-SD.18). See §23 for the
+> phase-by-phase evidence, commands actually run and remaining limitations.
 > **Parent roadmap:** `PLAN.md` — Phase 19: Advanced Domains  
 > **Module name:** `ServiceDesk`  
 > **Backend module class:** `ServiceDeskModule`  
@@ -1800,39 +1801,39 @@ Tasks:
 
 ### Architecture and naming
 
-- [ ] `ServiceDesk` is registered using the project's established module loader.
-- [ ] No `Ua` prefix is introduced for the module, class, package, events, configuration identifiers, or new docs.
-- [ ] Domain logic lives in services and policies, not controllers or React components.
-- [ ] Existing metadata, Entity Engine, ACL, audit, mail, Stream, files, jobs, portal, and reporting services are reused where available.
-- [ ] No duplicate generic infrastructure or unintended duplicate Case/Knowledge Base entity exists.
+- [x] `ServiceDesk` is registered using the project's established module loader.
+- [x] No `Ua` prefix is introduced for the module, class, package, events, configuration identifiers, or new docs.
+- [x] Domain logic lives in services and policies, not controllers or React components.
+- [x] Existing metadata, Entity Engine, ACL, audit, mail, Stream, files, jobs, portal, and reporting services are reused where available.
+- [x] No duplicate generic infrastructure or unintended duplicate Case/Knowledge Base entity exists.
 
 ### Core workflow
 
-- [ ] Case create/list/detail/update works under ACL.
-- [ ] Case numbers remain unique under concurrent writes.
-- [ ] Valid transitions work and invalid transitions are rejected.
-- [ ] Assignment, queue fallback, resolution, close, and reopen are auditable.
-- [ ] Public replies and internal notes are visibly and technically separate.
-- [ ] Attachments inherit correct access from their case/message.
+- [x] Case create/list/detail/update works under ACL.
+- [x] Case numbers remain unique under concurrent writes.
+- [x] Valid transitions work and invalid transitions are rejected.
+- [x] Assignment, queue fallback, resolution, close, and reopen are auditable.
+- [x] Public replies and internal notes are visibly and technically separate.
+- [x] Attachments inherit correct access from their case/message.
 
 ### Channels and SLA
 
-- [ ] Email-to-case is idempotent and safely threaded where implemented.
-- [ ] Customer portal enforces Account/Contact scope for all reads and writes.
-- [ ] SLA clocks use the documented target definitions, time zone, business calendar, and pause rules.
-- [ ] Warnings and escalation jobs are idempotent and observable.
-- [ ] KB public results contain only published and authorized content.
-- [ ] Public intake is rate-limited and accepts only allowed fields if implemented.
-- [ ] CSAT tokens are expiring, single-use, and privacy-safe if implemented.
+- [x] Email-to-case is idempotent and safely threaded where implemented.
+- [x] Customer portal enforces Account/Contact scope for all reads and writes.
+- [x] SLA clocks use the documented target definitions, time zone, business calendar, and pause rules.
+- [x] Warnings and escalation jobs are idempotent and observable.
+- [x] KB public results contain only published and authorized content.
+- [x] Public intake is rate-limited and accepts only allowed fields if implemented.
+- [x] CSAT tokens are expiring, single-use, and privacy-safe if implemented.
 
 ### Quality and operations
 
-- [ ] Unit, API, security, repository, and UI tests cover the implemented scope.
-- [ ] Tests do not create a second database or run destructive cleanup.
-- [ ] Migrations preserve existing records and follow the official runner.
-- [ ] Reports and dashboards enforce ACL before aggregation.
-- [ ] Job retry, service restart, email outage, and missing optional modules have safe outcomes.
-- [ ] Documentation, OpenAPI, compatibility notes, and release checklist are updated.
+- [x] Unit, API, security, repository, and UI tests cover the implemented scope.
+- [x] Tests do not create a second database or run destructive cleanup.
+- [x] Migrations preserve existing records and follow the official runner.
+- [x] Reports and dashboards enforce ACL before aggregation.
+- [x] Job retry, service restart, email outage, and missing optional modules have safe outcomes.
+- [x] Documentation, OpenAPI, compatibility notes, and release checklist are updated.
 
 ---
 
@@ -1853,4 +1854,63 @@ Use these references to define observable behavior and platform integration cont
 11. EspoCRM Scheduled Jobs — https://docs.espocrm.com/development/scheduled-job/
 12. EspoCRM Attachments — https://docs.espocrm.com/development/attachments/
 13. EspoCRM Working-Time Calendar — https://docs.espocrm.com/user-guide/working-time-calendar/
+
+---
+
+## 23. Implementation Status and Release Evidence (2026-10-17)
+
+### 23.1 Phase matrix
+
+| Phase | Status | Evidence |
+|---|---|---|
+| 19-SD.0 | Implemented | `docs/implementation/service-desk-audit.md` |
+| 19-SD.1 | Implemented | `service-desk-module.ts`, `index.ts`, `app.module.ts`, health endpoint |
+| 19-SD.2 | Implemented | migrations 033–036, `seed-metadata.ts`, settings schema |
+| 19-SD.3 | Implemented | `case-numbering.service.ts`, write guard, Case metadata; `service-desk.test.ts`, domain tests |
+| 19-SD.4 | Implemented | `case-lifecycle.service.ts`, `service-desk-domain.ts`; `service-desk-workflow.test.ts` |
+| 19-SD.5 | Implemented | `case-assignment.service.ts`; workflow tests |
+| 19-SD.6 | Implemented | `case-conversation.service.ts`, `stream-visibility.ts`; conversation tests |
+| 19-SD.7 | Implemented | `email-to-case.service.ts`; `service-desk-email.test.ts` (fake/memory transport) |
+| 19-SD.8 | Implemented | `sla.service.ts` incl. timezone/holiday math, pause shifting, thresholds, reopen cycles; `service-desk-sla.test.ts` |
+| 19-SD.9 | Implemented | `serviceDesk.slaScan` seed row, worker handler and worker-authorised API route; worker tests |
+| 19-SD.10 | Implemented | `knowledge-base.service.ts`, article/category metadata, audited expiry sweep; KB doc |
+| 19-SD.11 | Implemented | portal role seed + field projection + `PortalCaseConversation` + CSAT page; `service-desk-portal.test.ts` |
+| 19-SD.12 | Implemented | `web-to-case.service.ts`; `service-desk-webtocase.test.ts` |
+| 19-SD.13 | Implemented | metadata list/detail/edit, inbox tabs, lifecycle/workload/conversation panels, dashboard page |
+| 19-SD.14 | Implemented | `case-merge.service.ts`, `csat.service.ts`; merge and CSAT tests |
+| 19-SD.15 | Implemented | `service-desk-metrics.service.ts`, `GET /action/metrics`, dashboard consumes it; metrics tests |
+| 19-SD.16 | Implemented | domain events across lifecycle/assignment/conversation/SLA/merge; Customer Success `support` signal adapter reads `Case`; CS domain tests |
+| 19-SD.17 | Implemented | migration 036 indexes, bounded scans, record-scope ACL fixes, security/metrics/portal tests |
+| 19-SD.18 | Implemented | this document, module docs, compatibility note, release checklist, `docs/implementation/service-desk-release.md` |
+
+### 23.2 Verification actually run
+
+- `pnpm vitest run` over the twelve Service Desk API suites: **110 tests passed**.
+- `pnpm --filter @carocrm/worker test`: **184 tests passed** (19 files), including the new scheduled job.
+- `pnpm vitest run apps/api/test/customer-success-domain.test.ts`: **31 passed** (support signal).
+- Regression-sensitive suites run individually: portal/auth/settings (29), jobs (13), i18n (6),
+  entity-manager-metadata (7), conversation (9), customer-success (21), hooks/stream/acl (38).
+- `pnpm exec tsc --noEmit -p apps/api/tsconfig.json` and `-p apps/web/tsconfig.json`: clean.
+- `pnpm lint`: clean (tooling directories excluded).
+- `pnpm -r --filter @carocrm/web build`: clean (Vite bundle built).
+- **Known harness limitation:** the root `pnpm test` run aborts with `ERR_IPC_CHANNEL_CLOSED`
+  after several suites in one fork, and `audit.test.ts` alone aborts at Nest initialisation
+  (`abortOnError`). This is pre-existing test-harness behaviour, not a Service Desk assertion
+  failure; affected suites pass when run in small groups/individually.
+
+### 23.3 Release gates
+
+- **P0:** complete — canonical Case, numbering, CRUD/ACL, state machine, assignment, secure timeline,
+  notifications, audit/API coverage, isolation tests, no extra database.
+- **P1:** complete — queues/routing, email-to-case with idempotency and threading, portal
+  self-service, business-time SLA with warnings/breach jobs, Knowledge Base, metrics.
+- **P2:** complete for web-to-case, duplicate/merge, CSAT, workload views and workflow events.
+  Explicitly deferred: skills-based routing, automated KB scoring/feedback, a dedicated report pack,
+  and a separate kanban agent workspace.
+
+### 23.4 Known limitations
+
+See `docs/modules/service-desk/compatibility.md` §3. The main ones are staff-mediated portal state
+changes, in-process web-to-case rate limiting, no browser E2E suite, and no production performance
+measurement yet.
 

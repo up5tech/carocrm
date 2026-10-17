@@ -9,6 +9,7 @@ import type { SalesLine, SalesLineTotals } from '../components/LineItemEditor.js
 import { LineItemEditor, linePayload, SalesTotalsPanel } from '../components/LineItemEditor.js';
 import { useSalesPickers } from '../components/useSalesPickers.js';
 import { salesDocumentDate, salesDocumentKind } from '../sales/documents.js';
+import { PORTAL_HIDDEN_CASE_FIELDS } from '../service-desk/portal-case-fields.js';
 import { t } from '../state/i18n.js';
 import { evaluateEntityLogic, isComputedField } from '../state/logic.js';
 import {
@@ -21,7 +22,7 @@ import {
   useEntity,
   useMetadata,
 } from '../state/metadata.js';
-import { portalBase } from '../state/portal.js';
+import { portalBase, useIsPortalUser } from '../state/portal.js';
 import { useSession } from '../state/session.js';
 
 const GRID_STYLE: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '0 16px' };
@@ -63,9 +64,14 @@ function overridesOf(payload: RecordData): Record<string, unknown> {
   return out;
 }
 
-function buildEntries(definition: EntityDefinition | undefined, logic: ReturnType<typeof evaluateEntityLogic>): VisibleEntry[] {
+function buildEntries(
+  definition: EntityDefinition | undefined,
+  logic: ReturnType<typeof evaluateEntityLogic>,
+  hideFields?: ReadonlySet<string>,
+): VisibleEntry[] {
   return editEntries(definition)
     .filter((entry) => logic.fields[entry.name]?.visible !== false)
+    .filter((entry) => hideFields === undefined || !hideFields.has(entry.name))
     .map((entry) => ({
       name: entry.name,
       field: entry.field,
@@ -79,6 +85,7 @@ export function EntityEditPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { principal } = useSession();
+  const isPortal = useIsPortalUser();
   const base = portalBase(principal?.type);
   const { message } = AntApp.useApp();
   const definition = useEntity(entity);
@@ -116,7 +123,15 @@ export function EntityEditPage() {
   // formulas, so re-evaluating is cheaper than tracking which field each rule reads.
   const watched = Form.useWatch([], form);
   const logic = useMemo(() => evaluateEntityLogic(definition.data, watched ?? {}), [definition.data, watched]);
-  const entries = useMemo(() => buildEntries(definition.data, logic), [definition.data, logic]);
+  const entries = useMemo(
+    () =>
+      buildEntries(
+        definition.data,
+        logic,
+        isPortal && entity === 'Case' ? PORTAL_HIDDEN_CASE_FIELDS : undefined,
+      ),
+    [definition.data, logic, isPortal, entity],
+  );
   const computedNames = useMemo(() => Object.keys(logic.values), [logic.values]);
 
   // PLAN §8: an entity without an 'edit' layout keeps a single grid in field order.

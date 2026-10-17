@@ -482,6 +482,15 @@ export class CaseAssignmentService {
     },
   ): Promise<CaseAssignmentResult> {
     const actor = this.scope.requirePrincipal();
+    // Assignment is a write on a specific case: entity-level edit is not enough, the record scope
+    // must allow it too (own / team / project scope, and never a portal principal).
+    await this.acl.assertRecordAccess(CASE_ENTITY, "edit", {
+      id: caseId,
+      assignedUserId: text(row.data["assignedUserId"]) ?? undefined,
+      createdById: text(row.data["createdById"]) ?? undefined,
+      teams: Array.isArray(row.data["teams"]) ? (row.data["teams"] as string[]) : [],
+      data: row.data,
+    });
     const previousAssignedUserId = text(row.data["assignedUserId"]) ?? null;
     const previousTeamId = text(row.data["teamId"]) ?? null;
 

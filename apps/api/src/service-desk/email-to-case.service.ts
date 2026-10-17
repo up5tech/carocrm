@@ -168,15 +168,24 @@ export class EmailToCaseService {
     const textBody = input.text.trim();
     if (textBody === "") throw new ValidationError("An email reply needs text.", { caseId });
 
+    // Thread the outbound message with the case's last inbound mail, so the customer's mail client
+    // groups it and a reply from them matches the same case (§5.5). The sending address is left to
+    // the mail account/transport configuration rather than hard-coded (§28.1).
+    const lastInbound = await this.lastInboundEmail(caseId);
+    const parentMessageId = text(lastInbound?.["messageId"]);
+    const threadId = text(lastInbound?.["threadId"]) ?? parentMessageId;
+
     const created = await this.entities.create(EMAIL_ENTITY, {
       name: `Re: ${subject}`,
       status: "Draft",
       direction: "Outbound",
-      fromAddress: "support@example.com",
+      ...(settings.email.replyFromAddress !== "" ? { fromAddress: settings.email.replyFromAddress } : {}),
       toAddressList: requesterEmail,
       body: textBody,
       parentType: CASE_ENTITY,
       parentId: caseId,
+      ...(parentMessageId !== undefined ? { inReplyTo: parentMessageId } : {}),
+      ...(threadId !== undefined ? { threadId } : {}),
     });
 
     const emailId = String(created["id"]);
@@ -258,6 +267,20 @@ export class EmailToCaseService {
       .executeTakeFirst();
     if (row === undefined) return undefined;
     return text((row.attrs as Record<string, unknown>)["emailAddress"]);
+  }
+
+  private async lastInboundEmail(caseId: string): Promise<Record<string, unknown> | undefined> {
+    const row = await this.database.db
+      .selectFrom("entity_records")
+      .select("attrs")
+      .where("entity_type", "=", EMAIL_ENTITY)
+      .where("deleted_at", "is", null)
+      .where(sql`attrs ->> 'caseId'`, "=", caseId)
+      .where(sql`attrs ->> 'status'`, "=", "Inbound")
+      .orderBy("created_at", "desc")
+      .limit(1)
+      .executeTakeFirst();
+    return row === undefined ? undefined : ((row.attrs ?? {}) as Record<string, unknown>);
   }
 
   private loopReason(record: Record<string, unknown>): string | undefined {

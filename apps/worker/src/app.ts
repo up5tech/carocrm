@@ -14,6 +14,7 @@ import { registerMailJobs } from './handlers/mail-handlers.js';
 import { createKernelOutboxSetup } from './handlers/outbox-handlers.js';
 import { registerReportJobs } from './handlers/report-handlers.js';
 import { registerSalesJobs } from './handlers/sales-handlers.js';
+import { registerServiceDeskJobs } from './handlers/service-desk-handlers.js';
 import { createMailTransportForWorker } from './mail.js';
 import { OutboxPoller } from './outbox/outbox-poller.js';
 import { OutboxHandlerRegistry } from './outbox/outbox-registry.js';
@@ -97,6 +98,13 @@ export class WorkerApplication {
     // Phase 19-CS.11: health recalculation, override expiry and the customer success scans run in the
     // API, on this schedule. The jobs are inert when no worker capability is configured.
     registerCustomerSuccessJobs(this.jobRegistry, {
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
+      log: this.log,
+    });
+    // Phase 19-SD.9: the SLA warning/breach/escalation scan runs in the API on this schedule. The
+    // job is inert when no worker capability is configured.
+    registerServiceDeskJobs(this.jobRegistry, {
       apiBaseUrl: this.config.apiBaseUrl,
       secret: this.config.reportWorkerSecret,
       log: this.log,

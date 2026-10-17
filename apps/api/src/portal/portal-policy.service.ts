@@ -85,10 +85,24 @@ export class PortalPolicyService {
 
   /** Effective portal-role level of the current principal for `entity`/`action`. */
   async canUser(entity: string, action: AclAction): Promise<AclRoleLevel> {
+    // Phase 19-SD.11: the Service Desk portal capability is opt-in. The role still grants Case, but
+    // no portal session may read or write a case until an administrator enables `features.portal`.
+    if (entity === 'Case' && !(await this.serviceDeskPortalEnabled())) return 'no';
     const snapshot = await this.snapshot();
     if (!snapshot.ready || snapshot.roles.length === 0) return 'no';
     const levels = snapshot.roles.map((role) => portalRoleLevel(role, entity, action));
     return maxLevel(levels);
+  }
+
+  /** Reads the Service Desk portal flag from the shared settings row without importing the module. */
+  private async serviceDeskPortalEnabled(): Promise<boolean> {
+    const row = await this.database.db
+      .selectFrom('app_settings')
+      .select('data')
+      .where('name', '=', 'serviceDesk')
+      .executeTakeFirst();
+    const data = row?.data as { settings?: { features?: { portal?: unknown } } } | undefined;
+    return data?.settings?.features?.portal === true;
   }
 
   /** Throws 403 when the portal role grants no access at all. */

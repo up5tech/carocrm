@@ -973,3 +973,28 @@ export interface ServiceDeskQueueWorkload {
   members: readonly { userId: string; activeCases: number }[];
   unassigned: number;
 }
+
+/** SD.15 — ACL-scoped service metrics (`GET /ServiceDesk/action/metrics`). */
+export interface ServiceDeskMetricBucket {
+  key: string;
+  count: number;
+}
+
+export interface ServiceDeskMetrics {
+  range: { from: string; to: string };
+  total: number;
+  active: number;
+  unassigned: number;
+  escalated: number;
+  breached: number;
+  resolved: number;
+  reopened: number;
+  reopenRate: number | null;
+  byStatus: readonly ServiceDeskMetricBucket[];
+  byPriority: readonly ServiceDeskMetricBucket[];
+  bySource: readonly ServiceDeskMetricBucket[];
+  csat:
+    | { restricted: true }
+    | { restricted: false; count: number; average: number | null; responseRate: number | null };
+  definitions: Readonly<Record<string, string>>;
+}

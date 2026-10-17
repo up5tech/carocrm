@@ -252,7 +252,13 @@ export class AclApiService {
     }
     if (level === 'all' || level === 'yes') return true;
     const decision = await this.canAccessRecord(entity, action, record);
-    return decision.allowed === true;
+    if (!decision.allowed) {
+      throw new AuthorizationDeniedError(
+        decision.reason ?? `No "${action}" access to this "${entity}" record.`,
+        { entity, action },
+      );
+    }
+    return true;
   }
 
   /** Drop any memoised role snapshot (call after modifying roles, teams or portal assignments). */

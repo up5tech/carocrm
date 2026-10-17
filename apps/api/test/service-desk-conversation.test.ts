@@ -2,8 +2,8 @@ import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { canViewStreamVisibility, toStreamVisibility } from '../src/stream/stream-visibility.js';
-import type { ApiContext } from './support/boot-api.js';
 import {
+  type ApiContext,
   authHeader,
   bootApi,
   createTestRole,
@@ -51,11 +51,6 @@ async function call(method: Method, url: string, payload?: Record<string, unknow
     body = {};
   }
   return { status: res.statusCode, body };
-}
-
-function codeOf(body: Record<string, unknown>): string {
-  const error = body['error'] as { code?: string } | undefined;
-  return String(error?.code ?? '');
 }
 
 async function createCase(extra: Record<string, unknown> = {}): Promise<string> {

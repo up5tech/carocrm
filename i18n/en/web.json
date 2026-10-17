@@ -1116,9 +1116,15 @@
     "dashboard": {
       "title": "Service desk dashboard",
       "total": "Total cases",
+      "active": "Active",
       "unassigned": "Unassigned",
       "breached": "Breached SLA",
       "escalated": "Escalated",
+      "reopened": "Reopened",
+      "reopenRate": "Reopen rate",
+      "csat": "CSAT average",
+      "byStatus": "Cases by status",
+      "csatRestricted": "Satisfaction results are shown only to roles with read access to all cases.",
       "recent": "Recently updated",
       "subject": "Subject",
       "status": "Status",
@@ -1127,5 +1133,28 @@
       "modified": "Modified",
       "loadFailed": "Could not load dashboard"
     }
+  },
+  "portalCase": {
+    "conversation": "Case conversation",
+    "placeholder": "Write a message to the support team…",
+    "send": "Send message",
+    "empty": "No messages yet.",
+    "denied": "You do not have access to this case.",
+    "loadFailed": "Could not load the conversation.",
+    "postFailed": "Could not send the message.",
+    "publicBadge": "Visible to you",
+    "suggestions": "Suggested articles",
+    "noSuggestions": "No suggested articles for this case."
+  },
+  "portalCsat": {
+    "title": "How did we do?",
+    "intro": "Your feedback helps us improve support. This survey can be submitted once.",
+    "rating": "Rating",
+    "ratingRequired": "Choose a rating from 1 to 5.",
+    "feedback": "Comments (optional)",
+    "submit": "Submit feedback",
+    "thanks": "Thank you for your feedback.",
+    "failed": "Could not submit the survey.",
+    "missingToken": "This survey link is missing its token."
   }
 }

@@ -104,10 +104,17 @@ export class CaseLifecycleService {
     const record = await this.entities.get(CASE_ENTITY, caseId);
     const status = isStatus(record["status"]) ? record["status"] : "New";
     const settings = await this.settings.settings();
+    const decision = await this.acl.canAccessRecord(CASE_ENTITY, "edit", {
+      id: caseId,
+      assignedUserId: typeof record["assignedUserId"] === "string" ? (record["assignedUserId"] as string) : undefined,
+      createdById: typeof record["createdById"] === "string" ? (record["createdById"] as string) : undefined,
+      teams: Array.isArray(record["teams"]) ? (record["teams"] as string[]) : [],
+      data: record,
+    });
     return {
       caseId,
       status,
-      allowedCommands: allowedCaseCommands(status),
+      allowedCommands: decision.allowed === true ? allowedCaseCommands(status) : [],
       resolution: {
         requireCode: settings.resolution.requireCode,
         requireSummary: settings.resolution.requireSummary,
@@ -143,6 +150,15 @@ export class CaseLifecycleService {
 
     const row = await this.records.byId(CASE_ENTITY, caseId);
     if (row === undefined) throw new NotFoundError(`Case "${caseId}" does not exist.`);
+    // A transition is a write on this record. Entity-level edit alone is not enough: the actor's
+    // record scope (own/team/project) and principal type must allow it (§5.2, §10.2).
+    await this.acl.assertRecordAccess(CASE_ENTITY, "edit", {
+      id: caseId,
+      assignedUserId: text(row.data["assignedUserId"]) ?? undefined,
+      createdById: text(row.data["createdById"]) ?? undefined,
+      teams: Array.isArray(row.data["teams"]) ? (row.data["teams"] as string[]) : [],
+      data: row.data,
+    });
 
     const from: CaseStatus = isStatus(row.data["status"]) ? row.data["status"] : "New";
     const command = request.command;

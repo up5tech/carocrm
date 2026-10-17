@@ -1116,9 +1116,15 @@
     "dashboard": {
       "title": "Bảng điều khiển dịch vụ",
       "total": "Tổng hồ sơ",
+      "active": "Đang xử lý",
       "unassigned": "Chưa gán",
       "breached": "Vi phạm SLA",
       "escalated": "Đã chuyển cấp",
+      "reopened": "Mở lại",
+      "reopenRate": "Tỷ lệ mở lại",
+      "csat": "Điểm CSAT trung bình",
+      "byStatus": "Hồ sơ theo trạng thái",
+      "csatRestricted": "Kết quả hài lòng chỉ hiển thị cho vai trò có quyền đọc mọi hồ sơ.",
       "recent": "Cập nhật gần đây",
       "subject": "Chủ đề",
       "status": "Trạng thái",
@@ -1127,5 +1133,28 @@
       "modified": "Sửa đổi",
       "loadFailed": "Không tải được bảng điều khiển"
     }
+  },
+  "portalCase": {
+    "conversation": "Trao đổi về yêu cầu",
+    "placeholder": "Viết tin nhắn cho bộ phận hỗ trợ…",
+    "send": "Gửi tin nhắn",
+    "empty": "Chưa có tin nhắn.",
+    "denied": "Bạn không có quyền truy cập yêu cầu này.",
+    "loadFailed": "Không tải được cuộc trao đổi.",
+    "postFailed": "Không gửi được tin nhắn.",
+    "publicBadge": "Bạn có thể xem",
+    "suggestions": "Bài viết gợi ý",
+    "noSuggestions": "Không có bài viết gợi ý cho yêu cầu này."
+  },
+  "portalCsat": {
+    "title": "Bạn thấy chúng tôi hỗ trợ thế nào?",
+    "intro": "Phản hồi của bạn giúp chúng tôi cải thiện hỗ trợ. Khảo sát chỉ có thể gửi một lần.",
+    "rating": "Đánh giá",
+    "ratingRequired": "Chọn mức đánh giá từ 1 đến 5.",
+    "feedback": "Nhận xét (không bắt buộc)",
+    "submit": "Gửi phản hồi",
+    "thanks": "Cảm ơn phản hồi của bạn.",
+    "failed": "Không gửi được khảo sát.",
+    "missingToken": "Liên kết khảo sát thiếu mã xác thực."
   }
 }

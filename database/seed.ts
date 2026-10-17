@@ -144,14 +144,50 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
     // Phase 18 — default portal, its portal role, navigation and dashboard (PLAN §37).
     // The portal role grants entity-level read only; portal record visibility (contact/account
     // one-hop) is enforced by the portal ACL policy, never by the internal role tables.
+    //
+    // Phase 19-SD.11 — the same role exposes the canonical `Case` entity to customers. Record scope
+    // stays the contact/account neighbourhood; field permissions hide assignment, routing,
+    // SLA/escalation and merge internals, and deny direct status edits (state changes remain staff
+    // commands). Create and stream are allowed so a customer can raise a case and reply.
+    const portalCaseFields: Record<string, Record<string, string>> = {};
+    for (const field of [
+      'assignedUserId', 'teams', 'teamId', 'queueId', 'routingRuleId', 'leadId', 'slaPolicyId',
+      'slaState', 'isEscalated', 'escalationLevel', 'escalatedAt', 'resolvedById',
+      'isHiddenFromPortal', 'mergedIntoCaseId', 'lastAgentResponseAt', 'lastCustomerResponseAt',
+      'firstResponseAt', 'createdById', 'modifiedById',
+    ]) {
+      portalCaseFields[field] = { read: 'no', edit: 'no' };
+    }
+    for (const field of [
+      'caseNumber', 'status', 'priority', 'severity', 'type', 'source', 'resolutionCode',
+      'resolutionSummary', 'resolvedAt', 'closedAt', 'reopenedAt', 'accountId', 'contactId',
+      'lastActivityAt',
+    ]) {
+      portalCaseFields[field] = { read: 'yes', edit: 'no' };
+    }
+    portalCaseFields['name'] = { read: 'yes', edit: 'yes' };
+    portalCaseFields['description'] = { read: 'yes', edit: 'yes' };
+    portalCaseFields['requesterName'] = { read: 'yes', edit: 'yes' };
+    portalCaseFields['requesterEmail'] = { read: 'yes', edit: 'yes' };
+
     await pool.query(
       `INSERT INTO portals (id, name, url_path, settings) VALUES ($1, 'Customer Portal', '/portal', '{}'::jsonb)
        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
       ['portalCustomer'],
     );
     await pool.query(
-      `INSERT INTO portal_roles (id, name, permissions) VALUES ($1, 'Portal Customer', $2)
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, permissions = EXCLUDED.permissions`,
+      `INSERT INTO portal_roles (id, name, permissions, field_permissions) VALUES ($1, 'Portal Customer', $2, $3)
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name,
+         permissions = portal_roles.permissions || EXCLUDED.permissions,
+         field_permissions = CASE
+           WHEN portal_roles.field_permissions = '{}'::jsonb THEN EXCLUDED.field_permissions
+           ELSE jsonb_set(
+             portal_roles.field_permissions,
+             '{Case}',
+             COALESCE(portal_roles.field_permissions -> 'Case', '{}'::jsonb) || (EXCLUDED.field_permissions -> 'Case'),
+             TRUE
+           )
+         END`,
       [
         'portalCustomerRole',
         {
@@ -160,7 +196,10 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
           Opportunity: { read: 'all', create: 'no', edit: 'no', delete: 'no', stream: 'no' },
           Task: { read: 'all', create: 'no', edit: 'no', delete: 'no', stream: 'no' },
           Email: { read: 'all', create: 'no', edit: 'no', delete: 'no', stream: 'no' },
+          // SD.11 portal self-service: read visible cases, raise a case, post customer-visible replies.
+          Case: { read: 'all', create: 'yes', edit: 'no', delete: 'no', stream: 'yes' },
         },
+        { Case: portalCaseFields },
       ],
     );
     await pool.query(
@@ -174,6 +213,8 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
       { id: 'portalNavOpportunities', label: 'Opportunities', entity: 'Opportunity', route: null, icon: 'fund', position: 3 },
       { id: 'portalNavTasks', label: 'Tasks', entity: 'Task', route: null, icon: 'check', position: 4 },
       { id: 'portalNavEmails', label: 'Emails', entity: 'Email', route: null, icon: 'mail', position: 5 },
+      // SD.11 — customer self-service support cases.
+      { id: 'portalNavCases', label: 'Support Cases', entity: 'Case', route: null, icon: 'customerService', position: 6 },
     ]) {
       await pool.query(
         `INSERT INTO portal_nav_items (id, portal_id, label, entity, route, icon, position)
@@ -208,6 +249,19 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
         'kpi',
         1,
         { entity: 'Task', maxSize: 10, where: [] },
+      ],
+    );
+    // SD.11 — the customer's most recent support cases, scoped by the portal ACL.
+    await pool.query(
+      `INSERT INTO portal_dashlets (id, dashboard_id, name, kind, position, config)
+       VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING`,
+      [
+        'portalDashletCases',
+        'portalCustomerDashboard',
+        'Support Cases',
+        'list',
+        2,
+        { entity: 'Case', maxSize: 10, where: [] },
       ],
     );
 
@@ -364,6 +418,15 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
     await pool.query(
       `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
        VALUES ('csRepairStalePlaybookRuns', 'customerSuccess.repairStalePlaybookRuns', '35 3 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+
+    // Service Desk (Phase 19-SD.9): SLA clocks are scanned for warnings, breaches and escalations
+    // every five minutes. The pass is idempotent (fired thresholds and breach notifications are
+    // recorded on the clock) and is a no-op while the `sla` feature is off.
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('sdSlaScan', 'serviceDesk.slaScan', '*/5 * * * *', '{}'::jsonb, TRUE)
        ON CONFLICT (id) DO NOTHING`,
     );
 

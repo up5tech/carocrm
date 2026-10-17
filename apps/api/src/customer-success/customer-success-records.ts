@@ -21,6 +21,7 @@ export const CUSTOMER_SUCCESS_READABLE_ENTITIES = [
   "Call",
   "Meeting",
   "Email",
+  "Case",
 ] as const;
 
 export type ReadableEntity = (typeof CUSTOMER_SUCCESS_READABLE_ENTITIES)[number];

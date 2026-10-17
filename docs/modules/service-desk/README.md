@@ -1,28 +1,37 @@
 # Service Desk module (Phase 19-SD)
 
 Implemented in `apps/api/src/service-desk` (backend), registered once in `apps/api/src/app.module.ts`,
-with metadata in `database/seed-metadata.ts` and three additive migrations,
+with metadata in `database/seed-metadata.ts` and four additive migrations,
 `database/migrations/033_phase19_service_desk.sql`,
-`database/migrations/034_phase19_service_desk_workflow.sql` and
-`database/migrations/035_phase19_service_desk_conversation.sql`. Functional reference: the documented
+`database/migrations/034_phase19_service_desk_workflow.sql`,
+`database/migrations/035_phase19_service_desk_conversation.sql` and
+`database/migrations/036_phase19_service_desk_hardening.sql`. Functional reference: the documented
 product requirements in [`PLAN_Phase_19_ServiceDesk.md`](../../PLAN_Phase_19_ServiceDesk.md),
 reproduced as clean-room TypeScript behaviour — no upstream source, asset, translation or schema is
 copied.
 
-**Status: phases 19-SD.0 – 19-SD.18 are implemented (release gate passed).** (scaffold, persistence, Case CRUD/numbering,
-the state machine and resolution workflow, assignment/queues/routing, and the conversation timeline
-with public replies and internal notes). The list of phases actually claimed is
-`SERVICE_DESK_MODULE.implementedPhases`
+**Status: phases 19-SD.0 – 19-SD.18 are implemented and verified (release gate passed).** The list of
+phases claimed is `SERVICE_DESK_MODULE.implementedPhases`
 (`apps/api/src/service-desk/service-desk-module.ts`), which `/api/v1/ServiceDesk/action/health`
-reports. Everything from 19-SD.7 onward (email-to-case, SLA clocks, portal self-service, Knowledge
-Base, CSAT) is **not built yet**: the optional feature flags exist in settings, default **off**, and a
-settings warning says which phase delivers each one.
+reports. The optional feature flags remain **off by default** so a fresh installation gets working
+case management without the mail, portal, Knowledge Base or survey infrastructure enabled; the
+settings endpoint refuses nothing but the health endpoint reports each dependency's real state.
 
 | Read next | What it answers |
 |---|---|
 | [../../implementation/service-desk-audit.md](../../implementation/service-desk-audit.md) | the 19-SD.0 audit: what the repository already offered and the decisions taken |
-| [compatibility.md](compatibility.md) | deviations from the plan wording and known gaps, with reasons |
-| [`PLAN_Phase_19_ServiceDesk.md`](../../PLAN_Phase_19_ServiceDesk.md) | the full product scope for the remaining sub-phases |
+| [../../implementation/service-desk-release.md](../../implementation/service-desk-release.md) | release checklist with every phase's status and the commands actually run |
+| [case-lifecycle.md](case-lifecycle.md) | statuses, transitions, resolution/reopen/merge semantics |
+| [assignment-and-queues.md](assignment-and-queues.md) | assignment algorithms, queues, routing and audit |
+| [sla.md](sla.md) | policy model, business time, pauses, reopen cycles and metrics |
+| [email-to-case.md](email-to-case.md) | mailbox ingestion, threading, idempotency and replies |
+| [portal-security.md](portal-security.md) | portal scope, field projection and public/internal isolation |
+| [knowledge-base.md](knowledge-base.md) | article lifecycle and portal-safe visibility |
+| [api.md](api.md) | the module command surface |
+| [operations.md](operations.md) | jobs, retries, monitoring and failed-ingress operations |
+| [testing.md](testing.md) | safe test commands and test-data cleanup rules |
+| [compatibility.md](compatibility.md) | deviations from the plan wording and known limitations |
+| [`PLAN_Phase_19_ServiceDesk.md`](../../PLAN_Phase_19_ServiceDesk.md) | the full product scope and acceptance criteria |
 
 ## What it gives a user
 
@@ -39,12 +48,20 @@ settings warning says which phase delivers each one.
 | Case-lifecycle and queue-workload UI | `apps/web/src/components/CaseLifecycleActions.tsx`, `CaseQueueWorkload.tsx`, rendered by `EntityDetailPage.tsx` |
 | **Conversation timeline** (§5.4, SD.6): explicit public/internal/system visibility on every Stream item and attachment; `reply` (customer-visible) and `note` (internal-only) commands; visibility-safe timeline; attachments inherit their message's visibility; public replies stamp the response clocks, internal notes never do; in-app notifications for public replies (dedup by message/recipient) | `apps/api/src/service-desk/case-conversation.service.ts`; `apps/api/src/stream/stream-visibility.ts`; `apps/web/src/components/CaseConversation.tsx` |
 | **Email-to-Case** (§5.5, SD.7): inbound email processing into a `Case` (new thread) or appended as a customer-visible message (existing thread); idempotent by `messageId`/thread key; mail-loop/auto-reply/DSN skipping; contact resolution; outbound email reply command that queues a send through the kernel mail transport and records delivery status | `apps/api/src/service-desk/email-to-case.service.ts` |
-| **Business calendars & SLA** (§5.6, §5.7, SD.8): `BusinessCalendar` (timezone, weekly intervals, holidays), `SLAPolicy` (declarative conditions, first/next/resolution targets, warning thresholds, pause rules, version), `CaseSLAClock` (per-case/per-target, start/pause/resume/met/breached), business-time calculator, policy resolver, idempotent breach-check pass, Case-level `slaState`/`slaPolicyId` summary | `apps/api/src/service-desk/sla.service.ts` |
+| **Business calendars & SLA** (§5.6, §5.7, SD.8): `BusinessCalendar` (timezone, weekly intervals, holidays), `SLAPolicy` (declarative conditions, first/next/resolution targets, warning thresholds, pause rules, version), `CaseSLAClock` (per-case/per-target, start/pause/resume/met/breached), timezone-aware business-time calculator, policy resolver, idempotent breach-check pass, Case-level `slaState`/`slaPolicyId` summary | `apps/api/src/service-desk/sla.service.ts` |
+| **Scheduled SLA operations** (SD.9): `serviceDesk.slaScan` runs every five minutes through the `scheduled_jobs` table; the worker calls the worker-authorised `/action/sla/run-scheduled-check`; warning thresholds fire once per clock, breach notifications and escalation are deduplicated, and closed/merged cases are never escalated | `database/seed.ts`, `apps/worker/src/handlers/service-desk-handlers.ts`, `SlaService.runScheduledCheck` |
+| **Knowledge Base** (SD.10): `KnowledgeArticle`/`KnowledgeCategory`, publish/archive, audited publication status, scheduled expiry sweep, portal-safe published list and case suggestions | `apps/api/src/service-desk/knowledge-base.service.ts` |
+| **Portal self-service** (SD.11): the seeded portal role reads only the contact/account neighbourhood, internal fields are projected out by field ACL, customers create cases (source forced to `Portal`, requester derived), reply through the public-only stream and see published KB suggestions; a token-based CSAT page is available without a CRM session | `database/seed.ts`, `apps/web/src/components/PortalCaseConversation.tsx`, `apps/web/src/pages/PortalCsatPage.tsx` |
+| **Web-to-Case** (SD.12): unauthenticated intake endpoint with a strict allowlist, honeypot, per-IP rate limit and idempotency key that returns only the reference number | `apps/api/src/service-desk/web-to-case.service.ts` |
+| **Duplicate detection, merge and CSAT** (SD.14): ACL-filtered candidates, an atomic merge command that requires edit access, records a `merge` transition and emits an event, and hashed single-use expiring survey tokens | `case-merge.service.ts`, `csat.service.ts` |
+| **ACL-scoped metrics** (SD.15): one aggregate endpoint for volume, active backlog, unassigned, breached, escalated, reopen rate, status/priority/source buckets and CSAT (CSAT only for read-all roles); every count uses the same record predicate as the case list | `GET /api/v1/ServiceDesk/action/metrics`, `service-desk-metrics.service.ts` |
+| **Workflow/BPM events** (SD.16): `serviceDesk.case.{created,assigned,statusChanged,resolved,closed,reopened,escalated,replySent,noteAdded,slaBreached,merged}` are published through the platform outbox, and the Customer Success `support` health signal scores from the account's cases | `apps/api/src/service-desk/*.service.ts`, `apps/api/src/customer-success/customer-success-signals.ts` |
 | Module diagnostics: dependency evidence, optional-integration status, feature state, settings warnings | `GET /api/v1/ServiceDesk/action/health` |
 
 Entity CRUD stays on the generic `/api/v1/:entity` API. The module routes exist only for what a
-single record cannot express: diagnostics, the settings document, the numbering preview, the case
-state machine and assignment/routing.
+single record cannot express: diagnostics, settings, numbering preview, ACL-scoped metrics, the case
+state machine, assignment/routing, the conversation commands, mail ingestion/replies, SLA scans,
+Knowledge publication and CSAT/merge commands.
 
 ## The `Case` entity
 
@@ -62,6 +79,7 @@ agent recognises. Fields:
 - **Resolution**: `resolutionCode`, `resolutionSummary`, `resolvedById`, `isHiddenFromPortal`.
 - **Routing/ownership** (§5.3, SD.5, server-owned): `queueId`, `teamId`, `routingRuleId` — set only
   through the assignment/routing commands, never by the record API.
+- **Merge** (SD.14, server-owned): `mergedIntoCaseId` — written only by the merge command.
 
 Relations: activity links (`emails`, `calls`, `meetings`, `tasks`) through `entity_links`, and
 `Account.relations.cases` / `Contact.relations.cases` on the other side. Audit, stream and field ACL
@@ -105,10 +123,12 @@ One validated `serviceDesk` row in the existing `app_settings` store (no second 
   resolution codes), `reopenWindowDays` (`0` = unlimited).
 - `assignment`: `defaultQueueId` (used by routing when no rule matches).
 - `features`: `caseManagement` (on), and `queues`, `sla`, `notifications`, `emailToCase`, `portal`,
-  `knowledgeBase`, `csat` (**all off** until their sub-phase lands).
+  `knowledgeBase`, `csat` (**all off by default**; switching one on activates the delivered
+  capability, and module health reports any missing optional dependency).
 
-Turning an unimplemented feature on stores the flag and returns a warning naming the phase that
-delivers it; it never pretends the capability works.
+Turning an optional capability on never bypasses server-side checks: queued/routed assignment,
+mail ingestion, portal access and surveys each re-check their feature flag and dependency on every
+command.
 
 ## State machine and assignment
 
@@ -142,7 +162,21 @@ fallback owner) and the decision is recorded.
 - `apps/api/test/service-desk-email.test.ts` — inbound processing into a new case, thread append,
   idempotency, auto-reply skipping, outbound email reply, and feature gating.
 - `apps/api/test/service-desk-sla.test.ts` — clock creation on case create, markMet on public reply,
-  and idempotent breach detection.
+  idempotent breach detection, timezone/holiday business-time calculation, pause/resume deadline
+  shifting, configurable warning thresholds and the reopen resolution cycle.
+- `apps/api/test/service-desk-csat.test.ts` — invitation after resolution, submission, duplicate and
+  expiry protection, unresolved-case refusal and edit-permission refusal.
+- `apps/api/test/service-desk-merge.test.ts` — ACL-filtered duplicate candidates, an auditable atomic
+  merge, permission refusal, cancelled-source refusal and the server-owned merge field.
+- `apps/api/test/service-desk-portal.test.ts` — portal list scope, cross-account IDOR, internal-field
+  projection, public-only timeline, forced-public replies, portal-created source/requester and
+  privileged-field refusal.
+- `apps/api/test/service-desk-metrics.test.ts` — own-scope vs read-all aggregates, CSAT restriction,
+  missing-permission refusal and invalid range handling.
+- `apps/api/test/service-desk-security.test.ts` — IDOR, forged server-owned fields, record-scope
+  transition refusal, admin-only SLA scans and worker-capability checks.
+- `apps/worker/src/handlers/service-desk-handlers.test.ts` — the scheduled SLA job is registered,
+  inert without a capability, calls the worker endpoint with the secret and reports counts.
 - `apps/api/test/service-desk-domain.test.ts` — the pure numbering/validation/change-detection helpers,
   the transition model, the resolution requirement, routing-condition validation/matching and the
   round-robin/least-busy pickers.

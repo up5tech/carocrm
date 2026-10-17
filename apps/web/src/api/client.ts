@@ -55,6 +55,7 @@ import type {
   ServiceDeskAssignmentRow,
   ServiceDeskCapabilities,
   ServiceDeskMessageResult,
+  ServiceDeskMetrics,
   ServiceDeskQueueWorkload,
   ServiceDeskTransitionResult,
   ServiceDeskTransitionRow,
@@ -875,6 +876,8 @@ export const api = {
     request<{ list: ServiceDeskAssignmentRow[] }>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/assignments`),
   serviceDeskQueueWorkload: (queueId: string) =>
     request<ServiceDeskQueueWorkload>(`/ServiceDesk/action/queues/${encodeURIComponent(queueId)}/workload`),
+  serviceDeskMetrics: (range: { from?: string; to?: string } = {}) =>
+    request<ServiceDeskMetrics>(`/ServiceDesk/action/metrics${simpleQuery(range)}`),
 
   // Phase 19-SD.6 — case conversation (PLAN_Phase_19_ServiceDesk.md §5.4). The reply/note commands
   // fix the visibility server-side; the composer only chooses which command to send.
@@ -889,4 +892,14 @@ export const api = {
     request<ServiceDeskMessageResult>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/reply`, post(input)),
   serviceDeskNote: (caseId: string, input: { text: string; attachmentIds?: string[]; mentionIds?: string[] }) =>
     request<ServiceDeskMessageResult>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/note`, post(input)),
+
+  // Phase 19-SD.11 — portal-safe Knowledge Base and CSAT entry points.
+  serviceDeskKnowledgePortal: () =>
+    request<{ id: string; title: string; summary: string | null }[]>(`/ServiceDesk/action/knowledge/portal`),
+  serviceDeskKnowledgeSuggestions: (caseId: string) =>
+    request<{ id: string; title: string; summary: string | null }[]>(
+      `/ServiceDesk/action/case/${encodeURIComponent(caseId)}/knowledgeSuggestions`,
+    ),
+  serviceDeskCsatSubmit: (input: { token: string; rating: number; feedback?: string }) =>
+    request<{ submitted: boolean }>(`/ServiceDesk/action/csat/submit`, post(input)),
 };

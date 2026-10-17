@@ -1,8 +1,8 @@
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import type { ApiContext } from './support/boot-api.js';
-import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi, type TestUser } from './support/boot-api.js';
+import { SlaService } from '../src/service-desk/sla.service.js';
+import { type ApiContext, authHeader, bootApi, createTestRole, createTestUser, shutdownApi, type TestUser } from './support/boot-api.js';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -107,8 +107,132 @@ describe('phase 19-SD.8 — SLA (§5.6)', () => {
     // Force dueAt into the past.
     await ctx.database.db.updateTable('entity_records').set({ attrs: sql`attrs || '{"dueAt":"2020-01-01T00:00:00.000Z","status":"onTrack"}'::jsonb` }).where('entity_type', '=', 'CaseSLAClock').where(sql`attrs ->> 'caseId'`, '=', caseId).execute();
     // Directly invoke the service through the app.
-    const sla = ctx.app.get((await import('../src/service-desk/sla.service.js')).SlaService);
+    const sla = ctx.app.get(SlaService);
     const r = await sla.checkBreaches();
     expect(r.breached).toBeGreaterThan(0);
+  });
+
+  it('calculates business minutes in the calendar time zone, not server UTC', () => {
+    const sla = ctx.app.get(SlaService);
+    const calendar = {
+      id: 'test-tz',
+      timezone: 'Asia/Tokyo',
+      intervals: { '1': [{ start: '09:00', end: '17:00' }] },
+      holidays: new Set<string>(),
+    };
+    // 2026-01-05T00:00Z is Monday 09:00 in Tokyo: one business hour later is 01:00Z, not 09:00Z.
+    const due = sla.addBusinessMinutes(new Date('2026-01-05T00:00:00.000Z'), 60, calendar);
+    expect(due.toISOString()).toBe('2026-01-05T01:00:00.000Z');
+    expect(sla.businessMinutesBetween(new Date('2026-01-05T00:00:00.000Z'), due, calendar)).toBe(60);
+  });
+
+  it('treats holidays as local calendar dates', () => {
+    const sla = ctx.app.get(SlaService);
+    const calendar = {
+      id: 'test-holiday',
+      timezone: 'Asia/Tokyo',
+      intervals: { '1': [{ start: '09:00', end: '17:00' }], '2': [{ start: '09:00', end: '17:00' }] },
+      holidays: new Set(['2026-01-05']),
+    };
+    // Monday is a holiday, so an hour of business time lands on Tuesday 10:00 Tokyo.
+    const due = sla.addBusinessMinutes(new Date('2026-01-05T00:00:00.000Z'), 60, calendar);
+    expect(due.toISOString()).toBe('2026-01-06T01:00:00.000Z');
+  });
+
+  it('pauses a clock while waiting on the customer and shifts its deadline on resume', async () => {
+    const c = await call('POST', '/api/v1/Case', { name: marker('subject-pause'), requesterName: marker('Requester') }, agent.token);
+    const caseId = String(c.body['id']);
+    caseIds.push(caseId);
+    expect((await call('POST', `/api/v1/ServiceDesk/action/case/${caseId}/transition`, { command: 'start' }, agent.token)).status).toBe(200);
+    expect((await call('POST', `/api/v1/ServiceDesk/action/case/${caseId}/transition`, { command: 'setPendingCustomer' }, agent.token)).status).toBe(200);
+
+    const paused = await ctx.database.db
+      .selectFrom('entity_records')
+      .select(['id', 'attrs'])
+      .where('entity_type', '=', 'CaseSLAClock')
+      .where(sql`attrs ->> 'caseId'`, '=', caseId)
+      .execute();
+    for (const clock of paused) clockIds.push(clock.id);
+    expect(paused.length).toBeGreaterThan(0);
+    expect((paused[0].attrs as Record<string, unknown>)['status']).toBe('paused');
+    const priorDue = new Date(String((paused[0].attrs as Record<string, unknown>)['dueAt']));
+
+    // Pretend the clock has been paused for the last 60 minutes.
+    await ctx.database.db
+      .updateTable('entity_records')
+      .set({ attrs: sql`attrs || ${JSON.stringify({ pausedAt: new Date(Date.now() - 60 * 60_000).toISOString() })}::jsonb` })
+      .where('entity_type', '=', 'CaseSLAClock')
+      .where(sql`attrs ->> 'caseId'`, '=', caseId)
+      .execute();
+    expect((await call('POST', `/api/v1/ServiceDesk/action/case/${caseId}/transition`, { command: 'start' }, agent.token)).status).toBe(200);
+
+    const resumed = await ctx.database.db
+      .selectFrom('entity_records')
+      .select('attrs')
+      .where('id', '=', paused[0].id)
+      .executeTakeFirstOrThrow();
+    const attrs = resumed.attrs as Record<string, unknown>;
+    expect(attrs['status']).not.toBe('paused');
+    expect(attrs['pausedAt'] ?? null).toBeNull();
+    expect(Number(attrs['totalPausedBusinessMinutes'])).toBeGreaterThanOrEqual(59);
+    expect(new Date(String(attrs['dueAt'])).getTime()).toBeGreaterThanOrEqual(priorDue.getTime() + 59 * 60_000);
+  });
+
+  it('uses each clock’s saved warning thresholds instead of a hard-coded percentage', async () => {
+    const c = await call('POST', '/api/v1/Case', { name: marker('subject-warning'), requesterName: marker('Requester') }, agent.token);
+    const caseId = String(c.body['id']);
+    caseIds.push(caseId);
+    const now = Date.now();
+    // 60 of 120 business minutes used = 50%; the clock snapshot asks for a warning at 50%, not 75%.
+    await ctx.database.db
+      .updateTable('entity_records')
+      .set({
+        attrs: sql`attrs || ${JSON.stringify({
+          status: 'onTrack',
+          startAt: new Date(now - 60 * 60_000).toISOString(),
+          dueAt: new Date(now + 60 * 60_000).toISOString(),
+          warningThresholds: [50],
+          firedWarnings: [],
+        })}::jsonb`,
+      })
+      .where('entity_type', '=', 'CaseSLAClock')
+      .where(sql`attrs ->> 'caseId'`, '=', caseId)
+      .where(sql`attrs ->> 'targetType'`, '=', 'firstResponse')
+      .execute();
+
+    const sla = ctx.app.get(SlaService);
+    await sla.checkBreaches();
+    const clock = await ctx.database.db
+      .selectFrom('entity_records')
+      .select('attrs')
+      .where('entity_type', '=', 'CaseSLAClock')
+      .where(sql`attrs ->> 'caseId'`, '=', caseId)
+      .where(sql`attrs ->> 'targetType'`, '=', 'firstResponse')
+      .executeTakeFirstOrThrow();
+    expect((clock.attrs as Record<string, unknown>)['status']).toBe('warning');
+  });
+
+  it('starts a new resolution cycle when a resolved case is reopened', async () => {
+    const c = await call('POST', '/api/v1/Case', { name: marker('subject-reopen'), requesterName: marker('Requester') }, agent.token);
+    const caseId = String(c.body['id']);
+    caseIds.push(caseId);
+    await call('POST', `/api/v1/ServiceDesk/action/case/${caseId}/transition`, { command: 'start' }, agent.token);
+    const resolved = await call('POST', `/api/v1/ServiceDesk/action/case/${caseId}/transition`, { command: 'resolve', resolutionCode: 'Solved' }, agent.token);
+    expect(resolved.status, JSON.stringify(resolved.body)).toBe(200);
+    const reopened = await call('POST', `/api/v1/ServiceDesk/action/case/${caseId}/transition`, { command: 'reopen', reason: 'recurred' }, agent.token);
+    expect(reopened.status, JSON.stringify(reopened.body)).toBe(200);
+
+    const resolutionClocks = await ctx.database.db
+      .selectFrom('entity_records')
+      .select(['id', 'attrs'])
+      .where('entity_type', '=', 'CaseSLAClock')
+      .where(sql`attrs ->> 'caseId'`, '=', caseId)
+      .where(sql`attrs ->> 'targetType'`, '=', 'resolution')
+      .execute();
+    for (const clock of resolutionClocks) clockIds.push(clock.id);
+    expect(resolutionClocks.length).toBe(2);
+    const cycles = resolutionClocks.map((clock) => Number((clock.attrs as Record<string, unknown>)['cycle'])).sort();
+    expect(cycles).toEqual([1, 2]);
+    expect(resolutionClocks.some((clock) => (clock.attrs as Record<string, unknown>)['status'] === 'met')).toBe(true);
   });
 });

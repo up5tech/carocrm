@@ -842,7 +842,9 @@ function portalVisibilitySql(
   if (ids.length === 0) return sql<boolean>`false`;
   const clauses: RawBuilder<boolean>[] = ids.map((id) => sql<boolean>`${column('id')} = ${id}`);
   for (const link of acl.linkFields) {
-    const attrs = column('attrs');
+    // `attrs` is the JSONB payload column, deliberately not in the physical allowlist; it is a fixed
+    // identifier here, never a caller-supplied one.
+    const attrs = sql`attrs`;
     for (const id of ids) {
       if (link.multiple) {
         clauses.push(sql<boolean>`(${attrs} -> ${link.field}::text) @> ${JSON.stringify([id])}::jsonb`);

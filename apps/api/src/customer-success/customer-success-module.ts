@@ -140,9 +140,8 @@ export const OPTIONAL_INTEGRATIONS: readonly CustomerSuccessOptionalIntegration[
     id: "service-desk",
     label: "Service Desk",
     provides: "Support-derived health signals",
-    // Detected from the `Case` entity the Service Desk module registers (Phase 19-SD). The
-    // support-signal *adapter* that would score from cases is delivered in 19-SD.16, so
-    // `SupportSignalProvider` still reports the signal as unavailable until then (§12.6).
+    // Detected from the `Case` entity Service Desk registers (Phase 19-SD). The support-signal
+    // adapter reads each account's cases and feeds the `support` health signal (§12.6, 19-SD.16).
     markerEntity: "Case",
   },
   {

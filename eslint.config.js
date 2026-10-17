@@ -92,6 +92,6 @@ export default [
     },
   },
   {
-    ignores: ['**/dist/**', '**/*.d.ts', 'node_modules', '.next', 'coverage', '**/*.config.ts', '.data/**', '.claude/**', 'graft/**'],
+    ignores: ['**/dist/**', '**/*.d.ts', 'node_modules', '.next', 'coverage', '**/*.config.ts', '.data/**', '.claude/**', '.trail/**', 'graft/**'],
   },
 ];
