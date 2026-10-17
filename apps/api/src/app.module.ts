@@ -50,6 +50,7 @@ import { PROJECTS_CONTROLLERS, PROJECTS_PROVIDERS } from './projects/index.js';
 import { REPORT_CONTROLLERS, REPORT_PROVIDERS } from './reports/index.js';
 import { SALES_CONTROLLERS, SALES_PROVIDERS } from './sales/index.js';
 import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
+import { SERVICE_DESK_CONTROLLERS, SERVICE_DESK_PROVIDERS } from './service-desk/index.js';
 import { SETTINGS_CONTROLLERS, SETTINGS_PROVIDERS } from './settings/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
 import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, STREAM_PROVIDERS, StreamUpdateHookService } from './stream/index.js';
@@ -100,6 +101,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...SALES_CONTROLLERS,
     // Phase 19-CS: `/api/v1/CustomerSuccess/action/...` domain commands.
     ...CUSTOMER_SUCCESS_CONTROLLERS,
+    // Phase 19-SD: `/api/v1/ServiceDesk/action/...` module commands (diagnostics, settings,
+    // numbering). Case CRUD stays on the generic `:entity` API.
+    ...SERVICE_DESK_CONTROLLERS,
     // `/api/v1/DocumentTemplate` and `/api/v1/document/action/preview` are static prefixes too.
     ...DOCUMENT_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
@@ -131,6 +135,7 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...PROJECTS_PROVIDERS,
     ...SALES_PROVIDERS,
     ...CUSTOMER_SUCCESS_PROVIDERS,
+    ...SERVICE_DESK_PROVIDERS,
     ...DOCUMENT_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,

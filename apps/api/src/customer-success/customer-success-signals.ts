@@ -378,7 +378,7 @@ export class SupportSignalProvider implements HealthSignalProvider {
     return missing(
       this.key,
       "unavailable",
-      "No Service Desk module is installed; support signals are unavailable.",
+      "The Service Desk support-signal adapter is not implemented yet; support signals are unavailable.",
     );
   }
 }

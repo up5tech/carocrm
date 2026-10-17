@@ -264,7 +264,7 @@ export function settingsWarnings(settings: CustomerSuccessSettings): SettingsWar
   if (supportSignal?.enabled === true) {
     warnings.push({
       code: "supportSignalUnavailable",
-      message: "The support signal is enabled but no Service Desk module is installed; it will report unavailable.",
+      message: "The support signal is enabled but the Service Desk support-signal adapter is not implemented yet; it will report unavailable.",
     });
   }
   const windows = [...settings.renewal.windows].sort((a, b) => a - b);

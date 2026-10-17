@@ -111,6 +111,20 @@ const CS_STEP_RUN_STATUSES = ['pending', 'inProgress', 'completed', 'skipped', '
 const CS_SENTIMENTS = ['positive', 'neutral', 'negative', 'unknown'];
 const CS_ACTIVITY_TYPES = ['Call', 'Meeting', 'Task', 'Email'];
 
+/**
+ * Phase 19-SD — Service Desk case vocabulary (PLAN_Phase_19_ServiceDesk.md §5.1, §5.2).
+ *
+ * Declared above `coreMetadata`, which is evaluated at module load and calls `serviceDeskCaseEntity()`.
+ * The lists mirror `apps/api/src/service-desk/service-desk-domain.ts`; that module is the authority
+ * for the server-side vocabulary, and the metadata health check catches any drift.
+ */
+const SD_CASE_STATUSES = ['New', 'Open', 'Pending Customer', 'Pending Internal', 'Escalated', 'Resolved', 'Closed', 'Cancelled'];
+const SD_CASE_PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'];
+const SD_CASE_SEVERITIES = ['Low', 'Normal', 'High', 'Critical'];
+const SD_CASE_TYPES = ['Question', 'Incident', 'Problem', 'Service Request'];
+const SD_CASE_SOURCES = ['Web', 'Email', 'Portal', 'API', 'Web Form', 'Workflow', 'Phone'];
+const SD_CASE_SLA_STATES = ['NotApplicable', 'OnTrack', 'Warning', 'Breached', 'Paused', 'Met'];
+
 export const coreMetadata: MetadataSeedEntry[] = [
   {
     scope: 'entity',
@@ -140,6 +154,8 @@ export const coreMetadata: MetadataSeedEntry[] = [
         invoices: { type: 'oneToMany', target: 'Invoice', mappedBy: 'account' },
         payments: { type: 'oneToMany', target: 'Payment', mappedBy: 'account' },
         subscriptions: { type: 'oneToMany', target: 'Subscription', mappedBy: 'accountId' },
+        // Phase 19-SD: the support cases raised by this customer (§5.1 customer relations).
+        cases: { type: 'oneToMany', target: 'Case', mappedBy: 'account' },
       },
       indexes: [],
       record: { displayField: 'name', removable: true },
@@ -165,7 +181,10 @@ export const coreMetadata: MetadataSeedEntry[] = [
         leadSource: { type: 'varchar', inDetail: true, inEdit: true },
         status: { type: 'enum', values: ['Active', 'Left'], defaultValue: 'Active', inList: true, inDetail: true, inEdit: true },
       },
-      relations: {},
+      relations: {
+        // Phase 19-SD: the support cases this contact is the requester of.
+        cases: { type: 'oneToMany', target: 'Case', mappedBy: 'contact' },
+      },
       indexes: [],
       record: { displayField: 'lastName', removable: true },
       client: {},
@@ -849,6 +868,17 @@ export const coreMetadata: MetadataSeedEntry[] = [
   // Phase 19-CS — Customer Success (PLAN_Phase_19_Customer_Success.md §6)
   // -------------------------------------------------------------------------
   ...customerSuccessEntities(),
+
+  // -------------------------------------------------------------------------
+  // Phase 19-SD — Service Desk (`ServiceDesk`): the canonical support-case entity
+  // -------------------------------------------------------------------------
+  //
+  // `Case` is the single ticket entity (PLAN_Phase_19_ServiceDesk.md §5.1). It is an ordinary
+  // metadata record in `entity_records`, so the Entity Engine keeps CRUD, validation, field ACL,
+  // audit, stream, attachments and search; the Service Desk module adds numbering, the write guard
+  // and the `service_desk_case_number_seq` sequence in `apps/api/src/service-desk` and
+  // `database/migrations/033_phase19_service_desk.sql`.
+  serviceDeskCaseEntity(),
 ];
 
 /**
@@ -3328,4 +3358,119 @@ function customerSuccessEntities(): MetadataSeedEntry[] {
       },
     },
   ];
+}
+
+/**
+ * Phase 19-SD.2 / 19-SD.3 — the canonical `Case` entity (PLAN_Phase_19_ServiceDesk.md §5.1, §6.1).
+ *
+ * `name` is the case subject: the record's display field IS the subject, exactly as the `Email`
+ * entity's display name is its subject, so lists, search and stream posts read what an agent
+ * recognises without a second label. `caseNumber` is allocated by the module (never typed in), and
+ * the timing, SLA and escalation fields are server-owned — the `beforeValidate` write guard refuses
+ * a client write that sets any of them, and a Service Desk domain service sets them under its
+ * internal marker.
+ */
+function serviceDeskCaseEntity(): MetadataSeedEntry {
+  return {
+    scope: 'entity',
+    name: 'Case',
+    data: {
+      name: 'Case',
+      label: 'Case',
+      isEntity: true,
+      fields: {
+        ...standardFields,
+        // Identity and content.
+        name: { ...standardFields.name, label: 'Subject', required: true, maxLength: 255, audited: true },
+        caseNumber: { type: 'varchar', maxLength: 32, inList: true, inDetail: true, sortable: true, audited: true },
+        description: { type: 'text', inDetail: true, inEdit: true },
+        // Classification (§5.1). Enums are configurable through metadata overrides.
+        status: { type: 'enum', values: SD_CASE_STATUSES, defaultValue: 'New', inList: true, inDetail: true, inEdit: true, audited: true },
+        priority: { type: 'enum', values: SD_CASE_PRIORITIES, defaultValue: 'Normal', inList: true, inDetail: true, inEdit: true, audited: true },
+        severity: { type: 'enum', values: SD_CASE_SEVERITIES, defaultValue: 'Normal', inDetail: true, inEdit: true, audited: true },
+        type: { type: 'enum', values: SD_CASE_TYPES, defaultValue: 'Question', inList: true, inDetail: true, inEdit: true, audited: true },
+        source: { type: 'enum', values: SD_CASE_SOURCES, defaultValue: 'Web', inList: true, inDetail: true, inEdit: true, audited: true },
+        // Customer and ownership.
+        accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true, inEdit: true },
+        contactId: { type: 'link', entityKey: 'Contact', inList: true, inDetail: true, inEdit: true },
+        leadId: { type: 'link', entityKey: 'Lead', inDetail: true, inEdit: true },
+        requesterName: { type: 'varchar', maxLength: 255, inDetail: true, inEdit: true },
+        requesterEmail: { type: 'email', inDetail: true, inEdit: true },
+        // Timing (§6.1): derived from real events, server-owned.
+        lastActivityAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+        firstResponseAt: { type: 'datetime', inDetail: true, sortable: true },
+        lastCustomerResponseAt: { type: 'datetime', inDetail: true, sortable: true },
+        lastAgentResponseAt: { type: 'datetime', inDetail: true, sortable: true },
+        resolvedAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+        closedAt: { type: 'datetime', inDetail: true, sortable: true },
+        reopenedAt: { type: 'datetime', inDetail: true },
+        // SLA summary (§5.6): per-target detail lands with SD.8; these are the case-level view.
+        slaPolicyId: { type: 'varchar', maxLength: 64, inDetail: true },
+        slaState: { type: 'enum', values: SD_CASE_SLA_STATES, defaultValue: 'NotApplicable', inList: true, inDetail: true },
+        // Escalation (§5.7), server-owned.
+        isEscalated: { type: 'bool', defaultValue: false, inList: true, inDetail: true },
+        escalationLevel: { type: 'int', defaultValue: 0, inDetail: true },
+        escalatedAt: { type: 'datetime', inDetail: true },
+        // Resolution (§5.1).
+        resolutionCode: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+        resolutionSummary: { type: 'text', inDetail: true, inEdit: true },
+        resolvedById: { type: 'link', entityKey: 'User', inDetail: true },
+        // Portal access (§5.9): a hidden case is never returned to a portal client.
+        isHiddenFromPortal: { type: 'bool', defaultValue: false, inDetail: true, inEdit: true },
+      },
+      relations: {
+        // Activities reach a case through explicit `entity_links` rows (the generic related-record
+        // endpoint), so no activity metadata has to change for the link to work.
+        emails: { type: 'manyMany', target: 'Email' },
+        calls: { type: 'manyMany', target: 'Call' },
+        meetings: { type: 'manyMany', target: 'Meeting' },
+        tasks: { type: 'manyMany', target: 'Task' },
+      },
+      // Declarative only — the physical indexes are created by migration
+      // `database/migrations/033_phase19_service_desk.sql`; the names are kept in step so a reader
+      // can move between metadata and DDL without a lookup.
+      indexes: [
+        { name: 'uq_entity_records_case_number', fields: ['caseNumber'], unique: true },
+        { name: 'idx_entity_records_case_status', fields: ['status', 'modifiedAt'] },
+        { name: 'idx_entity_records_case_assignee', fields: ['assignedUserId', 'status'] },
+        { name: 'idx_entity_records_case_account', fields: ['accountId'] },
+        { name: 'idx_entity_records_case_contact', fields: ['contactId'] },
+      ],
+      layouts: {
+        list: [{ entity: 'Case', type: 'list', panels: [{ name: 'list', position: 0, fields: ['caseNumber', 'name', 'status', 'priority', 'type', 'accountId', 'assignedUserId', 'modifiedAt'] }] }],
+        detail: [
+          {
+            entity: 'Case',
+            type: 'detail',
+            panels: [
+              { name: 'overview', label: 'Overview', position: 0, fields: ['caseNumber', 'name', 'description', 'status', 'priority', 'severity', 'type', 'source'] },
+              { name: 'requester', label: 'Requester', position: 10, fields: ['accountId', 'contactId', 'leadId', 'requesterName', 'requesterEmail'] },
+              { name: 'ownership', label: 'Ownership', position: 20, fields: ['assignedUserId', 'teams'] },
+              { name: 'timing', label: 'Timeline', position: 30, fields: ['lastActivityAt', 'firstResponseAt', 'lastCustomerResponseAt', 'lastAgentResponseAt', 'resolvedAt', 'closedAt', 'reopenedAt'] },
+              { name: 'sla', label: 'SLA', position: 40, fields: ['slaPolicyId', 'slaState', 'isEscalated', 'escalationLevel', 'escalatedAt'] },
+              { name: 'resolution', label: 'Resolution', position: 50, fields: ['resolutionCode', 'resolutionSummary', 'resolvedById', 'isHiddenFromPortal'] },
+            ],
+          },
+        ],
+        edit: [
+          {
+            entity: 'Case',
+            type: 'edit',
+            panels: [
+              { name: 'main', label: 'Case', position: 0, fields: ['name', 'description', 'status', 'priority', 'severity', 'type', 'source'] },
+              { name: 'requester', label: 'Requester', position: 10, fields: ['accountId', 'contactId', 'leadId', 'requesterName', 'requesterEmail'] },
+              { name: 'ownership', label: 'Ownership', position: 20, fields: ['assignedUserId', 'teams'] },
+            ],
+          },
+        ],
+      },
+      record: { displayField: 'name', removable: true, followable: true, streamable: true },
+      client: {},
+      acl: {
+        // Baseline defaults (PLAN §10.2): agents create and read cases; editing and streaming are
+        // scoped to the record owner. An administrator narrows or widens this per role.
+        permissions: { Case: { create: 'yes', read: 'all', edit: 'own', delete: 'own', stream: 'own' } },
+      },
+    },
+  };
 }

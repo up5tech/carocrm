@@ -140,7 +140,9 @@ export const OPTIONAL_INTEGRATIONS: readonly CustomerSuccessOptionalIntegration[
     id: "service-desk",
     label: "Service Desk",
     provides: "Support-derived health signals",
-    // No Service Desk module ships in this repository, so this is reported unavailable (§12.6).
+    // Detected from the `Case` entity the Service Desk module registers (Phase 19-SD). The
+    // support-signal *adapter* that would score from cases is delivered in 19-SD.16, so
+    // `SupportSignalProvider` still reports the signal as unavailable until then (§12.6).
     markerEntity: "Case",
   },
   {

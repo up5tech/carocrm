@@ -85,7 +85,7 @@ writer with dedup keys and cadence, off by default until `features.notifications
 | Sales — Subscriptions (`sales-subscriptions`) and Opportunities (`opportunities`) | available when those entities are registered | detected adapters (`CustomerSuccessRenewalService.syncFromSource`); `GET /api/v1/Sales/action/health` reports `customer-success: available` (§12.8, asserted by a test) |
 | Projects (`projects`) | available as a *source* of delivery links when `Project` is registered | relations are registered only when the target entity exists |
 | Activities (Task/Call/Meeting/Email), Contacts, Accounts | available — kernel records | signal providers read them through the structural reader |
-| Cases / Service Desk (`service-desk`) | **not available** (§12.6) | reported as an unavailable optional integration in `/action/health` |
+| Cases / Service Desk (`service-desk`) | **available** once the Service Desk module registers `Case` (Phase 19-SD); the support-signal adapter is delivered in 19-SD.16, so the signal itself still reports `unavailable` (§12.6) | detected from the `Case` marker entity in `/action/health` |
 | External adoption analytics (`adoption-analytics`) | **not available** (§12.7) | `features.adoptionSignal` stays off; the signal reports `unavailable`, never a fake score |
 
 ## Setup

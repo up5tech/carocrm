@@ -15,7 +15,7 @@ first-party Customer Success product).
 | Scoring configuration is a slice of the `customerSuccess` settings row | The versioned `app_settings` store already exists; a redundant `CustomerSuccessScoringConfig` table would be a second source of truth for the same policy (plan option C). |
 | A module-local notification writer instead of a platform service | There is no notification service. The writer follows the `system.sendReminders` table shape (`apps/worker/src/handlers/job-handlers.ts:132`), writes in-app rows only and is documented as a module-local facility — the smallest reusable dependency, not a kernel service invented for one consumer. |
 | 19-CS.12 (dedicated React screens) is **not** built | Per §10 of the plan, entities registered with `layouts` render through the generic metadata-driven UI; dedicated screens are optional polish. Every entity has list/detail/edit screens; what is missing is a dedicated *Customer Success* submenu and purpose-built panels. Feature parity with §10.2–§10.4 panels is the known gap. |
-| No support or adoption signals | No Service Desk module and no usage connector exist. Both families are present in the configuration surface and report `unavailable`, so enabling them later needs no schema change (§12.6, §12.7). |
+| No support or adoption signals | The Service Desk module registers `Case` (Phase 19-SD), so the `service-desk` optional integration reads `available`, but the support-signal *adapter* is delivered in 19-SD.16 and the signal still reports `unavailable`; no usage connector exists either. Both families are present in the configuration surface and report `unavailable`, so enabling them later needs no schema change (§12.6, §12.7). |
 
 ## 2. Small platform changes this module required
 
