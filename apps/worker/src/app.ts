@@ -8,6 +8,7 @@ import { createPool, errorMessage, type Queryable } from './db.js';
 import type { WorkerConfig } from './env.js';
 import { DomainEventBus } from './events/domain-event-bus.js';
 import { loadExtensionConfig } from './extensions.js';
+import { registerCustomerSuccessJobs } from './handlers/customer-success-handlers.js';
 import { registerSystemJobs } from './handlers/job-handlers.js';
 import { registerMailJobs } from './handlers/mail-handlers.js';
 import { createKernelOutboxSetup } from './handlers/outbox-handlers.js';
@@ -89,6 +90,13 @@ export class WorkerApplication {
     // Phase 19-S.7: quotes past their validity date are expired by the API, on this schedule. The job
     // is inert when no worker capability is configured.
     registerSalesJobs(this.jobRegistry, {
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
+      log: this.log,
+    });
+    // Phase 19-CS.11: health recalculation, override expiry and the customer success scans run in the
+    // API, on this schedule. The jobs are inert when no worker capability is configured.
+    registerCustomerSuccessJobs(this.jobRegistry, {
       apiBaseUrl: this.config.apiBaseUrl,
       secret: this.config.reportWorkerSecret,
       log: this.log,

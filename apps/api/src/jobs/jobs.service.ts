@@ -13,7 +13,13 @@ import type { JobView, ScheduleView } from './job.views.js';
 import { toJobView, toScheduleView } from './job.views.js';
 import { JobQueueService } from './job-queue.service.js';
 
-const JOB_NAME = /^[a-z][a-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*){1,3}$/;
+/**
+ * `<module>.<action>` — 2 to 4 dot-separated segments. CamelCase is allowed in every segment, so a
+ * module that names itself `customerSuccess` can register `customerSuccess.recalculateHealthBatch`
+ * (PLAN_Phase_19_Customer_Success.md §9). Kept identical in shape to `EVENT_TYPE` in
+ * `apps/api/src/events/event-bus.ts`.
+ */
+const JOB_NAME = /^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*){1,3}$/;
 const JOB_ID = /^[0-9a-fA-F-]{16,64}$/;
 const SCHEDULE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const MAX_PAYLOAD_CHARS = 32_000;

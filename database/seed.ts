@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import argon2 from 'argon2';
 import pg from 'pg';
 
+import { DEFAULT_ONBOARDING_TEMPLATE } from '../apps/api/src/customer-success/customer-success-defaults.js';
 import { DEFAULT_DOCUMENT_TEMPLATES } from '../apps/api/src/sales/document/document-template-defaults.js';
 import { DEFAULT_NUMBER_SERIES } from '../apps/api/src/sales/document/number-series-defaults.js';
 import { getDatabaseUrl,loadEnv } from './env.js';
@@ -67,6 +68,24 @@ const DEFAULT_PROJECT_ROLES: readonly { id: string; name: string; policy: Record
     },
   },
 ];
+
+/**
+ * Phase 19-CS.6.6 — the default onboarding playbook (PLAN_Phase_19_Customer_Success.md §6.6).
+ *
+ * Without a template, `startOnboarding` falls back to manual tracking: correct, but a fresh
+ * installation would never show the playbook machinery it just installed. This is ordinary
+ * configuration in `entity_records`, with a fixed id and `ON CONFLICT DO NOTHING` so re-running the
+ * seed never duplicates it and never overwrites an operator's edits to the template. The record's
+ * shape is declared next to the service that reads it (`customer-success-defaults.ts`).
+ */
+async function seedCustomerSuccessSystemRows(pool: pg.Pool): Promise<void> {
+  const template = DEFAULT_ONBOARDING_TEMPLATE;
+  await pool.query(
+    `INSERT INTO entity_records (id, entity_type, name, attrs, created_at, modified_at, version)
+     VALUES ($1, 'CustomerSuccessPlaybookTemplate', $2, $3, now(), now(), 1) ON CONFLICT (id) DO NOTHING`,
+    [template.id, template.name, JSON.stringify(template.attrs)],
+  );
+}
 
 async function seedSalesNumberSeries(pool: pg.Pool): Promise<void> {
   for (const series of DEFAULT_NUMBER_SERIES) {
@@ -202,6 +221,10 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
     // prefix and padding once it exists, so re-running the seed can never reset a sequence.
     await seedSalesNumberSeries(pool);
 
+    // Phase 19-CS.6.6 — the default onboarding playbook, installed once under a fixed id
+    // (PLAN_Phase_19_Customer_Success.md §6.6).
+    await seedCustomerSuccessSystemRows(pool);
+
     // Phase 19-S.17 — default DocumentTemplate rows for every Sales document type
     // (PLAN_Phase_19_Sales.md S.17 task 3). DocumentTemplate is an ordinary metadata entity stored
     // in `entity_records`; `ON CONFLICT (id) DO NOTHING`: an operator's edits survive a seed re-run.
@@ -296,6 +319,51 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
     await pool.query(
       `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
        VALUES ('generateSubscriptionInvoices', 'sales.generateSubscriptionInvoices', '50 1 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+
+    // Customer Success (Phase 19-CS.11): health is refreshed daily for profiles whose score is stale,
+    // overrides that have passed their date are expired, and the portfolio scans run once a day. Each
+    // operation is idempotent, so a replay changes nothing, and each is a no-op while the module's
+    // feature flags are off.
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('csRecalculateHealth', 'customerSuccess.recalculateHealthBatch', '10 2 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('csExpireHealthOverrides', 'customerSuccess.expireHealthOverrides', '25 2 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('csEvaluateRenewalWindows', 'customerSuccess.evaluateRenewalWindows', '40 2 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('csEvaluateRiskEscalations', 'customerSuccess.evaluateRiskEscalations', '50 2 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('csEvaluateReviewReminders', 'customerSuccess.evaluateReviewReminders', '5 3 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('csUpdateGoalOverdue', 'customerSuccess.updateGoalOverdueState', '15 3 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('csProcessPlaybookWaitSteps', 'customerSuccess.processPlaybookWaitSteps', '25 3 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('csRepairStalePlaybookRuns', 'customerSuccess.repairStalePlaybookRuns', '35 3 * * *', '{}'::jsonb, TRUE)
        ON CONFLICT (id) DO NOTHING`,
     );
 

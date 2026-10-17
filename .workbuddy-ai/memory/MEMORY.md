@@ -78,3 +78,24 @@ Curated, long-lived notes. Daily logs live next to this file as `YYYY-MM-DD.md`.
 - Some sessions in this repo expose **no shell**: no `git`, no `pnpm typecheck`, no `vitest`, and no
   way to rename or delete files. When that happens, write the content changes, and record the exact
   commands the user must run instead of claiming verification.
+- **Full-suite flake (pre-existing, verified 2026-10-17):** `pnpm test` (all api suites, one fork)
+  aborts at random file boundaries with a native V8 abort before/between suites. Control-verified
+  with module changes stashed — crashes even earlier without them. Individual suites are reliable;
+  `attachments`, `attachments-storage`, `audit` crash at boot in this environment regardless of any
+  change. For regression sweeps, run one file per `pnpm vitest run` invocation.
+
+## Customer Success module (Phase 19-CS, shipped 2026-10-17)
+
+- `apps/api/src/customer-success/`, module id `CustomerSuccess` (no prefix), entities keep the
+  `CustomerSuccess` prefix. **`CustomerSuccessProfile` is a fixed name** — the shipped Sales
+  integration's marker (`sales-module.ts`); registering it flips
+  `apps/api/test/sales-module.test.ts`'s absence-case assertion to `available` (plan §12.8).
+- **`User` and `Team` are identity tables, not metadata entities** — the entity API refuses them;
+  validate destinations against `users`/`teams` directly (`project-member.service.ts` precedent).
+- Entity ACL `delete: 'no'` (playbook templates/runs/step runs) blocks the record API DELETE even
+  for admins — a test suite must remove its own such rows by exact id from the DB. Health snapshots
+  are engine-written with no tracked id; sweep them by the run's profile ids.
+- `EVENT_TYPE` (`events/event-bus.ts`) and `JOB_NAME` (`jobs/jobs.service.ts`) were widened to allow
+  camelCase segments so `customerSuccess.health.statusChanged` / `…recalculateHealthBatch` validate.
+- 19-CS.12 (dedicated React screens) deliberately not built; the generic metadata UI serves the
+  entities. Docs: `docs/modules/customer-success/` + `docs/implementation/customer-success-*.md`.

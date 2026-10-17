@@ -87,6 +87,30 @@ const projectFields = (extra: Record<string, Record<string, unknown>> = {}): Rec
   ...extra,
 });
 
+/**
+ * Customer Success enum values (PLAN_Phase_19_Customer_Success.md §4). Declared **above**
+ * `coreMetadata`, which is evaluated at module load and calls `customerSuccessEntities()`: a `const`
+ * below it would still be in its temporal dead zone at that moment.
+ */
+const CS_LIFECYCLE_STAGES = ['onboarding', 'adoption', 'valueRealization', 'mature', 'renewal', 'atRisk', 'churned'];
+const CS_HEALTH_STATUSES = ['healthy', 'monitor', 'atRisk', 'critical', 'unknown'];
+const CS_HEALTH_OVERRIDES = ['healthy', 'monitor', 'atRisk', 'critical'];
+const CS_TRENDS = ['improving', 'stable', 'declining', 'unknown'];
+const CS_ONBOARDING_STATUSES = ['notStarted', 'inProgress', 'blocked', 'completed', 'canceled'];
+const CS_RENEWAL_STATUSES = ['unknown', 'notDue', 'preparing', 'inProgress', 'renewed', 'atRisk', 'churned'];
+const CS_PLAN_STATUSES = ['draft', 'active', 'onHold', 'completed', 'canceled'];
+const CS_GOAL_DIRECTIONS = ['increase', 'decrease', 'maintain', 'boolean', 'manual'];
+const CS_GOAL_STATUSES = ['notStarted', 'inProgress', 'achieved', 'missed', 'canceled', 'blocked'];
+const CS_RISK_TYPES = ['adoption', 'engagement', 'support', 'stakeholder', 'valueRealization', 'renewal', 'commercial', 'implementation', 'competitor', 'unknown'];
+const CS_RISK_SEVERITIES = ['low', 'medium', 'high', 'critical'];
+const CS_RISK_STATUSES = ['open', 'mitigating', 'escalated', 'resolved', 'accepted', 'closed'];
+const CS_PLAYBOOK_TRIGGERS = ['manual', 'lifecycleTransition', 'healthTransition', 'renewalWindow', 'onboardingStarted'];
+const CS_PLAYBOOK_STEP_TYPES = ['manual', 'createActivity', 'createTask', 'createRisk', 'createSuccessPlan', 'notifyOwner', 'waitUntil'];
+const CS_RUN_STATUSES = ['pending', 'running', 'paused', 'completed', 'canceled', 'failed'];
+const CS_STEP_RUN_STATUSES = ['pending', 'inProgress', 'completed', 'skipped', 'failed', 'canceled'];
+const CS_SENTIMENTS = ['positive', 'neutral', 'negative', 'unknown'];
+const CS_ACTIVITY_TYPES = ['Call', 'Meeting', 'Task', 'Email'];
+
 export const coreMetadata: MetadataSeedEntry[] = [
   {
     scope: 'entity',
@@ -820,6 +844,11 @@ export const coreMetadata: MetadataSeedEntry[] = [
   // Phase 19 — the `document` module (kernel): a template is a record like any other
   // -------------------------------------------------------------------------
   coreDocumentTemplateEntity(),
+
+  // -------------------------------------------------------------------------
+  // Phase 19-CS — Customer Success (PLAN_Phase_19_Customer_Success.md §6)
+  // -------------------------------------------------------------------------
+  ...customerSuccessEntities(),
 ];
 
 /**
@@ -2837,4 +2866,466 @@ function salesWriteOffEntity(): MetadataSeedEntry {
       acl: { permissions: { WriteOff: { create: 'yes', read: 'all', edit: 'yes', delete: 'no', stream: 'all' } } },
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 19-CS — Customer Success entities (PLAN_Phase_19_Customer_Success.md §6)
+//
+// Every Customer Success record lives in the generic `entity_records` store like any other CRM
+// entity, so the Entity Engine provides CRUD, field validation, audit, stream, attachments and record
+// ACL for free. The relational invariants JSON alone cannot express — one active profile per account,
+// a run's trigger idempotency key — are expression indexes in migration `032`.
+// ---------------------------------------------------------------------------
+
+/** Fields shared by every Customer Success entity, with the audit flags this module needs. */
+function csFields(extra: Record<string, Record<string, unknown>> = {}): Record<string, Record<string, unknown>> {
+  return {
+    ...standardFields,
+    name: { ...standardFields['name'], required: true, audited: true },
+    ...extra,
+  };
+}
+
+function customerSuccessEntities(): MetadataSeedEntry[] {
+  return [
+    {
+      scope: 'entity',
+      name: 'CustomerSuccessProfile',
+      data: {
+        name: 'CustomerSuccessProfile',
+        label: 'Customer Success Profile',
+        isEntity: true,
+        fields: csFields({
+          /** The authoritative customer record this profile is about (§5.1); unique while active. */
+          accountId: { type: 'link', entityKey: 'Account', required: true, inList: true, inDetail: true, inEdit: true },
+          csmUserId: { type: 'link', entityKey: 'User', inList: true, inDetail: true, inEdit: true, audited: true },
+          csmTeamId: { type: 'link', entityKey: 'Team', inList: true, inDetail: true, inEdit: true },
+          lifecycleStage: { type: 'enum', values: CS_LIFECYCLE_STAGES, defaultValue: 'onboarding', inList: true, inDetail: true, inEdit: true, audited: true },
+          lifecycleStageReason: { type: 'text', inDetail: true, audited: true },
+          lifecycleStageChangedAt: { type: 'datetime', inDetail: true },
+          /** Effective status (override-aware); `calculatedHealthStatus` is the engine's own result. */
+          healthStatus: { type: 'enum', values: CS_HEALTH_STATUSES, defaultValue: 'unknown', inList: true, inDetail: true, sortable: true },
+          calculatedHealthStatus: { type: 'enum', values: CS_HEALTH_STATUSES, defaultValue: 'unknown', inDetail: true },
+          healthScore: { type: 'int', inList: true, inDetail: true, sortable: true },
+          healthScoreAt: { type: 'datetime', inDetail: true },
+          healthOverride: { type: 'enum', values: CS_HEALTH_OVERRIDES, inDetail: true },
+          healthOverrideReason: { type: 'text', inDetail: true },
+          healthOverrideByUserId: { type: 'link', entityKey: 'User', inDetail: true },
+          healthOverrideAt: { type: 'datetime', inDetail: true },
+          healthOverrideExpiresAt: { type: 'date', inDetail: true },
+          scoreTrend: { type: 'enum', values: CS_TRENDS, defaultValue: 'unknown', inList: true, inDetail: true },
+          segment: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true },
+          onboardingStatus: { type: 'enum', values: CS_ONBOARDING_STATUSES, defaultValue: 'notStarted', inList: true, inDetail: true },
+          onboardingStartedAt: { type: 'date', inDetail: true },
+          onboardingTargetDate: { type: 'date', inList: true, inDetail: true, inEdit: true },
+          onboardingCompletedAt: { type: 'date', inDetail: true },
+          activePlaybookRunId: { type: 'link', entityKey: 'CustomerSuccessPlaybookRun', inDetail: true },
+          renewalDate: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+          renewalStatus: { type: 'enum', values: CS_RENEWAL_STATUSES, defaultValue: 'unknown', inList: true, inDetail: true, inEdit: true },
+          renewalSource: { type: 'varchar', maxLength: 32, inDetail: true },
+          renewalSyncedAt: { type: 'datetime', inDetail: true },
+          notifiedRenewalWindows: { type: 'text', inDetail: true },
+          lastMeaningfulTouchAt: { type: 'datetime', inList: true, inDetail: true },
+          nextSuccessReviewAt: { type: 'datetime', inList: true, inDetail: true, inEdit: true, sortable: true },
+          lastHealthReviewAt: { type: 'datetime', inDetail: true },
+          customerSince: { type: 'date', inDetail: true, inEdit: true },
+          executiveSponsorContactId: { type: 'link', entityKey: 'Contact', inDetail: true, inEdit: true },
+          primaryPlanId: { type: 'link', entityKey: 'CustomerSuccessPlan', inList: true, inDetail: true },
+          activePlanProgress: { type: 'int', inList: true, inDetail: true },
+          openRiskCount: { type: 'int', inList: true, inDetail: true },
+        }),
+        relations: {
+          plans: { type: 'oneToMany', target: 'CustomerSuccessPlan', mappedBy: 'profile' },
+          goals: { type: 'oneToMany', target: 'CustomerSuccessGoal', mappedBy: 'profile' },
+          risks: { type: 'oneToMany', target: 'CustomerSuccessRisk', mappedBy: 'profile' },
+          snapshots: { type: 'oneToMany', target: 'CustomerSuccessHealthSnapshot', mappedBy: 'profile' },
+          playbookRuns: { type: 'oneToMany', target: 'CustomerSuccessPlaybookRun', mappedBy: 'profile' },
+          reviews: { type: 'oneToMany', target: 'CustomerSuccessReview', mappedBy: 'profile' },
+          contacts: { type: 'manyMany', target: 'Contact' },
+        },
+        indexes: [
+          { name: 'idx_cs_profile_account', fields: ['accountId'] },
+          { name: 'idx_cs_profile_csm', fields: ['csmUserId'] },
+          { name: 'idx_cs_profile_health', fields: ['healthStatus'] },
+        ],
+        layouts: {
+          list: [{ entity: 'CustomerSuccessProfile', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'accountId', 'csmUserId', 'lifecycleStage', 'healthStatus', 'healthScore', 'renewalDate', 'openRiskCount'] }] }],
+          detail: [
+            {
+              entity: 'CustomerSuccessProfile',
+              type: 'detail',
+              panels: [
+                { name: 'overview', label: 'Overview', position: 0, fields: ['name', 'accountId', 'csmUserId', 'csmTeamId', 'segment', 'lifecycleStage', 'customerSince'] },
+                { name: 'health', label: 'Health', position: 10, fields: ['healthStatus', 'calculatedHealthStatus', 'healthScore', 'healthScoreAt', 'scoreTrend', 'healthOverride', 'healthOverrideReason', 'healthOverrideExpiresAt'] },
+                { name: 'onboarding', label: 'Onboarding', position: 20, fields: ['onboardingStatus', 'onboardingStartedAt', 'onboardingTargetDate', 'onboardingCompletedAt', 'activePlaybookRunId'] },
+                { name: 'renewal', label: 'Renewal', position: 30, fields: ['renewalDate', 'renewalStatus', 'renewalSource', 'renewalSyncedAt'] },
+                { name: 'portfolio', label: 'Portfolio', position: 40, fields: ['activePlanProgress', 'openRiskCount', 'lastMeaningfulTouchAt', 'nextSuccessReviewAt'] },
+              ],
+            },
+          ],
+          edit: [
+            {
+              entity: 'CustomerSuccessProfile',
+              type: 'edit',
+              panels: [
+                { name: 'main', label: 'Profile', position: 0, fields: ['name', 'accountId', 'csmUserId', 'csmTeamId', 'segment', 'lifecycleStage', 'customerSince', 'executiveSponsorContactId', 'nextSuccessReviewAt', 'renewalDate', 'renewalStatus', 'onboardingTargetDate'] },
+              ],
+            },
+          ],
+        },
+        record: { displayField: 'name', removable: true, followable: true, streamable: true },
+        client: {},
+        acl: { permissions: { CustomerSuccessProfile: { create: 'yes', read: 'all', edit: 'own', delete: 'own', stream: 'own' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'CustomerSuccessHealthSnapshot',
+      data: {
+        name: 'CustomerSuccessHealthSnapshot',
+        label: 'Customer Success Health Snapshot',
+        isEntity: true,
+        fields: csFields({
+          profileId: { type: 'link', entityKey: 'CustomerSuccessProfile', required: true, inList: true, inDetail: true },
+          accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true },
+          score: { type: 'int', inList: true, inDetail: true, sortable: true },
+          status: { type: 'enum', values: CS_HEALTH_STATUSES, defaultValue: 'unknown', inList: true, inDetail: true, audited: true },
+          effectiveStatus: { type: 'enum', values: CS_HEALTH_STATUSES, defaultValue: 'unknown', inList: true, inDetail: true },
+          coverage: { type: 'float', inDetail: true },
+          configurationVersion: { type: 'int', inDetail: true },
+          source: { type: 'enum', values: ['manual', 'scheduled', 'event', 'rebuild'], defaultValue: 'manual', inList: true, inDetail: true },
+          resultState: { type: 'enum', values: ['success', 'partial', 'failed'], defaultValue: 'success', inList: true, inDetail: true },
+          errorSummary: { type: 'text', inDetail: true },
+          durationMs: { type: 'int', inDetail: true },
+          components: { type: 'text', inDetail: true },
+          signature: { type: 'text', inDetail: true },
+          triggerReason: { type: 'varchar', maxLength: 255, inDetail: true },
+          idempotencyKey: { type: 'varchar', maxLength: 128, inDetail: true },
+          calculatedAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+        }),
+        relations: {},
+        indexes: [
+          { name: 'idx_cs_snapshot_profile', fields: ['profileId'] },
+          { name: 'idx_cs_snapshot_calculated', fields: ['calculatedAt'] },
+        ],
+        layouts: {
+          list: [{ entity: 'CustomerSuccessHealthSnapshot', type: 'list', panels: [{ name: 'list', position: 0, fields: ['profileId', 'score', 'status', 'effectiveStatus', 'coverage', 'configurationVersion', 'source', 'calculatedAt'] }] }],
+          detail: [{ entity: 'CustomerSuccessHealthSnapshot', type: 'detail', panels: [{ name: 'main', label: 'Snapshot', position: 0, fields: ['profileId', 'accountId', 'score', 'status', 'effectiveStatus', 'coverage', 'configurationVersion', 'source', 'resultState', 'durationMs', 'calculatedAt', 'components'] }] }],
+          edit: [],
+        },
+        record: { displayField: 'name', removable: false },
+        client: { web: false },
+        // Append-only and module-written. Read/edit/delete are closed at the ACL level as well as by
+        // the write guard, and the history is served through a profile-scoped command instead (§5.4.4).
+        acl: { permissions: { CustomerSuccessHealthSnapshot: { create: 'yes', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'CustomerSuccessPlan',
+      data: {
+        name: 'CustomerSuccessPlan',
+        label: 'Customer Success Plan',
+        isEntity: true,
+        fields: csFields({
+          profileId: { type: 'link', entityKey: 'CustomerSuccessProfile', required: true, inList: true, inDetail: true, inEdit: true },
+          accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true },
+          ownerUserId: { type: 'link', entityKey: 'User', inList: true, inDetail: true, inEdit: true },
+          status: { type: 'enum', values: CS_PLAN_STATUSES, defaultValue: 'draft', inList: true, inDetail: true, sortable: true },
+          isPrimary: { type: 'bool', defaultValue: false, inList: true, inDetail: true },
+          planType: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true },
+          startDate: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+          endDate: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+          nextReviewDate: { type: 'date', inDetail: true, inEdit: true },
+          completedDate: { type: 'date', inDetail: true },
+          closeOutSummary: { type: 'text', inDetail: true },
+          outcomes: { type: 'text', inDetail: true, inEdit: true },
+          baselineSummary: { type: 'text', inDetail: true, inEdit: true },
+          progress: { type: 'int', inList: true, inDetail: true },
+          executiveSponsorContactId: { type: 'link', entityKey: 'Contact', inDetail: true, inEdit: true },
+          projectId: { type: 'link', entityKey: 'Project', inDetail: true, inEdit: true },
+          contactIds: { type: 'linkMultiple', entityKey: 'Contact', inDetail: true, inEdit: true },
+          opportunityId: { type: 'link', entityKey: 'Opportunity', inDetail: true, inEdit: true },
+        }),
+        relations: {
+          goals: { type: 'oneToMany', target: 'CustomerSuccessGoal', mappedBy: 'plan' },
+          risks: { type: 'oneToMany', target: 'CustomerSuccessRisk', mappedBy: 'plan' },
+        },
+        indexes: [
+          { name: 'idx_cs_plan_profile', fields: ['profileId', 'status'] },
+        ],
+        layouts: {
+          list: [{ entity: 'CustomerSuccessPlan', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'profileId', 'status', 'progress', 'startDate', 'endDate', 'ownerUserId'] }] }],
+          detail: [
+            {
+              entity: 'CustomerSuccessPlan',
+              type: 'detail',
+              panels: [
+                { name: 'overview', label: 'Overview', position: 0, fields: ['name', 'profileId', 'accountId', 'status', 'isPrimary', 'planType', 'progress'] },
+                { name: 'timeframe', label: 'Timeframe', position: 10, fields: ['startDate', 'endDate', 'nextReviewDate', 'completedDate'] },
+                { name: 'content', label: 'Content', position: 20, fields: ['outcomes', 'baselineSummary', 'closeOutSummary', 'executiveSponsorContactId', 'projectId'] },
+              ],
+            },
+          ],
+          edit: [{ entity: 'CustomerSuccessPlan', type: 'edit', panels: [{ name: 'main', label: 'Plan', position: 0, fields: ['name', 'profileId', 'planType', 'ownerUserId', 'startDate', 'endDate', 'nextReviewDate', 'outcomes', 'baselineSummary', 'executiveSponsorContactId', 'projectId'] }] }],
+        },
+        record: { displayField: 'name', removable: true, streamable: true },
+        client: {},
+        acl: { permissions: { CustomerSuccessPlan: { create: 'yes', read: 'all', edit: 'own', delete: 'own', stream: 'own' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'CustomerSuccessGoal',
+      data: {
+        name: 'CustomerSuccessGoal',
+        label: 'Customer Success Goal',
+        isEntity: true,
+        fields: csFields({
+          planId: { type: 'link', entityKey: 'CustomerSuccessPlan', required: true, inList: true, inDetail: true, inEdit: true },
+          profileId: { type: 'link', entityKey: 'CustomerSuccessProfile', inList: true, inDetail: true },
+          accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true },
+          direction: { type: 'enum', values: CS_GOAL_DIRECTIONS, defaultValue: 'manual', inList: true, inDetail: true, inEdit: true },
+          category: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true },
+          baselineValue: { type: 'float', inDetail: true, inEdit: true },
+          baselineDate: { type: 'date', inDetail: true, inEdit: true },
+          targetValue: { type: 'float', inDetail: true, inEdit: true },
+          targetDate: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+          currentValue: { type: 'float', inList: true, inDetail: true },
+          currentDate: { type: 'date', inDetail: true },
+          unit: { type: 'varchar', maxLength: 32, inDetail: true, inEdit: true },
+          tolerance: { type: 'float', inDetail: true, inEdit: true },
+          status: { type: 'enum', values: CS_GOAL_STATUSES, defaultValue: 'notStarted', inList: true, inDetail: true, sortable: true },
+          progress: { type: 'int', inList: true, inDetail: true, sortable: true },
+          progressAt: { type: 'datetime', inDetail: true },
+          progressExplanation: { type: 'text', inDetail: true },
+          overdue: { type: 'bool', defaultValue: false, inList: true, inDetail: true },
+          checkpointNotes: { type: 'text', inDetail: true },
+          ownerUserId: { type: 'link', entityKey: 'User', inList: true, inDetail: true, inEdit: true },
+          contactId: { type: 'link', entityKey: 'Contact', inDetail: true, inEdit: true },
+        }),
+        relations: {},
+        indexes: [
+          { name: 'idx_cs_goal_plan', fields: ['planId', 'status'] },
+          { name: 'idx_cs_goal_due', fields: ['targetDate'] },
+        ],
+        layouts: {
+          list: [{ entity: 'CustomerSuccessGoal', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'planId', 'direction', 'status', 'progress', 'currentValue', 'targetValue', 'targetDate'] }] }],
+          detail: [{ entity: 'CustomerSuccessGoal', type: 'detail', panels: [{ name: 'main', label: 'Goal', position: 0, fields: ['name', 'description', 'planId', 'profileId', 'category', 'direction', 'unit', 'status', 'progress', 'progressExplanation'] }, { name: 'measurement', label: 'Measurement', position: 10, fields: ['baselineValue', 'baselineDate', 'targetValue', 'targetDate', 'currentValue', 'currentDate', 'tolerance', 'overdue'] }, { name: 'ownership', label: 'Ownership', position: 20, fields: ['ownerUserId', 'contactId', 'checkpointNotes'] }] }],
+          edit: [{ entity: 'CustomerSuccessGoal', type: 'edit', panels: [{ name: 'main', label: 'Goal', position: 0, fields: ['name', 'description', 'planId', 'category', 'direction', 'unit', 'baselineValue', 'baselineDate', 'targetValue', 'targetDate', 'tolerance', 'ownerUserId', 'contactId'] }] }],
+        },
+        record: { displayField: 'name', removable: true, streamable: true },
+        client: {},
+        acl: { permissions: { CustomerSuccessGoal: { create: 'yes', read: 'all', edit: 'own', delete: 'own', stream: 'own' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'CustomerSuccessRisk',
+      data: {
+        name: 'CustomerSuccessRisk',
+        label: 'Customer Success Risk',
+        isEntity: true,
+        fields: csFields({
+          profileId: { type: 'link', entityKey: 'CustomerSuccessProfile', required: true, inList: true, inDetail: true, inEdit: true },
+          accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true },
+          planId: { type: 'link', entityKey: 'CustomerSuccessPlan', inDetail: true, inEdit: true },
+          riskType: { type: 'enum', values: CS_RISK_TYPES, defaultValue: 'unknown', inList: true, inDetail: true, inEdit: true },
+          severity: { type: 'enum', values: CS_RISK_SEVERITIES, defaultValue: 'medium', inList: true, inDetail: true, inEdit: true, sortable: true, audited: true },
+          status: { type: 'enum', values: CS_RISK_STATUSES, defaultValue: 'open', inList: true, inDetail: true, sortable: true, audited: true },
+          ownerUserId: { type: 'link', entityKey: 'User', inList: true, inDetail: true, inEdit: true },
+          escalationTeamId: { type: 'link', entityKey: 'Team', inDetail: true, inEdit: true },
+          contactId: { type: 'link', entityKey: 'Contact', inDetail: true, inEdit: true },
+          opportunityId: { type: 'link', entityKey: 'Opportunity', inDetail: true, inEdit: true },
+          subscriptionId: { type: 'link', entityKey: 'Subscription', inDetail: true, inEdit: true },
+          detectedDate: { type: 'date', inDetail: true },
+          nextReviewDate: { type: 'date', inList: true, inDetail: true, inEdit: true },
+          targetResolutionDate: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+          resolvedDate: { type: 'date', inDetail: true },
+          evidenceSummary: { type: 'text', inDetail: true, inEdit: true },
+          mitigationPlan: { type: 'text', inDetail: true, inEdit: true },
+          nextAction: { type: 'text', inDetail: true, inEdit: true },
+          resolutionReason: { type: 'text', inDetail: true },
+          resolutionHistory: { type: 'text', inDetail: true },
+          contributesToHealth: { type: 'bool', defaultValue: true, inDetail: true, inEdit: true },
+          probability: { type: 'int', inDetail: true, inEdit: true },
+          impact: { type: 'int', inDetail: true, inEdit: true },
+        }),
+        relations: {},
+        indexes: [
+          { name: 'idx_cs_risk_profile', fields: ['profileId', 'status'] },
+          { name: 'idx_cs_risk_severity', fields: ['severity', 'status'] },
+        ],
+        layouts: {
+          list: [{ entity: 'CustomerSuccessRisk', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'profileId', 'riskType', 'severity', 'status', 'ownerUserId', 'targetResolutionDate'] }] }],
+          detail: [
+            {
+              entity: 'CustomerSuccessRisk',
+              type: 'detail',
+              panels: [
+                { name: 'main', label: 'Risk', position: 0, fields: ['name', 'description', 'profileId', 'accountId', 'planId', 'riskType', 'severity', 'status', 'probability', 'impact'] },
+                { name: 'mitigation', label: 'Mitigation', position: 10, fields: ['ownerUserId', 'escalationTeamId', 'evidenceSummary', 'mitigationPlan', 'nextAction'] },
+                { name: 'dates', label: 'Dates', position: 20, fields: ['detectedDate', 'nextReviewDate', 'targetResolutionDate', 'resolvedDate', 'resolutionReason', 'contributesToHealth'] },
+              ],
+            },
+          ],
+          edit: [{ entity: 'CustomerSuccessRisk', type: 'edit', panels: [{ name: 'main', label: 'Risk', position: 0, fields: ['name', 'description', 'profileId', 'planId', 'riskType', 'severity', 'ownerUserId', 'escalationTeamId', 'evidenceSummary', 'mitigationPlan', 'nextAction', 'targetResolutionDate', 'nextReviewDate', 'contributesToHealth'] }] }],
+        },
+        record: { displayField: 'name', removable: true, streamable: true },
+        client: {},
+        acl: { permissions: { CustomerSuccessRisk: { create: 'yes', read: 'all', edit: 'own', delete: 'own', stream: 'own' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'CustomerSuccessPlaybookTemplate',
+      data: {
+        name: 'CustomerSuccessPlaybookTemplate',
+        label: 'Customer Success Playbook Template',
+        isEntity: true,
+        fields: csFields({
+          playbookType: { type: 'varchar', maxLength: 64, defaultValue: 'custom', inList: true, inDetail: true, inEdit: true },
+          triggerMode: { type: 'enum', values: CS_PLAYBOOK_TRIGGERS, defaultValue: 'manual', inList: true, inDetail: true, inEdit: true },
+          triggerConfig: { type: 'text', inDetail: true, inEdit: true },
+          isActive: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+          version: { type: 'int', defaultValue: 1, inList: true, inDetail: true },
+          steps: { type: 'text', inDetail: true },
+        }),
+        relations: { runs: { type: 'oneToMany', target: 'CustomerSuccessPlaybookRun', mappedBy: 'template' } },
+        indexes: [{ name: 'idx_cs_playbook_type', fields: ['playbookType'] }],
+        layouts: {
+          list: [{ entity: 'CustomerSuccessPlaybookTemplate', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'playbookType', 'triggerMode', 'isActive', 'version'] }] }],
+          detail: [{ entity: 'CustomerSuccessPlaybookTemplate', type: 'detail', panels: [{ name: 'main', label: 'Template', position: 0, fields: ['name', 'description', 'playbookType', 'triggerMode', 'triggerConfig', 'isActive', 'version', 'steps'] }] }],
+          edit: [{ entity: 'CustomerSuccessPlaybookTemplate', type: 'edit', panels: [{ name: 'main', label: 'Template', position: 0, fields: ['name', 'description', 'playbookType', 'triggerMode', 'isActive'] }] }],
+        },
+        record: { displayField: 'name', removable: true },
+        client: {},
+        // Steps are validated configuration: they are written only by the template command, so a role
+        // needs `create`/`edit` here to author a template but cannot hand-write raw steps.
+        acl: { permissions: { CustomerSuccessPlaybookTemplate: { create: 'yes', read: 'all', edit: 'yes', delete: 'no', stream: 'all' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'CustomerSuccessPlaybookRun',
+      data: {
+        name: 'CustomerSuccessPlaybookRun',
+        label: 'Customer Success Playbook Run',
+        isEntity: true,
+        fields: csFields({
+          profileId: { type: 'link', entityKey: 'CustomerSuccessProfile', required: true, inList: true, inDetail: true },
+          accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true },
+          templateId: { type: 'link', entityKey: 'CustomerSuccessPlaybookTemplate', inList: true, inDetail: true },
+          templateVersion: { type: 'int', inDetail: true },
+          status: { type: 'enum', values: CS_RUN_STATUSES, defaultValue: 'running', inList: true, inDetail: true, sortable: true },
+          onboarding: { type: 'bool', defaultValue: false, inList: true, inDetail: true },
+          startedAt: { type: 'datetime', inList: true, inDetail: true },
+          completedAt: { type: 'datetime', inDetail: true },
+          canceledAt: { type: 'datetime', inDetail: true },
+          cancelReason: { type: 'text', inDetail: true },
+          triggerSource: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+          triggerKey: { type: 'varchar', maxLength: 192, inDetail: true },
+          stepSnapshot: { type: 'text', inDetail: true },
+          stepCount: { type: 'int', inList: true, inDetail: true },
+          completedStepCount: { type: 'int', inList: true, inDetail: true },
+          errorSummary: { type: 'text', inDetail: true },
+        }),
+        relations: { steps: { type: 'oneToMany', target: 'CustomerSuccessPlaybookStepRun', mappedBy: 'run' } },
+        indexes: [
+          { name: 'idx_cs_run_profile', fields: ['profileId', 'status'] },
+          { name: 'idx_cs_run_trigger', fields: ['triggerKey'] },
+        ],
+        layouts: {
+          list: [{ entity: 'CustomerSuccessPlaybookRun', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'profileId', 'templateId', 'status', 'onboarding', 'completedStepCount', 'stepCount', 'startedAt'] }] }],
+          detail: [{ entity: 'CustomerSuccessPlaybookRun', type: 'detail', panels: [{ name: 'main', label: 'Run', position: 0, fields: ['name', 'profileId', 'accountId', 'templateId', 'templateVersion', 'status', 'onboarding', 'triggerSource', 'startedAt', 'completedAt', 'canceledAt', 'cancelReason', 'completedStepCount', 'stepCount'] }] }],
+          edit: [],
+        },
+        record: { displayField: 'name', removable: false },
+        client: {},
+        acl: { permissions: { CustomerSuccessPlaybookRun: { create: 'yes', read: 'all', edit: 'own', delete: 'no', stream: 'own' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'CustomerSuccessPlaybookStepRun',
+      data: {
+        name: 'CustomerSuccessPlaybookStepRun',
+        label: 'Customer Success Playbook Step Run',
+        isEntity: true,
+        fields: csFields({
+          runId: { type: 'link', entityKey: 'CustomerSuccessPlaybookRun', required: true, inList: true, inDetail: true },
+          profileId: { type: 'link', entityKey: 'CustomerSuccessProfile', inList: true, inDetail: true },
+          accountId: { type: 'link', entityKey: 'Account', inDetail: true },
+          stepKey: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+          stepOrder: { type: 'int', inList: true, inDetail: true, sortable: true },
+          stepType: { type: 'enum', values: CS_PLAYBOOK_STEP_TYPES, defaultValue: 'manual', inList: true, inDetail: true },
+          status: { type: 'enum', values: CS_STEP_RUN_STATUSES, defaultValue: 'pending', inList: true, inDetail: true, sortable: true },
+          isRequired: { type: 'bool', defaultValue: true, inList: true, inDetail: true },
+          dependsOn: { type: 'text', inDetail: true },
+          dueDate: { type: 'date', inList: true, inDetail: true, sortable: true },
+          assigneeUserId: { type: 'link', entityKey: 'User', inList: true, inDetail: true },
+          linkedEntityType: { type: 'varchar', maxLength: 64, inDetail: true },
+          linkedEntityId: { type: 'varchar', maxLength: 64, inDetail: true },
+          completedAt: { type: 'datetime', inDetail: true },
+          completionNote: { type: 'text', inDetail: true },
+          skipReason: { type: 'text', inDetail: true },
+          errorSummary: { type: 'text', inDetail: true },
+          attemptCount: { type: 'int', defaultValue: 0, inDetail: true },
+          waitUntil: { type: 'date', inDetail: true },
+          instructions: { type: 'text', inDetail: true },
+        }),
+        relations: {},
+        indexes: [
+          { name: 'idx_cs_step_run', fields: ['runId', 'status'] },
+          { name: 'idx_cs_step_assignee', fields: ['assigneeUserId', 'status'] },
+        ],
+        layouts: {
+          list: [{ entity: 'CustomerSuccessPlaybookStepRun', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'runId', 'stepType', 'status', 'isRequired', 'dueDate', 'assigneeUserId'] }] }],
+          detail: [{ entity: 'CustomerSuccessPlaybookStepRun', type: 'detail', panels: [{ name: 'main', label: 'Step', position: 0, fields: ['name', 'runId', 'stepKey', 'stepOrder', 'stepType', 'status', 'isRequired', 'dependsOn', 'dueDate', 'assigneeUserId', 'linkedEntityType', 'linkedEntityId', 'completedAt', 'completionNote', 'errorSummary', 'skipReason', 'waitUntil', 'instructions'] }] }],
+          edit: [],
+        },
+        record: { displayField: 'name', removable: false },
+        client: {},
+        acl: { permissions: { CustomerSuccessPlaybookStepRun: { create: 'yes', read: 'all', edit: 'own', delete: 'no', stream: 'own' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'CustomerSuccessReview',
+      data: {
+        name: 'CustomerSuccessReview',
+        label: 'Customer Success Review',
+        isEntity: true,
+        fields: csFields({
+          profileId: { type: 'link', entityKey: 'CustomerSuccessProfile', required: true, inList: true, inDetail: true, inEdit: true },
+          accountId: { type: 'link', entityKey: 'Account', inList: true, inDetail: true },
+          activityType: { type: 'enum', values: CS_ACTIVITY_TYPES, defaultValue: 'Meeting', inList: true, inDetail: true },
+          activityId: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+          reviewDate: { type: 'date', inList: true, inDetail: true, inEdit: true, sortable: true },
+          sentiment: { type: 'enum', values: CS_SENTIMENTS, defaultValue: 'unknown', inList: true, inDetail: true, inEdit: true },
+          objectives: { type: 'text', inDetail: true, inEdit: true },
+          outcomes: { type: 'text', inDetail: true, inEdit: true },
+          openRisks: { type: 'text', inDetail: true, inEdit: true },
+          goalProgressNote: { type: 'text', inDetail: true, inEdit: true },
+          actionItems: { type: 'text', inDetail: true, inEdit: true },
+          nextReviewDate: { type: 'date', inList: true, inDetail: true, inEdit: true },
+          ownerUserId: { type: 'link', entityKey: 'User', inList: true, inDetail: true, inEdit: true },
+          contactIds: { type: 'linkMultiple', entityKey: 'Contact', inDetail: true, inEdit: true },
+        }),
+        relations: {},
+        indexes: [
+          { name: 'idx_cs_review_profile', fields: ['profileId', 'reviewDate'] },
+          { name: 'idx_cs_review_activity', fields: ['activityId'] },
+        ],
+        layouts: {
+          list: [{ entity: 'CustomerSuccessReview', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'profileId', 'activityType', 'reviewDate', 'sentiment', 'nextReviewDate'] }] }],
+          detail: [{ entity: 'CustomerSuccessReview', type: 'detail', panels: [{ name: 'main', label: 'Review', position: 0, fields: ['name', 'profileId', 'accountId', 'activityType', 'activityId', 'reviewDate', 'sentiment'] }, { name: 'content', label: 'Content', position: 10, fields: ['objectives', 'outcomes', 'openRisks', 'goalProgressNote', 'actionItems', 'nextReviewDate', 'ownerUserId'] }] }],
+          edit: [{ entity: 'CustomerSuccessReview', type: 'edit', panels: [{ name: 'main', label: 'Review', position: 0, fields: ['name', 'profileId', 'reviewDate', 'sentiment', 'objectives', 'outcomes', 'openRisks', 'goalProgressNote', 'actionItems', 'nextReviewDate', 'ownerUserId'] }] }],
+        },
+        record: { displayField: 'name', removable: true, streamable: true },
+        client: {},
+        acl: { permissions: { CustomerSuccessReview: { create: 'yes', read: 'all', edit: 'own', delete: 'own', stream: 'own' } } },
+      },
+    },
+  ];
 }

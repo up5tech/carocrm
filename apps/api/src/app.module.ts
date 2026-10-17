@@ -20,6 +20,7 @@ import { OutboxService } from './common/outbox.service.js';
 import { RequestContextMiddleware } from './common/request-context.middleware.js';
 import { REQUEST_SCOPE_TOKEN,RequestScope } from './common/request-scope.js';
 import { buildConfig, CONFIG_TOKEN } from './config.js';
+import { CUSTOMER_SUCCESS_CONTROLLERS, CUSTOMER_SUCCESS_PROVIDERS } from './customer-success/index.js';
 import { DatabaseService } from './database/database.service.js';
 import { DOCUMENT_CONTROLLERS, DOCUMENT_PROVIDERS } from './document/index.js';
 import { EMAIL_CONTROLLERS, EMAIL_PROVIDERS } from './email/index.js';
@@ -97,6 +98,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 19-S: `/api/v1/Sales/action/...` domain commands (health, settings, numbering,
     // price resolution, bulk price update, totals preview) — also before `:entity`.
     ...SALES_CONTROLLERS,
+    // Phase 19-CS: `/api/v1/CustomerSuccess/action/...` domain commands.
+    ...CUSTOMER_SUCCESS_CONTROLLERS,
     // `/api/v1/DocumentTemplate` and `/api/v1/document/action/preview` are static prefixes too.
     ...DOCUMENT_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
@@ -127,6 +130,7 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...PORTAL_PROVIDERS,
     ...PROJECTS_PROVIDERS,
     ...SALES_PROVIDERS,
+    ...CUSTOMER_SUCCESS_PROVIDERS,
     ...DOCUMENT_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
