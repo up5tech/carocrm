@@ -3,6 +3,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import { sql } from "kysely";
 
 import { DatabaseService } from "../database/database.service.js";
+import { runInTransaction } from "../entity/tx-context.js";
+import { EventBus } from "../events/event-bus.js";
 import { CASE_ENTITY } from "./service-desk-domain.js";
 import { ServiceDeskRecords } from "./service-desk-records.js";
 
@@ -11,6 +13,7 @@ export class CaseMergeService {
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(ServiceDeskRecords) private readonly records: ServiceDeskRecords,
+    @Inject(EventBus) private readonly events: EventBus,
   ) {}
 
   /** Candidate duplicate cases (same account/contact, similar subject prefix). */
@@ -48,7 +51,10 @@ export class CaseMergeService {
     if (source === undefined) throw new NotFoundError(`Case "${sourceId}" does not exist.`);
     if (target === undefined) throw new NotFoundError(`Case "${targetId}" does not exist.`);
     if (source.data["mergedIntoCaseId"]) throw new ValidationError("This case is already merged.");
-    await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify({ mergedIntoCaseId: targetId, status: "Cancelled" })}::jsonb, modified_at = now() WHERE id = ${sourceId}`.execute(this.database.db);
+    await runInTransaction(this.database.db, async (tx) => {
+      await sql`UPDATE entity_records SET attrs = attrs || ${JSON.stringify({ mergedIntoCaseId: targetId, status: "Cancelled" })}::jsonb, modified_at = now() WHERE id = ${sourceId}`.execute(this.database.db);
+      await this.events.dispatchMany(tx, [{ type: "serviceDesk.case.merged", payload: { sourceCaseId: sourceId, targetCaseId: targetId } }]);
+    });
     return { merged: true };
   }
 }

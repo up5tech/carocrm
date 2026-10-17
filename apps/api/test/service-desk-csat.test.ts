@@ -10,6 +10,8 @@ let caseId = '';
 
 beforeAll(async () => {
   ctx = await bootApi();
+  const _s = await ctx.app.inject({ method: 'GET', url: '/api/v1/ServiceDesk/action/settings', headers: authHeader(ctx.adminToken) });
+  const priorFeatures = (_s.json() as any).settings.features;
   runId = `sdcsat${Date.now().toString(36)}`;
   await ctx.app.inject({ method: 'POST', url: '/api/v1/ServiceDesk/action/settings', headers: authHeader(ctx.adminToken), payload: { features: { caseManagement: true, csat: true } } });
   const roleId = `sdCsat${runId}`;
@@ -19,7 +21,7 @@ beforeAll(async () => {
   caseId = (c.json() as Record<string, unknown>)['id'] as string;
 });
 
-afterAll(async () => { await shutdownApi(); });
+afterAll(async () => { await ctx.app.inject({ method: 'POST', url: '/api/v1/ServiceDesk/action/settings', headers: authHeader(ctx.adminToken), payload: { features: { caseManagement: true, csat: false } } }); await shutdownApi(); });
 
 describe('phase 19-SD.14 — CSAT', () => {
   it('creates an invitation and accepts a submission', async () => {

@@ -4,7 +4,8 @@ import { sql } from "kysely";
 import { DatabaseService } from "../database/database.service.js";
 import type { AfterSaveHook, AfterSaveHookArgs } from "../entity/hooks.js";
 import { KERNEL_HOOKS_TOKEN } from "../entity/hooks.js";
-import { currentTx } from "../entity/tx-context.js";
+import { currentTx, runInTransaction } from "../entity/tx-context.js";
+import { EventBus } from "../events/event-bus.js";
 import { CASE_ENTITY } from "./service-desk-domain.js";
 import { ServiceDeskNotificationService } from "./service-desk-notification.service.js";
 import { ServiceDeskRecords } from "./service-desk-records.js";
@@ -39,6 +40,7 @@ export class SlaService implements OnApplicationBootstrap {
     @Inject(KERNEL_HOOKS_TOKEN) private readonly kernelHooks: AfterSaveHook[],
     @Inject(ServiceDeskNotificationService) private readonly notifications: ServiceDeskNotificationService,
     @Inject(ServiceDeskRecords) private readonly records: ServiceDeskRecords,
+    @Inject(EventBus) private readonly events: EventBus,
   ) {}
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,6 +61,7 @@ export class SlaService implements OnApplicationBootstrap {
     const data = (args.record.data ?? {}) as Record<string, unknown>;
     if (args.operation === "create") {
       await this.onCaseCreated(String(args.record.id), data);
+      await this.events.dispatchMany(args.tx, [{ type: "serviceDesk.case.created", payload: { caseId: String(args.record.id), caseNumber: data["caseNumber"] ?? null } }]);
       return;
     }
     if (args.operation === "update" && args.previous) {
@@ -347,7 +350,12 @@ export class SlaService implements OnApplicationBootstrap {
         await sql`UPDATE entity_records SET attrs = attrs || '{"status":"breached"}'::jsonb, modified_at = now() WHERE id = ${String(r.id)}`.execute(this.db);
         breached += 1;
         const caseId = String(a["caseId"] ?? "");
-        if (caseId) await this.setCaseSlaState(caseId, "breached", null, null);
+        if (caseId) {
+          await this.setCaseSlaState(caseId, "breached", null, null);
+          await runInTransaction(this.database.db, async (tx) => {
+            await this.events.dispatchMany(tx, [{ type: "serviceDesk.case.slaBreached", payload: { caseId, clockId: String(r.id) } }]);
+          });
+        }
       } else {
         const start = a["startAt"] ? new Date(String(a["startAt"])) : null;
         if (start !== null) {
