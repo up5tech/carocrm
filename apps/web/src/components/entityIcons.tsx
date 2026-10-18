@@ -1,21 +1,27 @@
 import {
+  ApartmentOutlined,
   ApiOutlined,
   AppstoreOutlined,
   BankOutlined,
   BarChartOutlined,
+  BookOutlined,
   CalendarOutlined,
   CarryOutOutlined,
   CloudOutlined,
+  CustomerServiceOutlined,
+  DashboardOutlined,
   DatabaseOutlined,
   DollarOutlined,
   EnvironmentOutlined,
   ExperimentOutlined,
+  FileSearchOutlined,
   FileTextOutlined,
   FundOutlined,
   GlobalOutlined,
   HddOutlined,
   HomeOutlined,
   InboxOutlined,
+  KeyOutlined,
   MailOutlined,
   MobileOutlined,
   NotificationOutlined,
@@ -23,6 +29,9 @@ import {
   ProfileOutlined,
   ProjectOutlined,
   ScheduleOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  ShareAltOutlined,
   ShopOutlined,
   ShoppingCartOutlined,
   SolutionOutlined,
@@ -115,8 +124,36 @@ export function defaultIconName(entityName: string): string | undefined {
   return ENTITY_DEFAULT_ICONS[entityName];
 }
 
-/** Sidebar icon: the entity's own choice, then its built-in default, then the generic record mark. */
+/**
+ * Sidebar icon: the entity's own choice, then its built-in default, then the generic record mark.
+ */
 export function entityIcon(icon: string | null | undefined, entityName?: string): ReactNode {
   const name = icon ?? (entityName === undefined ? undefined : defaultIconName(entityName));
   return (name !== undefined && name !== null ? ENTITY_ICONS[name] : undefined) ?? <DatabaseOutlined />;
+}
+
+/**
+ * The icons a resolved menu entry or an administration tab may name: every entity icon plus the
+ * marks the shell uses for its fixed pages, groups and panels. The server validates menu icons
+ * against the same list (`NAVIGATION_ICONS` in `apps/api/src/admin-panel/settings-shapes.ts`), so a
+ * settings document can never name a component that is not here.
+ */
+export const NAV_ICONS: Record<string, ReactNode> = {
+  ...ENTITY_ICONS,
+  ApartmentOutlined: <ApartmentOutlined />,
+  BookOutlined: <BookOutlined />,
+  CustomerServiceOutlined: <CustomerServiceOutlined />,
+  DashboardOutlined: <DashboardOutlined />,
+  FileSearchOutlined: <FileSearchOutlined />,
+  KeyOutlined: <KeyOutlined />,
+  SearchOutlined: <SearchOutlined />,
+  SettingOutlined: <SettingOutlined />,
+  ShareAltOutlined: <ShareAltOutlined />,
+};
+
+export const NAV_ICON_NAMES: readonly string[] = Object.keys(NAV_ICONS).sort();
+
+/** Menu icon for a server-resolved entry; an unknown name falls back rather than rendering nothing. */
+export function navIcon(name: string | undefined): ReactNode {
+  return (name === undefined ? undefined : NAV_ICONS[name]) ?? <AppstoreOutlined />;
 }

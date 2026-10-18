@@ -1,0 +1,108 @@
+/**
+ * The menu the platform ships with (PLAN_Phase_20_Settings_UX.md §4.4, §15.2).
+ *
+ * These are the entries `AppShell.tsx` used to hard-code. They move here so the resolved tree comes
+ * from one place, the `navigation` settings document can override it, and the SPA renders what the
+ * server computed. With no document written the tree is the menu users had before this phase.
+ */
+
+/** A menu entry before ACL filtering and before the `navigation` document is applied. */
+export interface NavigationSeed {
+  readonly key: string;
+  readonly kind: 'page' | 'entity' | 'group' | 'extension' | 'admin';
+  readonly route: string;
+  readonly label?: string | undefined;
+  readonly labelKey?: string | undefined;
+  readonly icon?: string | undefined;
+  readonly order: number;
+  readonly inQuickSearch?: boolean | undefined;
+  /** For entity/group seeds: the key of the container this entry sits in. */
+  readonly parent?: string | undefined;
+  /** For admin entries: the panel level required to see them. */
+  readonly level?: 'user' | 'admin' | undefined;
+}
+
+export interface NavigationGroupSeed {
+  readonly key: string;
+  /** Catalog key for the group. The Project submenu is named after its own record label instead. */
+  readonly labelKey?: string | undefined;
+  readonly icon?: string | undefined;
+  readonly order: number;
+  /** Container groups (`records`, `extensions`, `administration`) render as menu group labels. */
+  readonly container: boolean;
+}
+
+const PAGE_ORDER = [10, 20, 30, 40, 50, 60, 70];
+
+/** The fixed working surfaces, in the order the sidebar has always shown them. */
+export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
+  { key: 'home', kind: 'page', route: '/home', labelKey: 'core.app.home', icon: 'AppstoreOutlined', order: PAGE_ORDER[0] ?? 10, inQuickSearch: true },
+  { key: 'search', kind: 'page', route: '/search', labelKey: 'core.app.search', icon: 'SearchOutlined', order: PAGE_ORDER[1] ?? 20, inQuickSearch: true },
+  { key: 'dashboards', kind: 'page', route: '/dashboards', labelKey: 'core.app.dashboards', icon: 'DashboardOutlined', order: PAGE_ORDER[2] ?? 30 },
+  { key: 'reports', kind: 'page', route: '/reports', labelKey: 'core.app.reports', icon: 'BarChartOutlined', order: PAGE_ORDER[3] ?? 40 },
+  { key: 'stream', kind: 'page', route: '/stream', labelKey: 'core.app.stream', icon: 'NotificationOutlined', order: PAGE_ORDER[4] ?? 50 },
+  { key: 'calendar', kind: 'page', route: '/calendar', labelKey: 'core.app.calendar', icon: 'CalendarOutlined', order: PAGE_ORDER[5] ?? 60 },
+  { key: 'myTasks', kind: 'page', route: '/tasks', labelKey: 'core.app.myTasks', icon: 'CarryOutOutlined', order: PAGE_ORDER[6] ?? 70 },
+];
+
+export const NAVIGATION_CONTAINER_GROUPS: readonly NavigationGroupSeed[] = [
+  { key: 'records', labelKey: 'core.app.records', icon: 'ProfileOutlined', order: 100, container: true },
+  { key: 'extensions', labelKey: 'core.app.extensions', icon: 'ApiOutlined', order: 900, container: true },
+  { key: 'administration', labelKey: 'core.app.administration', icon: 'SettingOutlined', order: 950, container: true },
+];
+
+/**
+ * Module submenus inside RECORDS. Membership is a name set over the navigable metadata — the rule
+ * the sidebar already followed — so an entity renamed or hidden by metadata leaves its group instead
+ * of leaving a dead entry. An entity's own `nav.group` metadata wins over this table (§4.5).
+ */
+export const NAVIGATION_SUBGROUPS: readonly (NavigationGroupSeed & { entityNames: readonly string[] })[] = [
+  { key: 'customers', labelKey: 'web.navGroup.customers', icon: 'TeamOutlined', order: 110, container: false, entityNames: ['Account', 'Contact', 'Lead', 'Opportunity'] },
+  { key: 'activities', labelKey: 'web.navGroup.activities', icon: 'CarryOutOutlined', order: 120, container: false, entityNames: ['Task', 'Call', 'Meeting', 'Email', 'EmailTemplate'] },
+  { key: 'serviceDesk', labelKey: 'web.navGroup.serviceDesk', icon: 'CustomerServiceOutlined', order: 130, container: false, entityNames: ['Case', 'CaseQueue', 'CaseAssignment', 'CaseTransition', 'QueueMember', 'RoutingRule', 'SLAPolicy', 'CaseSLAClock', 'CsatSurvey', 'BusinessCalendar'] },
+  { key: 'knowledge', labelKey: 'web.navGroup.knowledge', icon: 'BookOutlined', order: 140, container: false, entityNames: ['KnowledgeArticle', 'KnowledgeCategory'] },
+  { key: 'customerSuccess', labelKey: 'web.navGroup.customerSuccess', icon: 'TrophyOutlined', order: 150, container: false, entityNames: ['CustomerSuccessProfile', 'CustomerSuccessPlan', 'CustomerSuccessGoal', 'CustomerSuccessReview', 'CustomerSuccessRisk', 'CustomerSuccessPlaybookTemplate', 'CustomerSuccessPlaybookRun', 'CustomerSuccessPlaybookStepRun'] },
+  { key: 'project', icon: 'ProjectOutlined', order: 160, container: false, entityNames: [] },
+  { key: 'marketing', labelKey: 'marketing.nav.marketing', icon: 'NotificationOutlined', order: 180, container: false, entityNames: ['Campaign', 'TargetList', 'MarketingConsent', 'MarketingSuppression'] },
+];
+
+/**
+ * Sales is the one module that groups its own entities into sub-submenus, so its tree is a nested
+ * descriptor rather than a flat name set (`sales.nav.<key>` labels come from the Sales catalog).
+ */
+export const NAVIGATION_SALES_GROUPS: readonly { key: string; entityNames: readonly string[] }[] = [
+  { key: 'sales', entityNames: ['Quote', 'SalesOrder', 'Invoice', 'CreditNote', 'DeliveryOrder', 'ReturnOrder'] },
+  { key: 'catalog', entityNames: ['Product', 'ProductCategory', 'PriceBook', 'PriceBookEntry', 'PriceRule', 'TaxClass', 'TaxCode', 'TaxRate', 'TaxRule'] },
+  { key: 'payments', entityNames: ['Payment', 'PaymentMethod', 'PaymentChannel', 'PaymentTermProfile', 'PaymentRequest', 'WriteOff'] },
+  { key: 'purchases', entityNames: ['Supplier', 'SupplierProductPrice', 'PurchaseOrder', 'ReceiptOrder', 'Bill', 'BillCredit'] },
+  { key: 'inventory', entityNames: ['Warehouse', 'InventoryTransaction', 'InventoryAdjustment', 'InventoryReservation', 'TransferOrder', 'InventoryBatch', 'InventorySerial'] },
+  { key: 'subscriptions', entityNames: ['Subscription', 'SubscriptionPeriod'] },
+];
+
+/** Entities the Sales submenu owns; used to keep them out of the ungrouped remainder. */
+export const NAVIGATION_SALES_ENTITY_NAMES: readonly string[] = NAVIGATION_SALES_GROUPS.flatMap((group) => [...group.entityNames]);
+
+/** Entities whose name starts with `Project` form the Project submenu, as they do today. */
+export const navigationProjectName = (entityName: string): boolean => entityName.startsWith('Project');
+
+export const NAVIGATION_ADMIN_ENTRIES: readonly NavigationSeed[] = [
+  { key: 'admin:entity-manager', kind: 'admin', route: '/admin/entity-manager', labelKey: 'web.entityManager.title', icon: 'KeyOutlined', order: 910, level: 'admin' },
+  { key: 'admin:audit', kind: 'admin', route: '/admin/audit-log', labelKey: 'web.adminAudit.title', icon: 'FileSearchOutlined', order: 920, level: 'admin' },
+  { key: 'admin:jobs', kind: 'admin', route: '/admin/jobs', labelKey: 'web.adminJobs.title', icon: 'ThunderboltOutlined', order: 930, level: 'admin' },
+  { key: 'admin:extensions', kind: 'admin', route: '/admin/extensions', labelKey: 'web.adminExtensions.title', icon: 'ApiOutlined', order: 940, level: 'admin' },
+  { key: 'admin:workflows', kind: 'admin', route: '/admin/workflows', labelKey: 'web.workflows.title', icon: 'ApartmentOutlined', order: 945, level: 'admin' },
+  { key: 'admin:processes', kind: 'admin', route: '/admin/processes', labelKey: 'web.processes.title', icon: 'ShareAltOutlined', order: 946, level: 'admin' },
+  { key: 'admin:settings', kind: 'admin', route: '/admin/settings', labelKey: 'web.adminSettings.title', icon: 'SettingOutlined', order: 950, level: 'admin' },
+  { key: 'admin:portals', kind: 'admin', route: '/admin/portals', labelKey: 'web.adminPortals.title', icon: 'ProjectOutlined', order: 960, level: 'admin' },
+];
+
+/**
+ * Group keys an entity's `nav.group` may name (PLAN_Phase_20 §4.5). `sales-<key>` addresses a Sales
+ * sub-group. The metadata writer validates against this list through the `NAVIGATION_GROUP_KEYS`
+ * seam, so an administrator cannot type a group that would silently drop the entity into the
+ * ungrouped remainder.
+ */
+export const navigationGroupKeyList = (): readonly string[] => [
+  ...NAVIGATION_SUBGROUPS.map((group) => group.key),
+  ...NAVIGATION_SALES_GROUPS.map((group) => `sales-${group.key}`),
+];

@@ -584,6 +584,11 @@
     "runFailed": "Run failed."
   },
   "adminSettings": {
+    "brandHint": "Shown to everyone, including the sign-in page.",
+    "enabledLocalesHint": "Only languages with a catalog can be offered.",
+    "defaultLocaleHint": "The language a new session starts in. It must be one of the enabled languages.",
+    "timezoneHint": "Used for record dates when a user has not set their own.",
+    "warnings": "Things to look at",
     "title": "Settings",
     "subtitle": "Instance brand text, logo, footer and language defaults.",
     "notAdmin": "Only administrators can open the instance settings.",
@@ -838,7 +843,18 @@
     "removeIndexConfirm": "Remove index {name}?",
     "removeIndexAria": "Remove index {name}",
     "fieldsToIndexPlaceholder": "fields to index",
-    "addIndex": "Add index"
+    "addIndex": "Add index",
+    "tabNavigation": "Navigation",
+    "navGroup": "Menu group",
+    "navGroupHint": "Which submenu this entity sits in. Leave it empty to use the group the platform ships with.",
+    "navGroupDefault": "Platform default",
+    "navOrder": "Order",
+    "navOrderHint": "Sort weight inside the group; entries without one follow their label. Ties break on the name.",
+    "navBoardGroupBy": "Board grouping field",
+    "navBoardGroupByHint": "The field the board opens grouped by. Only an enum field with values can group a board.",
+    "navHidden": "Hide from the main menu",
+    "navHiddenHint": "Hiding is presentation only: the list URL, the record URLs and the API keep working for anyone the roles allow.",
+    "navUpdated": "Navigation settings updated."
   },
   "workflows": {
     "title": "Workflows",
@@ -1226,5 +1242,82 @@
       "invalid": "This link is not valid. It may have expired or already been used; request a new one from the email.",
       "missingToken": "This link is missing its token."
     }
+  },
+  "adminPanel": {
+    "groups": {
+      "system": "System",
+      "users": "Users",
+      "customization": "Customization",
+      "messaging": "Messaging",
+      "integrations": "Modules and integrations"
+    },
+    "tabs": {
+      "general": "General",
+      "localization": "Language and time",
+      "menu": "Main menu",
+      "sales": "Sales",
+      "serviceDesk": "Service desk",
+      "customerSuccess": "Customer success",
+      "authentication": "Authentication",
+      "attachments": "Attachments",
+      "notifications": "Notifications"
+    },
+    "descriptions": {
+      "general": "Page title, logo and the footer line this instance shows.",
+      "localization": "Languages people can switch to, the starting language and the working time zone.",
+      "menu": "Enable, rename, reorder and colour the main menu for everyone.",
+      "sales": "Sales features, currency, pricing, tax, numbering, inventory and subscriptions.",
+      "serviceDesk": "Case routing, SLA and support policies.",
+      "customerSuccess": "Renewal, health and playbook policies.",
+      "entityManager": "Entities, fields and layouts.",
+      "jobs": "Scheduled jobs and queue activity.",
+      "audit": "Who changed what, and when.",
+      "extensions": "Installed packages and what they contribute.",
+      "workflows": "Automations that act on records.",
+      "processes": "Multi-step work with assignees and deadlines.",
+      "portals": "Customer portals and the roles inside them."
+    }
+  },
+  "adminShell": {
+    "saved": "Settings saved.",
+    "saveFailed": "The settings could not be saved.",
+    "conflict": "Another administrator saved this document after you opened it.",
+    "conflictHint": "Your input is kept. Reload to see the current version, then apply your change again.",
+    "discard": "Discard",
+    "leave": "Leave anyway",
+    "unsavedTitle": "You have unsaved changes",
+    "unsavedBody": "Leaving this tab discards what you have changed and not saved.",
+    "loadFailed": "The administration panel could not be loaded.",
+    "loadFailedHint": "Check the connection and try again.",
+    "noAccess": "This section is not available to you",
+    "noAccessHint": "Open a tab from the list on the left, or ask an administrator for access.",
+    "unknownTab": "This tab is not available in this installation.",
+    "lastModified": "Last changed by {by} on {at}",
+    "neverModified": "Not changed since installation.",
+    "versionLabel": "Version",
+    "documentName": "Document: {name}",
+    "railLabel": "Administration sections",
+    "saveBar": "Save settings",
+    "dirty": "Unsaved changes",
+    "movedUp": "moved up",
+    "movedDown": "moved down",
+    "loading": "Loading…",
+    "moduleDocumentHint": "Owned and validated by its module.",
+    "policyValue": "value",
+    "restored": "The registered defaults are back in place."
+  },
+  "adminMenu": {
+    "title": "Menu entries",
+    "hint": "Drag a row, or use the up and down buttons. Only what you change is stored: an entry you leave alone keeps following the platform default, including a new module added later.",
+    "previewTitle": "Preview",
+    "previewHint": "How the sidebar will look. Entries this caller cannot open are never listed, whatever is set here.",
+    "icon": "Icon",
+    "accent": "Accent",
+    "labelKeyPlaceholder": "Label key (optional)",
+    "enableEntry": "Show in the menu",
+    "edgeOfList": "This entry is already at the edge of its list.",
+    "restoreTitle": "Restore the shipped menu",
+    "restoreBody": "Every rename, reorder and hidden entry you added is removed and the platform menu comes back.",
+    "restoreAction": "Restore defaults"
   }
 }

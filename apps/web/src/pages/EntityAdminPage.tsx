@@ -10,8 +10,9 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition, IndexDefinition, LayoutDefinition, LayoutPanel, LayoutViewType, Role } from '../api/types.js';
 import { defaultIconName,ENTITY_ICONS } from '../components/entityIcons.js';
+import { useNavigationGroupKeys } from '../state/admin.js';
 import { t } from '../state/i18n.js';
-import { fieldLabel, useMetadata } from '../state/metadata.js';
+import { boardGroupFields, fieldLabel, useMetadata } from '../state/metadata.js';
 
 const FIELD_TYPES = ['varchar', 'text', 'int', 'float', 'decimal', 'bool', 'date', 'datetime', 'enum', 'multiEnum', 'currency', 'url', 'email', 'phone', 'link', 'linkMultiple', 'formula'];
 const RELATION_TYPES = ['oneToMany', 'manyToOne', 'manyToMany'];
@@ -280,6 +281,75 @@ function SettingsTab({ entity, patch }: { entity: EntityDefinition; patch: (body
         </Popconfirm>
       </div>
     </Space>
+  );
+}
+
+/**
+ * Navigation tab (PLAN_Phase_20_Settings_UX.md §4.5): how this entity behaves in the main menu.
+ *
+ * These values are metadata, edited through the same `POST /Metadata/:entity` path as every other
+ * section, and the server resolves them into `GET /Navigation`. Hiding an entity removes it from the
+ * menu only — the records, the list URL and the API stay reachable, because hiding is presentation and
+ * the ACL is the enforcement.
+ */
+function NavigationTab({ entity, patch }: { entity: EntityDefinition; patch: (body: Record<string, unknown>, okText: string) => void }) {
+  const groups = useNavigationGroupKeys();
+  const boardFields = boardGroupFields(entity);
+  const [form] = Form.useForm<{ group: string | null; order: number | null; hidden: boolean; defaultGroupBy: string | null }>();
+
+  return (
+    <Form
+      form={form}
+      layout="vertical"
+      initialValues={{
+        group: entity.nav?.group ?? null,
+        order: entity.nav?.order ?? null,
+        hidden: entity.nav?.hidden === true,
+        defaultGroupBy: entity.nav?.board?.defaultGroupBy ?? null,
+      }}
+      onFinish={(values: { group: string | null; order: number | null; hidden: boolean; defaultGroupBy: string | null }) =>
+        // A field left empty is stored as null, which the resolver reads as "no override", so the
+        // entity falls back to the shipped group and order rather than to a blank value.
+        void patch(
+          {
+            nav: {
+              hidden: values.hidden,
+              group: values.group === '' ? null : values.group,
+              order: values.order ?? null,
+              board: {
+                enabled: values.defaultGroupBy !== null,
+                ...(values.defaultGroupBy === null ? {} : { defaultGroupBy: values.defaultGroupBy }),
+              },
+            },
+          },
+          t('web.entityAdmin.navUpdated'),
+        )
+      }
+    >
+      <Row gutter={[12, 12]}>
+        <Col xs={24} md={10}>
+          <Form.Item name="group" label={t('web.entityAdmin.navGroup')} extra={t('web.entityAdmin.navGroupHint')}>
+            <Select allowClear placeholder={t('web.entityAdmin.navGroupDefault')} options={groups.map((key) => ({ value: key, label: key }))} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={7}>
+          <Form.Item name="order" label={t('web.entityAdmin.navOrder')} extra={t('web.entityAdmin.navOrderHint')}>
+            <InputNumber style={{ width: '100%' }} min={-100000} max={100000} placeholder="1000" />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={7}>
+          <Form.Item name="defaultGroupBy" label={t('web.entityAdmin.navBoardGroupBy')} extra={t('web.entityAdmin.navBoardGroupByHint')}>
+            <Select allowClear options={boardFields.map((entry) => ({ value: entry.name, label: entry.field.label ?? entry.name }))} />
+          </Form.Item>
+        </Col>
+      </Row>
+      <Form.Item name="hidden" label={t('web.entityAdmin.navHidden')} valuePropName="checked" extra={t('web.entityAdmin.navHiddenHint')}>
+        <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
+      </Form.Item>
+      <Button type="primary" icon={<SaveOutlined />} htmlType="submit">
+        {t('web.common.save')}
+      </Button>
+    </Form>
   );
 }
 
@@ -1316,6 +1386,7 @@ export function EntityAdminPage() {
             { key: 'relations', label: t('web.entityAdmin.tabRelations', { n: String(relationCount) }), children: <RelationsTab entity={entity} patch={patch} /> },
             { key: 'logic', label: t('web.entityAdmin.tabLogic', { n: String(rules.length) }), children: <LogicTab entity={entity} patch={patch} /> },
             { key: 'layout', label: t('web.entityAdmin.tabLayout'), children: <LayoutTab entity={entity} save={patch} /> },
+            { key: 'navigation', label: t('web.entityAdmin.tabNavigation'), children: <NavigationTab key={entity.name} entity={entity} patch={patch} /> },
             { key: 'access', label: t('web.entityAdmin.tabAccess'), children: <AccessTab entity={entity} /> },
             { key: 'indexes', label: t('web.entityAdmin.tabIndexes'), children: <IndexTab entity={entity} save={patch} /> },
             { key: 'settings', label: t('web.entityAdmin.tabSettings'), children: <SettingsTab key={entity.name} entity={entity} patch={patch} /> },

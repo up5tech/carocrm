@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { AuthorizationDeniedError, NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import type { EntityDefinition } from '@carocrm/metadata/schemas/index.js';
 import { EntityDefinitionSchema } from '@carocrm/metadata/schemas/index.js';
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Optional, Param, Post, Res } from '@nestjs/common';
 import type { FastifyReply } from 'fastify';
 
 import type { RequestScope } from '../common/request-scope.js';
@@ -11,8 +11,8 @@ import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
 import { acceptLanguageLocale, I18nService } from '../i18n/i18n.service.js';
 import { FormulaService } from '../logic/formula.service.js';
-import type { MetadataStoreService } from "./metadata-store.service.js";
-import { METADATA_STORE } from "./metadata-store.service.js";
+import type { MetadataStoreService, NavigationGroupKeys } from "./metadata-store.service.js";
+import { METADATA_STORE, NAVIGATION_GROUP_KEYS } from "./metadata-store.service.js";
 
 /**
  * Metadata API (PLAN §16.1). Mounted on the static `Metadata` prefix, so it must be
@@ -26,6 +26,9 @@ export class MetadataController {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(FormulaService) private readonly formulas: FormulaService,
     @Inject(I18nService) private readonly i18n: I18nService,
+    // The navigation groups belong to the admin panel, which depends on this module; the seam keeps
+    // the dependency pointing the right way (PLAN_Phase_20_Settings_UX.md §4.5).
+    @Inject(NAVIGATION_GROUP_KEYS) @Optional() private readonly navigationGroups: NavigationGroupKeys | undefined,
   ) {}
 
   @Get()
@@ -171,6 +174,9 @@ export class MetadataController {
     if (isRecord(patch['layouts'])) {
       this.validateLayouts(definition, patch['layouts']);
     }
+    if (isRecord(patch['nav'])) {
+      this.validateNav(definition, patch['nav']);
+    }
     this.formulas.validateDefinition(definition);
 
     await this.store.persistEntityOverride(entity, patch);
@@ -267,6 +273,28 @@ export class MetadataController {
     }
   }
 
+  /**
+   * Navigation behaviour is declarative metadata too (PLAN_Phase_20 §4.5): a group must name one the
+   * instance actually renders, and a board must group by a field that exists. Hiding an entity here
+   * only removes it from the menu — the record, its URL and its API stay reachable.
+   */
+  private validateNav(definition: EntityDefinition, nav: unknown): void {
+    const section = nav as { group?: unknown; board?: { groupBy?: unknown; defaultGroupBy?: unknown } };
+    if (typeof section.group === 'string' && section.group !== '' && this.navigationGroups !== undefined && !this.navigationGroups.has(section.group)) {
+      throw new ValidationError(`Navigation group "${section.group}" is not a navigation group of this instance.`, {
+        entity: definition.name,
+        groups: [...this.navigationGroups],
+      });
+    }
+    const allowed = new Set(Object.keys(definition.fields));
+    for (const key of ['groupBy', 'defaultGroupBy'] as const) {
+      const field = section.board?.[key];
+      if (typeof field === 'string' && !allowed.has(field)) {
+        throw new ValidationError(`Navigation board "${key}" references unknown field "${field}".`, { entity: definition.name });
+      }
+    }
+  }
+
   private definition(entity: string): EntityDefinition {
     this.store.ensureLoaded();
     const definition = this.store.registry.getEntity(entity);
@@ -295,6 +323,11 @@ function mergeDefinition(entity: string, base: EntityDefinition, patch: Record<s
   }
   if (base.record && isRecord(patch['record'])) {
     merged['record'] = { ...base.record, ...patch['record'] };
+  }
+  // `nav` is a section of its own: merge it per key so a partial edit (hiding an entity) keeps the
+  // group, order and board settings the entity already had.
+  if (base.nav && isRecord(patch['nav'])) {
+    merged['nav'] = { ...base.nav, ...patch['nav'] };
   }
   // indexes/layouts/acl are whole-scope objects in the patch: replace rather than shallow-merge so a
   // removed entry actually disappears (metadata-scoped, never physical DDL — AGENTS.md §3.4).
@@ -325,5 +358,6 @@ function schemaChangeOperation(patch: Record<string, unknown>, fieldName?: strin
   if (Array.isArray(patch['indexes'])) return 'entity.index.update';
   if (isRecord(patch['layouts'])) return 'entity.layout.update';
   if (isRecord(patch['acl'])) return 'entity.acl.update';
+  if (isRecord(patch['nav'])) return 'entity.nav.update';
   return 'entity.update';
 }

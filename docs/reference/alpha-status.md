@@ -595,3 +595,66 @@ can group by.
   change was made — no migration, no seed, no new database, no writes to the configured one.
 
 
+
+## Phase 20 — Settings, Administration and the resolved main menu (added 2026-10-18)
+
+Implemented: sub-phases **20.1 – 20.6** of `PLAN_Phase_20_Settings_UX.md`. The end-user UX half
+(20.11 – 20.16) and the remaining administration tabs (20.7 – 20.10) are not built.
+
+| Deliverable | Where |
+|---|---|
+| Settings document registry (name → schema, read/write level, defaults, owner) | `apps/api/src/admin-panel/settings-registry.service.ts` |
+| Document read / write / reset with version, optimistic concurrency, audit row and domain event | `settings-document.service.ts` |
+| Document API | `GET /Settings/documents`, `GET/POST /Settings/documents/:name`, `POST …/:name/reset` |
+| Platform documents registered | `brand`, `i18n` (delegating to their owning services), `navigation`, `security`, `fileStorage`, `notifications` |
+| Admin panel descriptors | `admin-panel.service.ts`, `GET /AdminPanel` |
+| Navigation resolution + ACL filtering | `navigation.service.ts`, `GET /Navigation` |
+| Per-entity `nav` metadata | `packages/metadata` schema, `POST /Metadata/:entity`, Entity Manager → Navigation |
+| Tabbed settings shell | `apps/web/src/admin/AdminSettingsShell.tsx` (`/admin/settings/:tabKey`) |
+| Tabs | general, localization, **main menu**, sales, serviceDesk, customerSuccess |
+| Sidebar renders the server tree | `apps/web/src/components/AppShell.tsx` |
+| Idempotent default rows | `database/migrations/044_phase20_settings_documents.sql` |
+| Documentation | `docs/admin/settings.md`, `docs/admin/navigation.md`, `docs/compatibility/settings-ux.md` |
+
+What changed for an administrator:
+
+- The administration menu, the sidebar and the settings routes now have one source: the descriptors
+  `GET /AdminPanel` returns, filtered by the caller's level. `/admin/settings` keeps working and
+  redirects to the first tab the caller may open.
+- `AdminSettingsPage.tsx` is gone. The brand form is the General tab, the language defaults are the
+  Localization tab, and the Sales document that used to be embedded in that page is its own tab
+  showing version, warnings and last-modified context.
+- The main menu is configurable without code: enable/disable, reorder (drag or arrow buttons), rename
+  by catalog key, icon and accent from fixed allowlists, per-entry reset and a whole-menu restore, with
+  a live preview. With no `navigation` document written the resolved tree is the menu users had before.
+- An entity's placement (`hidden`, `order`, `group`, `board.defaultGroupBy`) is metadata, edited in the
+  Entity Manager and validated on save — including a refusal of a group the instance does not render.
+- Hiding is never a permission: the ACL filter runs after the document, a forbidden entity is absent
+  from every tree, and its URL still answers `403`.
+
+Known limitations and deviations are listed in `docs/compatibility/settings-ux.md`.
+
+Verification actually run for this change (all against the configured database, no extra database):
+
+- `npx tsc --noEmit` for the API project and for `apps/web`: clean.
+- `pnpm -r build`: clean. `npx eslint .` is clean for every file this change touched; the two
+  remaining errors are in the pre-existing root scratch script `.shoot2.mjs` and the three remaining
+  warnings in `apps/api/test/marketing-automation-delivery.test.ts`, both untouched here.
+- `npx vitest run`: **120 files, 1505 tests passed**. New suites: `apps/api/test/settings-documents.test.ts`
+  (12) and `apps/api/test/navigation.test.ts` (10).
+- Browser: every tab rendered with no console or page errors at 1440 and 390 px; the Main Menu tab
+  reordered an entry, the save bar enabled, the write returned, and the sidebar repainted in the new
+  order; Discard and the unsaved-changes prompt both behaved; Restore defaults brought the shipped
+  menu back; the Service Desk policy editor round-tripped a value and reverted it; the Entity Manager
+  Navigation tab hid `Contact` from `GET /Navigation` while `/api/v1/Contact` kept answering 200, and
+  un-hid it. The `navigation` document was reset afterwards.
+
+Two incidental repairs were needed to make the existing suite runnable, neither part of Phase 20:
+
+- `apps/api/test/module-test-app.ts` did not provide `I18nService`, so the throwaway root module it
+  builds could not be instantiated and `attachments`, `attachments-storage` and `audit` killed the
+  vitest worker instead of running (42 tests across three files). Providing it makes all three run.
+- `apps/api/test/attachments-storage.test.ts` read `error.message` for four assertions. With the
+  catalog service present — as it is in the real app — the filter localizes `error.message` and keeps
+  the specific text in `error.details.reason`, so the helper now reads that field. The assertions
+  themselves are unchanged.

@@ -22,55 +22,162 @@
     }
   },
   "entities": {
-    "product": { "label": "Sản phẩm", "fields": { "sku": "Mã sản phẩm", "name": "Tên", "type": "Loại", "category": "Danh mục", "active": "Hoạt động", "sellable": "Có thể bán", "purchasable": "Có thể mua" } },
-    "productCategory": { "label": "Danh mục sản phẩm" },
-    "productVariant": { "label": "Biến thể sản phẩm" },
-    "priceBook": { "label": "Sách giá" },
-    "priceBookEntry": { "label": "Mục sách giá" },
-    "priceRule": { "label": "Quy tắc giá" },
-    "supplier": { "label": "Nhà cung cấp" },
-    "supplierProductPrice": { "label": "Giá sản phẩm nhà cung cấp" },
-    "taxClass": { "label": "Lớp thuế" },
-    "taxCode": { "label": "Mã thuế" },
-    "taxRule": { "label": "Quy tắc thuế" },
-    "taxRate": { "label": "Tỷ lệ thuế" },
-    "quote": { "label": "Báo giá" },
-    "quoteItem": { "label": "Mục báo giá" },
-    "salesOrder": { "label": "Đơn hàng bán" },
-    "salesOrderItem": { "label": "Mục đơn hàng bán" },
-    "invoice": { "label": "Hóa đơn" },
-    "invoiceItem": { "label": "Mục hóa đơn" },
-    "creditNote": { "label": "Phiếu giảm giá" },
-    "creditNoteItem": { "label": "Mục phiếu giảm giá" },
-    "deliveryOrder": { "label": "Đơn giao hàng" },
-    "deliveryOrderItem": { "label": "Mục đơn giao hàng" },
-    "returnOrder": { "label": "Đơn trả hàng" },
-    "returnOrderItem": { "label": "Mục đơn trả hàng" },
-    "writeOff": { "label": "Ghi giảm" },
-    "payment": { "label": "Thanh toán" },
-    "paymentAllocation": { "label": "Phân bổ thanh toán" },
-    "paymentMethod": { "label": "Phương thức thanh toán" },
-    "paymentChannel": { "label": "Kênh thanh toán" },
-    "paymentRequest": { "label": "Yêu cầu thanh toán" },
-    "purchaseOrder": { "label": "Đơn mua" },
-    "purchaseOrderItem": { "label": "Mục đơn mua" },
-    "receiptOrder": { "label": "Đơn nhập hàng" },
-    "receiptOrderItem": { "label": "Mục đơn nhập hàng" },
-    "bill": { "label": "Hóa đơn nhà cung cấp" },
-    "billItem": { "label": "Mục hóa đơn nhà cung cấp" },
-    "billCredit": { "label": "Tín dụng hóa đơn nhà cung cấp" },
-    "billCreditItem": { "label": "Mục tín dụng hóa đơn nhà cung cấp" },
-    "paymentTermProfile": { "label": "Điều khoản thanh toán" },
-    "warehouse": { "label": "Kho hàng" },
-    "inventoryTransaction": { "label": "Giao dịch kho hàng" },
-    "inventoryAdjustment": { "label": "Điều chỉnh kho hàng" },
-    "transferOrder": { "label": "Đơn chuyển kho" },
-    "transferOrderItem": { "label": "Mục đơn chuyển kho" },
-    "inventoryReservation": { "label": "Đặt hàng kho hàng" },
-    "inventoryBatch": { "label": "Lô kho hàng" },
-    "inventorySerial": { "label": "Số seri kho hàng" },
-    "subscription": { "label": "Đăng ký" },
-    "subscriptionPeriod": { "label": "Khoảng thời gian đăng ký" }
+    "product": {
+      "label": "Sản phẩm",
+      "fields": {
+        "sku": "Mã sản phẩm",
+        "name": "Tên",
+        "type": "Loại",
+        "category": "Danh mục",
+        "active": "Hoạt động",
+        "sellable": "Có thể bán",
+        "purchasable": "Có thể mua"
+      }
+    },
+    "productCategory": {
+      "label": "Danh mục sản phẩm"
+    },
+    "productVariant": {
+      "label": "Biến thể sản phẩm"
+    },
+    "priceBook": {
+      "label": "Sách giá"
+    },
+    "priceBookEntry": {
+      "label": "Mục sách giá"
+    },
+    "priceRule": {
+      "label": "Quy tắc giá"
+    },
+    "supplier": {
+      "label": "Nhà cung cấp"
+    },
+    "supplierProductPrice": {
+      "label": "Giá sản phẩm nhà cung cấp"
+    },
+    "taxClass": {
+      "label": "Lớp thuế"
+    },
+    "taxCode": {
+      "label": "Mã thuế"
+    },
+    "taxRule": {
+      "label": "Quy tắc thuế"
+    },
+    "taxRate": {
+      "label": "Tỷ lệ thuế"
+    },
+    "quote": {
+      "label": "Báo giá"
+    },
+    "quoteItem": {
+      "label": "Mục báo giá"
+    },
+    "salesOrder": {
+      "label": "Đơn hàng bán"
+    },
+    "salesOrderItem": {
+      "label": "Mục đơn hàng bán"
+    },
+    "invoice": {
+      "label": "Hóa đơn"
+    },
+    "invoiceItem": {
+      "label": "Mục hóa đơn"
+    },
+    "creditNote": {
+      "label": "Phiếu giảm giá"
+    },
+    "creditNoteItem": {
+      "label": "Mục phiếu giảm giá"
+    },
+    "deliveryOrder": {
+      "label": "Đơn giao hàng"
+    },
+    "deliveryOrderItem": {
+      "label": "Mục đơn giao hàng"
+    },
+    "returnOrder": {
+      "label": "Đơn trả hàng"
+    },
+    "returnOrderItem": {
+      "label": "Mục đơn trả hàng"
+    },
+    "writeOff": {
+      "label": "Ghi giảm"
+    },
+    "payment": {
+      "label": "Thanh toán"
+    },
+    "paymentAllocation": {
+      "label": "Phân bổ thanh toán"
+    },
+    "paymentMethod": {
+      "label": "Phương thức thanh toán"
+    },
+    "paymentChannel": {
+      "label": "Kênh thanh toán"
+    },
+    "paymentRequest": {
+      "label": "Yêu cầu thanh toán"
+    },
+    "purchaseOrder": {
+      "label": "Đơn mua"
+    },
+    "purchaseOrderItem": {
+      "label": "Mục đơn mua"
+    },
+    "receiptOrder": {
+      "label": "Đơn nhập hàng"
+    },
+    "receiptOrderItem": {
+      "label": "Mục đơn nhập hàng"
+    },
+    "bill": {
+      "label": "Hóa đơn nhà cung cấp"
+    },
+    "billItem": {
+      "label": "Mục hóa đơn nhà cung cấp"
+    },
+    "billCredit": {
+      "label": "Tín dụng hóa đơn nhà cung cấp"
+    },
+    "billCreditItem": {
+      "label": "Mục tín dụng hóa đơn nhà cung cấp"
+    },
+    "paymentTermProfile": {
+      "label": "Điều khoản thanh toán"
+    },
+    "warehouse": {
+      "label": "Kho hàng"
+    },
+    "inventoryTransaction": {
+      "label": "Giao dịch kho hàng"
+    },
+    "inventoryAdjustment": {
+      "label": "Điều chỉnh kho hàng"
+    },
+    "transferOrder": {
+      "label": "Đơn chuyển kho"
+    },
+    "transferOrderItem": {
+      "label": "Mục đơn chuyển kho"
+    },
+    "inventoryReservation": {
+      "label": "Đặt hàng kho hàng"
+    },
+    "inventoryBatch": {
+      "label": "Lô kho hàng"
+    },
+    "inventorySerial": {
+      "label": "Số seri kho hàng"
+    },
+    "subscription": {
+      "label": "Đăng ký"
+    },
+    "subscriptionPeriod": {
+      "label": "Khoảng thời gian đăng ký"
+    }
   },
   "document": {
     "quote": "Báo giá",
@@ -258,7 +365,19 @@
     "warnings": "Cảnh báo cài đặt",
     "warningsHint": "Xem lại các cảnh báo này trước khi bật các tính năng phụ thuộc.",
     "priceBooksDisabled": "Sách giá bị tắt nhưng phân giải giá vẫn ưu tiên chúng; giá sản phẩm sẽ được sử dụng.",
-    "featureLabels": { "productPrices": "Giá trên sản phẩm", "taxInclusivePrices": "Giá đã gồm thuế", "priceBooks": "Bảng giá", "productVariants": "Biến thể sản phẩm", "supplierPrices": "Giá nhà cung cấp", "purchases": "Mua hàng", "inventory": "Kho", "subscriptions": "Gói định kỳ", "paymentRequests": "Yêu cầu thanh toán", "multiCurrency": "Đa tiền tệ", "issuanceLocking": "Khóa khi phát hành" },
+    "featureLabels": {
+      "productPrices": "Giá trên sản phẩm",
+      "taxInclusivePrices": "Giá đã gồm thuế",
+      "priceBooks": "Bảng giá",
+      "productVariants": "Biến thể sản phẩm",
+      "supplierPrices": "Giá nhà cung cấp",
+      "purchases": "Mua hàng",
+      "inventory": "Kho",
+      "subscriptions": "Gói định kỳ",
+      "paymentRequests": "Yêu cầu thanh toán",
+      "multiCurrency": "Đa tiền tệ",
+      "issuanceLocking": "Khóa khi phát hành"
+    },
     "missingPricePolicyHint": "Dòng không có giá sẽ bị từ chối theo mặc định; \"cho phép nhập rõ\" ghi nhận dòng đó chưa có giá một cách chủ ý.",
     "versionLabel": "Phiên bản cấu hình",
     "seriesHint": "Số kế tiếp mỗi chuỗi sẽ cấp. Số được lấy khi phát hành, không nhập tay.",
@@ -273,7 +392,8 @@
     "inventoryWithoutStockManagedTypes": "Kho hàng được bật nhưng không có loại sản phẩm được quản lý kho hàng; không tài liệu nào sẽ di chuyển kho hàng.",
     "inventoryAllowsNegativeStock": "Cho phép kho hàng âm: một giao dịch sẽ được ghi ngay cả khi kho hàng có ít hơn yêu cầu giải phóng.",
     "productVariantsWithoutAttributes": "Biến thể sản phẩm được bật nhưng không có thuộc tính biến thể được cấu hình; một sản phẩm không thể gia nhập một gia đình.",
-    "removalPolicyWithoutInventory": "Một chính sách loại bỏ được cấu hình trong khi kho hàng bị tắt; không có việc chọn hàng nào sẽ diễn ra cho đến khi nó được bật."
+    "removalPolicyWithoutInventory": "Một chính sách loại bỏ được cấu hình trong khi kho hàng bị tắt; không có việc chọn hàng nào sẽ diễn ra cho đến khi nó được bật.",
+    "failedHint": "Module đã từ chối thay đổi và nêu lý do ở trên."
   },
   "lineItem": {
     "addLine": "Thêm mục",

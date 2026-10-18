@@ -1,5 +1,6 @@
 import type {
   AclDefinition,
+  AdminPanelView,
   AttachmentInfo,
   CloneResult,
   EntityDefinition,
@@ -20,6 +21,8 @@ import type {
   MarketingUnsubscribeResult,
   MarketingValidationReport,
   Metadata,
+  ModuleSettingsView,
+  NavigationTree,
   PortalContext,
   PortalDashboardRow,
   PortalNavItemRow,
@@ -67,6 +70,7 @@ import type {
   ServiceDeskQueueWorkload,
   ServiceDeskTransitionResult,
   ServiceDeskTransitionRow,
+  SettingsDocument,
   SettingsPatch,
   SettingsView,
   WorkflowActionSpec,
@@ -391,6 +395,26 @@ export const api = {
   // Instance settings (PLAN §12.2 `app_settings`): brand text, logo, footer, locale/timezone defaults.
   settings: () => request<SettingsView>('/Settings'),
   saveSettings: (input: SettingsPatch) => request<SettingsView>('/Settings', post(input)),
+
+  // Phase 20: the administration panel, the resolved menu and the settings document registry
+  // (PLAN_Phase_20_Settings_UX.md §8.1).
+  adminPanel: () => request<AdminPanelView>('/AdminPanel'),
+  navigation: () => request<NavigationTree>('/Navigation'),
+  settingsDocument: <T>(name: string) => request<SettingsDocument<T>>(`/Settings/documents/${encodeURIComponent(name)}`),
+  saveSettingsDocument: <T>(name: string, value: Record<string, unknown>, version?: number) =>
+    request<SettingsDocument<T>>(
+      `/Settings/documents/${encodeURIComponent(name)}`,
+      post(version === undefined ? { value } : { value, version }),
+    ),
+  resetSettingsDocument: <T>(name: string) =>
+    request<SettingsDocument<T>>(`/Settings/documents/${encodeURIComponent(name)}/reset`, post({})),
+
+  // Module settings documents hosted by the settings shell (§8.3): each keeps its own endpoint.
+  serviceDeskSettings: () => request<ModuleSettingsView>('/ServiceDesk/action/settings'),
+  saveServiceDeskSettings: (input: Record<string, unknown>) => request<ModuleSettingsView>('/ServiceDesk/action/settings', post(input)),
+  customerSuccessSettings: () => request<ModuleSettingsView>('/CustomerSuccess/action/settings'),
+  saveCustomerSuccessSettings: (input: Record<string, unknown>) =>
+    request<ModuleSettingsView>('/CustomerSuccess/action/settings', post(input)),
 
   // Phase 7A (PLAN §41.5): merged translation catalog, cacheable by content hash.
   i18nCatalog: (locale: string | undefined, clientCache?: string) => {

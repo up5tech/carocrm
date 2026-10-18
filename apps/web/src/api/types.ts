@@ -58,6 +58,18 @@ export interface AclDefinition {
   recordAccess?: Record<string, Record<string, string>> | undefined;
 }
 
+export interface EntityNavSection {
+  readonly hidden?: boolean | undefined;
+  readonly order?: number | undefined;
+  readonly group?: string | undefined;
+  readonly quickCreate?: boolean | undefined;
+  readonly board?: {
+    readonly enabled?: boolean | undefined;
+    readonly groupBy?: string | undefined;
+    readonly defaultGroupBy?: string | undefined;
+  } | undefined;
+}
+
 export interface EntityDefinition {
   name: string;
   label: string;
@@ -70,6 +82,8 @@ export interface EntityDefinition {
   layouts?: Record<string, LayoutDefinition[]> | undefined;
   acl?: AclDefinition | undefined;
   record?: { displayField?: string | undefined; nameField?: string | undefined } | undefined;
+  /** Per-entity navigation behaviour (PLAN_Phase_20 §4.5); absent means "follow the platform default". */
+  nav?: EntityNavSection | undefined;
   client?: { web?: boolean | undefined } | undefined;
   /** Declarative rules evaluated in the form and on the server (PLAN §21). */
   dynamicLogic?: { rules: Record<string, unknown>[] } | undefined;
@@ -1098,4 +1112,98 @@ export interface ServiceDeskMetrics {
     | { restricted: true }
     | { restricted: false; count: number; average: number | null; responseRate: number | null };
   definitions: Readonly<Record<string, string>>;
+}
+
+/**
+ * Phase 20 — settings documents, the administration panel and the resolved navigation tree
+ * (PLAN_Phase_20_Settings_UX.md §8.1). `warnings` are configuration problems the server reports but
+ * does not enforce, so a tab shows them next to the values that caused them.
+ */
+export interface SettingsDocumentWarning {
+  readonly code: string;
+  readonly message: string;
+}
+
+export interface SettingsDocument<T = Record<string, unknown>> {
+  readonly name: string;
+  readonly group: string;
+  readonly labelKey: string;
+  readonly descriptionKey?: string | undefined;
+  readonly readLevel: string;
+  readonly writeLevel: string;
+  readonly value: T;
+  readonly version: number;
+  readonly updatedAt: string | null;
+  readonly updatedBy: string | null;
+  readonly warnings: readonly SettingsDocumentWarning[];
+}
+
+/** One menu override in the `navigation` document; keys are namespaced (`home`, `entity:Contact`). */
+export interface NavigationMenuEntry {
+  readonly key: string;
+  readonly enabled: boolean;
+  readonly order: number;
+  readonly labelKey?: string | undefined;
+  readonly icon?: string | undefined;
+  readonly accent?: string | undefined;
+  readonly inQuickSearch?: boolean | undefined;
+}
+
+export interface NavigationDocument {
+  readonly items: readonly NavigationMenuEntry[];
+  readonly groups: readonly NavigationMenuEntry[];
+  readonly accentPalette: readonly string[];
+}
+
+/** A resolved menu entry: already ACL-filtered and ordered by the server. */
+export interface NavigationNode {
+  readonly key: string;
+  readonly kind: 'page' | 'entity' | 'group' | 'extension' | 'admin';
+  readonly route: string;
+  readonly label: string;
+  readonly icon?: string | undefined;
+  readonly accent?: string | undefined;
+  readonly order: number;
+  readonly inQuickSearch: boolean;
+  readonly children?: readonly NavigationNode[];
+}
+
+export interface NavigationTree {
+  readonly version: number;
+  readonly items: readonly NavigationNode[];
+  readonly warnings: readonly SettingsDocumentWarning[];
+}
+
+export interface AdminPanelTab {
+  readonly key: string;
+  readonly labelKey: string;
+  readonly descriptionKey?: string | undefined;
+  readonly icon: string;
+  readonly order: number;
+  readonly level: string;
+  readonly kind: 'tab' | 'page';
+  readonly route: string;
+  readonly document?: string | undefined;
+  readonly moduleEndpoint?: string | undefined;
+}
+
+export interface AdminPanelGroup {
+  readonly key: string;
+  readonly labelKey: string;
+  readonly order: number;
+  readonly tabs: readonly AdminPanelTab[];
+}
+
+export interface AdminPanelView {
+  readonly groups: readonly AdminPanelGroup[];
+  readonly defaultTab: string | null;
+}
+
+/** The shape every module settings document answers with (`settings`, `version`, `warnings`). */
+export interface ModuleSettingsView<T = Record<string, unknown>> {
+  readonly settings: T;
+  readonly version: number;
+  readonly updatedAt: string | null;
+  readonly updatedBy: string | null;
+  readonly warnings: readonly SettingsDocumentWarning[];
 }

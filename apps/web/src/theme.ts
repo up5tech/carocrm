@@ -78,3 +78,27 @@ export const carocrmTheme: ThemeConfig = {
     Descriptions: { itemPaddingBottom: 12 },
   },
 };
+
+/**
+ * Menu accent tokens (PLAN_Phase_20_Settings_UX.md §4.4). An accent is one of eight named tokens,
+ * never a free colour: the server validates the name against the same list, so a settings document
+ * can only choose a treatment the design system already owns. Colour marks a group, it is never the
+ * only signal — the label and icon carry the meaning too (§5.8).
+ */
+export const NAV_ACCENTS: Record<string, { fg: string; soft: string }> = {
+  blue: { fg: '#438eff', soft: '#f0f8ff' },
+  green: { fg: '#55c27f', soft: '#f2fbf6' },
+  orange: { fg: '#f8ac59', soft: '#fff8f0' },
+  red: { fg: '#fa626b', soft: '#fff5f5' },
+  purple: { fg: '#722ed1', soft: '#f7f3ff' },
+  cyan: { fg: '#13c2c2', soft: '#f0fbfb' },
+  magenta: { fg: '#eb2f96', soft: '#fff0f8' },
+  gold: { fg: '#d4b106', soft: '#fdfbe8' },
+};
+
+export const NAV_ACCENT_NAMES: readonly string[] = Object.keys(NAV_ACCENTS);
+
+/** The accent pair for a name, or the neutral pair when the entry carries none. */
+export function navAccent(name: string | undefined): { fg: string; soft: string } {
+  return (name === undefined ? undefined : NAV_ACCENTS[name]) ?? { fg: '#a1a8b3', soft: '#ffffff' };
+}

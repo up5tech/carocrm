@@ -15,6 +15,15 @@ interface AppScopeData {
   entity?: Record<string, unknown>;
 }
 
+/**
+ * Seam for the navigation group keys an entity's `nav.group` may name
+ * (PLAN_Phase_20_Settings_UX.md §4.5). The admin panel owns the menu, so the metadata writer asks
+ * for the accepted keys instead of importing the panel — the dependency stays pointing at the
+ * kernel. An installation that wires nothing leaves the check open.
+ */
+export const NAVIGATION_GROUP_KEYS = Symbol('NAVIGATION_GROUP_KEYS');
+export type NavigationGroupKeys = ReadonlySet<string>;
+
 @Injectable()
 export class MetadataStoreService {
   readonly registry = new MetadataRegistry();

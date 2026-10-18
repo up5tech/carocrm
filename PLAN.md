@@ -2768,6 +2768,13 @@ Do not put these directly into the kernel.
 
 ## Phase 20 — Settings, Administration and UX/UI
 
+Progress (2026-10-18): sub-phases 20.0–20.6 are implemented — settings document registry with
+versioning and optimistic concurrency, the tabbed administration shell, General / Localization /
+Main Menu tabs, the hosted Sales, Service Desk and Customer Success documents, `GET /Navigation`
+resolved and ACL-filtered on the server, and per-entity `nav` metadata. The remaining sub-phases
+(20.7–20.17) are open. See `docs/admin/settings.md`, `docs/admin/navigation.md`,
+`docs/compatibility/settings-ux.md` and `docs/reference/alpha-status.md`.
+
 Implement, as specified in `PLAN_Phase_20_Settings_UX.md`:
 
 - A metadata-driven, tabbed Administration area with a settings-document registry (brand,

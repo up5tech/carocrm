@@ -2,12 +2,12 @@ import { Spin } from 'antd';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
+import { AdminSettingsShell } from './admin/AdminSettingsShell.js';
 import { AppShell } from './components/AppShell.js';
 import { AdminAuditPage } from './pages/AdminAuditPage.js';
 import { AdminExtensionsPage } from './pages/AdminExtensionsPage.js';
 import { AdminJobsPage } from './pages/AdminJobsPage.js';
 import { AdminPortalsPage } from './pages/AdminPortalsPage.js';
-import { AdminSettingsPage } from './pages/AdminSettingsPage.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { DashboardsPage } from './pages/DashboardsPage.js';
 import { EntityAdminPage } from './pages/EntityAdminPage.js';
@@ -133,7 +133,10 @@ export function AppRoutes() {
         <Route path="/admin/processes" element={<ProcessesPage />} />
         <Route path="/admin/processes/:id" element={<ProcessEditorPage />} />
         <Route path="/admin/portals" element={<AdminPortalsPage />} />
-        <Route path="/admin/settings" element={<AdminSettingsPage />} />
+        {/* Phase 20: the settings shell owns `/admin/settings/:tabKey`; the bare URL redirects to the
+            first tab this caller may open, so existing bookmarks keep landing somewhere useful. */}
+        <Route path="/admin/settings" element={<AdminSettingsShell />} />
+        <Route path="/admin/settings/:tabKey" element={<AdminSettingsShell />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </AppShell>

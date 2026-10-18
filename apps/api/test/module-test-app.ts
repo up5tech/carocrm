@@ -27,6 +27,7 @@ import { REQUEST_SCOPE_TOKEN,RequestScope } from '../src/common/request-scope.js
 import type { AppConfig } from '../src/config.js';
 import { buildConfig, CONFIG_TOKEN } from '../src/config.js';
 import { DatabaseService } from '../src/database/database.service.js';
+import { I18nService } from '../src/i18n/i18n.service.js';
 
 export const ADMIN_LOGIN = 'admin';
 export const ADMIN_PASSWORD = 'admin';
@@ -72,6 +73,9 @@ export async function bootModuleTestApp(overrides: ModuleTestOverrides = {}): Pr
       DatabaseService,
       { provide: REQUEST_SCOPE_TOKEN, useClass: RequestScope },
       AuthService,
+      // `AuthController` translates its responses, so the throwaway root module has to own the
+      // catalog service just like AppModule does; without it the module cannot be instantiated.
+      I18nService,
       AuthGuard,
       { provide: APP_GUARD, useExisting: AuthGuard },
       ...(overrides.providers ?? []),

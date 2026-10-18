@@ -22,55 +22,162 @@
     }
   },
   "entities": {
-    "product": { "label": "Product", "fields": { "sku": "SKU", "name": "Name", "type": "Type", "category": "Category", "active": "Active", "sellable": "Sellable", "purchasable": "Purchasable" } },
-    "productCategory": { "label": "Product Category" },
-    "productVariant": { "label": "Product Variant" },
-    "priceBook": { "label": "Price Book" },
-    "priceBookEntry": { "label": "Price Book Entry" },
-    "priceRule": { "label": "Price Rule" },
-    "supplier": { "label": "Supplier" },
-    "supplierProductPrice": { "label": "Supplier Product Price" },
-    "taxClass": { "label": "Tax Class" },
-    "taxCode": { "label": "Tax Code" },
-    "taxRule": { "label": "Tax Rule" },
-    "taxRate": { "label": "Tax Rate" },
-    "quote": { "label": "Quote" },
-    "quoteItem": { "label": "Quote Item" },
-    "salesOrder": { "label": "Sales Order" },
-    "salesOrderItem": { "label": "Sales Order Item" },
-    "invoice": { "label": "Invoice" },
-    "invoiceItem": { "label": "Invoice Item" },
-    "creditNote": { "label": "Credit Note" },
-    "creditNoteItem": { "label": "Credit Note Item" },
-    "deliveryOrder": { "label": "Delivery Order" },
-    "deliveryOrderItem": { "label": "Delivery Order Item" },
-    "returnOrder": { "label": "Return Order" },
-    "returnOrderItem": { "label": "Return Order Item" },
-    "writeOff": { "label": "Write-off" },
-    "payment": { "label": "Payment" },
-    "paymentAllocation": { "label": "Payment Allocation" },
-    "paymentMethod": { "label": "Payment Method" },
-    "paymentChannel": { "label": "Payment Channel" },
-    "paymentRequest": { "label": "Payment Request" },
-    "purchaseOrder": { "label": "Purchase Order" },
-    "purchaseOrderItem": { "label": "Purchase Order Item" },
-    "receiptOrder": { "label": "Receipt Order" },
-    "receiptOrderItem": { "label": "Receipt Order Item" },
-    "bill": { "label": "Bill" },
-    "billItem": { "label": "Bill Item" },
-    "billCredit": { "label": "Bill Credit" },
-    "billCreditItem": { "label": "Bill Credit Item" },
-    "paymentTermProfile": { "label": "Payment Terms" },
-    "warehouse": { "label": "Warehouse" },
-    "inventoryTransaction": { "label": "Inventory Transaction" },
-    "inventoryAdjustment": { "label": "Inventory Adjustment" },
-    "transferOrder": { "label": "Transfer Order" },
-    "transferOrderItem": { "label": "Transfer Order Item" },
-    "inventoryReservation": { "label": "Inventory Reservation" },
-    "inventoryBatch": { "label": "Inventory Batch" },
-    "inventorySerial": { "label": "Inventory Serial" },
-    "subscription": { "label": "Subscription" },
-    "subscriptionPeriod": { "label": "Subscription Period" }
+    "product": {
+      "label": "Product",
+      "fields": {
+        "sku": "SKU",
+        "name": "Name",
+        "type": "Type",
+        "category": "Category",
+        "active": "Active",
+        "sellable": "Sellable",
+        "purchasable": "Purchasable"
+      }
+    },
+    "productCategory": {
+      "label": "Product Category"
+    },
+    "productVariant": {
+      "label": "Product Variant"
+    },
+    "priceBook": {
+      "label": "Price Book"
+    },
+    "priceBookEntry": {
+      "label": "Price Book Entry"
+    },
+    "priceRule": {
+      "label": "Price Rule"
+    },
+    "supplier": {
+      "label": "Supplier"
+    },
+    "supplierProductPrice": {
+      "label": "Supplier Product Price"
+    },
+    "taxClass": {
+      "label": "Tax Class"
+    },
+    "taxCode": {
+      "label": "Tax Code"
+    },
+    "taxRule": {
+      "label": "Tax Rule"
+    },
+    "taxRate": {
+      "label": "Tax Rate"
+    },
+    "quote": {
+      "label": "Quote"
+    },
+    "quoteItem": {
+      "label": "Quote Item"
+    },
+    "salesOrder": {
+      "label": "Sales Order"
+    },
+    "salesOrderItem": {
+      "label": "Sales Order Item"
+    },
+    "invoice": {
+      "label": "Invoice"
+    },
+    "invoiceItem": {
+      "label": "Invoice Item"
+    },
+    "creditNote": {
+      "label": "Credit Note"
+    },
+    "creditNoteItem": {
+      "label": "Credit Note Item"
+    },
+    "deliveryOrder": {
+      "label": "Delivery Order"
+    },
+    "deliveryOrderItem": {
+      "label": "Delivery Order Item"
+    },
+    "returnOrder": {
+      "label": "Return Order"
+    },
+    "returnOrderItem": {
+      "label": "Return Order Item"
+    },
+    "writeOff": {
+      "label": "Write-off"
+    },
+    "payment": {
+      "label": "Payment"
+    },
+    "paymentAllocation": {
+      "label": "Payment Allocation"
+    },
+    "paymentMethod": {
+      "label": "Payment Method"
+    },
+    "paymentChannel": {
+      "label": "Payment Channel"
+    },
+    "paymentRequest": {
+      "label": "Payment Request"
+    },
+    "purchaseOrder": {
+      "label": "Purchase Order"
+    },
+    "purchaseOrderItem": {
+      "label": "Purchase Order Item"
+    },
+    "receiptOrder": {
+      "label": "Receipt Order"
+    },
+    "receiptOrderItem": {
+      "label": "Receipt Order Item"
+    },
+    "bill": {
+      "label": "Bill"
+    },
+    "billItem": {
+      "label": "Bill Item"
+    },
+    "billCredit": {
+      "label": "Bill Credit"
+    },
+    "billCreditItem": {
+      "label": "Bill Credit Item"
+    },
+    "paymentTermProfile": {
+      "label": "Payment Terms"
+    },
+    "warehouse": {
+      "label": "Warehouse"
+    },
+    "inventoryTransaction": {
+      "label": "Inventory Transaction"
+    },
+    "inventoryAdjustment": {
+      "label": "Inventory Adjustment"
+    },
+    "transferOrder": {
+      "label": "Transfer Order"
+    },
+    "transferOrderItem": {
+      "label": "Transfer Order Item"
+    },
+    "inventoryReservation": {
+      "label": "Inventory Reservation"
+    },
+    "inventoryBatch": {
+      "label": "Inventory Batch"
+    },
+    "inventorySerial": {
+      "label": "Inventory Serial"
+    },
+    "subscription": {
+      "label": "Subscription"
+    },
+    "subscriptionPeriod": {
+      "label": "Subscription Period"
+    }
   },
   "document": {
     "quote": "Quote",
@@ -258,7 +365,19 @@
     "warnings": "Settings warnings",
     "warningsHint": "Review these before enabling dependent features.",
     "priceBooksDisabled": "Price books are disabled but price resolution still prefers them; product prices will be used.",
-    "featureLabels": { "productPrices": "Product prices", "taxInclusivePrices": "Tax-inclusive prices", "priceBooks": "Price books", "productVariants": "Product variants", "supplierPrices": "Supplier prices", "purchases": "Purchases", "inventory": "Inventory", "subscriptions": "Subscriptions", "paymentRequests": "Payment requests", "multiCurrency": "Multi-currency", "issuanceLocking": "Issuance locking" },
+    "featureLabels": {
+      "productPrices": "Product prices",
+      "taxInclusivePrices": "Tax-inclusive prices",
+      "priceBooks": "Price books",
+      "productVariants": "Product variants",
+      "supplierPrices": "Supplier prices",
+      "purchases": "Purchases",
+      "inventory": "Inventory",
+      "subscriptions": "Subscriptions",
+      "paymentRequests": "Payment requests",
+      "multiCurrency": "Multi-currency",
+      "issuanceLocking": "Issuance locking"
+    },
     "missingPricePolicyHint": "A line without a price is refused by default; \"allow explicit\" records it as deliberately unpriced.",
     "versionLabel": "Settings version",
     "seriesHint": "The next number each series will allocate. Numbers are taken at issuance, never by hand.",
@@ -273,7 +392,8 @@
     "inventoryWithoutStockManagedTypes": "Inventory is enabled but no product type is stock-managed; no document will move stock.",
     "inventoryAllowsNegativeStock": "Negative stock is allowed: a movement will be written even when the warehouse holds less than it is asked to release.",
     "productVariantsWithoutAttributes": "Product variants are enabled but no variant attributes are configured; a product cannot join a family yet.",
-    "removalPolicyWithoutInventory": "A removal policy is configured while inventory is disabled; no picking will happen until it is on."
+    "removalPolicyWithoutInventory": "A removal policy is configured while inventory is disabled; no picking will happen until it is on.",
+    "failedHint": "The module refused the change and gave the reason above."
   },
   "lineItem": {
     "addLine": "Add line",

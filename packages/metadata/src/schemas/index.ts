@@ -137,6 +137,29 @@ export const ClientDefinitionSchema = z.object({
 export type ClientDefinition = z.infer<typeof ClientDefinitionSchema>;
 
 /**
+ * Per-entity navigation behaviour (PLAN_Phase_20_Settings_UX.md §4.5). Optional: an entity without a
+ * `nav` section keeps the grouping and order the platform ships with. `hidden` is presentation — the
+ * entity stays fully usable by URL and API.
+ */
+export const NavigationSectionSchema = z.object({
+  hidden: z.boolean().default(false),
+  /** Sort weight inside its navigation group; ties break on the entity name. `null` clears it. */
+  order: z.number().int().min(-100000).max(100000).nullish(),
+  /** Group key. Without one the entity lands in the ungrouped remainder of RECORDS. */
+  group: z.string().min(1).max(80).nullish(),
+  quickCreate: z.boolean().default(true),
+  board: z
+    .object({
+      enabled: z.boolean().default(false),
+      groupBy: z.string().max(60).optional(),
+      defaultGroupBy: z.string().max(60).optional(),
+    })
+    .nullish(),
+});
+
+export type NavigationSection = z.infer<typeof NavigationSectionSchema>;
+
+/**
  * Declarative UI/validation rules (PLAN §21). The section is guarded shallowly here; every rule is
  * parsed and formula-checked by `@carocrm/formula` before metadata is accepted.
  */
@@ -164,6 +187,7 @@ export const EntityDefinitionSchema = z.object({
   layouts: z.record(z.string(), z.array(LayoutDefinitionSchema)).default({}),
   record: RecordDefinitionSchema.default({}),
   client: ClientDefinitionSchema.default({}),
+  nav: NavigationSectionSchema.optional(),
   dynamicLogic: DynamicLogicSectionSchema.optional(),
 });
 export type EntityDefinition = {
@@ -179,6 +203,7 @@ export type EntityDefinition = {
   layouts: Record<string, LayoutDefinition[]>;
   record: RecordDefinition;
   client: ClientDefinition;
+  nav?: NavigationSection | undefined;
   dynamicLogic?: DynamicLogicSection | undefined;
 };
 

@@ -584,6 +584,11 @@
     "runFailed": "Chạy thất bại."
   },
   "adminSettings": {
+    "brandHint": "Hiển thị với mọi người, kể cả trang đăng nhập.",
+    "enabledLocalesHint": "Chỉ có thể bật các ngôn ngữ đã có bảng dịch.",
+    "defaultLocaleHint": "Ngôn ngữ khởi tạo cho phiên mới; phải nằm trong danh sách bật.",
+    "timezoneHint": "Dùng cho ngày giờ bản ghi khi người dùng chưa tự đặt.",
+    "warnings": "Những điểm cần xem",
     "title": "Cài đặt",
     "subtitle": "Tên thương hiệu, logo, chân trang và giá trị mặc định ngôn ngữ của hệ thống.",
     "notAdmin": "Chỉ quản trị viên mới mở được cài đặt hệ thống.",
@@ -838,7 +843,18 @@
     "layoutAddGroup": "Thêm nhóm",
     "layoutEditGroupTitle": "Sửa nhóm — {name}",
     "layoutEditGroupAria": "Sửa nhóm {name}",
-    "layoutDropToEnd": "Thả vào đây để thêm vào cuối"
+    "layoutDropToEnd": "Thả vào đây để thêm vào cuối",
+    "tabNavigation": "Điều hướng",
+    "navGroup": "Nhóm menu",
+    "navGroupHint": "Thực thể này nằm trong submenu nào. Để trống để dùng nhóm mặc định của hệ thống.",
+    "navGroupDefault": "Mặc định hệ thống",
+    "navOrder": "Thứ tự",
+    "navOrderHint": "Thứ tự sắp xếp trong nhóm; bỏ trống thì theo nhãn. Trùng giá trị sẽ sắp theo tên.",
+    "navBoardGroupBy": "Trường nhóm trên board",
+    "navBoardGroupByHint": "Trường dùng để nhóm board khi mở. Chỉ trường enum có giá trị mới nhóm được.",
+    "navHidden": "Ẩn khỏi menu chính",
+    "navHiddenHint": "Ẩn chỉ là hiển thị: URL danh sách, URL bản ghi và API vẫn hoạt động với người dùng có quyền.",
+    "navUpdated": "Đã cập nhật cấu hình điều hướng."
   },
   "workflows": {
     "title": "Luồng công việc",
@@ -1226,5 +1242,82 @@
       "invalid": "Liên kết không hợp lệ. Có thể đã hết hạn hoặc đã được sử dụng; hãy yêu cầu liên kết mới từ email.",
       "missingToken": "Liên kết thiếu mã token."
     }
+  },
+  "adminPanel": {
+    "groups": {
+      "system": "Hệ thống",
+      "users": "Người dùng",
+      "customization": "Tùy biến",
+      "messaging": "Truyền thông",
+      "integrations": "Module và tích hợp"
+    },
+    "tabs": {
+      "general": "Chung",
+      "localization": "Ngôn ngữ và thời gian",
+      "menu": "Menu chính",
+      "sales": "Bán hàng",
+      "serviceDesk": "Bàn trợ giúp",
+      "customerSuccess": "Thành công của khách hàng",
+      "authentication": "Xác thực",
+      "attachments": "Tệp đính kèm",
+      "notifications": "Thông báo"
+    },
+    "descriptions": {
+      "general": "Tiêu đề trang, logo và dòng chân trang của hệ thống này.",
+      "localization": "Ngôn ngữ người dùng có thể chọn, ngôn ngữ mặc định và múi giờ làm việc.",
+      "menu": "Bật/tắt, đổi tên, sắp xếp và tô màu menu chính cho tất cả mọi người.",
+      "sales": "Tính năng bán hàng, tiền tệ, giá, thuế, số tự động, kho và định kỳ.",
+      "serviceDesk": "Chính sách phân luồng case, SLA và hỗ trợ.",
+      "customerSuccess": "Chính sách gia hạn, sức khỏe khách hàng và playbook.",
+      "entityManager": "Thực thể, trường dữ liệu và bố cục.",
+      "jobs": "Tác vụ định kỳ và hoạt động của hàng đợi.",
+      "audit": "Ai đã thay đổi gì và khi nào.",
+      "extensions": "Các gói đã cài và những gì chúng đóng góp.",
+      "workflows": "Tự động hóa tác động lên bản ghi.",
+      "processes": "Quy trình nhiều bước với người phụ trách và hạn chót.",
+      "portals": "Cổng khách hàng và các vai trò trong cổng."
+    }
+  },
+  "adminShell": {
+    "saved": "Đã lưu cấu hình.",
+    "saveFailed": "Không lưu được cấu hình.",
+    "conflict": "Một quản trị viên khác đã tài liệu này sau khi bạn mở.",
+    "conflictHint": "Nội dung của bạn vẫn được giữ. Tải lại để xem bản hiện tại rồi áp dụng lại thay đổi.",
+    "discard": "Bỏ thay đổi",
+    "leave": "Rời đi vẫn được",
+    "unsavedTitle": "Bạn có thay đổi chưa lưu",
+    "unsavedBody": "Rời tab này sẽ bỏ mọi thay đổi chưa lưu.",
+    "loadFailed": "Không tải được bảng quản trị.",
+    "loadFailedHint": "Kiểm tra kết nối rồi thử lại.",
+    "noAccess": "Bạn không có quyền mở phần này",
+    "noAccessHint": "Chọn một tab trong danh sách bên trái, hoặc xin quyền từ quản trị viên.",
+    "unknownTab": "Tab này không khả dụng trong hệ thống.",
+    "lastModified": "Thay đổi cuối bởi {by} lúc {at}",
+    "neverModified": "Chưa thay đổi kể từ khi cài đặt.",
+    "versionLabel": "Phiên bản",
+    "documentName": "Tài liệu cấu hình: {name}",
+    "railLabel": "Các phần quản trị",
+    "saveBar": "Lưu cấu hình",
+    "dirty": "Có thay đổi chưa lưu",
+    "movedUp": "đã được chuyển lên",
+    "movedDown": "đã được chuyển xuống",
+    "loading": "Đang tải…",
+    "moduleDocumentHint": "Do module sở hữu và kiểm tra tính hợp lệ.",
+    "policyValue": "giá trị",
+    "restored": "Đã khôi phục giá trị mặc định."
+  },
+  "adminMenu": {
+    "title": "Các mục menu",
+    "hint": "Kéo một dòng, hoặc dùng nút lên/xuống. Chỉ những gì bạn thay đổi mới được lưu: mục còn nguyên vẫn theo mặc định của hệ thống, kể cả module mới thêm sau này.",
+    "previewTitle": "Xem trước",
+    "previewHint": "Sidebar sẽ trông như vậy. Mục mà người dùng không có quyền mở sẽ không bao giờ xuất hiện, dù cấu hình ở đây thế nào.",
+    "icon": "Biểu tượng",
+    "accent": "Màu nhấn",
+    "labelKeyPlaceholder": "Key nhãn (không bắt buộc)",
+    "enableEntry": "Hiển thị trong menu",
+    "edgeOfList": "Mục này đã ở đầu/cuối danh sách.",
+    "restoreTitle": "Khôi phục menu mặc định",
+    "restoreBody": "Mọi đổi tên, sắp xếp lại và mục bạn đã ẩn sẽ bị xóa và menu mặc định quay trở lại.",
+    "restoreAction": "Khôi phục mặc định"
   }
 }

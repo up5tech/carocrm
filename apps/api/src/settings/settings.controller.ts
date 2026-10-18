@@ -4,6 +4,7 @@ import { ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 
+import { SettingsDocumentService } from '../admin-panel/settings-document.service.js';
 import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN,type RequestScope } from '../common/request-scope.js';
 import { I18nService } from '../i18n/i18n.service.js';
@@ -13,6 +14,10 @@ import { BrandService } from './brand.service.js';
 /**
  * Instance settings (PLAN §12.2 `app_settings`). The two reads are public because the sign-in page
  * has to show the same brand as the rest of the app; the write is administrator-only.
+ *
+ * Phase 20 (§7.1): the write keeps this flat six-key contract for existing clients but delegates to
+ * the settings document registry, so one set of rules and one version stamp serve both this route
+ * and `/Settings/documents/:name`.
  */
 @ApiTags('settings')
 @Controller('api/v1/Settings')
@@ -21,6 +26,7 @@ export class SettingsController {
     @Inject(BrandService) private readonly brand: BrandService,
     @Inject(I18nService) private readonly i18n: I18nService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(SettingsDocumentService) private readonly documents: SettingsDocumentService,
   ) {}
 
   @Public()
@@ -68,8 +74,8 @@ export class SettingsController {
       ...(footerText !== undefined ? { footerText } : {}),
       ...(logoAttachmentId !== undefined ? { logoAttachmentId } : {}),
     };
-    if (Object.keys(brandPatch).length > 0) await this.brand.save(brandPatch);
-    if (Object.keys(locales).length > 0) await this.i18n.saveSettings(locales);
+    if (Object.keys(brandPatch).length > 0) await this.documents.write('brand', brandPatch);
+    if (Object.keys(locales).length > 0) await this.documents.write('i18n', locales);
     return this.read();
   }
 }

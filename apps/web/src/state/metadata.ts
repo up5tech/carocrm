@@ -97,6 +97,10 @@ const BOARD_GROUP_PREFERENCE = ['stage', 'status', 'state'];
 
 export function defaultBoardGroupField(definition: EntityDefinition | undefined): string | undefined {
   const entries = boardGroupFields(definition);
+  // An entity can name its own board grouping in metadata (PLAN_Phase_20 §4.5); it wins when the
+  // field is still a valid grouping, so a renamed field falls back rather than breaking the board.
+  const configured = definition?.nav?.board?.defaultGroupBy;
+  if (typeof configured === 'string' && entries.some((entry) => entry.name === configured)) return configured;
   const preferred = BOARD_GROUP_PREFERENCE.find((name) => entries.some((entry) => entry.name === name));
   return preferred ?? entries[0]?.name;
 }

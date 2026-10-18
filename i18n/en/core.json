@@ -23,6 +23,7 @@
     "yes": "Yes",
     "no": "No",
     "refresh": "Refresh",
-    "reload": "Reload"
+    "reload": "Reload",
+    "cancel": "Cancel"
   }
 }

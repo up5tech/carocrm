@@ -132,6 +132,7 @@ export class MetadataRegistry {
         layouts: def.layouts ?? {},
         record: def.record,
         client: def.client,
+        nav: def.nav,
         acl: def.acl ?? this.getAcl(name),
         dynamicLogic: def.dynamicLogic,
       };

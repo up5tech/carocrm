@@ -6,6 +6,8 @@ import { APP_GUARD } from '@nestjs/core';
 
 import { ACL_PROVIDERS } from './acl/acl.module.js';
 import { AclApiService } from './acl/acl-api.service.js';
+import { ADMIN_PANEL_CONTROLLERS, ADMIN_PANEL_PROVIDERS } from './admin-panel/index.js';
+import { navigationGroupKeyList } from './admin-panel/navigation-defaults.js';
 import type { ParentAclChecker } from './attachment/index.js';
 import { ATTACHMENT_CONTROLLERS, ATTACHMENT_PROVIDERS, PARENT_ACL_CHECK_TOKEN } from './attachment/index.js';
 import type { AuditEntityMetadataLookup } from './audit/index.js';
@@ -44,7 +46,7 @@ import { FormulaService } from './logic/formula.service.js';
 import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
 import { MARKETING_AUTOMATION_CONTROLLERS, MARKETING_AUTOMATION_PROVIDERS } from './marketing-automation/index.js';
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
-import { METADATA_STORE,MetadataStoreService } from './metadata/metadata-store.service.js';
+import { METADATA_STORE,MetadataStoreService,NAVIGATION_GROUP_KEYS } from './metadata/metadata-store.service.js';
 import { PORTAL_CONTROLLERS, PORTAL_PROVIDERS } from './portal/index.js';
 import { PROCESS_CONTROLLERS, PROCESS_PROVIDERS } from './processes/index.js';
 import { PROJECTS_CONTROLLERS, PROJECTS_PROVIDERS } from './projects/index.js';
@@ -67,6 +69,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     I18nController,
     // `/api/v1/Settings` is a static prefix too: it must not fall through to `:entity`.
     ...SETTINGS_CONTROLLERS,
+    // Phase 20: `/api/v1/AdminPanel`, `/api/v1/Navigation` and `/api/v1/Settings/documents` are
+    // static prefixes, registered with the settings routes so `Settings/:name` never matches them.
+    ...ADMIN_PANEL_CONTROLLERS,
     ...ATTACHMENT_CONTROLLERS,
     ...AUDIT_CONTROLLERS,
     // `/api/v1/:entityType/:entityId/{stream,subscription}` must be matched before the
@@ -145,6 +150,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
     ...SETTINGS_PROVIDERS,
+    // Phase 20: the settings document registry, the admin panel descriptors and the navigation
+    // resolver. `PlatformSettingsRegistrar` registers the platform documents at bootstrap.
+    ...ADMIN_PANEL_PROVIDERS,
     ...AUDIT_PROVIDERS,
     ...STREAM_PROVIDERS,
     ...CALENDAR_PROVIDERS,
@@ -159,6 +167,12 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
       inject: [METADATA_STORE],
       useFactory: (store: MetadataStoreType): AuditEntityMetadataLookup => (entity: string) =>
         store.registry.getEntity(entity)?.fields,
+    },
+    // The navigation group keys an entity's `nav.group` may name. Owned by the admin panel, handed to
+    // the metadata writer through its seam so the dependency keeps pointing at the kernel.
+    {
+      provide: NAVIGATION_GROUP_KEYS,
+      useFactory: (): ReadonlySet<string> => new Set(navigationGroupKeyList()),
     },
     {
       provide: PARENT_ACL_CHECK_TOKEN,

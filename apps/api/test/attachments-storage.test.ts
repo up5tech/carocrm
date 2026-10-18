@@ -30,7 +30,10 @@ function codeOf(reply: Reply): string {
 }
 
 function messageOf(reply: Reply): string {
-  return String(((reply.body['error'] ?? {}) as { message?: string }).message ?? '');
+  // The exception filter localizes `error.message` to the catalog text of the code and keeps the
+  // specific reason in `error.details.reason`, which is what these assertions are about.
+  const error = (reply.body['error'] ?? {}) as { message?: string; details?: { reason?: string } };
+  return String(error.details?.reason ?? error.message ?? '');
 }
 
 async function upload(opts: {

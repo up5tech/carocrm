@@ -1,7 +1,13 @@
 # Phase 20 — Settings, Administration and End-User UX/UI
 
-> **Status:** Planned — not yet implemented. This document is the scope, architecture reference and
-> implementation roadmap for Phase 20. No code in this repository implements it yet.
+> **Status:** 20.0 – 20.6 implemented (2026-10-18): settings document registry, admin panel
+> descriptors and the tabbed shell, General/Localization/Main Menu tabs, the hosted module documents,
+> `GET /Navigation` with ACL-filtered resolution, per-entity `nav` metadata and the Entity Manager
+> Navigation tab. 20.7 – 20.17 (users/teams/roles/API keys, layout manager, security/messaging tabs,
+> user preferences, the end-user UX pack, accessibility and release hardening) are still planned.
+> This document remains the scope, architecture reference and implementation roadmap for Phase 20.
+> Implemented behaviour is documented in `docs/admin/settings.md`, `docs/admin/navigation.md` and the
+> deviations in `docs/compatibility/settings-ux.md`.
 > **Parent roadmap:** `PLAN.md` — Phase 20 (added to §57 alongside this document)
 > **Target runtime:** NestJS / TypeScript backend with the existing React SPA
 > **Functional reference:** EspoCRM Administration documentation and the Administration Panel /
@@ -944,7 +950,7 @@ configured primary database for integration tests — never a new database.
 
 ## 17. Implementation Phases and Work Order
 
-### Phase 20.0 — Repository audit and feature contract
+### Phase 20.0 — Repository audit and feature contract  ✅ done 2026-10-18
 
 Tasks: verify §3.1/§3.2 against the live code; confirm the configured database target without
 exposing credentials; produce the exact document/tab/metadata schema proposal for review.
@@ -952,7 +958,7 @@ exposing credentials; produce the exact document/tab/metadata schema proposal fo
 Acceptance: the proposal matches existing conventions (`app_settings` rows, Zod documents, metadata
 merge order) and introduces no second settings store.
 
-### Phase 20.1 — Settings registry and document service
+### Phase 20.1 — Settings registry and document service  ✅ done 2026-10-18
 
 Tasks: `admin-panel` module skeleton; registry with brand/i18n registered; read/write/reset/version;
 `SettingsController` delegation; audit + event on write.
@@ -960,7 +966,7 @@ Tasks: `admin-panel` module skeleton; registry with brand/i18n registered; read/
 Acceptance: brand and locale documents work through both the legacy route and the new one; conflicts
 return `409`.
 
-### Phase 20.2 — Admin panel descriptors and shell
+### Phase 20.2 — Admin panel descriptors and shell  ✅ done 2026-10-18
 
 Tasks: `GET /AdminPanel`; group/tab descriptor metadata; `/admin/settings/:tabKey?` routes, tab rail,
 sticky save bar, dirty guard, per-tab levels, old URL redirect.
@@ -968,7 +974,7 @@ sticky save bar, dirty guard, per-tab levels, old URL redirect.
 Acceptance: every tab is lazy-loaded; a non-admin cannot open a tab by URL; unsaved changes are
 guarded.
 
-### Phase 20.3 — General and Localization tabs
+### Phase 20.3 — General and Localization tabs  ✅ done 2026-10-18
 
 Tasks: port the brand form to the General tab (logo, title, footer) and extend the Localization tab
 with date/number format; move the Sales document out of `AdminSettingsPage` into the shell's shared
@@ -977,7 +983,7 @@ module-settings tab as the first client.
 Acceptance: `AdminSettingsPage.tsx` no longer hosts Sales settings; the Sales tab shows version and
 warnings.
 
-### Phase 20.4 — Navigation resolution service
+### Phase 20.4 — Navigation resolution service  ✅ done 2026-10-18
 
 Tasks: `GET /Navigation`; resolver with ACL filtering; admin and extension entries; favorites
 support; unit tests for ordering, unknown keys and filtering.
@@ -985,7 +991,7 @@ support; unit tests for ordering, unknown keys and filtering.
 Acceptance: the resolved tree for an unconfigured instance equals today's menu; no per-item database
 query.
 
-### Phase 20.5 — Main Menu settings tab
+### Phase 20.5 — Main Menu settings tab  ✅ done 2026-10-18
 
 Tasks: menu document schema; the sortable/nestable editor with keyboard equivalents, label/icon/accent
 allowlists, preview panel, restore-defaults.
@@ -993,7 +999,7 @@ allowlists, preview panel, restore-defaults.
 Acceptance: an administrator can reorder and disable entries; a forbidden entity still never
 appears for a limited user.
 
-### Phase 20.6 — Per-entity navigation metadata
+### Phase 20.6 — Per-entity navigation metadata  ✅ done 2026-10-18
 
 Tasks: `nav` section in the entity schema with defaults; Entity Manager Navigation tab; resolver
 reads it; metadata validation rejects unknown group keys.
@@ -1137,13 +1143,13 @@ extra database was created and no destructive setup was introduced.
 
 Phase 20 is complete when all applicable checks below pass:
 
-- [ ] `/admin/settings` is a tabbed, permissioned shell; no single page holds every setting.
-- [ ] Every settings capability in the §4.3 catalog is reachable from a tab or a documented deferral.
-- [ ] Settings documents live in `app_settings` with schema validation, versioning, concurrency and
-      reset-to-default; no second settings store exists.
-- [ ] The main menu is administrator-configurable and resolved server-side with ACL filtering.
-- [ ] Menu configuration can never widen access; forbidden entities never appear.
-- [ ] Entity navigation behavior is metadata-driven, not a hard-coded list in the SPA.
+- [x] `/admin/settings` is a tabbed, permissioned shell; no single page holds every setting. (20.2, `AdminSettingsPage.tsx` deleted)
+- [x] Every settings capability in the §4.3 catalog is reachable from a tab **or a documented deferral** — see `docs/compatibility/settings-ux.md` (users, teams, roles, API keys, layout manager, authentication, email, notifications, attachments, internal and webhooks are 20.7–20.10).
+- [x] Settings documents live in `app_settings` with schema validation, versioning, concurrency and
+      reset-to-default; no second settings store exists. (20.1)
+- [x] The main menu is administrator-configurable and resolved server-side with ACL filtering. (20.4, 20.5)
+- [x] Menu configuration can never widen access; forbidden entities never appear. (asserted by `apps/api/test/navigation.test.ts`)
+- [x] Entity navigation behavior is metadata-driven (`nav` section + Entity Manager tab); the SPA's hard-coded name sets are gone. (20.6)
 - [ ] Users, teams, roles and API keys are manageable without raw API calls, with last-admin
       protection and show-once secrets.
 - [ ] The navigation tree and favorites are server-persisted and permission-filtered.
@@ -1155,11 +1161,11 @@ Phase 20 is complete when all applicable checks below pass:
 - [ ] Users can work on desktop, tablet and phone without losing function.
 - [ ] Tests cover happy paths, invalid input, permission denial, conflicts and bulk-action edge cases.
 - [ ] Lint, typecheck, build and the existing test/smoke suites were run; skipped checks documented.
-- [ ] Migrations are additive, reviewed and applied without data loss.
-- [ ] Translations added for `en` and `vi`; no hard-coded user-visible strings.
+- [x] Migration `044_phase20_settings_documents.sql` is additive, reviewed and applied without data loss.
+- [x] Translations added for `en` and `vi`; the new UI strings resolve through `t()`. (20.2–20.6 scope)
 - [ ] OpenAPI and `api-spec/` updated; documentation and compatibility notes written.
-- [ ] No extra database was created; no reset, truncate or broad delete was performed.
-- [ ] No upstream PHP source, unlicensed assets or third-party branding were copied.
+- [x] No extra database was created; no reset, truncate or broad delete was performed.
+- [x] No upstream PHP source, unlicensed assets or third-party branding were copied.
 
 ---
 
