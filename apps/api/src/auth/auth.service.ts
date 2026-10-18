@@ -1,10 +1,10 @@
 import { createHash, randomBytes,randomUUID } from 'node:crypto';
 
-import { AuthenticationFailedError, RecordNotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
+import { AuthenticationFailedError, AuthenticationRequiredError, RecordNotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { hashString } from '@carocrm/core/utils/id.js';
 import { Inject, Injectable } from '@nestjs/common';
 import argon2 from 'argon2';
-import { jwtVerify,SignJWT } from 'jose';
+import { errors as joseErrors, type JWTPayload, jwtVerify, SignJWT } from 'jose';
 
 import type { AppConfig } from '../config.js';
 import { CONFIG_TOKEN } from '../config.js';
@@ -186,7 +186,20 @@ export class AuthService {
   }
 
   async verifyAccessToken(token: string): Promise<Record<string, string>> {
-    const { payload } = await jwtVerify(token, this.secretKey);
+    let payload: JWTPayload;
+    try {
+      ({ payload } = await jwtVerify(token, this.secretKey));
+    } catch (error) {
+      // `jwtVerify` signals every rejection — expiry, a forged signature, a malformed string — with
+      // its own error class. Left to propagate it reached the exception filter as an unknown error
+      // and answered **500**, which also meant the SPA's refresh-on-401 never ran: a session that had
+      // simply aged out looked to the person holding it like a server outage. An unusable access
+      // token is an authentication outcome, so it is reported as one.
+      if (error instanceof joseErrors.JWTExpired) {
+        throw new AuthenticationRequiredError('Access token has expired.');
+      }
+      throw new AuthenticationFailedError('Access token could not be verified.');
+    }
     if (payload.typ !== 'access') {
       throw new AuthenticationFailedError('Invalid token type.');
     }

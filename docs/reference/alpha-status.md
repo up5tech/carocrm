@@ -649,7 +649,7 @@ Verification actually run for this change (all against the configured database, 
   Navigation tab hid `Contact` from `GET /Navigation` while `/api/v1/Contact` kept answering 200, and
   un-hid it. The `navigation` document was reset afterwards.
 
-Two incidental repairs were needed to make the existing suite runnable, neither part of Phase 20:
+Three incidental repairs were made alongside this phase, none of them part of its scope:
 
 - `apps/api/test/module-test-app.ts` did not provide `I18nService`, so the throwaway root module it
   builds could not be instantiated and `attachments`, `attachments-storage` and `audit` killed the
@@ -658,3 +658,10 @@ Two incidental repairs were needed to make the existing suite runnable, neither 
   catalog service present — as it is in the real app — the filter localizes `error.message` and keeps
   the specific text in `error.details.reason`, so the helper now reads that field. The assertions
   themselves are unchanged.
+- **An expired access token answered 500.** `AuthService.verifyAccessToken` let jose's own error
+  classes escape, so `GlobalExceptionFilter` reported `INTERNAL_ERROR` — and because the SPA only
+  refreshes on 401, a session that had simply aged out looked like a server outage to whoever held
+  it. It now answers `401 AUTHENTICATION_REQUIRED` for an expired token (`details.reason` carries the
+  text) and `401 AUTHENTICATION_FAILED` for one that cannot be verified at all. Four cases in
+  `apps/api/test/auth.test.ts` pin it, and the browser confirms the recovery: `401 /AppUser/me` →
+  `201 /Refresh` → `200 /Navigation`, with no error toast.

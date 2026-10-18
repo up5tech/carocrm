@@ -282,3 +282,75 @@ describe('identity management', () => {
     expect(updated.json().permissions.Account.read).toBe('team');
   });
 });
+
+describe('access token verification failures', () => {
+  /**
+   * A token that no longer verifies is an authentication outcome, not a server fault. Before this
+   * was pinned down, `jwtVerify`'s own error class escaped to the exception filter and the API
+   * answered 500 — which also meant the SPA's refresh-on-401 never ran, so an expired session looked
+   * like an outage to whoever held the token.
+   */
+  async function signedToken(input: { expiresIn: number }): Promise<string> {
+    const { createHash } = await import('node:crypto');
+    const { SignJWT } = await import('jose');
+    const secret = new Uint8Array(createHash('sha256').update(ctx.config.jwtSecret).digest());
+    const now = Math.floor(Date.now() / 1000);
+    return new SignJWT({ typ: 'access', scope: 'user' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject('adminUserId')
+      .setIssuedAt(now + input.expiresIn - 60)
+      .setExpirationTime(now + input.expiresIn)
+      .sign(secret);
+  }
+
+  it('answers 401 when the access token has expired', async () => {
+    const expired = await signedToken({ expiresIn: -60 });
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/v1/AppUser/me',
+      headers: { authorization: `Bearer ${expired}` },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe('AUTHENTICATION_REQUIRED');
+  });
+
+  it('answers 401 for a token signed with a different secret', async () => {
+    const { createHash } = await import('node:crypto');
+    const { SignJWT } = await import('jose');
+    const wrong = new Uint8Array(createHash('sha256').update('not-the-instance-secret').digest());
+    const forged = await new SignJWT({ typ: 'access', scope: 'user' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject('adminUserId')
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(wrong);
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/v1/AppUser/me',
+      headers: { authorization: `Bearer ${forged}` },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe('AUTHENTICATION_FAILED');
+  });
+
+  it('answers 401 for a bearer token that is not a JWT at all', async () => {
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/v1/AppUser/me',
+      headers: { authorization: 'Bearer not-a-token' },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.code).toBe('AUTHENTICATION_FAILED');
+  });
+
+  it('still accepts a freshly issued token', async () => {
+    const valid = await signedToken({ expiresIn: 300 });
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/v1/AppUser/me',
+      headers: { authorization: `Bearer ${valid}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().userName).toBe('admin');
+  });
+});
