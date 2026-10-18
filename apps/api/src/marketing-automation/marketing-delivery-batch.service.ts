@@ -5,15 +5,14 @@ import { DatabaseService } from "../database/database.service.js";
 
 @Injectable()
 export class MarketingDeliveryBatchService {
-  constructor(@Inject(DatabaseService) private readonly db: any) {}
+  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
 
   /** Claim and return eligible recipient rows for the given send and slot. */
   async run(sendId: string, slot: number) {
     const now = new Date().toISOString();
 
     // Claim eligible rows: transition from Eligible/Queued to Sending
-    const claimed = await this.db.$executeQuery(
-      sql`
+    const claimed = await sql`
         update marketing_recipient_deliveries
         set state = 'Sending',
             error_code = null,
@@ -24,18 +23,16 @@ export class MarketingDeliveryBatchService {
           and state in ('Eligible', 'Queued')
         returning send_id, slot, entity_type, entity_id, email_hash, state, error_code, attempts
         limit 100
-      `
-    );
+      `.execute(this.database.db);
 
-    const claimedRows = (claimed as Record<string, unknown>[]);
+    const claimedRows = (claimed as { rows: Record<string, unknown>[] }).rows ?? [];
 
     if (!claimedRows || claimedRows.length === 0) {
       return { status: 'completed', message: 'No eligible recipients to claim', claimed: 0 };
     }
 
     // Mark the claimed rows as processed (the worker will update final state)
-    const requeued = await this.db.$executeQuery(
-      sql`
+    const requeued = await sql`
         update marketing_recipient_deliveries
         set state = 'Queued',
             updated_at = ${now}
@@ -53,10 +50,9 @@ export class MarketingDeliveryBatchService {
           )
         )
         and state = 'Sending'
-      `
-    );
+      `.execute(this.database.db);
 
-    const requeuedCount = Number((requeued as Record<string, unknown>).rowCount ?? 0);
+    const requeuedCount = Number((requeued as { numAffectedRows?: bigint }).numAffectedRows ?? 0n);
 
     return {
       status: 'completed',

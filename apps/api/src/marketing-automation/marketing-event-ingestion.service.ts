@@ -1,0 +1,282 @@
+import { randomUUID , timingSafeEqual } from "node:crypto";
+
+import { Inject, Injectable } from "@nestjs/common";
+import { sql } from "kysely";
+
+import { DatabaseService } from "../database/database.service.js";
+import { type SuppressionReason } from "./marketing-automation-domain.js";
+import { MarketingSuppressionService } from "./marketing-suppression.service.js";
+
+export type NormalizedMarketingEventType =
+  | "delivered"
+  | "soft_bounce"
+  | "hard_bounce"
+  | "complaint"
+  | "unsubscribed"
+  | "opened"
+  | "clicked"
+  | "rejected"
+  | "deferred"
+  | "provider_error";
+
+const EVENT_TYPE_MAP: Record<string, NormalizedMarketingEventType> = {
+  delivered: "delivered",
+  delivery: "delivered",
+  bounce: "hard_bounce",
+  hard_bounce: "hard_bounce",
+  hardbounce: "hard_bounce",
+  soft_bounce: "soft_bounce",
+  softbounce: "soft_bounce",
+  complaint: "complaint",
+  spam_complaint: "complaint",
+  unsubscribe: "unsubscribed",
+  unsubscribed: "unsubscribed",
+  open: "opened",
+  opened: "opened",
+  click: "clicked",
+  clicked: "clicked",
+  rejected: "rejected",
+  deferred: "deferred",
+  error: "provider_error",
+};
+
+function normalizeEventType(raw: string): NormalizedMarketingEventType {
+  const key = raw.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return EVENT_TYPE_MAP[key] ?? "provider_error";
+}
+
+export interface WebhookIngestInput {
+  readonly provider: string;
+  readonly signature: string | undefined;
+  readonly timestamp: string | undefined;
+  readonly secret: string | undefined;
+  readonly payload: Record<string, unknown>;
+}
+
+export interface WebhookIngestResult {
+  readonly inboxId: string;
+  readonly duplicate: boolean;
+  readonly normalizedType: NormalizedMarketingEventType;
+  readonly processingStatus: string;
+}
+
+@Injectable()
+export class MarketingEventIngestionService {
+  constructor(
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(MarketingSuppressionService) private readonly suppression: MarketingSuppressionService,
+  ) {}
+
+  verifySignature(provided: string | undefined, expected: string | undefined): boolean {
+    if (provided === undefined || expected === undefined) return false;
+    const a = Buffer.from(provided);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length) return false;
+    try {
+      return timingSafeEqual(a, b);
+    } catch {
+      return false;
+    }
+  }
+
+  async ingest(input: WebhookIngestInput): Promise<WebhookIngestResult> {
+    const payload = input.payload ?? {};
+    const providerEventId = stringField(payload, "eventId") ?? stringField(payload, "id") ?? null;
+    const eventTypeRaw = stringField(payload, "type") ?? stringField(payload, "eventType") ?? "provider_error";
+    const normalized = normalizeEventType(eventTypeRaw);
+    const providerMessageId =
+      stringField(payload, "providerMessageId") ??
+      stringField(payload, "messageId") ??
+      null;
+    const campaignId = stringField(payload, "campaignId") ?? null;
+    const sendId = stringField(payload, "sendId") ?? null;
+    const slot = numberField(payload, "slot");
+    const recipientEntityType = stringField(payload, "recipientEntityType") ?? stringField(payload, "entityType") ?? null;
+    const recipientEntityId = stringField(payload, "recipientEntityId") ?? stringField(payload, "entityId") ?? null;
+    const emailHash = stringField(payload, "emailHash") ?? null;
+    const occurredAt = stringField(payload, "occurredAt") ?? null;
+    const url = stringField(payload, "url") ?? null;
+
+    const dedupKey =
+      providerEventId !== null
+        ? providerEventId
+        : `${eventTypeRaw}:${providerMessageId ?? ""}:${recipientEntityId ?? ""}:${occurredAt ?? ""}`;
+
+    const now = new Date();
+    if (input.timestamp !== undefined) {
+      const ts = Date.parse(input.timestamp);
+      if (!Number.isNaN(ts) && Math.abs(now.getTime() - ts) > 5 * 60 * 1000) {
+        throw new Error("Webhook timestamp outside replay window.");
+      }
+    }
+
+    const existing = await sql<{ id: string; processing_status: string; normalized_event_type: string | null }>`
+      select id, processing_status, normalized_event_type
+      from marketing_provider_webhook_inbox
+      where provider = ${input.provider} and dedup_key = ${dedupKey}
+      limit 1
+    `.execute(this.database.db);
+    const found = existing.rows[0];
+    if (found !== undefined) {
+      return {
+        inboxId: found.id,
+        duplicate: true,
+        normalizedType: (found.normalized_event_type as NormalizedMarketingEventType) ?? normalized,
+        processingStatus: found.processing_status,
+      };
+    }
+
+    const inboxId = randomUUID();
+    const signatureValid = this.verifySignature(input.signature, input.secret);
+
+    if (!signatureValid) {
+      await sql`
+        insert into marketing_provider_webhook_inbox
+          (id, provider, provider_event_id, dedup_key, event_type, signature_valid,
+           processing_status, failure_reason, normalized_event_type)
+        values
+          (${inboxId}, ${input.provider}, ${providerEventId}, ${dedupKey}, ${eventTypeRaw},
+           false, 'rejected', 'INVALID_SIGNATURE', ${normalized})
+      `.execute(this.database.db);
+      return {
+        inboxId,
+        duplicate: false,
+        normalizedType: normalized,
+        processingStatus: "rejected",
+      };
+    }
+
+    await sql`
+      insert into marketing_provider_webhook_inbox
+        (id, provider, provider_event_id, dedup_key, event_type, signature_valid,
+         processing_status, normalized_event_type, campaign_id, send_id,
+         provider_message_id, recipient_entity_type, recipient_entity_id, raw_summary)
+      values
+        (${inboxId}, ${input.provider}, ${providerEventId}, ${dedupKey}, ${eventTypeRaw},
+         true, 'processing', ${normalized}, ${campaignId}, ${sendId},
+         ${providerMessageId}, ${recipientEntityType}, ${recipientEntityId},
+         ${JSON.stringify(redactPayload(payload))}::jsonb)
+    `.execute(this.database.db);
+
+    const eventId = randomUUID();
+    await sql`
+      insert into marketing_events
+        (id, inbox_id, provider, provider_event_id, event_type, normalized_type,
+         occurred_at, campaign_id, send_id, slot, provider_message_id,
+         recipient_entity_type, recipient_entity_id, email_hash, url, properties)
+      values
+        (${eventId}, ${inboxId}, ${input.provider}, ${providerEventId}, ${eventTypeRaw}, ${normalized},
+         ${occurredAt}, ${campaignId}, ${sendId}, ${slot}, ${providerMessageId},
+         ${recipientEntityType}, ${recipientEntityId}, ${emailHash}, ${url},
+         ${JSON.stringify({})}::jsonb)
+      on conflict (inbox_id) do nothing
+    `.execute(this.database.db);
+
+    await this.applySideEffects(normalized, {
+      provider: input.provider,
+      providerMessageId,
+      recipientEntityType,
+      recipientEntityId,
+      emailHash,
+      sendId,
+      slot: slot ?? 1,
+    });
+
+    await sql`
+      update marketing_provider_webhook_inbox
+      set processing_status = 'processed', processed_at = now()
+      where id = ${inboxId}
+    `.execute(this.database.db);
+
+    return {
+      inboxId,
+      duplicate: false,
+      normalizedType: normalized,
+      processingStatus: "processed",
+    };
+  }
+
+  private async applySideEffects(
+    normalized: NormalizedMarketingEventType,
+    ctx: {
+      provider: string;
+      providerMessageId: string | null;
+      recipientEntityType: string | null;
+      recipientEntityId: string | null;
+      emailHash: string | null;
+      sendId: string | null;
+      slot: number;
+    },
+  ): Promise<void> {
+    if (ctx.sendId !== null && ctx.recipientEntityType !== null && ctx.recipientEntityId !== null) {
+      const stateMap: Partial<Record<NormalizedMarketingEventType, string>> = {
+        delivered: "Delivered",
+        hard_bounce: "Bounced",
+        complaint: "Complained",
+        unsubscribed: "Unsubscribed",
+      };
+      const target = stateMap[normalized];
+      if (target !== undefined) {
+        await sql`
+          update marketing_recipient_deliveries
+          set state = ${target},
+              updated_at = now()
+          where send_id = ${ctx.sendId}
+            and slot = ${ctx.slot}
+            and entity_type = ${ctx.recipientEntityType}
+            and entity_id = ${ctx.recipientEntityId}
+            and state in ('Sent', 'Sending', 'Delivered', 'Bounced', 'Complained')
+            and not (state = 'Bounced' and ${target} = 'Delivered')
+        `.execute(this.database.db);
+      }
+    }
+
+    if (normalized === "hard_bounce" || normalized === "complaint" || normalized === "unsubscribed") {
+      const reason =
+        normalized === "hard_bounce"
+          ? "HardBounce"
+          : normalized === "complaint"
+            ? "Complaint"
+            : "GlobalOptOut";
+      const emailHash = ctx.emailHash;
+      if (emailHash !== null) {
+        try {
+          await this.suppression.add({
+            emailHash,
+            scope: "Global",
+            reason: reason as SuppressionReason,
+            source: "ProviderWebhook",
+            provider: ctx.provider,
+          });
+        } catch {
+          // Best-effort.
+        }
+      }
+    }
+  }
+}
+
+function stringField(payload: Record<string, unknown>, key: string): string | null {
+  const v = payload[key];
+  if (typeof v === "string" && v.trim() !== "") return v.trim();
+  return null;
+}
+
+function numberField(payload: Record<string, unknown>, key: string): number | null {
+  const v = payload[key];
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function redactPayload(payload: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (/secret|token|password|signature/i.test(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}

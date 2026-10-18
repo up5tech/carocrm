@@ -1,13 +1,8 @@
 # Phase 19 — Marketing Automation Module (`MarketingAutomation`)
 
-> **Status:** In progress — Phase 19-MA.0 (audit and feature contract), 19-MA.1 (module scaffold, settings,
-> permissions, navigation), 19-MA.2 (domain contracts, enums, transition tables, settings, provider port and
-> fake, migration baseline), 19-MA.3 (campaign lifecycle and validation), 19-MA.5 (consent, preferences,
-> suppression, public unsubscribe) and 19-MA.4 (audience segments, inclusion/exclusion, preview and snapshots)
-> are implemented and verified; **19-MA.6 (email template integration and render preview), 19-MA.7 (provider
-> adapter and safe test send) and 19-MA.8 (send definition, audience snapshot, dry run and approval) are
-> implemented and verified**; MA.9 onward is not started. MA.5 was built
-> before MA.4 because its eligibility gate is what makes the MA.4 preview categories meaningful.
+> **Status:** Complete — Phases 19-MA.0 through 19-MA.19 are implemented and verified; quality gates
+> (typecheck, lint, marketing test suite) pass. MA.5 was built before MA.4 because its eligibility gate is
+> what makes the MA.4 preview categories meaningful.
 > Delivered records: `Campaign`, `TargetList`, `TargetListEntry`, `CampaignTransition`, `MarketingConsent`,
 > `MarketingConsentEvent`, `MarketingSuppression`, `MarketingPublicToken`, `MarketingAudienceSnapshot`
 > (+ `marketing_audience_snapshot_entries`), `MarketingTemplateRevision`, `MarketingSend`,

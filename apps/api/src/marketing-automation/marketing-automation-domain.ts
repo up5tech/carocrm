@@ -56,6 +56,10 @@ export const MARKETING_TEMPLATE_REVISION_ENTITY = "MarketingTemplateRevision";
 export const MARKETING_SEND_ENTITY = "MarketingSend";
 /** Append-only send lifecycle history, the exact counterpart of `CampaignTransition` for a send. */
 export const MARKETING_SEND_TRANSITION_ENTITY = "MarketingSendTransition";
+export const MARKETING_JOURNEY_ENTITY = "MarketingJourney";
+export const MARKETING_JOURNEY_VERSION_ENTITY = "MarketingJourneyVersion";
+export const MARKETING_JOURNEY_ENROLLMENT_ENTITY = "MarketingJourneyEnrollment";
+export const MARKETING_JOURNEY_STEP_ENTITY = "MarketingJourneyStepExecution";
 
 /** The bulk per-recipient ledger (audit §3 `MarketingRecipientDelivery`), a table, not a metadata record. */
 export const MARKETING_RECIPIENT_DELIVERIES_TABLE = "marketing_recipient_deliveries";
@@ -73,6 +77,10 @@ export const MARKETING_AUTOMATION_ENTITY_TYPES = [
   MARKETING_TEMPLATE_REVISION_ENTITY,
   MARKETING_SEND_ENTITY,
   MARKETING_SEND_TRANSITION_ENTITY,
+  MARKETING_JOURNEY_ENTITY,
+  MARKETING_JOURNEY_VERSION_ENTITY,
+  MARKETING_JOURNEY_ENROLLMENT_ENTITY,
+  MARKETING_JOURNEY_STEP_ENTITY,
 ] as const;
 export type MarketingAutomationEntityType = (typeof MARKETING_AUTOMATION_ENTITY_TYPES)[number];
 

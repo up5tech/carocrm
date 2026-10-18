@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   Inject,
   Param,
@@ -43,14 +44,24 @@ import {
   SuppressionRevokeSchema,
   TestSendSchema,
 } from "./dto/marketing-automation-shapes.js";
+import { MarketingAttributionService } from "./marketing-attribution.service.js";
 import { MarketingAudienceService } from "./marketing-audience.service.js";
 import { MarketingAutomationModuleHealthService } from "./marketing-automation-module-health.service.js";
 import { MarketingAutomationNavigationService } from "./marketing-automation-navigation.service.js";
 import { MarketingAutomationSettingsService } from "./marketing-automation-settings.service.js";
 import { MarketingCampaignService } from "./marketing-campaign.service.js";
+import { MarketingCampaignLogService } from "./marketing-campaign-log.service.js";
 import { MarketingConsentService } from "./marketing-consent.service.js";
 import { MarketingDeliveryBatchService } from "./marketing-delivery-batch.service.js";
+import { MarketingEventIngestionService } from "./marketing-event-ingestion.service.js";
+import { MarketingFormService } from "./marketing-form.service.js";
+import { MarketingIntegrationService } from "./marketing-integration.service.js";
+import { MarketingJourneyDefinitionService } from "./marketing-journey-definition.service.js";
+import { MarketingJourneyRuntimeService } from "./marketing-journey-runtime.service.js";
+import { MarketingJourneyTriggerService } from "./marketing-journey-trigger.service.js";
+import { MarketingOperationsService } from "./marketing-operations.service.js";
 import { MarketingPublicTokenService } from "./marketing-public-token.service.js";
+import { MarketingRetentionService } from "./marketing-retention.service.js";
 import { MarketingSendService } from "./marketing-send.service.js";
 import { MarketingSuppressionService } from "./marketing-suppression.service.js";
 import { MarketingTemplateService } from "./marketing-template.service.js";
@@ -85,7 +96,17 @@ export class MarketingAutomationController {
     @Inject(MarketingTemplateService) private readonly templates: MarketingTemplateService,
     @Inject(MarketingTestSendService) private readonly testSends: MarketingTestSendService,
     @Inject(MarketingSendService) private readonly sends: MarketingSendService,
+    @Inject(MarketingCampaignLogService) private readonly campaignLogs: MarketingCampaignLogService,
+    @Inject(MarketingJourneyDefinitionService) private readonly journeys: MarketingJourneyDefinitionService,
+    @Inject(MarketingJourneyRuntimeService) private readonly journeyRuntime: MarketingJourneyRuntimeService,
+    @Inject(MarketingJourneyTriggerService) private readonly journeyTriggers: MarketingJourneyTriggerService,
+    @Inject(MarketingFormService) private readonly forms: MarketingFormService,
+    @Inject(MarketingIntegrationService) private readonly integration: MarketingIntegrationService,
+    @Inject(MarketingAttributionService) private readonly attribution: MarketingAttributionService,
+    @Inject(MarketingRetentionService) private readonly retention: MarketingRetentionService,
+    @Inject(MarketingOperationsService) private readonly operations: MarketingOperationsService,
     @Inject(MarketingDeliveryBatchService) private readonly deliveryBatch: MarketingDeliveryBatchService,
+    @Inject(MarketingEventIngestionService) private readonly eventIngestion: MarketingEventIngestionService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -144,6 +165,24 @@ export class MarketingAutomationController {
   @Get("action/campaign/:id/history")
   async campaignHistory(@Param("id") id: string) {
     return this.campaigns.history(id);
+  }
+
+  /** Campaign event log (MA.11): normalized provider events with filters. */
+  @Get("action/campaign/:id/log")
+  async campaignLog(@Param("id") id: string, @Query() query: unknown) {
+    const q = typeof query === "object" && query !== null ? (query as Record<string, unknown>) : {};
+    return this.campaignLogs.log({
+      campaignId: id,
+      ...(typeof q["type"] === "string" ? { normalizedType: q["type"] } : {}),
+      ...(q["limit"] !== undefined ? { limit: Number(q["limit"]) } : {}),
+      ...(q["offset"] !== undefined ? { offset: Number(q["offset"]) } : {}),
+    });
+  }
+
+  /** Campaign statistics (MA.11): counts by normalized event type, with as-of timestamp. */
+  @Get("action/campaign/:id/stats")
+  async campaignStats(@Param("id") id: string) {
+    return this.campaignLogs.stats(id);
   }
 
   /**
@@ -593,6 +632,265 @@ export class MarketingAutomationController {
     return this.links.confirmOptIn(token);
   }
 
+  @Public()
+  @HttpCode(200)
+  @Post("webhook/:providerKey")
+  async providerWebhook(
+    @Param("providerKey") providerKey: string,
+    @Body() body: unknown,
+    @Headers("x-webhook-signature") signature?: string,
+    @Headers("x-webhook-timestamp") timestamp?: string,
+  ) {
+    const secret = process.env.MARKETING_WEBHOOK_SECRET ?? "dev-marketing-webhook-secret";
+    return this.eventIngestion.ingest({
+      provider: providerKey,
+      signature,
+      timestamp,
+      secret,
+      payload: (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>,
+    });
+  }
+
+  @Public()
+  @HttpCode(200)
+  @Post("webhooks/:providerKey")
+  async providerWebhooksAlias(
+    @Param("providerKey") providerKey: string,
+    @Body() body: unknown,
+    @Headers("x-webhook-signature") signature?: string,
+    @Headers("x-webhook-timestamp") timestamp?: string,
+  ) {
+    return this.providerWebhook(providerKey, body, signature, timestamp);
+  }
+
+  @HttpCode(200)
+  @Post("action/journey/:id/validate")
+  async journeyValidate(@Param("id") _id: string, @Body() body: unknown) {
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    const graph = b["graph"] ?? b;
+    return this.journeys.validate(graph);
+  }
+
+  @HttpCode(200)
+  @Post("action/journey/:id/publish")
+  async journeyPublish(@Param("id") id: string, @Body() body: unknown) {
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    const graph = b["graph"] ?? b;
+    const releaseNotes = typeof b["releaseNotes"] === "string" ? b["releaseNotes"] : undefined;
+    return this.journeys.publish(id, graph, releaseNotes, this.scope.userId);
+  }
+
+  @HttpCode(200)
+  @Post("action/journey/:id/enroll")
+  async journeyEnroll(@Param("id") id: string, @Body() body: unknown) {
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    const versionId = typeof b.versionId === "string" ? b.versionId : null;
+    const version = Number(b.version ?? 1);
+    const graph = b.graph;
+    const dedupeKey = typeof b.dedupeKey === "string" ? b.dedupeKey : crypto.randomUUID();
+    if (graph === undefined) throw new Error("Enrollment needs the journey graph.");
+    return this.journeyRuntime.enroll({
+      journeyId: id,
+      versionId: versionId ?? "",
+      version,
+      graph: graph as never,
+      ...(typeof b.personType === "string" ? { personType: b.personType } : {}),
+      ...(typeof b.personId === "string" ? { personId: b.personId } : {}),
+      ...(typeof b.emailHash === "string" ? { emailHash: b.emailHash } : {}),
+      source: typeof b.source === "string" ? b.source : "Manual",
+      dedupeKey,
+    });
+  }
+
+  @HttpCode(200)
+  @Post("action/journey/run-batch")
+  async journeyRunBatch(@Body() body: unknown) {
+    this.requireAdmin("running the journey engine");
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    const limit = Number(b.limit ?? 25);
+    const now = new Date().toISOString();
+    const due = await this.journeyRuntime.dueEnrollments(now, limit);
+    const results: unknown[] = [];
+    for (const item of due) {
+      const enrollment = await this.journeyRuntime.claim(item.id, now);
+      if (enrollment === undefined) continue;
+      const versionRow = item.versionId ? await this.journeyRuntime.versionGraph(item.versionId) : undefined;
+      if (versionRow === undefined) {
+        results.push({ enrollmentId: item.id, outcome: "failed", reason: "missing-version" });
+        continue;
+      }
+      results.push(await this.journeyRuntime.runStep(item.id, versionRow));
+    }
+    return { ran: results.length, results };
+  }
+
+  @HttpCode(200)
+  @Post("action/enrollment/:id/suspend")
+  async enrollmentSuspend(@Param("id") id: string, @Body() body: unknown) {
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    const reason = typeof b.reason === "string" ? b.reason : "OperatorSuspend";
+    await this.journeyRuntime.suspend(id, reason);
+    return { id, state: "Suspended", reason };
+  }
+
+  @HttpCode(200)
+  @Post("action/enrollment/:id/resume")
+  async enrollmentResume(@Param("id") id: string) {
+    await this.journeyRuntime.resume(id);
+    return { id, state: "Active" };
+  }
+
+  @HttpCode(200)
+  @Post("action/enrollment/:id/exit")
+  async enrollmentExit(@Param("id") id: string, @Body() body: unknown) {
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    const reason = typeof b.reason === "string" ? b.reason : "OperatorExit";
+    await this.journeyRuntime.exit(id, reason, new Date().toISOString());
+    return { id, state: "Exited", reason };
+  }
+
+  /** Evaluate a whitelisted CRM event against a journey (worker/channel entry, §15 MA.14). */
+  @Public()
+  @HttpCode(200)
+  @Post("action/journey/:id/trigger")
+  async journeyTrigger(@Param("id") id: string, @Body() body: unknown) {
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    return this.journeyTriggers.trigger({
+      journeyId: id,
+      eventType: typeof b.eventType === "string" ? b.eventType : "",
+      ...(typeof b.entityType === "string" ? { entityType: b.entityType } : {}),
+      ...(typeof b.entityId === "string" ? { entityId: b.entityId } : {}),
+      ...(typeof b.depth === "number" ? { depth: b.depth } : {}),
+      ...(typeof b.correlationId === "string" ? { correlationId: b.correlationId } : {}),
+    });
+  }
+
+  @Public()
+  @HttpCode(200)
+  @Post("public/form/submit")
+  async publicFormSubmit(@Body() body: unknown) {
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    return this.forms.submit({
+      ...(typeof b.firstName === "string" ? { firstName: b.firstName } : {}),
+      ...(typeof b.lastName === "string" ? { lastName: b.lastName } : {}),
+      email: typeof b.email === "string" ? b.email : "",
+      ...(typeof b.company === "string" ? { company: b.company } : {}),
+      consent: b.consent === true,
+      ...(typeof b.campaignId === "string" ? { campaignId: b.campaignId } : {}),
+      ...(typeof b.journeyId === "string" ? { journeyId: b.journeyId } : {}),
+      ...(typeof b.journeyVersionId === "string" ? { journeyVersionId: b.journeyVersionId } : {}),
+      ...(typeof b.source === "string" ? { source: b.source } : {}),
+      ...(typeof b.utmSource === "string" ? { utmSource: b.utmSource } : {}),
+      ...(typeof b.utmMedium === "string" ? { utmMedium: b.utmMedium } : {}),
+      ...(typeof b.utmCampaign === "string" ? { utmCampaign: b.utmCampaign } : {}),
+      ...(typeof b.idempotencyKey === "string" ? { idempotencyKey: b.idempotencyKey } : {}),
+      ...(typeof b.website === "string" ? { honeypot: b.website } : {}),
+    });
+  }
+
+  @HttpCode(200)
+  @Post("action/attribution")
+  async recordAttribution(@Body() body: unknown) {
+    this.requireAdmin("recording attribution");
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    return this.integration.recordAttribution({
+      ...(typeof b.campaignId === "string" ? { campaignId: b.campaignId } : {}),
+      ...(typeof b.sendId === "string" ? { sendId: b.sendId } : {}),
+      ...(typeof b.journeyId === "string" ? { journeyId: b.journeyId } : {}),
+      outcome: typeof b.outcome === "string" ? b.outcome : "converted",
+      ...(typeof b.referenceType === "string" ? { referenceType: b.referenceType } : {}),
+      ...(typeof b.referenceId === "string" ? { referenceId: b.referenceId } : {}),
+      ...(typeof b.correlationId === "string" ? { correlationId: b.correlationId } : {}),
+    });
+  }
+
+  @HttpCode(200)
+  @Post("action/portal/preferences")
+  async portalPreferences(@Body() body: unknown) {
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    return this.integration.portalPreferenceUpdate({
+      consent: b.consent === true,
+      ...(typeof b.purpose === "string" ? { purpose: b.purpose } : {}),
+    });
+  }
+
+  @HttpCode(200)
+  @Post("action/crossModuleEvent")
+  async crossModuleEvent(@Body() body: unknown) {
+    this.requireAdmin("processing cross-module events");
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    return this.integration.handleCrossModuleEvent({
+      eventType: typeof b.eventType === "string" ? b.eventType : "",
+      sourceModule: typeof b.sourceModule === "string" ? b.sourceModule : "unknown",
+      ...(typeof b.entityType === "string" ? { entityType: b.entityType } : {}),
+      ...(typeof b.entityId === "string" ? { entityId: b.entityId } : {}),
+      ...(typeof b.emailHash === "string" ? { emailHash: b.emailHash } : {}),
+      ...(b.payload && typeof b.payload === "object" ? { payload: b.payload as Record<string, unknown> } : {}),
+      ...(typeof b.causationDepth === "number" ? { causationDepth: b.causationDepth } : {}),
+      ...(typeof b.correlationId === "string" ? { correlationId: b.correlationId } : {}),
+    });
+  }
+
+  @HttpCode(200)
+  @Get("action/campaign/:id/attribution")
+  async campaignAttribution(@Param("id") id: string, @Query() query: unknown) {
+    const q = typeof query === "object" && query !== null ? (query as Record<string, unknown>) : {};
+    const model = typeof q["model"] === "string" ? (q["model"] as "first_touch" | "last_touch" | "influenced") : "influenced";
+    return this.attribution.attribution(id, model);
+  }
+
+  @HttpCode(200)
+  @Get("action/campaign/:id/funnel")
+  async campaignFunnel(@Param("id") id: string) {
+    return this.attribution.funnel(id);
+  }
+
+  @HttpCode(200)
+  @Post("action/retention/dryRun")
+  async retentionDryRun(@Body() body: unknown) {
+    this.requireAdmin("running retention dry-run");
+    const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+    const days = Number(b.olderThanDays ?? 365);
+    return this.retention.dryRun(days);
+  }
+
+  @Get("action/diagnostics")
+  async diagnostics() {
+    this.requireAdmin("reading marketing diagnostics");
+    return this.operations.diagnostics();
+  }
+
+
+  @Public()
+  @Get("public/click")
+  async publicClick(@Query("to") to?: string) {
+    const target = typeof to === "string" ? to : "";
+    // Open-redirect guard: only http(s) URLs with an explicit host, or same-origin relative paths.
+    let safe = "";
+    try {
+      if (target.startsWith("/")) {
+        safe = target;
+      } else {
+        const u = new URL(target);
+        if (u.protocol === "http:" || u.protocol === "https:") {
+          safe = u.toString();
+        }
+      }
+    } catch {
+      safe = "";
+    }
+    if (safe === "") {
+      throw new Error("Invalid redirect target.");
+    }
+    // Express/Nest redirect via a 302 header is not available on @Get returning JSON; return the safe target.
+    return { redirect: safe };
+  }
+
+  @Public()
+  @Get("public/open")
+  async publicOpen() {
+    return { ok: true };
+  }
   private requireAdmin(action: string): void {
     if (!this.scope.isAdmin) {
       throw new AuthorizationDeniedError(`Administrator access is required for ${action}.`);

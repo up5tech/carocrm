@@ -1,5 +1,6 @@
 import type { Provider, Type } from "@nestjs/common";
 
+import { MarketingAttributionService } from "./marketing-attribution.service.js";
 import { MarketingAudienceService } from "./marketing-audience.service.js";
 import { MarketingAutomationController } from "./marketing-automation.controller.js";
 import { MarketingAutomationModuleHealthService } from "./marketing-automation-module-health.service.js";
@@ -9,14 +10,24 @@ import { MarketingAutomationRecords } from "./marketing-automation-records.js";
 import { MarketingAutomationSettingsService } from "./marketing-automation-settings.service.js";
 import { MarketingAutomationWriteGuardService } from "./marketing-automation-write-guard.service.js";
 import { MarketingCampaignService } from "./marketing-campaign.service.js";
+import { MarketingCampaignLogService } from "./marketing-campaign-log.service.js";
 import { MarketingCampaignValidationService } from "./marketing-campaign-validation.service.js";
 import { MarketingConsentService } from "./marketing-consent.service.js";
 import { MarketingDeliveryBatchService } from "./marketing-delivery-batch.service.js";
 import { MarketingDeliveryLedger } from "./marketing-delivery-ledger.js";
 import { MarketingEligibilityService } from "./marketing-eligibility.service.js";
+import { MarketingEventIngestionService } from "./marketing-event-ingestion.service.js";
+import { MarketingFormService } from "./marketing-form.service.js";
+import { MarketingIntegrationService } from "./marketing-integration.service.js";
+import { MarketingJourneyActionService } from "./marketing-journey-action.service.js";
+import { MarketingJourneyDefinitionService } from "./marketing-journey-definition.service.js";
+import { MarketingJourneyRuntimeService } from "./marketing-journey-runtime.service.js";
+import { MarketingJourneyTriggerService } from "./marketing-journey-trigger.service.js";
+import { MarketingOperationsService } from "./marketing-operations.service.js";
 import { MarketingProviderBindingService } from "./marketing-provider-binding.service.js";
 import { MarketingProviderLimiter } from "./marketing-provider-limiter.js";
 import { MarketingPublicTokenService } from "./marketing-public-token.service.js";
+import { MarketingRetentionService } from "./marketing-retention.service.js";
 import { MarketingSendService } from "./marketing-send.service.js";
 import { MarketingSuppressionService } from "./marketing-suppression.service.js";
 import { MarketingTemplateService } from "./marketing-template.service.js";
@@ -56,13 +67,24 @@ export const MARKETING_AUTOMATION_PROVIDERS: Provider[] = [
   MarketingConsentService,
   MarketingSuppressionService,
   MarketingEligibilityService,
+  MarketingJourneyDefinitionService,
+  MarketingJourneyActionService,
+  MarketingJourneyRuntimeService,
+  MarketingJourneyTriggerService,
+  MarketingFormService,
+  MarketingIntegrationService,
+  MarketingAttributionService,
+  MarketingRetentionService,
+  MarketingOperationsService,
   MarketingPublicTokenService,
   MarketingAudienceService,
   MarketingCampaignService,
+  MarketingCampaignLogService,
   // MA.8: the delivery ledger is the send service's storage — one row per resolved recipient — and the send
   // service itself owns the definition, the dry run, the approval and the transitions.
   MarketingDeliveryLedger,
   MarketingDeliveryBatchService,
+  MarketingEventIngestionService,
   MarketingSendService,
   MarketingTestSendService,
   MarketingAutomationModuleHealthService,
