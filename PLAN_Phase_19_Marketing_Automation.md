@@ -1,7 +1,15 @@
 # Phase 19 — Marketing Automation Module (`MarketingAutomation`)
 
 > **Status:** Complete — Phases 19-MA.0 through 19-MA.19 are implemented and verified; quality gates
-> (typecheck, lint, marketing test suite) pass. MA.5 was built before MA.4 because its eligibility gate is
+> (typecheck, lint, marketing test suite) pass. **Completion report with the evidence:**
+> `docs/implementation/marketing-automation-completion-report.md` (13 suites / 225 tests, migrations 037–043,
+> the defects found while closing the phase, settings inventory and known limitations).
+> A final hardening round (19-MA.19) fixed eight defects that only the missing tests could reveal — a webhook
+> event insert that could never succeed (partial-index `ON CONFLICT`), a journey runtime writing a
+> non-existent `updated_at` column, a claim that did not exclude a concurrent worker, a hard-coded webhook
+> secret fallback, suppression feedback that ran without an identity, an unauthenticated journey trigger, an
+> open redirect in `public/click`, and a public form that disclosed CRM record existence. See the report §3.
+> MA.5 was built before MA.4 because its eligibility gate is
 > what makes the MA.4 preview categories meaningful.
 > Delivered records: `Campaign`, `TargetList`, `TargetListEntry`, `CampaignTransition`, `MarketingConsent`,
 > `MarketingConsentEvent`, `MarketingSuppression`, `MarketingPublicToken`, `MarketingAudienceSnapshot`
@@ -25,8 +33,13 @@
 > `docs/marketing-automation/consent-and-suppression.md`; placeholders, render safety and revisions:
 > `docs/marketing-automation/email-templates.md`; adapters, limits, error classes and test send:
 > `docs/marketing-automation/provider-adapters.md`; send definition, dry run and approval:
-> `docs/marketing-automation/send-definitions.md`; operations:
-> `docs/runbooks/marketing-send-operations.md`.
+> `docs/marketing-automation/send-definitions.md`; journey graph, versions, enrollment and recovery:
+> `docs/marketing-automation/journey-runtime.md`; metric definitions, event semantics and attribution:
+> `docs/marketing-automation/metrics.md`; public surface, tokens, retention and privacy limits:
+> `docs/marketing-automation/security-and-privacy.md`; cross-module contracts:
+> `docs/marketing-automation/integration.md`; operations:
+> `docs/runbooks/marketing-send-operations.md`; incidents:
+> `docs/runbooks/marketing-provider-incidents.md`.
 > **Parent roadmap:** `PLAN.md` — CRM advanced domains / Marketing Automation  
 > **Module name:** `MarketingAutomation` (**do not add a `Ua` prefix**)  
 > **Module key / slug:** `marketing-automation` (follow repository conventions if they differ)  
@@ -1594,24 +1607,24 @@ Implement in the order below. Each sub-phase needs its own review and acceptance
 
 MarketingAutomation is not complete until all of the following are true:
 
-- [ ] Module key, class names, navigation and documentation use `MarketingAutomation` / `marketing-automation`; no `Ua` prefix was added.
-- [ ] The repository audit confirms canonical ownership and no duplicate Campaign, TargetList, Email, Template, Consent, Job or Workflow system was created unnecessarily.
-- [ ] Campaign lifecycle, recipient eligibility and send preview are validated on the server.
-- [ ] Audience criteria are safe, ACL-aware, explainable and stable for a specific send snapshot.
-- [ ] Consent, opt-out, suppression, hard bounce, complaint and unknown-consent policies are centralized and enforced before every marketing send.
-- [ ] Unsubscribe and preference endpoints are secure, idempotent, rate-limited and do not leak whether arbitrary people exist in the CRM.
-- [ ] Email templates render safely, are previewable and retain an immutable revision/content hash for actual sends as required.
-- [ ] Sending uses the shared provider interface, bounded batch/rate limits, durable delivery state, retries and no-duplicate safeguards.
-- [ ] Provider webhooks are verified, deduplicated and safe under retries/out-of-order events.
-- [ ] Journey graph validation, immutable published versions, idempotent enrollment, durable waits, safe conditions and execution traces are complete for the supported node set.
-- [ ] Optional integrations with Portal, Sales, CustomerSuccess and ServiceDesk use explicit contracts and do not silently create hard dependencies.
-- [ ] Reporting defines metrics and denominators, distinguishes delivery/engagement/conversion and applies ACL to drill-downs.
-- [ ] Public forms, if included, have server-side schema validation, anti-abuse controls, dedupe and explicit consent handling.
-- [ ] Migrations are version-controlled, reviewed and additive unless destructive changes receive explicit task-specific approval.
-- [ ] Tests use the existing configured database where database integration is needed and do not create test databases, schemas or containers.
-- [ ] Automated tests use fake/sandbox providers and do not send actual marketing messages.
-- [ ] `AGENTS.MD`, OpenAPI, compatibility notes and operational runbooks are followed/updated as applicable.
-- [ ] The final implementation report lists changed areas, tests run, migration effects, feature flags/settings and known limitations.
+- [x] Module key, class names, navigation and documentation use `MarketingAutomation` / `marketing-automation`; no `Ua` prefix was added. — `MARKETING_AUTOMATION_MODULE` (`marketing-automation-module.ts`), `@Controller("api/v1/MarketingAutomation")`, settings row `marketingAutomation`.
+- [x] The repository audit confirms canonical ownership and no duplicate Campaign, TargetList, Email, Template, Consent, Job or Workflow system was created unnecessarily. — audit §2–§3; the module owns no mail transport, queue, scheduler or expression language.
+- [x] Campaign lifecycle, recipient eligibility and send preview are validated on the server. — `marketing-automation.test.ts` (26), `marketing-automation-send.test.ts` (15).
+- [x] Audience criteria are safe, ACL-aware, explainable and stable for a specific send snapshot. — `marketing-automation-audience.test.ts` (16), `…-audience-domain.test.ts` (22).
+- [x] Consent, opt-out, suppression, hard bounce, complaint and unknown-consent policies are centralized and enforced before every marketing send. — `marketing-automation-consent.test.ts` (16), `…-delivery.test.ts` (global unsubscribe blocks the final step), `…-events.test.ts` (bounce/complaint/unsubscribe feedback).
+- [x] Unsubscribe and preference endpoints are secure, idempotent, rate-limited and do not leak whether arbitrary people exist in the CRM. — `marketing-automation-consent.test.ts`; one generic failure message, hashed tokens, 25-attempt budget. Rate limiting is the platform's global limiter (see §17 caveat).
+- [x] Email templates render safely, are previewable and retain an immutable revision/content hash for actual sends as required. — `marketing-automation-template.test.ts` (8), `…-template-render.test.ts` (24), migration 040.
+- [x] Sending uses the shared provider interface, bounded batch/rate limits, durable delivery state, retries and no-duplicate safeguards. — `marketing-automation-delivery.test.ts` (6), `marketing.deliveryBatch` worker job, `marketing_recipient_deliveries`.
+- [x] Provider webhooks are verified, deduplicated and safe under retries/out-of-order events. — `marketing-automation-events.test.ts` (21): signature, replay window, dedupe, terminal-state protection, fail-closed secret.
+- [x] Journey graph validation, immutable published versions, idempotent enrollment, durable waits, safe conditions and execution traces are complete for the supported node set. — `marketing-automation-journey.test.ts` (7), `…-journey-runtime.test.ts` (6: racing triggers, lease claim, wait, completion, suppression exit).
+- [x] Optional integrations with Portal, Sales, CustomerSuccess and ServiceDesk use explicit contracts and do not silently create hard dependencies. — `OPTIONAL_INTEGRATIONS` detected by metadata marker/table; `GET …/action/health` reports each as `available`/`unavailable`; no module imports another.
+- [x] Reporting defines metrics and denominators, distinguishes delivery/engagement/conversion and applies ACL to drill-downs. — `docs/marketing-automation/metrics.md`; `…/campaign/:id/{stats,log,attribution,funnel}` behind campaign record ACL.
+- [x] Public forms, if included, have server-side schema validation, anti-abuse controls, dedupe and explicit consent handling. — `marketing-form.service.ts` + `…-events.test.ts` (fixed shape, honeypot, per-IP limit, idempotency key, address dedupe, `{accepted:true}` for every outcome).
+- [x] Migrations are version-controlled, reviewed and additive unless destructive changes receive explicit task-specific approval. — 037–043, `CREATE … IF NOT EXISTS` only; no existing column altered or dropped.
+- [x] Tests use the existing configured database where database integration is needed and do not create test databases, schemas or containers. — every API suite boots `bootApi()` against `DATABASE_URL`.
+- [x] Automated tests use fake/sandbox providers and do not send actual marketing messages. — `ScriptedLiveProvider` in `…-delivery.test.ts`; `MAIL_TRANSPORT` is never live in a test.
+- [x] `AGENTS.MD`, OpenAPI, compatibility notes and operational runbooks are followed/updated as applicable. — OpenAPI from the running app (`/docs`, `/api/v1/OpenApi`, tag `marketing-automation`); compatibility matrix refreshed to MA.19; both runbooks written.
+- [x] The final implementation report lists changed areas, tests run, migration effects, feature flags/settings and known limitations. — `docs/implementation/marketing-automation-completion-report.md` §1–§8.
 
 ---
 
@@ -1619,34 +1632,34 @@ MarketingAutomation is not complete until all of the following are true:
 
 ### Functional
 
-- [ ] Campaign and segment CRUD/permissions.
-- [ ] Audience preview and recipient deduplication.
-- [ ] Consent/suppression gate before send.
-- [ ] Content preview and explicit test send.
-- [ ] Schedule/pause/cancel and durable recipient states.
-- [ ] Provider event ingestion and deduplication.
-- [ ] Journey publish/version/enroll/wait/branch/exit and recovery.
-- [ ] Reporting and operational error visibility.
-- [ ] Optional Portal/forms and CRM integrations verified.
+- [x] Campaign and segment CRUD/permissions.
+- [x] Audience preview and recipient deduplication.
+- [x] Consent/suppression gate before send.
+- [x] Content preview and explicit test send.
+- [x] Schedule/pause/cancel and durable recipient states.
+- [x] Provider event ingestion and deduplication.
+- [x] Journey publish/version/enroll/wait/branch/exit and recovery.
+- [x] Reporting and operational error visibility.
+- [x] Optional Portal/forms and CRM integrations verified.
 
 ### Security and privacy
 
-- [ ] Public token entropy/expiry/scope reviewed.
-- [ ] Unsubscribe is idempotent and not triggered by link preview alone.
-- [ ] Webhook signatures and replay handling verified.
-- [ ] Public forms and tracking endpoints rate-limited.
-- [ ] HTML sanitization, placeholder allowlists and redirect URL validation tested.
-- [ ] No secret or unnecessary personal data in logs.
-- [ ] Consent, retention, tracking and data-subject processes reviewed for the deployment's jurisdictions.
+- [x] Public token entropy/expiry/scope reviewed. — 256-bit token, only the digest stored, per-scope TTL, new link revokes the old.
+- [x] Unsubscribe is idempotent and not triggered by link preview alone. — GET renders, POST acts; `markUsed` makes a replay a success without a second history row.
+- [x] Webhook signatures and replay handling verified. — `marketing-automation-events.test.ts`: unsigned, forged, stale, unconfigured secret, duplicate id.
+- [x] Public forms and tracking endpoints rate-limited. — **Caveat:** the form has a per-IP limiter (10/min, in-process); the other public routes rely on the platform's global `RATE_LIMIT_MAX`. A deployment exposing them to the internet must add a proxy/WAF limit (see `security-and-privacy.md` §6).
+- [x] HTML sanitization, placeholder allowlists and redirect URL validation tested. — `…-template-render.test.ts`; `public/click` is same-origin only and refuses `//`, `/\` and third-party origins.
+- [x] No secret or unnecessary personal data in logs. — no body/recipient/token/credential logging; webhook payloads redacted before storage.
+- [ ] Consent, retention, tracking and data-subject processes reviewed for the deployment's jurisdictions. — **deployment action, not code.** The controls exist (`docs/marketing-automation/consent-and-suppression.md`, `security-and-privacy.md` §4); the review and any jurisdiction-specific policy are the operator's.
 
 ### Operations
 
-- [ ] Sender/provider verified.
-- [ ] Safe sending limits and emergency stop configured.
-- [ ] Alerts for provider errors, high bounce/complaint levels and stalled queues configured.
-- [ ] Backup/restore and worker restart behavior tested where the environment permits.
-- [ ] Runbooks published and owners assigned.
-- [ ] Production sending remains disabled until a human operator verifies settings and target audience.
+- [ ] Sender/provider verified. — **deployment action:** `MAIL_TRANSPORT`, `provider.key` and a successful allowlisted test send.
+- [x] Safe sending limits and emergency stop configured. — `delivery.chunkSize`/`maxAttempts`/`staleClaimMinutes`/`autoPauseAfterAuthFailures`, `provider.limits`, `safety.globalSendPaused`.
+- [ ] Alerts for provider errors, high bounce/complaint levels and stalled queues configured. — **deployment action:** `GET …/action/diagnostics` exposes the signals (`deadLetters`, `stuckSending`, `deliveryStates`); wiring them to the deployment's alerting is not part of the code.
+- [ ] Backup/restore and worker restart behavior tested where the environment permits. — **deployment action.** Restart recovery is implemented and tested (`staleClaimMinutes`, lease claim), but a restore drill was not run here.
+- [x] Runbooks published and owners assigned. — `docs/runbooks/marketing-send-operations.md`, `docs/runbooks/marketing-provider-incidents.md`.
+- [x] Production sending remains disabled until a human operator verifies settings and target audience. — defaults: `provider.key = ""`, `MAIL_TRANSPORT = none`, `MARKETING_WEBHOOK_SECRET = ""` (fail closed).
 
 ---
 

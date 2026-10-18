@@ -27,6 +27,27 @@ Curated, long-lived notes. Daily logs live next to this file as `YYYY-MM-DD.md`.
 - Money is a canonical decimal string at every boundary; `apps/api/src/sales/money/decimal.ts` is the
   module's decimal engine (the kernel has no currency registry or exchange-rate facility).
 - Docs for a module go in `docs/modules/<module>/`; audits in `docs/implementation/`.
+- **`entity_records` has `created_at` + `modified_at`, never `updated_at`.** Any hand-written SQL against
+  that table must use `modified_at`; `updated_at` fails at runtime with "column does not exist" (it cost
+  the whole journey runtime, see the 2026-10-18 log).
+- **`ON CONFLICT` cannot infer a partial unique index** unless the conflict target repeats the predicate:
+  `on conflict (inbox_id) where inbox_id is not null do nothing`. Several marketing indexes are partial
+  (`WHERE deleted_at IS NULL`, `WHERE inbox_id IS NOT NULL`).
+- Conditional-UPDATE "claims" must be **leases** (push the due/next-run timestamp forward), not a version
+  counter bump — otherwise two workers both claim the same row.
+
+## Marketing Automation (Phase 19-MA, complete)
+
+- `apps/api/src/marketing-automation/`, API prefix `/api/v1/MarketingAutomation`, settings row
+  `marketingAutomation`, records in `entity_records` (16 entity types), migrations 037–043.
+- Delivery is queue-driven: `marketing_recipient_deliveries` (one row per recipient per slot) is claimed by
+  `marketing.deliveryBatch`; journeys by `marketing.journeyRunBatch`. Both worker jobs call API endpoints
+  with `x-worker-secret` **and** a session — the secret is an extra capability, not authentication.
+- Public surface is 5 routes; `MARKETING_WEBHOOK_SECRET` empty means **reject every provider event** (fail
+  closed, no default secret). `public/form/submit` always answers `{accepted:true}` so it cannot confirm
+  whether an address is in the CRM.
+- Docs live in `docs/marketing-automation/` (+ `docs/runbooks/marketing-{send-operations,provider-incidents}.md`);
+  evidence report: `docs/implementation/marketing-automation-completion-report.md`. 13 suites / 225 tests.
 
 ## Kernel `document` module
 

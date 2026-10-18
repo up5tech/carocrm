@@ -336,7 +336,6 @@ let sharedCampaignId: string;
 let includedListId: string;
 let excludedListId: string;
 const address = (suffix: string) => `${runId}-${suffix}@example.test`;
-let oneContactId: string;
 let oneAddress: string;
 
 beforeAll(async () => {
@@ -371,7 +370,7 @@ beforeAll(async () => {
   // Audience: five contacts in one audience with five different outcomes, one of them also excluded by a
   // second audience so "exclusion always wins" is visible in the delivery ledger too.
   oneAddress = address("one");
-  oneContactId = await makeContact("RecipientOne", oneAddress);
+  await makeContact("RecipientOne", oneAddress);
   await makeContact("RecipientTwo", oneAddress);
   await makeContact("RecipientNoAddress");
   await makeContact("RecipientOptedOut", address("optedout"));
@@ -541,11 +540,18 @@ describe("send definition and the §5.5 dry run (19-MA.8)", () => {
     expect(categoryOf(report, "optedOut").reasons).toContain("OPTED_OUT");
     expect(categoryOf(report, "excludedBySegment").reasons).toContain("EXCLUDED_BY_TARGET_LIST");
 
-    // Samples name a record the caller may read and carry its own reasons.
-    const sample = report.audience.sample.find((entry) => entry.entityId === oneContactId);
-    expect(sample?.category).toBe("eligible");
-    expect(sample?.name, "a readable sample names the record").toBeTruthy();
-    expect(sample?.reasons).toEqual([]);
+    // Samples name a record the caller may read and carry its own reasons. Which of the two same-address
+    // contacts wins the message is the documented tie-break (`entityType:entityId` order), not an accident of
+    // row order, so the assertion is on the *pair*: exactly one eligible, exactly one duplicate.
+    const pair = report.audience.sample.filter(
+      (entry) => entry.entityId === contactIds[0] || entry.entityId === contactIds[1],
+    );
+    expect(pair.map((entry) => entry.category).sort()).toEqual(["duplicateAddress", "eligible"]);
+    const eligible = pair.find((entry) => entry.category === "eligible");
+    expect(eligible?.name, "a readable sample names the record").toBeTruthy();
+    expect(eligible?.reasons).toEqual([]);
+    const duplicate = pair.find((entry) => entry.category === "duplicateAddress");
+    expect(duplicate?.reasons).toEqual(["DUPLICATE_ADDRESS"]);
     expect(JSON.stringify(report.audience.sample)).not.toContain("@example.test");
 
     // The dry run wrote nothing: no ledger rows, no history, no status move, no snapshot of its own.

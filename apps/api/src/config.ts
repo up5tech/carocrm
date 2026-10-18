@@ -49,6 +49,12 @@ const ConfigSchema = z.object({
   /** Shared worker-to-API capability key; blank disables scheduled report delivery. */
   reportWorkerSecret: z.string().default(''),
   /**
+   * Shared secret a marketing provider signs its webhook calls with (Phase 19-MA.10). Blank is the
+   * default and means **no provider event is accepted**: a public constant would let anyone forge a
+   * signature, so the ingestion path fails closed instead of falling back to one.
+   */
+  marketingWebhookSecret: z.string().default(''),
+  /**
    * 32-byte hex key for secrets stored encrypted at rest (PLAN §28.3: mail account passwords).
    * Empty disables encrypted storage: saving a credential then fails with a clear message instead
    * of silently writing plaintext. Generate with `openssl rand -hex 32`.
@@ -130,6 +136,7 @@ export function buildConfig(): AppConfig {
     jobAttempts: process.env.JOB_ATTEMPTS,
     jobBackoffBaseMs: process.env.JOB_BACKOFF_BASE_MS,
     reportWorkerSecret: process.env.REPORT_WORKER_SECRET,
+    marketingWebhookSecret: process.env.MARKETING_WEBHOOK_SECRET,
     encryptionKey: process.env.ENCRYPTION_KEY,
     extensionsDir: process.env.EXTENSIONS_DIR,
     platformVersion: process.env.PLATFORM_VERSION,

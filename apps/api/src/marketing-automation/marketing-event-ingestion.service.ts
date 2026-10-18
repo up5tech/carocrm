@@ -3,7 +3,9 @@ import { randomUUID , timingSafeEqual } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { sql } from "kysely";
 
+import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
 import { DatabaseService } from "../database/database.service.js";
+import { runAsMarketingSystem } from "./marketing-automation-authority.js";
 import { type SuppressionReason } from "./marketing-automation-domain.js";
 import { MarketingSuppressionService } from "./marketing-suppression.service.js";
 
@@ -65,6 +67,7 @@ export class MarketingEventIngestionService {
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(MarketingSuppressionService) private readonly suppression: MarketingSuppressionService,
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
   verifySignature(provided: string | undefined, expected: string | undefined): boolean {
@@ -127,7 +130,10 @@ export class MarketingEventIngestionService {
     }
 
     const inboxId = randomUUID();
-    const signatureValid = this.verifySignature(input.signature, input.secret);
+    // Fail closed (§9.4, §15 `19-MA.10`): with no configured secret there is nothing to verify against,
+    // and a shared default would be a public constant anyone could sign with.
+    const configured = typeof input.secret === "string" && input.secret.trim() !== "";
+    const signatureValid = configured && this.verifySignature(input.signature, input.secret);
 
     if (!signatureValid) {
       await sql`
@@ -136,7 +142,7 @@ export class MarketingEventIngestionService {
            processing_status, failure_reason, normalized_event_type)
         values
           (${inboxId}, ${input.provider}, ${providerEventId}, ${dedupKey}, ${eventTypeRaw},
-           false, 'rejected', 'INVALID_SIGNATURE', ${normalized})
+           false, 'rejected', ${configured ? "INVALID_SIGNATURE" : "SECRET_NOT_CONFIGURED"}, ${normalized})
       `.execute(this.database.db);
       return {
         inboxId,
@@ -159,6 +165,9 @@ export class MarketingEventIngestionService {
     `.execute(this.database.db);
 
     const eventId = randomUUID();
+    // `uq_marketing_events_inbox` (migration 042) is a *partial* index, and PostgreSQL only infers a
+    // partial index when the conflict target repeats its predicate — without the `where`, this insert
+    // fails with 42P10 and no provider event is ever recorded.
     await sql`
       insert into marketing_events
         (id, inbox_id, provider, provider_event_id, event_type, normalized_type,
@@ -169,22 +178,37 @@ export class MarketingEventIngestionService {
          ${occurredAt}, ${campaignId}, ${sendId}, ${slot}, ${providerMessageId},
          ${recipientEntityType}, ${recipientEntityId}, ${emailHash}, ${url},
          ${JSON.stringify({})}::jsonb)
-      on conflict (inbox_id) do nothing
+      on conflict (inbox_id) where inbox_id is not null do nothing
     `.execute(this.database.db);
 
-    await this.applySideEffects(normalized, {
-      provider: input.provider,
-      providerMessageId,
-      recipientEntityType,
-      recipientEntityId,
-      emailHash,
-      sendId,
-      slot: slot ?? 1,
-    });
+    // The webhook has no logged-in principal, so the suppression feedback runs under the module's
+    // documented service identity (§9.2) — the same door the public unsubscribe uses. Without it a hard
+    // bounce or complaint would be *recorded* and never *applied*, which is the one thing MA.10 must not
+    // do (§15 acceptance: "hard bounce and complaint policy blocks subsequent marketing sends").
+    let sideEffectFailure: string | null = null;
+    try {
+      await runAsMarketingSystem(this.scope, "providerWebhookSideEffects", () =>
+        this.applySideEffects(normalized, {
+          provider: input.provider,
+          providerMessageId,
+          recipientEntityType,
+          recipientEntityId,
+          emailHash,
+          sendId,
+          slot: slot ?? 1,
+        }),
+      );
+    } catch (error) {
+      // Recorded on the inbox row rather than thrown: the provider would retry, hit the dedupe key and
+      // never reprocess, so the durable answer is "processed with errors" plus the reason.
+      sideEffectFailure = error instanceof Error ? error.message : "Side effect failed.";
+    }
 
     await sql`
       update marketing_provider_webhook_inbox
-      set processing_status = 'processed', processed_at = now()
+      set processing_status = ${sideEffectFailure === null ? "processed" : "processed_with_errors"},
+          failure_reason = ${sideEffectFailure},
+          processed_at = now()
       where id = ${inboxId}
     `.execute(this.database.db);
 
@@ -192,7 +216,7 @@ export class MarketingEventIngestionService {
       inboxId,
       duplicate: false,
       normalizedType: normalized,
-      processingStatus: "processed",
+      processingStatus: sideEffectFailure === null ? "processed" : "processed_with_errors",
     };
   }
 
@@ -240,17 +264,15 @@ export class MarketingEventIngestionService {
             : "GlobalOptOut";
       const emailHash = ctx.emailHash;
       if (emailHash !== null) {
-        try {
-          await this.suppression.add({
-            emailHash,
-            scope: "Global",
-            reason: reason as SuppressionReason,
-            source: "ProviderWebhook",
-            provider: ctx.provider,
-          });
-        } catch {
-          // Best-effort.
-        }
+        // Not swallowed: the caller records the failure on the inbox row, so a block that could not be
+        // applied is visible to an operator instead of looking like a delivered event.
+        await this.suppression.add({
+          emailHash,
+          scope: "Global",
+          reason: reason as SuppressionReason,
+          source: "ProviderWebhook",
+          provider: ctx.provider,
+        });
       }
     }
   }

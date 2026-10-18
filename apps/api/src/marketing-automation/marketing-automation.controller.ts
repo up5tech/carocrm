@@ -15,8 +15,12 @@ import {
   Param,
   Post,
   Query,
+  Redirect,
+  Req,
+  Res,
 } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { type ZodTypeAny } from "zod";
 
 import { Public } from "../auth/auth.guard.js";
@@ -658,12 +662,14 @@ export class MarketingAutomationController {
     @Headers("x-webhook-signature") signature?: string,
     @Headers("x-webhook-timestamp") timestamp?: string,
   ) {
-    const secret = process.env.MARKETING_WEBHOOK_SECRET ?? "dev-marketing-webhook-secret";
+    // Fail closed: with no configured secret there is nothing to verify a signature against, so every
+    // event is recorded as rejected instead of being accepted against a public default (§9.4).
+    const configuredSecret = this.config.marketingWebhookSecret.trim();
     return this.eventIngestion.ingest({
       provider: providerKey,
       signature,
       timestamp,
-      secret,
+      secret: configuredSecret === "" ? undefined : configuredSecret,
       payload: (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>,
     });
   }
@@ -780,11 +786,23 @@ export class MarketingAutomationController {
     return { id, state: "Exited", reason };
   }
 
-  /** Evaluate a whitelisted CRM event against a journey (worker/channel entry, §15 MA.14). */
-  @Public()
+  /**
+   * Evaluate a whitelisted CRM event against a journey (worker/channel entry, §15 MA.14).
+   *
+   * Not public: it answers whether a journey is published, so an anonymous caller could use it to
+   * enumerate the deployment's journeys. The event channel carries the shared worker capability
+   * (`x-worker-secret`, the same door as `journey/run-batch`); a human operator needs administrator
+   * access.
+   */
   @HttpCode(200)
   @Post("action/journey/:id/trigger")
-  async journeyTrigger(@Param("id") id: string, @Body() body: unknown) {
+  async journeyTrigger(
+    @Param("id") id: string,
+    @Body() body: unknown,
+    @Headers("x-worker-secret") workerSecret?: string,
+  ) {
+    if (workerSecret !== undefined) this.assertWorkerSecret(workerSecret);
+    else this.requireAdmin("evaluating a journey trigger");
     const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
     return this.journeyTriggers.trigger({
       journeyId: id,
@@ -799,9 +817,9 @@ export class MarketingAutomationController {
   @Public()
   @HttpCode(200)
   @Post("public/form/submit")
-  async publicFormSubmit(@Body() body: unknown) {
+  async publicFormSubmit(@Body() body: unknown, @Req() request: FastifyRequest) {
     const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
-    return this.forms.submit({
+    await this.forms.submit({
       ...(typeof b.firstName === "string" ? { firstName: b.firstName } : {}),
       ...(typeof b.lastName === "string" ? { lastName: b.lastName } : {}),
       email: typeof b.email === "string" ? b.email : "",
@@ -816,7 +834,14 @@ export class MarketingAutomationController {
       ...(typeof b.utmCampaign === "string" ? { utmCampaign: b.utmCampaign } : {}),
       ...(typeof b.idempotencyKey === "string" ? { idempotencyKey: b.idempotencyKey } : {}),
       ...(typeof b.website === "string" ? { honeypot: b.website } : {}),
+      // The per-IP limiter is only a limiter if it knows the caller: without this every submission in the
+      // deployment shared one bucket.
+      ...(typeof request.ip === "string" ? { clientIp: request.ip } : {}),
     });
+    // The same acknowledgement for a new Lead, a reused one and a honeypot hit (§15 `19-MA.15` acceptance:
+    // "public responses do not disclose CRM record existence"). The service's richer result is for internal
+    // callers; a public form gets a static thank-you and learns nothing about the CRM.
+    return { accepted: true };
   }
 
   @HttpCode(200)
@@ -892,35 +917,42 @@ export class MarketingAutomationController {
   }
 
 
+  /**
+   * A same-origin bounce for a tracked link (MA.10 task 6, §5.9). This is deliberately **not** a link
+   * rewriter: the module never rewrites a customer's URLs, so this endpoint's only job is to send a
+   * recipient back into this deployment.
+   *
+   * That is also what makes it safe. A relative path is accepted; an absolute URL is accepted only when
+   * its origin is the configured `delivery.publicBaseUrl`. A third-party host is refused, so the endpoint
+   * cannot be used as an open redirect (§15 `19-MA.10` acceptance). Engagement events themselves arrive
+   * through the provider webhook (`clicked`), never through this route.
+   */
   @Public()
   @Get("public/click")
+  @Redirect()
   async publicClick(@Query("to") to?: string) {
-    const target = typeof to === "string" ? to : "";
-    // Open-redirect guard: only http(s) URLs with an explicit host, or same-origin relative paths.
-    let safe = "";
-    try {
-      if (target.startsWith("/")) {
-        safe = target;
-      } else {
-        const u = new URL(target);
-        if (u.protocol === "http:" || u.protocol === "https:") {
-          safe = u.toString();
-        }
-      }
-    } catch {
-      safe = "";
-    }
+    const target = typeof to === "string" ? to.trim() : "";
+    const base = (await this.settings.read()).settings.delivery.publicBaseUrl.trim();
+    const safe = resolveTrackedTarget(target, base);
     if (safe === "") {
-      throw new Error("Invalid redirect target.");
+      throw new InvalidQueryError("Invalid redirect target.", { field: "to" });
     }
-    // Express/Nest redirect via a 302 header is not available on @Get returning JSON; return the safe target.
-    return { redirect: safe };
+    return { url: safe, statusCode: 302 };
   }
 
+  /**
+   * A 1×1 transparent GIF for a template that embeds an open beacon. No event is recorded here: open
+   * tracking is provider-supplied and approximate (§3.2), and this deployment does not mint per-recipient
+   * pixel identifiers.
+   */
   @Public()
   @Get("public/open")
-  async publicOpen() {
-    return { ok: true };
+  async publicOpen(@Res() reply: FastifyReply): Promise<void> {
+    reply
+      .header("content-type", "image/gif")
+      .header("cache-control", "no-store, no-cache, must-revalidate, private")
+      .header("content-length", String(TRANSPARENT_GIF.length));
+    await reply.send(TRANSPARENT_GIF);
   }
   private requireAdmin(action: string): void {
     if (!this.scope.isAdmin) {
@@ -965,4 +997,35 @@ function parse<T extends ZodTypeAny>(schema: T, body: unknown): T["_output"] {
     });
   }
   return parsed.data;
+}
+
+/** A 1×1 transparent GIF — 43 bytes, no external asset, no per-recipient identifier. */
+const TRANSPARENT_GIF = Buffer.from(
+  "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+  "base64",
+);
+
+/**
+ * The open-redirect guard for `public/click`. Returns `""` for anything that is not a same-origin
+ * destination:
+ *
+ * - a rooted path is accepted, but `//host` and `/\host` are not (browsers treat both as another host);
+ * - an absolute URL is accepted only when its origin equals the configured public base URL, so a
+ *   deployment can link to itself and never becomes a forwarder for somebody else's domain;
+ * - anything else — `javascript:`, `data:`, `mailto:`, a host-relative path, a malformed URL — is refused.
+ */
+function resolveTrackedTarget(target: string, publicBaseUrl: string): string {
+  if (target === "") return "";
+  if (target.startsWith("/")) {
+    return target.startsWith("//") || target.startsWith("/\\") ? "" : target;
+  }
+  if (publicBaseUrl === "") return "";
+  try {
+    const candidate = new URL(target);
+    const base = new URL(publicBaseUrl);
+    if (candidate.protocol !== "http:" && candidate.protocol !== "https:") return "";
+    return candidate.origin === base.origin ? candidate.toString() : "";
+  } catch {
+    return "";
+  }
 }

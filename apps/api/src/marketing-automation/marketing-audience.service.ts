@@ -666,6 +666,11 @@ export class MarketingAudienceService {
    * then address de-duplication among those who would otherwise receive a message. A duplicate is therefore
    * never counted as "eligible" twice, and a suppressed person is never counted as a duplicate of somebody
    * else's block.
+   *
+   * When two records share one address the *tie-break* decides which of them receives the message, so it must
+   * not depend on the order the database happened to return rows in — the same data would otherwise produce a
+   * different "eligible" record on a later run, and an explainable report cannot flip. The candidate set is
+   * therefore walked in `entityType:entityId` order and the loser is reported as `duplicateAddress`.
    */
   private async classify(
     candidates: readonly ResolvedCandidate[],
@@ -676,9 +681,12 @@ export class MarketingAudienceService {
     },
   ): Promise<readonly ClassifiedCandidate[]> {
     if (candidates.length === 0) return [];
+    const ordered = [...candidates].sort((a, b) =>
+      `${a.entityType}:${a.entityId}`.localeCompare(`${b.entityType}:${b.entityId}`),
+    );
     const purpose = context.purpose ?? "Newsletter";
     const decisions = await this.eligibility.decideMany(
-      candidates.map((candidate) => ({
+      ordered.map((candidate) => ({
         entityType: candidate.entityType,
         entityId: candidate.entityId,
         emailAddress: candidate.emailAddress,
@@ -699,7 +707,7 @@ export class MarketingAudienceService {
     const byEntity = new Map<string, (typeof decisions)[number]>();
     for (const decision of decisions) byEntity.set(`${decision.entityType}:${decision.entityId}`, decision);
 
-    for (const candidate of candidates) {
+    for (const candidate of ordered) {
       const key = `${candidate.entityType}:${candidate.entityId}`;
       const decision = byEntity.get(key);
       const eligibility = decision?.decision;

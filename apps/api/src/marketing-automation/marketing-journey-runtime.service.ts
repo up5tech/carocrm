@@ -10,6 +10,13 @@ import { MarketingSuppressionService } from "./marketing-suppression.service.js"
 
 export type EnrollmentState = "Active" | "Waiting" | "Suspended" | "Exited" | "Completed";
 
+/**
+ * How long one claim holds an enrollment before another worker may retry it (§11.2 "persist enough state to
+ * safely resume after worker restart"). Long enough for any single step, short enough that a crashed worker
+ * does not strand an enrollment for the rest of the day.
+ */
+const CLAIM_LEASE_MS = 60_000;
+
 export interface EnrollInput {
   readonly journeyId: string;
   readonly versionId: string;
@@ -61,7 +68,7 @@ export class MarketingJourneyRuntimeService {
     const name = `${input.journeyId} · ${input.dedupeKey}`;
     try {
       await sql`
-        insert into entity_records (id, entity_type, name, attrs, created_at, updated_at)
+        insert into entity_records (id, entity_type, name, attrs, created_at, modified_at)
         values (
           ${id}, 'MarketingJourneyEnrollment', ${name},
           ${JSON.stringify({
@@ -94,13 +101,25 @@ export class MarketingJourneyRuntimeService {
 
   /**
    * Atomically claim one enrollment's due step (§15 MA.13: "two workers cannot execute the same action
-   * instance concurrently"). The conditional UPDATE on `lockVersion` is the claim.
+   * instance concurrently").
+   *
+   * The claim is a **lease**, not a counter bump: the conditional UPDATE requires the row to be due and then
+   * pushes `nextRunAt` past the lease, so a second worker arriving while the first is executing finds it not
+   * due and gets nothing. A worker that dies mid-step leaves the lease behind, and the enrollment becomes due
+   * again when it expires — the recovery path, without a separate sweep.
    */
   async claim(enrollmentId: string, now: string): Promise<MarketingRow | undefined> {
+    const leaseUntil = new Date(Date.parse(now) + CLAIM_LEASE_MS).toISOString();
     const result = await sql`
       update entity_records
-      set attrs = jsonb_set(jsonb_set(attrs, '{lockVersion}', to_jsonb(coalesce((attrs->>'lockVersion')::int, 0) + 1)), '{state}', '"Active"'),
-          updated_at = now()
+      set attrs = jsonb_set(
+            jsonb_set(
+              jsonb_set(attrs, '{lockVersion}', to_jsonb(coalesce((attrs->>'lockVersion')::int, 0) + 1)),
+              '{state}', '"Active"'
+            ),
+            '{nextRunAt}', to_jsonb(${leaseUntil}::text)
+          ),
+          modified_at = now()
       where id = ${enrollmentId}
         and entity_type = 'MarketingJourneyEnrollment'
         and deleted_at is null
@@ -112,12 +131,15 @@ export class MarketingJourneyRuntimeService {
     return this.records.byId("MarketingJourneyEnrollment", enrollmentId);
   }
 
-  /** Run the claimed enrollment's current node one step. */
+  /**
+   * Run the current node of an enrollment the caller has already claimed. The caller owns the claim
+   * (`claim()`), so this never re-claims: re-claiming here is what would let two workers execute one step.
+   */
   async runStep(enrollmentId: string, graph: JourneyGraph): Promise<StepRunResult> {
     const now = new Date().toISOString();
-    const claimed = await this.claim(enrollmentId, now);
+    const claimed = await this.records.byId("MarketingJourneyEnrollment", enrollmentId);
     if (claimed === undefined) {
-      return { enrollmentId, nodeId: "", outcome: "noop", reason: "not-due-or-not-claimable" };
+      return { enrollmentId, nodeId: "", outcome: "noop", reason: "enrollment-not-found" };
     }
     const data = claimed.data as Record<string, unknown>;
     const nodeId = String(data.currentNodeId ?? graph.start);
@@ -303,7 +325,7 @@ export class MarketingJourneyRuntimeService {
     merged.lockVersion = Number(current.lockVersion ?? 0) + 1;
     await sql`
       update entity_records
-      set attrs = ${JSON.stringify(merged)}::jsonb, updated_at = now()
+      set attrs = ${JSON.stringify(merged)}::jsonb, modified_at = now()
       where id = ${enrollmentId} and entity_type = 'MarketingJourneyEnrollment'
     `.execute(this.db);
   }
@@ -312,7 +334,7 @@ export class MarketingJourneyRuntimeService {
     void at;
     const id = crypto.randomUUID();
     void sql`
-      insert into entity_records (id, entity_type, name, attrs, created_at, updated_at)
+      insert into entity_records (id, entity_type, name, attrs, created_at, modified_at)
       values (
         ${id}, 'MarketingJourneyStepExecution', ${`${enrollmentId} · ${node.id}`},
         ${JSON.stringify({

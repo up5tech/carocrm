@@ -303,8 +303,9 @@ Every module route is authenticated and ACL-checked server-side; see
 | [docs/modules/sales/](docs/modules/sales/README.md)                             | Sales: document engine, pricing, inventory, payments, subscriptions                                |
 | [docs/modules/customer-success/](docs/modules/customer-success/README.md)        | Customer Success: lifecycle, health scoring, plans, risks, playbooks, renewals                      |
 | [docs/modules/service-desk/](docs/modules/service-desk/README.md)                | Service Desk: cases, state machine, assignment, conversation, SLA                                 |
-| [docs/marketing-automation/](docs/marketing-automation/campaign-lifecycle.md)     | MA: campaign lifecycle, consent/suppression, templates, provider adapters, send definitions, cross-module integration |
+| [docs/marketing-automation/](docs/marketing-automation/campaign-lifecycle.md)     | MA: campaign lifecycle, consent/suppression, templates, provider adapters, send definitions, journey runtime, metrics, security and privacy, cross-module integration |
 | [docs/runbooks/marketing-send-operations.md](docs/runbooks/marketing-send-operations.md) | operating MA sending: provider binding, limits, test send, error kinds                    |
+| [docs/runbooks/marketing-provider-incidents.md](docs/runbooks/marketing-provider-incidents.md) | MA provider incidents: credentials, webhooks, bounce spikes, stalled queues, safe resume |
 | [docs/implementation/](docs/implementation/service-desk-release.md)               | per-module audits, gap reports and release notes                                                  |
 | [docs/reference/alpha-status.md](docs/reference/alpha-status.md)                 | kernel Alpha + Projects checklist, deviations, verification actually run, web theme, Kanban board |
 | [docs/reference/compatibility-matrix.md](docs/reference/compatibility-matrix.md) | behaviour compared against the EspoCRM 9.3.x baseline                                             |

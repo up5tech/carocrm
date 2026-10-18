@@ -1,13 +1,15 @@
 # Runbook — marketing send operations
 
-> **Scope:** operating Marketing Automation sending today. Phase 19-MA.7 delivers the provider binding, the
-> rate/concurrency interface and the safe test send; 19-MA.8 delivers the send definition, its dry run, the
-> frozen audience snapshot, the approval and the recipient ledger. The worker that actually submits messages
-> lands in 19-MA.9 and provider webhooks in 19-MA.10. Anything not yet delivered is marked **later phase**
-> rather than described as if it existed.
+> **Scope:** operating Marketing Automation sending. Phase 19-MA.7 delivered the provider binding, the
+> rate/concurrency interface and the safe test send; 19-MA.8 the send definition, its dry run, the frozen
+> audience snapshot, the approval and the recipient ledger; 19-MA.9 the queue-based delivery worker
+> (`marketing.deliveryBatch`) with retries, recovery and dead letters; 19-MA.10 the provider webhooks that
+> turn engagement into events and suppression. When the *provider* is the problem, use
+> [`marketing-provider-incidents.md`](marketing-provider-incidents.md).
 > **Related:** [`docs/marketing-automation/provider-adapters.md`](../marketing-automation/provider-adapters.md),
 > [`docs/marketing-automation/send-definitions.md`](../marketing-automation/send-definitions.md),
-> [`docs/marketing-automation/consent-and-suppression.md`](../marketing-automation/consent-and-suppression.md).
+> [`docs/marketing-automation/consent-and-suppression.md`](../marketing-automation/consent-and-suppression.md),
+> [`docs/marketing-automation/metrics.md`](../marketing-automation/metrics.md).
 
 ## 1. Where the controls are
 
@@ -76,19 +78,21 @@ Resuming without duplicate messages:
 
 1. Confirm the provider is healthy (test send to an allowlisted mailbox).
 2. Lift the stop with a reason — it is stored on the settings row and shown in diagnostics.
-3. **Later phase (MA.9):** before restarting a paused campaign, check the per-recipient delivery rows for
-   `unknown_submission` and reconcile them with the provider; that is the state that must never be blindly
-   resent.
+3. Check `GET …/action/diagnostics` before restarting: `deadLetters` are recipients whose attempts are spent,
+   and `stuckSending` are claims a dead worker left behind (the next sweep re-queues them under the same
+   idempotency key). A row that failed as `unknown_submission` must be reconciled with the provider before any
+   manual re-send — see
+   [`marketing-provider-incidents.md` §5](marketing-provider-incidents.md#5-stop-everything-then-resume-without-duplicates).
 
 ## 5. Provider incidents
 
 | Symptom | First check | Note |
 | --- | --- | --- |
 | `provider.mode` is `disabled` while the deployment expects live | `MAIL_TRANSPORT` and `provider.key` | a `none`/`memory` transport is a deliberate sandbox, not a misconfiguration to work around |
-| Repeated `AUTH_FAILED` | the mailbox credentials | rotate the credential in the existing store; never paste it into a record or a ticket |
+| Repeated `AUTH_FAILED` | the mailbox credentials | rotate the credential in the existing store; never paste it into a record or a ticket. The send pauses itself after `delivery.autoPauseAfterAuthFailures` |
 | High latency or timeouts | the provider's status and `provider.limits` | a test send holds the request for at most the transport's own timeout |
-| Bounce/complaint spike | suppression records (`MarketingSuppression`) | **later phase (MA.10):** automatic pausing on thresholds is not implemented yet; today the stop is manual |
-| Events missing from reports | — | **later phase (MA.10/MA.11):** provider webhooks and campaign statistics are not implemented; no report exists to be wrong yet |
+| Bounce/complaint spike | `GET …/action/campaign/{id}/stats` and the suppression list | a hard bounce, a complaint and an unsubscribe suppress the address automatically (MA.10); threshold pausing is **manual** |
+| Events missing from reports | `health` → `provider-webhook-secret`, then the inbox table | an unconfigured `MARKETING_WEBHOOK_SECRET` rejects every event by design; see [`marketing-provider-incidents.md` §2](marketing-provider-incidents.md#2-webhook-events-are-not-arriving) |
 
 ## 6. Approving and queueing a send (19-MA.8)
 

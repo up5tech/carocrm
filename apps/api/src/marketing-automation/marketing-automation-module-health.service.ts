@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { sql } from "kysely";
 
+import { type AppConfig, CONFIG_TOKEN } from "../config.js";
 import { DatabaseService } from "../database/database.service.js";
 import { HookRegistry } from "../hooks/hook.registry.js";
 import type { MetadataStoreService } from "../metadata/metadata-store.service.js";
@@ -113,6 +114,7 @@ export class MarketingAutomationModuleHealthService {
     @Inject(MarketingProviderRegistry) private readonly providers: MarketingProviderRegistry,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(HookRegistry) private readonly hooks: HookRegistry,
+    @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
 
   async health(): Promise<ModuleHealthView> {
@@ -240,6 +242,18 @@ export class MarketingAutomationModuleHealthService {
       detail: settings.safety.globalSendPaused
         ? `Global sending is STOPPED${settings.safety.reason === null ? "" : `: ${settings.safety.reason}`}`
         : "Global sending is not stopped.",
+    });
+
+    // The webhook door fails closed (§9.4): an unconfigured deployment records every provider event as
+    // rejected rather than accepting it against a public constant, and this check is where an operator
+    // finds out why no engagement event is arriving.
+    checks.push({
+      name: "provider-webhook-secret",
+      ok: true,
+      detail:
+        this.config.marketingWebhookSecret.trim() === ""
+          ? "No provider webhook secret is configured; every provider event is recorded as rejected. Set MARKETING_WEBHOOK_SECRET to accept signed events."
+          : "Provider webhook signatures are verified against the configured secret.",
     });
 
     return {
