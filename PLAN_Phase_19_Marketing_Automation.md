@@ -4,24 +4,33 @@
 > permissions, navigation), 19-MA.2 (domain contracts, enums, transition tables, settings, provider port and
 > fake, migration baseline), 19-MA.3 (campaign lifecycle and validation), 19-MA.5 (consent, preferences,
 > suppression, public unsubscribe) and 19-MA.4 (audience segments, inclusion/exclusion, preview and snapshots)
-> are implemented and verified; **19-MA.6 (email template integration and render preview) and 19-MA.7 (provider
-> adapter and safe test send) are implemented and verified**; MA.8 onward is not started. MA.5 was built
+> are implemented and verified; **19-MA.6 (email template integration and render preview), 19-MA.7 (provider
+> adapter and safe test send) and 19-MA.8 (send definition, audience snapshot, dry run and approval) are
+> implemented and verified**; MA.9 onward is not started. MA.5 was built
 > before MA.4 because its eligibility gate is what makes the MA.4 preview categories meaningful.
 > Delivered records: `Campaign`, `TargetList`, `TargetListEntry`, `CampaignTransition`, `MarketingConsent`,
 > `MarketingConsentEvent`, `MarketingSuppression`, `MarketingPublicToken`, `MarketingAudienceSnapshot`
-> (+ `marketing_audience_snapshot_entries`), `MarketingTemplateRevision`.
+> (+ `marketing_audience_snapshot_entries`), `MarketingTemplateRevision`, `MarketingSend`,
+> `MarketingSendTransition` (+ `marketing_recipient_deliveries`, migration 041).
 > MA.7 binds no new record: the live adapter wraps the platform's `MailTransport` (`MAIL_TRANSPORT`), the
 > deployment names it with the `marketingAutomation.provider.key` setting (empty by default, so nothing is
 > sent), credentials stay in `SMTP_*`/`email_accounts`, and the only sending command is the
 > allowlist-gated `POST /api/v1/MarketingAutomation/action/campaign/{id}/sendTest`. `start`/`resume` still
 > report `PROVIDER_NOT_BOUND` until a deployment configures a live adapter; the queued campaign delivery
-> pipeline is MA.8–MA.9.
+> pipeline is MA.9.
+> MA.8 binds the decision a send rests on: `MarketingSend` pins one message within a campaign to a sealed
+> content revision, a send-bound final audience snapshot, a validation hash and a named approval, and
+> `marketing_recipient_deliveries` holds one row per resolved recipient per intended send slot with the
+> reason each one was eligible, blocked or skipped. Nothing in MA.8 puts a message on the wire — the
+> transitions are `schedule`/`queue`/`pause`/`resume`/`cancel` only, and MA.9 owns the worker that claims the
+> `Eligible` rows (§15 `19-MA.8` acceptance: "without sending real mail during tests").
 > Audit: `docs/implementation/marketing-automation-audit.md`; compatibility:
 > `docs/compatibility/marketing-automation.md`; lifecycle and audience:
 > `docs/marketing-automation/campaign-lifecycle.md`; consent, suppression and public links:
 > `docs/marketing-automation/consent-and-suppression.md`; placeholders, render safety and revisions:
 > `docs/marketing-automation/email-templates.md`; adapters, limits, error classes and test send:
-> `docs/marketing-automation/provider-adapters.md`; operations:
+> `docs/marketing-automation/provider-adapters.md`; send definition, dry run and approval:
+> `docs/marketing-automation/send-definitions.md`; operations:
 > `docs/runbooks/marketing-send-operations.md`.
 > **Parent roadmap:** `PLAN.md` — CRM advanced domains / Marketing Automation  
 > **Module name:** `MarketingAutomation` (**do not add a `Ua` prefix**)  

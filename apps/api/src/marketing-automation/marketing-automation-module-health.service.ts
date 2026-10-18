@@ -11,6 +11,7 @@ import {
   OPTIONAL_INTEGRATIONS,
   type PlatformEvidence,
   REQUIRED_CAPABILITIES,
+  SEND_STRUCTURES,
 } from "./marketing-automation-module.js";
 import { MarketingProviderRegistry } from "./marketing-automation-provider.js";
 import {
@@ -193,6 +194,21 @@ export class MarketingAutomationModuleHealthService {
         : "Migration 037 has not been applied; campaign codes are not enforced as unique.",
     });
 
+    // Migration 041 is what makes "one delivery record per recipient per intended send slot" structural
+    // rather than aspirational (§5.6), and the ledger is where MA.9 will read its work from.
+    const missingSendStructures = [
+      ...SEND_STRUCTURES.indexes.filter((index) => !schema.indexes.has(index)),
+      ...SEND_STRUCTURES.tables.filter((table) => !schema.tables.has(table)),
+    ];
+    checks.push({
+      name: "send-delivery-ledger",
+      ok: missingSendStructures.length === 0,
+      detail:
+        missingSendStructures.length === 0
+          ? `Send definitions have their slot index and the ${SEND_STRUCTURES.tables.join(", ")} ledger.`
+          : `Missing: ${missingSendStructures.join(", ")}. Migration 041 has not been fully applied, so recipient deduplication is not enforced.`,
+    });
+
     checks.push({
       name: "settings-row",
       ok: true,
@@ -292,8 +308,8 @@ export class MarketingAutomationModuleHealthService {
     columns: Set<string>;
     indexes: Set<string>;
   }> {
-    const wantedTables = new Set<string>();
-    const wantedIndexes = new Set<string>(["uq_entity_records_campaign_code"]);
+    const wantedTables = new Set<string>([...SEND_STRUCTURES.tables]);
+    const wantedIndexes = new Set<string>(["uq_entity_records_campaign_code", ...SEND_STRUCTURES.indexes]);
     for (const capability of REQUIRED_CAPABILITIES) {
       for (const item of capability.evidence) {
         if (item.kind === "table") wantedTables.add(item.value);

@@ -10,7 +10,7 @@ import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.
 import { type AppConfig,CONFIG_TOKEN } from "../config.js";
 import { DatabaseService } from "../database/database.service.js";
 import { EntityCrudService } from "../entity/entity.service.js";
-import { currentTx } from "../entity/tx-context.js";
+import { currentTx, runInTransaction } from "../entity/tx-context.js";
 import type { MetadataStoreService } from "../metadata/metadata-store.service.js";
 import { METADATA_STORE } from "../metadata/metadata-store.service.js";
 import {
@@ -96,9 +96,15 @@ export interface ResolvedCandidate {
   readonly excluded: boolean;
 }
 
+/**
+ * One headline category of a resolved audience, with the reason codes that produced it. The reason list is
+ * what makes a dry run explainable (§5.5 "preview shows the reasons each recipient category is excluded"):
+ * "1,204 opted out" is a number, "1,204 opted out (OPTED_OUT, CONSENT_UNKNOWN)" is an answer.
+ */
 export interface CategoryCount {
   readonly category: AudienceCategory;
   readonly count: number;
+  readonly reasons: readonly string[];
 }
 
 export interface AudiencePreview {
@@ -109,7 +115,19 @@ export interface AudiencePreview {
   readonly resolved: number;
   readonly eligible: number;
   readonly categories: readonly CategoryCount[];
-  readonly samples: readonly { entityId: string; entityType: string; name: string | null; category: AudienceCategory }[];
+  /**
+   * The composition this preview was taken of, hashed exactly as the snapshot header hashes it, so a send
+   * definition can compare "what I was validated against" with "what the campaign includes now" (MA.8, §5.5).
+   */
+  readonly compositionHash: string;
+  readonly samples: readonly {
+    readonly entityId: string;
+    readonly entityType: string;
+    readonly name: string | null;
+    readonly category: AudienceCategory;
+    /** The reason codes behind this recipient's category, so a preview explains itself (§5.5). */
+    readonly reasons: readonly string[];
+  }[];
   readonly notes: readonly string[];
   readonly truncated: boolean;
   readonly limit: number;
@@ -125,6 +143,8 @@ export interface SnapshotResult {
   readonly categories: readonly CategoryCount[];
   readonly truncated: boolean;
   readonly previousSnapshotId: string | null;
+  /** The send definition this snapshot was frozen for, when it was taken by a send validation (MA.8). */
+  readonly sendId: string | null;
 }
 
 @Injectable()
@@ -333,12 +353,14 @@ export class MarketingAudienceService {
       status,
       resolved: composed.candidates.length,
       eligible: decisions.filter((item) => item.category === "eligible").length,
-      categories: tally(decisions.map((item) => item.category)),
+      categories: tally(decisions),
+      compositionHash: fingerprint({ included: [...included].sort(), excluded: [...excluded].sort() }),
       samples: decisions.slice(0, 10).map((item) => ({
         entityId: item.candidate.entityId,
         entityType: item.candidate.entityType,
         name: item.candidate.name,
         category: item.category,
+        reasons: item.reasons,
       })),
       notes: composed.notes,
       truncated: composed.truncated,
@@ -356,8 +378,12 @@ export class MarketingAudienceService {
    * previous one — it never edits the old rows, which is what makes "stable even if the segment changes"
    * testable rather than aspirational.
    */
-  async snapshot(campaignId: string, options: { readonly mode?: AudienceSnapshotMode } = {}): Promise<SnapshotResult> {
+  async snapshot(
+    campaignId: string,
+    options: { readonly mode?: AudienceSnapshotMode; readonly sendId?: string | null } = {},
+  ): Promise<SnapshotResult> {
     const mode: AudienceSnapshotMode = options.mode ?? "final";
+    const sendId = options.sendId ?? null;
     const row = await this.records.byId(CAMPAIGN_ENTITY, campaignId);
     if (row === undefined) throw new NotFoundError(`Campaign "${campaignId}" does not exist.`);
     await this.acl.assertRecordAccess(CAMPAIGN_ENTITY, "edit", {
@@ -387,17 +413,28 @@ export class MarketingAudienceService {
     });
     const eligible = decisions.filter((item) => item.category === "eligible").length;
     const compositionHash = fingerprint({ included: [...included].sort(), excluded: [...excluded].sort() });
-    const previous = (await this.records.findByAttrs(MARKETING_AUDIENCE_SNAPSHOT_ENTITY, { campaignId }, { limit: 10 }))
+    const siblings = await this.records.findByAttrs(MARKETING_AUDIENCE_SNAPSHOT_ENTITY, { campaignId }, { limit: 50, order: "desc" });
+    const previous = siblings
       .filter((candidate) => candidate.data["status"] === "Generated")
       .sort((left, right) => String(right.data["generatedAt"] ?? "").localeCompare(String(left.data["generatedAt"] ?? "")))[0];
     const actor = this.scope.principal;
     const generatedAt = new Date().toISOString();
 
-    const snapshotId = await this.database.db.transaction().execute(async (tx) => {
+    // A send's own earlier snapshots stop being the audience it is validated against the moment a new one is
+    // frozen. They are stamped `Invalidated`, never edited or removed: the old snapshot is still the record of
+    // what was intended at the time, which is exactly why an operator must be able to read it (§5.2, §6.1).
+    const superseded = sendId === null
+      ? []
+      : siblings.filter(
+          (candidate) => candidate.data["sendId"] === sendId && candidate.data["status"] === "Generated",
+        );
+
+    const snapshotId = await runInTransaction(this.database.db, async (tx) => {
       const created = await runAsMarketingSystem(this.scope, "audienceSnapshot", () =>
         this.entities.create(MARKETING_AUDIENCE_SNAPSHOT_ENTITY, {
           name: `${String(row.data["name"] ?? campaignId)} · ${mode} audience`,
           campaignId,
+          sendId,
           mode,
           status: "Generated",
           includeTargetListIds: JSON.stringify(included),
@@ -406,7 +443,7 @@ export class MarketingAudienceService {
           resolvedCount: composed.candidates.length,
           eligibleCount: eligible,
           entryCount: decisions.length,
-          categories: JSON.stringify(Object.fromEntries(tally(decisions.map((item) => item.category)).map((c) => [c.category, c.count]))),
+          categories: JSON.stringify(Object.fromEntries(tally(decisions).map((c) => [c.category, c.count]))),
           purpose,
           generatedById: actor?.userId ?? "system",
           generatedAt,
@@ -414,6 +451,14 @@ export class MarketingAudienceService {
         }),
       );
       const id = String(created["id"]);
+      for (const stale of superseded) {
+        await runAsMarketingSystem(this.scope, "audienceSnapshotSupersede", () =>
+          this.entities.update(MARKETING_AUDIENCE_SNAPSHOT_ENTITY, stale.id, {
+            status: "Invalidated",
+            invalidatedAt: generatedAt,
+          }),
+        );
+      }
       for (const batch of chunks(decisions, 500)) {
         if (batch.length === 0) continue;
         const values = sql.join(
@@ -436,9 +481,10 @@ export class MarketingAudienceService {
       resolved: composed.candidates.length,
       eligible,
       entryCount: decisions.length,
-      categories: tally(decisions.map((item) => item.category)),
+      categories: tally(decisions),
       truncated: composed.truncated,
       previousSnapshotId: previous?.id ?? null,
+      sendId,
     };
   }
 
@@ -446,7 +492,12 @@ export class MarketingAudienceService {
   async snapshotEntries(
     snapshotId: string,
     options: { readonly category?: AudienceCategory; readonly limit?: number } = {},
-  ): Promise<{ snapshotId: string; categories: CategoryCount[]; entries: Record<string, unknown>[] }> {
+  ): Promise<{
+    snapshotId: string;
+    /** Header counts only: the reason codes live on each entry, which is what a reader of a snapshot needs. */
+    categories: { category: AudienceCategory; count: number }[];
+    entries: Record<string, unknown>[];
+  }> {
     const header = await this.records.byId(MARKETING_AUDIENCE_SNAPSHOT_ENTITY, snapshotId);
     if (header === undefined) throw new NotFoundError(`Audience snapshot "${snapshotId}" does not exist.`);
     await this.acl.assertRecordAccess(MARKETING_AUDIENCE_SNAPSHOT_ENTITY, "read", {
@@ -741,11 +792,21 @@ interface ClassifiedCandidate {
   readonly decision: RecipientEligibilityDecision | undefined;
 }
 
-function tally(categories: readonly AudienceCategory[]): CategoryCount[] {
+function tally(items: readonly { readonly category: AudienceCategory; readonly reasons: readonly string[] }[]): CategoryCount[] {
   const counts = new Map<AudienceCategory, number>();
-  for (const category of categories) counts.set(category, (counts.get(category) ?? 0) + 1);
+  const reasons = new Map<AudienceCategory, Set<string>>();
+  for (const item of items) {
+    counts.set(item.category, (counts.get(item.category) ?? 0) + 1);
+    const seen = reasons.get(item.category) ?? new Set<string>();
+    for (const reason of item.reasons) seen.add(reason);
+    reasons.set(item.category, seen);
+  }
   return [...counts.entries()]
-    .map(([category, count]) => ({ category, count }))
+    .map(([category, count]) => ({
+      category,
+      count,
+      reasons: [...(reasons.get(category) ?? [])].sort(),
+    }))
     .sort((left, right) => right.count - left.count || left.category.localeCompare(right.category));
 }
 

@@ -28,6 +28,13 @@ import {
   GlobalSendPauseSchema,
   PublicLinkIssueSchema,
   PublicUnsubscribeSchema,
+  RunScheduledBatchSchema,
+  SendApprovalSchema,
+  SendCommandBodySchema,
+  SendCreateSchema,
+  SendRecipientsQuerySchema,
+  SendRevokeApprovalSchema,
+  SendTransitionSchema,
   SettingsPatchSchema,
   SnapshotEntriesQuerySchema,
   SnapshotModeSchema,
@@ -42,7 +49,9 @@ import { MarketingAutomationNavigationService } from "./marketing-automation-nav
 import { MarketingAutomationSettingsService } from "./marketing-automation-settings.service.js";
 import { MarketingCampaignService } from "./marketing-campaign.service.js";
 import { MarketingConsentService } from "./marketing-consent.service.js";
+import { MarketingDeliveryBatchService } from "./marketing-delivery-batch.service.js";
 import { MarketingPublicTokenService } from "./marketing-public-token.service.js";
+import { MarketingSendService } from "./marketing-send.service.js";
 import { MarketingSuppressionService } from "./marketing-suppression.service.js";
 import { MarketingTemplateService } from "./marketing-template.service.js";
 import { MarketingTestSendService } from "./marketing-test-send.service.js";
@@ -75,6 +84,8 @@ export class MarketingAutomationController {
     @Inject(MarketingPublicTokenService) private readonly links: MarketingPublicTokenService,
     @Inject(MarketingTemplateService) private readonly templates: MarketingTemplateService,
     @Inject(MarketingTestSendService) private readonly testSends: MarketingTestSendService,
+    @Inject(MarketingSendService) private readonly sends: MarketingSendService,
+    @Inject(MarketingDeliveryBatchService) private readonly deliveryBatch: MarketingDeliveryBatchService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -256,6 +267,160 @@ export class MarketingAutomationController {
   @Post("action/campaign/:id/sendTest")
   async campaignSendTest(@Param("id") id: string, @Body() body: unknown) {
     return this.testSends.send(id, parse(TestSendSchema, body));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Send definition, dry run, approval and transitions (19-MA.8, §5.5, §5.6, §8.2)
+  //
+  // A send is the record of a decision — content revision, frozen audience, validation hash, approval — and
+  // these routes are that decision's whole surface. Entity CRUD for `MarketingSend` is refused by the module
+  // write guard (§9.2): a send a client could create or edit would be a campaign send somebody authorised by
+  // hand. Nothing here hands a recipient to a provider; that is MA.9's queue.
+  // ---------------------------------------------------------------------------
+
+  /** Define a send (a message within the campaign) in a numbered slot. */
+  @HttpCode(200)
+  @Post("action/campaign/:id/sends")
+  async campaignSendCreate(@Param("id") id: string, @Body() body: unknown) {
+    return this.sends.create(id, parse(SendCreateSchema, body));
+  }
+
+  /** The campaign's sends, with each one's decision state, ledger totals and allowed commands. */
+  @Get("action/campaign/:id/sends")
+  async campaignSendList(@Param("id") id: string) {
+    return this.sends.list(id);
+  }
+
+  /** One send: approval state, content revision, snapshot, recipient totals and the stored dry-run report. */
+  @Get("action/send/:id")
+  async sendGet(@Param("id") id: string) {
+    return this.sends.get(id);
+  }
+
+  /** Why this send moved where it moved: the command, the actor, the reason and the hashes. */
+  @Get("action/send/:id/history")
+  async sendHistory(@Param("id") id: string) {
+    return this.sends.history(id);
+  }
+
+  /**
+   * The §5.5 dry run: who would be included, how many per category, and the reason each category exists —
+   * including the campaign's own findings and the approval state. It writes nothing, so it is safe to ask as
+   * often as an operator likes, and it is refused for a caller who cannot read the campaign.
+   */
+  @HttpCode(200)
+  @Post("action/send/:id/dryRun")
+  async sendDryRun(@Param("id") id: string, @Body() body: unknown) {
+    parse(EmptyCommandBodySchema, body);
+    return this.sends.dryRun(id);
+  }
+
+  /**
+   * Freeze the decision: seal the content revision, freeze the audience snapshot for this send, materialise
+   * the recipient ledger, record the validation hash and clear any previous approval (§5.5).
+   */
+  @HttpCode(200)
+  @Post("action/send/:id/validate")
+  async sendValidate(@Param("id") id: string, @Body() body: unknown) {
+    parse(EmptyCommandBodySchema, body);
+    return this.sends.validate(id);
+  }
+
+  /** Approve the exact facts that were validated, attributed to the person who accepted them. */
+  @HttpCode(200)
+  @Post("action/send/:id/approve")
+  async sendApprove(@Param("id") id: string, @Body() body: unknown) {
+    return this.sends.approve(id, parse(SendApprovalSchema, body));
+  }
+
+  /** Withdraw an approval; the send returns to `Draft` with the reason recorded. */
+  @HttpCode(200)
+  @Post("action/send/:id/revokeApproval")
+  async sendRevokeApproval(@Param("id") id: string, @Body() body: unknown) {
+    return this.sends.revokeApproval(id, parse(SendRevokeApprovalSchema, body));
+  }
+
+  /**
+   * One endpoint for the whole send state machine, for callers that already know the command. A bare target
+   * status is refused rather than guessed: `Scheduled` is reachable by `schedule` alone, but `Queued` is
+   * reachable by both `queue` and `resume`, and picking one for the caller would skip the gate the other one
+   * applies (§8.2).
+   */
+  @HttpCode(200)
+  @Post("action/send/:id/transition")
+  async sendTransition(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(SendTransitionSchema, body);
+    if (input.command === undefined) {
+      throw new InvalidQueryError(
+        "A send transition must name the command that owns the move (schedule, queue, pause, resume, cancel, complete), so its checks cannot be skipped.",
+      );
+    }
+    return this.sends.run(id, input.command, input);
+  }
+
+  @HttpCode(200)
+  @Post("action/send/:id/schedule")
+  async sendSchedule(@Param("id") id: string, @Body() body: unknown) {
+    return this.sends.run(id, "schedule", parse(SendCommandBodySchema, body));
+  }
+
+  /** Hand the send to the delivery runtime (MA.9). Requires a live provider and a lifted global stop. */
+  @HttpCode(200)
+  @Post("action/send/:id/queue")
+  async sendQueue(@Param("id") id: string, @Body() body: unknown) {
+    return this.sends.run(id, "queue", parse(SendCommandBodySchema, body));
+  }
+
+  @HttpCode(200)
+  @Post("action/send/:id/pause")
+  async sendPause(@Param("id") id: string, @Body() body: unknown) {
+    return this.sends.run(id, "pause", parse(SendCommandBodySchema, body));
+  }
+
+  @HttpCode(200)
+  @Post("action/send/:id/resume")
+  async sendResume(@Param("id") id: string, @Body() body: unknown) {
+    return this.sends.run(id, "resume", parse(SendCommandBodySchema, body));
+  }
+
+  /** Stops the send's remaining messages; the only command that requires a reason (§10.2). */
+  @HttpCode(200)
+  @Post("action/send/:id/cancel")
+  async sendCancel(@Param("id") id: string, @Body() body: unknown) {
+    return this.sends.run(id, "cancel", parse(SendCommandBodySchema, body));
+  }
+
+  @HttpCode(200)
+  @Post("action/send/:id/complete")
+  async sendComplete(@Param("id") id: string, @Body() body: unknown) {
+    return this.sends.run(id, "complete", parse(SendCommandBodySchema, body));
+  }
+
+  /**
+   * Run the delivery batch for a send (MA.9). Claims and sends a bounded chunk of eligible
+   * recipients through the delivery ledger. Requires a live provider and the global send pause to be
+   * lifted. Admin-only: only an administrator may trigger delivery for a send.
+   */
+  @HttpCode(200)
+  @Post("action/delivery/run-scheduled-batch")
+  async runScheduledBatch(@Body() body: unknown) {
+    this.requireAdmin("running delivery batch");
+    const input = parse(RunScheduledBatchSchema, body);
+    return this.deliveryBatch.run(input.sendId, input.slot);
+  }
+
+  /**
+   * The recipient ledger of a send: state, forecast category and reasons, with records this caller may not
+   * read counted rather than named (§9.2).
+   */
+  @Get("action/send/:id/recipients")
+  async sendRecipients(@Param("id") id: string, @Query() query: unknown) {
+    const parsed = parse(SendRecipientsQuerySchema, coercePage(query));
+    return this.sends.recipients(id, {
+      limit: parsed.limit,
+      offset: parsed.offset,
+      ...(parsed.state !== undefined ? { state: parsed.state } : {}),
+    });
   }
 
   // ---------------------------------------------------------------------------

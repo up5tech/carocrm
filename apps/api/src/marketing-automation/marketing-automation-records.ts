@@ -112,7 +112,7 @@ export class MarketingAutomationRecords {
   async findByAttrs(
     entity: MarketingAutomationEntityType,
     filters: Readonly<Record<string, string>>,
-    options: { readonly limit?: number } = {},
+    options: { readonly limit?: number; readonly order?: "asc" | "desc" } = {},
   ): Promise<MarketingRow[]> {
     if (!isMarketingEntityType(entity)) return [];
     const clauses = [sql<boolean>`entity_type = ${entity}`, sql<boolean>`deleted_at is null`];
@@ -120,11 +120,14 @@ export class MarketingAutomationRecords {
       attrKey(field);
       clauses.push(sql<boolean>`(attrs ->> ${field}::text) = ${value}`);
     }
+    // `desc` is how a caller asks for the *newest* N rows rather than the oldest N: with a bounded limit,
+    // ascending order answers "the first fifty ever", which is the wrong window for "the current snapshot"
+    // or "the latest send". The direction is a closed union, never a value from a request (AGENTS.md §5.2).
     const rows = await sql<RowShape>`
       select id, entity_type, version, name, attrs, assigned_user_id, created_by_id, team_ids
       from entity_records
       where ${sql.join(clauses, sql` and `)}
-      order by created_at asc, id asc
+      order by created_at ${options.order === "desc" ? sql`desc` : sql`asc`}, id ${options.order === "desc" ? sql`desc` : sql`asc`}
       limit ${options.limit ?? 2_000}
     `.execute(this.db);
     return rows.rows.map(toRow);

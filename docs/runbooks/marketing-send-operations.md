@@ -1,10 +1,12 @@
 # Runbook — marketing send operations
 
 > **Scope:** operating Marketing Automation sending today. Phase 19-MA.7 delivers the provider binding, the
-> rate/concurrency interface and the safe test send; the queued campaign and journey delivery pipeline lands
-> in 19-MA.8/MA.9, and provider webhooks in 19-MA.10. Anything not yet delivered is marked **later phase**
+> rate/concurrency interface and the safe test send; 19-MA.8 delivers the send definition, its dry run, the
+> frozen audience snapshot, the approval and the recipient ledger. The worker that actually submits messages
+> lands in 19-MA.9 and provider webhooks in 19-MA.10. Anything not yet delivered is marked **later phase**
 > rather than described as if it existed.
 > **Related:** [`docs/marketing-automation/provider-adapters.md`](../marketing-automation/provider-adapters.md),
+> [`docs/marketing-automation/send-definitions.md`](../marketing-automation/send-definitions.md),
 > [`docs/marketing-automation/consent-and-suppression.md`](../marketing-automation/consent-and-suppression.md).
 
 ## 1. Where the controls are
@@ -18,6 +20,7 @@ Every control below is server-side; a UI toggle is never the enforcement point.
 | Global emergency stop | `POST /api/v1/MarketingAutomation/action/globalSendPause` | administrator |
 | Test send | `POST /api/v1/MarketingAutomation/action/campaign/{id}/sendTest` | campaign `edit` + allowlist |
 | Campaign lifecycle (`start`, `pause`, `cancel`, …) | `POST /api/v1/MarketingAutomation/action/campaign/{id}/{command}` | campaign `edit` + validation |
+| Send dry run, validation, approval and transitions | `POST /api/v1/MarketingAutomation/action/send/{id}/{dryRun,validate,approve,schedule,queue,…}` | campaign `edit` (reads need campaign `read`) |
 
 ## 2. Before the first send
 
@@ -64,6 +67,10 @@ POST /api/v1/MarketingAutomation/action/globalSendPause   { "paused": true, "rea
 - It does **not** touch records: campaigns, audiences, consent and suppression are unchanged, so lifting the
   stop resumes from the same state.
 - `cancel` (with a reason) is the per-campaign stop, and it is recorded in `CampaignTransition` with the actor.
+- A **send** has its own stop: `POST /api/v1/MarketingAutomation/action/send/{id}/cancel` with a reason
+  cancels the remaining recipients of one send (their ledger rows move to `Skipped` with `SEND_CANCELLED`) and
+  is recorded in `MarketingSendTransition`. It stops what is still queued; it cannot un-send anything already
+  submitted (MA.9 owns in-flight reconciliation).
 
 Resuming without duplicate messages:
 
@@ -83,7 +90,29 @@ Resuming without duplicate messages:
 | Bounce/complaint spike | suppression records (`MarketingSuppression`) | **later phase (MA.10):** automatic pausing on thresholds is not implemented yet; today the stop is manual |
 | Events missing from reports | — | **later phase (MA.10/MA.11):** provider webhooks and campaign statistics are not implemented; no report exists to be wrong yet |
 
-## 6. What an operator must never do
+## 6. Approving and queueing a send (19-MA.8)
+
+A **send** is one message within a campaign, and it is the record of a decision. An operator's path:
+
+1. `POST …/action/send/{id}/dryRun` — read-only. It answers who would be included, how many per category and
+   *why* each excluded category was excluded, plus the campaign's own findings. Ask it as often as you like.
+2. `POST …/action/send/{id}/validate` — freezes the decision: seals (or reuses) the content revision, takes a
+   `final` audience snapshot bound to the send, writes one delivery row per recipient and records the
+   validation hash. It clears any previous approval.
+3. `POST …/action/send/{id}/approve` — records who accepted exactly what was validated. The approval is bound
+   to the facts: change the content, the audience, the sender, the purpose or the provider and the view starts
+   reporting `stale`, the approval stops being `current`, and the next command refuses with
+   `SEND_APPROVAL_STALE` and returns the send to `Draft`.
+4. `POST …/action/send/{id}/schedule`, then `queue`. `schedule` is a configuration step; `queue` is the
+   execution gate and additionally requires a live provider, a lifted global stop and a campaign that is
+   itself Scheduled or Running. **Queueing does not send mail** — MA.9's worker is what claims the ledger's
+   `Eligible` rows.
+
+If a refusal says `SEND_PROVIDER_NOT_LIVE`, the fix is the transport and `provider.key` (section 2), not the
+send. If it says `SEND_APPROVAL_STALE`, the fix is to look at what changed, then validate and approve again —
+never to force the old approval through.
+
+## 7. What an operator must never do
 
 - Never add a live provider purely to make a test pass: tests are expected to use the fake adapter or a
   scripted one, and the acceptance rule is that a unit or E2E test cannot reach a live provider.

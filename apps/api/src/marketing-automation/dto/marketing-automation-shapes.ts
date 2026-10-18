@@ -10,7 +10,10 @@ import {
   CONSENT_SOURCES,
   CONSENT_STATUSES,
   PUBLIC_TOKEN_SCOPES,
+  RECIPIENT_DELIVERY_STATUSES,
   SEGMENT_ENTITY_TYPES,
+  SEND_COMMANDS,
+  SEND_STATUSES,
   SUPPRESSION_REASONS,
   SUPPRESSION_SCOPES,
   TARGET_LIST_ENTRY_SOURCES,
@@ -48,6 +51,9 @@ const PublicTokenScopeSchema = enumSchema(PUBLIC_TOKEN_SCOPES);
 const SegmentEntityTypeSchema = enumSchema(SEGMENT_ENTITY_TYPES);
 const TargetListEntrySourceSchema = enumSchema(TARGET_LIST_ENTRY_SOURCES);
 const AudienceCategorySchema = enumSchema(AUDIENCE_CATEGORY_CODES);
+const SendStatusSchema = enumSchema(SEND_STATUSES);
+const SendCommandSchema = enumSchema(SEND_COMMANDS);
+const DeliveryStateSchema = enumSchema(RECIPIENT_DELIVERY_STATUSES);
 
 export const SettingsPatchSchema = z.record(z.string(), z.unknown());
 
@@ -173,6 +179,81 @@ export const CampaignValidateQuerySchema = z
 
 export type CampaignValidateQuery = z.infer<typeof CampaignValidateQuerySchema>;
 
+// ---------------------------------------------------------------------------
+// Send definition commands (19-MA.8, §5.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * Defining a send for a campaign. The slot is the §5.6 identity (one delivery record per recipient *per
+ * intended send slot*), so it is named here rather than invented per request, and it defaults to the first.
+ */
+export const SendCreateSchema = z
+  .object({
+    slot: z.number().int().min(1).max(100).default(1),
+    name: z.string().trim().min(1).max(255).optional(),
+    idempotencyKey: IdempotencyKeySchema.optional(),
+  })
+  .strict();
+
+export type SendCreateInput = z.infer<typeof SendCreateSchema>;
+
+/**
+ * The whole send state machine in one body, for callers that know the command. `fail` is deliberately
+ * absent: it is the delivery runtime's outcome (MA.9), and a client that could set `Failed` could hide a
+ * send that never happened.
+ */
+export const SendTransitionSchema = z
+  .object({
+    command: SendCommandSchema.refine((command) => command !== "fail", {
+      message: "`fail` is produced by the delivery runtime, never by a client.",
+    }).optional(),
+    to: SendStatusSchema.optional(),
+    reason: ReasonSchema.optional(),
+    idempotencyKey: IdempotencyKeySchema.optional(),
+    version: z.number().int().positive().optional(),
+  })
+  .strict()
+  .refine((value) => value.command !== undefined || value.to !== undefined, {
+    message: "A send transition needs a command or a target status.",
+  });
+
+export type SendTransitionInput = z.infer<typeof SendTransitionSchema>;
+
+/** A named send command route's body: the command is fixed by the path and cannot be renamed by a payload. */
+export const SendCommandBodySchema = z
+  .object({
+    reason: ReasonSchema.optional(),
+    idempotencyKey: IdempotencyKeySchema.optional(),
+    version: z.number().int().positive().optional(),
+  })
+  .strict();
+
+export type SendCommandInput = z.infer<typeof SendCommandBodySchema>;
+
+/** Approval metadata: who accepted this decision, and why (§5.5). */
+export const SendApprovalSchema = z
+  .object({
+    note: z.string().trim().max(2_000).optional(),
+    idempotencyKey: IdempotencyKeySchema.optional(),
+    version: z.number().int().positive().optional(),
+  })
+  .strict();
+
+/** Withdrawing an approval stops the send, so the reason is required (§10.2). */
+export const SendRevokeApprovalSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(2_000),
+    idempotencyKey: IdempotencyKeySchema.optional(),
+  })
+  .strict();
+
+/** The recipient ledger page: a state filter and paging, nothing that could name a hidden record. */
+export const SendRecipientsQuerySchema = z.object({
+  state: DeliveryStateSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 /** The global emergency stop (§13) as a named command rather than a settings patch an operator composes. */
 export const GlobalSendPauseSchema = z
   .object({
@@ -185,6 +266,24 @@ export const GlobalSendPauseSchema = z
   });
 
 export type GlobalSendPauseInput = z.infer<typeof GlobalSendPauseSchema>;
+
+// ---------------------------------------------------------------------------
+// Delivery commands (19-MA.9)
+// ---------------------------------------------------------------------------
+
+/**
+ * Run a delivery batch for a send (MA.9). Claims and sends a bounded chunk of eligible
+ * recipients through the delivery ledger. Requires the send to be Queued and the global send
+ * pause to be lifted.
+ */
+export const RunScheduledBatchSchema = z
+  .object({
+    sendId: z.string().trim().min(1).max(64),
+    slot: z.number().int().min(1).max(100),
+  })
+  .strict();
+
+export type RunScheduledBatchInput = z.infer<typeof RunScheduledBatchSchema>;
 
 // ---------------------------------------------------------------------------
 // Audience commands (19-MA.4, §5.2)

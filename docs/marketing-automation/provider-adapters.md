@@ -116,8 +116,9 @@ Rules, all enforced server-side:
 8. **No campaign side effects:** no lifecycle transition, no validation stamp, no snapshot, no delivery row,
    no `marketing.*` event. Test sends are not counted as campaign sends or journey outcomes.
 9. **Duplicate guard:** the same submission key returns the recorded answer with `duplicate: true` instead of
-   sending twice. The guard is per process and bounded; the durable dedupe arrives with MA.8's recipient
-   records.
+   sending twice. The guard is per process and bounded; recipient-level deduplication (one message per address
+   per send slot) is delivered in MA.8's `marketing_recipient_deliveries` ledger, and MA.9 adds the durable
+   submission dedupe.
 10. **Classified outcome:** a submission failure is returned as `{ accepted: false, errorKind, error }` with
     HTTP 200 — the command executed; the outcome is the diagnostic. `unknown_submission` specifically tells
     the operator that pressing send again is not safe.
@@ -133,7 +134,7 @@ transport timeout (default 20 s per connection phase) is the worst-case request 
 | --- | --- | --- |
 | Development / CI / any test | `MAIL_TRANSPORT=none` (default) or `memory`; no `provider.key`, or a key that resolves to `disabled` | Every adapter reports `disabled`. Campaign `start` is blocked with `PROVIDER_NOT_BOUND` and the test send is refused — a test **cannot** reach a live provider. |
 | Staging with a real provider | `MAIL_TRANSPORT=smtp` + `SMTP_*` (or a sandbox account on the vendor's side), `provider.key=platform-mail`, allowlisted test addresses | Live sends are possible; the allowlist keeps test sends inside the team. |
-| Production | as staging, with the verified sender and the deployment's `provider.limits` set to the vendor's quota | Campaign and journey sends (from MA.8/MA.9 onward) go through the same adapter and the same gates. |
+| Production | as staging, with the verified sender and the deployment's `provider.limits` set to the vendor's quota | Campaign sends are defined, validated and approved through MA.8's send definition, and from MA.9 onward they go through the same adapter and the same gates. |
 
 Checklist before flipping a deployment to live:
 
@@ -147,8 +148,10 @@ Checklist before flipping a deployment to live:
 
 ## 8. Handed to later phases
 
-- **MA.8** creates the durable send definition, audience snapshot and per-recipient delivery rows, and stamps
-  `revisionId`/`contentHash` on each delivery.
+- **MA.8 (delivered)** creates the durable send definition, the send-bound audience snapshot and the
+  per-recipient delivery rows, and pins `templateRevisionId`/`contentHash` on the send itself; each recipient
+  row carries the same `content_hash` column for MA.9 to stamp at submission.
+  See [`send-definitions.md`](send-definitions.md).
 - **MA.9** enqueues chunks, claims work atomically, re-checks consent/suppression at submission, applies the
   shared rate limiter, and reconciles `unknown_submission` before any resend.
 - **MA.10** verifies provider webhooks and normalizes delivery/bounce/complaint events; adapters advertise

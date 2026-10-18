@@ -122,6 +122,53 @@ export const MarketingAutomationSettingsSchema = z
       })
       .strict()
       .default({}),
+    delivery: z
+      .object({
+        /**
+         * MA.9 — the queue-based delivery pipeline's bounded chunk (§5.5 "use bounded chunks and
+         * persistent recipient state", §11.2 "bounded batch sizes"). One batch claims at most this many
+         * `Eligible` rows per send, so a 50,000-recipient send never becomes one job or one transaction.
+         */
+        chunkSize: z.number().int().min(1).max(500).default(100),
+        /**
+         * Per-recipient retry budget (§11.2 "maximum attempt counts"). A retryable provider failure puts
+         * the row back in the queue until it has been claimed this many times; then it becomes a dead
+         * letter an operator can see rather than a loop nobody can stop.
+         */
+        maxAttempts: z.number().int().min(1).max(10).default(3),
+        /**
+         * A claim older than this is evidence its worker died mid-flight (§11.2 "safely resume after
+         * worker restart"). Recovery expires it and re-queues under the same idempotency key, so a
+         * provider that honours idempotency cannot deliver twice.
+         */
+        staleClaimMinutes: z.number().int().min(1).max(1440).default(15),
+        /**
+         * §5.8 "pause a sender/campaign automatically after repeated authentication/provider errors":
+         * this many consecutive authentication failures pause the send instead of burning every attempt.
+         */
+        autoPauseAfterAuthFailures: z.number().int().min(1).max(20).default(3),
+        /**
+         * Send-time frequency cap per recipient inside the window below (§5.5's dry-run category made
+         * enforceable at submission). `0` means the deployment publishes no cap — inventing one would
+         * block a correctly configured installation, so the default is off.
+         */
+        frequencyCapPerRecipient: z.number().int().min(0).max(100).default(0),
+        /** The window the frequency cap counts delivered marketing messages in. */
+        frequencyWindowHours: z.number().int().min(1).max(8760).default(168),
+        /**
+         * Deployment base URL for the per-recipient unsubscribe/preference links inserted at send time
+         * (§5.4). Empty means the links render as API-relative paths and the RFC 2369 `List-Unsubscribe`
+         * header is omitted — an absolute URL cannot be invented, and a wrong one is worse than none.
+         */
+        publicBaseUrl: z
+          .string()
+          .trim()
+          .max(320)
+          .refine((value) => value === "" || /^https?:\/\//.test(value), "publicBaseUrl must be empty or an http(s) URL.")
+          .default(""),
+      })
+      .strict()
+      .default({}),
     safety: z
       .object({
         /**

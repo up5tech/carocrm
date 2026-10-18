@@ -221,6 +221,16 @@ export const MARKETING_AUTOMATION_FEATURES: readonly MarketingAutomationFeatureD
  */
 export const PENDING_FEATURES: readonly { readonly key: string; readonly phase: string }[] = [];
 
+/**
+ * The physical structures the send definition depends on (19-MA.8). Migration 041 creates them, and the
+ * health endpoint reports whether they are actually present — a send definition that cannot enforce "one
+ * delivery record per recipient per slot" is a promise the database is not keeping.
+ */
+export const SEND_STRUCTURES = {
+  tables: ["marketing_recipient_deliveries"],
+  indexes: ["uq_entity_records_marketing_send_slot", "uq_marketing_recipient_deliveries_address"],
+} as const;
+
 export const MARKETING_AUTOMATION_MODULE = {
   id: "MarketingAutomation",
   name: "Marketing Automation",
@@ -231,7 +241,7 @@ export const MARKETING_AUTOMATION_MODULE = {
   /** API prefix owned by the module's domain commands; entity CRUD stays on `/api/v1/:entity`. */
   apiPrefix: "/api/v1/MarketingAutomation",
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ["19-MA.0", "19-MA.1", "19-MA.2", "19-MA.3", "19-MA.4", "19-MA.5", "19-MA.6", "19-MA.7"],
+  implementedPhases: ["19-MA.0", "19-MA.1", "19-MA.2", "19-MA.3", "19-MA.4", "19-MA.5", "19-MA.6", "19-MA.7", "19-MA.8", "19-MA.9"],
   /** The records this module owns. `Email`, `EmailTemplate` and the CRM person records stay platform-owned. */
   entityTypes: [
     "Campaign",
@@ -244,6 +254,8 @@ export const MARKETING_AUTOMATION_MODULE = {
     "MarketingPublicToken",
     "MarketingAudienceSnapshot",
     "MarketingTemplateRevision",
+    "MarketingSend",
+    "MarketingSendTransition",
   ],
 } as const;
 

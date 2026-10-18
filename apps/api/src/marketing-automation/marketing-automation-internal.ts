@@ -8,6 +8,8 @@ import {
   MARKETING_CONSENT_ENTITY,
   MARKETING_CONSENT_EVENT_ENTITY,
   MARKETING_PUBLIC_TOKEN_ENTITY,
+  MARKETING_SEND_ENTITY,
+  MARKETING_SEND_TRANSITION_ENTITY,
   MARKETING_SUPPRESSION_ENTITY,
   MARKETING_TEMPLATE_REVISION_ENTITY,
   type MarketingAutomationEntityType,
@@ -167,6 +169,66 @@ export const SERVER_OWNED_FIELDS_BY_ENTITY: Readonly<Record<string, readonly str
     "sealedById",
     "sealedAt",
   ],
+  [MARKETING_SEND_ENTITY]: [
+    // A send definition *is* the decision (§5.5): status, the snapshot and content it was validated
+    // against, the hash an approval is bound to, the counts derived from the ledger, and every lifecycle
+    // stamp. A client that could write any of them could authorise its own send without a validation or an
+    // approval — the record API refuses the whole entity anyway (see `INTERNAL_ONLY_ENTITIES`), and this list
+    // is what makes the refusal explainable field by field.
+    "campaignId",
+    "slot",
+    "status",
+    "purpose",
+    "templateId",
+    "templateRevisionId",
+    "contentHash",
+    "snapshotId",
+    "compositionHash",
+    "senderAccountId",
+    "providerKey",
+    "recipientCount",
+    "eligibleCount",
+    "blockedCount",
+    "skippedCount",
+    "sentCount",
+    "failedCount",
+    "validationHash",
+    "validationReport",
+    "lastValidatedAt",
+    "validatedById",
+    "validationCount",
+    "approvedById",
+    "approvedAt",
+    "approvalHash",
+    "approvalNote",
+    "scheduledAt",
+    "queuedAt",
+    "pausedAt",
+    "startedSendingAt",
+    "sentAt",
+    "completedAt",
+    "cancelledAt",
+    "cancelReason",
+    "failedAt",
+    "failureReason",
+    "lastErrorCode",
+    "lastErrorAt",
+  ],
+  [MARKETING_SEND_TRANSITION_ENTITY]: [
+    "sendId",
+    "campaignId",
+    "snapshotId",
+    "fromStatus",
+    "toStatus",
+    "command",
+    "reason",
+    "actorUserId",
+    "actorType",
+    "validationHash",
+    "approvalHash",
+    "occurredAt",
+    "idempotencyKey",
+  ],
 };
 
 /**
@@ -182,6 +244,11 @@ export const INTERNAL_ONLY_ENTITIES: readonly MarketingAutomationEntityType[] = 
   MARKETING_PUBLIC_TOKEN_ENTITY,
   MARKETING_AUDIENCE_SNAPSHOT_ENTITY,
   MARKETING_TEMPLATE_REVISION_ENTITY,
+  // A send definition and its history are authored by the send state machine, which is where the dry run,
+  // the snapshot, the approval and the transition checks live (§5.5). A client-created send would be a
+  // campaign send somebody authorised by hand.
+  MARKETING_SEND_ENTITY,
+  MARKETING_SEND_TRANSITION_ENTITY,
 ];
 
 /** The capability that must be on before a record of this kind may be written by a caller. */
@@ -192,4 +259,8 @@ export const FEATURE_BY_ENTITY: Readonly<Record<string, string>> = {
   [TARGET_LIST_ENTRY_ENTITY]: "audience",
   [MARKETING_AUDIENCE_SNAPSHOT_ENTITY]: "audience",
   [MARKETING_TEMPLATE_REVISION_ENTITY]: "templates",
+  // Sending is campaign management: a send definition belongs to the campaign lifecycle, not to the
+  // optional audience or template capabilities a deployment may leave off (§13).
+  [MARKETING_SEND_ENTITY]: "campaigns",
+  [MARKETING_SEND_TRANSITION_ENTITY]: "campaigns",
 };

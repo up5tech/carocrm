@@ -156,6 +156,10 @@ const MA_PUBLIC_TOKEN_STATUSES = ['Active', 'Used', 'Expired', 'Revoked'];
 // Phase 19-MA.4 — audience snapshot vocabulary (§5.2, §6.1).
 const MA_SNAPSHOT_MODES = ['preview', 'final'];
 const MA_SNAPSHOT_STATUSES = ['Generated', 'Invalidated'];
+// Phase 19-MA.8 — send definition vocabulary (§5.5, §6.5).
+const MA_SEND_STATUSES = ['Draft', 'Validated', 'Scheduled', 'Queued', 'Sending', 'Sent', 'Completed', 'Paused', 'Cancelled', 'Failed'];
+// The recipient ledger (migration 041) is a table rather than an entity, so its state vocabulary lives only
+// in `marketing-automation-domain.ts` (`RECIPIENT_DELIVERY_STATUSES`) — there is no metadata enum to drift.
 
 export const coreMetadata: MetadataSeedEntry[] = [
   {
@@ -4463,6 +4467,126 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
         record: { displayField: 'name', removable: false, followable: false, streamable: false },
         client: { web: false },
         acl: { permissions: { MarketingTemplateRevision: { create: 'no', read: 'own', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'MarketingSend',
+      data: {
+        name: 'MarketingSend',
+        label: 'Send Definition',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, required: true, inList: true, inDetail: true },
+          campaignId: { type: 'link', entityKey: 'Campaign', required: true, inList: true, inDetail: true },
+          // The intended send slot (§5.6): one live send per (campaign, slot), enforced by
+          // `uq_entity_records_marketing_send_slot` in migration 041.
+          slot: { type: 'int', defaultValue: 1, inList: true, inDetail: true },
+          status: { type: 'enum', values: MA_SEND_STATUSES, defaultValue: 'Draft', inList: true, inDetail: true, audited: true },
+          // Purpose is copied from the campaign at validation time: it is what the consent gate was evaluated
+          // against, so it has to survive a later campaign edit as evidence of the decision that was made.
+          purpose: { type: 'enum', values: MA_CAMPAIGN_PURPOSES, inList: true, inDetail: true },
+          // Content is pinned by the sealed revision (MA.6), never by re-reading the template at send time —
+          // that is what makes "which content did this send use?" answerable (§6.2).
+          templateId: { type: 'link', entityKey: 'EmailTemplate', inDetail: true },
+          templateRevisionId: { type: 'link', entityKey: 'MarketingTemplateRevision', inDetail: true },
+          contentHash: { type: 'varchar', maxLength: 64, inDetail: true },
+          // The frozen audience this send was validated against (MA.4 snapshot, bound by its `sendId`).
+          snapshotId: { type: 'link', entityKey: 'MarketingAudienceSnapshot', inDetail: true },
+          compositionHash: { type: 'varchar', maxLength: 64, inDetail: true },
+          senderAccountId: { type: 'varchar', maxLength: 64, label: 'Sending account', inDetail: true },
+          providerKey: { type: 'varchar', maxLength: 64, inDetail: true },
+          // Forecast and ledger totals (server-owned, from the delivery records — never a client's arithmetic).
+          recipientCount: { type: 'int', defaultValue: 0, inList: true, inDetail: true },
+          eligibleCount: { type: 'int', defaultValue: 0, inList: true, inDetail: true },
+          blockedCount: { type: 'int', defaultValue: 0, inDetail: true },
+          skippedCount: { type: 'int', defaultValue: 0, inDetail: true },
+          sentCount: { type: 'int', defaultValue: 0, inDetail: true },
+          failedCount: { type: 'int', defaultValue: 0, inDetail: true },
+          // Validation and approval (§5.5). The hash is the fingerprint of the material facts the decision was
+          // made on; the approval is only valid while the facts still fingerprint to it.
+          validationHash: { type: 'varchar', maxLength: 64, inDetail: true },
+          validationReport: { type: 'text', label: 'Dry run report (JSON)', inDetail: true },
+          lastValidatedAt: { type: 'datetime', inDetail: true, sortable: true },
+          validatedById: { type: 'link', entityKey: 'User', inDetail: true },
+          validationCount: { type: 'int', defaultValue: 0, inDetail: true },
+          approvedById: { type: 'link', entityKey: 'User', inDetail: true },
+          approvedAt: { type: 'datetime', inDetail: true, sortable: true },
+          approvalHash: { type: 'varchar', maxLength: 64, inDetail: true },
+          approvalNote: { type: 'text', inDetail: true },
+          // Lifecycle stamps, written only by the send state machine (§5.5, §8.2).
+          scheduledAt: { type: 'datetime', inDetail: true, sortable: true },
+          queuedAt: { type: 'datetime', inDetail: true },
+          pausedAt: { type: 'datetime', inDetail: true },
+          startedSendingAt: { type: 'datetime', inDetail: true },
+          sentAt: { type: 'datetime', inDetail: true },
+          completedAt: { type: 'datetime', inDetail: true },
+          cancelledAt: { type: 'datetime', inDetail: true },
+          cancelReason: { type: 'text', inDetail: true },
+          failedAt: { type: 'datetime', inDetail: true },
+          failureReason: { type: 'text', inDetail: true },
+          // Why the last command was refused or the approval invalidated (§7.4 explainable failures).
+          lastErrorCode: { type: 'varchar', maxLength: 64, inDetail: true },
+          lastErrorAt: { type: 'datetime', inDetail: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'uq_entity_records_marketing_send_slot', fields: ['campaignId', 'slot'], unique: true },
+          { name: 'idx_entity_records_marketing_send_campaign', fields: ['campaignId', 'createdAt'] },
+          { name: 'idx_entity_records_marketing_send_status', fields: ['status', 'scheduledAt'] },
+        ],
+        layouts: {
+          list: [{ entity: 'MarketingSend', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'campaignId', 'slot', 'status', 'purpose', 'recipientCount', 'eligibleCount', 'lastValidatedAt'] }] }],
+          detail: [
+            { entity: 'MarketingSend', type: 'detail', panels: [{ name: 'main', label: 'Send', position: 0, fields: ['name', 'campaignId', 'slot', 'status', 'purpose', 'providerKey', 'senderAccountId'] }, { name: 'content', label: 'Content', position: 10, fields: ['templateId', 'templateRevisionId', 'contentHash'] }, { name: 'audience', label: 'Audience', position: 20, fields: ['snapshotId', 'compositionHash', 'recipientCount', 'eligibleCount', 'blockedCount', 'skippedCount', 'sentCount', 'failedCount'] }, { name: 'approval', label: 'Validation and approval', position: 30, fields: ['lastValidatedAt', 'validatedById', 'validationCount', 'validationHash', 'approvedById', 'approvedAt', 'approvalHash', 'approvalNote', 'validationReport'] }, { name: 'lifecycle', label: 'Lifecycle', position: 40, fields: ['scheduledAt', 'queuedAt', 'pausedAt', 'startedSendingAt', 'sentAt', 'completedAt', 'cancelledAt', 'cancelReason', 'failedAt', 'failureReason', 'lastErrorCode', 'lastErrorAt'] }] },
+          ],
+        },
+        // A send definition is evidence of what a campaign intended to send to whom (§5.5): it is retired by
+        // cancelling, never deleted, and it is read through the module's own endpoints that apply the parent
+        // campaign's permission.
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: { web: false },
+        acl: { permissions: { MarketingSend: { create: 'no', read: 'own', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'MarketingSendTransition',
+      data: {
+        name: 'MarketingSendTransition',
+        label: 'Send Transition',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, inList: false, inDetail: false, inEdit: false },
+          sendId: { type: 'link', entityKey: 'MarketingSend', required: true, inList: true, inDetail: true },
+          campaignId: { type: 'link', entityKey: 'Campaign', inList: true, inDetail: true },
+          // Which audience snapshot the command acted on, so a later change is provably not what was approved.
+          snapshotId: { type: 'link', entityKey: 'MarketingAudienceSnapshot', inDetail: true },
+          fromStatus: { type: 'enum', values: MA_SEND_STATUSES, inList: true, inDetail: true },
+          toStatus: { type: 'enum', values: MA_SEND_STATUSES, required: true, inList: true, inDetail: true },
+          command: { type: 'varchar', maxLength: 32, required: true, inList: true, inDetail: true },
+          reason: { type: 'text', inDetail: true },
+          actorUserId: { type: 'link', entityKey: 'User', inDetail: true },
+          actorType: { type: 'varchar', maxLength: 16, inDetail: true },
+          validationHash: { type: 'varchar', maxLength: 64, inDetail: true },
+          approvalHash: { type: 'varchar', maxLength: 64, inDetail: true },
+          occurredAt: { type: 'datetime', required: true, inList: true, inDetail: true, sortable: true },
+          idempotencyKey: { type: 'varchar', maxLength: 128, inDetail: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'idx_entity_records_marketing_send_transition_send', fields: ['sendId', 'occurredAt'] },
+          { name: 'uq_entity_records_marketing_send_transition_idem', fields: ['idempotencyKey'], unique: true },
+        ],
+        layouts: {
+          list: [{ entity: 'MarketingSendTransition', type: 'list', panels: [{ name: 'list', position: 0, fields: ['sendId', 'fromStatus', 'toStatus', 'command', 'actorUserId', 'occurredAt'] }] }],
+          detail: [{ entity: 'MarketingSendTransition', type: 'detail', panels: [{ name: 'main', label: 'Transition', position: 0, fields: ['sendId', 'campaignId', 'snapshotId', 'fromStatus', 'toStatus', 'command', 'reason', 'actorUserId', 'actorType', 'validationHash', 'approvalHash', 'occurredAt', 'idempotencyKey'] }] }],
+        },
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: { web: false },
+        acl: { permissions: { MarketingSendTransition: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
       },
     },
   ];

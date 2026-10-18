@@ -47,6 +47,18 @@ export const MARKETING_AUDIENCE_SNAPSHOT_ENTITY = "MarketingAudienceSnapshot";
  * itself stays platform-owned and editable; a sealed revision is the copy a send can be traced back to.
  */
 export const MARKETING_TEMPLATE_REVISION_ENTITY = "MarketingTemplateRevision";
+/**
+ * One message within a campaign (§5.5, audit §3: "Campaign fields must not be overloaded"). It carries the
+ * content revision, the audience snapshot, the validation hash and the approval the send is authorised by,
+ * so a campaign can hold several sends (§5.6 "one recipient has one delivery record per intended send
+ * slot") without any of them rewriting the campaign's own fields.
+ */
+export const MARKETING_SEND_ENTITY = "MarketingSend";
+/** Append-only send lifecycle history, the exact counterpart of `CampaignTransition` for a send. */
+export const MARKETING_SEND_TRANSITION_ENTITY = "MarketingSendTransition";
+
+/** The bulk per-recipient ledger (audit §3 `MarketingRecipientDelivery`), a table, not a metadata record. */
+export const MARKETING_RECIPIENT_DELIVERIES_TABLE = "marketing_recipient_deliveries";
 
 export const MARKETING_AUTOMATION_ENTITY_TYPES = [
   CAMPAIGN_ENTITY,
@@ -59,6 +71,8 @@ export const MARKETING_AUTOMATION_ENTITY_TYPES = [
   MARKETING_PUBLIC_TOKEN_ENTITY,
   MARKETING_AUDIENCE_SNAPSHOT_ENTITY,
   MARKETING_TEMPLATE_REVISION_ENTITY,
+  MARKETING_SEND_ENTITY,
+  MARKETING_SEND_TRANSITION_ENTITY,
 ] as const;
 export type MarketingAutomationEntityType = (typeof MARKETING_AUTOMATION_ENTITY_TYPES)[number];
 
@@ -385,6 +399,13 @@ export function warning(code: CampaignFindingCode, message: string, field?: stri
 // Send definition lifecycle (§5.5 — contract declared now, runtime in MA.8)
 // ---------------------------------------------------------------------------
 
+/**
+ * The queue job that drives delivery (§11.1 candidate jobs, MA.9 task 1). Defined here so the send
+ * service (which enqueues it on `queue`/`resume`) and the delivery worker (which reads it for health)
+ * cannot drift apart; the worker process registers the handler under this same name.
+ */
+export const DELIVERY_BATCH_JOB = "marketing.deliveryBatch";
+
 export const SEND_STATUSES = [
   "Draft",
   "Validated",
@@ -407,14 +428,21 @@ export type SendStatus = (typeof SEND_STATUSES)[number];
 export const SEND_TRANSITIONS: Readonly<Record<SendStatus, readonly SendStatus[]>> = {
   Draft: ["Validated", "Cancelled"],
   Validated: ["Draft", "Scheduled", "Cancelled"],
-  Scheduled: ["Draft", "Queued", "Paused", "Cancelled"],
-  Queued: ["Sending", "Paused", "Cancelled"],
+  // Re-validation is an edge in its own right: running the dry run again is how a stale approval is replaced
+  // (§5.5), and it must not require the operator to walk the send back to Draft by hand first.
+  Scheduled: ["Draft", "Validated", "Queued", "Paused", "Cancelled"],
+  // `Queued` and `Paused` join `Scheduled` in allowing `Draft`: "Validated is invalidated by any material
+  // change, which is why Draft is reachable from every pre-send state" (§5.5). A send whose content or
+  // audience changed while it sat queued has no approval left, and Draft is where it must go back to.
+  Queued: ["Draft", "Validated", "Sending", "Paused", "Cancelled"],
+  // `Sending` is deliberately not re-validatable: messages are on the wire, and changing what the send means
+  // underneath the worker is exactly the ambiguity the snapshot exists to prevent (§5.2).
   Sending: ["Sent", "Paused", "Failed"],
   Sent: ["Completed"],
   Completed: [],
-  Paused: ["Queued", "Cancelled"],
+  Paused: ["Draft", "Validated", "Queued", "Cancelled"],
   Cancelled: [],
-  Failed: ["Draft", "Cancelled"],
+  Failed: ["Draft", "Validated", "Cancelled"],
 };
 
 export const SEND_COMMANDS = [
@@ -428,6 +456,254 @@ export const SEND_COMMANDS = [
   "fail",
 ] as const;
 export type SendCommand = (typeof SEND_COMMANDS)[number];
+
+/**
+ * The target of each named command. `fail` is the one command the delivery runtime (MA.9) owns — it is a
+ * legal edge of the machine but is never exposed as a route, so an operator cannot declare a send failed.
+ */
+export const SEND_COMMAND_TARGET: Readonly<Record<SendCommand, SendStatus>> = {
+  validate: "Validated",
+  schedule: "Scheduled",
+  queue: "Queued",
+  pause: "Paused",
+  resume: "Queued",
+  cancel: "Cancelled",
+  complete: "Completed",
+  fail: "Failed",
+};
+
+/**
+ * The source states each named command accepts — always a subset of `SEND_TRANSITIONS`.
+ *
+ * `validate` is deliberately re-runnable from every pre-send state (a re-validation after a material change
+ * is how a stale approval is replaced), and `pause` covers `Queued` because a send that has been queued but
+ * not yet handed to a worker is still an operator's to stop.
+ */
+export const SEND_COMMAND_SOURCES: Readonly<Record<SendCommand, readonly SendStatus[]>> = {
+  validate: ["Draft", "Validated", "Scheduled", "Queued", "Paused", "Failed"],
+  schedule: ["Validated"],
+  queue: ["Scheduled"],
+  pause: ["Scheduled", "Queued", "Sending"],
+  resume: ["Paused"],
+  cancel: ["Draft", "Validated", "Scheduled", "Queued", "Sending", "Paused", "Failed"],
+  complete: ["Sent"],
+  fail: ["Sending"],
+};
+
+/** Commands a user may never run; MA.9's runtime produces these outcomes and nothing a client can press. */
+export const SEND_SYSTEM_ONLY_COMMANDS: readonly SendCommand[] = ["fail"];
+
+/** Statuses a send can no longer be stopped from: the state machine's terminal states. */
+export const SEND_TERMINAL_STATUSES: readonly SendStatus[] = ["Completed", "Cancelled"];
+
+/** Pre-send states: nothing has been handed to a provider, so a material change may return the send to Draft. */
+export const SEND_PRE_SEND_STATUSES: readonly SendStatus[] = ["Draft", "Validated", "Scheduled", "Queued", "Paused"];
+
+export function isSendStatus(value: unknown): value is SendStatus {
+  return typeof value === "string" && (SEND_STATUSES as readonly string[]).includes(value);
+}
+
+export function isSendCommand(value: unknown): value is SendCommand {
+  return typeof value === "string" && (SEND_COMMANDS as readonly string[]).includes(value);
+}
+
+export function sendCommandTarget(command: SendCommand): SendStatus {
+  return SEND_COMMAND_TARGET[command];
+}
+
+export function sendCommandSources(command: SendCommand): readonly SendStatus[] {
+  return SEND_COMMAND_SOURCES[command];
+}
+
+/** The commands an actor in this state may run, in declaration order — what the SPA renders verbatim. */
+export function allowedSendCommands(status: SendStatus): SendCommand[] {
+  return SEND_COMMANDS.filter(
+    (command) =>
+      SEND_COMMAND_SOURCES[command].includes(status) && !SEND_SYSTEM_ONLY_COMMANDS.includes(command),
+  );
+}
+
+/** The same single transition validator the campaign lifecycle uses, applied to the send machine (§5.5). */
+export function checkSendTransition(input: {
+  from: SendStatus;
+  to?: SendStatus | undefined;
+  command?: SendCommand | undefined;
+}): TransitionCheck {
+  const { from } = input;
+  const to = input.command !== undefined ? SEND_COMMAND_TARGET[input.command] : input.to;
+  if (to === undefined) {
+    return {
+      allowed: false,
+      code: "SEND_TRANSITION_UNDECLARED",
+      message: "A send transition needs a command or a target status.",
+    };
+  }
+  if (input.command !== undefined && input.to !== undefined && input.to !== to) {
+    return {
+      allowed: false,
+      code: "SEND_TRANSITION_NOT_ALLOWED",
+      message: `Command "${input.command}" moves a send to "${to}", not "${input.to}".`,
+    };
+  }
+  if (from === to) return { allowed: true };
+  if (input.command !== undefined && !SEND_COMMAND_SOURCES[input.command].includes(from)) {
+    return {
+      allowed: false,
+      code: "SEND_TRANSITION_NOT_ALLOWED",
+      message: `Command "${input.command}" cannot run on a send in status "${from}" (it applies to ${SEND_COMMAND_SOURCES[input.command].join(", ") || "no status"}).`,
+    };
+  }
+  if (!SEND_TRANSITIONS[from].includes(to)) {
+    const targets = SEND_TRANSITIONS[from];
+    return {
+      allowed: false,
+      code: "SEND_TRANSITION_NOT_ALLOWED",
+      message:
+        targets.length === 0
+          ? `A send in status "${from}" is final and cannot move to "${to}".`
+          : `A send in status "${from}" cannot move to "${to}". Allowed: ${targets.join(", ")}.`,
+    };
+  }
+  return { allowed: true };
+}
+// ---------------------------------------------------------------------------
+// Send definition: findings, dry run and the delivery ledger mapping (§5.5, §6.5 — MA.8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Every way a send definition can be refused or cautioned, from a fixed list (§7.4 "explainable"). A
+ * refusal names the rule and the thing to fix, exactly as a campaign finding does — "the send is blocked"
+ * is not an answer an operator can act on.
+ */
+export const SEND_FINDING_CODES = [
+  "SEND_CAMPAIGN_CLOSED",
+  "SEND_CAMPAIGN_INVALID",
+  "SEND_CHANNEL_UNSUPPORTED",
+  "SEND_AUDIENCE_EMPTY",
+  "SEND_NO_ELIGIBLE_RECIPIENTS",
+  "SEND_CONTENT_UNSEALED",
+  "SEND_PROVIDER_NOT_LIVE",
+  "SEND_GLOBAL_SEND_PAUSED",
+  "SEND_CAMPAIGN_NOT_LIVE",
+  "SEND_APPROVAL_REQUIRED",
+  "SEND_APPROVAL_STALE",
+  "SEND_AUDIENCE_TRUNCATED",
+  "SEND_CONSENT_POLICY",
+] as const;
+export type SendFindingCode = (typeof SEND_FINDING_CODES)[number];
+
+/** The same shape as a campaign finding, because an operator reads both reports side by side (§8.4). */
+export interface SendFinding {
+  readonly code: SendFindingCode;
+  readonly level: "blocker" | "warning";
+  readonly message: string;
+  readonly field?: string;
+}
+
+export function sendBlocker(code: SendFindingCode, message: string, field?: string): SendFinding {
+  return { code, level: "blocker", message, ...(field !== undefined ? { field } : {}) };
+}
+
+export function sendWarning(code: SendFindingCode, message: string, field?: string): SendFinding {
+  return { code, level: "warning", message, ...(field !== undefined ? { field } : {}) };
+}
+
+/** One category of the forecast, with the reasons that category exists at all (§5.5 dry run). */
+export interface AudienceCategoryCount {
+  readonly category: AudienceCategory;
+  readonly count: number;
+  /** Stable reason codes (suppression reason, consent block, duplicate rule) seen in this category. */
+  readonly reasons: readonly string[];
+}
+
+/** A named recipient the caller may read, so a dry run explains itself without disclosing hidden records. */
+export interface SendForecastRecipient {
+  readonly entityType: string;
+  readonly entityId: string;
+  readonly name: string | null;
+  readonly category: AudienceCategory;
+  readonly reasons: readonly string[];
+}
+
+/** The audience half of a dry run: counts per category, and the snapshot a validation would freeze. */
+export interface SendAudienceForecast {
+  readonly snapshotId: string | null;
+  readonly compositionHash: string;
+  readonly resolved: number;
+  readonly eligible: number;
+  readonly blocked: number;
+  readonly skipped: number;
+  readonly categories: readonly AudienceCategoryCount[];
+  readonly sample: readonly SendForecastRecipient[];
+  readonly truncated: boolean;
+  readonly limit: number;
+  readonly notes: readonly string[];
+}
+
+export interface SendApprovalState {
+  readonly approvedById: string | null;
+  readonly approvedAt: string | null;
+  readonly approvalHash: string | null;
+  /** True when the approval was given for exactly the material facts as they are now (§5.5). */
+  readonly current: boolean;
+  readonly note: string | null;
+}
+
+/**
+ * The §5.5 dry run: what would be sent, to how many people, and why the rest are excluded — plus the
+ * campaign report it inherits and the approval state the decision rests on. Produced without writing
+ * anything, so an operator (or a test) can ask the question as often as they like.
+ */
+export interface SendDryRunReport {
+  readonly sendId: string;
+  readonly campaignId: string;
+  readonly slot: number;
+  readonly status: SendStatus;
+  /** Blockers empty. A dry run is `valid` when nothing about it would be refused right now. */
+  readonly valid: boolean;
+  readonly blockers: readonly SendFinding[];
+  readonly warnings: readonly SendFinding[];
+  /** The campaign report this send inherits, findings and all (§5.1). */
+  readonly campaign: CampaignValidationReport;
+  readonly audience: SendAudienceForecast;
+  readonly approval: SendApprovalState;
+  /** The fingerprint of the facts an approval is bound to; the value `validate` records and `schedule` checks. */
+  readonly materialHash: string;
+  readonly checkedAt: string;
+}
+
+/**
+ * Which ledger state a forecast category lands in (§6.5, and the `RECIPIENT_DELIVERY_TRANSITIONS` machine
+ * above). Written once, so the eligibility reason an operator saw in the dry run is the state the delivery
+ * worker will act on later — never two vocabularies for one decision.
+ *
+ * `Eligible` means "would be sent"; `Blocked` is a recipient a gate refused (consent, suppression, segment
+ * exclusion); `Skipped` is a recipient with no message to send to (no address, a duplicate of another
+ * record, an unreadable record). Only `Eligible` rows are handed to the provider by MA.9.
+ */
+export const DELIVERY_STATE_FOR_CATEGORY: Readonly<Record<AudienceCategory, RecipientDeliveryStatus>> = {
+  eligible: "Eligible",
+  duplicateRecord: "Skipped",
+  duplicateAddress: "Skipped",
+  noEmailAddress: "Skipped",
+  invalidAddress: "Skipped",
+  recordUnreadable: "Skipped",
+  excludedBySegment: "Blocked",
+  suppressedGlobal: "Blocked",
+  suppressedComplaint: "Blocked",
+  suppressedBounce: "Blocked",
+  suppressedOther: "Blocked",
+  optedOut: "Blocked",
+  consentUnknown: "Blocked",
+  consentPending: "Blocked",
+  frequencyCapped: "Blocked",
+};
+
+/** The three ledger states a forecast can produce, so a count never invents a fourth. */
+export const FORECAST_DELIVERY_STATES: readonly RecipientDeliveryStatus[] = ["Eligible", "Blocked", "Skipped"];
+
+/** Ledger states that are still someone's to stop: only these are cancelled when a send is cancelled. */
+export const OPEN_DELIVERY_STATES: readonly RecipientDeliveryStatus[] = ["Pending", "Eligible", "Queued"];
 
 // ---------------------------------------------------------------------------
 // Consent, preferences and suppression (§5.3 — matrix declared now, endpoints in MA.5)

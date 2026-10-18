@@ -1,7 +1,9 @@
 # Marketing Automation — campaign lifecycle
 
 **Delivered in:** Phase 19-MA.2 (contracts), Phase 19-MA.3 (lifecycle and validation), Phase 19-MA.4
-(audience resolution and preview) and Phase 19-MA.5 (the consent gate behind `CONSENT_NOT_CONFIGURED`).
+(audience resolution and preview), Phase 19-MA.5 (the consent gate behind `CONSENT_NOT_CONFIGURED`) and
+Phase 19-MA.8 (the send definition a campaign schedules *into* — see
+[`send-definitions.md`](send-definitions.md)).
 **Plan:** `PLAN_Phase_19_Marketing_Automation.md` §5.1, §5.2, §8.2, §8.4, §15.
 **Code:** [apps/api/src/marketing-automation](../../apps/api/src/marketing-automation) —
 `marketing-automation-domain.ts` (the tables below), `marketing-campaign.service.ts` (commands),
@@ -178,9 +180,10 @@ on the constraint instead of double-writing (§0.1 rule 10).
 
 `duplicateAsDraft` builds the copy from an **allowlist of configuration fields**, so nothing that describes
 an execution can be carried over by omission: no lifecycle stamps, no validation report or hash, no failure
-reason, no recipients, deliveries, enrollments or provider identifiers (MA.8–MA.10 add those, and they
-cannot leak into a copy). `code` is not duplicated — a copy needs its own identity or none. The source is
-recorded as `duplicatedFromId`.
+reason, no recipients, deliveries, enrollments or provider identifiers. Those exist now — MA.8 added send
+definitions and per-recipient delivery rows, and neither is reachable from a copy — and MA.9/MA.10 add
+execution and enrollment state, which is excluded the same way. `code` is not duplicated — a copy needs its
+own identity or none. The source is recorded as `duplicatedFromId`.
 
 ## 9. Events
 

@@ -11,10 +11,13 @@ import { MarketingAutomationWriteGuardService } from "./marketing-automation-wri
 import { MarketingCampaignService } from "./marketing-campaign.service.js";
 import { MarketingCampaignValidationService } from "./marketing-campaign-validation.service.js";
 import { MarketingConsentService } from "./marketing-consent.service.js";
+import { MarketingDeliveryBatchService } from "./marketing-delivery-batch.service.js";
+import { MarketingDeliveryLedger } from "./marketing-delivery-ledger.js";
 import { MarketingEligibilityService } from "./marketing-eligibility.service.js";
 import { MarketingProviderBindingService } from "./marketing-provider-binding.service.js";
 import { MarketingProviderLimiter } from "./marketing-provider-limiter.js";
 import { MarketingPublicTokenService } from "./marketing-public-token.service.js";
+import { MarketingSendService } from "./marketing-send.service.js";
 import { MarketingSuppressionService } from "./marketing-suppression.service.js";
 import { MarketingTemplateService } from "./marketing-template.service.js";
 import { MarketingTestSendService } from "./marketing-test-send.service.js";
@@ -56,6 +59,11 @@ export const MARKETING_AUTOMATION_PROVIDERS: Provider[] = [
   MarketingPublicTokenService,
   MarketingAudienceService,
   MarketingCampaignService,
+  // MA.8: the delivery ledger is the send service's storage — one row per resolved recipient — and the send
+  // service itself owns the definition, the dry run, the approval and the transitions.
+  MarketingDeliveryLedger,
+  MarketingDeliveryBatchService,
+  MarketingSendService,
   MarketingTestSendService,
   MarketingAutomationModuleHealthService,
   MarketingAutomationNavigationService,

@@ -23,6 +23,7 @@ import {
   JOURNEY_VERSION_TRANSITIONS,
   looksLikeEmailAddress,
   MARKETING_AUTOMATION_ENTITY_TYPES,
+  MARKETING_RECIPIENT_DELIVERIES_TABLE,
   normalizeEmailAddress,
   purposeRequiresConsent,
   purposeTypeMismatch,
@@ -199,11 +200,17 @@ describe("classification and consent gating (§5.1, §5.3)", () => {
       "MarketingPublicToken",
       "MarketingAudienceSnapshot",
       "MarketingTemplateRevision",
+      "MarketingSend",
+      "MarketingSendTransition",
     ]);
     // `Email`, `EmailTemplate` and the CRM person records stay platform-owned; the plan's §0.2 rule forbids a
     // second templating or contact system.
     expect(MARKETING_AUTOMATION_ENTITY_TYPES).not.toContain("Email");
     expect(MARKETING_AUTOMATION_ENTITY_TYPES).not.toContain("MarketingCampaign");
+    // The per-recipient ledger is bulk derived state, so it is a table (migration 041) and deliberately not a
+    // record type: 50,000 recipients must never enter the store built for business objects (§1.2).
+    expect(MARKETING_RECIPIENT_DELIVERIES_TABLE).toBe("marketing_recipient_deliveries");
+    expect(MARKETING_AUTOMATION_ENTITY_TYPES).not.toContain("MarketingRecipientDelivery");
     expect(SENDING_CAMPAIGN_TYPES).toEqual(["Email", "Newsletter", "Informational"]);
   });
 });
