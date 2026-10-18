@@ -14,6 +14,7 @@ import { MarketingConsentService } from "./marketing-consent.service.js";
 import { MarketingEligibilityService } from "./marketing-eligibility.service.js";
 import { MarketingPublicTokenService } from "./marketing-public-token.service.js";
 import { MarketingSuppressionService } from "./marketing-suppression.service.js";
+import { MarketingTemplateService } from "./marketing-template.service.js";
 
 /**
  * Phase 19-MA.1 – 19-MA.5 — Marketing Automation module barrel
@@ -39,6 +40,7 @@ export const MARKETING_AUTOMATION_PROVIDERS: Provider[] = [
   MarketingAutomationSettingsService,
   MarketingAutomationRecords,
   MarketingProviderRegistry,
+  MarketingTemplateService,
   MarketingCampaignValidationService,
   MarketingConsentService,
   MarketingSuppressionService,

@@ -31,6 +31,9 @@ export const MarketingAutomationSettingsSchema = z
       .object({
         campaigns: z.boolean().default(true),
         audience: z.boolean().default(false),
+        // "Recipient context and preview" (§5.4): the placeholder renderer, content preview and the
+        // immutable template revisions it seals. Off until an instance opts in, like `audience`.
+        templates: z.boolean().default(false),
       })
       .strict()
       .default({}),

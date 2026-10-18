@@ -9,6 +9,7 @@ import {
   MARKETING_CONSENT_EVENT_ENTITY,
   MARKETING_PUBLIC_TOKEN_ENTITY,
   MARKETING_SUPPRESSION_ENTITY,
+  MARKETING_TEMPLATE_REVISION_ENTITY,
   type MarketingAutomationEntityType,
   TARGET_LIST_ENTITY,
   TARGET_LIST_ENTRY_ENTITY,
@@ -153,6 +154,19 @@ export const SERVER_OWNED_FIELDS_BY_ENTITY: Readonly<Record<string, readonly str
     "invalidatedAt",
     "previousSnapshotId",
   ],
+  [MARKETING_TEMPLATE_REVISION_ENTITY]: [
+    // §6.2: a revision is what a send is traced to, so its identity and content are the server's record
+    // of the template as it stood at sealing time — a client that could write them could forge provenance.
+    "templateId",
+    "revisionNumber",
+    "contentHash",
+    "subject",
+    "body",
+    "bodyHtml",
+    "campaignId",
+    "sealedById",
+    "sealedAt",
+  ],
 };
 
 /**
@@ -167,6 +181,7 @@ export const INTERNAL_ONLY_ENTITIES: readonly MarketingAutomationEntityType[] = 
   MARKETING_CONSENT_EVENT_ENTITY,
   MARKETING_PUBLIC_TOKEN_ENTITY,
   MARKETING_AUDIENCE_SNAPSHOT_ENTITY,
+  MARKETING_TEMPLATE_REVISION_ENTITY,
 ];
 
 /** The capability that must be on before a record of this kind may be written by a caller. */
@@ -176,4 +191,5 @@ export const FEATURE_BY_ENTITY: Readonly<Record<string, string>> = {
   [TARGET_LIST_ENTITY]: "audience",
   [TARGET_LIST_ENTRY_ENTITY]: "audience",
   [MARKETING_AUDIENCE_SNAPSHOT_ENTITY]: "audience",
+  [MARKETING_TEMPLATE_REVISION_ENTITY]: "templates",
 };

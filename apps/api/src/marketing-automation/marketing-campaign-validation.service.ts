@@ -23,6 +23,7 @@ import {
 import { MarketingProviderRegistry } from "./marketing-automation-provider.js";
 import { MarketingAutomationRecords } from "./marketing-automation-records.js";
 import { MarketingAutomationSettingsService } from "./marketing-automation-settings.service.js";
+import { MarketingTemplateService } from "./marketing-template.service.js";
 
 /**
  * Phase 19-MA.3 — campaign send-readiness validation
@@ -56,6 +57,7 @@ export class MarketingCampaignValidationService {
     @Inject(MarketingAutomationSettingsService) private readonly settings: MarketingAutomationSettingsService,
     @Inject(MarketingProviderRegistry) private readonly providers: MarketingProviderRegistry,
     @Inject(EntityCrudService) private readonly entities: EntityCrudService,
+    @Inject(MarketingTemplateService) private readonly templates: MarketingTemplateService,
   ) {}
 
   async report(
@@ -90,7 +92,7 @@ export class MarketingCampaignValidationService {
     this.checkSchedule(data, blockers);
     this.checkBudget(data, blockers);
     await this.checkAudience(data, audience, blockers);
-    await this.checkContent(data, blockers);
+    await this.checkContent(data, blockers, warnings);
     await this.checkSender(data, settings.sender.defaultEmailAccountId, blockers, warnings);
     this.checkTracking(data, warnings);
 
@@ -303,19 +305,49 @@ export class MarketingCampaignValidationService {
   private async checkContent(
     data: Record<string, unknown>,
     blockers: CampaignFinding[],
+    warnings: CampaignFinding[],
   ): Promise<void> {
     if (!isSendingType(data["type"])) return;
     const templateId = text(data["templateId"]);
     if (templateId === undefined) {
       blockers.push(
-        blocker("CONTENT_REQUIRED", "A sending campaign needs message content: link an email template (MA.6 adds revisions and preview).", "templateId"),
+        blocker("CONTENT_REQUIRED", "A sending campaign needs message content: link an email template.", "templateId"),
       );
       return;
     }
     const error = await this.readable("EmailTemplate", templateId);
     if (error !== undefined) {
       blockers.push(blocker("CONTENT_NOT_READABLE", `The linked template cannot be used by this user: ${error}`, "templateId"));
+      return;
     }
+
+    // MA.6 (§15 `19-MA.6` acceptance): what would this content actually render as, and what would it
+    // carry? The renderer answers with sanitized facts — what the filter dropped, whether the opt-out
+    // links are present, whether a placeholder the allowlist does not provide is named. Recipient
+    // personalisation stays out of the report (there is no recipient here), so a missing recipient
+    // value is a documented fallback, not a finding; a template *mistake* is.
+    const analysis = await this.analyzeContent(data, templateId);
+    if (analysis === null) return;
+    for (const finding of analysis.findings) {
+      const code = RENDER_FINDING_TO_CAMPAIGN_WARNING[finding.code];
+      if (code === undefined) continue;
+      warnings.push(warning(code, finding.message));
+    }
+  }
+
+  private async analyzeContent(data: Record<string, unknown>, templateId: string): Promise<ReturnType<MarketingTemplateService["analyzeTemplate"]> | null> {
+    let template: Record<string, unknown> | null = null;
+    try {
+      template = await this.templates.readTemplate(templateId);
+    } catch {
+      // `readable()` already ran; a race (deleted between the two reads) is not worth a blocker here,
+      // and swallowing it as unreadable would contradict the earlier check — null keeps the report
+      // limited to the facts taken at read time (AGENTS.md §7: no silently swallowed failures without
+      // an explicit reason).
+      return null;
+    }
+    if (template === null) return null;
+    return this.templates.analyzeTemplate(template, data);
   }
 
   private async checkSender(
@@ -393,6 +425,18 @@ export interface AudienceComposition {
   readonly included: readonly string[];
   readonly excluded: readonly string[];
 }
+
+/**
+ * The renderer findings a campaign report carries (MA.6), and the CAMPAIGN_FINDING_CODES entry each
+ * maps to. The informational `SYSTEM_LINK_INSERTED_AT_SEND` note stays preview-only, and a fallback
+ * for a missing recipient value is normal person-data sparsity, not a campaign finding.
+ */
+const RENDER_FINDING_TO_CAMPAIGN_WARNING: Readonly<Record<string, CampaignFinding["code"]>> = {
+  MARKUP_REMOVED: "CONTENT_MARKUP_REMOVED",
+  LINK_NOT_ALLOWED: "CONTENT_LINK_INVALID",
+  FOOTER_MISSING: "CONTENT_FOOTER_MISSING",
+  PLACEHOLDER_UNKNOWN: "CONTENT_PLACEHOLDER_UNKNOWN",
+};
 
 /** Types that would put a message on the wire, and therefore carry the sending obligations (§5.1). */
 function isSendingType(value: unknown): boolean {

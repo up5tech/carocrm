@@ -41,7 +41,7 @@ during MA.0; the URLs are recorded so a later reader can re-check them.
 ## 3. Behaviour matrix
 
 `planned` = requirement understood, not built. `implemented` = built in this checkout and covered by the
-stated acceptance rule. MA.0–MA.5 are delivered; MA.6 onward is planned.
+stated acceptance rule. MA.0–MA.6 are delivered; MA.7 onward is planned.
 
 | Behaviour | Reference basis | Status | Acceptance rule in this project |
 | --- | --- | --- | --- |
@@ -59,7 +59,10 @@ stated acceptance rule. MA.0–MA.5 are delivered; MA.6 onward is planned.
 | Opt-out per target list and global suppression | Target Lists + Campaigns user guides | **implemented (MA.5)** | `MarketingSuppression` is a tombstone per address × channel × scope; a `GlobalOptOut` outranks segment membership in the one eligibility matrix every path must use, and the reasons a complaint or hard bounce produced cannot be revoked. |
 | Consent state, preference center and audit trail | plan §5.3 (project requirement, no upstream record type) | **implemented (MA.5)** | Consent is per address × channel × purpose with a state machine, append-only history, `Unknown` never read as consent, and re-consent from an opt-out refused without stated affirmative evidence. |
 | One-click public unsubscribe link | Emails user guide (List-Unsubscribe), plan §5.3.1 | **implemented (MA.5)** | Unauthenticated, opaque, hashed, scoped and expiring; a GET never performs the opt-out, a repeated POST is a success, and every failure answers the same sentence so the endpoints cannot confirm an address exists. |
-| `{{placeholder}}` message personalization | Emails user guide | **partly existing** | The platform already renders `{{key}}` substitution ([packages/mail/src/template/index.ts:14](file:///Users/up5techjacky/Documents/projects/carocrmv2/packages/mail/src/template/index.ts#L14)); per-recipient context is a MA.6 addition, not upstream parity. |
+| `{{placeholder}}` message personalization | Emails user guide | **implemented (MA.6)** | Marketing renders from a **restricted, allowlisted context** (`docs/marketing-automation/email-templates.md` §2): recipient simple fields, the campaign's own configuration and documented system links only, read through the actor's ACL so unreadable fields cannot be extracted via templates; unknown placeholders are reported, not leaked. The shared `EmailTemplate` editor is unchanged (no second editor, §6.2). |
+| Message content preview (subject/body, test of what goes out) | Emails user guide; plan §5.4 | **implemented (MA.6)** | `POST …/action/campaign/:id/previewContent` renders the sanitised body, a plain-text fallback, resolved/fallback/unknown placeholders and the content findings — against a readable sample contact or with documented fallbacks. The per-recipient opt-out links are sent-time values; preview shows the reserved `.invalid` sentinel and says so. |
+| Sanitised message content (no scripts/CSS/unsafe protocols in mail bodies) | Emails security posture; plan §9.4 | **implemented (MA.6)** | One allowlist filter (`marketing-template-render.ts`) rebuilds every tag, drops `script`/`style`/`iframe` and event handlers with their content, validates `href`/`src` schemes after entity-decoding (`javascript:`, `data:`, control-split variants refused), and reports what it removed. |
+| Immutable content revision / message-to-content traceability | plan §6.2 | **implemented (MA.6), stamps land with MA.7–MA.9** | `MarketingTemplateRevision` records the raw parts + SHA-256 hash + monotonic revision number per template; sealing is idempotent for identical content and module-write-only (migration 040). The send path of MA.7–MA.9 must stamp `revisionId`+`contentHash` on each delivery — that stamp is that phase's acceptance, not a claim here. |
 | Metadata-driven entity/ACL/API/job conventions | developer docs (metadata, ACL, API, scheduled job) | **existing platform behaviour** | The module uses the same Entity Engine, ACL, API, hook, job and outbox primitives as every other domain; verified by the module health endpoint's evidence list. |
 
 ## 4. Explicitly **not** compatible / project-specific

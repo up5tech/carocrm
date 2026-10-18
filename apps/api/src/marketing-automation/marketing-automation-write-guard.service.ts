@@ -44,8 +44,9 @@ import { MarketingAutomationSettingsService } from "./marketing-automation-setti
  *     produced by a command that has already validated the transition, the actor and the send-readiness
  *     report. A patch that could set them bypasses all three — which §8.2 forbids by name.
  *  2. **audit and credential rows are module-written only.** `CampaignTransition`, `TargetListEntry`,
- *     `MarketingConsentEvent`, `MarketingPublicToken` and `MarketingAudienceSnapshot` are evidence: a
- *     client-authored one is a fabricated history, a forged opt-in, or a minted unsubscribe link.
+ *     `MarketingConsentEvent`, `MarketingPublicToken`, `MarketingAudienceSnapshot` and
+ *     `MarketingTemplateRevision` are evidence: a client-authored one is a fabricated history, a forged
+ *     opt-in, a minted unsubscribe link, or a forged "what was actually sent" record (§6.2).
  *  3. **a stored audience is data, never executable content.** `criteriaJson` is parsed here against the
  *     entity/field/type/operator allowlist, so no audience can hold SQL, a formula or a field its author
  *     may not read (§5.2, §9.2). It is refused at the write, not at resolution time, when the marketer has

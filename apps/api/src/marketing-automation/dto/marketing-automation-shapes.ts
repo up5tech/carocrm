@@ -59,6 +59,33 @@ const ReasonSchema = z.string().trim().max(2_000);
 /** The keyed address identity this platform computes: 64 lowercase hex characters, never free text. */
 const HashSchema = z.string().trim().regex(/^[0-9a-f]{64}$/, "An address identity must be a 64-character digest.");
 
+// ---------------------------------------------------------------------------
+// Template content commands (19-MA.6, §5.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * The sample recipient a content preview renders against. `Contact`/`Lead` only: those are the entity
+ * types a marketing audience resolves to (§5.2), and the placeholder allowlist reads fields each of
+ * them actually carries. Empty body renders without a recipient — every recipient value falls back
+ * and the preview says so.
+ */
+export const ContentPreviewSchema = z
+  .object({
+    recipientType: SegmentEntityTypeSchema.optional(),
+    recipientId: IdSchema.optional(),
+  })
+  .strict()
+  .refine((value) => !(value.recipientId !== undefined && value.recipientType === undefined), {
+    message: "Naming a sample recipient needs its entity type.",
+  });
+
+export type ContentPreviewInput = z.infer<typeof ContentPreviewSchema>;
+
+/** Commands that take no options accept an empty (or absent) body and nothing else. */
+export const EmptyCommandBodySchema = z.object({}).strict();
+
+export type EmptyCommandBody = z.infer<typeof EmptyCommandBodySchema>;
+
 /**
  * A lifecycle command, optionally with an explicit target status. When both are given they must agree, and
  * the service checks that against the server-side transition model — a client cannot choose a destination

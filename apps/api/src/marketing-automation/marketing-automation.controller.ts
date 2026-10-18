@@ -23,6 +23,8 @@ import {
   CampaignTransitionSchema,
   CampaignValidateQuerySchema,
   ConsentRecordSchema,
+  ContentPreviewSchema,
+  EmptyCommandBodySchema,
   GlobalSendPauseSchema,
   PublicLinkIssueSchema,
   PublicUnsubscribeSchema,
@@ -41,6 +43,7 @@ import { MarketingCampaignService } from "./marketing-campaign.service.js";
 import { MarketingConsentService } from "./marketing-consent.service.js";
 import { MarketingPublicTokenService } from "./marketing-public-token.service.js";
 import { MarketingSuppressionService } from "./marketing-suppression.service.js";
+import { MarketingTemplateService } from "./marketing-template.service.js";
 
 /**
  * Phase 19-MA.1/MA.3 — the `MarketingAutomation` command surface
@@ -68,6 +71,7 @@ export class MarketingAutomationController {
     @Inject(MarketingConsentService) private readonly consent: MarketingConsentService,
     @Inject(MarketingSuppressionService) private readonly suppression: MarketingSuppressionService,
     @Inject(MarketingPublicTokenService) private readonly links: MarketingPublicTokenService,
+    @Inject(MarketingTemplateService) private readonly templates: MarketingTemplateService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -203,6 +207,40 @@ export class MarketingAutomationController {
   @Post("action/campaign/:id/duplicateAsDraft")
   async campaignDuplicate(@Param("id") id: string, @Body() body: unknown) {
     return this.campaigns.duplicateAsDraft(id, parse(CampaignDuplicateSchema, body));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Template content: preview and revisions (19-MA.6, §5.4, §6.2)
+  //
+  // Reads and writes go through MarketingTemplateService, whose renderer is allowance-based
+  // (§5.4) and whose revisions are immutable; entity CRUD for `MarketingTemplateRevision` stays
+  // refused for direct writes by the module write guard (the rows are module-written evidence).
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Render the linked template as it would go out: subject, sanitized HTML, plain-text fallback,
+   * resolved/fallback placeholders and the content findings (§5.4). Optional sample recipient —
+   * resolved only if this actor may read it.
+   */
+  @HttpCode(200)
+  @Post("action/campaign/:id/previewContent")
+  async campaignPreviewContent(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(ContentPreviewSchema, body);
+    return this.templates.previewCampaignContent(id, input);
+  }
+
+  /** Seal the current template content into an immutable revision (idempotent for identical content). */
+  @HttpCode(200)
+  @Post("action/campaign/:id/contentRevision")
+  async campaignSealRevision(@Param("id") id: string, @Body() body: unknown) {
+    parse(EmptyCommandBodySchema, body);
+    return this.templates.sealRevision(id);
+  }
+
+  /** The revisions sealed for this campaign's template, newest first. */
+  @Get("action/campaign/:id/contentRevisions")
+  async campaignContentRevisions(@Param("id") id: string) {
+    return this.templates.revisionsForCampaign(id);
   }
 
   // ---------------------------------------------------------------------------

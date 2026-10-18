@@ -4421,5 +4421,49 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
         acl: { permissions: { MarketingAudienceSnapshot: { create: 'no', read: 'own', edit: 'no', delete: 'no', stream: 'no' } } },
       },
     },
+    {
+      scope: 'entity',
+      name: 'MarketingTemplateRevision',
+      data: {
+        name: 'MarketingTemplateRevision',
+        label: 'Content Revision',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, required: true, inList: true, inDetail: true },
+          // The sealed template ("wrap, don't fork", §6.2): the parts are copied so the revision is
+          // self-contained even if the platform-owned EmailTemplate is edited afterwards.
+          templateId: { type: 'link', entityKey: 'EmailTemplate', required: true, inList: true, inDetail: true },
+          revisionNumber: { type: 'int', required: true, inList: true, inDetail: true },
+          // SHA-256 of the sealed subject/body/bodyHtml (§6.2) — the value a delivery record cites.
+          contentHash: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+          subject: { type: 'text', inDetail: true },
+          body: { type: 'text', label: 'Body Text', inDetail: true },
+          bodyHtml: { type: 'text', label: 'Body Html', inDetail: true },
+          // The campaign the revision was sealed from, as provenance; a send definition (MA.8) will
+          // reference the revision itself, so this stays nullable.
+          campaignId: { type: 'link', entityKey: 'Campaign', inList: true, inDetail: true },
+          sealedById: { type: 'link', entityKey: 'User', inDetail: true },
+          sealedAt: { type: 'datetime', required: true, inList: true, inDetail: true, sortable: true },
+        },
+        relations: {},
+        indexes: [
+          // The monotonic numbering a re-seal computes from (§6.2): one number per template, ever.
+          { name: 'idx_entity_records_marketing_template_revision_template', fields: ['templateId', 'revisionNumber'] },
+          { name: 'idx_entity_records_marketing_template_revision_campaign', fields: ['campaignId', 'sealedAt'] },
+        ],
+        layouts: {
+          list: [{ entity: 'MarketingTemplateRevision', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'templateId', 'campaignId', 'revisionNumber', 'contentHash', 'sealedAt'] }] }],
+          detail: [
+            { entity: 'MarketingTemplateRevision', type: 'detail', panels: [{ name: 'main', label: 'Revision', position: 0, fields: ['name', 'templateId', 'campaignId', 'revisionNumber', 'contentHash', 'sealedById', 'sealedAt'] }, { name: 'content', label: 'Content', position: 10, fields: ['subject', 'body', 'bodyHtml'] }] },
+          ],
+        },
+        // Content of a sealed revision is evidence (§6.2): a client that could rewrite it could forge
+        // what a send was traced to, so it is module-written and read-only to clients.
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: { web: false },
+        acl: { permissions: { MarketingTemplateRevision: { create: 'no', read: 'own', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
   ];
 }

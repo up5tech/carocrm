@@ -42,6 +42,11 @@ export const MARKETING_SUPPRESSION_ENTITY = "MarketingSuppression";
 export const MARKETING_PUBLIC_TOKEN_ENTITY = "MarketingPublicToken";
 /** Header of a durable audience snapshot (§6.1 "Audience/send snapshot"). */
 export const MARKETING_AUDIENCE_SNAPSHOT_ENTITY = "MarketingAudienceSnapshot";
+/**
+ * Immutable snapshot of an `EmailTemplate`'s content (§6.2 `MarketingTemplateRevision`). The template
+ * itself stays platform-owned and editable; a sealed revision is the copy a send can be traced back to.
+ */
+export const MARKETING_TEMPLATE_REVISION_ENTITY = "MarketingTemplateRevision";
 
 export const MARKETING_AUTOMATION_ENTITY_TYPES = [
   CAMPAIGN_ENTITY,
@@ -53,6 +58,7 @@ export const MARKETING_AUTOMATION_ENTITY_TYPES = [
   MARKETING_SUPPRESSION_ENTITY,
   MARKETING_PUBLIC_TOKEN_ENTITY,
   MARKETING_AUDIENCE_SNAPSHOT_ENTITY,
+  MARKETING_TEMPLATE_REVISION_ENTITY,
 ] as const;
 export type MarketingAutomationEntityType = (typeof MARKETING_AUTOMATION_ENTITY_TYPES)[number];
 
@@ -337,6 +343,11 @@ export const CAMPAIGN_FINDING_CODES = [
   "CONSENT_NOT_CONFIGURED",
   "PROVIDER_NOT_BOUND",
   "GLOBAL_SEND_PAUSED",
+  // Phase 19-MA.6 — content findings (§5.4): what the linked template renders and carries.
+  "CONTENT_LINK_INVALID",
+  "CONTENT_FOOTER_MISSING",
+  "CONTENT_MARKUP_REMOVED",
+  "CONTENT_PLACEHOLDER_UNKNOWN",
 ] as const;
 export type CampaignFindingCode = (typeof CAMPAIGN_FINDING_CODES)[number];
 

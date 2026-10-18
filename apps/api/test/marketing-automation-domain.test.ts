@@ -198,6 +198,7 @@ describe("classification and consent gating (§5.1, §5.3)", () => {
       "MarketingSuppression",
       "MarketingPublicToken",
       "MarketingAudienceSnapshot",
+      "MarketingTemplateRevision",
     ]);
     // `Email`, `EmailTemplate` and the CRM person records stay platform-owned; the plan's §0.2 rule forbids a
     // second templating or contact system.
