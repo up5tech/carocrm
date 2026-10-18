@@ -242,7 +242,6 @@ A task is complete when, as applicable:
 **Use the existing configured primary project database for direct development testing when database verification is needed. Do not create extra test databases. Never reset, truncate, drop, or broadly delete data to make a test pass. Keep all test writes identifiable and narrowly scoped, and preserve existing project data.**
 
 <!-- trail:start -->
-
 ## Trail — repo context graph
 
 This repo is indexed in `.trail/cache/`: small linked markdown nodes that explain each
