@@ -11,6 +11,7 @@ import { DatabaseService } from "../database/database.service.js";
 import { EntityCrudService } from "../entity/entity.service.js";
 import { runInTransaction } from "../entity/tx-context.js";
 import { EventBus } from "../events/event-bus.js";
+import { JobsService } from "../jobs/jobs.service.js";
 import { type AudiencePreview, MarketingAudienceService } from "./marketing-audience.service.js";
 import { runAsMarketingSystem } from "./marketing-automation-authority.js";
 import {
@@ -22,6 +23,7 @@ import {
   type CampaignStatus,
   type CampaignValidationReport,
   checkSendTransition,
+  DELIVERY_BATCH_JOB,
   DELIVERY_STATE_FOR_CATEGORY,
   fingerprint,
   isCampaignPurpose,
@@ -149,6 +151,14 @@ export interface SendTransitionResult {
   readonly transitionId: string | null;
   readonly cancelledDeliveries?: number | undefined;
   readonly blockers?: readonly string[] | undefined;
+  /**
+   * MA.9: the queue job enqueued by `queue`/`resume` so the worker starts claiming recipients. `null`
+   * means the queue was unreachable (or this was not a command that enqueues) — the scheduled
+   * `marketing.deliveryBatch` sweep picks the send up instead, and the reason is reported rather than
+   * swallowed (§11.2 "persist enough state to safely resume after worker restart").
+   */
+  readonly deliveryJobId?: string | null | undefined;
+  readonly deliveryQueueNote?: string | undefined;
 }
 
 export interface SendRecipientView {
@@ -214,6 +224,7 @@ export class MarketingSendService {
     @Inject(MarketingProviderRegistry) private readonly providers: MarketingProviderRegistry,
     @Inject(EventBus) private readonly events: EventBus,
     @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -650,11 +661,6 @@ export class MarketingSendService {
         ? await this.ledger.cancelOpen(sendId, slot, "SEND_CANCELLED", now.toISOString())
         : 0;
 
-      // MA.9: on queue or resume, enqueue the delivery batch job. The worker reads from
-      // marketing_recipient_deliveries in Sending/Queued state under the send's sendId/slot.
-      // We only enqueue if there are Eligible rows already claimed or this send's ledger rows.
-      const enqueueResult = { jobId: null as string | null, queued: false };
-
       await runAsMarketingInternal(() =>
         this.entities.update(MARKETING_SEND_ENTITY, sendId, {
           ...buildPatch(command, now, request.reason?.trim() ?? null),
@@ -687,11 +693,19 @@ export class MarketingSendService {
           cancelledDeliveries,
           actorUserId: actor?.userId ?? null,
           ...(idempotencyKey !== undefined ? { correlationId: idempotencyKey } : {}),
-          ...enqueueResult,
         },
       });
       return { cancelledDeliveries, transitionId };
     });
+
+    // MA.9 task 1: `queue`/`resume` hand the send to the delivery worker through the platform's own queue
+    // (`marketing.deliveryBatch`, registered by the worker and swept by cron). The enqueue runs *after* the
+    // commit so the worker can never observe a send whose transition is not visible yet, and a queue outage
+    // does not fail a transition that already happened — it is reported on the result and the scheduled
+    // sweep is the recovery path (§11.2 "safely resume after worker restart", §11.3 observability).
+    const delivery = command === "queue" || command === "resume"
+      ? await this.enqueueDeliveryBatch(sendId, slot)
+      : undefined;
 
     return {
       sendId,
@@ -702,7 +716,108 @@ export class MarketingSendService {
       idempotent: false,
       transitionId: outcome.transitionId,
       ...(command === "cancel" ? { cancelledDeliveries: outcome.cancelledDeliveries } : {}),
+      ...(delivery !== undefined ? { deliveryJobId: delivery.jobId, deliveryQueueNote: delivery.note } : {}),
     };
+  }
+
+  /**
+   * MA.9 — the delivery runtime's own transitions: `Queued → Sending` when a batch starts claiming,
+   * `Sending → Sent` when every recipient reached a terminal state, `Sending → Failed` when the send's
+   * recipients could not be delivered at all. These edges are legal in `SEND_TRANSITIONS` but carry no
+   * operator command, because they are outcomes of execution rather than decisions a person presses —
+   * `fail` is declared `SEND_SYSTEM_ONLY_COMMANDS` for exactly that reason (§5.5).
+   *
+   * Runs under the documented service identity (§9.2): the runtime has no human session, and the history
+   * row it appends says `system` rather than borrowing an expired actor.
+   */
+  async runtimeAdvance(
+    sendId: string,
+    to: Extract<SendStatus, "Sending" | "Sent" | "Failed">,
+    reason: string,
+  ): Promise<{ sendId: string; from: SendStatus; to: SendStatus; changed: boolean }> {
+    return runAsMarketingSystem(this.scope, `deliveryRuntime:${to}`, async () => {
+      const { send } = await this.loadSend(sendId, "edit");
+      const from = this.statusOf(send);
+      if (from === to) return { sendId, from, to, changed: false };
+      const check = checkSendTransition({ from, to });
+      if (!check.allowed) {
+        throw new ValidationError(check.message ?? "This transition is not allowed.", {
+          code: check.code ?? "SEND_TRANSITION_NOT_ALLOWED",
+          sendId,
+          to,
+        });
+      }
+
+      const now = new Date();
+      await runInTransaction(this.database.db, async (tx) => {
+        await runAsMarketingInternal(() =>
+          this.entities.update(MARKETING_SEND_ENTITY, sendId, {
+            status: to,
+            ...(to === "Sending" ? { startedSendingAt: now.toISOString() } : {}),
+            ...(to === "Sent" ? { sentAt: now.toISOString() } : {}),
+            ...(to === "Failed" ? { failedAt: now.toISOString(), failureReason: reason } : {}),
+          }),
+        );
+        await this.appendHistory({
+          sendId,
+          campaignId: send.campaignId,
+          command: to === "Sending" ? "startSending" : to === "Sent" ? "finishSending" : "fail",
+          from,
+          to,
+          reason,
+          validationHash: text(send.data["validationHash"]) ?? null,
+          approvalHash: text(send.data["approvalHash"]) ?? null,
+          snapshotId: text(send.data["snapshotId"]) ?? null,
+          idempotencyKey: null,
+          occurredAt: now.toISOString(),
+        });
+        await this.events.dispatch(tx, {
+          type: to === "Sending"
+            ? "marketingAutomation.send.sending"
+            : to === "Sent"
+              ? "marketingAutomation.send.sent"
+              : "marketingAutomation.send.failed",
+          payload: {
+            schemaVersion: 1,
+            occurredAt: now.toISOString(),
+            campaignId: send.campaignId,
+            sendId,
+            slot: this.slotOf(send),
+            from,
+            to,
+            reason,
+            actorUserId: this.scope.principal?.userId ?? "system",
+          },
+        });
+      });
+      return { sendId, from, to, changed: true };
+    });
+  }
+
+  /**
+   * Best-effort enqueue of the MA.9 delivery job. A queue outage is returned as `null` + a reason (the
+   * caller surfaces both) instead of throwing: the transition is already committed, and the scheduled
+   * `marketing.deliveryBatch` sweep is the documented recovery path — swallowing the failure silently is
+   * what this deliberately does not do.
+   */
+  private async enqueueDeliveryBatch(
+    sendId: string,
+    slot: number,
+  ): Promise<{ jobId: string | null; note?: string | undefined }> {
+    try {
+      const job = await this.jobs.enqueue({
+        job: DELIVERY_BATCH_JOB,
+        data: { sendId, slot },
+      });
+      return { jobId: job.id };
+    } catch {
+      return {
+        jobId: null,
+        note:
+          "The delivery job could not be enqueued because the job queue is unreachable; " +
+          "the scheduled delivery sweep will run this send instead.",
+      };
+    }
   }
 
   /**

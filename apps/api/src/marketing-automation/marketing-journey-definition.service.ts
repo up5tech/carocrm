@@ -5,6 +5,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
 import { EntityCrudService } from "../entity/entity.service.js";
 import { runAsMarketingSystem } from "./marketing-automation-authority.js";
+import { CAMPAIGN_PURPOSES } from "./marketing-automation-domain.js";
 
 export type JourneyNodeType = "start" | "end" | "action" | "condition" | "wait" | "split" | "join";
 
@@ -116,7 +117,25 @@ export class MarketingJourneyDefinitionService {
         }
       }
       if (node.type === "split" && node.next === undefined && node.then === undefined) {
-        errors.push(`Split node "${node.id}" must declare at least one outgoing port.`);
+        errors.push(`Split node "${node.id}" is missing an outgoing port: declare \`next\` or \`then\`.`);
+      }
+      if (node.type === "action" && node.action === "sendEmail") {
+        // MA.14 task 1: a journey send is delivered by MA.9's pipeline, so its three configuration
+        // failures are publish-time errors, never runtime surprises — the delivery worker refuses a
+        // sendEmail node without a named template, a named recipient type it can resolve, or a valid
+        // purpose (and a template cannot invent a purpose: it must come from the allowlist).
+        const templateId = (node.params as Record<string, unknown> | undefined)?.["templateId"];
+        if (typeof templateId !== "string" || templateId.trim() === "") {
+          errors.push(`Send-email node "${node.id}" must name a templateId; the delivery pipeline renders only named templates.`);
+        }
+        const recipientType = (node.params as Record<string, unknown> | undefined)?.["recipientType"];
+        if (recipientType !== undefined && recipientType !== "Contact" && recipientType !== "Lead") {
+          errors.push(`Send-email node "${node.id}" names an unsupported recipientType; use Contact or Lead, or omit it to use the enrollment's person.`);
+        }
+        const nodePurpose = (node.params as Record<string, unknown> | undefined)?.["purpose"];
+        if (nodePurpose !== undefined && (typeof nodePurpose !== "string" || !(CAMPAIGN_PURPOSES as readonly string[]).includes(nodePurpose))) {
+          errors.push(`Send-email node "${node.id}" names an unknown purpose; use one of ${CAMPAIGN_PURPOSES.join(", ")}.`);
+        }
       }
     }
     if (errors.length === 0 && typeof g.start === "string" && byId.has(g.start)) {

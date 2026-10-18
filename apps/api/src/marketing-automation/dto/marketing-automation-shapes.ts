@@ -278,8 +278,10 @@ export type GlobalSendPauseInput = z.infer<typeof GlobalSendPauseSchema>;
  */
 export const RunScheduledBatchSchema = z
   .object({
-    sendId: z.string().trim().min(1).max(64),
-    slot: z.number().int().min(1).max(100),
+    /** Optional: the sweep (cron) runs with no arguments and claims every open send's work. */
+    sendId: z.string().trim().min(1).max(64).optional(),
+    slot: z.number().int().min(1).max(100).optional(),
+    limit: z.number().int().min(1).max(500).optional(),
   })
   .strict();
 

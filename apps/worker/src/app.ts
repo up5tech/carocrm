@@ -11,6 +11,7 @@ import { loadExtensionConfig } from './extensions.js';
 import { registerCustomerSuccessJobs } from './handlers/customer-success-handlers.js';
 import { registerSystemJobs } from './handlers/job-handlers.js';
 import { registerMailJobs } from './handlers/mail-handlers.js';
+import { registerMarketingJobs } from './handlers/marketing-handlers.js';
 import { createKernelOutboxSetup } from './handlers/outbox-handlers.js';
 import { registerReportJobs } from './handlers/report-handlers.js';
 import { registerSalesJobs } from './handlers/sales-handlers.js';
@@ -105,6 +106,13 @@ export class WorkerApplication {
     // Phase 19-SD.9: the SLA warning/breach/escalation scan runs in the API on this schedule. The
     // job is inert when no worker capability is configured.
     registerServiceDeskJobs(this.jobRegistry, {
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
+      log: this.log,
+    });
+    // Phase 19-MA.9/MA.13: the delivery batch (queued sends and the cron sweep) and the due-step scan
+    // run in the API on these schedules. The jobs are inert when no worker capability is configured.
+    registerMarketingJobs(this.jobRegistry, {
       apiBaseUrl: this.config.apiBaseUrl,
       secret: this.config.reportWorkerSecret,
       log: this.log,

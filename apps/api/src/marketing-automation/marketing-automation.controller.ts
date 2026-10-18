@@ -1,4 +1,10 @@
-import { AuthorizationDeniedError, InvalidQueryError } from "@carocrm/core/errors/index.js";
+import { timingSafeEqual } from "node:crypto";
+
+import {
+  AuthenticationFailedError,
+  AuthorizationDeniedError,
+  InvalidQueryError,
+} from "@carocrm/core/errors/index.js";
 import {
   Body,
   Controller,
@@ -15,6 +21,7 @@ import { type ZodTypeAny } from "zod";
 
 import { Public } from "../auth/auth.guard.js";
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
+import { type AppConfig, CONFIG_TOKEN } from "../config.js";
 import {
   AudienceMemberRemoveSchema,
   AudienceMembersSchema,
@@ -46,6 +53,7 @@ import {
 } from "./dto/marketing-automation-shapes.js";
 import { MarketingAttributionService } from "./marketing-attribution.service.js";
 import { MarketingAudienceService } from "./marketing-audience.service.js";
+import { runAsMarketingSystem } from "./marketing-automation-authority.js";
 import { MarketingAutomationModuleHealthService } from "./marketing-automation-module-health.service.js";
 import { MarketingAutomationNavigationService } from "./marketing-automation-navigation.service.js";
 import { MarketingAutomationSettingsService } from "./marketing-automation-settings.service.js";
@@ -107,6 +115,7 @@ export class MarketingAutomationController {
     @Inject(MarketingOperationsService) private readonly operations: MarketingOperationsService,
     @Inject(MarketingDeliveryBatchService) private readonly deliveryBatch: MarketingDeliveryBatchService,
     @Inject(MarketingEventIngestionService) private readonly eventIngestion: MarketingEventIngestionService,
+    @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -436,16 +445,24 @@ export class MarketingAutomationController {
   }
 
   /**
-   * Run the delivery batch for a send (MA.9). Claims and sends a bounded chunk of eligible
-   * recipients through the delivery ledger. Requires a live provider and the global send pause to be
-   * lifted. Admin-only: only an administrator may trigger delivery for a send.
+   * Run the delivery batch (MA.9). Two doors onto the same bounded batch: an administrator pressing
+   * "run delivery" for one send, or the worker's own capability (`x-worker-secret`, the shared
+   * `REPORT_WORKER_SECRET` used by Sales, CustomerSuccess and ServiceDesk) for the scheduled sweep.
+   * With no arguments the sweep claims open work from every `Queued`/`Sending` send; with `sendId` it
+   * drives that send only. The runtime executes under the documented service identity either way (§9.2),
+   * and a batch never puts a message on the wire the recipient's consent gate has not re-approved.
    */
   @HttpCode(200)
   @Post("action/delivery/run-scheduled-batch")
-  async runScheduledBatch(@Body() body: unknown) {
-    this.requireAdmin("running delivery batch");
+  async runScheduledBatch(@Body() body: unknown, @Headers("x-worker-secret") workerSecret?: string) {
+    if (workerSecret !== undefined) this.assertWorkerSecret(workerSecret);
+    else this.requireAdmin("running delivery batch");
     const input = parse(RunScheduledBatchSchema, body);
-    return this.deliveryBatch.run(input.sendId, input.slot);
+    return this.deliveryBatch.run({
+      ...(input.sendId !== undefined ? { sendId: input.sendId } : {}),
+      ...(input.slot !== undefined ? { slot: input.slot } : {}),
+      ...(input.limit !== undefined ? { limit: input.limit } : {}),
+    });
   }
 
   /**
@@ -702,26 +719,40 @@ export class MarketingAutomationController {
     });
   }
 
+  /**
+   * Advance due journey steps (MA.13). The admin door runs as the caller; the worker door — the
+   * `marketing.journeyRunBatch` cron twin — carries the shared capability and runs under the service
+   * identity, exactly like the Service Desk SLA scan (§9.2 "background jobs act under an explicit
+   * service identity"). The pass is idempotent: a step executes under its enrollment's own claim and
+   * dedupe keys, so a duplicate tick changes nothing.
+   */
   @HttpCode(200)
   @Post("action/journey/run-batch")
-  async journeyRunBatch(@Body() body: unknown) {
-    this.requireAdmin("running the journey engine");
+  async journeyRunBatch(@Body() body: unknown, @Headers("x-worker-secret") workerSecret?: string) {
     const b = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
     const limit = Number(b.limit ?? 25);
-    const now = new Date().toISOString();
-    const due = await this.journeyRuntime.dueEnrollments(now, limit);
-    const results: unknown[] = [];
-    for (const item of due) {
-      const enrollment = await this.journeyRuntime.claim(item.id, now);
-      if (enrollment === undefined) continue;
-      const versionRow = item.versionId ? await this.journeyRuntime.versionGraph(item.versionId) : undefined;
-      if (versionRow === undefined) {
-        results.push({ enrollmentId: item.id, outcome: "failed", reason: "missing-version" });
-        continue;
+    const run = async () => {
+      const now = new Date().toISOString();
+      const due = await this.journeyRuntime.dueEnrollments(now, limit);
+      const results: unknown[] = [];
+      for (const item of due) {
+        const enrollment = await this.journeyRuntime.claim(item.id, now);
+        if (enrollment === undefined) continue;
+        const versionRow = item.versionId ? await this.journeyRuntime.versionGraph(item.versionId) : undefined;
+        if (versionRow === undefined) {
+          results.push({ enrollmentId: item.id, outcome: "failed", reason: "missing-version" });
+          continue;
+        }
+        results.push(await this.journeyRuntime.runStep(item.id, versionRow));
       }
-      results.push(await this.journeyRuntime.runStep(item.id, versionRow));
+      return { ran: results.length, results };
+    };
+    if (workerSecret !== undefined) {
+      this.assertWorkerSecret(workerSecret);
+      return runAsMarketingSystem(this.scope, "journeyRunBatch", run);
     }
-    return { ran: results.length, results };
+    this.requireAdmin("running the journey engine");
+    return run();
   }
 
   @HttpCode(200)
@@ -894,6 +925,23 @@ export class MarketingAutomationController {
   private requireAdmin(action: string): void {
     if (!this.scope.isAdmin) {
       throw new AuthorizationDeniedError(`Administrator access is required for ${action}.`);
+    }
+  }
+
+  /**
+   * The worker→API capability (`x-worker-secret`, `REPORT_WORKER_SECRET`) the scheduled marketing jobs
+   * carry, compared in constant time and refused outright when no capability is configured — the same
+   * door Service Desk, Sales and CustomerSuccess use for their cron twins (§9.2).
+   */
+  private assertWorkerSecret(supplied: string | undefined): void {
+    const expected = this.config.reportWorkerSecret;
+    if (expected === "" || supplied === undefined) {
+      throw new AuthenticationFailedError("Invalid worker capability.");
+    }
+    const expectedBytes = Buffer.from(expected);
+    const suppliedBytes = Buffer.from(supplied);
+    if (expectedBytes.length !== suppliedBytes.length || !timingSafeEqual(expectedBytes, suppliedBytes)) {
+      throw new AuthenticationFailedError("Invalid worker capability.");
     }
   }
 }

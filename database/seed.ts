@@ -430,6 +430,21 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
        ON CONFLICT (id) DO NOTHING`,
     );
 
+    // Marketing Automation (Phase 19-MA.9/MA.13): open delivery work is claimed every minute — the
+    // cron recovery path when a queue-time delivery job was lost — and due journey steps advance every
+    // two minutes. Both passes are idempotent by the ledger's claim and the enrollment's step locks,
+    // and both are inert while the module's features are off.
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('maDeliveryBatch', 'marketing.deliveryBatch', '* * * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('maJourneyRunBatch', 'marketing.journeyRunBatch', '*/2 * * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+
     for (const entry of coreMetadata) {
       await pool.query(
         `INSERT INTO metadata_entries (scope, name, data) VALUES ($1, $2, $3)

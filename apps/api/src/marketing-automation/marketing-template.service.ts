@@ -87,6 +87,25 @@ export interface ContentPreview extends RenderOutput {
   readonly generatedAt: string;
 }
 
+/**
+ * One recipient's message content, rendered from a sealed revision (MA.9 delivery).
+ *
+ * `templateContentHash` is what the render produced; `sealedContentHash` is what the revision record
+ * stores. The delivery runtime compares the two (and the send's own `contentHash`) before anything goes
+ * on the wire, so a revision edited after approval can never be mailed as if it were the approved one.
+ */
+export interface DeliveryContentRender {
+  readonly revisionId: string;
+  readonly subject: string | null;
+  readonly plainText: string | null;
+  readonly bodyHtml: string | null;
+  /** Which per-recipient system links this content actually uses (`unsubscribeUrl` / `preferenceUrl`). */
+  readonly systemLinks: readonly string[];
+  readonly templateContentHash: string;
+  readonly sealedContentHash: string | null;
+  readonly findings: readonly RenderFinding[];
+}
+
 @Injectable()
 export class MarketingTemplateService {
   constructor(
@@ -262,7 +281,96 @@ export class MarketingTemplateService {
     });
   }
 
-  /** The revisions sealed for one campaign's template, newest first (campaign read required). */
+  /** The content the send actually renders: the sealed revision, never the (still editable) template. */
+  async renderEmailTemplateForRecipient(
+    templateId: string,
+    recipientType: string,
+    recipientId: string,
+  ): Promise<{
+    readonly subject: string | null;
+    readonly plainText: string | null;
+    readonly bodyHtml: string | null;
+    readonly systemLinks: readonly string[];
+    readonly templateContentHash: string;
+    readonly findings: readonly RenderFinding[];
+  }> {
+    // A journey owns no content revision: it sends the template as it stands, with its current hash named
+    // in the delivery outcome as the §15-`19-MA.6` acceptance requires ("a sent message can be associated
+    // with the content revision/hash actually used"). Exists-checks throw before anything is submitted.
+    const template = await this.entities.get("EmailTemplate", templateId);
+    const recipient = await this.entities.get(recipientType, recipientId);
+    if (recipient === null || recipient === undefined) {
+      throw new ValidationError(
+        `Recipient ${recipientType}:${recipientId} cannot be read, so the journey message cannot be rendered.`,
+        { code: "RECIPIENT_UNREADABLE", templateId },
+      );
+    }
+    const render = renderMarketingTemplate({
+      template: templateParts(template),
+      campaign: { name: null, code: null, objective: null, startsAt: null, endsAt: null },
+      recipient: recipientValues(recipient),
+      consentRequired: true,
+    });
+    return {
+      subject: render.subject,
+      plainText: render.plainText,
+      bodyHtml: render.bodyHtml,
+      systemLinks: render.systemLinks,
+      templateContentHash: render.templateContentHash,
+      findings: render.findings,
+    };
+  }
+
+  /** The content the send actually renders: the sealed revision, never the (still editable) template. */
+  async renderRevisionForRecipient(input: {
+    readonly campaignId: string;
+    readonly revisionId: string;
+    readonly recipientType: string;
+    readonly recipientId: string;
+  }): Promise<DeliveryContentRender> {
+    const revision = await this.records.byId(MARKETING_TEMPLATE_REVISION_ENTITY, input.revisionId);
+    if (revision === undefined) {
+      throw new ValidationError(
+        `The sealed content revision "${input.revisionId}" no longer exists, so this send cannot render what it was validated against.`,
+        { code: "CONTENT_REVISION_MISSING", campaignId: input.campaignId, revisionId: input.revisionId },
+      );
+    }
+    const campaign = await this.entities.get(CAMPAIGN_ENTITY, input.campaignId);
+    const recipient = await this.entities.get(input.recipientType, input.recipientId);
+    if (recipient === null || recipient === undefined) {
+      // Under the service identity an unreadable person is a deleted one: the delivery gate turns this
+      // into a terminal block rather than a retry loop (§5.7 "permanent failures … invalid address").
+      throw new ValidationError(
+        `Recipient ${input.recipientType}:${input.recipientId} cannot be read, so its message cannot be rendered.`,
+        { code: "RECIPIENT_UNREADABLE", campaignId: input.campaignId },
+      );
+    }
+    const purpose: CampaignPurpose | null = isCampaignPurpose(campaign["purpose"]) ? campaign["purpose"] : null;
+    const rawText = (value: unknown): string | null => (typeof value === "string" ? value : null);
+    const render = renderMarketingTemplate({
+      template: {
+        subject: rawText(revision.data["subject"]),
+        body: rawText(revision.data["body"]),
+        bodyHtml: rawText(revision.data["bodyHtml"]),
+      },
+      campaign: campaignValues(campaign),
+      recipient: recipientValues(recipient),
+      // A campaign without a purpose is the conservative case: its message carries the opt-out wording a
+      // consent-requiring purpose would, and the eligibility gate (not this render) decides deliverability.
+      consentRequired: purpose === null ? true : purposeRequiresConsent(purpose),
+    });
+    return {
+      revisionId: input.revisionId,
+      subject: render.subject,
+      plainText: render.plainText,
+      bodyHtml: render.bodyHtml,
+      systemLinks: render.systemLinks,
+      templateContentHash: render.templateContentHash,
+      sealedContentHash: text(revision.data["contentHash"]),
+      findings: render.findings,
+    };
+  }
+
   async revisionsForCampaign(campaignId: string): Promise<{ campaignId: string; templateId: string | null; revisions: readonly RevisionHeader[] }> {
     const campaign = await this.entities.get(CAMPAIGN_ENTITY, campaignId);
     const templateId = typeof campaign["templateId"] === "string" && campaign["templateId"].trim() !== ""

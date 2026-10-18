@@ -144,11 +144,15 @@ export class MarketingDeliveryLedger {
   // -------------------------------------------------------------------------
 
   /**
-   * Atomically claim a bounded chunk of `Eligible` rows for delivery (MA.9 task 3, §11.2).
+   * Atomically claim a bounded chunk of open rows for delivery (MA.9 task 3, §11.2).
    *
    * `FOR UPDATE SKIP LOCKED` is the claim: two workers running the same send receive disjoint row
    * sets, and a claim bumps `attempts` and stamps `claimed_at` in the same statement — the two facts
    * recovery needs to tell "died mid-flight" from "never started".
+   *
+   * `Eligible` **and** `Queued` are claimable: `Queued` is where `retryOrFail`/`releaseClaim` send a row
+   * back (the machine's own `Queued → Sending` edge), so a claim that only read `Eligible` would strand
+   * every retried recipient unclaimed forever.
    */
   async claim(input: {
     readonly sendId: string;
@@ -167,7 +171,7 @@ export class MarketingDeliveryLedger {
         from marketing_recipient_deliveries
         where send_id = ${input.sendId}
           and slot = ${input.slot}
-          and state = 'Eligible'
+          and state in ('Eligible', 'Queued')
         order by created_at asc, entity_type asc, entity_id asc
         limit ${input.limit}
         for update skip locked
@@ -397,19 +401,27 @@ export class MarketingDeliveryLedger {
     readonly at: string;
   }): Promise<{ expired: number; requeued: number; exhausted: number }> {
     const expired = await sql<ExpiredClaimRow>`
+      with to_expire as (
+        select send_id, slot, entity_type, entity_id
+        from marketing_recipient_deliveries
+        where state = 'Sending'
+          and error_code is null
+          and claimed_at is not null
+          and claimed_at < ${input.olderThan}
+          ${input.sendId === null ? sql`` : sql`and send_id = ${input.sendId}`}
+        order by claimed_at asc
+        limit ${input.limit}
+      )
       update marketing_recipient_deliveries
       set state = 'Failed',
           error_code = 'CLAIM_EXPIRED',
           failed_at = ${input.at},
           reasons = reasons || ${JSON.stringify(["CLAIM_EXPIRED"])}::jsonb,
           updated_at = ${input.at}
-      where state = 'Sending'
-        and error_code is null
-        and claimed_at is not null
-        and claimed_at < ${input.olderThan}
-        ${input.sendId === null ? sql`` : sql`and send_id = ${input.sendId}`}
+      where (send_id, slot, entity_type, entity_id) in (
+        select send_id, slot, entity_type, entity_id from to_expire
+      )
       returning send_id, slot, entity_type, entity_id, attempts
-      limit ${input.limit}
     `.execute(this.db);
     const rows = expired.rows;
     if (rows.length === 0) return { expired: 0, requeued: 0, exhausted: 0 };
