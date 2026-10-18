@@ -58,7 +58,7 @@ test.describe('CaroCRM UI', () => {
     await expect(page.getByText('Logistics').first()).toBeVisible();
 
     await page.goto('/Account');
-    const filterArea = page.locator('.lizant-filter');
+    const filterArea = page.locator('.carocrm-filter');
     const operatorSelect = filterArea.locator('.ant-select').first();
     await operatorSelect.click();
     // antd renders the option list in a portal; keyboard selection is deterministic
@@ -191,7 +191,7 @@ test.describe('CaroCRM UI', () => {
     const meeting = (await created.json()) as { id: string; version: number };
 
     await page.goto('/calendar');
-    const chip = page.locator('.lizant-cal-tag', { hasText: `PW Calendar Meeting ${runId}` });
+    const chip = page.locator('.carocrm-cal-tag', { hasText: `PW Calendar Meeting ${runId}` });
     await expect(chip).toBeVisible();
 
     const todayCell = chip.locator('xpath=ancestor::td[1]');

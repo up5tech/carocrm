@@ -59,19 +59,19 @@ export function ServiceDeskDashboardPage() {
   return (
     <div>
       <Typography.Title level={4}>{t('web.serviceDesk.dashboard.title')}</Typography.Title>
-      {loading && metrics === undefined ? <Card className="lizant-card" loading /> : (
+      {loading && metrics === undefined ? <Card className="carocrm-card" loading /> : (
         <>
           <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
             {cards.map((c) => (
               <Col key={c.label} xs={12} sm={8} md={6} lg={4}>
-                <Card className="lizant-card" size="small">
+                <Card className="carocrm-card" size="small">
                   <Statistic title={c.label} value={c.value} />
                 </Card>
               </Col>
             ))}
           </Row>
           {metrics !== undefined && metrics.byStatus.length > 0 ? (
-            <Card className="lizant-card" size="small" title={t('web.serviceDesk.dashboard.byStatus')} style={{ marginBottom: 16 }}>
+            <Card className="carocrm-card" size="small" title={t('web.serviceDesk.dashboard.byStatus')} style={{ marginBottom: 16 }}>
               <Row gutter={[8, 8]}>
                 {metrics.byStatus.map((bucket) => (
                   <Col key={bucket.key} xs={12} sm={8} md={6} lg={4}>
@@ -89,7 +89,7 @@ export function ServiceDeskDashboardPage() {
               message={t('web.serviceDesk.dashboard.csatRestricted')}
             />
           ) : null}
-          <Card className="lizant-card" title={t('web.serviceDesk.dashboard.recent')}>
+          <Card className="carocrm-card" title={t('web.serviceDesk.dashboard.recent')}>
             <Table
               rowKey={(row) => String(row['id'])}
               dataSource={recent}

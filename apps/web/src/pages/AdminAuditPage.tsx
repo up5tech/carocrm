@@ -57,7 +57,7 @@ export function AdminAuditPage() {
   }, [load]);
 
   return (
-    <Card className="lizant-card" title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{t('web.adminAudit.title')}</Typography.Title>}>
+    <Card className="carocrm-card" title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.adminAudit.title')}</Typography.Title>}>
       <Table
         rowKey="id"
         size="small"

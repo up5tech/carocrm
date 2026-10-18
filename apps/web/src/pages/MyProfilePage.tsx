@@ -120,16 +120,16 @@ export function MyProfilePage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <div className="lizant-page-head">
+      <div className="carocrm-page-head">
         <div>
-          <h1 className="lizant-page-title">{t('web.profile.title')}</h1>
-          <p className="lizant-page-sub">{t('web.profile.subtitle')}</p>
+          <h1 className="carocrm-page-title">{t('web.profile.title')}</h1>
+          <p className="carocrm-page-sub">{t('web.profile.subtitle')}</p>
         </div>
       </div>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={14}>
-          <Card className="lizant-card" title={t('web.profile.infoTitle')}>
+          <Card className="carocrm-card" title={t('web.profile.infoTitle')}>
             <Form
               form={profileForm}
               layout="vertical"
@@ -182,9 +182,9 @@ export function MyProfilePage() {
         </Col>
 
         <Col xs={24} lg={10}>
-          <Card className="lizant-card" title={t('web.profile.avatarTitle')}>
+          <Card className="carocrm-card" title={t('web.profile.avatarTitle')}>
             <Space align="center" size={16} wrap>
-              <Avatar size={72} className="lizant-avatar--large">
+              <Avatar size={72} className="carocrm-avatar--large">
                 {principal.avatarId ? (
                   <img src={`/api/v1/Attachment/${principal.avatarId}/file`} alt={principal.name} />
                 ) : (
@@ -209,7 +209,7 @@ export function MyProfilePage() {
             </Space>
           </Card>
 
-          <Card className="lizant-card" title={t('web.profile.preferencesTitle')} style={{ marginTop: 16 }}>
+          <Card className="carocrm-card" title={t('web.profile.preferencesTitle')} style={{ marginTop: 16 }}>
             <Form
               form={preferenceForm}
               layout="vertical"
@@ -230,7 +230,7 @@ export function MyProfilePage() {
         </Col>
       </Row>
 
-      <Card className="lizant-card" title={t('web.profile.passwordTitle')}>
+      <Card className="carocrm-card" title={t('web.profile.passwordTitle')}>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
           {t('web.profile.passwordHint')}
         </Typography.Paragraph>

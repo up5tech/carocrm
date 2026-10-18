@@ -224,9 +224,9 @@ export function EntityBoardPage() {
   const loadingFirstPage = loading && Object.keys(data).length === 0;
 
   return (
-    <Card className="lizant-card lizant-list-card">
-      <div className="lizant-list-head">
-        <Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>
+    <Card className="carocrm-card carocrm-list-card">
+      <div className="carocrm-list-head">
+        <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>
           {definition.data?.label ?? entityName}
         </Typography.Title>
         <Space wrap>
@@ -271,7 +271,7 @@ export function EntityBoardPage() {
           onDragCancel={() => setActiveId(null)}
           onDragEnd={(event) => void onDragEnd(event)}
         >
-          <div className="lizant-board">
+          <div className="carocrm-board">
             {columns.map((column) => (
               <BoardColumnView
                 key={column.key}
@@ -298,7 +298,7 @@ export function EntityBoardPage() {
           */}
           <DragOverlay dropAnimation={null}>
             {activeRow === undefined ? null : (
-              <div className="lizant-board-card lizant-board-card-overlay">
+              <div className="carocrm-board-card carocrm-board-card-overlay">
                 <BoardCardContent
                   row={activeRow}
                   cardEntries={cardEntries}
@@ -343,13 +343,13 @@ function BoardColumnView({
   const drop = useDroppable({ id: `column:${column.key}`, data: { columnKey: column.key } });
 
   return (
-    <div className={`lizant-board-column${drop.isOver ? ' is-over' : ''}`} ref={drop.setNodeRef}>
-      <div className="lizant-board-column-head">
-        <span className="lizant-board-column-title">{label}</span>
-        <span className="lizant-board-column-count">{total}</span>
+    <div className={`carocrm-board-column${drop.isOver ? ' is-over' : ''}`} ref={drop.setNodeRef}>
+      <div className="carocrm-board-column-head">
+        <span className="carocrm-board-column-title">{label}</span>
+        <span className="carocrm-board-column-count">{total}</span>
       </div>
       <SortableContext items={rows.map((row) => String(row['id']))} strategy={verticalListSortingStrategy}>
-        <div className="lizant-board-column-body">
+        <div className="carocrm-board-column-body">
           {rows.map((row) => (
             <BoardCard
               key={String(row['id'])}
@@ -364,10 +364,10 @@ function BoardColumnView({
         </div>
       </SortableContext>
       {rows.length === 0 && !loading ? (
-        <span className="lizant-board-column-empty">{t('web.board.emptyColumn')}</span>
+        <span className="carocrm-board-column-empty">{t('web.board.emptyColumn')}</span>
       ) : null}
       {rows.length < total ? (
-        <Button size="small" type="text" className="lizant-board-more" onClick={onLoadMore}>
+        <Button size="small" type="text" className="carocrm-board-more" onClick={onLoadMore}>
           {t('web.board.loadMore', { remaining: total - rows.length })}
         </Button>
       ) : null}
@@ -394,7 +394,7 @@ function BoardCard({
 
   return (
     <div
-      className={`lizant-board-card${sortable.isDragging ? ' is-dragging' : ''}`}
+      className={`carocrm-board-card${sortable.isDragging ? ' is-dragging' : ''}`}
       ref={sortable.setNodeRef}
       style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition }}
     >
@@ -412,7 +412,7 @@ function BoardCard({
           */
           <button
             type="button"
-            className="lizant-board-drag-handle"
+            className="carocrm-board-drag-handle"
             ref={sortable.setActivatorNodeRef}
             {...sortable.attributes}
             {...(sortable.listeners ?? {})}
@@ -445,17 +445,17 @@ function BoardCardContent({
 
   return (
     <>
-      <div className="lizant-board-card-head">
+      <div className="carocrm-board-card-head">
         {dragHandle ?? null}
-        <Link className="lizant-board-card-title" to={`${base}/${entityName}/${encodeURIComponent(id)}`}>
+        <Link className="carocrm-board-card-title" to={`${base}/${entityName}/${encodeURIComponent(id)}`}>
           {String(row[displayField] ?? row['name'] ?? id)}
         </Link>
       </div>
       {cardEntries.length === 0 ? null : (
-        <div className="lizant-board-card-fields">
+        <div className="carocrm-board-card-fields">
           {cardEntries.map((entry) => (
-            <span key={entry.name} className="lizant-board-card-field">
-              <span className="lizant-board-card-field-label">{fieldLabel(entry.name, entry.field)}</span>
+            <span key={entry.name} className="carocrm-board-card-field">
+              <span className="carocrm-board-card-field-label">{fieldLabel(entry.name, entry.field)}</span>
               <FieldValue field={entry.field} value={row[entry.name]} />
             </span>
           ))}

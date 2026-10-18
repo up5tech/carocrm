@@ -54,8 +54,8 @@ export function StreamPage() {
 
   return (
     <Card
-      className="lizant-card"
-      title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{t('web.stream.title')}</Typography.Title>}
+      className="carocrm-card"
+      title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.stream.title')}</Typography.Title>}
       extra={
         <Space>
           <Segmented
@@ -78,7 +78,7 @@ export function StreamPage() {
       ) : items.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.stream.empty')} />
       ) : (
-        <div className="lizant-stream-list">
+        <div className="carocrm-stream-list">
           {items.map((item) => (
             <StreamRow key={item.id} item={item} label={metadata.data?.[item.entityType]?.label ?? item.entityType} />
           ))}
@@ -99,7 +99,7 @@ function StreamRow({ item, label }: { item: StreamItem; label: string }) {
   const definition = useEntity(item.entityType);
   const body = item.type === 'Update' ? updateSummary(item, definition.data) : item.post ?? String(item.data['notes'] ?? '');
   return (
-    <div className="lizant-stream-item">
+    <div className="carocrm-stream-item">
       <Avatar size={32} style={{ flex: '0 0 auto', background: item.type === 'Update' ? '#f8ac59' : '#438eff' }}>
         {item.type === 'Update' ? '∆' : authorLabel(item).slice(0, 2).toUpperCase()}
       </Avatar>

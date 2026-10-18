@@ -497,7 +497,7 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   carries ARIA/`role`/`tabIndex`. So no drag could start anywhere in the Projects UI, even though
   `onDragEnd` and the move commands were correct. The Plan handle and the new Kanban card handle now
   spread `listeners`; the Kanban handle is the sole activator so a click on the card still opens the
-  task, and `.lizant-project-drag-handle` gained `touch-action: none` so touch dragging works.
+  task, and `.carocrm-project-drag-handle` gained `touch-action: none` so touch dragging works.
 - Follow-up defect fix (2026-10-14): with dragging working, the dragged item was occluded as soon as
   it crossed into another column/group — it kept living inside its own container, so the *following*
   containers (each with an opaque `#f7f9fb` background for the board, white cards for the Plan view)
@@ -505,7 +505,7 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   now render the dragged item through `DragOverlay`, which portals it above every container; the item
   left in place is dimmed as a placeholder and `dropAnimation` is disabled because both views refetch
   from the server on drop.
-- Follow-up (2026-10-14): the board card was restyled to the Lizant board card supplied as a
+- Follow-up (2026-10-14): the board card was restyled to the Carocrm board card supplied as a
   screenshot — a white 10px-radius card on the `#f7f9fb` column, a bold `#31373d` title with a `⋯`
   affordance, a row of soft pills (pale tint + saturated label; one palette shared by status and
   priority, purple for milestone) with the assignee's initials avatar pushed right, then a `#f0f0f0`
@@ -533,11 +533,11 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   through `details.reason`), and `attachments`/`audit` abort the vitest worker when another booting
   suite shares the process, so `pnpm test` cannot run the whole suite in one process.
 
-## Web UI theme (Lizant)
+## Web UI theme (Carocrm)
 
-`apps/web` follows the Lizant Ant Design admin look. Design tokens live in
+`apps/web` follows the Carocrm Ant Design admin look. Design tokens live in
 `apps/web/src/theme.ts` (ConfigProvider) and the few rules antd cannot express in
-`apps/web/src/styles/lizant.css`:
+`apps/web/src/styles/carocrm.css`:
 
 - primary `#438eff`, success `#55c27f`, warning `#f8ac59`, error `#fa626b`, text `#31373d`,
   secondary text `#737b85`, Inter, radius 8, no shadows.
@@ -551,7 +551,7 @@ fields (`accountId` → "Account") and otherwise humanizes the camelCase name
 (`billingAddressCity` → "Billing Address City"). Relation panel titles use the same helper
 (`contacts` → "Contacts").
 
-The record list follows the Lizant `ui-table` / `app-apikey` pattern measured on 2026-10-11:
+The record list follows the Carocrm `ui-table` / `app-apikey` pattern measured on 2026-10-11:
 one card with 22px body padding, a title row (entity label left, actions right), a filter grid
 with the label above each `operator + value` control, then the table at antd's default density
 (`th` `#fafafa` 14px/600 with 16px padding, `td` 12px/16px, row border `#f0f0f0`), the display
@@ -584,8 +584,8 @@ can group by.
   otherwise be painted under the next column.
 - Files: `apps/web/src/pages/EntityBoardPage.tsx` (new), `AppRoutes.tsx` (`/:entity/board`,
   declared before the `/:entity/:id` wildcard), `EntityListPage.tsx` (the view switch),
-  `state/metadata.ts` (`boardGroupFields` / `defaultBoardGroupField`), a `.lizant-board-*` block in
-  `styles/lizant.css`, and `web.board.*` keys in `i18n/{en,vi}/web.json`.
+  `state/metadata.ts` (`boardGroupFields` / `defaultBoardGroupField`), a `.carocrm-board-*` block in
+  `styles/carocrm.css`, and `web.board.*` keys in `i18n/{en,vi}/web.json`.
 - Not built: a board for portal users, per-column sorting, saved filters on the board, and inline
   card editing (a card links to the record instead).
 - Verification: **not executed**. This environment exposes no shell, so `pnpm typecheck`,

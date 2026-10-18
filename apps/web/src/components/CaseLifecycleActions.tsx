@@ -175,7 +175,7 @@ export function CaseLifecycleActions({ caseId, onChanged }: CaseLifecycleActions
 
   return (
     <Card
-      className="lizant-card"
+      className="carocrm-card"
       size="small"
       title={<Typography.Text strong>{t('web.serviceDesk.lifecycle')}</Typography.Text>}
       extra={<Tag color="blue">{caps.status}</Tag>}

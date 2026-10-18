@@ -97,7 +97,7 @@ test.describe('phase 19 projects', () => {
     await page.getByRole('button', { name: '+ New task' }).click();
     await modal(page).getByLabel('Name').fill(`E2E Task ${run}`);
     await modal(page).getByRole('button', { name: /^Create$/ }).click();
-    const taskRow = page.locator('.lizant-project-task').filter({ hasText: `E2E Task ${run}` }).first();
+    const taskRow = page.locator('.carocrm-project-task').filter({ hasText: `E2E Task ${run}` }).first();
     await expect(taskRow).toBeVisible({ timeout: 15_000 });
     await expect(taskRow.getByText('Not Started')).toBeVisible();
 
@@ -107,12 +107,12 @@ test.describe('phase 19 projects', () => {
     // a reload must show the same order and the same derived status: the server owns them
     await page.reload();
     await expect(
-      page.locator('.lizant-project-task').filter({ hasText: `E2E Task ${run}` }).first().getByText('Completed'),
+      page.locator('.carocrm-project-task').filter({ hasText: `E2E Task ${run}` }).first().getByText('Completed'),
     ).toBeVisible({ timeout: 15_000 });
 
     // --- Kanban board: the task now sits in the board's "Done" column -----------------
     await page.goto(`/Project/${projectId}/board`);
-    await expect(page.locator('.lizant-project-column').filter({ hasText: 'Done' }).first()).toContainText(
+    await expect(page.locator('.carocrm-project-column').filter({ hasText: 'Done' }).first()).toContainText(
       `E2E Task ${run}`,
       { timeout: 15_000 },
     );
@@ -125,7 +125,7 @@ test.describe('phase 19 projects', () => {
 
     // --- Gantt: give the task dates, then see it drawn -------------------------------
     await page.goto(`/Project/${projectId}/plan`);
-    await page.locator('.lizant-project-task-name').filter({ hasText: `E2E Task ${run}` }).first().click();
+    await page.locator('.carocrm-project-task-name').filter({ hasText: `E2E Task ${run}` }).first().click();
     // A month ahead, on purpose: a date in "today"'s cell would compete with other suites'
     // activities for the calendar's bounded day cell.
     await modal(page).locator('.ant-picker input').first().click();

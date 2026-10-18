@@ -160,7 +160,7 @@ export function ProjectGanttPage() {
         </Typography.Text>
       </Space>
 
-      <div className="lizant-project-gantt" ref={surface} onPointerMove={onPointerMove} onPointerUp={onPointerUp} style={{ overflowX: 'auto' }}>
+      <div className="carocrm-project-gantt" ref={surface} onPointerMove={onPointerMove} onPointerUp={onPointerUp} style={{ overflowX: 'auto' }}>
         <div style={{ width: LABEL_WIDTH + width }}>
           <svg width={LABEL_WIDTH + width} height={height} role="img" aria-label={t('web.projects.ganttAria')}>
             <g>

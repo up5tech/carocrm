@@ -26,7 +26,7 @@ search/import/export/dashboards, the extension SDK, the workflow engine and the 
 | Global search | v9.3.x | `/Search` over the query engine (ACL-aware) + trigram indexes; no OpenSearch stage 2 | P1 | implemented |
 | Import / Export | v9.3.x | CSV import with field mapping and a validation report, paged CSV export with formula neutralisation | P1 | implemented |
 | Dashboards / dashlets | v9.3.x | dashboards with list/chart/KPI dashlets driven by the query engine | P1 | implemented |
-| Frontend SPA | v9.3.x | React SPA: generic list/detail/edit/create, Entity Manager, audit, stream, calendar (Lizant theme) | P0 (product) | implemented |
+| Frontend SPA | v9.3.x | React SPA: generic list/detail/edit/create, Entity Manager, audit, stream, calendar (Carocrm theme) | P0 (product) | implemented |
 | Background jobs / scheduled jobs | v9.3.x | BullMQ worker, cron metadata, retries + backoff + dead letter, per-job progress and logs, cooperative cancellation, REST API and admin UI | P2 | implemented |
 | Formula engine | v9.3.x | sandboxed parser → AST → evaluator with an allowlisted function set and execution budgets (`@carocrm/formula`) | P2 | implemented |
 | Dynamic logic | v9.3.x | metadata `dynamicLogic.rules` evaluated in the SPA **and** on every API write | P2 | implemented |

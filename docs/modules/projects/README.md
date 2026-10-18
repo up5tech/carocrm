@@ -12,7 +12,7 @@ TypeScript behaviour — see [compatibility.md](compatibility.md) for the deviat
 |---|---|
 | Projects with a board chosen at creation, an owner, a category, dates and per-project settings | `/Project` list, `/Project/:id` detail |
 | Plan view: ordered groups, ordered tasks, subtasks, drag to reorder or move between groups (the dragged row follows the pointer through a drag overlay, never occluded by the next group) | `/Project/:id/plan` |
-| Kanban board: one column per stage of the project's board, one group at a time; drag a card by its handle into another column to change its stage. Cards follow the Lizant board card — white rounded card, bold title with a `⋯`, soft status/priority/milestone pills, assignee initials avatar, divider and an icon meta footer | `/Project/:id/board` |
+| Kanban board: one column per stage of the project's board, one group at a time; drag a card by its handle into another column to change its stage. Cards follow the Carocrm board card — white rounded card, bold title with a `⋯`, soft status/priority/milestone pills, assignee initials avatar, divider and an icon meta footer | `/Project/:id/board` |
 | Gantt view: task ranges, milestone markers, dependency paths, drag-move and resize, and "create dependent item" from a selected task | `/Project/:id/gantt` (only when the project enables it) |
 | Members with a project role each, plus bulk membership across projects | `/Project/:id/members` |
 | Feature settings (dependencies, collaborators, priority, points, hours, Gantt) | `/Project/:id/settings` |

@@ -68,13 +68,13 @@ export function FieldValue({ field, value }: { field: FieldDefinition; value: un
     case 'password':
       return <span>{'••••••'}</span>;
     case 'enum':
-      return <span className="lizant-pill">{String(value)}</span>;
+      return <span className="carocrm-pill">{String(value)}</span>;
     case 'multiEnum': {
       const items = Array.isArray(value) ? value : [value];
       return (
         <span>
           {items.map((item) => (
-            <span key={String(item)} className="lizant-pill" style={{ marginRight: 4 }}>
+            <span key={String(item)} className="carocrm-pill" style={{ marginRight: 4 }}>
               {String(item)}
             </span>
           ))}

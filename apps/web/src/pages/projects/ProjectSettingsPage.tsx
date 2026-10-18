@@ -56,7 +56,7 @@ export function ProjectSettingsPage() {
 
   return (
     <ProjectShell project={project} capabilities={capabilities.data} active="settings" loading={plan.isLoading} error={plan.error}>
-      <Card className="lizant-card" title={t('web.projects.featureSettings')} size="small">
+      <Card className="carocrm-card" title={t('web.projects.featureSettings')} size="small">
         <Space direction="vertical" size={6}>
           {FEATURES.map((feature) => (
             <Space key={feature.key} align="center">
@@ -75,7 +75,7 @@ export function ProjectSettingsPage() {
         </Typography.Paragraph>
       </Card>
 
-      <Card className="lizant-card" title={t('web.projects.defaultGroup')} size="small" style={{ marginTop: 12 }}>
+      <Card className="carocrm-card" title={t('web.projects.defaultGroup')} size="small" style={{ marginTop: 12 }}>
         <Select
           style={{ width: 240 }}
           disabled={!canEdit}
@@ -123,7 +123,7 @@ function ClonePanel({ projectId, projectName, canClone }: { projectId: string; p
   };
 
   return (
-    <Card className="lizant-card" title={t('web.projects.cloneTitle')} size="small" style={{ marginTop: 12 }}>
+    <Card className="carocrm-card" title={t('web.projects.cloneTitle')} size="small" style={{ marginTop: 12 }}>
       <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
         {t('web.projects.cloneNote')}
       </Typography.Paragraph>

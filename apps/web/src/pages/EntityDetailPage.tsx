@@ -77,7 +77,7 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base }
 
   return (
     <Card
-      className="lizant-card"
+      className="carocrm-card"
       size="small"
       title={<Typography.Text strong>{label ?? fieldLabel(name)}</Typography.Text>}
       extra={
@@ -219,10 +219,10 @@ export function EntityDetailPage() {
     <Spin spinning={loading}>
       {/* A column stack rather than an antd `Space`: a flex item's default `min-width: auto` lets a
           wide child (the line-item table) grow the page instead of scrolling inside its card. See
-          `.lizant-card-stack` in lizant.css. */}
-      <div className="lizant-card-stack">
+          `.carocrm-card-stack` in carocrm.css. */}
+      <div className="carocrm-card-stack">
         <Card
-          className="lizant-card"
+          className="carocrm-card"
           title={
             <Space>
               <Typography.Text strong>{definition.data?.label ?? entity}</Typography.Text>
@@ -300,7 +300,7 @@ export function EntityDetailPage() {
 
         {panels.map((panel) => (          <Card
             key={panel.name}
-            className="lizant-card"
+            className="carocrm-card"
             size="small"
             title={<Typography.Text strong>{panel.label ?? panel.name}</Typography.Text>}
           >
@@ -315,7 +315,7 @@ export function EntityDetailPage() {
         ))}
 
         {others.length > 0 ? (
-          <Card className="lizant-card" size="small" title={<Typography.Text strong>{t('core.common.other')}</Typography.Text>}>
+          <Card className="carocrm-card" size="small" title={<Typography.Text strong>{t('core.common.other')}</Typography.Text>}>
             <Descriptions column={{ xs: 1, md: 2 }} colon={false} labelStyle={labelStyle} contentStyle={contentStyle} items={describe(others)} />
           </Card>
         ) : null}

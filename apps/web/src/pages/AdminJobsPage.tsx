@@ -123,8 +123,8 @@ export function AdminJobsPage() {
   return (
     <Space direction="vertical" size={12} style={{ width: '100%' }}>
       <Card
-        className="lizant-card"
-        title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{t('web.adminJobs.title')}</Typography.Title>}
+        className="carocrm-card"
+        title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.adminJobs.title')}</Typography.Title>}
         extra={
           <Space>
             <Typography.Text type="secondary">{counts}</Typography.Text>
@@ -170,7 +170,7 @@ export function AdminJobsPage() {
               title: t('web.common.status'),
               dataIndex: 'status',
               width: 110,
-              render: (value: string) => <Tag className="lizant-pill" color={STATUS_COLORS[value] ?? 'default'}>{value}</Tag>,
+              render: (value: string) => <Tag className="carocrm-pill" color={STATUS_COLORS[value] ?? 'default'}>{value}</Tag>,
             },
             {
               title: t('web.adminJobs.progress'),
@@ -207,7 +207,7 @@ export function AdminJobsPage() {
         />
       </Card>
 
-      <Card className="lizant-card" title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{t('web.adminJobs.scheduledTitle')}</Typography.Title>}>
+      <Card className="carocrm-card" title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.adminJobs.scheduledTitle')}</Typography.Title>}>
         <Table
           rowKey="id"
           size="small"
@@ -357,7 +357,7 @@ export function AdminJobsPage() {
             ]}
           />
         ) : null}
-        <pre className="lizant-job-log">
+        <pre className="carocrm-job-log">
           {logs.length === 0
             ? t('web.adminJobs.noLogs')
             : logs.map((line) => `${line.createdAt.slice(0, 19).replace('T', ' ')} [${line.level}] ${line.message}`).join('\n')}

@@ -100,9 +100,9 @@ export function ProjectShell({ project, capabilities, active, loading = false, e
   ];
 
   return (
-    <div className="lizant-project">
+    <div className="carocrm-project">
       <Card
-        className="lizant-card"
+        className="carocrm-card"
         styles={{ body: { paddingBlock: 12 } }}
         title={
           <div>
@@ -117,7 +117,7 @@ export function ProjectShell({ project, capabilities, active, loading = false, e
           </div>
         }
         extra={
-          <div className="lizant-project-dates">
+          <div className="carocrm-project-dates">
             <Typography.Text type="secondary">
               {formatDay(project?.['dateStart'])} → {formatDay(project?.['dateEnd'])}
             </Typography.Text>
@@ -142,7 +142,7 @@ export function ProjectShell({ project, capabilities, active, loading = false, e
         <Alert type="error" showIcon style={{ marginBlock: 12 }} message={t('web.projects.loadFailed')} description={String(error)} />
       ) : null}
 
-      <Spin spinning={loading} wrapperClassName="lizant-project-body">{children}</Spin>
+      <Spin spinning={loading} wrapperClassName="carocrm-project-body">{children}</Spin>
     </div>
   );
 }

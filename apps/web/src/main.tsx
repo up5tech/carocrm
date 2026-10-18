@@ -1,4 +1,4 @@
-import './styles/lizant.css';
+import './styles/carocrm.css';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp, ConfigProvider } from 'antd';
@@ -8,7 +8,7 @@ import { BrowserRouter } from 'react-router-dom';
 
 import { AppRoutes } from './AppRoutes.js';
 import { i18n, initI18n, initI18nFromCache } from './state/i18n.js';
-import { lizantTheme } from './theme.js';
+import { carocrmTheme } from './theme.js';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -24,7 +24,7 @@ const root = createRoot(container);
 const render = (): void => {
   root.render(
     <StrictMode>
-      <ConfigProvider theme={lizantTheme}>
+      <ConfigProvider theme={carocrmTheme}>
         <AntApp>
           <QueryClientProvider client={queryClient}>
             <BrowserRouter>

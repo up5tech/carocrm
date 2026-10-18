@@ -128,7 +128,7 @@ export function ProjectPlanPage() {
       >
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           {groups.length === 0 ? (
-            <Card className="lizant-card">
+            <Card className="carocrm-card">
               <Empty description={t('web.projects.noGroups')}>
                 {canManageGroups ? (
                   <CreateGroupButton projectId={id} onChanged={() => { refresh(); void message.success(t('web.projects.groupSaved')); }} />
@@ -255,7 +255,7 @@ function GroupSection({ projectId, group, tasks, position, total, canManageGroup
 
   return (
     <Card
-      className="lizant-card lizant-project-group"
+      className="carocrm-card carocrm-project-group"
       size="small"
       title={
         <Space>
@@ -294,7 +294,7 @@ function GroupSection({ projectId, group, tasks, position, total, canManageGroup
       }
     >
       <SortableContext items={roots.map((task) => task.id)} strategy={verticalListSortingStrategy}>
-        <div className={`lizant-project-group-body${drop.isOver && drop.over === undefined ? ' is-over' : ''}`} ref={drop.setNodeRef}>
+        <div className={`carocrm-project-group-body${drop.isOver && drop.over === undefined ? ' is-over' : ''}`} ref={drop.setNodeRef}>
           {roots.length === 0 ? <Typography.Text type="secondary">{t('web.projects.groupEmpty')}</Typography.Text> : null}
           {roots.map((task) => (
             <TaskRow
@@ -309,7 +309,7 @@ function GroupSection({ projectId, group, tasks, position, total, canManageGroup
         </div>
       </SortableContext>
       {canCreate ? (
-        <Button size="small" type="text" className="lizant-project-add-task" onClick={() => onNewTask(false)}>
+        <Button size="small" type="text" className="carocrm-project-add-task" onClick={() => onNewTask(false)}>
           + {t('web.projects.newTask')}
         </Button>
       ) : null}
@@ -340,21 +340,21 @@ function TaskRow({ task, subtasks, onEdit, onChanged }: TaskRowProps) {
 
   return (
     <div
-      className={`lizant-project-task${sortable.isDragging ? ' is-dragging' : ''}`}
+      className={`carocrm-project-task${sortable.isDragging ? ' is-dragging' : ''}`}
       style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition }}
       ref={sortable.setNodeRef}
     >
-      <div className="lizant-project-task-main">
-        <button type="button" className="lizant-project-drag-handle" ref={sortable.setActivatorNodeRef} {...sortable.attributes} {...sortable.listeners} aria-label={t('web.projects.dragTask')}>
+      <div className="carocrm-project-task-main">
+        <button type="button" className="carocrm-project-drag-handle" ref={sortable.setActivatorNodeRef} {...sortable.attributes} {...sortable.listeners} aria-label={t('web.projects.dragTask')}>
           ⠿
         </button>
-        <Button type="text" size="small" className="lizant-project-task-name" onClick={() => onEdit(task)}>
+        <Button type="text" size="small" className="carocrm-project-task-name" onClick={() => onEdit(task)}>
           {task.name}
         </Button>
         {statusTag(task.status)}
         {task.taskType === 'Milestone' ? <Tag color="purple">{t('web.projects.milestone')}</Tag> : null}
       </div>
-      <div className="lizant-project-task-meta">
+      <div className="carocrm-project-task-meta">
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {formatDay(task.dateStart)}
           {task.dateEnd !== null ? ` → ${formatDay(task.dateEnd)}` : ''}
@@ -370,9 +370,9 @@ function TaskRow({ task, subtasks, onEdit, onChanged }: TaskRowProps) {
         </Button>
       </div>
       {subtasks.length > 0 ? (
-        <div className="lizant-project-subtasks">
+        <div className="carocrm-project-subtasks">
           {subtasks.map((child) => (
-            <div key={child.id} className="lizant-project-subtask">
+            <div key={child.id} className="carocrm-project-subtask">
               <Button type="text" size="small" onClick={() => onEdit(child)}>
                 {child.name}
               </Button>
@@ -391,9 +391,9 @@ function TaskRow({ task, subtasks, onEdit, onChanged }: TaskRowProps) {
  */
 function TaskRowOverlay({ task }: { task: ProjectTaskRow }) {
   return (
-    <div className="lizant-project-task lizant-project-task-overlay">
-      <div className="lizant-project-task-main">
-        <span className="lizant-project-drag-handle" aria-hidden="true">
+    <div className="carocrm-project-task carocrm-project-task-overlay">
+      <div className="carocrm-project-task-main">
+        <span className="carocrm-project-drag-handle" aria-hidden="true">
           ⠿
         </span>
         <Typography.Text strong ellipsis style={{ minWidth: 0 }}>
@@ -402,7 +402,7 @@ function TaskRowOverlay({ task }: { task: ProjectTaskRow }) {
         {statusTag(task.status)}
         {task.taskType === 'Milestone' ? <Tag color="purple">{t('web.projects.milestone')}</Tag> : null}
       </div>
-      <div className="lizant-project-task-meta">
+      <div className="carocrm-project-task-meta">
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {formatDay(task.dateStart)}
           {task.dateEnd !== null ? ` → ${formatDay(task.dateEnd)}` : ''}

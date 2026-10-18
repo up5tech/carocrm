@@ -130,7 +130,7 @@ export function SalesDocumentLinesPanel({ kind, id }: SalesDocumentLinesPanelPro
 
   if (loadError !== null) {
     return (
-      <Card className="lizant-card" size="small" title={<Typography.Text strong>{t('sales.document.lines')}</Typography.Text>}>
+      <Card className="carocrm-card" size="small" title={<Typography.Text strong>{t('sales.document.lines')}</Typography.Text>}>
         <Alert type="error" showIcon message={t('sales.document.linesFailed')} description={loadError} />
       </Card>
     );
@@ -138,7 +138,7 @@ export function SalesDocumentLinesPanel({ kind, id }: SalesDocumentLinesPanelPro
 
   return (
     <Card
-      className="lizant-card"
+      className="carocrm-card"
       size="small"
       loading={loading}
       title={

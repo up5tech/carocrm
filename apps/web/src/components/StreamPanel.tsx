@@ -48,7 +48,7 @@ export function StreamItemRow({ item, definition, onDelete }: {
 }) {
   const body = item.type === 'Update' ? updateSummary(item, definition) : mentionText(item.post ?? String(item.data['notes'] ?? ''));
   return (
-    <div className="lizant-stream-item">
+    <div className="carocrm-stream-item">
       <Avatar size={32} style={{ flex: '0 0 auto', background: item.type === 'Update' ? '#f8ac59' : '#438eff' }}>
         {item.type === 'Update' ? '∆' : initialsOf(item)}
       </Avatar>
@@ -153,7 +153,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
 
   return (
     <Card
-      className="lizant-card"
+      className="carocrm-card"
       title={<Typography.Text strong>{t('web.stream.title')}</Typography.Text>}
       extra={
         <Button size="small" type="text" icon={followed ? <StarFilled style={{ color: '#f8ac59' }} /> : <StarOutlined />} onClick={() => void toggleFollow()}>
@@ -166,7 +166,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
       ) : items.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.stream.noActivity')} />
       ) : (
-        <div className="lizant-stream-list">
+        <div className="carocrm-stream-list">
           {items.map((item) => (
             <StreamItemRow
               key={item.id}

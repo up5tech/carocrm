@@ -41,10 +41,10 @@ export function EntityManagerPage() {
 
   return (
     <>
-      <div className="lizant-page-head">
+      <div className="carocrm-page-head">
         <div>
-          <h1 className="lizant-page-title">{t('web.entityManager.title')}</h1>
-          <p className="lizant-page-sub">{t('web.entityManager.subtitle')}</p>
+          <h1 className="carocrm-page-title">{t('web.entityManager.title')}</h1>
+          <p className="carocrm-page-sub">{t('web.entityManager.subtitle')}</p>
         </div>
         <Space wrap>
           <Button icon={<ReloadOutlined />} loading={metadata.isFetching} onClick={() => void metadata.refetch()}>
@@ -56,7 +56,7 @@ export function EntityManagerPage() {
         </Space>
       </div>
 
-      <Card className="lizant-card" title={t('web.entityManager.cardTitle')} extra={<Typography.Text type="secondary">{t('web.entityManager.count', { shown: String(rows.length), total: String(entities.length) })}</Typography.Text>}>
+      <Card className="carocrm-card" title={t('web.entityManager.cardTitle')} extra={<Typography.Text type="secondary">{t('web.entityManager.count', { shown: String(rows.length), total: String(entities.length) })}</Typography.Text>}>
         <Input
           allowClear
           prefix={<SearchOutlined />}
@@ -79,7 +79,7 @@ export function EntityManagerPage() {
               title: t('web.entityManager.entity'),
               dataIndex: 'name',
               render: (name: string) => (
-                <Link className="lizant-row-link" to={`/admin/entity-manager/${name}`} onClick={(event) => event.stopPropagation()}>
+                <Link className="carocrm-row-link" to={`/admin/entity-manager/${name}`} onClick={(event) => event.stopPropagation()}>
                   {name}
                 </Link>
               ),

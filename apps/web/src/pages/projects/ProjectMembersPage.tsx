@@ -120,7 +120,7 @@ export function ProjectMembersPage() {
   return (
     <ProjectShell project={plan.data?.project} capabilities={capabilities.data} active="members" loading={members.isLoading} error={members.error}>
       <Table
-        className="lizant-card"
+        className="carocrm-card"
         size="small"
         rowKey={(row) => row.id}
         dataSource={members.data ?? []}
@@ -183,7 +183,7 @@ export function ProjectMembersPage() {
       )}
 
       {canManage ? (
-        <div className="lizant-project-bulk-members">
+        <div className="carocrm-project-bulk-members">
           <Typography.Text strong>{t('web.projects.bulkTitle')}</Typography.Text>
           <Space direction="vertical" style={{ width: '100%' }} size={8}>
             <Space wrap>

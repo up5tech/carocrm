@@ -74,7 +74,7 @@ export function PortalCaseConversation({ caseId }: { readonly caseId: string }) 
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Card className="lizant-card" title={t('web.portalCase.conversation')}>
+      <Card className="carocrm-card" title={t('web.portalCase.conversation')}>
         {loading && items.length === 0 ? (
           <Spin />
         ) : denied ? (
@@ -128,7 +128,7 @@ export function PortalCaseConversation({ caseId }: { readonly caseId: string }) 
         ) : null}
       </Card>
 
-      <Card className="lizant-card" title={t('web.portalCase.suggestions')}>
+      <Card className="carocrm-card" title={t('web.portalCase.suggestions')}>
         {articles.length === 0 ? (
           <Alert type="info" showIcon message={t('web.portalCase.noSuggestions')} />
         ) : (

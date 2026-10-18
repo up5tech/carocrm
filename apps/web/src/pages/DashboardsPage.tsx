@@ -158,10 +158,10 @@ export function DashboardsPage() {
 
   return (
     <>
-      <div className="lizant-page-head">
+      <div className="carocrm-page-head">
         <div>
-          <h1 className="lizant-page-title">{t('web.dashboards.title')}</h1>
-          <p className="lizant-page-sub">{t('web.dashboards.subtitle')}</p>
+          <h1 className="carocrm-page-title">{t('web.dashboards.title')}</h1>
+          <p className="carocrm-page-sub">{t('web.dashboards.subtitle')}</p>
         </div>
         <Space>
           <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void refresh()}>
@@ -174,7 +174,7 @@ export function DashboardsPage() {
       </div>
       {dashboards.length > 0 ? (
         <Select
-          className="lizant-dashboard-picker"
+          className="carocrm-dashboard-picker"
           value={activeId}
           onChange={(value: string) => setActiveId(value)}
           options={dashboards.map((item) => ({ value: item.id, label: `${item.name} (${item.dashlets.length})` }))}
@@ -204,7 +204,7 @@ export function DashboardsPage() {
             {active.dashlets.map((dashlet) => (
               <Col key={dashlet.id} xs={24} lg={12}>
                 <Card
-                  className="lizant-card"
+                  className="carocrm-card"
                   title={`${dashlet.name} · ${dashlet.kind}`}
                   extra={
                     <Space>
@@ -222,7 +222,7 @@ export function DashboardsPage() {
           </Row>
         </>
       ) : (
-        <Card className="lizant-card">{t('web.dashboards.empty')}</Card>
+        <Card className="carocrm-card">{t('web.dashboards.empty')}</Card>
       )}
       <Modal
         title={t('web.dashboards.new')}

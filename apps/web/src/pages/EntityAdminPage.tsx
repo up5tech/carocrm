@@ -248,7 +248,7 @@ function SettingsTab({ entity, patch }: { entity: EntityDefinition; patch: (body
           </Col>
         </Row>
         <Form.Item name="icon" label={t('web.entityAdmin.iconLabel')} extra={t('web.entityAdmin.iconHint')}>
-          <Radio.Group className="lizant-icon-picker" optionType="button">
+          <Radio.Group className="carocrm-icon-picker" optionType="button">
             <Radio.Button value="">{t('web.entityAdmin.iconDefault')}</Radio.Button>
             {Object.entries(ENTITY_ICONS).map(([name, icon]) => (
               <Radio.Button key={name} value={name} aria-label={name}>
@@ -694,7 +694,7 @@ const layoutCollisionDetection: CollisionDetection = (args) => {
 
 function LayoutFieldRow({ name, label, overlay }: { name: string; label: string; overlay?: boolean }) {
   return (
-    <div className="lizant-layout-row" title={name} style={overlay ? { boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)', cursor: 'grabbing' } : undefined}>
+    <div className="carocrm-layout-row" title={name} style={overlay ? { boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)', cursor: 'grabbing' } : undefined}>
       <HolderOutlined />
       <span>{label}</span>
     </div>
@@ -704,7 +704,7 @@ function LayoutFieldRow({ name, label, overlay }: { name: string; label: string;
 function SortableLayoutRow({ name, label }: { name: string; label: string }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: name });
   return (
-    <div ref={setNodeRef} className="lizant-layout-row-wrap" {...attributes} {...listeners} style={{ transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}>
+    <div ref={setNodeRef} className="carocrm-layout-row-wrap" {...attributes} {...listeners} style={{ transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}>
       <LayoutFieldRow name={name} label={label} />
     </div>
   );
@@ -716,13 +716,13 @@ function LayoutGroup({ panel, labelOf, onEdit, onRemove }: { panel: LayoutPanel;
   const fields = panel.fields ?? [];
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}>
-      <div className="lizant-layout-group">
-        <div className="lizant-layout-group-head">
-          <span className="lizant-board-drag-handle" {...attributes} {...listeners}>
+      <div className="carocrm-layout-group">
+        <div className="carocrm-layout-group-head">
+          <span className="carocrm-board-drag-handle" {...attributes} {...listeners}>
             <HolderOutlined />
           </span>
-          <span className="lizant-layout-group-name">{panel.label ?? panel.name}</span>
-          <span className="lizant-layout-group-count">({fields.length})</span>
+          <span className="carocrm-layout-group-name">{panel.label ?? panel.name}</span>
+          <span className="carocrm-layout-group-count">({fields.length})</span>
           <span style={{ display: 'inline-flex', gap: 2, marginLeft: 'auto' }}>
             <Button type="text" size="small" icon={<EditOutlined />} aria-label={t('web.entityAdmin.layoutEditGroupAria', { name: panel.name })} onClick={() => onEdit(panel.name)} />
             <Popconfirm title={t('web.entityAdmin.removePanelConfirm', { name: panel.name })} okText={t('web.entityAdmin.remove')} onConfirm={() => onRemove(panel.name)}>
@@ -730,14 +730,14 @@ function LayoutGroup({ panel, labelOf, onEdit, onRemove }: { panel: LayoutPanel;
             </Popconfirm>
           </span>
         </div>
-        <div className="lizant-layout-group-body">
+        <div className="carocrm-layout-group-body">
           {fields.length === 0 ? (
             <Typography.Text type="secondary" style={{ display: 'block', padding: '4px 10px' }}>
               {t('web.entityAdmin.layoutPanelEmpty')}
             </Typography.Text>
           ) : (
             <SortableContext items={fields} strategy={verticalListSortingStrategy}>
-              <div className="lizant-layout-rows">
+              <div className="carocrm-layout-rows">
                 {fields.map((field) => (
                   <SortableLayoutRow key={field} name={field} label={labelOf(field)} />
                 ))}
@@ -754,7 +754,7 @@ function LayoutGroup({ panel, labelOf, onEdit, onRemove }: { panel: LayoutPanel;
 function AppendZone({ empty }: { empty: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: LAYOUT_APPEND_ID });
   return (
-    <div ref={setNodeRef} className="lizant-layout-append" style={{ background: isOver ? '#f0f7ff' : undefined }}>
+    <div ref={setNodeRef} className="carocrm-layout-append" style={{ background: isOver ? '#f0f7ff' : undefined }}>
       {empty ? t('web.entityAdmin.noPanels') : t('web.entityAdmin.layoutDropToEnd')}
     </div>
   );
@@ -763,13 +763,13 @@ function AppendZone({ empty }: { empty: boolean }) {
 function DisabledPool({ draft, labelOf }: { draft: LayoutDraft; labelOf: (name: string) => string }) {
   const { setNodeRef, isOver } = useDroppable({ id: LAYOUT_POOL_ID });
   return (
-    <Card size="small" className="lizant-card" title={t('web.entityAdmin.layoutDisabled')}>
-      <div ref={setNodeRef} className="lizant-layout-pool" style={{ background: isOver ? '#f0f7ff' : '#fafafa' }}>
+    <Card size="small" className="carocrm-card" title={t('web.entityAdmin.layoutDisabled')}>
+      <div ref={setNodeRef} className="carocrm-layout-pool" style={{ background: isOver ? '#f0f7ff' : '#fafafa' }}>
         {draft.disabled.length === 0 ? (
           <Typography.Text type="secondary">{t('web.entityAdmin.layoutPoolEmpty')}</Typography.Text>
         ) : (
           <SortableContext items={draft.disabled} strategy={verticalListSortingStrategy}>
-            <div className="lizant-layout-rows">
+            <div className="carocrm-layout-rows">
               {draft.disabled.map((field) => (
                 <SortableLayoutRow key={field} name={field} label={labelOf(field)} />
               ))}
@@ -972,7 +972,7 @@ function LayoutTab({ entity, save }: MetadataTabProps) {
           <Col xs={24} lg={12}>
             <Card
               size="small"
-              className="lizant-card"
+              className="carocrm-card"
               title={t('web.entityAdmin.layoutVisible')}
               extra={
                 <Button size="small" icon={<PlusOutlined />} onClick={() => openGroupModal('add')}>
@@ -997,11 +997,11 @@ function LayoutTab({ entity, save }: MetadataTabProps) {
         <DragOverlay dropAnimation={null}>
           {activeField !== null ? <LayoutFieldRow name={activeField} label={labelOf(activeField)} overlay /> : null}
           {activePanel ? (
-            <div className="lizant-layout-group" style={{ width: 340, boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)' }}>
-              <div className="lizant-layout-group-head">
+            <div className="carocrm-layout-group" style={{ width: 340, boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)' }}>
+              <div className="carocrm-layout-group-head">
                 <HolderOutlined />
-                <span className="lizant-layout-group-name">{activePanel.label ?? activePanel.name}</span>
-                <span className="lizant-layout-group-count">({(activePanel.fields ?? []).length})</span>
+                <span className="carocrm-layout-group-name">{activePanel.label ?? activePanel.name}</span>
+                <span className="carocrm-layout-group-count">({(activePanel.fields ?? []).length})</span>
               </div>
             </div>
           ) : null}
@@ -1265,10 +1265,10 @@ export function EntityAdminPage() {
     }
   };
 
-  if (metadata.isLoading) return <Card className="lizant-card" loading />;
+  if (metadata.isLoading) return <Card className="carocrm-card" loading />;
   if (!entity) {
     return (
-      <Card className="lizant-card" title={entityName ?? t('web.entityAdmin.entityFallback')}>
+      <Card className="carocrm-card" title={entityName ?? t('web.entityAdmin.entityFallback')}>
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.entityAdmin.notFound', { name: entityName ?? '' })} />
         <div style={{ textAlign: 'center' }}>
           <Link to="/admin/entity-manager">
@@ -1285,17 +1285,17 @@ export function EntityAdminPage() {
 
   return (
     <>
-      <div className="lizant-page-head">
+      <div className="carocrm-page-head">
         <div>
           <Space size={8} wrap>
             <Link to="/admin/entity-manager" aria-label={t('web.entityAdmin.backToEntities')}>
               <Button size="small" icon={<ArrowLeftOutlined />} />
             </Link>
-            <h1 className="lizant-page-title">{entity.label}</h1>
+            <h1 className="carocrm-page-title">{entity.label}</h1>
             <Tag>{entity.name}</Tag>
             {entity.isEntity ? <Tag color="green">{t('web.entityAdmin.enabled')}</Tag> : <Tag color="red">{t('web.entityAdmin.disabled')}</Tag>}
           </Space>
-          <p className="lizant-page-sub">{t('web.entityAdmin.summary', { fields: String(fieldCount), relations: String(relationCount), rules: String(rules.length) })}</p>
+          <p className="carocrm-page-sub">{t('web.entityAdmin.summary', { fields: String(fieldCount), relations: String(relationCount), rules: String(rules.length) })}</p>
         </div>
         <Space wrap>
           <Button icon={<ReloadOutlined />} loading={metadata.isFetching} onClick={() => void metadata.refetch()}>
@@ -1307,7 +1307,7 @@ export function EntityAdminPage() {
         </Space>
       </div>
 
-      <Card className="lizant-card">
+      <Card className="carocrm-card">
         <Tabs
           activeKey={tab}
           onChange={(next) => setSearchParams({ tab: next }, { replace: true })}

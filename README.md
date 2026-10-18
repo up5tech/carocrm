@@ -20,9 +20,9 @@ encrypted credentials, delivery ledger, `system.sendEmail`), and the kernel-owne
 module** (`packages/document`): `{{ }}` / `{{{ }}}` / `{{#each }}` templates, block layout to text
 and an optional pdfkit adapter, exposed as `DocumentTemplate` records.
 
-_SPA look_ — the web app follows the **Lizant** Ant Design admin theme: tokens in
+_SPA look_ — the web app follows the **Carocrm** Ant Design admin theme: tokens in
 `apps/web/src/theme.ts` (ConfigProvider) plus the rules antd cannot express in
-`apps/web/src/styles/lizant.css`, and a derived-field-caption helper (`fieldLabel()` in
+`apps/web/src/styles/carocrm.css`, and a derived-field-caption helper (`fieldLabel()` in
 `state/metadata.ts`). Every record list has two views: the table and a **generic Kanban board**
 (`/<Entity>/board`) whose columns are the values of any enum field, available whenever the entity
 has one. Dragging a card issues an ordinary `PATCH /:entity/:id`, so validation, hooks, audit,

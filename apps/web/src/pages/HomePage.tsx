@@ -15,7 +15,7 @@ interface Count {
 }
 
 const TONES = ['blue', 'green', 'cyan', 'yellow', 'purple'] as const;
-/** Landing page: one Lizant stat tile per enabled entity, counts from the generic list API. */
+/** Landing page: one Carocrm stat tile per enabled entity, counts from the generic list API. */
 export function HomePage() {
   const metadata = useMetadata();
   const { principal } = useSession();
@@ -23,49 +23,52 @@ export function HomePage() {
 
   const entities = navEntities(metadata.data, principal?.type);
 
+  const tiles = counts.length > 0 ? counts : entities.map((entity) => ({ entity: entity.name, label: entity.label, total: null }));
+
   useEffect(() => {
     if (entities.length === 0) return;
     let active = true;
-    void Promise.all(
-      entities.map(async (entity) => {
-        try {
-          const result = await api.list(entity.name, { maxSize: 1 });
-          return { entity: entity.name, label: entity.label, total: result.total ?? result.count };
-        } catch {
-          return { entity: entity.name, label: entity.label, total: null };
-        }
-      }),
-    ).then((rows) => {
-      if (active) setCounts(rows);
-    });
+    // Paint every tile as "unknown" first, then fill each count in as it arrives — the grid must
+    // not wait for the slowest entity before the user sees anything.
+    setCounts(entities.map((entity) => ({ entity: entity.name, label: entity.label, total: null })));
+    for (const entity of entities) {
+      void api
+        .list(entity.name, { maxSize: 1 })
+        .then((result) => {
+          if (!active) return;
+          const total = result.total ?? result.count ?? null;
+          setCounts((current) => current.map((count) => (count.entity === entity.name ? { ...count, total } : count)));
+        })
+        .catch(() => {
+          // An entity the generic list refuses keeps its "—": the tile still links through.
+        });
+    }
     return () => {
       active = false;
     };
   }, [metadata.data, principal?.type]);
 
-  const tiles = counts.length > 0 ? counts : entities.map((entity) => ({ entity: entity.name, label: entity.label, total: null }));
-
   return (
     <>
-      <div className="lizant-page-head">
+      <div className="carocrm-page-head">
         <div>
-          <h1 className="lizant-page-title">{t('web.home.title')}</h1>
-          <p className="lizant-page-sub">{t('web.home.subtitle')}</p>
+          <h1 className="carocrm-page-title">{t('web.home.title')}</h1>
+          <p className="carocrm-page-sub">{t('web.home.subtitle')}</p>
         </div>
       </div>
       <Row gutter={[16, 16]}>
         {tiles.map((tile, index) => (
           <Col key={tile.entity} xs={24} sm={12} lg={8} xl={6}>
-            <Card className="lizant-card">
-              <div className="lizant-stat">
+            <Card className="carocrm-card">
+              <div className="carocrm-stat">
                 <div>
-                  <div className="lizant-label">
+                  <div className="carocrm-label">
                     <Link to={`/${tile.entity}`}>{tile.label}</Link>
                   </div>
-                  <div className="lizant-stat-value">{tile.total === null ? '—' : tile.total.toLocaleString()}</div>
-                  <div className="lizant-stat-hint">{t('web.home.records')}</div>
+                  <div className="carocrm-stat-value">{typeof tile.total === 'number' ? tile.total.toLocaleString() : '—'}</div>
+                  <div className="carocrm-stat-hint">{t('web.home.records')}</div>
                 </div>
-                <span className={`lizant-stat-icon lizant-stat-icon--${TONES[index % TONES.length]}`}>
+                <span className={`carocrm-stat-icon carocrm-stat-icon--${TONES[index % TONES.length]}`}>
                   {entityIcon(metadata.data?.[tile.entity]?.icon, tile.entity)}
                 </span>
               </div>

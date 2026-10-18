@@ -64,7 +64,7 @@ export function TasksPage() {
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Card
-        title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{t('web.tasks.title')}</Typography.Title>}
+        title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.tasks.title')}</Typography.Title>}
         extra={
           <Space>
             <Select

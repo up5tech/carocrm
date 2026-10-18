@@ -214,9 +214,9 @@ export function EntityListPage() {
   const canBoard = boardGroupFields(definition.data).length > 0;
 
   return (
-    <Card className="lizant-card lizant-list-card">
-      <div className="lizant-list-head">
-        <Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>
+    <Card className="carocrm-card carocrm-list-card">
+      <div className="carocrm-list-head">
+        <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>
           {definition.data?.label ?? entityName}
         </Typography.Title>
         <Space wrap>
@@ -282,11 +282,11 @@ export function EntityListPage() {
       </Space>
 
       {filterable.length > 0 ? (
-        <div className="lizant-filter" aria-label={t('web.list.filtersAria')}>
+        <div className="carocrm-filter" aria-label={t('web.list.filtersAria')}>
           <Row gutter={[12, 12]}>
             {filterable.slice(0, 5).map((entry) => (
               <Col key={entry.name} xs={24} sm={12} lg={8} xl={6}>
-                <Typography.Text className="lizant-filter-label">
+                <Typography.Text className="carocrm-filter-label">
                   {fieldLabel(entry.name, entry.field, metadata.data)}
                 </Typography.Text>
                 <Space.Compact block>
@@ -319,7 +319,7 @@ export function EntityListPage() {
               </Col>
             ))}
           </Row>
-          <div className="lizant-filter-actions">
+          <div className="carocrm-filter-actions">
             <Button type="primary" icon={<SearchOutlined />} onClick={() => { setOffset(0); void load(); }}>
               {t('web.list.apply')}
             </Button>
@@ -354,7 +354,7 @@ export function EntityListPage() {
             sorter: entry.field.sortable !== false,
             render: (_: unknown, row: Record<string, unknown>) =>
               entry.name === displayField ? (
-                <Link className="lizant-row-link" to={`${base}/${entityName}/${String(row['id'])}`}>
+                <Link className="carocrm-row-link" to={`${base}/${entityName}/${String(row['id'])}`}>
                   {String(row[entry.name] ?? '')}
                 </Link>
               ) : (

@@ -27,17 +27,17 @@ const ACTIVITY_ENTITIES = ['Task', 'Call', 'Meeting', 'ProjectTask'] as const;
 
 /** The chip accent per activity type — the entity filter row doubles as the colour legend. */
 const EVENT_CLASS: Record<string, string> = {
-  Call: 'lizant-cal-event--call',
-  Meeting: 'lizant-cal-event--meeting',
-  ProjectTask: 'lizant-cal-event--project-task',
-  Task: 'lizant-cal-event--task',
+  Call: 'carocrm-cal-event--call',
+  Meeting: 'carocrm-cal-event--meeting',
+  ProjectTask: 'carocrm-cal-event--project-task',
+  Task: 'carocrm-cal-event--task',
 };
 
 const LEGEND_CLASS: Record<string, string> = {
-  Call: 'lizant-cal-dot--call',
-  Meeting: 'lizant-cal-dot--meeting',
-  ProjectTask: 'lizant-cal-dot--project-task',
-  Task: 'lizant-cal-dot--task',
+  Call: 'carocrm-cal-dot--call',
+  Meeting: 'carocrm-cal-dot--meeting',
+  ProjectTask: 'carocrm-cal-dot--project-task',
+  Task: 'carocrm-cal-dot--task',
 };
 
 /** A day cell shows this many events, then counts the rest instead of hiding them silently. */
@@ -63,16 +63,16 @@ function EventChip({
 }) {
   return (
     <div
-      className={`lizant-cal-event ${EVENT_CLASS[event.activityType] ?? ''}`}
+      className={`carocrm-cal-event ${EVENT_CLASS[event.activityType] ?? ''}`}
       draggable
       title={eventTitle(event)}
       onDragStart={() => onDragStart(event)}
       onDragEnd={onDragEnd}
     >
       <Link to={`/${event.activityType}/${event.activityId}`} onClick={(e) => e.stopPropagation()}>
-        {!event.allDay ? <span className="lizant-cal-event-time">{timeOf(event.start)}</span> : null}
+        {!event.allDay ? <span className="carocrm-cal-event-time">{timeOf(event.start)}</span> : null}
         {event.name ?? event.activityType}
-        {event.recurring ? <span className="lizant-cal-event-repeat">↻</span> : null}
+        {event.recurring ? <span className="carocrm-cal-event-repeat">↻</span> : null}
       </Link>
     </div>
   );
@@ -180,8 +180,8 @@ export function CalendarPage() {
 
   return (
     <Card
-      className="lizant-card"
-      title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{t('web.calendar.title')}</Typography.Title>}
+      className="carocrm-card"
+      title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.calendar.title')}</Typography.Title>}
       extra={
         <Space wrap size={12}>
           <Space wrap size={4}>
@@ -193,8 +193,8 @@ export function CalendarPage() {
                   setEntities((current) => (e.target.checked ? [...current, name] : current.filter((value) => value !== name)))
                 }
               >
-                <span className="lizant-cal-legend">
-                  <span className={`lizant-cal-dot ${LEGEND_CLASS[name] ?? ''}`} />
+                <span className="carocrm-cal-legend">
+                  <span className={`carocrm-cal-dot ${LEGEND_CLASS[name] ?? ''}`} />
                   {entityLabel(name)}
                 </span>
               </Checkbox>
@@ -219,7 +219,7 @@ export function CalendarPage() {
           {t('web.calendar.hint', { zone })}
         </Typography.Text>
         <div
-          className="lizant-cal-grid"
+          className="carocrm-cal-grid"
           onClickCapture={(event) => {
             const target = event.target;
             if (!(target instanceof Element) || target.closest('a')) return;
@@ -233,7 +233,7 @@ export function CalendarPage() {
             value={month}
             locale={locale.toLowerCase().startsWith('vi') ? calendarViVN : calendarEnUS}
             headerRender={() => (
-              <div className="lizant-cal-header">
+              <div className="carocrm-cal-header">
                 <Space.Compact>
                   <Button icon={<LeftOutlined />} aria-label={t('web.calendar.prevMonth')} onClick={() => setMonth((m) => m.subtract(1, 'month'))} />
                   <Button icon={<RightOutlined />} aria-label={t('web.calendar.nextMonth')} onClick={() => setMonth((m) => m.add(1, 'month'))} />
@@ -241,8 +241,8 @@ export function CalendarPage() {
                 <Button onClick={() => { setMonth(dayjs().startOf('month')); setSelected(dayjs()); }}>
                   {t('web.calendar.today')}
                 </Button>
-                <Typography.Text className="lizant-cal-month">{monthTitle}</Typography.Text>
-                <Typography.Text type="secondary" className="lizant-cal-total">
+                <Typography.Text className="carocrm-cal-month">{monthTitle}</Typography.Text>
+                <Typography.Text type="secondary" className="carocrm-cal-total">
                   {t('web.calendar.entries', { count: String(events.length) })}
                 </Typography.Text>
               </div>
@@ -256,10 +256,10 @@ export function CalendarPage() {
               const dayEvents = byDay.get(day) ?? [];
               const inMonth = date.month() === month.month() && date.year() === month.year();
               const className = [
-                'lizant-cal-cell',
-                inMonth ? '' : 'lizant-cal-cell--out',
-                date.isSame(selected, 'day') ? 'lizant-cal-cell--selected' : '',
-                date.isSame(dayjs(), 'day') ? 'lizant-cal-cell--today' : '',
+                'carocrm-cal-cell',
+                inMonth ? '' : 'carocrm-cal-cell--out',
+                date.isSame(selected, 'day') ? 'carocrm-cal-cell--selected' : '',
+                date.isSame(dayjs(), 'day') ? 'carocrm-cal-cell--today' : '',
               ]
                 .filter(Boolean)
                 .join(' ');
@@ -279,8 +279,8 @@ export function CalendarPage() {
                     if (dropped) void reschedule(dropped, day);
                   }}
                 >
-                  <span className="lizant-cal-day">{String(date.date())}</span>
-                  <div className="lizant-cal-events">
+                  <span className="carocrm-cal-day">{String(date.date())}</span>
+                  <div className="carocrm-cal-events">
                     {dayEvents.slice(0, CELL_EVENTS).map((event) => (
                       <EventChip
                         key={`${event.activityType}-${event.activityId}-${event.start}`}
@@ -290,7 +290,7 @@ export function CalendarPage() {
                       />
                     ))}
                     {dayEvents.length > CELL_EVENTS ? (
-                      <span className="lizant-cal-more">{t('web.calendar.more', { count: String(dayEvents.length - CELL_EVENTS) })}</span>
+                      <span className="carocrm-cal-more">{t('web.calendar.more', { count: String(dayEvents.length - CELL_EVENTS) })}</span>
                     ) : null}
                   </div>
                 </div>
@@ -298,12 +298,12 @@ export function CalendarPage() {
             }}
           />
         </div>
-        <div className="lizant-cal-day-panel">
-          <Typography.Text className="lizant-cal-day-panel-title">{selectedTitle}</Typography.Text>
+        <div className="carocrm-cal-day-panel">
+          <Typography.Text className="carocrm-cal-day-panel-title">{selectedTitle}</Typography.Text>
           {selectedEvents.length === 0 ? (
             <Typography.Text type="secondary">{t('web.calendar.dayEmpty')}</Typography.Text>
           ) : (
-            <div className="lizant-cal-day-list">
+            <div className="carocrm-cal-day-list">
               {selectedEvents.map((event) => (
                 <EventChip
                   key={`${event.activityType}-${event.activityId}-${event.start}`}

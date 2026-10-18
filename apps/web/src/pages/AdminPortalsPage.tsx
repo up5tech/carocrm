@@ -29,11 +29,11 @@ export function AdminPortalsPage() {
   if (principal?.type !== 'admin') return <Alert type="error" message={t('web.admin.accessRequiredPortals')} />;
   return (
     <>
-      <div className="lizant-page-head"><div><h1 className="lizant-page-title">{t('web.adminPortals.title')}</h1>
-      <p className="lizant-page-sub">{t('web.adminPortals.subtitle')}</p></div>
+      <div className="carocrm-page-head"><div><h1 className="carocrm-page-title">{t('web.adminPortals.title')}</h1>
+      <p className="carocrm-page-sub">{t('web.adminPortals.subtitle')}</p></div>
       <Space wrap><Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>{t('core.common.refresh')}</Button>
       <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>{t('web.adminPortals.new')}</Button></Space></div>
-      <Card className="lizant-card" title={t('web.adminPortals.cardTitle')}>
+      <Card className="carocrm-card" title={t('web.adminPortals.cardTitle')}>
         <Table<PortalRow> rowKey="id" size="small" loading={loading} dataSource={portals} pagination={false}
           onRow={(r) => ({ onClick: () => setActiveId(r.id), style: { cursor: 'pointer' } })}
           columns={[
@@ -53,14 +53,14 @@ export function AdminPortalsPage() {
           ]} />
       </Card>
       {active ? (
-        <Card className="lizant-card" title={t('web.adminPortals.portalTitle', { name: active.name })} style={{ marginTop: 16 }}>
+        <Card className="carocrm-card" title={t('web.adminPortals.portalTitle', { name: active.name })} style={{ marginTop: 16 }}>
           <Tabs defaultActiveKey="roles" items={[
             { key: 'roles', label: t('web.adminPortals.tabRoles'), children: <RolesTab portal={active} /> },
             { key: 'navigation', label: t('web.adminPortals.tabNavigation'), children: <NavTab portal={active} /> },
             { key: 'dashboards', label: t('web.dashboards.title'), children: <DashboardsTab portal={active} /> },
           ]} />
         </Card>
-      ) : <Card className="lizant-card" style={{ marginTop: 16 }}><Typography.Text type="secondary">{t('web.adminPortals.selectPortal')}</Typography.Text></Card>}
+      ) : <Card className="carocrm-card" style={{ marginTop: 16 }}><Typography.Text type="secondary">{t('web.adminPortals.selectPortal')}</Typography.Text></Card>}
       <Modal title={t('web.adminPortals.createTitle')} open={open} onCancel={() => setOpen(false)}
         onOk={() => void (async () => { const v = await form.validateFields();
           try { const c = await api.createPortal({ name: v.name, ...(v.urlPath ? { urlPath: v.urlPath } : {}) });

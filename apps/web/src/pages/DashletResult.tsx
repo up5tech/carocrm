@@ -69,7 +69,7 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
     const value = result['value'] ?? result['count'];
     return (
       <div>
-        <div className="lizant-stat-value">{typeof value === 'number' ? value.toLocaleString() : String(value ?? '—')}</div>
+        <div className="carocrm-stat-value">{typeof value === 'number' ? value.toLocaleString() : String(value ?? '—')}</div>
         {hint}
       </div>
     );

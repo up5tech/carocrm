@@ -59,7 +59,7 @@ export function MarketingPreferencesPage() {
     );
   }
   if (view === undefined) {
-    return <Card className="lizant-card" loading style={{ maxWidth: 640, margin: '0 auto' }} />;
+    return <Card className="carocrm-card" loading style={{ maxWidth: 640, margin: '0 auto' }} />;
   }
 
   const act = async (all: boolean): Promise<void> => {
@@ -76,7 +76,7 @@ export function MarketingPreferencesPage() {
 
   return (
     <Card
-      className="lizant-card"
+      className="carocrm-card"
       title={<Typography.Text strong>{t('web.marketing.preferences.title')}</Typography.Text>}
       style={{ maxWidth: 640, margin: '0 auto' }}
     >

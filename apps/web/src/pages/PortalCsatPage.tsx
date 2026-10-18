@@ -48,7 +48,7 @@ export function PortalCsatPage() {
   };
 
   return (
-    <Card className="lizant-card" title={t('web.portalCsat.title')} style={{ maxWidth: 520, margin: '0 auto' }}>
+    <Card className="carocrm-card" title={t('web.portalCsat.title')} style={{ maxWidth: 520, margin: '0 auto' }}>
       <Typography.Paragraph type="secondary">{t('web.portalCsat.intro')}</Typography.Paragraph>
       <Form<CsatForm> layout="vertical" onFinish={(values) => void submit(values)}>
         <Form.Item name="rating" label={t('web.portalCsat.rating')} rules={[{ required: true, message: t('web.portalCsat.ratingRequired') }]}>

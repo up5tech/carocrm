@@ -98,6 +98,18 @@ function InternalShell({ children }: { children: ReactNode }) {
   const { message } = AntApp.useApp();
   const { collapsed, setCollapsed, drawerOpen, setDrawerOpen, narrow } = useSidebar();
 
+  // A direct hit on a Sales or Marketing URL (bookmark, link, refresh) must still show *where* the
+  // user is, so the submenu that owns the selected item opens on arrival. `defaultOpenKeys` cannot
+  // do this: antd reads it once on mount, before the location is known to match a group.
+  const [openKeys, setOpenKeys] = useState<string[]>(() => {
+    const first = location.pathname.split('/').filter(Boolean)[0] ?? '';
+    if (first.startsWith('Project')) return ['sub-project'];
+    const salesGroup = SALES_NAV_GROUPS.find((group) => group.entityNames.includes(first));
+    if (salesGroup) return ['sub-sales', `sub-sales-${salesGroup.key}`];
+    if ((MARKETING_NAV_NAMES as readonly string[]).includes(first)) return ['sub-marketing'];
+    return [];
+  });
+
   // Phase 19-S.17 task 5 — the module-visibility signal. The Sales submenu is built from metadata the
   // browser has, so until now it appeared for every user; `GET /Sales/action/nav` answers from the
   // platform's own ACL whether this caller may read anything in the domain at all, and the group is
@@ -286,12 +298,12 @@ function InternalShell({ children }: { children: ReactNode }) {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <header className="lizant-header">
-        <div className={`lizant-brand${(narrow ? drawerOpen : collapsed) ? ' lizant-brand--compact' : ''}`} title={settings.data?.pageTitle ?? DEFAULT_BRAND}>
+      <header className="carocrm-header">
+        <div className={`carocrm-brand${(narrow ? drawerOpen : collapsed) ? ' carocrm-brand--compact' : ''}`} title={settings.data?.pageTitle ?? DEFAULT_BRAND}>
           {settings.data?.logoUrl ? (
-            <img className="lizant-brand-logo" src={settings.data.logoUrl} alt="" />
+            <img className="carocrm-brand-logo" src={settings.data.logoUrl} alt="" />
           ) : (
-            <span className="lizant-brand-mark">C</span>
+            <span className="carocrm-brand-mark">C</span>
           )}
           {(narrow ? drawerOpen : collapsed) ? null : <span>{settings.data?.pageTitle ?? DEFAULT_BRAND}</span>}
         </div>
@@ -299,10 +311,12 @@ function InternalShell({ children }: { children: ReactNode }) {
           role="button"
           tabIndex={0}
           aria-label={(narrow ? drawerOpen : collapsed) ? t('core.app.expandSidebar') : t('core.app.collapseSidebar')}
-          className="lizant-collapse-toggle"
+          className="carocrm-collapse-toggle"
           onClick={() => (narrow ? setDrawerOpen(!drawerOpen) : setCollapsed(!collapsed))}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' || event.key === ' ') {
+              // Space would otherwise scroll the page behind the toggle.
+              event.preventDefault();
               if (narrow) setDrawerOpen(!drawerOpen);
               else setCollapsed(!collapsed);
             }
@@ -311,7 +325,7 @@ function InternalShell({ children }: { children: ReactNode }) {
           {(narrow ? drawerOpen : collapsed) ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
         </span>
         <Input
-          className="lizant-header-search"
+          className="carocrm-header-search"
           prefix={<SearchOutlined />}
           placeholder={t('core.app.searchRecords')}
           variant="filled"
@@ -320,11 +334,11 @@ function InternalShell({ children }: { children: ReactNode }) {
             if (q !== '') navigate(`/search?q=${encodeURIComponent(q)}`);
           }}
         />
-        <div className="lizant-header-actions">
+        <div className="carocrm-header-actions">
           <Dropdown menu={{ items: userMenu }} trigger={['click']}>
-            <span className="lizant-avatar" title={principal?.userName}>
+            <span className="carocrm-avatar" title={principal?.userName}>
               {principal?.avatarId ? (
-                <img className="lizant-avatar-img" src={`/api/v1/Attachment/${principal.avatarId}/file`} alt="" />
+                <img className="carocrm-avatar-img" src={`/api/v1/Attachment/${principal.avatarId}/file`} alt="" />
               ) : (
                 (principal?.userName ?? '?').slice(0, 2).toUpperCase()
               )}
@@ -334,7 +348,7 @@ function InternalShell({ children }: { children: ReactNode }) {
       </header>
       <Layout>
         <Sider
-          className={`lizant-sider${narrow ? ` lizant-sider--drawer${drawerOpen ? ' is-open' : ''}` : ''}`}
+          className={`carocrm-sider${narrow ? ` carocrm-sider--drawer${drawerOpen ? ' is-open' : ''}` : ''}`}
           width={260}
           collapsedWidth={72}
           collapsible={!narrow}
@@ -344,12 +358,13 @@ function InternalShell({ children }: { children: ReactNode }) {
           }}
           trigger={null}
         >
-          <div className="lizant-sider-scroll">
+          <div className="carocrm-sider-scroll">
             <Menu
               mode="inline"
               items={navItems}
               selectedKeys={[selectedKey]}
-              defaultOpenKeys={selectedKey.startsWith('/Project') ? ['sub-project'] : []}
+              openKeys={openKeys}
+              onOpenChange={(keys) => setOpenKeys(keys.map(String))}
               onClick={() => {
                 // Following a link closes the drawer; on desktop it does nothing.
                 if (narrow) setDrawerOpen(false);
@@ -358,11 +373,11 @@ function InternalShell({ children }: { children: ReactNode }) {
           </div>
         </Sider>
         {narrow && drawerOpen ? (
-          <div className="lizant-drawer-backdrop" onClick={() => setCollapsed(true)} aria-hidden="true" />
+          <div className="carocrm-drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
         ) : null}
         <Layout>
-          <Content className="lizant-content">{children}</Content>
-          <Footer className="lizant-footer">
+          <Content className="carocrm-content">{children}</Content>
+          <Footer className="carocrm-footer">
             {settings.data?.footerText ?? t('web.shell.footer', { year: String(new Date().getFullYear()) })}
           </Footer>
         </Layout>
@@ -419,16 +434,16 @@ function PortalShell({ children }: { children: ReactNode }) {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <header className="lizant-header">
-        <div className="lizant-brand" title={context.data?.portal.name ?? t('web.portal.portal')}>
-          <span className="lizant-brand-mark">P</span>
+      <header className="carocrm-header">
+        <div className="carocrm-brand" title={context.data?.portal.name ?? t('web.portal.portal')}>
+          <span className="carocrm-brand-mark">P</span>
           {context.data?.portal.name ?? t('web.portal.portal')}
         </div>
-        <div className="lizant-header-actions">
+        <div className="carocrm-header-actions">
           <Dropdown menu={{ items: userMenu }} trigger={['click']}>
-            <span className="lizant-avatar" title={principal?.userName}>
+            <span className="carocrm-avatar" title={principal?.userName}>
               {principal?.avatarId ? (
-                <img className="lizant-avatar-img" src={`/api/v1/Attachment/${principal.avatarId}/file`} alt="" />
+                <img className="carocrm-avatar-img" src={`/api/v1/Attachment/${principal.avatarId}/file`} alt="" />
               ) : (
                 (principal?.userName ?? '?').slice(0, 2).toUpperCase()
               )}
@@ -438,7 +453,7 @@ function PortalShell({ children }: { children: ReactNode }) {
       </header>
       <Layout>
         <Sider
-          className="lizant-sider"
+          className="carocrm-sider"
           width={220}
           collapsedWidth={72}
           collapsible
@@ -446,13 +461,13 @@ function PortalShell({ children }: { children: ReactNode }) {
           onCollapse={setCollapsed}
           trigger={null}
         >
-          <div className="lizant-sider-scroll">
+          <div className="carocrm-sider-scroll">
             <Menu mode="inline" items={navItems} selectedKeys={[selectedKey]} />
           </div>
         </Sider>
         <Layout>
-          <Content className="lizant-content">{children}</Content>
-          <Footer className="lizant-footer">{t('web.shell.portalFooter')}</Footer>
+          <Content className="carocrm-content">{children}</Content>
+          <Footer className="carocrm-footer">{t('web.shell.portalFooter')}</Footer>
         </Layout>
       </Layout>
     </Layout>

@@ -1,4 +1,4 @@
-/* Structural styling that antd theme tokens cannot express — Lizant look. */
+/* Structural styling that antd theme tokens cannot express — Carocrm look. */
 
 html,
 body,
@@ -14,7 +14,7 @@ body {
 }
 
 /* ---- top header: white, 70px, brand at the left ---- */
-.lizant-header {
+.carocrm-header {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -27,7 +27,7 @@ body {
   border-bottom: 1px solid #eff2f7;
 }
 
-.lizant-brand {
+.carocrm-brand {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -39,7 +39,7 @@ body {
   color: #31373d;
 }
 
-.lizant-brand-mark {
+.carocrm-brand-mark {
   width: 26px;
   height: 26px;
   border-radius: 8px;
@@ -51,12 +51,12 @@ body {
   font-weight: 700;
 }
 
-.lizant-brand--compact {
+.carocrm-brand--compact {
   width: 56px;
 }
 
 /* instance logo: replaces the letter mark in the header and on the sign-in page */
-.lizant-brand-logo {
+.carocrm-brand-logo {
   border-radius: 8px;
   display: block;
   height: 26px;
@@ -64,11 +64,11 @@ body {
   width: auto;
 }
 
-.lizant-brand-logo--auth {
+.carocrm-brand-logo--auth {
   height: 34px;
 }
 
-.lizant-logo-preview {
+.carocrm-logo-preview {
   background: #f7f9fc;
   border: 1px solid #eff2f7;
   border-radius: 8px;
@@ -79,13 +79,13 @@ body {
   place-items: center;
 }
 
-.lizant-logo-preview img {
+.carocrm-logo-preview img {
   max-height: 32px;
   max-width: 120px;
   object-fit: contain;
 }
 
-.lizant-collapse-toggle {
+.carocrm-collapse-toggle {
   cursor: pointer;
   color: #438eff;
   font-size: 16px;
@@ -96,16 +96,16 @@ body {
   border-radius: 6px;
 }
 
-.lizant-collapse-toggle:hover {
+.carocrm-collapse-toggle:hover {
   background: #f0f8ff;
 }
 
-.lizant-header-search {
+.carocrm-header-search {
   flex: 1 1 auto;
   max-width: 320px;
 }
 
-.lizant-header-actions {
+.carocrm-header-actions {
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -113,12 +113,12 @@ body {
   color: #737b85;
 }
 
-.lizant-header-actions .anticon {
+.carocrm-header-actions .anticon {
   font-size: 17px;
   cursor: pointer;
 }
 
-.lizant-avatar {
+.carocrm-avatar {
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -130,7 +130,7 @@ body {
   background: linear-gradient(135deg, #438eff, #6fa9ff);
 }
 
-.lizant-avatar-img {
+.carocrm-avatar-img {
   border-radius: 50%;
   display: block;
   height: 100%;
@@ -138,14 +138,14 @@ body {
   width: 100%;
 }
 
-.lizant-avatar--large {
+.carocrm-avatar--large {
   background: linear-gradient(135deg, #438eff, #6fa9ff);
   color: #fff;
   font-size: 24px;
   font-weight: 600;
 }
 
-.lizant-footer {
+.carocrm-footer {
   background: transparent;
   text-align: center;
   color: #a1a8b3;
@@ -154,19 +154,19 @@ body {
 }
 
 /* ---- sidebar ---- */
-.lizant-sider {
+.carocrm-sider {
   background: #fff !important;
   border-right: 1px solid #eff2f7;
   box-shadow: none !important;
 }
 
-.lizant-sider .ant-layout-sider-children {
+.carocrm-sider .ant-layout-sider-children {
   display: flex;
   flex-direction: column;
   padding: 8px 0 16px;
 }
 
-.lizant-sider .ant-menu-item-group-title {
+.carocrm-sider .ant-menu-item-group-title {
   padding: 14px 16px 6px;
   font-size: 11px;
   font-weight: 600;
@@ -175,7 +175,7 @@ body {
   color: #a1a8b3;
 }
 
-.lizant-nav-group {
+.carocrm-nav-group {
   padding: 14px 24px 6px;
   font-size: 11px;
   font-weight: 600;
@@ -184,33 +184,33 @@ body {
   color: #a1a8b3;
 }
 
-.lizant-sider .ant-menu {
+.carocrm-sider .ant-menu {
   background: transparent;
   border-inline-end: none !important;
   padding: 0 8px;
 }
 
-.lizant-sider .ant-menu .ant-menu-item,
-.lizant-sider .ant-menu .ant-menu-submenu-title {
+.carocrm-sider .ant-menu .ant-menu-item,
+.carocrm-sider .ant-menu .ant-menu-submenu-title {
   font-size: 14px;
 }
 
-.lizant-sider .ant-menu-item-selected {
+.carocrm-sider .ant-menu-item-selected {
   font-weight: 500;
 }
 
-.lizant-sider-scroll {
+.carocrm-sider-scroll {
   flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
 /* ---- content ---- */
-.lizant-content {
+.carocrm-content {
   padding: 24px;
 }
 
-.lizant-page-head {
+.carocrm-page-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -218,34 +218,34 @@ body {
   margin-bottom: 16px;
 }
 
-.lizant-page-title {
+.carocrm-page-title {
   margin: 0;
   font-size: 22px;
   font-weight: 500;
   line-height: 1.3;
 }
 
-.lizant-page-sub {
+.carocrm-page-sub {
   margin: 2px 0 0;
   color: #737b85;
   font-size: 13px;
 }
 
 /* dashboard switcher on /dashboards */
-.lizant-dashboard-picker {
+.carocrm-dashboard-picker {
   margin-bottom: 16px;
   max-width: 420px;
   min-width: 240px;
 }
 
 /* entity icon picker in the entity manager: a wrapping row of icon buttons */
-.lizant-icon-picker {
+.carocrm-icon-picker {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.lizant-icon-picker .ant-radio-button-wrapper {
+.carocrm-icon-picker .ant-radio-button-wrapper {
   border-radius: 6px;
   border-start-start-radius: 6px;
   border-start-end-radius: 6px;
@@ -254,13 +254,13 @@ body {
   text-align: center;
 }
 
-.lizant-card {
+.carocrm-card {
   border: 1px solid #f0f0f0;
   border-radius: 8px;
   box-shadow: none;
 }
 
-.lizant-label {
+.carocrm-label {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.8px;
@@ -269,27 +269,27 @@ body {
 }
 
 /* stat tiles on the home page */
-.lizant-stat {
+.carocrm-stat {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 
-.lizant-stat-value {
+.carocrm-stat-value {
   font-size: 26px;
   font-weight: 600;
   line-height: 1.2;
   margin-top: 6px;
 }
 
-.lizant-stat-hint {
+.carocrm-stat-hint {
   color: #a1a8b3;
   font-size: 12px;
   margin-top: 2px;
 }
 
-.lizant-stat-icon {
+.carocrm-stat-icon {
   width: 44px;
   height: 44px;
   border-radius: 8px;
@@ -299,14 +299,14 @@ body {
   flex: 0 0 auto;
 }
 
-.lizant-stat-icon--blue { background: #e3f0ff; color: #438eff; }
-.lizant-stat-icon--green { background: #ecfff3; color: #55c27f; }
-.lizant-stat-icon--cyan { background: #dbefef; color: #23819c; }
-.lizant-stat-icon--yellow { background: #fffbe6; color: #e8a33d; }
-.lizant-stat-icon--purple { background: #f1ecff; color: #7b61ff; }
+.carocrm-stat-icon--blue { background: #e3f0ff; color: #438eff; }
+.carocrm-stat-icon--green { background: #ecfff3; color: #55c27f; }
+.carocrm-stat-icon--cyan { background: #dbefef; color: #23819c; }
+.carocrm-stat-icon--yellow { background: #fffbe6; color: #e8a33d; }
+.carocrm-stat-icon--purple { background: #f1ecff; color: #7b61ff; }
 
 /* soft status pills, as used for enum values and record states */
-.lizant-pill {
+.carocrm-pill {
   display: inline-block;
   padding: 1px 8px;
   border-radius: 4px;
@@ -316,13 +316,13 @@ body {
   color: #438eff;
 }
 
-.lizant-pill--green { background: #ecfff3; color: #55c27f; }
-.lizant-pill--amber { background: #fffbe6; color: #e8a33d; }
-.lizant-pill--red { background: #fdecec; color: #fa626b; }
-.lizant-pill--grey { background: #f2f3f5; color: #737b85; }
+.carocrm-pill--green { background: #ecfff3; color: #55c27f; }
+.carocrm-pill--amber { background: #fffbe6; color: #e8a33d; }
+.carocrm-pill--red { background: #fdecec; color: #fa626b; }
+.carocrm-pill--grey { background: #f2f3f5; color: #737b85; }
 
 /* ---- login ---- */
-.lizant-auth {
+.carocrm-auth {
   min-height: 100vh;
   display: grid;
   place-items: center;
@@ -330,7 +330,7 @@ body {
   padding: 24px;
 }
 
-.lizant-auth-card {
+.carocrm-auth-card {
   width: 380px;
   background: #fff;
   border: 1px solid #f0f0f0;
@@ -338,7 +338,7 @@ body {
   padding: 32px;
 }
 
-.lizant-auth-brand {
+.carocrm-auth-brand {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -347,7 +347,7 @@ body {
   margin-bottom: 6px;
 }
 
-.lizant-auth-sub {
+.carocrm-auth-sub {
   color: #737b85;
   font-size: 13px;
   margin-bottom: 24px;
@@ -362,8 +362,8 @@ body {
   margin: 16px 0 0;
 }
 
-/* ---- record list page (Lizant app-* list pattern) ---- */
-.lizant-list-head {
+/* ---- record list page (Carocrm app-* list pattern) ---- */
+.carocrm-list-head {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -372,83 +372,83 @@ body {
   margin-bottom: 18px;
 }
 
-.lizant-list-head .lizant-page-title {
+.carocrm-list-head .carocrm-page-title {
   font-size: 17px;
   font-weight: 600;
 }
 
-.lizant-filter {
+.carocrm-filter {
   border-bottom: 1px solid #f0f0f0;
   margin-bottom: 18px;
   padding-bottom: 18px;
 }
 
-.lizant-filter-label {
+.carocrm-filter-label {
   color: #737b85;
   display: block;
   font-size: 13px;
   margin-bottom: 4px;
 }
 
-.lizant-filter-actions {
+.carocrm-filter-actions {
   display: flex;
   gap: 8px;
   margin-top: 14px;
 }
 
-.lizant-row-link {
+.carocrm-row-link {
   color: #438eff;
   font-weight: 400;
 }
 
 /* ---- stream ---- */
-.lizant-stream-list {
+.carocrm-stream-list {
   display: flex;
   flex-direction: column;
 }
 
-.lizant-stream-item {
+.carocrm-stream-item {
   border-bottom: 1px solid #f0f0f0;
   display: flex;
   gap: 12px;
   padding: 12px 0;
 }
 
-.lizant-stream-item:last-child {
+.carocrm-stream-item:last-child {
   border-bottom: 0;
 }
 
 /* ---- case conversation (SD.6) ----
    Posting mode must be unmistakable, so public/internal/system entries carry distinct left rails and
    the composer itself tints with the selected mode. */
-.lizant-conversation-composer {
+.carocrm-conversation-composer {
   border-radius: 8px;
   margin-top: 16px;
   padding: 12px;
 }
 
-.lizant-conversation-composer.lizant-conversation-public {
+.carocrm-conversation-composer.carocrm-conversation-public {
   background: #f6ffed;
   border: 1px solid #b7eb8f;
 }
 
-.lizant-conversation-composer.lizant-conversation-internal {
+.carocrm-conversation-composer.carocrm-conversation-internal {
   background: #fffbe6;
   border: 1px solid #ffe58f;
 }
 
-.lizant-stream-item.lizant-conversation-public {
+.carocrm-stream-item.carocrm-conversation-public {
   border-left: 3px solid #52c41a;
   padding-left: 12px;
 }
 
-.lizant-stream-item.lizant-conversation-internal {
+.carocrm-stream-item.carocrm-conversation-internal {
   background: #fffbe6;
   border-left: 3px solid #fa8c16;
   padding-left: 12px;
 }
 
-.lizant-stream-item.lizant-conversation-system {
+.carocrm-stream-item.carocrm-conversation-system {
   border-left: 3px solid #d9d9d9;
   padding-left: 12px;
 }
@@ -458,7 +458,7 @@ body {
 /* ---- calendar ----
    antd injects its CSS-in-JS after this file, so every rule that has to beat a built-in
    state (selected, today, hover) repeats the .ant-picker-calendar-full .ant-picker-panel chain. */
-.lizant-cal-header {
+.carocrm-cal-header {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -466,35 +466,35 @@ body {
   padding-bottom: 12px;
 }
 
-.lizant-cal-month {
+.carocrm-cal-month {
   font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.2px;
   min-width: 140px;
 }
 
-.lizant-cal-total {
+.carocrm-cal-total {
   font-size: 12px;
   margin-inline-start: auto;
 }
 
-.lizant-cal-legend {
+.carocrm-cal-legend {
   align-items: center;
   display: inline-flex;
   gap: 6px;
 }
 
-.lizant-cal-dot {
+.carocrm-cal-dot {
   border-radius: 999px;
   flex: 0 0 auto;
   height: 8px;
   width: 8px;
 }
 
-.lizant-cal-dot--task { background: #438eff; }
-.lizant-cal-dot--call { background: #13c2c2; }
-.lizant-cal-dot--meeting { background: #722ed1; }
-.lizant-cal-dot--project-task { background: #2f54eb; }
+.carocrm-cal-dot--task { background: #438eff; }
+.carocrm-cal-dot--call { background: #13c2c2; }
+.carocrm-cal-dot--meeting { background: #722ed1; }
+.carocrm-cal-dot--project-task { background: #2f54eb; }
 
 /* the grid replaces antd's month/year selects and its own cell chrome */
 .ant-picker-calendar.ant-picker-calendar-full .ant-picker-panel {
@@ -536,7 +536,7 @@ body {
   border-color: transparent;
 }
 
-.lizant-cal-cell {
+.carocrm-cal-cell {
   container-type: inline-size;
   cursor: pointer;
   display: flex;
@@ -548,26 +548,26 @@ body {
   transition: background-color 0.15s ease;
 }
 
-.ant-picker-calendar .ant-picker-cell:hover .lizant-cal-cell {
+.ant-picker-calendar .ant-picker-cell:hover .carocrm-cal-cell {
   background: #f8fbff;
 }
 
-.lizant-cal-cell--out {
+.carocrm-cal-cell--out {
   cursor: default;
 }
 
-.lizant-cal-cell--selected,
-.lizant-cal-cell--selected:hover {
+.carocrm-cal-cell--selected,
+.carocrm-cal-cell--selected:hover {
   background: #f0f8ff;
   box-shadow: inset 0 0 0 1px #dbeaff;
 }
 
-.lizant-cal-cell[data-drag-over='true'] {
+.carocrm-cal-cell[data-drag-over='true'] {
   background: #e8f3ff;
   box-shadow: inset 0 0 0 1px #438eff;
 }
 
-.lizant-cal-day {
+.carocrm-cal-day {
   align-self: flex-start;
   border-radius: 999px;
   color: #737b85;
@@ -580,22 +580,22 @@ body {
   text-align: center;
 }
 
-.lizant-cal-cell--out .lizant-cal-day {
+.carocrm-cal-cell--out .carocrm-cal-day {
   color: #c1c7ce;
 }
 
-.lizant-cal-cell--selected .lizant-cal-day {
+.carocrm-cal-cell--selected .carocrm-cal-day {
   box-shadow: inset 0 0 0 1px #438eff;
   color: #438eff;
 }
 
-.lizant-cal-cell--today .lizant-cal-day,
-.lizant-cal-cell--today:hover .lizant-cal-day {
+.carocrm-cal-cell--today .carocrm-cal-day,
+.carocrm-cal-cell--today:hover .carocrm-cal-day {
   background: #438eff;
   color: #fff;
 }
 
-.lizant-cal-events {
+.carocrm-cal-events {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -603,7 +603,7 @@ body {
   text-align: start;
 }
 
-.lizant-cal-event {
+.carocrm-cal-event {
   border: 1px solid #eff2f7;
   border-left: 3px solid #d5dbe3;
   border-radius: 6px;
@@ -614,18 +614,18 @@ body {
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.lizant-cal-event:hover {
+.carocrm-cal-event:hover {
   background: #f8fbff;
   border-color: #dbeaff;
   border-left-color: inherit;
 }
 
-.lizant-cal-event--task { border-left-color: #438eff; }
-.lizant-cal-event--call { border-left-color: #13c2c2; }
-.lizant-cal-event--meeting { border-left-color: #722ed1; }
-.lizant-cal-event--project-task { border-left-color: #2f54eb; }
+.carocrm-cal-event--task { border-left-color: #438eff; }
+.carocrm-cal-event--call { border-left-color: #13c2c2; }
+.carocrm-cal-event--meeting { border-left-color: #722ed1; }
+.carocrm-cal-event--project-task { border-left-color: #2f54eb; }
 
-.lizant-cal-event a {
+.carocrm-cal-event a {
   color: #31373d;
   display: block;
   overflow: hidden;
@@ -634,64 +634,64 @@ body {
   white-space: nowrap;
 }
 
-.lizant-cal-event-time {
+.carocrm-cal-event-time {
   color: #737b85;
   margin-inline-end: 5px;
 }
 
 /* In a narrow column the entry name matters more than its start time. */
 @container (max-width: 130px) {
-  .lizant-cal-event-time {
+  .carocrm-cal-event-time {
     display: none;
   }
 }
 
-.lizant-cal-event-repeat {
+.carocrm-cal-event-repeat {
   color: #9aa2ab;
   margin-inline-start: 4px;
 }
 
-.lizant-cal-more {
+.carocrm-cal-more {
   color: #438eff;
   font-size: 12px;
   font-weight: 500;
   padding-inline-start: 4px;
 }
 
-.lizant-cal-day-panel {
+.carocrm-cal-day-panel {
   border: 1px solid #eff2f7;
   border-radius: 8px;
   margin-top: 12px;
   padding: 10px 12px;
 }
 
-.lizant-cal-day-panel-title {
+.carocrm-cal-day-panel-title {
   display: block;
   font-weight: 600;
   margin-bottom: 8px;
   text-transform: capitalize;
 }
 
-.lizant-cal-day-list {
+.carocrm-cal-day-list {
   display: grid;
   gap: 6px;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
 
 @media only screen and (max-width: 768px) {
-  .lizant-cal-cell {
+  .carocrm-cal-cell {
     min-height: 76px;
     padding: 4px;
   }
 
-  .lizant-cal-event-time,
-  .lizant-cal-total {
+  .carocrm-cal-event-time,
+  .carocrm-cal-total {
     display: none;
   }
 }
 
 /* Jobs admin: the log viewer stays a plain monospace block (PLAN §24 job logs). */
-.lizant-job-log {
+.carocrm-job-log {
   margin: 0;
   padding: 12px 14px;
   background: #fafafa;
@@ -713,28 +713,28 @@ body {
  * ------------------------------------------------------------------------ */
 /* The view below the project header card needs its own air — with no gap the toolbar read as
    part of the card. */
-.lizant-project-body {
+.carocrm-project-body {
   margin-top: 16px;
 }
 
-.lizant-project-dates {
+.carocrm-project-dates {
   font-size: 12px;
 }
-.lizant-project-group-body {
+.carocrm-project-group-body {
   min-height: 44px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.lizant-project-group-body.is-over {
+.carocrm-project-group-body.is-over {
   outline: 1px dashed var(--ant-color-primary, #438eff);
   outline-offset: 2px;
 }
-.lizant-project-empty-group {
+.carocrm-project-empty-group {
   font-size: 12px;
   padding: 6px 0;
 }
-.lizant-project-task {
+.carocrm-project-task {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -744,35 +744,35 @@ body {
   border-radius: 8px;
   background: #fff;
 }
-.lizant-project-task.is-dragging {
+.carocrm-project-task.is-dragging {
   /* The drag overlay carries the visual; the row stays in its group as a dimmed placeholder. */
   opacity: 0.45;
 }
-.lizant-project-task-overlay {
+.carocrm-project-task-overlay {
   box-shadow: 0 8px 22px rgba(15, 34, 67, 0.22);
   cursor: grabbing;
 }
-.lizant-project-task-main {
+.carocrm-project-task-main {
   display: flex;
   align-items: center;
   gap: 6px;
   flex: 1 1 320px;
   min-width: 0;
 }
-.lizant-project-task-meta {
+.carocrm-project-task-meta {
   display: flex;
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
 }
-.lizant-project-task-name {
+.carocrm-project-task-name {
   padding-inline: 4px;
   max-width: 340px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.lizant-project-drag-handle {
+.carocrm-project-drag-handle {
   border: 0;
   background: transparent;
   color: #a7aeb8;
@@ -784,43 +784,43 @@ body {
   /* dnd-kit's PointerSensor only receives touch gestures when the browser stops panning here. */
   touch-action: none;
 }
-.lizant-project-drag-handle:active {
+.carocrm-project-drag-handle:active {
   cursor: grabbing;
 }
-.lizant-project-drag-handle:disabled {
+.carocrm-project-drag-handle:disabled {
   cursor: default;
   opacity: 0.4;
 }
-.lizant-project-drag-handle:focus-visible {
+.carocrm-project-drag-handle:focus-visible {
   outline: 2px solid #438eff;
   outline-offset: 1px;
 }
-.lizant-project-subtasks {
+.carocrm-project-subtasks {
   flex: 1 1 100%;
   padding-left: 22px;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.lizant-project-subtask {
+.carocrm-project-subtask {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
 }
-.lizant-project-add-task {
+.carocrm-project-add-task {
   width: 100%;
   text-align: left;
   margin-top: 6px;
 }
-.lizant-project-board {
+.carocrm-project-board {
   display: flex;
   gap: 12px;
   align-items: flex-start;
   overflow-x: auto;
   padding-bottom: 8px;
 }
-.lizant-project-column {
+.carocrm-project-column {
   flex: 0 0 260px;
   background: #f7f9fb;
   border: 1px solid #eceff3;
@@ -831,21 +831,21 @@ body {
   gap: 10px;
   min-height: 120px;
 }
-.lizant-project-column.is-over {
+.carocrm-project-column.is-over {
   border-color: #438eff;
 }
-.lizant-project-column-head {
+.carocrm-project-column-head {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 2px 2px 0;
 }
-.lizant-project-column-title {
+.carocrm-project-column-title {
   font-size: 13px;
   font-weight: 600;
   color: #31373d;
 }
-.lizant-project-column-count {
+.carocrm-project-column-count {
   margin-left: auto;
   min-width: 22px;
   height: 20px;
@@ -860,11 +860,11 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
- * Board card — follows the Lizant board card: a white rounded card, a bold
+ * Board card — follows the Carocrm board card: a white rounded card, a bold
  * title with a `⋯` affordance, a row of soft pills with the assignee avatar
  * pushed right, then a divider and an icon meta footer.
  * ------------------------------------------------------------------------ */
-.lizant-project-card {
+.carocrm-project-card {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -874,24 +874,24 @@ body {
   border-radius: 10px;
   cursor: pointer;
 }
-.lizant-project-card:hover {
+.carocrm-project-card:hover {
   border-color: #dbe3ec;
 }
-.lizant-project-card.is-dragging {
+.carocrm-project-card.is-dragging {
   /* The drag overlay carries the visual; the card stays in its column as a dimmed placeholder. */
   opacity: 0.45;
 }
-.lizant-project-card-overlay {
+.carocrm-project-card-overlay {
   /* dnd-kit sizes the overlay from the dragged card's rect; only the lift needs styling. */
   box-shadow: 0 8px 22px rgba(15, 34, 67, 0.24);
   cursor: grabbing;
 }
-.lizant-project-card-head {
+.carocrm-project-card-head {
   display: flex;
   align-items: flex-start;
   gap: 6px;
 }
-.lizant-project-card-title {
+.carocrm-project-card-title {
   flex: 1 1 auto;
   min-width: 0;
   font-size: 14px;
@@ -900,7 +900,7 @@ body {
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.lizant-project-card-menu {
+.carocrm-project-card-menu {
   flex: 0 0 auto;
   border: 0;
   background: transparent;
@@ -911,20 +911,20 @@ body {
   line-height: 1;
   cursor: pointer;
 }
-.lizant-project-card-menu:hover {
+.carocrm-project-card-menu:hover {
   color: #5b636d;
 }
-.lizant-project-card-tags {
+.carocrm-project-card-tags {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
 }
-.lizant-project-card-avatar {
+.carocrm-project-card-avatar {
   /* Colour is set inline on the Avatar — antd injects its own styles after this file. */
   margin-left: auto;
 }
-.lizant-project-card-footer {
+.carocrm-project-card-footer {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -934,18 +934,18 @@ body {
   font-size: 12px;
   color: #737b85;
 }
-.lizant-project-card-meta {
+.carocrm-project-card-meta {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   white-space: nowrap;
 }
-.lizant-project-card-meta .anticon {
+.carocrm-project-card-meta .anticon {
   color: #a7aeb8;
 }
 
 /* Soft pills: a pale tint with a saturated label, shared by status, priority and milestone. */
-.lizant-project-pill {
+.carocrm-project-pill {
   display: inline-flex;
   align-items: center;
   height: 22px;
@@ -956,40 +956,40 @@ body {
   line-height: 1;
   white-space: nowrap;
 }
-.lizant-project-pill.is-gray {
+.carocrm-project-pill.is-gray {
   background: #eef1f5;
   color: #5b636d;
 }
-.lizant-project-pill.is-blue {
+.carocrm-project-pill.is-blue {
   background: #e8f1ff;
   color: #2f7ff0;
 }
-.lizant-project-pill.is-green {
+.carocrm-project-pill.is-green {
   background: #e3f7ec;
   color: #2f9e63;
 }
-.lizant-project-pill.is-amber {
+.carocrm-project-pill.is-amber {
   background: #fdf3e3;
   color: #c9821f;
 }
-.lizant-project-pill.is-red {
+.carocrm-project-pill.is-red {
   background: #fdecec;
   color: #e04b54;
 }
-.lizant-project-pill.is-purple {
+.carocrm-project-pill.is-purple {
   background: #f0ebfd;
   color: #7b52d6;
 }
-.lizant-project-gantt {
+.carocrm-project-gantt {
   border: 1px solid #eceff3;
   border-radius: 8px;
   background: #fff;
   touch-action: none;
 }
-.lizant-project-gantt svg {
+.carocrm-project-gantt svg {
   display: block;
 }
-.lizant-project-bulk-members {
+.carocrm-project-bulk-members {
   margin-top: 16px;
   padding: 12px;
   border: 1px solid #eceff3;
@@ -999,18 +999,18 @@ body {
 
 /* ---------------------------------------------------------------------------
  * Record board (Kanban) — the metadata-driven view of any entity list. It
- * speaks the same Lizant board language as the Projects board: `#f7f9fb`
+ * speaks the same Carocrm board language as the Projects board: `#f7f9fb`
  * columns, white rounded cards, a bold title and a muted meta row. The classes
  * are separate on purpose, so neither view depends on the other's stylesheet.
  * ------------------------------------------------------------------------ */
-.lizant-board {
+.carocrm-board {
   display: flex;
   gap: 12px;
   align-items: flex-start;
   overflow-x: auto;
   padding-bottom: 8px;
 }
-.lizant-board-column {
+.carocrm-board-column {
   flex: 0 0 260px;
   background: #f7f9fb;
   border: 1px solid #eceff3;
@@ -1021,16 +1021,16 @@ body {
   gap: 10px;
   min-height: 120px;
 }
-.lizant-board-column.is-over {
+.carocrm-board-column.is-over {
   border-color: #438eff;
 }
-.lizant-board-column-head {
+.carocrm-board-column-head {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 2px 2px 0;
 }
-.lizant-board-column-title {
+.carocrm-board-column-title {
   font-size: 13px;
   font-weight: 600;
   color: #31373d;
@@ -1038,7 +1038,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.lizant-board-column-count {
+.carocrm-board-column-count {
   margin-left: auto;
   min-width: 22px;
   height: 20px;
@@ -1051,24 +1051,24 @@ body {
   line-height: 20px;
   text-align: center;
 }
-.lizant-board-column-body {
+.carocrm-board-column-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.lizant-board-column-empty {
+.carocrm-board-column-empty {
   font-size: 12px;
   color: #a7aeb8;
   padding: 2px 4px;
 }
-.lizant-board-more {
+.carocrm-board-more {
   color: #438eff;
   font-size: 12px;
   height: auto;
   padding: 0;
   text-align: left;
 }
-.lizant-board-card {
+.carocrm-board-card {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1077,24 +1077,24 @@ body {
   border: 1px solid #f0f0f0;
   border-radius: 10px;
 }
-.lizant-board-card:hover {
+.carocrm-board-card:hover {
   border-color: #dbe3ec;
 }
-.lizant-board-card.is-dragging {
+.carocrm-board-card.is-dragging {
   /* The drag overlay carries the visual; the card stays in its column as a dimmed placeholder. */
   opacity: 0.45;
 }
-.lizant-board-card-overlay {
+.carocrm-board-card-overlay {
   /* dnd-kit sizes the overlay from the dragged card's rect; only the lift needs styling. */
   box-shadow: 0 8px 22px rgba(15, 34, 67, 0.24);
   cursor: grabbing;
 }
-.lizant-board-card-head {
+.carocrm-board-card-head {
   display: flex;
   align-items: flex-start;
   gap: 6px;
 }
-.lizant-board-card-title {
+.carocrm-board-card-title {
   flex: 1 1 auto;
   min-width: 0;
   font-size: 14px;
@@ -1103,10 +1103,10 @@ body {
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.lizant-board-card-title:hover {
+.carocrm-board-card-title:hover {
   color: #438eff;
 }
-.lizant-board-card-fields {
+.carocrm-board-card-fields {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1114,16 +1114,16 @@ body {
   border-top: 1px solid #f0f0f0;
   font-size: 12px;
 }
-.lizant-board-card-field {
+.carocrm-board-card-field {
   display: flex;
   align-items: baseline;
   gap: 6px;
 }
-.lizant-board-card-field-label {
+.carocrm-board-card-field-label {
   flex: 0 0 auto;
   color: #a7aeb8;
 }
-.lizant-board-drag-handle {
+.carocrm-board-drag-handle {
   border: 0;
   background: transparent;
   color: #a7aeb8;
@@ -1135,23 +1135,24 @@ body {
   /* dnd-kit's PointerSensor only receives touch gestures when the browser stops panning here. */
   touch-action: none;
 }
-.lizant-board-drag-handle:active {
+.carocrm-board-drag-handle:active {
   cursor: grabbing;
 }
-.lizant-board-drag-handle:focus-visible {
+.carocrm-board-drag-handle:focus-visible {
   outline: 2px solid #438eff;
   outline-offset: 1px;
 }
 
 /* entity-manager layout editor: full-width field rows, group blocks and the disabled pool */
-.lizant-layout-row-wrap {
+.carocrm-layout-row-wrap {
   touch-action: none;
-}.lizant-layout-rows {
+}
+.carocrm-layout-rows {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.lizant-layout-row {
+.carocrm-layout-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1163,28 +1164,28 @@ body {
   cursor: grab;
   user-select: none;
 }
-.lizant-layout-group {
+.carocrm-layout-group {
   border: 1px solid #f0f0f0;
   border-radius: 8px;
   background: #fafbfc;
   padding: 8px 10px;
 }
-.lizant-layout-group-head {
+.carocrm-layout-group-head {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.lizant-layout-group-name {
+.carocrm-layout-group-name {
   font-weight: 600;
 }
-.lizant-layout-group-count {
+.carocrm-layout-group-count {
   color: #8c8c8c;
   font-size: 12px;
 }
-.lizant-layout-group-body {
+.carocrm-layout-group-body {
   margin-top: 8px;
 }
-.lizant-layout-append {
+.carocrm-layout-append {
   margin-top: 8px;
   padding: 14px;
   text-align: center;
@@ -1194,7 +1195,7 @@ body {
   font-size: 13px;
   transition: background 0.15s ease;
 }
-.lizant-layout-pool {
+.carocrm-layout-pool {
   min-height: 120px;
   padding: 8px;
   border: 1px dashed #d9d9d9;
@@ -1260,26 +1261,26 @@ body {
    column with `min-width: 0` on each child is the fix: the table keeps its
    width, the card stays the width of the screen, and the table scrolls.
    --------------------------------------------------------------------------- */
-.lizant-card-stack {
+.carocrm-card-stack {
   display: flex;
   flex-direction: column;
   gap: 12px;
   width: 100%;
   min-width: 0;
 }
-.lizant-card-stack > * {
+.carocrm-card-stack > * {
   min-width: 0;
 }
 /* A card on a document screen holds a table wider than a phone, so its body is
    the scroll container rather than the page. */
-.lizant-card-stack .ant-card-body {
+.carocrm-card-stack .ant-card-body {
   overflow-x: auto;
 }
-.lizant-card-stack .ant-table-wrapper {
+.carocrm-card-stack .ant-table-wrapper {
   max-width: 100%;
 }
-.lizant-card-stack .ant-table-content,
-.lizant-card-stack .ant-table-body {
+.carocrm-card-stack .ant-table-content,
+.carocrm-card-stack .ant-table-body {
   overflow-x: auto;
 }
 
@@ -1300,7 +1301,7 @@ body {
    `position` only - width and height stay antd's.
    --------------------------------------------------------------------------- */
 @media only screen and (max-width: 768px) {
-  .lizant-sider--drawer {
+  .carocrm-sider--drawer {
     position: fixed !important;
     top: 0;
     bottom: 0;
@@ -1309,17 +1310,17 @@ body {
     transform: translateX(-100%);
     transition: transform 0.2s ease;
   }
-  .lizant-sider--drawer.is-open {
+  .carocrm-sider--drawer.is-open {
     transform: translateX(0);
     box-shadow: 2px 0 12px rgba(0, 0, 0, 0.18);
   }
-  .lizant-drawer-backdrop {
+  .carocrm-drawer-backdrop {
     position: fixed;
     inset: 0;
     z-index: 20;
     background: rgba(0, 0, 0, 0.28);
   }
-  .lizant-content {
+  .carocrm-content {
     padding: 12px;
   }
 }

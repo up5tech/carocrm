@@ -14,17 +14,17 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   return (
-    <div className="lizant-auth">
-      <div className="lizant-auth-card">
-        <div className="lizant-auth-brand">
+    <div className="carocrm-auth">
+      <div className="carocrm-auth-card">
+        <div className="carocrm-auth-brand">
           {settings.data?.logoUrl ? (
-            <img className="lizant-brand-logo lizant-brand-logo--auth" src={settings.data.logoUrl} alt="" />
+            <img className="carocrm-brand-logo carocrm-brand-logo--auth" src={settings.data.logoUrl} alt="" />
           ) : (
-            <span className="lizant-brand-mark">C</span>
+            <span className="carocrm-brand-mark">C</span>
           )}
           <span>{settings.data?.pageTitle ?? DEFAULT_BRAND}</span>
         </div>
-        <p className="lizant-auth-sub">{t('web.login.subtitle')}</p>
+        <p className="carocrm-auth-sub">{t('web.login.subtitle')}</p>
         <Form
           form={form}
           layout="vertical"

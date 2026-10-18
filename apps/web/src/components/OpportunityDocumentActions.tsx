@@ -36,7 +36,7 @@ export function OpportunityDocumentActions({ opportunityId }: OpportunityDocumen
   const navigate = useNavigate();
 
   return (
-    <Card className="lizant-card" size="small" title={<Typography.Text strong>{t('sales.opportunity.title')}</Typography.Text>}>
+    <Card className="carocrm-card" size="small" title={<Typography.Text strong>{t('sales.opportunity.title')}</Typography.Text>}>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
         {t('sales.opportunity.hint')}
       </Typography.Paragraph>

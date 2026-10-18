@@ -51,7 +51,7 @@ export function PortalHomePage() {
 
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-      <Card className="lizant-card" title={t('web.portal.welcome', { portal: portal.name, user: user.firstName ?? user.userName })}>
+      <Card className="carocrm-card" title={t('web.portal.welcome', { portal: portal.name, user: user.firstName ?? user.userName })}>
         <Descriptions size="small" column={2} bordered>
           <Descriptions.Item label={t('web.portal.signedInAs')}>{user.userName}</Descriptions.Item>
           <Descriptions.Item label={t('web.portal.contact')}>
@@ -63,7 +63,7 @@ export function PortalHomePage() {
       </Card>
 
       {nav.length > 0 ? (
-        <Card className="lizant-card" size="small" title={t('web.portal.navigate')}>
+        <Card className="carocrm-card" size="small" title={t('web.portal.navigate')}>
           <Row gutter={[12, 12]}>
             {nav.map((item) => (
               <Col key={item.id} xs={12} sm={8} md={6}>
@@ -76,7 +76,7 @@ export function PortalHomePage() {
         </Card>
       ) : null}
 
-      <Card className="lizant-card" title={dashboard?.name ?? t('web.portal.dashboard')} loading={running}>
+      <Card className="carocrm-card" title={dashboard?.name ?? t('web.portal.dashboard')} loading={running}>
         {dashboard && dashboard.dashlets.length > 0 ? (
           <Row gutter={[12, 12]}>
             {dashboard.dashlets.map((dashlet) => (

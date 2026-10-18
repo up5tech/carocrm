@@ -140,7 +140,7 @@ export function ProjectBoardPage() {
           void onDragEnd(event);
         }}
       >
-        <div className="lizant-project-board">
+        <div className="carocrm-project-board">
           {columns.map((column) => (
             <StageColumn
               key={String(column.stage['id'])}
@@ -160,7 +160,7 @@ export function ProjectBoardPage() {
         */}
         <DragOverlay dropAnimation={null}>
           {activeTask === null ? null : (
-            <div className="lizant-project-card lizant-project-card-overlay">
+            <div className="carocrm-project-card carocrm-project-card-overlay">
               <BoardCardContent
                 task={activeTask}
                 assigneeName={activeTask.assigneeUserId === null ? undefined : memberNames.get(activeTask.assigneeUserId)}
@@ -199,11 +199,11 @@ function StageColumn({ stage, tasks, canEdit, memberNames, onEdit }: ColumnProps
   const statusValue = String(stage['statusValue'] ?? '');
 
   return (
-    <div className={`lizant-project-column${drop.isOver ? ' is-over' : ''}`} ref={drop.setNodeRef}>
-      <div className="lizant-project-column-head">
-        <span className="lizant-project-column-title">{String(stage['name'] ?? '')}</span>
-        <span className={`lizant-project-pill ${PILL_TONE[statusValue] ?? 'is-gray'}`}>{statusValue}</span>
-        <span className="lizant-project-column-count">{String(tasks.length)}</span>
+    <div className={`carocrm-project-column${drop.isOver ? ' is-over' : ''}`} ref={drop.setNodeRef}>
+      <div className="carocrm-project-column-head">
+        <span className="carocrm-project-column-title">{String(stage['name'] ?? '')}</span>
+        <span className={`carocrm-project-pill ${PILL_TONE[statusValue] ?? 'is-gray'}`}>{statusValue}</span>
+        <span className="carocrm-project-column-count">{String(tasks.length)}</span>
       </div>
       <SortableContext items={tasks.map((task) => task.id)} strategy={verticalListSortingStrategy}>
         {tasks.map((task) => (
@@ -221,7 +221,7 @@ function StageColumn({ stage, tasks, canEdit, memberNames, onEdit }: ColumnProps
 }
 
 /**
- * Soft pill tones, keyed by the value the API returns. The Lizant board colours its card tags with a
+ * Soft pill tones, keyed by the value the API returns. The Carocrm board colours its card tags with a
  * pale tint plus a saturated label rather than a bordered tag, so status and priority share one
  * palette and the tone is the only difference between them.
  */
@@ -248,7 +248,7 @@ function initials(name: string): string {
 
 /**
  * The card body, shared by the sortable card and its drag overlay so both look identical. The shape
- * follows the Lizant board card: a bold title with a `⋯` affordance, a row of soft pills with the
+ * follows the Carocrm board card: a bold title with a `⋯` affordance, a row of soft pills with the
  * assignee pushed to the right, then a divider and an icon meta footer.
  *
  * The reference card also carries a description and a progress bar; a `ProjectTask` row has neither,
@@ -268,17 +268,17 @@ function BoardCardContent({
 }) {
   return (
     <>
-      <div className="lizant-project-card-head">
+      <div className="carocrm-project-card-head">
         {dragHandle ?? null}
-        <span className="lizant-project-card-title">{task.name}</span>
+        <span className="carocrm-project-card-title">{task.name}</span>
         {onOpen === undefined ? (
-          <span className="lizant-project-card-menu" aria-hidden="true">
+          <span className="carocrm-project-card-menu" aria-hidden="true">
             ⋯
           </span>
         ) : (
           <button
             type="button"
-            className="lizant-project-card-menu"
+            className="carocrm-project-card-menu"
             aria-label={t('web.projects.editTask')}
             onClick={(event) => {
               event.stopPropagation();
@@ -290,37 +290,37 @@ function BoardCardContent({
         )}
       </div>
 
-      <div className="lizant-project-card-tags">
+      <div className="carocrm-project-card-tags">
         {task.status === null ? null : (
-          <span className={`lizant-project-pill ${PILL_TONE[task.status] ?? 'is-gray'}`}>{task.status}</span>
+          <span className={`carocrm-project-pill ${PILL_TONE[task.status] ?? 'is-gray'}`}>{task.status}</span>
         )}
         {task.priority === null ? null : (
-          <span className={`lizant-project-pill ${PILL_TONE[task.priority] ?? 'is-gray'}`}>{task.priority}</span>
+          <span className={`carocrm-project-pill ${PILL_TONE[task.priority] ?? 'is-gray'}`}>{task.priority}</span>
         )}
-        {task.taskType === 'Milestone' ? <span className="lizant-project-pill is-purple">{t('web.projects.milestone')}</span> : null}
+        {task.taskType === 'Milestone' ? <span className="carocrm-project-pill is-purple">{t('web.projects.milestone')}</span> : null}
         {assigneeName === null || assigneeName === undefined || assigneeName === '' ? null : (
-          // The tint is inline: antd injects its Avatar styles after lizant.css, so a class of equal
+          // The tint is inline: antd injects its Avatar styles after carocrm.css, so a class of equal
           // specificity would lose the background/colour.
-          <Avatar size={24} className="lizant-project-card-avatar" style={{ background: '#e8f1ff', color: '#2f7ff0', fontSize: 11, fontWeight: 600 }} alt={assigneeName}>
+          <Avatar size={24} className="carocrm-project-card-avatar" style={{ background: '#e8f1ff', color: '#2f7ff0', fontSize: 11, fontWeight: 600 }} alt={assigneeName}>
             {initials(assigneeName)}
           </Avatar>
         )}
       </div>
 
-      <div className="lizant-project-card-footer">
-        <span className="lizant-project-card-meta">
+      <div className="carocrm-project-card-footer">
+        <span className="carocrm-project-card-meta">
           <ClockCircleOutlined />
           {formatDay(task.dateStart)}
           {task.dateEnd === null ? '' : ` → ${formatDay(task.dateEnd)}`}
         </span>
         {task.points === null ? null : (
-          <span className="lizant-project-card-meta">
+          <span className="carocrm-project-card-meta">
             <TrophyOutlined />
             {String(task.points)}
           </span>
         )}
         {task.estimateHours === null ? null : (
-          <span className="lizant-project-card-meta">
+          <span className="carocrm-project-card-meta">
             <FieldTimeOutlined />
             {`${String(task.estimateHours)}h`}
           </span>
@@ -344,7 +344,7 @@ function BoardCard({
   const sortable = useSortable({ id: task.id, data: { stageId: task.stageId }, disabled });
   return (
     <div
-      className={`lizant-project-card${sortable.isDragging ? ' is-dragging' : ''}`}
+      className={`carocrm-project-card${sortable.isDragging ? ' is-dragging' : ''}`}
       ref={sortable.setNodeRef}
       style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition }}
       onClick={() => onEdit(task)}
@@ -361,7 +361,7 @@ function BoardCard({
           */
           <button
             type="button"
-            className="lizant-project-drag-handle"
+            className="carocrm-project-drag-handle"
             ref={sortable.setActivatorNodeRef}
             {...sortable.attributes}
             {...(sortable.listeners ?? {})}

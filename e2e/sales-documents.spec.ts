@@ -75,7 +75,7 @@ test.describe('a commercial document in the browser (19-S.17)', () => {
       const card = documentCard(page);
       const issue = card.getByRole('button', { name: 'Issue', exact: true });
       await expect(issue).toBeVisible();
-      await expect(page.locator('.lizant-pill', { hasText: 'draft' }).first()).toBeVisible();
+      await expect(page.locator('.carocrm-pill', { hasText: 'draft' }).first()).toBeVisible();
       // Nothing is locked yet, so the issued-document warning must not be on screen.
       await expect(page.getByText('This document is issued and locked')).toHaveCount(0);
 
@@ -87,7 +87,7 @@ test.describe('a commercial document in the browser (19-S.17)', () => {
       await expect(visibleModal(page)).toHaveCount(0);
       // Withdrawn: the document is untouched and still offers the same command.
       await expect(issue).toBeVisible();
-      await expect(page.locator('.lizant-pill', { hasText: 'draft' }).first()).toBeVisible();
+      await expect(page.locator('.carocrm-pill', { hasText: 'draft' }).first()).toBeVisible();
 
       // The same button, reached and pressed from the keyboard — the screen is not mouse-only.
       await issue.focus();
@@ -103,7 +103,7 @@ test.describe('a commercial document in the browser (19-S.17)', () => {
       await page.setViewportSize({ width: 390, height: 844 });
       // The rail re-renders as an off-canvas drawer at this width, and that re-render is itself what
       // gives the content the full viewport — so wait for the drawer before measuring anything.
-      const sider = page.locator('.lizant-sider--drawer');
+      const sider = page.locator('.carocrm-sider--drawer');
       await expect(sider).toHaveCount(1);
       await expect(issue).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -114,7 +114,7 @@ test.describe('a commercial document in the browser (19-S.17)', () => {
       // one-shot read catches it mid-slide.
       const shift = () => sider.evaluate((node) => node.getBoundingClientRect().left);
       await expect.poll(shift, { timeout: 5_000 }).toBeLessThan(0);
-      await page.locator('.lizant-collapse-toggle').click();
+      await page.locator('.carocrm-collapse-toggle').click();
       await expect.poll(shift, { timeout: 5_000 }).toBe(0);
       await page.keyboard.press('Escape');
       await expect.poll(shift, { timeout: 5_000 }).toBeLessThan(0);
@@ -150,7 +150,7 @@ test.describe('a commercial document in the browser (19-S.17)', () => {
       // Dismissed, not submitted: the quote is still a draft, which is what makes it deletable.
       await modal.getByRole('button', { name: 'Keep as is', exact: true }).click();
       await expect(visibleModal(page)).toHaveCount(0);
-      await expect(page.locator('.lizant-pill', { hasText: 'draft' }).first()).toBeVisible();
+      await expect(page.locator('.carocrm-pill', { hasText: 'draft' }).first()).toBeVisible();
       await expect(card.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
     } finally {
       await deleteDraft(page, token, 'quote', quoteId);

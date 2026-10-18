@@ -61,11 +61,11 @@ export function SearchPage() {
   }
 
   return (
-    <Card className="lizant-card">
-      <div className="lizant-page-head">
+    <Card className="carocrm-card">
+      <div className="carocrm-page-head">
         <div>
-          <h1 className="lizant-page-title">{t('web.search.title')}</h1>
-          <p className="lizant-page-sub">{t('web.search.subtitle')}</p>
+          <h1 className="carocrm-page-title">{t('web.search.title')}</h1>
+          <p className="carocrm-page-sub">{t('web.search.subtitle')}</p>
         </div>
       </div>
       <Space.Compact style={{ width: '100%', marginBottom: 12 }}>

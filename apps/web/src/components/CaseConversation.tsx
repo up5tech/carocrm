@@ -184,7 +184,7 @@ export function CaseConversation({ caseId, definition, onChanged }: CaseConversa
 
   return (
     <Card
-      className="lizant-card"
+      className="carocrm-card"
       title={
         <Space size={8}>
           <Typography.Text strong>{t('web.serviceDesk.conversation.title')}</Typography.Text>
@@ -199,7 +199,7 @@ export function CaseConversation({ caseId, definition, onChanged }: CaseConversa
       ) : items.length === 0 ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.serviceDesk.conversation.empty')} />
       ) : (
-        <div className="lizant-stream-list">
+        <div className="carocrm-stream-list">
           {items.map((item) => (
             <ConversationEntry
               key={item.id}
@@ -212,7 +212,7 @@ export function CaseConversation({ caseId, definition, onChanged }: CaseConversa
       )}
 
       {canReply ? (
-        <div className={`lizant-conversation-composer lizant-conversation-${mode}`}>
+        <div className={`carocrm-conversation-composer carocrm-conversation-${mode}`}>
           <Segmented<Mode>
             block
             value={mode}
@@ -330,7 +330,7 @@ function ConversationEntry({
 }) {
   if (item.type === 'Update') {
     return (
-      <div className="lizant-stream-item lizant-conversation-system">
+      <div className="carocrm-stream-item carocrm-conversation-system">
         <Avatar size={32} style={{ flex: '0 0 auto', background: '#f8ac59' }}>
           ∆
         </Avatar>
@@ -352,7 +352,7 @@ function ConversationEntry({
   const internal = isInternal(item);
   const body = mentionText(item.post ?? String(item.data['notes'] ?? ''));
   return (
-    <div className={`lizant-stream-item ${internal ? 'lizant-conversation-internal' : 'lizant-conversation-public'}`}>
+    <div className={`carocrm-stream-item ${internal ? 'carocrm-conversation-internal' : 'carocrm-conversation-public'}`}>
       <Avatar size={32} style={{ flex: '0 0 auto', background: internal ? '#fa8c16' : '#438eff' }}>
         {initialsOf(item)}
       </Avatar>

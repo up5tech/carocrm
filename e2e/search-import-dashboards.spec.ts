@@ -85,7 +85,7 @@ test.describe('phase 12 — search, saved filters, csv and dashboards', () => {
     expect(created.status()).toBe(201);
 
     await login(page);
-    await page.locator('.lizant-header-search input').fill(name);
+    await page.locator('.carocrm-header-search input').fill(name);
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/search\?q=/);
     await expect(page.getByRole('link', { name })).toHaveCount(1);
@@ -148,12 +148,12 @@ test.describe('phase 12 — search, saved filters, csv and dashboards', () => {
     });
     expect(added.status()).toBe(201);
     await page.getByRole('button', { name: 'Refresh' }).click();
-    await expect(page.locator('.lizant-stat-value')).toBeVisible();
-    expect((await page.locator('.lizant-stat-value').innerText()).replace(/[^0-9]/g, '')).not.toBe('');
+    await expect(page.locator('.carocrm-stat-value')).toBeVisible();
+    expect((await page.locator('.carocrm-stat-value').innerText()).replace(/[^0-9]/g, '')).not.toBe('');
 
     await page.getByRole('button', { name: 'Delete dashboard' }).click();
     await page.locator('.ant-popconfirm:visible, .ant-popover:visible').getByRole('button', { name: 'Delete' }).click();
     // The picker is a Select now, so check both its current label and any rendered option.
-    await expect(page.locator('.lizant-dashboard-picker, .ant-select-item-option', { hasText: `PW Dashboard ${runId}` })).toHaveCount(0);
+    await expect(page.locator('.carocrm-dashboard-picker, .ant-select-item-option', { hasText: `PW Dashboard ${runId}` })).toHaveCount(0);
   });
 });

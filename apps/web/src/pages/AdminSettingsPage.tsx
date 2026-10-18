@@ -133,10 +133,10 @@ export function AdminSettingsPage() {
 
   return (
     <>
-      <div className="lizant-page-head">
+      <div className="carocrm-page-head">
         <div>
-          <h1 className="lizant-page-title">{t('web.adminSettings.title')}</h1>
-          <p className="lizant-page-sub">{t('web.adminSettings.subtitle')}</p>
+          <h1 className="carocrm-page-title">{t('web.adminSettings.title')}</h1>
+          <p className="carocrm-page-sub">{t('web.adminSettings.subtitle')}</p>
         </div>
         <Button icon={<ReloadOutlined />} loading={settings.isFetching} onClick={() => void settings.refetch()}>
           {t('core.common.reload')}
@@ -146,7 +146,7 @@ export function AdminSettingsPage() {
       <Form form={form} layout="vertical" onFinish={(values: SettingsForm) => void save(values)}>
         <Row gutter={[16, 16]}>
           <Col xs={24} lg={14}>
-            <Card className="lizant-card" title={t('web.adminSettings.brandTitle')}>
+            <Card className="carocrm-card" title={t('web.adminSettings.brandTitle')}>
               <Form.Item name="pageTitle" label={t('web.adminSettings.pageTitleLabel')} extra={t('web.adminSettings.pageTitleHint')}>
                 <Input maxLength={80} placeholder={t('web.adminSettings.pageTitlePlaceholder')} />
               </Form.Item>
@@ -159,7 +159,7 @@ export function AdminSettingsPage() {
               <Form.Item label={t('web.adminSettings.logoLabel')} extra={t('web.adminSettings.logoHint')}>
                 <Space align="center" size={12} wrap>
                   {logoId ? (
-                    <span className="lizant-logo-preview">
+                    <span className="carocrm-logo-preview">
                       <img src={`/api/v1/Attachment/${logoId}/file`} alt="" />
                     </span>
                   ) : null}
@@ -179,7 +179,7 @@ export function AdminSettingsPage() {
           </Col>
 
           <Col xs={24} lg={10}>
-            <Card className="lizant-card" title={t('web.adminSettings.localeTitle')}>
+            <Card className="carocrm-card" title={t('web.adminSettings.localeTitle')}>
               <Form.Item name="enabledLocales" label={t('web.adminSettings.enabledLocalesLabel')} rules={[{ required: true, message: t('web.adminSettings.enabledLocalesRequired') }]}>
                 <Select mode="multiple" options={localeOptions} placeholder={t('web.adminSettings.enabledLocalesPlaceholder')} />
               </Form.Item>
@@ -236,7 +236,7 @@ export function AdminSettingsPage() {
               {salesView && salesView.updatedAt ? ` · ${new Date(salesView.updatedAt).toLocaleString()}` : ''}
             </Typography.Text>
 
-            <Card className="lizant-card" title={t('sales.settings.features')} extra={t('sales.settings.featuresHint')} style={{ marginBottom: 16 }}>
+            <Card className="carocrm-card" title={t('sales.settings.features')} extra={t('sales.settings.featuresHint')} style={{ marginBottom: 16 }}>
               <Row gutter={[16, 4]}>
                 {SALES_FEATURE_KEYS.map((key) => (
                   <Col key={key} xs={24} md={12} lg={8}>
@@ -255,7 +255,7 @@ export function AdminSettingsPage() {
 
             <Row gutter={16}>
               <Col xs={24} md={12}>
-                <Card className="lizant-card" title={t('sales.settings.currency')} extra={t('sales.settings.currencyHint')} style={{ marginBottom: 16 }}>
+                <Card className="carocrm-card" title={t('sales.settings.currency')} extra={t('sales.settings.currencyHint')} style={{ marginBottom: 16 }}>
                   <Form.Item name={['currency', 'defaultCurrency']} label={t('sales.settings.defaultCurrency')} rules={[{ required: true, message: t('web.adminSettings.fieldRequired') }]}>
                     <Input maxLength={3} placeholder="USD" />
                   </Form.Item>
@@ -265,7 +265,7 @@ export function AdminSettingsPage() {
                 </Card>
               </Col>
               <Col xs={24} md={12}>
-                <Card className="lizant-card" title={t('sales.settings.pricing')} extra={t('sales.settings.pricingHint')} style={{ marginBottom: 16 }}>
+                <Card className="carocrm-card" title={t('sales.settings.pricing')} extra={t('sales.settings.pricingHint')} style={{ marginBottom: 16 }}>
                   <Form.Item name={['pricing', 'resolution']} label={t('sales.settings.resolution')}>
                     <Select
                       options={[
@@ -289,7 +289,7 @@ export function AdminSettingsPage() {
               </Col>
             </Row>
 
-            <Card className="lizant-card" title={t('sales.settings.tax')} extra={t('sales.settings.taxHint')} style={{ marginBottom: 16 }}>
+            <Card className="carocrm-card" title={t('sales.settings.tax')} extra={t('sales.settings.taxHint')} style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col xs={24} md={12} lg={6}>
                   <Form.Item name={['tax', 'missingTaxPolicy']} label={t('sales.settings.missingTaxPolicy')} extra={t('sales.settings.missingTaxPolicyError')}>
@@ -331,7 +331,7 @@ export function AdminSettingsPage() {
               </Row>
             </Card>
 
-            <Card className="lizant-card" title={t('sales.settings.numbering')} extra={t('sales.settings.numberingHint')} style={{ marginBottom: 16 }}>
+            <Card className="carocrm-card" title={t('sales.settings.numbering')} extra={t('sales.settings.numberingHint')} style={{ marginBottom: 16 }}>
               <Form.Item name={['numbering', 'allocation']} label={t('sales.settings.allocation')}>
                 <Select
                   options={[
@@ -359,7 +359,7 @@ export function AdminSettingsPage() {
 
             <Row gutter={16}>
               <Col xs={24} md={12}>
-                <Card className="lizant-card" title={t('sales.settings.inventory')} extra={t('sales.settings.inventoryHint')} style={{ marginBottom: 16 }}>
+                <Card className="carocrm-card" title={t('sales.settings.inventory')} extra={t('sales.settings.inventoryHint')} style={{ marginBottom: 16 }}>
                   <Form.Item name={['inventory', 'defaultWarehouseId']} label={t('sales.settings.defaultWarehouseId')} extra={t('sales.settings.defaultWarehouseIdHint')}>
                     <Input maxLength={64} />
                   </Form.Item>
@@ -396,7 +396,7 @@ export function AdminSettingsPage() {
                 </Card>
               </Col>
               <Col xs={24} md={12}>
-                <Card className="lizant-card" title={t('sales.settings.subscriptions')} extra={t('sales.settings.subscriptionsHint')} style={{ marginBottom: 16 }}>
+                <Card className="carocrm-card" title={t('sales.settings.subscriptions')} extra={t('sales.settings.subscriptionsHint')} style={{ marginBottom: 16 }}>
                   <Form.Item name={['subscriptions', 'horizonDays']} label={t('sales.settings.horizonDays')}>
                     <InputNumber min={1} max={1095} style={{ width: '100%' }} />
                   </Form.Item>
@@ -407,7 +407,7 @@ export function AdminSettingsPage() {
                     <InputNumber min={1} max={1000} style={{ width: '100%' }} />
                   </Form.Item>
                 </Card>
-                <Card className="lizant-card" title={t('sales.settings.variants')} extra={t('sales.settings.variantsHint')}>
+                <Card className="carocrm-card" title={t('sales.settings.variants')} extra={t('sales.settings.variantsHint')}>
                   <Form.Item name={['variants', 'requireAllAttributes']} label={t('sales.settings.requireAllAttributes')} valuePropName="checked">
                     <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
                   </Form.Item>

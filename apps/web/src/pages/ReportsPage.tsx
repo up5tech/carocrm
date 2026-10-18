@@ -324,10 +324,10 @@ export function ReportsPage() {
 
   return (
     <>
-      <div className="lizant-page-head">
+      <div className="carocrm-page-head">
         <div>
-          <h1 className="lizant-page-title">{t('web.reports.title')}</h1>
-          <p className="lizant-page-sub">{t('web.reports.subtitle')}</p>
+          <h1 className="carocrm-page-title">{t('web.reports.title')}</h1>
+          <p className="carocrm-page-sub">{t('web.reports.subtitle')}</p>
         </div>
         <Space wrap>
           <Button icon={<PlusOutlined />} onClick={resetBuilder}>{t('web.reports.new')}</Button>
@@ -344,7 +344,7 @@ export function ReportsPage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={6}>
-          <Card className="lizant-card" title={t('web.reports.savedTitle')}>
+          <Card className="carocrm-card" title={t('web.reports.savedTitle')}>
             <Space direction="vertical" style={{ width: '100%' }}>
               {reports.map((report) => (
                 <Button key={report.id} type={report.id === reportId ? 'primary' : 'default'} block onClick={() => selectReport(report)}>
@@ -356,7 +356,7 @@ export function ReportsPage() {
           </Card>
         </Col>
         <Col xs={24} xl={18}>
-          <Card className="lizant-card" title={t('web.reports.builderTitle')} extra={reportId === null ? <Tag color="blue">{t('web.reports.unsaved')}</Tag> : <Tag>{reportId.slice(0, 8)}</Tag>}>
+          <Card className="carocrm-card" title={t('web.reports.builderTitle')} extra={reportId === null ? <Tag color="blue">{t('web.reports.unsaved')}</Tag> : <Tag>{reportId.slice(0, 8)}</Tag>}>
             <Row gutter={[12, 12]}>
               <Col xs={24} md={12}>
                 <label htmlFor="report-name">{t('web.reports.nameLabel')}</label>
@@ -448,7 +448,7 @@ export function ReportsPage() {
             </Row>
           </Card>
 
-          <Card className="lizant-card" title={<Space><BarChartOutlined />{t('web.reports.resultsTitle')}</Space>} style={{ marginTop: 16 }}>
+          <Card className="carocrm-card" title={<Space><BarChartOutlined />{t('web.reports.resultsTitle')}</Space>} style={{ marginTop: 16 }}>
             {!result ? <Empty description={t('web.reports.resultsEmpty')} /> : (
               <>
                 {result.truncated ? <Alert type="warning" showIcon message={t('web.reports.partialResult', { scanned: String(result.scanned), total: String(result.total) })} style={{ marginBottom: 16 }} /> : null}

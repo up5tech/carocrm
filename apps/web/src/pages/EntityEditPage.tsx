@@ -219,14 +219,14 @@ export function EntityEditPage() {
   // otherwise overwrite whatever the user already typed.
   if (id && initial === undefined && !loadFailed) {
     return (
-      <Card className="lizant-card" title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{title}</Typography.Title>}>
+      <Card className="carocrm-card" title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{title}</Typography.Title>}>
         <Spin />
       </Card>
     );
   }
 
   return (
-    <Card className="lizant-card" title={<Typography.Title level={4} className="lizant-page-title" style={{ margin: 0 }}>{title}</Typography.Title>}>
+    <Card className="carocrm-card" title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{title}</Typography.Title>}>
       {blocked ? (
         <Alert
           type="error"

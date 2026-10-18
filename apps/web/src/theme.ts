@@ -1,12 +1,10 @@
 import type { ThemeConfig } from 'antd';
 
 /**
- * Design tokens measured from the Lizant (Themesbrand) Ant Design dashboard demo:
- * https://themes.themesbrand.com/lizant/react/light/dashboard
- * primary #438eff, Inter, layout #f5f5f5, white 260px sider / 70px header with
- * #eff2f7 separators, 8px cards with a #f0f0f0 border and no shadow.
+ * CaroCRM design tokens: primary #438eff, Inter, layout #f5f5f5, white 260px sider /
+ * 70px header with #eff2f7 separators, 8px cards with a #f0f0f0 border and no shadow.
  */
-export const lizantTheme: ThemeConfig = {
+export const carocrmTheme: ThemeConfig = {
   token: {
     colorPrimary: '#438eff',
     colorInfo: '#438eff',
