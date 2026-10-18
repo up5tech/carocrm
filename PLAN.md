@@ -2766,6 +2766,26 @@ Do not put these directly into the kernel.
 
 ---
 
+## Phase 20 — Settings, Administration and UX/UI
+
+Implement, as specified in `PLAN_Phase_20_Settings_UX.md`:
+
+- A metadata-driven, tabbed Administration area with a settings-document registry (brand,
+  localization, layouts, main menu, attachments, jobs, audit, internal, users, teams, roles, API
+  keys, portals, authentication, permissions, email, notifications, integrations and module settings).
+- Administrator-configurable main menu and per-entity navigation metadata, resolved server-side and
+  always filtered by existing ACL.
+- End-user UX: command palette and global search, list-view power pack (saved views, URL state,
+  columns, density, inline edit, scoped bulk actions with undo), record page and form ergonomics,
+  shared empty/loading/error/permission states, accessibility and responsive hardening.
+
+Acceptance:
+
+An administrator configures the whole instance from the tabbed Settings area without a code change,
+and an end user completes daily CRM work with minimal hunting, typing and context switching.
+
+---
+
 # 58. API Endpoint Inventory Plan
 
 Create a machine-readable endpoint registry:

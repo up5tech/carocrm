@@ -1018,6 +1018,13 @@
     "footer": "CaroCRM ©{year} — nhân CRM điều khiển bằng metadata",
     "portalFooter": "Cổng thông tin bên ngoài — quyền truy cập giới hạn trong bản ghi của bạn"
   },
+  "navGroup": {
+    "customers": "Khách hàng",
+    "activities": "Hoạt động",
+    "serviceDesk": "Hỗ trợ khách hàng",
+    "knowledge": "Kiến thức",
+    "customerSuccess": "Chăm sóc khách hàng"
+  },
   "params": {
     "noParameters": "Không có tham số.",
     "fieldsHint": "trường=giá trị, trường2=giá trị2",

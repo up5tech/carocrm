@@ -1,4 +1,4 @@
-import { ApartmentOutlined, ApiOutlined, AppstoreOutlined, BarChartOutlined, CalendarOutlined, CarryOutOutlined, DashboardOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, ProjectOutlined, SearchOutlined, SettingOutlined, ShareAltOutlined, ShoppingCartOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ApartmentOutlined, ApiOutlined, AppstoreOutlined, BarChartOutlined, BookOutlined, CalendarOutlined, CarryOutOutlined, CustomerServiceOutlined, DashboardOutlined, DatabaseOutlined, FileSearchOutlined, KeyOutlined, MenuFoldOutlined, MenuUnfoldOutlined, NotificationOutlined, ProjectOutlined, SearchOutlined, SettingOutlined, ShareAltOutlined, ShoppingCartOutlined, TeamOutlined, ThunderboltOutlined, TrophyOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
@@ -106,6 +106,8 @@ function InternalShell({ children }: { children: ReactNode }) {
     if (first.startsWith('Project')) return ['sub-project'];
     const salesGroup = SALES_NAV_GROUPS.find((group) => group.entityNames.includes(first));
     if (salesGroup) return ['sub-sales', `sub-sales-${salesGroup.key}`];
+    const navGroup = NAV_GROUPS.find((group) => group.entityNames.includes(first));
+    if (navGroup) return [`sub-${navGroup.key}`];
     if ((MARKETING_NAV_NAMES as readonly string[]).includes(first)) return ['sub-marketing'];
     return [];
   });
@@ -194,15 +196,26 @@ function InternalShell({ children }: { children: ReactNode }) {
       .map((name) => navList.find((entity) => entity.name === name))
       .filter((entity): entity is EntityDefinition => entity !== undefined);
     const marketingNames = new Set(marketingEntities.map((entity) => entity.name));
-    const records: MenuItems = navList
-      .filter(
-        (entity) =>
-          !entity.name.startsWith('Project') && !salesNames.has(entity.name) && !marketingNames.has(entity.name),
-      )
-      .map((entity) => recordItem(entity));
+    // The remaining record entities are split into module submenus (Customers, Activities,
+    // Service Desk, Knowledge, Customer Success) so RECORDS is a handful of entries instead of a
+    // flat list of forty. Every submenu — these plus Project, Sales and Marketing — comes first;
+    // the ungrouped remainder, a custom entity above all, sits at the end of the group.
+    const navGroups = NAV_GROUPS.map((group) => ({
+      ...group,
+      entities: group.entityNames
+        .map((name) => navList.find((entity) => entity.name === name))
+        .filter((entity): entity is EntityDefinition => entity !== undefined),
+    })).filter((group) => group.entities.length > 0);
+    const navGroupNames = new Set(navGroups.flatMap((group) => group.entities.map((entity) => entity.name)));
+    const submenuItems: MenuItems = navGroups.map((group) => ({
+      key: `sub-${group.key}`,
+      icon: group.icon,
+      label: t(group.labelKey),
+      children: group.entities.map((entity) => recordItem(entity)),
+    }));
     if (projectEntities.length > 0) {
       const project = projectEntities.find((entity) => entity.name === 'Project');
-      records.push({
+      submenuItems.push({
         key: 'sub-project',
         icon: entityIcon(project?.icon, project?.name ?? 'Project'),
         label: project?.label ?? 'Project',
@@ -210,7 +223,7 @@ function InternalShell({ children }: { children: ReactNode }) {
       });
     }
     if (salesGroups.length > 0 && salesVisible !== false) {
-      records.push({
+      submenuItems.push({
         key: 'sub-sales',
         icon: <ShoppingCartOutlined />,
         label: t('sales.nav.sales'),
@@ -222,13 +235,22 @@ function InternalShell({ children }: { children: ReactNode }) {
       });
     }
     if (marketingEntities.length > 0 && marketingVisible !== false) {
-      records.push({
+      submenuItems.push({
         key: 'sub-marketing',
         icon: <NotificationOutlined />,
         label: t('marketing.nav.marketing'),
         children: marketingEntities.map((entity) => recordItem(entity)),
       });
     }
+    const records: MenuItems = [
+      ...submenuItems,
+      ...navList
+        .filter(
+          (entity) =>
+            !entity.name.startsWith('Project') && !salesNames.has(entity.name) && !marketingNames.has(entity.name) && !navGroupNames.has(entity.name),
+        )
+        .map((entity) => recordItem(entity)),
+    ];
     if (records.length > 0) groups.push({ type: 'group', key: 'grp-records', label: t('core.app.records'), children: records });
 
     // Entries contributed by installed extensions (PLAN §38). The server already filtered the ones
@@ -489,4 +511,20 @@ const SALES_NAV_GROUPS: readonly { key: string; entityNames: readonly string[] }
   { key: 'purchases', entityNames: ['Supplier', 'SupplierProductPrice', 'PurchaseOrder', 'ReceiptOrder', 'Bill', 'BillCredit'] },
   { key: 'inventory', entityNames: ['Warehouse', 'InventoryTransaction', 'InventoryAdjustment', 'InventoryReservation', 'TransferOrder', 'InventoryBatch', 'InventorySerial'] },
   { key: 'subscriptions', entityNames: ['Subscription', 'SubscriptionPeriod'] },
+];
+
+/**
+ * The rest of RECORDS, split into module submenus so the sidebar stays one screen long.
+ *
+ * Membership is a **name set over the navigable metadata** — the same rule Project, Sales and
+ * Marketing already follow — so an entity renamed or hidden by metadata leaves its group instead
+ * of leaving a dead entry. Every other record entity (a custom entity from the Entity Manager,
+ * for instance) stays flat under RECORDS, which keeps the menu open-ended.
+ */
+const NAV_GROUPS: readonly { key: string; labelKey: string; icon: ReactNode; entityNames: readonly string[] }[] = [
+  { key: 'customers', labelKey: 'web.navGroup.customers', icon: <TeamOutlined />, entityNames: ['Account', 'Contact', 'Lead', 'Opportunity'] },
+  { key: 'activities', labelKey: 'web.navGroup.activities', icon: <CarryOutOutlined />, entityNames: ['Task', 'Call', 'Meeting', 'Email', 'EmailTemplate'] },
+  { key: 'serviceDesk', labelKey: 'web.navGroup.serviceDesk', icon: <CustomerServiceOutlined />, entityNames: ['Case', 'CaseQueue', 'CaseAssignment', 'CaseTransition', 'QueueMember', 'RoutingRule', 'SLAPolicy', 'CaseSLAClock', 'CsatSurvey', 'BusinessCalendar'] },
+  { key: 'knowledge', labelKey: 'web.navGroup.knowledge', icon: <BookOutlined />, entityNames: ['KnowledgeArticle', 'KnowledgeCategory'] },
+  { key: 'customerSuccess', labelKey: 'web.navGroup.customerSuccess', icon: <TrophyOutlined />, entityNames: ['CustomerSuccessProfile', 'CustomerSuccessPlan', 'CustomerSuccessGoal', 'CustomerSuccessReview', 'CustomerSuccessRisk', 'CustomerSuccessPlaybookTemplate', 'CustomerSuccessPlaybookRun', 'CustomerSuccessPlaybookStepRun'] },
 ];

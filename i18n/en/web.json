@@ -1018,6 +1018,13 @@
     "footer": "CaroCRM ©{year} — metadata-driven CRM kernel",
     "portalFooter": "External portal — access limited to your records"
   },
+  "navGroup": {
+    "customers": "Customers",
+    "activities": "Activities",
+    "serviceDesk": "Service Desk",
+    "knowledge": "Knowledge Base",
+    "customerSuccess": "Customer Success"
+  },
   "params": {
     "noParameters": "No parameters.",
     "fieldsHint": "field=value, field2=value2",

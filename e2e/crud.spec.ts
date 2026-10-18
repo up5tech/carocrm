@@ -105,6 +105,9 @@ test.describe('CaroCRM UI', () => {
     // creating an entity opens its editor page, so the admin goes straight to adding fields
     await expect(page).toHaveURL(new RegExp(`/admin/entity-manager/${entity}$`));
     await page.goto('/admin/entity-manager');
+    // The table is paginated (20 rows), and a fresh PwSite… sorts onto a later page — filter
+    // first, exactly like an operator would, instead of assuming the first page.
+    await page.getByLabel('Filter entities').fill(entity);
     await expect(page.locator('.ant-table-tbody tr', { hasText: entity }).first()).toBeVisible();
 
     await createRecord(page, entity, { name: `${entity} record` });
@@ -180,8 +183,24 @@ test.describe('CaroCRM UI', () => {
     expect(token).toBeTruthy();
     const headers = { authorization: `Bearer ${token ?? ''}` };
 
-    const start = new Date();
-    start.setHours(9, 0, 0, 0);
+    // A busy day cell collapses its entries behind "+N more" (`carocrm-cal-more`), and a chip
+    // hidden there can neither be asserted nor dragged — so the meeting goes on the first day of
+    // the visible month whose cell is empty and that still has a following sibling cell.
+    await page.goto('/calendar');
+    await expect(page.locator('.ant-picker-calendar')).toBeVisible();
+    const dayTitle = await page.evaluate(() => {
+      for (const cell of document.querySelectorAll('.ant-picker-calendar .ant-picker-cell')) {
+        const inner = cell.querySelector('.carocrm-cal-cell');
+        if (!inner || inner.classList.contains('carocrm-cal-cell--out')) continue;
+        if (inner.querySelector('.carocrm-cal-event')) continue;
+        if (!cell.nextElementSibling) continue;
+        return cell.getAttribute('title');
+      }
+      return null;
+    });
+    expect(dayTitle, 'a free day cell in the visible month').toBeTruthy();
+    const [year, month, day] = (dayTitle as string).split('-').map(Number);
+    const start = new Date(year ?? 0, (month ?? 1) - 1, day ?? 1, 9, 0, 0, 0);
     const end = new Date(start.getTime() + 45 * 60_000);
     const created = await request.post('/api/v1/Meeting', {
       headers,
@@ -190,13 +209,25 @@ test.describe('CaroCRM UI', () => {
     expect(created.ok()).toBe(true);
     const meeting = (await created.json()) as { id: string; version: number };
 
-    await page.goto('/calendar');
-    const chip = page.locator('.carocrm-cal-tag', { hasText: `PW Calendar Meeting ${runId}` });
+    await page.reload();
+    // The calendar chip is the `.carocrm-cal-event` entry inside a month cell; the same meeting
+    // also appears in the day panel below the grid, so scope the locator to the grid.
+    const chip = page.locator('.ant-picker-calendar .carocrm-cal-event', { hasText: `PW Calendar Meeting ${runId}` });
     await expect(chip).toBeVisible();
 
     const todayCell = chip.locator('xpath=ancestor::td[1]');
     const targetCell = todayCell.locator('xpath=following-sibling::td[1]');
-    await chip.dragTo(targetCell);
+    // The calendar listens to native HTML5 drag events, which `dragTo` does not fire; drive the
+    // mouse the way a user does instead (measured working 2026-10-18).
+    const chipBox = await chip.boundingBox();
+    const targetBox = await targetCell.boundingBox();
+    if (!chipBox || !targetBox) throw new Error('calendar chip or target cell has no bounding box');
+    await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(chipBox.x + 20, chipBox.y + 10, { steps: 5 });
+    await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + 20, { steps: 10 });
+    await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + 30, { steps: 5 });
+    await page.mouse.up();
     await expect(page.getByText(/Moved to/)).toBeVisible({ timeout: 15_000 });
 
     const after = await request.get(`/api/v1/Meeting/${meeting.id}`, { headers });
