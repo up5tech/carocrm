@@ -4,18 +4,25 @@
 > permissions, navigation), 19-MA.2 (domain contracts, enums, transition tables, settings, provider port and
 > fake, migration baseline), 19-MA.3 (campaign lifecycle and validation), 19-MA.5 (consent, preferences,
 > suppression, public unsubscribe) and 19-MA.4 (audience segments, inclusion/exclusion, preview and snapshots)
-> are implemented and verified; **19-MA.6 (email template integration and render preview) is implemented and
-> verified**; MA.7 onward is not started. MA.5 was built before MA.4 because its eligibility
-> gate is what makes the MA.4 preview categories meaningful.
+> are implemented and verified; **19-MA.6 (email template integration and render preview) and 19-MA.7 (provider
+> adapter and safe test send) are implemented and verified**; MA.8 onward is not started. MA.5 was built
+> before MA.4 because its eligibility gate is what makes the MA.4 preview categories meaningful.
 > Delivered records: `Campaign`, `TargetList`, `TargetListEntry`, `CampaignTransition`, `MarketingConsent`,
 > `MarketingConsentEvent`, `MarketingSuppression`, `MarketingPublicToken`, `MarketingAudienceSnapshot`
-> (+ `marketing_audience_snapshot_entries`), `MarketingTemplateRevision`. `start`/`resume` of a sendable
-> campaign stay blocked by `PROVIDER_NOT_BOUND` until MA.7 binds a live provider.
+> (+ `marketing_audience_snapshot_entries`), `MarketingTemplateRevision`.
+> MA.7 binds no new record: the live adapter wraps the platform's `MailTransport` (`MAIL_TRANSPORT`), the
+> deployment names it with the `marketingAutomation.provider.key` setting (empty by default, so nothing is
+> sent), credentials stay in `SMTP_*`/`email_accounts`, and the only sending command is the
+> allowlist-gated `POST /api/v1/MarketingAutomation/action/campaign/{id}/sendTest`. `start`/`resume` still
+> report `PROVIDER_NOT_BOUND` until a deployment configures a live adapter; the queued campaign delivery
+> pipeline is MA.8–MA.9.
 > Audit: `docs/implementation/marketing-automation-audit.md`; compatibility:
 > `docs/compatibility/marketing-automation.md`; lifecycle and audience:
 > `docs/marketing-automation/campaign-lifecycle.md`; consent, suppression and public links:
 > `docs/marketing-automation/consent-and-suppression.md`; placeholders, render safety and revisions:
-> `docs/marketing-automation/email-templates.md`.
+> `docs/marketing-automation/email-templates.md`; adapters, limits, error classes and test send:
+> `docs/marketing-automation/provider-adapters.md`; operations:
+> `docs/runbooks/marketing-send-operations.md`.
 > **Parent roadmap:** `PLAN.md` — CRM advanced domains / Marketing Automation  
 > **Module name:** `MarketingAutomation` (**do not add a `Ua` prefix**)  
 > **Module key / slug:** `marketing-automation` (follow repository conventions if they differ)  

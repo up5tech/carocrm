@@ -70,10 +70,31 @@ export interface ModuleHealthView {
   readonly optionalIntegrations: readonly OptionalIntegrationView[];
   readonly features: readonly FeatureView[];
   readonly provider: {
+    /** The key `provider.key` names, so the screen shows configured-versus-resolved in one place (§13). */
+    readonly configuredKey: string;
     readonly resolvedKey: string;
+    readonly label: string;
     readonly mode: string;
     readonly live: boolean;
+    readonly maxRecipients: number;
+    readonly ratePerMinute: number;
+    readonly maxConcurrency: number;
+    readonly supportsTestSend: boolean;
+    readonly reportsEvents: boolean;
     readonly note: string;
+    /** Capability metadata for every resolvable adapter; never a credential (§5.8, §15 `19-MA.7` task 2). */
+    readonly available: readonly {
+      readonly key: string;
+      readonly label: string;
+      readonly mode: string;
+      readonly supportsTestSend: boolean;
+    }[];
+    /** The test-send policy as counts only — the allowlisted addresses themselves stay out of diagnostics. */
+    readonly testSend: {
+      readonly configured: boolean;
+      readonly requireConfirmation: boolean;
+      readonly maxRecipients: number;
+    };
   };
   readonly settings: {
     readonly version: number;
@@ -181,16 +202,19 @@ export class MarketingAutomationModuleHealthService {
           : `Settings version ${String(settingsView.version)}.`,
     });
 
-    // Resolved exactly as a send would resolve it. No provider key exists in settings until MA.7 binds a
-    // live adapter, so an unconfigured deployment reports `disabled` here instead of failing later.
-    const adapter = this.providers.resolve();
+    // Resolved exactly as a send would resolve it: the configured key against the registered adapters. An
+    // unconfigured deployment resolves `none`/`disabled` and reports that, instead of failing later.
+    const configuredProviderKey = settingsView.settings.provider.key;
+    const adapter = this.providers.resolve(configuredProviderKey);
     checks.push({
       name: "provider-bound",
       ok: true,
       detail:
         adapter.info.mode === "live"
           ? `Provider "${adapter.info.key}" is live; up to ${String(adapter.info.maxRecipients)} recipients per message.`
-          : `Provider "${adapter.info.key}" is ${adapter.info.mode}; no campaign can send until a live adapter is bound (phase 19-MA.7).`,
+          : configuredProviderKey === ""
+            ? "No provider is configured; no campaign can start and no test send can run until provider.key is set (phase 19-MA.7)."
+            : `Provider "${adapter.info.key}" is ${adapter.info.mode}; sending is refused rather than faked.`,
     });
 
     const settings = settingsView.settings;
@@ -226,13 +250,33 @@ export class MarketingAutomationModuleHealthService {
         ...(feature.requiresIntegration !== undefined ? { requiresIntegration: feature.requiresIntegration } : {}),
       })),
       provider: {
+        configuredKey: configuredProviderKey,
         resolvedKey: adapter.info.key,
+        label: adapter.info.label,
         mode: adapter.info.mode,
         live: adapter.info.mode === "live",
+        maxRecipients: adapter.info.maxRecipients,
+        ratePerMinute: adapter.info.ratePerMinute,
+        maxConcurrency: adapter.info.maxConcurrency,
+        supportsTestSend: adapter.info.supportsTestSend,
+        reportsEvents: adapter.info.reportsEvents,
         note:
-          adapter.info.mode === "live"
-            ? "Messages will be handed to the bound provider."
-            : "No live provider is bound; sending is refused rather than faked.",
+          configuredProviderKey === ""
+            ? "No provider is configured; sending is refused rather than faked."
+            : adapter.info.mode === "live"
+              ? "Messages will be handed to the configured provider."
+              : `The configured provider is ${adapter.info.mode}; sending is refused rather than faked.`,
+        available: this.providers.describeAll().map((info) => ({
+          key: info.key,
+          label: info.label,
+          mode: info.mode,
+          supportsTestSend: info.supportsTestSend,
+        })),
+        testSend: {
+          configured: settingsView.settings.provider.testSend.allowedRecipients.length > 0,
+          requireConfirmation: settingsView.settings.provider.testSend.requireConfirmation,
+          maxRecipients: settingsView.settings.provider.testSend.maxRecipients,
+        },
       },
       settings: {
         version: settingsView.version,

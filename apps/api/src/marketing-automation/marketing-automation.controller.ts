@@ -34,6 +34,7 @@ import {
   SuppressionAddSchema,
   SuppressionListQuerySchema,
   SuppressionRevokeSchema,
+  TestSendSchema,
 } from "./dto/marketing-automation-shapes.js";
 import { MarketingAudienceService } from "./marketing-audience.service.js";
 import { MarketingAutomationModuleHealthService } from "./marketing-automation-module-health.service.js";
@@ -44,6 +45,7 @@ import { MarketingConsentService } from "./marketing-consent.service.js";
 import { MarketingPublicTokenService } from "./marketing-public-token.service.js";
 import { MarketingSuppressionService } from "./marketing-suppression.service.js";
 import { MarketingTemplateService } from "./marketing-template.service.js";
+import { MarketingTestSendService } from "./marketing-test-send.service.js";
 
 /**
  * Phase 19-MA.1/MA.3 — the `MarketingAutomation` command surface
@@ -72,6 +74,7 @@ export class MarketingAutomationController {
     @Inject(MarketingSuppressionService) private readonly suppression: MarketingSuppressionService,
     @Inject(MarketingPublicTokenService) private readonly links: MarketingPublicTokenService,
     @Inject(MarketingTemplateService) private readonly templates: MarketingTemplateService,
+    @Inject(MarketingTestSendService) private readonly testSends: MarketingTestSendService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -241,6 +244,18 @@ export class MarketingAutomationController {
   @Get("action/campaign/:id/contentRevisions")
   async campaignContentRevisions(@Param("id") id: string) {
     return this.templates.revisionsForCampaign(id);
+  }
+
+  /**
+   * Send one clearly marked test message to explicitly named, administrator-allowlisted addresses
+   * (19-MA.7, §8.2, §10.2, §10.5). The campaign's status, history, snapshots and metrics are untouched: a
+   * test send is evidence about the provider, not a campaign send (§15 acceptance). The response carries the
+   * provider's classified per-recipient result — never a credential or a raw provider body (§9.3).
+   */
+  @HttpCode(200)
+  @Post("action/campaign/:id/sendTest")
+  async campaignSendTest(@Param("id") id: string, @Body() body: unknown) {
+    return this.testSends.send(id, parse(TestSendSchema, body));
   }
 
   // ---------------------------------------------------------------------------

@@ -12,12 +12,15 @@ import { MarketingCampaignService } from "./marketing-campaign.service.js";
 import { MarketingCampaignValidationService } from "./marketing-campaign-validation.service.js";
 import { MarketingConsentService } from "./marketing-consent.service.js";
 import { MarketingEligibilityService } from "./marketing-eligibility.service.js";
+import { MarketingProviderBindingService } from "./marketing-provider-binding.service.js";
+import { MarketingProviderLimiter } from "./marketing-provider-limiter.js";
 import { MarketingPublicTokenService } from "./marketing-public-token.service.js";
 import { MarketingSuppressionService } from "./marketing-suppression.service.js";
 import { MarketingTemplateService } from "./marketing-template.service.js";
+import { MarketingTestSendService } from "./marketing-test-send.service.js";
 
 /**
- * Phase 19-MA.1 – 19-MA.5 — Marketing Automation module barrel
+ * Phase 19-MA.1 – 19-MA.7 — Marketing Automation module barrel
  * (PLAN_Phase_19_Marketing_Automation.md §7.1, §15 `19-MA.1`).
  *
  * Like Projects, Sales, Customer Success and Service Desk, this is a directory under `apps/api/src` and not
@@ -32,7 +35,8 @@ import { MarketingTemplateService } from "./marketing-template.service.js";
  * stay last so static routes win.
  *
  * Order inside `MARKETING_AUTOMATION_PROVIDERS` is the registration order; the write guard is last because
- * it registers its hooks at `onApplicationBootstrap`, once the records and settings services it reads exist.
+ * it registers its hooks at `onApplicationBootstrap`, once the records and settings services it reads exist,
+ * and `MarketingProviderBindingService` (MA.7) sits next to the registry it fills at module init.
  */
 export const MARKETING_AUTOMATION_CONTROLLERS: Type<unknown>[] = [MarketingAutomationController];
 
@@ -40,6 +44,10 @@ export const MARKETING_AUTOMATION_PROVIDERS: Provider[] = [
   MarketingAutomationSettingsService,
   MarketingAutomationRecords,
   MarketingProviderRegistry,
+  // The live adapter is bound at bootstrap (MA.7); the limiter is the one ceiling both the test send and,
+  // later, the delivery worker share (§5.8, §11.2).
+  MarketingProviderBindingService,
+  MarketingProviderLimiter,
   MarketingTemplateService,
   MarketingCampaignValidationService,
   MarketingConsentService,
@@ -48,6 +56,7 @@ export const MARKETING_AUTOMATION_PROVIDERS: Provider[] = [
   MarketingPublicTokenService,
   MarketingAudienceService,
   MarketingCampaignService,
+  MarketingTestSendService,
   MarketingAutomationModuleHealthService,
   MarketingAutomationNavigationService,
   MarketingAutomationWriteGuardService,

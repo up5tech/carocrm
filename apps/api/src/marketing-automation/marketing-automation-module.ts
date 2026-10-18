@@ -231,7 +231,7 @@ export const MARKETING_AUTOMATION_MODULE = {
   /** API prefix owned by the module's domain commands; entity CRUD stays on `/api/v1/:entity`. */
   apiPrefix: "/api/v1/MarketingAutomation",
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ["19-MA.0", "19-MA.1", "19-MA.2", "19-MA.3", "19-MA.4", "19-MA.5", "19-MA.6"],
+  implementedPhases: ["19-MA.0", "19-MA.1", "19-MA.2", "19-MA.3", "19-MA.4", "19-MA.5", "19-MA.6", "19-MA.7"],
   /** The records this module owns. `Email`, `EmailTemplate` and the CRM person records stay platform-owned. */
   entityTypes: [
     "Campaign",

@@ -6,6 +6,7 @@ import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.
 import { DatabaseService } from "../database/database.service.js";
 import { CAMPAIGN_TIMEZONE_MAX_LENGTH, isSupportedTimeZone } from "./marketing-automation-domain.js";
 import { PENDING_FEATURES } from "./marketing-automation-module.js";
+import { MarketingProviderRegistry } from "./marketing-automation-provider.js";
 
 /**
  * Phase 19-MA.1/MA.2 — Marketing Automation domain settings
@@ -83,6 +84,44 @@ export const MarketingAutomationSettingsSchema = z
       })
       .strict()
       .default({}),
+    provider: z
+      .object({
+        /**
+         * The adapter key this deployment sends through; the empty string means **no provider**, which is the
+         * default (§1.2 safe by default). §13 lists "default sender/provider reference" as a setting, and it is
+         * read by the send-readiness gate, the health report and the test-send command — never inferred from
+         * whichever adapter happened to register first (§7.1 `MarketingProviderRegistry`).
+         */
+        key: z.string().trim().max(64).default(""),
+        /**
+         * The deployment's own ceiling over a provider that publishes none (§13 "provider- or sender-level
+         * rate limits and quotas"). `ratePerMinute: 0` means "whatever the provider allows" and is the default,
+         * because inventing a quota here would throttle a correctly configured installation.
+         */
+        limits: z
+          .object({
+            ratePerMinute: z.number().int().min(0).max(100_000).default(0),
+            maxConcurrency: z.number().int().min(1).max(50).default(1),
+          })
+          .strict()
+          .default({}),
+        /**
+         * The safe test send (§10.5, §15 `19-MA.7` task 3). A test send is a manufacturing-safety device:
+         * it may only reach addresses an administrator listed here, and an empty list means **no test send at
+         * all** — a mis-click can otherwise mail a live audience. Confirmation is required by default (§10.2
+         * "show test/preview state clearly").
+         */
+        testSend: z
+          .object({
+            allowedRecipients: z.array(z.string().trim().email().max(320)).max(50).default([]),
+            requireConfirmation: z.boolean().default(true),
+            maxRecipients: z.number().int().min(1).max(20).default(5),
+          })
+          .strict()
+          .default({}),
+      })
+      .strict()
+      .default({}),
     safety: z
       .object({
         /**
@@ -134,6 +173,20 @@ export function settingsWarnings(settings: MarketingAutomationSettings): Setting
       message: "Marketing sending is stopped globally. No message may be queued or sent until it is resumed.",
     });
   }
+  if (settings.provider.key === "") {
+    warnings.push({
+      code: "providerNotConfigured",
+      message:
+        "No marketing provider is configured, so no campaign can start and no test send can run. Set provider.key to a registered adapter (for example `platform-mail`).",
+    });
+  }
+  if (settings.provider.testSend.allowedRecipients.length === 0) {
+    warnings.push({
+      code: "testSendNotConfigured",
+      message:
+        "No test-send recipient is allowlisted, so the test-send command is refused. Add internal mailboxes under provider.testSend.allowedRecipients.",
+    });
+  }
   return warnings;
 }
 
@@ -162,6 +215,7 @@ export class MarketingAutomationSettingsService {
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(MarketingProviderRegistry) private readonly providers: MarketingProviderRegistry,
   ) {}
 
   /** Validated settings for behaviour paths; defaults when the row is absent. */
@@ -201,6 +255,17 @@ export class MarketingAutomationSettingsService {
           path: issue.path.join("."),
           message: issue.message,
         })),
+      });
+    }
+    // A provider key that resolves to nothing must be refused here, at the write, rather than silently
+    // disabling sending later (§13) — the registry still fails closed at send time for anything stored before
+    // an adapter was removed.
+    const requestedProvider = isRecord(patch) ? patch["provider"] : undefined;
+    const requestedKey = isRecord(requestedProvider) ? requestedProvider["key"] : undefined;
+    if (typeof requestedKey === "string" && requestedKey.trim() !== "" && !this.providers.has(requestedKey)) {
+      throw new ValidationError(`Unknown marketing provider "${requestedKey.trim()}".`, {
+        code: "PROVIDER_UNKNOWN",
+        known: this.providers.keys(),
       });
     }
     const stored: StoredSettings = {

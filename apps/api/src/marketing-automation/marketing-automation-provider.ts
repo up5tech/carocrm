@@ -21,15 +21,38 @@ import { type AppConfig,CONFIG_TOKEN } from "../config.js";
 
 export type MarketingProviderMode = "live" | "disabled";
 
+/**
+ * How a provider failure is classified for the retry policy (§5.8, §15 `19-MA.7` acceptance:
+ * "provider errors are classified into retryable, permanent and unknown-submission states"):
+ *
+ *  - `retryable` — nothing was accepted and a later attempt may succeed (`4xx`, refused connection, DNS).
+ *  - `permanent` — retrying would fail identically (bad credentials, rejected recipient, invalid content).
+ *  - `unknown_submission` — the submission may have reached the provider (a socket died mid-transaction),
+ *    so a blind retry could deliver twice. MA.9 must reconcile before resending rather than assuming failure.
+ */
+export type MarketingProviderErrorKind = "retryable" | "permanent" | "unknown_submission";
+
 export interface MarketingProviderInfo {
   readonly key: string;
+  /** Operator-facing name for capability screens and diagnostics; never a credential. */
+  readonly label: string;
   readonly mode: MarketingProviderMode;
   /** Highest recipient count one `send` call may carry; the caller chunks to this (§5.5, §11.2). */
   readonly maxRecipients: number;
   /** Messages per minute the provider will accept; `0` means the provider publishes no limit. */
   readonly ratePerMinute: number;
+  /** Simultaneous `send` calls this adapter tolerates; `0` means the caller imposes no local ceiling. */
+  readonly maxConcurrency: number;
+  /**
+   * The verified sending address this adapter can send *as*, when it has one. §5.8 asks capability metadata
+   * to carry the "verified sender/configuration identity" so a caller knows what From it may use before it
+   * builds a message — and so an adapter with no verified identity can say `null` instead of inventing one.
+   */
+  readonly fromAddress: string | null;
   /** Whether this adapter reports delivery/bounce/complaint feedback (webhooks, MA.10). */
   readonly reportsEvents: boolean;
+  /** Whether this adapter may carry the explicit test-send command (MA.7); a fan-out-only vendor may not. */
+  readonly supportsTestSend: boolean;
 }
 
 export interface MarketingProviderAttachment {
@@ -45,9 +68,20 @@ export interface MarketingProviderMessage {
   readonly subject: string;
   readonly text?: string;
   readonly html?: string;
-  readonly fromAddress: string;
+  /**
+   * The From header to send with. Optional by design: a caller that names a `senderAccountId` may not be
+   * allowed to *see* that mailbox's address (the platform keeps sending accounts administrator-only), so the
+   * adapter resolves its own verified sender identity instead of the caller having to know it (§5.8, §9.4).
+   */
+  readonly fromAddress?: string;
   readonly fromName?: string;
   readonly replyTo?: string;
+  /**
+   * The sending *identity* to use when the deployment keeps several (`email_accounts.id`). A provider
+   * that resolves identities by address ignores it; the kernel mail adapter uses it to send through that
+   * mailbox's own SMTP settings and encrypted credentials (§9.4, §13). Absent means the deployment default.
+   */
+  readonly senderAccountId?: string;
   /** Extra transport headers, e.g. `List-Unsubscribe`. Values are validated, never trusted (§9.4). */
   readonly headers?: Readonly<Record<string, string>>;
   readonly attachments?: readonly MarketingProviderAttachment[];
@@ -73,8 +107,9 @@ export interface MarketingProviderResult {
   readonly accepted: boolean;
   readonly providerMessageId?: string;
   readonly receipts: readonly MarketingProviderReceipt[];
-  /** Classified so the retry policy can decide: transient is worth another attempt, permanent is not (§5.8). */
-  readonly errorKind?: "transient" | "permanent";
+  /** Classified so the retry policy can decide (§5.8, `MarketingProviderErrorKind`). */
+  readonly errorKind?: MarketingProviderErrorKind;
+  /** Operator-safe sentence: a stable reason, never a raw provider body or a credential (§7.4, §9.3). */
   readonly error?: string;
 }
 
@@ -91,7 +126,7 @@ export interface MarketingProviderAdapter {
 export class MarketingProviderError extends Error {
   constructor(
     message: string,
-    readonly kind: "transient" | "permanent",
+    readonly kind: MarketingProviderErrorKind,
     readonly reasonCode: string,
   ) {
     super(message);
@@ -109,15 +144,19 @@ export function assertProviderMessage(message: MarketingProviderMessage): void {
   if (message.idempotencyKey.trim() === "") {
     throw new MarketingProviderError("A provider message needs an idempotency key.", "permanent", "NO_IDEMPOTENCY_KEY");
   }
-  if (message.fromAddress.trim() === "") {
-    throw new MarketingProviderError("A provider message needs a sender address.", "permanent", "NO_SENDER");
+  if ((message.fromAddress ?? "").trim() === "" && (message.senderAccountId ?? "").trim() === "") {
+    throw new MarketingProviderError(
+      "A provider message needs a sender address or a sending account to resolve one from.",
+      "permanent",
+      "NO_SENDER",
+    );
   }
   if (message.subject.length > 998) {
     throw new MarketingProviderError("A message subject is too long.", "permanent", "SUBJECT_TOO_LONG");
   }
   // A CRLF inside a header value or address is a transport-injection vector, refused before any adapter
   // sees it — the same rule the platform mail layer applies (`packages/mail/src/message/index.ts:132`).
-  for (const value of [...message.to, message.fromAddress, message.replyTo ?? ""]) {
+  for (const value of [...message.to, message.fromAddress ?? "", message.replyTo ?? ""]) {
     if (/[\r\n]/.test(value)) {
       throw new MarketingProviderError("A message address contains an illegal character.", "permanent", "ADDRESS_INJECTION");
     }
@@ -153,10 +192,14 @@ export class FakeMarketingProvider implements MarketingProviderAdapter {
   constructor(
     readonly info: MarketingProviderInfo = {
       key: "fake",
+      label: "Test adapter (in-memory)",
       mode: "disabled",
       maxRecipients: 50,
       ratePerMinute: 0,
+      maxConcurrency: 1,
+      fromAddress: null,
       reportsEvents: true,
+      supportsTestSend: true,
     },
   ) {}
 
@@ -214,10 +257,14 @@ export class FakeMarketingProvider implements MarketingProviderAdapter {
 export class DisabledMarketingProvider implements MarketingProviderAdapter {
   readonly info: MarketingProviderInfo = {
     key: "none",
+    label: "No provider configured",
     mode: "disabled",
     maxRecipients: 0,
     ratePerMinute: 0,
+    maxConcurrency: 1,
+    fromAddress: null,
     reportsEvents: false,
+    supportsTestSend: false,
   };
 
   validate(message: MarketingProviderMessage): void {
@@ -250,6 +297,11 @@ export class DisabledMarketingProvider implements MarketingProviderAdapter {
  * "this deployment is not attached to a real mail server" switch (`MAIL_TRANSPORT`, AGENTS.md §5.5). In any
  * other runtime a `fake` key resolves to `disabled`, so a mis-set provider key in production cannot produce
  * a provider that lies about delivery.
+ *
+ * The live adapter (MA.7) is **registered**, never hard-wired: `KernelMailMarketingProvider` wraps the
+ * platform's own `MailTransport` and is added by `MarketingProviderBindingService` at bootstrap. That keeps
+ * this file provider-neutral and lets an extension replace the transport (SES/SendGrid/Graph) without any
+ * marketing service changing (§7.1).
  */
 @Injectable()
 export class MarketingProviderRegistry {
@@ -271,6 +323,21 @@ export class MarketingProviderRegistry {
   /** Registration point for MA.7's live adapter and for tests that need a scripted provider. */
   register(adapter: MarketingProviderAdapter): void {
     this.custom.set(adapter.info.key, adapter);
+  }
+
+  /** Whether a key is one this deployment can actually resolve, so settings can refuse a typo (§13). */
+  has(key: string): boolean {
+    return this.keys().includes(key.trim());
+  }
+
+  /** The adapter's advertised capabilities, without constructing anything new. */
+  infoOf(key: string): MarketingProviderInfo | undefined {
+    return this.resolve(key).info;
+  }
+
+  /** Every resolvable capability, for the diagnostics screen — capability metadata, never credentials. */
+  describeAll(): readonly MarketingProviderInfo[] {
+    return this.capabilities();
   }
 
   /** The adapter the fake resolves to in this runtime, so a test can hold the same instance the domain uses. */

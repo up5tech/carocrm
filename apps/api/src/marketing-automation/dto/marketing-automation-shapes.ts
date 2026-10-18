@@ -81,6 +81,27 @@ export const ContentPreviewSchema = z
 
 export type ContentPreviewInput = z.infer<typeof ContentPreviewSchema>;
 
+/**
+ * The safe test-send command (19-MA.7, §8.2, §10.5). Recipients are named explicitly and never default to
+ * the campaign's audience; `confirm` is the §10.2 acknowledgement that this message leaves the system. The
+ * service still enforces the administrator's allowlist, the confirmation policy and the provider ceiling
+ * against stored settings — this shape only carries the caller's intent.
+ */
+export const TestSendSchema = z
+  .object({
+    recipients: z.array(z.string().trim().min(3).max(320)).min(1).max(20),
+    confirm: z.boolean().default(false),
+    recipientType: SegmentEntityTypeSchema.optional(),
+    recipientId: IdSchema.optional(),
+    idempotencyKey: IdempotencyKeySchema.optional(),
+  })
+  .strict()
+  .refine((value) => !(value.recipientId !== undefined && value.recipientType === undefined), {
+    message: "Naming a sample recipient needs its entity type.",
+  });
+
+export type TestSendInput = z.infer<typeof TestSendSchema>;
+
 /** Commands that take no options accept an empty (or absent) body and nothing else. */
 export const EmptyCommandBodySchema = z.object({}).strict();
 

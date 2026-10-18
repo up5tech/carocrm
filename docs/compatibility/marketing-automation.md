@@ -41,7 +41,7 @@ during MA.0; the URLs are recorded so a later reader can re-check them.
 ## 3. Behaviour matrix
 
 `planned` = requirement understood, not built. `implemented` = built in this checkout and covered by the
-stated acceptance rule. MA.0–MA.6 are delivered; MA.7 onward is planned.
+stated acceptance rule. MA.0–MA.7 are delivered; MA.8 onward is planned.
 
 | Behaviour | Reference basis | Status | Acceptance rule in this project |
 | --- | --- | --- | --- |
@@ -62,7 +62,11 @@ stated acceptance rule. MA.0–MA.6 are delivered; MA.7 onward is planned.
 | `{{placeholder}}` message personalization | Emails user guide | **implemented (MA.6)** | Marketing renders from a **restricted, allowlisted context** (`docs/marketing-automation/email-templates.md` §2): recipient simple fields, the campaign's own configuration and documented system links only, read through the actor's ACL so unreadable fields cannot be extracted via templates; unknown placeholders are reported, not leaked. The shared `EmailTemplate` editor is unchanged (no second editor, §6.2). |
 | Message content preview (subject/body, test of what goes out) | Emails user guide; plan §5.4 | **implemented (MA.6)** | `POST …/action/campaign/:id/previewContent` renders the sanitised body, a plain-text fallback, resolved/fallback/unknown placeholders and the content findings — against a readable sample contact or with documented fallbacks. The per-recipient opt-out links are sent-time values; preview shows the reserved `.invalid` sentinel and says so. |
 | Sanitised message content (no scripts/CSS/unsafe protocols in mail bodies) | Emails security posture; plan §9.4 | **implemented (MA.6)** | One allowlist filter (`marketing-template-render.ts`) rebuilds every tag, drops `script`/`style`/`iframe` and event handlers with their content, validates `href`/`src` schemes after entity-decoding (`javascript:`, `data:`, control-split variants refused), and reports what it removed. |
-| Immutable content revision / message-to-content traceability | plan §6.2 | **implemented (MA.6), stamps land with MA.7–MA.9** | `MarketingTemplateRevision` records the raw parts + SHA-256 hash + monotonic revision number per template; sealing is idempotent for identical content and module-write-only (migration 040). The send path of MA.7–MA.9 must stamp `revisionId`+`contentHash` on each delivery — that stamp is that phase's acceptance, not a claim here. |
+| Immutable content revision / message-to-content traceability | plan §6.2 | **implemented (MA.6), delivery stamps land with MA.8–MA.9** | `MarketingTemplateRevision` records the raw parts + SHA-256 hash + monotonic revision number per template; sealing is idempotent for identical content and module-write-only (migration 040). MA.7 returns the rendered content hash with a test send; the per-delivery `revisionId`+`contentHash` stamp arrives with MA.8's recipient records. |
+| Provider-independent delivery adapter with capability metadata | plan §1.2, §5.8 | **implemented (MA.7)** | `MarketingProviderAdapter` is the only thing that can put a message on the wire; the live adapter wraps the platform `MailTransport`, the registry resolves the configured `provider.key` and **fails closed** to `disabled`, and capabilities (mode, limits, verified From, test-send support, event reporting) are reported without credentials. |
+| Sending credentials held by the platform's secret stores | plan §9.4, §13 | **implemented (MA.7)** | Deployment `SMTP_*`/`MAIL_TRANSPORT` settings or an `email_accounts` row whose password is encrypted with `ENCRYPTION_KEY`; no marketing record, API response or log carries a credential. |
+| Provider rate limits and normalized provider errors | plan §5.8, §11.2 | **implemented (MA.7), queue use lands MA.9** | One `MarketingProviderLimiter` (rate + concurrency, `429` with a retry hint) and one classifier producing `retryable` / `permanent` / `unknown_submission` with stable reason codes. |
+| Explicit, safe test send of a campaign message | Mass Email / Emails user guides (test email); plan §5.4, §10.2, §10.5 | **implemented (MA.7)** | Recipients must be named and administrator-allowlisted, confirmation is server-side, the message is marked (`[TEST] ` subject, `X-Marketing-Test` header, body banner), suppression still applies, and the campaign's status, history, snapshots and events are untouched — §15's "test sends are not counted as campaign sends or journey outcomes". |
 | Metadata-driven entity/ACL/API/job conventions | developer docs (metadata, ACL, API, scheduled job) | **existing platform behaviour** | The module uses the same Entity Engine, ACL, API, hook, job and outbox primitives as every other domain; verified by the module health endpoint's evidence list. |
 
 ## 4. Explicitly **not** compatible / project-specific
@@ -75,9 +79,13 @@ These are this project's own design and must never be presented as EspoCRM featu
 - **`MarketingJourney`, `MarketingSend`, `MarketingConsent`, `MarketingSuppression`,
   `MarketingRecipientDelivery`, `MarketingEvent`, `MarketingForm`** and their records: project names and
   project schema.
-- The **provider adapter contract** and its capability negotiation: no upstream equivalent is claimed.
-  Upstream sends through SMTP with per-message recipient limits; the plan requires a provider-independent
-  domain model (§1.2), which is a project extension.
+- The **provider adapter contract**, its capability negotiation and the classified provider errors
+  (`retryable` / `permanent` / `unknown_submission`): no upstream equivalent is claimed. Upstream sends
+  through SMTP with per-message recipient limits; the plan requires a provider-independent domain model
+  (§1.2), which is a project extension.
+- The **test-send allowlist** (`provider.testSend.allowedRecipients`) as a hard server-side gate, and the
+  in-process duplicate guard on a repeated test-send key: project design, chosen so an operator can prove the
+  sending path without any possibility of reaching the campaign's audience.
 - **Inbound provider webhooks** (delivered/bounced/complaint/unsubscribed) with signature verification and
   a dedupe inbox: a project design. Upstream has no equivalent inbox in this checkout (audit §4.4).
 - **Signed, opaque public unsubscribe and preference tokens** with expiry and scope, and the preference

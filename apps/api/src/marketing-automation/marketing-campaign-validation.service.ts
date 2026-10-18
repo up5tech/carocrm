@@ -97,16 +97,19 @@ export class MarketingCampaignValidationService {
     this.checkTracking(data, warnings);
 
     if (demandsSending) {
-      // Campaign-level execution gates (§5.1, §13). Audience resolution (MA.4) and the consent gate
-      // (MA.5) exist, so what still stands between a scheduled campaign and a running one is a provider:
-      // nothing may leave this system until MA.7 binds a live adapter. The blocker names the phase rather
-      // than failing opaquely at the first send.
-      const adapter = this.providers.resolve();
+      // Campaign-level execution gates (§5.1, §13). Audience resolution (MA.4) and the consent gate (MA.5)
+      // exist, so what stands between a scheduled campaign and a running one is a **live provider**: the
+      // adapter the deployment named in `provider.key` (MA.7), which is disabled unless the platform's own
+      // mail transport is configured to deliver. The blocker is raised here rather than failing opaquely at
+      // the first send.
+      const adapter = this.providers.resolve(settings.provider.key);
       if (adapter.info.mode !== "live") {
         blockers.push(
           blocker(
             "PROVIDER_NOT_BOUND",
-            `No live marketing provider is bound ("${adapter.info.key}" is ${adapter.info.mode}); phase 19-MA.7 attaches one.`,
+            settings.provider.key === ""
+              ? "No marketing provider is configured, so nothing may be sent. Set the provider key in Marketing Automation settings (§13)."
+              : `The configured provider "${adapter.info.key}" is ${adapter.info.mode}, so nothing may be sent through it (§1.2).`,
           ),
         );
       }
