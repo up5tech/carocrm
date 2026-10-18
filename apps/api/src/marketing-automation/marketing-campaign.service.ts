@@ -338,10 +338,7 @@ export class MarketingCampaignService {
       // construction — any recipient, delivery, enrollment or provider reference a later phase adds.
     };
     if (input.code !== undefined && input.code.trim() !== "") data["code"] = input.code.trim();
-    if (input.includeAudience === true) {
-      data["includeTargetListId"] = source["includeTargetListId"] ?? null;
-      data["excludeTargetListId"] = source["excludeTargetListId"] ?? null;
-    }
+    const copyAudience = input.includeAudience === true;
     if (input.includeContent === true) {
       data["templateId"] = source["templateId"] ?? null;
       data["emailAccountId"] = source["emailAccountId"] ?? null;
@@ -365,6 +362,15 @@ export class MarketingCampaignService {
           occurredAt: now.toISOString(),
         }),
       );
+      if (copyAudience) {
+        // Audience composition is relation links, not attributes, so it is copied here rather than in the
+        // field allowlist — and only the configuration: no history, no snapshot, no recipient reference.
+        for (const relation of ["includedTargetLists", "excludedTargetLists"] as const) {
+          for (const listId of await this.records.linkedRecordIds(CAMPAIGN_ENTITY, campaignId, relation)) {
+            await runAsMarketingInternal(() => this.entities.link(CAMPAIGN_ENTITY, createdId, relation, listId));
+          }
+        }
+      }
       await this.events.dispatch(tx, campaignEvent({
         type: "marketingAutomation.campaign.duplicated",
         campaignId: createdId,

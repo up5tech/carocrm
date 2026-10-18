@@ -40,45 +40,19 @@
     "ServiceNotice": "Thông báo bắt buộc về dịch vụ"
   },
   "entities": {
-    "campaign": {
-      "label": "Chiến dịch",
-      "fields": {
-        "code": "Mã",
-        "name": "Tên",
-        "type": "Loại",
-        "purpose": "Mục đích",
-        "status": "Trạng thái",
-        "startsAt": "Bắt đầu",
-        "endsAt": "Kết thúc",
-        "timezone": "Múi giờ",
-        "objective": "Mục tiêu",
-        "source": "Nguồn",
-        "budgetAmount": "Ngân sách",
-        "budgetCurrency": "Tiền tệ",
-        "includeTargetListId": "Tệp khách hàng",
-        "excludeTargetListId": "Tệp loại trừ",
-        "templateId": "Mẫu nội dung",
-        "emailAccountId": "Tài khoản gửi",
-        "trackingOpen": "Theo dõi lượt mở",
-        "trackingClick": "Theo dõi lượt nhấp",
-        "serviceNoticeAcknowledged": "Xác nhận thông báo dịch vụ",
-        "validationReport": "Báo cáo kiểm tra",
-        "validationHash": "Dấu kiểm tra",
-        "lastValidatedAt": "Kiểm tra lần cuối"
-      }
+    "marketingConsent": {
+      "label": "Sự đồng ý marketing"
     },
-    "targetList": {
-      "label": "Tệp khách hàng",
-      "fields": {
-        "code": "Mã",
-        "name": "Tên",
-        "membershipMode": "Kiểu thành viên",
-        "entityTypes": "Loại bản ghi",
-        "criteriaJson": "Điều kiện",
-        "status": "Trạng thái",
-        "resolvedCount": "Số bản ghi",
-        "lastRefreshedAt": "Làm mới lần cuối"
-      }
+    "marketingSuppression": {
+      "label": "Chặn liên hệ"
     }
+  },
+  "consentStatus": {
+    "Unknown": "Chưa có dữ liệu",
+    "PendingConfirmation": "Chờ xác nhận",
+    "Consented": "Đã đồng ý",
+    "OptedOut": "Đã hủy",
+    "Suppressed": "Không liên hệ",
+    "Invalid": "Địa chỉ không hợp lệ"
   }
 }

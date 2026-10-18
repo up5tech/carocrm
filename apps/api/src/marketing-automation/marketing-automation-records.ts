@@ -104,6 +104,85 @@ export class MarketingAutomationRecords {
     return rows.rows[0]?.id ?? null;
   }
 
+  /**
+   * Equality lookup over several `attrs` text values at once — the shape the consent and suppression
+   * lookups need (`emailHash` × `channel` × `purpose`). Field names are validated and values are bound, so
+   * no request value can become an identifier (AGENTS.md §5.2).
+   */
+  async findByAttrs(
+    entity: MarketingAutomationEntityType,
+    filters: Readonly<Record<string, string>>,
+    options: { readonly limit?: number } = {},
+  ): Promise<MarketingRow[]> {
+    if (!isMarketingEntityType(entity)) return [];
+    const clauses = [sql<boolean>`entity_type = ${entity}`, sql<boolean>`deleted_at is null`];
+    for (const [field, value] of Object.entries(filters)) {
+      attrKey(field);
+      clauses.push(sql<boolean>`(attrs ->> ${field}::text) = ${value}`);
+    }
+    const rows = await sql<RowShape>`
+      select id, entity_type, version, name, attrs, assigned_user_id, created_by_id, team_ids
+      from entity_records
+      where ${sql.join(clauses, sql` and `)}
+      order by created_at asc, id asc
+      limit ${options.limit ?? 2_000}
+    `.execute(this.db);
+    return rows.rows.map(toRow);
+  }
+
+  /**
+   * One read for many values of a single attribute — the bulk form the audience resolver needs, so a
+   * 10,000-recipient preview is a handful of queries rather than 10,000 (§5.2 "enforce query cost/time
+   * limits"). Values are bind parameters; the field name is validated.
+   */
+  async findByAttrIn(
+    entity: MarketingAutomationEntityType,
+    field: string,
+    values: readonly string[],
+    options: { readonly limit?: number } = {},
+  ): Promise<MarketingRow[]> {
+    if (!isMarketingEntityType(entity) || values.length === 0) return [];
+    attrKey(field);
+    const list = sql.join(values.map((value) => sql`${value}`));
+    const rows = await sql<RowShape>`
+      select id, entity_type, version, name, attrs, assigned_user_id, created_by_id, team_ids
+      from entity_records
+      where entity_type = ${entity}
+        and deleted_at is null
+        and (attrs ->> ${field}::text) in (${list})
+      order by created_at asc, id asc
+      limit ${options.limit ?? 5_000}
+    `.execute(this.db);
+    return rows.rows.map(toRow);
+  }
+
+  /**
+   * The ids linked to a record through a relation, read structurally.
+   *
+   * A domain command needs the *composition* before it can decide whether the caller may see it: a
+   * campaign's audience is stored as relation links, and the ACL-filtered view of them (`related()`)
+   * silently omits what the caller cannot read. Comparing the two is how the module can say "your audience
+   * has a list you are not allowed to use" instead of pretending the audience is empty (§9.2).
+   */
+  async linkedRecordIds(
+    entity: MarketingAutomationEntityType,
+    id: string,
+    relationName: string,
+  ): Promise<string[]> {
+    if (!isMarketingEntityType(entity)) return [];
+    if (!/^[A-Za-z][A-Za-z0-9]{0,64}$/.test(relationName)) {
+      throw new Error(`Illegal Marketing relation name "${relationName}".`);
+    }
+    const rows = await sql<{ record_id_b: string }>`
+      select record_id_b
+      from entity_links
+      where entity_type_a = ${entity} and record_id_a = ${id} and relation_name = ${relationName}
+      order by created_at asc, record_id_b asc
+      limit 200
+    `.execute(this.db);
+    return rows.rows.map((row) => row.record_id_b);
+  }
+
   /** True when a campaign code is already used by a live campaign — the invariant migration 037 enforces. */
   async campaignCodeTaken(code: string, exceptId?: string): Promise<boolean> {
     const rows = await sql<{ id: string }>`

@@ -193,6 +193,11 @@ describe("classification and consent gating (§5.1, §5.3)", () => {
       "TargetList",
       "TargetListEntry",
       "CampaignTransition",
+      "MarketingConsent",
+      "MarketingConsentEvent",
+      "MarketingSuppression",
+      "MarketingPublicToken",
+      "MarketingAudienceSnapshot",
     ]);
     // `Email`, `EmailTemplate` and the CRM person records stay platform-owned; the plan's §0.2 rule forbids a
     // second templating or contact system.

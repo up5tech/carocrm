@@ -11,10 +11,13 @@ import type {
   LayoutDefinition,
   ListResult,
   LoginResult,
+  MarketingAudiencePreview,
   MarketingCampaignCapabilities,
   MarketingCampaignTransitionResult,
   MarketingCampaignTransitionRow,
   MarketingNavigationVisibility,
+  MarketingPreferenceView,
+  MarketingUnsubscribeResult,
   MarketingValidationReport,
   Metadata,
   PortalContext,
@@ -931,6 +934,26 @@ export const api = {
   marketingCampaignDuplicate: (campaignId: string, input: Record<string, unknown> = {}) =>
     request<Record<string, unknown>>(
       `/MarketingAutomation/action/campaign/${encodeURIComponent(campaignId)}/duplicateAsDraft`,
+      post(input),
+    ),
+
+
+  // Phase 19-MA.4/MA.5 — audience preview and the public preference surface. The public calls carry only
+  // the token: no session, no record id, and no address is ever sent from this page (§5.3.1).
+  marketingAudiencePreview: (campaignId: string) =>
+    request<MarketingAudiencePreview>(
+      `/MarketingAutomation/action/campaign/${encodeURIComponent(campaignId)}/audiencePreview`,
+    ),
+  marketingAudienceSnapshot: (campaignId: string, mode: 'preview' | 'final') =>
+    request<Record<string, unknown>>(
+      `/MarketingAutomation/action/campaign/${encodeURIComponent(campaignId)}/audienceSnapshot`,
+      post({ mode }),
+    ),
+  marketingPreferences: (token: string) =>
+    request<MarketingPreferenceView>(`/MarketingAutomation/public/preferences/${encodeURIComponent(token)}`),
+  marketingUnsubscribe: (token: string, input: { all?: boolean } = {}) =>
+    request<MarketingUnsubscribeResult>(
+      `/MarketingAutomation/public/unsubscribe/${encodeURIComponent(token)}`,
       post(input),
     ),
 

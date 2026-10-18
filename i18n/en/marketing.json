@@ -40,45 +40,19 @@
     "ServiceNotice": "Required service notice"
   },
   "entities": {
-    "campaign": {
-      "label": "Campaign",
-      "fields": {
-        "code": "Code",
-        "name": "Name",
-        "type": "Type",
-        "purpose": "Purpose",
-        "status": "Status",
-        "startsAt": "Starts",
-        "endsAt": "Ends",
-        "timezone": "Time zone",
-        "objective": "Objective",
-        "source": "Source",
-        "budgetAmount": "Budget",
-        "budgetCurrency": "Currency",
-        "includeTargetListId": "Audience",
-        "excludeTargetListId": "Excluded audience",
-        "templateId": "Content template",
-        "emailAccountId": "Sending account",
-        "trackingOpen": "Track opens",
-        "trackingClick": "Track clicks",
-        "serviceNoticeAcknowledged": "Service-notice acknowledgement",
-        "validationReport": "Validation report",
-        "validationHash": "Validation fingerprint",
-        "lastValidatedAt": "Last validated"
-      }
+    "marketingConsent": {
+      "label": "Marketing Consent"
     },
-    "targetList": {
-      "label": "Target List",
-      "fields": {
-        "code": "Code",
-        "name": "Name",
-        "membershipMode": "Membership",
-        "entityTypes": "Record types",
-        "criteriaJson": "Criteria",
-        "status": "Status",
-        "resolvedCount": "Records resolved",
-        "lastRefreshedAt": "Last refreshed"
-      }
+    "marketingSuppression": {
+      "label": "Suppression"
     }
+  },
+  "consentStatus": {
+    "Unknown": "No record",
+    "PendingConfirmation": "Awaiting confirmation",
+    "Consented": "Subscribed",
+    "OptedOut": "Unsubscribed",
+    "Suppressed": "Do not contact",
+    "Invalid": "Address invalid"
   }
 }

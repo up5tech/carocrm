@@ -1,11 +1,12 @@
 # Marketing Automation — campaign lifecycle
 
-**Delivered in:** Phase 19-MA.2 (contracts) and Phase 19-MA.3 (lifecycle and validation).
-**Plan:** `PLAN_Phase_19_Marketing_Automation.md` §5.1, §8.2, §8.4, §15.
+**Delivered in:** Phase 19-MA.2 (contracts), Phase 19-MA.3 (lifecycle and validation), Phase 19-MA.4
+(audience resolution and preview) and Phase 19-MA.5 (the consent gate behind `CONSENT_NOT_CONFIGURED`).
+**Plan:** `PLAN_Phase_19_Marketing_Automation.md` §5.1, §5.2, §8.2, §8.4, §15.
 **Code:** [apps/api/src/marketing-automation](../../apps/api/src/marketing-automation) —
 `marketing-automation-domain.ts` (the tables below), `marketing-campaign.service.ts` (commands),
-`marketing-campaign-validation.service.ts` (the gate), `marketing-automation-write-guard.service.ts`
-(the record-API boundary).
+`marketing-campaign-validation.service.ts` (the gate), `marketing-audience.service.ts` (resolution and
+preview), `marketing-automation-write-guard.service.ts` (the record-API boundary).
 
 ## 1. States
 
@@ -60,14 +61,19 @@ checks. A command and a `to` that disagree are rejected rather than silently rec
 > "Prevent a campaign from becoming Scheduled/Running unless audience resolution, consent policy, template,
 > sender/provider, tracking settings and required content validation pass."
 
-The gate is **per target state**, which is what lets MA.3 ship a real lifecycle while the audit records
-audience resolution (MA.4), consent (MA.5) and a live provider (MA.7) as prerequisites of an actual send:
+The gate is **per target state**, which is what lets MA.3 ship a real lifecycle while the later phases attach
+a live provider:
 
 * **configuration findings** apply to `schedule` — classification, purpose, schedule order, time zone,
   audience and content references the actor can actually read, sender existence, tracking choices;
 * **execution findings** additionally apply to `start`/`resume` **of a campaign that could send**
-  (`Email`, `Newsletter`, `Informational`): `AUDIENCE_ENGINE_PENDING`, `CONSENT_NOT_CONFIGURED`,
-  `PROVIDER_NOT_BOUND`, `GLOBAL_SEND_PAUSED`.
+  (`Email`, `Newsletter`, `Informational`): `PROVIDER_NOT_BOUND`, `GLOBAL_SEND_PAUSED`.
+
+Audience resolution (MA.4) and the consent gate (MA.5) are live, so they are no longer blockers: a campaign
+that is configured, aimed at a resolvable audience and addressed to consenting people can pass everything this
+system decides — and still must not run until MA.7 binds a real provider. `CONSENT_NOT_CONFIGURED` survives as
+a **warning** for a campaign whose audience has no recorded consent at all, because such a campaign is
+scheduleable but will send to nobody; the preview is the tool that proves it.
 
 A campaign typed `Other` is the documented non-email family: its `Running` is a programme being underway, so
 it is validated as configuration only. Nothing about it can put a message on the wire.
@@ -84,7 +90,59 @@ purpose and demands a separate, explicit `serviceNoticeAcknowledged` on the camp
 attributable decision rather than a dropdown default (§5.1, §9.3). A `Newsletter` campaign carrying the
 `ServiceNotice` purpose is a blocker.
 
-## 5. What the record API may not write
+## 5. Audience resolution, preview and snapshots (MA.4)
+
+A campaign points at **audience definitions**, never at recipients: the many-to-many relations
+`includedTargetLists` and `excludedTargetLists` on `Campaign`. `TargetList` owns the *rule*; `TargetListEntry`
+owns a *named membership* (`memberType` + `memberId`, source `Manual|Import|Criteria|Api|Journey`).
+
+**Two membership modes.**
+`static` resolves through the list's own membership rows. `dynamic` resolves a stored, versioned criteria
+document through the platform query engine — nothing else.
+
+**Criteria are validated before anything runs** (`marketing-audience-criteria.ts`, `CRITERIA_VERSION` 1):
+one clause per segment entity type (`Contact`, `Lead` — the only types that can be mailed), at most 20 filters
+per clause, at most 50 `in` values, values capped at 512 characters, field names matched against the entity's
+own metadata and read permission, an operator set taken verbatim from the query engine's vocabulary and
+narrowed by the field's declared type (`equals`/`contains`/`between`/…), audit columns `createdAt`/`modifiedAt`
+capped to date operators, and a deny list (`id`, `deletedAt`, `password`, `apiKey`, `token`, `tokenHash`,
+`emailHash`, `teams`, `assignedUsers`). A rejected document names every problem it found. **No user-supplied SQL
+is constructed or executed at any point** — resolution goes through `EntityCrudService.list`, so record-level
+ACL, field masking and serialisation stay in the one place (§5.2, AGENTS.md §5.2).
+
+**Composition** (`MarketingAudienceService.compose`): the included lists are unioned and de-duplicated by
+`entityType:entityId` (a second mention is recorded as a `source`, not as a second person); every excluded list
+is applied **by record key *and* by address identity**, so a person who exists as both a Contact and a Lead is
+excluded from both — the thing being suppressed is the recipient, not the row. Exclusion always wins over
+inclusion. Candidates are then ordered by `recipientPrecedence` (Contact before Lead, then oldest key), which is
+the documented de-duplication rule for one message per normalised address; records are never merged and
+identity is never rewritten.
+
+**Classification** maps each candidate to exactly one headline category, in this order: excluded → duplicate
+record → the eligibility code (`optedOut`, `consentUnknown`, `suppressedGlobal`, `noEmailAddress`, …, see
+[consent-and-suppression.md](consent-and-suppression.md) §6) → duplicate address → `eligible`. The counts
+therefore add up to the resolved population and an operator can see *why* eligible < resolved.
+
+**Cost ceiling.** `settings.limits.maxResolveRecords` (default 10,000) bounds every resolution. Hitting it sets
+`truncated: true` and pushes a note naming the list and the ceiling, so a partial audience is never silently
+read as the whole audience.
+
+`GET …/action/campaign/:id/audiencePreview` returns `{ campaignId, purpose, status, resolved, eligible,
+categories, samples, notes, truncated, limit, generatedAt }`. `samples` is capped at 10 rows and only ever
+holds records the caller may actually read; counts come from the ACL-filtered set, so a preview cannot disclose
+records or addresses the caller may not see. `refresh` is the only command that recomputes a list's stored
+counters — no read path writes.
+
+**Snapshots.** `POST …/action/campaign/:id/audienceSnapshot` (`preview` | `final`, default `final`) freezes the
+composition: a `MarketingAudienceSnapshot` header (include/exclude ids, `compositionHash`, resolved/eligible/
+entry counts, per-category tally, purpose, actor, `generatedAt`, `previousSnapshotId`) plus
+`marketing_audience_snapshot_entries` rows written in the same transaction
+(`on conflict (snapshot_id, entity_type, entity_id) do nothing`, so a retried command cannot double-insert).
+Entries carry the **digest**, never an address. A snapshot is immutable: editing the audience afterwards
+generates a *new* snapshot, and the send definition a later phase runs against will be a snapshot, not a live
+query — that is what makes "the audience a send used" reconstructable after the fact (§6.1).
+
+## 6. What the record API may not write
 
 The write guard refuses a client that sets any of: `status`, `scheduledAt`, `startedAt`, `pausedAt`,
 `resumedAt`, `completedAt`, `cancelledAt`, `archivedAt`, `failureReason`, `validationReport`,
@@ -93,7 +151,17 @@ The write guard refuses a client that sets any of: `status`, `scheduledAt`, `sta
 
 These fields are also `inEdit: false` in metadata, so the SPA never offers an input the server will refuse.
 
-## 6. Atomicity, history and idempotency
+MA.4 and MA.5 extended the same boundary to the resolver and to consent provenance
+(`SERVER_OWNED_FIELDS_BY_ENTITY`): `TargetList.refreshStatus|lastRefreshedAt|resolvedCount|criteriaHash`,
+`TargetListEntry.addedById|addedAt|source|removedAt|removedById`, the consent stamps
+(`confirmedAt`, `withdrawnAt`, …) and the acting identity, and a suppression's provider provenance and
+revocation stamps. A `confirmedAt` someone could type in is a forged opt-in, so it is derived from the
+transition that actually happened. `MarketingConsent`, `MarketingSuppression`, `MarketingPublicToken`,
+`MarketingAudienceSnapshot` and `MarketingConsentEvent` are internal-only entities: no client writes them at
+all, they are written by their services under the module identity, and the guard refuses a portal/API-user
+write path by name.
+
+## 7. Atomicity, history and idempotency
 
 One command runs in one transaction: campaign update → `CampaignTransition` row → outbox event. A refusal
 anywhere leaves no partial write.
@@ -106,7 +174,7 @@ A repeated `idempotencyKey` returns the original answer with `changed: false, id
 nothing new; the key is also unique in the database (migration `037`), so a race between two retries fails
 on the constraint instead of double-writing (§0.1 rule 10).
 
-## 7. Duplicate as draft
+## 8. Duplicate as draft
 
 `duplicateAsDraft` builds the copy from an **allowlist of configuration fields**, so nothing that describes
 an execution can be carried over by omission: no lifecycle stamps, no validation report or hash, no failure
@@ -114,14 +182,17 @@ reason, no recipients, deliveries, enrollments or provider identifiers (MA.8–M
 cannot leak into a copy). `code` is not duplicated — a copy needs its own identity or none. The source is
 recorded as `duplicatedFromId`.
 
-## 8. Events
+## 9. Events
 
 `marketingAutomation.campaign.<action>` (kernel grammar allows 2–4 dot segments, so the plan's `.v1`
 suffix is not usable — see [the compatibility note](../compatibility/marketing-automation.md) §5). Payload:
 `schemaVersion`, `occurredAt`, `correlationId`, `source`, `campaignId`, `campaignCode`, `from`, `to`,
 `actorUserId`, `actorType`. Identifiers and decisions only: no person, no body, no token (§7.3).
 
-## 9. Verification
+MA.5 adds `marketingAutomation.consent.changed` under the same discipline: consent id, purpose, channel,
+from/to, source and actor — never the address, and not even its digest, which is already an identifier.
+
+## 10. Verification
 
 * Unit: [apps/api/test/marketing-automation-domain.test.ts](../../apps/api/test/marketing-automation-domain.test.ts)
   — every table is total over its status list, every command source is a declared edge, no edge lacks a
@@ -130,3 +201,14 @@ suffix is not usable — see [the compatibility note](../compatibility/marketing
   — the full lifecycle with stamps and history, illegal moves refused without mutating the record, the
   validation blockers on `schedule`/`start`, cancel-without-reason refused, idempotent replay, optimistic
   version conflict, duplicate-as-draft exclusions, record ACL on every path, and outbox payload shape.
+* API (MA.4): [apps/api/test/marketing-automation-audience.test.ts](../../apps/api/test/marketing-automation-audience.test.ts)
+  + [its domain half](../../apps/api/test/marketing-automation-audience-domain.test.ts)
+  — static membership add/remove with provenance, dynamic criteria resolution, the injection-shaped criteria
+  refused before any query runs, one inclusion union, **exclusion winning over inclusion**, de-duplication of
+  one person in several lists, the no-address and unreadable cases, the resolution ceiling reporting
+  `truncated`, a snapshot staying stable after the segment changes, and snapshot entries never returning an
+  address. Every phase acceptance criterion of §15 `19-MA.4` is a named test.
+* Browser: the campaign detail page shows the lifecycle controls, the blockers/warnings a `schedule` or `start`
+  would raise, and an audience summary line ("Audience resolved: 2 · sendable now: 1") with the per-category
+  breakdown; unsubscribing from the public preference page in the same session dropped that campaign to zero
+  eligible recipients.

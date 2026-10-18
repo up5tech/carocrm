@@ -1,11 +1,19 @@
 # Phase 19 — Marketing Automation Module (`MarketingAutomation`)
 
 > **Status:** In progress — Phase 19-MA.0 (audit and feature contract), 19-MA.1 (module scaffold, settings,
-> permissions, navigation), 19-MA.2 (domain contracts, provider port and fake, migration baseline) and
-> 19-MA.3 (campaign lifecycle and validation) are implemented and verified; MA.4 onward is not started.
-> Delivered records: `Campaign`, `TargetList`, `TargetListEntry`, `CampaignTransition`.
+> permissions, navigation), 19-MA.2 (domain contracts, enums, transition tables, settings, provider port and
+> fake, migration baseline), 19-MA.3 (campaign lifecycle and validation), 19-MA.5 (consent, preferences,
+> suppression, public unsubscribe) and 19-MA.4 (audience segments, inclusion/exclusion, preview and snapshots)
+> are implemented and verified; MA.6 onward is not started. MA.5 was built before MA.4 because its eligibility
+> gate is what makes the MA.4 preview categories meaningful.
+> Delivered records: `Campaign`, `TargetList`, `TargetListEntry`, `CampaignTransition`, `MarketingConsent`,
+> `MarketingConsentEvent`, `MarketingSuppression`, `MarketingPublicToken`, `MarketingAudienceSnapshot`
+> (+ `marketing_audience_snapshot_entries`). `start`/`resume` of a sendable campaign stay blocked by
+> `PROVIDER_NOT_BOUND` until MA.7 binds a live provider.
 > Audit: `docs/implementation/marketing-automation-audit.md`; compatibility:
-> `docs/compatibility/marketing-automation.md`; lifecycle: `docs/marketing-automation/campaign-lifecycle.md`.
+> `docs/compatibility/marketing-automation.md`; lifecycle and audience:
+> `docs/marketing-automation/campaign-lifecycle.md`; consent, suppression and public links:
+> `docs/marketing-automation/consent-and-suppression.md`.
 > **Parent roadmap:** `PLAN.md` — CRM advanced domains / Marketing Automation  
 > **Module name:** `MarketingAutomation` (**do not add a `Ua` prefix**)  
 > **Module key / slug:** `marketing-automation` (follow repository conventions if they differ)  

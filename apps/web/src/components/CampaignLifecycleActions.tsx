@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type {
+  MarketingAudiencePreview,
   MarketingCampaignCapabilities,
   MarketingCampaignTransitionRow,
 } from '../api/types.js';
@@ -73,6 +74,8 @@ export function CampaignLifecycleActions({ campaignId, onChanged }: CampaignLife
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [audience, setAudience] = useState<MarketingAudiencePreview | undefined>(undefined);
+  const [audienceBusy, setAudienceBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -112,6 +115,17 @@ export function CampaignLifecycleActions({ campaignId, onChanged }: CampaignLife
       void message.error(errorText(error));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const previewAudience = async (): Promise<void> => {
+    setAudienceBusy(true);
+    try {
+      setAudience(await api.marketingAudiencePreview(campaignId));
+    } catch (error) {
+      void message.error(errorText(error));
+    } finally {
+      setAudienceBusy(false);
     }
   };
 
@@ -182,7 +196,36 @@ export function CampaignLifecycleActions({ campaignId, onChanged }: CampaignLife
         <Button size="small" loading={duplicating} onClick={() => void duplicate()}>
           {t('web.marketingAutomation.duplicate')}
         </Button>
+        <Button size="small" loading={audienceBusy} onClick={() => void previewAudience()}>
+          {t('web.marketingAutomation.previewAudience')}
+        </Button>
       </Space>
+
+      {audience !== undefined ? (
+        <Alert
+          style={{ marginTop: 12 }}
+          type={audience.eligible > 0 ? 'success' : 'info'}
+          showIcon
+          message={t('web.marketingAutomation.audienceSummary', {
+            resolved: audience.resolved,
+            eligible: audience.eligible,
+          })}
+          description={
+            <>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {audience.categories.map((item) => (
+                  <li key={item.category}>
+                    {t(`web.marketingAutomation.category.${item.category}`)}: {item.count}
+                  </li>
+                ))}
+              </ul>
+              {audience.truncated ? (
+                <Typography.Text type="danger">{t('web.marketingAutomation.truncated')}</Typography.Text>
+              ) : null}
+            </>
+          }
+        />
+      ) : null}
 
       {blockers.length > 0 ? (
         <Alert

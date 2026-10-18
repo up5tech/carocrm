@@ -24,16 +24,35 @@ import { createHash } from "node:crypto";
 export const CAMPAIGN_ENTITY = "Campaign";
 /** The audience *definition* record (EspoCRM-documented "target list"), never a recipient list. */
 export const TARGET_LIST_ENTITY = "TargetList";
+/** How a membership row came to exist (§6.1 `source`): a person, an import, or criteria. */
+export const TARGET_LIST_ENTRY_SOURCES = ["Manual", "Import", "Criteria", "Api", "Journey"] as const;
+export type TargetListEntrySource = (typeof TARGET_LIST_ENTRY_SOURCES)[number];
+
 /** One auditable membership row of a target list (MA.4 owns resolution; the name is fixed here). */
 export const TARGET_LIST_ENTRY_ENTITY = "TargetListEntry";
 /** Append-only lifecycle history: the command, the actor, the reason and the report it passed (§5.1). */
 export const CAMPAIGN_TRANSITION_ENTITY = "CampaignTransition";
+/** Current consent state per address identity × channel × purpose (§6.3). */
+export const MARKETING_CONSENT_ENTITY = "MarketingConsent";
+/** Append-only audit of every consent mutation (§5.3 invariant 9). */
+export const MARKETING_CONSENT_EVENT_ENTITY = "MarketingConsentEvent";
+/** Suppression tombstone per address identity, channel and scope (§6.3). */
+export const MARKETING_SUPPRESSION_ENTITY = "MarketingSuppression";
+/** Hashed, scoped, expiring public unsubscribe / preference / confirmation token (§5.3.1). */
+export const MARKETING_PUBLIC_TOKEN_ENTITY = "MarketingPublicToken";
+/** Header of a durable audience snapshot (§6.1 "Audience/send snapshot"). */
+export const MARKETING_AUDIENCE_SNAPSHOT_ENTITY = "MarketingAudienceSnapshot";
 
 export const MARKETING_AUTOMATION_ENTITY_TYPES = [
   CAMPAIGN_ENTITY,
   TARGET_LIST_ENTITY,
   TARGET_LIST_ENTRY_ENTITY,
   CAMPAIGN_TRANSITION_ENTITY,
+  MARKETING_CONSENT_ENTITY,
+  MARKETING_CONSENT_EVENT_ENTITY,
+  MARKETING_SUPPRESSION_ENTITY,
+  MARKETING_PUBLIC_TOKEN_ENTITY,
+  MARKETING_AUDIENCE_SNAPSHOT_ENTITY,
 ] as const;
 export type MarketingAutomationEntityType = (typeof MARKETING_AUTOMATION_ENTITY_TYPES)[number];
 
@@ -46,6 +65,10 @@ export type MarketingAutomationEntityType = (typeof MARKETING_AUTOMATION_ENTITY_
 export const MARKETING_AUTOMATION_NAVIGABLE_ENTITIES = [
   CAMPAIGN_ENTITY,
   TARGET_LIST_ENTITY,
+  // §10.1 puts "Consent & Suppression" in the Marketing menu, restricted by role: the records are
+  // navigable, and their default ACL (`own`, and `no` for suppression writes) is what restricts them.
+  MARKETING_CONSENT_ENTITY,
+  MARKETING_SUPPRESSION_ENTITY,
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -314,7 +337,6 @@ export const CAMPAIGN_FINDING_CODES = [
   "CONSENT_NOT_CONFIGURED",
   "PROVIDER_NOT_BOUND",
   "GLOBAL_SEND_PAUSED",
-  "AUDIENCE_ENGINE_PENDING",
 ] as const;
 export type CampaignFindingCode = (typeof CAMPAIGN_FINDING_CODES)[number];
 
@@ -507,6 +529,142 @@ export const SUPPRESSION_OVERRIDABLE: Readonly<Record<SuppressionReason, boolean
   LegalRestriction: false,
   UnknownUser: true,
 };
+
+// ---------------------------------------------------------------------------
+// Audience composition (§5.2, MA.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Record types an audience may name. §5.2 starts with Contacts and Leads and requires an explicit
+ * compatibility contract (plus a recipient-address rule) before any other entity joins them — an Account
+ * has an `emailAddress` but is not a person to mail.
+ */
+export const SEGMENT_ENTITY_TYPES = ["Contact", "Lead"] as const;
+export type SegmentEntityType = (typeof SEGMENT_ENTITY_TYPES)[number];
+
+export function isSegmentEntityType(value: unknown): value is SegmentEntityType {
+  return typeof value === "string" && (SEGMENT_ENTITY_TYPES as readonly string[]).includes(value);
+}
+
+/** How a snapshot was produced. A preview is never mistaken for the list a send will use (§5.5). */
+export const SNAPSHOT_MODES = ["preview", "final"] as const;
+export type AudienceSnapshotMode = (typeof SNAPSHOT_MODES)[number];
+
+export const SNAPSHOT_STATUSES = ["Generated", "Invalidated"] as const;
+export type AudienceSnapshotStatus = (typeof SNAPSHOT_STATUSES)[number];
+
+/**
+ * The documented de-duplication rule (§5.2 "De-duplicate a recipient across matching records using
+ * documented rules"): one message per normalised address, kept on the *person* record preferred over a
+ * lead, then the oldest record, then the id. Records are never merged and identity is never rewritten —
+ * this is a send-time choice about which record carries the message (§1.2 "reuse over duplication").
+ */
+export function recipientPrecedence(entityType: string): number {
+  return entityType === "Contact" ? 0 : 1;
+}
+
+/**
+ * Preview categories (§5.5's dry-run list). Every recipient lands in exactly one headline category, in
+ * this order, so the counts add up to the resolved population and an operator can see *why* the eligible
+ * number is smaller than the audience number.
+ */
+export const AUDIENCE_CATEGORY_CODES = [
+  "eligible",
+  "duplicateRecord",
+  "duplicateAddress",
+  "noEmailAddress",
+  "invalidAddress",
+  "excludedBySegment",
+  "suppressedGlobal",
+  "suppressedComplaint",
+  "suppressedBounce",
+  "suppressedOther",
+  "optedOut",
+  "consentUnknown",
+  "consentPending",
+  "frequencyCapped",
+  "recordUnreadable",
+] as const;
+export type AudienceCategory = (typeof AUDIENCE_CATEGORY_CODES)[number];
+
+/** Headline category for an eligibility decision — the mapping the preview counts and the snapshot share. */
+export function categoryForDecision(decision: {
+  eligible: boolean;
+  code: EligibilityBlockCode | "ELIGIBLE";
+  duplicateRecord?: boolean | undefined;
+  duplicateAddress?: boolean | undefined;
+}): AudienceCategory {
+  if (!decision.eligible) {
+    switch (decision.code) {
+      case "NO_EMAIL_ADDRESS":
+        return "noEmailAddress";
+      case "INVALID_ADDRESS":
+        return "invalidAddress";
+      case "EXCLUDED_BY_TARGET_LIST":
+        return "excludedBySegment";
+      case "GLOBALLY_SUPPRESSED":
+        return "suppressedGlobal";
+      case "COMPLAINT_SUPPRESSED":
+        return "suppressedComplaint";
+      case "HARD_BOUNCE_SUPPRESSED":
+        return "suppressedBounce";
+      case "CHANNEL_SUPPRESSED":
+      case "PURPOSE_SUPPRESSED":
+      case "TARGET_LIST_SUPPRESSED":
+        return "suppressedOther";
+      case "OPTED_OUT":
+        return "optedOut";
+      case "CONSENT_UNKNOWN":
+        return "consentUnknown";
+      case "CONSENT_PENDING":
+        return "consentPending";
+      case "FREQUENCY_CAP_REACHED":
+        return "frequencyCapped";
+      case "RECORD_UNREADABLE":
+        return "recordUnreadable";
+      case "ELIGIBLE":
+        // Unreachable: an eligible decision is not blocked. Kept exhaustive so a new code cannot be
+        // counted as eligible by accident.
+        return "eligible";
+      default: {
+        const exhaustive: never = decision.code;
+        throw new Error(`Unsupported eligibility code "${String(exhaustive)}".`);
+      }
+    }
+  }
+  if (decision.duplicateRecord === true) return "duplicateRecord";
+  if (decision.duplicateAddress === true) return "duplicateAddress";
+  return "eligible";
+}
+
+// ---------------------------------------------------------------------------
+// Public tokens (§5.3.1, §5.3.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * What a public token may do. Keeping the operation *in* the token is what stops an unsubscribe link from
+ * becoming a preference-writing link, and a confirmation link from unsubscribing someone.
+ */
+export const PUBLIC_TOKEN_SCOPES = ["Unsubscribe", "Preferences", "OptInConfirmation"] as const;
+export type PublicTokenScope = (typeof PUBLIC_TOKEN_SCOPES)[number];
+
+export const PUBLIC_TOKEN_STATUSES = ["Active", "Used", "Expired", "Revoked"] as const;
+export type PublicTokenStatus = (typeof PUBLIC_TOKEN_STATUSES)[number];
+
+/** Token lifetimes in days (§13 "public unsubscribe/preference token lifetime"). */
+export const PUBLIC_TOKEN_TTL_DAYS: Readonly<Record<PublicTokenScope, number>> = {
+  // An unsubscribe link must keep working long after a message is read — a broken opt-out is worse than a
+  // long-lived URL, and the action is idempotent and single-direction.
+  Unsubscribe: 365,
+  Preferences: 90,
+  // A confirmation link is a short-lived step in a double-opt-in flow, not a standing credential.
+  OptInConfirmation: 7,
+};
+
+/** §5.3 invariant 10: calling an idempotent operation twice is a success, not an error. */
+export function isConsentTerminalForPurpose(status: ConsentStatus): boolean {
+  return status === "OptedOut" || status === "Suppressed" || status === "Invalid";
+}
 
 // ---------------------------------------------------------------------------
 // The eligibility decision matrix (§5.3, §7.1 `MarketingEligibilityService`)

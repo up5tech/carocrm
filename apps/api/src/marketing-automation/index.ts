@@ -1,5 +1,6 @@
 import type { Provider, Type } from "@nestjs/common";
 
+import { MarketingAudienceService } from "./marketing-audience.service.js";
 import { MarketingAutomationController } from "./marketing-automation.controller.js";
 import { MarketingAutomationModuleHealthService } from "./marketing-automation-module-health.service.js";
 import { MarketingAutomationNavigationService } from "./marketing-automation-navigation.service.js";
@@ -9,9 +10,13 @@ import { MarketingAutomationSettingsService } from "./marketing-automation-setti
 import { MarketingAutomationWriteGuardService } from "./marketing-automation-write-guard.service.js";
 import { MarketingCampaignService } from "./marketing-campaign.service.js";
 import { MarketingCampaignValidationService } from "./marketing-campaign-validation.service.js";
+import { MarketingConsentService } from "./marketing-consent.service.js";
+import { MarketingEligibilityService } from "./marketing-eligibility.service.js";
+import { MarketingPublicTokenService } from "./marketing-public-token.service.js";
+import { MarketingSuppressionService } from "./marketing-suppression.service.js";
 
 /**
- * Phase 19-MA.1 – 19-MA.3 — Marketing Automation module barrel
+ * Phase 19-MA.1 – 19-MA.5 — Marketing Automation module barrel
  * (PLAN_Phase_19_Marketing_Automation.md §7.1, §15 `19-MA.1`).
  *
  * Like Projects, Sales, Customer Success and Service Desk, this is a directory under `apps/api/src` and not
@@ -35,6 +40,11 @@ export const MARKETING_AUTOMATION_PROVIDERS: Provider[] = [
   MarketingAutomationRecords,
   MarketingProviderRegistry,
   MarketingCampaignValidationService,
+  MarketingConsentService,
+  MarketingSuppressionService,
+  MarketingEligibilityService,
+  MarketingPublicTokenService,
+  MarketingAudienceService,
   MarketingCampaignService,
   MarketingAutomationModuleHealthService,
   MarketingAutomationNavigationService,

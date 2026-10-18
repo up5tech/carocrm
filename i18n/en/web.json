@@ -1180,6 +1180,44 @@
     },
     "staleReportHint": "The stored report was produced before the last change; check again before scheduling.",
     "confirm": "Confirm",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "previewAudience": "Preview audience",
+    "audienceSummary": "Audience resolved: {resolved} · sendable now: {eligible}",
+    "truncated": "The audience hit the resolution ceiling; the numbers are partial.",
+    "category": {
+      "eligible": "Eligible",
+      "duplicateRecord": "Same record in several audiences",
+      "duplicateAddress": "Same address on another record",
+      "noEmailAddress": "No email address",
+      "invalidAddress": "Invalid email address",
+      "excludedBySegment": "Excluded by an audience",
+      "suppressedGlobal": "Global do-not-contact",
+      "suppressedComplaint": "Complaint",
+      "suppressedBounce": "Hard bounce",
+      "suppressedOther": "Suppressed for this purpose or list",
+      "optedOut": "Unsubscribed",
+      "consentUnknown": "No consent record",
+      "consentPending": "Awaiting confirmation",
+      "frequencyCapped": "Frequency cap reached",
+      "recordUnreadable": "Not readable by you"
+    }
+  },
+  "marketing": {
+    "preferences": {
+      "title": "Email preferences",
+      "intro": "This page shows what we are allowed to send you and lets you stop it. Nothing here changes anything until you press a button.",
+      "category": "Communication type",
+      "state": "Your state",
+      "unsubscribe": "Unsubscribe from this type",
+      "unsubscribeAll": "Unsubscribe from all marketing",
+      "done": "You have been unsubscribed.",
+      "doneAll": "You have been unsubscribed from all marketing email.",
+      "doneHint": "You may close this page. The change takes effect immediately and applies to messages that have not yet been sent.",
+      "globallySuppressed": "You are not receiving marketing email",
+      "globallySuppressedHint": "Your address is on our do-not-contact list. Nothing in a campaign can override that.",
+      "expires": "This link stops working on {date}.",
+      "invalid": "This link is not valid. It may have expired or already been used; request a new one from the email.",
+      "missingToken": "This link is missing its token."
+    }
   }
 }

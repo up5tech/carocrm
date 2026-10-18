@@ -143,6 +143,19 @@ const MA_CAMPAIGN_PURPOSES = ['Newsletter', 'ProductMarketing', 'EventUpdate', '
 const MA_MEMBERSHIP_MODES = ['static', 'dynamic'];
 const MA_TARGET_LIST_STATUSES = ['Active', 'Archived'];
 const MA_TARGET_LIST_ENTRY_SOURCES = ['Manual', 'Import', 'Criteria', 'Api', 'Journey'];
+// Phase 19-MA.5 — consent, suppression and public-token vocabulary
+// (PLAN_Phase_19_Marketing_Automation.md §5.3, §6.3; mirrors marketing-automation-domain.ts).
+const MA_CONSENT_STATUSES = ['Unknown', 'PendingConfirmation', 'Consented', 'OptedOut', 'Suppressed', 'Invalid'];
+const MA_CONSENT_CHANNELS = ['Email'];
+const MA_CONSENT_BASES = ['ExplicitOptIn', 'DoubleOptIn', 'LegacyImport', 'ManualRecord', 'Contractual', 'ProviderConfirmed'];
+const MA_CONSENT_SOURCES = ['WebForm', 'PreferenceCenter', 'UnsubscribeLink', 'ProviderWebhook', 'ManualRecord', 'Import', 'Api', 'SalesRep', 'System'];
+const MA_SUPPRESSION_SCOPES = ['Global', 'Channel', 'Purpose', 'TargetList'];
+const MA_SUPPRESSION_REASONS = ['GlobalOptOut', 'Complaint', 'HardBounce', 'InvalidAddress', 'ManualBlock', 'OperatorBlock', 'LegalRestriction', 'UnknownUser'];
+const MA_PUBLIC_TOKEN_SCOPES = ['Unsubscribe', 'Preferences', 'OptInConfirmation'];
+const MA_PUBLIC_TOKEN_STATUSES = ['Active', 'Used', 'Expired', 'Revoked'];
+// Phase 19-MA.4 — audience snapshot vocabulary (§5.2, §6.1).
+const MA_SNAPSHOT_MODES = ['preview', 'final'];
+const MA_SNAPSHOT_STATUSES = ['Generated', 'Invalidated'];
 
 export const coreMetadata: MetadataSeedEntry[] = [
   {
@@ -3939,9 +3952,9 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
           source: { type: 'varchar', maxLength: 100, inDetail: true, inEdit: true },
           budgetAmount: { type: 'decimal', inDetail: true, inEdit: true },
           budgetCurrency: { type: 'varchar', maxLength: 3, inDetail: true, inEdit: true },
-          // Audience references (§5.2): include and exclude, exclusion winning at resolution (MA.4).
-          includeTargetListId: { type: 'link', entityKey: 'TargetList', label: 'Audience', inList: true, inDetail: true, inEdit: true },
-          excludeTargetListId: { type: 'link', entityKey: 'TargetList', label: 'Excluded audience', inDetail: true, inEdit: true },
+          // Audience composition (§5.2): a campaign names several included and several excluded
+          // audiences, held as relation links so the platform's relation ACL governs reading them.
+          // Exclusion wins over inclusion at resolution (MA.4).
           // Content and sender (§5.4, §13). The template stays the platform's `EmailTemplate`; marketing
           // wraps it with immutable revisions in MA.6 rather than forking the renderer.
           templateId: { type: 'link', entityKey: 'EmailTemplate', label: 'Email template', inDetail: true, inEdit: true },
@@ -3965,7 +3978,10 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
           validationHash: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: false },
           validationReport: { type: 'text', label: 'Validation report (JSON)', inDetail: true, inEdit: false },
         },
-        relations: {},
+        relations: {
+          includedTargetLists: { type: 'manyMany', target: 'TargetList' },
+          excludedTargetLists: { type: 'manyMany', target: 'TargetList' },
+        },
         // Declarative only; the physical indexes are created by
         // `database/migrations/037_phase19_marketing_automation.sql`, names kept in step. Only indexes a
         // delivered query actually uses are declared — a campaign list filtered by schedule (MA.8) and an
@@ -3975,7 +3991,7 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
           { name: 'idx_entity_records_campaign_status', fields: ['status', 'modifiedAt'] },
         ],
         layouts: {
-          list: [{ entity: 'Campaign', type: 'list', panels: [{ name: 'list', position: 0, fields: ['code', 'name', 'status', 'type', 'purpose', 'startsAt', 'endsAt', 'includeTargetListId', 'assignedUserId', 'modifiedAt'] }] }],
+          list: [{ entity: 'Campaign', type: 'list', panels: [{ name: 'list', position: 0, fields: ['code', 'name', 'status', 'type', 'purpose', 'startsAt', 'endsAt', 'assignedUserId', 'modifiedAt'] }] }],
           detail: [
             {
               entity: 'Campaign',
@@ -3983,7 +3999,7 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
               panels: [
                 { name: 'overview', label: 'Overview', position: 0, fields: ['code', 'name', 'description', 'status', 'type', 'purpose', 'serviceNoticeAcknowledged', 'objective', 'source'] },
                 { name: 'schedule', label: 'Schedule', position: 10, fields: ['startsAt', 'endsAt', 'timezone'] },
-                { name: 'audience', label: 'Audience', position: 20, fields: ['includeTargetListId', 'excludeTargetListId'] },
+                { name: 'audience', label: 'Audience', position: 20, fields: [] },
                 { name: 'content', label: 'Content and sender', position: 30, fields: ['templateId', 'emailAccountId', 'trackingOpen', 'trackingClick'] },
                 { name: 'budget', label: 'Budget', position: 40, fields: ['budgetAmount', 'budgetCurrency'] },
                 { name: 'ownership', label: 'Ownership', position: 50, fields: ['assignedUserId', 'teams'] },
@@ -3999,7 +4015,7 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
               panels: [
                 { name: 'main', label: 'Campaign', position: 0, fields: ['name', 'code', 'description', 'type', 'purpose', 'serviceNoticeAcknowledged', 'objective', 'source'] },
                 { name: 'schedule', label: 'Schedule', position: 10, fields: ['startsAt', 'endsAt', 'timezone'] },
-                { name: 'audience', label: 'Audience', position: 20, fields: ['includeTargetListId', 'excludeTargetListId'] },
+                { name: 'audience', label: 'Audience', position: 20, fields: [] },
                 { name: 'content', label: 'Content and sender', position: 30, fields: ['templateId', 'emailAccountId', 'trackingOpen', 'trackingClick'] },
                 { name: 'budget', label: 'Budget', position: 40, fields: ['budgetAmount', 'budgetCurrency'] },
                 { name: 'ownership', label: 'Ownership', position: 50, fields: ['assignedUserId', 'teams'] },
@@ -4007,7 +4023,7 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
             },
           ],
           filter: [
-            { entity: 'Campaign', type: 'filter', panels: [{ name: 'filter', position: 0, fields: ['status', 'type', 'purpose', 'startsAt', 'endsAt', 'includeTargetListId', 'assignedUserId'] }] },
+            { entity: 'Campaign', type: 'filter', panels: [{ name: 'filter', position: 0, fields: ['status', 'type', 'purpose', 'startsAt', 'endsAt', 'assignedUserId'] }] },
           ],
         },
         record: { displayField: 'name', removable: true, followable: true, streamable: true, audited: true },
@@ -4093,8 +4109,12 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
           targetListId: { type: 'link', entityKey: 'TargetList', required: true, inList: true, inDetail: true },
           // A reference to the canonical CRM record — identity is never copied in here (§1.2 "reuse over
           // duplication"), and the pair is what the unique index in migration 037 constrains.
-          entityType: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
-          entityId: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+          //
+          // Named `memberType`/`memberId`, not `entityType`/`entityId`: the record API treats `entityType`
+          // as an immutable input (it is the physical discriminator of `entity_records`), so an attribute
+          // with that name could never be written by anything.
+          memberType: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+          memberId: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
           addedById: { type: 'link', entityKey: 'User', inDetail: true },
           addedAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
           source: { type: 'enum', values: MA_TARGET_LIST_ENTRY_SOURCES, defaultValue: 'Manual', inList: true, inDetail: true },
@@ -4104,11 +4124,11 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
         },
         relations: {},
         indexes: [
-          { name: 'uq_entity_records_target_list_entry', fields: ['targetListId', 'entityType', 'entityId'], unique: true },
-          { name: 'idx_entity_records_target_list_entry_record', fields: ['entityType', 'entityId'] },
+          { name: 'uq_entity_records_target_list_entry', fields: ['targetListId', 'memberType', 'memberId'], unique: true },
+          { name: 'idx_entity_records_target_list_entry_record', fields: ['memberType', 'memberId'] },
         ],
         layouts: {
-          list: [{ entity: 'TargetListEntry', type: 'list', panels: [{ name: 'list', position: 0, fields: ['targetListId', 'entityType', 'entityId', 'source', 'addedAt'] }] }],
+          list: [{ entity: 'TargetListEntry', type: 'list', panels: [{ name: 'list', position: 0, fields: ['targetListId', 'memberType', 'memberId', 'source', 'addedAt'] }] }],
         },
         record: { displayField: 'name', removable: false, followable: false, streamable: false },
         client: { web: false },
@@ -4150,6 +4170,255 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
         record: { displayField: 'name', removable: false, followable: false, streamable: false },
         client: { web: false },
         acl: { permissions: { CampaignTransition: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'MarketingConsent',
+      data: {
+        name: 'MarketingConsent',
+        label: 'Marketing Consent',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          // Not a person's name: §9.3 minimises identifiers, so the record is titled by what it decides,
+          // and the address itself is only ever present as a keyed digest.
+          name: { ...standardFields.name, label: 'Decision', inList: true, inDetail: true, inEdit: true },
+          emailHash: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+          channel: { type: 'enum', values: MA_CONSENT_CHANNELS, defaultValue: 'Email', inList: true, inDetail: true, inEdit: true },
+          purpose: { type: 'enum', values: MA_CAMPAIGN_PURPOSES, required: true, inList: true, inDetail: true, inEdit: true },
+          status: { type: 'enum', values: MA_CONSENT_STATUSES, defaultValue: 'Unknown', inList: true, inDetail: true, inEdit: true, audited: true },
+          basis: { type: 'enum', values: MA_CONSENT_BASES, inList: true, inDetail: true, inEdit: true },
+          source: { type: 'enum', values: MA_CONSENT_SOURCES, inList: true, inDetail: true, inEdit: true },
+          // Canonical person reference where one is known (§6.3). A reference, never a copy of the record.
+          subjectType: { type: 'varchar', maxLength: 64, inList: true, inDetail: true, inEdit: true },
+          subjectId: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+          contactId: { type: 'link', entityKey: 'Contact', inDetail: true, inEdit: true },
+          leadId: { type: 'link', entityKey: 'Lead', inDetail: true, inEdit: true },
+          // Evidence metadata (§5.3): the wording version the person agreed to, not the wording itself.
+          policyVersion: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+          locale: { type: 'varchar', maxLength: 16, inDetail: true, inEdit: true },
+          captureContext: { type: 'varchar', maxLength: 255, inDetail: true, inEdit: true },
+          consentedAt: { type: 'datetime', inList: true, inDetail: true, inEdit: true, sortable: true },
+          confirmedAt: { type: 'datetime', inDetail: true, sortable: true },
+          withdrawnAt: { type: 'datetime', inDetail: true, sortable: true },
+          confirmedTokenId: { type: 'link', entityKey: 'MarketingPublicToken', inDetail: true },
+          // Scope narrowing: a preference can be for one list or one campaign, but a global opt-out is
+          // never stored per list (§6.3 "do not duplicate a global suppression into every segment").
+          campaignId: { type: 'link', entityKey: 'Campaign', inDetail: true, inEdit: true },
+          targetListId: { type: 'link', entityKey: 'TargetList', inDetail: true, inEdit: true },
+          actorUserId: { type: 'link', entityKey: 'User', inDetail: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'uq_entity_records_marketing_consent_identity', fields: ['emailHash', 'channel', 'purpose'], unique: true },
+          { name: 'idx_entity_records_marketing_consent_record', fields: ['subjectType', 'subjectId'] },
+          { name: 'idx_entity_records_marketing_consent_status', fields: ['status', 'purpose'] },
+        ],
+        layouts: {
+          list: [{ entity: 'MarketingConsent', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'channel', 'purpose', 'status', 'basis', 'source', 'consentedAt'] }] }],
+          detail: [
+            {
+              entity: 'MarketingConsent',
+              type: 'detail',
+              panels: [
+                { name: 'decision', label: 'Decision', position: 0, fields: ['name', 'emailHash', 'channel', 'purpose', 'status', 'basis', 'source'] },
+                { name: 'person', label: 'Person reference', position: 10, fields: ['subjectType', 'subjectId', 'contactId', 'leadId'] },
+                { name: 'evidence', label: 'Evidence', position: 20, fields: ['policyVersion', 'locale', 'captureContext', 'consentedAt', 'confirmedAt', 'withdrawnAt', 'confirmedTokenId', 'actorUserId'] },
+                { name: 'scope', label: 'Scope', position: 30, fields: ['campaignId', 'targetListId'] },
+              ],
+            },
+          ],
+          edit: [
+            { entity: 'MarketingConsent', type: 'edit', panels: [{ name: 'main', label: 'Consent', position: 0, fields: ['name', 'emailHash', 'channel', 'purpose', 'status', 'basis', 'source', 'subjectType', 'subjectId', 'contactId', 'leadId', 'policyVersion', 'locale', 'captureContext', 'consentedAt'] }] },
+          ],
+        },
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: {},
+        acl: {
+          // Least privilege (§9.1): a marketer manages the consent records they created; an administrator
+          // widens it. Deletion is never available — a withdrawn consent is a fact, not a mistake (§6.8).
+          permissions: { MarketingConsent: { create: 'own', read: 'own', edit: 'own', delete: 'no', stream: 'no' } },
+        },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'MarketingConsentEvent',
+      data: {
+        name: 'MarketingConsentEvent',
+        label: 'Consent History',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, inList: false, inDetail: false, inEdit: false },
+          consentId: { type: 'link', entityKey: 'MarketingConsent', required: true, inList: true, inDetail: true },
+          emailHash: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+          channel: { type: 'enum', values: MA_CONSENT_CHANNELS, inDetail: true },
+          purpose: { type: 'enum', values: MA_CAMPAIGN_PURPOSES, required: true, inList: true, inDetail: true },
+          fromStatus: { type: 'enum', values: MA_CONSENT_STATUSES, inList: true, inDetail: true },
+          toStatus: { type: 'enum', values: MA_CONSENT_STATUSES, required: true, inList: true, inDetail: true },
+          source: { type: 'enum', values: MA_CONSENT_SOURCES, inList: true, inDetail: true },
+          basis: { type: 'enum', values: MA_CONSENT_BASES, inDetail: true },
+          reason: { type: 'text', inDetail: true },
+          policyVersion: { type: 'varchar', maxLength: 64, inDetail: true },
+          actorUserId: { type: 'link', entityKey: 'User', inDetail: true },
+          actorType: { type: 'varchar', maxLength: 16, inDetail: true },
+          campaignId: { type: 'link', entityKey: 'Campaign', inDetail: true },
+          targetListId: { type: 'link', entityKey: 'TargetList', inDetail: true },
+          occurredAt: { type: 'datetime', required: true, inList: true, inDetail: true, sortable: true },
+          idempotencyKey: { type: 'varchar', maxLength: 128, inDetail: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'idx_entity_records_marketing_consent_event_consent', fields: ['consentId', 'occurredAt'] },
+          { name: 'idx_entity_records_marketing_consent_event_identity', fields: ['emailHash', 'occurredAt'] },
+          { name: 'uq_entity_records_marketing_consent_event_idem', fields: ['idempotencyKey'], unique: true },
+        ],
+        layouts: {
+          list: [{ entity: 'MarketingConsentEvent', type: 'list', panels: [{ name: 'list', position: 0, fields: ['occurredAt', 'purpose', 'fromStatus', 'toStatus', 'source', 'emailHash'] }] }],
+        },
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: { web: false },
+        acl: { permissions: { MarketingConsentEvent: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'MarketingSuppression',
+      data: {
+        name: 'MarketingSuppression',
+        label: 'Suppression',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, label: 'Block', inList: true, inDetail: true, inEdit: true },
+          emailHash: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+          channel: { type: 'enum', values: MA_CONSENT_CHANNELS, defaultValue: 'Email', inList: true, inDetail: true, inEdit: true },
+          scope: { type: 'enum', values: MA_SUPPRESSION_SCOPES, defaultValue: 'Global', required: true, inList: true, inDetail: true, inEdit: true },
+          purpose: { type: 'enum', values: MA_CAMPAIGN_PURPOSES, inList: true, inDetail: true, inEdit: true },
+          targetListId: { type: 'link', entityKey: 'TargetList', inDetail: true, inEdit: true },
+          reason: { type: 'enum', values: MA_SUPPRESSION_REASONS, required: true, inList: true, inDetail: true, inEdit: true },
+          source: { type: 'enum', values: MA_CONSENT_SOURCES, inList: true, inDetail: true, inEdit: true },
+          // Linkage to the provider fact that caused it (§6.3 "last-seen provider event").
+          providerEventId: { type: 'varchar', maxLength: 128, inDetail: true },
+          provider: { type: 'varchar', maxLength: 64, inDetail: true },
+          effectiveAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+          lastSeenAt: { type: 'datetime', inDetail: true, sortable: true },
+          note: { type: 'text', inDetail: true, inEdit: true },
+          // Removal is a recorded, attributable decision — never a delete, which would silently re-open an
+          // address to marketing (§6.8 "avoid deleting suppression evidence").
+          revokedAt: { type: 'datetime', inDetail: true },
+          revokedById: { type: 'link', entityKey: 'User', inDetail: true },
+          revokedReason: { type: 'text', inDetail: true, inEdit: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'uq_entity_records_marketing_suppression_identity', fields: ['emailHash', 'channel', 'scope', 'purpose', 'targetListId'], unique: true },
+          { name: 'idx_entity_records_marketing_suppression_hash', fields: ['emailHash', 'channel'] },
+        ],
+        layouts: {
+          list: [{ entity: 'MarketingSuppression', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'emailHash', 'channel', 'scope', 'purpose', 'reason', 'source', 'effectiveAt'] }] }],
+          detail: [
+            { entity: 'MarketingSuppression', type: 'detail', panels: [{ name: 'block', label: 'Block', position: 0, fields: ['name', 'emailHash', 'channel', 'scope', 'purpose', 'targetListId', 'reason', 'source', 'note'] }, { name: 'provenance', label: 'Provider provenance', position: 10, fields: ['provider', 'providerEventId', 'effectiveAt', 'lastSeenAt'] }, { name: 'revocation', label: 'Revocation', position: 20, fields: ['revokedAt', 'revokedById', 'revokedReason'] }] },
+          ],
+          edit: [
+            { entity: 'MarketingSuppression', type: 'edit', panels: [{ name: 'main', label: 'Suppression', position: 0, fields: ['name', 'emailHash', 'channel', 'scope', 'purpose', 'targetListId', 'reason', 'source', 'note', 'revokedReason'] }] },
+          ],
+        },
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: {},
+        acl: {
+          // Administrator-written by default: blocking an address is a compliance act (§9.1), and a
+          // marketer who could add a suppression could also revoke one.
+          permissions: { MarketingSuppression: { create: 'no', read: 'own', edit: 'no', delete: 'no', stream: 'no' } },
+        },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'MarketingPublicToken',
+      data: {
+        name: 'MarketingPublicToken',
+        label: 'Marketing Link',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, inList: false, inDetail: false, inEdit: false },
+          // The digest only. The value a recipient clicks is never stored (§5.3.1 "keep an audit entry
+          // without storing raw tokens").
+          tokenHash: { type: 'varchar', maxLength: 64, required: true, inDetail: true },
+          scope: { type: 'enum', values: MA_PUBLIC_TOKEN_SCOPES, required: true, inList: true, inDetail: true },
+          status: { type: 'enum', values: MA_PUBLIC_TOKEN_STATUSES, defaultValue: 'Active', inList: true, inDetail: true },
+          emailHash: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+          channel: { type: 'enum', values: MA_CONSENT_CHANNELS, defaultValue: 'Email', inDetail: true },
+          purpose: { type: 'enum', values: MA_CAMPAIGN_PURPOSES, inDetail: true },
+          campaignId: { type: 'link', entityKey: 'Campaign', inDetail: true },
+          targetListId: { type: 'link', entityKey: 'TargetList', inDetail: true },
+          issuedAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+          expiresAt: { type: 'datetime', required: true, inList: true, inDetail: true, sortable: true },
+          usedAt: { type: 'datetime', inDetail: true },
+          attempts: { type: 'int', defaultValue: 0, inDetail: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'uq_entity_records_marketing_public_token_hash', fields: ['tokenHash'], unique: true },
+          { name: 'idx_entity_records_marketing_public_token_identity', fields: ['emailHash', 'scope'] },
+        ],
+        layouts: {
+          list: [{ entity: 'MarketingPublicToken', type: 'list', panels: [{ name: 'list', position: 0, fields: ['scope', 'status', 'emailHash', 'purpose', 'issuedAt', 'expiresAt', 'usedAt'] }] }],
+        },
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: { web: false },
+        acl: { permissions: { MarketingPublicToken: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'MarketingAudienceSnapshot',
+      data: {
+        name: 'MarketingAudienceSnapshot',
+        label: 'Audience Snapshot',
+        isEntity: true,
+        fields: {
+          ...standardFields,
+          name: { ...standardFields.name, required: true, inList: true, inDetail: true },
+          campaignId: { type: 'link', entityKey: 'Campaign', required: true, inList: true, inDetail: true },
+          // Nullable until a send definition exists (MA.8); a preview snapshot belongs to the campaign alone.
+          sendId: { type: 'varchar', maxLength: 64, inDetail: true },
+          mode: { type: 'enum', values: MA_SNAPSHOT_MODES, defaultValue: 'preview', required: true, inList: true, inDetail: true },
+          status: { type: 'enum', values: MA_SNAPSHOT_STATUSES, defaultValue: 'Generated', inList: true, inDetail: true },
+          // The audience lists this snapshot was taken of, as JSON arrays of ids: a snapshot must keep
+          // answering "who did we mean?" after the lists themselves change (§5.2, §5.5).
+          includeTargetListIds: { type: 'text', label: 'Included audiences (JSON)', inDetail: true },
+          excludeTargetListIds: { type: 'text', label: 'Excluded audiences (JSON)', inDetail: true },
+          // The composition the snapshot was taken of, so a later change to either list is detectable
+          // (§5.2 "use a snapshot for a send, not a query that keeps changing while batches are sent").
+          compositionHash: { type: 'varchar', maxLength: 64, inList: true, inDetail: true },
+          resolvedCount: { type: 'int', defaultValue: 0, inList: true, inDetail: true },
+          eligibleCount: { type: 'int', defaultValue: 0, inList: true, inDetail: true },
+          entryCount: { type: 'int', defaultValue: 0, inDetail: true },
+          // Category totals (§5.5 dry-run breakdown) — counts only, never recipient identity.
+          categories: { type: 'text', label: 'Categories (JSON)', inDetail: true },
+          purpose: { type: 'enum', values: MA_CAMPAIGN_PURPOSES, inDetail: true },
+          generatedById: { type: 'link', entityKey: 'User', inDetail: true },
+          generatedAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+          invalidatedAt: { type: 'datetime', inDetail: true },
+          previousSnapshotId: { type: 'link', entityKey: 'MarketingAudienceSnapshot', inDetail: true },
+        },
+        relations: {},
+        indexes: [
+          { name: 'idx_entity_records_marketing_snapshot_campaign', fields: ['campaignId', 'generatedAt'] },
+        ],
+        layouts: {
+          list: [{ entity: 'MarketingAudienceSnapshot', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'campaignId', 'mode', 'status', 'resolvedCount', 'eligibleCount', 'generatedAt'] }] }],
+          detail: [
+            { entity: 'MarketingAudienceSnapshot', type: 'detail', panels: [{ name: 'main', label: 'Snapshot', position: 0, fields: ['name', 'campaignId', 'sendId', 'mode', 'status', 'purpose'] }, { name: 'composition', label: 'Composition', position: 10, fields: ['includeTargetListIds', 'excludeTargetListIds', 'compositionHash', 'previousSnapshotId'] }, { name: 'results', label: 'Results', position: 20, fields: ['resolvedCount', 'eligibleCount', 'entryCount', 'categories', 'generatedById', 'generatedAt', 'invalidatedAt'] }] },
+          ],
+        },
+        record: { displayField: 'name', removable: false, followable: false, streamable: false },
+        client: { web: false },
+        acl: { permissions: { MarketingAudienceSnapshot: { create: 'no', read: 'own', edit: 'no', delete: 'no', stream: 'no' } } },
       },
     },
   ];

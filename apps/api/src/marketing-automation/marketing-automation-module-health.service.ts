@@ -154,7 +154,7 @@ export class MarketingAutomationModuleHealthService {
 
     const guardRegistered = this.hooks
       .list()
-      .some((hook) => hook.name === "marketingAutomation.campaignWriteGuard");
+      .some((hook) => hook.name === "marketingAutomation.CampaignGuard");
     checks.push({
       name: "write-guard",
       ok: guardRegistered,

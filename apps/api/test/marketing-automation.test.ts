@@ -82,6 +82,10 @@ async function makeCampaign(overrides: Record<string, unknown> = {}, token = ctx
   );
 }
 
+async function linkList(campaignId: string, listId: string, relation = "includedTargetLists", token = ctx.adminToken) {
+  return call("PUT", `/api/v1/Campaign/${campaignId}/${relation}/${listId}`, undefined, token);
+}
+
 async function action(
   id: string,
   verb: string,
@@ -329,19 +333,7 @@ describe("campaign CRUD through the entity conventions (19-MA.3)", () => {
     expect(malformed.status).toBeGreaterThanOrEqual(400);
   });
 
-  it("refuses a dangling audience reference at the write, and an unreadable one at validation (§9.2)", async () => {
-    // The engine's own link validation catches a reference to a record that does not exist.
-    const dangling = await call("POST", "/api/v1/Campaign", {
-      name: marker("dangling audience"),
-      type: "Email",
-      purpose: "Newsletter",
-      includeTargetListId: "does-not-exist",
-    });
-    expect(dangling.status).toBe(422);
-    expect(JSON.stringify(dangling.body)).toContain("does not exist");
-
-    // A reference to a real list the caller may *not* read is a blocker, never a silent pass: the campaign
-    // author cannot lean on an audience they are not allowed to see.
+  it("refuses an audience the caller may not read (§9.2)", async () => {
     await call("POST", "/api/v1/MarketingAutomation/action/settings", { features: { audience: true } });
     const privateList = await create("TargetList", {
       name: marker("private audience"),
@@ -358,10 +350,11 @@ describe("campaign CRUD through the entity conventions (19-MA.3)", () => {
       },
     });
     const marketer = await createTestUser(ctx, { userName: `ma_aud_${runId}`, roleIds: [roleId] });
-    const id = await makeCampaign(
-      { type: "Email", purpose: "Newsletter", includeTargetListId: privateList },
-      marketer.token,
-    );
+    const id = await makeCampaign({ type: "Email", purpose: "Newsletter" }, marketer.token);
+    // The list owner (an administrator here) attaches it; the marketer then holds a campaign aimed at an
+    // audience they cannot read, which is the disclosure the validation must refuse.
+    await linkList(id, privateList, "includedTargetLists");
+
     const res = await call(
       "POST",
       `/api/v1/MarketingAutomation/action/campaign/${id}/validate`,
@@ -560,7 +553,7 @@ describe("send-readiness validation (19-MA.3, §5.1)", () => {
     expect(await status(id)).toBe("Draft");
   });
 
-  it("schedules a fully configured campaign but refuses to run it before MA.4–MA.7 exist", async () => {
+  it("schedules a fully configured campaign but refuses to run it until a provider exists (MA.7)", async () => {
     // The audience feature is off until MA.4, so a target list is created as an administrator.
     await call("POST", "/api/v1/MarketingAutomation/action/settings", { features: { audience: true } });
     const listId = await create("TargetList", {
@@ -577,13 +570,13 @@ describe("send-readiness validation (19-MA.3, §5.1)", () => {
     const id = await makeCampaign({
       type: "Newsletter",
       purpose: "Newsletter",
-      includeTargetListId: listId,
       templateId,
       emailAccountId: "agent-test-no-such-account",
       trackingOpen: false,
       trackingClick: false,
     });
     expect(testAccountId).not.toBeNull();
+    await linkList(id, listId);
 
     // A sender that does not exist is a blocker, so the campaign cannot be scheduled at all.
     const unknownSender = await call("POST", `/api/v1/MarketingAutomation/action/campaign/${id}/validate`);
@@ -595,9 +588,9 @@ describe("send-readiness validation (19-MA.3, §5.1)", () => {
 
     const start = await action(id, "start");
     expect(start.status).toBeGreaterThanOrEqual(400);
-    expect(blockerCodes(start.body)).toEqual(
-      expect.arrayContaining(["AUDIENCE_ENGINE_PENDING", "CONSENT_NOT_CONFIGURED", "PROVIDER_NOT_BOUND"]),
-    );
+    // Audience resolution (MA.4) and the consent gate (MA.5) exist now, so the one remaining blocker on
+    // running a campaign is a live provider (MA.7). Consent is still enforced per recipient at send time.
+    expect(blockerCodes(start.body)).toEqual(["PROVIDER_NOT_BOUND"]);
     expect(await status(id)).toBe("Scheduled");
 
     // A newsletter that claims to be a required service notice is refused outright (§5.1, §9.3).
@@ -726,7 +719,7 @@ describe("audience and history records are module-written only (19-MA.3)", () =>
     expect(JSON.stringify(blocked.body)).toMatch(/audience|disabled/i);
 
     await call("POST", "/api/v1/MarketingAutomation/action/settings", { features: { audience: true } });
-    const id = await create("TargetList", { name: marker("audience fields"), membershipMode: "dynamic" });
+    const id = await create("TargetList", { name: marker("audience fields"), membershipMode: "static" });
     const stamped = await call("PUT", `/api/v1/TargetList/${id}`, { resolvedCount: 999_999 });
     expect(stamped.status).toBeGreaterThanOrEqual(400);
 

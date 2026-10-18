@@ -5,6 +5,15 @@
 > rule (§4.2: "Do not add a duplicate Campaign or TargetList entity before completing this audit").
 > **Method:** every claim below was read out of this checkout (file:line). Nothing is assumed from
 > `PLAN.md`, from an upstream EspoCRM layout, or from a previous session's report.
+>
+> **Read this as the MA.0 snapshot.** It is deliberately frozen at the state the repository was in before the
+> module existed. MA.1–MA.5 have since built `Campaign`, `TargetList`, `TargetListEntry`, `CampaignTransition`,
+> `MarketingConsent`, `MarketingConsentEvent`, `MarketingSuppression`, `MarketingPublicToken` and
+> `MarketingAudienceSnapshot`, the eligibility gate, the public unsubscribe/preference flow and the audience
+> resolver — so every "absent" row below is history, not the current tree. For what is true now see
+> [campaign-lifecycle.md](../marketing-automation/campaign-lifecycle.md) and
+> [consent-and-suppression.md](../marketing-automation/consent-and-suppression.md); §3 (canonical ownership)
+> and §8 (phase order) still bind later phases.
 
 ---
 
@@ -360,11 +369,18 @@ payload (§7.3).
   sequences + expression/partial indexes over `entity_records.attrs`, because records stay in the JSONB store.
   Sales is the only module that created tables, and only for non-record state (number series, stock) —
   [021_phase19_sales.sql:19](file:///Users/up5techjacky/Documents/projects/carocrmv2/database/migrations/021_phase19_sales.sql#L19).
-- MarketingAutomation follows the same rule: **new entities are metadata + indexes, not new tables**, unless
-  a unique row-level constraint cannot be expressed on JSONB — which is the case for
-  `TargetListEntry` membership, `MarketingRecipientDelivery` dedupe, `MarketingConsent` current-state
-  uniqueness and `MarketingSuppression` address scope. Those get their own tables in MA.2's migration, and
-  the reason is stated in the migration header. Records that *are* user-editable entities stay in `entity_records`.
+- MarketingAutomation follows the same rule: **new entities are metadata + indexes, not new tables**. The
+  row-level invariants the audit worried about — `TargetListEntry` membership, `MarketingConsent`
+  current-state uniqueness, `MarketingSuppression` address scope, public-token hash uniqueness and the
+  command idempotency keys — were all expressible as partial **unique expression indexes over
+  `entity_records.attrs`** and are exactly what migrations 037/038 create, so no per-entity side tables were
+  needed. The single table the module does own is `marketing_audience_snapshot_entries`
+  ([038_phase19_marketing_consent_audience.sql:127](file:///Users/up5techjacky/Documents/projects/carocrmv2/database/migrations/038_phase19_marketing_consent_audience.sql#L127)):
+  snapshot members are derived, high-volume, write-once send state that no user edits and that a snapshot
+  record must not serialise through the JSONB store.
+- Migration 039 renames the membership/consent identity indexes after `entityType`/`entityId` had to become
+  `memberType`/`memberId` and `subjectType`/`subjectId` — `entityType` is an immutable engine column and can
+  never be an `attrs` key. 037/038 were already applied to the configured database and are never edited.
 - No destructive operation is planned or permitted without task-specific approval (AGENTS.md §3.5).
 
 ---
@@ -379,7 +395,9 @@ The audit confirms the plan's roadmap with two adjustments:
 
 Order for the delivered phases: MA.0 (this audit) → MA.1 scaffold/registration/ACL/navigation/health →
 MA.2 domain contracts + enums/transition tables + settings + provider port + fake + decision matrix +
-migration baseline → MA.3 campaign lifecycle and validation. MA.4 onward is not started.
+migration baseline → MA.3 campaign lifecycle and validation → MA.5 consent/preferences/suppression/public
+unsubscribe (its eligibility gate is a prerequisite for MA.4's preview categories) → MA.4 audience segments,
+inclusion/exclusion, preview and snapshots. MA.6 onward is not started.
 
 Sub-phase acceptance for MA.0 (§15):
 

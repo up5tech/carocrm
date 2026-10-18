@@ -68,6 +68,18 @@ export const MarketingAutomationSettingsSchema = z
       })
       .strict()
       .default({}),
+    limits: z
+      .object({
+        /**
+         * How many records one audience resolution may read (§5.2 "enforce query cost/time limits and
+         * pagination"). A preview and a snapshot both stop at this ceiling and say so, rather than
+         * materialising an unbounded cross-entity read because somebody saved a criteria that matches
+         * everybody.
+         */
+        maxResolveRecords: z.number().int().min(1).max(200_000).default(10_000),
+      })
+      .strict()
+      .default({}),
     safety: z
       .object({
         /**

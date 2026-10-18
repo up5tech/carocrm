@@ -18,6 +18,7 @@ import { EntityListPage } from './pages/EntityListPage.js';
 import { EntityManagerPage } from './pages/EntityManagerPage.js';
 import { HomePage } from './pages/HomePage.js';
 import { LoginPage } from './pages/LoginPage.js';
+import { MarketingPreferencesPage } from './pages/MarketingPreferencesPage.js';
 import { MyProfilePage } from './pages/MyProfilePage.js';
 import { PortalCsatPage } from './pages/PortalCsatPage.js';
 import { PortalHomePage } from './pages/PortalHomePage.js';
@@ -57,6 +58,8 @@ export function AppRoutes() {
       <Routes>
         {/* SD.14 — the CSAT link is token-based and must work without a CRM session. */}
         <Route path="/csat" element={<PortalCsatPage />} />
+        {/* Phase 19-MA.5 — the public preference page: no session, token only (§5.3.1). */}
+        <Route path="/marketing/preferences" element={<MarketingPreferencesPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
@@ -94,6 +97,8 @@ export function AppRoutes() {
         <Route path="/home" element={<HomePage />} />
         {/* SD.14 — the same token survey page is reachable for signed-in staff testing a link. */}
         <Route path="/csat" element={<PortalCsatPage />} />
+        {/* Phase 19-MA.5 — the public preference page: no session, token only (§5.3.1). */}
+        <Route path="/marketing/preferences" element={<MarketingPreferencesPage />} />
         {/* signed-in users must never hit the entity route with "login" as the entity name */}
         <Route path="/login" element={<Navigate to="/home" replace />} />
         {/* declared before the entity wildcard so "stream" is never read as an entity name */}

@@ -201,16 +201,19 @@ export const OPTIONAL_INTEGRATIONS: readonly MarketingAutomationOptionalIntegrat
  */
 export const MARKETING_AUTOMATION_FEATURES: readonly MarketingAutomationFeatureDescriptor[] = [
   { key: "campaigns", label: "Campaign management", settingsPath: "features.campaigns", requires: [] },
-  { key: "audience", label: "Audience segments", settingsPath: "features.audience", requires: ["campaigns"] },
+  {
+    key: "audience",
+    label: "Audience segments",
+    settingsPath: "features.audience",
+    requires: ["campaigns"],
+  },
 ];
 
 /**
  * Declared features whose infrastructure is delivered by a later sub-phase. Enabling one is honest but
  * inert, and the settings view says so instead of silently doing nothing (the Service Desk precedent).
  */
-export const PENDING_FEATURES: readonly { readonly key: string; readonly phase: string }[] = [
-  { key: "audience", phase: "19-MA.4" },
-];
+export const PENDING_FEATURES: readonly { readonly key: string; readonly phase: string }[] = [];
 
 export const MARKETING_AUTOMATION_MODULE = {
   id: "MarketingAutomation",
@@ -222,9 +225,19 @@ export const MARKETING_AUTOMATION_MODULE = {
   /** API prefix owned by the module's domain commands; entity CRUD stays on `/api/v1/:entity`. */
   apiPrefix: "/api/v1/MarketingAutomation",
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ["19-MA.0", "19-MA.1", "19-MA.2", "19-MA.3"],
+  implementedPhases: ["19-MA.0", "19-MA.1", "19-MA.2", "19-MA.3", "19-MA.4", "19-MA.5"],
   /** The records this module owns. `Email`, `EmailTemplate` and the CRM person records stay platform-owned. */
-  entityTypes: ["Campaign", "TargetList", "TargetListEntry", "CampaignTransition"],
+  entityTypes: [
+    "Campaign",
+    "TargetList",
+    "TargetListEntry",
+    "CampaignTransition",
+    "MarketingConsent",
+    "MarketingConsentEvent",
+    "MarketingSuppression",
+    "MarketingPublicToken",
+    "MarketingAudienceSnapshot",
+  ],
 } as const;
 
 export type MarketingAutomationModuleDescriptor = typeof MARKETING_AUTOMATION_MODULE;

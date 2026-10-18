@@ -12,19 +12,35 @@ import {
 import { ApiTags } from "@nestjs/swagger";
 import { type ZodTypeAny } from "zod";
 
+import { Public } from "../auth/auth.guard.js";
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
 import {
+  AudienceMemberRemoveSchema,
+  AudienceMembersSchema,
+  AudiencePageQuerySchema,
   CampaignCommandBodySchema,
   CampaignDuplicateSchema,
   CampaignTransitionSchema,
   CampaignValidateQuerySchema,
+  ConsentRecordSchema,
   GlobalSendPauseSchema,
+  PublicLinkIssueSchema,
+  PublicUnsubscribeSchema,
   SettingsPatchSchema,
+  SnapshotEntriesQuerySchema,
+  SnapshotModeSchema,
+  SuppressionAddSchema,
+  SuppressionListQuerySchema,
+  SuppressionRevokeSchema,
 } from "./dto/marketing-automation-shapes.js";
+import { MarketingAudienceService } from "./marketing-audience.service.js";
 import { MarketingAutomationModuleHealthService } from "./marketing-automation-module-health.service.js";
 import { MarketingAutomationNavigationService } from "./marketing-automation-navigation.service.js";
 import { MarketingAutomationSettingsService } from "./marketing-automation-settings.service.js";
 import { MarketingCampaignService } from "./marketing-campaign.service.js";
+import { MarketingConsentService } from "./marketing-consent.service.js";
+import { MarketingPublicTokenService } from "./marketing-public-token.service.js";
+import { MarketingSuppressionService } from "./marketing-suppression.service.js";
 
 /**
  * Phase 19-MA.1/MA.3 — the `MarketingAutomation` command surface
@@ -48,6 +64,10 @@ export class MarketingAutomationController {
     @Inject(MarketingAutomationSettingsService) private readonly settings: MarketingAutomationSettingsService,
     @Inject(MarketingAutomationNavigationService) private readonly navigation: MarketingAutomationNavigationService,
     @Inject(MarketingCampaignService) private readonly campaigns: MarketingCampaignService,
+    @Inject(MarketingAudienceService) private readonly audience: MarketingAudienceService,
+    @Inject(MarketingConsentService) private readonly consent: MarketingConsentService,
+    @Inject(MarketingSuppressionService) private readonly suppression: MarketingSuppressionService,
+    @Inject(MarketingPublicTokenService) private readonly links: MarketingPublicTokenService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -185,11 +205,186 @@ export class MarketingAutomationController {
     return this.campaigns.duplicateAsDraft(id, parse(CampaignDuplicateSchema, body));
   }
 
+  // ---------------------------------------------------------------------------
+  // Audience membership, resolution and snapshots (19-MA.4, §5.2)
+  //
+  // A campaign's *composition* (which audiences it includes and excludes) is managed through the platform's
+  // own relation API — `PUT /api/v1/Campaign/:id/includedTargetLists/:listId` — because that path already
+  // enforces record ACL on both ends. These routes are for what a relation link cannot express: audited
+  // membership of a static audience, resolution, and an immutable snapshot.
+  // ---------------------------------------------------------------------------
+
+  /** Who is in an audience, as the caller's ACL can see them, plus how many entries were hidden. */
+  @Get("action/segment/:id/members")
+  async segmentMembers(@Param("id") id: string, @Query() query: unknown) {
+    const page = AudiencePageQuerySchema.parse(coercePage(query));
+    return this.audience.members(id, page);
+  }
+
+  /** Add records to a static audience. Membership is written as evidence, with who added it and when. */
+  @HttpCode(200)
+  @Post("action/segment/:id/members")
+  async segmentAddMembers(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(AudienceMembersSchema, body);
+    return this.audience.addMembers(id, input.members, input.source);
+  }
+
+  /** Remove one member. The row is kept and stamped, so the audience's history stays explainable. */
+  @HttpCode(200)
+  @Post("action/segment/:id/members/remove")
+  async segmentRemoveMember(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(AudienceMemberRemoveSchema, body);
+    return this.audience.removeMember(id, { entityType: input.entityType, entityId: input.entityId }, input.reason);
+  }
+
+  /** Recompute an audience's summary fields. An explicit command, not a side effect of reading. */
+  @HttpCode(200)
+  @Post("action/segment/:id/refresh")
+  async segmentRefresh(@Param("id") id: string) {
+    return this.audience.refresh(id);
+  }
+
+  /**
+   * The campaign's audience resolved and classified (§5.5's dry-run categories), with samples the caller is
+   * allowed to read. Counts are computed from the ACL-filtered set, so they cannot disclose records the
+   * caller may not see (§9.2).
+   */
+  @Get("action/campaign/:id/audiencePreview")
+  async campaignAudiencePreview(@Param("id") id: string) {
+    return this.audience.previewCampaign(id);
+  }
+
+  /** Freeze the current composition into an immutable snapshot. A later change creates a new one. */
+  @HttpCode(200)
+  @Post("action/campaign/:id/audienceSnapshot")
+  async campaignAudienceSnapshot(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(SnapshotModeSchema, body);
+    return this.audience.snapshot(id, { mode: input.mode });
+  }
+
+  /** Snapshot entries by category. Identities are digests, so this never returns an address. */
+  @Get("action/snapshot/:id/entries")
+  async snapshotEntries(@Param("id") id: string, @Query() query: unknown) {
+    const parsed = parse(SnapshotEntriesQuerySchema, coercePage(query));
+    return this.audience.snapshotEntries(id, {
+      limit: parsed.limit,
+      ...(parsed.category !== undefined ? { category: parsed.category } : {}),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Consent, suppression and public links (19-MA.5, §5.3)
+  // ---------------------------------------------------------------------------
+
+  /** Record a consent decision. Every accepted mutation appends history in the same transaction. */
+  @HttpCode(200)
+  @Post("action/consent")
+  async consentRecord(@Body() body: unknown) {
+    return this.consent.record(parse(ConsentRecordSchema, body));
+  }
+
+  @Get("action/consent/:id")
+  async consentGet(@Param("id") id: string) {
+    return this.consent.get(id);
+  }
+
+  /** The audit trail of one consent decision: prior state, new state, actor, source, reason (§5.3.9). */
+  @Get("action/consent/:id/history")
+  async consentHistory(@Param("id") id: string) {
+    return this.consent.history(id);
+  }
+
+  @HttpCode(200)
+  @Post("action/suppression")
+  async suppressionAdd(@Body() body: unknown) {
+    return this.suppression.add(parse(SuppressionAddSchema, body));
+  }
+
+  /** Lifting a block is a recorded decision, and only for the reasons an operator may lift (§5.3.8). */
+  @HttpCode(200)
+  @Post("action/suppression/:id/revoke")
+  async suppressionRevoke(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(SuppressionRevokeSchema, body);
+    return this.suppression.revoke(id, input.reason);
+  }
+
+  @Get("action/suppression")
+  async suppressionList(@Query() query: unknown) {
+    const parsed = parse(SuppressionListQuerySchema, coercePage(query));
+    const emailHash = parsed.emailAddress === undefined
+      ? undefined
+      : this.consent.identity(parsed.emailAddress) ?? undefined;
+    return { list: await this.suppression.list({ ...(emailHash !== undefined ? { emailHash } : {}) }) };
+  }
+
+  /** Mint a public unsubscribe / preference / confirmation link for an address. */
+  @HttpCode(200)
+  @Post("action/publicLink")
+  async publicLinkIssue(@Body() body: unknown) {
+    const input = parse(PublicLinkIssueSchema, body);
+    const emailHash = input.emailHash ?? this.consent.identity(input.emailAddress);
+    if (emailHash === null || emailHash === undefined) {
+      throw new InvalidQueryError("A public link needs an email address or its identity.");
+    }
+    return this.links.issue(input.scope, {
+      emailHash,
+      channel: input.channel,
+      ...(input.purpose !== undefined ? { purpose: input.purpose } : {}),
+      ...(input.campaignId !== undefined ? { campaignId: input.campaignId } : {}),
+      ...(input.targetListId !== undefined ? { targetListId: input.targetListId } : {}),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public endpoints (19-MA.5, §5.3.1, §8.3)
+  //
+  // Unauthenticated by design: an opt-out must not require a CRM login. They are deliberately GET/POST
+  // pairs — a GET renders the page and changes nothing, because mail clients and link-preview crawlers
+  // fetch URLs, and a GET that unsubscribed would silently opt people out of communications they never
+  // meant to leave (§5.3.1). Every failure answers the same generic sentence, so the endpoints cannot be
+  // used to test whether an address is in the CRM (§15 `19-MA.5` acceptance).
+  // ---------------------------------------------------------------------------
+
+  @Public()
+  @Get("public/preferences/:token")
+  async publicPreferences(@Param("token") token: string) {
+    return this.links.preferences(token);
+  }
+
+  /** The confirmation page a one-click link opens. It performs nothing. */
+  @Public()
+  @Get("public/unsubscribe/:token")
+  async publicUnsubscribePage(@Param("token") token: string) {
+    return this.links.preferences(token);
+  }
+
+  /** The deliberate act. Idempotent: pressing it twice is one unsubscribe, reported as such. */
+  @Public()
+  @HttpCode(200)
+  @Post("public/unsubscribe/:token")
+  async publicUnsubscribe(@Param("token") token: string, @Body() body: unknown) {
+    const input = parse(PublicUnsubscribeSchema, body);
+    return this.links.unsubscribe(token, { all: input.all });
+  }
+
+  /** Double opt-in confirmation. Its own scope, so an unsubscribe link can never grant consent. */
+  @Public()
+  @HttpCode(200)
+  @Post("public/confirm/:token")
+  async publicConfirm(@Param("token") token: string) {
+    return this.links.confirmOptIn(token);
+  }
+
   private requireAdmin(action: string): void {
     if (!this.scope.isAdmin) {
       throw new AuthorizationDeniedError(`Administrator access is required for ${action}.`);
     }
   }
+}
+
+/** A query string arrives as text, so paging keys are coerced before the schema sees them. */
+function coercePage(query: unknown): Record<string, unknown> {
+  return typeof query === "object" && query !== null ? (query as Record<string, unknown>) : {};
 }
 
 /** A query string arrives as text; the optional status is the only key this endpoint reads. */

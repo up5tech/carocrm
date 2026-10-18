@@ -23,13 +23,14 @@ subscriptions and commercial analytics (Phase 19-S); customer success with lifec
 plans, risks, playbooks and renewals (Phase 19-CS); service desk with case numbering, state machine,
 assignment/queues/routing, conversation timeline, email-to-case, business calendars, SLA clocks,
 Knowledge Base, portal self-service, CSAT and metrics (Phase 19-SD); marketing automation with campaign
-lifecycle, send-readiness validation, audience records and consent/provider contracts (Phase 19-MA);
+lifecycle, send-readiness validation, audience segments with inclusion/exclusion, preview and snapshots,
+consent, suppression and public unsubscribe (Phase 19-MA.0–MA.5);
 i18n catalogs for `en`/`vi` (Phase 7A).
 Not built yet: real inbound mail collection (`POST /api/v1/Email/action/pollInbound` runs a null
 provider until an IMAP/Graph adapter is installed), API-user attachment policies, multi-tenancy.
-Marketing Automation beyond Phase 19-MA.3 — audience resolution, consent and unsubscribe, sending and
-provider events, journeys, forms — is specified in `PLAN_Phase_19_Marketing_Automation.md` and not built;
-no campaign can send in this build.
+Marketing Automation beyond Phase 19-MA.5 — templating, sending and delivery, provider events, journeys and
+forms — is specified in `PLAN_Phase_19_Marketing_Automation.md` and not built; no campaign can send in this
+build, and `start` refuses with `PROVIDER_NOT_BOUND` until Phase 19-MA.7 binds a live provider.
 Full checklist, deviations and known failures: [docs/reference/alpha-status.md](docs/reference/alpha-status.md).
 ## Requirements
 

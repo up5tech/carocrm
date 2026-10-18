@@ -1180,6 +1180,44 @@
     },
     "staleReportHint": "Báo cáo đã lưu được tạo trước thay đổi gần nhất; hãy kiểm tra lại trước khi lên lịch.",
     "confirm": "Xác nhận",
-    "cancel": "Hủy"
+    "cancel": "Hủy",
+    "previewAudience": "Xem trước tệp",
+    "audienceSummary": "Đã phân tích tệp: {resolved} · đủ điều kiện gửi ngay: {eligible}",
+    "truncated": "Tệp vượt giới hạn phân tích; các số liệu chỉ là một phần.",
+    "category": {
+      "eligible": "Đủ điều kiện",
+      "duplicateRecord": "Cùng bản ghi ở nhiều tệp",
+      "duplicateAddress": "Cùng địa chỉ trên bản ghi khác",
+      "noEmailAddress": "Không có email",
+      "invalidAddress": "Email không hợp lệ",
+      "excludedBySegment": "Bị loại bởi tệp khác",
+      "suppressedGlobal": "Không liên hệ (toàn cục)",
+      "suppressedComplaint": "Khiếu nại",
+      "suppressedBounce": "Bounce cứng",
+      "suppressedOther": "Bị chặn theo mục đích hoặc danh sách",
+      "optedOut": "Đã hủy đăng ký",
+      "consentUnknown": "Chưa có đồng ý",
+      "consentPending": "Chờ xác nhận",
+      "frequencyCapped": "Vượt giới hạn tần suất",
+      "recordUnreadable": "Bạn không có quyền xem"
+    }
+  },
+  "marketing": {
+    "preferences": {
+      "title": "Thiết lập email",
+      "intro": "Trang này cho biết chúng tôi được phép gửi gì cho bạn và cho phép bạn dừng lại. Chưa có thay đổi nào cho đến khi bạn bấm nút.",
+      "category": "Loại truyền thông",
+      "state": "Trạng thái của bạn",
+      "unsubscribe": "Hủy loại này",
+      "unsubscribeAll": "Hủy toàn bộ email marketing",
+      "done": "Bạn đã hủy đăng ký.",
+      "doneAll": "Bạn đã hủy nhận toàn bộ email marketing.",
+      "doneHint": "Bạn có thể đóng trang. Thay đổi có hiệu lực ngay và áp dụng cho cả những tin chưa gửi.",
+      "globallySuppressed": "Bạn không nhận email marketing",
+      "globallySuppressedHint": "Địa chỉ của bạn nằm trong danh sách không liên hệ. Không chiến dịch nào vượt qua được.",
+      "expires": "Liên kết này hết hạn vào {date}.",
+      "invalid": "Liên kết không hợp lệ. Có thể đã hết hạn hoặc đã được sử dụng; hãy yêu cầu liên kết mới từ email.",
+      "missingToken": "Liên kết thiếu mã token."
+    }
   }
 }

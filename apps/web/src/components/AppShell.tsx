@@ -465,7 +465,7 @@ function PortalShell({ children }: { children: ReactNode }) {
  * Phase 19-MA.1 — the entities the Marketing submenu names. These are navigable records only; a campaign's
  * membership and history rows are read through the campaign itself (§9.2).
  */
-const MARKETING_NAV_NAMES = ['Campaign', 'TargetList'] as const;
+const MARKETING_NAV_NAMES = ['Campaign', 'TargetList', 'MarketingConsent', 'MarketingSuppression'] as const;
 
 const SALES_NAV_GROUPS: readonly { key: string; entityNames: readonly string[] }[] = [
   { key: 'sales', entityNames: ['Quote', 'SalesOrder', 'Invoice', 'CreditNote', 'DeliveryOrder', 'ReturnOrder'] },

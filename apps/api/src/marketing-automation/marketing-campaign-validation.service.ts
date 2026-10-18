@@ -17,6 +17,7 @@ import {
   purposeTypeMismatch,
   SENDING_CAMPAIGN_TYPES,
   serviceNoticeNeedsAcknowledgement,
+  TARGET_LIST_ENTITY,
   warning,
 } from "./marketing-automation-domain.js";
 import { MarketingProviderRegistry } from "./marketing-automation-provider.js";
@@ -84,47 +85,49 @@ export class MarketingCampaignValidationService {
     const blockers: CampaignFinding[] = [];
     const warnings: CampaignFinding[] = [];
 
+    const audience = await this.audienceOf(campaignId);
     this.checkClassification(data, blockers, warnings);
     this.checkSchedule(data, blockers);
     this.checkBudget(data, blockers);
-    await this.checkAudience(data, blockers);
+    await this.checkAudience(data, audience, blockers);
     await this.checkContent(data, blockers);
     await this.checkSender(data, settings.sender.defaultEmailAccountId, blockers, warnings);
     this.checkTracking(data, warnings);
 
     if (demandsSending) {
-      // Campaign-level execution gates (§5.1, §13). Each names the sub-phase that will clear it, so a
-      // refusal in MA.3 is a roadmap, not a mystery.
-      if (isSendingType(data["type"])) {
+      // Campaign-level execution gates (§5.1, §13). Audience resolution (MA.4) and the consent gate
+      // (MA.5) exist, so what still stands between a scheduled campaign and a running one is a provider:
+      // nothing may leave this system until MA.7 binds a live adapter. The blocker names the phase rather
+      // than failing opaquely at the first send.
+      const adapter = this.providers.resolve();
+      if (adapter.info.mode !== "live") {
         blockers.push(
           blocker(
-            "AUDIENCE_ENGINE_PENDING",
-            "Audience resolution is delivered in phase 19-MA.4, so no recipient list can be built yet. The campaign can be Scheduled, but not Run.",
-            "includeTargetListId",
-          ),
-          blocker(
-            "CONSENT_NOT_CONFIGURED",
-            "The consent and suppression gate (§5.3) is delivered in phase 19-MA.5. §0.1 rule 8 makes it non-bypassable, so a send cannot begin before it exists.",
-            "purpose",
+            "PROVIDER_NOT_BOUND",
+            `No live marketing provider is bound ("${adapter.info.key}" is ${adapter.info.mode}); phase 19-MA.7 attaches one.`,
           ),
         );
-        const adapter = this.providers.resolve();
-        if (adapter.info.mode !== "live") {
-          blockers.push(
-            blocker(
-              "PROVIDER_NOT_BOUND",
-              `No live marketing provider is bound ("${adapter.info.key}" is ${adapter.info.mode}); phase 19-MA.7 attaches one.`,
-            ),
-          );
-        }
-        const sendable = checkCampaignSendable({
-          status: target,
-          globalSendPaused: settings.safety.globalSendPaused,
-        });
-        if (!sendable.sendable && sendable.code === "GLOBAL_SEND_PAUSED") {
-          blockers.push(blocker("GLOBAL_SEND_PAUSED", sendable.message));
-        }
       }
+      const sendable = checkCampaignSendable({
+        status: target,
+        globalSendPaused: settings.safety.globalSendPaused,
+      });
+      if (!sendable.sendable && sendable.code === "GLOBAL_SEND_PAUSED") {
+        blockers.push(blocker("GLOBAL_SEND_PAUSED", sendable.message));
+      }
+    }
+
+    if (isSendingType(data["type"]) && audience.included.length > 0) {
+      // §5.1 lists consent policy among the things that must pass. Per-recipient consent is enforced at the
+      // gate (MA.5); what can be checked here is that the campaign has not been pointed at an audience the
+      // operator cannot resolve, and that a purpose was chosen deliberately rather than defaulted.
+      warnings.push(
+        warning(
+          "CONSENT_NOT_CONFIGURED",
+          "Recipients are only mailed if they hold consent for this purpose at send time (MA.5). A campaign aimed at an audience with no recorded consent will send to nobody — preview the audience before scheduling.",
+          "purpose",
+        ),
+      );
     }
 
     return {
@@ -134,7 +137,7 @@ export class MarketingCampaignValidationService {
       blockers,
       warnings,
       checkedAt: new Date().toISOString(),
-      validationHash: this.hash(data),
+      validationHash: this.hash(data, audience),
     };
   }
 
@@ -143,7 +146,7 @@ export class MarketingCampaignValidationService {
    * approval). Classification, audience, content, sender, policy and timing — and deliberately **not** the
    * name, description or budget, which an editor can fix without changing what would be sent.
    */
-  hash(data: Record<string, unknown>): string {
+  hash(data: Record<string, unknown>, audience: AudienceComposition): string {
     return fingerprint({
       type: text(data["type"]) ?? "",
       purpose: text(data["purpose"]) ?? "",
@@ -151,13 +154,25 @@ export class MarketingCampaignValidationService {
       timezone: text(data["timezone"]) ?? "",
       startsAt: text(data["startsAt"]) ?? "",
       endsAt: text(data["endsAt"]) ?? "",
-      includeTargetListId: text(data["includeTargetListId"]) ?? "",
-      excludeTargetListId: text(data["excludeTargetListId"]) ?? "",
+      includedTargetLists: audience.included,
+      excludedTargetLists: audience.excluded,
       templateId: text(data["templateId"]) ?? "",
       emailAccountId: text(data["emailAccountId"]) ?? "",
       trackingOpen: data["trackingOpen"] ?? null,
       trackingClick: data["trackingClick"] ?? null,
     });
+  }
+
+  /**
+   * The campaign's audience composition, read structurally. Relation links are not attributes, so the
+   * composition has to come from the link table; the caller's permission over each list is checked where it
+   * is used, not here, because this read is what makes "a list you cannot see is attached" detectable.
+   */
+  async audienceOf(campaignId: string): Promise<AudienceComposition> {
+    return {
+      included: await this.records.linkedRecordIds(CAMPAIGN_ENTITY, campaignId, "includedTargetLists"),
+      excluded: await this.records.linkedRecordIds(CAMPAIGN_ENTITY, campaignId, "excludedTargetLists"),
+    };
   }
 
   private checkClassification(
@@ -241,26 +256,46 @@ export class MarketingCampaignValidationService {
 
   private async checkAudience(
     data: Record<string, unknown>,
+    audience: AudienceComposition,
     blockers: CampaignFinding[],
   ): Promise<void> {
     if (!isSendingType(data["type"])) return;
-    const includeId = text(data["includeTargetListId"]);
-    if (includeId === undefined) {
+    if (audience.included.length === 0) {
       blockers.push(
-        blocker("AUDIENCE_REQUIRED", "A sending campaign needs an audience: no target list means no recipient to evaluate.", "includeTargetListId"),
+        blocker(
+          "AUDIENCE_REQUIRED",
+          "A sending campaign needs an audience: no target list means no recipient to evaluate.",
+          "includedTargetLists",
+        ),
       );
       return;
     }
-    const error = await this.readable("TargetList", includeId);
-    if (error !== undefined) {
-      blockers.push(
-        blocker("AUDIENCE_NOT_READABLE", `The audience target list cannot be used by this user: ${error}`, "includeTargetListId"),
-      );
+    // Each audience must be one *this caller* may read: leaning on a list they cannot see would let a
+    // campaign be aimed at records the operator has no visibility of (§9.2).
+    for (const id of audience.included) {
+      const problem = await this.readable(TARGET_LIST_ENTITY, id);
+      if (problem !== undefined) {
+        blockers.push(
+          blocker("AUDIENCE_NOT_READABLE", `An included audience cannot be used by this user: ${problem}`, "includedTargetLists"),
+        );
+      }
     }
-    const excludeId = text(data["excludeTargetListId"]);
-    if (excludeId !== undefined && excludeId === includeId) {
+    for (const id of audience.excluded) {
+      const problem = await this.readable(TARGET_LIST_ENTITY, id);
+      if (problem !== undefined) {
+        blockers.push(
+          blocker("AUDIENCE_NOT_READABLE", `An excluded audience cannot be used by this user: ${problem}`, "excludedTargetLists"),
+        );
+      }
+    }
+    const shared = audience.included.filter((id) => audience.excluded.includes(id));
+    if (shared.length > 0) {
       blockers.push(
-        blocker("AUDIENCE_NOT_READABLE", "The excluded audience is the same list as the included one, which would resolve to nobody.", "excludeTargetListId"),
+        blocker(
+          "AUDIENCE_NOT_READABLE",
+          "An audience is listed as both included and excluded, which resolves to nobody and hides the mistake.",
+          "excludedTargetLists",
+        ),
       );
     }
   }
@@ -351,6 +386,12 @@ export class MarketingCampaignValidationService {
       return "it is not readable by this user.";
     }
   }
+}
+
+/** The campaign's audience composition, as relation ids. */
+export interface AudienceComposition {
+  readonly included: readonly string[];
+  readonly excluded: readonly string[];
 }
 
 /** Types that would put a message on the wire, and therefore carry the sending obligations (§5.1). */

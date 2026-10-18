@@ -961,6 +961,45 @@ export interface MarketingNavigationVisibility {
   entities: readonly string[];
 }
 
+/**
+ * Phase 19-MA.4/MA.5 — audience and consent contracts the SPA renders
+ * (PLAN_Phase_19_Marketing_Automation.md §8.1–§8.4). The categories and counts are the server's; the page
+ * never recomputes eligibility, so a client cannot make a blocked recipient look sendable.
+ */
+export interface MarketingAudienceCategory {
+  category: string;
+  count: number;
+}
+
+export interface MarketingAudiencePreview {
+  campaignId: string | null;
+  targetListId: string | null;
+  purpose: string | null;
+  status: string | null;
+  resolved: number;
+  eligible: number;
+  categories: MarketingAudienceCategory[];
+  samples: { entityId: string; entityType: string; name: string | null; category: string }[];
+  notes: string[];
+  truncated: boolean;
+  limit: number;
+  generatedAt: string;
+}
+
+export interface MarketingPreferenceView {
+  categories: { purpose: string; status: string }[];
+  globallySuppressed: boolean;
+  expiresAt: string | null;
+}
+
+export interface MarketingUnsubscribeResult {
+  unsubscribed: true;
+  scope: 'global' | 'purpose';
+  purpose: string | null;
+  applied: boolean;
+}
+
+
 /** SD.6 — the result of posting a public reply or an internal note. */
 export interface ServiceDeskMessageResult {
   caseId: string;
