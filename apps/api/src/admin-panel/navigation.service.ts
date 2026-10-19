@@ -170,7 +170,18 @@ export class NavigationService {
         .filter((node): node is NavigationNode => node !== null)
         .sort(byOrder);
 
-    const items: NavigationNode[] = NAVIGATION_PAGES.map((page) => buildNode(page)).filter((node): node is NavigationNode => node !== null);
+    // A page seed may name a module permission instead of a metadata entity (Phase 19-AI). ACL runs
+    // last here too: the navigation document can rename or hide the entry but can never reveal a page
+    // the caller's roles refuse.
+    const items: NavigationNode[] = [];
+    for (const page of NAVIGATION_PAGES) {
+      if (page.permission !== undefined) {
+        const level = await this.acl.canUser(page.permission.entity, page.permission.action);
+        if (level === 'no') continue;
+      }
+      const node = buildNode(page);
+      if (node !== null) items.push(node);
+    }
 
     for (const container of NAVIGATION_CONTAINER_GROUPS) {
       let children: NavigationNode[];

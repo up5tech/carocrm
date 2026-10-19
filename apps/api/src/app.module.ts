@@ -8,6 +8,7 @@ import { ACL_PROVIDERS } from './acl/acl.module.js';
 import { AclApiService } from './acl/acl-api.service.js';
 import { ADMIN_PANEL_CONTROLLERS, ADMIN_PANEL_PROVIDERS } from './admin-panel/index.js';
 import { navigationGroupKeyList } from './admin-panel/navigation-defaults.js';
+import { AI_AGENTS_CONTROLLERS, AI_AGENTS_PROVIDERS } from './ai-agents/index.js';
 import type { ParentAclChecker } from './attachment/index.js';
 import { ATTACHMENT_CONTROLLERS, ATTACHMENT_PROVIDERS, PARENT_ACL_CHECK_TOKEN } from './attachment/index.js';
 import type { AuditEntityMetadataLookup } from './audit/index.js';
@@ -113,6 +114,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 19-MA: `/api/v1/MarketingAutomation/action/...` module and campaign lifecycle commands.
     // Case/record CRUD stays on the generic `:entity` API.
     ...MARKETING_AUTOMATION_CONTROLLERS,
+    // Phase 19-AI: `/api/v1/AIAgents/action/...` is a static prefix (diagnostics, settings,
+    // provider connections) and must be matched before the generic `:entity` wildcard.
+    ...AI_AGENTS_CONTROLLERS,
     // `/api/v1/DocumentTemplate` and `/api/v1/document/action/preview` are static prefixes too.
     ...DOCUMENT_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
@@ -146,6 +150,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...CUSTOMER_SUCCESS_PROVIDERS,
     ...SERVICE_DESK_PROVIDERS,
     ...MARKETING_AUTOMATION_PROVIDERS,
+    // Phase 19-AI: module settings/permission/policy, provider connections and the model gateway.
+    ...AI_AGENTS_PROVIDERS,
     ...DOCUMENT_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,

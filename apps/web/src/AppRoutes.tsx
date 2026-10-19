@@ -8,6 +8,7 @@ import { AdminAuditPage } from './pages/AdminAuditPage.js';
 import { AdminExtensionsPage } from './pages/AdminExtensionsPage.js';
 import { AdminJobsPage } from './pages/AdminJobsPage.js';
 import { AdminPortalsPage } from './pages/AdminPortalsPage.js';
+import { AIAgentsPage } from './pages/AIAgentsPage.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { DashboardsPage } from './pages/DashboardsPage.js';
 import { EntityAdminPage } from './pages/EntityAdminPage.js';
@@ -108,6 +109,9 @@ export function AppRoutes() {
         <Route path="/dashboards" element={<DashboardsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        {/* Phase 19-AI: a static module page, declared before the entity wildcard so "ai-agents"
+            is never read as an entity name. Visibility is decided by the server's navigation. */}
+        <Route path="/ai-agents" element={<AIAgentsPage />} />
         {/* the signed-in user's own page, before the entity wildcard reads "profile" as an entity */}
         <Route path="/profile" element={<MyProfilePage />} />
         {/* Phase 19: the Projects views are static routes, matched before the entity wildcard */}

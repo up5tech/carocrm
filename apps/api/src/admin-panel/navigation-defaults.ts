@@ -1,3 +1,5 @@
+import type { AclAction } from '@carocrm/acl/types/index.js';
+
 /**
  * The menu the platform ships with (PLAN_Phase_20_Settings_UX.md §4.4, §15.2).
  *
@@ -20,6 +22,11 @@ export interface NavigationSeed {
   readonly parent?: string | undefined;
   /** For admin entries: the panel level required to see them. */
   readonly level?: 'user' | 'admin' | undefined;
+  /**
+   * A page that is only useful to a principal with this permission. Entity entries are filtered by
+   * their own record ACL; this covers module pages whose route is not a metadata entity.
+   */
+  readonly permission?: { readonly entity: string; readonly action: AclAction } | undefined;
 }
 
 export interface NavigationGroupSeed {
@@ -43,6 +50,18 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
   { key: 'stream', kind: 'page', route: '/stream', labelKey: 'core.app.stream', icon: 'NotificationOutlined', order: PAGE_ORDER[4] ?? 50 },
   { key: 'calendar', kind: 'page', route: '/calendar', labelKey: 'core.app.calendar', icon: 'CalendarOutlined', order: PAGE_ORDER[5] ?? 60 },
   { key: 'myTasks', kind: 'page', route: '/tasks', labelKey: 'core.app.myTasks', icon: 'CarryOutOutlined', order: PAGE_ORDER[6] ?? 70 },
+  // Phase 19-AI: the module page is not a metadata entity, so its visibility is checked against the
+  // synthetic `AIAgent:read` permission (the same capability the API asserts).
+  {
+    key: 'aiAgents',
+    kind: 'page',
+    route: '/ai-agents',
+    labelKey: 'web.aiAgents.title',
+    icon: 'RobotOutlined',
+    order: 75,
+    inQuickSearch: true,
+    permission: { entity: 'AIAgent', action: 'read' },
+  },
 ];
 
 export const NAVIGATION_CONTAINER_GROUPS: readonly NavigationGroupSeed[] = [

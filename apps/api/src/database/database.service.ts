@@ -685,6 +685,227 @@ export interface SalesDocumentNumbersTable {
   allocated_at: Date;
 }
 
+/**
+ * Phase 19-AI — provider connections (PLAN_Phase_19_AI_Agents.md §4.4, §6.2).
+ *
+ * `api_key_encrypted` is a write-only AES-256-GCM payload. No read path returns it; API views expose
+ * `hasApiKey`. `models`/`data_classes` are JSON arrays; `config` is validated provider configuration.
+ */
+export interface AIProviderConnectionsTable {
+  id: string;
+  key: string;
+  kind: string;
+  label: string;
+  base_url: string;
+  models: unknown;
+  data_classes: unknown;
+  api_key_encrypted: string | null;
+  config: unknown;
+  enabled: boolean;
+  created_at: Date;
+  modified_at: Date;
+  created_by_id: string | null;
+  modified_by_id: string | null;
+}
+
+/** Phase 19-AI — an agent definition; `draft_config` is mutable, published versions are not. */
+export interface AIAgentsTable {
+  id: string;
+  agent_key: string;
+  name: string;
+  description: string | null;
+  purpose: string | null;
+  category: string | null;
+  icon: string | null;
+  owner_user_id: string | null;
+  team_id: string | null;
+  visibility: string;
+  status: string;
+  draft_config: unknown;
+  current_version: number | null;
+  data_sensitivity: string;
+  is_deleted: boolean;
+  created_at: Date;
+  modified_at: Date;
+  created_by_id: string | null;
+  modified_by_id: string | null;
+}
+
+/** Phase 19-AI — an immutable published configuration snapshot (§5.2, §5.3). */
+export interface AIAgentVersionsTable {
+  id: string;
+  agent_id: string;
+  version: number;
+  config: unknown;
+  checksum: string;
+  provider_key: string | null;
+  model: string | null;
+  fallback_models: unknown;
+  input_schema: unknown;
+  output_schema: unknown;
+  limits: unknown;
+  memory_policy: unknown;
+  trigger_policy: unknown;
+  approval_policy: unknown;
+  published_by_id: string | null;
+  published_at: Date;
+  publication_note: string | null;
+  created_at: Date;
+}
+
+/** Phase 19-AI — tool grants captured by a published version (§7.1). */
+export interface AIAgentToolGrantsTable {
+  id: string;
+  agent_version_id: string;
+  tool_key: string;
+  tool_version: string;
+  effect_class: string;
+  constraints: unknown;
+  requires_approval: boolean;
+  enabled: boolean;
+  created_at: Date;
+}
+
+/** Phase 19-AI — durable run record (§4.4, §8.2). Money is NUMERIC and arrives as a string. */
+export interface AIAgentRunsTable {
+  id: string;
+  agent_id: string;
+  agent_version_id: string;
+  agent_version: number;
+  initiated_by_user_id: string | null;
+  service_principal: string | null;
+  trigger: string;
+  status: string;
+  input: unknown;
+  input_ref: string | null;
+  idempotency_key: string | null;
+  correlation_id: string | null;
+  causation_id: string | null;
+  lease_owner: string | null;
+  lease_expires_at: Date | null;
+  started_at: Date | null;
+  finished_at: Date | null;
+  expires_at: Date | null;
+  step_count: number;
+  model_call_count: number;
+  tool_call_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost_usd: string;
+  result: unknown;
+  failure_category: string | null;
+  failure_message: string | null;
+  cancel_requested: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Phase 19-AI — append-only run timeline (§16.1). */
+export interface AIAgentRunEventsTable {
+  id: string;
+  run_id: string;
+  seq: number;
+  category: string;
+  event_type: string;
+  actor_type: string;
+  actor_id: string | null;
+  correlation_id: string | null;
+  causation_id: string | null;
+  summary: string;
+  payload: unknown;
+  visibility: string;
+  redaction: string;
+  created_at: Date;
+}
+
+/** Phase 19-AI — tool proposal/execution ledger (§7.5). */
+export interface AIAgentToolCallsTable {
+  id: string;
+  run_id: string;
+  step: number;
+  tool_key: string;
+  tool_version: string | null;
+  argument_hash: string;
+  arguments: unknown;
+  policy_result: string;
+  status: string;
+  outcome: unknown;
+  result_ref: string | null;
+  error_category: string | null;
+  idempotency_key: string;
+  attempt: number;
+  duration_ms: number | null;
+  started_at: Date | null;
+  finished_at: Date | null;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Phase 19-AI — human approval of a proposed action (§9.2). */
+export interface AIAgentApprovalsTable {
+  id: string;
+  run_id: string;
+  tool_call_id: string | null;
+  agent_id: string;
+  agent_version: number;
+  requested_by_user_id: string | null;
+  action_class: string;
+  risk_level: string;
+  summary: string;
+  proposal: unknown;
+  targets: unknown;
+  expires_at: Date;
+  status: string;
+  decided_by_user_id: string | null;
+  decided_at: Date | null;
+  decision_note: string | null;
+  revalidation: unknown;
+  execution_result: unknown;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Phase 19-AI — model request ledger; no prompt/completion by default (§12.1). */
+export interface AIAgentProviderRequestsTable {
+  id: string;
+  run_id: string | null;
+  step: number | null;
+  agent_id: string | null;
+  agent_version: number | null;
+  provider_key: string;
+  model: string;
+  request_hash: string;
+  request_meta: unknown;
+  response_meta: unknown;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cached_input_tokens: number | null;
+  latency_ms: number;
+  outcome: string;
+  error_category: string | null;
+  estimated_cost_usd: string | null;
+  provider_request_id: string | null;
+  created_at: Date;
+}
+
+/** Phase 19-AI — scoped budget policy (§12.2). BIGINT/NUMERIC arrive as strings. */
+export interface AIAgentBudgetPoliciesTable {
+  id: string;
+  scope: string;
+  scope_ref: string | null;
+  provider_key: string | null;
+  agent_id: string | null;
+  period: string;
+  max_requests: number | null;
+  max_tokens: string | null;
+  max_cost_usd: string | null;
+  max_runs: number | null;
+  max_concurrent_runs: number | null;
+  enabled: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
@@ -738,6 +959,16 @@ export interface Database {
   portal_dashlets: PortalDashletsTable;
   sales_number_series: SalesNumberSeriesTable;
   sales_document_numbers: SalesDocumentNumbersTable;
+  ai_agents: AIAgentsTable;
+  ai_agent_versions: AIAgentVersionsTable;
+  ai_agent_tool_grants: AIAgentToolGrantsTable;
+  ai_agent_runs: AIAgentRunsTable;
+  ai_agent_run_events: AIAgentRunEventsTable;
+  ai_agent_tool_calls: AIAgentToolCallsTable;
+  ai_agent_approvals: AIAgentApprovalsTable;
+  ai_agent_provider_requests: AIAgentProviderRequestsTable;
+  ai_agent_budget_policies: AIAgentBudgetPoliciesTable;
+  ai_provider_connections: AIProviderConnectionsTable;
 }
 
 export type Db = Kysely<Database>;

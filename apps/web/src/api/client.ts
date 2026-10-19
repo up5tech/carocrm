@@ -1,6 +1,8 @@
 import type {
   AclDefinition,
   AdminPanelView,
+  AIAgentsCapabilitiesView,
+  AIAgentsHealthView,
   ApiKeyRow,
   ApiKeySecret,
   ApiUserRow,
@@ -417,6 +419,8 @@ export const api = {
     request<SettingsDocument<T>>(`/Settings/documents/${encodeURIComponent(name)}/reset`, post({})),
 
   // Module settings documents hosted by the settings shell (§8.3): each keeps its own endpoint.
+  aiAgentsHealth: () => request<AIAgentsHealthView>('/AIAgents/action/health'),
+  aiAgentsCapabilities: () => request<AIAgentsCapabilitiesView>('/AIAgents/action/capabilities'),
   serviceDeskSettings: () => request<ModuleSettingsView>('/ServiceDesk/action/settings'),
   saveServiceDeskSettings: (input: Record<string, unknown>) => request<ModuleSettingsView>('/ServiceDesk/action/settings', post(input)),
   customerSuccessSettings: () => request<ModuleSettingsView>('/CustomerSuccess/action/settings'),

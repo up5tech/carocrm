@@ -1290,3 +1290,57 @@ export interface ModuleSettingsView<T = Record<string, unknown>> {
   readonly updatedBy: string | null;
   readonly warnings: readonly SettingsDocumentWarning[];
 }
+
+/** Phase 19-AI: the foundation diagnostics returned by `GET /AIAgents/action/health`. */
+export interface AIAgentsHealthDependency {
+  readonly id: string;
+  readonly label: string;
+  readonly present: boolean;
+  readonly missing: readonly string[];
+}
+
+export interface AIAgentsHealthView {
+  readonly module: {
+    readonly id: string;
+    readonly name: string;
+    readonly version: string;
+    readonly frontendRoute: string;
+    readonly implementedPhases: readonly string[];
+  };
+  readonly ok: boolean;
+  readonly execution: { readonly enabled: boolean; readonly paused: boolean; readonly reason: string | null };
+  readonly dependencies: readonly AIAgentsHealthDependency[];
+  readonly optionalIntegrations: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly provides: string;
+    readonly present: boolean;
+  }[];
+  readonly features: readonly { readonly key: string; readonly label: string; readonly enabled: boolean }[];
+  readonly structures: readonly { readonly name: string; readonly present: boolean }[];
+  readonly providers: {
+    readonly count: number;
+    readonly enabledCount: number;
+    readonly credentialCount: number;
+    readonly adapterKeys: readonly string[];
+    readonly adapters: readonly { readonly key: string; readonly label: string; readonly toolCalling: boolean }[];
+    readonly defaultKey: string | null;
+    readonly encryptionConfigured: boolean;
+  };
+  readonly settings: {
+    readonly version: number;
+    readonly updatedAt: string | null;
+    readonly warnings: readonly string[];
+  };
+  readonly checks: readonly { readonly name: string; readonly ok: boolean; readonly detail: string }[];
+}
+
+export interface AIAgentsCapabilitiesView {
+  readonly capabilities: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly description: string;
+    readonly granted: boolean;
+  }[];
+  readonly execution: { readonly enabled: boolean; readonly paused: boolean; readonly available: boolean };
+}
