@@ -17,6 +17,12 @@ the upstream file layout, and copies no upstream source, asset or translation.
 | `entityMenu` / module menu metadata | `nav` section on the entity definition (`hidden/order/group/quickCreate/board`) | Placement belongs to the entity, so it travels with the metadata override the Entity Manager already writes and is validated by the same `POST /Metadata/:entity` path. |
 | Settings live in one `config` JSON | One `app_settings` row per document, kept from Phases 0–19 | No second settings store, and each module keeps owning its own document and validation. |
 | `modifiedById` on configuration | Actor name/id inside the row JSON, plus a `schema_changes` audit row | `app_settings` has only `name/data/modified_at`; adding columns for a bookkeeping field is not worth a destructive-capable migration. The audit row records actor, document, changed key names and both versions — never values. |
+| User administration is a set of separate screens (`Administration → Users`, `Teams`, `Roles`, `Api Keys`) | Four tabs in the settings shell over the **existing** `/User`, `/Team`, `/Role`, `/ApiUser`, `/ApiKey` routes | The plan's acceptance for 20.7 is "work entirely through the existing identity API". The only additions are documented: `GET /User` filters + `POST /User/:id/password-reset` + `DELETE /Role/:id` + `POST /ApiUser/:id/key` + `DELETE /Team/:id`, all of which existed as data, not as endpoints. |
+| Last-administrator protection is a client-side hint | Refused by `IdentityService.assertKeepsAnAdministrator` on the state *after* the change | Hiding a control is not authorization (AGENTS §5.3). A browser tab that is stale would otherwise be able to lock everybody out. |
+| Role permission matrix offers `not-own`/`own`/`all` plus position-based scopes | `no / own / team / all / yes` per `create/read/edit/delete/stream` | These are the levels `AclApiService` and `packages/acl` evaluate. The editor writes the document the ACL reads rather than a richer vocabulary the engine would ignore. |
+| Team `roleList` grants access | `teams.role_ids` mirrored into `teams_roles`, which is what the ACL joins | Before 20.7 a role stored on a team was never granted. The denormalised array stays for readers, the link table stays authoritative — the same arrangement as `users_teams`. |
+| An API key secret can be re-read by a super admin | Never returned after the creating response | The server stores only a hash (`auth.service.issueApiKey`), so "shown once" is a property of the data, not a UI rule. Rotation is issue-new + revoke-old, offered as one button. |
+| User list shows team membership | The list omits `teams`; the editor reads `GET /User/:id` | Keeping the page cheap matters more than one column, and the row the form writes is the row it read. `title` and `phone` are in both DTOs so a save cannot blank them. |
 
 ## Behaviour that matches upstream intent
 
@@ -26,13 +32,23 @@ the upstream file layout, and copies no upstream source, asset or translation.
 - Reads of brand and language defaults stay open to any session, because the shell has to paint them.
 - Icon and accent choices come from fixed allowlists; no remote or arbitrary icon source exists.
 
-## Known limitations after sub-phases 20.1–20.6
+## Known limitations after sub-phases 20.1–20.7
 
 - Only the platform documents (`brand`, `i18n`, `navigation`, `security`, `fileStorage`,
-  `notifications`) are registered; the authentication, attachments, notifications, jobs, audit, users,
-  teams, roles, API keys, layout manager and internal tabs are the plan's later sub-phases (20.7–20.10).
+  `notifications`) are registered; the authentication, attachments, notifications, internal and
+  messaging tabs are the plan's later sub-phases (20.9–20.10), and the layout manager is 20.8.
   The `security`, `fileStorage` and `notifications` rows exist and are readable/writable now, so those
   tabs need only UI.
+- The 20.7 tabs manage internal users, teams, roles and API keys. **Portal roles and portal-user
+  linkage stay on the Portals screen** (`/admin/portals`): a portal account edited here shows only the
+  fields that are safe to change, because the identity service refuses internal roles on a portal
+  account and portal authority comes from portal roles.
+- The role **list** pages on the server (`GET /Role?offset`), because that endpoint has no name filter.
+  The role/team/user **pickers** inside the editors read a fixed 500-record window, so an instance with
+  more roles than that cannot assign role #501 from the form — it can still be assigned through the API,
+  and a searchable picker needs a `where` filter on `/Role` (not built here).
+- The last-administrator **refusal** is asserted against `leavesNoAdministrator` plus the allowed HTTP
+  path, not by deactivating the development instance's only administrator over HTTP.
 - Service Desk and Customer Success documents are hosted and editable as flat policy rows; Sales keeps
   its own purpose-built form. None of the three is a registry document (§8.3 keeps their endpoints).
 - `nav.quickCreate` is stored and validated but not yet consumed: the global create menu arrives with

@@ -13,4 +13,8 @@ export const TAB_COMPONENTS: Record<string, LazyExoticComponent<ComponentType>> 
   sales: lazy(() => import('./tabs/SalesSettingsTab.js').then((module) => ({ default: module.SalesSettingsTab }))),
   serviceDesk: lazy(() => import('./tabs/ServiceDeskSettingsTab.js').then((module) => ({ default: module.ServiceDeskSettingsTab }))),
   customerSuccess: lazy(() => import('./tabs/CustomerSuccessSettingsTab.js').then((module) => ({ default: module.CustomerSuccessSettingsTab }))),
+  users: lazy(() => import('./tabs/UsersTab.js').then((module) => ({ default: module.UsersTab }))),
+  teams: lazy(() => import('./tabs/TeamsTab.js').then((module) => ({ default: module.TeamsTab }))),
+  roles: lazy(() => import('./tabs/RolesTab.js').then((module) => ({ default: module.RolesTab }))),
+  apiKeys: lazy(() => import('./tabs/ApiKeysTab.js').then((module) => ({ default: module.ApiKeysTab }))),
 };

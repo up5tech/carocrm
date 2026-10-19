@@ -2,7 +2,7 @@
 
 Scope: `PLAN_Phase_20_Settings_UX.md` §4, §7, §8. Implemented: 20.1 registry and documents, 20.2 the
 tabbed shell, 20.3 General/Localization and the hosted module documents, 20.4 navigation resolution,
-20.5 the Main Menu tab, 20.6 per-entity navigation metadata.
+20.5 the Main Menu tab, 20.6 per-entity navigation metadata, 20.7 users/teams/roles/API keys.
 
 ## Where things live
 
@@ -23,7 +23,11 @@ apps/web/src/admin/
   shell.tsx                         the tab ↔ shell action contract
   document-form.ts                  one document edited as a draft
   module-document.ts                the same for a module-owned document
-  tabs/                             general, localization, menu, sales, serviceDesk, customerSuccess
+  tabs/                             general, localization, menu, sales, serviceDesk, customerSuccess,
+                                    users, teams, roles, apiKeys (+ identity.ts shared ACL vocabulary)
+apps/api/src/auth/
+  identity.service.ts               /User /Role /Team /ApiUser /ApiKey business rules
+  identity.controller.ts            the same routes, with the 20.7 filters and actions
 ```
 
 ## Storage
@@ -78,10 +82,31 @@ POST /api/v1/Settings/documents/navigation
 `warnings` are how a document reports a configuration problem without refusing it: a menu label key
 that does not resolve, a key an upgrade removed. The tab lists them; the value still saves.
 
+## Identity administration (20.7)
+
+Users, teams, roles and API keys are tabs in the same shell, but they are **record** editors: each
+action writes one record through the existing identity API, so the shell hides the sticky save bar for
+a tab that has no `document` and no `moduleEndpoint` (`AdminSettingsShell.tsx`).
+
+| Tab | Endpoints | Rules the server owns |
+|---|---|---|
+| `users` | `GET/POST /User`, `GET/PATCH/DELETE /User/:id`, `POST /User/:id/password-reset` | last-administrator guard, team sync, portal linkage, session revocation on reset |
+| `teams` | `GET/POST /Team`, `GET/PATCH/DELETE /Team/:id` | `users_teams` is authoritative, `teams_roles` is what the ACL reads |
+| `roles` | `GET/POST /Role`, `GET/PATCH/DELETE /Role/:id` | a role still assigned cannot be deleted (`details.rule = roleInUse`) |
+| `apiKeys` | `GET/POST /ApiUser`, `POST /ApiUser/:id/key`, `GET /ApiKey/:id`, `DELETE /ApiKey/:keyId` | the secret exists only in the response that created it |
+
+`GET /User` accepts `where`, `isActive`, `type`, `roleId` and `teamId`; a value it cannot interpret
+answers `400 INVALID_QUERY` rather than quietly widening the list an administrator is reading.
+
+The last-administrator rule is evaluated on the state **after** the change — deactivating, demoting or
+deleting the account that would leave no active administrator is what is refused
+(`422 VALIDATION_FAILED`, `details.rule = lastAdministrator`). "Administrator" is the same three ways
+`AclApiService` decides it: `is_admin`, `type = 'admin'`, or the built-in `sysAdmin` role.
+
 ## Levels
 
 `public` (any session, e.g. brand), `admin` and `sysAdmin`. The instance has one administrative tier
 today, so `admin` and `sysAdmin` resolve to the same predicate — recorded in
-`docs/compatibility/settings-ux.md`. The `internal`/danger-zone tab, users/teams/roles/API keys, the
-layout manager and the messaging tabs are later sub-phases of the same plan (20.7–20.10); the
+`docs/compatibility/settings-ux.md`. The `internal`/danger-zone tab, the
+layout manager and the messaging tabs are later sub-phases of the same plan (20.8–20.10); the
 descriptors and endpoints are shaped for them.

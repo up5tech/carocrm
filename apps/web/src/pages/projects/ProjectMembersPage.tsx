@@ -49,11 +49,7 @@ export function ProjectMembersPage() {
     queryKey: ['allUsers'],
     queryFn: async () => {
       const result = await api.users({ maxSize: 200 });
-      const rows = (result as { list?: Record<string, unknown>[] }).list ?? [];
-      return rows.map((row) => ({
-        value: String(row['id']),
-        label: [row['firstName'], row['lastName']].filter(Boolean).join(' ') || String(row['name'] ?? row['userName'] ?? ''),
-      }));
+      return result.list.map((row) => ({ value: row.id, label: row.name }));
     },
   });
   const projects = useQuery({

@@ -99,6 +99,89 @@ export interface Role {
   modifiedAt: string;
 }
 
+/** Account kinds the identity API can serve; mirrors `USER_ACCOUNT_TYPES` on the server. */
+export type UserAccountType = 'admin' | 'regular' | 'api' | 'portal' | 'system';
+
+/**
+ * An account as served by `GET /User` and `GET /User/:id`. `teams` is only present on the single
+ * record read — the list endpoint is deliberately cheaper, so the editor loads the user it opens.
+ */
+export interface UserRow {
+  id: string;
+  userName: string;
+  firstName: string | null;
+  lastName: string | null;
+  name: string;
+  emailAddress: string | null;
+  isAdmin: boolean;
+  isActive: boolean;
+  type: UserAccountType;
+  roles: string[];
+  portalId: string | null;
+  contactId: string | null;
+  portalRoleIds: string[];
+  title: string | null;
+  phone: string | null;
+  createdAt: string;
+  modifiedAt: string;
+  teams?: string[];
+}
+
+/** What the administration form sends; `null` clears a value, omitting the key keeps it. */
+export interface UserInput {
+  userName?: string;
+  firstName?: string;
+  lastName?: string;
+  emailAddress?: string | null;
+  password?: string;
+  isAdmin?: boolean;
+  isActive?: boolean;
+  assignedRoleIds?: string[];
+  teamIds?: string[];
+  title?: string | null;
+  phone?: string | null;
+}
+
+export interface TeamRow {
+  id: string;
+  name: string;
+  userIds: string[];
+  roleIds: string[];
+  isPrivate: boolean;
+  createdAt: string;
+  modifiedAt: string;
+}
+
+/** An API account and how many of its keys still work (`GET /ApiUser`). */
+export interface ApiUserRow {
+  id: string;
+  userName: string;
+  isActive: boolean;
+  roles: string[];
+  createdAt: string;
+  activeKeys: number;
+  lastUsedAt: string | null;
+}
+
+export interface ApiKeyRow {
+  id: string;
+  apiUserId: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
+/**
+ * The response that created a key. `secret` exists in this payload and nowhere else — the server
+ * stores only a hash, so the UI has to show it once and never offer it again.
+ */
+export interface ApiKeySecret {
+  id: string;
+  userName: string;
+  keyId: string;
+  secret: string;
+}
+
 /** Instance settings served by `GET /Settings` — public, so the sign-in page can paint the brand. */
 export interface SettingsView {
   pageTitle: string | null;

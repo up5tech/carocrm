@@ -1,6 +1,9 @@
 import type {
   AclDefinition,
   AdminPanelView,
+  ApiKeyRow,
+  ApiKeySecret,
+  ApiUserRow,
   AttachmentInfo,
   CloneResult,
   EntityDefinition,
@@ -73,6 +76,10 @@ import type {
   SettingsDocument,
   SettingsPatch,
   SettingsView,
+  TeamRow,
+  UserAccountType,
+  UserInput,
+  UserRow,
   WorkflowActionSpec,
   WorkflowDefinitionShape,
   WorkflowIssue,
@@ -432,11 +439,50 @@ export const api = {
   disableField: (name: string, field: string) =>
     request<EntityDefinition>(`/Metadata/${encodeURIComponent(name)}/Field/${encodeURIComponent(field)}`, { method: 'DELETE' }),
 
-  roles: () => request<ListResult<Role>>('/Role'),
-  users: (params: { offset?: number | undefined; maxSize?: number | undefined; where?: string | undefined } = {}) =>
-    request<ListResult<{ id: string; name: string; userName: string; isActive: boolean }>>(`/User${simpleQuery(params)}`),
+  // Phase 20.7 — identity administration (PLAN_Phase_20 §4.3 rows 9–12). These are the existing
+  // `/User`, `/Role`, `/Team`, `/ApiUser`, `/ApiKey` endpoints; the UI adds no second authority path.
+  roles: (params: { offset?: number | undefined; maxSize?: number | undefined } = {}) =>
+    request<ListResult<Role>>(`/Role${simpleQuery(params)}`),
+  role: (id: string) => request<Role>(`/Role/${encodeURIComponent(id)}`),
+  createRole: (input: { name: string; permissions?: Record<string, Record<string, string>>; fieldPermissions?: Role['fieldPermissions'] }) =>
+    request<Role>('/Role', post(input)),
   patchRole: (id: string, patch: Record<string, unknown>) =>
     request<Role>(`/Role/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  deleteRole: (id: string) => request<{ success: boolean }>(`/Role/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  users: (
+    params: {
+      offset?: number | undefined;
+      maxSize?: number | undefined;
+      where?: string | undefined;
+      isActive?: 'true' | 'false' | undefined;
+      type?: UserAccountType | undefined;
+      roleId?: string | undefined;
+      teamId?: string | undefined;
+    } = {},
+  ) => request<ListResult<UserRow>>(`/User${simpleQuery(params)}`),
+  user: (id: string) => request<UserRow>(`/User/${encodeURIComponent(id)}`),
+  createUser: (input: UserInput) => request<UserRow>('/User', post(input)),
+  updateUser: (id: string, input: UserInput) =>
+    request<UserRow>(`/User/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deleteUser: (id: string) => request<{ success: boolean }>(`/User/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  resetUserPassword: (id: string, password: string) =>
+    request<{ success: boolean }>(`/User/${encodeURIComponent(id)}/password-reset`, post({ password })),
+
+  teams: (params: { offset?: number | undefined; maxSize?: number | undefined } = {}) =>
+    request<ListResult<TeamRow>>(`/Team${simpleQuery(params)}`),
+  getTeam: (id: string) => request<TeamRow>(`/Team/${encodeURIComponent(id)}`),
+  createTeam: (input: { name: string; userIds?: string[]; roleIds?: string[]; isPrivate?: boolean }) =>
+    request<TeamRow>('/Team', post(input)),
+  updateTeam: (id: string, input: Partial<{ name: string; userIds: string[]; roleIds: string[]; isPrivate: boolean }>) =>
+    request<TeamRow>(`/Team/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deleteTeam: (id: string) => request<{ success: boolean }>(`/Team/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  apiUsers: () => request<{ list: ApiUserRow[]; total: number }>('/ApiUser'),
+  createApiUser: (input: { userName: string; assignedRoleIds?: string[] }) => request<ApiKeySecret>('/ApiUser', post(input)),
+  issueApiKey: (apiUserId: string) => request<ApiKeySecret>(`/ApiUser/${encodeURIComponent(apiUserId)}/key`, { method: 'POST' }),
+  apiKeys: (apiUserId: string) => request<{ list: ApiKeyRow[] }>(`/ApiKey/${encodeURIComponent(apiUserId)}`),
+  revokeApiKey: (keyId: string) => request<{ success: boolean }>(`/ApiKey/${encodeURIComponent(keyId)}`, { method: 'DELETE' }),
 
   // Phase 8 — index / layout / ACL metadata editing.
   saveIndexes: (name: string, indexes: IndexDefinition[]) =>

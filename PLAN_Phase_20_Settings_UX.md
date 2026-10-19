@@ -1,10 +1,11 @@
 # Phase 20 — Settings, Administration and End-User UX/UI
 
-> **Status:** 20.0 – 20.6 implemented (2026-10-18): settings document registry, admin panel
+> **Status:** 20.0 – 20.7 implemented (2026-10-19): settings document registry, admin panel
 > descriptors and the tabbed shell, General/Localization/Main Menu tabs, the hosted module documents,
 > `GET /Navigation` with ACL-filtered resolution, per-entity `nav` metadata and the Entity Manager
-> Navigation tab. 20.7 – 20.17 (users/teams/roles/API keys, layout manager, security/messaging tabs,
-> user preferences, the end-user UX pack, accessibility and release hardening) are still planned.
+> Navigation tab, and the Users/Teams/Roles/API keys tabs over the existing identity API with
+> last-administrator protection and show-once secrets. 20.8 – 20.17 (layout manager, security/messaging
+> tabs, user preferences, the end-user UX pack, accessibility and release hardening) are still planned.
 > This document remains the scope, architecture reference and implementation roadmap for Phase 20.
 > Implemented behaviour is documented in `docs/admin/settings.md`, `docs/admin/navigation.md` and the
 > deviations in `docs/compatibility/settings-ux.md`.
@@ -1006,13 +1007,22 @@ reads it; metadata validation rejects unknown group keys.
 
 Acceptance: hiding an entity in metadata removes it from navigation but leaves direct URLs working.
 
-### Phase 20.7 — Users, teams, roles and API keys
+### Phase 20.7 — Users, teams, roles and API keys  ✅ done 2026-10-19
 
 Tasks: Users tab (paginated, role/team assignment, activate/deactivate, password reset); Teams tab;
 Roles tab with permission matrix and last-admin protection; API keys tab with show-once secrets.
 
 Acceptance: the four tabs work entirely through the existing identity API; no new user-management
 endpoint beyond a documented minimal addition; secrets never returned twice.
+
+Delivered: `users`, `teams`, `roles` and `apiKeys` tabs in the settings shell (`apps/web/src/admin/tabs/`),
+all writes going to `/User`, `/Role`, `/Team`, `/ApiUser`, `/ApiKey`. The documented additions are
+`GET /User` filters (`isActive/type/roleId/teamId`), `POST /User/:id/password-reset`, `DELETE /Role/:id`,
+`POST /ApiUser/:id/key` and `DELETE /Team/:id`, plus `title`/`phone` in the user DTO so the editor cannot
+blank them. The last-administrator rule is refused server-side on the state after the change
+(`details.rule = lastAdministrator`); a role still assigned is refused the same way (`roleInUse`);
+team roles are now actually granted through `teams_roles`. The secret exists only in the response that
+created it. Portal roles stay on the Portals screen — see `docs/compatibility/settings-ux.md`.
 
 ### Phase 20.8 — Layout manager
 
@@ -1144,14 +1154,14 @@ extra database was created and no destructive setup was introduced.
 Phase 20 is complete when all applicable checks below pass:
 
 - [x] `/admin/settings` is a tabbed, permissioned shell; no single page holds every setting. (20.2, `AdminSettingsPage.tsx` deleted)
-- [x] Every settings capability in the §4.3 catalog is reachable from a tab **or a documented deferral** — see `docs/compatibility/settings-ux.md` (users, teams, roles, API keys, layout manager, authentication, email, notifications, attachments, internal and webhooks are 20.7–20.10).
+- [x] Every settings capability in the §4.3 catalog is reachable from a tab **or a documented deferral** — see `docs/compatibility/settings-ux.md` (users, teams, roles and API keys arrived in 20.7; layout manager, authentication, email, notifications, attachments, internal and webhooks remain 20.8–20.10).
 - [x] Settings documents live in `app_settings` with schema validation, versioning, concurrency and
       reset-to-default; no second settings store exists. (20.1)
 - [x] The main menu is administrator-configurable and resolved server-side with ACL filtering. (20.4, 20.5)
 - [x] Menu configuration can never widen access; forbidden entities never appear. (asserted by `apps/api/test/navigation.test.ts`)
 - [x] Entity navigation behavior is metadata-driven (`nav` section + Entity Manager tab); the SPA's hard-coded name sets are gone. (20.6)
-- [ ] Users, teams, roles and API keys are manageable without raw API calls, with last-admin
-      protection and show-once secrets.
+- [x] Users, teams, roles and API keys are manageable without raw API calls, with last-admin
+      protection and show-once secrets. (20.7)
 - [ ] The navigation tree and favorites are server-persisted and permission-filtered.
 - [ ] List views support URL-shareable state, columns, density, scoped bulk actions and undo.
 - [ ] Record pages have a sticky header, next-action affordance and unsaved-changes guard.
@@ -1162,7 +1172,7 @@ Phase 20 is complete when all applicable checks below pass:
 - [ ] Tests cover happy paths, invalid input, permission denial, conflicts and bulk-action edge cases.
 - [ ] Lint, typecheck, build and the existing test/smoke suites were run; skipped checks documented.
 - [x] Migration `044_phase20_settings_documents.sql` is additive, reviewed and applied without data loss.
-- [x] Translations added for `en` and `vi`; the new UI strings resolve through `t()`. (20.2–20.6 scope)
+- [x] Translations added for `en` and `vi`; the new UI strings resolve through `t()`. (20.2–20.7 scope)
 - [ ] OpenAPI and `api-spec/` updated; documentation and compatibility notes written.
 - [x] No extra database was created; no reset, truncate or broad delete was performed.
 - [x] No upstream PHP source, unlicensed assets or third-party branding were copied.

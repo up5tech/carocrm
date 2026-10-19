@@ -27,6 +27,9 @@ export function AdminSettingsShell() {
 
   const tabs = useMemo(() => panel.data?.groups.flatMap((group) => [...group.tabs]) ?? [], [panel.data]);
   const active = tabs.find((tab) => tab.key === tabKey);
+  // The bar belongs to a form over one document. Record-editing tabs (users, teams, roles, API keys)
+  // save each record as its own action, so a sticky Save would promise a write that has no target.
+  const hasDocument = active?.document !== undefined || active?.moduleEndpoint !== undefined;
 
   // No tab key: open the first tab this caller may use, so a bookmark on `/admin/settings` still lands.
   useEffect(() => {
@@ -147,7 +150,7 @@ export function AdminSettingsShell() {
 
         <div className="carocrm-admin-main">
           {body()}
-          <SaveBar />
+          {hasDocument ? <SaveBar /> : null}
         </div>
       </div>
     </SettingsShellProvider>

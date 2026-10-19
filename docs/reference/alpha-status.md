@@ -665,3 +665,75 @@ Three incidental repairs were made alongside this phase, none of them part of it
   text) and `401 AUTHENTICATION_FAILED` for one that cannot be verified at all. Four cases in
   `apps/api/test/auth.test.ts` pin it, and the browser confirms the recovery: `401 /AppUser/me` →
   `201 /Refresh` → `200 /Navigation`, with no error toast.
+
+## Phase 20.7 — Users, teams, roles and API keys (added 2026-10-19)
+
+Implemented: the four identity tabs of `PLAN_Phase_20_Settings_UX.md` §4.3 (rows 9–12). They are tabs
+in the same shell but **record** editors, so the sticky save bar is hidden for a tab with no settings
+document — each action is its own write through the existing identity API.
+
+| Deliverable | Where |
+|---|---|
+| Users tab: server-paged list, `where` + status/type/role/team filters, create, edit, activate/deactivate, password reset, delete | `apps/web/src/admin/tabs/UsersTab.tsx` |
+| Teams tab: CRUD, membership, team roles and a read-only access overview | `tabs/TeamsTab.tsx` |
+| Roles tab: CRUD, entity × action matrix, per-field read/edit, delete refused while assigned | `tabs/RolesTab.tsx` |
+| API keys tab: accounts, issue/rotate/revoke, secret shown once | `tabs/ApiKeysTab.tsx` |
+| Shared ACL vocabulary the editors write in | `tabs/identity.ts` (`create/read/edit/delete/stream`, `no/own/team/all/yes`) |
+| Identity API additions | `GET /User` filters, `POST /User/:id/password-reset`, `DELETE /Role/:id`, `POST /ApiUser/:id/key`, `DELETE /Team/:id` |
+| Last-administrator guard | `IdentityService.assertKeepsAnAdministrator` + `leavesNoAdministrator` |
+| Team roles actually granted | `IdentityService.syncTeamRoles` → `teams_roles`, which is what the ACL joins |
+| Tab descriptors | `admin-panel.service.ts` (group `users`, `apiKeys` at `sysAdmin`) |
+
+What changed for an administrator:
+
+- Accounts, teams, roles and API keys are managed without raw API calls. `GET /User` narrows on the
+  server (`isActive`, `type`, `roleId`, `teamId`, `where`) and refuses a value it cannot interpret with
+  `400 INVALID_QUERY` instead of quietly widening the list.
+- Demoting, deactivating or deleting the last active administrator is refused (`422`,
+  `details.rule = lastAdministrator`) and the form explains it inline. "Administrator" is decided the
+  same three ways `AclApiService` decides it.
+- Setting a password from the UI is a reset: the sessions the previous password opened are revoked,
+  and the dialog says so before it is confirmed.
+- A role assigned to a team now grants access. Before this sub-phase `teams.role_ids` was stored and
+  never joined, so the teams tab would have edited a setting that did nothing.
+- An API key secret exists only in the response that created it. Every other view can show the key id,
+  because the server keeps a hash; rotation is one button (issue new, then revoke the old).
+- Editing a portal account here changes only the fields that are safe; portal authority stays on the
+  Portals screen, matching the server's rule that internal roles and portal roles never mix.
+
+Verification actually run for this change (all against the configured database, no extra database):
+
+- `npx tsc --noEmit` for the API project and for `apps/web`: clean. `pnpm -r build` and the web Vite
+  build: clean, with each tab emitted as its own chunk (Users 11.4 kB, Roles 6.8 kB, Teams 6.1 kB).
+  `pnpm lint` reports only the two pre-existing errors in the tracked root script `.shoot2.mjs` and the
+  three pre-existing warnings in `marketing-automation-delivery.test.ts`; every file this change touched
+  is clean.
+- `npx vitest run apps/api/test/identity-admin.test.ts`: 17 tests, covering the filters, the invalid
+  filter refusal, non-admin refusal, a rejected payload answering `422` with the failing field path
+  instead of `500`, team sync from the user's side, a team role granting real ACL access, role delete
+  refusal then success, team soft delete, the last-admin rule (allowed HTTP path + the pure rule
+  function), show-once secrets, rotate/revoke, password reset revoking the old session, the panel
+  descriptors listing the four tabs for an admin and nobody else, and the `title`/`phone` round-trip.
+  The whole suite afterwards: **121 files, 1526 tests passed**.
+- Browser (Playwright, admin session, 1440 and 390 px): 18 flow assertions, all passing — create a user
+  through the form, find it by user name, reopen the editor and see the job title back, toggle the
+  status and read it from the server, delete it; create a team, see the access overview appear when a
+  role is picked, find it through the name filter, delete it; open the role matrix, set `Account → read
+  → All`, expand the entity to the field editor, save, list, delete; create an API account and see the
+  secret exactly once, reload and confirm the secret is nowhere in the panel, expand the keys, revoke.
+  `document.body.scrollWidth` equals the viewport width on all four tabs at both sizes, no console or
+  page errors came from the tabs themselves, and no save bar renders for them.
+- Test records created by the walkthrough (four users, three teams, three roles, three API accounts and
+  their keys) were removed again by id, with a dry run reviewed first.
+- Pre-existing and untouched: `POST /Refresh` with no cookie answers `422 VALIDATION_FAILED` rather
+  than `401`, which logs a console error at sign-in on a browser profile with no session cookie.
+
+Two defects the walkthrough found and fixed on the way:
+
+- **A rejected identity payload answered 500.** `IdentityService` called `Schema.parse`, so a `ZodError`
+  escaped to the filter as `INTERNAL_ERROR` — the users form turned a mistyped email into "Internal
+  server error". All six payload sites now go through `parseOrReject`, which answers
+  `422 VALIDATION_FAILED` with `details.issues[]` paths, the same shape the settings documents use.
+- **An empty field could not be cleared.** `emailAddress` accepted only a non-empty string, so the form
+  had nothing to send for "no email"; it now takes `null` for email, title and phone, and the form sends
+  `null` rather than `''`.
