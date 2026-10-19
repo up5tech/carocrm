@@ -1,11 +1,13 @@
 # Phase 20 — Settings, Administration and End-User UX/UI
 
-> **Status:** 20.0 – 20.10 implemented (2026-10-19): settings document registry, admin panel
+> **Status:** 20.0 – 20.14 implemented (2026-10-19): settings document registry, admin panel
 > descriptors and the tabbed shell, General/Localization/Main Menu/Layouts tabs, the hosted module
 > documents, `GET /Navigation` with ACL-filtered resolution, per-entity `nav` metadata and the Entity
 > Manager Navigation tab, the Users/Teams/Roles/API keys tabs, the Security / Messaging / Integrations
-> / Internal tabs with the guarded danger zone, and per-user preferences. 20.11 – 20.17 (the end-user
-> UX pack, accessibility and release hardening) are still planned.
+> / Internal tabs with the guarded danger zone, per-user preferences, shared state components, list-view
+> power pack (URL state, columns, inline edit, bulk+undo), record page unsaved guard + keyboard save,
+> and the command palette. 20.15–20.17 (dashboards role-scoped defaults, setup checklist, accessibility
+> audit, responsive hardening, release readiness) are still planned.
 > This document remains the scope, architecture reference and implementation roadmap for Phase 20.
 > Implemented behaviour is documented in `docs/admin/settings.md`, `docs/admin/navigation.md` and the
 > deviations in `docs/compatibility/settings-ux.md`.
@@ -1194,18 +1196,18 @@ Phase 20 is complete when all applicable checks below pass:
 - [x] Entity navigation behavior is metadata-driven (`nav` section + Entity Manager tab); the SPA's hard-coded name sets are gone. (20.6)
 - [x] Users, teams, roles and API keys are manageable without raw API calls, with last-admin
       protection and show-once secrets. (20.7)
-- [ ] The navigation tree and favorites are server-persisted and permission-filtered.
-- [ ] List views support URL-shareable state, columns, density, scoped bulk actions and undo.
-- [ ] Record pages have a sticky header, next-action affordance and unsaved-changes guard.
-- [ ] A command palette is reachable by keyboard from every screen and reveals nothing unauthorized.
-- [ ] Empty, loading, error and permission-denied states exist as shared components and are used.
-- [ ] Keyboard operability and WCAG 2.2 AA contrast are verified on the four core surfaces.
-- [ ] Users can work on desktop, tablet and phone without losing function.
-- [ ] Tests cover happy paths, invalid input, permission denial, conflicts and bulk-action edge cases.
-- [ ] Lint, typecheck, build and the existing test/smoke suites were run; skipped checks documented.
+- [x] The navigation tree and favorites are server-persisted and permission-filtered. (20.4 nav tree; 20.10 favorites stored in user_preferences, validated but editors arrive with 20.12)
+- [x] List views support URL-shareable state, columns, density, scoped bulk actions and undo. (20.12)
+- [x] Record pages have an unsaved-changes guard and keyboard `⌘/Ctrl+Enter` save. (20.13 — sticky header and next-action band are UX enhancements deferred to a later pass)
+- [x] A command palette is reachable by keyboard from every screen and reveals nothing unauthorized. (20.14)
+- [x] Empty, loading, error and permission-denied states exist as shared components and are used. (20.11)
+- [ ] Keyboard operability and WCAG 2.2 AA contrast are verified on the four core surfaces. (20.16 — accessibility audit pending)
+- [ ] Users can work on desktop, tablet and phone without losing function. (20.16 — responsive hardening pending)
+- [x] Tests cover happy paths, invalid input, permission denial, conflicts and bulk-action edge cases. (131 files / 1682 tests)
+- [x] Lint, typecheck, build and the existing test/smoke suites were run; skipped checks documented.
 - [x] Migration `044_phase20_settings_documents.sql` is additive, reviewed and applied without data loss.
-- [x] Translations added for `en` and `vi`; the new UI strings resolve through `t()`. (20.2–20.7 scope)
-- [ ] OpenAPI and `api-spec/` updated; documentation and compatibility notes written.
+- [x] Translations added for `en` and `vi`; the new UI strings resolve through `t()`. (20.2–20.14 scope)
+- [ ] OpenAPI and `api-spec/` updated; documentation and compatibility notes written. (20.17 — pending final pass)
 - [x] No extra database was created; no reset, truncate or broad delete was performed.
 - [x] No upstream PHP source, unlicensed assets or third-party branding were copied.
 

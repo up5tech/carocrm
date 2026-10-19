@@ -95,7 +95,10 @@
     "required": "{field} là bắt buộc.",
     "maxLength": "Tối đa {max} ký tự.",
     "invalidEmail": "Nhập địa chỉ email hợp lệ.",
-    "invalidUrl": "Nhập URL hợp lệ."
+    "invalidUrl": "Nhập URL hợp lệ.",
+    "duplicateTitle": "Đã có bản ghi trùng tên",
+    "duplicateHint": "Đã có bản ghi tên \"{name}\". Vẫn tạo?",
+    "duplicateCreateAnyway": "Vẫn tạo"
   },
   "language": {
     "label": "Ngôn ngữ",

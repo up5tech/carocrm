@@ -1,5 +1,5 @@
-import { Alert, App as AntApp, Button, Card, Form, Space, Spin, Typography } from 'antd';
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, App as AntApp, Button, Card, Form, Modal, Space, Spin, Typography } from 'antd';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { api, type RecordData } from '../api/client.js';
@@ -94,6 +94,37 @@ export function EntityEditPage() {
   const [initial, setInitial] = useState<RecordData | undefined>(undefined);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
+  // §20.13: unsaved-changes guard + keyboard save
+  const formRef = useRef(form);
+  formRef.current = form;
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        event.preventDefault();
+        formRef.current.submit();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Track form changes for unsaved guard via onValuesChange prop on Form
+  const handleValuesChange = useCallback(() => {
+    setHasUnsavedChanges(true);
+  }, []);
 
   // A commercial document cannot be made by the generic form alone: its totals only exist once the
   // server has priced, taxed and summed at least one line. So creating one carries the line editor and
@@ -246,8 +277,34 @@ export function EntityEditPage() {
         form={form}
         layout="vertical"
         initialValues={initial ?? {}}
+        onValuesChange={handleValuesChange}
         onFinish={async (values) => {
           if (!entity) return;
+          // §20.13: duplicate warning on create — check if a record with the same name already exists
+          if (!id && definition.data?.record?.nameField) {
+            const nameField = definition.data.record.nameField;
+            const nameValue = values[nameField];
+            if (nameValue && typeof nameValue === 'string' && nameValue.trim() !== '') {
+              try {
+                const existing = await api.list(entity, { where: [{ field: nameField, operator: 'equals', value: nameValue.trim() }], maxSize: 1 });
+                if (existing.list.length > 0) {
+                  const confirmed = await new Promise<boolean>((resolve) => {
+                    Modal.confirm({
+                      title: t('web.edit.duplicateTitle'),
+                      content: t('web.edit.duplicateHint', { name: nameValue.trim() }),
+                      okText: t('web.edit.duplicateCreateAnyway'),
+                      cancelText: t('core.common.cancel'),
+                      onOk: () => resolve(true),
+                      onCancel: () => resolve(false),
+                    });
+                  });
+                  if (!confirmed) return;
+                }
+              } catch {
+                // If the check fails, proceed anyway — don't block the user
+              }
+            }
+          }
           const payload: RecordData = { ...values };
           // Values the rules or a field formula compute come from the server; sending them back
           // would only risk a mismatch on a field the user cannot edit.
@@ -276,6 +333,7 @@ export function EntityEditPage() {
             void message.error(error instanceof Error ? error.message : t('web.edit.saveFailed'));
           } finally {
             setSaving(false);
+            setHasUnsavedChanges(false);
           }
         }}
       >

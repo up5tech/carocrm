@@ -95,7 +95,10 @@
     "required": "{field} is required.",
     "maxLength": "Max {max} characters.",
     "invalidEmail": "Enter a valid email address.",
-    "invalidUrl": "Enter a valid URL."
+    "invalidUrl": "Enter a valid URL.",
+    "duplicateTitle": "A record with this name already exists",
+    "duplicateHint": "A record named \"{name}\" already exists. Create anyway?",
+    "duplicateCreateAnyway": "Create anyway"
   },
   "language": {
     "label": "Language",
