@@ -796,6 +796,58 @@ export interface AIAgentRunsTable {
   failure_category: string | null;
   failure_message: string | null;
   cancel_requested: boolean;
+  conversation_id: string | null;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Phase 19-AI.12 — an owner-scoped conversation thread (§10.1). */
+export interface AIAgentConversationsTable {
+  id: string;
+  agent_id: string;
+  owner_user_id: string;
+  title: string | null;
+  status: string;
+  related_entity: string | null;
+  related_id: string | null;
+  message_count: number;
+  summary: string | null;
+  summary_message_count: number;
+  last_activity_at: Date;
+  expires_at: Date | null;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Phase 19-AI.12 — one stored message in a conversation (§4.4). */
+export interface AIAgentMessagesTable {
+  id: string;
+  conversation_id: string;
+  run_id: string | null;
+  seq: number;
+  role: string;
+  content: string;
+  content_meta: unknown;
+  redaction: string;
+  token_count: number | null;
+  created_at: Date;
+}
+
+/** Phase 19-AI.12 — scoped memory with provenance and expiry (§10.2). */
+export interface AIAgentMemoryItemsTable {
+  id: string;
+  scope: string;
+  owner_user_id: string | null;
+  agent_id: string | null;
+  conversation_id: string | null;
+  run_id: string | null;
+  kind: string;
+  content: string;
+  source_refs: unknown;
+  sensitivity: string;
+  confidence: string | null;
+  expires_at: Date | null;
+  deleted_at: Date | null;
   created_at: Date;
   modified_at: Date;
 }
@@ -901,9 +953,62 @@ export interface AIAgentBudgetPoliciesTable {
   max_cost_usd: string | null;
   max_runs: number | null;
   max_concurrent_runs: number | null;
+  /** Soft limit: warn at this percentage of a hard limit (19-AI.13, §12.3). */
+  warn_percent: number | null;
   enabled: boolean;
   created_at: Date;
   modified_at: Date;
+}
+
+/** Phase 19-AI.13 — admin-maintained pricing snapshot used to estimate request cost (§12.1). */
+export interface AIAgentPricingSnapshotsTable {
+  id: string;
+  provider_key: string;
+  model: string;
+  currency: string;
+  input_price_per_million: string;
+  output_price_per_million: string;
+  cached_input_price_per_million: string;
+  valid_from: Date;
+  created_by_user_id: string | null;
+  created_at: Date;
+}
+
+/** Phase 19-AI.14 — an evaluation suite grouping deterministic and review graders (§17). */
+export interface AIAgentEvalSuitesTable {
+  id: string;
+  suite_key: string;
+  name: string;
+  description: string | null;
+  required_for_publish: boolean;
+  enabled: boolean;
+  created_by_user_id: string | null;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Phase 19-AI.14 — one evaluation case: a grader plus its configuration. */
+export interface AIAgentEvalCasesTable {
+  id: string;
+  suite_id: string;
+  case_key: string;
+  title: string;
+  grader: string;
+  grader_config: unknown;
+  created_at: Date;
+}
+
+/** Phase 19-AI.14 — one evaluation run of one configuration checksum against one suite. */
+export interface AIAgentEvalRunsTable {
+  id: string;
+  agent_id: string;
+  suite_id: string;
+  config_checksum: string;
+  agent_version: number | null;
+  status: string;
+  results: unknown;
+  created_by_user_id: string | null;
+  created_at: Date;
 }
 
 export interface Database {
@@ -966,8 +1071,15 @@ export interface Database {
   ai_agent_run_events: AIAgentRunEventsTable;
   ai_agent_tool_calls: AIAgentToolCallsTable;
   ai_agent_approvals: AIAgentApprovalsTable;
+  ai_agent_conversations: AIAgentConversationsTable;
+  ai_agent_messages: AIAgentMessagesTable;
+  ai_agent_memory_items: AIAgentMemoryItemsTable;
   ai_agent_provider_requests: AIAgentProviderRequestsTable;
   ai_agent_budget_policies: AIAgentBudgetPoliciesTable;
+  ai_agent_pricing_snapshots: AIAgentPricingSnapshotsTable;
+  ai_agent_eval_suites: AIAgentEvalSuitesTable;
+  ai_agent_eval_cases: AIAgentEvalCasesTable;
+  ai_agent_eval_runs: AIAgentEvalRunsTable;
   ai_provider_connections: AIProviderConnectionsTable;
 }
 

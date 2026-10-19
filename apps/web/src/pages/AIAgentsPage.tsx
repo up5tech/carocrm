@@ -7,6 +7,7 @@ import { api } from '../api/client.js';
 import { t } from '../state/i18n.js';
 import { AIAgentsAgentsTab } from './ai-agents/AIAgentsAgentsTab.js';
 import { AIAgentsApprovalsTab } from './ai-agents/AIAgentsApprovalsTab.js';
+import { AIAgentsConversationsTab } from './ai-agents/AIAgentsConversationsTab.js';
 import { AIAgentsOverview } from './ai-agents/AIAgentsOverview.js';
 import { AIAgentsRunsTab } from './ai-agents/AIAgentsRunsTab.js';
 import { AIAgentsUsageTab } from './ai-agents/AIAgentsUsageTab.js';
@@ -81,6 +82,13 @@ export function AIAgentsPage() {
       ),
     },
   ];
+  if (capabilities.data.memory.enabled && granted['use']) {
+    items.push({
+      key: 'conversations',
+      label: t('web.aiAgents.conversationsTab'),
+      children: <AIAgentsConversationsTab capabilities={granted} />,
+    });
+  }
   if (granted['approval']) {
     items.push({
       key: 'approvals',

@@ -22,7 +22,11 @@ import { type AppConfig, CONFIG_TOKEN } from '../config.js';
 import type { ApprovalStatusFilter } from './ai-agent-approvals.service.js';
 import { AIAgentApprovalService } from './ai-agent-approvals.service.js';
 import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
+import { AIAgentMemoryService } from './ai-agent-memory.service.js';
+import { AIAgentPricingService } from './ai-agent-pricing.service.js';
+import { AIAgentQuotaService } from './ai-agent-quota.service.js';
 import { AIAgentRunService } from './ai-agent-runs.service.js';
+import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 import { AGENT_STATUSES, type AgentStatus, type RunStatus } from './ai-agents-module.js';
 import { AIAgentsModuleHealthService } from './ai-agents-module-health.service.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
@@ -35,11 +39,18 @@ import {
   AgentPublishSchema,
   AgentUpdateSchema,
   ApprovalDecisionSchema,
+  BudgetPolicyCreateSchema,
+  DecisionEvaluationSchema,
   EmptyBodySchema,
+  EvaluationCaseCreateSchema,
+  PricingSnapshotCreateSchema,
+  PricingSnapshotReplaceSchema,
   ProviderCheckSchema,
   ProviderConnectionCreateSchema,
   ProviderConnectionPatchSchema,
   RunCreateSchema,
+  RunRetrySchema,
+  RunEvaluationSchema,
 } from './dto/ai-agents-shapes.js';
 
 /**
@@ -69,6 +80,10 @@ export class AIAgentsController {
     @Inject(AIAgentDefinitionService) private readonly agents: AIAgentDefinitionService,
     @Inject(AIAgentRunService) private readonly runs: AIAgentRunService,
     @Inject(AIAgentApprovalService) private readonly approvals: AIAgentApprovalService,
+    @Inject(AIAgentMemoryService) private readonly memory: AIAgentMemoryService,
+    @Inject(AIAgentPricingService) private readonly pricing: AIAgentPricingService,
+    @Inject(AIAgentQuotaService) private readonly quotas: AIAgentQuotaService,
+    @Inject(AIAgentEvaluationService) private readonly evaluations: AIAgentEvaluationService,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
 
@@ -99,6 +114,8 @@ export class AIAgentsController {
         paused: settings.safety.globalExecutionPaused,
         available: executionAvailable,
       },
+      memory: { enabled: settings.features.memory },
+      evaluations: { enabled: settings.features.evaluations },
     };
   }
 
@@ -314,6 +331,13 @@ export class AIAgentsController {
     return this.runs.toolCalls(id);
   }
 
+  /** A new run that repeats a finished one whose outcome is fully known (19-AI.11). */
+  @Post('action/runs/:id/retry')
+  async retryRun(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(RunRetrySchema, body);
+    return this.runs.retry(id, input.idempotencyKey);
+  }
+
   @HttpCode(200)
   @Post('action/runs/:id/cancel')
   async cancelRun(@Param('id') id: string, @Body() body: unknown) {
@@ -345,9 +369,210 @@ export class AIAgentsController {
     return this.runs.execute(id);
   }
 
+  // -------------------------------------------------------------------------
+  // 19-AI.12 — conversations, memory and retention
+  // -------------------------------------------------------------------------
+
+  @Get('action/conversations')
+  async listConversations(@Query() query: unknown) {
+    const q = asRecord(query);
+    return this.memory.listConversations({
+      ...(typeof q['agentId'] === 'string' ? { agentId: q['agentId'] } : {}),
+      maxSize: numberOrUndefined(q['maxSize']),
+    });
+  }
+
+  @Get('action/conversations/:id')
+  async getConversation(@Param('id') id: string) {
+    return this.memory.getConversation(id);
+  }
+
+  @HttpCode(200)
+  @Post('action/conversations/:id/archive')
+  async archiveConversation(@Param('id') id: string, @Body() body: unknown) {
+    parse(EmptyBodySchema, body);
+    return this.memory.archiveConversation(id);
+  }
+
+  @Delete('action/conversations/:id')
+  async deleteConversation(@Param('id') id: string) {
+    return this.memory.deleteConversation(id);
+  }
+
+  @Get('action/memory')
+  async listMemory(@Query() query: unknown) {
+    const q = asRecord(query);
+    return this.memory.listMemory({
+      ...(typeof q['agentId'] === 'string' ? { agentId: q['agentId'] } : {}),
+      maxSize: numberOrUndefined(q['maxSize']),
+    });
+  }
+
+  @Delete('action/memory/:id')
+  async deleteMemory(@Param('id') id: string) {
+    return this.memory.deleteMemoryItem(id);
+  }
+
+  @Get('action/retention/dryRun')
+  async retentionDryRun() {
+    return this.memory.retentionDryRun();
+  }
+
+  @HttpCode(200)
+  @Post('action/retention/run')
+  async retentionRun(@Body() body: unknown) {
+    parse(EmptyBodySchema, body);
+    return this.memory.retentionSweep();
+  }
+
+  /** The worker's door for scheduled retention; the shared capability is the authorization. */
+  @Public()
+  @HttpCode(200)
+  @Post('action/worker/retention')
+  async retentionForWorker(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
+    parse(EmptyBodySchema, body);
+    this.assertWorkerSecret(secret);
+    return this.memory.sweep();
+  }
+
   @Get('action/usage')
   async usage() {
     return this.runs.usage();
+  }
+
+  // -------------------------------------------------------------------------
+  // 19-AI.14 — evaluation suites, cases, runs and publication gates
+  // -------------------------------------------------------------------------
+
+  @Get('action/evaluations')
+  async listEvaluationSuites() {
+    await this.permissions.assert('use');
+    return this.evaluations.listSuites();
+  }
+
+  @Post('action/evaluations')
+  async ensureStandardSuite() {
+    await this.permissions.assert('evaluation');
+    return this.evaluations.ensureStandardSuite();
+  }
+
+  @Post('action/evaluations/:suiteKey')
+  async createEvaluationCase(@Param('suiteKey') suiteKey: string, @Body() body: unknown) {
+    await this.permissions.assert('evaluation');
+    const input = parse(EvaluationCaseCreateSchema, body);
+    return this.evaluations.createCase(suiteKey, { caseKey: input.caseKey, title: input.title, grader: input.grader, graderConfig: input.graderConfig ?? {} });
+  }
+
+  @Post('action/agents/:agentId/evaluations/run')
+  async runEvaluation(@Param('agentId') agentId: string, @Body() body: unknown) {
+    const input = parse(RunEvaluationSchema, body);
+    return this.evaluations.runSuite(agentId, input.suiteId);
+  }
+
+  @Get('action/agents/:agentId/evaluations')
+  async listEvaluationRuns(@Param('agentId') agentId: string, @Query() query: unknown) {
+    await this.permissions.assert('use');
+    const q = asRecord(query);
+    const limit = numberOrUndefined(q['maxSize']);
+    // TypeScript sees agentId as read through the service call
+    return this.evaluations.listRuns(agentId, limit ?? 25);
+  }@Post('action/agents/:agentId/evaluations/:runId/decide')
+async decideEvaluationCase(@Param('runId') runId: string, @Body() body: unknown) {
+    const input = parse(DecisionEvaluationSchema, body);
+    return this.evaluations.decide(runId, input.caseKey, input.decision, input.note);
+  }
+
+  @Post('action/agents/:agentId/publish')
+  async publishAgentWithGate(@Param('agentId') agentId: string, @Body() body: unknown) {
+    const input = parse(AgentPublishSchema, body);
+    const checksum = input.checksum ?? undefined;
+    // assertPublicationGate expects a string; pass empty string when not provided
+    // (the service will check if evaluations are enabled and no required suite exists).
+    return this.evaluations.assertPublicationGate(agentId, checksum ?? '');
+  }
+
+  @Get('action/agents/:agentId/evaluations/compare')
+  async compareEvaluation(@Param('agentId') agentId: string) {
+    await this.permissions.assert('use');
+    return this.evaluations.compare(agentId);
+  }
+
+  // -------------------------------------------------------------------------
+  // 19-AI.13 — pricing snapshots, quotas and admin reporting
+  // -------------------------------------------------------------------------
+
+  @Get('action/pricing')
+  async listPricing(@Query() query: unknown) {
+    const q = asRecord(query);
+    return this.pricing.list(typeof q['providerKey'] === 'string' ? q['providerKey'] : undefined);
+  }
+
+  @HttpCode(201)
+  @Post('action/pricing')
+  async createPricing(@Body() body: unknown) {
+    const input = parse(PricingSnapshotCreateSchema, body);
+    return this.pricing.create({
+      providerKey: input.providerKey,
+      model: input.model,
+      currency: input.currency,
+      inputPricePerMillion: input.inputPricePerMillion,
+      outputPricePerMillion: input.outputPricePerMillion,
+      cachedInputPricePerMillion: input.cachedInputPricePerMillion,
+    });
+  }
+
+  @HttpCode(200)
+  @Post('action/pricing/:id/replace')
+  async replacePricing(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(PricingSnapshotReplaceSchema, body);
+    return this.pricing.replace(id, {
+      inputPricePerMillion: input.inputPricePerMillion,
+      outputPricePerMillion: input.outputPricePerMillion,
+      cachedInputPricePerMillion: input.cachedInputPricePerMillion,
+    });
+  }
+
+  @Delete('action/pricing/:id')
+  async deletePricing(@Param('id') id: string) {
+    await this.pricing.remove(id);
+    return { deleted: true };
+  }
+
+  @Get('action/quotas')
+  async listQuotas() {
+    return this.quotas.list();
+  }
+
+  /** Current consumption per policy: the §12.4 admin read-out with soft-limit warnings. */
+  @Get('action/quotas/status')
+  async quotaStatus() {
+    return this.quotas.status();
+  }
+
+  @HttpCode(201)
+  @Post('action/quotas')
+  async createQuota(@Body() body: unknown) {
+    const input = parse(BudgetPolicyCreateSchema, body);
+    return this.quotas.create({
+      scope: input.scope,
+      period: input.period,
+      enabled: input.enabled,
+      ...(input.scopeRef === undefined ? {} : { scopeRef: input.scopeRef }),
+      ...(input.providerKey === undefined ? {} : { providerKey: input.providerKey }),
+      ...(input.agentId === undefined ? {} : { agentId: input.agentId }),
+      ...(input.maxRequests === undefined ? {} : { maxRequests: input.maxRequests }),
+      ...(input.maxTokens === undefined ? {} : { maxTokens: input.maxTokens }),
+      ...(input.maxCostUsd === undefined ? {} : { maxCostUsd: input.maxCostUsd }),
+      ...(input.maxRuns === undefined ? {} : { maxRuns: input.maxRuns }),
+      ...(input.maxConcurrentRuns === undefined ? {} : { maxConcurrentRuns: input.maxConcurrentRuns }),
+      ...(input.warnPercent === undefined ? {} : { warnPercent: input.warnPercent }),
+    });
+  }
+
+  @Delete('action/quotas/:id')
+  async deleteQuota(@Param('id') id: string) {
+    await this.quotas.remove(id);
+    return { deleted: true };
   }
 
   // -------------------------------------------------------------------------

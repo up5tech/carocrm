@@ -161,7 +161,7 @@ export class AIAgentsModuleHealthService {
         detail:
           missingStructures.length === 0
             ? `${String(AI_AGENTS_TABLES.length)} AI Agents tables are present.`
-            : `Missing: ${missingStructures.join(', ')}. Apply migration 045.`,
+            : `Missing: ${missingStructures.join(', ')}. Apply the module migrations.`,
       },
       {
         name: 'provider-adapters',

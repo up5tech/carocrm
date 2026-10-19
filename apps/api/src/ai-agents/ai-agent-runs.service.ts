@@ -26,7 +26,9 @@ import {
   validateBoundedJsonSchema,
 } from './ai-agent-config.js';
 import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
+import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AI_AGENT_RUN_JOB } from './ai-agent-jobs.js';
+import { AIAgentQuotaService } from './ai-agent-quota.service.js';
 import type { AIToolContext, AIToolDefinition, AIToolProposal } from './ai-agent-tools.js';
 import { AIToolRegistry } from './ai-agent-tools.js';
 import { type AgentStatus, type RunStatus, type RunTrigger,TERMINAL_RUN_STATUSES } from './ai-agents-module.js';
@@ -64,6 +66,8 @@ export interface RunCreateInput {
   readonly input?: { readonly text?: string | undefined; readonly record?: { entity: string; id: string } | undefined } | undefined;
   readonly idempotencyKey?: string | undefined;
   readonly trigger?: RunTrigger | undefined;
+  /** Continue an existing owner-scoped thread of the same agent (conversation memory only). */
+  readonly conversationId?: string | undefined;
 }
 
 export interface AIAgentRunView {
@@ -81,6 +85,7 @@ export interface AIAgentRunView {
   readonly failureCategory: string | null;
   readonly failureMessage: string | null;
   readonly cancelRequested: boolean;
+  readonly conversationId: string | null;
   readonly counters: {
     readonly steps: number;
     readonly modelCalls: number;
@@ -148,6 +153,8 @@ export class AIAgentRunService {
     @Inject(EntityService) private readonly entities: EntityCrudService,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
     @Inject(JobsService) private readonly jobs: JobsService,
+    @Inject(AIAgentMemoryService) private readonly memory: AIAgentMemoryService,
+    @Inject(AIAgentQuotaService) private readonly quotas: AIAgentQuotaService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -249,9 +256,13 @@ export class AIAgentRunService {
   }
 
   /**
-   * Phase 19-AI.10 usage read-out: run counters plus the provider ledger. Costs are captured as the
-   * ledger's own numeric column; where a deployment has no pricing, the value is an exact 0 rather
-   * than an invented estimate (pricing snapshots arrive with 19-AI.13).
+   * Phase 19-AI.10/19-AI.13 usage read-out: run counters plus the provider ledger. Cost totals
+   * come from the ledger's `estimated_cost_usd`, which the gateway prices from admin-maintained
+   * pricing snapshots (§12.1). `costLabel` says what those numbers are: `estimate` when at least
+   * one row was priced from a snapshot, `none` when the deployment has no price data — in that case
+   * the total is an exact 0, never an invented figure. No registered adapter returns a
+   * provider-confirmed billing value in this release, so `confirmedCostUsd` is always absent
+   * rather than silently equal to the estimate.
    */
   async usage(): Promise<{
     totals: {
@@ -261,6 +272,7 @@ export class AIAgentRunService {
       inputTokens: number;
       outputTokens: number;
       estimatedCostUsd: number;
+      costLabel: 'estimate' | 'none';
     };
     byAgent: { agentId: string; agentName: string; runs: number; modelCalls: number; toolCalls: number; tokens: number }[];
     byProvider: {
@@ -297,8 +309,9 @@ export class AIAgentRunService {
     }
     const providerRows = await this.database.db
       .selectFrom('ai_agent_provider_requests')
-      .select(['provider_key', 'model', 'outcome', 'input_tokens', 'output_tokens', 'latency_ms'])
+      .select(['provider_key', 'model', 'outcome', 'input_tokens', 'output_tokens', 'latency_ms', 'estimated_cost_usd'])
       .execute();
+    const pricedRequests = providerRows.filter((row) => row.estimated_cost_usd !== null).length;
     const byProvider = new Map<
       string,
       {
@@ -336,7 +349,8 @@ export class AIAgentRunService {
         toolCalls: runs.reduce((sum, run) => sum + run.tool_call_count, 0),
         inputTokens: runs.reduce((sum, run) => sum + run.input_tokens, 0),
         outputTokens: runs.reduce((sum, run) => sum + run.output_tokens, 0),
-        estimatedCostUsd: runs.reduce((sum, run) => sum + Number(run.estimated_cost_usd), 0),
+        estimatedCostUsd: providerRows.reduce((sum, row) => sum + Number(row.estimated_cost_usd ?? 0), 0),
+        costLabel: pricedRequests === 0 ? 'none' : 'estimate',
       },
       byAgent: [...byAgent.values()].sort((left, right) => right.runs - left.runs),
       byProvider: [...byProvider.values()]
@@ -433,45 +447,76 @@ export class AIAgentRunService {
       );
     }
 
+    // Unlocked quota pre-check (19-AI.13): refuse obvious overruns before any side effect, so a
+    // refused run never leaves an empty conversation thread behind. The locked re-check inside the
+    // insert transaction below is the atomic guarantee.
+    await this.quotas.assertRunAllowedUnlocked({
+      userId: principal.userId,
+      agentId: agent.id,
+      providerKey: config.provider?.key ?? '',
+    });
+
+    // A conversation is resolved only after the concurrency gate, so a refused run never leaves an
+    // empty thread behind. Ownership, agent match and expiry are enforced inside the memory service.
+    const conversation = await this.memory.conversationForRun({
+      agentId: agent.id,
+      agentName: agent.name,
+      config,
+      userId: principal.userId,
+      text: normalized.input.text,
+      conversationId: input.conversationId,
+      record: normalized.input.record,
+    });
+
     const now = new Date();
     const id = randomUUID();
     const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1_000);
     try {
-      await this.database.db
-        .insertInto('ai_agent_runs')
-        .values({
-          id,
-          agent_id: agent.id,
-          agent_version_id: version.id,
-          agent_version: version.version,
-          initiated_by_user_id: principal.userId,
-          service_principal: null,
-          trigger: 'manual',
-          status: 'queued',
-          input: JSON.stringify(normalized.input),
-          input_ref: normalized.input.ref ?? null,
-          idempotency_key: input.idempotencyKey ?? null,
-          correlation_id: id,
-          causation_id: null,
-          lease_owner: null,
-          lease_expires_at: null,
-          started_at: null,
-          finished_at: null,
-          expires_at: expiresAt,
-          step_count: 0,
-          model_call_count: 0,
-          tool_call_count: 0,
-          input_tokens: 0,
-          output_tokens: 0,
-          estimated_cost_usd: '0',
-          result: null,
-          failure_category: null,
-          failure_message: null,
-          cancel_requested: false,
-          created_at: now,
-          modified_at: now,
-        })
-        .execute();
+      // 19-AI.13 §12.3: the quota re-check shares the insert's transaction and locks the matching
+      // policy rows, so two concurrent creations cannot both take the last available slot.
+      await this.database.db.transaction().execute(async (trx) => {
+        await this.quotas.assertRunAllowed(trx, {
+          userId: principal.userId,
+          agentId: agent.id,
+          providerKey: config.provider?.key ?? '',
+        });
+        await trx
+          .insertInto('ai_agent_runs')
+          .values({
+            id,
+            agent_id: agent.id,
+            agent_version_id: version.id,
+            agent_version: version.version,
+            initiated_by_user_id: principal.userId,
+            service_principal: null,
+            trigger: 'manual',
+            status: 'queued',
+            input: JSON.stringify(normalized.input),
+            input_ref: normalized.input.ref ?? null,
+            idempotency_key: input.idempotencyKey ?? null,
+            correlation_id: id,
+            causation_id: null,
+            lease_owner: null,
+            lease_expires_at: null,
+            started_at: null,
+            finished_at: null,
+            expires_at: expiresAt,
+            step_count: 0,
+            model_call_count: 0,
+            tool_call_count: 0,
+            input_tokens: 0,
+            output_tokens: 0,
+            estimated_cost_usd: '0',
+            result: null,
+            failure_category: null,
+            failure_message: null,
+            cancel_requested: false,
+            conversation_id: conversation?.id ?? null,
+            created_at: now,
+            modified_at: now,
+          })
+          .execute();
+      });
     } catch (error) {
       // The unique partial index is the real idempotency guarantee under a concurrent retry.
       if (input.idempotencyKey !== undefined && isUniqueViolation(error)) {
@@ -488,12 +533,75 @@ export class AIAgentRunService {
       throw error;
     }
 
+    if (conversation !== undefined) {
+      const message = normalized.input.text ?? (normalized.input.record === undefined
+        ? 'Started a conversation.'
+        : `Started from ${normalized.input.record.entity} "${normalized.input.record.id}".`);
+      await this.memory.appendUserMessage(conversation.id, id, message);
+    }
     await this.appendEvent(id, 'run', 'run.queued', `Run queued for agent "${agent.name}".`, {
       agentVersion: version.version,
       trigger: 'manual',
+      ...(conversation === undefined ? {} : { conversationId: conversation.id }),
     });
     await this.enqueue(id);
     return this.get(id);
+  }
+
+  /**
+   * Phase 19-AI.11 — a safe retry of a run whose fate is fully known.
+   *
+   * Retrying is a **new** run: the original ledger stays intact and the new row points back to it
+   * through `causation_id`. Anything whose side effect may already have happened (`outcome_unknown`
+   * or `partially_succeeded`) is refused until an operator reconciles it, and a run that is still
+   * active is not retried — it is resumed or canceled. The client supplies an idempotency key so a
+   * double-click cannot enqueue two copies.
+   */
+  async retry(id: string, idempotencyKey?: string): Promise<AIAgentRunView> {
+    await this.permissions.assert('use');
+    const row = await this.visibleRun(id);
+    const retryable: ReadonlySet<RunStatus> = new Set(['failed', 'canceled', 'expired', 'blocked_by_policy']);
+    if (!retryable.has(row.status as RunStatus)) {
+      throw new ValidationError(`A run with status "${row.status}" cannot be retried.`, { status: row.status });
+    }
+    const uncertain = await this.database.db
+      .selectFrom('ai_agent_tool_calls')
+      .select('id')
+      .where('run_id', '=', row.id)
+      .where('status', '=', 'outcome_unknown')
+      .executeTakeFirst();
+    if (uncertain) {
+      throw new ValidationError('A tool call from this run has an unknown outcome; reconcile it before retrying.');
+    }
+
+    const storedInput = asRecord(row.input);
+    const text = typeof storedInput['text'] === 'string' ? storedInput['text'] : undefined;
+    const record = asRecord(storedInput['record']);
+    const entity = typeof record['entity'] === 'string' ? record['entity'] : undefined;
+    const recordId = typeof record['id'] === 'string' ? record['id'] : undefined;
+    const view = await this.create(row.agent_id, {
+      input: {
+        ...(text === undefined ? {} : { text }),
+        ...(entity === undefined || recordId === undefined ? {} : { record: { entity, id: recordId } }),
+      },
+      ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
+    });
+    // A replayed idempotency key returns the run this endpoint already created; it is not rewritten
+    // and its timeline is not duplicated.
+    const created = await this.database.db
+      .selectFrom('ai_agent_runs')
+      .select('causation_id')
+      .where('id', '=', view.id)
+      .executeTakeFirst();
+    if (created?.causation_id !== row.id) {
+      await this.database.db
+        .updateTable('ai_agent_runs')
+        .set({ causation_id: row.id, correlation_id: row.correlation_id ?? row.id, modified_at: new Date() })
+        .where('id', '=', view.id)
+        .execute();
+      await this.appendEvent(view.id, 'run', 'run.retried', `Retried run ${row.id}.`, { retryOf: row.id }, 'user');
+    }
+    return this.get(view.id);
   }
 
   async cancel(id: string): Promise<AIAgentRunView> {
@@ -516,6 +624,15 @@ export class AIAgentRunService {
     if (immediate) {
       await this.invalidatePendingApprovals(id, 'The run was canceled by its owner.');
       await this.appendEvent(id, 'run', 'run.canceled', 'Run canceled before completion.', {}, 'user');
+      if (row.conversation_id !== null) {
+        await this.memory.appendRunOutcome({
+          conversationId: row.conversation_id,
+          runId: id,
+          result: null,
+          failureMessage: 'The run was canceled before completion.',
+        });
+        await this.memory.releaseCheckpoint(id);
+      }
     } else {
       await this.appendEvent(id, 'run', 'run.cancel_requested', 'Cancellation requested; the current step will stop.', {}, 'user');
     }
@@ -883,6 +1000,22 @@ export class AIAgentRunService {
       inputTokens += response.usage.inputTokens ?? 0;
       outputTokens += response.usage.outputTokens ?? 0;
       await this.updateCounters(row.id, { inputTokens, outputTokens });
+      // 19-AI.13 §12.3 "reconcile provider-reported usage after each call": the run's cost
+      // counter mirrors the provider ledger (the gateway priced this call from the admin's
+      // pricing snapshot), so per-run budgets and reports see real numbers, not zeros.
+      await this.reconcileRunCost(row.id);
+      const runCost = await this.database.db
+        .selectFrom('ai_agent_runs')
+        .select(['estimated_cost_usd'])
+        .where('id', '=', row.id)
+        .executeTakeFirstOrThrow();
+      if (Number(runCost.estimated_cost_usd) >= config.limits.maxCostUsd) {
+        await this.finish(row.id, 'failed', {
+          failureCategory: 'cost_limit',
+          failureMessage: 'The run reached its cost budget; no further model calls were made.',
+        });
+        return;
+      }
       await this.appendEvent(row.id, 'model', 'model.completed', `Model call ${String(step)} completed (${response.finishReason}).`, {
         step,
         finishReason: response.finishReason,
@@ -1403,6 +1536,9 @@ export class AIAgentRunService {
       actionClass: definition.effectClass,
       expiresAt: expiresAt.toISOString(),
     }, 'user');
+    // Checkpoint memory is explicit per-agent state, not hidden CRM content: it carries only the
+    // counters and the approval this run is waiting on, so a restarted worker can resume safely.
+    if (row.conversation_id !== null) await this.memory.checkpointRun(row, approvalId);
     return true;
   }
 
@@ -1622,8 +1758,33 @@ export class AIAgentRunService {
     if (actions !== '') {
       taskParts.push(`Actions already executed in this run:\n${actions}`);
     }
+    const history: AIProviderMessage[] = [];
+    if (row.conversation_id !== null && config.memory.mode === 'conversation') {
+      const conversation = await this.database.db
+        .selectFrom('ai_agent_conversations')
+        .selectAll()
+        .where('id', '=', row.conversation_id)
+        .where('status', '=', 'active')
+        .executeTakeFirst();
+      if (conversation) {
+        const context = await this.memory.contextFor(conversation, row.id, config.memory.maxMessages);
+        history.push(...this.memory.buildMessages(context));
+        if (context.withheld > 0) {
+          await this.appendEvent(
+            row.id,
+            'policy',
+            'memory.withheld',
+            `${String(context.withheld)} earlier message(s) were withheld because a referenced record is no longer readable.`,
+            { withheld: context.withheld },
+            'operator',
+          );
+        }
+      }
+    }
+
     return [
       { role: 'system', content: system },
+      ...history,
       { role: 'user', content: taskParts.join('\n\n') },
     ];
   }
@@ -1646,6 +1807,22 @@ export class AIAgentRunService {
       await this.appendEvent(runId, 'run', 'run.dispatch_pending', 'The job queue was unreachable; the run stays queued.', {}, 'operator');
       return false;
     }
+  }
+
+  /** 19-AI.13 — fold the provider ledger's estimated cost into the run counter. */
+  private async reconcileRunCost(runId: string): Promise<void> {
+    const ledger = await this.database.db
+      .selectFrom('ai_agent_provider_requests')
+      .select((eb) => eb.fn.sum<number>('estimated_cost_usd').as('costUsd'))
+      .where('run_id', '=', runId)
+      .executeTakeFirst();
+    const costUsd = Number(ledger?.costUsd ?? 0);
+    if (!Number.isFinite(costUsd) || costUsd <= 0) return;
+    await this.database.db
+      .updateTable('ai_agent_runs')
+      .set({ estimated_cost_usd: String(costUsd), modified_at: new Date() })
+      .where('id', '=', runId)
+      .execute();
   }
 
   private async updateCounters(
@@ -1729,6 +1906,33 @@ export class AIAgentRunService {
       'user',
     );
     if (status !== 'waiting_for_approval') await this.invalidatePendingApprovals(runId, `The run ended as "${status}".`);
+
+    // Conversation memory is written only after the durable run row is settled: a failed write can
+    // never make a run look successful. The checkpoint is released because the counters above are
+    // now authoritative.
+    const settled = await this.database.db
+      .selectFrom('ai_agent_runs')
+      .select(['conversation_id', 'agent_id', 'agent_version'])
+      .where('id', '=', runId)
+      .executeTakeFirst();
+    if (settled?.conversation_id !== null && settled?.conversation_id !== undefined) {
+      await this.memory.appendRunOutcome({
+        conversationId: settled.conversation_id,
+        runId,
+        result: options.result ?? null,
+        failureMessage: options.failureMessage ?? null,
+      });
+      await this.memory.releaseCheckpoint(runId);
+      const version = await this.database.db
+        .selectFrom('ai_agent_versions')
+        .select('memory_policy')
+        .where('agent_id', '=', settled.agent_id)
+        .where('version', '=', settled.agent_version)
+        .executeTakeFirst();
+      const policy = asRecord(version?.memory_policy);
+      const keep = typeof policy['maxMessages'] === 'number' ? policy['maxMessages'] : 12;
+      await this.memory.summarize(settled.conversation_id, keep);
+    }
   }
 
   private async failFromError(runId: string, error: unknown): Promise<void> {
@@ -2026,6 +2230,7 @@ export class AIAgentRunService {
       failureCategory: row.failure_category,
       failureMessage: row.failure_message,
       cancelRequested: row.cancel_requested,
+      conversationId: row.conversation_id,
       counters: {
         steps: row.step_count,
         modelCalls: row.model_call_count,

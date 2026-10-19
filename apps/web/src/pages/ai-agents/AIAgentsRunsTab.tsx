@@ -35,6 +35,9 @@ import { formatTimestamp, ResultText, RunStatusTag } from './shared.js';
  * every four seconds, and stops as soon as the data is terminal.
  */
 
+/** A run may be retried only when its side effects are fully known (19-AI.11). */
+const RETRYABLE: ReadonlySet<AIAgentRunStatus> = new Set(['failed', 'canceled', 'expired', 'blocked_by_policy']);
+
 const ACTIVE: ReadonlySet<AIAgentRunStatus> = new Set([
   'queued',
   'running',
@@ -117,6 +120,16 @@ export function AIAgentsRunsTab({ capabilities, focusRunId, onFocusConsumed, onO
     onSuccess: (run) => {
       void message.success(t('web.aiAgents.runNow', { status: run.status }));
       invalidate();
+    },
+    onError: (error: Error) => void message.error(error.message),
+  });
+
+  const retry = useMutation({
+    mutationFn: (id: string) => api.aiAgentsRetryRun(id, newRetryKey()),
+    onSuccess: (run) => {
+      void message.success(t('web.aiAgents.retryStarted'));
+      invalidate();
+      setOpenRunId(run.id);
     },
     onError: (error: Error) => void message.error(error.message),
   });
@@ -272,6 +285,11 @@ export function AIAgentsRunsTab({ capabilities, focusRunId, onFocusConsumed, onO
                   {t('web.aiAgents.executeNow')}
                 </Button>
               ) : null}
+              {RETRYABLE.has(active.status) ? (
+                <Button size="small" loading={retry.isPending} onClick={() => retry.mutate(active.id)}>
+                  {t('web.aiAgents.retryRun')}
+                </Button>
+              ) : null}
               {pendingApproval === undefined ? null : (
                 <Button size="small" type="primary" onClick={onOpenApprovals}>
                   {t('web.aiAgents.reviewApproval')}
@@ -412,6 +430,13 @@ export function AIAgentsRunsTab({ capabilities, focusRunId, onFocusConsumed, onO
       </Drawer>
     </div>
   );
+}
+
+/** A fresh idempotency key per click keeps a double submit from creating two retries. */
+function newRetryKey(): string {
+  return typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `retry-${String(Date.now())}-${Math.random().toString(36).slice(2)}`;
 }
 
 function toneForEvent(type: string): string {

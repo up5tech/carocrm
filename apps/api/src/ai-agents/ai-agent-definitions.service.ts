@@ -503,10 +503,28 @@ export class AIAgentDefinitionService {
     if (config.triggers.integration) {
       warn('trigger-not-implemented', 'triggers.integration', 'Integration triggers are declared but not implemented in this release.');
     }
+    const memoryEnabled = config.memory.mode !== 'none';
+    if (memoryEnabled && !settings.features.memory) {
+      block(
+        'memory-disabled',
+        'memory.mode',
+        'This agent declares memory but the instance feature `features.memory` is off; enable it or set memory.mode to "none".',
+      );
+    } else if (memoryEnabled && config.memory.retentionDays > settings.retention.conversationsDays) {
+      block(
+        'memory-retention',
+        'memory.retentionDays',
+        `The agent retention (${String(config.memory.retentionDays)} days) exceeds the instance ceiling (${String(settings.retention.conversationsDays)} days).`,
+      );
+    }
     checks.push({
       id: 'memory',
-      ok: true,
-      detail: 'Memory mode is "none": this release stores no conversation memory.',
+      ok: !memoryEnabled || settings.features.memory,
+      detail: !memoryEnabled
+        ? 'Memory mode is "none": every run is isolated.'
+        : settings.features.memory
+          ? `Memory mode is "${config.memory.mode}" with ${String(config.memory.maxMessages)} recent messages and ${String(config.memory.retentionDays)}-day retention.`
+          : 'The agent declares memory but the instance memory feature is off.',
     });
     if (settings.features.evaluations) {
       warn(
@@ -964,7 +982,7 @@ export class AIAgentDefinitionService {
               temperature: 0.2,
             },
             output: { mode: 'text' },
-            memory: { mode: 'none' },
+            memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
             triggers: { manual: true, record: false, event: false, schedule: false, integration: false },
             approval: { requireFor: ['material_write', 'high_impact'] },
           },
@@ -1021,7 +1039,7 @@ function parsedFallbackConfig(): AgentConfig {
       temperature: 0.2,
     },
     output: { mode: 'text' },
-    memory: { mode: 'none' },
+    memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
     triggers: { manual: true, record: false, event: false, schedule: false, integration: false },
     approval: { requireFor: ['material_write', 'high_impact'] },
   };

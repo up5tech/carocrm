@@ -1343,6 +1343,8 @@ export interface AIAgentsCapabilitiesView {
     readonly granted: boolean;
   }[];
   readonly execution: { readonly enabled: boolean; readonly paused: boolean; readonly available: boolean };
+  readonly memory: { readonly enabled: boolean };
+  readonly evaluations: { readonly enabled: boolean };
 }
 
 /** Phase 19-AI.4: a provider connection as the admin API returns it. Never contains a credential. */
@@ -1400,7 +1402,7 @@ export interface AIAgentConfigShape {
     temperature: number;
   };
   readonly output: { mode: 'text' | 'json'; schema?: Record<string, unknown> };
-  readonly memory: { mode: 'none' };
+  readonly memory: { mode: 'none' | 'conversation' | 'checkpoint'; maxMessages?: number; retentionDays?: number };
   readonly triggers: { manual: boolean; record: boolean; event: boolean; schedule: boolean; integration: boolean };
   readonly approval: { requireFor: readonly string[] };
 }
@@ -1495,6 +1497,7 @@ export interface AIAgentRunView {
   readonly failureCategory: string | null;
   readonly failureMessage: string | null;
   readonly cancelRequested: boolean;
+  readonly conversationId: string | null;
   readonly counters: {
     readonly steps: number;
     readonly modelCalls: number;
@@ -1575,6 +1578,89 @@ export interface AIAgentApprovalListResult {
   readonly expired: number;
 }
 
+export interface AIAgentConversationView {
+  readonly id: string;
+  readonly agentId: string;
+  readonly agentName: string;
+  readonly title: string | null;
+  readonly status: string;
+  readonly messageCount: number;
+  readonly summary: string | null;
+  readonly lastActivityAt: string;
+  readonly expiresAt: string | null;
+  readonly createdAt: string;
+}
+
+export interface AIAgentConversationMessageView {
+  readonly id: string;
+  readonly seq: number;
+  readonly role: string;
+  readonly content: string;
+  readonly redaction: string;
+  readonly runId: string | null;
+  readonly createdAt: string;
+}
+
+export interface AIAgentMemoryView {
+  readonly id: string;
+  readonly scope: string;
+  readonly kind: string;
+  readonly content: string;
+  readonly sensitivity: string;
+  readonly sourceRefs: readonly unknown[];
+  readonly expiresAt: string | null;
+  readonly createdAt: string;
+}
+
+/** Phase 19-AI.13 — an admin-maintained price card; costs are estimates, never billed values. */
+export interface AIAgentPricingSnapshot {
+  readonly id: string;
+  readonly providerKey: string;
+  readonly model: string;
+  readonly currency: string;
+  readonly inputPricePerMillion: number;
+  readonly outputPricePerMillion: number;
+  readonly cachedInputPricePerMillion: number;
+  readonly validFrom: string;
+  readonly createdAt: string;
+}
+
+/** Phase 19-AI.13 — a scoped budget policy with its current consumption. */
+export interface AIAgentBudgetPolicy {
+  readonly id: string;
+  readonly scope: 'global' | 'user' | 'team' | 'agent' | 'provider';
+  readonly scopeRef: string | null;
+  readonly providerKey: string | null;
+  readonly agentId: string | null;
+  readonly period: 'day' | 'month';
+  readonly maxRequests: number | null;
+  readonly maxTokens: string | null;
+  readonly maxCostUsd: string | null;
+  readonly maxRuns: number | null;
+  readonly maxConcurrentRuns: number | null;
+  readonly warnPercent: number | null;
+  readonly enabled: boolean;
+}
+
+export interface AIAgentBudgetPolicyStatus extends AIAgentBudgetPolicy {
+  readonly usage: {
+    readonly runs: number;
+    readonly requests: number;
+    readonly tokens: number;
+    readonly costUsd: number;
+    readonly concurrentRuns: number;
+  };
+  readonly warning: boolean;
+  readonly exhausted: boolean;
+}
+
+export interface AIAgentRetentionReport {
+  readonly conversations: number;
+  readonly memoryItems: number;
+  readonly providerRequests: number;
+  readonly runEvents: number;
+}
+
 export interface AIAgentUsageView {
   readonly totals: {
     readonly runs: number;
@@ -1583,6 +1669,8 @@ export interface AIAgentUsageView {
     readonly inputTokens: number;
     readonly outputTokens: number;
     readonly estimatedCostUsd: number;
+    /** `estimate` when priced from an admin snapshot; `none` when no price data exists (19-AI.13). */
+    readonly costLabel: 'estimate' | 'none';
   };
   readonly byAgent: readonly {
     readonly agentId: string;

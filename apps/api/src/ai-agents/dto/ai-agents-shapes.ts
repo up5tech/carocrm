@@ -123,6 +123,7 @@ export const AgentUpdateSchema = z
 export const AgentPublishSchema = z
   .object({
     note: z.string().trim().max(1_000).optional(),
+    checksum: z.string().trim().max(64).optional(),
   })
   .strict();
 
@@ -142,6 +143,15 @@ export const RunCreateSchema = z
       .strict()
       .optional(),
     idempotencyKey: z.string().trim().min(8).max(120).optional(),
+    /** Continue an existing conversation of this agent; refused for a no-memory agent. */
+    conversationId: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict();
+
+export const RunRetrySchema = z
+  .object({
+    /** Reusing the key after a lost response returns the already-created retry instead of a third run. */
+    idempotencyKey: z.string().trim().min(8).max(120).optional(),
   })
   .strict();
 
@@ -153,6 +163,79 @@ export const ApprovalDecisionSchema = z
 
 export const EmptyBodySchema = z.object({}).strict();
 
+// ---------------------------------------------------------------------------
+// 19-AI.14 — evaluation suites, cases and runs
+// ---------------------------------------------------------------------------
+
+export const RunEvaluationSchema = z
+  .object({
+    suiteId: z.string().trim().min(1).max(255).optional(),
+  })
+  .strict();
+
+export const DecisionEvaluationSchema = z
+  .object({
+    caseKey: z.string().trim().min(1).max(255),
+    decision: z.enum(['approve', 'reject']),
+    note: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
+export const EvaluationCaseCreateSchema = z
+  .object({
+    caseKey: z.string().trim().min(1).max(255),
+    title: z.string().trim().min(1).max(500),
+    grader: z.string().trim().min(1).max(120),
+    graderConfig: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
+// 19-AI.13 — pricing snapshots and budget policies
+// ---------------------------------------------------------------------------
+
+/** Prices are USD per million tokens; the service additionally bounds them. */
+const PricePerMillionSchema = z.number().min(0).max(1_000_000);
+
+export const PricingSnapshotCreateSchema = z
+  .object({
+    providerKey: ProviderKeySchema,
+    /** Exact model name, or `*` for every model of this provider. */
+    model: z.string().trim().min(1).max(200),
+    currency: z.string().trim().length(3).default('USD'),
+    inputPricePerMillion: PricePerMillionSchema,
+    outputPricePerMillion: PricePerMillionSchema,
+    cachedInputPricePerMillion: PricePerMillionSchema.default(0),
+  })
+  .strict();
+
+export const PricingSnapshotReplaceSchema = z
+  .object({
+    inputPricePerMillion: PricePerMillionSchema,
+    outputPricePerMillion: PricePerMillionSchema,
+    cachedInputPricePerMillion: PricePerMillionSchema.default(0),
+  })
+  .strict();
+
+export const BudgetPolicyCreateSchema = z
+  .object({
+    scope: z.enum(['global', 'user', 'team', 'agent', 'provider']),
+    scopeRef: z.string().trim().min(1).max(120).optional(),
+    providerKey: ProviderKeySchema.optional(),
+    agentId: z.string().trim().min(1).max(120).optional(),
+    /** `run` budgets live in the agent config; a policy may only bound day/month windows. */
+    period: z.enum(['day', 'month']),
+    maxRequests: z.number().int().min(0).max(1_000_000).nullable().optional(),
+    maxTokens: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
+    maxCostUsd: z.number().min(0).max(1_000_000).nullable().optional(),
+    maxRuns: z.number().int().min(0).max(1_000_000).nullable().optional(),
+    maxConcurrentRuns: z.number().int().min(0).max(100).nullable().optional(),
+    /** Soft limit: warn at this percentage of a hard limit; never refuses work by itself. */
+    warnPercent: z.number().int().min(1).max(100).nullable().optional(),
+    enabled: z.boolean().default(true),
+  })
+  .strict();
+
 export type ProviderConnectionCreateInput = z.infer<typeof ProviderConnectionCreateSchema>;
 export type ProviderConnectionPatchInput = z.infer<typeof ProviderConnectionPatchSchema>;
 export type ProviderCheckInput = z.infer<typeof ProviderCheckSchema>;
@@ -160,3 +243,7 @@ export type AgentCreateInput = z.infer<typeof AgentCreateSchema>;
 export type AgentUpdateInput = z.infer<typeof AgentUpdateSchema>;
 export type RunCreateBody = z.infer<typeof RunCreateSchema>;
 export type ApprovalDecisionInput = z.infer<typeof ApprovalDecisionSchema>;
+export type RunRetryInput = z.infer<typeof RunRetrySchema>;
+export type PricingSnapshotCreateInput = z.infer<typeof PricingSnapshotCreateSchema>;
+export type PricingSnapshotReplaceInput = z.infer<typeof PricingSnapshotReplaceSchema>;
+export type BudgetPolicyCreateInput = z.infer<typeof BudgetPolicyCreateSchema>;

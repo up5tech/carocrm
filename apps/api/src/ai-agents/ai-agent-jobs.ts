@@ -9,6 +9,7 @@
  */
 
 export const AI_AGENT_RUN_JOB = 'aiAgents.executeRun';
+export const AI_AGENT_RETENTION_JOB = 'aiAgents.retentionSweep';
 export const AI_AGENT_RUN_EXECUTE_PATH = '/api/v1/AIAgents/action/runs';
 
 export function aiAgentRunExecutePath(runId: string): string {

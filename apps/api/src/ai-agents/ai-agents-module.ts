@@ -325,8 +325,15 @@ export const AI_AGENTS_TABLES = [
   'ai_agent_run_events',
   'ai_agent_tool_calls',
   'ai_agent_approvals',
+  'ai_agent_conversations',
+  'ai_agent_messages',
+  'ai_agent_memory_items',
   'ai_agent_provider_requests',
   'ai_agent_budget_policies',
+  'ai_agent_pricing_snapshots',
+  'ai_agent_eval_suites',
+  'ai_agent_eval_cases',
+  'ai_agent_eval_runs',
   'ai_provider_connections',
 ] as const;
 
@@ -354,6 +361,9 @@ export const AI_AGENTS_MODULE = {
     '19-AI.8',
     '19-AI.9',
     '19-AI.10',
+    '19-AI.11',
+    '19-AI.12',
+    '19-AI.13',
   ],
   /** Tables the module owns; no other module may write them directly. */
   tables: AI_AGENTS_TABLES,

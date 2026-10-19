@@ -18,7 +18,9 @@ import type { JobContext, JobHandler, JobRegistry } from '@carocrm/jobs';
  */
 
 export const AI_AGENT_RUN_JOB = 'aiAgents.executeRun';
+export const AI_AGENT_RETENTION_JOB = 'aiAgents.retentionSweep';
 export const AI_AGENT_RUN_EXECUTE_PREFIX = '/api/v1/AIAgents/action/worker/runs';
+export const AI_AGENT_RETENTION_PATH = '/api/v1/AIAgents/action/worker/retention';
 
 export interface AIAgentJobDeps {
   readonly apiBaseUrl: string;
@@ -74,6 +76,39 @@ function runJob(deps: AIAgentJobDeps): JobHandler {
   };
 }
 
+/**
+ * Phase 19-AI.12 — scheduled retention. The worker only asks the API to sweep; the API decides what
+ * falls outside its configured windows, so a cron misconfiguration cannot become a broad delete.
+ */
+function retentionJob(deps: AIAgentJobDeps): JobHandler {
+  return async (context: JobContext) => {
+    if (deps.secret.trim() === '') {
+      return {
+        status: 'completed',
+        message: 'AI agent retention is disabled: no worker capability is configured.',
+        result: { disabled: true },
+      };
+    }
+    if (await context.shouldStop()) {
+      return { status: 'completed', message: 'Stopped before the retention sweep.', result: { stopped: true } };
+    }
+    context.progress(20, 'running retention sweep');
+    const fetcher = deps.fetcher ?? fetch;
+    const response = await fetcher(`${deps.apiBaseUrl.replace(/\/$/, '')}${AI_AGENT_RETENTION_PATH}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-worker-secret': deps.secret },
+      body: JSON.stringify({}),
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!response.ok) throw new Error(`Agent retention sweep failed with HTTP ${String(response.status)}.`);
+    const result = (await response.json()) as Record<string, number>;
+    context.progress(100, 'retention sweep finished');
+    deps.log.info({ result }, 'ai agent retention sweep finished');
+    return { status: 'completed', message: 'Agent retention sweep finished.', result };
+  };
+}
+
 export function registerAIAgentJobs(registry: JobRegistry, deps: AIAgentJobDeps): void {
   registry.register(AI_AGENT_RUN_JOB, runJob(deps));
+  registry.register(AI_AGENT_RETENTION_JOB, retentionJob(deps));
 }

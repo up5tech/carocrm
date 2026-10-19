@@ -3,7 +3,14 @@ import type {
   AdminPanelView,
   AIAgentApprovalListResult,
   AIAgentApprovalView,
+  AIAgentBudgetPolicy,
+  AIAgentBudgetPolicyStatus,
+  AIAgentConversationMessageView,
+  AIAgentConversationView,
   AIAgentListResult,
+  AIAgentMemoryView,
+  AIAgentPricingSnapshot,
+  AIAgentRetentionReport,
   AIAgentRunEventView,
   AIAgentRunListResult,
   AIAgentRunToolCallView,
@@ -493,8 +500,18 @@ export const api = {
     request<{ list: AIAgentRunToolCallView[] }>(`/AIAgents/action/runs/${encodeURIComponent(id)}/toolCalls`),
   aiAgentsRunsForAgent: (agentId: string) =>
     request<AIAgentRunListResult>(`/AIAgents/action/runs?agentId=${encodeURIComponent(agentId)}&maxSize=50`),
-  aiAgentsCreateRun: (agentId: string, input: { text?: string; record?: { entity: string; id: string } }, idempotencyKey?: string) =>
-    request<AIAgentRunView>(`/AIAgents/action/agents/${encodeURIComponent(agentId)}/runs`, post({ input, idempotencyKey })),
+  aiAgentsCreateRun: (
+    agentId: string,
+    input: { text?: string; record?: { entity: string; id: string } },
+    idempotencyKey?: string,
+    conversationId?: string,
+  ) =>
+    request<AIAgentRunView>(
+      `/AIAgents/action/agents/${encodeURIComponent(agentId)}/runs`,
+      post({ input, idempotencyKey, conversationId }),
+    ),
+  aiAgentsRetryRun: (id: string, idempotencyKey?: string) =>
+    request<AIAgentRunView>(`/AIAgents/action/runs/${encodeURIComponent(id)}/retry`, post({ idempotencyKey })),
   aiAgentsCancelRun: (id: string) =>
     request<AIAgentRunView>(`/AIAgents/action/runs/${encodeURIComponent(id)}/cancel`, post({})),
   aiAgentsExecuteRun: (id: string) =>
@@ -522,7 +539,65 @@ export const api = {
       `/AIAgents/action/approvals/${encodeURIComponent(id)}/reject`,
       post({ note }),
     ),
+  aiAgentsConversations: (params: { agentId?: string; maxSize?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.agentId) query.set('agentId', params.agentId);
+    if (params.maxSize !== undefined) query.set('maxSize', String(params.maxSize));
+    const suffix = query.toString() === '' ? '' : `?${query.toString()}`;
+    return request<{ list: AIAgentConversationView[] }>(`/AIAgents/action/conversations${suffix}`);
+  },
+  aiAgentsConversation: (id: string) =>
+    request<{ conversation: AIAgentConversationView; messages: AIAgentConversationMessageView[] }>(
+      `/AIAgents/action/conversations/${encodeURIComponent(id)}`,
+    ),
+  aiAgentsArchiveConversation: (id: string) =>
+    request<AIAgentConversationView>(`/AIAgents/action/conversations/${encodeURIComponent(id)}/archive`, post({})),
+  aiAgentsDeleteConversation: (id: string) =>
+    request<{ status: boolean }>(`/AIAgents/action/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  aiAgentsMemory: (params: { agentId?: string } = {}) => {
+    const suffix = params.agentId === undefined ? '' : `?agentId=${encodeURIComponent(params.agentId)}`;
+    return request<{ list: AIAgentMemoryView[] }>(`/AIAgents/action/memory${suffix}`);
+  },
+  aiAgentsDeleteMemory: (id: string) =>
+    request<{ status: boolean }>(`/AIAgents/action/memory/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  aiAgentsRetentionDryRun: () => request<AIAgentRetentionReport>('/AIAgents/action/retention/dryRun'),
+  aiAgentsRetentionRun: () =>
+    request<AIAgentRetentionReport>('/AIAgents/action/retention/run', post({})),
   aiAgentsUsage: () => request<AIAgentUsageView>('/AIAgents/action/usage'),
+  aiAgentsPricing: (providerKey?: string) =>
+    request<{ list: AIAgentPricingSnapshot[] }>(
+      `/AIAgents/action/pricing${providerKey === undefined ? '' : `?providerKey=${encodeURIComponent(providerKey)}`}`,
+    ),
+  aiAgentsCreatePricing: (input: {
+    providerKey: string;
+    model: string;
+    inputPricePerMillion: number;
+    outputPricePerMillion: number;
+    cachedInputPricePerMillion?: number;
+  }) => request<AIAgentPricingSnapshot>('/AIAgents/action/pricing', post(input)),
+  aiAgentsReplacePricing: (
+    id: string,
+    input: { inputPricePerMillion: number; outputPricePerMillion: number; cachedInputPricePerMillion?: number },
+  ) => request<AIAgentPricingSnapshot>(`/AIAgents/action/pricing/${encodeURIComponent(id)}/replace`, post(input)),
+  aiAgentsDeletePricing: (id: string) =>
+    request<{ deleted: boolean }>(`/AIAgents/action/pricing/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  aiAgentsQuotas: () => request<{ list: AIAgentBudgetPolicy[] }>('/AIAgents/action/quotas'),
+  aiAgentsQuotaStatus: () => request<{ list: AIAgentBudgetPolicyStatus[] }>('/AIAgents/action/quotas/status'),
+  aiAgentsCreateQuota: (input: {
+    scope: 'global' | 'user' | 'team' | 'agent' | 'provider';
+    scopeRef?: string;
+    providerKey?: string;
+    agentId?: string;
+    period: 'day' | 'month';
+    maxRequests?: number;
+    maxTokens?: number;
+    maxCostUsd?: number;
+    maxRuns?: number;
+    maxConcurrentRuns?: number;
+    warnPercent?: number;
+  }) => request<AIAgentBudgetPolicy>('/AIAgents/action/quotas', post(input)),
+  aiAgentsDeleteQuota: (id: string) =>
+    request<{ deleted: boolean }>(`/AIAgents/action/quotas/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   serviceDeskSettings: () => request<ModuleSettingsView>('/ServiceDesk/action/settings'),
   saveServiceDeskSettings: (input: Record<string, unknown>) => request<ModuleSettingsView>('/ServiceDesk/action/settings', post(input)),
   customerSuccessSettings: () => request<ModuleSettingsView>('/CustomerSuccess/action/settings'),

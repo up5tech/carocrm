@@ -6,6 +6,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service.js';
 import type { DataClass } from './ai-agents-module.js';
+import { AIAgentPricingService } from './ai-agent-pricing.service.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 import {
   AIProviderError,
@@ -71,6 +72,7 @@ export class AIProviderGateway {
     @Inject(AIProviderConnectionService) private readonly connections: AIProviderConnectionService,
     @Inject(AIAgentsSettingsService) private readonly settings: AIAgentsSettingsService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(AIAgentPricingService) private readonly pricing: AIAgentPricingService,
   ) {}
 
   async complete(input: GatewayCompleteInput): Promise<AIProviderResponse> {
@@ -198,6 +200,9 @@ export class AIProviderGateway {
     response: AIProviderResponse,
     latencyMs: number,
   ): Promise<void> {
+    // Cost is estimated from the admin-maintained pricing snapshot, never from a hard-coded rate
+    // (§12.1). No snapshot means an exact NULL, not an invented number.
+    const estimate = await this.pricing.estimate(providerKey, response.model, response.usage);
     await this.insertLedger({
       input,
       providerKey,
@@ -211,6 +216,9 @@ export class AIProviderGateway {
       toolCallCount: response.toolCalls.length,
       structured: response.structured !== null,
       errorCategory: null,
+      costUsd: estimate.costUsd,
+      costSource: estimate.source,
+      costSnapshotId: estimate.snapshotId,
     });
   }
 
@@ -233,6 +241,9 @@ export class AIProviderGateway {
       toolCallCount: 0,
       structured: false,
       errorCategory: error.category,
+      costUsd: null,
+      costSource: 'none',
+      costSnapshotId: null,
     });
   }
 
@@ -249,6 +260,9 @@ export class AIProviderGateway {
     readonly toolCallCount: number;
     readonly structured: boolean;
     readonly errorCategory: AIProviderErrorCategory | null;
+    readonly costUsd: number | null;
+    readonly costSource: 'snapshot' | 'none';
+    readonly costSnapshotId: string | null;
   }): Promise<void> {
     try {
       await this.database.db
@@ -274,6 +288,11 @@ export class AIProviderGateway {
             finishReason: entry.finishReason,
             toolCallCount: entry.toolCallCount,
             structured: entry.structured,
+            // Reports must distinguish an estimate from a provider-confirmed billing value (§12.1).
+            // No registered adapter returns a billed amount in this release, so the label is
+            // always 'estimate' or 'none' — never an unlabelled number.
+            costLabel: entry.costSource === 'snapshot' ? 'estimate' : 'none',
+            costSnapshotId: entry.costSnapshotId,
           }),
           input_tokens: entry.usage?.inputTokens ?? null,
           output_tokens: entry.usage?.outputTokens ?? null,
@@ -281,7 +300,7 @@ export class AIProviderGateway {
           latency_ms: entry.latencyMs,
           outcome: entry.outcome,
           error_category: entry.errorCategory,
-          estimated_cost_usd: null,
+          estimated_cost_usd: entry.costUsd === null ? null : String(entry.costUsd),
           provider_request_id: entry.providerRequestId,
           created_at: new Date(),
         })

@@ -178,8 +178,21 @@ export const AgentConfigSchema = z
     tools: z.array(ToolGrantSchema).max(MAX_TOOLS).default([]),
     limits: AgentLimitsSchema,
     output: AgentOutputSchema,
-    /** No-memory is the default and the only mode this release implements (§10.1). */
-    memory: z.object({ mode: z.literal('none').default('none') }).strict().default({}),
+    /**
+     * Memory is opt-in (§10.1). `none` isolates every run; `conversation` keeps one owner-scoped
+     * thread; `checkpoint` stores only the resumable state of the same run. Long-term curated facts
+     * are never inferred automatically.
+     */
+    memory: z
+      .object({
+        mode: z.enum(['none', 'conversation', 'checkpoint']).default('none'),
+        /** How many prior messages are put in the prompt; older ones become a rolling summary. */
+        maxMessages: z.number().int().min(2).max(40).default(12),
+        /** Retention the conversation inherits; the instance setting is the ceiling. */
+        retentionDays: z.number().int().min(1).max(3650).default(30),
+      })
+      .strict()
+      .default({}),
     triggers: z
       .object({
         manual: z.boolean().default(true),
@@ -254,7 +267,7 @@ export function blankAgentConfig(): AgentConfig {
     tools: [],
     limits: { ...DEFAULT_AGENT_LIMITS },
     output: { mode: 'text' },
-    memory: { mode: 'none' },
+    memory: { mode: 'none', maxMessages: 12, retentionDays: 30 },
     triggers: { manual: true, record: false, event: false, schedule: false, integration: false },
     approval: { requireFor: ['material_write', 'high_impact'] },
   };

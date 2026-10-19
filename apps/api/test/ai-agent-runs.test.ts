@@ -43,6 +43,8 @@ const createdUserIds: string[] = [];
 const agentKeys: string[] = [];
 const entityIds: string[] = [];
 const runIds: string[] = [];
+const pricingSnapshotIds: string[] = [];
+const budgetPolicyIds: string[] = [];
 let taskId = '';
 
 async function call(method: Method, url: string, token?: string, payload?: unknown): Promise<CallResult> {
@@ -115,6 +117,14 @@ async function publish(id: string): Promise<CallResult> {
   return call('POST', `/api/v1/AIAgents/action/agents/${id}/publish`, ctx.adminToken, {});
 }
 
+/** 19-AI.13 helper: an organization-visible agent that is published and ready to run. */
+async function publishedAgent(suffix: string): Promise<string> {
+  const { id } = await createAgent({ suffix });
+  const result = await publish(id);
+  expect(result.status, JSON.stringify(result.body)).toBe(200);
+  return id;
+}
+
 async function createRecord(entity: 'Account' | 'Task', name: string): Promise<string> {
   const created = await call('POST', `/api/v1/${entity}`, ctx.adminToken, { name });
   expect(created.status).toBe(201);
@@ -169,7 +179,7 @@ beforeAll(async () => {
   expect(provider.status).toBe(201);
 
   const settings = await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
-    features: { definitions: true, execution: true },
+    features: { definitions: true, execution: true, memory: true },
     safety: { globalExecutionPaused: false, reason: null },
     provider: { defaultKey: PROVIDER_KEY },
   });
@@ -194,7 +204,26 @@ afterAll(async () => {
   }
   await db.deleteFrom('ai_agent_runs').where('idempotency_key', 'like', `%${MARKER}%`).execute();
   await db.deleteFrom('ai_agent_provider_requests').where('provider_key', '=', PROVIDER_KEY).execute();
+  if (pricingSnapshotIds.length > 0) {
+    await db.deleteFrom('ai_agent_pricing_snapshots').where('id', 'in', pricingSnapshotIds).execute();
+  }
+  // Safety net: any snapshot or policy this suite created by marker, in case a mid-test crash
+  // skipped the per-test cleanup. Both are module-owned rows keyed to this run's provider/user.
+  await db.deleteFrom('ai_agent_pricing_snapshots').where('provider_key', '=', PROVIDER_KEY).execute();
+  if (budgetPolicyIds.length > 0) {
+    await db.deleteFrom('ai_agent_budget_policies').where('id', 'in', budgetPolicyIds).execute();
+  }
   await db.deleteFrom('ai_provider_connections').where('key', '=', PROVIDER_KEY).execute();
+  const testAgents = await db
+    .selectFrom('ai_agents')
+    .select('id')
+    .where('agent_key', 'like', `agent-test-${runId}-%`)
+    .execute();
+  if (testAgents.length > 0) {
+    const ids = testAgents.map((agent) => agent.id);
+    await db.deleteFrom('ai_agent_memory_items').where('agent_id', 'in', ids).execute();
+    await db.deleteFrom('ai_agent_conversations').where('agent_id', 'in', ids).execute();
+  }
   await db.deleteFrom('ai_agents').where('agent_key', 'like', `agent-test-${runId}-%`).execute();
   if (entityIds.length > 0) await db.deleteFrom('entity_records').where('id', 'in', entityIds).execute();
   if (baselineSettings === null) {
@@ -454,6 +483,136 @@ describe('read-only run end to end (19-AI.6–19-AI.9)', () => {
     const executed = await executeRun(idRun);
     expect((executed.body['run'] as { status: string }).status).toBe('canceled');
   });
+
+  it('retries a finished run exactly once per idempotency key and refuses an active run', async () => {
+    const { id } = await createAgent({ suffix: 'retry' });
+    expect((await publish(id)).status).toBe(200);
+    const created = await runAgent(id, 'retry this task');
+    const originalId = String(created.body['id']);
+    expect((await call('POST', `/api/v1/AIAgents/action/runs/${originalId}/cancel`, ctx.adminToken, {})).status).toBe(200);
+
+    const key = `AGENT_TEST-retry-${runId}-1`;
+    const first = await call('POST', `/api/v1/AIAgents/action/runs/${originalId}/retry`, ctx.adminToken, { idempotencyKey: key });
+    expect(first.status, JSON.stringify(first.body)).toBe(201);
+    const retryId = String(first.body['id']);
+    expect(retryId).not.toBe(originalId);
+    expect((first.body['input'] as { text: string }).text).toBe('retry this task');
+    runIds.push(retryId);
+
+    const replay = await call('POST', `/api/v1/AIAgents/action/runs/${originalId}/retry`, ctx.adminToken, { idempotencyKey: key });
+    expect(replay.status).toBe(201);
+    expect(String(replay.body['id'])).toBe(retryId);
+    const executedRetry = await executeRun(retryId);
+    expect((executedRetry.body['run'] as { status: string }).status).toBe('succeeded');
+
+    const active = await call('POST', `/api/v1/AIAgents/action/runs/${retryId}/retry`, ctx.adminToken, {});
+    expect(active.status).toBe(422);
+    expect(errorCode(active)).toBe('VALIDATION_FAILED');
+  });
+});
+
+describe('conversation memory and retention (19-AI.12)', () => {
+  it('keeps an owner-scoped thread, feeds prior turns, and refuses cross-user access', async () => {
+    const { id } = await createAgent({
+      suffix: 'memory',
+      config: baseConfig({ memory: { mode: 'conversation', maxMessages: 12, retentionDays: 7 } }),
+    });
+    expect((await publish(id)).status).toBe(200);
+
+    const first = await runAgent(id, 'Remember that the account is called Acme.');
+    const firstId = String(first.body['id']);
+    const conversationId = String(first.body['conversationId'] ?? '');
+    expect(conversationId).not.toBe('');
+    const firstRun = await executeRun(firstId);
+    expect((firstRun.body['run'] as { status: string }).status).toBe('succeeded');
+
+    const inbox = await call('GET', `/api/v1/AIAgents/action/conversations?agentId=${id}`, ctx.adminToken);
+    expect(inbox.status).toBe(200);
+    const listed = inbox.body['list'] as { id: string; messageCount: number; agentId: string }[];
+    const thread = listed.find((entry) => entry.id === conversationId);
+    expect(thread?.agentId).toBe(id);
+    expect(thread?.messageCount).toBe(2);
+
+    const detail = await call('GET', `/api/v1/AIAgents/action/conversations/${conversationId}`, ctx.adminToken);
+    expect(detail.status).toBe(200);
+    const messages = detail.body['messages'] as { role: string; content: string }[];
+    expect(messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(messages[0]?.content).toContain('Acme');
+
+    const second = await call('POST', `/api/v1/AIAgents/action/agents/${id}/runs`, ctx.adminToken, {
+      input: { text: 'What is the account called?' },
+      conversationId,
+    });
+    expect(second.status).toBe(201);
+    const secondId = String(second.body['id']);
+    runIds.push(secondId);
+    const executed = await executeRun(secondId);
+    expect((executed.body['run'] as { status: string }).status).toBe('succeeded');
+    const ledger = await ctx.database.db
+      .selectFrom('ai_agent_provider_requests')
+      .select('request_meta')
+      .where('run_id', '=', secondId)
+      .orderBy('created_at', 'desc')
+      .executeTakeFirst();
+    const meta = (ledger?.request_meta ?? {}) as { messageCount?: number };
+    // system + prior user + prior assistant + current task
+    expect(meta.messageCount).toBeGreaterThanOrEqual(4);
+
+    const crossUser = await call('POST', `/api/v1/AIAgents/action/agents/${id}/runs`, useToken, {
+      input: { text: 'Read someone else\'s thread.' },
+      conversationId,
+    });
+    expect(crossUser.status).toBe(404);
+  });
+
+  it('deletes a conversation for its owner and reports expired rows in the retention dry run', async () => {
+    const { id } = await createAgent({
+      suffix: 'memory-delete',
+      config: baseConfig({ memory: { mode: 'conversation', maxMessages: 8, retentionDays: 7 } }),
+    });
+    expect((await publish(id)).status).toBe(200);
+    const run = await runAgent(id, 'A thread that will be deleted.');
+    const conversationId = String(run.body['conversationId'] ?? '');
+    expect(conversationId).not.toBe('');
+
+    const deleted = await call('DELETE', `/api/v1/AIAgents/action/conversations/${conversationId}`, ctx.adminToken);
+    expect(deleted.status).toBe(200);
+    expect((await call('GET', `/api/v1/AIAgents/action/conversations/${conversationId}`, ctx.adminToken)).status).toBe(404);
+
+    const admin = await ctx.database.db.selectFrom('users').select('id').where('user_name', '=', 'admin').executeTakeFirst();
+    expect(admin).toBeDefined();
+    const expiredId = `AGENT_TEST-expired-${runId}`;
+    await ctx.database.db
+      .insertInto('ai_agent_conversations')
+      .values({
+        id: expiredId,
+        agent_id: id,
+        owner_user_id: String(admin?.id),
+        title: `${MARKER} expired thread`,
+        status: 'active',
+        related_entity: null,
+        related_id: null,
+        message_count: 0,
+        summary: null,
+        summary_message_count: 0,
+        last_activity_at: new Date(Date.now() - 60 * 86_400_000),
+        expires_at: new Date(Date.now() - 86_400_000),
+        created_at: new Date(Date.now() - 60 * 86_400_000),
+        modified_at: new Date(Date.now() - 60 * 86_400_000),
+      })
+      .execute();
+    const dryRun = await call('GET', '/api/v1/AIAgents/action/retention/dryRun', ctx.adminToken);
+    expect(dryRun.status).toBe(200);
+    expect((dryRun.body['conversations'] as number)).toBeGreaterThanOrEqual(1);
+    // The dry run must not delete anything.
+    const stillThere = await ctx.database.db
+      .selectFrom('ai_agent_conversations')
+      .select('id')
+      .where('id', '=', expiredId)
+      .executeTakeFirst();
+    expect(stillThere?.id).toBe(expiredId);
+    await ctx.database.db.deleteFrom('ai_agent_conversations').where('id', '=', expiredId).execute();
+  });
 });
 
 describe('approval service and low-risk writes (19-AI.10)', () => {
@@ -588,5 +747,252 @@ describe('approval service and low-risk writes (19-AI.10)', () => {
     expect(totals.modelCalls).toBeGreaterThan(0);
     expect(Array.isArray(usage.body['byProvider'])).toBe(true);
     expect((usage.body['byProvider'] as { providerKey: string }[]).some((entry) => entry.providerKey === PROVIDER_KEY)).toBe(true);
+  });
+});
+
+describe('pricing snapshots and quota enforcement (19-AI.13)', () => {
+  it('prices provider requests from an admin snapshot and labels the cost as an estimate', async () => {
+    // Without a snapshot the ledger stays NULL and the label says so — no invented numbers.
+    const unpriced = await runAgent(await publishedAgent('pricing-none'), 'Say hello without pricing.');
+    const unpricedId = String(unpriced.body['id']);
+    expect((await executeRun(unpricedId)).status).toBe(200);
+    const unpricedLedger = await ctx.database.db
+      .selectFrom('ai_agent_provider_requests')
+      .select(['estimated_cost_usd', 'response_meta'])
+      .where('run_id', '=', String(unpriced.body['id']))
+      .executeTakeFirst();
+    expect(unpricedLedger?.estimated_cost_usd).toBeNull();
+
+    const snapshot = await call('POST', '/api/v1/AIAgents/action/pricing', ctx.adminToken, {
+      providerKey: PROVIDER_KEY,
+      model: 'fake-model',
+      inputPricePerMillion: 2.5,
+      outputPricePerMillion: 10,
+      cachedInputPricePerMillion: 1.25,
+    });
+    expect(snapshot.status).toBe(201);
+    pricingSnapshotIds.push(String(snapshot.body['id']));
+
+    // The fake adapter reports tokens, so the run's ledger row must now carry an estimate.
+    const pricedAgent = await publishedAgent('pricing-yes');
+    const priced = await runAgent(pricedAgent, 'Say hello with pricing.');
+    const pricedId = String(priced.body['id']);
+    expect((await executeRun(pricedId)).status).toBe(200);
+    const ledger = await ctx.database.db
+      .selectFrom('ai_agent_provider_requests')
+      .select(['estimated_cost_usd', 'response_meta'])
+      .where('run_id', '=', pricedId)
+      .executeTakeFirst();
+    expect(ledger?.estimated_cost_usd).not.toBeNull();
+    expect(Number(ledger?.estimated_cost_usd)).toBeGreaterThan(0);
+    const meta = (ledger?.response_meta ?? {}) as { costLabel?: string; costSnapshotId?: string };
+    expect(meta.costLabel).toBe('estimate');
+    expect(meta.costSnapshotId).toBe(String(snapshot.body['id']));
+
+    // The run counter mirrors the ledger after reconciliation.
+    const run = await call('GET', `/api/v1/AIAgents/action/runs/${pricedId}`, ctx.adminToken);
+    const view = run.body as { counters: { estimatedCostUsd: number } };
+    expect(view.counters.estimatedCostUsd).toBeGreaterThan(0);
+
+    const usage = await call('GET', '/api/v1/AIAgents/action/usage', ctx.adminToken);
+    const totals = usage.body['totals'] as { estimatedCostUsd: number; costLabel: string };
+    expect(totals.costLabel).toBe('estimate');
+    expect(totals.estimatedCostUsd).toBeGreaterThan(0);
+
+    // A duplicate (provider, model) card is refused; replace updates it in place.
+    const duplicate = await call('POST', '/api/v1/AIAgents/action/pricing', ctx.adminToken, {
+      providerKey: PROVIDER_KEY,
+      model: 'fake-model',
+      inputPricePerMillion: 1,
+      outputPricePerMillion: 1,
+    });
+    expect(duplicate.status).toBe(409);
+    const replaced = await call('POST', `/api/v1/AIAgents/action/pricing/${String(snapshot.body['id'])}/replace`, ctx.adminToken, {
+      inputPricePerMillion: 3,
+      outputPricePerMillion: 12,
+      cachedInputPricePerMillion: 1.5,
+    });
+    expect(replaced.status).toBe(200);
+    expect((replaced.body as { inputPricePerMillion: number }).inputPricePerMillion).toBe(3);
+
+    // Pricing is an administrative act; a plain user is refused.
+    const denied = await call('POST', '/api/v1/AIAgents/action/pricing', useToken, {
+      providerKey: PROVIDER_KEY,
+      model: 'other-model',
+      inputPricePerMillion: 1,
+      outputPricePerMillion: 1,
+    });
+    expect(denied.status).toBe(403);
+  });
+
+  it('stops a run safely when its cost budget is reached', async () => {
+    // Replace the cheap card from the previous test with a punishing one: prices are set so the
+    // very first call blows a one-cent budget. The run must fail with a cost category, not limp
+    // on or half-finish.
+    for (const id of [...pricingSnapshotIds]) {
+      await call('DELETE', `/api/v1/AIAgents/action/pricing/${id}`, ctx.adminToken);
+      pricingSnapshotIds.splice(pricingSnapshotIds.indexOf(id), 1);
+    }
+    // $1 per token: the fake adapter's first call costs dollars against a $0.0001 budget.
+    const snapshot = await call('POST', '/api/v1/AIAgents/action/pricing', ctx.adminToken, {
+      providerKey: PROVIDER_KEY,
+      model: 'fake-model',
+      inputPricePerMillion: 1_000_000,
+      outputPricePerMillion: 1_000_000,
+    });
+    expect(snapshot.status, JSON.stringify(snapshot.body)).toBe(201);
+    pricingSnapshotIds.push(String(snapshot.body['id']));
+
+    const agentId = await publishedAgent('cost-limit');
+    const config = baseConfig();
+    const limits = config['limits'] as Record<string, unknown>;
+    const agent = await call('PATCH', `/api/v1/AIAgents/action/agents/${agentId}`, ctx.adminToken, {
+      config: baseConfig({ limits: { ...limits, maxCostUsd: 0.0001 } }),
+    });
+    expect(agent.status).toBe(200);
+    expect((await publish(agentId)).status).toBe(200);
+
+    const run = await runAgent(agentId, 'This run must hit its cost budget.');
+    const runId = String(run.body['id']);
+    const executed = await executeRun(runId);
+    expect(executed.status).toBe(200);
+    const view = executed.body['run'] as { status: string; failureCategory: string | null };
+    expect(view.status).toBe('failed');
+    expect(view.failureCategory).toBe('cost_limit');
+  });
+
+  it('refuses a run when a scoped hard quota is exhausted and warns before the soft limit', async () => {
+    const agentId = await publishedAgent('quota');
+    const agent = await call('GET', `/api/v1/AIAgents/action/agents/${agentId}`, ctx.adminToken);
+    const adminUser = await ctx.database.db
+      .selectFrom('users')
+      .select('id')
+      .where('user_name', '=', 'admin')
+      .executeTakeFirst();
+    expect(adminUser).toBeDefined();
+
+    // The policy must be relative to what this user already ran today: earlier suites in this
+    // file created admin runs, and a fixed maxRuns would be exhausted before the first assertion.
+    // Hard limit = used + 2, soft limit positioned so the first new run already warns.
+    const today = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()));
+    const used = await ctx.database.db
+      .selectFrom('ai_agent_runs')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('initiated_by_user_id', '=', String(adminUser?.id))
+      .where('created_at', '>=', today)
+      .executeTakeFirst();
+    const alreadyRan = Number(used?.count ?? 0);
+    const policy = await call('POST', '/api/v1/AIAgents/action/quotas', ctx.adminToken, {
+      scope: 'user',
+      scopeRef: String(adminUser?.id),
+      period: 'day',
+      maxRuns: alreadyRan + 2,
+      warnPercent: Math.floor(((alreadyRan + 1) / (alreadyRan + 2)) * 100),
+    });
+    expect(policy.status).toBe(201);
+    budgetPolicyIds.push(String(policy.body['id']));
+
+    try {
+      const first = await runAgent(agentId, 'First run inside the quota.');
+      expect(first.status).toBe(201);
+      // Drive it out of the active set so later creations test the quota, not the instance cap.
+      expect((await executeRun(String(first.body['id']))).status).toBe(200);
+      const status = await call('GET', '/api/v1/AIAgents/action/quotas/status', ctx.adminToken);
+      expect(status.status).toBe(200);
+      const entry = (status.body['list'] as { id: string; warning: boolean; exhausted: boolean }[]).find(
+        (row) => row.id === String(policy.body['id']),
+      );
+      expect(entry?.exhausted).toBe(false);
+      expect(entry?.warning).toBe(true);
+
+      const second = await runAgent(agentId, 'Second run inside the quota.');
+      expect(second.status).toBe(201);
+      expect((await executeRun(String(second.body['id']))).status).toBe(200);
+
+      // The third run hits the hard limit: refused before any row is created.
+      const third = await call('POST', `/api/v1/AIAgents/action/agents/${agentId}/runs`, ctx.adminToken, {
+        input: { text: 'Third run must be refused.' },
+      });
+      expect(third.status).toBe(422);
+      expect(errorCode(third)).toBe('VALIDATION_FAILED');
+      expect(JSON.stringify(third.body)).toContain('quota');
+
+      const after = await call('GET', '/api/v1/AIAgents/action/quotas/status', ctx.adminToken);
+      const exhausted = (after.body['list'] as { id: string; exhausted: boolean }[]).find(
+        (row) => row.id === String(policy.body['id']),
+      );
+      expect(exhausted?.exhausted).toBe(true);
+    } finally {
+      // Remove the policy even if an assertion failed; a leaked global quota would poison later suites.
+      await call('DELETE', `/api/v1/AIAgents/action/quotas/${String(policy.body['id'])}`, ctx.adminToken);
+      budgetPolicyIds.splice(budgetPolicyIds.indexOf(String(policy.body['id'])), 1);
+    }
+
+    // Without the policy the same run is accepted again.
+    const allowed = await call('POST', `/api/v1/AIAgents/action/agents/${agentId}/runs`, ctx.adminToken, {
+      input: { text: 'Quota removed; this run is fine.' },
+    });
+    expect(allowed.status).toBe(201);
+    if (allowed.status === 201) {
+      runIds.push(String(allowed.body['id']));
+      // Execute so the queued run does not eat an instance concurrency slot for the race test.
+      await executeRun(String(allowed.body['id']));
+    }
+  });
+
+  it('does not let concurrent runs share the last available quota slot', async () => {
+    const agentId = await publishedAgent('quota-race');
+    const adminUser = await ctx.database.db
+      .selectFrom('users')
+      .select('id')
+      .where('user_name', '=', 'admin')
+      .executeTakeFirst();
+    // One slot left for this user today (previous tests in this block already used some runs;
+    // the policy allows exactly one more than the current count).
+    const today = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()));
+    const used = await ctx.database.db
+      .selectFrom('ai_agent_runs')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('initiated_by_user_id', '=', String(adminUser?.id))
+      .where('created_at', '>=', today)
+      .executeTakeFirst();
+    const policy = await call('POST', '/api/v1/AIAgents/action/quotas', ctx.adminToken, {
+      scope: 'user',
+      scopeRef: String(adminUser?.id),
+      period: 'day',
+      maxRuns: Number(used?.count ?? 0) + 1,
+    });
+    expect(policy.status).toBe(201);
+    budgetPolicyIds.push(String(policy.body['id']));
+    try {
+      // Ten simultaneous creations compete for ONE remaining slot. The transaction-scoped
+      // FOR UPDATE lock must hand it to exactly one; the rest are refused, not queued.
+      const attempts = await Promise.all(
+        Array.from({ length: 10 }, (_value, index) =>
+          call('POST', `/api/v1/AIAgents/action/agents/${agentId}/runs`, ctx.adminToken, {
+            input: { text: `Racing for the last quota slot ${String(index)}.` },
+          }),
+        ),
+      );
+      const created = attempts.filter((attempt) => attempt.status === 201);
+      const refused = attempts.filter((attempt) => attempt.status === 422);
+      expect(created.length).toBe(1);
+      expect(refused.length).toBe(9);
+      for (const attempt of created) runIds.push(String(attempt.body['id']));
+    } finally {
+      await call('DELETE', `/api/v1/AIAgents/action/quotas/${String(policy.body['id'])}`, ctx.adminToken);
+      budgetPolicyIds.splice(budgetPolicyIds.indexOf(String(policy.body['id'])), 1);
+    }
+  });
+
+  it('refuses quota administration to a user without the capability', async () => {
+    const denied = await call('POST', '/api/v1/AIAgents/action/quotas', useToken, {
+      scope: 'global',
+      period: 'day',
+      maxRuns: 1,
+    });
+    expect(denied.status).toBe(403);
+    const list = await call('GET', '/api/v1/AIAgents/action/quotas', useToken);
+    expect(list.status).toBe(403);
   });
 });

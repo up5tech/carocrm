@@ -65,6 +65,7 @@ interface AgentFormValues {
   model?: string;
   systemPrompt: string;
   tools: string[];
+  memoryMode: 'none' | 'conversation' | 'checkpoint';
   maxSteps: number;
   maxToolCalls: number;
   maxTokens: number;
@@ -90,6 +91,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
   const [publishOpen, setPublishOpen] = useState(false);
   const [runOpen, setRunOpen] = useState(false);
   const [runTask, setRunTask] = useState('');
+  const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [templateKey, setTemplateKey] = useState<string | undefined>(undefined);
 
   const [form] = Form.useForm<AgentFormValues>();
@@ -195,12 +197,20 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
     onError: (error: Error) => void message.error(error.message),
   });
 
+  const runConversations = useQuery({
+    queryKey: ['aiAgents', 'conversations', 'agent', detailId],
+    queryFn: () => api.aiAgentsConversations({ agentId: detailId ?? '', maxSize: 50 }),
+    enabled: runOpen && detail.data?.draftConfig.memory.mode === 'conversation',
+    staleTime: 15_000,
+  });
+
   const startRun = useMutation({
-    mutationFn: () => api.aiAgentsCreateRun(detailId ?? '', { text: runTask.trim() }),
+    mutationFn: () => api.aiAgentsCreateRun(detailId ?? '', { text: runTask.trim() }, undefined, conversationId),
     onSuccess: (run) => {
       void message.success(t('web.aiAgents.runStarted'));
       setRunOpen(false);
       setRunTask('');
+      setConversationId(undefined);
       void queryClient.invalidateQueries({ queryKey: ['aiAgents', 'runs'] });
       onOpenRun(run.id);
     },
@@ -433,6 +443,15 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
                 ))}
               </Space>
             </Checkbox.Group>
+          </Form.Item>
+          <Form.Item name="memoryMode" label={t('web.aiAgents.memoryMode')} extra={t('web.aiAgents.memoryHint')} initialValue="none">
+            <Select
+              options={[
+                { value: 'none', label: t('web.aiAgents.memoryNone') },
+                { value: 'conversation', label: t('web.aiAgents.memoryConversation') },
+                { value: 'checkpoint', label: t('web.aiAgents.memoryCheckpoint') },
+              ]}
+            />
           </Form.Item>
           <Divider orientation="left" style={{ marginTop: 0 }}>
             {t('web.aiAgents.limits')}
@@ -692,6 +711,25 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
         <Typography.Paragraph type="secondary">
           {active?.inputHint ?? t('web.aiAgents.runHint')}
         </Typography.Paragraph>
+        {active?.draftConfig.memory.mode === 'conversation' ? (
+          <div style={{ marginBottom: 12 }}>
+            <Typography.Text strong>{t('web.aiAgents.conversation')}</Typography.Text>
+            <Select
+              allowClear
+              style={{ width: '100%', marginTop: 4 }}
+              value={conversationId}
+              onChange={(value: string | undefined) => setConversationId(value)}
+              placeholder={t('web.aiAgents.newConversation')}
+              options={(runConversations.data?.list ?? []).map((conversation) => ({
+                value: conversation.id,
+                label: `${conversation.title ?? conversation.id.slice(0, 8)} · ${String(conversation.messageCount)} messages`,
+              }))}
+            />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('web.aiAgents.newConversationHint')}
+            </Typography.Text>
+          </div>
+        ) : null}
         <Input.TextArea
           rows={4}
           maxLength={4_000}
@@ -792,6 +830,7 @@ function formValues(agent: AIAgentView | undefined, template: AIAgentTemplate | 
     ...(config?.provider?.model === undefined ? {} : { model: config.provider.model }),
     systemPrompt: config?.prompt.system ?? '',
     tools: config?.tools.map((tool) => tool.key) ?? [],
+    memoryMode: config?.memory.mode ?? 'none',
     maxSteps: limits.maxSteps,
     maxToolCalls: limits.maxToolCalls,
     maxTokens: limits.maxTokens,
@@ -815,6 +854,9 @@ function buildConfig(base: AIAgentConfigShape | undefined, values: AgentFormValu
     ...(base ?? {}),
     prompt: { ...(base?.prompt ?? { system: '' }), system: values.systemPrompt },
     tools: values.tools.map((key) => ({ key })),
+    // Memory is opt-in: the mode is the administrator's choice, the sizing fields keep their
+    // server defaults (maxMessages/retentionDays) unless the draft already set them.
+    memory: { maxMessages: 12, retentionDays: 30, ...(base?.memory ?? {}), mode: values.memoryMode },
     limits,
   };
   // Clearing the provider must remove it, not silently keep the previous connection: publication
