@@ -1,8 +1,9 @@
-import { Card, Col, Row } from 'antd';
+import { Card, Checkbox, Col, Progress, Row, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
+import type { SetupChecklistItem } from '../api/types.js';
 import { entityIcon } from '../components/entityIcons.js';
 import { t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
@@ -76,6 +77,49 @@ export function HomePage() {
           </Col>
         ))}
       </Row>
+
+      {/* §20.15: setup checklist for administrators */}
+      {principal?.type === 'admin' ? <SetupChecklistPanel /> : null}
     </>
+  );
+}
+
+function SetupChecklistPanel() {
+  const [items, setItems] = useState<SetupChecklistItem[]>([]);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.setupChecklist().then((data) => {
+      setItems(data.items);
+      setProgress(data.progress);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  if (loading || items.length === 0) return null;
+  const allDone = progress.done === progress.total;
+
+  return (
+    <Card className="carocrm-card" title={t('web.setup.title')} style={{ marginTop: 24 }}>
+      {allDone ? (
+        <Typography.Text type="success">{t('web.setup.allDone')}</Typography.Text>
+      ) : (
+        <>
+          <Progress percent={Math.round((progress.done / progress.total) * 100)} status="active" style={{ marginBottom: 16 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {items.map((item) => (
+              <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Checkbox checked={item.completed} disabled />
+                <Link to={item.route} style={{ flex: 1 }}>
+                  <Typography.Text strong={item.completed}>{t(item.labelKey)}</Typography.Text>
+                  <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{t(item.descriptionKey)}</Typography.Text>
+                </Link>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Card>
   );
 }

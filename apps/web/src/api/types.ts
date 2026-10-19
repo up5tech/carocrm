@@ -259,6 +259,21 @@ export interface InternalInfoView {
   uptimeSeconds: number;
 }
 
+/** One item in the first-run setup checklist (PLAN §20.15). */
+export interface SetupChecklistItem {
+  id: string;
+  labelKey: string;
+  descriptionKey: string;
+  route: string;
+  completed: boolean;
+  order: number;
+}
+
+export interface SetupChecklistView {
+  items: SetupChecklistItem[];
+  progress: { done: number; total: number };
+}
+
 /**
  * One named preference document of the signed-in user (PLAN_Phase_20 §5.9). `value` is `null` when
  * the name has no row — the client keeps its own default then.

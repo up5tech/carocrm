@@ -59,6 +59,7 @@ import type {
   PortalRoleRow,
   PortalRow,
   PreferenceItem,
+  SetupChecklistView,
   Principal,
   ProcessCatalog,
   ProcessDefinitionShape,
@@ -359,6 +360,8 @@ export interface DashboardRow {
   id: string;
   name: string;
   userId: string | null;
+  /** If set, this dashboard is the default for users holding this role. */
+  roleScoped: string | null;
   config: Record<string, unknown>;
   layout: unknown[];
   isShared: boolean;
@@ -721,6 +724,9 @@ export const api = {
   preference: (name: string) => request<PreferenceItem>(`/Preferences/${encodeURIComponent(name)}`),
   savePreference: (name: string, value: unknown) =>
     request<PreferenceItem>(`/Preferences/${encodeURIComponent(name)}`, { method: 'PUT', body: JSON.stringify({ value }) }),
+
+  // Phase 20.15 — setup checklist for first-run administrators.
+  setupChecklist: () => request<SetupChecklistView>('/SetupChecklist'),
 
   // Phase 8 — index / layout / ACL metadata editing.
   saveIndexes: (name: string, indexes: IndexDefinition[]) =>

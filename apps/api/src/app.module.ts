@@ -56,6 +56,7 @@ import { REPORT_CONTROLLERS, REPORT_PROVIDERS } from './reports/index.js';
 import { SALES_CONTROLLERS, SALES_PROVIDERS } from './sales/index.js';
 import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
 import { SERVICE_DESK_CONTROLLERS, SERVICE_DESK_PROVIDERS } from './service-desk/index.js';
+import { SETUP_CHECKLIST_CONTROLLERS, SETUP_CHECKLIST_PROVIDERS } from './setup-checklist/index.js';
 import { SETTINGS_CONTROLLERS, SETTINGS_PROVIDERS } from './settings/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
 import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, STREAM_PROVIDERS, StreamUpdateHookService } from './stream/index.js';
@@ -72,6 +73,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     I18nController,
     // `/api/v1/Settings` is a static prefix too: it must not fall through to `:entity`.
     ...SETTINGS_CONTROLLERS,
+    // Phase 20.15: setup checklist for first-run administrators.
+    ...SETUP_CHECKLIST_CONTROLLERS,
     // Phase 20: `/api/v1/AdminPanel`, `/api/v1/Navigation` and `/api/v1/Settings/documents` are
     // static prefixes, registered with the settings routes so `Settings/:name` never matches them.
     ...ADMIN_PANEL_CONTROLLERS,
@@ -169,6 +172,7 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
     ...SETTINGS_PROVIDERS,
+    ...SETUP_CHECKLIST_PROVIDERS,
     // Phase 20: the settings document registry, the admin panel descriptors and the navigation
     // resolver. `PlatformSettingsRegistrar` registers the platform documents at bootstrap.
     ...ADMIN_PANEL_PROVIDERS,

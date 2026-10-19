@@ -2000,5 +2000,19 @@
     "commands": "Commands",
     "records": "Records",
     "recent": "Recent"
+  },
+  "setup": {
+    "title": "Setup checklist",
+    "menuLabel": "Configure the main menu",
+    "menuHint": "Enable, reorder and colour navigation entries.",
+    "emailLabel": "Add an outbound mailbox",
+    "emailHint": "Configure SMTP so the system can send notifications.",
+    "rolesLabel": "Create at least one role",
+    "rolesHint": "Roles define what users can see and do.",
+    "teamsLabel": "Create a team",
+    "teamsHint": "Teams group users for record-level access.",
+    "usersLabel": "Invite your first user",
+    "usersHint": "Create accounts for people who will use the CRM.",
+    "allDone": "All setup steps complete — you are ready to go!"
   }
 }

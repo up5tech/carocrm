@@ -33,9 +33,23 @@ export function DashboardsPage() {
   useEffect(() => {
     if (chosenManually.current) return;
     const preferred = defaultDashboard.value;
-    if (preferred === null || preferred === undefined) return;
-    if (dashboards.some((item) => item.id === preferred)) setActiveId(preferred);
-  }, [defaultDashboard.value, dashboards]);
+    // Priority: user-starred > role-scoped default > first dashboard
+    if (preferred !== null && preferred !== undefined && dashboards.some((item) => item.id === preferred)) {
+      setActiveId(preferred);
+      return;
+    }
+    // Role-scoped default: find a dashboard whose roleScoped matches one of the user's roles
+    const roles = principal?.roles;
+    if (roles && roles.length > 0 && dashboards.length > 0) {
+      const roleDefault = dashboards.find((d) => d.roleScoped !== null && d.roleScoped !== undefined && roles.includes(d.roleScoped));
+      if (roleDefault) {
+        setActiveId(roleDefault.id);
+        return;
+      }
+    }
+    // Fallback: first shared or personal dashboard
+    if (!activeId && dashboards.length > 0) setActiveId(dashboards[0]!.id);
+  }, [defaultDashboard.value, dashboards, principal, activeId]);
 
   const load = useCallback(async (): Promise<DashboardRow[]> => {
     setLoading(true);

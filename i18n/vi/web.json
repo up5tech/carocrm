@@ -2000,5 +2000,19 @@
     "commands": "Lệnh",
     "records": "Bản ghi",
     "recent": "Gần đây"
+  },
+  "setup": {
+    "title": "Danh sách thiết lập",
+    "menuLabel": "Cấu hình menu chính",
+    "menuHint": "Bật, sắp xếp và tô màu các mục điều hướng.",
+    "emailLabel": "Thêm hộp thư gửi đi",
+    "emailHint": "Cấu hình SMTP để hệ thống gửi thông báo.",
+    "rolesLabel": "Tạo ít nhất một phân quyền",
+    "rolesHint": "Phân quyền quyết định người dùng thấy và làm được gì.",
+    "teamsLabel": "Tạo một nhóm",
+    "teamsHint": "Nhóm gom người dùng để kiểm soát quyền theo bản ghi.",
+    "usersLabel": "Mời người dùng đầu tiên",
+    "usersHint": "Tạo tài khoản cho người sẽ dùng CRM.",
+    "allDone": "Hoàn tất mọi bước thiết lập — bạn đã sẵn sàng!"
   }
 }
