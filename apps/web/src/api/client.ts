@@ -514,6 +514,10 @@ export const api = {
     request<AIAgentRunView>(`/AIAgents/action/runs/${encodeURIComponent(id)}/retry`, post({ idempotencyKey })),
   aiAgentsCancelRun: (id: string) =>
     request<AIAgentRunView>(`/AIAgents/action/runs/${encodeURIComponent(id)}/cancel`, post({})),
+  aiAgentsInputRun: (id: string, text: string) =>
+    request<AIAgentRunView>(`/AIAgents/action/runs/${encodeURIComponent(id)}/input`, post({ text })),
+  aiAgentsResumeRun: (id: string) =>
+    request<AIAgentRunView>(`/AIAgents/action/runs/${encodeURIComponent(id)}/resume`, post({})),
   aiAgentsExecuteRun: (id: string) =>
     request<{ run: AIAgentRunView; claimed: boolean; waitingForApproval: boolean }>(
       `/AIAgents/action/runs/${encodeURIComponent(id)}/execute`,
@@ -564,6 +568,18 @@ export const api = {
   aiAgentsRetentionRun: () =>
     request<AIAgentRetentionReport>('/AIAgents/action/retention/run', post({})),
   aiAgentsUsage: () => request<AIAgentUsageView>('/AIAgents/action/usage'),
+  aiAgentsEvalSuites: () => request<{ list: unknown[] }>('/AIAgents/action/evaluations'),
+  aiAgentsEnsureEvalSuite: () => request<unknown>('/AIAgents/action/evaluations', post({})),
+  aiAgentsCreateEvalCase: (suiteKey: string, input: { caseKey: string; title: string; grader: string; graderConfig?: Record<string, unknown> }) =>
+    request<unknown>(`/AIAgents/action/evaluations/${encodeURIComponent(suiteKey)}`, post(input)),
+  aiAgentsRunEval: (agentId: string, suiteId: string) =>
+    request<unknown>(`/AIAgents/action/agents/${encodeURIComponent(agentId)}/evaluations/run`, post({ suiteId })),
+  aiAgentsEvalRuns: (agentId: string, maxSize?: number) =>
+    request<{ list: unknown[] }>(`/AIAgents/action/agents/${encodeURIComponent(agentId)}/evaluations${maxSize === undefined ? '' : `?maxSize=${maxSize}`}`),
+  aiAgentsDecideEval: (agentId: string, runId: string, caseKey: string, decision: 'passed' | 'failed', note?: string) =>
+    request<unknown>(`/AIAgents/action/agents/${encodeURIComponent(agentId)}/evaluations/${encodeURIComponent(runId)}/decide`, post({ caseKey, decision, note })),
+  aiAgentsCompareEval: (agentId: string) =>
+    request<unknown>(`/AIAgents/action/agents/${encodeURIComponent(agentId)}/evaluations/compare`),
   aiAgentsPricing: (providerKey?: string) =>
     request<{ list: AIAgentPricingSnapshot[] }>(
       `/AIAgents/action/pricing${providerKey === undefined ? '' : `?providerKey=${encodeURIComponent(providerKey)}`}`,

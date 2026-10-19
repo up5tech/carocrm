@@ -639,6 +639,38 @@ export class AIAgentRunService {
     return this.get(id);
   }
 
+  async provideInput(id: string, text: string): Promise<AIAgentRunView> {
+    await this.permissions.assert('use');
+    const row = await this.visibleRun(id);
+    if (row.status !== 'waiting_for_input') {
+      throw new ValidationError('The run is not waiting for input.', { status: row.status });
+    }
+    const now = new Date();
+    const stored = asRecord(row.input);
+    const merged = { ...stored, text };
+    await this.database.db
+      .updateTable('ai_agent_runs')
+      .set({ status: 'queued', input: JSON.stringify(merged), modified_at: now })
+      .where('id', '=', id)
+      .execute();
+    await this.appendEvent(id, 'run', 'run.input_received', 'Additional input received; resuming.', { text }, 'user');
+    return this.get(id);
+  }
+
+  async resume(id: string): Promise<AIAgentRunView> {
+    await this.permissions.assert('use');
+    const row = await this.visibleRun(id);
+    if (row.status === 'waiting_for_input' || row.status === 'waiting_for_approval') {
+      await this.database.db
+        .updateTable('ai_agent_runs')
+        .set({ status: 'queued', modified_at: new Date() })
+        .where('id', '=', id)
+        .execute();
+      await this.appendEvent(id, 'run', 'run.resumed', 'Run resumed by user.', {}, 'user');
+    }
+    return this.get(id);
+  }
+
   // -------------------------------------------------------------------------
   // execution (worker or administrator)
   // -------------------------------------------------------------------------

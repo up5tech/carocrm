@@ -8,6 +8,7 @@ import { t } from '../state/i18n.js';
 import { AIAgentsAgentsTab } from './ai-agents/AIAgentsAgentsTab.js';
 import { AIAgentsApprovalsTab } from './ai-agents/AIAgentsApprovalsTab.js';
 import { AIAgentsConversationsTab } from './ai-agents/AIAgentsConversationsTab.js';
+import { AIAgentsEvaluationsTab } from './ai-agents/AIAgentsEvaluationsTab.js';
 import { AIAgentsOverview } from './ai-agents/AIAgentsOverview.js';
 import { AIAgentsRunsTab } from './ai-agents/AIAgentsRunsTab.js';
 import { AIAgentsUsageTab } from './ai-agents/AIAgentsUsageTab.js';
@@ -101,6 +102,13 @@ export function AIAgentsPage() {
       key: 'usage',
       label: t('web.aiAgents.usageTab'),
       children: <AIAgentsUsageTab capabilities={granted} />,
+    });
+  }
+  if (granted['evaluation']) {
+    items.push({
+      key: 'evaluations',
+      label: t('web.aiAgents.evaluationsTab'),
+      children: <AIAgentsEvaluationsTab capabilities={granted} />,
     });
   }
 

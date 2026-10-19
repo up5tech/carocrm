@@ -50,6 +50,7 @@ import {
   ProviderConnectionPatchSchema,
   RunCreateSchema,
   RunEvaluationSchema,
+  RunInputSchema,
   RunRetrySchema,
 } from './dto/ai-agents-shapes.js';
 
@@ -343,6 +344,20 @@ export class AIAgentsController {
   async cancelRun(@Param('id') id: string, @Body() body: unknown) {
     parse(EmptyBodySchema, body);
     return this.runs.cancel(id);
+  }
+
+  @HttpCode(200)
+  @Post('action/runs/:id/input')
+  async inputRun(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(RunInputSchema, body);
+    return this.runs.provideInput(id, input.text);
+  }
+
+  @HttpCode(200)
+  @Post('action/runs/:id/resume')
+  async resumeRun(@Param('id') id: string, @Body() body: unknown) {
+    parse(EmptyBodySchema, body);
+    return this.runs.resume(id);
   }
 
   /** An administrator (or the user who owns the run) can re-attempt a queued run by hand. */

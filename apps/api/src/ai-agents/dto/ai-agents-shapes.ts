@@ -163,6 +163,12 @@ export const ApprovalDecisionSchema = z
 
 export const EmptyBodySchema = z.object({}).strict();
 
+export const RunInputSchema = z
+  .object({
+    text: z.string().trim().min(1).max(4_000),
+  })
+  .strict();
+
 // ---------------------------------------------------------------------------
 // 19-AI.14 — evaluation suites, cases and runs
 // ---------------------------------------------------------------------------
