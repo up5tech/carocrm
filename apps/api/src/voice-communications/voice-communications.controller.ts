@@ -7,7 +7,7 @@ import {
 } from "@carocrm/core/errors/index.js";
 import { Body, Controller, Delete, Get, Headers, HttpCode, Inject, Param, Patch, Post, Query } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
-import { type ZodTypeAny } from "zod";
+import { z,type ZodTypeAny } from "zod";
 
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
 import { type AppConfig, CONFIG_TOKEN } from "../config.js";
@@ -16,12 +16,21 @@ import {
   CallLinkSchema,
   CallListQuerySchema,
   CallNoteSchema,
+  CaseHandoffSchema,
+  CaseLinkSchema,
+  ComposerValidateSchema,
   ConsentRecordSchema,
+  ConversationAssignSchema,
   ConversationListQuerySchema,
+  ConversationStatusSchema,
   EndpointCreateSchema,
   EndpointStateSchema,
+  InboxQuerySchema,
   InitiateCallSchema,
+  MediaActionSchema,
   PageQuerySchema,
+  PanelLinkSchema,
+  PanelQuerySchema,
   PolicyEvaluateSchema,
   ProviderAccountCreateSchema,
   ProviderAccountPatchSchema,
@@ -31,6 +40,10 @@ import {
   SettingsPatchSchema,
   SuppressionAddSchema,
   SuppressionQuerySchema,
+  TemplateRenderSchema,
+  TemplateUpsertSchema,
+  TimelineQuerySchema,
+  TranscriptReviewSchema,
   WhatsappTemplateSchema,
   WhatsappTemplateStatusSchema,
   WorkerProcessSchema,
@@ -42,10 +55,15 @@ import { VoiceCommunicationsSettingsService } from "./voice-communications-setti
 import { VoiceConsentService } from "./voice-consent.service.js";
 import { VoiceContactResolverService } from "./voice-contact-resolver.service.js";
 import { VoiceEventProcessorService } from "./voice-event-processor.service.js";
+import { VoiceInboxService } from "./voice-inbox.service.js";
+import { VoiceMediaService } from "./voice-media.service.js";
+import { VoiceMessageTemplateService } from "./voice-message-template.service.js";
 import { VoiceMessagingService } from "./voice-messaging.service.js";
+import { VoicePanelService } from "./voice-panel.service.js";
 import { VoicePolicyService } from "./voice-policy.service.js";
 import { VoiceProviderRegistry } from "./voice-provider.js";
 import { VoiceProviderAccountsService } from "./voice-provider-accounts.service.js";
+import { VoiceTranscriptionService } from "./voice-transcription.service.js";
 import { VoiceWebhookIngressService } from "./voice-webhook-ingress.service.js";
 import { VoiceWhatsappTemplateService } from "./voice-whatsapp-template.service.js";
 
@@ -71,7 +89,12 @@ export class VoiceCommunicationsController {
     @Inject(VoiceProviderRegistry) private readonly providers: VoiceProviderRegistry,
     @Inject(VoiceCallService) private readonly calls: VoiceCallService,
     @Inject(VoiceMessagingService) private readonly messaging: VoiceMessagingService,
-    @Inject(VoiceWhatsappTemplateService) private readonly templates: VoiceWhatsappTemplateService,
+    @Inject(VoiceWhatsappTemplateService) private readonly whatsappTemplates: VoiceWhatsappTemplateService,
+    @Inject(VoiceMessageTemplateService) private readonly snippets: VoiceMessageTemplateService,
+    @Inject(VoiceInboxService) private readonly inbox: VoiceInboxService,
+    @Inject(VoiceMediaService) private readonly media: VoiceMediaService,
+    @Inject(VoiceTranscriptionService) private readonly transcription: VoiceTranscriptionService,
+    @Inject(VoicePanelService) private readonly panels: VoicePanelService,
     @Inject(VoiceWebhookIngressService) private readonly ingress: VoiceWebhookIngressService,
     @Inject(VoiceEventProcessorService) private readonly processor: VoiceEventProcessorService,
     @Inject(VoiceContactResolverService) private readonly resolver: VoiceContactResolverService,
@@ -308,7 +331,7 @@ export class VoiceCommunicationsController {
   @Get("action/templates/:accountKey")
   async listTemplates(@Param("accountKey") accountKey: string) {
     this.requireAdmin("reading WhatsApp templates");
-    return { list: await this.templates.list(accountKey) };
+    return { list: await this.whatsappTemplates.list(accountKey) };
   }
 
   @HttpCode(200)
@@ -316,7 +339,7 @@ export class VoiceCommunicationsController {
   async upsertTemplate(@Param("accountKey") accountKey: string, @Body() body: unknown) {
     this.requireAdmin("recording a WhatsApp template");
     const input = parse(WhatsappTemplateSchema, body);
-    return this.templates.upsert({ accountKey, ...input, components: input.components ?? [] });
+    return this.whatsappTemplates.upsert({ accountKey, ...input, components: input.components ?? [] });
   }
 
   @HttpCode(200)
@@ -329,10 +352,197 @@ export class VoiceCommunicationsController {
   ) {
     this.requireAdmin("changing a WhatsApp template status");
     const input = parse(WhatsappTemplateStatusSchema, body);
-    return this.templates.setStatus(accountKey, templateKey, language, input.status, {
+    return this.whatsappTemplates.setStatus(accountKey, templateKey, language, input.status, {
       ...(input.vendorStatus !== undefined ? { vendorStatus: input.vendorStatus } : {}),
       ...(input.rejectionReason !== undefined ? { rejectionReason: input.rejectionReason } : {}),
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Unified inbox: conversations, timeline, assignment, case handoff (19-VC.12–13)
+  // ---------------------------------------------------------------------------
+
+  @Get("action/inbox")
+  async inboxList(@Query() query: unknown) {
+    return this.inbox.list(parse(InboxQuerySchema, coerceQuery(query)));
+  }
+
+  @Get("action/conversations/:id/timeline")
+  async conversationTimeline(@Param("id") id: string, @Query() query: unknown) {
+    return this.inbox.timeline(id, parse(TimelineQuerySchema, coerceQuery(query)));
+  }
+
+  /** History: assignment/status/case events with actor and time (§9.1 acceptance). */
+  @Get("action/conversations/:id/history")
+  async conversationHistory(@Param("id") id: string) {
+    return this.inbox.history(id);
+  }
+
+  @HttpCode(200)
+  @Post("action/conversations/:id/read")
+  async conversationMarkRead(@Param("id") id: string) {
+    return this.inbox.markRead(id);
+  }
+
+  @HttpCode(200)
+  @Post("action/conversations/:id/status")
+  async conversationSetStatus(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(ConversationStatusSchema, body);
+    return this.inbox.setStatus(id, input.status, input.reason);
+  }
+
+  @HttpCode(200)
+  @Post("action/conversations/:id/assign")
+  async conversationAssign(@Param("id") id: string, @Body() body: unknown) {
+    return this.inbox.assign(id, parse(ConversationAssignSchema, body));
+  }
+
+  @HttpCode(200)
+  @Post("action/conversations/:id/case/link")
+  async conversationLinkCase(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(CaseLinkSchema, body);
+    return this.inbox.linkCase(id, input.caseId);
+  }
+
+  /**
+   * Hand off to a Service Desk Case. The conversation's `case_id` is the deduplication key: a
+   * repeated click returns the existing Case with `duplicate: true` (§9.2 acceptance).
+   */
+  @HttpCode(201)
+  @Post("action/conversations/:id/case/handoff")
+  async conversationHandoff(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(CaseHandoffSchema, body);
+    return this.inbox.handoffToCase(id, input);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Service snippets and composer validation (19-VC.14)
+  // ---------------------------------------------------------------------------
+
+  @Get("action/snippets")
+  async listSnippets(@Query() query: unknown) {
+    const parsed = parse(z.object({ channel: z.enum(["sms", "mms", "whatsapp", "any"]).optional() }).strict(), coerceQuery(query));
+    return this.snippets.list({ ...(parsed.channel !== undefined ? { channel: parsed.channel } : {}) });
+  }
+
+  @Get("action/snippets/:key")
+  async getSnippet(@Param("key") key: string) {
+    return this.snippets.get(key);
+  }
+
+  @HttpCode(200)
+  @Post("action/snippets")
+  async upsertSnippet(@Body() body: unknown) {
+    this.requireAdmin("editing a service snippet");
+    return this.snippets.upsert(parse(TemplateUpsertSchema, body));
+  }
+
+  @Delete("action/snippets/:key")
+  async removeSnippet(@Param("key") key: string) {
+    this.requireAdmin("removing a service snippet");
+    await this.snippets.remove(key);
+    return { removed: true };
+  }
+
+  @HttpCode(200)
+  @Post("action/snippets/:key/render")
+  async renderSnippet(@Param("key") key: string, @Body() body: unknown) {
+    const input = parse(TemplateRenderSchema, body);
+    return this.snippets.render(key, input.variables);
+  }
+
+  /** The same checks the send path applies, before the agent commits (§10.1). */
+  @HttpCode(200)
+  @Post("action/composer/validate")
+  async composerValidate(@Body() body: unknown) {
+    const input = parse(ComposerValidateSchema, body);
+    return this.snippets.validateComposer(input);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Recordings and media (19-VC.15)
+  // ---------------------------------------------------------------------------
+
+  @Get("action/calls/:id/media")
+  async listCallMedia(@Param("id") id: string) {
+    return this.media.listForCall(id);
+  }
+
+  /** Authorized playback: bytes from private storage, never a provider redirect. */
+  @Get("action/media/:id/playback")
+  async mediaPlayback(@Param("id") id: string) {
+    const result = await this.media.playback(id);
+    return { contentType: result.contentType, filename: result.filename, dataBase64: result.body.toString("base64") };
+  }
+
+  /** The worker door for a media fetch (`voiceCommunications.fetchMedia`). */
+  @HttpCode(200)
+  @Post("action/media/fetch")
+  async mediaFetch(@Body() body: unknown, @Headers("x-worker-secret") workerSecret?: string) {
+    if (workerSecret !== undefined) this.assertWorkerSecret(workerSecret);
+    else this.requireAdmin("fetching media");
+    const input = parse(MediaActionSchema, body);
+    return this.media.fetchAndStore(input.mediaId);
+  }
+
+  /** The worker door for the retention sweep (`voiceCommunications.retentionSweep`). */
+  @HttpCode(200)
+  @Post("action/media/retention-sweep")
+  async mediaRetentionSweep(@Headers("x-worker-secret") workerSecret?: string) {
+    if (workerSecret !== undefined) this.assertWorkerSecret(workerSecret);
+    else this.requireAdmin("running the media retention sweep");
+    return this.media.retentionSweep();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Transcription and AI enrichment (19-VC.16)
+  // ---------------------------------------------------------------------------
+
+  @Get("action/calls/:id/transcript")
+  async callTranscript(@Param("id") id: string) {
+    return { transcript: await this.transcription.get(id) };
+  }
+
+  @HttpCode(200)
+  @Post("action/calls/:id/transcript/request")
+  async requestTranscript(@Param("id") id: string) {
+    return this.transcription.requestTranscript(id);
+  }
+
+  /** Draft-only AI enrichment: provenance and review state are part of the answer (§7.6). */
+  @HttpCode(200)
+  @Post("action/calls/:id/transcript/enrich")
+  async enrichTranscript(@Param("id") id: string) {
+    return this.transcription.enrich(id);
+  }
+
+  @HttpCode(200)
+  @Post("action/calls/:id/transcript/review")
+  async reviewTranscript(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(TranscriptReviewSchema, body);
+    return this.transcription.setReviewStatus(id, input.status);
+  }
+
+  // ---------------------------------------------------------------------------
+  // CRM panels and Customer Success touchpoints (19-VC.17)
+  // ---------------------------------------------------------------------------
+
+  /** Record-ACL aware panel data: summaries only, bodies load lazily elsewhere. */
+  @Get("action/panels/:entityType/:entityId")
+  async recordPanel(@Param("entityType") entityType: string, @Param("entityId") entityId: string, @Query() query: unknown) {
+    return this.panels.forRecord(entityType, entityId, parse(PanelQuerySchema, coerceQuery(query)));
+  }
+
+  @Get("action/panels/:entityType/:entityId/touchpoints")
+  async recordTouchpoints(@Param("entityType") entityType: string, @Param("entityId") entityId: string) {
+    return this.panels.touchpoints(entityType, entityId);
+  }
+
+  @HttpCode(200)
+  @Post("action/conversations/:id/link-record")
+  async linkConversation(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(PanelLinkSchema, body);
+    return this.panels.linkConversation(id, input.entityType, input.entityId);
   }
 
   // ---------------------------------------------------------------------------

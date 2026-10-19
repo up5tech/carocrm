@@ -127,6 +127,18 @@ export interface NormalizedStatusEvent {
   readonly vendorStatus: string | null;
 }
 
+/** 19-VC.15 — a recording became available for a call. The URL is never trusted blindly. */
+export interface NormalizedRecordingEvent {
+  readonly kind: "recording";
+  readonly providerCallId: string | null;
+  readonly providerRef: string | null;
+  /** The provider's media URL. Held for validation; never fetched without a policy check. */
+  readonly url: string | null;
+  readonly durationSeconds: number | null;
+  readonly mimeType: string | null;
+  readonly occurredAt: string | null;
+}
+
 export interface NormalizedUnknownEvent {
   readonly kind: "unknown";
   readonly reason: string;
@@ -137,6 +149,7 @@ export type NormalizedProviderEvent =
   | NormalizedCallEvent
   | NormalizedMessageEvent
   | NormalizedStatusEvent
+  | NormalizedRecordingEvent
   | NormalizedUnknownEvent;
 
 export interface ProviderHealthResult {
@@ -317,11 +330,14 @@ export class FakeVoiceProvider implements VoiceProviderAdapter {
     }
 
     const eventType = stringOf(request.body["type"]) ?? "unknown";
-    const kind: ProviderEventKind = eventType.startsWith("call.")
-      ? "call"
-      : eventType.startsWith("message.")
-        ? "message"
-        : "unknown";
+    const kind: ProviderEventKind =
+      eventType === "call.recording"
+        ? "recording"
+        : eventType.startsWith("call.")
+          ? "call"
+          : eventType.startsWith("message.")
+            ? "message"
+            : "unknown";
     const externalId = stringOf(request.body["callId"]) ?? stringOf(request.body["messageId"]);
     return {
       providerEventId: stringOf(request.body["eventId"]),
@@ -373,6 +389,17 @@ export class FakeVoiceProvider implements VoiceProviderAdapter {
         vendorStatus,
       };
     }
+    if (event.kind === "recording") {
+      return {
+        kind: "recording",
+        providerCallId: stringOf(payload["callId"]),
+        providerRef: stringOf(payload["recordingId"]),
+        url: stringOf(payload["recordingUrl"]),
+        durationSeconds: numberOf(payload["durationSeconds"]),
+        mimeType: stringOf(payload["mimeType"]),
+        occurredAt: event.occurredAt,
+      };
+    }
     return { kind: "unknown", reason: `unsupported event type "${event.eventType}"`, occurredAt: event.occurredAt };
   }
 
@@ -418,6 +445,29 @@ export class FakeVoiceProvider implements VoiceProviderAdapter {
       accepted: true,
       // Accepted by the provider; the domain must not claim delivery without a callback.
       state: "sent",
+    };
+  }
+
+  /**
+   * 19-VC.16 — the simulator returns a small canned transcript, so the transcription path can be
+   * exercised end to end without a network or a speech vendor. An outage is honoured like every
+   * other simulator operation.
+   */
+  async fetchTranscript(input: {
+    readonly account: ResolvedProviderAccount;
+    readonly providerRef: string | null;
+  }): Promise<TranscriptFetchResult> {
+    if (input.account.config["simulateOutage"] === true) {
+      return { ok: false, language: null, segments: [], error: "The simulator is configured to fail its retrieval." };
+    }
+    return {
+      ok: true,
+      language: "en",
+      segments: [
+        { startMs: 0, endMs: 4_200, speaker: "agent", text: "Hello, this is Acme support. How can I help?" },
+        { startMs: 4_800, endMs: 11_500, speaker: "customer", text: "I was charged twice for my September invoice." },
+        { startMs: 12_000, endMs: 18_400, speaker: "agent", text: "I can see the duplicate charge and will request a refund today." },
+      ],
     };
   }
 
@@ -487,6 +537,23 @@ export interface VoiceProviderAdapter {
   initiateCall?(input: InitiateCallInput): Promise<InitiateCallResult>;
   /** Absent when the adapter cannot send on this channel (`messaging.*.send` not declared). */
   sendMessage?(input: SendMessageInput): Promise<SendMessageResult>;
+  /**
+   * 19-VC.16 — retrieve an existing transcript from the provider. Absent when the adapter has no
+   * transcript source; the module then reports the transcript as unavailable rather than inventing one.
+   */
+  fetchTranscript?(input: {
+    readonly account: ResolvedProviderAccount;
+    readonly providerRef: string | null;
+  }): Promise<TranscriptFetchResult>;
+}
+
+/** 19-VC.16 — what a provider transcript retrieval produced. */
+export interface TranscriptFetchResult {
+  readonly ok: boolean;
+  readonly language: string | null;
+  /** Chronological segments with offsets and optional speaker labels, when the provider supplies them. */
+  readonly segments: readonly { readonly startMs: number; readonly endMs: number | null; readonly speaker: string | null; readonly text: string }[];
+  readonly error?: string | undefined;
 }
 
 /** Sign the simulator's documented payload. Exported so a test and the admin simulator use one rule. */

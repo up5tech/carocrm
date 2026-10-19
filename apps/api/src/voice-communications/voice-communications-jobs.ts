@@ -7,6 +7,10 @@
  */
 export const VOICE_JOB_PROCESS_WEBHOOK = "voiceCommunications.processWebhookEvent";
 export const VOICE_JOB_RETENTION_SWEEP = "voiceCommunications.retentionSweep";
+/** 19-VC.15 — copy one provider recording into private storage. */
+export const VOICE_JOB_FETCH_MEDIA = "voiceCommunications.fetchMedia";
+/** 19-VC.16 — retrieve or refresh the transcript of one call session. */
+export const VOICE_JOB_TRANSCRIBE_CALL = "voiceCommunications.transcribeCall";
 
 /** How many processing attempts before a receipt is a dead letter an operator must inspect. */
 export const WEBHOOK_MAX_ATTEMPTS = 3;

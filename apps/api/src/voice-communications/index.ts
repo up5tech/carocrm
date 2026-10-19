@@ -10,10 +10,15 @@ import { VoiceCommunicationsSettingsService } from "./voice-communications-setti
 import { VoiceConsentService } from "./voice-consent.service.js";
 import { VoiceContactResolverService } from "./voice-contact-resolver.service.js";
 import { VoiceEventProcessorService } from "./voice-event-processor.service.js";
+import { VoiceInboxService } from "./voice-inbox.service.js";
+import { VoiceMediaService } from "./voice-media.service.js";
+import { VoiceMessageTemplateService } from "./voice-message-template.service.js";
 import { VoiceMessagingService } from "./voice-messaging.service.js";
+import { VoicePanelService } from "./voice-panel.service.js";
 import { VoicePolicyService } from "./voice-policy.service.js";
 import { VoiceProviderRegistry } from "./voice-provider.js";
 import { VoiceProviderAccountsService } from "./voice-provider-accounts.service.js";
+import { VoiceTranscriptionService } from "./voice-transcription.service.js";
 import { VoiceWebhookController } from "./voice-webhook.controller.js";
 import { VoiceWebhookIngressService } from "./voice-webhook-ingress.service.js";
 import { VoiceWhatsappTemplateService } from "./voice-whatsapp-template.service.js";
@@ -52,7 +57,12 @@ export const VOICE_COMMUNICATIONS_PROVIDERS: Provider[] = [
   VoiceProviderAccountsService,
   VoiceCallNotificationService,
   VoiceCallService,
+  VoiceInboxService,
+  VoiceMediaService,
+  VoiceMessageTemplateService,
   VoiceMessagingService,
+  VoicePanelService,
+  VoiceTranscriptionService,
   VoiceWhatsappTemplateService,
   VoiceConsentService,
   VoicePolicyService,

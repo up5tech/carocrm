@@ -1268,6 +1268,7 @@ export interface AdminPanelTab {
   readonly route: string;
   readonly document?: string | undefined;
   readonly moduleEndpoint?: string | undefined;
+  readonly usesSaveBar?: boolean | undefined;
 }
 
 export interface AdminPanelGroup {

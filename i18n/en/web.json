@@ -855,7 +855,11 @@
     "navBoardGroupByHint": "The field the board opens grouped by. Only an enum field with values can group a board.",
     "navHidden": "Hide from the main menu",
     "navHiddenHint": "Hiding is presentation only: the list URL, the record URLs and the API keep working for anyone the roles allow.",
-    "navUpdated": "Navigation settings updated."
+    "navUpdated": "Navigation settings updated.",
+    "layoutPreview": "Preview",
+    "layoutPreviewHint": "What a saved record page will look like: panels in this order, fields in this order.",
+    "layoutPreviewListHint": "A list layout orders the table columns; fields left out keep their flag-driven visibility.",
+    "layoutPreviewEmpty": "No columns yet — drag fields into a panel."
   },
   "workflows": {
     "title": "Workflows",
@@ -1265,7 +1269,8 @@
       "users": "Users",
       "teams": "Teams",
       "roles": "Roles",
-      "apiKeys": "API keys"
+      "apiKeys": "API keys",
+      "layout": "Layouts"
     },
     "descriptions": {
       "general": "Page title, logo and the footer line this instance shows.",
@@ -1284,7 +1289,8 @@
       "users": "Accounts, their roles, teams and status.",
       "teams": "Teams, membership and what each team's roles grant.",
       "roles": "Roles and the entity and field permissions behind them.",
-      "apiKeys": "API accounts and the keys that authenticate them."
+      "apiKeys": "API accounts and the keys that authenticate them.",
+      "layout": "Panels, field order and list columns per entity."
     }
   },
   "adminShell": {
@@ -1802,5 +1808,14 @@
     "selectAgentFirst": "Select an agent to see its evaluation runs.",
     "evalRuns": "Evaluation runs",
     "createdAt": "Created"
+  },
+  "adminLayout": {
+    "entityTitle": "Entity",
+    "entityAria": "Pick the entity to lay out",
+    "entityPlaceholder": "Choose an entity",
+    "changesRender": "Changes render on {name}'s list, detail and edit screens as soon as they are saved.",
+    "pickEntity": "Pick an entity to arrange its panels, field order and list columns.",
+    "editorTitle": "{name} layout",
+    "saveFailed": "Could not save the layout."
   }
 }

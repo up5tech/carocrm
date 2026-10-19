@@ -17,6 +17,7 @@ import {
   type VoiceDomainEvent,
 } from "./voice-communications-domain.js";
 import { WEBHOOK_MAX_ATTEMPTS } from "./voice-communications-jobs.js";
+import { VoiceMediaService } from "./voice-media.service.js";
 import { VoiceMessagingService } from "./voice-messaging.service.js";
 import {
   type NormalizedProviderEvent,
@@ -72,6 +73,7 @@ export class VoiceEventProcessorService {
     @Inject(VoiceProviderRegistry) private readonly registry: VoiceProviderRegistry,
     @Inject(VoiceCallService) private readonly calls: VoiceCallService,
     @Inject(VoiceMessagingService) private readonly messaging: VoiceMessagingService,
+    @Inject(VoiceMediaService) private readonly media: VoiceMediaService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -154,6 +156,12 @@ export class VoiceEventProcessorService {
             occurredAt: normalized.occurredAt,
             failureCategory: normalized.failureCategory,
           });
+        }
+
+        // VC.15: a recording callback registers the media reference. Nothing is fetched here; the
+        // media service decides whether the configured policy allows a private-storage copy.
+        if (normalized.kind === "recording" && account.enabled) {
+          await this.media.ingestRecording({ accountKey: account.key, event: normalized });
         }
 
         if (account.enabled) {
@@ -251,6 +259,7 @@ export class VoiceEventProcessorService {
 }
 
 function kindOf(eventType: string): ProviderEventKind {
+  if (eventType === "call.recording") return "recording";
   if (eventType.startsWith("call.")) return "call";
   if (eventType.startsWith("message.")) return "message";
   if (eventType.includes("status")) return "status";
@@ -267,7 +276,7 @@ function domainEventFor(normalized: NormalizedProviderEvent): VoiceDomainEvent |
 }
 
 function stateOf(event: NormalizedProviderEvent): string | null {
-  return event.kind === "unknown" ? null : event.state;
+  return event.kind === "unknown" || event.kind === "recording" ? null : event.state;
 }
 
 function externalIdOf(event: NormalizedProviderEvent): string | null {
@@ -278,6 +287,8 @@ function externalIdOf(event: NormalizedProviderEvent): string | null {
       return event.providerMessageId;
     case "status":
       return event.externalId;
+    case "recording":
+      return event.providerCallId;
     case "unknown":
       return null;
   }

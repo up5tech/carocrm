@@ -1,6 +1,6 @@
 # Voice & Communications — providers
 
-> Phase 19-VC.4. This file is the single source for per-adapter status. A capability is never
+> Phase 19-VC.4, extended through 19-VC.16. This file is the single source for per-adapter status. A capability is never
 > described as supported before its adapter and end-to-end behavior pass the relevant tests.
 
 ## 1. Adapters shipped
@@ -21,8 +21,8 @@ resolves to `disabled`, so a mis-set account cannot pretend to work. No producti
 | `voice.outboundCall` | experimental | not-implemented |
 | `voice.inboundEvents` | experimental | not-implemented |
 | `voice.callStatusCallbacks` | experimental | not-implemented |
-| `voice.recordingMetadata` | not-implemented | not-implemented |
-| `voice.recordingDownload` | not-implemented | not-implemented |
+| `voice.recordingMetadata` | experimental | not-implemented |
+| `voice.recordingDownload` | experimental | not-implemented |
 | `messaging.sms.send` | experimental | not-implemented |
 | `messaging.sms.receive` | experimental | not-implemented |
 | `messaging.mms.send` | not-implemented | not-implemented |
@@ -32,6 +32,7 @@ resolves to `disabled`, so a mis-set account cannot pretend to work. No producti
 | `messaging.deliveryStatus` | experimental | not-implemented |
 | `messaging.templates` | experimental | not-implemented |
 | `messaging.media` | not-implemented | not-implemented |
+| `voice.transcript` | experimental | not-implemented |
 | `webhook.signatureValidation` | supported | not-implemented |
 | `provider.healthCheck` | supported | not-implemented |
 
@@ -62,6 +63,17 @@ accepts `rawBody` and the ingress passes it through when present.
 - A send returns `sent` — never `delivered`. Delivery is only ever asserted from a callback.
 - Calls and messages get a deterministic provider id derived from the idempotency key, so a repeated
   dispatch resolves to the same provider object.
+
+## 3.2 Recording and transcript contracts (19-VC.15–19-VC.16)
+
+- A recording arrives as a `call.recording` callback; the adapter normalizes it to
+  `{ providerCallId, providerRef, url, durationSeconds, mimeType }`. No adapter downloads media itself:
+  the module validates and fetches, so the SSRF and MIME rules cannot be bypassed by an adapter.
+- `fetchTranscript({ account, providerRef })` is **optional**. When absent, the module reports
+  "this provider does not offer transcript retrieval" instead of fabricating one. The simulator
+  returns three canned segments, so the transcription path is testable without a speech vendor.
+- Neither contract can send anything: they only read. AI enrichment goes through the platform's
+  AI gateway, never through a telephony adapter.
 
 ## 4. Account configuration
 

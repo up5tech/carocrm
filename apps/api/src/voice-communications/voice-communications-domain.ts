@@ -356,7 +356,7 @@ export function conversationStateAfterInbound(current: ConversationState): Conve
  * object that already exists; `call` and `message` create or update the object; `unknown` is
  * persisted for an operator to inspect rather than silently dropped.
  */
-export const PROVIDER_EVENT_KINDS = ["call", "message", "status", "unknown"] as const;
+export const PROVIDER_EVENT_KINDS = ["call", "message", "status", "recording", "unknown"] as const;
 export type ProviderEventKind = (typeof PROVIDER_EVENT_KINDS)[number];
 
 /**

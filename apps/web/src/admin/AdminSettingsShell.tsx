@@ -27,9 +27,9 @@ export function AdminSettingsShell() {
 
   const tabs = useMemo(() => panel.data?.groups.flatMap((group) => [...group.tabs]) ?? [], [panel.data]);
   const active = tabs.find((tab) => tab.key === tabKey);
-  // The bar belongs to a form over one document. Record-editing tabs (users, teams, roles, API keys)
-  // save each record as its own action, so a sticky Save would promise a write that has no target.
-  const hasDocument = active?.document !== undefined || active?.moduleEndpoint !== undefined;
+  // The bar belongs to a form over one draft: a settings document, a hosted module document, or a tab
+  // that opted in (the layout manager writes entity metadata). Record tabs save per action instead.
+  const hasDocument = active?.document !== undefined || active?.moduleEndpoint !== undefined || active?.usesSaveBar === true;
 
   // No tab key: open the first tab this caller may use, so a bookmark on `/admin/settings` still lands.
   useEffect(() => {

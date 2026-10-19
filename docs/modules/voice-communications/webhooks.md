@@ -1,6 +1,7 @@
 # Voice & Communications — webhooks
 
-> Phase 19-VC.5. Applies to every adapter that declares `webhook.signatureValidation`.
+> Phase 19-VC.5, extended in 19-VC.15 (recording callbacks). Applies to every adapter that declares
+> `webhook.signatureValidation`.
 
 ## 1. Endpoints
 
@@ -8,12 +9,14 @@
 POST /api/v1/integrations/voice-communications/{providerKey}/{accountKey}/voice-events
 POST /api/v1/integrations/voice-communications/{providerKey}/{accountKey}/message-events
 POST /api/v1/integrations/voice-communications/{providerKey}/{accountKey}/status-events
+POST /api/v1/integrations/voice-communications/{providerKey}/{accountKey}/media-events
 ```
 
 Unauthenticated by design: a provider cannot hold a CRM session. `accountKey` is a routing
 identifier, **not** a secret; authentication is the provider's signature. The `{kind}` segment is
-validated (`voice-events | message-events | status-events`) but the event's own `type` decides how it
-is normalized.
+validated (`voice-events | message-events | status-events | media-events`) but the event's own
+`type` decides how it is normalized. `media-events` carries `call.recording` (19-VC.15); the routing
+segment is a URL convention, not a trust boundary.
 
 ## 2. Processing order (the security contract)
 
@@ -54,7 +57,27 @@ The unique index `uq_voice_webhook_events_dedup` is what enforces it, not the ap
 }
 ```
 
-`type` is `call.status`, `call.inbound`, `message.inbound` or `message.status`.
+`type` is `call.status`, `call.inbound`, `message.inbound`, `message.status` or `call.recording`.
+
+A recording callback:
+
+```json
+{
+  "eventId": "evt-rec-1",
+  "type": "call.recording",
+  "occurredAt": "2026-01-01T00:05:00Z",
+  "callId": "CA-1",
+  "recordingId": "RE-1",
+  "recordingUrl": "https://media.provider.example/rec/1.wav",
+  "mimeType": "audio/wav",
+  "durationSeconds": 42
+}
+```
+
+`recordingUrl` is **not** trusted: the media service refuses any URL outside the configured
+`media.allowedHosts` allowlist, any non-https URL, and any private/link-local/metadata destination
+(§7.5). A refused URL still leaves a processed receipt with the reason recorded, so a permanent
+policy verdict does not become a retry storm.
 
 Signature: `HMAC-SHA256(webhookSecret, timestamp + "." + stableStringify(body))`, hex, sent as
 `x-webhook-signature` with `x-webhook-timestamp`. `stableStringify` sorts keys, because Fastify hands

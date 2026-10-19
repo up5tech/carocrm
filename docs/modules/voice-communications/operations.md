@@ -1,7 +1,7 @@
 # Voice & Communications — operations
 
-> Phase 19-VC.2–19-VC.6. Health, queue recovery, credential rotation and incidents for the delivered
-> scope. Later sub-phases extend this file.
+> Phase 19-VC.2–19-VC.17. Health, queue recovery, credential rotation, media and incidents for the
+> delivered scope.
 
 ## 1. Health
 
@@ -36,6 +36,24 @@ send/call and says so.
 | A WhatsApp send is refused `payload_invalid` | Template variables missing | Supply every `{{n}}` placeholder |
 | A call is `failed` with `invalid_recipient` | Destination outside the simulator allowlist | Expected in tests; a live adapter uses the provider's own rejection |
 | A message stays `sent` | No delivery callback arrived | That is correct: delivery is never inferred |
+| A recording callback records nothing | `features.recordings` is off, or the URL is outside `media.allowedHosts` | Enable the feature and add the provider host; the receipt keeps the reason |
+| `media.fetchMode` is `privateStorage` but playback says "not fetched" | The fetch job did not run | Run `voiceCommunications.fetchMedia` for the media id; the reference stays replayable |
+| Playback answers 404 for an operator | They are not the call's assignee, a sharing team member, or an administrator | Assign the call or grant the role |
+| Transcript request refuses `does not offer transcript retrieval` | The adapter has no `fetchTranscript` | Use a provider that supplies transcripts, or keep the feature off |
+| AI enrichment refuses `ai.connectionKey` | The gateway connection is not configured | Set `ai.connectionKey` + `ai.model` to an approved connection |
+| AI output is empty but review state is `pending` | The model returned no usable structured payload | Inspect the AI gateway ledger; the transcript itself is unaffected |
+| Handoff returns the same Case | That is the idempotency contract | Not an error: one conversation owns at most one Case link |
+
+## 2.1 Jobs and worker doors (19-VC.12–19-VC.17)
+
+| Job | Worker endpoint | Effect |
+| --- | --- | --- |
+| `voiceCommunications.processWebhookEvent` | `POST action/webhook-events/process` `{ eventId }` | Normalize one receipt once |
+| `voiceCommunications.fetchMedia` | `POST action/media/fetch` `{ mediaId }` | Copy a recording into private storage |
+| `voiceCommunications.retentionSweep` | `POST action/media/retention-sweep` | Delete media past `retention_at` |
+
+All three accept `x-worker-secret` (`REPORT_WORKER_SECRET`) or an administrator session. They are
+idempotent: a repeated call re-does at most the same write.
 
 ## 3. Credential rotation
 

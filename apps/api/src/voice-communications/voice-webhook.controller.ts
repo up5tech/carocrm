@@ -10,7 +10,8 @@ import { VoiceWebhookIngressService } from "./voice-webhook-ingress.service.js";
  * (`PLAN_Phase_19_Voice_Communications.md` §11.4, §15 `19-VC.5`).
  *
  * `POST /api/v1/integrations/voice-communications/{providerKey}/{accountKey}/{kind}` with
- * `kind ∈ voice-events | message-events | status-events`.
+ * `kind ∈ voice-events | message-events | status-events | media-events` (`media-events` carries
+ * recording callbacks, 19-VC.15).
  *
  * Unauthenticated by design: a provider cannot hold a CRM session. Authentication is the provider's
  * own signature, verified by the adapter before any effect occurs (§13.2). `accountKey` is a routing
@@ -44,4 +45,4 @@ export class VoiceWebhookController {
   }
 }
 
-const WEBHOOK_KINDS = new Set(["voice-events", "message-events", "status-events"]);
+const WEBHOOK_KINDS = new Set(["voice-events", "message-events", "status-events", "media-events"]);

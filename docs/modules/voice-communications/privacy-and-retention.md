@@ -1,6 +1,6 @@
 # Voice & Communications — privacy and retention
 
-> Phase 19-VC.6. This is not legal advice. The deploying organization must validate telecom,
+> Phase 19-VC.6, extended through 19-VC.17. This is not legal advice. The deploying organization must validate telecom,
 > privacy, recording and messaging requirements for its jurisdictions.
 
 ## 1. Consent ownership
@@ -26,13 +26,32 @@ phases.
 
 ## 3. Recording and transcription
 
-Both default **off** (`features.recordings`, `features.transcripts`). No recording is fetched,
-stored or played in 19-VC.0–19-VC.6. When 19-VC.15/16 land, they must:
+Both default **off** (`features.recordings`, `features.transcripts`). 19-VC.15/16 implement them as
+follows:
 
-- require an administrator-configured legal/operational policy before enabling;
-- authorize every playback/download server-side, independently of Contact/Case visibility;
-- keep a retention date and a deletion path per `voice_media`;
-- avoid persisting provider URLs that carry bearer-like parameters.
+- Enabling is an explicit administrator action; a callback while the flag is off registers nothing.
+- A recording callback stores only a **reference** after the URL passes the SSRF allowlist
+  (`media.allowedHosts`, https only, no private/metadata destination). Bytes enter private storage
+  only when `media.fetchMode = "privateStorage"`, through a worker job.
+- Playback is authorized server-side against the parent call (assignee, sharing team, or platform
+  administrator). A caller without access gets "does not exist", not "forbidden".
+- The browser never receives a provider URL or token: the platform serves the bytes it stored.
+- Every media row carries `retention_at` (`media.retentionDays`, default 90); the
+  `voiceCommunications.retentionSweep` job deletes the object and the row once it passes.
+- Provider URLs with bearer-like query parameters are still a residual risk: the reference is stored
+  in `voice_media.provider_ref` for the fetch, never returned by a read API, and the row is deleted at
+  retention. A provider that puts a long-lived token in the URL should be avoided.
+
+### AI enrichment (19-VC.16)
+
+- `features.aiEnrichment` defaults off; the module calls the platform AI gateway, so the gateway's
+  data-class policy and allowlists apply unchanged.
+- Only the transcript text is sent, redacted (`[number]`, `[email]`, `[card]`) and truncated to
+  `ai.maxTranscriptChars`.
+- Output is **draft-only**: `ai_review_status` starts `pending`; nothing is sent or written to another
+  record until an authorized user approves it, and the AI has no tools that could send or mutate.
+- Provenance (`ai_connection_key`, `ai_model`, `ai_generated_at`) and review state are returned to
+  authorized readers.
 
 ## 4. Data minimization
 
@@ -47,14 +66,17 @@ stored or played in 19-VC.0–19-VC.6. When 19-VC.15/16 land, they must:
 `call-metadata`, `message-body`, `message-media`, `call-recording`, `transcript`,
 `consent-evidence`, `webhook-diagnostic`.
 
-Only `voice_media.retention_at` exists as a concrete column today; the retention job itself is
-19-VC.15/19-VC.18. Consent evidence and webhook diagnostics are never deleted by a blanket rule.
+`voice_media.retention_at` and the `voiceCommunications.retentionSweep` job cover recordings and
+message media; transcript rows follow their call session (cascade) and can be deleted with it.
+Consent evidence and webhook diagnostics are never deleted by a blanket rule.
 
 ## 6. Access
 
 - Provider configuration and credentials: administrative capability only; secrets are write-only.
-- Conversations, messages, recordings and transcripts will each have their own permission
-  (`ACL_MATRIX`), so Contact visibility never implies recording access.
+- Conversations, messages, recordings and transcripts each check their own capability
+  (`ACL_MATRIX`): `CommunicationConversation` for the inbox, the `Call` entity for calls and their
+  media/transcripts, so Contact visibility never implies recording access.
 - Internal notes are structurally excluded from provider sends (`ck_voice_messages_internal_note`)
-  and must be excluded from any portal projection.
+  and are only visible in the agent inbox; any portal projection must filter
+  `is_internal_note = false` (no portal conversation surface exists yet — see the compatibility doc).
 - Aggregate counts and health reports never include message content.

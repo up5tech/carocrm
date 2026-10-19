@@ -737,3 +737,49 @@ Two defects the walkthrough found and fixed on the way:
 - **An empty field could not be cleared.** `emailAddress` accepted only a non-empty string, so the form
   had nothing to send for "no email"; it now takes `null` for email, title and phone, and the form sends
   `null` rather than `''`.
+
+## Phase 20.8 — Layout manager tab (added 2026-10-19)
+
+Implemented: the `layout` tab of `PLAN_Phase_20_Settings_UX.md` §4.3 row 3. The drag & drop editor that
+lived inside the Entity Manager was extracted verbatim into `apps/web/src/components/LayoutEditor.tsx`
+and is now hosted by both places, so there is one editing behavior instead of two that can drift.
+
+| Deliverable | Where |
+|---|---|
+| Shared layout editor (panels, field order, disabled pool, add/rename/remove panel, keyboard sensor) | `apps/web/src/components/LayoutEditor.tsx` |
+| Settings `layout` tab with an entity picker (`?entity=` in the URL) | `apps/web/src/admin/tabs/LayoutTab.tsx` |
+| Live preview built from the draft (list = column order; detail/edit = stacked panels) | `LayoutPreview` inside the shared editor |
+| Shell save bar for a metadata-editing tab | `usesSaveBar` flag on the descriptor, honoured by `AdminSettingsShell` |
+| Descriptor | `admin-panel.service.ts` (group `system`, between Main menu and Entity Manager) |
+| Layout validation (already existed, now pinned for the descriptor too) | `metadata.controller.validateLayouts`, `apps/api/test/metadata-api.test.ts` |
+
+What changed for an administrator:
+
+- Layouts are reachable from `/admin/settings/layout` without going through the Entity Manager, with the
+  same drag & drop editing, a live preview of what the saved layout will render, and the shell's
+  Save/Discard/Reload plus dirty guard. Switching entity with a dirty draft asks first.
+- The keyboard alternative is dnd-kit's `KeyboardSensor` — focus a row, `Space`, arrows, `Space` — which
+  is also what the browser verification used to make its move.
+- A `list` layout orders table columns; detail/edit layouts drive the record screens' panels. Both render
+  from `layoutPanelsFor`/`orderByLayout`, which already existed, so a saved change appears without a code
+  change.
+
+Verification actually run (all against the configured database, no extra database):
+
+- `npx tsc --noEmit` for both projects, `pnpm -r build`, and the web Vite build (the tab is its own
+  2.16 kB chunk): clean. `npx eslint .`: clean.
+- `npx vitest run`: **129 files, 1675 tests passed** (the tree carries other agents' committed suites;
+  this change added the descriptor assertion to `navigation.test.ts`, and the existing 17
+  `metadata-api.test.ts` cases keep pinning layout validation, including "references unknown field").
+- Browser (Playwright, admin session, 1440 and 390 px): 16 assertions, all passing — the rail lists the
+  tab, the entity picker selects `Bill`, the save bar hosts the editor and Save starts disabled, a
+  keyboard move (Space/arrows/Space) marks the tab dirty, Save writes `POST /Metadata/Bill` and the
+  fetched definition changes, the Entity Manager editor still renders after the extraction, and the
+  original layout was restored by writing the captured value back (status 200). `scrollWidth` equals the
+  viewport at both widths; no page errors.
+- The restore leaves `app_settings.entity.Bill` carrying layout values equal to the shipped defaults —
+  the same end state as an administrator saving a layout without changes; rendering is identical.
+
+Known limitations are in `docs/compatibility/settings-ux.md` (per-field list/filter/mass-update flags
+stay in the Entity Manager's field forms; the save bar footer has no last-modified actor for entity
+metadata).

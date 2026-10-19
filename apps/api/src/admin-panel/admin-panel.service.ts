@@ -28,6 +28,11 @@ export interface AdminPanelTab {
   readonly document?: string;
   /** Module settings tabs read their own endpoint instead of the document registry (§8.3). */
   readonly moduleEndpoint?: string;
+  /**
+   * Record-editing tabs save per action and show no bar; a tab that edits a draft — such as the layout
+   * manager, which writes entity metadata — opts into the shell's save bar and dirty guard.
+   */
+  readonly usesSaveBar?: boolean;
 }
 
 export interface AdminPanelGroup {
@@ -41,6 +46,7 @@ const TAB_CATALOG: readonly (AdminPanelTab & { group: string })[] = [
   { group: 'system', key: 'general', labelKey: 'web.adminPanel.tabs.general', descriptionKey: 'web.adminPanel.descriptions.general', icon: 'GlobalOutlined', order: 110, level: 'admin', kind: 'tab', route: '/admin/settings/general', document: 'brand' },
   { group: 'system', key: 'localization', labelKey: 'web.adminPanel.tabs.localization', descriptionKey: 'web.adminPanel.descriptions.localization', icon: 'ScheduleOutlined', order: 120, level: 'admin', kind: 'tab', route: '/admin/settings/localization', document: 'i18n' },
   { group: 'system', key: 'menu', labelKey: 'web.adminPanel.tabs.menu', descriptionKey: 'web.adminPanel.descriptions.menu', icon: 'AppstoreOutlined', order: 130, level: 'admin', kind: 'tab', route: '/admin/settings/menu', document: 'navigation' },
+  { group: 'system', key: 'layout', labelKey: 'web.adminPanel.tabs.layout', descriptionKey: 'web.adminPanel.descriptions.layout', icon: 'ToolOutlined', order: 135, level: 'admin', kind: 'tab', route: '/admin/settings/layout', usesSaveBar: true },
   { group: 'system', key: 'entity-manager', labelKey: 'web.entityManager.title', descriptionKey: 'web.adminPanel.descriptions.entityManager', icon: 'KeyOutlined', order: 140, level: 'admin', kind: 'page', route: '/admin/entity-manager' },
   { group: 'system', key: 'jobs', labelKey: 'web.adminJobs.title', descriptionKey: 'web.adminPanel.descriptions.jobs', icon: 'ThunderboltOutlined', order: 150, level: 'admin', kind: 'page', route: '/admin/jobs' },
   { group: 'system', key: 'audit', labelKey: 'web.adminAudit.title', descriptionKey: 'web.adminPanel.descriptions.audit', icon: 'FileSearchOutlined', order: 160, level: 'admin', kind: 'page', route: '/admin/audit-log' },

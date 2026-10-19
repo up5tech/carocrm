@@ -220,3 +220,87 @@ export const WhatsappTemplateStatusSchema = z
     rejectionReason: z.string().trim().max(1000).nullable().optional(),
   })
   .strict();
+
+/** Phase 19-VC.12 — inbox queries and conversation actions. */
+export const InboxQuerySchema = z
+  .object({
+    status: z.string().trim().max(32).optional(),
+    channel: z.enum(["sms", "mms", "whatsapp"]).optional(),
+    assignee: z.string().trim().max(64).optional(),
+    includeArchived: z
+      .union([z.literal("true"), z.literal("false")])
+      .optional()
+      .transform((value) => value === "true"),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+  .strict();
+
+export const TimelineQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(200).default(100),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+  .strict();
+
+export const ConversationStatusSchema = z
+  .object({ status: z.enum(["open", "pending_customer", "pending_internal", "resolved", "closed", "spam"]), reason: z.string().trim().max(500).optional() })
+  .strict();
+
+export const ConversationAssignSchema = z
+  .object({
+    userId: z.string().trim().max(64).nullable().optional(),
+    teamId: z.string().trim().max(64).nullable().optional(),
+    reason: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
+export const CaseLinkSchema = z.object({ caseId: z.string().trim().min(1).max(64) }).strict();
+
+export const CaseHandoffSchema = z
+  .object({
+    subject: z.string().trim().min(1).max(256),
+    description: z.string().trim().min(1).max(10_000),
+    reason: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
+/** Phase 19-VC.14 — local service snippets and composer validation. */
+export const TemplateUpsertSchema = z
+  .object({
+    key: z.string().trim().min(2).max(64),
+    name: z.string().trim().min(1).max(256),
+    channel: z.enum(["sms", "mms", "whatsapp", "any"]),
+    body: z.string().min(1).max(10_000),
+    active: z.boolean().optional(),
+  })
+  .strict();
+
+export const TemplateRenderSchema = z
+  .object({ variables: z.record(z.string()).default({}) })
+  .strict();
+
+export const ComposerValidateSchema = z
+  .object({ channel: z.enum(["sms", "mms", "whatsapp"]), body: z.string().max(10_000) })
+  .strict();
+
+/** Phase 19-VC.15/16 — media and transcription worker/actions. */
+export const MediaActionSchema = z.object({ mediaId: z.string().trim().min(1).max(64) }).strict();
+
+export const TranscriptRequestSchema = z.object({ callSessionId: z.string().trim().min(1).max(64) }).strict();
+
+export const TranscriptReviewSchema = z
+  .object({ status: z.enum(["approved", "dismissed"]) })
+  .strict();
+
+/** Phase 19-VC.17 — CRM panel queries. */
+export const PanelQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+  .strict();
+
+export const PanelLinkSchema = z
+  .object({ entityType: z.enum(["Account", "Contact", "Lead", "Opportunity", "Case"]), entityId: z.string().trim().min(1).max(64) })
+  .strict();

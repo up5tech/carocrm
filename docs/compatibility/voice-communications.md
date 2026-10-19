@@ -1,7 +1,7 @@
 # Voice & Communications — compatibility and behavior reference
 
 > Phase 19-VC.0 deliverable (`PLAN_Phase_19_Voice_Communications.md` §1.3, §16).
-> Status: **audit complete; implementation starts at 19-VC.1**.
+> Status: **19-VC.0–19-VC.17 delivered** (server side; dedicated screens remain a follow-up).
 > Canonical module name: `VoiceCommunications` (no `Ua` prefix). API prefix:
 > `/api/v1/VoiceCommunications`; webhook prefix: `/api/v1/integrations/voice-communications`.
 
@@ -18,12 +18,18 @@ The product behavior is CRM-oriented telephony and one-to-one messaging, not a P
 
 | Behavior | Reference | Implementation status |
 | --- | --- | --- |
-| Click-to-call from a phone field | EspoCRM VoIP Integration overview | Implemented as an API (19-VC.8); the phone-field button is 19-VC.17 |
-| Incoming-call popup with caller context | EspoCRM VoIP Integration overview | Server side implemented (19-VC.9): notification row + ACL-filtered context; the popup component is 19-VC.17 |
+| Click-to-call from a phone field | EspoCRM VoIP Integration overview | API implemented (19-VC.8); the phone-field button is not built (no SPA screens in this phase) |
+| Incoming-call popup with caller context | EspoCRM VoIP Integration overview | Server side implemented (19-VC.9): notification row + ACL-filtered context; the popup component is not built |
 | Call logging as an Activity | EspoCRM Activities and Calendar | Implemented (19-VC.7): one `Call` Activity per session, created/updated through the entity service |
 | SMS/MMS send + delivery callbacks | Twilio Message resource docs | SMS implemented through the simulator (19-VC.10); MMS not implemented; live adapter pending |
 | WhatsApp Business templates and service window | Twilio WhatsApp API / templates docs | Window policy (19-VC.6) + template approval/variables (19-VC.11), simulator only |
 | Provider webhook signature validation | Twilio webhook security docs | Contract + fake HMAC adapter (19-VC.5); provider-specific validators per adapter |
+| Unified inbox: list, timeline, read state, status | EspoCRM / general CRM inbox behavior | Implemented as an API (19-VC.12); no dedicated SPA screen |
+| Conversation assignment and Service Desk handoff | EspoCRM assignment + Service Desk case flow | Implemented (19-VC.13): user/team assignment with history, idempotent Case handoff |
+| One-to-one service snippets and composer checks | EspoCRM email templates (one-to-one use) | Implemented (19-VC.14): local snippets, strict placeholders, segment hints; no campaign model |
+| Call recording metadata, playback and retention | Twilio recording docs | Implemented with the simulator (19-VC.15): reference, SSRF-checked private fetch, ACL playback, retention sweep |
+| Transcript and AI summary / suggested reply | Twilio transcription + AI summarization | Implemented with the simulator and the fake AI adapter (19-VC.16); draft-only, opt-in |
+| Communications panel on a CRM record | EspoCRM stream/panels | API implemented (19-VC.17): record-ACL-aware conversations + calls, touchpoints for Customer Success |
 
 This is a clean-room reimplementation. No EspoCRM PHP class, frontend asset, icon, translation or
 branding is copied. Provider behavior is treated as a versioned external contract; each adapter
@@ -94,10 +100,21 @@ later sub-phase:
   outside its `sandboxRecipients` allowlist.
 - **No PBX adapter** (Asterisk, 3CX, Starface, Binotel, iexPBX) exists. Each will be marked
   `not-implemented` in the capability matrix until it has an adapter and contract tests.
-- **No recording or transcription is enabled.** Recording metadata/download and transcripts are
-  later sub-phases; the defaults are off and the settings schema says so.
-- **No click-to-call button, call-popup component, inbox UI or CRM panel** yet. The APIs behind them
-  exist; the screens are 19-VC.12/19-VC.17.
+- **Recording and transcription are off by default and must be enabled explicitly.** With the flag
+  off, a recording callback registers nothing. Transcription requires a provider adapter that offers
+  `fetchTranscript`; AI enrichment additionally requires an approved AI gateway connection.
+- **No dedicated SPA screens** for the inbox, composer, call popup, media player or CRM panel. Every
+  behavior is reachable through the API and is exercised by the integration suite; the screens are a
+  separate UI phase, not a missing backend capability.
+- **The Portal is not extended.** There is no customer-facing conversation surface: adding one
+  without an explicit product requirement would create a second ACL surface whose internal-note
+  exclusion would have to be re-proved. The inbox API never exposes internal notes to a
+  non-agent caller, and any future portal projection must filter `is_internal_note = false`.
+- **Customer Success consumes events, not records.** `voiceCommunications.*` events carry ids and
+  verbs only (no bodies), and the panel touchpoint endpoint returns counts and recency. Neither
+  creates a second Activity, so the "no duplicate Activities" rule holds by construction.
+- **MMS is not implemented**; the channel exists in the domain and the settings gate, but no adapter
+  path sends it.
 - **Delivery state is never inferred.** The normalized message state machine only moves forward on
   an actual callback; absent a callback the state remains `sent`/`unknown`, never `delivered`.
 - **WhatsApp service-window policy is evaluated with an injectable clock** and returns
@@ -115,7 +132,7 @@ later sub-phase:
 | Component | Version / contract |
 | --- | --- |
 | Module | `VoiceCommunications` 1.0.0, load order 390 |
-| Migration | `051_phase19_voice_communications.sql` (additive) |
+| Migrations | `051`…`054` (additive) |
 | Adapter contract | `apps/api/src/voice-communications/voice-provider.ts` |
 | Normalized states | `apps/api/src/voice-communications/voice-communications-domain.ts` |
 | Fake adapter signature | HMAC-SHA256 over `timestamp + "." + canonical JSON` |

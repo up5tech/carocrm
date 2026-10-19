@@ -22,6 +22,7 @@ the upstream file layout, and copies no upstream source, asset or translation.
 | Role permission matrix offers `not-own`/`own`/`all` plus position-based scopes | `no / own / team / all / yes` per `create/read/edit/delete/stream` | These are the levels `AclApiService` and `packages/acl` evaluate. The editor writes the document the ACL reads rather than a richer vocabulary the engine would ignore. |
 | Team `roleList` grants access | `teams.role_ids` mirrored into `teams_roles`, which is what the ACL joins | Before 20.7 a role stored on a team was never granted. The denormalised array stays for readers, the link table stays authoritative — the same arrangement as `users_teams`. |
 | An API key secret can be re-read by a super admin | Never returned after the creating response | The server stores only a hash (`auth.service.issueApiKey`), so "shown once" is a property of the data, not a UI rule. Rotation is issue-new + revoke-old, offered as one button. |
+| Layout manager is an `EntityLayoutManager` per entity panel | One shared `LayoutEditor` component hosted by both the Entity Manager and a settings `layout` tab | Copying the editor into the shell would let the two drift. The tab hosts it with the shell's save bar (`usesSaveBar` descriptor flag) and an entity picker; the Entity Manager keeps its inline actions. |
 | User list shows team membership | The list omits `teams`; the editor reads `GET /User/:id` | Keeping the page cheap matters more than one column, and the row the form writes is the row it read. `title` and `phone` are in both DTOs so a save cannot blank them. |
 
 ## Behaviour that matches upstream intent
@@ -32,13 +33,18 @@ the upstream file layout, and copies no upstream source, asset or translation.
 - Reads of brand and language defaults stay open to any session, because the shell has to paint them.
 - Icon and accent choices come from fixed allowlists; no remote or arbitrary icon source exists.
 
-## Known limitations after sub-phases 20.1–20.7
+## Known limitations after sub-phases 20.1–20.8
 
 - Only the platform documents (`brand`, `i18n`, `navigation`, `security`, `fileStorage`,
   `notifications`) are registered; the authentication, attachments, notifications, internal and
-  messaging tabs are the plan's later sub-phases (20.9–20.10), and the layout manager is 20.8.
+  messaging tabs are the plan's later sub-phases (20.9–20.10).
   The `security`, `fileStorage` and `notifications` rows exist and are readable/writable now, so those
   tabs need only UI.
+- The 20.8 layout editor covers panels and field order for `list`/`detail`/`edit`. The plan's "list
+  columns, filter and mass-update fields" are per-field flags (`inList`, `inFilter`, `massUpdate`) that
+  live in the Entity Manager's field forms, not in a layout; the tab previews what the layouts actually
+  drive. The save bar footer shows "not changed since installation" there, because entity metadata does
+  not serve a last-modified actor.
 - The 20.7 tabs manage internal users, teams, roles and API keys. **Portal roles and portal-user
   linkage stay on the Portals screen** (`/admin/portals`): a portal account edited here shows only the
   fields that are safe to change, because the identity service refuses internal roles on a portal

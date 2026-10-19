@@ -2,7 +2,8 @@
 
 Scope: `PLAN_Phase_20_Settings_UX.md` §4, §7, §8. Implemented: 20.1 registry and documents, 20.2 the
 tabbed shell, 20.3 General/Localization and the hosted module documents, 20.4 navigation resolution,
-20.5 the Main Menu tab, 20.6 per-entity navigation metadata, 20.7 users/teams/roles/API keys.
+20.5 the Main Menu tab, 20.6 per-entity navigation metadata, 20.7 users/teams/roles/API keys, 20.8 the
+layout manager tab.
 
 ## Where things live
 
@@ -24,10 +25,14 @@ apps/web/src/admin/
   document-form.ts                  one document edited as a draft
   module-document.ts                the same for a module-owned document
   tabs/                             general, localization, menu, sales, serviceDesk, customerSuccess,
-                                    users, teams, roles, apiKeys (+ identity.ts shared ACL vocabulary)
+                                    users, teams, roles, apiKeys (+ identity.ts shared ACL vocabulary),
+                                    layout (hosts the shared LayoutEditor)
 apps/api/src/auth/
   identity.service.ts               /User /Role /Team /ApiUser /ApiKey business rules
   identity.controller.ts            the same routes, with the 20.7 filters and actions
+apps/web/src/components/
+  LayoutEditor.tsx                  the drag & drop layout editor shared by the Entity Manager and the
+                                    settings Layout tab (draft + pool + live preview + keyboard sensor)
 ```
 
 ## Storage
@@ -103,10 +108,31 @@ deleting the account that would leave no active administrator is what is refused
 (`422 VALIDATION_FAILED`, `details.rule = lastAdministrator`). "Administrator" is the same three ways
 `AclApiService` decides it: `is_admin`, `type = 'admin'`, or the built-in `sysAdmin` role.
 
+## Layout manager (20.8)
+
+The `layout` tab hosts the same `LayoutEditor` the Entity Manager uses — one editing behavior, two
+hosts. The tab picks an entity (kept in the URL as `?entity=`), and the editor manages list/detail/edit
+panels per view: drag fields between panels and the disabled pool, drag a panel by its handle to
+reorder, add/rename/remove panels, with a live preview built from the draft (a list layout previews as
+the table's column order; detail and edit preview as stacked panels).
+
+- The keyboard alternative is dnd-kit's `KeyboardSensor`: focus a row, `Space` to lift, arrows to move,
+  `Space` to drop. No pointer is required anywhere in the editor.
+- The editor reports its draft to the shell (`onState`), so Save/Discard/Reload and the dirty guard come
+  from the shared save bar — the descriptor opts in with `usesSaveBar: true`, and the editor draws no
+  button row of its own in this host. Switching entity with a dirty draft asks first.
+- Writes go through `POST /Metadata/:entity` (`layouts` section). The server validates the patch
+  (`metadata.controller.validateLayouts`): an unknown view, a panel without a name, or a panel listing a
+  field the entity does not have is refused with `422` naming the field. The same validation is pinned by
+  `apps/api/test/metadata-api.test.ts`.
+- A `list` layout only reorders columns (`orderByLayout`); a field's presence stays governed by its
+  `inList` flag. detail/edit layouts drive the panels of the record screens (`layoutPanelsFor`), so a
+  saved change renders without a code change.
+
 ## Levels
 
 `public` (any session, e.g. brand), `admin` and `sysAdmin`. The instance has one administrative tier
 today, so `admin` and `sysAdmin` resolve to the same predicate — recorded in
-`docs/compatibility/settings-ux.md`. The `internal`/danger-zone tab, the
-layout manager and the messaging tabs are later sub-phases of the same plan (20.8–20.10); the
-descriptors and endpoints are shaped for them.
+`docs/compatibility/settings-ux.md`. The `internal`/danger-zone tab and the
+messaging tabs are later sub-phases of the same plan (20.9–20.10); the descriptors and endpoints are
+shaped for them.

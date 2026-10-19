@@ -232,6 +232,7 @@ describe('navigation resolution', () => {
     const groups = admin.body['groups'] as { key: string; tabs: { key: string; kind: string }[] }[];
     expect(admin.body['defaultTab']).toBe('general');
     expect(groups.some((group) => group.key === 'system' && group.tabs.some((tab) => tab.key === 'menu'))).toBe(true);
+    expect(groups.some((group) => group.key === 'system' && group.tabs.some((tab) => tab.key === 'layout' && tab.usesSaveBar === true))).toBe(true);
     expect(groups.some((group) => group.tabs.some((tab) => tab.kind === 'tab' && tab.key === 'sales'))).toBe(true);
 
     const rep = await call('GET', '/api/v1/AdminPanel', repToken);

@@ -1,6 +1,6 @@
 # Voice & Communications — architecture
 
-> Phase 19-VC.0–19-VC.6. Canonical module `VoiceCommunications`, API `/api/v1/VoiceCommunications`,
+> Phase 19-VC.0–19-VC.17. Canonical module `VoiceCommunications`, API `/api/v1/VoiceCommunications`,
 > webhook prefix `/api/v1/integrations/voice-communications`.
 > Audit and capability matrix: `docs/implementation/voice-communications-audit.md`.
 > Behavior reference and limitations: `docs/compatibility/voice-communications.md`.
@@ -30,13 +30,18 @@ optional integrations are detected by a metadata marker, never by an import.
 | Incoming-call notifications | `voice-call-notification.service.ts` | One notification row per call and recipient: the assigned user or the endpoint team's members, number only. |
 | Messaging | `voice-messaging.service.ts` | Conversations, participants, durable send path, inbound materialization, monotonic delivery status, internal notes, media references. |
 | WhatsApp templates | `voice-whatsapp-template.service.ts` | Locally recorded approval status, language, `{{n}}` variable validation. |
+| Unified inbox | `voice-inbox.service.ts` | ACL-scoped conversation list with indexed filters, merged message/history timeline, read state, status changes, assignment and case handoff — all with append-only history. |
+| Service snippets | `voice-message-template.service.ts` | Local one-to-one snippets with a strict placeholder grammar, render with caller-supplied values only, SMS segment arithmetic, composer validation. |
+| Recordings & media | `voice-media.service.ts` | Recording references from callbacks, SSRF-checked fetch into private storage as a worker job, authorized playback, retention sweep. |
+| Transcription & AI | `voice-transcription.service.ts` | Provider transcript retrieval, segment storage, opt-in AI summary/topics/actions/suggested reply through the AI gateway, draft-only review state. |
+| CRM panels | `voice-panel.service.ts` | Record-ACL-aware panel data (conversations + calls), touchpoint counts for Customer Success, link a conversation to a record. |
 | Event processor | `voice-event-processor.service.ts` | Normalize a receipt once, persist `voice_communication_events`, emit `voiceCommunications.*` through the outbox. |
 | Contact resolver | `voice-contact-resolver.service.ts` | Normalize, match `phoneNumber` across Contact/Lead/Account, ACL-filter, report ambiguity. |
 | Consent + suppression | `voice-consent.service.ts` | Append-only consent evidence, suppression tombstones, last inbound time. |
 | Channel policy | `voice-policy.service.ts` | The single send-eligibility decision, with explainable refusals. |
 | Health / navigation | `*-module-health.service.ts`, `*-navigation.service.ts` | Facts read from the running platform; ACL-scoped menu visibility. |
 | HTTP | `voice-communications.controller.ts`, `voice-webhook.controller.ts` | Static admin prefix and public provider prefix. |
-| Persistence | `database/migrations/051_phase19_voice_communications.sql` | Eleven tables, additive only. |
+| Persistence | `database/migrations/051…054_phase19_voice_communications*.sql` | Fifteen tables, additive only. |
 
 ## 3. Data flow
 
@@ -58,7 +63,8 @@ disclosed to the provider.
 `voice_provider_accounts`, `voice_endpoints`, `voice_webhook_events`,
 `voice_communication_events`, `voice_call_sessions`, `voice_conversations`,
 `voice_conversation_participants`, `voice_messages`, `voice_media`, `voice_consent_events`,
-`voice_suppressions`, `voice_whatsapp_templates`.
+`voice_suppressions`, `voice_whatsapp_templates`, `voice_conversation_events`,
+`voice_message_templates`, `voice_transcripts`.
 
 The user-facing **Call** record stays the platform's `Call` Activity; `voice_call_sessions` holds
 provider correlation and normalized state and links to it by `activity_id`. One session produces
@@ -73,6 +79,10 @@ Idempotency is structural:
 - `uq_voice_messages_provider_message (account_key, provider_message_id) WHERE provider_message_id IS NOT NULL`
 - `ck_voice_messages_internal_note` — an internal note cannot carry a provider message id.
 - `uq_voice_suppressions_active (channel, address) WHERE revoked_at IS NULL`
+- `uq_voice_message_templates_key (key)` — one snippet per key, local only
+- `uq_voice_transcripts_call (call_session_id)` — one transcript per call
+- `voice_conversation_events` is append-only: assignment and status history are rows, never an
+  overwritten column (§9.1).
 
 ## 5. Service authority
 

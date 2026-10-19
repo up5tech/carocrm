@@ -1773,3 +1773,52 @@ body {
     width: 92px;
   }
 }
+
+/* ---- Phase 20.8: live preview in the layout manager ---- */
+.carocrm-layout-preview-table {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid #e6e9ef;
+  border-radius: 6px;
+  background: #fafbfc;
+}
+
+.carocrm-layout-preview-col {
+  padding: 3px 8px;
+  border: 1px solid #e6e9ef;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.carocrm-layout-preview-panel {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid #e6e9ef;
+  border-radius: 6px;
+}
+
+.carocrm-layout-preview-panel-name {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.carocrm-layout-preview-row {
+  padding: 4px 0;
+  border-bottom: 1px solid #f0f2f5;
+  font-size: 13px;
+}
+
+.carocrm-layout-preview-row:last-of-type {
+  border-bottom: 0;
+}
+
+.carocrm-admin-entity-picker {
+  min-width: 240px;
+  max-width: 100%;
+}

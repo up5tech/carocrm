@@ -855,7 +855,11 @@
     "navBoardGroupByHint": "Trường dùng để nhóm board khi mở. Chỉ trường enum có giá trị mới nhóm được.",
     "navHidden": "Ẩn khỏi menu chính",
     "navHiddenHint": "Ẩn chỉ là hiển thị: URL danh sách, URL bản ghi và API vẫn hoạt động với người dùng có quyền.",
-    "navUpdated": "Đã cập nhật cấu hình điều hướng."
+    "navUpdated": "Đã cập nhật cấu hình điều hướng.",
+    "layoutPreview": "Xem trước",
+    "layoutPreviewHint": "Trang bản ghi sẽ hiển thị thế nào: các nhóm theo thứ tự này, trường theo thứ tự này.",
+    "layoutPreviewListHint": "Bố cục danh sách quyết định thứ tự cột; trường để ngoài vẫn hiện theo cờ riêng của nó.",
+    "layoutPreviewEmpty": "Chưa có cột nào — hãy kéo trường vào một nhóm."
   },
   "workflows": {
     "title": "Luồng công việc",
@@ -1265,7 +1269,8 @@
       "users": "Người dùng",
       "teams": "Nhóm",
       "roles": "Phân quyền",
-      "apiKeys": "API key"
+      "apiKeys": "API key",
+      "layout": "Bố cục"
     },
     "descriptions": {
       "general": "Tiêu đề trang, logo và dòng chân trang của hệ thống này.",
@@ -1284,7 +1289,8 @@
       "users": "Tài khoản, phân quyền, nhóm và trạng thái.",
       "teams": "Nhóm, thành viên và quyền mà phân quyền của nhóm mang lại.",
       "roles": "Phân quyền và các quyền theo bản ghi, theo trường.",
-      "apiKeys": "Tài khoản API và key để xác thực."
+      "apiKeys": "Tài khoản API và key để xác thực.",
+      "layout": "Nhóm trường, thứ tự trường và cột danh sách theo từng bản ghi."
     }
   },
   "adminShell": {
@@ -1802,5 +1808,14 @@
     "selectAgentFirst": "Chọn agent để xem kết quả đánh giá.",
     "evalRuns": "Lần chạy đánh giá",
     "createdAt": "Ngày tạo"
+  },
+  "adminLayout": {
+    "entityTitle": "Bản ghi",
+    "entityAria": "Chọn bản ghi cần sắp bố cục",
+    "entityPlaceholder": "Chọn một bản ghi",
+    "changesRender": "Thay đổi hiển thị ngay trên màn hình danh sách, chi tiết và chỉnh sửa của {name} sau khi lưu.",
+    "pickEntity": "Chọn một bản ghi để sắp nhóm trường, thứ tự trường và cột danh sách.",
+    "editorTitle": "Bố cục của {name}",
+    "saveFailed": "Không lưu được bố cục."
   }
 }

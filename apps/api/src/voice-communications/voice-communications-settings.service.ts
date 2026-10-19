@@ -111,6 +111,38 @@ export const VoiceCommunicationsSettingsSchema = z
       })
       .strict()
       .default({}),
+    /**
+     * 19-VC.15 — media handling. A provider recording URL is fetched into private storage only when
+     * the administrator says so; otherwise playback is refused rather than proxied blind.
+     */
+    media: z
+      .object({
+        /** `off` keeps the reference only; `privateStorage` fetches bytes into the platform store. */
+        fetchMode: z.enum(["off", "privateStorage"]).default("off"),
+        /** Extra hostnames a provider's media may come from. Empty means "refuse every fetch". */
+        allowedHosts: z.array(z.string().trim().min(1).max(255)).max(32).default([]),
+        /** Non-production escape hatch for the SSRF check; never set in a live deployment. */
+        allowLoopback: z.boolean().default(false),
+        maxBytes: z.number().int().min(1024).max(104_857_600).default(26_214_400),
+        retentionDays: z.number().int().min(1).max(3_650).default(90),
+        /** The operator-facing notice an agent must present before a recorded call. */
+        noticeRequired: z.boolean().default(false),
+      })
+      .strict()
+      .default({}),
+    /**
+     * 19-VC.16 — AI enrichment. Both keys must be set for a summary/suggested reply to be produced;
+     * the module calls the platform's AI gateway, never a provider directly.
+     */
+    ai: z
+      .object({
+        connectionKey: z.string().trim().max(64).default(""),
+        model: z.string().trim().max(128).default(""),
+        /** Largest transcript text handed to a model, so a runaway recording cannot drain budget. */
+        maxTranscriptChars: z.number().int().min(500).max(200_000).default(20_000),
+      })
+      .strict()
+      .default({}),
   })
   .strict();
 

@@ -1,11 +1,11 @@
 # Phase 20 — Settings, Administration and End-User UX/UI
 
-> **Status:** 20.0 – 20.7 implemented (2026-10-19): settings document registry, admin panel
+> **Status:** 20.0 – 20.8 implemented (2026-10-19): settings document registry, admin panel
 > descriptors and the tabbed shell, General/Localization/Main Menu tabs, the hosted module documents,
 > `GET /Navigation` with ACL-filtered resolution, per-entity `nav` metadata and the Entity Manager
-> Navigation tab, and the Users/Teams/Roles/API keys tabs over the existing identity API with
-> last-administrator protection and show-once secrets. 20.8 – 20.17 (layout manager, security/messaging
-> tabs, user preferences, the end-user UX pack, accessibility and release hardening) are still planned.
+> Navigation tab, the Users/Teams/Roles/API keys tabs over the existing identity API, and the Layout
+> manager tab. 20.9 – 20.17 (security/messaging tabs, user preferences, the end-user UX pack,
+> accessibility and release hardening) are still planned.
 > This document remains the scope, architecture reference and implementation roadmap for Phase 20.
 > Implemented behaviour is documented in `docs/admin/settings.md`, `docs/admin/navigation.md` and the
 > deviations in `docs/compatibility/settings-ux.md`.
@@ -1024,13 +1024,22 @@ blank them. The last-administrator rule is refused server-side on the state afte
 team roles are now actually granted through `teams_roles`. The secret exists only in the response that
 created it. Portal roles stay on the Portals screen — see `docs/compatibility/settings-ux.md`.
 
-### Phase 20.8 — Layout manager
+### Phase 20.8 — Layout manager  ✅ done 2026-10-19
 
 Tasks: per-entity list/detail/edit layout editing in the `layout` tab, live preview, keyboard
 alternative to drag & drop, validation against the layout schema.
 
 Acceptance: a layout referencing an unknown field is rejected with a clear message; changes render in
 list/detail without a code change.
+
+Delivered: the `layout` settings tab hosts the same `LayoutEditor` the Entity Manager uses — panels,
+field order, disabled pool, add/rename/remove panel, drag & drop plus dnd-kit's keyboard sensor, and a
+live preview built from the draft (list = column order; detail/edit = stacked panels). The tab opts into
+the shell save bar with a new `usesSaveBar` descriptor flag and reports its draft to it; switching
+entity with a dirty draft asks first. Writes go through `POST /Metadata/:entity`, whose
+`validateLayouts` already refused unknown fields and views with `422` naming the offender — pinned by
+`apps/api/test/metadata-api.test.ts` and now also asserted for the descriptor in
+`apps/api/test/navigation.test.ts`.
 
 ### Phase 20.9 — Security, Messaging, Integrations and Internal tabs
 
@@ -1154,7 +1163,7 @@ extra database was created and no destructive setup was introduced.
 Phase 20 is complete when all applicable checks below pass:
 
 - [x] `/admin/settings` is a tabbed, permissioned shell; no single page holds every setting. (20.2, `AdminSettingsPage.tsx` deleted)
-- [x] Every settings capability in the §4.3 catalog is reachable from a tab **or a documented deferral** — see `docs/compatibility/settings-ux.md` (users, teams, roles and API keys arrived in 20.7; layout manager, authentication, email, notifications, attachments, internal and webhooks remain 20.8–20.10).
+- [x] Every settings capability in the §4.3 catalog is reachable from a tab **or a documented deferral** — see `docs/compatibility/settings-ux.md` (users, teams, roles and API keys arrived in 20.7 and the layout manager in 20.8; authentication, email, notifications, attachments, internal and webhooks remain 20.9–20.10).
 - [x] Settings documents live in `app_settings` with schema validation, versioning, concurrency and
       reset-to-default; no second settings store exists. (20.1)
 - [x] The main menu is administrator-configurable and resolved server-side with ACL filtering. (20.4, 20.5)

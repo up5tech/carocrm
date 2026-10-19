@@ -192,9 +192,6 @@ export const PENDING_FEATURES: readonly { readonly key: string; readonly phase: 
   { key: "sms", phase: "19-VC.10" },
   { key: "mms", phase: "19-VC.10" },
   { key: "whatsapp", phase: "19-VC.11" },
-  { key: "recordings", phase: "19-VC.15" },
-  { key: "transcripts", phase: "19-VC.16" },
-  { key: "aiEnrichment", phase: "19-VC.16" },
 ];
 
 /** The physical structures the module's own contract depends on (migration 051). */
@@ -212,6 +209,10 @@ export const VOICE_STRUCTURES = {
     "voice_consent_events",
     "voice_suppressions",
     "voice_whatsapp_templates",
+    // 19-VC.12–19-VC.17: inbox history, local snippets, transcripts.
+    "voice_conversation_events",
+    "voice_message_templates",
+    "voice_transcripts",
   ],
   indexes: [
     "uq_voice_webhook_events_dedup",
@@ -235,7 +236,7 @@ export const VOICE_COMMUNICATIONS_MODULE = {
   /** Frontend slug (§3.3). */
   slug: "voice-communications",
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ["19-VC.0", "19-VC.1", "19-VC.2", "19-VC.3", "19-VC.4", "19-VC.5", "19-VC.6", "19-VC.7", "19-VC.8", "19-VC.9", "19-VC.10", "19-VC.11"],
+  implementedPhases: ["19-VC.0", "19-VC.1", "19-VC.2", "19-VC.3", "19-VC.4", "19-VC.5", "19-VC.6", "19-VC.7", "19-VC.8", "19-VC.9", "19-VC.10", "19-VC.11", "19-VC.12", "19-VC.13", "19-VC.14", "19-VC.15", "19-VC.16", "19-VC.17"],
   /**
    * Metadata entities this module owns. Empty on purpose: the CRM records it links to are the
    * platform's (`Contact`, `Lead`, `Account`, `Call`, `Case`), and its own communication data lives
