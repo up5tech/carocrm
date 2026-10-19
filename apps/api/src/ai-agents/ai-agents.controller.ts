@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 
-import { AuthenticationFailedError, InvalidQueryError } from '@carocrm/core/errors/index.js';
+import { AuthenticationFailedError, InvalidQueryError, ValidationError } from '@carocrm/core/errors/index.js';
 import {
   Body,
   Controller,
@@ -16,8 +16,11 @@ import {
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
+import { z } from 'zod';
 
 import { Public } from '../auth/auth.guard.js';
+import type { RequestScope } from '../common/request-scope.js';
+import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
 import type { ApprovalStatusFilter } from './ai-agent-approvals.service.js';
 import { AIAgentApprovalService } from './ai-agent-approvals.service.js';
@@ -27,6 +30,7 @@ import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
 import { AIAgentRunService } from './ai-agent-runs.service.js';
+import { AIToolRegistry } from './ai-agent-tools.js';
 import { AGENT_STATUSES, type AgentStatus, type RunStatus } from './ai-agents-module.js';
 import { AIAgentsModuleHealthService } from './ai-agents-module-health.service.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
@@ -86,6 +90,8 @@ export class AIAgentsController {
     @Inject(AIAgentPricingService) private readonly pricing: AIAgentPricingService,
     @Inject(AIAgentQuotaService) private readonly quotas: AIAgentQuotaService,
     @Inject(AIAgentEvaluationService) private readonly evaluations: AIAgentEvaluationService,
+    @Inject(AIToolRegistry) private readonly tools: AIToolRegistry,
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
 
@@ -384,6 +390,49 @@ export class AIAgentsController {
       ...(input.causationId === undefined ? {} : { causationId: input.causationId }),
       ...(input.depth === undefined ? {} : { depth: input.depth }),
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // 19-AI.18 — MCP-compatible tool protocol adapter (authenticated, allowlisted)
+  // -------------------------------------------------------------------------
+  @Get('action/mcp/tools')
+  async mcpListTools() {
+    await this.permissions.assert('use');
+    const defs = this.tools.list();
+    return {
+      tools: defs.map((d) => ({
+        name: d.key,
+        description: d.description,
+        inputSchema: d.inputJsonSchema,
+      })),
+    };
+  }
+
+  @HttpCode(200)
+  @Post('action/mcp/call')
+  async mcpCallTool(@Body() body: unknown) {
+    await this.permissions.assert('use');
+    const schema = z
+      .object({
+        name: z.string().trim().min(1).max(120),
+        arguments: z.record(z.string(), z.unknown()).optional(),
+      })
+      .strict();
+    const input = parse(schema, body);
+    const def = this.tools.get(input.name);
+    if (!(await this.tools.isEnabled(input.name))) {
+      throw new ValidationError('Tool is not enabled.', { tool: input.name });
+    }
+    const validated = def.inputSchema.parse(input.arguments ?? {});
+    const principal = this.scope.requirePrincipal();
+    const context = {
+      runId: 'mcp-direct',
+      step: 0,
+      actorUserId: principal.userId,
+      idempotencyKey: `mcp-${Date.now()}`,
+    };
+    const result = await def.execute(validated, context as never);
+    return { content: [{ type: 'text', text: JSON.stringify(result.result) }], isError: false };
   }
 
   /**

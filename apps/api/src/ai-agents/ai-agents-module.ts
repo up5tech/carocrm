@@ -368,6 +368,9 @@ export const AI_AGENTS_MODULE = {
     '19-AI.15',
     '19-AI.16',
     '19-AI.17',
+    '19-AI.18',
+    '19-AI.19',
+    '19-AI.20',
   ],
   /** Tables the module owns; no other module may write them directly. */
   tables: AI_AGENTS_TABLES,
