@@ -375,7 +375,6 @@ afterAll(async () => {
   }
   for (const entry of [...created].reverse()) {
     if (entry.entity === "MarketingPublicToken") continue;
-    // eslint-disable-next-line no-await-in-loop
     await call("DELETE", `/api/v1/${entry.entity}/${entry.id}`);
   }
   if (tokenIds.length > 0) {
@@ -414,7 +413,6 @@ afterAll(async () => {
   if (campaignIds.length > 0 || listIds.length > 0) {
     const endpoints = [...campaignIds, ...listIds];
     for (const column of ["record_id_a", "record_id_b"] as const) {
-      // eslint-disable-next-line no-await-in-loop
       await ctx.database.db
         .deleteFrom("entity_links")
         .where("relation_name", "in", ["includedTargetLists", "excludedTargetLists"])
@@ -579,7 +577,6 @@ describe("limits, retries and the emergency stop (19-MA.9 tasks 4–6)", () => {
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
       scripted.failNext = { kind: "retryable", reasonCode: "PROVIDER_TEMP_FAIL" };
-      // eslint-disable-next-line no-await-in-loop
       batch = await runBatch({ sendId }) as Record<string, unknown>;
     }
     first = ((batch["sends"] as Record<string, unknown>[]) ?? [])[0] as Record<string, unknown>;

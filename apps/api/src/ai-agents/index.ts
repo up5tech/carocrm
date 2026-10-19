@@ -2,6 +2,7 @@ import type { Provider } from '@nestjs/common';
 
 import { AIAgentApprovalService } from './ai-agent-approvals.service.js';
 import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
+import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
@@ -20,6 +21,7 @@ import { OpenAICompatibleProviderAdapter } from './ai-provider-openai-compatible
 
 export { AIAgentApprovalService } from './ai-agent-approvals.service.js';
 export { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
+export { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 export { AI_AGENT_RETENTION_JOB, AI_AGENT_RUN_JOB } from './ai-agent-jobs.js';
 export { AIAgentMemoryService } from './ai-agent-memory.service.js';
 export { AIAgentPricingService } from './ai-agent-pricing.service.js';
@@ -50,6 +52,7 @@ export const AI_AGENTS_PROVIDERS: Provider[] = [
   AIAgentsModuleHealthService,
   AIToolRegistry,
   AIAgentDefinitionService,
+  AIAgentEvaluationService,
   AIAgentMemoryService,
   AIAgentPricingService,
   AIAgentQuotaService,

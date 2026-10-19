@@ -5,8 +5,8 @@ import { log } from '@carocrm/core/logger/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { DatabaseService } from '../database/database.service.js';
-import type { DataClass } from './ai-agents-module.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
+import type { DataClass } from './ai-agents-module.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 import {
   AIProviderError,

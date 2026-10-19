@@ -22,11 +22,11 @@ import { type AppConfig, CONFIG_TOKEN } from '../config.js';
 import type { ApprovalStatusFilter } from './ai-agent-approvals.service.js';
 import { AIAgentApprovalService } from './ai-agent-approvals.service.js';
 import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
+import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
 import { AIAgentRunService } from './ai-agent-runs.service.js';
-import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 import { AGENT_STATUSES, type AgentStatus, type RunStatus } from './ai-agents-module.js';
 import { AIAgentsModuleHealthService } from './ai-agents-module-health.service.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
@@ -49,8 +49,8 @@ import {
   ProviderConnectionCreateSchema,
   ProviderConnectionPatchSchema,
   RunCreateSchema,
-  RunRetrySchema,
   RunEvaluationSchema,
+  RunRetrySchema,
 } from './dto/ai-agents-shapes.js';
 
 /**
@@ -476,19 +476,12 @@ export class AIAgentsController {
     const limit = numberOrUndefined(q['maxSize']);
     // TypeScript sees agentId as read through the service call
     return this.evaluations.listRuns(agentId, limit ?? 25);
-  }@Post('action/agents/:agentId/evaluations/:runId/decide')
+  }
+
+  @Post('action/agents/:agentId/evaluations/:runId/decide')
 async decideEvaluationCase(@Param('runId') runId: string, @Body() body: unknown) {
     const input = parse(DecisionEvaluationSchema, body);
     return this.evaluations.decide(runId, input.caseKey, input.decision, input.note);
-  }
-
-  @Post('action/agents/:agentId/publish')
-  async publishAgentWithGate(@Param('agentId') agentId: string, @Body() body: unknown) {
-    const input = parse(AgentPublishSchema, body);
-    const checksum = input.checksum ?? undefined;
-    // assertPublicationGate expects a string; pass empty string when not provided
-    // (the service will check if evaluations are enabled and no required suite exists).
-    return this.evaluations.assertPublicationGate(agentId, checksum ?? '');
   }
 
   @Get('action/agents/:agentId/evaluations/compare')

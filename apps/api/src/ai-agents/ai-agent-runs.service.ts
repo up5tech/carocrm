@@ -26,8 +26,8 @@ import {
   validateBoundedJsonSchema,
 } from './ai-agent-config.js';
 import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
-import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AI_AGENT_RUN_JOB } from './ai-agent-jobs.js';
+import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
 import type { AIToolContext, AIToolDefinition, AIToolProposal } from './ai-agent-tools.js';
 import { AIToolRegistry } from './ai-agent-tools.js';

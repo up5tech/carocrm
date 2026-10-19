@@ -863,7 +863,7 @@ describe('pricing snapshots and quota enforcement (19-AI.13)', () => {
 
   it('refuses a run when a scoped hard quota is exhausted and warns before the soft limit', async () => {
     const agentId = await publishedAgent('quota');
-    const agent = await call('GET', `/api/v1/AIAgents/action/agents/${agentId}`, ctx.adminToken);
+    const _agent = await call('GET', `/api/v1/AIAgents/action/agents/${agentId}`, ctx.adminToken);
     const adminUser = await ctx.database.db
       .selectFrom('users')
       .select('id')

@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
-import type { Db } from '../database/database.service.js';
 
+import type { Db } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 

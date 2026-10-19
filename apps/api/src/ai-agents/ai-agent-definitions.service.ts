@@ -17,6 +17,7 @@ import {
   parseAgentConfig,
   publicationConfigIssues,
 } from './ai-agent-config.js';
+import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 import type { AIToolDefinition } from './ai-agent-tools.js';
 import { AIToolRegistry } from './ai-agent-tools.js';
 import { AGENT_STATUSES, type AgentStatus } from './ai-agents-module.js';
@@ -171,6 +172,7 @@ export class AIAgentDefinitionService {
     @Inject(AIAgentsSettingsService) private readonly settings: AIAgentsSettingsService,
     @Inject(AIToolRegistry) private readonly tools: AIToolRegistry,
     @Inject(AIProviderConnectionService) private readonly connections: AIProviderConnectionService,
+    @Inject(AIAgentEvaluationService) private readonly evaluations: AIAgentEvaluationService,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
   ) {}
 
@@ -567,6 +569,7 @@ export class AIAgentDefinitionService {
       throw new ValidationError('An agent cannot be published without a provider connection.');
     }
     const checksum = agentConfigChecksum(config);
+    await this.evaluations.assertPublicationGate(id, checksum);
     const grants = await this.resolveGrants(config);
 
     const versionId = await this.database.db.transaction().execute(async (trx) => {
