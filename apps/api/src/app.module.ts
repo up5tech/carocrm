@@ -27,6 +27,7 @@ import { CUSTOMER_SUCCESS_CONTROLLERS, CUSTOMER_SUCCESS_PROVIDERS } from './cust
 import { DatabaseService } from './database/database.service.js';
 import { DOCUMENT_CONTROLLERS, DOCUMENT_PROVIDERS } from './document/index.js';
 import { EMAIL_CONTROLLERS, EMAIL_PROVIDERS } from './email/index.js';
+import { PREFERENCES_CONTROLLERS, PREFERENCES_PROVIDERS } from './preferences/index.js';
 import { ENTITY_CONTROLLERS, ENTITY_PROVIDERS } from './entity/entity.module.js';
 import type { PostgresRecordStore } from './entity/entity-record.store.js';
 import { ENTITY_STORE } from './entity/entity-record.store.js';
@@ -89,6 +90,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...JOB_CONTROLLERS,
     // `/api/v1/Email/action/...` and `/Email/:id/deliveries` must be matched before `:entity`.
     ...EMAIL_CONTROLLERS,
+    // Phase 20.10: `/api/v1/Preferences` is a static prefix — the caller's own rows are the only ones
+    // reachable, so it must never fall through to the `:entity` wildcard.
+    ...PREFERENCES_CONTROLLERS,
     // Phase 12: `/api/v1/Search`, `/SavedFilter`, `/Dashboard` static prefixes plus
     // `:entity/action/{import,export}` — all before the generic `:entity` wildcard.
     ...SEARCH_CONTROLLERS,
@@ -142,6 +146,7 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...DOMAIN_EVENT_PROVIDERS,
     ...JOB_PROVIDERS,
     ...EMAIL_PROVIDERS,
+    ...PREFERENCES_PROVIDERS,
     ...LOGIC_PROVIDERS,
     ...SEARCH_PROVIDERS,
     ...REPORT_PROVIDERS,

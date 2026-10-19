@@ -33,7 +33,7 @@ the upstream file layout, and copies no upstream source, asset or translation.
 - Reads of brand and language defaults stay open to any session, because the shell has to paint them.
 - Icon and accent choices come from fixed allowlists; no remote or arbitrary icon source exists.
 
-## Known limitations after sub-phases 20.1–20.9
+## Known limitations after sub-phases 20.1–20.10
 
 - All §4.3 rows through 20.9 have a tab or a documented home. Still open: the "who can see what" explain
   helper on the Permissions tab (it needs a server-side ACL evaluation for an arbitrary principal, so the
@@ -44,6 +44,10 @@ the upstream file layout, and copies no upstream source, asset or translation.
 - The danger zone is guarded and audited, but its destructive success paths are not exercised against the
   configured database (see `docs/admin/settings.md`); the guards, refusals and the audit-no-write-on-failure
   behaviour are pinned by `apps/api/test/admin-internal.test.ts`.
+- 20.10's preference resource stores `columns`, `favorites`, `lastVisited` and `dismissedSetupSteps` and
+  validates them, but nothing reads those four yet — their editors and consumers are 20.12's list-view
+  power pack and the command palette. The two consumers that exist are list density/page size and the
+  default dashboard.
 - The 20.8 layout editor covers panels and field order for `list`/`detail`/`edit`. The plan's "list
   columns, filter and mass-update fields" are per-field flags (`inList`, `inFilter`, `massUpdate`) that
   live in the Entity Manager's field forms, not in a layout; the tab previews what the layouts actually

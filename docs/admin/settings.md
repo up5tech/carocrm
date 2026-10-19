@@ -1,9 +1,10 @@
 # Settings and Administration (Phase 20)
 
-Scope: `PLAN_Phase_20_Settings_UX.md` §4, §7, §8. Implemented: 20.1 registry and documents, 20.2 the
-tabbed shell, 20.3 General/Localization and the hosted module documents, 20.4 navigation resolution,
-20.5 the Main Menu tab, 20.6 per-entity navigation metadata, 20.7 users/teams/roles/API keys, 20.8 the
-layout manager tab, 20.9 the security, messaging, integrations and internal tabs.
+Scope: `PLAN_Phase_20_Settings_UX.md` §4, §5, §7, §8. Implemented: 20.1 registry and documents, 20.2
+the tabbed shell, 20.3 General/Localization and the hosted module documents, 20.4 navigation
+resolution, 20.5 the Main Menu tab, 20.6 per-entity navigation metadata, 20.7
+users/teams/roles/API keys, 20.8 the layout manager tab, 20.9 the security, messaging, integrations and
+internal tabs, 20.10 per-user preferences.
 
 ## Where things live
 
@@ -150,6 +151,25 @@ invalidates the metadata cache — records are never touched; the purge drains t
 only. Refusals write no audit row; success is always audited. The destructive paths are not exercised
 against the configured database — `apps/api/test/admin-internal.test.ts` pins the guards and asserts
 that a refusal leaves both the overrides and the audit count untouched.
+
+## Per-user preferences (20.10)
+
+`/api/v1/Preferences` (PLAN §5.9): small named documents owned by one account, stored in the
+`user_preferences` table keyed `(user_id, name)`. The routes carry no user id — the caller's own rows
+are the only ones reachable, so "only the owner may read/write" is the shape of the API, not a check.
+Locale and timezone stay on `PATCH /AppUser/me`; they are not duplicated here.
+
+- Registered names (`apps/api/src/preferences/preference-shapes.ts`): `density`, `listPageSize`,
+  `defaultDashboard`, `columns` (entity → visible columns, for 20.12), `favorites`, `lastVisited`,
+  `dismissedSetupSteps`. An unknown name or an invalid value is refused with `422` and
+  `details.issues`; the registry is where 20.12 and the command palette add theirs.
+- Consumers live where the preference is used: the list pages read `density` and `listPageSize`
+  (the density control sits beside the saved filters), and the dashboards page opens on the starred
+  `defaultDashboard` unless the user picks another one themselves. Columns and favorites are stored
+  and validated now; their editing UI arrives with the list-view power pack (20.12).
+- `apps/api/test/user-preferences.test.ts` pins the guarantee: a value survives a fresh login (a new
+  session, i.e. another device), a second account's view of the same name is independent both ways,
+  and unknown/invalid input is refused.
 
 ## Levels
 

@@ -1,11 +1,11 @@
 # Phase 20 — Settings, Administration and End-User UX/UI
 
-> **Status:** 20.0 – 20.9 implemented (2026-10-19): settings document registry, admin panel
+> **Status:** 20.0 – 20.10 implemented (2026-10-19): settings document registry, admin panel
 > descriptors and the tabbed shell, General/Localization/Main Menu/Layouts tabs, the hosted module
 > documents, `GET /Navigation` with ACL-filtered resolution, per-entity `nav` metadata and the Entity
-> Manager Navigation tab, the Users/Teams/Roles/API keys tabs, and the Security / Messaging /
-> Integrations / Internal tabs with the guarded danger zone. 20.10 – 20.17 (user preferences, the
-> end-user UX pack, accessibility and release hardening) are still planned.
+> Manager Navigation tab, the Users/Teams/Roles/API keys tabs, the Security / Messaging / Integrations
+> / Internal tabs with the guarded danger zone, and per-user preferences. 20.11 – 20.17 (the end-user
+> UX pack, accessibility and release hardening) are still planned.
 > This document remains the scope, architecture reference and implementation roadmap for Phase 20.
 > Implemented behaviour is documented in `docs/admin/settings.md`, `docs/admin/navigation.md` and the
 > deviations in `docs/compatibility/settings-ux.md`.
@@ -1061,12 +1061,23 @@ write nothing. The extensions page had already joined the rail as a descriptor, 
 webhooks tab plus the descriptors. Pinned by `apps/api/test/admin-internal.test.ts` (guards + refusals +
 no audit on failure) — the destructive success paths are not run against the configured database.
 
-### Phase 20.10 — User preferences
+### Phase 20.10 — User preferences  ✅ done 2026-10-19
 
 Tasks: per-user preference resource, endpoint and client; density, columns, favorites, default
 dashboard; enforcement that only the owner may read/write.
 
 Acceptance: preferences follow the user across devices and never leak between users.
+
+Delivered: `GET/PUT /api/v1/Preferences[/:name]` over the new `user_preferences` table keyed
+`(user_id, name)` (migration 055, additive). Ownership is structural — the routes carry no user id, so
+only the caller's own rows are reachable, administrators included. The named-document registry
+(`preference-shapes.ts`) validates `density`, `listPageSize`, `defaultDashboard`, `columns`,
+`favorites`, `lastVisited` and `dismissedSetupSteps` and refuses unknown names; locale/timezone stay on
+`/AppUser/me`. Consumers: list density + page size on the list pages, and the dashboards page opens on
+the starred `defaultDashboard` (a deleted dashboard clears the star). `columns` and `favorites` are
+stored and validated now; their editors arrive with 20.12. Pinned by
+`apps/api/test/user-preferences.test.ts`: a value survives a fresh login (another device), two
+accounts' views of the same name are independent both ways, and invalid input is refused.
 
 ### Phase 20.11 — Shared state components
 
@@ -1151,7 +1162,7 @@ extra database was created and no destructive setup was introduced.
 - Command palette with command/record/recent modes.
 - Inline editing in list views with in-cell validation.
 - Layout manager.
-- User preferences server-side (columns, density, favorites).
+- User preferences server-side (columns, density, favorites). ✅ 20.10 — the resource stores and validates all of them; density/page size and the default dashboard are consumed, the columns/favorites editors are 20.12.
 - Setup checklist and first-run empty states.
 - Undo for reversible bulk actions.
 - Authentication/Email/Notifications/Attachments tabs.

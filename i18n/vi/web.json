@@ -42,7 +42,10 @@
     "isNull": "trống",
     "isNotNull": "không trống",
     "shared": "(dùng chung)",
-    "filtersAria": "Bộ lọc bản ghi"
+    "filtersAria": "Bộ lọc bản ghi",
+    "densityAria": "Mật độ dòng",
+    "densityComfortable": "Dòng thoáng",
+    "densityCompact": "Dòng nhỏ gọn"
   },
   "board": {
     "groupBy": "Nhóm theo",
@@ -384,7 +387,10 @@
     "runFailed": "Chạy dashlet thất bại.",
     "runOneFailed": "Chạy dashlet thất bại.",
     "deleteFailed": "Xóa bảng điều khiển thất bại.",
-    "deleteDashletFailed": "Xóa dashlet thất bại."
+    "deleteDashletFailed": "Xóa dashlet thất bại.",
+    "makeDefault": "Đặt làm mặc định",
+    "isDefault": "Bảng điều khiển mặc định",
+    "defaultAria": "Đặt {name} làm bảng điều khiển mặc định"
   },
   "reports": {
     "title": "Báo cáo",

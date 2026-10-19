@@ -259,6 +259,16 @@ export interface InternalInfoView {
   uptimeSeconds: number;
 }
 
+/**
+ * One named preference document of the signed-in user (PLAN_Phase_20 §5.9). `value` is `null` when
+ * the name has no row — the client keeps its own default then.
+ */
+export interface PreferenceItem {
+  name: string;
+  value: unknown;
+  updatedAt: string;
+}
+
 /** Instance settings served by `GET /Settings` — public, so the sign-in page can paint the brand. */
 export interface SettingsView {
   pageTitle: string | null;

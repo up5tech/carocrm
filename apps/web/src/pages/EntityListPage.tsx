@@ -8,6 +8,7 @@ import { FieldValue } from '../components/fields.js';
 import { t } from '../state/i18n.js';
 import { boardGroupFields, fieldLabel, filterEntries, layoutPanelsFor, listEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
 import { portalBase } from '../state/portal.js';
+import { usePreference } from '../state/preferences.js';
 import { useSession } from '../state/session.js';
 import type { FilterDraft } from '../types/views.js';
 
@@ -38,6 +39,14 @@ export function EntityListPage() {
   const [offset, setOffset] = useState(0);
   const [inboxView, setInboxView] = useState<string>('all');
   const [pageSize, setPageSize] = useState(20);
+  // §20.10: row density and page size are the user's, kept server-side — they follow the account to
+  // the next device instead of living in this browser's localStorage.
+  const density = usePreference<'comfortable' | 'compact'>('density');
+  const pageSizePreference = usePreference<number>('listPageSize');
+  useEffect(() => {
+    if (typeof pageSizePreference.value === 'number') setPageSize(pageSizePreference.value);
+    // The preference arrives once per mount; re-running on every change of the stored value is enough.
+  }, [pageSizePreference.value]);
   const [orderBy, setOrderBy] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<string[]>([]);
   const [drafts, setDrafts] = useState<FilterDraft[]>([]);
@@ -279,6 +288,16 @@ export function EntityListPage() {
           onChange={(value) => void applySavedFilter(savedFilters.find((filter) => filter.id === value) ?? null)}
         />
         <Button onClick={() => setFilterNameOpen(true)}>{t('web.list.saveCurrentFilters')}</Button>
+        <Select
+          style={{ minWidth: 150 }}
+          aria-label={t('web.list.densityAria')}
+          value={density.value ?? 'comfortable'}
+          options={[
+            { value: 'comfortable', label: t('web.list.densityComfortable') },
+            { value: 'compact', label: t('web.list.densityCompact') },
+          ]}
+          onChange={(next) => density.save(next)}
+        />
       </Space>
 
       {filterable.length > 0 ? (
@@ -337,6 +356,7 @@ export function EntityListPage() {
         loading={loading}
         dataSource={rows}
         scroll={{ x: 'max-content' }}
+        {...(density.value === 'compact' ? { size: 'small' as const } : {})}
         pagination={{
           current: Math.floor(offset / pageSize) + 1,
           pageSize,
@@ -345,6 +365,7 @@ export function EntityListPage() {
           onChange: (page, size) => {
             setPageSize(size);
             setOffset((page - 1) * size);
+            if (size !== pageSize) pageSizePreference.save(size);
           },
         }}
         columns={[

@@ -109,6 +109,15 @@ export interface TeamsRolesTable {
   role_id: string;
 }
 
+/** One named preference document of one account (PLAN_Phase_20 §5.9) — owned, never shared. */
+export interface UserPreferencesTable {
+  user_id: string;
+  name: string;
+  data: unknown;
+  created_at: Date;
+  modified_at: Date;
+}
+
 export interface MetadataEntriesTable {
   scope: string;
   name: string;
@@ -1021,6 +1030,7 @@ export interface Database {
   users_roles: UsersRolesTable;
   users_teams: UsersTeamsTable;
   teams_roles: TeamsRolesTable;
+  user_preferences: UserPreferencesTable;
   metadata_entries: MetadataEntriesTable;
   app_settings: AppSettingsTable;
   entity_records: EntityRecordsTable;

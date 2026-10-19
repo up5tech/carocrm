@@ -42,7 +42,10 @@
     "isNull": "is empty",
     "isNotNull": "is not empty",
     "shared": "(shared)",
-    "filtersAria": "Record filters"
+    "filtersAria": "Record filters",
+    "densityAria": "Row density",
+    "densityComfortable": "Comfortable rows",
+    "densityCompact": "Compact rows"
   },
   "board": {
     "groupBy": "Group by",
@@ -384,7 +387,10 @@
     "runFailed": "Failed to run dashlets.",
     "runOneFailed": "Failed to run dashlet.",
     "deleteFailed": "Failed to delete dashboard.",
-    "deleteDashletFailed": "Failed to delete dashlet."
+    "deleteDashletFailed": "Failed to delete dashlet.",
+    "makeDefault": "Set as default",
+    "isDefault": "Default dashboard",
+    "defaultAria": "Set {name} as the default dashboard"
   },
   "reports": {
     "title": "Reports",

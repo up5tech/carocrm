@@ -1,10 +1,11 @@
-import { AppstoreOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined, StarOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Card, Checkbox, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space } from 'antd';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api, type DashboardRow } from '../api/client.js';
 import { t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
+import { usePreference } from '../state/preferences.js';
 import { useSession } from '../state/session.js';
 import { DashletResult } from './DashletResult.js';
 
@@ -24,6 +25,16 @@ export function DashboardsPage() {
 
   const entities = navEntities(metadata.data, principal?.type).map((entity) => ({ value: entity.name, label: entity.label }));
   const active = dashboards.find((item) => item.id === activeId) ?? null;
+  // §20.10: the dashboard the user starred opens first, on every device — until they pick another one
+  // themselves, which this ref records so the preference never fights an explicit choice.
+  const defaultDashboard = usePreference<string | null>('defaultDashboard');
+  const chosenManually = useRef(false);
+  useEffect(() => {
+    if (chosenManually.current) return;
+    const preferred = defaultDashboard.value;
+    if (preferred === null || preferred === undefined) return;
+    if (dashboards.some((item) => item.id === preferred)) setActiveId(preferred);
+  }, [defaultDashboard.value, dashboards]);
 
   const load = useCallback(async (): Promise<DashboardRow[]> => {
     setLoading(true);
@@ -136,12 +147,14 @@ export function DashboardsPage() {
     if (!active) return;
     try {
       await api.deleteDashboard(active.id);
+      // A default that points at a deleted dashboard would be dead weight on every device.
+      if (defaultDashboard.value === active.id) defaultDashboard.save(null);
       setResults({});
       await load();
     } catch (error) {
       void message.error(error instanceof Error ? error.message : t('web.dashboards.deleteFailed'));
     }
-  }, [active, load, message]);
+  }, [active, defaultDashboard, load, message]);
 
   const removeDashlet = useCallback(
     async (dashletId: string) => {
@@ -176,7 +189,10 @@ export function DashboardsPage() {
         <Select
           className="carocrm-dashboard-picker"
           value={activeId}
-          onChange={(value: string) => setActiveId(value)}
+          onChange={(value: string) => {
+            chosenManually.current = true;
+            setActiveId(value);
+          }}
           options={dashboards.map((item) => ({ value: item.id, label: `${item.name} (${item.dashlets.length})` }))}
           placeholder={t('web.dashboards.pick')}
           showSearch
@@ -189,6 +205,15 @@ export function DashboardsPage() {
           <div style={{ marginBottom: 12 }}>
             <Button icon={<PlusOutlined />} onClick={() => setDashletOpen(true)}>
               {t('web.dashboards.addDashlet')}
+            </Button>
+            <Button
+              type={defaultDashboard.value === active.id ? 'primary' : 'default'}
+              icon={<StarOutlined />}
+              style={{ marginLeft: 8 }}
+              aria-label={t('web.dashboards.defaultAria', { name: active.name })}
+              onClick={() => defaultDashboard.save(defaultDashboard.value === active.id ? null : active.id)}
+            >
+              {defaultDashboard.value === active.id ? t('web.dashboards.isDefault') : t('web.dashboards.makeDefault')}
             </Button>
             <Popconfirm
               title={t('web.dashboards.deleteConfirm', { name: active.name })}

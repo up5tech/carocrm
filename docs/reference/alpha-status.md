@@ -830,3 +830,44 @@ Verification actually run (all against the configured database, no extra databas
   webhooks tab shows its not-installed state; the danger modal disables its button until the exact
   phrase is typed and Cancel executes nothing; no page errors and no horizontal overflow at either
   width.
+
+## Phase 20.10 — Per-user preferences (added 2026-10-19)
+
+Implemented: the preference resource, endpoint and client of `PLAN_Phase_20_Settings_UX.md` §5.9/§20.10,
+plus the first two consumers.
+
+| Deliverable | Where |
+|---|---|
+| `user_preferences` table keyed `(user_id, name)` | `database/migrations/055_phase20_user_preferences.sql` (additive) |
+| Named-document registry with per-name Zod validation | `apps/api/src/preferences/preference-shapes.ts` |
+| `GET /Preferences`, `GET/PUT /Preferences/:name` — owner-only by construction | `apps/api/src/preferences/preferences.service.ts` |
+| Client hook | `apps/web/src/state/preferences.ts` (`usePreference`) |
+| Consumers | list pages: row density + page size; dashboards: starred `defaultDashboard` |
+
+What changed for a user:
+
+- Row density and page size follow the account to the next device — the control sits beside the saved
+  filters on every list, and the choice survives a reload because it is the server's value, not
+  `localStorage`.
+- The dashboards page opens on the starred default dashboard; starring is one button, and deleting the
+  dashboard clears the star.
+- Ownership is structural: the routes carry no user id, so the caller's own rows are the only ones
+  reachable — administrators included. That is the "never leak between users" guarantee, and
+  `apps/api/test/user-preferences.test.ts` pins it: a value survives a fresh login (a new session, i.e.
+  another device), two accounts' views of the same name are independent both ways, and an unknown name
+  or invalid value is refused with `422`.
+
+Verification actually run (all against the configured database, no extra database):
+
+- Migration `055_phase20_user_preferences.sql` reviewed (one `CREATE TABLE IF NOT EXISTS`, a composite
+  primary key, `ON DELETE CASCADE`) and applied.
+- `npx tsc --noEmit` for both projects, the web build, `npx eslint .`: clean.
+- `npx vitest run`: **131 files, 1682 tests passed** (new: `user-preferences.test.ts`, 4 tests).
+- Browser (Playwright, admin session, 1440 and 390 px): the density control sits on the list; switching
+  to compact shrinks the rows (12px → 8px padding) and the value survives a reload; the dashboards page
+  opens on the starred dashboard after a reload, and the walkthrough un-starred it afterwards. No page
+  errors, no horizontal overflow.
+
+Known limits are in `docs/compatibility/settings-ux.md`: `columns`, `favorites`, `lastVisited` and
+`dismissedSetupSteps` are stored and validated but have no editor or consumer yet — that is the 20.12
+list-view power pack and the command palette's job.

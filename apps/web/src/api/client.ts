@@ -58,6 +58,7 @@ import type {
   PortalNavItemRow,
   PortalRoleRow,
   PortalRow,
+  PreferenceItem,
   Principal,
   ProcessCatalog,
   ProcessDefinitionShape,
@@ -713,6 +714,13 @@ export const api = {
   internalInfo: () => request<InternalInfoView>('/AdminInternal'),
   resetMetadataOverrides: (confirm: string) => request<{ cleared: number }>('/AdminInternal/action/metadata-reset', post({ confirm })),
   purgeJobQueue: (confirm: string) => request<{ drained: number | null }>('/AdminInternal/action/queue-purge', post({ confirm })),
+
+  // Phase 20.10 — per-user preferences. The routes carry no user id: the caller's own rows are the
+  // only ones reachable, so a preference cannot leak between accounts by construction.
+  preferences: () => request<{ items: PreferenceItem[] }>('/Preferences'),
+  preference: (name: string) => request<PreferenceItem>(`/Preferences/${encodeURIComponent(name)}`),
+  savePreference: (name: string, value: unknown) =>
+    request<PreferenceItem>(`/Preferences/${encodeURIComponent(name)}`, { method: 'PUT', body: JSON.stringify({ value }) }),
 
   // Phase 8 — index / layout / ACL metadata editing.
   saveIndexes: (name: string, indexes: IndexDefinition[]) =>
