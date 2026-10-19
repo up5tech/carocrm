@@ -50,7 +50,8 @@
     "invalidNumber": "Invalid number",
     "undoAvailable": "Action can be undone.",
     "undo": "Undo",
-    "undoFailed": "Undo failed"
+    "undoFailed": "Undo failed",
+    "bulkActionsAria": "Bulk actions toolbar"
   },
   "board": {
     "groupBy": "Group by",
@@ -1999,7 +2000,9 @@
     "empty": "No results found.",
     "commands": "Commands",
     "records": "Records",
-    "recent": "Recent"
+    "recent": "Recent",
+    "ariaLabel": "Command palette",
+    "inputAria": "Search commands, records or recent pages"
   },
   "setup": {
     "title": "Setup checklist",
@@ -2013,6 +2016,7 @@
     "teamsHint": "Teams group users for record-level access.",
     "usersLabel": "Invite your first user",
     "usersHint": "Create accounts for people who will use the CRM.",
-    "allDone": "All setup steps complete — you are ready to go!"
+    "allDone": "All setup steps complete — you are ready to go!",
+    "ariaLabel": "First-run setup checklist"
   }
 }

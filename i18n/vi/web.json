@@ -50,7 +50,8 @@
     "invalidNumber": "Số không hợp lệ",
     "undoAvailable": "Có thể hoàn tác.",
     "undo": "Hoàn tác",
-    "undoFailed": "Hoàn tác thất bại"
+    "undoFailed": "Hoàn tác thất bại",
+    "bulkActionsAria": "Thanh công cụ thao tác hàng loạt"
   },
   "board": {
     "groupBy": "Nhóm theo",
@@ -1999,7 +2000,9 @@
     "empty": "Không tìm thấy kết quả.",
     "commands": "Lệnh",
     "records": "Bản ghi",
-    "recent": "Gần đây"
+    "recent": "Gần đây",
+    "ariaLabel": "Bảng lệnh",
+    "inputAria": "Tìm lệnh, bản ghi hoặc trang gần đây"
   },
   "setup": {
     "title": "Danh sách thiết lập",
@@ -2013,6 +2016,7 @@
     "teamsHint": "Nhóm gom người dùng để kiểm soát quyền theo bản ghi.",
     "usersLabel": "Mời người dùng đầu tiên",
     "usersHint": "Tạo tài khoản cho người sẽ dùng CRM.",
-    "allDone": "Hoàn tất mọi bước thiết lập — bạn đã sẵn sàng!"
+    "allDone": "Hoàn tất mọi bước thiết lập — bạn đã sẵn sàng!",
+    "ariaLabel": "Danh sách thiết lập ban đầu"
   }
 }

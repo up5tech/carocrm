@@ -615,8 +615,8 @@ export function EntityListPage() {
 
       {/* §20.12: floating bulk action bar */}
       {selected.length > 0 ? (
-        <div className="carocrm-bulk-bar" style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, background: '#fff', border: '1px solid #e6e9ef', borderRadius: 8, padding: '10px 20px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Typography.Text strong>{selected.length} selected</Typography.Text>
+        <div className="carocrm-bulk-bar" role="toolbar" aria-label={t('web.list.bulkActionsAria')} style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, background: '#fff', border: '1px solid #e6e9ef', borderRadius: 8, padding: '10px 20px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Typography.Text strong aria-live="polite">{selected.length} selected</Typography.Text>
           <Popconfirm title={t('web.list.deleteConfirm', { count: selected.length })} okText={t('web.common.delete')} okButtonProps={{ danger: true }} onConfirm={() => void bulkDelete()}>
             <Button danger size="small">{t('web.list.deleteSelected')}</Button>
           </Popconfirm>

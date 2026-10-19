@@ -101,7 +101,7 @@ function SetupChecklistPanel() {
   const allDone = progress.done === progress.total;
 
   return (
-    <Card className="carocrm-card" title={t('web.setup.title')} style={{ marginTop: 24 }}>
+    <Card className="carocrm-card" title={t('web.setup.title')} style={{ marginTop: 24 }} role="region" aria-label={t('web.setup.ariaLabel')}>
       {allDone ? (
         <Typography.Text type="success">{t('web.setup.allDone')}</Typography.Text>
       ) : (

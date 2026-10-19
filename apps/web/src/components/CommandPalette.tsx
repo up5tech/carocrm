@@ -126,8 +126,8 @@ export function CommandPalette() {
   }, [recents, query]);
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
-      <CommandInput placeholder={t('web.commandPalette.placeholder')} value={query} onValueChange={setQuery} />
+    <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false} aria-label={t('web.commandPalette.ariaLabel')}>
+      <CommandInput placeholder={t('web.commandPalette.placeholder')} value={query} onValueChange={setQuery} aria-label={t('web.commandPalette.inputAria')} />
       <CommandList>
         <CommandEmpty>{t('web.commandPalette.empty')}</CommandEmpty>
 
