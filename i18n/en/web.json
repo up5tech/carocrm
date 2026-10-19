@@ -1789,6 +1789,18 @@
     "model": "Model",
     "requests": "Requests",
     "failures": "Failures",
-    "latency": "Average latency"
+    "latency": "Average latency",
+    "evalSuites": "Evaluation suites",
+    "evaluationsTab": "Evaluations",
+    "suiteKey": "Suite key",
+    "requiredForPublish": "Required for publish",
+    "ensureStandardSuite": "Create the standard publication-gate suite",
+    "noSuites": "No evaluation suite exists yet.",
+    "runEvaluation": "Run an evaluation",
+    "selectAgent": "Select an agent",
+    "selectSuite": "Select a suite",
+    "selectAgentFirst": "Select an agent to see its evaluation runs.",
+    "evalRuns": "Evaluation runs",
+    "createdAt": "Created"
   }
 }

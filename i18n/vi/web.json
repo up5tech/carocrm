@@ -1789,6 +1789,18 @@
     "model": "Model",
     "requests": "Yêu cầu",
     "failures": "Lỗi",
-    "latency": "Độ trễ trung bình"
+    "latency": "Độ trễ trung bình",
+    "evalSuites": "Bộ đánh giá",
+    "evaluationsTab": "Đánh giá",
+    "suiteKey": "Mã bộ đánh giá",
+    "requiredForPublish": "Bắt buộc trước khi xuất bản",
+    "ensureStandardSuite": "Tạo bộ đánh giá chuẩn cho cổng xuất bản",
+    "noSuites": "Chưa có bộ đánh giá nào.",
+    "runEvaluation": "Chạy đánh giá",
+    "selectAgent": "Chọn một agent",
+    "selectSuite": "Chọn một bộ đánh giá",
+    "selectAgentFirst": "Chọn agent để xem kết quả đánh giá.",
+    "evalRuns": "Lần chạy đánh giá",
+    "createdAt": "Ngày tạo"
   }
 }

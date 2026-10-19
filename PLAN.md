@@ -2758,7 +2758,9 @@ Implement in separate modules:
 - Customer success.
 - Service desk.
 - Marketing automation.
-- AI agents (Phase 19-AI.0–19-AI.19 implemented; 19-AI.18 advanced retrieval/protocol deferred; see `PLAN_Phase_19_AI_Agents.md` and `docs/modules/ai-agents/`).
+- AI agents (Phase 19-AI.0–19-AI.19 implemented; 19-AI.18's protocol half is delivered as the
+  authenticated, allowlisted MCP-compatible adapter while model-backed retrieval stays deferred; see
+  `PLAN_Phase_19_AI_Agents.md` and `docs/modules/ai-agents/`).
 - Voice/communications.
 - Advanced integrations.
 
