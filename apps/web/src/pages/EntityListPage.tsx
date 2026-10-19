@@ -1,7 +1,7 @@
 import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Card, Col, Input, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Typography } from 'antd';
+import { App as AntApp, Button, Card, Col, Dropdown, Input, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { api, type SavedFilterRow, type WhereClause } from '../api/client.js';
 import { EmptyState } from '../components/EmptyState.js';
@@ -30,31 +30,41 @@ function operatorOptions(): { value: string; label: string }[] {
 export function EntityListPage() {
   const { entity: entityName } = useParams<{ entity: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { principal } = useSession();
   const base = portalBase(principal?.type);
   const { message } = AntApp.useApp();
   const metadata = useMetadata();
   const definition = useEntity(entityName);
 
+  // §20.12: URL-encoded list state — filter/sort/page survive reload and share via link.
+  const urlOffset = Number(searchParams.get('offset') ?? '0');
+  const urlOrderBy = searchParams.get('orderBy') ?? undefined;
+  const urlPageSize = Number(searchParams.get('pageSize') ?? '20');
+  const urlWhereRaw = searchParams.get('where');
+  const urlTextQuery = searchParams.get('q') ?? '';
+
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [offset, setOffset] = useState(0);
+  const [offset, setOffset] = useState(urlOffset);
   const [inboxView, setInboxView] = useState<string>('all');
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(urlPageSize || 20);
   // §20.10: row density and page size are the user's, kept server-side — they follow the account to
   // the next device instead of living in this browser's localStorage.
   const density = usePreference<'comfortable' | 'compact'>('density');
   const pageSizePreference = usePreference<number>('listPageSize');
   useEffect(() => {
     if (typeof pageSizePreference.value === 'number') setPageSize(pageSizePreference.value);
-    // The preference arrives once per mount; re-running on every change of the stored value is enough.
   }, [pageSizePreference.value]);
-  const [orderBy, setOrderBy] = useState<string | undefined>(undefined);
+  const [orderBy, setOrderBy] = useState<string | undefined>(urlOrderBy);
   const [selected, setSelected] = useState<string[]>([]);
+  // §20.12: undo stack for reversible bulk actions
+  const [undoStack, setUndoStack] = useState<Array<{ action: string; ids: string[]; before: Record<string, unknown>[] }>>([]);
+  const [showUndo, setShowUndo] = useState(false);
   const [drafts, setDrafts] = useState<FilterDraft[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [textQuery, setTextQuery] = useState('');
+  const [textQuery, setTextQuery] = useState(urlTextQuery);
   const [savedFilters, setSavedFilters] = useState<SavedFilterRow[]>([]);
   const [activeFilterId, setActiveFilterId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -62,6 +72,36 @@ export function EntityListPage() {
   const [importBusy, setImportBusy] = useState(false);
   const [filterNameOpen, setFilterNameOpen] = useState(false);
   const [filterNameDraft, setFilterNameDraft] = useState('');
+  // §20.12: inline editing — which cell is currently being edited { entityId, fieldName }
+  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Parse where from URL on mount
+  useEffect(() => {
+    if (urlWhereRaw) {
+      try {
+        const parsed = JSON.parse(urlWhereRaw) as FilterDraft[];
+        if (Array.isArray(parsed) && parsed.every((d) => typeof d.field === 'string' && typeof d.operator === 'string')) {
+          setDrafts(parsed);
+        }
+      } catch {
+        // ignore malformed where
+      }
+    }
+  }, [urlWhereRaw]);
+
+  // Sync URL when list state changes (debounced to avoid thrashing)
+  useEffect(() => {
+    if (!entityName) return;
+    const params = new URLSearchParams(searchParams);
+    if (offset > 0) params.set('offset', String(offset)); else params.delete('offset');
+    if (orderBy) params.set('orderBy', orderBy); else params.delete('orderBy');
+    if (pageSize !== 20) params.set('pageSize', String(pageSize)); else params.delete('pageSize');
+    if (textQuery.trim()) params.set('q', textQuery.trim()); else params.delete('q');
+    if (drafts.length > 0) params.set('where', JSON.stringify(drafts)); else params.delete('where');
+    setSearchParams(params, { replace: true });
+  }, [offset, orderBy, pageSize, textQuery, drafts, entityName, searchParams, setSearchParams]);
 
   // PLAN §8: a 'list' layout only reorders the columns; without one the field order is unchanged.
   const panels = useMemo(() => layoutPanelsFor(definition.data, 'list'), [definition.data]);
@@ -217,6 +257,68 @@ export function EntityListPage() {
     }
   }, [drafts, entityName, message]);
 
+  // §20.12: bulk delete with undo
+  const bulkDelete = useCallback(async () => {
+    if (!entityName || selected.length === 0) return;
+    const before = rows.filter((r) => selected.includes(String(r['id'])));
+    try {
+      await api.massDelete(entityName, selected);
+      setUndoStack((prev) => [...prev.slice(-4), { action: 'delete', ids: [...selected], before }]);
+      setShowUndo(true);
+      setSelected([]);
+      void load();
+      setTimeout(() => setShowUndo(false), 8000);
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('web.list.deleteFailed'));
+    }
+  }, [entityName, selected, rows, load, message]);
+
+  const undoLastAction = useCallback(async () => {
+    if (undoStack.length === 0 || !entityName) return;
+    const last = undoStack[undoStack.length - 1];
+    if (!last) return;
+    if (last.action === 'delete') {
+      try {
+        for (const record of last.before) {
+          await api.create(entityName, record as Record<string, unknown>);
+        }
+        setUndoStack((prev) => prev.slice(0, -1));
+        setShowUndo(false);
+        void load();
+      } catch (error) {
+        void message.error(error instanceof Error ? error.message : t('web.list.undoFailed'));
+      }
+    }
+  }, [undoStack, entityName, load, message]);
+
+  // §20.12: inline edit save — uses massUpdate for a single record
+  const saveInlineEdit = useCallback(async () => {
+    if (!editingCell || !entityName) return;
+    const field = definition.data?.fields[editingCell.field];
+    if (!field) return;
+    // Basic type validation before sending
+    let value: unknown = editValue;
+    if (field.type === 'int' || field.type === 'float') {
+      const num = Number(editValue);
+      if (isNaN(num)) { setEditError(t('web.list.invalidNumber')); return; }
+      value = num;
+    }
+    try {
+      await api.massUpdate(entityName, { ids: [editingCell.id], values: { [editingCell.field]: value } });
+      setEditingCell(null);
+      setEditError(null);
+      void load();
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : t('web.list.saveFailed'));
+    }
+  }, [editingCell, editValue, entityName, definition.data, load, message]);
+
+  const cancelInlineEdit = useCallback(() => {
+    setEditingCell(null);
+    setEditValue('');
+    setEditError(null);
+  }, []);
+
   if (metadata.isError || definition.isError) {
     return <ErrorState message={t('web.list.notAvailable', { entity: entityName ?? '' })} />;
   }
@@ -228,6 +330,16 @@ export function EntityListPage() {
   const displayField = definition.data?.record?.displayField ?? 'name';
   // The board groups by an enum field, so an entity without one has no board to switch to.
   const canBoard = boardGroupFields(definition.data).length > 0;
+
+  // §20.12: user-chosen columns per entity, persisted server-side via /Preferences/columns
+  const columnPref = usePreference<Record<string, string[]>>('columns');
+  const visibleColumns = useMemo(() => {
+    if (!entityName) return columns;
+    const saved = columnPref.value?.[entityName];
+    if (!saved || saved.length === 0) return columns;
+    const savedSet = new Set(saved);
+    return columns.filter((entry) => savedSet.has(entry.name));
+  }, [columns, columnPref.value, entityName]);
 
   return (
     <Card className="carocrm-card carocrm-list-card">
@@ -250,6 +362,25 @@ export function EntityListPage() {
           <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
             {t('web.list.importCsv')}
           </Button>
+          <Dropdown
+            menu={{
+              items: columns.map((entry) => ({
+                key: entry.name,
+                label: fieldLabel(entry.name, entry.field, metadata.data),
+              })),
+              selectable: true,
+              selectedKeys: visibleColumns.map((c) => c.name),
+              onClick: ({ key }: { key: string }) => {
+                const next = visibleColumns.some((c) => c.name === key)
+                  ? visibleColumns.filter((c) => c.name !== key)
+                  : [...visibleColumns, columns.find((c) => c.name === key)!];
+                columnPref.save({ ...(columnPref.value ?? {}), [entityName!]: next.map((c) => c.name) });
+              },
+            }}
+            trigger={['click']}
+          >
+            <Button icon={<AppstoreOutlined />}>{t('web.list.columns')}</Button>
+          </Dropdown>
           <Popconfirm
             title={t('web.list.deleteConfirm', { count: selected.length })}
             disabled={selected.length === 0}
@@ -389,18 +520,48 @@ export function EntityListPage() {
           },
         }}
         columns={[
-          ...columns.map((entry) => ({
+          ...visibleColumns.map((entry) => ({
             title: fieldLabel(entry.name, entry.field, metadata.data),
             dataIndex: entry.name,
             sorter: entry.field.sortable !== false,
-            render: (_: unknown, row: Record<string, unknown>) =>
-              entry.name === displayField ? (
-                <Link className="carocrm-row-link" to={`${base}/${entityName}/${String(row['id'])}`}>
-                  {String(row[entry.name] ?? '')}
-                </Link>
-              ) : (
-                <FieldValue field={entry.field} value={row[entry.name]} />
-              ),
+            render: (_: unknown, row: Record<string, unknown>) => {
+              const isEditing = editingCell?.id === String(row['id']) && editingCell?.field === entry.name;
+              if (isEditing) {
+                return (
+                  <Space.Compact style={{ width: '100%' }}>
+                    <Input
+                      size="small"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onPressEnter={() => void saveInlineEdit()}
+                      {...(editError ? { status: 'error' as const } : {})}
+                      autoFocus
+                    />
+                    <Button size="small" type="primary" onClick={() => void saveInlineEdit()}>{t('web.common.save')}</Button>
+                    <Button size="small" onClick={cancelInlineEdit}>{t('core.common.cancel')}</Button>
+                  </Space.Compact>
+                );
+              }
+              const canEdit = ['varchar', 'text', 'int', 'float', 'decimal'].includes(entry.field.type);
+              return (
+                <div
+                  role={canEdit ? 'button' : undefined}
+                  tabIndex={canEdit ? 0 : undefined}
+                  onClick={() => { if (canEdit) { setEditingCell({ id: String(row['id']), field: entry.name }); setEditValue(String(row[entry.name] ?? '')); setEditError(null); }}}
+                  onKeyDown={(e) => { if (canEdit && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setEditingCell({ id: String(row['id']), field: entry.name }); setEditValue(String(row[entry.name] ?? '')); setEditError(null); }}}
+                  style={canEdit ? { cursor: 'pointer' } : undefined}
+                >
+                  {entry.name === displayField ? (
+                    <Link className="carocrm-row-link" to={`${base}/${entityName}/${String(row['id'])}`}>
+                      {String(row[entry.name] ?? '')}
+                    </Link>
+                  ) : (
+                    <FieldValue field={entry.field} value={row[entry.name]} />
+                  )}
+                  {editError && isEditing ? <Typography.Text type="danger" style={{ fontSize: 11 }}>{editError}</Typography.Text> : null}
+                </div>
+              );
+            },
           })),
           {
             title: t('core.common.action'),
@@ -450,6 +611,25 @@ export function EntityListPage() {
           setOrderBy(`${String(field)},${single.order === 'ascend' ? 'asc' : 'desc'}`);
         }}
       />
+      ) : null}
+
+      {/* §20.12: floating bulk action bar */}
+      {selected.length > 0 ? (
+        <div className="carocrm-bulk-bar" style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, background: '#fff', border: '1px solid #e6e9ef', borderRadius: 8, padding: '10px 20px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Typography.Text strong>{selected.length} selected</Typography.Text>
+          <Popconfirm title={t('web.list.deleteConfirm', { count: selected.length })} okText={t('web.common.delete')} okButtonProps={{ danger: true }} onConfirm={() => void bulkDelete()}>
+            <Button danger size="small">{t('web.list.deleteSelected')}</Button>
+          </Popconfirm>
+          <Button size="small" onClick={() => setSelected([])}>{t('core.common.cancel')}</Button>
+        </div>
+      ) : null}
+
+      {/* §20.12: undo toast */}
+      {showUndo && undoStack.length > 0 ? (
+        <div style={{ position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)', zIndex: 101, background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 8, padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Typography.Text>{t('web.list.undoAvailable')}</Typography.Text>
+          <Button size="small" onClick={() => void undoLastAction()}>{t('web.list.undo')}</Button>
+        </div>
       ) : null}
 
       <Modal title={t('web.list.importTitle', { entity: entityName ?? '' })} open={importOpen} onOk={() => void runImport()} onCancel={() => setImportOpen(false)} okText={t('web.list.import')} confirmLoading={importBusy}>

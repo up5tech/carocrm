@@ -743,6 +743,8 @@ export const api = {
   remove: (entity: string, id: string) => request<unknown>(`/${encodeURIComponent(entity)}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   massDelete: (entity: string, ids: string[]) =>
     request<unknown>(`/${encodeURIComponent(entity)}/action/massDelete`, { method: 'POST', body: JSON.stringify({ ids }) }),
+  massUpdate: (entity: string, input: { ids: string[]; values: Record<string, unknown> }) =>
+    request<unknown>(`/${encodeURIComponent(entity)}/action/massUpdate`, { method: 'POST', body: JSON.stringify(input) }),
 
   related: (entity: string, id: string, relation: string, params: ListParams = {}) =>
     request<ListResult>(`/${encodeURIComponent(entity)}/${encodeURIComponent(id)}/${encodeURIComponent(relation)}${listQuery(params)}`),

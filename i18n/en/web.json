@@ -13,7 +13,7 @@
     "savedFilters": "Saved filters",
     "saveCurrentFilters": "Save current filters",
     "saved": "Filter saved.",
-    "saveFailed": "Save failed.",
+    "saveFailed": "Save failed",
     "filterName": "Filter name",
     "saveFiltersTitle": "Save current filters",
     "saveFiltersHint": "Stores the {count} active filter(s) on this list as a reusable, shareable saved filter.",
@@ -45,7 +45,12 @@
     "filtersAria": "Record filters",
     "densityAria": "Row density",
     "densityComfortable": "Comfortable rows",
-    "densityCompact": "Compact rows"
+    "densityCompact": "Compact rows",
+    "columns": "Columns",
+    "invalidNumber": "Invalid number",
+    "undoAvailable": "Action can be undone.",
+    "undo": "Undo",
+    "undoFailed": "Undo failed"
   },
   "board": {
     "groupBy": "Group by",

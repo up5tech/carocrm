@@ -13,7 +13,7 @@
     "savedFilters": "Bộ lọc đã lưu",
     "saveCurrentFilters": "Lưu bộ lọc hiện tại",
     "saved": "Đã lưu bộ lọc.",
-    "saveFailed": "Lưu thất bại.",
+    "saveFailed": "Lưu thất bại",
     "filterName": "Tên bộ lọc",
     "saveFiltersTitle": "Lưu bộ lọc hiện tại",
     "saveFiltersHint": "Lưu {count} bộ lọc đang bật trên danh sách này thành bộ lọc dùng chung được.",
@@ -45,7 +45,12 @@
     "filtersAria": "Bộ lọc bản ghi",
     "densityAria": "Mật độ dòng",
     "densityComfortable": "Dòng thoáng",
-    "densityCompact": "Dòng nhỏ gọn"
+    "densityCompact": "Dòng nhỏ gọn",
+    "columns": "Cột",
+    "invalidNumber": "Số không hợp lệ",
+    "undoAvailable": "Có thể hoàn tác.",
+    "undo": "Hoàn tác",
+    "undoFailed": "Hoàn tác thất bại"
   },
   "board": {
     "groupBy": "Nhóm theo",
