@@ -136,3 +136,31 @@ Curated, long-lived notes. Daily logs live next to this file as `YYYY-MM-DD.md`.
   camelCase segments so `customerSuccess.health.statusChanged` / `…recalculateHealthBatch` validate.
 - 19-CS.12 (dedicated React screens) deliberately not built; the generic metadata UI serves the
   entities. Docs: `docs/modules/customer-success/` + `docs/implementation/customer-success-*.md`.
+
+## Voice & Communications module (Phase 19-VC.0–19-VC.6, 2026-10-19)
+
+- `apps/api/src/voice-communications/`, module id `VoiceCommunications` (no prefix), API prefix
+  `/api/v1/VoiceCommunications`, webhook prefix `/api/v1/integrations/voice-communications`.
+- **No metadata entity** in VC.0–6: provider accounts, endpoints, webhook receipts, normalized
+  events, call sessions, conversations, participants, messages, media, consent and suppression are
+  dedicated tables (migration 051). The user-facing call record remains the platform `Call` Activity.
+- Provider adapters are classes inside the module (`VoiceProviderAdapter`), never modules; only the
+  `fake` simulator exists, and it resolves to `disabled` in production.
+- Event namespace is `voiceCommunications.*` — the plan's hyphenated `voice-communications.*` fails
+  the platform `EVENT_TYPE` regex.
+- MarketingAutomation consent is **email-only**; this module owns SMS/MMS/WhatsApp/voice consent
+  (`voice_consent_events`, append-only) and suppression tombstones.
+- Provider secrets use `ENCRYPTION_KEY` + `encryptSecret`/`decryptSecret`; write-only, masked hint
+  on read. Enabling requires the credential (live adapters) and the webhook secret (signature
+  adapters) before the write.
+- Webhook ingress: body ceiling → replay window → adapter signature → `voice_webhook_events`
+  receipt (`unique(account_key, dedup_key)`) → `voiceCommunications.processWebhookEvent` job.
+  Processing is idempotent via `unique(webhook_event_id)` on `voice_communication_events`.
+- **Kysely `RawBuilder` has no `executeTakeFirst(db)`** in this repo: use
+  `(await sql`…`.execute(db)).rows[0]`. Platform `ValidationError` returns HTTP **422**, not 400.
+- `phone-number.ts` exposes `PhoneNormalizer` via the `PHONE_NORMALIZER` token. The default is
+  `LibPhoneNumberNormalizer` (`libphonenumber-js` 1.13.15, installed manually);
+  `ConservativePhoneNormalizer` remains a dependency-free fallback. Services inject the interface.
+- Tests: `apps/api/test/voice-communications-domain.test.ts` (30) and
+  `voice-communications.test.ts` (24). The integration suite sets `ENCRYPTION_KEY` and
+  `REPORT_WORKER_SECRET` before `bootApi()`.

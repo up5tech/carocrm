@@ -58,6 +58,7 @@ import { SERVICE_DESK_CONTROLLERS, SERVICE_DESK_PROVIDERS } from './service-desk
 import { SETTINGS_CONTROLLERS, SETTINGS_PROVIDERS } from './settings/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
 import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, STREAM_PROVIDERS, StreamUpdateHookService } from './stream/index.js';
+import { VOICE_COMMUNICATIONS_CONTROLLERS, VOICE_COMMUNICATIONS_PROVIDERS } from './voice-communications/index.js';
 import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
 
 @Module({
@@ -117,6 +118,10 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 19-AI: `/api/v1/AIAgents/action/...` is a static prefix (diagnostics, settings,
     // provider connections) and must be matched before the generic `:entity` wildcard.
     ...AI_AGENTS_CONTROLLERS,
+    // Phase 19-VC: `/api/v1/VoiceCommunications/action/...` and the provider webhook prefix
+    // `/api/v1/integrations/voice-communications/...` are static prefixes and must be matched before
+    // the generic `:entity` wildcard.
+    ...VOICE_COMMUNICATIONS_CONTROLLERS,
     // `/api/v1/DocumentTemplate` and `/api/v1/document/action/preview` are static prefixes too.
     ...DOCUMENT_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
@@ -152,6 +157,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...MARKETING_AUTOMATION_PROVIDERS,
     // Phase 19-AI: module settings/permission/policy, provider connections and the model gateway.
     ...AI_AGENTS_PROVIDERS,
+    // Phase 19-VC: settings, provider registry/accounts, webhook ingress/processing, resolution,
+    // consent/policy and the module health/navigation reports.
+    ...VOICE_COMMUNICATIONS_PROVIDERS,
     ...DOCUMENT_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,

@@ -35,6 +35,7 @@ import { SearchPage } from './pages/SearchPage.js';
 import { ServiceDeskDashboardPage } from './pages/ServiceDeskDashboardPage.js';
 import { StreamPage } from './pages/StreamPage.js';
 import { TasksPage } from './pages/TasksPage.js';
+import { VoiceCommunicationsPage } from './pages/VoiceCommunicationsPage.js';
 import { WorkflowEditorPage } from './pages/WorkflowEditorPage.js';
 import { WorkflowsPage } from './pages/WorkflowsPage.js';
 import { useSession } from './state/session.js';
@@ -112,6 +113,8 @@ export function AppRoutes() {
         {/* Phase 19-AI: a static module page, declared before the entity wildcard so "ai-agents"
             is never read as an entity name. Visibility is decided by the server's navigation. */}
         <Route path="/ai-agents" element={<AIAgentsPage />} />
+        {/* Phase 19-VC: the module's diagnostics page, before the entity wildcard. */}
+        <Route path="/voice-communications" element={<VoiceCommunicationsPage />} />
         {/* the signed-in user's own page, before the entity wildcard reads "profile" as an entity */}
         <Route path="/profile" element={<MyProfilePage />} />
         {/* Phase 19: the Projects views are static routes, matched before the entity wildcard */}

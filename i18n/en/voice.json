@@ -1,0 +1,60 @@
+{
+  "module": {
+    "label": "Voice & Communications",
+    "description": "Calls, SMS/MMS and WhatsApp conversations connected to CRM records, with provider-neutral adapters, consent and channel policy."
+  },
+  "nav": {
+    "voice": "Voice & Communications",
+    "overview": "Overview",
+    "providers": "Providers",
+    "webhooks": "Webhook inbox"
+  },
+  "page": {
+    "title": "Voice & Communications",
+    "subtitle": "Provider health, channel policy and webhook processing for calls and messages.",
+    "loadFailed": "The module diagnostics could not be loaded.",
+    "loadFailedHint": "Check that migration 051 is applied and that you hold the module's administrative capability.",
+    "ok": "Healthy",
+    "degraded": "Needs attention",
+    "dependencies": "Platform dependencies",
+    "optionalIntegrations": "Optional integrations",
+    "features": "Feature flags",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "present": "Available",
+    "missing": "Unavailable",
+    "checks": "Checks",
+    "warnings": "Warnings",
+    "noWarnings": "No configuration warnings.",
+    "providers": "Provider adapters",
+    "provider": "Adapter",
+    "mode": "Mode",
+    "channels": "Channels",
+    "capabilities": "Capabilities",
+    "accounts": "Provider accounts",
+    "account": "Account",
+    "environment": "Environment",
+    "health": "Last health",
+    "credential": "Credential",
+    "webhookSecret": "Webhook secret",
+    "configured": "Configured",
+    "notConfigured": "Not configured",
+    "noAccounts": "No provider account is configured. Every send and call is refused until one exists.",
+    "webhookInbox": "Webhook receipts",
+    "eventType": "Event",
+    "signature": "Signature",
+    "processing": "Processing",
+    "received": "Received",
+    "processedAt": "Processed",
+    "noEvents": "No provider callback has been recorded yet.",
+    "reload": "Reload",
+    "settingsVersion": "Settings version",
+    "never": "Never"
+  },
+  "channel": {
+    "voice": "Voice",
+    "sms": "SMS",
+    "mms": "MMS",
+    "whatsapp": "WhatsApp"
+  }
+}

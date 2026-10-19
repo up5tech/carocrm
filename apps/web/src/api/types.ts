@@ -1690,3 +1690,115 @@ export interface AIAgentUsageView {
     readonly averageLatencyMs: number;
   }[];
 }
+
+/**
+ * Phase 19-VC.2–19-VC.5 — Voice & Communications contracts the SPA renders.
+ *
+ * The server's shapes are the source of truth: these types add presentation only and never a second
+ * authorization path. Credentials and webhook secrets are absent by construction — the API reports
+ * `hasCredential`/`hasWebhookSecret` and a masked hint, never a value.
+ */
+export interface VoiceDependencyView {
+  readonly id: string;
+  readonly label: string;
+  readonly present: boolean;
+  readonly missing: readonly string[];
+}
+
+export interface VoiceCommunicationsHealthView {
+  readonly module: {
+    readonly id: string;
+    readonly name: string;
+    readonly version: string;
+    readonly minPlatformVersion: string;
+    readonly loadOrder: number;
+    readonly apiPrefix: string;
+    readonly webhookPrefix: string;
+    readonly implementedPhases: readonly string[];
+  };
+  readonly ok: boolean;
+  readonly dependencies: readonly VoiceDependencyView[];
+  readonly optionalIntegrations: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly provides: string;
+    readonly present: boolean;
+    readonly status: 'available' | 'unavailable';
+  }[];
+  readonly features: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly enabled: boolean;
+    readonly settingsPath: string;
+    readonly requires: readonly string[];
+  }[];
+  readonly providers: {
+    readonly configuredDefaultAccount: string;
+    readonly available: readonly {
+      readonly key: string;
+      readonly label: string;
+      readonly mode: string;
+      readonly channels: readonly string[];
+      readonly capabilities: number;
+      readonly webhookSignature: string;
+    }[];
+    readonly accounts: number;
+    readonly enabledAccounts: number;
+  };
+  readonly settings: {
+    readonly version: number;
+    readonly updatedAt: string | null;
+    readonly warnings: readonly string[];
+  };
+  readonly checks: readonly { readonly name: string; readonly ok: boolean; readonly detail: string }[];
+}
+
+export interface VoiceCommunicationsSettingsView {
+  readonly settings: Record<string, unknown>;
+  readonly version: number;
+  readonly updatedAt: string | null;
+  readonly updatedBy: string | null;
+  readonly warnings: readonly { readonly code: string; readonly message: string }[];
+}
+
+export interface VoiceProviderAccountView {
+  readonly id: string;
+  readonly key: string;
+  readonly providerKey: string;
+  readonly label: string;
+  readonly environment: string;
+  readonly enabled: boolean;
+  readonly capabilities: readonly string[];
+  readonly effectiveCapabilities: readonly string[];
+  readonly hasCredential: boolean;
+  readonly credentialHint: string | null;
+  readonly hasWebhookSecret: boolean;
+  readonly webhookSecretHint: string | null;
+  readonly lastHealth: {
+    readonly status: string | null;
+    readonly detail: string | null;
+    readonly at: string | null;
+  };
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}
+
+export interface VoiceWebhookEventView {
+  readonly id: string;
+  readonly accountKey: string;
+  readonly providerKey: string;
+  readonly vendorEventId: string | null;
+  readonly eventType: string;
+  readonly signatureValid: boolean;
+  readonly processingStatus: string;
+  readonly attempts: number;
+  readonly failureCode: string | null;
+  readonly failureDetail: string | null;
+  readonly receivedAt: string;
+  readonly processedAt: string | null;
+}
+
+export interface VoiceWebhookEventList {
+  readonly list: readonly VoiceWebhookEventView[];
+  readonly total: number;
+}

@@ -103,6 +103,10 @@ import type {
   UserAccountType,
   UserInput,
   UserRow,
+  VoiceCommunicationsHealthView,
+  VoiceCommunicationsSettingsView,
+  VoiceProviderAccountView,
+  VoiceWebhookEventList,
   WorkflowActionSpec,
   WorkflowDefinitionShape,
   WorkflowIssue,
@@ -1233,4 +1237,16 @@ export const api = {
     ),
   serviceDeskCsatSubmit: (input: { token: string; rating: number; feedback?: string }) =>
     request<{ submitted: boolean }>(`/ServiceDesk/action/csat/submit`, post(input)),
+
+  // Phase 19-VC.2–19-VC.5 — Voice & Communications diagnostics. Read-only on this page: provider
+  // account creation and credential rotation are administrative API operations until the full admin
+  // screen lands in 19-VC.18, and no method here ever sends or reads a secret.
+  voiceCommunicationsHealth: () =>
+    request<VoiceCommunicationsHealthView>('/VoiceCommunications/action/health'),
+  voiceCommunicationsSettings: () =>
+    request<VoiceCommunicationsSettingsView>('/VoiceCommunications/action/settings'),
+  voiceCommunicationsAccounts: () =>
+    request<{ list: VoiceProviderAccountView[] }>('/VoiceCommunications/action/accounts'),
+  voiceCommunicationsWebhookEvents: (limit = 25) =>
+    request<VoiceWebhookEventList>(`/VoiceCommunications/action/webhook-events${simpleQuery({ limit })}`),
 };

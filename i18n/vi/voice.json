@@ -1,0 +1,60 @@
+{
+  "module": {
+    "label": "Thoại & Liên lạc",
+    "description": "Cuộc gọi, SMS/MMS và hội thoại WhatsApp gắn với bản ghi CRM, với adapter trung lập nhà cung cấp, sự đồng ý và chính sách kênh."
+  },
+  "nav": {
+    "voice": "Thoại & Liên lạc",
+    "overview": "Tổng quan",
+    "providers": "Nhà cung cấp",
+    "webhooks": "Hộp thư webhook"
+  },
+  "page": {
+    "title": "Thoại & Liên lạc",
+    "subtitle": "Tình trạng nhà cung cấp, chính sách kênh và xử lý webhook cho cuộc gọi và tin nhắn.",
+    "loadFailed": "Không tải được chẩn đoán của module.",
+    "loadFailedHint": "Kiểm tra migration 051 đã được áp dụng và bạn có quyền quản trị của module.",
+    "ok": "Bình thường",
+    "degraded": "Cần chú ý",
+    "dependencies": "Phụ thuộc nền tảng",
+    "optionalIntegrations": "Tích hợp tùy chọn",
+    "features": "Cờ tính năng",
+    "enabled": "Đang bật",
+    "disabled": "Đang tắt",
+    "present": "Sẵn sàng",
+    "missing": "Không sẵn sàng",
+    "checks": "Kiểm tra",
+    "warnings": "Cảnh báo",
+    "noWarnings": "Không có cảnh báo cấu hình.",
+    "providers": "Adapter nhà cung cấp",
+    "provider": "Adapter",
+    "mode": "Chế độ",
+    "channels": "Kênh",
+    "capabilities": "Năng lực",
+    "accounts": "Tài khoản nhà cung cấp",
+    "account": "Tài khoản",
+    "environment": "Môi trường",
+    "health": "Tình trạng gần nhất",
+    "credential": "Thông tin xác thực",
+    "webhookSecret": "Khóa webhook",
+    "configured": "Đã cấu hình",
+    "notConfigured": "Chưa cấu hình",
+    "noAccounts": "Chưa có tài khoản nhà cung cấp. Mọi lần gửi và gọi đều bị từ chối cho tới khi có.",
+    "webhookInbox": "Biên nhận webhook",
+    "eventType": "Sự kiện",
+    "signature": "Chữ ký",
+    "processing": "Xử lý",
+    "received": "Đã nhận",
+    "processedAt": "Đã xử lý",
+    "noEvents": "Chưa ghi nhận callback nào từ nhà cung cấp.",
+    "reload": "Tải lại",
+    "settingsVersion": "Phiên bản cài đặt",
+    "never": "Chưa bao giờ"
+  },
+  "channel": {
+    "voice": "Thoại",
+    "sms": "SMS",
+    "mms": "MMS",
+    "whatsapp": "WhatsApp"
+  }
+}
