@@ -14,6 +14,8 @@ interface Producer {
   add(name: string, data: Record<string, unknown>, jobId?: string, delayMs?: number): Promise<{ id?: string | number }>;
   removeJob(id: string): Promise<boolean>;
   counts(): Promise<Record<string, number>>;
+  /** Danger-zone support: drops the waiting jobs. Active, completed and failed jobs stay. */
+  purgeWaiting(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -76,6 +78,11 @@ class BullMqProducer implements Producer {
     return (await this.queue.getJobCounts()) as unknown as Record<string, number>;
   }
 
+  async purgeWaiting(): Promise<void> {
+    // `drain(false)` removes waiting jobs only; delayed, active, completed and failed stay.
+    await this.queue.drain(false);
+  }
+
   async close(): Promise<void> {
     await this.queue.close();
     if (this.connection.status !== 'end') await this.connection.quit();
@@ -132,6 +139,11 @@ export class JobQueueService implements JobQueuePort {
     } catch {
       return {};
     }
+  }
+
+  /** Danger-zone support: drops the jobs waiting to be picked up; everything else stays. */
+  async purgeWaiting(): Promise<void> {
+    await this.producer.purgeWaiting();
   }
 }
 

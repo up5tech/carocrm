@@ -18,4 +18,11 @@ export const TAB_COMPONENTS: Record<string, LazyExoticComponent<ComponentType>> 
   roles: lazy(() => import('./tabs/RolesTab.js').then((module) => ({ default: module.RolesTab }))),
   apiKeys: lazy(() => import('./tabs/ApiKeysTab.js').then((module) => ({ default: module.ApiKeysTab }))),
   layout: lazy(() => import('./tabs/LayoutTab.js').then((module) => ({ default: module.LayoutSettingsTab }))),
+  authentication: lazy(() => import('./tabs/AuthenticationTab.js').then((module) => ({ default: module.AuthenticationTab }))),
+  permissions: lazy(() => import('./tabs/PermissionsTab.js').then((module) => ({ default: module.PermissionsTab }))),
+  attachments: lazy(() => import('./tabs/AttachmentsTab.js').then((module) => ({ default: module.AttachmentsTab }))),
+  email: lazy(() => import('./tabs/EmailTab.js').then((module) => ({ default: module.EmailTab }))),
+  notifications: lazy(() => import('./tabs/NotificationsTab.js').then((module) => ({ default: module.NotificationsTab }))),
+  webhooks: lazy(() => import('./tabs/WebhooksTab.js').then((module) => ({ default: module.WebhooksTab }))),
+  internal: lazy(() => import('./tabs/InternalTab.js').then((module) => ({ default: module.InternalTab }))),
 };

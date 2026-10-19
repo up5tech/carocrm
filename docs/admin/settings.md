@@ -3,7 +3,7 @@
 Scope: `PLAN_Phase_20_Settings_UX.md` §4, §7, §8. Implemented: 20.1 registry and documents, 20.2 the
 tabbed shell, 20.3 General/Localization and the hosted module documents, 20.4 navigation resolution,
 20.5 the Main Menu tab, 20.6 per-entity navigation metadata, 20.7 users/teams/roles/API keys, 20.8 the
-layout manager tab.
+layout manager tab, 20.9 the security, messaging, integrations and internal tabs.
 
 ## Where things live
 
@@ -129,10 +129,31 @@ the table's column order; detail and edit preview as stacked panels).
   `inList` flag. detail/edit layouts drive the panels of the record screens (`layoutPanelsFor`), so a
   saved change renders without a code change.
 
+## Security, messaging, integrations and internal tabs (20.9)
+
+| Tab | Backing | Notes |
+|---|---|---|
+| `authentication` (Security, sysAdmin) | `security` document | password policy, session policy, sign-in notice |
+| `permissions` (Security, admin) | read-only from metadata + `/Role` | the composition rule, each role's stated scope, and the mandatory defaults metadata ships; no editor — the Roles tab is the editor |
+| `attachments` (System, admin) | `fileStorage` document | upload limit + extension allowlist; the storage driver itself stays in server configuration |
+| `email` (Messaging, admin) | `/EmailAccount`, `/Email/action/transport` | mailbox CRUD + "test settings"; a mailbox password is write-only — the API never returns it, the view can only say whether one is stored |
+| `notifications` (Messaging, admin) | `notifications` document | the defaults new users start from, not a mandate |
+| `webhooks` (Integrations, admin) | `/WebhookEndpoint` (the `webhook-integration` extension) | endpoint CRUD, deliveries; when the extension is not installed the tab shows that as a state, not an error |
+| `internal` (System, sysAdmin) | `/AdminInternal` | instance facts (metadata version, override count, queue counts, extensions) and the guarded danger zone |
+
+**The danger zone.** `POST /AdminInternal/action/metadata-reset` and
+`POST /AdminInternal/action/queue-purge` each require the exact typed confirmation
+(`RESET METADATA` / `PURGE QUEUE` — a mismatch answers `422` with `details.expected`), refuse
+non-administrators with `403`, and write an `admin.internal.*` row to `schema_changes` when they run.
+The reset drops the `app_settings.entity` override row (the Entity Manager's per-entity changes) and
+invalidates the metadata cache — records are never touched; the purge drains the BullMQ waiting list
+only. Refusals write no audit row; success is always audited. The destructive paths are not exercised
+against the configured database — `apps/api/test/admin-internal.test.ts` pins the guards and asserts
+that a refusal leaves both the overrides and the audit count untouched.
+
 ## Levels
 
 `public` (any session, e.g. brand), `admin` and `sysAdmin`. The instance has one administrative tier
 today, so `admin` and `sysAdmin` resolve to the same predicate — recorded in
-`docs/compatibility/settings-ux.md`. The `internal`/danger-zone tab and the
-messaging tabs are later sub-phases of the same plan (20.9–20.10); the descriptors and endpoints are
-shaped for them.
+`docs/compatibility/settings-ux.md`. The remaining catalog rows — user preferences (20.10) and the
+end-user UX pack — are the plan's later sub-phases.

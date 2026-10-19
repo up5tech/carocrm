@@ -1,11 +1,11 @@
 # Phase 20 — Settings, Administration and End-User UX/UI
 
-> **Status:** 20.0 – 20.8 implemented (2026-10-19): settings document registry, admin panel
-> descriptors and the tabbed shell, General/Localization/Main Menu tabs, the hosted module documents,
-> `GET /Navigation` with ACL-filtered resolution, per-entity `nav` metadata and the Entity Manager
-> Navigation tab, the Users/Teams/Roles/API keys tabs over the existing identity API, and the Layout
-> manager tab. 20.9 – 20.17 (security/messaging tabs, user preferences, the end-user UX pack,
-> accessibility and release hardening) are still planned.
+> **Status:** 20.0 – 20.9 implemented (2026-10-19): settings document registry, admin panel
+> descriptors and the tabbed shell, General/Localization/Main Menu/Layouts tabs, the hosted module
+> documents, `GET /Navigation` with ACL-filtered resolution, per-entity `nav` metadata and the Entity
+> Manager Navigation tab, the Users/Teams/Roles/API keys tabs, and the Security / Messaging /
+> Integrations / Internal tabs with the guarded danger zone. 20.10 – 20.17 (user preferences, the
+> end-user UX pack, accessibility and release hardening) are still planned.
 > This document remains the scope, architecture reference and implementation roadmap for Phase 20.
 > Implemented behaviour is documented in `docs/admin/settings.md`, `docs/admin/navigation.md` and the
 > deviations in `docs/compatibility/settings-ux.md`.
@@ -1041,13 +1041,25 @@ entity with a dirty draft asks first. Writes go through `POST /Metadata/:entity`
 `apps/api/test/metadata-api.test.ts` and now also asserted for the descriptor in
 `apps/api/test/navigation.test.ts`.
 
-### Phase 20.9 — Security, Messaging, Integrations and Internal tabs
+### Phase 20.9 — Security, Messaging, Integrations and Internal tabs  ✅ done 2026-10-19
 
 Tasks: authentication policy document; read-only permissions summary; email accounts; notification
 defaults; extensions/webhooks relocation; internal tab with cache info and the guarded danger zone.
 
 Acceptance: secrets are masked and never persisted in `app_settings`; danger-zone actions require
 typed confirmation and are audited.
+
+Delivered: a `security` group (Authentication over the `security` document, read-only Permissions
+summary); the Messaging group (Email over the existing `/EmailAccount` + `/Email/action/transport`
+APIs — passwords write-only and never served back; Notifications over the `notifications` document);
+`attachments` over `fileStorage`; `webhooks` over the `webhook-integration` extension's
+`/WebhookEndpoint` API with a not-installed state; and the `internal` tab backed by the new
+`/AdminInternal` routes — instance facts plus the guarded danger zone. `metadata-reset` and
+`queue-purge` demand the exact typed phrase (`422` with `details.expected` on mismatch), refuse
+non-administrators, and audit every execution into `schema_changes` (`admin.internal.*`); refusals
+write nothing. The extensions page had already joined the rail as a descriptor, so "relocation" is the
+webhooks tab plus the descriptors. Pinned by `apps/api/test/admin-internal.test.ts` (guards + refusals +
+no audit on failure) — the destructive success paths are not run against the configured database.
 
 ### Phase 20.10 — User preferences
 
@@ -1163,7 +1175,7 @@ extra database was created and no destructive setup was introduced.
 Phase 20 is complete when all applicable checks below pass:
 
 - [x] `/admin/settings` is a tabbed, permissioned shell; no single page holds every setting. (20.2, `AdminSettingsPage.tsx` deleted)
-- [x] Every settings capability in the §4.3 catalog is reachable from a tab **or a documented deferral** — see `docs/compatibility/settings-ux.md` (users, teams, roles and API keys arrived in 20.7 and the layout manager in 20.8; authentication, email, notifications, attachments, internal and webhooks remain 20.9–20.10).
+- [x] Every settings capability in the §4.3 catalog is reachable from a tab **or a documented deferral** — see `docs/compatibility/settings-ux.md` (users/teams/roles/API keys in 20.7, layout manager in 20.8, security/messaging/webhooks/internal in 20.9; the ACL explain helper, storage usage and 2FA are documented deferrals, user preferences is 20.10).
 - [x] Settings documents live in `app_settings` with schema validation, versioning, concurrency and
       reset-to-default; no second settings store exists. (20.1)
 - [x] The main menu is administrator-configurable and resolved server-side with ACL filtering. (20.4, 20.5)

@@ -182,6 +182,83 @@ export interface ApiKeySecret {
   secret: string;
 }
 
+/** An outbound mailbox as `GET /EmailAccount` serves it — the password never leaves the server. */
+export interface EmailAccountRow {
+  id: string;
+  name: string;
+  emailAddress: string;
+  fromName: string | null;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecurity: string;
+  smtpUsername: string | null;
+  hasPassword: boolean;
+  signature: string | null;
+  isActive: boolean;
+  isDefault: boolean;
+  createdById: string | null;
+  createdAt: string;
+  modifiedAt: string;
+}
+
+/** What the administration form sends; `smtpPassword` is write-only and `null` clears it. */
+export interface EmailAccountInput {
+  name?: string;
+  emailAddress?: string;
+  fromName?: string | null;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpSecurity?: string;
+  smtpUsername?: string | null;
+  smtpPassword?: string | null;
+  signature?: string | null;
+  isActive?: boolean;
+  isDefault?: boolean;
+}
+
+/** What `GET /Email/action/transport` advertises about the outbound mail configuration. */
+export interface EmailTransportInfo {
+  name: string;
+  mode: 'live' | 'disabled';
+  fromAddress: string | null;
+  maxRecipients: number;
+  strictFrom: boolean;
+  holdsMessages: boolean;
+}
+
+export interface WebhookEndpointRow {
+  id: string;
+  name: string;
+  url: string;
+  events: string[];
+  enabled: boolean;
+  hasSecret: boolean;
+  createdAt: string;
+  modifiedAt: string;
+}
+
+export interface WebhookDeliveryRow {
+  id: string;
+  endpointId: string;
+  eventType: string;
+  status: string;
+  attempts: number;
+  responseCode: number | null;
+  error: string | null;
+  createdAt: string;
+}
+
+/** The internal tab's read-only facts about this instance. */
+export interface InternalInfoView {
+  metadataVersion: number;
+  entityCount: number;
+  overrideCount: number;
+  jobQueue: { name: string; counts: Record<string, number> | null };
+  extensions: string[];
+  nodeVersion: string;
+  uptimeSeconds: number;
+}
+
 /** Instance settings served by `GET /Settings` — public, so the sign-in page can paint the brand. */
 export interface SettingsView {
   pageTitle: string | null;

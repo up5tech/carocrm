@@ -33,13 +33,17 @@ the upstream file layout, and copies no upstream source, asset or translation.
 - Reads of brand and language defaults stay open to any session, because the shell has to paint them.
 - Icon and accent choices come from fixed allowlists; no remote or arbitrary icon source exists.
 
-## Known limitations after sub-phases 20.1–20.8
+## Known limitations after sub-phases 20.1–20.9
 
-- Only the platform documents (`brand`, `i18n`, `navigation`, `security`, `fileStorage`,
-  `notifications`) are registered; the authentication, attachments, notifications, internal and
-  messaging tabs are the plan's later sub-phases (20.9–20.10).
-  The `security`, `fileStorage` and `notifications` rows exist and are readable/writable now, so those
-  tabs need only UI.
+- All §4.3 rows through 20.9 have a tab or a documented home. Still open: the "who can see what" explain
+  helper on the Permissions tab (it needs a server-side ACL evaluation for an arbitrary principal, so the
+  tab ships the composition rule + per-role summary instead), storage-usage figures on the Attachments
+  tab (needs a storage enumeration endpoint), and 2FA on the Authentication tab (P2 in the plan).
+- The webhooks tab reads the `webhook-integration` **extension**. When it is not installed the routes
+  answer 404 and the tab shows an installation hint; it is not a second endpoint API.
+- The danger zone is guarded and audited, but its destructive success paths are not exercised against the
+  configured database (see `docs/admin/settings.md`); the guards, refusals and the audit-no-write-on-failure
+  behaviour are pinned by `apps/api/test/admin-internal.test.ts`.
 - The 20.8 layout editor covers panels and field order for `list`/`detail`/`edit`. The plan's "list
   columns, filter and mass-update fields" are per-field flags (`inList`, `inFilter`, `massUpdate`) that
   live in the Entity Manager's field forms, not in a layout; the tab previews what the layouts actually

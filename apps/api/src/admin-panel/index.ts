@@ -14,6 +14,8 @@ import type { Provider, Type } from '@nestjs/common';
 
 import { AdminPanelController, NavigationController } from './admin-panel.controller.js';
 import { AdminPanelService } from './admin-panel.service.js';
+import { InternalInfoController } from './internal.controller.js';
+import { InternalInfoService } from './internal.service.js';
 import { NavigationService } from './navigation.service.js';
 import { PlatformSettingsRegistrar } from './platform-settings.js';
 import { SettingsDocumentService } from './settings-document.service.js';
@@ -23,6 +25,9 @@ import { SettingsRegistryService } from './settings-registry.service.js';
 export { AdminPanelController, NavigationController } from './admin-panel.controller.js';
 export type { AdminPanelGroup, AdminPanelTab } from './admin-panel.service.js';
 export { AdminPanelService } from './admin-panel.service.js';
+export { InternalInfoController } from './internal.controller.js';
+export type { InternalInfoView } from './internal.service.js';
+export { InternalInfoService, METADATA_RESET_CONFIRM, QUEUE_PURGE_CONFIRM } from './internal.service.js';
 export type { NavigationNode, NavigationTree } from './navigation.service.js';
 export { NavigationService } from './navigation.service.js';
 export type { SettingsDocumentView } from './settings-document.service.js';
@@ -44,6 +49,7 @@ export const ADMIN_PANEL_PROVIDERS: Provider[] = [
   NavigationService,
   AdminPanelService,
   PlatformSettingsRegistrar,
+  InternalInfoService,
 ];
 
-export const ADMIN_PANEL_CONTROLLERS: Type<unknown>[] = [AdminPanelController, NavigationController, SettingsDocumentsController];
+export const ADMIN_PANEL_CONTROLLERS: Type<unknown>[] = [AdminPanelController, NavigationController, SettingsDocumentsController, InternalInfoController];

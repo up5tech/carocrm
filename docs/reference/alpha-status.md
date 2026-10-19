@@ -783,3 +783,50 @@ Verification actually run (all against the configured database, no extra databas
 Known limitations are in `docs/compatibility/settings-ux.md` (per-field list/filter/mass-update flags
 stay in the Entity Manager's field forms; the save bar footer has no last-modified actor for entity
 metadata).
+
+## Phase 20.9 — Security, Messaging, Integrations and Internal tabs (added 2026-10-19)
+
+Implemented: the seven remaining administration tabs of `PLAN_Phase_20_Settings_UX.md` §4.3 rows 5, 8,
+14–17 and 19, plus the `security` group in the rail. One new API surface — `/AdminInternal` — backs the
+internal tab; everything else is UI over capability that already existed.
+
+| Deliverable | Where |
+|---|---|
+| Authentication tab (password/session policy, sign-in notice) | `apps/web/src/admin/tabs/AuthenticationTab.tsx` over the `security` document |
+| Permissions tab (read-only: composition rule, per-role scope, metadata-declared defaults) | `tabs/PermissionsTab.tsx` |
+| Attachments tab (upload limit, extension allowlist) | `tabs/AttachmentsTab.tsx` over the `fileStorage` document |
+| Email tab (mailbox CRUD + "test settings", transport status) | `tabs/EmailTab.tsx` over `/EmailAccount` + `/Email/action/transport` |
+| Notifications tab (instance defaults) | `tabs/NotificationsTab.tsx` over the `notifications` document |
+| Webhooks tab (endpoints, deliveries, not-installed state) | `tabs/WebhooksTab.tsx` over the `webhook-integration` extension |
+| Internal tab + guarded danger zone | `tabs/InternalTab.tsx` over `/AdminInternal` (`apps/api/src/admin-panel/internal.service.ts`) |
+| Queue purge support | `JobQueueService.purgeWaiting` → BullMQ `queue.drain(false)` |
+
+What changed for an administrator:
+
+- Password/session policy and the sign-in notice are editable with versioning and concurrency; the
+  notification defaults new users start from are editable the same way.
+- Mailboxes are managed without raw API calls. A mailbox password is **write-only**: the list view can
+  only say whether one is stored (`hasPassword`), so no secret round-trips through the browser or
+  `app_settings` — they live encrypted in `email_accounts`.
+- The internal tab shows instance facts (metadata version, entity and override counts, queue counts,
+  extensions, uptime) and the guarded danger zone: resetting metadata overrides (drops
+  `app_settings.entity`, invalidates the cache, never touches records) and purging waiting jobs
+  (BullMQ waiting list only). Both require typing `RESET METADATA` / `PURGE QUEUE` — the server refuses
+  anything else with `422 details.expected` — refuse non-administrators with `403`, and audit every
+  execution into `schema_changes` (`admin.internal.*`). A refusal writes no audit row.
+
+Verification actually run (all against the configured database, no extra database):
+
+- `npx tsc --noEmit` for both projects, `pnpm -r build` + the web build (each tab its own chunk),
+  `npx eslint .`: clean.
+- `npx vitest run`: **130 files, 1678 tests passed**. New: `apps/api/test/admin-internal.test.ts` (3) —
+  info is admin-only, both danger actions refuse a missing/wrong phrase with `details.expected`, refuse
+  non-administrators, and a refusal leaves the override row and the audit count untouched; the
+  destructive success paths are deliberately not executed here. `navigation.test.ts` now also pins the
+  `security`/`messaging`/`integrations` descriptors.
+- Browser (Playwright, admin session, 1440 and 390 px): the rail lists all seven new tabs under the new
+  Security group; the three document tabs render with the save bar; the permissions summary lists roles;
+  a test mailbox was created through the form, listed, and deleted (cleanup by the flow itself); the
+  webhooks tab shows its not-installed state; the danger modal disables its button until the exact
+  phrase is typed and Cancel executes nothing; no page errors and no horizontal overflow at either
+  width.

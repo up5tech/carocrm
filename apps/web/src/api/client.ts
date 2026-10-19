@@ -29,12 +29,16 @@ import type {
   ApiUserRow,
   AttachmentInfo,
   CloneResult,
+  EmailAccountInput,
+  EmailAccountRow,
+  EmailTransportInfo,
   EntityDefinition,
   ExtensionInstallResult,
   ExtensionListResult,
   ExtensionNavItem,
   ExtensionRow,
   IndexDefinition,
+  InternalInfoView,
   LayoutDefinition,
   ListResult,
   LoginResult,
@@ -107,6 +111,8 @@ import type {
   VoiceCommunicationsSettingsView,
   VoiceProviderAccountView,
   VoiceWebhookEventList,
+  WebhookDeliveryRow,
+  WebhookEndpointRow,
   WorkflowActionSpec,
   WorkflowDefinitionShape,
   WorkflowIssue,
@@ -684,6 +690,29 @@ export const api = {
   issueApiKey: (apiUserId: string) => request<ApiKeySecret>(`/ApiUser/${encodeURIComponent(apiUserId)}/key`, { method: 'POST' }),
   apiKeys: (apiUserId: string) => request<{ list: ApiKeyRow[] }>(`/ApiKey/${encodeURIComponent(apiUserId)}`),
   revokeApiKey: (keyId: string) => request<{ success: boolean }>(`/ApiKey/${encodeURIComponent(keyId)}`, { method: 'DELETE' }),
+
+  // Phase 20.9 — security, messaging and internal administration. Mailboxes and webhook endpoints are
+  // existing APIs; the internal routes are the guarded danger zone, each requiring a typed confirmation.
+  emailAccounts: () => request<EmailAccountRow[]>('/EmailAccount'),
+  createEmailAccount: (input: EmailAccountInput) => request<EmailAccountRow>('/EmailAccount', post(input)),
+  updateEmailAccount: (id: string, input: EmailAccountInput) =>
+    request<EmailAccountRow>(`/EmailAccount/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  deleteEmailAccount: (id: string) => request<{ id: string; deleted: boolean }>(`/EmailAccount/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  verifyEmailAccount: (id: string) => request<{ verified: boolean; error: string | null }>(`/EmailAccount/${encodeURIComponent(id)}/action/verify`, { method: 'POST' }),
+  emailTransport: () => request<EmailTransportInfo>('/Email/action/transport'),
+  verifyEmailTransport: () => request<{ transport: string; verified: boolean; error: string | null }>('/Email/action/verify', { method: 'POST' }),
+
+  webhookEndpoints: () => request<{ list: WebhookEndpointRow[]; total: number }>('/WebhookEndpoint'),
+  createWebhookEndpoint: (input: { name: string; url: string; events?: string[]; secret?: string; enabled?: boolean }) =>
+    request<WebhookEndpointRow>('/WebhookEndpoint', post(input)),
+  updateWebhookEndpoint: (id: string, input: { name?: string; url?: string; events?: string[]; secret?: string; enabled?: boolean }) =>
+    request<WebhookEndpointRow>(`/WebhookEndpoint/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }),
+  deleteWebhookEndpoint: (id: string) => request<{ id: string; removed: boolean }>(`/WebhookEndpoint/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  webhookDeliveries: (id: string) => request<{ list: WebhookDeliveryRow[]; total: number }>(`/WebhookEndpoint/${encodeURIComponent(id)}/deliveries`),
+
+  internalInfo: () => request<InternalInfoView>('/AdminInternal'),
+  resetMetadataOverrides: (confirm: string) => request<{ cleared: number }>('/AdminInternal/action/metadata-reset', post({ confirm })),
+  purgeJobQueue: (confirm: string) => request<{ drained: number | null }>('/AdminInternal/action/queue-purge', post({ confirm })),
 
   // Phase 8 — index / layout / ACL metadata editing.
   saveIndexes: (name: string, indexes: IndexDefinition[]) =>
