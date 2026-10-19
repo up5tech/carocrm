@@ -4,7 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api, type SavedFilterRow, type WhereClause } from '../api/client.js';
+import { EmptyState } from '../components/EmptyState.js';
+import { ErrorState } from '../components/ErrorState.js';
 import { FieldValue } from '../components/fields.js';
+import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { t } from '../state/i18n.js';
 import { boardGroupFields, fieldLabel, filterEntries, layoutPanelsFor, listEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
 import { portalBase } from '../state/portal.js';
@@ -215,7 +218,11 @@ export function EntityListPage() {
   }, [drafts, entityName, message]);
 
   if (metadata.isError || definition.isError) {
-    return <Card>{t('web.list.notAvailable', { entity: entityName ?? '' })}</Card>;
+    return <ErrorState message={t('web.list.notAvailable', { entity: entityName ?? '' })} />;
+  }
+
+  if (metadata.isLoading || definition.isLoading) {
+    return <LoadingSkeleton rows={8} />;
   }
 
   const displayField = definition.data?.record?.displayField ?? 'name';
@@ -351,7 +358,20 @@ export function EntityListPage() {
         <Tabs activeKey={inboxView} onChange={setInboxView} items={caseInboxViews.map((v) => ({ key: v.key, label: v.label }))} style={{ marginBottom: 12 }} />
       ) : null}
 
-      <Table
+      {loadError !== null ? (
+        <div style={{ marginBottom: 16 }}>
+          <ErrorState message={loadError} onRetry={() => void load()} />
+        </div>
+      ) : null}
+
+      {rows.length === 0 && !loading ? (
+        <div style={{ marginBottom: 16 }}>
+          <EmptyState title={t('web.list.emptyTitle')} description={t('web.list.emptyHint')} />
+        </div>
+      ) : null}
+
+      {rows.length > 0 || loading ? (
+        <Table
         rowKey={(row) => String(row['id'])}
         loading={loading}
         dataSource={rows}
@@ -430,6 +450,8 @@ export function EntityListPage() {
           setOrderBy(`${String(field)},${single.order === 'ascend' ? 'asc' : 'desc'}`);
         }}
       />
+      ) : null}
+
       <Modal title={t('web.list.importTitle', { entity: entityName ?? '' })} open={importOpen} onOk={() => void runImport()} onCancel={() => setImportOpen(false)} okText={t('web.list.import')} confirmLoading={importBusy}>
         <Typography.Paragraph type="secondary">{t('web.list.importHint')}</Typography.Paragraph>
         <Input.TextArea rows={8} placeholder={'name,website\nAcme,https://acme.example'} value={importText} onChange={(event) => setImportText(event.target.value)} />

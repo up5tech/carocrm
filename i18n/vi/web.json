@@ -1985,5 +1985,12 @@
     "actionFailed": "Thao tác bị từ chối.",
     "resetDone": "Đã bỏ {count} ghi đè metadata.",
     "purgeDone": "Đã bỏ {count} công việc đang chờ."
+  },
+  "commandPalette": {
+    "placeholder": "Nhập lệnh, bản ghi hoặc trang gần đây…",
+    "empty": "Không tìm thấy kết quả.",
+    "commands": "Lệnh",
+    "records": "Bản ghi",
+    "recent": "Gần đây"
   }
 }

@@ -28,5 +28,12 @@
     "save": "Lưu",
     "confirm": "Xác nhận",
     "close": "Đóng"
-  }
+  },
+  "empty": "Chưa có dữ liệu.",
+  "error": "Có lỗi xảy ra.",
+  "retry": "Thử lại",
+  "retryHint": "Thử lại — lỗi có thể chỉ là tạm thời.",
+  "accessDenied": "Không có quyền truy cập",
+  "accessDeniedHint": "Bạn không có quyền xem trang này.",
+  "help": "Trợ giúp"
 }

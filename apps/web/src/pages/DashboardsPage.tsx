@@ -3,6 +3,7 @@ import { App as AntApp, Button, Card, Checkbox, Col, Form, Input, InputNumber, M
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api, type DashboardRow } from '../api/client.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
 import { usePreference } from '../state/preferences.js';
@@ -247,7 +248,7 @@ export function DashboardsPage() {
           </Row>
         </>
       ) : (
-        <Card className="carocrm-card">{t('web.dashboards.empty')}</Card>
+        <EmptyState title={t('web.dashboards.empty')} />
       )}
       <Modal
         title={t('web.dashboards.new')}

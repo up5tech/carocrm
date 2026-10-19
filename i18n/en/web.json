@@ -1985,5 +1985,12 @@
     "actionFailed": "The action was refused.",
     "resetDone": "{count} entity override(s) were removed.",
     "purgeDone": "{count} waiting job(s) were removed."
+  },
+  "commandPalette": {
+    "placeholder": "Type a command, entity or recent page…",
+    "empty": "No results found.",
+    "commands": "Commands",
+    "records": "Records",
+    "recent": "Recent"
   }
 }

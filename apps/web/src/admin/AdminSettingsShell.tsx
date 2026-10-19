@@ -1,8 +1,10 @@
-import { ReloadOutlined } from '@ant-design/icons';
-import { Alert, App as AntApp, Button, Skeleton, Typography } from 'antd';
+import { App as AntApp, Button, Skeleton, Typography } from 'antd';
 import { Suspense, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import { EmptyState } from '../components/EmptyState.js';
+import { ErrorState } from '../components/ErrorState.js';
+import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import type { AdminPanelTab } from '../api/types.js';
 import { navIcon } from '../components/entityIcons.js';
 import { useAdminPanel } from '../state/admin.js';
@@ -77,28 +79,16 @@ export function AdminSettingsShell() {
   };
 
   const body = () => {
-    if (panel.isLoading) return <Skeleton active paragraph={{ rows: 8 }} />;
+    if (panel.isLoading) return <LoadingSkeleton rows={8} />;
     if (panel.isError) {
-      return (
-        <Alert
-          type="error"
-          showIcon
-          message={t('web.adminShell.loadFailed')}
-          description={t('web.adminShell.loadFailedHint')}
-          action={
-            <Button size="small" icon={<ReloadOutlined />} onClick={() => void panel.refetch()}>
-              {t('core.common.reload')}
-            </Button>
-          }
-        />
-      );
+      return <ErrorState message={t('web.adminShell.loadFailed')} onRetry={() => void panel.refetch()} />;
     }
     // An unknown or forbidden tab key answers with the refusal state, never a partial render (§11).
     if (tabKey === undefined || active === undefined) {
-      return <Alert type="warning" showIcon message={t('web.adminShell.noAccess')} description={t('web.adminShell.noAccessHint')} />;
+      return <EmptyState title={t('web.adminShell.noAccess')} description={t('web.adminShell.noAccessHint')} />;
     }
     const Tab = TAB_COMPONENTS[active.key];
-    if (Tab === undefined) return <Alert type="warning" showIcon message={t('web.adminShell.unknownTab')} />;
+    if (Tab === undefined) return <EmptyState title={t('web.adminShell.unknownTab')} />;
     return (
         <div className="carocrm-admin-panel">
           <header className="carocrm-admin-tab-head">

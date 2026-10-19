@@ -28,5 +28,12 @@
     "save": "Save",
     "confirm": "Confirm",
     "close": "Close"
-  }
+  },
+  "empty": "Nothing here yet.",
+  "error": "Something went wrong.",
+  "retry": "Retry",
+  "retryHint": "Try again — the error may be temporary.",
+  "accessDenied": "Access denied",
+  "accessDeniedHint": "You do not have permission to view this page.",
+  "help": "Help"
 }
