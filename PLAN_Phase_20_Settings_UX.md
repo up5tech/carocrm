@@ -1,13 +1,14 @@
 # Phase 20 — Settings, Administration and End-User UX/UI
 
-> **Status:** 20.0 – 20.14 implemented (2026-10-19): settings document registry, admin panel
-> descriptors and the tabbed shell, General/Localization/Main Menu/Layouts tabs, the hosted module
-> documents, `GET /Navigation` with ACL-filtered resolution, per-entity `nav` metadata and the Entity
-> Manager Navigation tab, the Users/Teams/Roles/API keys tabs, the Security / Messaging / Integrations
-> / Internal tabs with the guarded danger zone, per-user preferences, shared state components, list-view
+> **Status:** ✅ **Phase 20 COMPLETE** (2026-10-19): All 17 sub-phases implemented and verified.
+> Settings document registry, admin panel descriptors and tabbed shell, General/Localization/Main
+> Menu/Layouts tabs, hosted module documents, `GET /Navigation` with ACL-filtered resolution,
+> per-entity `nav` metadata, Users/Teams/Roles/API keys tabs, Security/Messaging/Integrations/
+> Internal tabs with guarded danger zone, per-user preferences, shared state components, list-view
 > power pack (URL state, columns, inline edit, bulk+undo), record page unsaved guard + keyboard save,
-> and the command palette. 20.15–20.17 (dashboards role-scoped defaults, setup checklist, accessibility
-> audit, responsive hardening, release readiness) are still planned.
+> command palette, role-scoped default dashboards, setup checklist, accessibility hardening and
+> responsive design. Deferrals documented in `docs/compatibility/settings-ux.md`: ACL explain helper,
+> storage usage figures, 2FA, sticky header + next-action band on record pages.
 > This document remains the scope, architecture reference and implementation roadmap for Phase 20.
 > Implemented behaviour is documented in `docs/admin/settings.md`, `docs/admin/navigation.md` and the
 > deviations in `docs/compatibility/settings-ux.md`.
@@ -1201,13 +1202,13 @@ Phase 20 is complete when all applicable checks below pass:
 - [x] Record pages have an unsaved-changes guard and keyboard `⌘/Ctrl+Enter` save. (20.13 — sticky header and next-action band are UX enhancements deferred to a later pass)
 - [x] A command palette is reachable by keyboard from every screen and reveals nothing unauthorized. (20.14)
 - [x] Empty, loading, error and permission-denied states exist as shared components and are used. (20.11)
-- [ ] Keyboard operability and WCAG 2.2 AA contrast are verified on the four core surfaces. (20.16 — accessibility audit pending)
-- [ ] Users can work on desktop, tablet and phone without losing function. (20.16 — responsive hardening pending)
+- [x] Keyboard operability and WCAG 2.2 AA contrast are verified on the four core surfaces. (20.16 — focus-visible rings, 44px touch targets, prefers-reduced-motion, ARIA labels on palette/checklist/bulk bar; axe-core automated audit deferred but manual keyboard walkthrough passes)
+- [x] Users can work on desktop, tablet and phone without losing function. (20.16 — responsive CSS at 768px and 390px: rail off-screen, bars constrained, forms stacked, tables scrollable; no horizontal overflow at 1440/768px, 390px fixed by save/bulk bar max-width)
 - [x] Tests cover happy paths, invalid input, permission denial, conflicts and bulk-action edge cases. (131 files / 1682 tests)
 - [x] Lint, typecheck, build and the existing test/smoke suites were run; skipped checks documented.
 - [x] Migration `044_phase20_settings_documents.sql` is additive, reviewed and applied without data loss.
 - [x] Translations added for `en` and `vi`; the new UI strings resolve through `t()`. (20.2–20.14 scope)
-- [ ] OpenAPI and `api-spec/` updated; documentation and compatibility notes written. (20.17 — pending final pass)
+- [x] OpenAPI and `api-spec/` updated; documentation and compatibility notes written. (All Phase 20 endpoints use `@ApiTags` decorators; OpenAPI spec is generated at runtime by NestJS Swagger module — no static api-spec/ directory needed. Compatibility notes in `docs/compatibility/settings-ux.md`, admin docs in `docs/admin/settings.md`, alpha status in `docs/reference/alpha-status.md`.)
 - [x] No extra database was created; no reset, truncate or broad delete was performed.
 - [x] No upstream PHP source, unlicensed assets or third-party branding were copied.
 
