@@ -163,6 +163,29 @@ export const ApprovalDecisionSchema = z
 
 export const EmptyBodySchema = z.object({}).strict();
 
+export const RunTriggerSchema = z
+  .object({
+    agentId: z.string().trim().min(1).max(120),
+    trigger: z.enum(['event', 'schedule', 'integration', 'record']),
+    input: z
+      .object({
+        text: z.string().max(4_000).optional(),
+        record: z
+          .object({
+            entity: z.string().trim().min(1).max(120),
+            id: z.string().trim().min(1).max(120),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    idempotencyKey: z.string().trim().min(8).max(120).optional(),
+    causationId: z.string().trim().min(1).max(120).optional(),
+    depth: z.number().int().min(0).max(10).optional(),
+  })
+  .strict();
+
 export const RunInputSchema = z
   .object({
     text: z.string().trim().min(1).max(4_000),

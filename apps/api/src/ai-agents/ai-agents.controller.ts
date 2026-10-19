@@ -52,6 +52,7 @@ import {
   RunEvaluationSchema,
   RunInputSchema,
   RunRetrySchema,
+  RunTriggerSchema,
 } from './dto/ai-agents-shapes.js';
 
 /**
@@ -368,6 +369,21 @@ export class AIAgentsController {
     // Visibility is the authorization: get() refuses a run this caller may not see.
     await this.runs.get(id);
     return this.runs.execute(id);
+  }
+
+  @HttpCode(200)
+  @Post('action/triggers/run')
+  async triggerRun(@Body() body: unknown) {
+    await this.permissions.assert('policyAdmin');
+    const input = parse(RunTriggerSchema, body);
+    return this.runs.triggerRun({
+      agentId: input.agentId,
+      trigger: input.trigger,
+      ...(input.input === undefined ? {} : { runInput: input.input }),
+      ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
+      ...(input.causationId === undefined ? {} : { causationId: input.causationId }),
+      ...(input.depth === undefined ? {} : { depth: input.depth }),
+    });
   }
 
   /**

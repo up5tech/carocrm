@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
+import { FeatureDisabledError, NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { log } from '@carocrm/core/logger/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Updateable } from 'kysely';
@@ -489,7 +489,7 @@ export class AIAgentRunService {
             agent_version: version.version,
             initiated_by_user_id: principal.userId,
             service_principal: null,
-            trigger: 'manual',
+            trigger: input.trigger ?? 'manual',
             status: 'queued',
             input: JSON.stringify(normalized.input),
             input_ref: normalized.input.ref ?? null,
@@ -541,7 +541,7 @@ export class AIAgentRunService {
     }
     await this.appendEvent(id, 'run', 'run.queued', `Run queued for agent "${agent.name}".`, {
       agentVersion: version.version,
-      trigger: 'manual',
+      trigger: input.trigger ?? 'manual',
       ...(conversation === undefined ? {} : { conversationId: conversation.id }),
     });
     await this.enqueue(id);
@@ -557,6 +557,79 @@ export class AIAgentRunService {
    * active is not retried — it is resumed or canceled. The client supplies an idempotency key so a
    * double-click cannot enqueue two copies.
    */
+  /**
+   * Phase 19-AI.17 — start a run from an approved event or schedule.
+   *
+   * Reuses `create()` so quota, idempotency, conversation memory and the run engine behave exactly
+   * like a manual run. Adds the trigger type, feature-flag gating, the agent's own trigger allowlist,
+   * a causation id and a bounded recursion depth so an agent-created change cannot loop forever.
+   */
+  async triggerRun(input: {
+    readonly agentId: string;
+    readonly trigger: 'event' | 'schedule' | 'integration' | 'record';
+    readonly runInput?: RunCreateInput['input'];
+    readonly idempotencyKey?: string;
+    readonly causationId?: string;
+    readonly depth?: number;
+  }): Promise<AIAgentRunView> {
+    await this.policy.assertCanStartRun();
+    const settings = await this.settings.settings();
+    const featureKey =
+      input.trigger === 'event' || input.trigger === 'integration' ? 'eventTriggers' : input.trigger === 'schedule' ? 'scheduledTriggers' : 'execution';
+    if (featureKey === 'eventTriggers' && !settings.features.eventTriggers) {
+      throw new FeatureDisabledError('AI agent event triggers');
+    }
+    if (featureKey === 'scheduledTriggers' && !settings.features.scheduledTriggers) {
+      throw new FeatureDisabledError('AI agent scheduled triggers');
+    }
+    const depth = input.depth ?? 0;
+    if (depth > 3) {
+      throw new ValidationError('Trigger recursion depth exceeded.', { depth });
+    }
+    // de-dup
+    if (input.idempotencyKey !== undefined) {
+      const existing = await this.database.db
+        .selectFrom('ai_agent_runs')
+        .selectAll()
+        .where('idempotency_key', '=', input.idempotencyKey)
+        .executeTakeFirst();
+      if (existing) {
+        const { agents } = await this.agentNames([existing.agent_id]);
+        return this.toView(existing, agents.get(existing.agent_id));
+      }
+    }
+    const agent = await this.database.db
+      .selectFrom('ai_agents')
+      .selectAll()
+      .where('id', '=', input.agentId)
+      .where('is_deleted', '=', false)
+      .executeTakeFirst();
+    if (!agent) throw new NotFoundError(`Agent "${input.agentId}" does not exist.`);
+    const parsed = parseAgentConfig(agent.draft_config);
+    if (!parsed.ok) throw new ValidationError('The agent configuration is not valid.');
+    if (parsed.config.triggers === undefined) throw new ValidationError('The agent declares no triggers.');
+    const allowed =
+      (input.trigger === 'event' && parsed.config.triggers.event) ||
+      (input.trigger === 'schedule' && parsed.config.triggers.schedule) ||
+      (input.trigger === 'record' && parsed.config.triggers.record) ||
+      (input.trigger === 'integration' && parsed.config.triggers.integration);
+    if (!allowed) throw new ValidationError('This trigger is not enabled on the agent.');
+    const view = await this.create(input.agentId, {
+      input: input.runInput,
+      idempotencyKey: input.idempotencyKey,
+      trigger: input.trigger,
+    });
+    // stamp causation for loop detection
+    if (input.causationId !== undefined) {
+      await this.database.db
+        .updateTable('ai_agent_runs')
+        .set({ causation_id: input.causationId, modified_at: new Date() })
+        .where('id', '=', view.id)
+        .execute();
+    }
+    return view;
+  }
+
   async retry(id: string, idempotencyKey?: string): Promise<AIAgentRunView> {
     await this.permissions.assert('use');
     const row = await this.visibleRun(id);
