@@ -18,11 +18,11 @@ The product behavior is CRM-oriented telephony and one-to-one messaging, not a P
 
 | Behavior | Reference | Implementation status |
 | --- | --- | --- |
-| Click-to-call from a phone field | EspoCRM VoIP Integration overview | Not implemented (19-VC.8) |
-| Incoming-call popup with caller context | EspoCRM VoIP Integration overview | Not implemented (19-VC.9) |
-| Call logging as an Activity | EspoCRM Activities and Calendar | Not implemented (19-VC.7); `Call` entity exists |
-| SMS/MMS send + delivery callbacks | Twilio Message resource docs | Contract + fake adapter (19-VC.4/19-VC.5); live adapter 19-VC.10 |
-| WhatsApp Business templates and service window | Twilio WhatsApp API / templates docs | Policy evaluation (19-VC.6); adapter 19-VC.11 |
+| Click-to-call from a phone field | EspoCRM VoIP Integration overview | Implemented as an API (19-VC.8); the phone-field button is 19-VC.17 |
+| Incoming-call popup with caller context | EspoCRM VoIP Integration overview | Server side implemented (19-VC.9): notification row + ACL-filtered context; the popup component is 19-VC.17 |
+| Call logging as an Activity | EspoCRM Activities and Calendar | Implemented (19-VC.7): one `Call` Activity per session, created/updated through the entity service |
+| SMS/MMS send + delivery callbacks | Twilio Message resource docs | SMS implemented through the simulator (19-VC.10); MMS not implemented; live adapter pending |
+| WhatsApp Business templates and service window | Twilio WhatsApp API / templates docs | Window policy (19-VC.6) + template approval/variables (19-VC.11), simulator only |
 | Provider webhook signature validation | Twilio webhook security docs | Contract + fake HMAC adapter (19-VC.5); provider-specific validators per adapter |
 
 This is a clean-room reimplementation. No EspoCRM PHP class, frontend asset, icon, translation or
@@ -89,18 +89,20 @@ later sub-phase:
 
 ## 3. Compatibility limits (honest list)
 
-- **No live provider is implemented in 19-VC.0–19-VC.6.** Only the fake/simulator adapter and the
-  adapter contract exist. No call is placed, no message is sent, no external host is contacted.
+- **No live provider is implemented.** Only the simulator and the adapter contract exist. No call is
+  placed, no message is sent, no external host is contacted; the simulator refuses every destination
+  outside its `sandboxRecipients` allowlist.
 - **No PBX adapter** (Asterisk, 3CX, Starface, Binotel, iexPBX) exists. Each will be marked
   `not-implemented` in the capability matrix until it has an adapter and contract tests.
 - **No recording or transcription is enabled.** Recording metadata/download and transcripts are
   later sub-phases; the defaults are off and the settings schema says so.
-- **No click-to-call UI, call popup, inbox UI or CRM panels** yet (19-VC.8, 19-VC.9, 19-VC.12,
-  19-VC.17).
+- **No click-to-call button, call-popup component, inbox UI or CRM panel** yet. The APIs behind them
+  exist; the screens are 19-VC.12/19-VC.17.
 - **Delivery state is never inferred.** The normalized message state machine only moves forward on
   an actual callback; absent a callback the state remains `sent`/`unknown`, never `delivered`.
 - **WhatsApp service-window policy is evaluated with an injectable clock** and returns
-  `templateRequired` outside the window; template approval validation is 19-VC.11.
+  `templateRequired` outside the window; an approved local template with complete variables is the
+  only way through it (19-VC.11).
 - **No cost or billing integration.** Provider usage data is not collected in this release.
 - **Webhook replay protection** is a timestamp window plus an `(account_id, dedup_key)` unique
   constraint. Replay of an old event outside the window is rejected; a duplicate inside it is

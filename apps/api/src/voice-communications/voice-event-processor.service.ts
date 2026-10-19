@@ -7,6 +7,7 @@ import { sql } from "kysely";
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.js";
 import { DatabaseService } from "../database/database.service.js";
 import { EventBus } from "../events/event-bus.js";
+import { VoiceCallService } from "./voice-call.service.js";
 import { runAsVoiceSystem } from "./voice-communications-authority.js";
 import {
   callEventFor,
@@ -16,6 +17,7 @@ import {
   type VoiceDomainEvent,
 } from "./voice-communications-domain.js";
 import { WEBHOOK_MAX_ATTEMPTS } from "./voice-communications-jobs.js";
+import { VoiceMessagingService } from "./voice-messaging.service.js";
 import {
   type NormalizedProviderEvent,
   type ValidatedProviderEvent,
@@ -68,6 +70,8 @@ export class VoiceEventProcessorService {
     @Inject(EventBus) private readonly events: EventBus,
     @Inject(VoiceProviderAccountsService) private readonly accounts: VoiceProviderAccountsService,
     @Inject(VoiceProviderRegistry) private readonly registry: VoiceProviderRegistry,
+    @Inject(VoiceCallService) private readonly calls: VoiceCallService,
+    @Inject(VoiceMessagingService) private readonly messaging: VoiceMessagingService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -105,6 +109,51 @@ export class VoiceEventProcessorService {
           // Another attempt won the unique constraint: the event exists, so this one is a duplicate.
           await this.markProcessed(eventId);
           return { eventId, status: "duplicate", kind: normalized.kind };
+        }
+
+        // VC.7: a call event reconciles the logical session and its Call Activity before the domain
+        // event is announced, so a consumer that reloads the call always sees the stored state.
+        if (normalized.kind === "call" && account.enabled) {
+          await this.calls.applyCallEvent({
+            accountKey: account.key,
+            providerCallId: normalized.providerCallId,
+            event: {
+              state: normalized.state,
+              direction: normalized.direction,
+              from: normalized.from,
+              to: normalized.to,
+              occurredAt: normalized.occurredAt,
+              durationSeconds: normalized.durationSeconds,
+              failureCategory: normalized.failureCategory,
+              vendorStatus: normalized.vendorStatus,
+            },
+          });
+        }
+
+        // VC.10: an inbound message creates one conversation row and one message row; a status
+        // callback advances an existing message without ever inventing delivery.
+        if (normalized.kind === "message" && account.enabled) {
+          if (normalized.direction === "inbound") {
+            await this.messaging.ingestInbound({ accountKey: account.key, event: normalized });
+          } else if (normalized.providerMessageId !== null) {
+            await this.messaging.applyStatus({
+              accountKey: account.key,
+              providerMessageId: normalized.providerMessageId,
+              state: normalized.state,
+              occurredAt: normalized.occurredAt,
+              failureCategory: normalized.failureCategory,
+            });
+          }
+        }
+        if (normalized.kind === "status" && account.enabled && normalized.externalId !== null) {
+          // A status event may belong to a message; `applyStatus` ignores an unknown id.
+          await this.messaging.applyStatus({
+            accountKey: account.key,
+            providerMessageId: normalized.externalId,
+            state: normalized.state as never,
+            occurredAt: normalized.occurredAt,
+            failureCategory: normalized.failureCategory,
+          });
         }
 
         if (account.enabled) {

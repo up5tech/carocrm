@@ -130,6 +130,8 @@ export const PolicyEvaluateSchema = z
     lastInboundAt: z.string().datetime({ offset: true }).nullable().optional(),
     messageLength: z.number().int().min(0).max(100_000).optional(),
     templateKey: z.string().trim().max(128).nullable().optional(),
+    templateLanguage: z.string().trim().max(16).optional(),
+    templateVariables: z.record(z.string()).optional(),
   })
   .strict();
 
@@ -142,3 +144,79 @@ export const ResolvePhoneSchema = z
   .strict();
 
 export const WorkerProcessSchema = z.object({ eventId: z.string().uuid() }).strict();
+
+/** Phase 19-VC.8 — click-to-call. `idempotencyKey` is client-generated so a double click is one call. */
+export const InitiateCallSchema = z
+  .object({
+    to: z.string().trim().min(3).max(64),
+    accountKey: z.string().trim().max(64).optional(),
+    endpointKey: z.string().trim().max(64).optional(),
+    idempotencyKey: z.string().trim().min(8).max(128),
+    relatedEntityType: z.string().trim().max(64).optional(),
+    relatedEntityId: z.string().trim().max(64).optional(),
+  })
+  .strict();
+
+export const CallListQuerySchema = z
+  .object({
+    state: z.string().trim().max(32).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+  .strict();
+
+export const CallNoteSchema = z.object({ description: z.string().trim().min(1).max(10_000) }).strict();
+
+export const CallLinkSchema = z
+  .object({
+    entityType: z.string().trim().min(1).max(64),
+    entityId: z.string().trim().min(1).max(64),
+  })
+  .strict();
+
+/** Phase 19-VC.10 — one outbound message attempt. */
+export const SendMessageSchema = z
+  .object({
+    channel: z.enum(["sms", "mms", "whatsapp"]),
+    body: z.string().trim().max(10_000).default(""),
+    idempotencyKey: z.string().trim().min(8).max(128),
+    accountKey: z.string().trim().max(64).optional(),
+    conversationId: z.string().trim().max(64).optional(),
+    to: z.string().trim().max(64).optional(),
+    purpose: z.string().trim().max(64).optional(),
+    mediaAttachmentIds: z.array(z.string().trim().max(64)).max(10).optional(),
+    templateKey: z.string().trim().max(128).optional(),
+    templateLanguage: z.string().trim().max(16).optional(),
+    templateVariables: z.record(z.string()).optional(),
+    isInternalNote: z.boolean().optional(),
+  })
+  .strict();
+
+export const ConversationListQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+  .strict();
+
+/** Phase 19-VC.11 — a locally recorded WhatsApp template. */
+export const WhatsappTemplateSchema = z
+  .object({
+    templateKey: z.string().trim().min(1).max(128),
+    name: z.string().trim().min(1).max(256),
+    category: z.string().trim().min(1).max(64),
+    language: z.string().trim().min(2).max(16),
+    components: z.unknown().optional(),
+    status: z.enum(["pending", "approved", "rejected", "disabled"]).default("pending"),
+    vendorStatus: z.string().trim().max(64).nullable().optional(),
+    rejectionReason: z.string().trim().max(1000).nullable().optional(),
+  })
+  .strict();
+
+export const WhatsappTemplateStatusSchema = z
+  .object({
+    status: z.enum(["pending", "approved", "rejected", "disabled"]),
+    vendorStatus: z.string().trim().max(64).nullable().optional(),
+    rejectionReason: z.string().trim().max(1000).nullable().optional(),
+  })
+  .strict();

@@ -13,30 +13,41 @@ import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.
 import { type AppConfig, CONFIG_TOKEN } from "../config.js";
 import {
   AccountStateSchema,
+  CallLinkSchema,
+  CallListQuerySchema,
+  CallNoteSchema,
   ConsentRecordSchema,
+  ConversationListQuerySchema,
   EndpointCreateSchema,
   EndpointStateSchema,
+  InitiateCallSchema,
   PageQuerySchema,
   PolicyEvaluateSchema,
   ProviderAccountCreateSchema,
   ProviderAccountPatchSchema,
   ResolvePhoneSchema,
   RevokeSuppressionSchema,
+  SendMessageSchema,
   SettingsPatchSchema,
   SuppressionAddSchema,
   SuppressionQuerySchema,
+  WhatsappTemplateSchema,
+  WhatsappTemplateStatusSchema,
   WorkerProcessSchema,
 } from "./dto/voice-communications-shapes.js";
+import { VoiceCallService } from "./voice-call.service.js";
 import { VoiceCommunicationsModuleHealthService } from "./voice-communications-module-health.service.js";
 import { VoiceCommunicationsNavigationService } from "./voice-communications-navigation.service.js";
 import { VoiceCommunicationsSettingsService } from "./voice-communications-settings.service.js";
 import { VoiceConsentService } from "./voice-consent.service.js";
 import { VoiceContactResolverService } from "./voice-contact-resolver.service.js";
 import { VoiceEventProcessorService } from "./voice-event-processor.service.js";
+import { VoiceMessagingService } from "./voice-messaging.service.js";
 import { VoicePolicyService } from "./voice-policy.service.js";
 import { VoiceProviderRegistry } from "./voice-provider.js";
 import { VoiceProviderAccountsService } from "./voice-provider-accounts.service.js";
 import { VoiceWebhookIngressService } from "./voice-webhook-ingress.service.js";
+import { VoiceWhatsappTemplateService } from "./voice-whatsapp-template.service.js";
 
 /**
  * Phase 19-VC.2–19-VC.6 — the `VoiceCommunications` command surface
@@ -58,6 +69,9 @@ export class VoiceCommunicationsController {
     @Inject(VoiceCommunicationsNavigationService) private readonly navigation: VoiceCommunicationsNavigationService,
     @Inject(VoiceProviderAccountsService) private readonly accounts: VoiceProviderAccountsService,
     @Inject(VoiceProviderRegistry) private readonly providers: VoiceProviderRegistry,
+    @Inject(VoiceCallService) private readonly calls: VoiceCallService,
+    @Inject(VoiceMessagingService) private readonly messaging: VoiceMessagingService,
+    @Inject(VoiceWhatsappTemplateService) private readonly templates: VoiceWhatsappTemplateService,
     @Inject(VoiceWebhookIngressService) private readonly ingress: VoiceWebhookIngressService,
     @Inject(VoiceEventProcessorService) private readonly processor: VoiceEventProcessorService,
     @Inject(VoiceContactResolverService) private readonly resolver: VoiceContactResolverService,
@@ -218,6 +232,107 @@ export class VoiceCommunicationsController {
     else this.requireAdmin("processing a webhook event");
     const input = parse(WorkerProcessSchema, body);
     return this.processor.process(input.eventId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Calls: click-to-call, session and caller context (19-VC.7–19-VC.9)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Place a call through the configured adapter. The client supplies `idempotencyKey`; repeating the
+   * request returns the same session with `duplicate: true` and places no second call.
+   */
+  @HttpCode(201)
+  @Post("action/calls/initiate")
+  async initiateCall(@Body() body: unknown) {
+    return this.calls.initiate(parse(InitiateCallSchema, body));
+  }
+
+  @Get("action/calls")
+  async listCalls(@Query() query: unknown) {
+    return { list: await this.calls.list(parse(CallListQuerySchema, coerceQuery(query))) };
+  }
+
+  /** Inbound calls still ringing for this caller — the popup's polling source (§7.2). */
+  @Get("action/calls/incoming")
+  async incomingCalls() {
+    return { list: await this.calls.incoming() };
+  }
+
+  @Get("action/calls/:id")
+  async getCall(@Param("id") id: string) {
+    return this.calls.get(id);
+  }
+
+  /** Caller context for the incoming-call panel: permitted matches only, ambiguity preserved. */
+  @Get("action/calls/:id/context")
+  async callContext(@Param("id") id: string) {
+    return this.calls.contextFor(id);
+  }
+
+  @HttpCode(200)
+  @Post("action/calls/:id/note")
+  async callNote(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(CallNoteSchema, body);
+    return this.calls.note(id, input.description);
+  }
+
+  @HttpCode(200)
+  @Post("action/calls/:id/link")
+  async callLink(@Param("id") id: string, @Body() body: unknown) {
+    const input = parse(CallLinkSchema, body);
+    return this.calls.link(id, input.entityType, input.entityId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Messaging and WhatsApp templates (19-VC.10–19-VC.11)
+  // ---------------------------------------------------------------------------
+
+  /** One outbound attempt. A repeated `idempotencyKey` returns the same message, never a second send. */
+  @HttpCode(201)
+  @Post("action/messages/send")
+  async sendMessage(@Body() body: unknown) {
+    return this.messaging.send(parse(SendMessageSchema, body));
+  }
+
+  @Get("action/conversations")
+  async listConversations(@Query() query: unknown) {
+    return { list: await this.messaging.listConversations(parse(ConversationListQuerySchema, coerceQuery(query))) };
+  }
+
+  @Get("action/conversations/:id")
+  async getConversation(@Param("id") id: string) {
+    return this.messaging.getConversation(id);
+  }
+
+  @Get("action/templates/:accountKey")
+  async listTemplates(@Param("accountKey") accountKey: string) {
+    this.requireAdmin("reading WhatsApp templates");
+    return { list: await this.templates.list(accountKey) };
+  }
+
+  @HttpCode(200)
+  @Post("action/templates/:accountKey")
+  async upsertTemplate(@Param("accountKey") accountKey: string, @Body() body: unknown) {
+    this.requireAdmin("recording a WhatsApp template");
+    const input = parse(WhatsappTemplateSchema, body);
+    return this.templates.upsert({ accountKey, ...input, components: input.components ?? [] });
+  }
+
+  @HttpCode(200)
+  @Post("action/templates/:accountKey/:templateKey/:language/status")
+  async setTemplateStatus(
+    @Param("accountKey") accountKey: string,
+    @Param("templateKey") templateKey: string,
+    @Param("language") language: string,
+    @Body() body: unknown,
+  ) {
+    this.requireAdmin("changing a WhatsApp template status");
+    const input = parse(WhatsappTemplateStatusSchema, body);
+    return this.templates.setStatus(accountKey, templateKey, language, input.status, {
+      ...(input.vendorStatus !== undefined ? { vendorStatus: input.vendorStatus } : {}),
+      ...(input.rejectionReason !== undefined ? { rejectionReason: input.rejectionReason } : {}),
+    });
   }
 
   // ---------------------------------------------------------------------------

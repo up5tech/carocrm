@@ -1,6 +1,8 @@
 import type { Provider, Type } from "@nestjs/common";
 
 import { LibPhoneNumberNormalizer, PHONE_NORMALIZER } from "./phone-number.js";
+import { VoiceCallService } from "./voice-call.service.js";
+import { VoiceCallNotificationService } from "./voice-call-notification.service.js";
 import { VoiceCommunicationsController } from "./voice-communications.controller.js";
 import { VoiceCommunicationsModuleHealthService } from "./voice-communications-module-health.service.js";
 import { VoiceCommunicationsNavigationService } from "./voice-communications-navigation.service.js";
@@ -8,11 +10,13 @@ import { VoiceCommunicationsSettingsService } from "./voice-communications-setti
 import { VoiceConsentService } from "./voice-consent.service.js";
 import { VoiceContactResolverService } from "./voice-contact-resolver.service.js";
 import { VoiceEventProcessorService } from "./voice-event-processor.service.js";
+import { VoiceMessagingService } from "./voice-messaging.service.js";
 import { VoicePolicyService } from "./voice-policy.service.js";
 import { VoiceProviderRegistry } from "./voice-provider.js";
 import { VoiceProviderAccountsService } from "./voice-provider-accounts.service.js";
 import { VoiceWebhookController } from "./voice-webhook.controller.js";
 import { VoiceWebhookIngressService } from "./voice-webhook-ingress.service.js";
+import { VoiceWhatsappTemplateService } from "./voice-whatsapp-template.service.js";
 
 /**
  * Phase 19-VC.2 — Voice & Communications module barrel
@@ -46,6 +50,10 @@ export const VOICE_COMMUNICATIONS_PROVIDERS: Provider[] = [
   { provide: PHONE_NORMALIZER, useFactory: () => new LibPhoneNumberNormalizer() },
   VoiceProviderRegistry,
   VoiceProviderAccountsService,
+  VoiceCallNotificationService,
+  VoiceCallService,
+  VoiceMessagingService,
+  VoiceWhatsappTemplateService,
   VoiceConsentService,
   VoicePolicyService,
   VoiceContactResolverService,
@@ -55,6 +63,7 @@ export const VOICE_COMMUNICATIONS_PROVIDERS: Provider[] = [
   VoiceCommunicationsNavigationService,
 ];
 
+export { VoiceCallService } from "./voice-call.service.js";
 export { VOICE_COMMUNICATIONS_MODULE } from "./voice-communications-module.js";
 export { VOICE_FEATURES } from "./voice-communications-module.js";
 export { VoiceCommunicationsSettingsService } from "./voice-communications-settings.service.js";

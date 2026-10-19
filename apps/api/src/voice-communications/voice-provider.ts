@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import { Injectable } from "@nestjs/common";
 
@@ -146,6 +146,59 @@ export interface ProviderHealthResult {
   readonly detail: string;
 }
 
+/** A call the module asks a provider to place (§7.1). */
+export interface InitiateCallInput {
+  readonly account: ResolvedProviderAccount;
+  /** The caller id / source endpoint address, when one is configured. */
+  readonly from: string | null;
+  /** Destination number in E.164. */
+  readonly to: string;
+  /** Client-generated key so a duplicate click cannot place a second call. */
+  readonly idempotencyKey: string;
+}
+
+export interface InitiateCallResult {
+  readonly providerCallId: string | null;
+  readonly accepted: boolean;
+  /** The state the provider itself reports; the domain never rounds it up. */
+  readonly state: CallState;
+  readonly errorCategory?: CommunicationErrorCategory | undefined;
+  readonly error?: string | undefined;
+}
+
+/** A message the module asks a provider to deliver (§8.1). */
+export interface SendMessageInput {
+  readonly account: ResolvedProviderAccount;
+  readonly conversationId: string;
+  readonly messageId: string;
+  readonly to: string;
+  readonly body: string;
+  readonly channel: MessageChannel;
+  readonly idempotencyKey: string;
+  readonly fromAddress?: string | null | undefined;
+  readonly media?: readonly SendMessageMedia[] | undefined;
+  readonly templateKey?: string | null | undefined;
+  readonly templateLanguage?: string | null | undefined;
+  readonly templateVariables?: Readonly<Record<string, string>> | null | undefined;
+}
+
+export interface SendMessageMedia {
+  /** The internal storage reference (an attachment id), never a raw provider URL. */
+  readonly storageRef: string;
+  readonly contentType: string;
+  readonly filename: string;
+  readonly sizeBytes?: number | undefined;
+}
+
+export interface SendMessageResult {
+  readonly providerMessageId: string | null;
+  readonly accepted: boolean;
+  /** `queued` when the provider accepted but has not reported delivery; never `delivered`. */
+  readonly state: MessageState;
+  readonly errorCategory?: CommunicationErrorCategory | undefined;
+  readonly error?: string | undefined;
+}
+
 /** A capability the adapter declares but the account has not been granted is still refused server-side. */
 export function effectiveCapabilities(
   info: VoiceProviderInfo,
@@ -231,11 +284,14 @@ export class FakeVoiceProvider implements VoiceProviderAdapter {
       "voice.callStatusCallbacks",
       "messaging.sms.send",
       "messaging.sms.receive",
+      "messaging.whatsapp.send",
+      "messaging.whatsapp.receive",
       "messaging.deliveryStatus",
+      "messaging.templates",
       "webhook.signatureValidation",
       "provider.healthCheck",
     ],
-    channels: ["voice", "sms"],
+    channels: ["voice", "sms", "whatsapp"],
     ratePerMinute: 0,
     maxConcurrency: 1,
     webhookSignature: "hmac-sha256-canonical-json",
@@ -331,6 +387,64 @@ export class FakeVoiceProvider implements VoiceProviderAdapter {
       detail: "Simulator reachable; no network call was made.",
     };
   }
+
+  /**
+   * The simulator never dials a number. `sandboxRecipients` (account config) is an allowlist; when it
+   * is set, a call or message to anything outside it is refused with `invalid_recipient`. An account
+   * with no allowlist at all is a deployment mistake and is also refused — a simulator that could
+   * reach a real phone would be a §15.4 violation ("no real calls or messages during tests").
+   */
+  async initiateCall(input: InitiateCallInput): Promise<InitiateCallResult> {
+    this.assertScriptedOutage(input.account);
+    this.assertSandboxRecipient(input.account, input.to);
+    return {
+      providerCallId: `CA-${simulatorId(input.idempotencyKey)}`,
+      accepted: true,
+      state: "initiated",
+    };
+  }
+
+  async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
+    this.assertScriptedOutage(input.account);
+    this.assertSandboxRecipient(input.account, input.to);
+    if (input.templateKey !== null && input.templateKey !== undefined && input.templateKey.trim() !== "") {
+      // A template send needs its variables; a missing body is legitimate for WhatsApp.
+      if (input.templateVariables === null || input.templateVariables === undefined) {
+        throw new VoiceProviderError("invalid_request", "A template send needs its variables.");
+      }
+    }
+    return {
+      providerMessageId: `SM-${simulatorId(input.idempotencyKey)}`,
+      accepted: true,
+      // Accepted by the provider; the domain must not claim delivery without a callback.
+      state: "sent",
+    };
+  }
+
+  private assertScriptedOutage(account: ResolvedProviderAccount): void {
+    if (account.config["simulateOutage"] === true) {
+      throw new VoiceProviderError(
+        "provider_unavailable",
+        "The simulator is configured to fail its sends, which is how an unhealthy provider is exercised.",
+      );
+    }
+  }
+
+  private assertSandboxRecipient(account: ResolvedProviderAccount, to: string): void {
+    const allowed = stringArray(account.config["sandboxRecipients"]);
+    if (allowed.length === 0) {
+      throw new VoiceProviderError(
+        "invalid_recipient",
+        "The simulator refuses every destination until the account configures sandboxRecipients.",
+      );
+    }
+    if (!allowed.includes(to.trim())) {
+      throw new VoiceProviderError(
+        "invalid_recipient",
+        "The simulator only accepts the allowlisted sandbox recipients this account names.",
+      );
+    }
+  }
 }
 
 /** The bound adapter when an account names no provider or the provider is unknown. Every action refuses. */
@@ -369,6 +483,10 @@ export interface VoiceProviderAdapter {
   validateWebhook(request: ProviderWebhookRequest, account: ResolvedProviderAccount): Promise<ValidatedProviderEvent>;
   normalizeEvent(event: ValidatedProviderEvent, account: ResolvedProviderAccount): NormalizedProviderEvent;
   healthCheck(account: ResolvedProviderAccount): Promise<ProviderHealthResult>;
+  /** Absent when the adapter cannot place calls (`voice.outboundCall` not declared). */
+  initiateCall?(input: InitiateCallInput): Promise<InitiateCallResult>;
+  /** Absent when the adapter cannot send on this channel (`messaging.*.send` not declared). */
+  sendMessage?(input: SendMessageInput): Promise<SendMessageResult>;
 }
 
 /** Sign the simulator's documented payload. Exported so a test and the admin simulator use one rule. */
@@ -400,6 +518,18 @@ function numberOf(value: unknown): number | null {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+}
+
+function stringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "").map((entry) => entry.trim());
+  }
+  return [];
+}
+
+/** A stable provider id per idempotency key, so a repeated dispatch resolves to the same call. */
+function simulatorId(idempotencyKey: string): string {
+  return createHash("sha256").update(idempotencyKey).digest("base64url").slice(0, 22);
 }
 
 /**

@@ -13,6 +13,7 @@ import { VoiceCommunicationsSettingsService } from "./voice-communications-setti
 import { type ConsentState, type SuppressionView, VoiceConsentService } from "./voice-consent.service.js";
 import { effectiveCapabilities, VoiceProviderRegistry } from "./voice-provider.js";
 import { VoiceProviderAccountsService } from "./voice-provider-accounts.service.js";
+import { VoiceWhatsappTemplateService } from "./voice-whatsapp-template.service.js";
 
 /**
  * Phase 19-VC.6 — channel policy evaluation
@@ -49,6 +50,8 @@ export interface PolicyInput {
   readonly messageLength?: number | undefined;
   /** An approved template key; its presence satisfies the WhatsApp window rule. */
   readonly templateKey?: string | null | undefined;
+  readonly templateLanguage?: string | undefined;
+  readonly templateVariables?: Readonly<Record<string, string>> | undefined;
   /** Injectable clock so window and quiet-hour decisions are testable (§15 `19-VC.6`). */
   readonly now?: Date | undefined;
 }
@@ -79,6 +82,7 @@ export class VoicePolicyService {
     @Inject(VoiceProviderAccountsService) private readonly accounts: VoiceProviderAccountsService,
     @Inject(VoiceProviderRegistry) private readonly registry: VoiceProviderRegistry,
     @Inject(PHONE_NORMALIZER) private readonly phones: PhoneNormalizer,
+    @Inject(VoiceWhatsappTemplateService) private readonly templates: VoiceWhatsappTemplateService,
   ) {}
 
   async evaluate(input: PolicyInput): Promise<PolicyEvaluation> {
@@ -153,8 +157,21 @@ export class VoicePolicyService {
           ? input.lastInboundAt
           : await this.consent.lastInboundAt(input.channel, address);
       windowOpen = isWhatsAppWindowOpen(lastInboundAt, now, settings.policy.whatsappWindowHours);
-      const hasTemplate = (input.templateKey ?? "").trim() !== "";
-      if (!windowOpen && !hasTemplate) refuse("template_required");
+      const templateKey = (input.templateKey ?? "").trim();
+      if (!windowOpen && templateKey === "") refuse("template_required");
+      // VC.11: a template that is not approved, or whose variables are incomplete, is refused even
+      // when the window is closed — sending `{{2}}` literally is worse than refusing the send.
+      if (templateKey !== "" && accountKey !== "") {
+        const validation = await this.templates.validateForSend({
+          accountKey,
+          templateKey,
+          ...(input.templateLanguage !== undefined ? { language: input.templateLanguage } : {}),
+          ...(input.templateVariables !== undefined ? { variables: input.templateVariables } : {}),
+        });
+        if (!validation.ok) {
+          refuse(validation.reason?.startsWith("template_variables_missing") ? "payload_invalid" : "template_required");
+        }
+      }
     }
 
     // 9. Payload shape.

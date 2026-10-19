@@ -163,6 +163,41 @@ export function canTransitionCall(from: CallState, to: CallState): boolean {
 }
 
 /**
+ * The state a callback leaves the call in. A later, out-of-order callback must never regress a
+ * terminal state: once a call is `completed`, a duplicate `ringing` from a replayed webhook changes
+ * nothing (§7.4 "incoming event reconciliation must update one logical call record").
+ */
+export function advanceCallState(current: CallState, incoming: CallState): CallState {
+  if (current === incoming) return current;
+  if (isCallTerminal(current) || isCallTerminal(incoming)) {
+    return canTransitionCall(current, incoming) ? incoming : current;
+  }
+  return canTransitionCall(current, incoming) ? incoming : current;
+}
+
+/** The platform `Call` Activity status a normalized call state means (PLAN §27 activity conventions). */
+export const CALL_ACTIVITY_STATUS: Readonly<Record<CallState, "Planned" | "Held" | "Not Held">> = {
+  requested: "Planned",
+  initiated: "Planned",
+  ringing: "Planned",
+  in_progress: "Planned",
+  completed: "Held",
+  missed: "Not Held",
+  busy: "Not Held",
+  no_answer: "Not Held",
+  failed: "Not Held",
+  cancelled: "Not Held",
+  // An unknown outcome is not a failure and not a success; the activity stays open until reconciliation.
+  unknown: "Planned",
+};
+
+/** The `Call` direction value for a normalized direction. */
+export const CALL_ACTIVITY_DIRECTION: Readonly<Record<"inbound" | "outbound", "Inbound" | "Outbound">> = {
+  inbound: "Inbound",
+  outbound: "Outbound",
+};
+
+/**
  * Vendor call-status mapping (§7.3 "do not force every provider state to fit an incorrect status").
  * Keys are lower-cased and punctuation-normalized by `normalizeStatusToken`. An unrecognized value
  * maps to `unknown`, never to `completed`.

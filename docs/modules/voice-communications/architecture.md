@@ -26,6 +26,10 @@ optional integrations are detected by a metadata marker, never by an import.
 | Provider contract + registry | `voice-provider.ts` | `VoiceProviderAdapter`, capability declaration, simulator, disabled adapter, fail-closed resolution. |
 | Provider accounts | `voice-provider-accounts.service.ts` | Accounts, endpoints, encrypted credentials (write-only), enable/disable, health checks. |
 | Webhook ingress | `voice-webhook-ingress.service.ts` | Body ceiling, replay window, adapter signature validation, durable receipt, dedup, enqueue. |
+| Call sessions | `voice-call.service.ts` | Click-to-call, provider correlation, state reconciliation, the single Call Activity, notes, record links, caller context. |
+| Incoming-call notifications | `voice-call-notification.service.ts` | One notification row per call and recipient: the assigned user or the endpoint team's members, number only. |
+| Messaging | `voice-messaging.service.ts` | Conversations, participants, durable send path, inbound materialization, monotonic delivery status, internal notes, media references. |
+| WhatsApp templates | `voice-whatsapp-template.service.ts` | Locally recorded approval status, language, `{{n}}` variable validation. |
 | Event processor | `voice-event-processor.service.ts` | Normalize a receipt once, persist `voice_communication_events`, emit `voiceCommunications.*` through the outbox. |
 | Contact resolver | `voice-contact-resolver.service.ts` | Normalize, match `phoneNumber` across Contact/Lead/Account, ACL-filter, report ambiguity. |
 | Consent + suppression | `voice-consent.service.ts` | Append-only consent evidence, suppression tombstones, last inbound time. |
@@ -54,10 +58,11 @@ disclosed to the provider.
 `voice_provider_accounts`, `voice_endpoints`, `voice_webhook_events`,
 `voice_communication_events`, `voice_call_sessions`, `voice_conversations`,
 `voice_conversation_participants`, `voice_messages`, `voice_media`, `voice_consent_events`,
-`voice_suppressions`.
+`voice_suppressions`, `voice_whatsapp_templates`.
 
 The user-facing **Call** record stays the platform's `Call` Activity; `voice_call_sessions` holds
-provider correlation and normalized state and links to it by `activity_id` (19-VC.7). No table copies
+provider correlation and normalized state and links to it by `activity_id`. One session produces
+exactly one Activity, created on the first accepted state and updated afterwards (19-VC.7). No table copies
 Contact/Lead/Account fields: a participant or session stores an address and a record reference.
 
 Idempotency is structural:
@@ -79,6 +84,6 @@ ACL or the documented service scope.
 
 ## 6. What is deliberately absent in this scope
 
-Click-to-call, the incoming-call panel, call/message materialization, the inbox, ServiceDesk handoff,
-recordings, transcripts and AI enrichment are later sub-phases. Their tables exist where the
-contract needs them; no endpoint claims them.
+The **inbox UI**, ServiceDesk handoff, recordings, transcripts and AI enrichment are later
+sub-phases. The call/message API surface exists (click-to-call, call list/detail/note/link/context,
+message send, conversation list/detail) but the dedicated screens arrive in 19-VC.12/19-VC.17.

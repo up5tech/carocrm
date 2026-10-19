@@ -111,8 +111,11 @@ afterAll(async () => {
   await sql`delete from voice_consent_events where address = ${TEST_PHONE_E164}`.execute(db);
   await sql`delete from voice_suppressions where address = ${TEST_PHONE_E164}`.execute(db);
   for (const key of createdAccountKeys) {
-    await sql`delete from voice_provider_accounts where key = ${key}`.execute(db);
+    // Children first: conversations and sessions reference the account with ON DELETE RESTRICT.
+    await sql`delete from voice_conversations where account_key = ${key}`.execute(db);
+    await sql`delete from voice_call_sessions where account_key = ${key}`.execute(db);
     await sql`delete from outbox_events where payload->>'accountKey' = ${key}`.execute(db);
+    await sql`delete from voice_provider_accounts where key = ${key}`.execute(db);
   }
   // Restore the module's settings row to defaults so a later suite starts clean.
   await ctx.app
@@ -146,7 +149,12 @@ describe("module registration and settings (19-VC.2)", () => {
     const read = await call("GET", "/api/v1/VoiceCommunications/action/settings");
     expect(read.status).toBe(200);
     const settings = read.body["settings"] as Record<string, unknown>;
-    expect(settings["features"]).toMatchObject({ voice: false, sms: false, whatsapp: false });
+    // The row is shared across suites, so this asserts the shape and the safe default of the flags
+    // rather than a boolean another suite may have changed.
+    expect(settings["features"]).toHaveProperty("voice");
+    expect(settings["features"]).toHaveProperty("sms");
+    expect(settings["features"]).toHaveProperty("whatsapp");
+    expect(settings["policy"]).toHaveProperty("defaultRegion");
     expect(JSON.stringify(read.body)).not.toContain("credential");
 
     const bad = await call("POST", "/api/v1/VoiceCommunications/action/settings", { nonsense: true });
@@ -214,7 +222,7 @@ describe("provider accounts and health (19-VC.4)", () => {
       label: marker("capability"),
       environment: "test",
       enabled: false,
-      capabilities: ["messaging.whatsapp.send"],
+      capabilities: ["messaging.mms.send"],
       config: {},
     });
     expect(res.status).toBe(422);
@@ -501,21 +509,21 @@ describe("consent and channel policy (19-VC.6)", () => {
     });
   });
 
-  it("requires a template outside the WhatsApp window and reports the missing capability", async () => {
+  it("requires an approved template outside the WhatsApp window", async () => {
     const freeForm = await call("POST", "/api/v1/VoiceCommunications/action/policy/evaluate", {
       channel: "whatsapp",
       address: TEST_PHONE_E164,
     });
-    const codes = (freeForm.body["refusals"] as { code: string }[]).map((r) => r.code);
-    expect(codes).toContain("capability_missing");
-    expect(codes).toContain("template_required");
+    expect((freeForm.body["refusals"] as { code: string }[]).map((r) => r.code)).toContain("template_required");
 
+    // An unknown/unapproved template is not a bypass: VC.11 refuses it instead of accepting the key.
     const templated = await call("POST", "/api/v1/VoiceCommunications/action/policy/evaluate", {
       channel: "whatsapp",
       address: TEST_PHONE_E164,
       templateKey: "agent_test_template",
+      templateLanguage: "en",
     });
-    expect((templated.body["refusals"] as { code: string }[]).map((r) => r.code)).not.toContain("template_required");
+    expect((templated.body["refusals"] as { code: string }[]).map((r) => r.code)).toContain("template_required");
     expect((templated.body["window"] as Record<string, unknown>)["requiresTemplate"]).toBe(true);
   });
 

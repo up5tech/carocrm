@@ -7,7 +7,7 @@
 
 | Adapter | Key | Mode | Channels | Signature scheme |
 | --- | --- | --- | --- | --- |
-| Simulator | `fake` | `simulator` | voice, sms | HMAC-SHA256 over `timestamp + "." + canonical JSON` |
+| Simulator | `fake` | `simulator` | voice, sms, whatsapp | HMAC-SHA256 over `timestamp + "." + canonical JSON` |
 | Disabled | `none` | `disabled` | — | — |
 
 The simulator is resolvable only when `NODE_ENV !== 'production'`. In production the key `fake`
@@ -27,10 +27,10 @@ resolves to `disabled`, so a mis-set account cannot pretend to work. No producti
 | `messaging.sms.receive` | experimental | not-implemented |
 | `messaging.mms.send` | not-implemented | not-implemented |
 | `messaging.mms.receive` | not-implemented | not-implemented |
-| `messaging.whatsapp.send` | not-implemented | not-implemented |
-| `messaging.whatsapp.receive` | not-implemented | not-implemented |
+| `messaging.whatsapp.send` | experimental | not-implemented |
+| `messaging.whatsapp.receive` | experimental | not-implemented |
 | `messaging.deliveryStatus` | experimental | not-implemented |
-| `messaging.templates` | not-implemented | not-implemented |
+| `messaging.templates` | experimental | not-implemented |
 | `messaging.media` | not-implemented | not-implemented |
 | `webhook.signatureValidation` | supported | not-implemented |
 | `provider.healthCheck` | supported | not-implemented |
@@ -51,6 +51,17 @@ live vendor. `supported` is reserved for a verified implementation.
 
 Adapters that sign exact raw bytes need a raw-body capture in the Fastify bootstrap; the contract
 accepts `rawBody` and the ingress passes it through when present.
+
+## 3.1 Simulator behaviour (19-VC.10–19-VC.11)
+
+- `sandboxRecipients` (account config) is a **mandatory** allowlist. With no list, every call and
+  message is refused with `invalid_recipient`; with a list, anything outside it is refused. A
+  simulator that could reach a real phone would violate §15.4.
+- `simulateOutage: true` makes sends and calls fail with `provider_unavailable`, which is how the
+  retry/uncertain-outcome paths are exercised.
+- A send returns `sent` — never `delivered`. Delivery is only ever asserted from a callback.
+- Calls and messages get a deterministic provider id derived from the idempotency key, so a repeated
+  dispatch resolves to the same provider object.
 
 ## 4. Account configuration
 

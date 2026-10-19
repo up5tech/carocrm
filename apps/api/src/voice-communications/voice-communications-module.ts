@@ -211,6 +211,7 @@ export const VOICE_STRUCTURES = {
     "voice_media",
     "voice_consent_events",
     "voice_suppressions",
+    "voice_whatsapp_templates",
   ],
   indexes: [
     "uq_voice_webhook_events_dedup",
@@ -234,7 +235,7 @@ export const VOICE_COMMUNICATIONS_MODULE = {
   /** Frontend slug (§3.3). */
   slug: "voice-communications",
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ["19-VC.0", "19-VC.1", "19-VC.2", "19-VC.3", "19-VC.4", "19-VC.5", "19-VC.6"],
+  implementedPhases: ["19-VC.0", "19-VC.1", "19-VC.2", "19-VC.3", "19-VC.4", "19-VC.5", "19-VC.6", "19-VC.7", "19-VC.8", "19-VC.9", "19-VC.10", "19-VC.11"],
   /**
    * Metadata entities this module owns. Empty on purpose: the CRM records it links to are the
    * platform's (`Contact`, `Lead`, `Account`, `Call`, `Case`), and its own communication data lives

@@ -31,6 +31,11 @@ send/call and says so.
 | `enqueue_failed` | Queue unavailable | The receipt is durable; replay once the queue is back |
 | Account cannot be enabled | Missing credential or webhook secret | Provide it; the API refuses with the exact requirement |
 | Secret cannot be saved | `ENCRYPTION_KEY` unset | Configure the platform key; never store plaintext |
+| Every simulator send fails `invalid_recipient` | No `sandboxRecipients`, or the destination is not listed | Add the test number to the account config |
+| A WhatsApp send is refused `template_required` | Window closed and no approved template | Record the template and its approval, then send with its key and variables |
+| A WhatsApp send is refused `payload_invalid` | Template variables missing | Supply every `{{n}}` placeholder |
+| A call is `failed` with `invalid_recipient` | Destination outside the simulator allowlist | Expected in tests; a live adapter uses the provider's own rejection |
+| A message stays `sent` | No delivery callback arrived | That is correct: delivery is never inferred |
 
 ## 3. Credential rotation
 

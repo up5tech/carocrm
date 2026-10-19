@@ -161,6 +161,12 @@ Curated, long-lived notes. Daily logs live next to this file as `YYYY-MM-DD.md`.
 - `phone-number.ts` exposes `PhoneNormalizer` via the `PHONE_NORMALIZER` token. The default is
   `LibPhoneNumberNormalizer` (`libphonenumber-js` 1.13.15, installed manually);
   `ConservativePhoneNormalizer` remains a dependency-free fallback. Services inject the interface.
-- Tests: `apps/api/test/voice-communications-domain.test.ts` (30) and
-  `voice-communications.test.ts` (24). The integration suite sets `ENCRYPTION_KEY` and
-  `REPORT_WORKER_SECRET` before `bootApi()`.
+- VC.7–VC.11 add `voice-call.service.ts` (one session ↔ one `Call` Activity via `EntityCrudService`,
+  `advanceCallState` monotonic), `voice-call-notification.service.ts` (notification rows for the
+  endpoint team), `voice-messaging.service.ts` (durable send + inbound materialization + monotonic
+  `advanceMessageState`), `voice-whatsapp-template.service.ts` (approval + `{{n}}` variables) and
+  migration 052 (`idempotency_key` columns, `voice_whatsapp_templates`).
+- The simulator **requires** `sandboxRecipients` and never returns `delivered`; a send is `sent`
+  until a callback arrives.
+- Tests: domain 35, base 24, calls 9, messaging 10 (78). The integration suites set
+  `ENCRYPTION_KEY` and `REPORT_WORKER_SECRET` before `bootApi()`.
