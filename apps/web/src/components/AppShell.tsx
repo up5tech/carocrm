@@ -13,6 +13,7 @@ import { portalBase, usePortalContext } from '../state/portal.js';
 import { useSession } from '../state/session.js';
 import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 import { navAccent } from '../theme.js';
+import { CommandPalette } from './CommandPalette.js';
 import { navIcon } from './entityIcons.js';
 
 const { Sider, Content, Footer } = Layout;
@@ -139,9 +140,11 @@ function InternalShell({ children }: { children: ReactNode }) {
   }, [narrow, drawerOpen, setDrawerOpen]);
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <header className="carocrm-header">
-        <div className={`carocrm-brand${(narrow ? drawerOpen : collapsed) ? ' carocrm-brand--compact' : ''}`} title={settings.data?.pageTitle ?? DEFAULT_BRAND}>
+    <>
+      <CommandPalette />
+      <Layout style={{ minHeight: '100vh' }}>
+        <header className="carocrm-header">
+          <div className={`carocrm-brand${(narrow ? drawerOpen : collapsed) ? ' carocrm-brand--compact' : ''}`} title={settings.data?.pageTitle ?? DEFAULT_BRAND}>
           {settings.data?.logoUrl ? (
             <img className="carocrm-brand-logo" src={settings.data.logoUrl} alt="" />
           ) : (
@@ -229,6 +232,7 @@ function InternalShell({ children }: { children: ReactNode }) {
         </Layout>
       </Layout>
     </Layout>
+    </>
   );
 }
 
