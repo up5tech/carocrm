@@ -1,5 +1,9 @@
 import type { Provider } from '@nestjs/common';
 
+import { AIAgentApprovalService } from './ai-agent-approvals.service.js';
+import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
+import { AIAgentRunService } from './ai-agent-runs.service.js';
+import { AIToolRegistry } from './ai-agent-tools.js';
 import { AIAgentsController } from './ai-agents.controller.js';
 import { AIAgentsModuleHealthService } from './ai-agents-module-health.service.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
@@ -11,6 +15,11 @@ import { FakeProviderAdapter } from './ai-provider-fake.js';
 import { AIProviderGateway } from './ai-provider-gateway.service.js';
 import { OpenAICompatibleProviderAdapter } from './ai-provider-openai-compatible.js';
 
+export { AIAgentApprovalService } from './ai-agent-approvals.service.js';
+export { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
+export { AI_AGENT_RUN_JOB } from './ai-agent-jobs.js';
+export { AIAgentRunService } from './ai-agent-runs.service.js';
+export { AIToolRegistry } from './ai-agent-tools.js';
 export { AI_AGENTS_MODULE } from './ai-agents-module.js';
 export { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 export { AIProviderRegistry } from './ai-provider.js';
@@ -33,6 +42,10 @@ export const AI_AGENTS_PROVIDERS: Provider[] = [
   AIAgentsPermissionService,
   AIAgentsPolicyService,
   AIAgentsModuleHealthService,
+  AIToolRegistry,
+  AIAgentDefinitionService,
+  AIAgentRunService,
+  AIAgentApprovalService,
   AIProviderConnectionService,
   AIProviderGateway,
   OpenAICompatibleProviderAdapter,

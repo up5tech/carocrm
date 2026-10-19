@@ -342,7 +342,19 @@ export const AI_AGENTS_MODULE = {
   /** Frontend route of the human-facing surface. */
   frontendRoute: '/ai-agents',
   /** Sub-phases delivered so far. */
-  implementedPhases: ['19-AI.0', '19-AI.1', '19-AI.2', '19-AI.3', '19-AI.4'],
+  implementedPhases: [
+    '19-AI.0',
+    '19-AI.1',
+    '19-AI.2',
+    '19-AI.3',
+    '19-AI.4',
+    '19-AI.5',
+    '19-AI.6',
+    '19-AI.7',
+    '19-AI.8',
+    '19-AI.9',
+    '19-AI.10',
+  ],
   /** Tables the module owns; no other module may write them directly. */
   tables: AI_AGENTS_TABLES,
 } as const;

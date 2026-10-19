@@ -1,8 +1,22 @@
 import type {
   AclDefinition,
   AdminPanelView,
+  AIAgentApprovalListResult,
+  AIAgentApprovalView,
+  AIAgentListResult,
+  AIAgentRunEventView,
+  AIAgentRunListResult,
+  AIAgentRunToolCallView,
+  AIAgentRunView,
   AIAgentsCapabilitiesView,
   AIAgentsHealthView,
+  AIAgentsProviderConnection,
+  AIAgentTemplate,
+  AIAgentToolCatalogue,
+  AIAgentUsageView,
+  AIAgentValidationReport,
+  AIAgentVersionView,
+  AIAgentView,
   ApiKeyRow,
   ApiKeySecret,
   ApiUserRow,
@@ -421,6 +435,94 @@ export const api = {
   // Module settings documents hosted by the settings shell (§8.3): each keeps its own endpoint.
   aiAgentsHealth: () => request<AIAgentsHealthView>('/AIAgents/action/health'),
   aiAgentsCapabilities: () => request<AIAgentsCapabilitiesView>('/AIAgents/action/capabilities'),
+
+  // Phase 19-AI.5–19-AI.10: definitions, runs and approvals. Every method is an existing, guarded
+  // module endpoint; the SPA adds presentation only and never a second authorization path.
+  aiAgentsTools: () => request<AIAgentToolCatalogue>('/AIAgents/action/tools'),
+  aiAgentsProviders: () => request<{ list: AIAgentsProviderConnection[] }>('/AIAgents/action/providers'),
+  aiAgentsTemplates: () => request<{ list: AIAgentTemplate[] }>('/AIAgents/action/templates'),
+  aiAgentsAgents: (params: { offset?: number; maxSize?: number; status?: string; q?: string; scope?: 'mine' | 'all' } = {}) => {
+    const query = new URLSearchParams();
+    if (params.offset !== undefined) query.set('offset', String(params.offset));
+    if (params.maxSize !== undefined) query.set('maxSize', String(params.maxSize));
+    if (params.status) query.set('status', params.status);
+    if (params.q) query.set('q', params.q);
+    if (params.scope) query.set('scope', params.scope);
+    const suffix = query.toString() === '' ? '' : `?${query.toString()}`;
+    return request<AIAgentListResult>(`/AIAgents/action/agents${suffix}`);
+  },
+  aiAgentsAgent: (id: string) => request<AIAgentView>(`/AIAgents/action/agents/${encodeURIComponent(id)}`),
+  aiAgentsCreateAgent: (input: Record<string, unknown>) => request<AIAgentView>('/AIAgents/action/agents', post(input)),
+  aiAgentsUpdateAgent: (id: string, input: Record<string, unknown>) =>
+    request<AIAgentView>(`/AIAgents/action/agents/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  aiAgentsValidate: (id: string) =>
+    request<AIAgentValidationReport>(`/AIAgents/action/agents/${encodeURIComponent(id)}/validate`),
+  aiAgentsPublish: (id: string, note?: string) =>
+    request<{ agent: AIAgentView; version: AIAgentVersionView; report: AIAgentValidationReport }>(
+      `/AIAgents/action/agents/${encodeURIComponent(id)}/publish`,
+      post({ note }),
+    ),
+  aiAgentsPause: (id: string) =>
+    request<AIAgentView>(`/AIAgents/action/agents/${encodeURIComponent(id)}/pause`, post({})),
+  aiAgentsResume: (id: string) =>
+    request<AIAgentView>(`/AIAgents/action/agents/${encodeURIComponent(id)}/resume`, post({})),
+  aiAgentsArchive: (id: string) =>
+    request<AIAgentView>(`/AIAgents/action/agents/${encodeURIComponent(id)}/archive`, post({})),
+  aiAgentsRestore: (id: string) =>
+    request<AIAgentView>(`/AIAgents/action/agents/${encodeURIComponent(id)}/restore`, post({})),
+  aiAgentsVersions: (id: string) =>
+    request<{ list: AIAgentVersionView[] }>(`/AIAgents/action/agents/${encodeURIComponent(id)}/versions`),
+  aiAgentsVersion: (id: string, version: number) =>
+    request<AIAgentVersionView & { config: AIAgentView['draftConfig'] }>(
+      `/AIAgents/action/agents/${encodeURIComponent(id)}/versions/${String(version)}`,
+    ),
+  aiAgentsRuns: (params: { offset?: number; maxSize?: number; status?: string; agentId?: string; scope?: 'mine' | 'all' } = {}) => {
+    const query = new URLSearchParams();
+    if (params.offset !== undefined) query.set('offset', String(params.offset));
+    if (params.maxSize !== undefined) query.set('maxSize', String(params.maxSize));
+    if (params.status) query.set('status', params.status);
+    if (params.agentId) query.set('agentId', params.agentId);
+    if (params.scope) query.set('scope', params.scope);
+    const suffix = query.toString() === '' ? '' : `?${query.toString()}`;
+    return request<AIAgentRunListResult>(`/AIAgents/action/runs${suffix}`);
+  },
+  aiAgentsRun: (id: string) => request<AIAgentRunView>(`/AIAgents/action/runs/${encodeURIComponent(id)}`),
+  aiAgentsRunEvents: (id: string) =>
+    request<{ list: AIAgentRunEventView[] }>(`/AIAgents/action/runs/${encodeURIComponent(id)}/events`),
+  aiAgentsRunToolCalls: (id: string) =>
+    request<{ list: AIAgentRunToolCallView[] }>(`/AIAgents/action/runs/${encodeURIComponent(id)}/toolCalls`),
+  aiAgentsRunsForAgent: (agentId: string) =>
+    request<AIAgentRunListResult>(`/AIAgents/action/runs?agentId=${encodeURIComponent(agentId)}&maxSize=50`),
+  aiAgentsCreateRun: (agentId: string, input: { text?: string; record?: { entity: string; id: string } }, idempotencyKey?: string) =>
+    request<AIAgentRunView>(`/AIAgents/action/agents/${encodeURIComponent(agentId)}/runs`, post({ input, idempotencyKey })),
+  aiAgentsCancelRun: (id: string) =>
+    request<AIAgentRunView>(`/AIAgents/action/runs/${encodeURIComponent(id)}/cancel`, post({})),
+  aiAgentsExecuteRun: (id: string) =>
+    request<{ run: AIAgentRunView; claimed: boolean; waitingForApproval: boolean }>(
+      `/AIAgents/action/runs/${encodeURIComponent(id)}/execute`,
+      post({}),
+    ),
+  aiAgentsApprovals: (params: { status?: string; runId?: string; agentId?: string } = {}) => {
+    const query = new URLSearchParams();
+    if (params.status) query.set('status', params.status);
+    if (params.runId) query.set('runId', params.runId);
+    if (params.agentId) query.set('agentId', params.agentId);
+    const suffix = query.toString() === '' ? '' : `?${query.toString()}`;
+    return request<AIAgentApprovalListResult>(`/AIAgents/action/approvals${suffix}`);
+  },
+  aiAgentsRunApprovals: (runId: string) =>
+    request<{ list: AIAgentApprovalView[] }>(`/AIAgents/action/runs/${encodeURIComponent(runId)}/approvals`),
+  aiAgentsApprove: (id: string, note?: string) =>
+    request<{ approval: AIAgentApprovalView; resumed: boolean }>(
+      `/AIAgents/action/approvals/${encodeURIComponent(id)}/approve`,
+      post({ note }),
+    ),
+  aiAgentsReject: (id: string, note?: string) =>
+    request<{ approval: AIAgentApprovalView; resumed: boolean }>(
+      `/AIAgents/action/approvals/${encodeURIComponent(id)}/reject`,
+      post({ note }),
+    ),
+  aiAgentsUsage: () => request<AIAgentUsageView>('/AIAgents/action/usage'),
   serviceDeskSettings: () => request<ModuleSettingsView>('/ServiceDesk/action/settings'),
   saveServiceDeskSettings: (input: Record<string, unknown>) => request<ModuleSettingsView>('/ServiceDesk/action/settings', post(input)),
   customerSuccessSettings: () => request<ModuleSettingsView>('/CustomerSuccess/action/settings'),

@@ -8,6 +8,7 @@ import { createPool, errorMessage, type Queryable } from './db.js';
 import type { WorkerConfig } from './env.js';
 import { DomainEventBus } from './events/domain-event-bus.js';
 import { loadExtensionConfig } from './extensions.js';
+import { registerAIAgentJobs } from './handlers/ai-agent-handlers.js';
 import { registerCustomerSuccessJobs } from './handlers/customer-success-handlers.js';
 import { registerSystemJobs } from './handlers/job-handlers.js';
 import { registerMailJobs } from './handlers/mail-handlers.js';
@@ -113,6 +114,13 @@ export class WorkerApplication {
     // Phase 19-MA.9/MA.13: the delivery batch (queued sends and the cron sweep) and the due-step scan
     // run in the API on these schedules. The jobs are inert when no worker capability is configured.
     registerMarketingJobs(this.jobRegistry, {
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
+      log: this.log,
+    });
+    // Phase 19-AI.7: a run is enqueued when created; the engine and its lease stay in the API. The
+    // handler is inert without a worker capability, exactly like the other module jobs.
+    registerAIAgentJobs(this.jobRegistry, {
       apiBaseUrl: this.config.apiBaseUrl,
       secret: this.config.reportWorkerSecret,
       log: this.log,

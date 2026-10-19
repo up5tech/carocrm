@@ -1,18 +1,29 @@
-import { InvalidQueryError } from '@carocrm/core/errors/index.js';
+import { timingSafeEqual } from 'node:crypto';
+
+import { AuthenticationFailedError, InvalidQueryError } from '@carocrm/core/errors/index.js';
 import {
   Body,
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   Inject,
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
 
+import { Public } from '../auth/auth.guard.js';
+import { type AppConfig, CONFIG_TOKEN } from '../config.js';
+import type { ApprovalStatusFilter } from './ai-agent-approvals.service.js';
+import { AIAgentApprovalService } from './ai-agent-approvals.service.js';
+import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
+import { AIAgentRunService } from './ai-agent-runs.service.js';
+import { AGENT_STATUSES, type AgentStatus, type RunStatus } from './ai-agents-module.js';
 import { AIAgentsModuleHealthService } from './ai-agents-module-health.service.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 import { AIAgentsPolicyService } from './ai-agents-policy.service.js';
@@ -20,9 +31,15 @@ import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 import { AIProviderConnectionService } from './ai-provider-connections.service.js';
 import { AIProviderGateway } from './ai-provider-gateway.service.js';
 import {
+  AgentCreateSchema,
+  AgentPublishSchema,
+  AgentUpdateSchema,
+  ApprovalDecisionSchema,
+  EmptyBodySchema,
   ProviderCheckSchema,
   ProviderConnectionCreateSchema,
   ProviderConnectionPatchSchema,
+  RunCreateSchema,
 } from './dto/ai-agents-shapes.js';
 
 /**
@@ -49,6 +66,10 @@ export class AIAgentsController {
     @Inject(AIAgentsSettingsService) private readonly settings: AIAgentsSettingsService,
     @Inject(AIProviderConnectionService) private readonly connections: AIProviderConnectionService,
     @Inject(AIProviderGateway) private readonly gateway: AIProviderGateway,
+    @Inject(AIAgentDefinitionService) private readonly agents: AIAgentDefinitionService,
+    @Inject(AIAgentRunService) private readonly runs: AIAgentRunService,
+    @Inject(AIAgentApprovalService) private readonly approvals: AIAgentApprovalService,
+    @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
 
   /** Module diagnostics. The caller must be allowed to use the module at all. */
@@ -137,6 +158,292 @@ export class AIAgentsController {
     const input = parse(ProviderCheckSchema, body);
     return this.gateway.check(key, input);
   }
+
+  // -------------------------------------------------------------------------
+  // 19-AI.5 — agent definitions, versions and lifecycle
+  // -------------------------------------------------------------------------
+
+  /** The registered tool catalogue, with its effect class and global enabled state. */
+  @Get('action/tools')
+  async listTools() {
+    return this.agents.permissionSummary();
+  }
+
+  /** Reviewed read-only starters for the first end-to-end agent (19-AI.8). */
+  @Get('action/templates')
+  async listTemplates() {
+    return this.agents.templates();
+  }
+
+  @Get('action/agents')
+  async listAgents(@Query() query: unknown) {
+    const q = asRecord(query);
+    const status = typeof q['status'] === 'string' ? q['status'] : undefined;
+    if (status !== undefined && !(AGENT_STATUSES as readonly string[]).includes(status)) {
+      throw new InvalidQueryError('Unknown agent status.');
+    }
+    return this.agents.list({
+      offset: numberOrUndefined(q['offset']),
+      maxSize: numberOrUndefined(q['maxSize']),
+      ...(status === undefined ? {} : { status: status as AgentStatus }),
+      ...(typeof q['q'] === 'string' ? { q: q['q'] } : {}),
+      ...(q['scope'] === 'mine' ? { scope: 'mine' } : {}),
+    });
+  }
+
+  @Get('action/agents/:id')
+  async getAgent(@Param('id') id: string) {
+    return this.agents.get(id);
+  }
+
+  @Post('action/agents')
+  async createAgent(@Body() body: unknown) {
+    const input = parse(AgentCreateSchema, body);
+    return this.agents.create(input);
+  }
+
+  @Patch('action/agents/:id')
+  async updateAgent(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(AgentUpdateSchema, body);
+    return this.agents.update(id, input);
+  }
+
+  @Delete('action/agents/:id')
+  async removeAgent(@Param('id') id: string) {
+    return this.agents.remove(id);
+  }
+
+  @Get('action/agents/:id/versions')
+  async agentVersions(@Param('id') id: string) {
+    return this.agents.versions(id);
+  }
+
+  @Get('action/agents/:id/versions/:version')
+  async agentVersion(@Param('id') id: string, @Param('version') version: string) {
+    const parsed = Number(version);
+    if (!Number.isInteger(parsed) || parsed <= 0) throw new InvalidQueryError('Invalid version number.');
+    return this.agents.version(id, parsed);
+  }
+
+  /** The blocking findings and warnings publication would act on. Safe to call while drafting. */
+  @Get('action/agents/:id/validate')
+  async validateAgent(@Param('id') id: string) {
+    return this.agents.validate(id);
+  }
+
+  @HttpCode(200)
+  @Post('action/agents/:id/validate')
+  async validateAgentPost(@Param('id') id: string) {
+    return this.agents.validate(id);
+  }
+
+  @HttpCode(200)
+  @Post('action/agents/:id/publish')
+  async publishAgent(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(AgentPublishSchema, body);
+    return this.agents.publish(id, input.note);
+  }
+
+  @HttpCode(200)
+  @Post('action/agents/:id/pause')
+  async pauseAgent(@Param('id') id: string, @Body() body: unknown) {
+    parse(EmptyBodySchema, body);
+    return this.agents.pause(id);
+  }
+
+  @HttpCode(200)
+  @Post('action/agents/:id/resume')
+  async resumeAgent(@Param('id') id: string, @Body() body: unknown) {
+    parse(EmptyBodySchema, body);
+    return this.agents.resume(id);
+  }
+
+  @HttpCode(200)
+  @Post('action/agents/:id/archive')
+  async archiveAgent(@Param('id') id: string, @Body() body: unknown) {
+    parse(EmptyBodySchema, body);
+    return this.agents.archive(id);
+  }
+
+  /** Archived -> draft. Copies the published config into the draft; no version row is mutated. */
+  @HttpCode(200)
+  @Post('action/agents/:id/restore')
+  async restoreAgent(@Param('id') id: string, @Body() body: unknown) {
+    parse(EmptyBodySchema, body);
+    return this.agents.restore(id);
+  }
+
+  // -------------------------------------------------------------------------
+  // 19-AI.7/19-AI.8 — runs, timelines and execution
+  // -------------------------------------------------------------------------
+
+  @Get('action/runs')
+  async listRuns(@Query() query: unknown) {
+    const q = asRecord(query);
+    const status = typeof q['status'] === 'string' ? q['status'] : undefined;
+    if (status !== undefined && !(RUN_STATUS_SET as ReadonlySet<string>).has(status)) {
+      throw new InvalidQueryError('Unknown run status.');
+    }
+    return this.runs.list({
+      offset: numberOrUndefined(q['offset']),
+      maxSize: numberOrUndefined(q['maxSize']),
+      ...(status === undefined ? {} : { status: status as RunStatus }),
+      ...(typeof q['agentId'] === 'string' ? { agentId: q['agentId'] } : {}),
+      ...(q['scope'] === 'all' ? { scope: 'all' as const } : {}),
+    });
+  }
+
+  @Post('action/agents/:id/runs')
+  async createRun(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(RunCreateSchema, body);
+    return this.runs.create(id, input);
+  }
+
+  @Get('action/runs/:id')
+  async getRun(@Param('id') id: string) {
+    return this.runs.get(id);
+  }
+
+  @Get('action/runs/:id/events')
+  async runEvents(@Param('id') id: string) {
+    return this.runs.events(id);
+  }
+
+  @Get('action/runs/:id/toolCalls')
+  async runToolCalls(@Param('id') id: string) {
+    return this.runs.toolCalls(id);
+  }
+
+  @HttpCode(200)
+  @Post('action/runs/:id/cancel')
+  async cancelRun(@Param('id') id: string, @Body() body: unknown) {
+    parse(EmptyBodySchema, body);
+    return this.runs.cancel(id);
+  }
+
+  /** An administrator (or the user who owns the run) can re-attempt a queued run by hand. */
+  @HttpCode(200)
+  @Post('action/runs/:id/execute')
+  async executeRun(@Param('id') id: string, @Body() body: unknown) {
+    parse(EmptyBodySchema, body);
+    // Visibility is the authorization: get() refuses a run this caller may not see.
+    await this.runs.get(id);
+    return this.runs.execute(id);
+  }
+
+  /**
+   * The worker's door (19-AI.7). The worker has no session, so `@Public()` skips session
+   * authentication and the shared worker capability is the authorization — constant-time compared and
+   * refused when the deployment has not configured it. The run engine re-checks every claim, so a
+   * duplicated dispatch is a no-op.
+   */
+  @Public()
+  @HttpCode(200)
+  @Post('action/worker/runs/:id/execute')
+  async executeRunForWorker(@Param('id') id: string, @Headers('x-worker-secret') secret?: string) {
+    this.assertWorkerSecret(secret);
+    return this.runs.execute(id);
+  }
+
+  @Get('action/usage')
+  async usage() {
+    return this.runs.usage();
+  }
+
+  // -------------------------------------------------------------------------
+  // 19-AI.10 — approvals
+  // -------------------------------------------------------------------------
+
+  @Get('action/approvals')
+  async listApprovals(@Query() query: unknown) {
+    const q = asRecord(query);
+    const status = typeof q['status'] === 'string' ? q['status'] : 'pending';
+    const allowed: readonly string[] = [
+      'pending',
+      'approved',
+      'rejected',
+      'changes_requested',
+      'expired',
+      'invalidated',
+      'executed',
+      'all',
+    ];
+    if (!allowed.includes(status)) throw new InvalidQueryError('Unknown approval status.');
+    return this.approvals.list({
+      status: status as ApprovalStatusFilter,
+      offset: numberOrUndefined(q['offset']),
+      maxSize: numberOrUndefined(q['maxSize']),
+      ...(typeof q['runId'] === 'string' ? { runId: q['runId'] } : {}),
+      ...(typeof q['agentId'] === 'string' ? { agentId: q['agentId'] } : {}),
+    });
+  }
+
+  @Get('action/runs/:id/approvals')
+  async runApprovals(@Param('id') id: string) {
+    return this.approvals.forRun(id);
+  }
+
+  @Get('action/approvals/:id')
+  async getApproval(@Param('id') id: string) {
+    return this.approvals.get(id);
+  }
+
+  @HttpCode(200)
+  @Post('action/approvals/:id/approve')
+  async approve(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(ApprovalDecisionSchema, body);
+    return this.approvals.approve(id, input.note);
+  }
+
+  @HttpCode(200)
+  @Post('action/approvals/:id/reject')
+  async reject(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(ApprovalDecisionSchema, body);
+    return this.approvals.reject(id, input.note);
+  }
+
+  private assertWorkerSecret(supplied: string | undefined): void {
+    const expected = this.config.reportWorkerSecret;
+    if (expected === '' || supplied === undefined) {
+      throw new AuthenticationFailedError('Invalid worker capability.');
+    }
+    const expectedBytes = Buffer.from(expected);
+    const suppliedBytes = Buffer.from(supplied);
+    if (expectedBytes.length !== suppliedBytes.length || !timingSafeEqual(expectedBytes, suppliedBytes)) {
+      throw new AuthenticationFailedError('Invalid worker capability.');
+    }
+  }
+}
+
+const RUN_STATUS_SET: ReadonlySet<string> = new Set([
+  'queued',
+  'running',
+  'waiting_for_approval',
+  'waiting_for_input',
+  'retry_wait',
+  'cancel_requested',
+  'succeeded',
+  'partially_succeeded',
+  'failed',
+  'canceled',
+  'expired',
+  'blocked_by_policy',
+  'outcome_unknown',
+]);
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function numberOrUndefined(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
 }
 
 function parse<T extends ZodTypeAny>(schema: T, body: unknown): T['_output'] {

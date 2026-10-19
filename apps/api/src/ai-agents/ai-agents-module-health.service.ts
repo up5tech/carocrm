@@ -190,11 +190,13 @@ export class AIAgentsModuleHealthService {
           : 'Execution is disabled; run creation is refused until features.execution is enabled.',
       },
       {
+        // A default provider is a convenience for templates, not a prerequisite: a published agent
+        // names its own connection, so an unset default must not darken the module's health.
         name: 'default-provider',
-        ok: !settingsView.settings.features.execution || defaultResolvable,
+        ok: defaultKey === null || defaultResolvable,
         detail:
           defaultKey === null
-            ? 'No default provider connection is configured.'
+            ? 'No default provider connection is configured; agents must name an enabled connection before publishing.'
             : defaultResolvable
               ? `The default provider "${defaultKey}" is enabled.`
               : `The default provider "${defaultKey}" is missing or disabled.`,

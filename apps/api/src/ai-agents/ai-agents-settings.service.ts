@@ -71,6 +71,8 @@ export const AIAgentsSettingsSchema = z
       .object({
         /** Effect classes that always require a human decision (§9.2). */
         requireFor: z.array(EffectClassSchema).default(['material_write', 'high_impact']),
+        /** How long a pending approval stays actionable; an expired request cannot execute. */
+        ttlMinutes: z.number().int().min(1).max(1_440).default(60),
       })
       .strict()
       .default({}),
@@ -87,6 +89,16 @@ export const AIAgentsSettingsSchema = z
       .object({
         globalExecutionPaused: z.boolean().default(false),
         reason: z.string().trim().max(500).nullable().default(null),
+      })
+      .strict()
+      .default({}),
+    tools: z
+      .object({
+        /**
+         * Tool keys an administrator has switched off globally (§7.1 `enabled`). A disabled tool is
+         * refused at publication and is not offered to a model even if a published version granted it.
+         */
+        disabled: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
       })
       .strict()
       .default({}),

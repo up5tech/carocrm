@@ -24,6 +24,9 @@
     "no": "Không",
     "refresh": "Tải lại",
     "reload": "Tải lại",
-    "cancel": "Hủy"
+    "cancel": "Hủy",
+    "save": "Lưu",
+    "confirm": "Xác nhận",
+    "close": "Đóng"
   }
 }

@@ -24,6 +24,9 @@
     "no": "No",
     "refresh": "Refresh",
     "reload": "Reload",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "save": "Save",
+    "confirm": "Confirm",
+    "close": "Close"
   }
 }

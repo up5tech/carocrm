@@ -1344,3 +1344,261 @@ export interface AIAgentsCapabilitiesView {
   }[];
   readonly execution: { readonly enabled: boolean; readonly paused: boolean; readonly available: boolean };
 }
+
+/** Phase 19-AI.4: a provider connection as the admin API returns it. Never contains a credential. */
+export interface AIAgentsProviderConnection {
+  readonly id: string;
+  readonly key: string;
+  readonly kind: string;
+  readonly label: string;
+  readonly baseUrl: string;
+  readonly models: readonly string[];
+  readonly dataClasses: readonly string[];
+  readonly hasApiKey: boolean;
+  readonly config: { readonly allowLoopback: boolean; readonly organization?: string };
+  readonly enabled: boolean;
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}
+
+/** Phase 19-AI.5–19-AI.10: definition, run and approval surfaces. */
+export interface AIAgentToolView {
+  readonly key: string;
+  readonly label: string;
+  readonly effectClass: string;
+  readonly requiresApproval: boolean;
+  readonly enabled: boolean;
+}
+
+export interface AIAgentVersionView {
+  readonly id: string;
+  readonly version: number;
+  readonly checksum: string;
+  readonly providerKey: string | null;
+  readonly model: string | null;
+  readonly publishedById: string | null;
+  readonly publishedAt: string;
+  readonly note: string | null;
+  readonly tools: readonly AIAgentToolView[];
+}
+
+export interface AIAgentConfigShape {
+  readonly provider?: { key: string; model: string; fallbackModels: readonly string[] };
+  readonly dataClass: string;
+  readonly prompt: { system: string; inputHint?: string };
+  readonly input: { mode: 'text' | 'record'; entity?: string };
+  readonly tools: readonly { key: string; constraints?: Record<string, unknown> }[];
+  readonly limits: {
+    maxSteps: number;
+    maxModelCalls: number;
+    maxToolCalls: number;
+    maxTokens: number;
+    maxCostUsd: number;
+    maxElapsedSeconds: number;
+    maxRetries: number;
+    maxOutputTokens: number;
+    temperature: number;
+  };
+  readonly output: { mode: 'text' | 'json'; schema?: Record<string, unknown> };
+  readonly memory: { mode: 'none' };
+  readonly triggers: { manual: boolean; record: boolean; event: boolean; schedule: boolean; integration: boolean };
+  readonly approval: { requireFor: readonly string[] };
+}
+
+export interface AIAgentConfigIssue {
+  readonly path: string;
+  readonly message: string;
+}
+
+export interface AIAgentView {
+  readonly id: string;
+  readonly key: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly purpose: string | null;
+  readonly category: string | null;
+  readonly icon: string | null;
+  readonly visibility: string;
+  readonly teamId: string | null;
+  readonly ownerUserId: string | null;
+  readonly status: 'draft' | 'published' | 'paused' | 'archived';
+  readonly dataSensitivity: string;
+  readonly currentVersion: number | null;
+  readonly hasUnpublishedChanges: boolean;
+  readonly draftConfig: AIAgentConfigShape;
+  readonly configIssues: readonly AIAgentConfigIssue[];
+  readonly inputHint: string | null;
+  readonly tools: readonly AIAgentToolView[];
+  readonly capabilities: {
+    readonly editDraft: boolean;
+    readonly publish: boolean;
+    readonly lifecycle: boolean;
+    readonly run: boolean;
+  };
+  readonly latestVersion: AIAgentVersionView | null;
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}
+
+export interface AIAgentListResult {
+  readonly list: readonly AIAgentView[];
+  readonly total: number;
+  readonly offset: number;
+  readonly count: number;
+}
+
+export interface AIAgentValidationReport {
+  readonly ok: boolean;
+  readonly issues: readonly { readonly code: string; readonly path: string; readonly message: string; readonly blocking: boolean }[];
+  readonly checks: readonly { readonly id: string; readonly ok: boolean; readonly detail: string }[];
+}
+
+export interface AIAgentToolCatalogue {
+  readonly tools: readonly { readonly key: string; readonly label: string; readonly effectClass: string; readonly enabled: boolean }[];
+}
+
+export interface AIAgentTemplate {
+  readonly key: string;
+  readonly name: string;
+  readonly description: string;
+  readonly icon: string;
+  readonly config: AIAgentConfigShape;
+}
+
+export type AIAgentRunStatus =
+  | 'queued'
+  | 'running'
+  | 'waiting_for_approval'
+  | 'waiting_for_input'
+  | 'retry_wait'
+  | 'cancel_requested'
+  | 'succeeded'
+  | 'partially_succeeded'
+  | 'failed'
+  | 'canceled'
+  | 'expired'
+  | 'blocked_by_policy'
+  | 'outcome_unknown';
+
+export interface AIAgentRunView {
+  readonly id: string;
+  readonly agentId: string;
+  readonly agentKey: string;
+  readonly agentName: string;
+  readonly agentVersion: number;
+  readonly agentVersionId: string;
+  readonly status: AIAgentRunStatus;
+  readonly trigger: string;
+  readonly initiatedByUserId: string | null;
+  readonly input: { readonly text: string | null; readonly recordEntity: string | null; readonly recordId: string | null };
+  readonly result: unknown;
+  readonly failureCategory: string | null;
+  readonly failureMessage: string | null;
+  readonly cancelRequested: boolean;
+  readonly counters: {
+    readonly steps: number;
+    readonly modelCalls: number;
+    readonly toolCalls: number;
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+    readonly estimatedCostUsd: number;
+  };
+  readonly startedAt: string | null;
+  readonly finishedAt: string | null;
+  readonly expiresAt: string | null;
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}
+
+export interface AIAgentRunListResult {
+  readonly list: readonly AIAgentRunView[];
+  readonly total: number;
+  readonly offset: number;
+  readonly count: number;
+}
+
+export interface AIAgentRunEventView {
+  readonly id: string;
+  readonly seq: number;
+  readonly category: string;
+  readonly type: string;
+  readonly actorType: string;
+  readonly actorId: string | null;
+  readonly summary: string;
+  readonly payload: unknown;
+  readonly visibility: string;
+  readonly createdAt: string;
+}
+
+export interface AIAgentRunToolCallView {
+  readonly id: string;
+  readonly step: number;
+  readonly toolKey: string;
+  readonly policyResult: string;
+  readonly status: string;
+  readonly summary: string | null;
+  readonly errorCategory: string | null;
+  readonly durationMs: number | null;
+  readonly resultRef: string | null;
+  readonly createdAt: string;
+}
+
+export interface AIAgentApprovalView {
+  readonly id: string;
+  readonly runId: string;
+  readonly agentId: string;
+  readonly agentName: string;
+  readonly agentVersion: number;
+  readonly toolKey: string | null;
+  readonly actionClass: string;
+  readonly riskLevel: string;
+  readonly summary: string;
+  readonly proposal: unknown;
+  readonly targets: unknown;
+  readonly status: string;
+  readonly requestedByUserId: string | null;
+  readonly decidedByUserId: string | null;
+  readonly decidedAt: string | null;
+  readonly decisionNote: string | null;
+  readonly revalidation: unknown;
+  readonly executionResult: unknown;
+  readonly expiresAt: string;
+  readonly createdAt: string;
+  readonly selfApproval: boolean;
+}
+
+export interface AIAgentApprovalListResult {
+  readonly list: readonly AIAgentApprovalView[];
+  readonly total: number;
+  readonly offset: number;
+  readonly count: number;
+  readonly expired: number;
+}
+
+export interface AIAgentUsageView {
+  readonly totals: {
+    readonly runs: number;
+    readonly modelCalls: number;
+    readonly toolCalls: number;
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+    readonly estimatedCostUsd: number;
+  };
+  readonly byAgent: readonly {
+    readonly agentId: string;
+    readonly agentName: string;
+    readonly runs: number;
+    readonly modelCalls: number;
+    readonly toolCalls: number;
+    readonly tokens: number;
+  }[];
+  readonly byProvider: readonly {
+    readonly providerKey: string;
+    readonly model: string;
+    readonly requests: number;
+    readonly failures: number;
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+    readonly averageLatencyMs: number;
+  }[];
+}

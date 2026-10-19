@@ -21,8 +21,10 @@ import {
  *  - `__FAKE_ERROR__:<category>` throws that normalized error;
  *  - `__FAKE_DELAY__:<ms>` waits (respecting cancellation and the timeout);
  *  - with a JSON-schema response format it returns `{"ok":true}`;
- *  - with tools it returns no tool call unless the prompt names `__FAKE_TOOL__:<tool>`,
- *    in which case it proposes that tool with `{"query":"fake"}`.
+ *  - with tools it returns no tool call unless the prompt names `__FAKE_TOOL__:<tool>`, in which
+ *    case it proposes that tool. Arguments default to `{"query":"fake"}` and can be supplied after
+ *    `__FAKE_TOOL_ARGS__:` on the same line as JSON, which lets a test exercise a real registry tool
+ *    without inventing a second provider.
  *
  * The registry registers this adapter **only outside production** (`AIAgentsModule` factory), so an
  * administrator cannot configure a fake provider on a live deployment.
@@ -72,7 +74,13 @@ export class FakeProviderAdapter implements AIProviderAdapter {
     const toolCalls =
       toolName === null
         ? []
-        : [{ id: 'fake_call_1', name: toolName, rawArguments: '{"query":"fake"}' }];
+        : [
+            {
+              id: 'fake_call_1',
+              name: toolName,
+              rawArguments: extractJsonAfter(prompt, '__FAKE_TOOL_ARGS__:') ?? '{"query":"fake"}',
+            },
+          ];
 
     let structured: unknown | null = null;
     if (request.responseFormat?.type === 'json_schema') structured = { ok: true };
@@ -106,6 +114,34 @@ function extract(prompt: string, marker: string): string | null {
   const rest = prompt.slice(index + marker.length);
   const match = rest.match(/^[A-Za-z0-9_.-]+/);
   return match?.[0] ?? null;
+}
+
+/** Test-only convenience: `__FAKE_TOOL_ARGS__:{"entity":"Account"}` becomes the raw arguments. */
+function extractJsonAfter(prompt: string, marker: string): string | null {
+  const index = prompt.indexOf(marker);
+  if (index < 0) return null;
+  const rest = prompt.slice(index + marker.length).trimStart();
+  if (!rest.startsWith('{')) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let position = 0; position < rest.length; position += 1) {
+    const char = rest[position];
+    if (char === undefined) break;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    else if (char === '{') depth += 1;
+    else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return rest.slice(0, position + 1);
+    }
+  }
+  return null;
 }
 
 function lastUserContent(request: AIProviderRequest): string {
