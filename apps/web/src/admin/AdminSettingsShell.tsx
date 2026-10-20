@@ -2,11 +2,11 @@ import { App as AntApp, Button, Skeleton, Typography } from 'antd';
 import { Suspense, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import type { AdminPanelTab } from '../api/types.js';
 import { EmptyState } from '../components/EmptyState.js';
+import { navIcon } from '../components/entityIcons.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
-import type { AdminPanelTab } from '../api/types.js';
-import { navIcon } from '../components/entityIcons.js';
 import { useAdminPanel } from '../state/admin.js';
 import { t } from '../state/i18n.js';
 import { SettingsShellProvider, useSettingsShellMeta, useSettingsShellState, useShellValue } from './shell.js';

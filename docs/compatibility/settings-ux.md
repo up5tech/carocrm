@@ -74,3 +74,73 @@ the upstream file layout, and copies no upstream source, asset or translation.
 - The menu preview renders the *current caller's* tree. "Preview as another principal" (plan §4.4) needs
   a server-side impersonation parameter and is not built.
 - Favorites, per-user UI preferences and role-scoped default menus are §5.1/§5.9 work (20.10, 20.15).
+
+## Known limitations after sub-phases 20.11–20.17
+
+The end-user UX half of the phase (20.11–20.16) is built, with the following parts of the plan's
+§5 explicitly deferred. Each of them is a gap in the shipped behaviour, not a deviation from upstream
+behaviour, so none of them is an EspoCRM compatibility question.
+
+### List view (§5.3)
+
+- **"Select all N matching records"** is not built. The header checkbox selects the rows of the
+  current page only; there is no cross-page selection and no count of matching records.
+- **Bulk actions report a count of records, not a count of outcomes.** Only mass delete is wired;
+  mass assign and mass update are not, so "48 updated, 2 skipped (no permission)" is not a shape the
+  list page can produce. The undo toast restores the rows the action deleted.
+- **The row kebab menu** (§5.3 "Row actions") is not built. The row action column offers Edit and
+  Delete; Open, Assign and Follow are absent, and the contents are not permission-filtered
+  server-side.
+- **Column reorder, resize and freeze** are not built. The column manager toggles visibility per
+  entity and persists it in the `columns` preference; the order still comes from the entity's `list`
+  layout.
+- **Table ergonomics** — no sticky table header, no frozen identifier column, no tabular figures and
+  no virtualization at 2 000+ rows. The table renders every row of the page.
+- **The undo toast has no timeout.** It stays until the next action replaces it.
+
+### Record page and forms (§5.4, §5.5)
+
+- **The sticky header and the next-action band are deferred.** The record title, status, owner and
+  the primary action are not pinned to a sticky header, and there is no computed "Log a call / Create
+  invoice / Advance stage" band. Both need a stable record header component and an activity model to
+  be reliable.
+- **Progressive disclosure is not built.** The detail page renders its panels in one column; there
+  are no collapsible or tabbed variants.
+- **"Save & new" is not built.** The edit form offers Save and Cancel.
+- **Focus is not moved to the first invalid field** after a failed save.
+
+### Favorites (§5.1)
+
+- **There is no Favorites UI.** The `favorites` preference is registered, validated and stored, but
+  no screen writes or reads it, so there is no pinned group at the top of the sidebar. The command
+  palette's Recent mode is the substitute for "recently visited".
+
+### Command palette (§5.2)
+
+- The palette opens with `⌘/Ctrl + K` only. The plan's `/` shortcut is not implemented.
+- Results are capped at 12 per group rather than the plan's 20, and there is no "see all" deep link.
+- The Recent mode is in-memory for the session; it is not the server-persisted `lastVisited`
+  preference.
+
+### Shared states and accessibility (§5.7, §5.8)
+
+- **`PermissionDenied.tsx` and `HelpTip.tsx` are not used by any page.** The shared components exist,
+  but the permission-denied state of §5.7 is applied only inside the settings shell; other pages
+  still render their own markup. `EmptyState`, `LoadingSkeleton` and `ErrorState` are used by the
+  settings shell, the list page and the dashboards page.
+- **There is no automated axe audit** on the four core surfaces, and there is no frontend test
+  runner in this repository at all (`vitest.config.ts` covers `apps/api/test` and `packages/*/src`
+  only). The accessibility pass is a manual keyboard walkthrough plus a responsive check at 1440 px,
+  768 px and 390 px. The plan's acceptance criterion "axe passes on the four core surfaces" is
+  therefore **not met**.
+- **No Playwright spec covers the plan's §13.5 scenarios** (1–6); `e2e/` holds specs for the
+  earlier modules only.
+- **Contrast was not measured.** The palette uses the Ant Design token set; no contrast audit was
+  run against the `carocrm-*` layer.
+
+### Documentation
+
+- `docs/ux/design-principles.md`, `docs/ux/list-view.md`, `docs/ux/record-page.md` and
+  `docs/ux/accessibility.md` were added with the 20.17 hardening pass. They describe the shipped
+  behaviour and name the gaps above.
+

@@ -107,6 +107,17 @@ export function EntityListPage() {
   const panels = useMemo(() => layoutPanelsFor(definition.data, 'list'), [definition.data]);
   const columns = useMemo(() => orderByLayout(listEntries(definition.data), panels), [definition.data, panels]);
   const filterable = useMemo(() => filterEntries(definition.data), [definition.data]);
+  // §20.12: user-chosen columns per entity, persisted server-side via /Preferences/columns.
+  // This hook must stay above the loading/error early returns below — a hook that only runs once
+  // the metadata has arrived changes the hook order between renders and React tears the page down.
+  const columnPref = usePreference<Record<string, string[]>>('columns');
+  const visibleColumns = useMemo(() => {
+    if (!entityName) return columns;
+    const saved = columnPref.value?.[entityName];
+    if (!saved || saved.length === 0) return columns;
+    const savedSet = new Set(saved);
+    return columns.filter((entry) => savedSet.has(entry.name));
+  }, [columns, columnPref.value, entityName]);
 
   const caseInboxViews = useMemo(() => ([
     { key: 'all', label: t('web.serviceDesk.inbox.all'), drafts: [] as FilterDraft[] },
@@ -331,16 +342,6 @@ export function EntityListPage() {
   // The board groups by an enum field, so an entity without one has no board to switch to.
   const canBoard = boardGroupFields(definition.data).length > 0;
 
-  // §20.12: user-chosen columns per entity, persisted server-side via /Preferences/columns
-  const columnPref = usePreference<Record<string, string[]>>('columns');
-  const visibleColumns = useMemo(() => {
-    if (!entityName) return columns;
-    const saved = columnPref.value?.[entityName];
-    if (!saved || saved.length === 0) return columns;
-    const savedSet = new Set(saved);
-    return columns.filter((entry) => savedSet.has(entry.name));
-  }, [columns, columnPref.value, entityName]);
-
   return (
     <Card className="carocrm-card carocrm-list-card">
       <div className="carocrm-list-head">
@@ -371,10 +372,13 @@ export function EntityListPage() {
               selectable: true,
               selectedKeys: visibleColumns.map((c) => c.name),
               onClick: ({ key }: { key: string }) => {
+                const added = columns.find((c) => c.name === key);
+                if (added === undefined) return;
                 const next = visibleColumns.some((c) => c.name === key)
                   ? visibleColumns.filter((c) => c.name !== key)
-                  : [...visibleColumns, columns.find((c) => c.name === key)!];
-                columnPref.save({ ...(columnPref.value ?? {}), [entityName!]: next.map((c) => c.name) });
+                  : [...visibleColumns, added];
+                if (entityName === undefined) return;
+                columnPref.save({ ...(columnPref.value ?? {}), [entityName]: next.map((c) => c.name) });
               },
             }}
             trigger={['click']}

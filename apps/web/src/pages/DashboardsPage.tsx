@@ -48,7 +48,8 @@ export function DashboardsPage() {
       }
     }
     // Fallback: first shared or personal dashboard
-    if (!activeId && dashboards.length > 0) setActiveId(dashboards[0]!.id);
+    const first = dashboards[0];
+    if (!activeId && first !== undefined) setActiveId(first.id);
   }, [defaultDashboard.value, dashboards, principal, activeId]);
 
   const load = useCallback(async (): Promise<DashboardRow[]> => {

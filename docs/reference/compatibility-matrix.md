@@ -14,7 +14,7 @@ search/import/export/dashboards, the extension SDK, the workflow engine and the 
 | Field types | v9.3.x | varchar/text/int/float/decimal/bool/date/datetime/enum/multiEnum/currency/url/email/phone/password + link kinds | P0 | implemented subset |
 | Relations | v9.3.x | link, linkMultiple, oneToMany/manyToOne via link attributes + `entity_links` | P0 | implemented |
 | ACL (entity/record/field) | v9.3.x | `yes/all/team/own/no`, role merge, field read/edit, record predicates | P0 | implemented |
-| Roles / Teams / Users | v9.3.x | REST + storage; no admin UI yet | P0 | partial (API only) |
+| Roles / Teams / Users | v9.3.x | REST + storage + admin UI (users, teams, roles, API-key tabs in the settings shell) | P0 | implemented |
 | Authentication | v9.3.x | argon2id + JWT + rotating refresh + CSRF cookie; API keys hashed | P0 | implemented |
 | OAuth/OIDC, MFA, password reset | v9.3.x | not built | P1 | not started |
 | Attachments | v9.3.x | local-filesystem storage, MIME/size/extension checks, checksums | P0 | implemented |
@@ -26,7 +26,7 @@ search/import/export/dashboards, the extension SDK, the workflow engine and the 
 | Global search | v9.3.x | `/Search` over the query engine (ACL-aware) + trigram indexes; no OpenSearch stage 2 | P1 | implemented |
 | Import / Export | v9.3.x | CSV import with field mapping and a validation report, paged CSV export with formula neutralisation | P1 | implemented |
 | Dashboards / dashlets | v9.3.x | dashboards with list/chart/KPI dashlets driven by the query engine | P1 | implemented |
-| Frontend SPA | v9.3.x | React SPA: generic list/detail/edit/create, Entity Manager, audit, stream, calendar (Carocrm theme) | P0 (product) | implemented |
+| Frontend SPA | v9.3.x | React SPA: generic list/detail/edit/create, Entity Manager, audit, stream, calendar, tabbed settings shell, command palette (Carocrm theme) | P0 (product) | implemented |
 | Background jobs / scheduled jobs | v9.3.x | BullMQ worker, cron metadata, retries + backoff + dead letter, per-job progress and logs, cooperative cancellation, REST API and admin UI | P2 | implemented |
 | Formula engine | v9.3.x | sandboxed parser → AST → evaluator with an allowlisted function set and execution budgets (`@carocrm/formula`) | P2 | implemented |
 | Dynamic logic | v9.3.x | metadata `dynamicLogic.rules` evaluated in the SPA **and** on every API write | P2 | implemented |
@@ -296,3 +296,18 @@ documentation pass, and its templates, tags, mailbox accounts and feedback loop 
 | Non-member task collaborators | documented upstream | refused: collaborators must be project members | — | intentional deviation |
 | Gantt working-time shading | documented upstream | not built (no working-time calendar to reuse) | — | deferred |
 | Project cloning with date offset | documented upstream | transactional, id remapped, attachments copied after commit | P1 | implemented |
+
+## Phase 20 — Settings, administration and UX (added 2026-10-20)
+
+| Capability | Espo baseline | This implementation | Priority | State |
+|---|---|---|---|---|
+| Administration panel | `app > adminPanel` metadata, panels with an `itemList` | group + tab descriptors registered in code (`apps/api/src/admin-panel/admin-panel.service.ts`), served by `GET /AdminPanel`; a module contributes a tab without editing the shell | P0 | implemented, deviation in `docs/compatibility/settings-ux.md` |
+| Config-parameter visibility level | `default/global/admin/internal/system/superAdmin` + `readOnly` | `public` / `admin` / `sysAdmin` on each settings document; the instance has one administrative tier | P0 | implemented subset |
+| Settings documents | one `config` JSON | one `app_settings` row per document, with a schema, a version, optimistic concurrency and reset-to-default | P0 | implemented |
+| Main menu customization | client-side menu customization | server-resolved, ACL-filtered tree from `GET /Navigation`; the document stores overrides only | P0 | implemented |
+| Per-entity navigation metadata | `entityMenu` / module menu metadata | a `nav` section on the entity definition (`hidden/order/group/quickCreate/board`) | P0 | implemented |
+| User / team / role / API-key administration | separate screens under Administration | four tabs in the settings shell over the existing identity API; the secret exists only in the creating response | P1 | implemented |
+| Layout manager | `EntityLayoutManager` per entity | one shared `LayoutEditor` hosted by the Entity Manager and a settings tab | P1 | implemented subset |
+| Command palette | not an upstream feature | `⌘/Ctrl+K`, commands / records / recent modes, ACL-filtered records | P1 | implemented (this project's own) |
+| Per-user preferences | local browser storage | server-side `/Preferences` documents keyed `(user_id, name)`; ownership is structural | P1 | implemented |
+| Accessibility verification | not verified upstream | focus ring, 44 px targets, reduced motion, responsive breakpoints — **no automated axe audit, no frontend test runner** | P1 | partial, gaps in `docs/ux/accessibility.md` |

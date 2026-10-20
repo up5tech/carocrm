@@ -2770,11 +2770,22 @@ Do not put these directly into the kernel.
 
 ## Phase 20 — Settings, Administration and UX/UI
 
-Progress (2026-10-18): sub-phases 20.0–20.6 are implemented — settings document registry with
-versioning and optimistic concurrency, the tabbed administration shell, General / Localization /
-Main Menu tabs, the hosted Sales, Service Desk and Customer Success documents, `GET /Navigation`
-resolved and ACL-filtered on the server, and per-entity `nav` metadata. The remaining sub-phases
-(20.7–20.17) are open. See `docs/admin/settings.md`, `docs/admin/navigation.md`,
+Progress (2026-10-20): sub-phases 20.0–20.17 are implemented — the settings document registry with
+versioning and optimistic concurrency, the tabbed administration shell, the General / Localization /
+Main Menu / Layout / Attachments / Users / Teams / Roles / API keys / Security / Messaging / Internal
+tabs, the hosted Sales, Service Desk and Customer Success documents, `GET /Navigation` resolved and
+ACL-filtered on the server, per-entity `nav` metadata, per-user preferences, the shared state
+components, the list-view power pack, the record-page guard, the command palette, the setup
+checklist, and the accessibility/responsive pass.
+
+The remaining parts of the plan's §5 that are **not** built — cross-page "select all N matching
+records", bulk-action outcome counts, the row kebab menu, column reorder/resize/freeze, list
+virtualization, the Favorites group, the record-page sticky header and next-action band, "Save &
+new" — are listed as deferrals in `docs/compatibility/settings-ux.md`. There is no automated axe
+audit and no frontend test runner in this repository, so the plan's 20.16 acceptance criterion is
+not met; see `docs/ux/accessibility.md`.
+
+See `docs/admin/settings.md`, `docs/admin/navigation.md`, `docs/ux/`,
 `docs/compatibility/settings-ux.md` and `docs/reference/alpha-status.md`.
 
 Implement, as specified in `PLAN_Phase_20_Settings_UX.md`:

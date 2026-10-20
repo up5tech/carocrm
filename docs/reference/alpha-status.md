@@ -871,3 +871,55 @@ Verification actually run (all against the configured database, no extra databas
 Known limits are in `docs/compatibility/settings-ux.md`: `columns`, `favorites`, `lastVisited` and
 `dismissedSetupSteps` are stored and validated but have no editor or consumer yet — that is the 20.12
 list-view power pack and the command palette's job.
+
+
+
+## Phase 20.11–20.17 — Shared states, list-view power pack, record page, command palette, checklist and hardening (added 2026-10-20)
+
+Implemented: sub-phases **20.11 – 20.17** of `PLAN_Phase_20_Settings_UX.md` — the end-user UX half
+of the phase. 20.11 (shared state components), 20.12 (the list-view power pack), 20.13 (the record
+page and the forms), 20.14 (the command palette), 20.15 (role-scoped default dashboards, the setup
+checklist and the onboarding empty states), 20.16 (the accessibility and responsive pass) and 20.17
+(the hardening, compatibility and release-readiness pass).
+
+| Deliverable | Where |
+|---|---|
+| Shared `EmptyState` / `LoadingSkeleton` / `ErrorState` / `PermissionDenied` / `HelpTip` | `apps/web/src/components/` |
+| List view: URL state, column manager, density, inline edit, selection + bulk bar + undo | `apps/web/src/pages/EntityListPage.tsx` |
+| Record page: layout-driven panels, relation link/new, duplicate warning | `apps/web/src/pages/EntityDetailPage.tsx` |
+| Edit form: unsaved guard, `⌘/Ctrl+Enter` save, inline validation | `apps/web/src/pages/EntityEditPage.tsx` |
+| Command palette (`⌘/Ctrl+K`, commands / records / recent) | `apps/web/src/components/CommandPalette.tsx` |
+| Setup checklist service + admin panel on the home page | `apps/api/src/setup-checklist/`, `apps/web/src/pages/HomePage.tsx` |
+| Role-scoped default dashboards | `apps/web/src/pages/DashboardsPage.tsx` |
+| Accessibility and responsive CSS (focus ring, 44 px targets, reduced motion, 768/390 px) | `apps/web/src/styles/carocrm.css` |
+| UX documentation | `docs/ux/design-principles.md`, `docs/ux/list-view.md`, `docs/ux/record-page.md`, `docs/ux/accessibility.md` |
+
+Fixed in this pass:
+
+- **`EntityListPage` crashed on every list view.** The `columns` preference hook and the column
+  `useMemo` sat *after* the loading/error early returns, so the hook count changed between the
+  loading render and the loaded render. React reported "change in the order of Hooks" and unmounted
+  the page — `/Contact` and every other entity list rendered blank. The hooks now run above the
+  early returns. The regression came from 20.11 (the early returns) and 20.12 (the hooks).
+
+Verification actually run (against the configured database; no extra database, no destructive step):
+
+- `pnpm typecheck`: clean.
+- `pnpm lint`: clean — five errors that the phase left behind are fixed (two import/export sort
+  issues in `apps/api/src/setup-checklist/index.ts` and `apps/web/src/admin/AdminSettingsShell.tsx`,
+  three `no-non-null-assertion` violations in `apps/web/src/pages/DashboardsPage.tsx` and
+  `apps/web/src/pages/EntityListPage.tsx`).
+- `pnpm test`: **138 files, 1876 tests passed**.
+- `pnpm build`: clean.
+- Browser (admin session, Vite dev server against the configured API): the settings shell, the main
+  menu tab, the users tab, the internal tab, the command palette, the setup checklist and the record
+  detail page all render; `/Contact` renders its rows again after the hook-order fix, both on a hard
+  reload and on an in-app navigation; no console errors.
+
+Known limits are in `docs/compatibility/settings-ux.md` ("Known limitations after sub-phases
+20.11–20.17"): the list view has no cross-page "select all N matching records", no bulk-action
+outcome counts, no row kebab menu and no virtualization; there is no Favorites UI; the record page
+has no sticky header and no next-action band and the form has no "Save & new"; the palette has no
+`/` shortcut; `PermissionDenied` and `HelpTip` are not yet used by any page; and there is **no
+automated axe audit and no frontend test runner** in this repository, so the plan's 20.16 acceptance
+criterion ("axe passes on the four core surfaces") is not met.

@@ -4,7 +4,11 @@ Scope: `PLAN_Phase_20_Settings_UX.md` §4, §5, §7, §8. Implemented: 20.1 regi
 the tabbed shell, 20.3 General/Localization and the hosted module documents, 20.4 navigation
 resolution, 20.5 the Main Menu tab, 20.6 per-entity navigation metadata, 20.7
 users/teams/roles/API keys, 20.8 the layout manager tab, 20.9 the security, messaging, integrations and
-internal tabs, 20.10 per-user preferences.
+internal tabs, 20.10 per-user preferences, and the end-user UX pack 20.11–20.16 (shared state
+components, the list-view power pack, the record-page guard, the command palette, the setup checklist
+and the accessibility/responsive pass). 20.17 was the hardening, documentation and release-readiness
+pass. The UX half is documented in `docs/ux/`; the remaining gaps are listed in
+`docs/compatibility/settings-ux.md`.
 
 ## Where things live
 
@@ -160,13 +164,14 @@ are the only ones reachable, so "only the owner may read/write" is the shape of 
 Locale and timezone stay on `PATCH /AppUser/me`; they are not duplicated here.
 
 - Registered names (`apps/api/src/preferences/preference-shapes.ts`): `density`, `listPageSize`,
-  `defaultDashboard`, `columns` (entity → visible columns, for 20.12), `favorites`, `lastVisited`,
+  `defaultDashboard`, `columns` (entity → visible columns), `favorites`, `lastVisited`,
   `dismissedSetupSteps`. An unknown name or an invalid value is refused with `422` and
-  `details.issues`; the registry is where 20.12 and the command palette add theirs.
+  `details.issues`.
 - Consumers live where the preference is used: the list pages read `density` and `listPageSize`
-  (the density control sits beside the saved filters), and the dashboards page opens on the starred
-  `defaultDashboard` unless the user picks another one themselves. Columns and favorites are stored
-  and validated now; their editing UI arrives with the list-view power pack (20.12).
+  (the density control sits beside the saved filters) and `columns` (the column manager), and the
+  dashboards page opens on the starred `defaultDashboard` unless the user picks another one
+  themselves. `favorites`, `lastVisited` and `dismissedSetupSteps` are stored and validated but have
+  no editor or consumer yet — see `docs/compatibility/settings-ux.md`.
 - `apps/api/test/user-preferences.test.ts` pins the guarantee: a value survives a fresh login (a new
   session, i.e. another device), a second account's view of the same name is independent both ways,
   and unknown/invalid input is refused.
@@ -175,5 +180,4 @@ Locale and timezone stay on `PATCH /AppUser/me`; they are not duplicated here.
 
 `public` (any session, e.g. brand), `admin` and `sysAdmin`. The instance has one administrative tier
 today, so `admin` and `sysAdmin` resolve to the same predicate — recorded in
-`docs/compatibility/settings-ux.md`. The remaining catalog rows — user preferences (20.10) and the
-end-user UX pack — are the plan's later sub-phases.
+`docs/compatibility/settings-ux.md`.
