@@ -63,6 +63,12 @@ export const CRMChatSettingsSchema = z
         maxConversationsPerUser: z.number().int().min(1).max(2_000).default(200),
         turnTimeoutSeconds: z.number().int().min(10).max(600).default(180),
         heartbeatSeconds: z.number().int().min(5).max(60).default(15),
+        /** Maximum number of concurrent cross-module queries per user */
+        maxConcurrentQueries: z.number().int().min(1).max(10).default(3),
+        /** Rate limit: maximum turns per minute per user */
+        maxTurnsPerMinute: z.number().int().min(1).max(60).default(10),
+        /** Maximum records returned by a single query */
+        maxQueryResults: z.number().int().min(1).max(1000).default(100),
       })
       .strict()
       .default({}),

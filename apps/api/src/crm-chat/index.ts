@@ -3,10 +3,14 @@ import type { Provider, Type } from '@nestjs/common';
 import { CRMChatController } from './crm-chat.controller.js';
 import { CRMChatAIAgentsClientService } from './crm-chat-ai-agents-client.service.js';
 import { CRMChatAssistantService } from './crm-chat-assistant.service.js';
+import { CRMChatContextService } from './crm-chat-context.service.js';
 import { CRMChatConversationService } from './crm-chat-conversations.service.js';
+import { CRMChatCrossModuleService } from './crm-chat-cross-module.service.js';
+import { CRMChatHelpService } from './crm-chat-help.service.js';
 import { CRMChatModuleHealthService } from './crm-chat-module-health.service.js';
 import { CRMChatPermissionService } from './crm-chat-permission.service.js';
 import { CRMChatPolicyService } from './crm-chat-policy.service.js';
+import { CRMChatQueryService } from './crm-chat-query.service.js';
 import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 import { CRMChatStreamingService } from './crm-chat-streaming.service.js';
 import { CRM_CHAT_MENU_INVALIDATOR, noopMenuInvalidator } from './crm-chat-tokens.js';
@@ -15,6 +19,14 @@ export type { CRMChatCapabilitiesView } from './crm-chat.controller.js';
 export { CRMChatController } from './crm-chat.controller.js';
 export type { AssistantReadiness } from './crm-chat-assistant.service.js';
 export { CRMChatAssistantService } from './crm-chat-assistant.service.js';
+export type { CitationSource, ContextRef, ReauthorizedCitation } from './crm-chat-context.service.js';
+export { CRMChatContextService } from './crm-chat-context.service.js';
+export type { CrossModuleQuery, CrossModuleResult, CrossModuleSubQuery } from './crm-chat-cross-module.service.js';
+export { CRMChatCrossModuleService } from './crm-chat-cross-module.service.js';
+export type { HelpSearchResult, HelpSource } from './crm-chat-help.service.js';
+export { CRMChatHelpService } from './crm-chat-help.service.js';
+export type { QueryPlan, QueryResult, RecordSummary } from './crm-chat-query.service.js';
+export { CRMChatQueryService } from './crm-chat-query.service.js';
 export type {
   CrmChatTurnResult,
   CrmChatTurnStatus,
@@ -91,6 +103,10 @@ export const CRM_CHAT_PROVIDERS: Provider[] = [
   CRMChatPolicyService,
   CRMChatAssistantService,
   CRMChatAIAgentsClientService,
+  CRMChatContextService,
+  CRMChatCrossModuleService,
+  CRMChatHelpService,
+  CRMChatQueryService,
   CRMChatStreamingService,
   CRMChatModuleHealthService,
   // Default seam: an isolated module test has no navigation surface to invalidate. `AppModule`

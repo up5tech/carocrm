@@ -8,6 +8,9 @@ import { z } from 'zod';
 import type { AssistantReadiness } from './crm-chat-assistant.service.js';
 import { CRMChatAssistantService } from './crm-chat-assistant.service.js';
 import { CRMChatAIAgentsClientService } from './crm-chat-ai-agents-client.service.js';
+import { CRMChatContextService, type CitationSource } from './crm-chat-context.service.js';
+import { CRMChatHelpService } from './crm-chat-help.service.js';
+import { CRMChatQueryService, type QueryPlan } from './crm-chat-query.service.js';
 import { CRM_CHAT_CONTRACT_VERSION } from './crm-chat-contract.js';
 import {
   CRMChatConversationService,
@@ -107,6 +110,9 @@ export class CRMChatController {
     @Inject(CRMChatSettingsService) private readonly settings: CRMChatSettingsService,
     @Inject(CRMChatAssistantService) private readonly assistant: CRMChatAssistantService,
     @Inject(CRMChatAIAgentsClientService) private readonly aiAgents: CRMChatAIAgentsClientService,
+    @Inject(CRMChatContextService) private readonly context: CRMChatContextService,
+    @Inject(CRMChatHelpService) private readonly help: CRMChatHelpService,
+    @Inject(CRMChatQueryService) private readonly query: CRMChatQueryService,
     @Inject(CRMChatStreamingService) private readonly streaming: CRMChatStreamingService,
     @Inject(CRMChatModuleHealthService) private readonly health: CRMChatModuleHealthService,
     @Inject(CRMChatConversationService) private readonly conversations: CRMChatConversationService,
@@ -298,6 +304,71 @@ export class CRMChatController {
 
     // Stream events to the writer.
     await this.streaming.streamToWriter(turnId, writer, lastEventId);
+  }
+
+  /**
+   * Search for CRM help content. Answers "how do I" questions by searching Knowledge Base articles
+   * and other approved help sources. Retrieved content is treated as untrusted data.
+   */
+  @Get('action/help/search')
+  async searchHelp(@Query('q') query?: string) {
+    await this.policy.assertWorkspace();
+
+    if (!query || query.trim().length === 0) {
+      throw new InvalidQueryError('Please provide a search query using ?q=your+question');
+    }
+
+    return this.help.searchHelp(query);
+  }
+
+  /**
+   * Execute a validated read-only query with ACL enforcement. The query plan is validated against
+   * metadata; no raw SQL is ever executed. List sizes are bounded to prevent unbounded consumption.
+   */
+  @Post('action/query/execute')
+  async executeQuery(@Body() body: unknown) {
+    await this.policy.assertWorkspace();
+
+    const schema = z.object({
+      entity: z.string().trim().min(1).max(120),
+      fields: z.array(z.string().trim().min(1).max(120)).optional(),
+      filters: z.record(z.string(), z.unknown()).optional(),
+      sort: z.object({
+        field: z.string().trim().min(1).max(120),
+        direction: z.enum(['asc', 'desc']),
+      }).optional(),
+      limit: z.number().int().min(1).max(50).optional(),
+      offset: z.number().int().min(0).optional(),
+    }).strict();
+
+    const input = parse(schema, body);
+    return this.query.executeQuery(input as QueryPlan);
+  }
+
+  /**
+   * Reauthorize citations before rendering. Ensures that each cited source is still accessible to
+   * the current user at render time (permissions may have changed since the turn was created).
+   */
+  @Post('action/citations/reauthorize')
+  async reauthorizeCitations(@Body() body: unknown) {
+    await this.policy.assertWorkspace();
+
+    const schema = z.object({
+      citations: z.array(
+        z.object({
+          sourceType: z.enum(['crm_record', 'query_result', 'report', 'help_document', 'approved_external_source']),
+          sourceId: z.string().optional(),
+          entity: z.string().optional(),
+          displayLabel: z.string(),
+          safeRoute: z.string().optional(),
+        }).strict(),
+      ),
+    });
+
+    const input = parse(schema, body);
+    const results = await this.context.reauthorizeCitations(input.citations as CitationSource[]);
+
+    return { citations: results };
   }
 
   /** The administration surface. Never returns a credential: Chat stores none. */

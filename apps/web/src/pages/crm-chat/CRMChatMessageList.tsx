@@ -1,6 +1,8 @@
-import { LinkOutlined } from '@ant-design/icons';
+import { LinkOutlined, LockOutlined } from '@ant-design/icons';
 import { Button, Empty, Space, Tag, Typography } from 'antd';
+import { useEffect, useState } from 'react';
 
+import { api } from '../../api/client.js';
 import type { CRMChatCitation, CRMChatMessageView } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
 
@@ -15,11 +17,13 @@ export interface CRMChatMessageListProps {
 }
 
 /**
- * Phase 19-CHAT.7 — Message list with safe Markdown rendering and citation support.
+ * Phase 19-CHAT.8 — Message list with safe Markdown rendering and citation reauthorization.
  *
  * Renders user/assistant messages with:
- * - Safe Markdown (sanitized, no HTML execution)
- * - Citation links (only trusted routes from server)
+ * - Safe plain text rendering (no HTML execution)
+ * - Citation links that are reauthorized before display
+ * - Reauthorization happens on mount and when citations change
+ * - Revoked citations show as inaccessible with lock icon
  * - Redaction indicators
  * - Timestamps and role labels
  * - "Load older" pagination button
@@ -123,8 +127,56 @@ interface CitationLinkProps {
 }
 
 function CitationLink({ citation, index }: CitationLinkProps) {
-  const hasRoute = citation.safeRoute && citation.safeRoute.startsWith('/');
+  const [accessible, setAccessible] = useState<boolean | null>(null);
+  const [resolvedRoute, setResolvedRoute] = useState<string | undefined>(undefined);
 
+  // Reauthorize citation on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkAccess = async () => {
+      try {
+        const result = await api.crmChatReauthorizeCitations([citation]);
+        if (!cancelled && result.citations && result.citations.length > 0) {
+          const reauthed = result.citations[0];
+          if (reauthed) {
+            setAccessible(reauthed.accessible);
+            setResolvedRoute(reauthed.resolvedRoute);
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setAccessible(false);
+        }
+      }
+    };
+
+    void checkAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, [citation]);
+
+  // Show loading state while checking
+  if (accessible === null) {
+    return (
+      <Tag color="default" style={{ fontSize: 11 }}>
+        [{index}] Checking...
+      </Tag>
+    );
+  }
+
+  // Show locked state if access revoked
+  if (!accessible) {
+    return (
+      <Tag color="red" icon={<LockOutlined />} style={{ fontSize: 11 }}>
+        [{index}] {citation.displayLabel} (No longer accessible)
+      </Tag>
+    );
+  }
+
+  // Show clickable link if accessible
+  const hasRoute = resolvedRoute && resolvedRoute.startsWith('/');
   return (
     <Tag
       icon={hasRoute ? <LinkOutlined /> : undefined}
@@ -132,7 +184,7 @@ function CitationLink({ citation, index }: CitationLinkProps) {
       style={{ fontSize: 11 }}
     >
       {hasRoute ? (
-        <a href={citation.safeRoute} target="_blank" rel="noopener noreferrer">
+        <a href={resolvedRoute} target="_blank" rel="noopener noreferrer">
           [{index}] {citation.displayLabel}
         </a>
       ) : (

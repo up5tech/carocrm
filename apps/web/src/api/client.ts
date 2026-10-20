@@ -547,6 +547,17 @@ export const api = {
   /** Phase 19-CHAT.5 — cancel a running turn. */
   crmChatCancelTurn: (turnId: string) =>
     request<CRMChatTurnStatus>(`/CRMChat/action/turns/${encodeURIComponent(turnId)}/cancel`, post({})),
+  /** Phase 19-CHAT.8 — reauthorize citations before rendering. */
+  crmChatReauthorizeCitations: (citations: readonly unknown[]) =>
+    request<{ citations: readonly { accessible: boolean; resolvedRoute?: string | undefined }[] }>(
+      '/CRMChat/action/citations/reauthorize',
+      post({ citations }),
+    ),
+  /** Phase 19-CHAT.9 — search help content for "how do I" questions. */
+  crmChatSearchHelp: (query: string) =>
+    request<{ query: string; sources: readonly unknown[]; hasResults: boolean; message?: string | undefined }>(
+      `/CRMChat/action/help/search?q=${encodeURIComponent(query)}`,
+    ),
 
   // Phase 19-AI.2/19-AI.4 — the administrative surfaces of the module: the policy settings row and
   // the provider connections. Both are guarded by a capability the server asserts; the SPA only

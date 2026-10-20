@@ -216,6 +216,9 @@ Pagination decisions that the implementation fixes, so the client cannot get the
 | `GET` | `action/turns/:turnId` | `use` + owner | — | `CRMChatTurnView` |
 | `GET` | `action/turns/:turnId/events` | `use` + owner | `Last-Event-ID` | `text/event-stream` (§8) |
 | `POST` | `action/turns/:turnId/cancel` | `use` + owner | `{}` | `CRMChatTurnView` |
+| `GET` | `action/help/search` | `use` | `?q=query` | `HelpSearchResult` (§11) |
+| `POST` | `action/query/execute` | `use` | `QueryPlan` | `QueryResult` (§12) |
+| `POST` | `action/citations/reauthorize` | `use` | `{ citations }` | `{ citations: ReauthorizedCitation[] }` (§10) |
 | `POST` | `action/turns/:turnId/feedback` | `feedback` + owner | `{ rating, category?, comment? }` | `{ status: true }` |
 
 Submission is `POST action/turns`, not a route nested under a conversation, because per D2 the thread
