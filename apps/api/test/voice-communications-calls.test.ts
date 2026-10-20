@@ -90,6 +90,8 @@ beforeAll(async () => {
       "voice.outboundCall",
       "voice.inboundEvents",
       "voice.callStatusCallbacks",
+      "voice.callAnswer",
+      "voice.callHangup",
       "webhook.signatureValidation",
       "provider.healthCheck",
     ],
@@ -385,5 +387,122 @@ describe("call lifecycle and the Call Activity (19-VC.7)", () => {
     const matches = res.body["matches"] as { id: string }[];
     expect(matches.some((match) => match.id === contactId)).toBe(true);
     expect(res.body["hiddenMatches"]).toBe(0);
+  });
+});
+
+describe("incoming-call controls (19-VC.9)", () => {
+  /**
+   * A ringing inbound call of its own, so no earlier assertion's state can leak into these ones. The
+   * simulator owns the call, so answering it goes through the real adapter path (§15.4: no real phone).
+   */
+  async function ringingInboundCall(tag: string): Promise<string> {
+    const providerCallId = `CA-ctl-${tag}-${runId}`;
+    await callback({
+      eventId: `evt-${runId}-ctl-${tag}`,
+      type: "call.status",
+      occurredAt: new Date().toISOString(),
+      callId: providerCallId,
+      status: "ringing",
+      direction: "inbound",
+      from: DESTINATION,
+      to: ENDPOINT,
+    });
+    const row = (await sql<{ id: string }>`
+      select id from voice_call_sessions where account_key = ${accountKey} and provider_call_id = ${providerCallId}
+    `.execute(ctx.database.db)).rows[0];
+    const id = String(row?.id);
+    sessionIds.push(id);
+    const read = await call("GET", `/api/v1/VoiceCommunications/action/calls/${id}`);
+    if (typeof read.body["activityId"] === "string") activityIds.push(read.body["activityId"]);
+    return id;
+  }
+
+  const control = (id: string, action: string) =>
+    call("POST", `/api/v1/VoiceCommunications/action/calls/${id}/control`, { action });
+
+  async function popupRow(id: string) {
+    const incoming = await call("GET", "/api/v1/VoiceCommunications/action/calls/incoming");
+    expect(incoming.status).toBe(200);
+    const list = incoming.body["list"] as { id: string; state: string; controls: string[] }[];
+    return list.find((session) => session.id === id);
+  }
+
+  it("answers a ringing call, keeps it on the popup while in progress, and ends it", async () => {
+    const sessionId = await ringingInboundCall("answered");
+    expect((await popupRow(sessionId))?.controls).toEqual(["answer", "hangup"]);
+
+    const answered = await control(sessionId, "answer");
+    expect(answered.status, JSON.stringify(answered.body)).toBe(200);
+    expect(answered.body["state"]).toBe("in_progress");
+    expect(answered.body["answeredAt"]).toBeTruthy();
+    // An agent who answers an unassigned inbound call owns it, so their own-scoped views keep showing it.
+    expect(typeof answered.body["assignedUserId"]).toBe("string");
+
+    const live = await popupRow(sessionId);
+    expect(live?.state).toBe("in_progress");
+    expect(live?.controls).toEqual(["hangup"]);
+
+    const ended = await control(sessionId, "hangup");
+    expect(ended.status, JSON.stringify(ended.body)).toBe(200);
+    expect(ended.body["state"]).toBe("completed");
+    expect(ended.body["endedAt"]).toBeTruthy();
+    expect(await popupRow(sessionId)).toBeUndefined();
+
+    const activityId = String((await call("GET", `/api/v1/VoiceCommunications/action/calls/${sessionId}`)).body["activityId"]);
+    const activity = await call("GET", `/api/v1/Call/${activityId}`);
+    expect(activity.body["status"]).toBe("Held");
+  });
+
+  it("declines a call that was never answered and refuses a second control", async () => {
+    const sessionId = await ringingInboundCall("declined");
+    const declined = await control(sessionId, "hangup");
+    expect(declined.status, JSON.stringify(declined.body)).toBe(200);
+    expect(declined.body["state"]).toBe("cancelled");
+    expect(declined.body["answeredAt"]).toBeNull();
+
+    const again = await control(sessionId, "hangup");
+    expect(again.status).toBe(422);
+    expect(JSON.stringify(again.body)).toContain("cannot be ended");
+  });
+
+  it("offers no control the account does not grant, and re-checks the grant on the command", async () => {
+    const sessionId = await ringingInboundCall("ungranted");
+    const granted = ["voice.outboundCall", "voice.inboundEvents", "voice.callStatusCallbacks", "webhook.signatureValidation", "provider.healthCheck"];
+    const stripped = await ctx.app.inject({
+      method: "PATCH",
+      url: `/api/v1/VoiceCommunications/action/accounts/${accountKey}`,
+      headers: authHeader(ctx.adminToken),
+      payload: { capabilities: granted },
+    });
+    expect(stripped.statusCode, stripped.body).toBe(200);
+    try {
+      expect((await popupRow(sessionId))?.controls).toEqual([]);
+      const refused = await control(sessionId, "answer");
+      expect(refused.status).toBe(422);
+      expect(JSON.stringify(refused.body)).toContain("voice.callAnswer");
+      // The refusal changed nothing: the call is still ringing for a later attempt.
+      expect((await call("GET", `/api/v1/VoiceCommunications/action/calls/${sessionId}`)).body["state"]).toBe("ringing");
+    } finally {
+      const restored = await ctx.app.inject({
+        method: "PATCH",
+        url: `/api/v1/VoiceCommunications/action/accounts/${accountKey}`,
+        headers: authHeader(ctx.adminToken),
+        payload: { capabilities: [...granted, "voice.callAnswer", "voice.callHangup"] },
+      });
+      expect(restored.statusCode, restored.body).toBe(200);
+    }
+  });
+
+  it("rejects an unknown action and an anonymous control", async () => {
+    const sessionId = await ringingInboundCall("validated");
+    expect((await control(sessionId, "transfer")).status).toBe(422);
+
+    const anonymous = await ctx.app.inject({
+      method: "POST",
+      url: `/api/v1/VoiceCommunications/action/calls/${sessionId}/control`,
+      payload: { action: "answer" },
+    });
+    expect(anonymous.statusCode).toBe(401);
+    expect((await call("GET", `/api/v1/VoiceCommunications/action/calls/${sessionId}`)).body["state"]).toBe("ringing");
   });
 });

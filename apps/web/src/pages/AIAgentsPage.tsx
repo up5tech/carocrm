@@ -10,7 +10,9 @@ import { AIAgentsApprovalsTab } from './ai-agents/AIAgentsApprovalsTab.js';
 import { AIAgentsConversationsTab } from './ai-agents/AIAgentsConversationsTab.js';
 import { AIAgentsEvaluationsTab } from './ai-agents/AIAgentsEvaluationsTab.js';
 import { AIAgentsOverview } from './ai-agents/AIAgentsOverview.js';
+import { AIAgentsProvidersTab } from './ai-agents/AIAgentsProvidersTab.js';
 import { AIAgentsRunsTab } from './ai-agents/AIAgentsRunsTab.js';
+import { AIAgentsSettingsTab } from './ai-agents/AIAgentsSettingsTab.js';
 import { AIAgentsUsageTab } from './ai-agents/AIAgentsUsageTab.js';
 
 /**
@@ -109,6 +111,23 @@ export function AIAgentsPage() {
       key: 'evaluations',
       label: t('web.aiAgents.evaluationsTab'),
       children: <AIAgentsEvaluationsTab capabilities={granted} />,
+    });
+  }
+  // Administration surfaces. They are ordinary tabs of the module page, not a separate console:
+  // an administrator configuring a provider is already in the module, and the tab is rendered only
+  // when the server reports the matching capability. The endpoints re-check it regardless.
+  if (granted['providerAdmin']) {
+    items.push({
+      key: 'providers',
+      label: t('web.aiAgents.providersTab'),
+      children: <AIAgentsProvidersTab />,
+    });
+  }
+  if (granted['policyAdmin']) {
+    items.push({
+      key: 'settings',
+      label: t('web.aiAgents.settingsTab'),
+      children: <AIAgentsSettingsTab capabilities={granted} />,
     });
   }
 

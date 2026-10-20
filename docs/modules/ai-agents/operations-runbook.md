@@ -4,7 +4,9 @@
 
 - Runs fail with a normalized provider error and enter `retry_wait` within retry budget.
 - No duplicate tool effects: retries re-claim the lease; terminal/unknown outcomes are not retried.
-- Rotate credentials via `PATCH /api/v1/AIAgents/action/providers/:key` (secret is write-only).
+- Rotate credentials in the **Providers** tab of the AI Agents module page, or via
+  `PATCH /api/v1/AIAgents/action/providers/:key` (secret is write-only).
+- Use **Check** on the connection to confirm the endpoint answers before re-enabling execution.
 
 ## Stuck run
 
@@ -14,8 +16,9 @@
 
 ## Cost / quota spike
 
-- Kill switch: `POST /api/v1/AIAgents/action/settings` with `safety.globalExecutionPaused=true`
-  stops new runs without deleting history.
+- Kill switch: the **Emergency stop** card of the **Settings** tab of the AI Agents module page, or
+  `POST /api/v1/AIAgents/action/settings` with `safety.globalExecutionPaused=true`, stops new runs
+  without deleting history.
 - Hard limits stop execution safely and preserve partial results.
 
 ## Retention / deletion request

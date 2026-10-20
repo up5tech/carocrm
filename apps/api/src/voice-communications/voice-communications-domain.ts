@@ -48,6 +48,8 @@ export const PROVIDER_CAPABILITIES = [
   "voice.outboundCall",
   "voice.inboundEvents",
   "voice.callStatusCallbacks",
+  "voice.callAnswer",
+  "voice.callHangup",
   "voice.recordingMetadata",
   "voice.recordingDownload",
   "messaging.sms.send",
@@ -173,6 +175,28 @@ export function advanceCallState(current: CallState, incoming: CallState): CallS
     return canTransitionCall(current, incoming) ? incoming : current;
   }
   return canTransitionCall(current, incoming) ? incoming : current;
+}
+
+/**
+ * Agent-side call control (§7.1, §11.2). A control exists only when its capability is declared and
+ * granted, so the UI can never offer a hang-up the provider cannot perform.
+ */
+export const CALL_CONTROL_ACTIONS = ["answer", "hangup"] as const;
+export type CallControlAction = (typeof CALL_CONTROL_ACTIONS)[number];
+
+export function callControlCapabilityFor(action: CallControlAction): ProviderCapability {
+  return action === "answer" ? "voice.callAnswer" : "voice.callHangup";
+}
+
+/** Whether a control makes sense for a call in `state`. A terminal call is never controllable. */
+export function canControlCall(state: CallState, action: CallControlAction): boolean {
+  return action === "answer" ? state === "ringing" : state === "ringing" || state === "in_progress";
+}
+
+/** The state the module leaves the call in when a control succeeds (§7.3). */
+export function callControlTargetState(state: CallState, action: CallControlAction): CallState {
+  if (action === "answer") return "in_progress";
+  return state === "in_progress" ? "completed" : "cancelled";
 }
 
 /** The platform `Call` Activity status a normalized call state means (PLAN §27 activity conventions). */

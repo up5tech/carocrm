@@ -3,6 +3,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { Injectable } from "@nestjs/common";
 
 import {
+  type CallControlAction,
   type CallState,
   type CommunicationErrorCategory,
   mapCallStatus,
@@ -179,6 +180,21 @@ export interface InitiateCallResult {
   readonly error?: string | undefined;
 }
 
+/** A control the module asks a provider to perform on a live call (§7.1, §11.2). */
+export interface CallControlInput {
+  readonly account: ResolvedProviderAccount;
+  readonly providerCallId: string;
+  readonly action: CallControlAction;
+}
+
+export interface CallControlResult {
+  readonly accepted: boolean;
+  /** The state the provider reports after the control; `unknown` when it says nothing. */
+  readonly state: CallState;
+  readonly errorCategory?: CommunicationErrorCategory | undefined;
+  readonly error?: string | undefined;
+}
+
 /** A message the module asks a provider to deliver (§8.1). */
 export interface SendMessageInput {
   readonly account: ResolvedProviderAccount;
@@ -295,6 +311,8 @@ export class FakeVoiceProvider implements VoiceProviderAdapter {
       "voice.outboundCall",
       "voice.inboundEvents",
       "voice.callStatusCallbacks",
+      "voice.callAnswer",
+      "voice.callHangup",
       "messaging.sms.send",
       "messaging.sms.receive",
       "messaging.whatsapp.send",
@@ -431,6 +449,15 @@ export class FakeVoiceProvider implements VoiceProviderAdapter {
     };
   }
 
+  /**
+   * The simulator answers and ends its own scripted calls, so the popup's controls exercise the whole
+   * path without a network. A scripted outage refuses a control exactly like it refuses a send.
+   */
+  async controlCall(input: CallControlInput): Promise<CallControlResult> {
+    this.assertScriptedOutage(input.account);
+    return { accepted: true, state: input.action === "answer" ? "in_progress" : "completed" };
+  }
+
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
     this.assertScriptedOutage(input.account);
     this.assertSandboxRecipient(input.account, input.to);
@@ -535,6 +562,12 @@ export interface VoiceProviderAdapter {
   healthCheck(account: ResolvedProviderAccount): Promise<ProviderHealthResult>;
   /** Absent when the adapter cannot place calls (`voice.outboundCall` not declared). */
   initiateCall?(input: InitiateCallInput): Promise<InitiateCallResult>;
+  /**
+   * Absent when the adapter cannot control a live call. The caller must check the account's granted
+   * `voice.callAnswer`/`voice.callHangup` capabilities as well — the adapter declaring a control the
+   * account was not given is still a refusal (§7.1, §11.2).
+   */
+  controlCall?(input: CallControlInput): Promise<CallControlResult>;
   /** Absent when the adapter cannot send on this channel (`messaging.*.send` not declared). */
   sendMessage?(input: SendMessageInput): Promise<SendMessageResult>;
   /**

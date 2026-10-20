@@ -13,6 +13,7 @@ import { REQUEST_SCOPE_TOKEN, type RequestScope } from "../common/request-scope.
 import { type AppConfig, CONFIG_TOKEN } from "../config.js";
 import {
   AccountStateSchema,
+  CallControlSchema,
   CallLinkSchema,
   CallListQuerySchema,
   CallNoteSchema,
@@ -276,10 +277,20 @@ export class VoiceCommunicationsController {
     return { list: await this.calls.list(parse(CallListQuerySchema, coerceQuery(query))) };
   }
 
-  /** Inbound calls still ringing for this caller — the popup's polling source (§7.2). */
+  /** Inbound calls still live for this caller — the popup's polling source (§7.2). */
   @Get("action/calls/incoming")
   async incomingCalls() {
     return { list: await this.calls.incoming() };
+  }
+
+  /**
+   * Answer or end a live call. Refused when the account does not grant the matching capability, so an
+   * adapter that cannot control a call can never be asked to (§7.1, §11.2).
+   */
+  @HttpCode(200)
+  @Post("action/calls/:id/control")
+  async controlCall(@Param("id") id: string, @Body() body: unknown) {
+    return this.calls.control(id, parse(CallControlSchema, body).action);
   }
 
   @Get("action/calls/:id")

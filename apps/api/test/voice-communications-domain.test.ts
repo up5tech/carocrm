@@ -10,7 +10,10 @@ import {
 import {
   advanceMessageState,
   CALL_STATES,
+  callControlCapabilityFor,
+  callControlTargetState,
   callEventFor,
+  canControlCall,
   canTransitionCall,
   canTransitionConversation,
   CONVERSATION_STATES,
@@ -290,5 +293,33 @@ describe("WhatsApp service window", () => {
   it("honours an injectable window length", () => {
     expect(isWhatsAppWindowOpen("2026-01-01T00:00:00Z", now, 6)).toBe(false);
     expect(isWhatsAppWindowOpen("2026-01-01T00:00:00Z", now, 24)).toBe(true);
+  });
+});
+
+describe("call control (19-VC.9)", () => {
+  it("names the capability each control needs", () => {
+    expect(callControlCapabilityFor("answer")).toBe("voice.callAnswer");
+    expect(callControlCapabilityFor("hangup")).toBe("voice.callHangup");
+  });
+
+  it("offers a control only while the call can still take it", () => {
+    expect(canControlCall("ringing", "answer")).toBe(true);
+    expect(canControlCall("in_progress", "answer")).toBe(false);
+    expect(canControlCall("ringing", "hangup")).toBe(true);
+    expect(canControlCall("in_progress", "hangup")).toBe(true);
+    for (const state of CALL_STATES.filter(isCallTerminal)) {
+      expect(canControlCall(state, "answer")).toBe(false);
+      expect(canControlCall(state, "hangup")).toBe(false);
+    }
+  });
+
+  it("ends a answered call and a declined call differently", () => {
+    expect(callControlTargetState("ringing", "answer")).toBe("in_progress");
+    expect(callControlTargetState("in_progress", "hangup")).toBe("completed");
+    expect(callControlTargetState("ringing", "hangup")).toBe("cancelled");
+    // Every control target is a legal transition, so a control can never regress the machine.
+    expect(canTransitionCall("ringing", callControlTargetState("ringing", "answer"))).toBe(true);
+    expect(canTransitionCall("in_progress", callControlTargetState("in_progress", "hangup"))).toBe(true);
+    expect(canTransitionCall("ringing", callControlTargetState("ringing", "hangup"))).toBe(true);
   });
 });

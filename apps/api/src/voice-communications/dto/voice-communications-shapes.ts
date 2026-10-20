@@ -167,6 +167,12 @@ export const CallListQuerySchema = z
 
 export const CallNoteSchema = z.object({ description: z.string().trim().min(1).max(10_000) }).strict();
 
+/**
+ * Phase 19-VC.9 — an agent-side control on a live call. The server, not this schema, decides whether
+ * the provider can perform it; an unsupported action is a refusal, never a silent success.
+ */
+export const CallControlSchema = z.object({ action: z.enum(["answer", "hangup"]) }).strict();
+
 export const CallLinkSchema = z
   .object({
     entityType: z.string().trim().min(1).max(64),

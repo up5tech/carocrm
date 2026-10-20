@@ -1466,6 +1466,79 @@ export interface AIAgentsProviderConnection {
   readonly modifiedAt: string;
 }
 
+/**
+ * Phase 19-AI.4 — the result of an administrator-triggered connectivity check. It reports status,
+ * latency and usage only: never the model's text, the request body or the credential.
+ */
+export interface AIAgentProviderCheckResult {
+  readonly ok: boolean;
+  readonly connectionKey: string;
+  readonly model: string;
+  readonly latencyMs: number;
+  readonly category: string | null;
+  readonly message: string;
+  readonly providerRequestId: string | null;
+  readonly usage: { readonly inputTokens: number | null; readonly outputTokens: number | null; readonly cachedInputTokens: number | null } | null;
+}
+
+/**
+ * Phase 19-AI.2 — the `aiAgents` module settings row. Every group is a validated, closed shape:
+ * the server refuses an unknown key rather than ignoring it, so the SPA sends what the schema
+ * defines and nothing else.
+ */
+export interface AIAgentsSettings {
+  readonly features: {
+    readonly definitions: boolean;
+    readonly execution: boolean;
+    readonly memory: boolean;
+    readonly evaluations: boolean;
+    readonly eventTriggers: boolean;
+    readonly scheduledTriggers: boolean;
+    readonly portalAssistant: boolean;
+  };
+  readonly provider: { readonly defaultKey: string };
+  readonly limits: {
+    readonly maxSteps: number;
+    readonly maxModelCalls: number;
+    readonly maxToolCalls: number;
+    readonly maxTokens: number;
+    readonly maxCostUsd: number;
+    readonly maxElapsedSeconds: number;
+    readonly maxRetries: number;
+    readonly maxConcurrency: number;
+    readonly maxResultBytes: number;
+  };
+  readonly approval: {
+    readonly requireFor: readonly string[];
+    readonly ttlMinutes: number;
+  };
+  readonly retention: {
+    readonly runEventsDays: number;
+    readonly providerRequestsDays: number;
+    readonly conversationsDays: number;
+    readonly evaluationsDays: number;
+  };
+  readonly safety: {
+    readonly globalExecutionPaused: boolean;
+    readonly reason: string | null;
+  };
+  readonly tools: { readonly disabled: readonly string[] };
+  readonly dataPolicy: {
+    readonly allowedExternalDataClasses: readonly string[];
+    readonly logPrompts: boolean;
+  };
+}
+
+/** Phase 19-AI.2 — the settings row as the module returns it, with the warnings it reports. */
+export interface AIAgentsSettingsView {
+  readonly settings: AIAgentsSettings;
+  readonly version: number;
+  readonly updatedAt: string | null;
+  readonly updatedBy: string | null;
+  readonly defaults: AIAgentsSettings;
+  readonly warnings: readonly SettingsDocumentWarning[];
+}
+
 /** Phase 19-AI.5–19-AI.10: definition, run and approval surfaces. */
 export interface AIAgentToolView {
   readonly key: string;
@@ -2028,6 +2101,26 @@ export interface VoiceCallSessionView {
   readonly assignedUserId: string | null;
   readonly activityId: string | null;
   readonly createdAt: string;
+}
+
+/** The control an agent may ask for on a live call; the server only offers granted ones. */
+export type VoiceCallControlAction = 'answer' | 'hangup';
+
+export interface VoiceIncomingCallView extends VoiceCallSessionView {
+  readonly controls: readonly VoiceCallControlAction[];
+}
+
+export interface VoiceCallerMatch {
+  readonly entityType: string;
+  readonly id: string;
+  readonly name: string;
+}
+
+/** Caller context for the incoming-call popup: permitted matches only, ambiguity preserved. */
+export interface VoiceCallContextView {
+  readonly session: VoiceCallSessionView;
+  readonly matches: readonly VoiceCallerMatch[];
+  readonly hiddenMatches: number;
 }
 
 export interface VoiceMediaView {

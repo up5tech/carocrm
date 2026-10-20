@@ -31,12 +31,21 @@ import {
   advanceCallState,
   CALL_ACTIVITY_DIRECTION,
   CALL_ACTIVITY_STATUS,
+  CALL_CONTROL_ACTIONS,
+  type CallControlAction,
+  callControlCapabilityFor,
+  callControlTargetState,
   type CallState,
+  canControlCall,
+  canTransitionCall,
+  isCallTerminal,
+  type ProviderCapability,
   sendCapabilityFor,
 } from './voice-communications-domain.js';
 import { VoiceCommunicationsSettingsService } from './voice-communications-settings.service.js';
 import { VoicePolicyService } from './voice-policy.service.js';
 import {
+  type CallControlResult,
   effectiveCapabilities,
   type InitiateCallResult,
   VoiceProviderError,
@@ -100,6 +109,14 @@ export interface CallSessionView {
   readonly createdAt: string;
   readonly modifiedAt: string;
 }
+
+/** The popup's row: a session plus the controls this caller may actually use on it. */
+export interface IncomingCallView extends CallSessionView {
+  readonly controls: readonly CallControlAction[];
+}
+
+/** States that keep an inbound call on the agent's screen: ringing, and answered but not ended. */
+const POPUP_CALL_STATES: readonly CallState[] = ["ringing", "in_progress"];
 
 export interface InitiateCallInput {
   readonly to: string;
@@ -336,13 +353,21 @@ export class VoiceCallService {
   }
 
   /** ACL-scoped list. The `Call` entity's own read level decides the scope, never a module guess. */
-  async list(query: { readonly limit: number; readonly offset: number; readonly state?: string | undefined }): Promise<readonly CallSessionView[]> {
+  async list(query: {
+    readonly limit: number;
+    readonly offset: number;
+    readonly state?: string | undefined;
+    readonly states?: readonly string[] | undefined;
+  }): Promise<readonly CallSessionView[]> {
     const scope = await this.readScope();
     if (scope === 'none') return [];
     const userId = this.scope.userId ?? null;
+    const states = query.states ?? (query.state === undefined ? [] : [query.state]);
+    const statePredicate =
+      states.length === 0 ? sql`true` : sql`state in (${sql.join(states.map((value) => sql.val(value)))})`;
     const rows = await sql<CallSessionRow>`
       select * from voice_call_sessions
-      where (${query.state ?? null}::text is null or state = ${query.state ?? null})
+      where ${statePredicate}
         and ${
           scope === 'all'
             ? sql`true`
@@ -358,10 +383,80 @@ export class VoiceCallService {
     return rows.rows.map(toView);
   }
 
-  /** Inbound calls still ringing that this caller may see — the popup's polling source (§7.2). */
-  async incoming(): Promise<readonly CallSessionView[]> {
-    const rows = await this.list({ limit: 20, offset: 0, state: "ringing" });
-    return rows.filter((session) => session.direction === "inbound");
+  /**
+   * Inbound calls this caller may see that are still live: ringing, or answered and not yet ended.
+   * Each row names the controls the server will actually honour for it, so the popup never shows a
+   * hang-up the provider cannot perform (§7.2, §11.2).
+   */
+  async incoming(): Promise<readonly IncomingCallView[]> {
+    const rows = await this.list({ limit: 20, offset: 0, states: POPUP_CALL_STATES });
+    const grantedByAccount = new Map<string, readonly ProviderCapability[]>();
+    const views: IncomingCallView[] = [];
+    for (const session of rows) {
+      if (session.direction !== 'inbound') continue;
+      views.push({
+        ...session,
+        controls: await this.controlsFor(session.accountKey, session.state, grantedByAccount),
+      });
+    }
+    return views;
+  }
+
+  /**
+   * Answer or end a call the agent can see (§7.1, §11.2). The order is the contract: permission, then
+   * session visibility, then the live state, then the granted capability, and the provider control
+   * last — a provider that refuses leaves the session exactly as it was instead of a call the CRM
+   * believes has finished.
+   */
+  async control(id: string, action: CallControlAction): Promise<CallSessionView> {
+    await this.acl.assertAccess(CALL_ACTIVITY_ENTITY, 'edit');
+    const row = await this.requireRow(id);
+    await this.assertCanRead(row);
+    const current = row.state as CallState;
+    if (!canControlCall(current, action)) {
+      throw new ValidationError(`A call in state "${current}" cannot be ${action === 'answer' ? 'answered' : 'ended'}.`);
+    }
+
+    const account = await this.accounts.resolve(row.account_key);
+    const adapter = this.registry.resolve(account.providerKey);
+    const capability = callControlCapabilityFor(action);
+    if (!effectiveCapabilities(adapter.info, account.capabilities).includes(capability)) {
+      throw new ValidationError(`Provider "${account.providerKey}" does not declare ${capability}.`);
+    }
+    if (adapter.controlCall === undefined) throw new ValidationError('This provider adapter cannot control calls.');
+    if (row.provider_call_id === null) {
+      throw new ValidationError('This call has no provider id, so the provider cannot be told about it.');
+    }
+
+    let result: CallControlResult;
+    try {
+      result = await adapter.controlCall({ account, providerCallId: row.provider_call_id, action });
+    } catch (error) {
+      const detail = error instanceof VoiceProviderError
+        ? `${error.message} (${error.category})`
+        : 'The provider refused the control.';
+      throw new ValidationError(detail);
+    }
+    if (!result.accepted) {
+      throw new ValidationError(result.error ?? 'The provider refused the control.');
+    }
+
+    // The provider's own state wins when it is a legal successor; otherwise the control's outcome is
+    // the state the machine expects, never something invented.
+    const target = canTransitionCall(current, result.state) ? result.state : callControlTargetState(current, action);
+    const now = new Date();
+    const updated = await this.patchSession(row.id, {
+      state: target,
+      ...(target === 'in_progress' && row.answered_at === null ? { answeredAt: now } : {}),
+      ...(isCallTerminal(target) && row.ended_at === null ? { endedAt: now } : {}),
+      ...(isCallTerminal(target) && row.duration_seconds === null ? { durationSeconds: elapsedSeconds(row.answered_at, now) } : {}),
+      // An agent who answers an unassigned inbound call owns it, so their own-scoped views keep it.
+      ...(action === 'answer' && row.assigned_user_id === null && this.scope.userId !== undefined
+        ? { assignedUserId: this.scope.userId }
+        : {}),
+    });
+    await this.syncActivity(updated);
+    return toView(updated);
   }
 
   async get(id: string): Promise<CallSessionView> {
@@ -479,6 +574,31 @@ export class VoiceCallService {
   }
 
   // ------------------------------------------------------------------------- internals
+
+  /**
+   * Controls this account really supports for a call in `state`: the adapter's declaration intersected
+   * with the account's grant, cached per account for one popup refresh. An unresolvable account yields
+   * no controls, so the popup degrades to the informational card instead of a button that will fail.
+   */
+  private async controlsFor(
+    accountKey: string,
+    state: CallState,
+    cache: Map<string, readonly ProviderCapability[]>,
+  ): Promise<readonly CallControlAction[]> {
+    let granted = cache.get(accountKey);
+    if (granted === undefined) {
+      try {
+        const account = await this.accounts.resolve(accountKey);
+        granted = effectiveCapabilities(this.registry.resolve(account.providerKey).info, account.capabilities);
+      } catch {
+        granted = [];
+      }
+      cache.set(accountKey, granted);
+    }
+    return CALL_CONTROL_ACTIONS.filter(
+      (action) => canControlCall(state, action) && granted.includes(callControlCapabilityFor(action)),
+    );
+  }
 
   private async readScope(): Promise<'all' | 'own' | 'team' | 'none'> {
     const level = await this.acl.canUser(CALL_ACTIVITY_ENTITY, 'read');
@@ -601,6 +721,7 @@ export class VoiceCallService {
       readonly activityId?: string | null | undefined;
       readonly relatedEntityType?: string | null | undefined;
       readonly relatedEntityId?: string | null | undefined;
+      readonly assignedUserId?: string | null | undefined;
     },
   ): Promise<CallSessionRow> {
     // Built as expressions, not interpolated SQL: every value stays a bound parameter, and the
@@ -619,11 +740,18 @@ export class VoiceCallService {
     if (patch.activityId !== undefined) assignments.push(sql`activity_id = ${patch.activityId}`);
     if (patch.relatedEntityType !== undefined) assignments.push(sql`related_entity_type = ${patch.relatedEntityType}`);
     if (patch.relatedEntityId !== undefined) assignments.push(sql`related_entity_id = ${patch.relatedEntityId}`);
+    if (patch.assignedUserId !== undefined) assignments.push(sql`assigned_user_id = ${patch.assignedUserId}`);
 
     const combined = assignments.reduce((left, right) => sql`${left}, ${right}`);
     await sql`update voice_call_sessions set ${combined} where id = ${id}`.execute(this.database.db);
     return this.requireRow(id);
   }
+}
+
+/** Whole seconds between the answer and the end; null for a call that was never answered. */
+function elapsedSeconds(from: Date | null, to: Date): number | null {
+  if (from === null) return null;
+  return Math.max(0, Math.round((to.getTime() - from.getTime()) / 1000));
 }
 
 function toView(row: CallSessionRow): CallSessionView {

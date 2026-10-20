@@ -80,6 +80,25 @@ only approved for internal use.
 
 All routes require the `AIAgentProvider:edit` capability (administrators hold it).
 
+### In the admin UI
+
+An administrator manages connections in the **Providers** tab of the AI Agents module page
+(`/ai-agents`). The tab appears only for a caller the server reports as holding the provider
+capability; every endpoint re-checks it. The form offers:
+
+- the registered adapters, read from the running platform (the `fake` adapter is absent in production);
+- the model allowlist as a tag list — an agent can only request a model listed here;
+- the four data classes, intersected with the module's own `dataPolicy`;
+- the credential as a **write-only** field. It is stored encrypted and never shown again; leaving it
+  empty on an edit keeps the stored secret;
+- **Check**, which performs one controlled provider turn and reports status, latency and usage only.
+
+The **Settings** tab of the same page holds the module policy — the feature switches, the run
+ceilings, the approval classes, the retention windows, the operator kill switch, the data classes
+an external provider may receive, the disabled tools and the default connection.
+
+### Through the API
+
 ```http
 GET    /api/v1/AIAgents/action/providers
 GET    /api/v1/AIAgents/action/providers/:key

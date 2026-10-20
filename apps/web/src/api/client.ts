@@ -11,6 +11,7 @@ import type {
   AIAgentListResult,
   AIAgentMemoryView,
   AIAgentPricingSnapshot,
+  AIAgentProviderCheckResult,
   AIAgentRetentionReport,
   AIAgentRunEventView,
   AIAgentRunListResult,
@@ -19,6 +20,7 @@ import type {
   AIAgentsCapabilitiesView,
   AIAgentsHealthView,
   AIAgentsProviderConnection,
+  AIAgentsSettingsView,
   AIAgentTemplate,
   AIAgentToolCatalogue,
   AIAgentUsageView,
@@ -128,6 +130,8 @@ import type {
   UserAccountType,
   UserInput,
   UserRow,
+  VoiceCallContextView,
+  VoiceCallControlAction,
   VoiceCallSessionView,
   VoiceCommunicationsHealthView,
   VoiceCommunicationsSettingsView,
@@ -135,6 +139,7 @@ import type {
   VoiceConversationHistoryEntry,
   VoiceConversationView,
   VoiceInboxList,
+  VoiceIncomingCallView,
   VoiceMediaView,
   VoiceMessageView,
   VoiceProviderAccountView,
@@ -492,6 +497,24 @@ export const api = {
   // Module settings documents hosted by the settings shell (§8.3): each keeps its own endpoint.
   aiAgentsHealth: () => request<AIAgentsHealthView>('/AIAgents/action/health'),
   aiAgentsCapabilities: () => request<AIAgentsCapabilitiesView>('/AIAgents/action/capabilities'),
+
+  // Phase 19-AI.2/19-AI.4 — the administrative surfaces of the module: the policy settings row and
+  // the provider connections. Both are guarded by a capability the server asserts; the SPA only
+  // presents them to a caller who already holds it.
+  aiAgentsSettings: () => request<AIAgentsSettingsView>('/AIAgents/action/settings'),
+  /** A validated patch; the server merges it into the stored row and bumps the version. */
+  saveAiAgentsSettings: (patch: Record<string, unknown>) =>
+    request<AIAgentsSettingsView>('/AIAgents/action/settings', post(patch)),
+  aiAgentsProvider: (key: string) => request<AIAgentsProviderConnection>(`/AIAgents/action/providers/${encodeURIComponent(key)}`),
+  aiAgentsCreateProvider: (input: Record<string, unknown>) =>
+    request<AIAgentsProviderConnection>('/AIAgents/action/providers', post(input)),
+  aiAgentsUpdateProvider: (key: string, input: Record<string, unknown>) =>
+    request<AIAgentsProviderConnection>(`/AIAgents/action/providers/${encodeURIComponent(key)}`, patch(input)),
+  aiAgentsDeleteProvider: (key: string) =>
+    request<{ success: boolean }>(`/AIAgents/action/providers/${encodeURIComponent(key)}`, { method: 'DELETE' }),
+  /** One tiny provider turn; returns status, latency and usage only — never the model text. */
+  aiAgentsCheckProvider: (key: string, input: { model?: string; prompt?: string } = {}) =>
+    request<AIAgentProviderCheckResult>(`/AIAgents/action/providers/${encodeURIComponent(key)}/check`, post(input)),
 
   // Phase 19-AI.5–19-AI.10: definitions, runs and approvals. Every method is an existing, guarded
   // module endpoint; the SPA adds presentation only and never a second authorization path.
@@ -1390,7 +1413,22 @@ export const api = {
   voiceCalls: (params: { state?: string; limit?: number; offset?: number } = {}) =>
     request<{ list: VoiceCallSessionView[] }>(`/VoiceCommunications/action/calls${simpleQuery(params)}`),
   voiceIncomingCalls: () =>
-    request<{ list: VoiceCallSessionView[] }>('/VoiceCommunications/action/calls/incoming'),
+    request<{ list: VoiceIncomingCallView[] }>('/VoiceCommunications/action/calls/incoming'),
+  /** Answer or end a live call. The server refuses an action the provider account does not grant. */
+  voiceCallControl: (callId: string, action: VoiceCallControlAction) =>
+    request<VoiceCallSessionView>(
+      `/VoiceCommunications/action/calls/${encodeURIComponent(callId)}/control`,
+      post({ action }),
+    ),
+  voiceCallContext: (callId: string) =>
+    request<VoiceCallContextView>(`/VoiceCommunications/action/calls/${encodeURIComponent(callId)}/context`),
+  voiceCallNote: (callId: string, description: string) =>
+    request<VoiceCallSessionView>(`/VoiceCommunications/action/calls/${encodeURIComponent(callId)}/note`, post({ description })),
+  voiceCallLink: (callId: string, entityType: string, entityId: string) =>
+    request<VoiceCallSessionView>(
+      `/VoiceCommunications/action/calls/${encodeURIComponent(callId)}/link`,
+      post({ entityType, entityId }),
+    ),
   voiceCallMedia: (callId: string) =>
     request<{ list: VoiceMediaView[] }>(`/VoiceCommunications/action/calls/${encodeURIComponent(callId)}/media`),
   voiceMediaPlayback: (mediaId: string) =>
