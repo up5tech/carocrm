@@ -8,6 +8,7 @@ import { createPool, errorMessage, type Queryable } from './db.js';
 import type { WorkerConfig } from './env.js';
 import { DomainEventBus } from './events/domain-event-bus.js';
 import { loadExtensionConfig } from './extensions.js';
+import { registerAdvancedIntegrationsJobs } from './handlers/advanced-integrations-handlers.js';
 import { registerAIAgentJobs } from './handlers/ai-agent-handlers.js';
 import { registerCustomerSuccessJobs } from './handlers/customer-success-handlers.js';
 import { registerSystemJobs } from './handlers/job-handlers.js';
@@ -107,6 +108,14 @@ export class WorkerApplication {
     // Phase 19-SD.9: the SLA warning/breach/escalation scan runs in the API on this schedule. The
     // job is inert when no worker capability is configured.
     registerServiceDeskJobs(this.jobRegistry, {
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
+      log: this.log,
+    });
+    // Phase 19-INT.5: the expiring-credential sweep runs in the API on this schedule, so a
+    // reauthorization notice is written by the application layer. The job is inert when no worker
+    // capability is configured.
+    registerAdvancedIntegrationsJobs(this.jobRegistry, {
       apiBaseUrl: this.config.apiBaseUrl,
       secret: this.config.reportWorkerSecret,
       log: this.log,

@@ -1,0 +1,74 @@
+{
+  "module": {
+    "label": "Advanced Integrations",
+    "description": "Connectors to approved third-party systems, with provider-neutral connections, credentials and authorization."
+  },
+  "nav": {
+    "advancedIntegrations": "Advanced Integrations",
+    "providers": "Connectors",
+    "connections": "Connections",
+    "credentials": "Credentials",
+    "authorization": "Authorization"
+  },
+  "page": {
+    "title": "Advanced Integrations",
+    "subtitle": "The connectors this installation offers, the connections to them, and their authorization state.",
+    "loadFailed": "The module diagnostics could not be loaded.",
+    "loadFailedHint": "Check that migration 056 is applied and that you hold the module's administrative capability.",
+    "empty": "No connector is registered yet. Nothing can be connected until a connector is delivered."
+  },
+  "providers": {
+    "title": "Connectors",
+    "provider": "Connector",
+    "status": "Status",
+    "category": "Category",
+    "authentication": "Authentication",
+    "executable": "Ready",
+    "executableYes": "Ready",
+    "executableNo": "Not executable",
+    "objects": "Objects",
+    "capabilities": "Capabilities",
+    "setup": "Setup"
+  },
+  "connections": {
+    "title": "Connections",
+    "name": "Name",
+    "provider": "Connector",
+    "status": "Status",
+    "owner": "Owner",
+    "enabled": "Enabled",
+    "health": "Health",
+    "grantedScopes": "Granted permissions",
+    "missingScopes": "Missing permissions",
+    "credential": "Credential",
+    "hasCredential": "Stored",
+    "noCredential": "None",
+    "pause": "Pause",
+    "resume": "Resume",
+    "revoke": "Revoke",
+    "remove": "Delete",
+    "create": "Add connection",
+    "empty": "No connection yet."
+  },
+  "oauth": {
+    "title": "Authorization",
+    "authorize": "Authorize",
+    "reconnect": "Reauthorize",
+    "scopes": "Requested permissions",
+    "missingScopes": "The provider did not grant these permissions: {scopes}. Reauthorize to request them again.",
+    "expired": "This credential has expired. Reauthorize the connection.",
+    "callbackFailed": "The authorization could not be completed.",
+    "stateExpired": "The authorization request expired. Start it again."
+  },
+  "settings": {
+    "title": "Advanced Integrations settings",
+    "features": "Features",
+    "connections": "Connections",
+    "oauth": "OAuth flow",
+    "expiryNotices": "Expiry notices",
+    "stateTtlSeconds": "Authorization request lifetime (seconds)",
+    "pkce": "Use PKCE",
+    "requireScopes": "Require the declared permissions before a connection becomes usable",
+    "reauthorizationWarningDays": "Warn this many days before a credential expires"
+  }
+}

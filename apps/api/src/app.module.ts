@@ -8,6 +8,7 @@ import { ACL_PROVIDERS } from './acl/acl.module.js';
 import { AclApiService } from './acl/acl-api.service.js';
 import { ADMIN_PANEL_CONTROLLERS, ADMIN_PANEL_PROVIDERS } from './admin-panel/index.js';
 import { navigationGroupKeyList } from './admin-panel/navigation-defaults.js';
+import { ADVANCED_INTEGRATIONS_CONTROLLERS, ADVANCED_INTEGRATIONS_PROVIDERS } from './advanced-integrations/index.js';
 import { AI_AGENTS_CONTROLLERS, AI_AGENTS_PROVIDERS } from './ai-agents/index.js';
 import type { ParentAclChecker } from './attachment/index.js';
 import { ATTACHMENT_CONTROLLERS, ATTACHMENT_PROVIDERS, PARENT_ACL_CHECK_TOKEN } from './attachment/index.js';
@@ -27,7 +28,6 @@ import { CUSTOMER_SUCCESS_CONTROLLERS, CUSTOMER_SUCCESS_PROVIDERS } from './cust
 import { DatabaseService } from './database/database.service.js';
 import { DOCUMENT_CONTROLLERS, DOCUMENT_PROVIDERS } from './document/index.js';
 import { EMAIL_CONTROLLERS, EMAIL_PROVIDERS } from './email/index.js';
-import { PREFERENCES_CONTROLLERS, PREFERENCES_PROVIDERS } from './preferences/index.js';
 import { ENTITY_CONTROLLERS, ENTITY_PROVIDERS } from './entity/entity.module.js';
 import type { PostgresRecordStore } from './entity/entity-record.store.js';
 import { ENTITY_STORE } from './entity/entity-record.store.js';
@@ -50,14 +50,15 @@ import { MARKETING_AUTOMATION_CONTROLLERS, MARKETING_AUTOMATION_PROVIDERS } from
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
 import { METADATA_STORE,MetadataStoreService,NAVIGATION_GROUP_KEYS } from './metadata/metadata-store.service.js';
 import { PORTAL_CONTROLLERS, PORTAL_PROVIDERS } from './portal/index.js';
+import { PREFERENCES_CONTROLLERS, PREFERENCES_PROVIDERS } from './preferences/index.js';
 import { PROCESS_CONTROLLERS, PROCESS_PROVIDERS } from './processes/index.js';
 import { PROJECTS_CONTROLLERS, PROJECTS_PROVIDERS } from './projects/index.js';
 import { REPORT_CONTROLLERS, REPORT_PROVIDERS } from './reports/index.js';
 import { SALES_CONTROLLERS, SALES_PROVIDERS } from './sales/index.js';
 import { SEARCH_CONTROLLERS, SEARCH_PROVIDERS } from './search/index.js';
 import { SERVICE_DESK_CONTROLLERS, SERVICE_DESK_PROVIDERS } from './service-desk/index.js';
-import { SETUP_CHECKLIST_CONTROLLERS, SETUP_CHECKLIST_PROVIDERS } from './setup-checklist/index.js';
 import { SETTINGS_CONTROLLERS, SETTINGS_PROVIDERS } from './settings/index.js';
+import { SETUP_CHECKLIST_CONTROLLERS, SETUP_CHECKLIST_PROVIDERS } from './setup-checklist/index.js';
 import type { StreamEntityMetadataLookup } from './stream/index.js';
 import { registerStreamUpdateHook, STREAM_CONTROLLERS, STREAM_METADATA_LOOKUP, STREAM_PROVIDERS, StreamUpdateHookService } from './stream/index.js';
 import { VOICE_COMMUNICATIONS_CONTROLLERS, VOICE_COMMUNICATIONS_PROVIDERS } from './voice-communications/index.js';
@@ -129,6 +130,10 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // `/api/v1/integrations/voice-communications/...` are static prefixes and must be matched before
     // the generic `:entity` wildcard.
     ...VOICE_COMMUNICATIONS_CONTROLLERS,
+    // Phase 19-INT: `/api/v1/AdvancedIntegrations/action/...` and the OAuth callback prefix
+    // `/api/v1/integrations/advanced-integrations/...` are static prefixes and must be matched before
+    // the generic `:entity` wildcard.
+    ...ADVANCED_INTEGRATIONS_CONTROLLERS,
     // `/api/v1/DocumentTemplate` and `/api/v1/document/action/preview` are static prefixes too.
     ...DOCUMENT_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
@@ -168,6 +173,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 19-VC: settings, provider registry/accounts, webhook ingress/processing, resolution,
     // consent/policy and the module health/navigation reports.
     ...VOICE_COMMUNICATIONS_PROVIDERS,
+    // Phase 19-INT: the permission gate, module settings, provider registry, the credential vault,
+    // the connection lifecycle and the OAuth flow.
+    ...ADVANCED_INTEGRATIONS_PROVIDERS,
     ...DOCUMENT_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,

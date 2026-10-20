@@ -1,0 +1,74 @@
+{
+  "module": {
+    "label": "Tích hợp nâng cao",
+    "description": "Kết nối với các hệ thống bên thứ ba đã được phê duyệt, với kết nối, thông tin xác thực và uỷ quyền không phụ thuộc nhà cung cấp."
+  },
+  "nav": {
+    "advancedIntegrations": "Tích hợp nâng cao",
+    "providers": "Kết nối tích hợp",
+    "connections": "Kết nối",
+    "credentials": "Thông tin xác thực",
+    "authorization": "Uỷ quyền"
+  },
+  "page": {
+    "title": "Tích hợp nâng cao",
+    "subtitle": "Các kết nối tích hợp mà bản cài đặt này cung cấp, các kết nối tới chúng và trạng thái uỷ quyền.",
+    "loadFailed": "Không tải được chẩn đoán của module.",
+    "loadFailedHint": "Kiểm tra migration 056 đã được áp dụng và bạn có quyền quản trị của module.",
+    "empty": "Chưa có kết nối tích hợp nào được đăng ký. Chưa thể kết nối cho tới khi có một kết nối tích hợp được triển khai."
+  },
+  "providers": {
+    "title": "Kết nối tích hợp",
+    "provider": "Kết nối tích hợp",
+    "status": "Trạng thái",
+    "category": "Nhóm",
+    "authentication": "Xác thực",
+    "executable": "Sẵn sàng",
+    "executableYes": "Sẵn sàng",
+    "executableNo": "Chưa dùng được",
+    "objects": "Đối tượng",
+    "capabilities": "Năng lực",
+    "setup": "Thiết lập"
+  },
+  "connections": {
+    "title": "Kết nối",
+    "name": "Tên",
+    "provider": "Kết nối tích hợp",
+    "status": "Trạng thái",
+    "owner": "Chủ sở hữu",
+    "enabled": "Đang bật",
+    "health": "Tình trạng",
+    "grantedScopes": "Quyền đã được cấp",
+    "missingScopes": "Quyền còn thiếu",
+    "credential": "Thông tin xác thực",
+    "hasCredential": "Đã lưu",
+    "noCredential": "Không có",
+    "pause": "Tạm dừng",
+    "resume": "Tiếp tục",
+    "revoke": "Thu hồi",
+    "remove": "Xoá",
+    "create": "Thêm kết nối",
+    "empty": "Chưa có kết nối nào."
+  },
+  "oauth": {
+    "title": "Uỷ quyền",
+    "authorize": "Uỷ quyền",
+    "reconnect": "Uỷ quyền lại",
+    "scopes": "Quyền được yêu cầu",
+    "missingScopes": "Nhà cung cấp chưa cấp các quyền này: {scopes}. Hãy uỷ quyền lại để yêu cầu lại.",
+    "expired": "Thông tin xác thực này đã hết hạn. Hãy uỷ quyền lại kết nối.",
+    "callbackFailed": "Không thể hoàn tất uỷ quyền.",
+    "stateExpired": "Yêu cầu uỷ quyền đã hết hạn. Hãy bắt đầu lại."
+  },
+  "settings": {
+    "title": "Cài đặt Tích hợp nâng cao",
+    "features": "Tính năng",
+    "connections": "Kết nối",
+    "oauth": "Luồng OAuth",
+    "expiryNotices": "Thông báo hết hạn",
+    "stateTtlSeconds": "Thời gian hiệu lực của yêu cầu uỷ quyền (giây)",
+    "pkce": "Dùng PKCE",
+    "requireScopes": "Yêu cầu đủ các quyền đã khai báo trước khi kết nối dùng được",
+    "reauthorizationWarningDays": "Cảnh báo trước N ngày khi thông tin xác thực hết hạn"
+  }
+}

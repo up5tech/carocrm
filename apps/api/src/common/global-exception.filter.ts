@@ -20,6 +20,47 @@ function isUniqueViolation(exception: unknown): boolean {
   return typeof exception === 'object' && exception !== null && (exception as { code?: unknown }).code === '23505';
 }
 
+/**
+ * Query parameters that must never reach a log line.
+ *
+ * The OAuth callback carries the authorization code and the single-use state in its query string
+ * (`/api/v1/integrations/advanced-integrations/oauth/callback`). An error on that route would
+ * otherwise put a usable credential into the log (PLAN §7.2: "Redact authorization codes and
+ * tokens from access logs, tracing, errors, analytics, and URLs").
+ */
+const SENSITIVE_QUERY_PARAMS: ReadonlySet<string> = new Set([
+  'code',
+  'state',
+  'access_token',
+  'refresh_token',
+  'id_token',
+  'token',
+  'secret',
+  'client_secret',
+  'api_key',
+  'apikey',
+  'password',
+]);
+
+/** Replaces the value of every sensitive query parameter with a marker. */
+export function redactUrl(url: string): string {
+  const queryStart = url.indexOf('?');
+  if (queryStart < 0) return url;
+  const path = url.slice(0, queryStart);
+  const query = url.slice(queryStart + 1);
+  const hashStart = query.indexOf('#');
+  const fragment = hashStart < 0 ? '' : query.slice(hashStart);
+  const params = (hashStart < 0 ? query : query.slice(0, hashStart)).split('&');
+  const redacted = params.map((param) => {
+    const separator = param.indexOf('=');
+    if (separator < 0) return param;
+    const key = param.slice(0, separator);
+    if (!SENSITIVE_QUERY_PARAMS.has(decodeURIComponent(key).toLowerCase())) return param;
+    return `${key}=[redacted]`;
+  });
+  return `${path}?${redacted.join('&')}${fragment}`;
+}
+
 @Catch()
 export class GlobalExceptionFilter {
   catch(exception: unknown, host: ExecutionContext): void {
@@ -68,9 +109,9 @@ export class GlobalExceptionFilter {
     };
 
     if (error.statusCode >= 500) {
-      log.error({ err: exception, requestId: request.id, path: request.url }, 'unhandled error');
+      log.error({ err: exception, requestId: request.id, path: redactUrl(request.url) }, 'unhandled error');
     } else {
-      log.debug({ code: error.code, requestId: request.id, path: request.url }, 'request error');
+      log.debug({ code: error.code, requestId: request.id, path: redactUrl(request.url) }, 'request error');
     }
 
     void reply.status(error.statusCode).send(body);
