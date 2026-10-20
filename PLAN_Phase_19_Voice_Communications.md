@@ -253,6 +253,8 @@ Adapters should declare capabilities instead of assuming every provider supports
 - `voice.outboundCall`
 - `voice.inboundEvents`
 - `voice.callStatusCallbacks`
+- `voice.callAnswer` (optional: agent-side answer from the call popup)
+- `voice.callHangup` (optional: agent-side decline/hang-up)
 - `voice.recordingMetadata`
 - `voice.recordingDownload` (optional)
 - `messaging.sms.send`

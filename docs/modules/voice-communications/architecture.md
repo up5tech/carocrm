@@ -44,7 +44,7 @@ optional integrations are detected by a metadata marker, never by an import.
 | SPA — inbox | `apps/web/src/pages/VoiceInboxPage.tsx` | Conversation list + timeline + composer + call log; click-to-call; snippet picker; assignment, status, handoff. |
 | SPA — call detail | `apps/web/src/components/VoiceCallDetail.tsx` | Recordings (authorized playback) and transcript / AI draft with review state. |
 | SPA — record panel | `apps/web/src/components/CommunicationsPanel.tsx` | Communications panel on Account/Contact/Lead/Opportunity/Case detail; lazy call expansion. |
-| SPA — incoming call | `apps/web/src/components/IncomingCallBanner.tsx` | Polls `action/calls/incoming`; number only; internal shell only (never the portal). |
+| SPA — incoming call | `apps/web/src/components/IncomingCallBanner.tsx` | Polls `action/calls/incoming`; renders the number, the permitted caller matches and only the `controls` the server granted (Accept / Decline-Hang up), plus a quick note and record association; internal shell only (never the portal). |
 | Persistence | `database/migrations/051…054_phase19_voice_communications*.sql` | Fifteen tables, additive only. |
 
 ## 3. Data flow

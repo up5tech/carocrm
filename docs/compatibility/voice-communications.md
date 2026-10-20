@@ -114,6 +114,15 @@ later sub-phase:
   with the form work; the API already accepts `relatedEntityType`/`relatedEntityId`.
 - **The inbox polls.** The platform has no realtime gateway (audit §2), so the banner and lists use
   10–30 s refetch intervals instead of a push channel.
+- **Agent-side call control is capability-gated, not assumed.** The incoming-call popup offers
+  Accept and Decline/Hang up only when the call's provider account grants `voice.callAnswer` /
+  `voice.callHangup` (`POST …/action/calls/:id/control` re-checks the same rule). The simulator
+  declares both; no production adapter does yet, so a live provider shows the popup without controls
+  until its adapter implements `controlCall`. Hold, transfer and mute remain unimplemented — the
+  capability list has no key for them, and the UI never implies support (§7.1).
+- **A provider account's capability grant is API-only.** `PATCH …/action/accounts/:key` sets it; the
+  Voice & Communications admin screen lists accounts and their grants but has no editor yet, so
+  granting a new capability to an existing account is still an administrator API call.
 - **Customer Success consumes events, not records.** `voiceCommunications.*` events carry ids and
   verbs only (no bodies), and the panel touchpoint endpoint returns counts and recency. Neither
   creates a second Activity, so the "no duplicate Activities" rule holds by construction.
