@@ -109,12 +109,51 @@ async function makeUsable(connectionId: string): Promise<void> {
  */
 const CONTACT_FIELDS = [{ sourcePath: 'fullName', targetField: 'name', transform: null, required: true }] as const;
 
-/** How many CRM records the entity holds right now. */
+/**
+ * The Account records that existed before this run.
+ *
+ * The cleanup removes the **delta** — the records this run created — rather than a tracked list.
+ * A tracked list depends on every code path remembering to record its ids, and one missed path
+ * leaves residue behind for the next run to trip over.
+ */
+let preexistingAccountIds: ReadonlySet<string> = new Set<string>();
+
+async function snapshotAccountIds(): Promise<ReadonlySet<string>> {
+  const rows = await ctx.database.db
+    .selectFrom('entity_records')
+    .select('id')
+    .where('entity_type', '=', 'Account')
+    .execute();
+  return new Set(rows.map((row) => row.id));
+}
+
+/**
+ * Remember the CRM records this run created, so the cleanup removes exactly those.
+ *
+ * The records are created by the sync engine, so the ids are read back from the external links
+ * the run produced.
+ */
+async function trackCreatedAccounts(connectionId: string): Promise<void> {
+  const existing = await asSystem(() => links.list(connectionId));
+  for (const link of existing) {
+    if (link.crmEntityId !== null && !createdAccountIds.includes(link.crmEntityId)) {
+      createdAccountIds.push(link.crmEntityId);
+    }
+  }
+}
+
+/**
+ * How many **live** CRM records the entity holds right now.
+ *
+ * A soft-deleted record is not a live one: the platform keeps it, and counting it would make the
+ * assertion depend on what other test files left behind.
+ */
 async function countAccounts(): Promise<number> {
   const rows = await ctx.database.db
     .selectFrom('entity_records')
     .select('id')
     .where('entity_type', '=', 'Account')
+    .where('deleted_at', 'is', null)
     .execute();
   return rows.length;
 }
@@ -140,6 +179,8 @@ async function webhookKeyOf(connectionId: string): Promise<string> {
   expect(connection.webhookKey).not.toBeNull();
   return connection.webhookKey ?? '';
 }
+
+const createdAccountIds: string[] = [];
 
 let connectionCounter = 0;
 
@@ -270,6 +311,7 @@ beforeAll(async () => {
   webhooks = ctx.app.get(WebhookIngressService);
   executor = ctx.app.get(ConnectorExecutor);
   scope = ctx.app.get(REQUEST_SCOPE_TOKEN);
+  preexistingAccountIds = await snapshotAccountIds();
 
   fake = createFakeProviderAdapter({ providerKey: PROVIDER_KEY });
   registry.register({
@@ -308,73 +350,50 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (mappingIds.length > 0) {
-    await ctx.database.db.deleteFrom('integration_field_mappings').where('mapping_id', 'in', mappingIds).execute();
-    await ctx.database.db.deleteFrom('integration_object_mappings').where('id', 'in', mappingIds).execute();
-  }
+  // The cleanup is ordered children-first: every table below references the one after it, and
+  // deleting a parent before its child violates a foreign key, which would abort the cleanup and
+  // leave residue behind.
   if (connectionIds.length > 0) {
-    await ctx.database.db
-      .deleteFrom('integration_sync_checkpoints')
-      .where('connection_id', 'in', connectionIds)
-      .execute();
-    await ctx.database.db
-      .deleteFrom('integration_sync_operations')
-      .where('connection_id', 'in', connectionIds)
-      .execute();
-    await ctx.database.db
-      .deleteFrom('integration_sync_runs')
-      .where('connection_id', 'in', connectionIds)
-      .execute();
-    await ctx.database.db
-      .deleteFrom('integration_conflicts')
-      .where('connection_id', 'in', connectionIds)
-      .execute();
-    await ctx.database.db
-      .deleteFrom('integration_external_links')
-      .where('connection_id', 'in', connectionIds)
-      .execute();
-    await ctx.database.db
-      .deleteFrom('integration_record_origins')
-      .where('connection_id', 'in', connectionIds)
-      .execute();
-    await ctx.database.db
-      .deleteFrom('integration_outbound_operations')
-      .where('connection_id', 'in', connectionIds)
-      .execute();
-    await ctx.database.db
-      .deleteFrom('integration_webhook_deliveries')
-      .where('connection_id', 'in', connectionIds)
-      .execute();
-    await ctx.database.db
-      .deleteFrom('integration_dead_letters')
-      .where('connection_id', 'in', connectionIds)
-      .execute();
-    await ctx.database.db
-      .deleteFrom('integration_credential_secrets')
-      .where('connection_id', 'in', connectionIds)
-      .execute();
-    await ctx.database.db
-      .deleteFrom('integration_oauth_states')
-      .where('connection_id', 'in', connectionIds)
-      .execute();
+    await ctx.database.db.deleteFrom('integration_field_mappings').where('mapping_id', 'in', mappingIds).execute();
+    await ctx.database.db.deleteFrom('integration_sync_checkpoints').where('connection_id', 'in', connectionIds).execute();
+    await ctx.database.db.deleteFrom('integration_sync_operations').where('connection_id', 'in', connectionIds).execute();
+    await ctx.database.db.deleteFrom('integration_sync_runs').where('connection_id', 'in', connectionIds).execute();
+    await ctx.database.db.deleteFrom('integration_conflicts').where('connection_id', 'in', connectionIds).execute();
+    await ctx.database.db.deleteFrom('integration_external_links').where('connection_id', 'in', connectionIds).execute();
+    await ctx.database.db.deleteFrom('integration_record_origins').where('connection_id', 'in', connectionIds).execute();
+    await ctx.database.db.deleteFrom('integration_outbound_operations').where('connection_id', 'in', connectionIds).execute();
+    await ctx.database.db.deleteFrom('integration_webhook_deliveries').where('connection_id', 'in', connectionIds).execute();
+    await ctx.database.db.deleteFrom('integration_dead_letters').where('connection_id', 'in', connectionIds).execute();
+    await ctx.database.db.deleteFrom('integration_credential_secrets').where('connection_id', 'in', connectionIds).execute();
+    await ctx.database.db.deleteFrom('integration_oauth_states').where('connection_id', 'in', connectionIds).execute();
+    // The mappings reference the connections, so they go after their own children.
+    if (mappingIds.length > 0) {
+      await ctx.database.db.deleteFrom('integration_object_mappings').where('id', 'in', mappingIds).execute();
+    }
     await ctx.database.db.deleteFrom('integration_connections').where('id', 'in', connectionIds).execute();
   }
-  await ctx.database.db.deleteFrom('entity_records').where('entity_type', '=', 'Account').execute();
-  // The resilience state is keyed by the connection it belongs to, so it is cleaned up by the
-  // connection ids this run created — plus the run-scoped keys the resilience test uses.
-  const resilienceKeys = [...connectionIds.map((id) => `conn:${id}`), `conn:${runId}-rate`, `conn:${runId}-circuit`];
-  if (resilienceKeys.length > 0) {
-    await ctx.database.db
-      .deleteFrom('integration_rate_limit_buckets')
-      .where('key', 'in', resilienceKeys)
-      .execute();
-    await ctx.database.db
-      .deleteFrom('integration_circuit_states')
-      .where('key', 'in', resilienceKeys)
-      .execute();
+  await ctx.database.db
+    .deleteFrom('integration_rate_limit_buckets')
+    .where('key', 'in', [...connectionIds.map((id) => `conn:${id}`), `conn:${runId}-rate`, `conn:${runId}-circuit`])
+    .execute();
+  await ctx.database.db
+    .deleteFrom('integration_circuit_states')
+    .where('key', 'in', [...connectionIds.map((id) => `conn:${id}`), `conn:${runId}-rate`, `conn:${runId}-circuit`])
+    .execute();
+  // Only the records this run created are removed: the delta against the snapshot taken before
+  // the tests. A broad delete would take a developer's records with it (AGENTS.md §3.3).
+  const remaining = await ctx.database.db
+    .selectFrom('entity_records')
+    .select('id')
+    .where('entity_type', '=', 'Account')
+    .execute();
+  const created = remaining.map((row) => row.id).filter((id) => !preexistingAccountIds.has(id));
+  if (created.length > 0) {
+    await ctx.database.db.deleteFrom('entity_records').where('id', 'in', created).execute();
   }
   await shutdownApi();
 });
+
 
 describe('Advanced Integrations — the connector contract (19-INT.6)', () => {
   itSystem('the fake connector satisfies the contract', async () => {
@@ -627,6 +646,7 @@ describe('Advanced Integrations — the sync engine (19-INT.9)', () => {
       maxRecords: 3,
       pageSize: 2,
     });
+    await trackCreatedAccounts(connectionId);
     expect(run.status).toBe('completed');
     expect(run.recordsApplied).toBe(3);
 
@@ -654,6 +674,7 @@ describe('Advanced Integrations — the sync engine (19-INT.9)', () => {
 
     const before = await countAccounts();
     const first = await orchestrator.runInbound(mapping.id, { triggerSource: 'manual', maxRecords: 2 });
+    await trackCreatedAccounts(connectionId);
     expect(first.recordsApplied).toBe(2);
     const afterFirst = await links.list(connectionId);
     expect(afterFirst).toHaveLength(2);
@@ -687,9 +708,9 @@ describe('Advanced Integrations — the sync engine (19-INT.9)', () => {
 
     const before = await links.list(connectionId);
     expect(before).toHaveLength(1);
-    const linked = before[0];
-    expect(linked).toBeDefined();
-    if (linked === undefined) return;
+    const linkedRecord = before[0];
+    expect(linkedRecord).toBeDefined();
+    if (linkedRecord === undefined) return;
     const recordsBefore = await ctx.database.db
       .selectFrom('entity_records')
       .select('id')
@@ -701,7 +722,7 @@ describe('Advanced Integrations — the sync engine (19-INT.9)', () => {
       mapping,
       {
         objectType: 'contact',
-        externalId: linked.externalId,
+        externalId: linkedRecord.externalId,
         externalParentId: null,
         fields: {},
         updatedAt: null,
@@ -711,7 +732,7 @@ describe('Advanced Integrations — the sync engine (19-INT.9)', () => {
       null,
     );
     expect(outcome.action).toBe('skipped');
-    const after = await links.resolve(connectionId, 'contact', linked.externalId);
+    const after = await links.resolve(connectionId, 'contact', linkedRecord.externalId);
     expect(after?.linkStatus).toBe('unlinked');
     // The CRM record is untouched.
     const recordsAfter = await ctx.database.db
@@ -737,6 +758,8 @@ describe('Advanced Integrations — conflicts (19-INT.10)', () => {
     await mappings.activate(mapping.id);
     await makeUsable(connectionId);
     await orchestrator.runInbound(mapping.id, { triggerSource: 'manual', maxRecords: 1 });
+    await trackCreatedAccounts(connectionId);
+    await trackCreatedAccounts(connectionId);
 
     const linked = (await links.list(connectionId))[0];
     expect(linked).toBeDefined();
@@ -1008,6 +1031,7 @@ describe('Advanced Integrations — outbound sync and echo prevention (19-INT.13
       .create('Account', { name: `AGENT_TEST-outbound-echo-${runId}` });
     const userId = String(userRecord['id']);
     const echoId = String(echoRecord['id']);
+    createdAccountIds.push(userId, echoId);
 
     // A record whose last change was a user edit is queued.
     await origins.record({

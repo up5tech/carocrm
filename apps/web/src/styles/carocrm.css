@@ -1926,3 +1926,180 @@ input[type="radio"] {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Phase 19-INT.14 / 19-INT.15 — the Advanced Integrations patch bay.
+ *
+ * The module reads as a signal panel: a list of wires between external systems
+ * and the CRM. The status rail is the one expressive device — a 3px bar whose
+ * colour encodes the health of a wire. It is always paired with a text label,
+ * so colour is never the only signal. Everything else is deliberately quiet.
+ * ------------------------------------------------------------------------- */
+
+/* The rail itself. */
+.carocrm-rail {
+  width: 3px;
+  min-height: 26px;
+  border-radius: 2px;
+  background: #d9dce1;
+  flex: 0 0 auto;
+  align-self: stretch;
+}
+
+.carocrm-rail--ok { background: #55c27f; }
+.carocrm-rail--warn { background: #e8a33d; }
+.carocrm-rail--error { background: #fa626b; }
+.carocrm-rail--idle { background: #d9dce1; }
+
+/* A rail beside its text label. */
+.carocrm-rail-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A row that leads with a rail. */
+.carocrm-rail-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+}
+
+/* The provider name in a catalog row: the one thing that is read first. */
+.carocrm-wire-name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.carocrm-wire-meta {
+  color: #737b85;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* A quiet secondary line. */
+.carocrm-quiet {
+  color: #a1a8b3;
+  font-size: 12px;
+}
+
+/* The warning stack on the connection detail. */
+.carocrm-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.carocrm-warning {
+  border-left: 2px solid #d9dce1;
+  padding: 6px 0 6px 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.carocrm-warning--warning { border-left-color: #e8a33d; }
+.carocrm-warning--error { border-left-color: #fa626b; }
+.carocrm-warning--info { border-left-color: #438eff; }
+
+.carocrm-warning-code {
+  color: #737b85;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-right: 8px;
+}
+
+/* The mapping builder: source panel, wire, target panel. */
+.carocrm-wiring {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.carocrm-wiring-pane {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 14px;
+  min-width: 0;
+}
+
+.carocrm-wiring-pane-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.carocrm-wire-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding-top: 26px;
+  color: #a1a8b3;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* The conflict workbench: the two sides of one record. */
+.carocrm-diff {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.carocrm-diff-side {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.carocrm-diff-side--local { border-left: 2px solid #438eff; }
+.carocrm-diff-side--remote { border-left: 2px solid #e8a33d; }
+
+.carocrm-diff-field {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 1px solid #fafafa;
+  font-size: 13px;
+}
+
+.carocrm-diff-field:first-of-type { border-top: 0; }
+
+.carocrm-diff-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  word-break: break-word;
+}
+
+/* A field that differs between the two sides. */
+.carocrm-diff-field--changed .carocrm-diff-value {
+  font-weight: 600;
+}
+
+/* The empty state of a panel. */
+.carocrm-panel-empty {
+  padding: 28px 0;
+  text-align: center;
+}
+
+/* Phone viewport: the wiring and the diff collapse into one column. */
+@media (max-width: 768px) {
+  .carocrm-wiring,
+  .carocrm-diff {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .carocrm-wire-link {
+    flex-direction: row;
+    padding-top: 0;
+    justify-content: center;
+  }
+}

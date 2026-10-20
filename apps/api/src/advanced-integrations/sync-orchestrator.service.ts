@@ -91,6 +91,24 @@ export type ApplyOutcome =
   | { readonly action: 'skipped'; readonly reason: string }
   | { readonly action: 'conflict'; readonly conflictId: string; readonly reason: string };
 
+interface OperationRow {
+  id: string;
+  run_id: string;
+  connection_id: string;
+  operation_type: string;
+  external_id: string | null;
+  crm_entity_type: string | null;
+  crm_entity_id: string | null;
+  status: string;
+  attempts: number;
+  idempotency_key: string | null;
+  payload: unknown;
+  error_code: string | null;
+  error_detail: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
 interface RunRow {
   id: string;
   connection_id: string;
@@ -517,6 +535,98 @@ export class SyncOrchestrator {
         reset_required = excluded.reset_required,
         updated_at = excluded.updated_at
     `.execute(this.database.db);
+  }
+
+  /**
+   * The operations of a run.
+   *
+   * An operation is the **unit of retry**. A failed operation is marked `retryable` so the
+   * operator can retry it on its own — the run and the checkpoint are untouched, so retrying one
+   * record never restarts the whole sync.
+   */
+  async listOperations(
+    runId: string,
+    options: { readonly status?: string | undefined; readonly limit?: number | undefined } = {},
+  ): Promise<
+    readonly {
+      readonly id: string;
+      readonly operationType: string;
+      readonly externalId: string | null;
+      readonly crmEntityType: string | null;
+      readonly crmEntityId: string | null;
+      readonly status: string;
+      readonly attempts: number;
+      readonly errorCode: string | null;
+      readonly errorDetail: string | null;
+      readonly createdAt: string;
+      readonly updatedAt: string;
+      readonly retryable: boolean;
+    }[]
+  > {
+    await this.connections.get((await this.requireRunRow(runId)).connection_id);
+    const limit = Math.min(Math.max(options.limit ?? 100, 1), 500);
+    const rows = await sql<OperationRow>`
+      select * from integration_sync_operations
+      where run_id = ${runId}
+        ${options.status === undefined ? sql`` : sql`and status = ${options.status}`}
+      order by created_at asc
+      limit ${limit}
+    `.execute(this.database.db);
+    return rows.rows.map((row) => ({
+      id: row.id,
+      operationType: row.operation_type,
+      externalId: row.external_id,
+      crmEntityType: row.crm_entity_type,
+      crmEntityId: row.crm_entity_id,
+      status: row.status,
+      attempts: row.attempts,
+      errorCode: row.error_code,
+      errorDetail: row.error_detail,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+      // An operation that was already applied is never retried: the effect is in place.
+      retryable: row.status === 'failed' || row.status === 'dead_letter',
+    }));
+  }
+
+  /**
+   * Re-queue **one** operation.
+   *
+   * The run and the checkpoint are deliberately left alone. The whole point of an operation-level
+   * retry is that a single bad record does not force a full re-sync (plan §15.5).
+   */
+  async retryOperation(operationId: string): Promise<{
+    readonly id: string;
+    readonly status: string;
+    readonly attempts: number;
+  }> {
+    const rows = await sql<OperationRow>`
+      select * from integration_sync_operations where id = ${operationId} limit 1
+    `.execute(this.database.db);
+    const operation = rows.rows[0];
+    if (!operation) throw new NotFoundError(`Operation "${operationId}" does not exist.`);
+    if (operation.status !== 'failed' && operation.status !== 'dead_letter') {
+      throw new ValidationError(
+        `An operation in "${operation.status}" cannot be retried. Only a failed or dead-lettered operation can.`,
+      );
+    }
+    await this.connections.get(operation.connection_id);
+    const attempts = operation.attempts + 1;
+    await sql`
+      update integration_sync_operations
+      set status = 'pending', attempts = ${attempts}, error_code = null, error_detail = null, updated_at = ${new Date()}
+      where id = ${operationId}
+    `.execute(this.database.db);
+    return { id: operation.id, status: 'pending', attempts };
+  }
+
+  private async requireRunRow(runId: string): Promise<{ connection_id: string }> {
+    const rows = await sql<{ connection_id: string }>`
+      select connection_id from integration_sync_runs where id = ${runId} limit 1
+    `.execute(this.database.db);
+    const row = rows.rows[0];
+    if (!row) throw new NotFoundError(`Sync run "${runId}" does not exist.`);
+    return row;
   }
 
   // ---------------------------------------------------------------------------

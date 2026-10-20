@@ -45,6 +45,20 @@ export const RESOLUTIONS = [
 ] as const;
 export type ConflictResolution = (typeof RESOLUTIONS)[number];
 
+export interface ConflictDetailView extends ConflictView {
+  /** The field authority rule that applies to each conflicting field. */
+  readonly fieldAuthority: Readonly<Record<string, string>>;
+  /** True when the record changed on either side since the conflict was detected. */
+  readonly stale: boolean;
+  readonly staleSide: 'local' | 'remote' | null;
+  readonly resolutions: readonly {
+    readonly value: ConflictResolution;
+    readonly label: string;
+    readonly enabled: boolean;
+    readonly reason: string | null;
+  }[];
+}
+
 export interface ConflictView {
   readonly id: string;
   readonly connectionId: string;
@@ -177,6 +191,121 @@ export class ConflictService {
   }
 
   /**
+   * The full detail of one conflict, with the field authority and the staleness check.
+   *
+   * **Stale detection** is what makes a resolution safe. A conflict compares two states of a
+   * record. If the record moved again after the conflict was detected, both sides are old, and
+   * applying the provider's value would overwrite a newer change with a stale one. The platform
+   * therefore refuses that resolution and says which side moved.
+   */
+  async detail(id: string): Promise<ConflictDetailView> {
+    const conflict = await this.get(id);
+    const mapping = await this.mappingOf(conflict.mappingId);
+    const localChangedAt = await this.localChangedAt(conflict);
+    const detectedAt = Date.parse(conflict.createdAt);
+    const localStale = localChangedAt !== null && localChangedAt > detectedAt;
+    const remoteStale = await this.remoteChangedAfter(conflict, detectedAt);
+    const stale = localStale || remoteStale;
+    const staleSide: 'local' | 'remote' | null = localStale ? 'local' : remoteStale ? 'remote' : null;
+
+    const resolutions: {
+      readonly value: ConflictResolution;
+      readonly label: string;
+      readonly enabled: boolean;
+      readonly reason: string | null;
+    }[] = [
+      {
+        value: 'keep_crm',
+        label: 'Keep the CRM value',
+        enabled: true,
+        reason: null,
+      },
+      {
+        value: 'keep_provider',
+        label: "Keep the provider's value",
+        // A stale comparison cannot decide the winner.
+        enabled: !stale,
+        reason: stale ? 'The record changed again after this conflict was detected.' : null,
+      },
+      {
+        value: 'ignore',
+        label: 'Ignore this conflict',
+        enabled: true,
+        reason: null,
+      },
+      {
+        value: 'unlink',
+        label: 'Unlink the record',
+        enabled: true,
+        reason: null,
+      },
+    ];
+
+    return {
+      ...conflict,
+      fieldAuthority: mapping?.fieldAuthority ?? {},
+      stale,
+      staleSide,
+      resolutions,
+    };
+  }
+
+  /**
+   * The mapping's field authority, so the workbench can say who wins each field.
+   */
+  private async mappingOf(mappingId: string): Promise<{ fieldAuthority: Record<string, string> } | null> {
+    const rows = await sql<{ field_authority: unknown }>`
+      select field_authority from integration_object_mappings where id = ${mappingId} limit 1
+    `.execute(this.database.db);
+    const row = rows.rows[0];
+    if (!row) return null;
+    const authority = row.field_authority;
+    if (typeof authority !== 'object' || authority === null || Array.isArray(authority)) {
+      return { fieldAuthority: {} };
+    }
+    const out: Record<string, string> = {};
+    for (const [field, value] of Object.entries(authority as Record<string, unknown>)) {
+      if (typeof value === 'string') out[field] = value;
+    }
+    return { fieldAuthority: out };
+  }
+
+  /** When the CRM record last changed, or `null` when it cannot be read. */
+  private async localChangedAt(conflict: ConflictView): Promise<number | null> {
+    if (conflict.crmEntityType === null || conflict.crmEntityId === null) return null;
+    try {
+      const record = await this.entities.get(conflict.crmEntityType, conflict.crmEntityId);
+      const modifiedAt = record['modifiedAt'];
+      if (typeof modifiedAt !== 'string') return null;
+      const at = Date.parse(modifiedAt);
+      return Number.isNaN(at) ? null : at;
+    } catch {
+      // A record that cannot be read is not evidence of staleness.
+      return null;
+    }
+  }
+
+  /**
+   * Whether the provider side moved after the conflict was detected.
+   *
+   * The provider's own timestamp is carried on the external link, so it is read from there.
+   */
+  private async remoteChangedAfter(conflict: ConflictView, detectedAt: number): Promise<boolean> {
+    if (conflict.crmEntityType === null || conflict.crmEntityId === null) return false;
+    const rows = await sql<{ provider_updated_at: Date | null }>`
+      select provider_updated_at from integration_external_links
+      where connection_id = ${conflict.connectionId}
+        and object_type = ${conflict.objectType}
+        and external_id = ${conflict.externalId}
+        and link_status = 'linked'
+      limit 1
+    `.execute(this.database.db);
+    const updatedAt = rows.rows[0]?.provider_updated_at ?? null;
+    if (updatedAt === null) return false;
+    return updatedAt.getTime() > detectedAt;
+  }
+
+  /**
    * Resolve a conflict.
    *
    * The resolution decides what happens to the CRM record:
@@ -193,6 +322,17 @@ export class ConflictService {
     }
     if (!RESOLUTIONS.includes(resolution)) {
       throw new ValidationError(`Unknown conflict resolution "${resolution}".`);
+    }
+    if (resolution === 'keep_provider') {
+      // A stale comparison must not decide the winner: both sides are older states, and applying
+      // the provider's value would overwrite a newer change with a stale one.
+      const detail = await this.detail(id);
+      if (detail.stale) {
+        throw new ValidationError(
+          'The record changed again after this conflict was detected, so the provider’s value cannot be applied. Re-run the sync and resolve the fresh conflict.',
+          { stale: true, staleSide: detail.staleSide },
+        );
+      }
     }
     if (resolution === 'keep_provider') {
       if (conflict.crmEntityType === null || conflict.crmEntityId === null) {

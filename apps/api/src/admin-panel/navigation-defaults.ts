@@ -85,6 +85,18 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     inQuickSearch: true,
     permission: { entity: 'VoiceProviderAccount', action: 'read' },
   },
+  // Phase 19-INT.14: the connector workspace. Its records are dedicated tables, not metadata
+  // entities, so the page is gated on the same synthetic capability its API asserts.
+  {
+    key: 'advancedIntegrations',
+    kind: 'page',
+    route: '/advanced-integrations',
+    labelKey: 'advancedintegrations.module.label',
+    icon: 'ApiOutlined',
+    order: 79,
+    inQuickSearch: true,
+    permission: { entity: 'IntegrationConnection', action: 'read' },
+  },
 ];
 
 export const NAVIGATION_CONTAINER_GROUPS: readonly NavigationGroupSeed[] = [

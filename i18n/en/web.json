@@ -1273,6 +1273,7 @@
       "security": "Security"
     },
     "tabs": {
+      "advancedIntegrations": "Advanced Integrations",
       "general": "General",
       "localization": "Language and time",
       "menu": "Main menu",
@@ -1293,6 +1294,7 @@
       "webhooks": "Webhooks"
     },
     "descriptions": {
+      "advancedIntegrations": "Connectors to approved third-party systems, with connections, permissions and authorization.",
       "general": "Page title, logo and the footer line this instance shows.",
       "localization": "Languages people can switch to, the starting language and the working time zone.",
       "menu": "Enable, rename, reorder and colour the main menu for everyone.",

@@ -494,7 +494,57 @@ The engine's design decisions are recorded in the feature contract §7 (D-10 to 
 | The raw body is captured by a **scoped** Fastify `preParsing` hook | Buffering every request body would cost memory on every call and would break the multipart streaming the attachment upload relies on |
 | The echo guard is a **record-origin table** | The origin is not record data, is not shown to an operator, and cannot be forged by a user editing a record |
 
-### 11.4 What was deliberately left out
+### 11.4 The administration surface (19-INT.14 / 19-INT.15)
+
+The module now has a page of its own at `/advanced-integrations`, five surfaces (catalog,
+connections, mapping builder, sync runs, conflict workbench) and one admin-panel tab in the
+existing `integrations` group.
+
+The design decisions are recorded in the feature contract §7 (D-14 to D-18). The two that matter
+most:
+
+- **The catalog is a dense list, not a card grid.** An administrator with twenty connectors scans
+  for one; they do not browse. The one expressive device is a **status rail** — a 3px bar encoding
+  a wire's health — and it is always paired with a text label, so colour is never the only signal.
+- **The mapping builder is a two-pane view with a wire between them.** A mapping is a routing
+  decision, and the layout says so before a word is read.
+
+The backend grew a `ConnectionDetailService` (the catalog and the connection detail document), a
+field catalogue in `MappingService`, operation listing and retry in `SyncOrchestrator`, and conflict
+detail with **stale detection** in `ConflictService`. A stale conflict — one where the record moved
+again after the conflict was detected — refuses the provider's value, because both sides are then
+older states and applying one would overwrite a newer change with a stale one.
+
+### 11.5 Verification (19-INT.14 / 19-INT.15)
+
+| Check | Result |
+| --- | --- |
+| `pnpm typecheck` | **PASS** (root + the web app) |
+| `pnpm test` | **PASS — 135 test files, 1804 tests, 0 failures**, twice in a row. The new suite contributes 10 tests in `apps/api/test/advanced-integrations-admin.test.ts` |
+| `pnpm lint` | **5 errors, all pre-existing** in files this work did not touch: `apps/api/src/setup-checklist/index.ts`, `apps/web/src/admin/AdminSettingsShell.tsx`, `apps/web/src/pages/DashboardsPage.tsx:51`, `apps/web/src/pages/EntityListPage.tsx:376-377` |
+| Database | 111 tables, 58 migrations, `metadata_entries` unchanged at 110. **0 rows across all 16 module tables** after the suite. No database created, dropped, truncated or reset |
+| Browser | `e2e/advanced-integrations.spec.ts` covers the page, its empty states and its capability gating. The **end-to-end configuration of a fake connector is covered by the API suite**, because a fake connector is code-registered and does not exist in a browser build |
+
+### 11.6 A defect this work found, and did not paper over
+
+The engine test's cleanup originally deleted **every** `Account` record in the database. That is a
+violation of AGENTS.md §3.3 ("Never run global cleanup queries or broad deletes to remove test
+data"), and it was worse than a residue problem: it also destroyed the platform's soft-deleted
+history and would have taken a developer's own Account records with it. It is now a **precise
+delta** — the records this run created, against a snapshot taken before the tests.
+
+Removing it exposed a **pre-existing** condition, which is not this work's to own: ten test files
+create `Account` records and never remove them —
+`acl-matrix`, `entity-crud`, `hooks-events`, `i18n`, `identity-admin`,
+`marketing-automation-audience`, `metadata-api`, `navigation`, `sales-integrations-api` and
+`service-desk-portal`. The broad delete had been masking that, so each full-suite run left ~13
+`Account` records behind.
+
+The end state is now **exactly the repository's pre-INT.6 baseline**: the records accumulated
+before this work too, and the suite is stable with them present. Fixing the ten files is a focused
+change to those ten files and is left to a separate task rather than smuggled into this one.
+
+### 11.7 What was deliberately left out
 
 | Omitted | Why | Lands in |
 | --- | --- | --- |
@@ -503,4 +553,5 @@ The engine's design decisions are recorded in the feature contract §7 (D-10 to 
 | A metadata entity for the module | The module's state is control-plane and must not be reachable through the generic entity API | — |
 | Any connector | No connector is enabled by default (19-INT.1 acceptance) | 19-INT.16+ |
 | Cross-module contract routing | The engine writes through the generic entity API; routing a write through a domain module's own service (for example `SalesIntegrationService`) is 19-INT.25's work | 19-INT.25 |
+| A **frontend unit-test** harness | The SPA has no test setup — `vitest.config.ts` includes only `apps/api/test/**` and `packages/*/src/**`, and there is no jsdom or testing-library. Frontend verification is therefore **Playwright only**; the end-to-end configuration of a fake connector is covered by the API suite, because a fake connector is code-registered and does not exist in a browser build | — |
 

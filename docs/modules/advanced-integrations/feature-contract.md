@@ -265,6 +265,11 @@ network access.
 | D-11 | One **executor** is the only path from the engine to a connector | The reliability rules (connection state, rate limit, circuit breaker, credential resolution) live in one place, so no engine code can call a provider without them |
 | D-12 | The raw body is captured by a **scoped** Fastify `preParsing` hook, not by replacing the JSON parser | Buffering every request body would cost memory on every call and would interfere with the multipart streaming the attachment upload relies on. The default parser is untouched |
 | D-13 | The echo guard is a **record-origin table**, not a flag on the record | The origin is not part of the record's data, is not shown to an operator, and cannot be forged by a user editing a record |
+| D-14 | The module is a **page** at `/advanced-integrations` with five surfaces, plus one admin-panel tab in the existing `integrations` group | A page-kind admin tab points at the module; a settings-kind tab with no settings document would render an empty panel |
+| D-15 | The catalog is a **dense list**, not a card grid | An administrator with twenty connectors scans for one; they do not browse |
+| D-16 | The **status rail** is the module's only expressive device | A 3px bar encoding a wire's health, always paired with a text label, so colour is never the only signal (AGENTS.md §8) |
+| D-17 | The mapping builder is a **two-pane layout with a wire between them** | A mapping is a routing decision; the layout says so before a word is read |
+| D-18 | The end-to-end configuration of a fake connector is covered by the **API suite**, not the browser suite | A fake connector is code-registered and therefore does not exist in a browser build; the browser spec covers the page, its empty states and its capability gating |
 
 D-5 revises the *provisional* storage choice recorded in
 `docs/implementation/advanced-integrations-audit.md` §4. The reason is specific: a metadata entity

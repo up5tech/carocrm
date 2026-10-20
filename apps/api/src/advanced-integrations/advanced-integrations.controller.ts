@@ -1,19 +1,24 @@
 import { timingSafeEqual } from 'node:crypto';
 
 import { AuthenticationFailedError, InvalidQueryError, ValidationError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Delete, Get, Headers, HttpCode, Inject, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Inject, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { sql } from 'kysely';
 import type { ZodTypeAny } from 'zod';
 
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
+import { DatabaseService } from '../database/database.service.js';
+import { JobsService } from '../jobs/jobs.service.js';
 import { runAsAdvancedIntegrationsSystem } from './advanced-integrations-authority.js';
 import { AdvancedIntegrationsHealthService } from './advanced-integrations-health.service.js';
 import { AdvancedIntegrationsNavigationService } from './advanced-integrations-navigation.service.js';
 import { AdvancedIntegrationsPermissionService } from './advanced-integrations-permission.service.js';
 import { AdvancedIntegrationsSettingsService } from './advanced-integrations-settings.service.js';
 import { ConflictService } from './conflict.service.js';
+import { ConnectionDetailService } from './connection-detail.service.js';
 import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
+import { ConnectorExecutor } from './connector-executor.service.js';
 import { DeadLetterService } from './dead-letter.service.js';
 import {
   AuthorizeSchema,
@@ -27,6 +32,7 @@ import {
   MappingPreviewSchema,
   OutboundEventSchema,
   OutboundPushSchema,
+  RotateSecretSchema,
   SyncRunSchema,
   WebhookProcessSchema,
 } from './dto/advanced-integrations-shapes.js';
@@ -35,6 +41,7 @@ import { IntegrationRegistry } from './integration-registry.service.js';
 import { MappingService } from './mapping.service.js';
 import { OAuthFlowService } from './oauth-flow.service.js';
 import { OutboundSyncService } from './outbound-sync.service.js';
+import { redactProviderError } from './provider-error.js';
 import { SyncOrchestrator } from './sync-orchestrator.service.js';
 import { WebhookIngressService } from './webhook-ingress.service.js';
 
@@ -70,6 +77,10 @@ export class AdvancedIntegrationsController {
     @Inject(ExternalLinkService) private readonly links: ExternalLinkService,
     @Inject(WebhookIngressService) private readonly webhooks: WebhookIngressService,
     @Inject(OutboundSyncService) private readonly outbound: OutboundSyncService,
+    @Inject(ConnectionDetailService) private readonly details: ConnectionDetailService,
+    @Inject(ConnectorExecutor) private readonly executor: ConnectorExecutor,
+    @Inject(JobsService) private readonly jobs: JobsService,
+    @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
@@ -397,6 +408,170 @@ export class AdvancedIntegrationsController {
   async listOutbound(@Param('id') id: string) {
     await this.permissions.assert('use');
     return { list: await this.outbound.listOperations(id) };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 19-INT.14 — the catalog and the connection detail
+  // ---------------------------------------------------------------------------
+
+  /** The connector catalog. A visible connector is not an installed one. */
+  @Get('action/catalog')
+  async catalog() {
+    await this.permissions.assert('providerAdmin');
+    return { list: await this.details.catalog() };
+  }
+
+  /** Everything an operator needs about one connection, including what needs attention. */
+  @Get('action/connections/:id/detail')
+  async connectionDetail(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return this.details.detail(id);
+  }
+
+  /**
+   * Test a connection.
+   *
+   * The provider is asked to confirm the account with its **lowest-cost, read-only** call. The
+   * test never creates, updates, charges, sends or deletes anything at the provider.
+   */
+  @Post('action/connections/:id/test')
+  async testConnection(@Param('id') id: string) {
+    await this.permissions.assert('connectionAdmin');
+    const connection = await this.connections.get(id);
+    const provider = this.registry.require(connection.providerKey);
+    if (provider.adapter === null) {
+      throw new ValidationError(`Provider "${connection.providerKey}" has no connector bound.`, {
+        providerKey: connection.providerKey,
+      });
+    }
+    const checkedAt = new Date().toISOString();
+    try {
+      const result = await this.executor.call(id, async (context, adapter) =>
+        adapter.validateConnection(context),
+      );
+      await this.connections.recordTest(id, { ok: result.ok, code: result.code });
+      return {
+        ok: result.ok,
+        code: result.code,
+        message: result.message,
+        accountRef: result.accountRef,
+        grantedScopes: result.grantedScopes,
+        checkedAt,
+      };
+    } catch (error) {
+      const redacted = redactProviderError(error);
+      await this.connections.recordTest(id, { ok: false, code: redacted.code });
+      return {
+        ok: false,
+        code: redacted.code,
+        message: null,
+        accountRef: null,
+        grantedScopes: [],
+        checkedAt,
+      };
+    }
+  }
+
+  /** Replace a stored secret. The value is write-only: it is never read back. */
+  @Post('action/connections/:id/rotate-secret')
+  async rotateSecret(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(RotateSecretSchema, body);
+    return this.connections.storeCredential({
+      connectionId: id,
+      kind: input.kind,
+      value: input.value,
+      expiresAt: input.expiresAt ?? null,
+    });
+  }
+
+  /** Reset the checkpoint so the next run is a full re-sync. The run itself is not started here. */
+  @Post('action/connections/:id/reconcile')
+  async reconcile(@Param('id') id: string) {
+    await this.permissions.assert('connectionAdmin');
+    const resetMappings = await this.connections.resetCheckpoints(id);
+    return { resetMappings, message: 'The next run of every mapping does a full re-sync.' };
+  }
+
+  /** The job log of a connection's work. */
+  @Get('action/connections/:id/logs')
+  async connectionLogs(@Param('id') id: string, @Query() query: Record<string, string | undefined>) {
+    await this.permissions.assert('use');
+    await this.connections.get(id);
+    const limit = Math.min(Math.max(Number(query['limit'] ?? 50) || 50, 1), 200);
+    const rows = await sql<{
+      id: string;
+      job: string;
+      status: string;
+      created_at: Date;
+      finished_at: Date | null;
+      message: string | null;
+      last_error: string | null;
+    }>`
+      select id, job, status, created_at, finished_at, message, last_error
+      from jobs
+      where job like 'advancedIntegrations.%'
+        and target->>'connectionId' = ${id}
+      order by created_at desc
+      limit ${limit}
+    `.execute(this.database.db);
+    return {
+      list: rows.rows.map((row) => ({
+        id: row.id,
+        job: row.job,
+        status: row.status,
+        createdAt: row.created_at.toISOString(),
+        finishedAt: row.finished_at ? row.finished_at.toISOString() : null,
+        message: row.message,
+        lastError: row.last_error,
+      })),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 19-INT.15 — the mapping builder, the runs and the conflicts
+  // ---------------------------------------------------------------------------
+
+  /** The field catalogue of a mapping, with what an operator should check before publishing. */
+  @Get('action/mappings/:id/fields')
+  async mappingFields(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return this.mappings.listFields(id);
+  }
+
+  /** The operations of a run. */
+  @Get('action/runs/:id/operations')
+  async runOperations(@Param('id') id: string, @Query() query: Record<string, string | undefined>) {
+    await this.permissions.assert('use');
+    return {
+      list: await this.orchestrator.listOperations(id, {
+        ...(query['status'] === undefined ? {} : { status: query['status'] }),
+        ...(query['limit'] === undefined ? {} : { limit: Number(query['limit']) }),
+      }),
+    };
+  }
+
+  /**
+   * Retry **one** operation.
+   *
+   * The run and the checkpoint are untouched, so retrying a single record never restarts the
+   * whole sync.
+   */
+  @Post('action/operations/:id/retry')
+  async retryOperation(@Param('id') id: string) {
+    await this.permissions.assert('connectionAdmin');
+    const operation = await this.orchestrator.retryOperation(id);
+    await this.jobs.enqueue({
+      job: 'advancedIntegrations.retryOperation',
+      data: { operationId: operation.id },
+    });
+    return operation;
+  }
+
+  /** One conflict, with the field authority and the staleness check. */
+  @Get('action/conflicts/:id')
+  async conflict(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return this.conflicts.detail(id);
   }
 
   // ---------------------------------------------------------------------------

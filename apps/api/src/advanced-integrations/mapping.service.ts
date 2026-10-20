@@ -5,7 +5,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
 import { DatabaseService } from '../database/database.service.js';
+import { METADATA_STORE, type MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
+import { ConnectorExecutor } from './connector-executor.service.js';
+import { crmFieldsOf, type CrmFieldView, isLossyConversion } from './integration-fields.js';
 import { IntegrationRegistry } from './integration-registry.service.js';
 import {
   type CompiledFieldMapping,
@@ -88,6 +91,34 @@ export interface MappingFieldInput extends FieldMappingInput {
   readonly direction?: MappingDirection;
 }
 
+export interface ProviderFieldView {
+  readonly name: string;
+  readonly label: string;
+  readonly type: string;
+  readonly required: boolean;
+  readonly unique: boolean;
+  readonly identifier: boolean;
+  readonly sensitive: boolean;
+}
+
+export interface MappingWarning {
+  readonly code: string;
+  readonly severity: 'info' | 'warning' | 'error';
+  readonly message: string;
+}
+
+export interface MappingFieldsView {
+  readonly mappingId: string;
+  readonly mappingVersion: number;
+  readonly crmEntityType: string;
+  readonly objectType: string;
+  readonly direction: string;
+  readonly providerFields: readonly ProviderFieldView[];
+  readonly crmFields: readonly CrmFieldView[];
+  readonly fields: readonly FieldMappingView[];
+  readonly warnings: readonly MappingWarning[];
+}
+
 export interface ObjectMappingCreateInput {
   readonly connectionId: string;
   readonly objectType: string;
@@ -147,6 +178,8 @@ export class MappingService {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(ConnectionLifecycleService) private readonly connections: ConnectionLifecycleService,
     @Inject(IntegrationRegistry) private readonly registry: IntegrationRegistry,
+    @Inject(ConnectorExecutor) private readonly executor: ConnectorExecutor,
+    @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
   ) {}
 
   /** Every mapping of a connection. */
@@ -368,6 +401,102 @@ export class MappingService {
         required: field.required,
       })),
     );
+  }
+
+  /**
+   * The field catalogue of a mapping: the provider's fields, the CRM's fields, and what an
+   * operator should look at before publishing.
+   *
+   * The warnings are the reason this exists. An unmapped required field, a lossy conversion and a
+   * sensitive target are all things that should be seen **before** a mapping goes live, not
+   * discovered by the first sync.
+   */
+  async listFields(mappingId: string): Promise<MappingFieldsView> {
+    const mapping = await this.get(mappingId);
+    const crmFields = crmFieldsOf(this.metadata, mapping.crmEntityType);
+    const providerFields = await this.providerFields(mapping);
+
+    const warnings: MappingWarning[] = [];
+    const mappedTargets = new Set(mapping.fields.map((field) => field.targetField));
+    const crmFieldByName = new Map(crmFields.map((field) => [field.name, field]));
+    const providerFieldByName = new Map(providerFields.map((field) => [field.name, field]));
+
+    for (const field of crmFields) {
+      if (field.required && !mappedTargets.has(field.name)) {
+        warnings.push({
+          code: 'REQUIRED_FIELD_UNMAPPED',
+          severity: 'error',
+          message: `"${field.label}" is required by ${mapping.crmEntityType} and nothing writes to it.`,
+        });
+      }
+    }
+
+    for (const field of mapping.fields) {
+      const crmField = crmFieldByName.get(field.targetField);
+      if (crmField === undefined) {
+        warnings.push({
+          code: 'TARGET_FIELD_UNKNOWN',
+          severity: 'error',
+          message: `"${field.targetField}" is not a field of ${mapping.crmEntityType}. The mapping will fail at run time.`,
+        });
+        continue;
+      }
+      if (crmField.sensitive) {
+        warnings.push({
+          code: 'SENSITIVE_TARGET',
+          severity: 'warning',
+          message: `"${crmField.label}" holds sensitive data. Check that the provider is allowed to receive it.`,
+        });
+      }
+      const providerField = providerFieldByName.get(field.sourcePath);
+      if (providerField !== undefined && isLossyConversion(providerField.type, crmField.type)) {
+        warnings.push({
+          code: 'LOSSY_CONVERSION',
+          severity: 'warning',
+          message: `"${field.sourcePath}" is a ${providerField.type} and "${crmField.label}" is a ${crmField.type}. Some values cannot be represented.`,
+        });
+      }
+    }
+
+    if (providerFields.length === 0) {
+      warnings.push({
+        code: 'NO_PROVIDER_FIELDS',
+        severity: 'info',
+        message: 'This connector does not publish its field list, so the mapping cannot be checked field by field.',
+      });
+    }
+
+    return {
+      mappingId: mapping.id,
+      mappingVersion: mapping.mappingVersion,
+      crmEntityType: mapping.crmEntityType,
+      objectType: mapping.objectType,
+      direction: mapping.direction,
+      providerFields,
+      crmFields,
+      fields: mapping.fields,
+      warnings,
+    };
+  }
+
+  /**
+   * The provider's field list, read through the connector.
+   *
+   * A connector that does not publish its fields yields an empty list, not an error — the builder
+   * must still render.
+   */
+  private async providerFields(mapping: ObjectMappingView): Promise<readonly ProviderFieldView[]> {
+    const connection = await this.connections.get(mapping.connectionId);
+    if (connection.status !== 'connected' && connection.status !== 'degraded') return [];
+    try {
+      return await this.executor.call(mapping.connectionId, async (context, adapter) => {
+        if (adapter.listFields === undefined) return [];
+        return adapter.listFields(context, mapping.objectType);
+      });
+    } catch {
+      // A connector that cannot be reached simply publishes no fields right now.
+      return [];
+    }
   }
 
   private async replaceFields(mappingId: string, fields: readonly MappingFieldInput[]): Promise<void> {

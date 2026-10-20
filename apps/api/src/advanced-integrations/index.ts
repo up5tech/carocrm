@@ -4,6 +4,7 @@ import { AdvancedIntegrationsNavigationService } from './advanced-integrations-n
 import { AdvancedIntegrationsPermissionService } from './advanced-integrations-permission.service.js';
 import { AdvancedIntegrationsSettingsService } from './advanced-integrations-settings.service.js';
 import { ConflictService } from './conflict.service.js';
+import { ConnectionDetailService } from './connection-detail.service.js';
 import { ConnectionLifecycleService,CREDENTIAL_VAULT } from './connection-lifecycle.service.js';
 import { ConnectorExecutor } from './connector-executor.service.js';
 import { EncryptedCredentialVault } from './credential-vault.js';
@@ -70,6 +71,8 @@ export const ADVANCED_INTEGRATIONS_PROVIDERS = [
   OutboundSyncService,
   // 19-INT.6 / 19-INT.11 — the single path from the engine to a connector.
   ConnectorExecutor,
+  // 19-INT.14 — the connector catalog and the connection detail document.
+  ConnectionDetailService,
 ] as const;
 
 export {
@@ -92,6 +95,7 @@ export {
   ADVANCED_INTEGRATIONS_SETTINGS_KEY,
 } from './advanced-integrations-module.js';
 export { ConflictService } from './conflict.service.js';
+export { ConnectionDetailService } from './connection-detail.service.js';
 export { ConnectorExecutor } from './connector-executor.service.js';
 export { DeadLetterService } from './dead-letter.service.js';
 export { ExternalLinkService } from './external-link.service.js';

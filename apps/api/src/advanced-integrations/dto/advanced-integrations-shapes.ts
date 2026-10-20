@@ -182,3 +182,12 @@ export const OutboundPushSchema = z
     operationId: z.string().trim().min(1).max(64),
   })
   .strict();
+
+export const RotateSecretSchema = z
+  .object({
+    kind: z.enum(['api_key', 'client_secret', 'webhook_secret', 'signing_secret']),
+    /** The secret itself. It is write-only: no read path ever returns it. */
+    value: z.string().min(1).max(8192),
+    expiresAt: z.string().trim().max(40).nullish(),
+  })
+  .strict();

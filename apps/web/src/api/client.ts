@@ -1,6 +1,7 @@
 import type {
   AclDefinition,
   AdminPanelView,
+  AdvancedIntegrationsCapabilitiesView,
   AIAgentApprovalListResult,
   AIAgentApprovalView,
   AIAgentBudgetPolicy,
@@ -38,6 +39,24 @@ import type {
   ExtensionNavItem,
   ExtensionRow,
   IndexDefinition,
+  IntegrationCatalogResult,
+  IntegrationConflict,
+  IntegrationConflictListResult,
+  IntegrationConflictResolution,
+  IntegrationConnection,
+  IntegrationConnectionDetail,
+  IntegrationConnectionListResult,
+  IntegrationConnectionTestResult,
+  IntegrationJobLogResult,
+  IntegrationMappingFields,
+  IntegrationMappingListResult,
+  IntegrationMappingPreview,
+  IntegrationMappingView,
+  IntegrationReconcileResult,
+  IntegrationSyncOperation,
+  IntegrationSyncOperationListResult,
+  IntegrationSyncRun,
+  IntegrationSyncRunListResult,
   InternalInfoView,
   LayoutDefinition,
   ListResult,
@@ -234,6 +253,11 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
 /** A JSON POST — every Phase 19 domain command is an action POST (PLAN §7.2). */
 function post(input: unknown): RequestInit {
   return { method: 'POST', body: JSON.stringify(input ?? {}) };
+}
+
+/** A JSON PATCH — a partial update of one record. */
+function patch(input: unknown): RequestInit {
+  return { method: 'PATCH', body: JSON.stringify(input ?? {}) };
 }
 
 function listQuery(params: ListParams): string {
@@ -1395,5 +1419,117 @@ export const api = {
   voiceRecordPanel: (entityType: string, entityId: string, params: { limit?: number; offset?: number } = {}) =>
     request<VoiceRecordPanelView>(
       `/VoiceCommunications/action/panels/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}${simpleQuery(params)}`,
+    ),
+
+  /* ---------------------------------------------------------------------
+   * Phase 19-INT.14 / 19-INT.15 — the Advanced Integrations admin surface.
+   * ------------------------------------------------------------------- */
+
+  advancedIntegrationsCapabilities: () =>
+    request<AdvancedIntegrationsCapabilitiesView>('/AdvancedIntegrations/action/capabilities'),
+  integrationCatalog: () => request<IntegrationCatalogResult>('/AdvancedIntegrations/action/catalog'),
+  integrationConnections: () => request<IntegrationConnectionListResult>('/AdvancedIntegrations/action/connections'),
+  integrationConnection: (id: string) =>
+    request<IntegrationConnectionDetail>(`/AdvancedIntegrations/action/connections/${encodeURIComponent(id)}/detail`),
+  integrationConnectionTest: (id: string) =>
+    request<IntegrationConnectionTestResult>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(id)}/test`,
+      post({}),
+    ),
+  integrationRotateSecret: (id: string, input: { kind: string; value: string }) =>
+    request<IntegrationConnection>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(id)}/rotate-secret`,
+      post(input),
+    ),
+  integrationReconcile: (id: string) =>
+    request<IntegrationReconcileResult>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(id)}/reconcile`,
+      post({}),
+    ),
+  integrationLogs: (id: string, params: { limit?: number } = {}) =>
+    request<IntegrationJobLogResult>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(id)}/logs${simpleQuery(params)}`,
+    ),
+  integrationMappings: () => request<IntegrationMappingListResult>('/AdvancedIntegrations/action/mappings'),
+  integrationMapping: (id: string) =>
+    request<IntegrationMappingView>(`/AdvancedIntegrations/action/mappings/${encodeURIComponent(id)}`),
+  integrationMappingFields: (id: string) =>
+    request<IntegrationMappingFields>(`/AdvancedIntegrations/action/mappings/${encodeURIComponent(id)}/fields`),
+  integrationMappingUpdate: (
+    id: string,
+    input: {
+      crmEntityType?: string;
+      direction?: string;
+      syncMode?: string;
+      conflictPolicy?: string;
+      deletionPolicy?: string;
+      fieldAuthority?: Record<string, string>;
+      fields?: { sourcePath: string; targetField: string; transform: unknown; required: boolean; direction: string }[];
+    },
+  ) => request<IntegrationMappingView>(`/AdvancedIntegrations/action/mappings/${encodeURIComponent(id)}`, patch(input)),
+  integrationMappingActivate: (id: string) =>
+    request<IntegrationMappingView>(`/AdvancedIntegrations/action/mappings/${encodeURIComponent(id)}/activate`, post({})),
+  integrationMappingRetire: (id: string) =>
+    request<IntegrationMappingView>(`/AdvancedIntegrations/action/mappings/${encodeURIComponent(id)}/retire`, post({})),
+  integrationMappingPreview: (id: string, sample: Record<string, unknown>) =>
+    request<IntegrationMappingPreview>(`/AdvancedIntegrations/action/mappings/${encodeURIComponent(id)}/preview`, post({ sample })),
+  integrationMappingCreate: (input: Record<string, unknown>) =>
+    request<IntegrationMappingView>('/AdvancedIntegrations/action/mappings', post(input)),
+  integrationRun: (id: string) => request<IntegrationSyncRun>(`/AdvancedIntegrations/action/runs/${encodeURIComponent(id)}`),
+  integrationRuns: (connectionId: string) =>
+    request<IntegrationSyncRunListResult>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(connectionId)}/runs`,
+    ),
+  integrationRunStart: (mappingId: string, input: { runType?: string; maxRecords?: number; pageSize?: number } = {}) =>
+    request<IntegrationSyncRun>(`/AdvancedIntegrations/action/mappings/${encodeURIComponent(mappingId)}/sync`, post(input)),
+  integrationRunOperations: (runId: string, params: { status?: string; limit?: number } = {}) =>
+    request<IntegrationSyncOperationListResult>(
+      `/AdvancedIntegrations/action/runs/${encodeURIComponent(runId)}/operations${simpleQuery(params)}`,
+    ),
+  integrationOperationRetry: (id: string) =>
+    request<IntegrationSyncOperation>(`/AdvancedIntegrations/action/operations/${encodeURIComponent(id)}/retry`, post({})),
+  integrationConflicts: (connectionId: string) =>
+    request<IntegrationConflictListResult>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(connectionId)}/conflicts`,
+    ),
+  integrationConflict: (id: string) => request<IntegrationConflict>(`/AdvancedIntegrations/action/conflicts/${encodeURIComponent(id)}`),
+  integrationConflictResolve: (id: string, resolution: IntegrationConflictResolution) =>
+    request<IntegrationConflict>(`/AdvancedIntegrations/action/conflicts/${encodeURIComponent(id)}/resolve`, post({ resolution })),
+  integrationConnectionCreate: (input: Record<string, unknown>) =>
+    request<IntegrationConnection>('/AdvancedIntegrations/action/connections', post(input)),
+  integrationConnectionUpdate: (id: string, input: Record<string, unknown>) =>
+    request<IntegrationConnection>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(id)}`,
+      patch(input),
+    ),
+  integrationConnectionPause: (id: string) =>
+    request<IntegrationConnection>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(id)}/pause`,
+      post({}),
+    ),
+  integrationConnectionResume: (id: string) =>
+    request<IntegrationConnection>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(id)}/resume`,
+      post({}),
+    ),
+  integrationConnectionAuthorize: (id: string, scopes?: string[]) =>
+    request<{ authorizationUrl: string; expiresAt: string }>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(id)}/authorize`,
+      post(scopes && scopes.length > 0 ? { scopes } : {}),
+    ),
+  integrationConnectionRevoke: (id: string) =>
+    request<{ success: boolean; providerRevoked: boolean }>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(id)}/revoke`,
+      post({}),
+    ),
+  integrationConnectionDelete: (id: string) =>
+    request<{ success: boolean }>(`/AdvancedIntegrations/action/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  integrationWebhookDeliveries: (connectionId: string) =>
+    request<{ list: readonly { id: string; deliveryId: string; status: string; signatureValid: boolean; eventType: string | null; externalId: string | null; receivedAt: string }[] }>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(connectionId)}/webhook-deliveries`,
+    ),
+  integrationOutbound: (connectionId: string) =>
+    request<{ list: readonly { id: string; status: string; operationType: string; errorCode: string | null; createdAt: string }[] }>(
+      `/AdvancedIntegrations/action/connections/${encodeURIComponent(connectionId)}/outbound`,
     ),
 };

@@ -1273,6 +1273,7 @@
       "security": "Bảo mật"
     },
     "tabs": {
+      "advancedIntegrations": "Tích hợp nâng cao",
       "general": "Chung",
       "localization": "Ngôn ngữ và thời gian",
       "menu": "Menu chính",
@@ -1293,6 +1294,7 @@
       "webhooks": "Webhook"
     },
     "descriptions": {
+      "advancedIntegrations": "Kết nối tới các hệ thống bên thứ ba đã được phê duyệt, gồm kết nối, quyền và uỷ quyền.",
       "general": "Tiêu đề trang, logo và dòng chân trang của hệ thống này.",
       "localization": "Ngôn ngữ người dùng có thể chọn, ngôn ngữ mặc định và múi giờ làm việc.",
       "menu": "Bật/tắt, đổi tên, sắp xếp và tô màu menu chính cho tất cả mọi người.",

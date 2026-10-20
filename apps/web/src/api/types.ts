@@ -2075,3 +2075,364 @@ export interface VoiceRecordPanelView {
   readonly calls: readonly VoiceCallSessionView[];
   readonly total: { readonly conversations: number; readonly calls: number };
 }
+
+/* ---------------------------------------------------------------------------
+ * Phase 19-INT.14 / 19-INT.15 — the Advanced Integrations admin surface.
+ *
+ * The types mirror the server's response shapes exactly. A credential is only ever
+ * `hasCredential` + a non-secret `credentialHint`; no type here can carry a token.
+ * ------------------------------------------------------------------------- */
+
+export type IntegrationConnectionStatus =
+  | 'draft'
+  | 'pending_authorization'
+  | 'connected'
+  | 'degraded'
+  | 'reauthorization_required'
+  | 'paused'
+  | 'revoked'
+  | 'error';
+
+export type IntegrationProviderStatus = 'available' | 'disabled' | 'deprecated' | 'unsupported';
+
+export type IntegrationProviderTier = 'core' | 'optional' | 'experimental' | 'deprecated';
+
+export type IntegrationAuthenticationType = 'oauth' | 'api_key' | 'service_account' | 'none';
+
+export type IntegrationWarningSeverity = 'info' | 'warning' | 'error';
+
+export interface IntegrationWarning {
+  readonly code: string;
+  readonly severity: IntegrationWarningSeverity;
+  readonly message: string;
+}
+
+export interface IntegrationProviderObject {
+  readonly objectType: string;
+  readonly label: string;
+  readonly read: boolean;
+  readonly write: boolean;
+  readonly webhook: boolean;
+}
+
+export interface IntegrationCatalogProvider {
+  readonly providerKey: string;
+  readonly displayName: string;
+  readonly description: string;
+  readonly category: string;
+  readonly status: IntegrationProviderStatus;
+  readonly tier: IntegrationProviderTier;
+  readonly authentication: IntegrationAuthenticationType;
+  readonly objects: readonly IntegrationProviderObject[];
+  readonly requiredScopes: readonly string[];
+  readonly optionalScopes: readonly string[];
+  readonly docsUrl: string | null;
+  readonly connectionCount: number;
+  readonly healthyCount: number;
+  readonly executable: boolean;
+}
+
+export interface IntegrationCatalogResult {
+  readonly list: readonly IntegrationCatalogProvider[];
+}
+
+export interface IntegrationConnection {
+  readonly id: string;
+  readonly providerKey: string;
+  readonly name: string;
+  readonly ownerType: 'organization' | 'user';
+  readonly ownerId: string;
+  readonly tenantRef: string | null;
+  readonly status: IntegrationConnectionStatus;
+  readonly enabled: boolean;
+  readonly grantedScopes: readonly string[];
+  readonly requiredScopes: readonly string[];
+  readonly missingScopes: readonly string[];
+  readonly connectionOptions: Readonly<Record<string, unknown>>;
+  readonly adapterVersion: string;
+  readonly healthStatus: string | null;
+  readonly healthSummaryCode: string | null;
+  readonly lastValidatedAt: string | null;
+  readonly lastSuccessfulSyncAt: string | null;
+  readonly lastErrorCode: string | null;
+  readonly credentialReferenceId: string | null;
+  readonly hasCredential: boolean;
+  readonly credentialHint: string | null;
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}
+
+export interface IntegrationConnectionListResult {
+  readonly list: readonly IntegrationConnection[];
+}
+
+export interface IntegrationMappingSummary {
+  readonly id: string;
+  readonly objectType: string;
+  readonly crmEntityType: string;
+  readonly direction: 'inbound' | 'outbound' | 'bidirectional';
+  readonly status: 'draft' | 'active' | 'retired';
+  readonly mappingVersion: number;
+  readonly syncMode: 'full' | 'incremental';
+  readonly conflictPolicy: 'provider_wins' | 'crm_wins' | 'manual' | 'newest_wins';
+  readonly deletionPolicy: 'unlink' | 'archive' | 'ignore';
+  readonly fieldCount: number;
+}
+
+export interface IntegrationConnectionDetail {
+  readonly connection: IntegrationConnection;
+  readonly provider: {
+    readonly providerKey: string;
+    readonly displayName: string;
+    readonly adapterVersion: string;
+    readonly providerApiVersion: string;
+    readonly status: string;
+  };
+  readonly tenant: {
+    readonly ownerType: string;
+    readonly ownerId: string;
+    readonly tenantRef: string | null;
+  };
+  readonly lastTest: {
+    readonly ok: boolean;
+    readonly code: string | null;
+    readonly message: string | null;
+    readonly checkedAt: string;
+  } | null;
+  readonly lastRun: {
+    readonly id: string;
+    readonly status: string;
+    readonly finishedAt: string | null;
+    readonly recordsApplied: number;
+    readonly recordsFailed: number;
+  } | null;
+  readonly syncLagSeconds: number | null;
+  readonly lastWebhook: {
+    readonly receivedAt: string;
+    readonly status: string;
+    readonly signatureValid: boolean;
+    readonly eventType: string | null;
+  } | null;
+  readonly mappings: readonly IntegrationMappingSummary[];
+  readonly warnings: readonly IntegrationWarning[];
+  readonly missingScopes: readonly string[];
+}
+
+export interface IntegrationConnectionTestResult {
+  readonly ok: boolean;
+  readonly code: string | null;
+  readonly message: string | null;
+  readonly accountRef: string | null;
+  readonly grantedScopes: readonly string[];
+  readonly checkedAt: string;
+}
+
+export interface IntegrationReconcileResult {
+  readonly resetMappings: number;
+  readonly message: string;
+}
+
+export interface IntegrationJobLogRow {
+  readonly id: string;
+  readonly job: string;
+  readonly status: string;
+  readonly createdAt: string;
+  readonly finishedAt: string | null;
+  readonly message: string | null;
+  readonly lastError: string | null;
+}
+
+export interface IntegrationJobLogResult {
+  readonly list: readonly IntegrationJobLogRow[];
+}
+
+export interface IntegrationFieldMapping {
+  readonly id: string;
+  readonly sourcePath: string;
+  readonly targetField: string;
+  readonly transform: unknown;
+  readonly required: boolean;
+  readonly direction: 'inbound' | 'outbound' | 'bidirectional';
+  readonly position: number;
+}
+
+export interface IntegrationProviderField {
+  readonly name: string;
+  readonly label: string;
+  readonly type: string;
+  readonly required: boolean;
+  readonly unique: boolean;
+  readonly identifier: boolean;
+  readonly sensitive: boolean;
+}
+
+export interface IntegrationCrmField {
+  readonly name: string;
+  readonly label: string;
+  readonly type: string;
+  readonly required: boolean;
+  readonly identifier: boolean;
+  readonly sensitive: boolean;
+}
+
+export interface IntegrationMappingFields {
+  readonly mappingId: string;
+  readonly mappingVersion: number;
+  readonly crmEntityType: string;
+  readonly objectType: string;
+  readonly direction: string;
+  readonly providerFields: readonly IntegrationProviderField[];
+  readonly crmFields: readonly IntegrationCrmField[];
+  readonly fields: readonly IntegrationFieldMapping[];
+  readonly warnings: readonly IntegrationWarning[];
+}
+
+export interface IntegrationMappingView {
+  readonly id: string;
+  readonly connectionId: string;
+  readonly providerKey: string;
+  readonly objectType: string;
+  readonly crmEntityType: string;
+  readonly direction: 'inbound' | 'outbound' | 'bidirectional';
+  readonly mappingVersion: number;
+  readonly status: 'draft' | 'active' | 'retired';
+  readonly syncMode: 'full' | 'incremental';
+  readonly conflictPolicy: 'provider_wins' | 'crm_wins' | 'manual' | 'newest_wins';
+  readonly deletionPolicy: 'unlink' | 'archive' | 'ignore';
+  readonly fieldAuthority: Readonly<Record<string, string>>;
+  readonly fields: readonly IntegrationFieldMapping[];
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}
+
+export interface IntegrationMappingListResult {
+  readonly list: readonly IntegrationMappingView[];
+}
+
+export interface IntegrationMappingPreview {
+  readonly mappingId: string;
+  readonly mappingVersion: number;
+  readonly values: Readonly<Record<string, unknown>>;
+  readonly missingRequired: readonly string[];
+  readonly emptySources: readonly string[];
+  readonly dryRun: true;
+}
+
+export type IntegrationRunStatus =
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+export type IntegrationRunType = 'full' | 'incremental' | 'webhook' | 'manual';
+
+export interface IntegrationSyncRun {
+  readonly id: string;
+  readonly connectionId: string;
+  readonly mappingId: string;
+  readonly runType: IntegrationRunType;
+  readonly status: IntegrationRunStatus;
+  readonly triggerSource: string;
+  readonly direction: string;
+  readonly mappingVersion: number;
+  readonly cursorBefore: string | null;
+  readonly cursorAfter: string | null;
+  readonly recordsScanned: number;
+  readonly recordsApplied: number;
+  readonly recordsSkipped: number;
+  readonly recordsFailed: number;
+  readonly startedAt: string | null;
+  readonly finishedAt: string | null;
+  readonly lastErrorCode: string | null;
+  readonly lastErrorDetail: string | null;
+  readonly createdAt: string;
+}
+
+export interface IntegrationSyncRunListResult {
+  readonly list: readonly IntegrationSyncRun[];
+}
+
+export type IntegrationOperationStatus =
+  | 'pending'
+  | 'applied'
+  | 'skipped'
+  | 'failed'
+  | 'dead_letter';
+
+export interface IntegrationSyncOperation {
+  readonly id: string;
+  readonly operationType: string;
+  readonly externalId: string | null;
+  readonly crmEntityType: string | null;
+  readonly crmEntityId: string | null;
+  readonly status: IntegrationOperationStatus;
+  readonly attempts: number;
+  readonly errorCode: string | null;
+  readonly errorDetail: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly retryable: boolean;
+}
+
+export interface IntegrationSyncOperationListResult {
+  readonly list: readonly IntegrationSyncOperation[];
+}
+
+export type IntegrationConflictResolution = 'keep_crm' | 'keep_provider' | 'ignore' | 'unlink';
+
+export interface IntegrationConflict {
+  readonly id: string;
+  readonly connectionId: string;
+  readonly mappingId: string;
+  readonly runId: string | null;
+  readonly objectType: string;
+  readonly externalId: string;
+  readonly crmEntityType: string | null;
+  readonly crmEntityId: string | null;
+  readonly conflictType: 'field_conflict' | 'duplicate' | 'deletion' | 'authorization';
+  readonly status: 'open' | 'resolved' | 'ignored';
+  readonly localSnapshot: Readonly<Record<string, unknown>> | null;
+  readonly remoteSnapshot: Readonly<Record<string, unknown>> | null;
+  readonly conflictingFields: Readonly<Record<string, { readonly local: unknown; readonly remote: unknown }>>;
+  readonly policy: string;
+  readonly resolution: string | null;
+  readonly resolvedBy: string | null;
+  readonly resolvedAt: string | null;
+  readonly createdAt: string;
+  /** The field authority rule that applies to each conflicting field. */
+  readonly fieldAuthority: Readonly<Record<string, string>>;
+  /** True when the record changed on either side since the conflict was detected. */
+  readonly stale: boolean;
+  readonly staleSide: 'local' | 'remote' | null;
+  readonly resolutions: readonly {
+    readonly value: IntegrationConflictResolution;
+    readonly label: string;
+    readonly enabled: boolean;
+    readonly reason: string | null;
+  }[];
+}
+
+export interface IntegrationConflictListResult {
+  readonly list: readonly IntegrationConflict[];
+}
+
+export interface IntegrationWebhookDelivery {
+  readonly id: string;
+  readonly deliveryId: string;
+  readonly status: string;
+  readonly signatureValid: boolean;
+  readonly eventType: string | null;
+  readonly externalId: string | null;
+  readonly receivedAt: string;
+}
+
+export interface AdvancedIntegrationsCapabilitiesView {
+  readonly capabilities: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly description: string;
+    readonly granted: boolean;
+  }[];
+}

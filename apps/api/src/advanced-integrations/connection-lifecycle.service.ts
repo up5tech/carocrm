@@ -324,6 +324,34 @@ export class ConnectionLifecycleService {
   }
 
   /**
+   * Record the outcome of a connection test.
+   *
+   * The result is a health summary, never a credential: the provider's message is not stored
+   * verbatim, only the stable code.
+   */
+  async recordTest(connectionId: string, result: { readonly ok: boolean; readonly code: string | null }): Promise<void> {
+    await sql`
+      update integration_connections set
+        health_status = ${result.ok ? 'ok' : 'error'},
+        health_summary_code = ${result.code},
+        last_validated_at = ${new Date()},
+        modified_at = ${new Date()},
+        modified_by_id = ${this.scope.userId ?? null}
+      where id = ${connectionId}
+    `.execute(this.database.db);
+  }
+
+  /** Reset the inbound checkpoint of every active mapping, so the next run is a full re-sync. */
+  async resetCheckpoints(connectionId: string): Promise<number> {
+    const result = await sql`
+      update integration_sync_checkpoints
+      set cursor_value = null, reset_required = true, updated_at = ${new Date()}
+      where connection_id = ${connectionId} and direction = 'inbound'
+    `.execute(this.database.db);
+    return Number(result.numAffectedRows ?? 0n);
+  }
+
+  /**
    * Remove a connection.
    *
    * The configuration and the credentials go. The CRM records the connection synced are **not**

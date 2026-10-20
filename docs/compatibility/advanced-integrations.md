@@ -168,7 +168,19 @@ remain unwritten until they can be correct.
 | Webhook ingress | A shared endpoint at `/api/v1/integrations/advanced-integrations/{provider}/{webhookKey}/{kind}` with scoped raw-body capture, connector-owned signature verification, a receipt written **only after verification**, delivery-id deduplication, and fast acknowledgement with asynchronous processing |
 | Outbound sync | A domain-event subscriber, `integration_outbound_operations` with an event-derived idempotency key, and a **record-origin** table that prevents an inbound sync from echoing back to the provider |
 
-**Still not delivered, and deliberately so:** no provider connector, no admin page, and no
-cross-module contract routing. Those are 19-INT.14 onward. The sidebar entry and the admin panel
-tab are registered with **19-INT.14**, together with the SPA page they point at, so no navigation
-entry is ever a dead link.
+### 19-INT.14 / 19-INT.15 — the administration UX
+
+| Surface | Delivered |
+| --- | --- |
+| Connector catalog | A searchable, scannable list — not a card grid. Each row leads with a **status rail**, then the name, then the facts that decide whether it is worth connecting: object count, authentication, connection count, required scopes and a documentation link. A visible row never implies the connector is configured; the action says exactly what happens |
+| Connection wizard | Eight explicit steps: ownership → permissions → credentials → test → objects → mapping → preview → publish. The permissions are reviewed **before** anything is stored, a secret is write-only, and a draft cannot trigger a sync |
+| Connection detail | Two columns: identity and state on the left, **what needs attention** on the right. The actions are Test, Pause, Resume, Reconcile, Rotate secret and Revoke; the destructive one asks for confirmation and states the impact |
+| Mapping builder | A two-pane view with a wire between them — the provider's fields on the left, the CRM's on the right, the transformation in the middle. Unmapped required fields, lossy conversions and sensitive targets are listed **above** the panes, before publishing |
+| Sync runs | The run list shows state, counts, duration, cursor, mapping version and error. The drawer shows the **operations**, and a failed operation can be retried **on its own** — the run and the checkpoint are untouched |
+| Conflict workbench | The two sides side by side, field by field, with the changed fields marked and the field-authority rule beside each. A **stale** conflict refuses the provider's value, and the reason is stated before the operator tries |
+
+**Colour is never the only signal** anywhere in the module: the status rail is always paired with a
+text label (AGENTS.md §8, plan §15.6).
+
+**Still not delivered, and deliberately so:** no provider connector and no cross-module contract
+routing. Those are 19-INT.16 and 19-INT.25.
