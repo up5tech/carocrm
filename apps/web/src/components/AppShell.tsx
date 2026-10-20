@@ -14,7 +14,7 @@ import { useSession } from '../state/session.js';
 import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 import { navAccent } from '../theme.js';
 import { CommandPalette } from './CommandPalette.js';
-import { navIcon } from './entityIcons.js';
+import { entityIcon, navIcon } from './entityIcons.js';
 import { IncomingCallBanner } from './IncomingCallBanner.js';
 
 const { Sider, Content, Footer } = Layout;
@@ -353,7 +353,12 @@ function toMenuItems(nodes: readonly NavigationNode[], depth = 0): MenuItems {
     }
     items.push({
       key: node.route,
-      icon: navIcon(node.icon),
+      // An entity without an explicit metadata icon keeps its built-in mark instead of the
+      // generic appstore fallback; an administrator's icon override still wins.
+      icon:
+        node.kind === 'entity'
+          ? entityIcon(node.icon, node.key.startsWith('entity:') ? node.key.slice('entity:'.length) : undefined)
+          : navIcon(node.icon),
       label: <Link to={node.route}>{node.label}</Link>,
     });
   }

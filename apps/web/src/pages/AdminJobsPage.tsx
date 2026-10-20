@@ -303,9 +303,9 @@ export function AdminJobsPage() {
             <Input placeholder='{"retentionDays":7}' style={{ width: 180 }} />
           </Form.Item>
           <Form.Item name="enabled" valuePropName="checked">
-            <Switch size="small" />
+            <Switch />
           </Form.Item>
-          <Button size="small" type="primary" htmlType="submit">
+          <Button type="primary" htmlType="submit">
             {t('web.adminJobs.saveSchedule')}
           </Button>
         </Form>
@@ -340,7 +340,7 @@ export function AdminJobsPage() {
 
       <Drawer title={t('web.adminJobs.logTitle', { job: logJob?.job ?? '' })} width={720} open={logJob !== undefined} onClose={() => setLogJob(undefined)}>
         <Space style={{ marginBottom: 12 }}>
-          <Button size="small" icon={<ReloadOutlined />} onClick={() => void refreshLogs()}>
+          <Button icon={<ReloadOutlined />} onClick={() => void refreshLogs()}>
             {t('core.common.refresh')}
           </Button>
           <Typography.Text type="secondary">{logJob ? t('web.adminJobs.attemptSummary', { status: logJob.status, attempt: String(logJob.attempt), max: String(logJob.maxAttempts) }) : ''}</Typography.Text>
