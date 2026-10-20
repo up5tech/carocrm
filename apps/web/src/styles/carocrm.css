@@ -1632,8 +1632,33 @@ body {
 }
 
 .carocrm-policy-name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 13px;
   color: #31373d;
+}
+
+/* The value column is bounded: a stringified JSON policy (Customer Success stages/transitions)
+   must truncate inside its control instead of widening the page. */
+.carocrm-policy-value {
+  display: flex;
+  flex: 0 1 280px;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 45%;
+}
+
+.carocrm-policy-value > .ant-select,
+.carocrm-policy-value > .ant-input-number,
+.carocrm-policy-value > .ant-input {
+  width: 100%;
+  min-width: 0;
+}
+
+.carocrm-policy-value .ant-select-selection-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {
@@ -1652,6 +1677,19 @@ body {
   .carocrm-admin-tab {
     width: auto;
     white-space: nowrap;
+  }
+
+  .carocrm-policy-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .carocrm-policy-value {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    justify-content: flex-start;
   }
   .carocrm-menu-row-fields {
     padding-left: 0;

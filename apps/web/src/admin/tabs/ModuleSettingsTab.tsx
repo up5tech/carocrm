@@ -95,10 +95,12 @@ export function ModuleSettingsTab({ module }: { module: ModuleKey }) {
           {leaves.map((leaf) => (
             <li className="carocrm-policy-row" key={leaf.path.join('.')}>
               <span className="carocrm-policy-name">{labelPath(leaf.path)}</span>
-              <PolicyValue
-                value={leaf.value}
-                onChange={(next) => document.edit(setPath(leaf.path, next) as Record<string, unknown>)}
-              />
+              <span className="carocrm-policy-value">
+                <PolicyValue
+                  value={leaf.value}
+                  onChange={(next) => document.edit(setPath(leaf.path, next) as Record<string, unknown>)}
+                />
+              </span>
             </li>
           ))}
         </ul>
@@ -119,7 +121,16 @@ function PolicyValue({ value, onChange }: { value: boolean | number | string | n
   }
   // An enumerated string (a policy name) stays a text field rather than a guessed option list: the
   // module's schema is the authority and its refusal is shown, so the tab never invents values.
-  return <Select size="small" value={value} options={[{ value, label: value }]} onChange={(next: string) => onChange(next)} />;
+  // Arrays/objects arrive here as stringified JSON; the select is width-constrained by the row so a
+  // long value truncates instead of widening the settings page.
+  return (
+    <Select
+      size="small"
+      value={value}
+      options={[{ value, label: value, title: value }]}
+      onChange={(next: string) => onChange(next)}
+    />
+  );
 }
 
 function flattenLeaves(value: Record<string, unknown>, prefix: string[] = []): Leaf[] {
