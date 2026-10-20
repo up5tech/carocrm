@@ -173,7 +173,6 @@ export function CampaignLifecycleActions({ campaignId, onChanged }: CampaignLife
         {allowed.map((command) => (
           <Button
             key={command}
-            size="small"
             type={command === 'start' || command === 'schedule' ? 'primary' : 'default'}
             danger={command === 'cancel'}
             onClick={() => {
@@ -190,13 +189,13 @@ export function CampaignLifecycleActions({ campaignId, onChanged }: CampaignLife
       </Space>
 
       <Space wrap size={8} style={{ marginTop: 12 }}>
-        <Button size="small" loading={checking} onClick={() => void checkReadiness()}>
+        <Button loading={checking} onClick={() => void checkReadiness()}>
           {t('web.marketingAutomation.validate')}
         </Button>
-        <Button size="small" loading={duplicating} onClick={() => void duplicate()}>
+        <Button loading={duplicating} onClick={() => void duplicate()}>
           {t('web.marketingAutomation.duplicate')}
         </Button>
-        <Button size="small" loading={audienceBusy} onClick={() => void previewAudience()}>
+        <Button loading={audienceBusy} onClick={() => void previewAudience()}>
           {t('web.marketingAutomation.previewAudience')}
         </Button>
       </Space>

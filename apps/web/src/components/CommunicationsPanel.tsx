@@ -53,7 +53,7 @@ export function CommunicationsPanel({ entityType, entityId }: { entityType: stri
         </Space>
       }
       extra={
-        <Button size="small" onClick={() => navigate('/voice-inbox')}>
+        <Button onClick={() => navigate('/voice-inbox')}>
           {t('voice.panel.openInbox')}
         </Button>
       }

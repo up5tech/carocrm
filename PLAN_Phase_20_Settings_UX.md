@@ -545,7 +545,7 @@ Target WCAG 2.2 AA:
   icon-only controls.
 - Contrast ≥ 4.5:1 for text and ≥ 3:1 for UI components and chart marks; color is never the only
   signal.
-- Touch targets ≥ 44 × 44 px on narrow viewports.
+- Touch targets ≥ 44 × 44 px on touch devices.
 - Reduced motion respected (`prefers-reduced-motion`) for skeleton shimmer, drawer and modal motion.
 
 ### 5.9 Per-user UI preferences
@@ -1168,7 +1168,8 @@ viewports.
 Acceptance: axe passes on the four core surfaces; keyboard-only walkthrough of §13.5 scenarios 1–5
 passes.
 
-Delivered: the focus-visible ring, 44 px touch targets, `prefers-reduced-motion`, the ARIA labels on
+Delivered: the focus-visible ring, 36 px desktop controls with 44 px touch targets on coarse
+pointers, `prefers-reduced-motion`, the ARIA labels on
 the palette, the checklist and the bulk bar, the responsive breakpoints at 1180 / 768 / 390 px, and a
 manual keyboard walkthrough. **The automated axe pass is not met** — this repository has no frontend
 test runner and no axe dependency. See `docs/ux/accessibility.md`.
@@ -1257,7 +1258,7 @@ Phase 20 is complete when all applicable checks below pass:
       header, the next-action band, progressive disclosure and "Save & new" are documented deferrals)
 - [x] A command palette is reachable by keyboard from every screen and reveals nothing unauthorized. (20.14 — the `/` shortcut and the "see all" deep link are documented deferrals)
 - [~] Empty, loading, error and permission-denied states exist as shared components and are used. (20.11 — `EmptyState`, `LoadingSkeleton` and `ErrorState` are used by the settings shell, the list page and the dashboards page; `PermissionDenied` and `HelpTip` exist but are **not used by any page** — documented deferral)
-- [~] Keyboard operability is verified on the four core surfaces. (20.16 — focus-visible rings, 44 px touch targets, `prefers-reduced-motion`, ARIA labels on the palette/checklist/bulk bar, and a manual keyboard walkthrough. **The axe-core automated audit the acceptance asks for is not done**: this repository has no frontend test runner and no axe dependency. WCAG 2.2 AA **contrast was not measured**.)
+- [~] Keyboard operability is verified on the four core surfaces. (20.16 — focus-visible rings, 36 px desktop controls with 44 px touch targets on touch devices, `prefers-reduced-motion`, ARIA labels on the palette/checklist/bulk bar, and a manual keyboard walkthrough. **The axe-core automated audit the acceptance asks for is not done**: this repository has no frontend test runner and no axe dependency. WCAG 2.2 AA **contrast was not measured**.)
 - [x] Users can work on desktop, tablet and phone without losing function. (20.16 — responsive CSS at 768px and 390px: rail off-screen, bars constrained, forms stacked, tables scrollable; no horizontal overflow at 1440/768px, 390px fixed by save/bulk bar max-width)
 - [x] Tests cover happy paths, invalid input, permission denial, conflicts and bulk-action edge cases. (138 files / 1876 tests — API and package suites; there is **no frontend test runner** in this repository, so the UI half of the plan's §13.1/§13.4/§13.5 is covered by a manual browser walkthrough only)
 - [x] Lint, typecheck, build and the existing test/smoke suites were run; skipped checks documented. (`pnpm lint` clean, `pnpm typecheck` clean, `pnpm build` clean, `pnpm test` 138/1876 green, 2026-10-20)

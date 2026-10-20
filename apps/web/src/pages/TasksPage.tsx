@@ -68,7 +68,6 @@ export function TasksPage() {
         extra={
           <Space>
             <Select
-              size="small"
               value={scope}
               style={{ width: 160 }}
               onChange={(value: 'answerable' | 'all' | 'completed') => setScope(value)}
@@ -78,7 +77,7 @@ export function TasksPage() {
                 { value: 'all', label: t('web.tasks.scopeAll') },
               ]}
             />
-            <Button size="small" icon={<ReloadOutlined />} onClick={refresh} loading={tasks.isFetching}>
+            <Button icon={<ReloadOutlined />} onClick={refresh} loading={tasks.isFetching}>
               {t('core.common.refresh')}
             </Button>
           </Space>

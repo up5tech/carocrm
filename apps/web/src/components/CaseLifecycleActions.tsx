@@ -184,7 +184,6 @@ export function CaseLifecycleActions({ caseId, onChanged }: CaseLifecycleActions
         {allowed.map((command) => (
           <Button
             key={command}
-            size="small"
             type={command === 'resolve' ? 'primary' : 'default'}
             danger={command === 'cancel'}
             onClick={() => {
@@ -203,7 +202,6 @@ export function CaseLifecycleActions({ caseId, onChanged }: CaseLifecycleActions
       {caps.assignment.canAssign ? (
         <Space wrap size={8} style={{ marginTop: 12 }}>
           <Select
-            size="small"
             style={{ minWidth: 220 }}
             placeholder={t('web.serviceDesk.queuePlaceholder')}
             showSearch
@@ -213,14 +211,13 @@ export function CaseLifecycleActions({ caseId, onChanged }: CaseLifecycleActions
             options={queues}
           />
           <Button
-            size="small"
             loading={assigning}
             disabled={queueId === undefined}
             onClick={() => queueId !== undefined && void assignTo({ queueId })}
           >
             {t('web.serviceDesk.assignToQueue')}
           </Button>
-          <Button size="small" loading={assigning} onClick={() => void route()}>
+          <Button loading={assigning} onClick={() => void route()}>
             {t('web.serviceDesk.route')}
           </Button>
         </Space>

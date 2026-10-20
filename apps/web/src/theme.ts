@@ -16,6 +16,9 @@ export const carocrmTheme: ThemeConfig = {
     colorTextSecondary: '#737b85',
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
     fontSize: 14,
+    controlHeight: 36,
+    controlHeightSM: 24,
+    controlHeightLG: 40,
     borderRadius: 8,
     borderRadiusSM: 4,
     wireframe: false,
@@ -70,6 +73,7 @@ export const carocrmTheme: ThemeConfig = {
       fontWeight: 500,
     },
     Input: { borderRadius: 6, controlHeight: 36 },
+    InputNumber: { borderRadius: 6, controlHeight: 36 },
     // Select and DatePicker must match Input's height or Space.Compact rows sit crooked
     Select: { borderRadius: 6, controlHeight: 36 },
     DatePicker: { borderRadius: 6, controlHeight: 36 },

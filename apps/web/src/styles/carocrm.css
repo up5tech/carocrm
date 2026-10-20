@@ -1831,26 +1831,32 @@ body {
   outline-offset: 2px;
 }
 
-/* Minimum 44×44 px touch targets for interactive elements (WCAG 2.5.8). */
-button,
-[role="button"],
-a.carocrm-row-link,
-.ant-btn,
-.ant-select-selector,
-.ant-input,
-.ant-checkbox-wrapper,
-.ant-switch,
-input[type="checkbox"],
-input[type="radio"] {
-  min-height: 44px;
-  min-width: 44px;
-}
+/* Controls keep the theme's controlHeight (36px). Forcing a 44px box on every button,
+   input, select and checkbox overrode that token and broke row rhythm across the SPA:
+   icon buttons became 44px squares and checkbox inputs overflowed their 16px box. The
+   36px controls already clear the WCAG 2.5.8 24×24 target minimum. */
 
-/* Compact surfaces (tables, dense lists) keep their layout but ensure clickable areas are large enough. */
-.ant-table-cell .ant-btn,
-.ant-table-cell a,
-.carocrm-layout-row-wrap {
-  min-height: 36px;
+/* Touch devices get the larger touch target, but every field grows together so rows stay
+   aligned. Checkbox/radio inputs keep their 16px box; their wrapper carries the target. */
+@media (pointer: coarse) {
+  .ant-btn,
+  .ant-input,
+  .ant-input-number,
+  .ant-select-selector,
+  .ant-picker,
+  .ant-checkbox-wrapper,
+  .ant-radio-wrapper {
+    min-height: 44px;
+  }
+
+  .ant-btn.ant-btn-icon-only {
+    min-width: 44px;
+  }
+
+  .ant-checkbox-wrapper,
+  .ant-radio-wrapper {
+    align-items: center;
+  }
 }
 
 /* Reduced motion: disable transitions and animations when the user prefers it. */

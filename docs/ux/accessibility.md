@@ -37,8 +37,11 @@ No interaction is drag-only. Every list that can be dragged also has move-up / m
 
 ### Touch targets and motion
 
-- Interactive controls get `min-height: 44px; min-width: 44px` (WCAG 2.5.8); dense table cells
-  keep a 36 px minimum so the layout is not destroyed.
+- Interactive controls follow the theme's 36 px control height, which clears the WCAG 2.5.8 AA
+  24 × 24 target minimum without distorting dense rows. A blanket 44 px minimum was removed
+  because it overrode `controlHeight`, stretched icon buttons into 44 px squares and pushed
+  checkbox inputs outside their 16 px box. On coarse-pointer devices, fields and buttons grow
+  together to a 44 px height so touch targets are larger without breaking row alignment.
 - `@media (prefers-reduced-motion: reduce)` neutralises animations and transitions globally, and the
   administration tab / menu row transitions explicitly.
 

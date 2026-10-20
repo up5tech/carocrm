@@ -172,7 +172,6 @@ export function SalesDocumentActions({ view, onChanged }: SalesDocumentActionsPr
         {actions.map((action) => (
           <Button
             key={action.action}
-            size="small"
             type={action.issues ? 'primary' : 'default'}
             loading={busy === action.action}
             disabled={busy !== null}
@@ -184,7 +183,6 @@ export function SalesDocumentActions({ view, onChanged }: SalesDocumentActionsPr
         {view.conversions.map((conversion) => (
           <Button
             key={conversion.action}
-            size="small"
             icon={<SwapOutlined />}
             loading={busy === conversion.action}
             disabled={busy !== null}
@@ -194,7 +192,7 @@ export function SalesDocumentActions({ view, onChanged }: SalesDocumentActionsPr
           </Button>
         ))}
         {locked ? (
-          <Button size="small" icon={<LockOutlined />} loading={busy === 'unlock'} disabled={busy !== null} onClick={startUnlock}>
+          <Button icon={<LockOutlined />} loading={busy === 'unlock'} disabled={busy !== null} onClick={startUnlock}>
             {t('sales.document.unlock')}
           </Button>
         ) : null}

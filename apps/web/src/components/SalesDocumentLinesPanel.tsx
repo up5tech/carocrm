@@ -150,18 +150,16 @@ export function SalesDocumentLinesPanel({ kind, id }: SalesDocumentLinesPanelPro
       extra={
         <Space size={4}>
           <Button
-            size="small"
             icon={<SendOutlined />}
             disabled={view === null}
             onClick={() => setSendOpen(true)}
           >
             {t('sales.document.send')}
           </Button>
-          <Button size="small" icon={<ReloadOutlined />} disabled={saving || locked} onClick={() => void recalculate()}>
+          <Button icon={<ReloadOutlined />} disabled={saving || locked} onClick={() => void recalculate()}>
             {t('sales.lineItem.recalculate')}
           </Button>
           <Button
-            size="small"
             type="primary"
             icon={<SaveOutlined />}
             disabled={saving || locked || !dirty || unpriced.length > 0}

@@ -163,10 +163,10 @@ function SaveBar() {
           : t('web.adminShell.lastModified', { by: meta.modifiedBy ?? '-', at: new Date(meta.modifiedAt).toLocaleString() })}
       </Typography.Text>
       <div className="carocrm-admin-savebar-actions">
-        <Button size="small" onClick={() => shell.actions.current.onReload()} disabled={!meta.canSave}>
+        <Button onClick={() => shell.actions.current.onReload()} disabled={!meta.canSave}>
           {t('core.common.reload')}
         </Button>
-        <Button size="small" onClick={() => shell.actions.current.onDiscard()} disabled={!meta.dirty}>
+        <Button onClick={() => shell.actions.current.onDiscard()} disabled={!meta.dirty}>
           {t('web.adminShell.discard')}
         </Button>
         <Button type="primary" onClick={() => shell.actions.current.onSave()} loading={meta.saving} disabled={!meta.dirty || !meta.canSave}>

@@ -84,7 +84,6 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base }
       extra={
         <Space.Compact>
           <Select
-            size="small"
             style={{ width: 220 }}
             placeholder={t('web.detail.linkExisting')}
             showSearch
@@ -95,7 +94,6 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base }
             options={candidates}
           />
           <Button
-            size="small"
             icon={<LinkOutlined />}
             disabled={!selected}
             onClick={async () => {
@@ -113,7 +111,7 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base }
             {t('web.detail.link')}
           </Button>
           {targetName ? (
-            <Button size="small" icon={<PlusOutlined />} onClick={() => navigate(`${base}/${targetName}/create`)}>
+            <Button icon={<PlusOutlined />} onClick={() => navigate(`${base}/${targetName}/create`)}>
               {t('web.detail.new')}
             </Button>
           ) : null}

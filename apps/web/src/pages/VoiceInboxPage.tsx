@@ -155,7 +155,6 @@ function SnippetPicker({
   return (
     <>
       <Select
-        size="small"
         style={{ minWidth: 180 }}
         placeholder={t('voice.inbox.snippetPlaceholder')}
         value={undefined}
@@ -275,7 +274,7 @@ function Composer({ conversation, onSent }: { conversation: VoiceConversationVie
           />
           <Tooltip title={t('voice.inbox.internalNoteHint')}>
             <Space size={4}>
-              <Switch size="small" checked={internal} onChange={setInternal} />
+              <Switch checked={internal} onChange={setInternal} />
               <Typography.Text type="secondary">{t('voice.inbox.internalNote')}</Typography.Text>
             </Space>
           </Tooltip>
@@ -350,7 +349,6 @@ function ConversationDetail({ conversation, onChanged }: { conversation: VoiceCo
         </Space>
         <Space wrap>
           <Select
-            size="small"
             style={{ width: 170 }}
             placeholder={t('voice.inbox.assignPlaceholder')}
             value={conversation.assignedUserId ?? undefined}
@@ -361,17 +359,15 @@ function ConversationDetail({ conversation, onChanged }: { conversation: VoiceCo
             optionFilterProp="label"
           />
           <Select
-            size="small"
             style={{ width: 150 }}
             value={conversation.status}
             options={STATUSES.map((status) => ({ value: status, label: statusLabel(status) }))}
             onChange={(status) => mutate.mutate({ kind: 'status', status })}
           />
-          <Button size="small" onClick={() => mutate.mutate({ kind: 'read' })} disabled={conversation.unreadCount === 0}>
+          <Button onClick={() => mutate.mutate({ kind: 'read' })} disabled={conversation.unreadCount === 0}>
             {t('voice.inbox.markRead')}
           </Button>
           <Button
-            size="small"
             icon={<CustomerServiceOutlined />}
             onClick={() => {
               handoffForm.setFieldsValue({
@@ -566,13 +562,12 @@ export function VoiceInboxPage() {
           </Space>
         }
         extra={
-          <Button size="small" icon={<ReloadOutlined />} onClick={() => void inbox.refetch()} aria-label={t('voice.page.reload')} />
+          <Button icon={<ReloadOutlined />} onClick={() => void inbox.refetch()} aria-label={t('voice.page.reload')} />
         }
       >
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
           <Segmented
             block
-            size="small"
             value={surface}
             onChange={(value) => setSurface(value as 'inbox' | 'calls')}
             options={[
@@ -584,7 +579,6 @@ export function VoiceInboxPage() {
             <>
               <Space wrap size={6}>
                 <Select
-                  size="small"
                   allowClear
                   placeholder={t('voice.inbox.filterStatus')}
                   style={{ width: 140 }}
@@ -593,7 +587,6 @@ export function VoiceInboxPage() {
                   options={STATUSES.map((value) => ({ value, label: statusLabel(value) }))}
                 />
                 <Select
-                  size="small"
                   allowClear
                   placeholder={t('voice.inbox.filterChannel')}
                   style={{ width: 120 }}
@@ -603,7 +596,7 @@ export function VoiceInboxPage() {
                 />
                 <Tooltip title={t('voice.inbox.onlyMineHint')}>
                   <Space size={4}>
-                    <Switch size="small" checked={mine} onChange={setMine} />
+                    <Switch checked={mine} onChange={setMine} />
                     <TeamOutlined />
                   </Space>
                 </Tooltip>

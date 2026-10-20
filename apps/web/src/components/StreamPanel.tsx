@@ -156,7 +156,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
       className="carocrm-card"
       title={<Typography.Text strong>{t('web.stream.title')}</Typography.Text>}
       extra={
-        <Button size="small" type="text" icon={followed ? <StarFilled style={{ color: '#f8ac59' }} /> : <StarOutlined />} onClick={() => void toggleFollow()}>
+        <Button type="text" icon={followed ? <StarFilled style={{ color: '#f8ac59' }} /> : <StarOutlined />} onClick={() => void toggleFollow()}>
           {followed ? t('web.stream.following') : t('web.stream.follow')}
         </Button>
       }
