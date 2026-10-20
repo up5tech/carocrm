@@ -14,7 +14,7 @@ import { useSession } from '../state/session.js';
 import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 import { navAccent } from '../theme.js';
 import { CommandPalette } from './CommandPalette.js';
-import { entityIcon, navIcon } from './entityIcons.js';
+import { entityIcon, navGroupIcon, navIcon } from './entityIcons.js';
 import { IncomingCallBanner } from './IncomingCallBanner.js';
 
 const { Sider, Content, Footer } = Layout;
@@ -343,12 +343,13 @@ function PortalShell({ children }: { children: ReactNode }) {
 function toMenuItems(nodes: readonly NavigationNode[], depth = 0): MenuItems {
   const items: MenuItems = [];
   for (const node of nodes) {
+    const text = node.kind === 'entity' ? entityNavLabel(node) : node.label;
     const accent = node.accent === undefined ? undefined : navAccent(node.accent).fg;
-    const label = accent === undefined ? node.label : <span style={{ color: accent }}>{node.label}</span>;
+    const label = accent === undefined ? text : <span style={{ color: accent }}>{text}</span>;
     if (node.kind === 'group') {
       const children = node.children === undefined ? [] : toMenuItems(node.children, depth + 1);
       if (depth === 0) items.push({ type: 'group', key: node.key, label, children });
-      else items.push({ key: node.key, icon: navIcon(node.icon), label, children });
+      else items.push({ key: node.key, icon: navGroupIcon(node.key, node.icon), label, children });
       continue;
     }
     items.push({
@@ -359,10 +360,21 @@ function toMenuItems(nodes: readonly NavigationNode[], depth = 0): MenuItems {
         node.kind === 'entity'
           ? entityIcon(node.icon, node.key.startsWith('entity:') ? node.key.slice('entity:'.length) : undefined)
           : navIcon(node.icon),
-      label: <Link to={node.route}>{node.label}</Link>,
+      label: <Link to={node.route}>{text}</Link>,
     });
   }
   return items;
+}
+
+/**
+ * Inside the Customer Success group every entity repeats the group name, and the sidebar is too
+ * narrow for the repeated prefix. The page/list titles keep the metadata label; only the menu leaf
+ * is shortened.
+ */
+function entityNavLabel(node: NavigationNode): string {
+  const prefix = 'Customer Success ';
+  if (!node.key.startsWith('entity:CustomerSuccess') || !node.label.startsWith(prefix)) return node.label;
+  return node.label.slice(prefix.length);
 }
 
 /** The route the current path selects: `/Contact/…` → `/Contact`, `/admin/jobs` → `/admin/jobs`. */

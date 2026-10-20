@@ -222,3 +222,20 @@ export const NAV_ICON_NAMES: readonly string[] = Object.keys(NAV_ICONS).sort();
 export function navIcon(name: string | undefined): ReactNode {
   return (name === undefined ? undefined : NAV_ICONS[name]) ?? <AppstoreOutlined />;
 }
+
+/**
+ * Presentation defaults for nested navigation groups the server builds without an icon (the Sales
+ * submenu family). A server-sent image still wins, so an administrator override is never masked.
+ */
+export const NAV_GROUP_DEFAULT_ICONS: Record<string, string> = {
+  'group:sales-sales': 'FileTextOutlined',
+  'group:sales-catalog': 'TagOutlined',
+  'group:sales-payments': 'WalletOutlined',
+  'group:sales-purchases': 'ShopOutlined',
+  'group:sales-inventory': 'HddOutlined',
+  'group:sales-subscriptions': 'CalendarOutlined',
+};
+
+export function navGroupIcon(key: string, icon: string | undefined): ReactNode {
+  return navIcon(icon ?? NAV_GROUP_DEFAULT_ICONS[key]);
+}
