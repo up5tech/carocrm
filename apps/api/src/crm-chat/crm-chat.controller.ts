@@ -1,10 +1,13 @@
 import { InvalidQueryError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Inject, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { FastifyReply } from 'fastify';
 import type { ZodTypeAny } from 'zod';
+import { z } from 'zod';
 
 import type { AssistantReadiness } from './crm-chat-assistant.service.js';
 import { CRMChatAssistantService } from './crm-chat-assistant.service.js';
+import { CRMChatAIAgentsClientService } from './crm-chat-ai-agents-client.service.js';
 import { CRM_CHAT_CONTRACT_VERSION } from './crm-chat-contract.js';
 import {
   CRMChatConversationService,
@@ -21,11 +24,13 @@ import { CRMChatModuleHealthService } from './crm-chat-module-health.service.js'
 import { CRMChatPermissionService } from './crm-chat-permission.service.js';
 import { CRMChatPolicyService } from './crm-chat-policy.service.js';
 import { CRMChatSettingsService } from './crm-chat-settings.service.js';
+import { CRMChatStreamingService } from './crm-chat-streaming.service.js';
 import {
   CRMChatConversationListQuerySchema,
   CRMChatConversationPatchSchema,
   CRMChatMessageListQuerySchema,
   CRMChatSettingsPatchSchema,
+  CRMChatTurnCreateSchema,
 } from './dto/crm-chat-shapes.js';
 
 /**
@@ -101,6 +106,8 @@ export class CRMChatController {
     @Inject(CRMChatPolicyService) private readonly policy: CRMChatPolicyService,
     @Inject(CRMChatSettingsService) private readonly settings: CRMChatSettingsService,
     @Inject(CRMChatAssistantService) private readonly assistant: CRMChatAssistantService,
+    @Inject(CRMChatAIAgentsClientService) private readonly aiAgents: CRMChatAIAgentsClientService,
+    @Inject(CRMChatStreamingService) private readonly streaming: CRMChatStreamingService,
     @Inject(CRMChatModuleHealthService) private readonly health: CRMChatModuleHealthService,
     @Inject(CRMChatConversationService) private readonly conversations: CRMChatConversationService,
   ) {}
@@ -196,6 +203,101 @@ export class CRMChatController {
   @Delete('action/conversations/:id')
   async deleteConversation(@Param('id') id: string): Promise<{ status: true }> {
     return this.conversations.remove(id);
+  }
+
+  // -------------------------------------------------------------------------
+  // 19-CHAT.5 — turn submission and lifecycle
+  // -------------------------------------------------------------------------
+
+  /**
+   * Submit a user message to the assistant agent. The server verifies assistant readiness, creates or
+   * continues a conversation thread, and submits the prompt to AIAgents. Returns a turn/run ID for
+   * status polling.
+   */
+  @Post('action/turns')
+  async createTurn(@Body() body: unknown) {
+    await this.policy.assertWorkspace();
+    const input = parse(CRMChatTurnCreateSchema, body);
+
+    // Verify assistant is ready before submitting.
+    const readiness = await this.assistant.readiness();
+    if (readiness.state !== 'ready' || !readiness.agentId) {
+      throw new InvalidQueryError('The assistant agent is not ready.', {
+        state: readiness.state,
+        reason: readiness.reason,
+      });
+    }
+
+    // Generate an idempotency key if not provided by the client.
+    const idempotencyKey = input.idempotencyKey ?? `crm-chat-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    const result = await this.aiAgents.submitTurn({
+      agentId: readiness.agentId,
+      prompt: input.prompt,
+      conversationId: input.conversationId,
+      idempotencyKey,
+      contextRefs: input.contextRefs,
+    });
+
+    return result;
+  }
+
+  /** Retrieve the current status of a turn. */
+  @Get('action/turns/:turnId')
+  async getTurn(@Param('turnId') turnId: string) {
+    await this.policy.assertWorkspace();
+    return this.aiAgents.getTurnStatus(turnId);
+  }
+
+  /** Request cancellation of a running turn. The turn may complete a step before stopping. */
+  @HttpCode(200)
+  @Post('action/turns/:turnId/cancel')
+  async cancelTurn(@Param('turnId') turnId: string, @Body() body: unknown) {
+    await this.policy.assertWorkspace();
+    parse(z.object({}).strict(), body);
+    return this.aiAgents.cancelTurn(turnId);
+  }
+
+  /**
+   * SSE stream for a turn's events. The client can resume after a disconnect by sending the
+   * Last-Event-ID header. Events are user-safe and never expose tool arguments or hidden reasoning.
+   */
+  @Get('action/turns/:turnId/events')
+  async streamTurnEvents(
+    @Param('turnId') turnId: string,
+    @Headers('last-event-id') lastEventId: string | undefined,
+    @Res() reply: FastifyReply,
+  ) {
+    await this.policy.assertWorkspace();
+
+    // Verify the turn exists and the user has access.
+    try {
+      await this.aiAgents.getTurnStatus(turnId);
+    } catch {
+      throw new InvalidQueryError('Turn not found or access denied.');
+    }
+
+    // Set SSE headers.
+    reply.header('Content-Type', 'text/event-stream');
+    reply.header('Cache-Control', 'no-cache');
+    reply.header('Connection', 'keep-alive');
+    reply.header('X-Accel-Buffering', 'no'); // Disable nginx buffering if present.
+
+    // Create a writer adapter for the Fastify response.
+    const writer = {
+      write: (chunk: string) => {
+        reply.raw.write(chunk);
+      },
+      end: () => {
+        reply.raw.end();
+      },
+      onclose: (callback: () => void) => {
+        reply.raw.on('close', callback);
+      },
+    };
+
+    // Stream events to the writer.
+    await this.streaming.streamToWriter(turnId, writer, lastEventId);
   }
 
   /** The administration surface. Never returns a credential: Chat stores none. */

@@ -1,18 +1,28 @@
 import type { Provider, Type } from '@nestjs/common';
 
 import { CRMChatController } from './crm-chat.controller.js';
+import { CRMChatAIAgentsClientService } from './crm-chat-ai-agents-client.service.js';
 import { CRMChatAssistantService } from './crm-chat-assistant.service.js';
 import { CRMChatConversationService } from './crm-chat-conversations.service.js';
 import { CRMChatModuleHealthService } from './crm-chat-module-health.service.js';
 import { CRMChatPermissionService } from './crm-chat-permission.service.js';
 import { CRMChatPolicyService } from './crm-chat-policy.service.js';
 import { CRMChatSettingsService } from './crm-chat-settings.service.js';
+import { CRMChatStreamingService } from './crm-chat-streaming.service.js';
 import { CRM_CHAT_MENU_INVALIDATOR, noopMenuInvalidator } from './crm-chat-tokens.js';
 
 export type { CRMChatCapabilitiesView } from './crm-chat.controller.js';
 export { CRMChatController } from './crm-chat.controller.js';
 export type { AssistantReadiness } from './crm-chat-assistant.service.js';
 export { CRMChatAssistantService } from './crm-chat-assistant.service.js';
+export type {
+  CrmChatTurnResult,
+  CrmChatTurnStatus,
+  CrmChatTurnSubmission,
+} from './crm-chat-ai-agents-client.service.js';
+export { CRMChatAIAgentsClientService } from './crm-chat-ai-agents-client.service.js';
+export type { CrmChatStreamEvent, CrmChatStreamEventType } from './crm-chat-streaming.service.js';
+export { CRMChatStreamingService } from './crm-chat-streaming.service.js';
 export {
   CRM_CHAT_BLOCKED_CAPABILITIES,
   CRM_CHAT_CONTRACT_VERSION,
@@ -80,6 +90,8 @@ export const CRM_CHAT_PROVIDERS: Provider[] = [
   CRMChatPermissionService,
   CRMChatPolicyService,
   CRMChatAssistantService,
+  CRMChatAIAgentsClientService,
+  CRMChatStreamingService,
   CRMChatModuleHealthService,
   // Default seam: an isolated module test has no navigation surface to invalidate. `AppModule`
   // overrides this with `NavigationService.invalidate()`.

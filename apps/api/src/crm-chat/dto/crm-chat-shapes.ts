@@ -61,3 +61,32 @@ export const CRMChatConversationPatchSchema = z
   .strict();
 
 export type CRMChatConversationPatchShape = z.infer<typeof CRMChatConversationPatchSchema>;
+
+/**
+ * Phase 19-CHAT.5 — turn submission shapes (contract §8.2).
+ *
+ * A turn is a single user message submitted to the assistant agent. The server creates or continues
+ * a conversation thread, submits the prompt to AIAgents, and returns a turn/run ID for status polling.
+ */
+export const CRMChatTurnCreateSchema = z
+  .object({
+    /** User-visible prompt text. Required. */
+    prompt: z.string().trim().min(1).max(4_000),
+    /** Optional conversation thread to continue; refused if the agent has memory off. */
+    conversationId: z.string().trim().min(1).max(120).optional(),
+    /** Client-generated idempotency key to prevent duplicate turns on retry. */
+    idempotencyKey: z.string().trim().min(8).max(120).optional(),
+    /** Optional safe context references (record IDs the user is viewing). */
+    contextRefs: z
+      .array(
+        z.object({
+          entity: z.string().trim().min(1).max(120),
+          id: z.string().trim().min(1).max(120),
+        }).strict(),
+      )
+      .max(10)
+      .optional(),
+  })
+  .strict();
+
+export type CRMChatTurnCreateShape = z.infer<typeof CRMChatTurnCreateSchema>;

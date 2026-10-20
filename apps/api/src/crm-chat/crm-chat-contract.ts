@@ -123,7 +123,7 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
     capability: 'use',
     feature: 'readTools',
     phase: '19-CHAT.5',
-    implemented: false,
+    implemented: true,
     summary: 'Submit a turn; creates the conversation on first use and returns a run-backed turn.',
   },
   {
@@ -132,7 +132,7 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
     capability: 'use',
     feature: 'workspace',
     phase: '19-CHAT.5',
-    implemented: false,
+    implemented: true,
     summary: 'The projected turn state, citations and usage.',
   },
   {
@@ -141,7 +141,7 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
     capability: 'manage',
     feature: 'workspace',
     phase: '19-CHAT.5',
-    implemented: false,
+    implemented: true,
     summary: 'Ask the runtime to cancel; answers with the state the server actually reached.',
   },
   {
@@ -150,7 +150,7 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
     capability: 'use',
     feature: 'workspace',
     phase: '19-CHAT.6',
-    implemented: false,
+    implemented: true,
     summary: 'SSE stream for one turn, resumable with Last-Event-ID.',
   },
   {

@@ -2667,6 +2667,55 @@ export interface CRMChatConversationDetail {
   readonly messages: CRMChatMessagePage;
 }
 
+/** Phase 19-CHAT.5 — turn submission result (contract §8.2). */
+export interface CRMChatTurnResult {
+  readonly turnId: string;
+  readonly runId: string;
+  readonly status: string;
+  readonly conversationId: string | null;
+}
+
+/** Phase 19-CHAT.5 — turn status view. */
+export interface CRMChatTurnStatus {
+  readonly turnId: string;
+  readonly runId: string;
+  readonly status: string;
+  readonly conversationId: string | null;
+  readonly result: unknown;
+  readonly failureMessage: string | null;
+  readonly cancelRequested: boolean;
+}
+
+/** Phase 19-CHAT.6 — SSE stream event type. */
+export type CRMChatStreamEventType =
+  | 'turn.started'
+  | 'tool.started'
+  | 'tool.completed'
+  | 'citation.added'
+  | 'action.proposed'
+  | 'approval.required'
+  | 'assistant.message'
+  | 'usage.summary'
+  | 'turn.completed'
+  | 'turn.failed'
+  | 'turn.cancelled'
+  | 'heartbeat';
+
+/** Phase 19-CHAT.6 — parsed SSE event from the stream. */
+export interface CRMChatStreamEvent {
+  readonly id: string;
+  readonly event: CRMChatStreamEventType;
+  readonly data: Record<string, unknown>;
+}
+
+/** Phase 19-CHAT.6 — citation rendered in a message. */
+export interface CRMChatCitation {
+  readonly sourceType: 'crm_record' | 'query_result' | 'report' | 'help_document' | 'approved_external_source';
+  readonly displayLabel: string;
+  readonly safeRoute?: string | undefined;
+  readonly retrievedAt?: string | undefined;
+}
+
 export interface CRMChatHealthView {
   readonly module: {
     readonly id: string;

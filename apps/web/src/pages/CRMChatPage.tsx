@@ -1,6 +1,6 @@
 import { CustomerServiceOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Descriptions, Divider, Empty, Input, Result, Row, Space, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Card, Col, Descriptions, Divider, Empty, Result, Row, Space, Tag, Tooltip, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 
 import { api, ApiError } from '../api/client.js';
@@ -9,6 +9,8 @@ import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
 import { formatDateTime, t } from '../state/i18n.js';
+import { CRMChatComposer } from './crm-chat/CRMChatComposer.js';
+import { CRMChatMessageList } from './crm-chat/CRMChatMessageList.js';
 
 /**
  * The server state is kebab-case (`not-configured`); the catalog forbids hyphens in a key segment
@@ -269,69 +271,28 @@ export function CRMChatPage() {
 
             {detail.data !== undefined ? (
               <div>
-                {hasMore ? (
-                  <div style={{ marginBottom: 12 }}>
-                    <Button size="small" loading={loadingOlder} onClick={() => void loadOlder()}>
-                      {t('web.crmChat.loadOlder')}
-                    </Button>
-                  </div>
-                ) : null}
-                {detail.data.messages.list.length + older.length === 0 ? (
-                  <Empty
-                    description={<Typography.Text type="secondary">{t('web.crmChat.historyEmpty')}</Typography.Text>}
-                  />
-                ) : null}
-                <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                  {[...older, ...detail.data.messages.list].map((message) => (
-                    <div key={message.id}>
-                      <Space size={6} wrap>
-                        <Typography.Text strong style={{ fontSize: 12 }}>
-                          {t(`web.crmChat.role.${message.role}`)}
-                        </Typography.Text>
-                        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                          {formatDateTime(message.createdAt)}
-                        </Typography.Text>
-                        {message.redaction !== 'none' ? (
-                          <Tag color="orange">{t('web.crmChat.redactedTag')}</Tag>
-                        ) : null}
-                      </Space>
-                      {/* Plain text by contract D11 — the model's output is never HTML. */}
-                      <div style={{ whiteSpace: 'pre-wrap', marginTop: 2 }}>{message.content}</div>
-                    </div>
-                  ))}
-                </Space>
+                <CRMChatMessageList
+                  messages={detail.data.messages.list}
+                  olderMessages={older}
+                  hasMore={hasMore}
+                  loadingOlder={loadingOlder}
+                  onLoadOlder={loadOlder}
+                />
               </div>
             ) : null}
-            <Input.TextArea
-              rows={3}
-              disabled
-              placeholder={
-                data.actions.canStartTurn
-                  ? t('web.crmChat.composerComingSoon')
-                  : t('web.crmChat.composerUnavailable')
-              }
-            />
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                marginTop: 12,
-              }}
-            >
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t('web.crmChat.composerHint', {
-                  max: data.limits.maxMessageChars,
-                  seconds: data.limits.turnTimeoutSeconds,
-                })}
-              </Typography.Text>
-              <Space>
-                <Button disabled>{t('web.crmChat.cancelTurn')}</Button>
-                <Button type="primary" disabled>
-                  {t('web.crmChat.send')}
-                </Button>
-              </Space>
+
+            {/* Composer - enabled when assistant is ready */}
+            <div style={{ marginTop: 16 }}>
+              <CRMChatComposer
+                conversationId={selectedId}
+                enabled={data.actions.canStartTurn && selectedId !== undefined}
+                maxMessageChars={data.limits.maxMessageChars}
+                turnTimeoutSeconds={data.limits.turnTimeoutSeconds}
+                onTurnSubmitted={() => {
+                  // Refresh conversation detail after turn submission.
+                  void detail.refetch();
+                }}
+              />
             </div>
           </Card>
         </Col>

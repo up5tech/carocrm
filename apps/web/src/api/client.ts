@@ -38,6 +38,8 @@ import type {
   CRMChatHealthView,
   CRMChatMessagePage,
   CRMChatSettingsView,
+  CRMChatTurnResult,
+  CRMChatTurnStatus,
   EmailAccountInput,
   EmailAccountRow,
   EmailTransportInfo,
@@ -533,6 +535,18 @@ export const api = {
       `/CRMChat/action/conversations/${encodeURIComponent(id)}/messages${suffix === '' ? '' : `?${suffix}`}`,
     );
   },
+  /** Phase 19-CHAT.5 — submit a turn to the assistant agent. */
+  crmChatSubmitTurn: (input: {
+    prompt: string;
+    conversationId?: string | undefined;
+    idempotencyKey?: string | undefined;
+    contextRefs?: readonly { entity: string; id: string }[] | undefined;
+  }) => request<CRMChatTurnResult>('/CRMChat/action/turns', post(input)),
+  /** Phase 19-CHAT.5 — get turn status. */
+  crmChatGetTurn: (turnId: string) => request<CRMChatTurnStatus>(`/CRMChat/action/turns/${encodeURIComponent(turnId)}`),
+  /** Phase 19-CHAT.5 — cancel a running turn. */
+  crmChatCancelTurn: (turnId: string) =>
+    request<CRMChatTurnStatus>(`/CRMChat/action/turns/${encodeURIComponent(turnId)}/cancel`, post({})),
 
   // Phase 19-AI.2/19-AI.4 — the administrative surfaces of the module: the policy settings row and
   // the provider connections. Both are guarded by a capability the server asserts; the SPA only

@@ -288,7 +288,7 @@ export const CRM_CHAT_MODULE = {
   apiPrefix: '/api/v1/CRMChat',
   /** Frontend route of the human-facing surface. */
   frontendRoute: '/crm-chat',
-  implementedPhases: ['19-CHAT.0', '19-CHAT.1', '19-CHAT.2', '19-CHAT.3', '19-CHAT.4'],
+  implementedPhases: ['19-CHAT.0', '19-CHAT.1', '19-CHAT.2', '19-CHAT.3', '19-CHAT.4', '19-CHAT.5', '19-CHAT.6'],
   /** Tables the module owns. Conversation storage stays with `AIAgents`. */
   tables: CRM_CHAT_TABLES,
   /** The module cannot function without this owner; it is a dependency, not a copy. */
