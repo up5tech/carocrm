@@ -32,6 +32,12 @@ import type {
   ApiUserRow,
   AttachmentInfo,
   CloneResult,
+  CRMChatCapabilitiesView,
+  CRMChatConversationDetail,
+  CRMChatConversationList,
+  CRMChatHealthView,
+  CRMChatMessagePage,
+  CRMChatSettingsView,
   EmailAccountInput,
   EmailAccountRow,
   EmailTransportInfo,
@@ -497,6 +503,36 @@ export const api = {
   // Module settings documents hosted by the settings shell (§8.3): each keeps its own endpoint.
   aiAgentsHealth: () => request<AIAgentsHealthView>('/AIAgents/action/health'),
   aiAgentsCapabilities: () => request<AIAgentsCapabilitiesView>('/AIAgents/action/capabilities'),
+
+  // Phase 19-CHAT.2 — the Chat workspace shell. Capabilities and health are reads the server gates on
+  // the caller's Chat capability; settings are the administrative surface and need `admin`.
+  crmChatCapabilities: () => request<CRMChatCapabilitiesView>('/CRMChat/action/capabilities'),
+  crmChatHealth: () => request<CRMChatHealthView>('/CRMChat/action/health'),
+  crmChatSettings: () => request<CRMChatSettingsView>('/CRMChat/action/settings'),
+  crmChatUpdateSettings: (patch: Record<string, unknown>) =>
+    request<CRMChatSettingsView>('/CRMChat/action/settings', post(patch)),
+
+  // Phase 19-CHAT.4 — the caller's own conversations. The server scopes every read to the owner, so
+  // there is no user parameter here and there must never be one.
+  crmChatConversations: (params: { status?: 'active' | 'archived' | 'all'; offset?: number; maxSize?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.status !== undefined) query.set('status', params.status);
+    if (params.offset !== undefined) query.set('offset', String(params.offset));
+    if (params.maxSize !== undefined) query.set('maxSize', String(params.maxSize));
+    const suffix = query.toString();
+    return request<CRMChatConversationList>(`/CRMChat/action/conversations${suffix === '' ? '' : `?${suffix}`}`);
+  },
+  crmChatConversation: (id: string) =>
+    request<CRMChatConversationDetail>(`/CRMChat/action/conversations/${encodeURIComponent(id)}`),
+  crmChatConversationMessages: (id: string, params: { before?: number; maxSize?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.before !== undefined) query.set('before', String(params.before));
+    if (params.maxSize !== undefined) query.set('maxSize', String(params.maxSize));
+    const suffix = query.toString();
+    return request<CRMChatMessagePage>(
+      `/CRMChat/action/conversations/${encodeURIComponent(id)}/messages${suffix === '' ? '' : `?${suffix}`}`,
+    );
+  },
 
   // Phase 19-AI.2/19-AI.4 — the administrative surfaces of the module: the policy settings row and
   // the provider connections. Both are guarded by a capability the server asserts; the SPA only

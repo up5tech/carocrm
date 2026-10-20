@@ -11,6 +11,7 @@ import { AdminPortalsPage } from './pages/AdminPortalsPage.js';
 import { AdvancedIntegrationsPage } from './pages/AdvancedIntegrationsPage.js';
 import { AIAgentsPage } from './pages/AIAgentsPage.js';
 import { CalendarPage } from './pages/CalendarPage.js';
+import { CRMChatPage } from './pages/CRMChatPage.js';
 import { DashboardsPage } from './pages/DashboardsPage.js';
 import { EntityAdminPage } from './pages/EntityAdminPage.js';
 import { EntityBoardPage } from './pages/EntityBoardPage.js';
@@ -115,6 +116,9 @@ export function AppRoutes() {
         {/* Phase 19-AI: a static module page, declared before the entity wildcard so "ai-agents"
             is never read as an entity name. Visibility is decided by the server's navigation. */}
         <Route path="/ai-agents" element={<AIAgentsPage />} />
+        {/* Phase 19-CHAT: the conversational workspace. Also a static route, so "crm-chat" is never
+            read as an entity name; visibility and authorization are decided by the server. */}
+        <Route path="/crm-chat" element={<CRMChatPage />} />
         {/* Phase 19-VC: the module's diagnostics page, before the entity wildcard. */}
         <Route path="/voice-inbox" element={<VoiceInboxPage />} />
         <Route path="/voice-communications" element={<VoiceCommunicationsPage />} />

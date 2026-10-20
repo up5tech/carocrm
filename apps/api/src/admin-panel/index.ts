@@ -17,6 +17,7 @@ import { AdminPanelService } from './admin-panel.service.js';
 import { InternalInfoController } from './internal.controller.js';
 import { InternalInfoService } from './internal.service.js';
 import { NavigationService } from './navigation.service.js';
+import { allowEveryNavigationFeature, NAVIGATION_FEATURE_GATE } from './navigation-features.js';
 import { PlatformSettingsRegistrar } from './platform-settings.js';
 import { SettingsDocumentService } from './settings-document.service.js';
 import { SettingsDocumentsController } from './settings-documents.controller.js';
@@ -30,6 +31,8 @@ export type { InternalInfoView } from './internal.service.js';
 export { InternalInfoService, METADATA_RESET_CONFIRM, QUEUE_PURGE_CONFIRM } from './internal.service.js';
 export type { NavigationNode, NavigationTree } from './navigation.service.js';
 export { NavigationService } from './navigation.service.js';
+export type { NavigationFeatureGate } from './navigation-features.js';
+export { allowEveryNavigationFeature, NAVIGATION_FEATURE_GATE } from './navigation-features.js';
 export type { SettingsDocumentView } from './settings-document.service.js';
 export { SettingsDocumentService } from './settings-document.service.js';
 export { SettingsDocumentsController } from './settings-documents.controller.js';
@@ -44,6 +47,9 @@ export {
 } from './settings-shapes.js';
 
 export const ADMIN_PANEL_PROVIDERS: Provider[] = [
+  // Default feature gate: every module page is visible. `AppModule` overrides this with a resolver
+  // that reads each module's settings row, so the kernel depends on no domain module.
+  { provide: NAVIGATION_FEATURE_GATE, useValue: allowEveryNavigationFeature },
   SettingsRegistryService,
   SettingsDocumentService,
   NavigationService,

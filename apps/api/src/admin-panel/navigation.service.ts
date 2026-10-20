@@ -8,6 +8,7 @@ import { I18nService } from '../i18n/i18n.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import { NAVIGATION_ADMIN_ENTRIES, NAVIGATION_CONTAINER_GROUPS, NAVIGATION_PAGES, NAVIGATION_SALES_ENTITY_NAMES, NAVIGATION_SALES_GROUPS, NAVIGATION_SUBGROUPS, navigationProjectName, type NavigationSeed } from './navigation-defaults.js';
+import { NAVIGATION_FEATURE_GATE, type NavigationFeatureGate } from './navigation-features.js';
 import { knownEntryKeys, navigationWarnings } from './navigation-warnings.js';
 import { SettingsDocumentService } from './settings-document.service.js';
 import type { SettingsWarning } from './settings-registry.service.js';
@@ -60,6 +61,7 @@ export class NavigationService {
     @Inject(I18nService) private readonly i18n: I18nService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(SettingsDocumentService) private readonly documents: SettingsDocumentService,
+    @Inject(NAVIGATION_FEATURE_GATE) private readonly featureOn: NavigationFeatureGate,
   ) {
     // A menu edit has to show on the next render, not after the TTL expires.
     this.documents.onChanged((name) => {
@@ -178,6 +180,11 @@ export class NavigationService {
       if (page.permission !== undefined) {
         const level = await this.acl.canUser(page.permission.entity, page.permission.action);
         if (level === 'no') continue;
+      }
+      // A module page can also be switched off by a deployment flag (Phase 19-CHAT). Checked after
+      // the ACL, so the flag can only remove an entry a role already allows — never add one.
+      if (page.feature !== undefined && !(await this.featureOn(page.feature.module, page.feature.flag))) {
+        continue;
       }
       const node = buildNode(page);
       if (node !== null) items.push(node);

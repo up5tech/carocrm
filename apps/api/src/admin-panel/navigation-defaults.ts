@@ -27,6 +27,12 @@ export interface NavigationSeed {
    * their own record ACL; this covers module pages whose route is not a metadata entity.
    */
   readonly permission?: { readonly entity: string; readonly action: AclAction } | undefined;
+  /**
+   * A module page that is only useful while its deployment feature is on (Phase 19-CHAT). Resolved
+   * through `NAVIGATION_FEATURE_GATE` **after** the ACL, so a module switched off by an administrator
+   * is absent from the menu rather than present and refusing every call.
+   */
+  readonly feature?: { readonly module: string; readonly flag: string } | undefined;
 }
 
 export interface NavigationGroupSeed {
@@ -61,6 +67,20 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     order: 75,
     inQuickSearch: true,
     permission: { entity: 'AIAgent', action: 'read' },
+  },
+  // Phase 19-CHAT: the workspace is a module page too. Two server-side gates apply — the synthetic
+  // `CRMChatConversation:read` permission and the `crmChat` module's `features.workspace` flag — so
+  // an administrator who disables Chat removes the entry, and the page is also refused directly.
+  {
+    key: 'crmChat',
+    kind: 'page',
+    route: '/crm-chat',
+    labelKey: 'web.crmChat.title',
+    icon: 'CustomerServiceOutlined',
+    order: 76,
+    inQuickSearch: true,
+    permission: { entity: 'CRMChatConversation', action: 'read' },
+    feature: { module: 'crmChat', flag: 'workspace' },
   },
   // Phase 19-VC: the module's records are dedicated tables, not metadata entities, so each page is
   // gated on the same synthetic capability its API asserts. The inbox needs the conversation

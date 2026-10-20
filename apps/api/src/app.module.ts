@@ -2,11 +2,12 @@ import type { ExtensionAcl, ExtensionDb, ExtensionJobEnqueuer, ExtensionMetadata
 import { EXTENSION_ACL, EXTENSION_DATABASE, EXTENSION_JOB_ENQUEUER, EXTENSION_METADATA, EXTENSION_PRINCIPAL } from '@carocrm/extension-sdk';
 import type { MiddlewareConsumer, NestModule, OnApplicationBootstrap } from '@nestjs/common';
 import { Inject, Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, ModuleRef } from '@nestjs/core';
 
 import { ACL_PROVIDERS } from './acl/acl.module.js';
 import { AclApiService } from './acl/acl-api.service.js';
-import { ADMIN_PANEL_CONTROLLERS, ADMIN_PANEL_PROVIDERS } from './admin-panel/index.js';
+import type { NavigationFeatureGate } from './admin-panel/index.js';
+import { ADMIN_PANEL_CONTROLLERS, ADMIN_PANEL_PROVIDERS, NAVIGATION_FEATURE_GATE, NavigationService } from './admin-panel/index.js';
 import { navigationGroupKeyList } from './admin-panel/navigation-defaults.js';
 import { ADVANCED_INTEGRATIONS_CONTROLLERS, ADVANCED_INTEGRATIONS_PROVIDERS } from './advanced-integrations/index.js';
 import { AI_AGENTS_CONTROLLERS, AI_AGENTS_PROVIDERS } from './ai-agents/index.js';
@@ -24,6 +25,8 @@ import { OutboxService } from './common/outbox.service.js';
 import { RequestContextMiddleware } from './common/request-context.middleware.js';
 import { REQUEST_SCOPE_TOKEN,RequestScope } from './common/request-scope.js';
 import { buildConfig, CONFIG_TOKEN } from './config.js';
+import type { MenuInvalidator } from './crm-chat/index.js';
+import { CRM_CHAT_CONTROLLERS, CRM_CHAT_MENU_INVALIDATOR, CRM_CHAT_PROVIDERS, CRMChatSettingsService } from './crm-chat/index.js';
 import { CUSTOMER_SUCCESS_CONTROLLERS, CUSTOMER_SUCCESS_PROVIDERS } from './customer-success/index.js';
 import { DatabaseService } from './database/database.service.js';
 import { DOCUMENT_CONTROLLERS, DOCUMENT_PROVIDERS } from './document/index.js';
@@ -126,6 +129,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 19-AI: `/api/v1/AIAgents/action/...` is a static prefix (diagnostics, settings,
     // provider connections) and must be matched before the generic `:entity` wildcard.
     ...AI_AGENTS_CONTROLLERS,
+    // Phase 19-CHAT: `/api/v1/CRMChat/action/...` is a static prefix (capabilities, diagnostics and
+    // the administrative settings row) and must be matched before the generic `:entity` wildcard.
+    ...CRM_CHAT_CONTROLLERS,
     // Phase 19-VC: `/api/v1/VoiceCommunications/action/...` and the provider webhook prefix
     // `/api/v1/integrations/voice-communications/...` are static prefixes and must be matched before
     // the generic `:entity` wildcard.
@@ -170,6 +176,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...MARKETING_AUTOMATION_PROVIDERS,
     // Phase 19-AI: module settings/permission/policy, provider connections and the model gateway.
     ...AI_AGENTS_PROVIDERS,
+    // Phase 19-CHAT: the workspace settings row, capability gate, policy, assistant readiness and
+    // module health. The module owns no table, queue or adapter of its own.
+    ...CRM_CHAT_PROVIDERS,
     // Phase 19-VC: settings, provider registry/accounts, webhook ingress/processing, resolution,
     // consent/policy and the module health/navigation reports.
     ...VOICE_COMMUNICATIONS_PROVIDERS,
@@ -184,6 +193,38 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 20: the settings document registry, the admin panel descriptors and the navigation
     // resolver. `PlatformSettingsRegistrar` registers the platform documents at bootstrap.
     ...ADMIN_PANEL_PROVIDERS,
+    // Phase 19-CHAT: the menu pipeline asks a deployment flag before it renders a module page, and
+    // the kernel resolves it here instead of importing a domain module. A module this build does not
+    // know stays visible — the ACL still decides who may see it.
+    //
+    // Both factories resolve their target **lazily** through `ModuleRef`, because the dependency runs
+    // in a circle by design: `NavigationService` needs the gate, the gate needs the Chat settings row,
+    // and the settings row needs the menu invalidator. Resolving inside the returned closure keeps the
+    // graph acyclic at construction time.
+    {
+      provide: NAVIGATION_FEATURE_GATE,
+      inject: [ModuleRef],
+      useFactory:
+        (ref: ModuleRef): NavigationFeatureGate =>
+        async (module: string, flag: string) => {
+          if (module === 'crmChat' && flag === 'workspace') {
+            const chat = ref.get(CRMChatSettingsService, { strict: false });
+            return (await chat.settings()).features.workspace;
+          }
+          return true;
+        },
+    },
+    // The menu is cached per user for 30 s; a Chat flag write drops it so a disabled module leaves
+    // the sidebar on the next render instead of after the TTL (`docs/admin/navigation.md`).
+    {
+      provide: CRM_CHAT_MENU_INVALIDATOR,
+      inject: [ModuleRef],
+      useFactory:
+        (ref: ModuleRef): MenuInvalidator =>
+        () => {
+          ref.get(NavigationService, { strict: false }).invalidate();
+        },
+    },
     ...AUDIT_PROVIDERS,
     ...STREAM_PROVIDERS,
     ...CALENDAR_PROVIDERS,

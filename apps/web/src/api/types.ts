@@ -2548,3 +2548,166 @@ export interface AdvancedIntegrationsCapabilitiesView {
     readonly granted: boolean;
   }[];
 }
+
+/**
+ * Phase 19-CHAT.2 — the Chat workspace contract the SPA renders
+ * (PLAN_Phase_19_CRM_Chat.md §8, §13). The server decides every field: the shell shows what the
+ * caller may do and why the workspace is not ready, instead of inferring it from hidden controls.
+ */
+export type CRMChatAssistantState =
+  | 'not-configured'
+  | 'unresolvable'
+  | 'not-found'
+  | 'not-published'
+  | 'execution-disabled'
+  | 'execution-paused'
+  | 'memory-disabled'
+  | 'agent-memory-off'
+  | 'ready';
+
+export interface CRMChatAssistantReadiness {
+  readonly state: CRMChatAssistantState;
+  readonly reason: string;
+  readonly configuredKey: string;
+  readonly agentId: string | null;
+  readonly name: string | null;
+  readonly version: number | null;
+  readonly tools: readonly string[];
+  readonly memoryMessages: number;
+}
+
+export interface CRMChatFeaturesView {
+  readonly key: string;
+  readonly label: string;
+  readonly description: string;
+  readonly enabled: boolean;
+  readonly effective: boolean;
+  readonly defaultEnabled: boolean;
+  readonly settingsPath: string;
+}
+
+export interface CRMChatLimits {
+  readonly maxMessageChars: number;
+  readonly maxContextRefs: number;
+  readonly maxActiveTurnsPerUser: number;
+  readonly maxConversationsPerUser: number;
+  readonly turnTimeoutSeconds: number;
+  readonly heartbeatSeconds: number;
+}
+
+export interface CRMChatCapabilitiesView {
+  readonly module: {
+    readonly id: string;
+    readonly name: string;
+    readonly version: string;
+    readonly contractVersion: string;
+    readonly apiPrefix: string;
+    readonly frontendRoute: string;
+    readonly implementedPhases: readonly string[];
+  };
+  readonly workspace: { readonly enabled: boolean; readonly permitted: boolean };
+  readonly capabilities: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly description: string;
+    readonly granted: boolean;
+  }[];
+  readonly features: readonly CRMChatFeaturesView[];
+  readonly assistant: CRMChatAssistantReadiness;
+  readonly limits: CRMChatLimits;
+  readonly actions: {
+    readonly canStartTurn: boolean;
+    readonly canConfirmWrite: boolean;
+    readonly reason: string | null;
+  };
+}
+
+/** 19-CHAT.4 — a conversation the caller owns (contract §7.6). */
+export interface CRMChatConversationView {
+  readonly id: string;
+  readonly title: string | null;
+  readonly agentId: string;
+  readonly agentName: string;
+  readonly status: 'active' | 'archived';
+  readonly messageCount: number;
+  readonly lastMessageAt: string;
+  readonly expiresAt: string | null;
+  readonly createdAt: string;
+}
+
+export interface CRMChatConversationList {
+  readonly list: readonly CRMChatConversationView[];
+  readonly total: number;
+  readonly offset: number;
+  readonly count: number;
+}
+
+/** Plain text only (contract D11): no markdown, no HTML from the model. */
+export interface CRMChatMessageView {
+  readonly id: string;
+  readonly sequence: number;
+  readonly role: 'user' | 'assistant' | 'system';
+  readonly content: string;
+  readonly contentFormat: 'plain';
+  readonly redaction: 'none' | 'summary' | 'hashed';
+  readonly turnId: string | null;
+  readonly citations: readonly unknown[];
+  readonly createdAt: string;
+  readonly completedAt: string | null;
+}
+
+export interface CRMChatMessagePage {
+  readonly list: readonly CRMChatMessageView[];
+  readonly nextBefore: number | null;
+  readonly hasMore: boolean;
+}
+
+export interface CRMChatConversationDetail {
+  readonly conversation: CRMChatConversationView;
+  readonly messages: CRMChatMessagePage;
+}
+
+export interface CRMChatHealthView {
+  readonly module: {
+    readonly id: string;
+    readonly name: string;
+    readonly version: string;
+    readonly minPlatformVersion: string;
+    readonly loadOrder: number;
+    readonly apiPrefix: string;
+    readonly frontendRoute: string;
+    readonly implementedPhases: readonly string[];
+    readonly dependsOn: readonly string[];
+  };
+  readonly ok: boolean;
+  readonly workspace: { readonly enabled: boolean };
+  readonly assistant: CRMChatAssistantReadiness;
+  readonly dependencies: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly present: boolean;
+    readonly evidence: readonly { readonly kind: string; readonly value: string; readonly present: boolean }[];
+    readonly missing: readonly string[];
+  }[];
+  readonly optionalIntegrations: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly provides: string;
+    readonly present: boolean;
+    readonly status: string;
+  }[];
+  readonly features: readonly CRMChatFeaturesView[];
+  readonly structures: readonly { readonly name: string; readonly present: boolean }[];
+  readonly settings: { readonly version: number; readonly updatedAt: string | null; readonly warnings: readonly string[] };
+  readonly checks: readonly { readonly name: string; readonly ok: boolean; readonly detail: string }[];
+}
+
+export interface CRMChatSettingsView {
+  readonly settings: Record<string, unknown>;
+  readonly version: number;
+  readonly updatedAt: string | null;
+  readonly updatedBy: string | null;
+  readonly warnings: readonly { readonly code: string; readonly message: string }[];
+  readonly features: Record<string, boolean>;
+  readonly effectiveFeatures: Record<string, boolean>;
+}
