@@ -14,6 +14,7 @@ import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 import { AIAgentsPolicyService } from './ai-agents-policy.service.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 import { AIProviderRegistry } from './ai-provider.js';
+import { AnthropicProviderAdapter } from './ai-provider-anthropic.js';
 import { AIProviderConnectionService } from './ai-provider-connections.service.js';
 import { FakeProviderAdapter } from './ai-provider-fake.js';
 import { AIProviderGateway } from './ai-provider-gateway.service.js';
@@ -31,6 +32,8 @@ export { AIToolRegistry } from './ai-agent-tools.js';
 export { AI_AGENTS_MODULE } from './ai-agents-module.js';
 export { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 export { AIProviderRegistry } from './ai-provider.js';
+export { AnthropicProviderAdapter } from './ai-provider-anthropic.js';
+export { AI_PROVIDER_PRESETS, providerPresets } from './ai-provider-presets.js';
 
 /**
  * `AIAgents` barrel (AGENTS.md §5.1, docs/module-guide.md).
@@ -60,17 +63,20 @@ export const AI_AGENTS_PROVIDERS: Provider[] = [
   AIAgentApprovalService,
   AIProviderConnectionService,
   AIProviderGateway,
+  AnthropicProviderAdapter,
   OpenAICompatibleProviderAdapter,
   FakeProviderAdapter,
   {
     provide: AIProviderRegistry,
-    inject: [OpenAICompatibleProviderAdapter, FakeProviderAdapter],
+    inject: [OpenAICompatibleProviderAdapter, AnthropicProviderAdapter, FakeProviderAdapter],
     useFactory: (
       openai: OpenAICompatibleProviderAdapter,
+      anthropic: AnthropicProviderAdapter,
       fake: FakeProviderAdapter,
     ): AIProviderRegistry => {
       const registry = new AIProviderRegistry();
       registry.register(openai);
+      registry.register(anthropic);
       if (process.env.NODE_ENV !== 'production') registry.register(fake);
       return registry;
     },

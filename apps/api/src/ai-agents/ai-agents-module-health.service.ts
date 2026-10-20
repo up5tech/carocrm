@@ -17,6 +17,7 @@ import {
 } from './ai-agents-module.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 import { AIProviderRegistry } from './ai-provider.js';
+import { providerPresets } from './ai-provider-presets.js';
 
 /**
  * Phase 19-AI.2/19-AI.4 — module health
@@ -70,6 +71,22 @@ export interface AIAgentsModuleHealthView {
       readonly label: string;
       readonly structuredOutput: boolean;
       readonly toolCalling: boolean;
+    }[];
+    /**
+     * The curated catalog of popular endpoints an administrator picks from when creating a
+     * connection. It is configuration, not access: a preset carries a base URL, a model suggestion
+     * and the credential header — never a secret and never a grant.
+     */
+    readonly presets: readonly {
+      readonly key: string;
+      readonly label: string;
+      readonly kind: string;
+      readonly baseUrl: string;
+      readonly models: readonly string[];
+      readonly group: string;
+      readonly authHeader: string;
+      readonly requiresApiKey: boolean;
+      readonly note: string | null;
     }[];
     readonly defaultKey: string | null;
     readonly defaultResolvable: boolean;
@@ -241,6 +258,17 @@ export class AIAgentsModuleHealthService {
           label: adapter.label,
           structuredOutput: adapter.capabilities.structuredOutput,
           toolCalling: adapter.capabilities.toolCalling,
+        })),
+        presets: providerPresets(this.providers.has('fake')).map((preset) => ({
+          key: preset.key,
+          label: preset.label,
+          kind: preset.kind,
+          baseUrl: preset.baseUrl,
+          models: [...preset.models],
+          group: preset.group,
+          authHeader: preset.authHeader,
+          requiresApiKey: preset.requiresApiKey,
+          note: preset.note ?? null,
         })),
         defaultKey: revealConfiguration ? defaultKey : null,
         defaultResolvable: revealConfiguration ? defaultResolvable : defaultKey !== null,

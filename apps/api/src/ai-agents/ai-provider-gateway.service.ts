@@ -123,6 +123,7 @@ export class AIProviderGateway {
             ? {}
             : { organization: connection.config.organization }),
           allowLoopback: connection.config.allowLoopback,
+          authHeader: connection.config.authHeader,
         },
       );
       await this.record(input, connection.key, 'succeeded', response, Date.now() - started);

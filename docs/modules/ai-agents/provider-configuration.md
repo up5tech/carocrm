@@ -13,19 +13,46 @@ A connection is one approved model endpoint. It is stored in `ai_provider_connec
 | Field | Meaning |
 | --- | --- |
 | `key` | Stable lowercase identifier, `^[a-z][a-z0-9-]{1,63}$`; agents/policies refer to it. |
-| `kind` | Registered adapter: `openai-compatible` (production) or `fake` (non-production only). |
+| `kind` | Registered adapter: `openai-compatible` (`/chat/completions`), `anthropic` (Messages API) or `fake` (non-production only). |
 | `label` | Human label for the admin screen. |
-| `baseUrl` | Endpoint root. The adapter appends `/chat/completions`. |
+| `baseUrl` | Endpoint root. The adapter appends its own path (`/chat/completions` or `/messages`). |
 | `models` | **Allowlist** of model ids an agent may request. Empty is refused. |
 | `dataClasses` | Data classes this endpoint is approved to receive: `public`, `internal`, `confidential`, `restricted`. |
 | `apiKey` | Write-only credential. Encrypted at rest; read paths return `hasApiKey`. |
 | `config.allowLoopback` | Allow a self-hosted runtime on loopback (still `https`, never in production). |
 | `config.organization` | Optional provider organization/tenant header. |
+| `config.authHeader` | The header the credential travels in: `bearer` (default) or `api-key` (Azure OpenAI). |
 | `enabled` | A disabled connection cannot be used by a run. |
 
 A definition/version references a connection by `key` and a model from its allowlist. Changing the
 credential never changes the agent definition, and rotating a key is a `PATCH` with the new
 `apiKey`.
+
+---
+
+## 1b. The provider catalog
+
+The **Providers** tab offers a curated list of the endpoints an administrator is most likely to
+configure. Picking one fills the form — the adapter, the base URL, the suggested models and the
+credential header — and every value stays editable.
+
+The catalog is **configuration, not code**: a preset never grants access, and a connection is
+refused unless its `kind` is an adapter the server actually registered.
+
+| Group | Entries |
+| --- | --- |
+| Hosted | OpenAI, Anthropic (Claude), Google Gemini, Azure OpenAI, Groq, DeepSeek, Mistral AI, xAI (Grok), OpenRouter, Together AI, Fireworks AI, Perplexity, NVIDIA NIM, SiliconFlow, Nebius AI Studio, Chutes AI |
+| Self-hosted | LiteLLM proxy, Ollama, LM Studio, vLLM, llama.cpp server, LocalAI |
+| Other | Custom / OpenAI-compatible endpoint, and the deterministic fake provider outside production |
+
+Most of them share the `openai-compatible` adapter and differ only by base URL — that is the
+point of the catalog: one transport, many vendors. Gemini is reached through Google's
+OpenAI-compatible surface. Azure OpenAI needs the `api-key` header and an `?api-version=…` query
+on the base URL; both are preserved by the adapter.
+
+A self-hosted runtime must be reachable over **https** (behind a TLS terminator) and the
+connection must allow loopback; the plain `http://localhost:…` endpoint of Ollama is refused by
+the SSRF guard.
 
 ---
 
@@ -175,11 +202,14 @@ does not fail a call whose tokens were already consumed.
 
 | Kind | Availability | Notes |
 | --- | --- | --- |
-| `openai-compatible` | all environments | `/chat/completions`, tool calls, JSON-schema response format, usage; no vendor SDK. |
+| `openai-compatible` | all environments | `/chat/completions`, tool calls, JSON-schema response format, usage; no vendor SDK. Serves every vendor that speaks that contract. |
+| `anthropic` | all environments | The Messages API (`/messages`, `x-api-key`, pinned `anthropic-version`); tool calls, usage. **No structured output** — the Messages API has no response format, so a run that asks for a JSON schema is refused rather than answered with prose. |
 | `fake` | **non-production only** | Deterministic; simulates errors, delays and tool proposals. Never selected in production. |
 
-Adding a provider is a code change: implement `AIProviderAdapter`, register it in the module barrel,
-and document its capabilities. No table, API or model output can register an adapter at runtime.
+Adding a **transport** is a code change: implement `AIProviderAdapter`, register it in the module
+barrel, and document its capabilities. No table, API or model output can register an adapter at
+runtime. Adding a **vendor** that speaks an existing transport is not a code change — it is a
+catalog entry (§1b).
 
 ---
 

@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AIProviderError, AIProviderRegistry } from '../src/ai-agents/ai-provider.js';
+import { AnthropicProviderAdapter } from '../src/ai-agents/ai-provider-anthropic.js';
 import { FakeProviderAdapter } from '../src/ai-agents/ai-provider-fake.js';
 import { OpenAICompatibleProviderAdapter } from '../src/ai-agents/ai-provider-openai-compatible.js';
+import { AI_PROVIDER_PRESETS, presetForConnection, providerPresets } from '../src/ai-agents/ai-provider-presets.js';
 import { assertSafeProviderBaseUrl, isPrivateAddress } from '../src/ai-agents/ai-provider-url.js';
 
 /**
@@ -197,5 +199,130 @@ describe('provider registry', () => {
       }
     })();
     expect((error as AIProviderError).category).toBe('unknown_provider');
+  });
+});
+
+describe('Anthropic adapter', () => {
+  const anthropic = new AnthropicProviderAdapter();
+  const anthropicContext = { apiKey: 'test-key-never-logged', baseUrl: 'https://api.anthropic.com/v1' };
+
+  it('sends the Messages API shape and normalizes text, usage and a tool call', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        id: 'msg_1',
+        model: 'claude-sonnet-4-5',
+        content: [
+          { type: 'text', text: 'working' },
+          { type: 'tool_use', id: 'toolu_1', name: 'search', input: { query: 'x' } },
+        ],
+        stop_reason: 'tool_use',
+        usage: { input_tokens: 12, output_tokens: 7, cache_read_input_tokens: 3 },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await anthropic.complete(
+      {
+        model: 'claude-sonnet-4-5',
+        messages: [
+          { role: 'system', content: 'be brief' },
+          { role: 'user', content: 'hello' },
+        ],
+        tools: [{ name: 'search', description: 'search', parameters: { type: 'object' } }],
+      },
+      anthropicContext,
+    );
+
+    expect(response.text).toBe('working');
+    expect(response.model).toBe('claude-sonnet-4-5');
+    expect(response.finishReason).toBe('tool_calls');
+    expect(response.toolCalls).toEqual([{ id: 'toolu_1', name: 'search', rawArguments: '{"query":"x"}' }]);
+    expect(response.usage).toEqual({ inputTokens: 12, outputTokens: 7, cachedInputTokens: 3 });
+
+    // The credential travels in the Anthropic header and the system prompt is a top-level field.
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.anthropic.com/v1/messages');
+    const headers = init.headers as Record<string, string>;
+    expect(headers['x-api-key']).toBe('test-key-never-logged');
+    expect(headers.authorization).toBeUndefined();
+    expect(headers['anthropic-version']).toBe('2023-06-01');
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body['system']).toBe('be brief');
+    expect(body['max_tokens']).toBe(4096);
+    expect(body['tools']).toEqual([
+      { name: 'search', description: 'search', input_schema: { type: 'object' } },
+    ]);
+  });
+
+  it('refuses a structured-output request instead of answering with prose', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ content: [{ type: 'text', text: '{}' }] })));
+    const error = await anthropic
+      .complete(
+        {
+          model: 'claude-sonnet-4-5',
+          messages: [{ role: 'user', content: 'hello' }],
+          responseFormat: { type: 'json_schema', name: 'result', schema: { type: 'object' } },
+        },
+        anthropicContext,
+      )
+      .catch((caught: unknown) => caught);
+    expect((error as AIProviderError).category).toBe('invalid_request');
+  });
+
+  it('maps HTTP 401 to a non-retryable auth error without reading the body', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: 'bad key' }, 401)));
+    const error = await anthropic
+      .complete(request, anthropicContext)
+      .catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(AIProviderError);
+    expect((error as AIProviderError).category).toBe('auth');
+    expect((error as AIProviderError).retryable).toBe(false);
+    expect((error as AIProviderError).message).not.toContain('test-key-never-logged');
+  });
+});
+
+describe('OpenAI-compatible credential header and query string', () => {
+  it('sends the credential in the api-key header when the connection asks for it', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({ choices: [{ message: { content: 'ok' } }] }));
+    vi.stubGlobal('fetch', fetchMock);
+    await adapter.complete(request, {
+      apiKey: 'azure-secret-never-logged',
+      baseUrl: 'https://resource.openai.azure.com/openai/deployments/dep?api-version=2024-10-21',
+      authHeader: 'api-key',
+    });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    // The path segment is appended before the query, which belongs to the endpoint.
+    expect(url).toBe(
+      'https://resource.openai.azure.com/openai/deployments/dep/chat/completions?api-version=2024-10-21',
+    );
+    const headers = init.headers as Record<string, string>;
+    expect(headers['api-key']).toBe('azure-secret-never-logged');
+    expect(headers.authorization).toBeUndefined();
+  });
+});
+
+describe('provider presets', () => {
+  it('offers the popular hosted providers and the local runtimes', () => {
+    const keys = AI_PROVIDER_PRESETS.map((preset) => preset.key);
+    for (const expected of ['openai', 'anthropic', 'gemini', 'azure-openai', 'groq', 'deepseek', 'ollama', 'custom']) {
+      expect(keys).toContain(expected);
+    }
+    // The fake adapter is offered outside production only.
+    expect(providerPresets(true).map((preset) => preset.key)).toContain('fake');
+    expect(providerPresets(false).map((preset) => preset.key)).not.toContain('fake');
+  });
+
+  it('names a transport that is actually registered', () => {
+    const registered = new Set(['openai-compatible', 'anthropic', 'fake']);
+    for (const preset of AI_PROVIDER_PRESETS) {
+      expect(registered.has(preset.kind)).toBe(true);
+    }
+  });
+
+  it('matches an existing connection back to the preset it came from', () => {
+    expect(presetForConnection('openai-compatible', 'https://api.openai.com/v1')?.key).toBe('openai');
+    expect(presetForConnection('anthropic', 'https://api.anthropic.com/v1')?.key).toBe('anthropic');
+    // An unknown endpoint falls back to the custom entry rather than guessing.
+    expect(presetForConnection('openai-compatible', 'https://internal.example/v1')?.key).toBe('custom');
   });
 });

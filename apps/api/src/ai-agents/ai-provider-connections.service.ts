@@ -12,7 +12,7 @@ import { CONFIG_TOKEN } from '../config.js';
 import type { AIProviderConnectionsTable } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { DataClass } from './ai-agents-module.js';
-import { type AIProviderAdapter, AIProviderError, AIProviderRegistry } from './ai-provider.js';
+import { type AIProviderAdapter, type AIProviderAuthHeader, AIProviderError, AIProviderRegistry } from './ai-provider.js';
 import { assertSafeProviderBaseUrl } from './ai-provider-url.js';
 import {
   ProviderConnectionConfigSchema,
@@ -46,7 +46,11 @@ export interface ProviderConnectionView {
   readonly models: readonly string[];
   readonly dataClasses: readonly DataClass[];
   readonly hasApiKey: boolean;
-  readonly config: { readonly allowLoopback: boolean; readonly organization?: string | undefined };
+  readonly config: {
+    readonly allowLoopback: boolean;
+    readonly organization?: string | undefined;
+    readonly authHeader: AIProviderAuthHeader;
+  };
   readonly enabled: boolean;
   readonly createdAt: string;
   readonly modifiedAt: string;
@@ -60,7 +64,11 @@ export interface ResolvedProviderConnection {
   readonly models: readonly string[];
   readonly dataClasses: readonly DataClass[];
   readonly apiKey: string | null;
-  readonly config: { readonly allowLoopback: boolean; readonly organization?: string | undefined };
+  readonly config: {
+    readonly allowLoopback: boolean;
+    readonly organization?: string | undefined;
+    readonly authHeader: AIProviderAuthHeader;
+  };
 }
 
 @Injectable()
@@ -272,9 +280,18 @@ function toView(row: AIProviderConnectionsTable): ProviderConnectionView {
   };
 }
 
-function configOf(row: AIProviderConnectionsTable): { allowLoopback: boolean; organization?: string | undefined } {
+function configOf(row: AIProviderConnectionsTable): {
+  allowLoopback: boolean;
+  organization?: string | undefined;
+  authHeader: AIProviderAuthHeader;
+} {
   const parsed = ProviderConnectionConfigSchema.safeParse(row.config);
-  return parsed.success ? parsed.data : { allowLoopback: false };
+  if (!parsed.success) return { allowLoopback: false, authHeader: 'bearer' };
+  return {
+    allowLoopback: parsed.data.allowLoopback,
+    ...(parsed.data.organization === undefined ? {} : { organization: parsed.data.organization }),
+    authHeader: parsed.data.authHeader,
+  };
 }
 
 function parseStringArray(value: unknown): string[] {

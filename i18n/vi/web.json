@@ -1925,7 +1925,13 @@
     "settingsDefaultProviderHint": "Kết nối mà agent mới bắt đầu. Để trống nghĩa là quản trị viên phải chọn tường minh.",
     "settingsDefaultProviderKey": "Kết nối mặc định",
     "settingsDefaultProviderPlaceholder": "Không có kết nối mặc định",
-    "settingsVersionMeta": "Phiên bản {version} — thay đổi lần cuối bởi {by} lúc {at}"
+    "settingsVersionMeta": "Phiên bản {version} — thay đổi lần cuối bởi {by} lúc {at}",
+    "providerPreset": "Nhà cung cấp",
+    "providerPresetPlaceholder": "Chọn nhà cung cấp",
+    "providerPresetHint": "Chọn nhà cung cấp sẽ điền endpoint, model gợi ý và header của khóa bí mật. Mọi giá trị vẫn sửa được.",
+    "providerGroupHosted": "Nhà cung cấp lưu trữ",
+    "providerGroupSelfHosted": "Runtime tự host và cục bộ",
+    "providerGroupOther": "Khác"
   },
   "adminLayout": {
     "entityTitle": "Bản ghi",

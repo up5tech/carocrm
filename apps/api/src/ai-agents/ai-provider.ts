@@ -51,7 +51,15 @@ export interface AIProviderContext {
   readonly organization?: string | undefined;
   /** Administrator-approved self-hosted endpoint. Only meaningful in non-production. */
   readonly allowLoopback?: boolean | undefined;
+  /**
+   * The header the credential travels in. `bearer` is the default (`Authorization: Bearer …`);
+   * `api-key` is the header Azure OpenAI expects. The adapter decides, not the connection row.
+   */
+  readonly authHeader?: AIProviderAuthHeader | undefined;
 }
+
+/** How a provider expects its credential. */
+export type AIProviderAuthHeader = 'bearer' | 'api-key';
 
 export interface AIProviderUsage {
   readonly inputTokens: number | null;

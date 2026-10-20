@@ -27,13 +27,18 @@ export const ProviderConnectionConfigSchema = z
     allowLoopback: z.boolean().default(false),
     /** Optional provider organization/tenant label sent as a header by the adapter. */
     organization: z.string().trim().max(200).optional(),
+    /**
+     * The header the credential travels in. `bearer` is the default; Azure OpenAI expects
+     * `api-key`. The adapter decides which header it reads, not the connection.
+     */
+    authHeader: z.enum(['bearer', 'api-key']).default('bearer'),
   })
   .strict();
 
 export const ProviderConnectionCreateSchema = z
   .object({
     /** The connection `kind`; it selects a registered adapter. */
-    kind: z.enum(['openai-compatible', 'fake']),
+    kind: z.enum(['openai-compatible', 'anthropic', 'fake']),
     key: ProviderKeySchema,
     label: z.string().trim().min(1).max(120),
     baseUrl: z.string().trim().min(1).max(500),

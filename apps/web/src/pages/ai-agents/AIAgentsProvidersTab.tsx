@@ -20,10 +20,10 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '../../api/client.js';
-import type { AIAgentProviderCheckResult, AIAgentsProviderConnection } from '../../api/types.js';
+import type { AIAgentProviderCheckResult, AIAgentsHealthView, AIAgentsProviderConnection } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
 
 /**
@@ -58,6 +58,9 @@ function errorText(error: unknown): string {
 }
 
 interface ProviderFormValues {
+  /** The catalog entry the administrator picked. It carries the kind and the defaults. */
+  preset: string;
+  /** The transport adapter, derived from the preset. */
   kind: string;
   key: string;
   label: string;
@@ -67,7 +70,32 @@ interface ProviderFormValues {
   apiKey?: string;
   allowLoopback: boolean;
   organization?: string;
+  authHeader: 'bearer' | 'api-key';
   enabled: boolean;
+}
+
+type Preset = NonNullable<AIAgentsHealthView['providers']['presets'][number]>;
+
+interface PresetGroup {
+  readonly key: string;
+  readonly label: string;
+  readonly options: readonly Preset[];
+}
+
+/** The catalog, grouped the way the administrator looks for a provider. */
+function groupPresets(presets: readonly Preset[]): PresetGroup[] {
+  const order: readonly { key: string; labelKey: string }[] = [
+    { key: 'hosted', labelKey: 'web.aiAgents.providerGroupHosted' },
+    { key: 'self-hosted', labelKey: 'web.aiAgents.providerGroupSelfHosted' },
+    { key: 'other', labelKey: 'web.aiAgents.providerGroupOther' },
+  ];
+  return order
+    .map((group) => ({
+      key: group.key,
+      label: t(group.labelKey),
+      options: presets.filter((preset) => preset.group === group.key),
+    }))
+    .filter((group) => group.options.length > 0);
 }
 
 export function AIAgentsProvidersTab() {
@@ -84,9 +112,10 @@ export function AIAgentsProvidersTab() {
     retry: false,
     staleTime: 30_000,
   });
-  // The adapter list comes from the health endpoint, so the form can only offer an adapter the
-  // server actually registered — a `fake` adapter is absent in production.
+  // The catalog comes from the health endpoint, so the form can only offer an adapter the server
+  // actually registered — a `fake` adapter is absent in production.
   const health = useQuery({ queryKey: ['aiAgents', 'health'], queryFn: () => api.aiAgentsHealth(), staleTime: 30_000 });
+  const presets = health.data?.providers.presets ?? [];
 
   const refresh = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['aiAgents', 'providers'] });
@@ -95,7 +124,10 @@ export function AIAgentsProvidersTab() {
 
   const save = useMutation({
     mutationFn: async (values: ProviderFormValues) => {
-      const config: Record<string, unknown> = { allowLoopback: values.allowLoopback };
+      const config: Record<string, unknown> = {
+        allowLoopback: values.allowLoopback,
+        authHeader: values.authHeader,
+      };
       if (values.organization !== undefined && values.organization.trim() !== '') {
         config['organization'] = values.organization.trim();
       }
@@ -152,21 +184,62 @@ export function AIAgentsProvidersTab() {
     onError: (error: Error) => void message.error(errorText(error)),
   });
 
+  /** The catalog entry that matches an existing connection, so the form shows what it is. */
+  const presetOf = useCallback(
+    (connection: AIAgentsProviderConnection): string => {
+      const normalized = connection.baseUrl.replace(/\/+$/, '').toLowerCase();
+      const exact = presets.find(
+        (preset) => preset.baseUrl !== '' && preset.baseUrl.replace(/\/+$/, '').toLowerCase() === normalized,
+      );
+      if (exact !== undefined) return exact.key;
+      // A protocol with an adapter of its own is identified by that adapter.
+      const byKind = presets.find((preset) => preset.kind === connection.kind && preset.kind !== 'openai-compatible');
+      return byKind?.key ?? 'custom';
+    },
+    [presets],
+  );
+
   useEffect(() => {
     if (!editorOpen) return;
+    const presetKey = editing === undefined ? 'openai' : presetOf(editing);
+    const preset = presets.find((entry) => entry.key === presetKey);
     form.setFieldsValue({
-      kind: editing?.kind ?? 'openai-compatible',
+      preset: presetKey,
+      kind: editing?.kind ?? preset?.kind ?? 'openai-compatible',
       key: editing?.key ?? '',
       label: editing?.label ?? '',
-      baseUrl: editing?.baseUrl ?? '',
-      models: editing === undefined ? [] : [...editing.models],
+      baseUrl: editing?.baseUrl ?? preset?.baseUrl ?? '',
+      models: editing === undefined ? [...(preset?.models ?? [])] : [...editing.models],
       dataClasses: editing === undefined ? [...DATA_CLASSES.slice(0, 2)] : [...editing.dataClasses],
       apiKey: '',
-      allowLoopback: editing?.config.allowLoopback ?? false,
+      allowLoopback: editing?.config.allowLoopback ?? (preset?.group === 'self-hosted' ? true : false),
       organization: editing?.config.organization ?? '',
+      authHeader: editing?.config.authHeader ?? preset?.authHeader ?? 'bearer',
       enabled: editing?.enabled ?? true,
     });
-  }, [editorOpen, editing, form]);
+  }, [editorOpen, editing, form, presets, presetOf]);
+
+  /** Choosing a provider fills the endpoint, the model suggestions and the credential header. */
+  const applyPreset = useCallback(
+    (presetKey: string) => {
+      const preset = presets.find((entry) => entry.key === presetKey);
+      if (preset === undefined) return;
+      form.setFieldsValue({
+        preset: presetKey,
+        kind: preset.kind,
+        baseUrl: preset.baseUrl,
+        models: [...preset.models],
+        authHeader: preset.authHeader,
+        ...(preset.group === 'self-hosted' ? { allowLoopback: true } : {}),
+      });
+    },
+    [presets, form],
+  );
+
+  const presetGroups = useMemo(() => groupPresets(presets), [presets]);
+  const selectedPresetKey = Form.useWatch('preset', form);
+  const selectedPreset = presets.find((preset) => preset.key === selectedPresetKey);
+  const presetNote = selectedPreset?.note ?? null;
 
   const openCreate = (): void => {
     setEditing(undefined);
@@ -189,8 +262,6 @@ export function AIAgentsProvidersTab() {
       />
     );
   }
-
-  const adapters = health.data?.providers.adapters ?? [];
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -318,12 +389,26 @@ export function AIAgentsProvidersTab() {
         <Form<ProviderFormValues> form={form} layout="vertical" onFinish={(values) => save.mutate(values)} requiredMark="optional">
           <Row gutter={12}>
             <Col xs={24} sm={12}>
-              <Form.Item name="kind" label={t('web.aiAgents.providerKind')} rules={[{ required: true }]}>
+              <Form.Item name="preset" label={t('web.aiAgents.providerPreset')} extra={presetNote ?? t('web.aiAgents.providerPresetHint')}>
                 <Select
-                  disabled={editing !== undefined}
-                  options={adapters.map((adapter) => ({ value: adapter.key, label: adapter.label }))}
-                  placeholder={t('web.aiAgents.providerKindPlaceholder')}
+                  showSearch
+                  optionFilterProp="label"
+                  onChange={(value: string) => applyPreset(value)}
+                  options={presetGroups.map((group) => ({
+                    label: group.label,
+                    options: group.options.map((preset) => ({
+                      value: preset.key,
+                      label: preset.label,
+                    })),
+                  }))}
+                  placeholder={t('web.aiAgents.providerPresetPlaceholder')}
                 />
+              </Form.Item>
+              <Form.Item name="kind" hidden>
+                <Input />
+              </Form.Item>
+              <Form.Item name="authHeader" hidden>
+                <Input />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12}>

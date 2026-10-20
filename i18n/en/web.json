@@ -1925,7 +1925,13 @@
     "settingsDefaultProviderHint": "The connection a new agent starts from. Empty means an administrator must choose one explicitly.",
     "settingsDefaultProviderKey": "Default connection",
     "settingsDefaultProviderPlaceholder": "No default connection",
-    "settingsVersionMeta": "Version {version} — last changed by {by} at {at}"
+    "settingsVersionMeta": "Version {version} — last changed by {by} at {at}",
+    "providerPreset": "Provider",
+    "providerPresetPlaceholder": "Choose a provider",
+    "providerPresetHint": "Picking a provider fills the endpoint, the suggested models and the credential header. Every value stays editable.",
+    "providerGroupHosted": "Hosted providers",
+    "providerGroupSelfHosted": "Self-hosted and local runtimes",
+    "providerGroupOther": "Other"
   },
   "adminLayout": {
     "entityTitle": "Entity",

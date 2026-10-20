@@ -1427,6 +1427,21 @@ export interface AIAgentsHealthView {
     readonly credentialCount: number;
     readonly adapterKeys: readonly string[];
     readonly adapters: readonly { readonly key: string; readonly label: string; readonly toolCalling: boolean }[];
+    /**
+     * The curated catalog of popular endpoints. A preset is configuration, not access: it carries
+     * a base URL, a model suggestion and the credential header.
+     */
+    readonly presets: readonly {
+      readonly key: string;
+      readonly label: string;
+      readonly kind: string;
+      readonly baseUrl: string;
+      readonly models: readonly string[];
+      readonly group: 'hosted' | 'self-hosted' | 'other';
+      readonly authHeader: 'bearer' | 'api-key';
+      readonly requiresApiKey: boolean;
+      readonly note: string | null;
+    }[];
     readonly defaultKey: string | null;
     readonly encryptionConfigured: boolean;
   };
@@ -1460,7 +1475,11 @@ export interface AIAgentsProviderConnection {
   readonly models: readonly string[];
   readonly dataClasses: readonly string[];
   readonly hasApiKey: boolean;
-  readonly config: { readonly allowLoopback: boolean; readonly organization?: string };
+  readonly config: {
+    readonly allowLoopback: boolean;
+    readonly organization?: string;
+    readonly authHeader: 'bearer' | 'api-key';
+  };
   readonly enabled: boolean;
   readonly createdAt: string;
   readonly modifiedAt: string;

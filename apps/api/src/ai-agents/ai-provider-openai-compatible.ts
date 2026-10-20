@@ -106,7 +106,13 @@ function clampTimeout(value: number | undefined): number {
 }
 
 function joinUrl(baseUrl: string, path: string): string {
-  return `${baseUrl.replace(/\/+$/, '')}/${path}`;
+  // A query string on the base URL belongs to the endpoint, not to the path: Azure OpenAI needs
+  // `?api-version=…` on every request. The path segment is appended before the query.
+  const trimmed = baseUrl.replace(/\/+$/, '');
+  const queryIndex = trimmed.indexOf('?');
+  if (queryIndex === -1) return `${trimmed}/${path}`;
+  const base = trimmed.slice(0, queryIndex).replace(/\/+$/, '');
+  return `${base}/${path}${trimmed.slice(queryIndex)}`;
 }
 
 function buildHeaders(context: AIProviderContext): Record<string, string> {
@@ -115,7 +121,8 @@ function buildHeaders(context: AIProviderContext): Record<string, string> {
     'content-type': 'application/json',
   };
   if (context.apiKey !== null && context.apiKey !== '') {
-    headers.authorization = `Bearer ${context.apiKey}`;
+    if (context.authHeader === 'api-key') headers['api-key'] = context.apiKey;
+    else headers.authorization = `Bearer ${context.apiKey}`;
   }
   if (context.organization !== undefined && context.organization !== '') {
     headers['openai-organization'] = context.organization;
