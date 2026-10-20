@@ -26,6 +26,7 @@ export const ADVANCED_INTEGRATIONS_JOB_NAMES = {
   notifyExpiringCredentials: 'advancedIntegrations.notifyExpiringCredentials',
   processWebhookEvent: 'advancedIntegrations.processWebhookEvent',
   pushOutbound: 'advancedIntegrations.pushOutbound',
+  purgeRetention: 'advancedIntegrations.purgeRetention',
 } as const;
 
 /** The CRM entity events the outbound path reacts to. */
@@ -47,6 +48,7 @@ export interface AdvancedIntegrationsJobDeps {
 const NOTIFY_EXPIRING_CREDENTIALS_PATH = '/api/v1/AdvancedIntegrations/action/notify-expiring-credentials';
 const PROCESS_WEBHOOK_EVENT_PATH = '/api/v1/AdvancedIntegrations/action/process-webhook-event';
 const PUSH_OUTBOUND_PATH = '/api/v1/AdvancedIntegrations/action/push-outbound';
+const PURGE_RETENTION_PATH = '/api/v1/AdvancedIntegrations/action/purge-retention';
 const OUTBOUND_EVENT_PATH = '/api/v1/AdvancedIntegrations/action/outbound-event';
 
 /** Internal signal: the run was cancelled before the API was called. Never escapes a handler. */
@@ -137,6 +139,35 @@ function pushOutboundJob(deps: AdvancedIntegrationsJobDeps): JobHandler {
   };
 }
 
+/**
+ * Run the retention purge.
+ *
+ * The purge is **idempotent** and it is **off by default**: the API decides, from the module's
+ * own policy, whether anything is removed. This handler only reports what the API said.
+ */
+function purgeRetentionJob(deps: AdvancedIntegrationsJobDeps): JobHandler {
+  return async (context: JobContext) => {
+    if (deps.secret.trim() === '') {
+      return { status: 'completed', message: 'No worker capability is configured; the purge did not run.' };
+    }
+    if (await context.shouldStop()) throw new CancelledBeforeCall();
+    context.progress(40, 'Applying the retention policy');
+    const result = await post(deps, PURGE_RETENTION_PATH, {});
+    if (!result.ok) {
+      deps.log.warn({ status: result.status }, 'retention purge refused');
+      return { status: 'failed', message: `The API refused the purge (${String(result.status)}).` };
+    }
+    const removed = result.payload['removed'];
+    const total = typeof result.payload['total'] === 'number' ? result.payload['total'] : 0;
+    context.progress(100, 'Purge complete');
+    return {
+      status: 'completed',
+      message: `Removed ${String(total)} row${total === 1 ? '' : 's'}.`,
+      result: { enabled: result.payload['enabled'] === true, total, removed: removed ?? {} },
+    };
+  };
+}
+
 export function registerAdvancedIntegrationsJobs(registry: JobRegistry, deps: AdvancedIntegrationsJobDeps): void {
   registry.register(
     ADVANCED_INTEGRATIONS_JOB_NAMES.notifyExpiringCredentials,
@@ -144,6 +175,7 @@ export function registerAdvancedIntegrationsJobs(registry: JobRegistry, deps: Ad
   );
   registry.register(ADVANCED_INTEGRATIONS_JOB_NAMES.processWebhookEvent, processWebhookEventJob(deps));
   registry.register(ADVANCED_INTEGRATIONS_JOB_NAMES.pushOutbound, pushOutboundJob(deps));
+  registry.register(ADVANCED_INTEGRATIONS_JOB_NAMES.purgeRetention, purgeRetentionJob(deps));
 }
 
 /**

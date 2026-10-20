@@ -3,6 +3,7 @@ import { sql } from 'kysely';
 
 import { DatabaseService } from '../database/database.service.js';
 import { METADATA_STORE, type MetadataStoreService } from '../metadata/metadata-store.service.js';
+import { AdvancedIntegrationsSettingsService } from './advanced-integrations-settings.service.js';
 import { ConflictService } from './conflict.service.js';
 import { ConnectionLifecycleService, type IntegrationConnectionView } from './connection-lifecycle.service.js';
 import { DeadLetterService } from './dead-letter.service.js';
@@ -145,6 +146,7 @@ export class ConnectionDetailService {
     @Inject(DeadLetterService) private readonly deadLetters: DeadLetterService,
     @Inject(WebhookIngressService) private readonly webhooks: WebhookIngressService,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
+    @Inject(AdvancedIntegrationsSettingsService) private readonly settings: AdvancedIntegrationsSettingsService,
   ) {}
 
   /**
@@ -212,11 +214,16 @@ export class ConnectionDetailService {
       : null;
 
     const syncLagSeconds = this.syncLag(connection);
-    const warnings = await this.warnings(connection, {
+    const settings = await this.settings.settings();
+    const counters = {
       openConflicts: openConflicts.length,
       openDeadLetters: openLetters.length,
       draftMappings: mappings.filter((mapping) => mapping.status === 'draft').length,
-    });
+      // The last few runs, so a **streak** of failures can be counted rather than guessed at.
+      recentRuns: await this.orchestrator.listRuns(connectionId, 5),
+      rejectedWebhooks: await this.countRejectedWebhooks(connectionId),
+    };
+    const warnings = await this.warnings(connection, counters, settings.health);
 
     return {
       connection,
@@ -265,6 +272,20 @@ export class ConnectionDetailService {
   }
 
   /**
+   * How many webhook deliveries this connection had rejected.
+   *
+   * A rejected delivery is a signature that did not verify. A handful is noise; a streak is a
+   * wrong secret or a forgery attempt, and the plan asks for it to be visible.
+   */
+  private async countRejectedWebhooks(connectionId: string): Promise<number> {
+    const rows = await sql<{ total: string }>`
+      select count(*)::text as total from integration_webhook_deliveries
+      where connection_id = ${connectionId} and status = 'rejected'
+    `.execute(this.database.db);
+    return Number(rows.rows[0]?.total ?? '0');
+  }
+
+  /**
    * How long ago the last successful sync finished.
    *
    * `null` when there has never been one — an operator must be able to tell "never synced" from
@@ -285,7 +306,18 @@ export class ConnectionDetailService {
    */
   private async warnings(
     connection: IntegrationConnectionView,
-    counters: { readonly openConflicts: number; readonly openDeadLetters: number; readonly draftMappings: number },
+    counters: {
+      readonly openConflicts: number;
+      readonly openDeadLetters: number;
+      readonly draftMappings: number;
+      readonly recentRuns: readonly { readonly status: string; readonly finishedAt: string | null }[];
+      readonly rejectedWebhooks: number;
+    },
+    thresholds: {
+      readonly syncLagWarningSeconds: number;
+      readonly consecutiveFailureWarning: number;
+      readonly webhookFailureWarning: number;
+    },
   ): Promise<readonly ConnectionWarningView[]> {
     const warnings: ConnectionWarningView[] = [];
 
@@ -365,6 +397,31 @@ export class ConnectionDetailService {
         message: `${String(counters.openDeadLetters)} operation${counters.openDeadLetters === 1 ? '' : 's'} failed permanently and can be replayed.`,
       });
     }
+    // The thresholds of plan §16.1. A run that failed once is not a problem; a **streak** is.
+    const failureStreak = counters.recentRuns.filter((run) => run.status === 'failed').length;
+    if (failureStreak >= thresholds.consecutiveFailureWarning) {
+      warnings.push({
+        code: 'CONSECUTIVE_FAILURES',
+        severity: 'error',
+        message: `The last ${String(failureStreak)} run${failureStreak === 1 ? '' : 's'} failed. The provider or the mapping is the likely cause; open the run to see the error code.`,
+      });
+    }
+    const lag = this.syncLag(connection);
+    if (lag !== null && lag > thresholds.syncLagWarningSeconds) {
+      warnings.push({
+        code: 'SYNC_LAG',
+        severity: 'warning',
+        message: `The last successful sync finished ${String(Math.round(lag / 3600))} hour${Math.round(lag / 3600) === 1 ? '' : 's'} ago.`,
+      });
+    }
+    if (counters.rejectedWebhooks >= thresholds.webhookFailureWarning) {
+      warnings.push({
+        code: 'WEBHOOK_SIGNATURE_FAILURES',
+        severity: 'error',
+        message: `${String(counters.rejectedWebhooks)} webhook deliveries were rejected. The signing secret may be wrong, or the deliveries may be forged.`,
+      });
+    }
+
     if (counters.draftMappings > 0) {
       warnings.push({
         code: 'DRAFT_MAPPINGS',

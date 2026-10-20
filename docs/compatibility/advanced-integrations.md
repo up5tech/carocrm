@@ -1,13 +1,16 @@
 # Advanced Integrations — compatibility and behavior reference
 
 > Phase 19-INT.0 deliverable (`PLAN_Phase_19_Advanced_Integrations.md` §3.3, §4.2, §19 `19-INT.0`).
-> Status: **audit complete; the control plane and nine connectors are implemented (19-INT.0–19-INT.24).**
+> Status: **audit complete; the module is implemented (19-INT.0–19-INT.27).**
 > Canonical module name: `AdvancedIntegrations` (no `Ua` prefix). API prefix:
 > `/api/v1/AdvancedIntegrations`; webhook prefix:
 > `/api/v1/integrations/advanced-integrations`.
 > Repository audit: `docs/implementation/advanced-integrations-audit.md`.
 > Provider matrix: `docs/compatibility/advanced-integrations/provider-matrix.md`.
 > Per-connector contracts: `docs/compatibility/advanced-integrations/providers.md`.
+> Acceptance evidence: `docs/compatibility/advanced-integrations/acceptance-evidence.md`.
+> Runbook: `docs/runbooks/advanced-integrations.md`.
+> Threat model: `docs/security/advanced-integrations-threat-model.md`.
 
 This document records the external behavior this module reimplements, the decisions taken against
 the repository as it actually exists, and the compatibility limits a deploying organization must
@@ -206,3 +209,26 @@ text label (AGENTS.md §8, plan §15.6).
 **Still not delivered, and deliberately so:** the observability, retention and threat-model work
 (19-INT.26), the end-to-end release evidence (19-INT.27), the cross-module contracts for the
 remaining modules (19-INT.25), and any verification against a live vendor account.
+
+### 19-INT.25 / 19-INT.26 / 19-INT.27 — the contracts, the operations and the release
+
+| Area | Delivered |
+| --- | --- |
+| The cross-module contracts | Nine **named, versioned** contracts across six modules. Each names its owner and **what it owns**, so an auditor can answer "who is allowed to change this?" without reading an implementation. A connector never imports a domain service. |
+| The contracts are optional | Every adapter injects its domain service with `@Optional()` and registers only when the service is present. `GET /action/contracts` lists the published contracts and names the unavailable ones, so a missing contract is never mistaken for a broken one. |
+| The event loop is prevented | A contract names the CRM records it changed, and the bridge records their **origin** as the provider's own. The outbound path then recognises the change as an echo and skips it — a payment that became `paid` is not pushed back to the provider that reported it. |
+| A payload cannot become an authorization | A **protected field** — owner, team, roles, permissions, payment status, consent — is never written by an imported payload unless the mapping recorded the review, and the mapping **cannot be activated** without it. |
+| The integration events | An allowlist of event types, published through the platform's **transactional outbox**, carrying references rather than data. An unknown event type is refused. The contract path publishes inside the owner's transaction; the sync path publishes after the write, because the sync engine's write path is not one transaction — so a lost event is possible and the record remains the truth. |
+| The module's own audit trail | `integration_audit_log`, with an allowlisted action vocabulary, the actor (system or human), the reason and a **redacted** detail. The kernel audit hook records entities; this records the module's privileged actions, which touch no entity. |
+| The metrics | A derived document — the platform has no metrics facility — with the plan's §16.1 list and **no high-cardinality label**. The circuit breaker is reported per provider, not per connection. |
+| The controlled debug mode | Off by default, **expiring**, gated behind a separate `diagnostics` capability, and exposing only the field *names* and the size of a payload. Never a value. |
+| The health thresholds | A **streak** of failed runs, a sync lag beyond the configured window, and a count of rejected webhook deliveries — each derived from the connection's real state, never asserted. |
+| The retention policy | Off by default, so a deployment decides deliberately that a diagnostic row may be discarded. The purge removes by primary key, in a bounded batch, with a predicate about age and terminal state, and it never touches a CRM record. |
+| The runbook | Thirteen situations, each with the symptom, the cause, the safe action and the recovery — plus the credentials runbook, the incident-response section and the rollback/disable plan. |
+| The threat model | The plan's §18 trust boundaries, the control for each with the file that implements it, the eight acceptance scenarios with their tests, and the known gaps. |
+| The acceptance evidence | What was actually run, what it proved, the migration check against the **configured** database, the safe defaults, and the known gaps per provider. |
+
+**What is still open, and it is not code:** no connector was verified against a live vendor
+account. Every provider-side fact is the implementation's own pin. The acceptance evidence says so
+in the first line of its known-gaps table, and the matrix's §5 explains what `implemented` does and
+does not mean.

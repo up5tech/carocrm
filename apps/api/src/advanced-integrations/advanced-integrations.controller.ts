@@ -41,7 +41,11 @@ import {
 } from './dto/advanced-integrations-shapes.js';
 import { EnrichmentService } from './enrichment.service.js';
 import { ExternalLinkService } from './external-link.service.js';
+import { IntegrationAuditService } from './integration-audit.service.js';
+import { IntegrationContractRegistry } from './integration-contracts.js';
+import { IntegrationMetricsService } from './integration-metrics.service.js';
 import { IntegrationRegistry } from './integration-registry.service.js';
+import { IntegrationRetentionService } from './integration-retention.service.js';
 import { MappingService } from './mapping.service.js';
 import { OAuthFlowService } from './oauth-flow.service.js';
 import { OutboundSyncService } from './outbound-sync.service.js';
@@ -84,6 +88,10 @@ export class AdvancedIntegrationsController {
     @Inject(ConnectionDetailService) private readonly details: ConnectionDetailService,
     @Inject(ConnectorExecutor) private readonly executor: ConnectorExecutor,
     @Inject(EnrichmentService) private readonly enrichment: EnrichmentService,
+    @Inject(IntegrationContractRegistry) private readonly contracts: IntegrationContractRegistry,
+    @Inject(IntegrationAuditService) private readonly audit: IntegrationAuditService,
+    @Inject(IntegrationMetricsService) private readonly metricsService: IntegrationMetricsService,
+    @Inject(IntegrationRetentionService) private readonly retention: IntegrationRetentionService,
     @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
@@ -538,6 +546,71 @@ export class AdvancedIntegrationsController {
   }
 
   // ---------------------------------------------------------------------------
+  // 19-INT.25 / 19-INT.26 — the contracts, the trail, the metrics and the retention
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The cross-module contracts this installation publishes.
+   *
+   * A contract that is **absent** means the module that owns it is not installed. The list says
+   * so explicitly, so an operator is never left wondering whether a contract is missing or broken.
+   */
+  @Get('action/contracts')
+  async listContracts() {
+    await this.permissions.assert('use');
+    const published = this.contracts.all();
+    const known = this.contracts.knownKeys();
+    return {
+      published,
+      unavailable: known.filter((key) => !published.some((contract) => contract.contractKey === key)),
+    };
+  }
+
+  /**
+   * The module's audit trail.
+   *
+   * The trail is a redacted record of the module's privileged actions. It is not a CRM record and
+   * it is not a substitute for one — it explains what the module did, and nothing else.
+   */
+  @Get('action/audit')
+  async listAudit(@Query() query: Record<string, string | undefined>) {
+    await this.permissions.assert('diagnostics');
+    const limit = Math.min(Math.max(Number(query['limit'] ?? 100) || 100, 1), 500);
+    return {
+      list: await this.audit.list({
+        ...(query['connectionId'] === undefined ? {} : { connectionId: query['connectionId'] }),
+        ...(query['action'] === undefined ? {} : { action: query['action'] }),
+        limit,
+      }),
+    };
+  }
+
+  /**
+   * The module's metrics.
+   *
+   * They are **derived** from the module's own tables, because the platform has no metrics
+   * facility. The document is for an administrator's diagnostics: it carries no record id, no
+   * token and no raw payload.
+   */
+  @Get('action/metrics')
+  async metrics() {
+    await this.permissions.assert('diagnostics');
+    return this.metricsService.metrics();
+  }
+
+  /**
+   * Run the retention purge now.
+   *
+   * The purge is **off by default** and only removes the module's own diagnostics — never a CRM
+   * record, never a credential, never an audit row that is still inside its own retention period.
+   */
+  @Post('action/retention/purge')
+  async purgeRetention() {
+    await this.permissions.assert('connectionAdmin');
+    return this.retention.purge();
+  }
+
+  // ---------------------------------------------------------------------------
   // 19-INT.14 — the catalog and the connection detail
   // ---------------------------------------------------------------------------
 
@@ -771,6 +844,20 @@ export class AdvancedIntegrationsController {
     return runAsAdvancedIntegrationsSystem(this.scope, 'notify-expiring-credentials', () =>
       this.oauth.notifyExpiringCredentials(),
     );
+  }
+
+  /**
+   * Run the retention purge.
+   *
+   * The worker has no session, so the purge runs under the documented service authority — and the
+   * policy itself decides whether anything is removed. The purge is off by default, so a
+   * deployment that did not opt in simply sees an empty report.
+   */
+  @HttpCode(200)
+  @Post('action/purge-retention')
+  async purgeRetentionFromWorker(@Headers('x-worker-secret') secret?: string) {
+    this.assertWorkerSecret(secret);
+    return runAsAdvancedIntegrationsSystem(this.scope, 'purge-retention', () => this.retention.purge());
   }
 
   private assertWorkerSecret(supplied: string | undefined): void {

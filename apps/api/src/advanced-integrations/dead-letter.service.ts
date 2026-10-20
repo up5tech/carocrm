@@ -6,6 +6,7 @@ import { sql } from 'kysely';
 
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
+import { IntegrationAuditService } from './integration-audit.service.js';
 import { redactProviderError } from './provider-error.js';
 
 /**
@@ -73,6 +74,7 @@ export class DeadLetterService {
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(IntegrationAuditService) private readonly audit: IntegrationAuditService,
   ) {}
 
   /** Record a terminal failure. */
@@ -133,6 +135,12 @@ export class DeadLetterService {
     if (!row) {
       throw new ValidationError('The dead letter is not open, so it cannot be replayed.');
     }
+    await this.audit.record({
+      action: 'deadLetter.replayed',
+      connectionId: row.connection_id,
+      entityType: 'IntegrationDeadLetter',
+      entityId: id,
+    });
     return toView(row);
   }
 

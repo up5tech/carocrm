@@ -13,6 +13,7 @@ import { CREDENTIAL_VAULT } from './connection-lifecycle.service.js';
 import type { EnrichmentAdapter } from './connectors/enrichment/enrichment.port.js';
 import { REST_ENRICHMENT_PROVIDER_KEY,RestEnrichmentAdapter } from './connectors/enrichment/rest-enrichment.adapter.js';
 import type { CredentialVaultPort } from './credential-vault.js';
+import { IntegrationAuditService } from './integration-audit.service.js';
 import { ProviderError } from './provider-error.js';
 
 /**
@@ -146,6 +147,7 @@ export class EnrichmentService {
     @Inject(EntityCrudService) private readonly entities: EntityCrudService,
     @Inject(CREDENTIAL_VAULT) private readonly vault: CredentialVaultPort,
     @Optional() @Inject(ENRICHMENT_ADAPTERS) adapters: readonly EnrichmentAdapter[] | null,
+    @Inject(IntegrationAuditService) private readonly audit: IntegrationAuditService,
   ) {
     this.registered = adapters ?? [];
   }
@@ -225,6 +227,13 @@ export class EnrichmentService {
     `.execute(this.database.db);
     const created = row.rows[0];
     if (created === undefined) throw new ValidationError('The enrichment profile could not be created.');
+    await this.audit.record({
+      action: 'enrichment.profileCreated',
+      connectionId: input.connectionId,
+      entityType: 'IntegrationEnrichmentProfile',
+      entityId: created.id,
+      detail: { providerKey: input.providerKey, entityType: input.entityType },
+    });
     return toProfileView(created);
   }
 
@@ -276,6 +285,12 @@ export class EnrichmentService {
     `.execute(this.database.db);
     const updated = row.rows[0];
     if (updated === undefined) throw new NotFoundError(`The enrichment profile "${id}" does not exist.`);
+    await this.audit.record({
+      action: 'enrichment.profileUpdated',
+      connectionId: updated.connection_id,
+      entityType: 'IntegrationEnrichmentProfile',
+      entityId: id,
+    });
     return toProfileView(updated);
   }
 
@@ -417,7 +432,15 @@ export class EnrichmentService {
     const saved = updated.rows[0];
     if (saved === undefined) throw new NotFoundError(`The enrichment result "${resultId}" does not exist.`);
     const view = toResultView(saved);
-    return { ...view, changedFields: view.changedFields.filter((field) => !skipped.includes(field)) };
+    const applied = view.changedFields.filter((field) => !skipped.includes(field));
+    await this.audit.record({
+      action: 'enrichment.accepted',
+      connectionId: profile.connection_id,
+      entityType: 'IntegrationEnrichmentResult',
+      entityId: resultId,
+      detail: { appliedFields: applied, skippedFields: skipped },
+    });
+    return { ...view, changedFields: applied };
   }
 
   /** Reject a pending result. Nothing is written to the CRM. */
@@ -435,6 +458,12 @@ export class EnrichmentService {
     `.execute(this.database.db);
     const saved = updated.rows[0];
     if (saved === undefined) throw new NotFoundError(`The enrichment result "${resultId}" does not exist.`);
+    await this.audit.record({
+      action: 'enrichment.rejected',
+      connectionId: (await this.requireProfileRow(row.profile_id)).connection_id,
+      entityType: 'IntegrationEnrichmentResult',
+      entityId: resultId,
+    });
     return toResultView(saved);
   }
 
@@ -546,6 +575,13 @@ export class EnrichmentService {
     `.execute(this.database.db);
     const saved = row.rows[0];
     if (saved === undefined) throw new ValidationError('The enrichment result could not be written.');
+    await this.audit.record({
+      action: 'enrichment.previewed',
+      connectionId: (await this.requireProfileRow(input.profileId)).connection_id,
+      entityType: 'IntegrationEnrichmentResult',
+      entityId: saved.id,
+      detail: { entityType: input.entityType, entityId: input.entityId, creditsUsed: input.creditsUsed },
+    });
     return toResultView(saved);
   }
 

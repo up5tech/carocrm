@@ -18,6 +18,7 @@ import {
 import { AdvancedIntegrationsPermissionService } from './advanced-integrations-permission.service.js';
 import { AdvancedIntegrationsSettingsService } from './advanced-integrations-settings.service.js';
 import { type CredentialVaultPort } from './credential-vault.js';
+import { IntegrationAuditService } from './integration-audit.service.js';
 import { IntegrationRegistry } from './integration-registry.service.js';
 import { requiredScopesFor } from './provider-capabilities.js';
 
@@ -138,6 +139,7 @@ export class ConnectionLifecycleService {
     @Inject(AdvancedIntegrationsSettingsService) private readonly settings: AdvancedIntegrationsSettingsService,
     @Inject(IntegrationRegistry) private readonly registry: IntegrationRegistry,
     @Inject(CREDENTIAL_VAULT) private readonly vault: CredentialVaultPort,
+    @Inject(IntegrationAuditService) private readonly audit: IntegrationAuditService,
   ) {}
 
   /** Every connection the caller may see. */
@@ -204,6 +206,13 @@ export class ConnectionLifecycleService {
       }
       throw error;
     }
+    await this.audit.record({
+      action: 'connection.created',
+      connectionId: id,
+      entityType: 'IntegrationConnection',
+      entityId: id,
+      detail: { providerKey: input.providerKey, ownerType: input.ownerType },
+    });
     return this.get(id);
   }
 
@@ -224,6 +233,33 @@ export class ConnectionLifecycleService {
         modified_by_id = ${this.scope.userId ?? null}
       where id = ${id}
     `.execute(this.database.db);
+    await this.audit.record({
+      action: 'connection.updated',
+      connectionId: id,
+      entityType: 'IntegrationConnection',
+      entityId: id,
+      detail: {
+        ...(patch.name === undefined ? {} : { name: patch.name }),
+        ...(patch.enabled === undefined ? {} : { enabled: patch.enabled }),
+        ...(patch.tenantRef === undefined ? {} : { tenantRef: patch.tenantRef }),
+        optionsChanged: patch.connectionOptions !== undefined,
+      },
+    });
+    if (patch.enabled === true) {
+      await this.audit.record({
+        action: 'connection.enabled',
+        connectionId: id,
+        entityType: 'IntegrationConnection',
+        entityId: id,
+      });
+    } else if (patch.enabled === false) {
+      await this.audit.record({
+        action: 'connection.disabled',
+        connectionId: id,
+        entityType: 'IntegrationConnection',
+        entityId: id,
+      });
+    }
     return this.get(id);
   }
 
@@ -287,12 +323,26 @@ export class ConnectionLifecycleService {
         modified_by_id = ${this.scope.userId ?? null}
       where id = ${id}
     `.execute(this.database.db);
+    await this.audit.record({
+      action: 'connection.changed',
+      connectionId: id,
+      entityType: 'IntegrationConnection',
+      entityId: id,
+      detail: { from: from, to: to },
+    });
     return this.get(id);
   }
 
   /** Pause a connection. No provider call may be made through it while it is paused. */
   async pause(id: string): Promise<IntegrationConnectionView> {
-    return this.transition(id, 'paused');
+    const view = await this.transition(id, 'paused');
+    await this.audit.record({
+      action: 'connection.paused',
+      connectionId: id,
+      entityType: 'IntegrationConnection',
+      entityId: id,
+    });
+    return view;
   }
 
   /**
@@ -314,7 +364,14 @@ export class ConnectionLifecycleService {
         { missingScopes: missing },
       );
     }
-    return this.transition(id, 'connected');
+    const view = await this.transition(id, 'connected');
+    await this.audit.record({
+      action: 'connection.resumed',
+      connectionId: id,
+      entityType: 'IntegrationConnection',
+      entityId: id,
+    });
+    return view;
   }
 
   /**
@@ -335,8 +392,23 @@ export class ConnectionLifecycleService {
     const credentials = await this.vault.list(id);
     for (const credential of credentials) {
       await this.vault.revoke({ connectionId: id, kind: credential.kind });
+      await this.audit.record({
+        action: 'credential.revoked',
+        connectionId: id,
+        entityType: 'IntegrationCredential',
+        entityId: id,
+        detail: { kind: credential.kind },
+      });
     }
-    return this.transition(id, 'revoked');
+    const view = await this.transition(id, 'revoked');
+    await this.audit.record({
+      action: 'connection.revoked',
+      connectionId: id,
+      entityType: 'IntegrationConnection',
+      entityId: id,
+      detail: { revokedCredentials: credentials.length },
+    });
+    return view;
   }
 
   /**
@@ -355,6 +427,14 @@ export class ConnectionLifecycleService {
         modified_by_id = ${this.scope.userId ?? null}
       where id = ${connectionId}
     `.execute(this.database.db);
+    await this.audit.record({
+      action: 'connection.tested',
+      connectionId,
+      entityType: 'IntegrationConnection',
+      entityId: connectionId,
+      outcome: result.ok ? 'ok' : 'refused',
+      detail: { ok: result.ok, code: result.code },
+    });
   }
 
   /** Reset the inbound checkpoint of every active mapping, so the next run is a full re-sync. */
@@ -364,7 +444,15 @@ export class ConnectionLifecycleService {
       set cursor_value = null, reset_required = true, updated_at = ${new Date()}
       where connection_id = ${connectionId} and direction = 'inbound'
     `.execute(this.database.db);
-    return Number(result.numAffectedRows ?? 0n);
+    const reset = Number(result.numAffectedRows ?? 0n);
+    await this.audit.record({
+      action: 'sync.reconciled',
+      connectionId,
+      entityType: 'IntegrationConnection',
+      entityId: connectionId,
+      detail: { resetCheckpoints: reset },
+    });
+    return reset;
   }
 
   /**
@@ -388,6 +476,13 @@ export class ConnectionLifecycleService {
       where id = ${id}
     `.execute(this.database.db);
     await sql`delete from integration_oauth_states where connection_id = ${id}`.execute(this.database.db);
+    await this.audit.record({
+      action: 'connection.deleted',
+      connectionId: id,
+      entityType: 'IntegrationConnection',
+      entityId: id,
+      detail: { crmRecordsDeleted: 0 },
+    });
     return { success: true };
   }
 
@@ -417,6 +512,14 @@ export class ConnectionLifecycleService {
         modified_by_id = ${this.scope.userId ?? null}
       where id = ${input.connectionId}
     `.execute(this.database.db);
+    await this.audit.record({
+      action: 'credential.stored',
+      connectionId: input.connectionId,
+      entityType: 'IntegrationCredential',
+      entityId: input.connectionId,
+      // The kind is recorded; the value never is.
+      detail: { kind: input.kind, expiresAt: input.expiresAt ?? null },
+    });
     return this.get(input.connectionId);
   }
 

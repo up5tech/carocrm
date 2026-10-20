@@ -9,11 +9,22 @@ import { ConnectionLifecycleService,CREDENTIAL_VAULT } from './connection-lifecy
 import { ConnectorEventHandlerRegistry } from './connector-event-handlers.js';
 import { ConnectorExecutor } from './connector-executor.service.js';
 import { ConnectorRegistrar } from './connector-registrar.service.js';
+import { CustomerSuccessIntegrationContracts } from './contracts/customer-success-contracts.js';
+import { MarketingIntegrationContracts } from './contracts/marketing-contracts.js';
+import { ProjectsIntegrationContracts } from './contracts/projects-contracts.js';
+import { SalesIntegrationContracts } from './contracts/sales-contracts.js';
+import { ServiceDeskIntegrationContracts } from './contracts/service-desk-contracts.js';
+import { VoiceCommunicationsIntegrationContracts } from './contracts/voice-contracts.js';
 import { EncryptedCredentialVault } from './credential-vault.js';
 import { DeadLetterService } from './dead-letter.service.js';
 import { ENRICHMENT_ADAPTERS,EnrichmentService } from './enrichment.service.js';
 import { ExternalLinkService } from './external-link.service.js';
+import { IntegrationAuditService } from './integration-audit.service.js';
+import { IntegrationContractRegistry } from './integration-contracts.js';
+import { IntegrationEventPublisher } from './integration-events.js';
+import { IntegrationMetricsService } from './integration-metrics.service.js';
 import { IntegrationRegistry } from './integration-registry.service.js';
+import { IntegrationRetentionService } from './integration-retention.service.js';
 import { MailchimpConsentBridge } from './mailchimp-consent.bridge.js';
 import { MappingService } from './mapping.service.js';
 import { AdvancedIntegrationsOAuthCallbackController } from './oauth-callback.controller.js';
@@ -87,6 +98,21 @@ export const ADVANCED_INTEGRATIONS_PROVIDERS = [
   ConnectorEventHandlerRegistry,
   StripePaymentBridge,
   MailchimpConsentBridge,
+  // 19-INT.25 — the cross-module contracts. Each adapter publishes the contracts of the module
+  // it belongs to, and each is optional: a deployment without that module publishes none of them.
+  IntegrationContractRegistry,
+  SalesIntegrationContracts,
+  MarketingIntegrationContracts,
+  CustomerSuccessIntegrationContracts,
+  ProjectsIntegrationContracts,
+  ServiceDeskIntegrationContracts,
+  VoiceCommunicationsIntegrationContracts,
+  // 19-INT.25 — the integration events, published through the platform's transactional outbox.
+  IntegrationEventPublisher,
+  // 19-INT.26 — the module's own audit trail, the derived metrics and the retention policy.
+  IntegrationAuditService,
+  IntegrationMetricsService,
+  IntegrationRetentionService,
   // 19-INT.24 — the bounded enrichment service: profiles, preview, accept, reject, quota.
   EnrichmentService,
   {
@@ -124,7 +150,12 @@ export { ConnectorRegistrar } from './connector-registrar.service.js';
 export { DeadLetterService } from './dead-letter.service.js';
 export { EnrichmentService } from './enrichment.service.js';
 export { ExternalLinkService } from './external-link.service.js';
+export { IntegrationAuditService } from './integration-audit.service.js';
+export { IntegrationContractRegistry } from './integration-contracts.js';
+export { IntegrationEventPublisher } from './integration-events.js';
+export { IntegrationMetricsService } from './integration-metrics.service.js';
 export { IntegrationRegistry } from './integration-registry.service.js';
+export { IntegrationRetentionService } from './integration-retention.service.js';
 export { MailchimpConsentBridge } from './mailchimp-consent.bridge.js';
 export { MappingService } from './mapping.service.js';
 export { OAUTH_CALLBACK_PATH, OAuthFlowService } from './oauth-flow.service.js';

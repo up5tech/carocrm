@@ -264,6 +264,12 @@ afterAll(async () => {
       .deleteFrom('integration_credential_secrets')
       .where('connection_id', 'in', createdConnectionIds)
       .execute();
+    // 19-INT.26: the module's own audit trail. The rows belong to the connections this run
+    // created, so they go with them.
+    await ctx.database.db
+      .deleteFrom('integration_audit_log')
+      .where('connection_id', 'in', createdConnectionIds)
+      .execute();
     await ctx.database.db
       .deleteFrom('integration_connections')
       .where('id', 'in', createdConnectionIds)

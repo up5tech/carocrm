@@ -14,7 +14,7 @@
     "title": "Advanced Integrations",
     "subtitle": "The connectors this installation offers, the connections to them, and their authorization state.",
     "loadFailed": "The module could not be loaded.",
-    "loadFailedHint": "Check that migrations 057 and 059 are applied and that you hold the module's administrative capability.",
+    "loadFailedHint": "Check that migrations 059 and 060 are applied and that you hold the module's administrative capability.",
     "empty": "This installation registered no connector. Nothing can be connected until one is registered."
   },
   "providers": {

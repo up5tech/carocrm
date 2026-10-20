@@ -440,12 +440,23 @@ export interface FieldMappingInput {
   readonly transform: TransformSpec | null;
   /** Whether a missing value is an error for the caller. */
   readonly required: boolean;
+  /**
+   * Whether the mapping may write a **protected** CRM field.
+   *
+   * A protected field decides who may act on a record or what the record means financially or
+   * for consent. An imported payload never writes one unless the mapping says so — and saying so
+   * is the "explicit reviewed mapping" of plan §14.2. The flag is per field, so one reviewed
+   * target does not unlock the rest.
+   */
+  readonly allowProtected?: boolean | undefined;
 }
 
 /** A compiled field mapping: a validated target and a ready-to-run reader. */
 export interface CompiledFieldMapping {
   readonly targetField: string;
   readonly required: boolean;
+  /** Whether this mapping may write a protected field. */
+  readonly allowProtected: boolean;
   /** Reads the source path and applies the transformation. Returns `undefined` when absent. */
   readonly apply: (source: Readonly<Record<string, unknown>>) => unknown;
 }
@@ -539,9 +550,15 @@ export function compileFieldMappings(mappings: readonly FieldMappingInput[]): Co
       throw new ValidationError(`The "required" flag of field mapping #${index} must be a boolean.`, { index });
     }
 
+    const allowProtected = record['allowProtected'];
+    if (allowProtected !== undefined && typeof allowProtected !== 'boolean') {
+      throw new ValidationError(`The "allowProtected" flag of field mapping #${index} must be a boolean.`, { index });
+    }
+
     return {
       targetField,
       required: required === true,
+      allowProtected: allowProtected === true,
       apply: (source: Readonly<Record<string, unknown>>): unknown => {
         const raw = readPath(source, sourcePath);
         // An absent path is not a value: it stays absent, and `required` is the caller's business.

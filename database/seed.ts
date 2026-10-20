@@ -445,6 +445,16 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
        ON CONFLICT (id) DO NOTHING`,
     );
 
+    // Advanced Integrations (Phase 19-INT.26): the retention purge runs once a day, off the hour so
+    // it does not collide with the other sweeps. The purge is **off by default** — the API decides,
+    // from the module's own policy, whether anything is removed — so the sweep is inert until a
+    // deployment opts in.
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('aiPurgeRetention', 'advancedIntegrations.purgeRetention', '40 4 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
+
     for (const entry of coreMetadata) {
       await pool.query(
         `INSERT INTO metadata_entries (scope, name, data) VALUES ($1, $2, $3)

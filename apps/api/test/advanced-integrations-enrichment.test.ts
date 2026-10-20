@@ -102,6 +102,17 @@ afterAll(async () => {
         .execute();
     });
   }
+  // 19-INT.26: the module's own audit trail. The rows belong to the profiles this run created.
+  await asSystem(async () => {
+    await ctx.database.db
+      .deleteFrom('integration_audit_log' as never)
+      .where('entity_id' as never, 'in', createdProfileIds as never)
+      .execute();
+    await ctx.database.db
+      .deleteFrom('integration_audit_log' as never)
+      .where('connection_id' as never, '=', 'nonexistent-connection' as never)
+      .execute();
+  });
   for (const id of createdContactIds) {
     await asSystem(async () => {
       await entities.update('Contact', id, { deleted: true } as never);

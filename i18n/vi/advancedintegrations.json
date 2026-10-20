@@ -14,7 +14,7 @@
     "title": "Tích hợp nâng cao",
     "subtitle": "Các kết nối tích hợp mà bản cài đặt này cung cấp, các kết nối tới chúng và trạng thái uỷ quyền.",
     "loadFailed": "Không tải được module.",
-    "loadFailedHint": "Kiểm tra migration 057 và 059 đã được áp dụng và bạn có quyền quản trị của module.",
+    "loadFailedHint": "Kiểm tra migration 059 và 060 đã được áp dụng và bạn có quyền quản trị của module.",
     "empty": "Bản cài đặt này chưa đăng ký kết nối tích hợp nào. Chưa thể kết nối cho tới khi có một kết nối tích hợp được đăng ký."
   },
   "providers": {

@@ -77,6 +77,79 @@ export const AdvancedIntegrationsSettingsSchema = z
       })
       .strict()
       .default({}),
+    /**
+     * The retention policy (plan §14.3, §16.3).
+     *
+     * **Off by default.** A purge deletes rows, and a deployment must decide — deliberately, with
+     * its own legal and operational policy — that a diagnostic row may be discarded. The default
+     * is therefore "keep everything", and the operator turns the purge on.
+     *
+     * The purge never touches a CRM record. It removes the module's own diagnostics: the redacted
+     * payload of an operation, the raw provider payload of a delivery, a resolved conflict, a
+     * discarded dead letter, an old run, a decided enrichment result and an old audit row.
+     */
+    retention: z
+      .object({
+        /** Whether the scheduled purge runs at all. */
+        enabled: z.boolean().default(false),
+        /** How long a sync operation's redacted payload is kept. */
+        syncOperationsDays: z.number().int().min(1).max(3650).default(30),
+        /** How long a webhook delivery's payload is kept. */
+        webhookDeliveriesDays: z.number().int().min(1).max(3650).default(14),
+        /** How long a resolved conflict is kept. */
+        conflictsDays: z.number().int().min(1).max(3650).default(90),
+        /** How long a discarded or replayed dead letter is kept. */
+        deadLettersDays: z.number().int().min(1).max(3650).default(90),
+        /** How long a finished sync run is kept. */
+        syncRunsDays: z.number().int().min(1).max(3650).default(90),
+        /** How long a decided enrichment result is kept. */
+        enrichmentResultsDays: z.number().int().min(1).max(3650).default(30),
+        /** How long an audit row is kept. The trail is the longest-lived thing the module writes. */
+        auditLogDays: z.number().int().min(1).max(3650).default(365),
+        /** How many rows one purge pass removes per table. A bounded pass cannot lock a table. */
+        batchSize: z.number().int().min(1).max(10_000).default(1000),
+      })
+      .strict()
+      .default({}),
+    /**
+     * The controlled debug mode (plan §16.2).
+     *
+     * *"Provide controlled debug mode with expiry, explicit admin authorization, and additional
+     * redaction; do not expose debug mode to ordinary users."*
+     *
+     * So the mode is **off by default**, it **expires** — a forgotten debug mode must not stay on
+     * forever — and it never exposes a raw payload. It adds *redacted* diagnostics: the digests,
+     * the field names and the error codes that a full payload would have carried. Only an
+     * administrator with the module's diagnostic capability may turn it on.
+     */
+    debug: z
+      .object({
+        enabled: z.boolean().default(false),
+        /**
+         * When the debug mode stops working. Null means "no expiry", which the health report
+         * flags as a warning — a debug mode without an expiry is a debug mode nobody turns off.
+         */
+        expiresAt: z.string().datetime().nullish().default(null),
+      })
+      .strict()
+      .default({}),
+    /**
+     * The health thresholds (plan §16.1, §16.3).
+     *
+     * A connection is not broken because a run failed once. These are the thresholds at which the
+     * connection detail starts saying so.
+     */
+    health: z
+      .object({
+        /** How old a connection's last successful sync may be before it is reported as lagging. */
+        syncLagWarningSeconds: z.number().int().min(60).max(2_592_000).default(86_400),
+        /** How many consecutive failed runs are reported as a problem. */
+        consecutiveFailureWarning: z.number().int().min(1).max(100).default(3),
+        /** How many rejected webhook deliveries are reported as a signature problem. */
+        webhookFailureWarning: z.number().int().min(1).max(1000).default(10),
+      })
+      .strict()
+      .default({}),
   })
   .strict();
 
@@ -112,7 +185,44 @@ export function settingsWarnings(settings: AdvancedIntegrationsSettings): Settin
       message: 'Reauthorization warnings are sent only on the day a credential expires.',
     });
   }
+  if (settings.debug.enabled && settings.debug.expiresAt === null) {
+    warnings.push({
+      code: 'debugWithoutExpiry',
+      message:
+        'The debug mode has no expiry. A debug mode nobody switches off is a debug mode that stays on; set an expiry.',
+    });
+  }
+  if (settings.debug.enabled && settings.debug.expiresAt !== null) {
+    const expiresAt = Date.parse(settings.debug.expiresAt);
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+      warnings.push({
+        code: 'debugExpired',
+        message: 'The debug mode has expired. It no longer adds any diagnostics.',
+      });
+    }
+  }
+  if (settings.retention.enabled && settings.retention.auditLogDays < settings.retention.conflictsDays) {
+    warnings.push({
+      code: 'auditRetentionShorterThanConflicts',
+      message:
+        'The audit trail is retained for less time than the conflicts it explains. An operator may need the trail after the conflict is gone.',
+    });
+  }
   return warnings;
+}
+
+/**
+ * Whether the debug mode is currently in force.
+ *
+ * It is on only when it was enabled **and** it has not expired. An expired mode is off, not
+ * "on until somebody notices".
+ */
+export function debugModeActive(settings: AdvancedIntegrationsSettings, now: number = Date.now()): boolean {
+  if (!settings.debug.enabled) return false;
+  if (settings.debug.expiresAt === null || settings.debug.expiresAt === undefined) return true;
+  const expiresAt = Date.parse(settings.debug.expiresAt);
+  if (!Number.isFinite(expiresAt)) return false;
+  return expiresAt > now;
 }
 
 export interface AdvancedIntegrationsSettingsView {

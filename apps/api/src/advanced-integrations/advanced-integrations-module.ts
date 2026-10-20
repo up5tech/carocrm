@@ -3,6 +3,7 @@ import type { AclAction } from '@carocrm/acl/types/index.js';
 import {
   INTEGRATION_CONNECTION_PERMISSION_ENTITY,
   INTEGRATION_CREDENTIAL_PERMISSION_ENTITY,
+  INTEGRATION_DIAGNOSTIC_PERMISSION_ENTITY,
   INTEGRATION_PERMISSION_ENTITY,
   INTEGRATION_PROVIDER_PERMISSION_ENTITY,
   INTEGRATION_SETTINGS_PERMISSION_ENTITY,
@@ -30,7 +31,8 @@ export type AdvancedIntegrationsCapabilityKey =
   | 'connectionAdmin'
   | 'credentialAdmin'
   | 'authorize'
-  | 'settingsAdmin';
+  | 'settingsAdmin'
+  | 'diagnostics';
 
 export interface AdvancedIntegrationsCapabilityDefinition {
   readonly key: AdvancedIntegrationsCapabilityKey;
@@ -83,6 +85,14 @@ export const ADVANCED_INTEGRATIONS_CAPABILITIES: readonly AdvancedIntegrationsCa
     description: 'Change the module’s own settings.',
     resource: INTEGRATION_SETTINGS_PERMISSION_ENTITY,
     action: 'edit',
+  },
+  {
+    key: 'diagnostics',
+    label: 'Diagnostics',
+    description:
+      'Read the redacted diagnostics: the metrics, the audit trail and — while the controlled debug mode is in force — the shape of what a provider sent.',
+    resource: INTEGRATION_DIAGNOSTIC_PERMISSION_ENTITY,
+    action: 'read',
   },
 ];
 

@@ -13,8 +13,10 @@ import type { ExternalObject } from './connector-adapter.port.js';
 import { ConnectorExecutor } from './connector-executor.service.js';
 import { DeadLetterService } from './dead-letter.service.js';
 import { ExternalLinkService, type UniqueFieldPair } from './external-link.service.js';
+import { IntegrationEventPublisher } from './integration-events.js';
 import { IntegrationRegistry } from './integration-registry.service.js';
 import { MappingService,type ObjectMappingView } from './mapping.service.js';
+import { isProtectedField } from './protected-fields.js';
 import { ProviderError, redactProviderError } from './provider-error.js';
 import { RecordOriginService } from './record-origin.service.js';
 import { decideRetry, DEFAULT_RETRY_POLICY } from './resilience.js';
@@ -145,6 +147,7 @@ export class SyncOrchestrator {
     @Inject(RecordOriginService) private readonly origins: RecordOriginService,
     @Inject(DeadLetterService) private readonly deadLetters: DeadLetterService,
     @Inject(IntegrationRegistry) private readonly registry: IntegrationRegistry,
+    @Inject(IntegrationEventPublisher) private readonly events: IntegrationEventPublisher,
   ) {}
 
   /**
@@ -269,7 +272,13 @@ export class SyncOrchestrator {
     const values: Record<string, unknown> = {};
     for (const field of compiled) {
       const value = field.apply(object.fields);
-      if (value !== undefined) values[field.targetField] = value;
+      if (value === undefined) continue;
+      // A protected field decides who may act on a record or what the record means financially or
+      // for consent. An imported payload never writes one unless the mapping recorded the review
+      // (plan §14.2). The value is dropped here rather than refused, so one unreviewed field does
+      // not fail the whole record — the mapping cannot even be activated in that state.
+      if (isProtectedField(field.targetField) && !field.allowProtected) continue;
+      values[field.targetField] = value;
     }
 
     // A provider-side delete never hard-deletes a CRM record.
@@ -333,6 +342,17 @@ export class SyncOrchestrator {
       originRef: runId,
     });
     await this.recordOperation(mapping, runId, 'apply', object, 'applied', null, null, values);
+    // The event is published through the platform's outbox, so it is delivered only if the write
+    // above is committed. It carries references, not data.
+    await this.events.publish('integration.record.imported', {
+      connectionId: mapping.connectionId,
+      providerKey: mapping.providerKey,
+      mappingId: mapping.id,
+      ...(runId === null ? {} : { runId }),
+      crmEntityType: mapping.crmEntityType,
+      crmEntityId,
+      externalId: object.externalId,
+    });
     return { action: 'created', crmEntityId };
   }
 
@@ -428,6 +448,15 @@ export class SyncOrchestrator {
       originRef: runId,
     });
     await this.recordOperation(mapping, runId, 'apply', object, 'applied', null, null, write);
+    await this.events.publish('integration.record.updated', {
+      connectionId: mapping.connectionId,
+      providerKey: mapping.providerKey,
+      mappingId: mapping.id,
+      ...(runId === null ? {} : { runId }),
+      crmEntityType,
+      crmEntityId,
+      externalId: object.externalId,
+    });
     return { action: 'updated', crmEntityId };
   }
 
@@ -456,6 +485,15 @@ export class SyncOrchestrator {
       await this.origins.clear(link.crmEntityType, link.crmEntityId, mapping.connectionId);
     }
     await this.recordOperation(mapping, runId, 'delete', object, 'applied', null, null);
+    await this.events.publish('integration.record.unlinked', {
+      connectionId: mapping.connectionId,
+      providerKey: mapping.providerKey,
+      mappingId: mapping.id,
+      ...(runId === null ? {} : { runId }),
+      ...(link.crmEntityType === null ? {} : { crmEntityType: link.crmEntityType }),
+      ...(link.crmEntityId === null ? {} : { crmEntityId: link.crmEntityId }),
+      externalId: object.externalId,
+    });
     return { action: 'skipped', reason: 'unlinked' };
   }
 
@@ -675,11 +713,11 @@ export class SyncOrchestrator {
     const rows = await sql<RunRow>`
       insert into integration_sync_runs
         (id, connection_id, mapping_id, run_type, status, trigger_source, direction, mapping_version,
-         cursor_before, created_at, created_by_id)
+         cursor_before, created_at, created_by_id, correlation_id)
       values
         (${id}, ${mapping.connectionId}, ${mapping.id}, ${runType}, 'queued', ${triggerSource},
          'inbound', ${mapping.mappingVersion}, ${checkpoint.cursorValue}, ${new Date()},
-         ${this.scope.userId ?? null})
+         ${this.scope.userId ?? null}, ${randomUUID()})
       returning *
     `.execute(this.database.db);
     const row = rows.rows[0];

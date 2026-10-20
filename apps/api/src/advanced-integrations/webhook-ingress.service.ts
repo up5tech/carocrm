@@ -6,6 +6,7 @@ import { sql } from 'kysely';
 
 import { DatabaseService } from '../database/database.service.js';
 import { JobsService } from '../jobs/jobs.service.js';
+import { AdvancedIntegrationsSettingsService, debugModeActive } from './advanced-integrations-settings.service.js';
 import type { NormalizedProviderEvent } from './connector-adapter.port.js';
 import { ConnectorEventHandlerRegistry } from './connector-event-handlers.js';
 import { ConnectorExecutor } from './connector-executor.service.js';
@@ -84,6 +85,7 @@ export class WebhookIngressService {
     @Inject(MappingService) private readonly mappings: MappingService,
     @Inject(SyncOrchestrator) private readonly orchestrator: SyncOrchestrator,
     @Inject(ConnectorEventHandlerRegistry) private readonly handlers: ConnectorEventHandlerRegistry,
+    @Inject(AdvancedIntegrationsSettingsService) private readonly settings: AdvancedIntegrationsSettingsService,
   ) {}
 
   /**
@@ -290,7 +292,14 @@ export class WebhookIngressService {
     return { status: 'processed', outcome: outcome.action };
   }
 
-  /** The receipts of a connection, newest first. */
+  /**
+   * The receipts of a connection, newest first.
+   *
+   * While the **controlled debug mode** is in force, each receipt also carries a *shape*: the
+   * field names the provider sent and the size of the payload. It never carries a value. The
+   * shape is what a diagnostic actually needs — "the provider sent `email_address` but not
+   * `phone_number`" — and it says nothing about the person the payload is about.
+   */
   async listDeliveries(connectionId: string, limit = 100): Promise<
     readonly {
       readonly id: string;
@@ -300,8 +309,12 @@ export class WebhookIngressService {
       readonly eventType: string | null;
       readonly externalId: string | null;
       readonly receivedAt: string;
+      readonly correlationId: string | null;
+      readonly shape: { readonly fields: readonly string[]; readonly bytes: number } | null;
     }[]
   > {
+    const settings = await this.settings.settings();
+    const debug = debugModeActive(settings);
     const rows = await sql<{
       id: string;
       delivery_id: string;
@@ -310,6 +323,8 @@ export class WebhookIngressService {
       event_type: string | null;
       external_id: string | null;
       received_at: Date;
+      correlation_id: string | null;
+      payload: unknown;
     }>`
       select * from integration_webhook_deliveries
       where connection_id = ${connectionId}
@@ -324,6 +339,8 @@ export class WebhookIngressService {
       eventType: row.event_type,
       externalId: row.external_id,
       receivedAt: row.received_at.toISOString(),
+      correlationId: row.correlation_id,
+      shape: debug ? shapeOf(row.payload) : null,
     }));
   }
 
@@ -350,13 +367,13 @@ export class WebhookIngressService {
     const result = await sql`
       insert into integration_webhook_deliveries
         (id, connection_id, provider_key, delivery_id, object_type, external_id, event_type,
-         status, signature_valid, payload, error_code, error_detail, received_at)
+         status, signature_valid, payload, error_code, error_detail, received_at, correlation_id)
       values
         (${randomUUID()}, ${input.connectionId}, ${input.providerKey}, ${input.deliveryId},
          ${input.objectType ?? null}, ${input.externalId ?? null}, ${input.eventType ?? null},
          ${input.status}, ${input.signatureValid},
          ${input.payload === undefined || input.payload === null ? null : JSON.stringify(input.payload)}::jsonb,
-         ${input.errorCode ?? null}, ${input.errorDetail ?? null}, ${new Date()})
+         ${input.errorCode ?? null}, ${input.errorDetail ?? null}, ${new Date()}, ${randomUUID()})
       on conflict (connection_id, delivery_id) do nothing
     `.execute(this.database.db);
     return Number(result.numAffectedRows ?? 0n) > 0;
@@ -386,6 +403,24 @@ export class WebhookIngressService {
     `.execute(this.database.db);
     return rows.rows[0] ?? null;
   }
+}
+
+/**
+ * The **shape** of a provider payload: the field names and the size, never the values.
+ *
+ * This is what the controlled debug mode exposes. A field name is a fact about the provider's
+ * API; a value is a fact about a person. The line between them is the whole point.
+ */
+function shapeOf(payload: unknown): { readonly fields: readonly string[]; readonly bytes: number } {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return { fields: [], bytes: 0 };
+  }
+  const fields = Object.keys(payload as Record<string, unknown>).sort();
+  let bytes = 0;
+  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    bytes += key.length + (typeof value === 'string' ? value.length : 8);
+  }
+  return { fields, bytes };
 }
 
 export { ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX };

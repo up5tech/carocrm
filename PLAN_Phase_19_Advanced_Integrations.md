@@ -1,15 +1,17 @@
 # Phase 19 — Advanced Integrations Module (`AdvancedIntegrations`)
 
-> **Status:** 🟡 **In progress** (2026-10-20): 19-INT.0–19-INT.24 implemented and verified.
-> The control plane, the sync engine, the administration UX and **nine connectors** are delivered:
-> Google Workspace, Microsoft 365, Zoom, Stripe, Mailchimp, Meta Lead Ads, Shopify (the first
-> ecommerce provider), QuickBooks Online (the first accounting provider), the generic REST
-> connector, plus the bounded data-enrichment provider.
-> **Remaining:** 19-INT.25 (cross-module contracts for the remaining modules), 19-INT.26
-> (observability, retention, threat model) and 19-INT.27 (end-to-end release evidence).
-> **No connector was verified against a live vendor account** — the provider-side facts are the
-> implementation's own pins. Deferrals and limitations: `docs/compatibility/advanced-integrations.md`
-> and `docs/compatibility/advanced-integrations/providers.md` §4.
+> **Status:** ✅ **Phase 19-INT COMPLETE** (2026-10-20): 19-INT.0–19-INT.27 implemented and verified.
+> The control plane, the sync engine, the administration UX, **nine connectors** (Google Workspace,
+> Microsoft 365, Zoom, Stripe, Mailchimp, Meta Lead Ads, Shopify as the first ecommerce provider,
+> QuickBooks Online as the first accounting provider, and the generic REST connector), the bounded
+> data-enrichment provider, the **cross-module contracts** for six domain modules, the module's own
+> audit trail, the derived metrics, the controlled debug mode, the retention policy, the operator
+> runbook, the threat model and the acceptance evidence are delivered.
+> **One honest limit:** no connector was verified against a live vendor account — every
+> provider-side fact is the implementation's own pin, and the acceptance evidence says so first.
+> Compatibility: `docs/compatibility/advanced-integrations.md` and its four companions ·
+> `acceptance-evidence.md`. Runbook: `docs/runbooks/advanced-integrations.md`.
+> Threat model: `docs/security/advanced-integrations-threat-model.md`.
 > This document remains the scope, architecture reference and implementation roadmap.
 >
 > **Parent roadmap:** `PLAN.md` — Phase 19: Advanced Domains  

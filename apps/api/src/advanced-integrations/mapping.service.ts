@@ -8,8 +8,10 @@ import { DatabaseService } from '../database/database.service.js';
 import { METADATA_STORE, type MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
 import { ConnectorExecutor } from './connector-executor.service.js';
+import { IntegrationAuditService } from './integration-audit.service.js';
 import { crmFieldsOf, type CrmFieldView, isLossyConversion } from './integration-fields.js';
 import { IntegrationRegistry } from './integration-registry.service.js';
+import { isProtectedField, protectedTargetsAmong } from './protected-fields.js';
 import {
   type CompiledFieldMapping,
   compileFieldMappings,
@@ -58,6 +60,13 @@ export interface FieldMappingView {
   readonly targetField: string;
   readonly transform: TransformSpec | null;
   readonly required: boolean;
+  /**
+   * Whether this mapping may write a **protected** CRM field.
+   *
+   * A protected field decides who may act on a record or what the record means financially or
+   * for consent. The flag is the "explicit reviewed mapping" of plan §14.2, and it is per field.
+   */
+  readonly allowProtected: boolean;
   readonly direction: MappingDirection;
   readonly position: number;
 }
@@ -89,6 +98,8 @@ export interface ObjectMappingView {
  */
 export interface MappingFieldInput extends FieldMappingInput {
   readonly direction?: MappingDirection;
+  /** Whether this mapping may write a protected CRM field. The reviewed-mapping escape hatch. */
+  readonly allowProtected?: boolean | undefined;
 }
 
 export interface ProviderFieldView {
@@ -168,6 +179,8 @@ interface FieldRow {
   target_field: string;
   transform: unknown;
   required: boolean;
+  /** Whether the mapping was reviewed to allow writing a protected CRM field. */
+  allow_protected: boolean;
   direction: string;
   position: number;
 }
@@ -178,6 +191,7 @@ export class MappingService {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(ConnectionLifecycleService) private readonly connections: ConnectionLifecycleService,
     @Inject(IntegrationRegistry) private readonly registry: IntegrationRegistry,
+    @Inject(IntegrationAuditService) private readonly audit: IntegrationAuditService,
     @Inject(ConnectorExecutor) private readonly executor: ConnectorExecutor,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
   ) {}
@@ -296,6 +310,13 @@ export class MappingService {
          ${JSON.stringify(input.fieldAuthority ?? {})}::jsonb, ${now}, ${now}, null, null)
     `.execute(this.database.db);
     await this.replaceFields(id, fields);
+    await this.audit.record({
+      action: 'mapping.created',
+      connectionId: input.connectionId,
+      entityType: 'IntegrationObjectMapping',
+      entityId: id,
+      detail: { objectType: input.objectType, crmEntityType: input.crmEntityType },
+    });
     return this.get(id);
   }
 
@@ -348,6 +369,16 @@ export class MappingService {
   async activate(mappingId: string): Promise<ObjectMappingView> {
     const row = await this.requireRow(mappingId);
     await this.connections.get(row.connection_id);
+    // A mapping that writes a protected CRM field without a recorded review never goes live.
+    // The review is the `allowProtected` flag on the field; without it the payload would be able
+    // to assign an owner, a team or a payment state (plan §14.2).
+    const unreviewed = await this.unreviewedProtectedTargets(mappingId);
+    if (unreviewed.length > 0) {
+      throw new ValidationError(
+        `The mapping writes protected field${unreviewed.length === 1 ? '' : 's'} that were not reviewed: ${unreviewed.join(', ')}. Mark them as reviewed before activating the mapping.`,
+        { protectedFields: [...unreviewed] },
+      );
+    }
     const now = new Date();
     await sql`
       update integration_object_mappings
@@ -358,17 +389,45 @@ export class MappingService {
     await sql`
       update integration_object_mappings set status = 'active', modified_at = ${now} where id = ${mappingId}
     `.execute(this.database.db);
+    await this.audit.record({
+      action: 'mapping.published',
+      connectionId: row.connection_id,
+      entityType: 'IntegrationObjectMapping',
+      entityId: mappingId,
+      detail: { objectType: row.object_type, crmEntityType: row.crm_entity_type },
+    });
     return this.get(mappingId);
   }
 
   /** Retire a mapping. Its history stays; it simply stops being used. */
   async retire(mappingId: string): Promise<ObjectMappingView> {
-    await this.requireRow(mappingId);
+    const row = await this.requireRow(mappingId);
     const now = new Date();
     await sql`
       update integration_object_mappings set status = 'retired', modified_at = ${now} where id = ${mappingId}
     `.execute(this.database.db);
+    await this.audit.record({
+      action: 'mapping.retired',
+      connectionId: row.connection_id,
+      entityType: 'IntegrationObjectMapping',
+      entityId: mappingId,
+    });
     return this.get(mappingId);
+  }
+
+  /**
+   * The protected fields a mapping targets without a recorded review.
+   *
+   * A mapping that names one of them is a mapping that would let an imported payload decide who
+   * owns a record or what it means financially. The review is the field's own flag, so this is a
+   * per-field question and not a global one.
+   */
+  private async unreviewedProtectedTargets(mappingId: string): Promise<readonly string[]> {
+    const rows = await sql<{ target_field: string }>`
+      select target_field from integration_field_mappings
+      where mapping_id = ${mappingId} and allow_protected = false
+    `.execute(this.database.db);
+    return protectedTargetsAmong(rows.rows.map((row) => row.target_field));
   }
 
   /**
@@ -385,9 +444,18 @@ export class MappingService {
         targetField: field.targetField,
         transform: field.transform,
         required: field.required,
+        allowProtected: field.allowProtected,
       })),
     );
-    return buildPreview(mapping, compiled, sample);
+    const preview = buildPreview(mapping, compiled, sample);
+    await this.audit.record({
+      action: 'mapping.previewed',
+      connectionId: mapping.connectionId,
+      entityType: 'IntegrationObjectMapping',
+      entityId: mapping.id,
+      detail: { missingRequired: preview.missingRequired.length, emptySources: preview.emptySources.length },
+    });
+    return preview;
   }
 
   /** The compiled field mappings of a mapping. */
@@ -399,6 +467,7 @@ export class MappingService {
         targetField: field.targetField,
         transform: field.transform,
         required: field.required,
+        allowProtected: field.allowProtected,
       })),
     );
   }
@@ -456,6 +525,19 @@ export class MappingService {
           message: `"${field.sourcePath}" is a ${providerField.type} and "${crmField.label}" is a ${crmField.type}. Some values cannot be represented.`,
         });
       }
+      if (isProtectedField(field.targetField) && !field.allowProtected) {
+        warnings.push({
+          code: 'PROTECTED_TARGET',
+          severity: 'error',
+          message: `"${crmField.label}" is a protected field. An imported payload may not write it unless the mapping records the review, and the mapping cannot be activated until it does.`,
+        });
+      } else if (isProtectedField(field.targetField)) {
+        warnings.push({
+          code: 'PROTECTED_TARGET_REVIEWED',
+          severity: 'warning',
+          message: `"${crmField.label}" is a protected field and this mapping writes it. The review is recorded; the owning domain's rules still apply.`,
+        });
+      }
     }
 
     if (providerFields.length === 0) {
@@ -506,11 +588,13 @@ export class MappingService {
       const transform = field.transform === null ? null : validateTransformSpec(field.transform);
       await sql`
         insert into integration_field_mappings
-          (id, mapping_id, source_path, target_field, transform, required, direction, position)
+          (id, mapping_id, source_path, target_field, transform, required, direction, position,
+           allow_protected)
         values
           (${randomUUID()}, ${mappingId}, ${field.sourcePath}, ${field.targetField},
            ${transform === null ? null : JSON.stringify(transform)}::jsonb,
-           ${field.required}, ${field.direction ?? 'inbound'}, ${position})
+           ${field.required}, ${field.direction ?? 'inbound'}, ${position},
+           ${field.allowProtected === true})
       `.execute(this.database.db);
       position += 1;
     }
@@ -548,6 +632,7 @@ export class MappingService {
         targetField: field.target_field,
         transform: field.transform === null ? null : (validateTransformSpec(field.transform) as TransformSpec),
         required: field.required,
+        allowProtected: field.allow_protected === true,
         direction: field.direction as MappingDirection,
         position: field.position,
       })),

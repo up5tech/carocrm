@@ -8,6 +8,7 @@ import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.
 import { DatabaseService } from '../database/database.service.js';
 import { EntityCrudService } from '../entity/entity.service.js';
 import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
+import { IntegrationAuditService } from './integration-audit.service.js';
 
 /**
  * Phase 19-INT.10 — conflicts and the deletion policy
@@ -128,6 +129,7 @@ export class ConflictService {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(ConnectionLifecycleService) private readonly connections: ConnectionLifecycleService,
+    @Inject(IntegrationAuditService) private readonly audit: IntegrationAuditService,
     @Inject(EntityCrudService) private readonly entities: EntityCrudService,
   ) {}
 
@@ -165,6 +167,13 @@ export class ConflictService {
     `.execute(this.database.db);
     const row = rows.rows[0];
     if (!row) throw new ValidationError('The conflict could not be recorded.');
+    await this.audit.record({
+      action: 'conflict.opened',
+      connectionId: input.connectionId,
+      entityType: 'IntegrationConflict',
+      entityId: id,
+      detail: { conflictType: input.conflictType, policy: input.policy },
+    });
     return toView(row);
   }
 
@@ -354,6 +363,14 @@ export class ConflictService {
     `.execute(this.database.db);
     const row = rows.rows[0];
     if (!row) throw new ValidationError('The conflict could not be resolved.');
+    await this.audit.record({
+      action: 'conflict.resolved',
+      connectionId: conflict.connectionId,
+      entityType: 'IntegrationConflict',
+      entityId: id,
+      reason: resolution,
+      detail: { resolution },
+    });
     return toView(row);
   }
 }

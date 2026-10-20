@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
 import { AdvancedIntegrationsPermissionService } from './advanced-integrations-permission.service.js';
-import { AdvancedIntegrationsSettingsService } from './advanced-integrations-settings.service.js';
+import { AdvancedIntegrationsSettingsService, debugModeActive } from './advanced-integrations-settings.service.js';
+import { IntegrationContractRegistry } from './integration-contracts.js';
 import { IntegrationRegistry } from './integration-registry.service.js';
 
 /**
@@ -81,6 +82,9 @@ export const ADVANCED_INTEGRATIONS_MODULE = {
     '19-INT.22',
     '19-INT.23',
     '19-INT.24',
+    '19-INT.25',
+    '19-INT.26',
+    '19-INT.27',
   ],
 } as const;
 
@@ -89,6 +93,7 @@ export class AdvancedIntegrationsHealthService {
   constructor(
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
     @Inject(IntegrationRegistry) private readonly registry: IntegrationRegistry,
+    @Inject(IntegrationContractRegistry) private readonly contracts: IntegrationContractRegistry,
     @Inject(AdvancedIntegrationsSettingsService) private readonly settings: AdvancedIntegrationsSettingsService,
     @Inject(AdvancedIntegrationsPermissionService) private readonly permissions: AdvancedIntegrationsPermissionService,
   ) {}
@@ -131,7 +136,21 @@ export class AdvancedIntegrationsHealthService {
       warnings.push({
         code: 'noProviders',
         message:
-          'No connector is registered yet. The control plane is available, but nothing can be connected until a connector phase delivers one.',
+          'No connector is registered. The control plane is available, but nothing can be connected until one is registered.',
+      });
+    }
+
+    // The contracts that are **unavailable** are named, so an operator is never left wondering
+    // whether a contract is missing or broken: it is missing because its owning module is not
+    // installed.
+    const publishedContracts = this.contracts.all();
+    const unavailableContracts = this.contracts
+      .knownKeys()
+      .filter((key) => !publishedContracts.some((contract) => contract.contractKey === key));
+    if (unavailableContracts.length > 0) {
+      warnings.push({
+        code: 'contractsUnavailable',
+        message: `${String(unavailableContracts.length)} cross-module contract${unavailableContracts.length === 1 ? ' is' : 's are'} unavailable: ${unavailableContracts.join(', ')}. The module that owns them is not installed, so a connector cannot use them.`,
       });
     }
 
@@ -144,6 +163,8 @@ export class AdvancedIntegrationsHealthService {
         { key: 'connections', label: 'Connections', enabled: settings.settings.features.connections },
         { key: 'oauth', label: 'OAuth', enabled: settings.settings.features.oauth },
         { key: 'expiryNotices', label: 'Expiry notices', enabled: settings.settings.features.expiryNotices },
+        { key: 'retention', label: 'Retention purge', enabled: settings.settings.retention.enabled },
+        { key: 'debug', label: 'Debug mode', enabled: debugModeActive(settings.settings) },
       ],
       warnings,
     };

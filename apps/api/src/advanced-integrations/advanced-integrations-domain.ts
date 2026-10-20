@@ -43,6 +43,14 @@ export const INTEGRATION_PROVIDER_PERMISSION_ENTITY = 'IntegrationProvider';
 export const INTEGRATION_CREDENTIAL_PERMISSION_ENTITY = 'IntegrationCredential';
 export const INTEGRATION_CONNECTION_PERMISSION_ENTITY = 'IntegrationConnection';
 export const INTEGRATION_SETTINGS_PERMISSION_ENTITY = 'AdvancedIntegrationsSettings';
+/**
+ * The redacted diagnostics (plan §14.1 `advancedIntegrations.viewLogs`).
+ *
+ * Its own resource, because the diagnostics are **more sensitive** than the module's own read
+ * capability: they show what a provider sent, and the plan asks for them to be visible only to an
+ * administrator who holds a diagnostic right.
+ */
+export const INTEGRATION_DIAGNOSTIC_PERMISSION_ENTITY = 'IntegrationDiagnostic';
 
 // ---------------------------------------------------------------------------
 // connection lifecycle
