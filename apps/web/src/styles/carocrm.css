@@ -2109,3 +2109,491 @@ body {
     justify-content: center;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Advanced Integrations workspace — surfaces, section toolbars and the catalog
+ * -------------------------------------------------------------------------
+ * The five surfaces share one white sheet under the tabs. A compact toolbar
+ * (16px title, 13px subtitle, actions right) belongs to the sheet, so the page
+ * heading is rendered exactly once. The catalog is a signal board: category
+ * bands, a 3px status rail per provider, a quiet initial tile, facts in one
+ * line, and one primary action. No card per row and no decorative shadows.
+ * ------------------------------------------------------------------------- */
+
+.carocrm-int-workspace.ant-tabs-top > .ant-tabs-nav {
+  margin-bottom: 14px;
+}
+
+.carocrm-int-workspace .ant-tabs-content-holder {
+  background: #fff;
+  border: 1px solid #eff2f7;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+/* ---- section toolbar ---- */
+.carocrm-int-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.carocrm-int-section-heading {
+  min-width: 0;
+}
+
+.carocrm-int-section-title {
+  margin: 0;
+  color: #31373d;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.carocrm-int-section-sub {
+  margin: 2px 0 0;
+  color: #737b85;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.carocrm-int-section-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.carocrm-int-search {
+  width: 320px;
+  max-width: 100%;
+}
+
+.carocrm-int-search .ant-input-search {
+  width: 100%;
+}
+
+.carocrm-int-select {
+  width: 240px;
+}
+
+.carocrm-int-loading {
+  padding: 4px 0;
+}
+
+.carocrm-int-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  padding: 8px 0;
+}
+
+.carocrm-int-state .carocrm-panel-empty {
+  padding: 0;
+}
+
+/* ---- catalog facts ---- */
+.carocrm-int-summary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  margin-bottom: 4px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid #eff2f7;
+}
+
+.carocrm-int-summary-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.carocrm-int-summary-value {
+  color: #31373d;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.carocrm-int-summary-label {
+  color: #737b85;
+  font-size: 12px;
+}
+
+/* ---- category bands ---- */
+.carocrm-int-category + .carocrm-int-category {
+  margin-top: 22px;
+}
+
+.carocrm-int-category-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 8px;
+}
+
+.carocrm-int-category-label {
+  margin: 0;
+  /* 4.8:1 on white: the band is the catalog's primary scanning device, so it must not fade. */
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.carocrm-int-category-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #f2f4f7;
+  /* 5.5:1 on the count background. */
+  color: #5b636d;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- provider rows ---- */
+.carocrm-int-provider-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carocrm-int-provider {
+  display: grid;
+  grid-template-areas: 'rail tile body actions';
+  grid-template-columns: 3px 36px minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 12px;
+  padding: 15px 0;
+  border-top: 1px solid #eff2f7;
+  transition: background-color 0.12s ease;
+}
+
+.carocrm-int-provider:hover {
+  background: #fafcff;
+}
+
+.carocrm-int-provider > .carocrm-rail {
+  grid-area: rail;
+  align-self: stretch;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.carocrm-int-tile {
+  grid-area: tile;
+  display: grid;
+  align-self: start;
+  width: 36px;
+  height: 36px;
+  margin-top: 1px;
+  border: 1px solid #eff2f7;
+  border-radius: 8px;
+  background: #f7f9fc;
+  color: #438eff;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  place-items: center;
+}
+
+.carocrm-int-provider-body {
+  grid-area: body;
+  min-width: 0;
+}
+
+.carocrm-int-provider-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.carocrm-int-provider-name {
+  color: #31373d;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.carocrm-int-auth {
+  padding: 0 6px;
+  border: 1px solid #eff2f7;
+  border-radius: 4px;
+  background: #fbfcfe;
+  color: #737b85;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  line-height: 18px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.carocrm-int-provider-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 2px 0 5px;
+  color: #737b85;
+  font-size: 13px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.carocrm-int-provider-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  color: #737b85;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.carocrm-int-meta-sep {
+  color: #d9dce1;
+}
+
+.carocrm-int-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.carocrm-int-chip {
+  max-width: 180px;
+  overflow: hidden;
+  padding: 0 6px;
+  border: 1px solid #eff2f7;
+  border-radius: 4px;
+  background: #f7f9fc;
+  color: #737b85;
+  font-size: 11px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carocrm-int-chip--more {
+  color: #438eff;
+  cursor: default;
+}
+
+.carocrm-int-provider-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  align-self: center;
+  justify-content: flex-end;
+  gap: 16px;
+  white-space: nowrap;
+}
+
+.carocrm-int-provider-actions .ant-btn {
+  min-width: 96px;
+}
+
+.carocrm-int-docs {
+  color: #737b85;
+  font-size: 12px;
+  line-height: 36px;
+  text-decoration: none;
+}
+
+.carocrm-int-docs:hover {
+  color: #438eff;
+  text-decoration: underline;
+}
+
+/* antd's `a:focus { outline: 0 }` is more specific than the global `*:focus-visible`, so the
+   Documentation link would otherwise lose its keyboard focus indicator. */
+.carocrm-int-docs:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid #1890ff;
+  outline-offset: 2px;
+}
+
+.carocrm-int-connect-wrap {
+  display: inline-flex;
+}
+
+.carocrm-int-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- tables ---- */
+.carocrm-int-table {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Keep table rows at their natural height on narrow screens: scroll the table inside
+   the surface instead of letting every column squeeze into a few characters. */
+.carocrm-int-table .ant-table {
+  min-width: 760px;
+}
+
+.carocrm-int-table .ant-table-thead > tr > th {
+  border-bottom-color: #eff2f7;
+  background: #fafbfd;
+  color: #737b85;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.carocrm-int-table .ant-table-tbody > tr > td {
+  border-bottom-color: #eff2f7;
+}
+
+.carocrm-int-table .ant-table-tbody > tr:last-child > td {
+  border-bottom: 0;
+}
+
+/* ---- mapping sidebar ---- */
+.carocrm-int-mapping {
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+}
+
+.carocrm-int-mapping-choice {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.carocrm-int-mapping-choice + .carocrm-int-mapping-choice {
+  margin-top: 2px;
+}
+
+.carocrm-int-mapping-choice:hover {
+  background: #fafcff;
+}
+
+.carocrm-int-mapping-choice.is-selected {
+  border-color: #438eff;
+  background: #f7faff;
+}
+
+@media (max-width: 1024px) {
+  .carocrm-int-mapping {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 520px) {
+  /* Five long surface labels cannot share one phone row. Let the strip wrap onto a second
+     row rather than truncating labels or hiding surfaces behind an overflow menu. */
+  .carocrm-int-workspace.ant-tabs-top > .ant-tabs-nav .ant-tabs-nav-wrap {
+    overflow: visible;
+  }
+
+  .carocrm-int-workspace.ant-tabs-top > .ant-tabs-nav .ant-tabs-nav-wrap::before,
+  .carocrm-int-workspace.ant-tabs-top > .ant-tabs-nav .ant-tabs-nav-wrap::after {
+    content: none;
+  }
+
+  .carocrm-int-workspace.ant-tabs-top > .ant-tabs-nav .ant-tabs-nav-list {
+    flex-wrap: wrap;
+    gap: 0 32px;
+    transform: none !important;
+  }
+
+  .carocrm-int-workspace.ant-tabs-top > .ant-tabs-nav .ant-tabs-tab {
+    margin-left: 0 !important;
+  }
+
+  .carocrm-int-workspace.ant-tabs-top > .ant-tabs-nav .ant-tabs-nav-operations {
+    display: none;
+  }
+
+  /* antd's ink bar assumes one row, so the active tab carries its own underline. */
+  .carocrm-int-workspace.ant-tabs-top > .ant-tabs-nav .ant-tabs-ink-bar {
+    display: none;
+  }
+
+  .carocrm-int-workspace.ant-tabs-top > .ant-tabs-nav .ant-tabs-tab-active {
+    box-shadow: inset 0 -2px 0 #438eff;
+  }
+}
+
+@media (max-width: 768px) {
+  .carocrm-int-workspace .ant-tabs-content-holder {
+    padding: 16px;
+  }
+
+  .carocrm-int-section-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .carocrm-int-section-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .carocrm-int-search {
+    width: 100%;
+  }
+
+  .carocrm-int-select {
+    flex: 1 1 180px;
+    width: auto;
+    min-width: 0;
+  }
+
+  .carocrm-int-state {
+    min-height: 200px;
+  }
+
+  /* The row stacks: identity, facts, then a full-width action row. */
+  .carocrm-int-provider {
+    grid-template-areas:
+      'rail tile body'
+      'rail . actions';
+    grid-template-columns: 3px 36px minmax(0, 1fr);
+    row-gap: 10px;
+    padding: 14px 0;
+  }
+
+  .carocrm-int-provider-actions {
+    align-self: start;
+    justify-content: flex-start;
+  }
+
+  .carocrm-int-provider-actions .ant-btn {
+    min-width: 96px;
+  }
+
+  .carocrm-int-summary {
+    gap: 4px 18px;
+  }
+}

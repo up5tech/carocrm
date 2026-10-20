@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { api } from '../../api/client.js';
 import type { IntegrationMappingView } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
-import { formatTimestamp,PanelEmpty, WarningList } from './shared.js';
+import { formatTimestamp, PanelEmpty, SectionToolbar, WarningList } from './shared.js';
 
 /**
  * Phase 19-INT.15 — the mapping builder
@@ -50,60 +50,64 @@ export function IntegrationsMappingTab() {
     },
   });
 
-  if (mappings.isLoading) return <Skeleton active paragraph={{ rows: 6 }} />;
-  if (mappings.isError) {
-    return (
-      <PanelEmpty
-        text={t('advancedintegrations.mapping.loadFailed')}
-        action={<Button onClick={() => void mappings.refetch()}>{t('core.common.reload')}</Button>}
-      />
-    );
-  }
-
   const list = mappings.data?.list ?? [];
-  if (list.length === 0) {
-    return <PanelEmpty text={t('advancedintegrations.mapping.empty')} />;
-  }
 
   return (
     <div>
-      <div className="carocrm-list-head">
-        <div>
-          <div className="carocrm-page-title">{t('advancedintegrations.mapping.title')}</div>
-          <p className="carocrm-page-sub">{t('advancedintegrations.mapping.subtitle')}</p>
-        </div>
-        <Button onClick={() => void mappings.refetch()}>{t('core.common.refresh')}</Button>
-      </div>
+      <SectionToolbar
+        title={t('advancedintegrations.mapping.title')}
+        subtitle={t('advancedintegrations.mapping.subtitle')}
+        actions={<Button onClick={() => void mappings.refetch()}>{t('core.common.refresh')}</Button>}
+      />
 
-      <div className="carocrm-wiring" style={{ gridTemplateColumns: 'minmax(0, 260px) minmax(0, 1fr)' }}>
-        <div className="carocrm-wiring-pane">
-          <div className="carocrm-wiring-pane-title">
-            <span className="carocrm-label">{t('advancedintegrations.mapping.select')}</span>
+      {mappings.isLoading ? (
+        <div className="carocrm-int-loading">
+          <Skeleton active paragraph={{ rows: 6 }} />
+        </div>
+      ) : mappings.isError ? (
+        <div className="carocrm-int-state">
+          <PanelEmpty
+            text={t('advancedintegrations.mapping.loadFailed')}
+            action={<Button onClick={() => void mappings.refetch()}>{t('core.common.reload')}</Button>}
+          />
+        </div>
+      ) : list.length === 0 ? (
+        <div className="carocrm-int-state">
+          <PanelEmpty text={t('advancedintegrations.mapping.empty')} />
+        </div>
+      ) : (
+        <div className="carocrm-wiring carocrm-int-mapping">
+          <div className="carocrm-wiring-pane">
+            <div className="carocrm-wiring-pane-title">
+              <span className="carocrm-label">{t('advancedintegrations.mapping.select')}</span>
+            </div>
+            {list.map((mapping) => (
+              <MappingChoice
+                key={mapping.id}
+                mapping={mapping}
+                selected={mapping.id === selectedId}
+                onSelect={() => setSelectedId(mapping.id)}
+              />
+            ))}
           </div>
-          {list.map((mapping) => (
-            <MappingChoice
-              key={mapping.id}
-              mapping={mapping}
-              selected={mapping.id === selectedId}
-              onSelect={() => setSelectedId(mapping.id)}
-            />
-          ))}
-        </div>
 
-        <div>
-          {selected === null ? (
-            <PanelEmpty text={t('advancedintegrations.mapping.selectPrompt')} />
-          ) : (
-            <MappingDetail
-              mapping={selected}
-              fields={fields.data}
-              loading={fields.isLoading}
-              onPublish={() => publish.mutate(selected.id)}
-              publishing={publish.isPending}
-            />
-          )}
+          <div>
+            {selected === null ? (
+              <div className="carocrm-int-state">
+                <PanelEmpty text={t('advancedintegrations.mapping.selectPrompt')} />
+              </div>
+            ) : (
+              <MappingDetail
+                mapping={selected}
+                fields={fields.data}
+                loading={fields.isLoading}
+                onPublish={() => publish.mutate(selected.id)}
+                publishing={publish.isPending}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -121,16 +125,8 @@ function MappingChoice({
     <button
       type="button"
       onClick={onSelect}
-      style={{
-        display: 'block',
-        width: '100%',
-        textAlign: 'left',
-        border: selected ? '1px solid #438eff' : '1px solid transparent',
-        borderRadius: 6,
-        padding: '8px 10px',
-        background: selected ? '#f7faff' : 'transparent',
-        cursor: 'pointer',
-      }}
+      aria-pressed={selected}
+      className={`carocrm-int-mapping-choice${selected ? ' is-selected' : ''}`}
     >
       <div className="carocrm-wire-name" style={{ fontSize: 13 }}>
         {mapping.objectType} → {mapping.crmEntityType}

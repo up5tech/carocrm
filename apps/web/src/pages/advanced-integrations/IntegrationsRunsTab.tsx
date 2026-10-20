@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { api } from '../../api/client.js';
 import type { IntegrationConnection, IntegrationSyncOperation, IntegrationSyncRun } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
-import { formatDuration,PanelEmpty } from './shared.js';
+import { formatDuration, PanelEmpty, SectionToolbar } from './shared.js';
 
 /**
  * Phase 19-INT.15 — the sync run history
@@ -57,39 +57,48 @@ export function IntegrationsRunsTab() {
     [connectionList, connectionId],
   );
 
-  if (connections.isLoading) return <Skeleton active paragraph={{ rows: 6 }} />;
-
   return (
     <div>
-      <div className="carocrm-list-head">
-        <div>
-          <div className="carocrm-page-title">{t('advancedintegrations.runs.title')}</div>
-          <p className="carocrm-page-sub">{t('advancedintegrations.runs.subtitle')}</p>
-        </div>
-        <Space>
-          <Select
-            allowClear
-            placeholder={t('advancedintegrations.runs.selectConnection')}
-            value={connectionId ?? undefined}
-            onChange={(value) => setConnectionId(value ?? null)}
-            style={{ minWidth: 240 }}
-            options={connectionList.map((connection: IntegrationConnection) => ({
-              value: connection.id,
-              label: `${connection.name} · ${connection.providerKey}`,
-            }))}
-          />
-          <Button onClick={() => void runs.refetch()}>{t('core.common.refresh')}</Button>
-        </Space>
-      </div>
+      <SectionToolbar
+        title={t('advancedintegrations.runs.title')}
+        subtitle={t('advancedintegrations.runs.subtitle')}
+        actions={
+          <>
+            <Select
+              allowClear
+              className="carocrm-int-select"
+              placeholder={t('advancedintegrations.runs.selectConnection')}
+              value={connectionId ?? undefined}
+              onChange={(value) => setConnectionId(value ?? null)}
+              options={connectionList.map((connection: IntegrationConnection) => ({
+                value: connection.id,
+                label: `${connection.name} · ${connection.providerKey}`,
+              }))}
+            />
+            <Button onClick={() => void runs.refetch()}>{t('core.common.refresh')}</Button>
+          </>
+        }
+      />
 
-      {connectionId === null ? (
-        <PanelEmpty text={t('advancedintegrations.runs.selectPrompt')} />
+      {connections.isLoading ? (
+        <div className="carocrm-int-loading">
+          <Skeleton active paragraph={{ rows: 6 }} />
+        </div>
+      ) : connectionId === null ? (
+        <div className="carocrm-int-state">
+          <PanelEmpty text={t('advancedintegrations.runs.selectPrompt')} />
+        </div>
       ) : runs.isLoading ? (
-        <Skeleton active paragraph={{ rows: 5 }} />
+        <div className="carocrm-int-loading">
+          <Skeleton active paragraph={{ rows: 5 }} />
+        </div>
       ) : (runs.data?.list ?? []).length === 0 ? (
-        <PanelEmpty text={t('advancedintegrations.runs.empty')} />
+        <div className="carocrm-int-state">
+          <PanelEmpty text={t('advancedintegrations.runs.empty')} />
+        </div>
       ) : (
         <Table<IntegrationSyncRun>
+          className="carocrm-int-table"
           rowKey="id"
           size="small"
           pagination={false}

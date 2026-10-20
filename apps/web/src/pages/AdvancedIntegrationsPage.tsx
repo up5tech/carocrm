@@ -116,7 +116,7 @@ export function AdvancedIntegrationsPage() {
         </Typography.Title>
         <p className="carocrm-page-sub">{t('advancedintegrations.page.subtitle')}</p>
       </header>
-      <Tabs activeKey={tab} onChange={setTab} items={items} tabBarStyle={{ marginBottom: 16 }} />
+      <Tabs className="carocrm-int-workspace" activeKey={tab} onChange={setTab} items={items} />
     </div>
   );
 }

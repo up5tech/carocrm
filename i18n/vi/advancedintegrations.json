@@ -22,6 +22,19 @@
     "subtitle": "Bản cài đặt này có thể kết nối tới những gì, và mỗi kết nối tích hợp yêu cầu điều gì.",
     "searchPlaceholder": "Tìm kết nối tích hợp",
     "noResults": "Không có kết nối tích hợp nào khớp với tìm kiếm.",
+    "summary": {
+      "connectors": "Kết nối tích hợp",
+      "connections": "Kết nối",
+      "ready": "Sẵn sàng"
+    },
+    "category": {
+      "platform": "Nền tảng",
+      "productivity": "Năng suất",
+      "marketing": "Tiếp thị",
+      "accounting": "Kế toán",
+      "commerce": "Thương mại",
+      "payments": "Thanh toán"
+    },
     "loadFailed": "Không tải được danh mục kết nối tích hợp.",
     "empty": "Bản cài đặt này chưa đăng ký kết nối tích hợp nào. Bộ điều khiển đã sẵn sàng, nhưng chưa thể kết nối cho tới khi có một kết nối tích hợp được đăng ký.",
     "objects": "Đối tượng",

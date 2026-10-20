@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { api } from '../../api/client.js';
 import type { IntegrationConflict, IntegrationConflictResolution } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
-import { formatTimestamp,PanelEmpty } from './shared.js';
+import { formatTimestamp, PanelEmpty, SectionToolbar } from './shared.js';
 
 /**
  * Phase 19-INT.15 — the conflict workbench
@@ -61,39 +61,48 @@ export function IntegrationsConflictsTab() {
 
   const connectionList = connections.data?.list ?? [];
 
-  if (connections.isLoading) return <Skeleton active paragraph={{ rows: 6 }} />;
-
   return (
     <div>
-      <div className="carocrm-list-head">
-        <div>
-          <div className="carocrm-page-title">{t('advancedintegrations.conflicts.title')}</div>
-          <p className="carocrm-page-sub">{t('advancedintegrations.conflicts.subtitle')}</p>
-        </div>
-        <Space>
-          <Select
-            allowClear
-            placeholder={t('advancedintegrations.conflicts.selectConnection')}
-            value={connectionId ?? undefined}
-            onChange={(value) => setConnectionId(value ?? null)}
-            style={{ minWidth: 240 }}
-            options={connectionList.map((connection) => ({
-              value: connection.id,
-              label: `${connection.name} · ${connection.providerKey}`,
-            }))}
-          />
-          <Button onClick={() => void conflicts.refetch()}>{t('core.common.refresh')}</Button>
-        </Space>
-      </div>
+      <SectionToolbar
+        title={t('advancedintegrations.conflicts.title')}
+        subtitle={t('advancedintegrations.conflicts.subtitle')}
+        actions={
+          <>
+            <Select
+              allowClear
+              className="carocrm-int-select"
+              placeholder={t('advancedintegrations.conflicts.selectConnection')}
+              value={connectionId ?? undefined}
+              onChange={(value) => setConnectionId(value ?? null)}
+              options={connectionList.map((connection) => ({
+                value: connection.id,
+                label: `${connection.name} · ${connection.providerKey}`,
+              }))}
+            />
+            <Button onClick={() => void conflicts.refetch()}>{t('core.common.refresh')}</Button>
+          </>
+        }
+      />
 
-      {connectionId === null ? (
-        <PanelEmpty text={t('advancedintegrations.conflicts.selectPrompt')} />
+      {connections.isLoading ? (
+        <div className="carocrm-int-loading">
+          <Skeleton active paragraph={{ rows: 6 }} />
+        </div>
+      ) : connectionId === null ? (
+        <div className="carocrm-int-state">
+          <PanelEmpty text={t('advancedintegrations.conflicts.selectPrompt')} />
+        </div>
       ) : conflicts.isLoading ? (
-        <Skeleton active paragraph={{ rows: 5 }} />
+        <div className="carocrm-int-loading">
+          <Skeleton active paragraph={{ rows: 5 }} />
+        </div>
       ) : (conflicts.data?.list ?? []).length === 0 ? (
-        <PanelEmpty text={t('advancedintegrations.conflicts.empty')} />
+        <div className="carocrm-int-state">
+          <PanelEmpty text={t('advancedintegrations.conflicts.empty')} />
+        </div>
       ) : (
         <Table<IntegrationConflict>
+          className="carocrm-int-table"
           rowKey="id"
           size="small"
           pagination={false}

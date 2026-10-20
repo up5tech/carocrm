@@ -222,6 +222,32 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${String(Math.round(seconds / 86_400))}d`;
 }
 
+/**
+ * The compact section header every tab shares.
+ *
+ * The page itself owns the only page-level title; a tab states what its surface contains at
+ * 16px/600 so the hierarchy stays flat and the catalog rows remain the content, not the chrome.
+ */
+export function SectionToolbar({
+  title,
+  subtitle,
+  actions,
+}: {
+  readonly title: string;
+  readonly subtitle: string;
+  readonly actions?: ReactNode;
+}) {
+  return (
+    <div className="carocrm-int-section-head">
+      <div className="carocrm-int-section-heading">
+        <h5 className="carocrm-int-section-title">{title}</h5>
+        <p className="carocrm-int-section-sub">{subtitle}</p>
+      </div>
+      {actions === undefined ? null : <div className="carocrm-int-section-actions">{actions}</div>}
+    </div>
+  );
+}
+
 /** The empty state of a panel: an invitation to act, not an apology. */
 export function PanelEmpty({ text, action }: { readonly text: string; readonly action?: ReactNode }) {
   return (

@@ -22,6 +22,19 @@
     "subtitle": "What this installation can connect to, and what each connector asks for.",
     "searchPlaceholder": "Search connectors",
     "noResults": "No connector matches that search.",
+    "summary": {
+      "connectors": "Connectors",
+      "connections": "Connections",
+      "ready": "Ready"
+    },
+    "category": {
+      "platform": "Platform",
+      "productivity": "Productivity",
+      "marketing": "Marketing",
+      "accounting": "Accounting",
+      "commerce": "Commerce",
+      "payments": "Payments"
+    },
     "loadFailed": "The connector catalog could not be loaded.",
     "empty": "This installation registered no connector. The control plane is available, but nothing can be connected until one is registered.",
     "objects": "Objects",
