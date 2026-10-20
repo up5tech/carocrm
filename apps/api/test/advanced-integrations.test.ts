@@ -11,6 +11,7 @@ import type { ConnectorAdapter } from '../src/advanced-integrations/integration-
 import { IntegrationRegistry } from '../src/advanced-integrations/integration-registry.service.js';
 import { OAuthFlowService } from '../src/advanced-integrations/oauth-flow.service.js';
 import { validateConnectorCapabilities } from '../src/advanced-integrations/provider-capabilities.js';
+import { ProviderError } from '../src/advanced-integrations/provider-error.js';
 import { AppModule } from '../src/app.module.js';
 import { redactUrl } from '../src/common/global-exception.filter.js';
 import type { ApiContext } from './support/boot-api.js';
@@ -107,6 +108,41 @@ const fakeAdapter: ConnectorAdapter = {
   supportsAuthorization: true,
   supportsRefresh: true,
   supportsRevocation: true,
+  // Phase 19-INT.6 — the typed adapter port. A connector that does not read objects still
+  // implements the read-only introspection calls; they are how the mapping builder learns what a
+  // provider offers.
+  getCapabilities: () => fakeAdapter.capabilities,
+  validateConnection: async () => ({
+    ok: true,
+    code: null,
+    message: null,
+    accountRef: 'fake-account-1',
+    grantedScopes: ['fake.read', 'fake.write'],
+  }),
+  listObjectSchemas: async () => [
+    {
+      objectType: 'fakeRecord',
+      label: 'Fake record',
+      incremental: true,
+      maxPageSize: 100,
+      fields: [
+        { name: 'id', label: 'Id', type: 'string', required: true, unique: true, identifier: true, sensitive: false },
+        { name: 'title', label: 'Title', type: 'string', required: false, unique: false, identifier: false, sensitive: false },
+      ],
+    },
+  ],
+  listFields: async (_context, objectType) => {
+    if (objectType !== 'fakeRecord') {
+      throw new ProviderError('NOT_FOUND', `Unknown object "${objectType}".`, {
+        category: 'not_found',
+        retryable: false,
+      });
+    }
+    return [
+      { name: 'id', label: 'Id', type: 'string', required: true, unique: true, identifier: true, sensitive: false },
+      { name: 'title', label: 'Title', type: 'string', required: false, unique: false, identifier: false, sensitive: false },
+    ];
+  },
   authorize: async (context) => {
     fake.authorizeCount += 1;
     return {

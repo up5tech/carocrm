@@ -155,7 +155,20 @@ remain unwritten until they can be correct.
 | Background work | `advancedIntegrations.notifyExpiringCredentials` in the worker, calling the API's worker-authorised endpoint under the documented service authority |
 | Log hygiene | The OAuth callback's `code` and `state` are redacted from any logged request URL (`redactUrl` in `apps/api/src/common/global-exception.filter.ts`) |
 
-**Not delivered, and deliberately so:** no connector, no mapping, no sync, no webhook ingress, no
-admin page. Those are 19-INT.6 and later. The sidebar entry and the admin panel tab are registered
-with **19-INT.14**, together with the SPA page they point at, so no navigation entry is ever a dead
-link.
+### 19-INT.6–19-INT.13 — the engine
+
+| Area | Delivered |
+| --- | --- |
+| Connector SDK | A typed `ConnectorAdapter` port, a normalized `ProviderError` model with stable codes and categories, a provider HTTP client with a bounded timeout, **no redirect following**, an SSRF address check and redacted logging, and a reusable **contract conformance suite** with a deterministic fake connector |
+| External id links | `integration_external_links` with database-enforced uniqueness per `(connection, object type, external id)` and per CRM record; idempotent linking, resolution by either side, and unlink that **keeps the CRM record** |
+| Mappings | `integration_object_mappings` / `integration_field_mappings` with versioning, one active mapping per object type, and a **dry-run preview** that writes nothing. The transformation set is **allowlisted** — no expression, script or template is ever evaluated |
+| Sync engine | `integration_sync_runs` / `integration_sync_operations` / `integration_sync_checkpoints`; pagination with a clamped page size, a checkpoint that advances only past a successful operation, idempotent re-runs, and a provider-side delete that unlinks without deleting the CRM record |
+| Conflicts | `integration_conflicts` with the four policies, per-field authority, and an explicit resolution. The default `manual` policy **never overwrites a CRM field silently** |
+| Resilience | Bounded retry with exponential backoff **and jitter**, a shared token-bucket rate limiter, a shared circuit breaker, and `integration_dead_letters` with an explicit replay |
+| Webhook ingress | A shared endpoint at `/api/v1/integrations/advanced-integrations/{provider}/{webhookKey}/{kind}` with scoped raw-body capture, connector-owned signature verification, a receipt written **only after verification**, delivery-id deduplication, and fast acknowledgement with asynchronous processing |
+| Outbound sync | A domain-event subscriber, `integration_outbound_operations` with an event-derived idempotency key, and a **record-origin** table that prevents an inbound sync from echoing back to the provider |
+
+**Still not delivered, and deliberately so:** no provider connector, no admin page, and no
+cross-module contract routing. Those are 19-INT.14 onward. The sidebar entry and the admin panel
+tab are registered with **19-INT.14**, together with the SPA page they point at, so no navigation
+entry is ever a dead link.

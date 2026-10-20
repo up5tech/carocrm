@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 import { DuplicateRecordError, NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
@@ -67,6 +67,11 @@ export interface IntegrationConnectionView {
   readonly lastSuccessfulSyncAt: string | null;
   readonly lastErrorCode: string | null;
   readonly credentialReferenceId: string | null;
+  /**
+   * The opaque endpoint key the provider is given for a webhook URL. It is a routing identifier,
+   * not a secret; the secret is the provider's signature.
+   */
+  readonly webhookKey: string | null;
   /** Whether a credential is stored. The value is never returned. */
   readonly hasCredential: boolean;
   /** A short, non-secret hint that identifies the credential to a human. */
@@ -113,6 +118,7 @@ interface ConnectionRow {
   last_successful_sync_at: Date | null;
   last_error_code: string | null;
   credential_reference_id: string | null;
+  webhook_key: string | null;
   created_by_id: string | null;
   modified_by_id: string | null;
   created_at: Date;
@@ -174,17 +180,20 @@ export class ConnectionLifecycleService {
     const now = new Date();
     const id = randomUUID();
     const requiredScopes = [...provider.requiredScopes];
+    // A provider that can push webhooks gets an opaque endpoint key. It is a routing identifier,
+    // not a secret: the secret is the provider's signature.
+    const webhookKey = provider.capabilities.webhook.supported ? randomBytes(24).toString('base64url') : null;
     try {
       await sql`
         insert into integration_connections
           (id, provider_key, name, owner_type, owner_id, tenant_ref, status, enabled,
-           granted_scopes, required_scopes, connection_options, adapter_version,
+           granted_scopes, required_scopes, connection_options, adapter_version, webhook_key,
            created_by_id, modified_by_id, created_at, modified_at)
         values
           (${id}, ${input.providerKey}, ${input.name}, ${input.ownerType}, ${input.ownerId},
            ${input.tenantRef ?? null}, 'draft', ${input.enabled ?? false},
            ${JSON.stringify([])}::jsonb, ${JSON.stringify(requiredScopes)}::jsonb,
-           ${JSON.stringify(options)}::jsonb, ${provider.adapterVersion},
+           ${JSON.stringify(options)}::jsonb, ${provider.adapterVersion}, ${webhookKey},
            ${this.scope.userId ?? null}, ${this.scope.userId ?? null}, ${now}, ${now})
       `.execute(this.database.db);
     } catch (error) {
@@ -428,6 +437,7 @@ export class ConnectionLifecycleService {
       lastSuccessfulSyncAt: row.last_successful_sync_at ? row.last_successful_sync_at.toISOString() : null,
       lastErrorCode: row.last_error_code,
       credentialReferenceId: row.credential_reference_id,
+      webhookKey: row.webhook_key,
       hasCredential: active !== undefined,
       credentialHint: active === undefined ? null : credentialHintOf(credentials, active.kind),
       createdAt: row.created_at.toISOString(),

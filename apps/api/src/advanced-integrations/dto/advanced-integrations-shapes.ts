@@ -84,3 +84,101 @@ export const OAuthCallbackSchema = z
     error_description: z.string().max(1024).optional(),
   })
   .strict();
+
+// ---------------------------------------------------------------------------
+// 19-INT.8 — mappings
+// ---------------------------------------------------------------------------
+
+const FieldMappingSchema = z
+  .object({
+    /** A dotted path into the provider object. */
+    sourcePath: z.string().trim().min(1).max(200),
+    /** The CRM field the value is written to. */
+    targetField: z.string().trim().min(1).max(120),
+    /** The allowlisted transformation. `null` is a direct copy. */
+    transform: z.unknown().nullable().optional(),
+    required: z.boolean().default(false),
+    direction: z.enum(['inbound', 'outbound', 'bidirectional']).default('inbound'),
+  })
+  .strict();
+
+export const MappingCreateSchema = z
+  .object({
+    providerKey: z.string().trim().min(1).max(64),
+    objectType: z.string().trim().min(1).max(64),
+    crmEntityType: z.string().trim().min(1).max(64),
+    direction: z.enum(['inbound', 'outbound', 'bidirectional']).default('inbound'),
+    syncMode: z.enum(['full', 'incremental']).default('incremental'),
+    conflictPolicy: z.enum(['provider_wins', 'crm_wins', 'manual', 'newest_wins']).default('manual'),
+    deletionPolicy: z.enum(['unlink', 'archive', 'ignore']).default('unlink'),
+    /** Per-field authority, e.g. `{"amount": "provider", "title": "crm"}`. */
+    fieldAuthority: z.record(z.string().trim().min(1).max(120), z.string().trim().min(1).max(40)).default({}),
+    fields: z.array(FieldMappingSchema).max(200).default([]),
+  })
+  .strict();
+
+export const MappingPatchSchema = z
+  .object({
+    crmEntityType: z.string().trim().min(1).max(64).optional(),
+    direction: z.enum(['inbound', 'outbound', 'bidirectional']).optional(),
+    syncMode: z.enum(['full', 'incremental']).optional(),
+    conflictPolicy: z.enum(['provider_wins', 'crm_wins', 'manual', 'newest_wins']).optional(),
+    deletionPolicy: z.enum(['unlink', 'archive', 'ignore']).optional(),
+    fieldAuthority: z.record(z.string().trim().min(1).max(120), z.string().trim().min(1).max(40)).optional(),
+    fields: z.array(FieldMappingSchema).max(200).optional(),
+  })
+  .strict();
+
+export const MappingPreviewSchema = z
+  .object({
+    /** A sample provider object. Nothing is written. */
+    sample: z.record(z.string(), z.unknown()),
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
+// 19-INT.9 / 19-INT.10 / 19-INT.11 / 19-INT.13
+// ---------------------------------------------------------------------------
+
+export const SyncRunSchema = z
+  .object({
+    runType: z.enum(['full', 'incremental', 'webhook', 'manual']).optional(),
+    triggerSource: z.enum(['schedule', 'manual', 'webhook', 'event']).optional(),
+    /** Stop after this many provider objects. */
+    maxRecords: z.number().int().min(1).max(1000).optional(),
+    /** The page size the run asks the provider for. Clamped by the connector's declared maximum. */
+    pageSize: z.number().int().min(1).max(1000).optional(),
+  })
+  .strict();
+
+export const ConflictResolveSchema = z
+  .object({
+    resolution: z.enum(['keep_crm', 'keep_provider', 'ignore', 'unlink']),
+  })
+  .strict();
+
+export const OutboundEventSchema = z
+  .object({
+    eventId: z.string().trim().min(1).max(200),
+    eventType: z.string().trim().min(1).max(80),
+    entityType: z.string().trim().min(1).max(80),
+    entityId: z.string().trim().min(1).max(200),
+  })
+  .strict();
+
+export const WebhookProcessSchema = z
+  .object({
+    connectionId: z.string().trim().min(1).max(64),
+    deliveryId: z.string().trim().min(1).max(200),
+    providerKey: z.string().trim().min(1).max(64),
+    objectType: z.string().trim().min(1).max(64),
+    externalId: z.string().trim().min(1).max(200).nullable(),
+    eventType: z.string().trim().min(1).max(80),
+  })
+  .strict();
+
+export const OutboundPushSchema = z
+  .object({
+    operationId: z.string().trim().min(1).max(64),
+  })
+  .strict();

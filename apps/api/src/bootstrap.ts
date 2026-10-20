@@ -2,6 +2,7 @@ import 'reflect-metadata';
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname,resolve } from 'node:path';
+import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 import { log } from '@carocrm/core/logger/index.js';
@@ -18,6 +19,7 @@ import { FastifyAdapter } from '@nestjs/platform-fastify';
 import type { FastifyInstance } from 'fastify';
 import { Pool } from 'pg';
 
+import { ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX } from './advanced-integrations/webhook-prefix.js';
 import { GlobalExceptionFilter } from './common/global-exception.filter.js';
 import type { AppConfig } from './config.js';
 import { buildConfig } from './config.js';
@@ -116,6 +118,32 @@ export async function createApp(
 
   const adapter = new FastifyAdapter({ logger: false, bodyLimit: 32 * 1024 * 1024 });
   const app = await NestFactory.create<NestFastifyApplication>(createExtensionHostModule(host), adapter, { abortOnError: true });
+
+  // Phase 19-INT.12: preserve the exact bytes of a provider callback body.
+  //
+  // Almost every real provider signs the **exact bytes** it sent (Stripe, Google, Mailchimp,
+  // Zoom, Meta, Shopify). A parsed body cannot be verified against such a signature, so the raw
+  // body is kept.
+  //
+  // The hook is **scoped to the webhook prefix** on purpose: buffering every request body would
+  // cost memory on every call, and it would interfere with the multipart streaming that the
+  // attachment upload relies on. The default JSON parser is left untouched.
+  const fastifyInstance = app.getHttpAdapter().getInstance() as unknown as FastifyInstance;
+  fastifyInstance.decorateRequest('rawBody', null);
+  fastifyInstance.addHook('preParsing', (request, _reply, payload, done) => {
+    if (!request.url.startsWith(ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX)) {
+      done(null, payload);
+      return;
+    }
+    const chunks: Buffer[] = [];
+    payload.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    payload.on('error', (error: Error) => done(error, undefined));
+    payload.on('end', () => {
+      const raw = Buffer.concat(chunks);
+      (request as { rawBody?: string | null }).rawBody = raw.toString('utf8');
+      done(null, Readable.from(raw));
+    });
+  });
 
   await app.register(asPlugin(swagger), {
     routePrefix: 'docs',

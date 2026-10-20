@@ -476,7 +476,25 @@ what the implementation verified.
 | Database safety | 98 tables (95 + 3 new), 56 migrations (55 + 1), `metadata_entries` unchanged at 110. **No database created, dropped, truncated or reset.** After the suite: 0 rows in all three new tables, 0 module notifications, 0 leftover test users or roles |
 | i18n parity | `i18n/en/advancedintegrations.json` and `i18n/vi/advancedintegrations.json` — 58 keys each, no key missing on either side |
 
-### 11.3 What was deliberately left out
+### 11.3 The engine (19-INT.6–19-INT.13)
+
+The engine landed in two migrations: `057_phase19_advanced_integrations_engine.sql` (16 new
+tables) and `058_phase19_advanced_integrations_webhook_key.sql` (the opaque endpoint key).
+
+058 exists because 057 had already been applied to the configured database when the endpoint-key
+column was added to the design. **Applied migration history is never edited** (AGENTS.md §3.5), so
+the change shipped as its own additive migration rather than as a rewrite of 057.
+
+The engine's design decisions are recorded in the feature contract §7 (D-10 to D-13):
+
+| Decision | Why |
+| --- | --- |
+| The rate limiter and the circuit breaker keep their state in the **database** | The API and the worker are separate processes; a per-process limiter would let them exceed the provider's quota between them |
+| One **executor** is the only path from the engine to a connector | The reliability rules live in one place, so no engine code can call a provider without them |
+| The raw body is captured by a **scoped** Fastify `preParsing` hook | Buffering every request body would cost memory on every call and would break the multipart streaming the attachment upload relies on |
+| The echo guard is a **record-origin table** | The origin is not record data, is not shown to an operator, and cannot be forged by a user editing a record |
+
+### 11.4 What was deliberately left out
 
 | Omitted | Why | Lands in |
 | --- | --- | --- |
@@ -484,4 +502,5 @@ what the implementation verified.
 | The `PaymentProviderEvent` / `AccountingExport` marker entities | Registering them now would make Sales report `stripe-integration` as **available** while no Stripe connector exists | 19-INT.19 / 19-INT.23 |
 | A metadata entity for the module | The module's state is control-plane and must not be reachable through the generic entity API | — |
 | Any connector | No connector is enabled by default (19-INT.1 acceptance) | 19-INT.16+ |
+| Cross-module contract routing | The engine writes through the generic entity API; routing a write through a domain module's own service (for example `SalesIntegrationService`) is 19-INT.25's work | 19-INT.25 |
 

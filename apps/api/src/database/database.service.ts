@@ -1020,6 +1020,282 @@ export interface AIAgentEvalRunsTable {
   created_at: Date;
 }
 
+/* ---------------------------------------------------------------------------
+ * Phase 19-INT — the Advanced Integrations control plane.
+ *
+ * The module's state is control-plane state, so it lives in its own tables rather than in
+ * `entity_records`: a metadata entity is reachable through the generic `/api/v1/:entity` API, and
+ * a direct write would bypass the engine's state machines and uniqueness rules.
+ * --------------------------------------------------------------------------- */
+
+/** A configured provider account/tenant, with its state machine. */
+export interface IntegrationConnectionsTable {
+  id: string;
+  provider_key: string;
+  name: string;
+  owner_type: string;
+  owner_id: string;
+  tenant_ref: string | null;
+  status: string;
+  enabled: boolean;
+  granted_scopes: unknown;
+  required_scopes: unknown;
+  connection_options: unknown;
+  adapter_version: string;
+  health_status: string | null;
+  health_summary_code: string | null;
+  last_validated_at: Date | null;
+  last_successful_sync_at: Date | null;
+  last_error_code: string | null;
+  credential_reference_id: string | null;
+  /** The opaque endpoint key a provider is given. A routing identifier, not a secret. */
+  webhook_key: string | null;
+  created_at: Date;
+  modified_at: Date;
+  created_by_id: string | null;
+  modified_by_id: string | null;
+  deleted_at: Date | null;
+}
+
+/** One encrypted credential of a connection. The payload is never plaintext. */
+export interface IntegrationCredentialSecretsTable {
+  id: string;
+  connection_id: string;
+  kind: string;
+  state: string;
+  payload_encrypted: string;
+  expires_at: Date | null;
+  created_at: Date;
+  modified_at: Date;
+  rotated_at: Date | null;
+  revoked_at: Date | null;
+}
+
+/** A single-use OAuth authorization state. The id is the **hash** of the state. */
+export interface IntegrationOauthStatesTable {
+  id: string;
+  connection_id: string;
+  provider_key: string;
+  initiated_by: string;
+  code_verifier: string | null;
+  redirect_uri: string;
+  requested_scopes: unknown;
+  created_at: Date;
+  expires_at: Date;
+  consumed_at: Date | null;
+}
+
+/** The link between a provider object and a CRM record. */
+export interface IntegrationExternalLinksTable {
+  id: string;
+  connection_id: string;
+  provider_key: string;
+  object_type: string;
+  external_id: string;
+  external_parent_id: string | null;
+  crm_entity_type: string | null;
+  crm_entity_id: string | null;
+  link_status: string;
+  provider_version: string | null;
+  provider_updated_at: Date | null;
+  first_seen_at: Date;
+  last_seen_at: Date;
+  synced_at: Date | null;
+  detail: string | null;
+}
+
+/** Which provider object feeds which CRM entity, and under which policies. */
+export interface IntegrationObjectMappingsTable {
+  id: string;
+  connection_id: string;
+  provider_key: string;
+  object_type: string;
+  crm_entity_type: string;
+  direction: string;
+  mapping_version: number;
+  status: string;
+  sync_mode: string;
+  conflict_policy: string;
+  deletion_policy: string;
+  field_authority: unknown;
+  created_at: Date;
+  modified_at: Date;
+  created_by_id: string | null;
+  modified_by_id: string | null;
+}
+
+/** One field of a mapping, with its allowlisted transformation. */
+export interface IntegrationFieldMappingsTable {
+  id: string;
+  mapping_id: string;
+  source_path: string;
+  target_field: string;
+  transform: unknown;
+  required: boolean;
+  direction: string;
+  position: number;
+}
+
+/** One sync run. */
+export interface IntegrationSyncRunsTable {
+  id: string;
+  connection_id: string;
+  mapping_id: string;
+  run_type: string;
+  status: string;
+  trigger_source: string;
+  direction: string;
+  mapping_version: number;
+  cursor_before: string | null;
+  cursor_after: string | null;
+  records_scanned: number;
+  records_applied: number;
+  records_skipped: number;
+  records_failed: number;
+  started_at: Date | null;
+  finished_at: Date | null;
+  last_error_code: string | null;
+  last_error_detail: string | null;
+  created_at: Date;
+  created_by_id: string | null;
+}
+
+/** One operation of a run. The idempotency key makes a replay a no-op. */
+export interface IntegrationSyncOperationsTable {
+  id: string;
+  run_id: string;
+  connection_id: string;
+  operation_type: string;
+  external_id: string | null;
+  crm_entity_type: string | null;
+  crm_entity_id: string | null;
+  status: string;
+  attempts: number;
+  idempotency_key: string | null;
+  payload: unknown;
+  error_code: string | null;
+  error_detail: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/** The opaque provider cursor of a mapping and direction. */
+export interface IntegrationSyncCheckpointsTable {
+  id: string;
+  connection_id: string;
+  mapping_id: string;
+  direction: string;
+  cursor_value: string | null;
+  reset_required: boolean;
+  updated_at: Date;
+  created_at: Date;
+}
+
+/** A conflict between the provider's value and the CRM's. */
+export interface IntegrationConflictsTable {
+  id: string;
+  connection_id: string;
+  mapping_id: string;
+  run_id: string | null;
+  object_type: string;
+  external_id: string;
+  crm_entity_type: string | null;
+  crm_entity_id: string | null;
+  conflict_type: string;
+  status: string;
+  local_snapshot: unknown;
+  remote_snapshot: unknown;
+  conflicting_fields: unknown;
+  policy: string;
+  resolution: string | null;
+  resolved_by: string | null;
+  resolved_at: Date | null;
+  created_at: Date;
+}
+
+/** A shared token bucket. The state is in the database so the API and the worker share it. */
+export interface IntegrationRateLimitBucketsTable {
+  key: string;
+  tokens: number;
+  updated_at: Date;
+}
+
+/** A shared circuit breaker. */
+export interface IntegrationCircuitStatesTable {
+  key: string;
+  state: string;
+  failure_count: number;
+  opened_at: Date | null;
+  next_probe_at: Date | null;
+  updated_at: Date;
+}
+
+/** A terminal failure an operator has to look at. */
+export interface IntegrationDeadLettersTable {
+  id: string;
+  connection_id: string;
+  provider_key: string;
+  operation_id: string | null;
+  error_code: string;
+  error_category: string;
+  error_detail: string | null;
+  attempts: number;
+  payload: unknown;
+  status: string;
+  replayed_at: Date | null;
+  replayed_by: string | null;
+  created_at: Date;
+}
+
+/** One provider callback. The delivery id is the deduplication key. */
+export interface IntegrationWebhookDeliveriesTable {
+  id: string;
+  connection_id: string;
+  provider_key: string;
+  delivery_id: string;
+  object_type: string | null;
+  external_id: string | null;
+  event_type: string | null;
+  status: string;
+  signature_valid: boolean;
+  payload: unknown;
+  error_code: string | null;
+  error_detail: string | null;
+  received_at: Date;
+  processed_at: Date | null;
+}
+
+/** One queued push to a provider. */
+export interface IntegrationOutboundOperationsTable {
+  id: string;
+  connection_id: string;
+  mapping_id: string;
+  crm_entity_type: string;
+  crm_entity_id: string;
+  operation_type: string;
+  status: string;
+  attempts: number;
+  idempotency_key: string | null;
+  origin_event_id: string | null;
+  payload: unknown;
+  error_code: string | null;
+  error_detail: string | null;
+  created_at: Date;
+  updated_at: Date;
+  applied_at: Date | null;
+}
+
+/** The origin of the last change to a CRM record. This is how an echo is recognised. */
+export interface IntegrationRecordOriginsTable {
+  entity_type: string;
+  entity_id: string;
+  connection_id: string;
+  mapping_id: string | null;
+  origin: string;
+  origin_ref: string | null;
+  recorded_at: Date;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
@@ -1091,6 +1367,22 @@ export interface Database {
   ai_agent_eval_cases: AIAgentEvalCasesTable;
   ai_agent_eval_runs: AIAgentEvalRunsTable;
   ai_provider_connections: AIProviderConnectionsTable;
+  integration_connections: IntegrationConnectionsTable;
+  integration_credential_secrets: IntegrationCredentialSecretsTable;
+  integration_oauth_states: IntegrationOauthStatesTable;
+  integration_external_links: IntegrationExternalLinksTable;
+  integration_object_mappings: IntegrationObjectMappingsTable;
+  integration_field_mappings: IntegrationFieldMappingsTable;
+  integration_sync_runs: IntegrationSyncRunsTable;
+  integration_sync_operations: IntegrationSyncOperationsTable;
+  integration_sync_checkpoints: IntegrationSyncCheckpointsTable;
+  integration_conflicts: IntegrationConflictsTable;
+  integration_rate_limit_buckets: IntegrationRateLimitBucketsTable;
+  integration_circuit_states: IntegrationCircuitStatesTable;
+  integration_dead_letters: IntegrationDeadLettersTable;
+  integration_webhook_deliveries: IntegrationWebhookDeliveriesTable;
+  integration_outbound_operations: IntegrationOutboundOperationsTable;
+  integration_record_origins: IntegrationRecordOriginsTable;
 }
 
 export type Db = Kysely<Database>;

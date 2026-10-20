@@ -1,17 +1,9 @@
 import { ValidationError } from '@carocrm/core/errors/index.js';
 import { Injectable } from '@nestjs/common';
 
-import type {
-  OAuthAuthorizationStart,
-  OAuthAuthorizeContext,
-  OAuthExchangeContext,
-  OAuthRefreshContext,
-  OAuthRevokeContext,
-  OAuthTokenSet,
-} from './oauth-connector.js';
+import type { ConnectorAdapter } from './connector-adapter.port.js';
 import {
   assertAdapterSatisfiesCapabilities,
-  type ConnectorAdapterShape,
   type ConnectorCapabilities,
   type ConnectorOperation,
   findObjectCapability,
@@ -43,56 +35,7 @@ export const PROVIDER_KEY_PATTERN = /^[a-z][a-z0-9-]{1,63}$/;
 export const PROVIDER_STATUSES = ['available', 'disabled', 'deprecated', 'unsupported'] as const;
 export type ProviderStatus = (typeof PROVIDER_STATUSES)[number];
 
-/**
- * The credential bundle an adapter receives.
- *
- * The vault resolves it; the adapter never sees the ciphertext, and the platform never logs it.
- */
-export interface ConnectorCredential {
-  readonly accessToken: string | null;
-  readonly refreshToken: string | null;
-  readonly apiKey: string | null;
-  readonly clientSecret: string | null;
-  /** ISO timestamp at which the access token stops being usable. */
-  readonly expiresAt: string | null;
-}
 
-export interface ConnectorContext {
-  readonly connectionId: string;
-  readonly providerKey: string;
-  readonly credential: ConnectorCredential;
-}
-
-/**
- * The minimum an adapter exposes to be registered.
- *
- * 19-INT.6 turns this into the full typed port with its inputs, outputs and HTTP reliability.
- * The registry needs only identity, the capability declaration, and which optional operations exist.
- */
-export interface ConnectorAdapter {
-  readonly providerKey: string;
-  readonly adapterVersion: string;
-  readonly providerApiVersion: string;
-  readonly capabilities: ConnectorCapabilities;
-  /** Which optional operations the adapter implements. */
-  readonly operations: ConnectorAdapterShape;
-  /** Whether the connector can start an OAuth flow. */
-  readonly supportsAuthorization: boolean;
-  /** Whether the connector can refresh a credential. */
-  readonly supportsRefresh: boolean;
-  /** Whether the connector can revoke a provider grant. */
-  readonly supportsRevocation: boolean;
-  /**
-   * The OAuth operations (19-INT.5).
-   *
-   * They are optional members: a connector that authenticates with an API key does not implement
-   * them, and the registry refuses to start an OAuth flow for such a connector.
-   */
-  authorize?(context: OAuthAuthorizeContext): Promise<OAuthAuthorizationStart>;
-  exchangeCode?(context: OAuthExchangeContext): Promise<OAuthTokenSet>;
-  refreshCredentials?(context: OAuthRefreshContext): Promise<OAuthTokenSet>;
-  revokeCredentials?(context: OAuthRevokeContext): Promise<void>;
-}
 
 /**
  * A connector type available to administrators — the plan's §6.1 `IntegrationDefinition`.
@@ -283,3 +226,9 @@ export class IntegrationRegistry {
     return findObjectCapability(definition.capabilities, objectType);
   }
 }
+
+export type {
+  ConnectorAdapter,
+  ConnectorContext,
+  ConnectorCredential,
+} from './connector-adapter.port.js';

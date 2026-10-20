@@ -261,6 +261,10 @@ network access.
 | D-7 | Organization-level connection ownership in the first release | Fewer tokens, fewer refresh races |
 | D-8 | The sidebar entry and the admin panel tab are registered with **19-INT.14**, not with 19-INT.2 | A navigation entry names a real SPA route. Registering it before the page exists would ship a dead link |
 | D-9 | The OAuth callback and the credential refresh run under the **documented service authority** | The work is attributable, and the platform's own authorization engine is not bypassed by a special case |
+| D-10 | The rate limiter and the circuit breaker keep their state in the **database**, not in memory | The API and the worker are separate processes. A per-process limiter would let the two of them together exceed the provider's quota, and a per-process breaker would let one of them keep hammering a provider the other has given up on |
+| D-11 | One **executor** is the only path from the engine to a connector | The reliability rules (connection state, rate limit, circuit breaker, credential resolution) live in one place, so no engine code can call a provider without them |
+| D-12 | The raw body is captured by a **scoped** Fastify `preParsing` hook, not by replacing the JSON parser | Buffering every request body would cost memory on every call and would interfere with the multipart streaming the attachment upload relies on. The default parser is untouched |
+| D-13 | The echo guard is a **record-origin table**, not a flag on the record | The origin is not part of the record's data, is not shown to an operator, and cannot be forged by a user editing a record |
 
 D-5 revises the *provisional* storage choice recorded in
 `docs/implementation/advanced-integrations-audit.md` §4. The reason is specific: a metadata entity

@@ -8,7 +8,10 @@ import { createPool, errorMessage, type Queryable } from './db.js';
 import type { WorkerConfig } from './env.js';
 import { DomainEventBus } from './events/domain-event-bus.js';
 import { loadExtensionConfig } from './extensions.js';
-import { registerAdvancedIntegrationsJobs } from './handlers/advanced-integrations-handlers.js';
+import {
+  registerAdvancedIntegrationsDomainEvents,
+  registerAdvancedIntegrationsJobs,
+} from './handlers/advanced-integrations-handlers.js';
 import { registerAIAgentJobs } from './handlers/ai-agent-handlers.js';
 import { registerCustomerSuccessJobs } from './handlers/customer-success-handlers.js';
 import { registerSystemJobs } from './handlers/job-handlers.js';
@@ -140,6 +143,13 @@ export class WorkerApplication {
     this.outboxRegistry = outbox.registry;
     this.domainEvents = outbox.events;
     this.registerExtensionDomainEvents();
+    // Phase 19-INT.13: the outbound path reacts to CRM changes. The echo guard lives in the API —
+    // it decides whether a change is a genuine user edit or the echo of an earlier sync.
+    registerAdvancedIntegrationsDomainEvents(this.domainEvents, {
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
+      log: this.log,
+    });
 
     this.jobQueue = new BullMqJobQueue({
       queueName: this.config.queueName,

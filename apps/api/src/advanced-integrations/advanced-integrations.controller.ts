@@ -1,6 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 
-import { AuthenticationFailedError, InvalidQueryError } from '@carocrm/core/errors/index.js';
+import { AuthenticationFailedError, InvalidQueryError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Body, Controller, Delete, Get, Headers, HttpCode, Inject, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
@@ -12,16 +12,31 @@ import { AdvancedIntegrationsHealthService } from './advanced-integrations-healt
 import { AdvancedIntegrationsNavigationService } from './advanced-integrations-navigation.service.js';
 import { AdvancedIntegrationsPermissionService } from './advanced-integrations-permission.service.js';
 import { AdvancedIntegrationsSettingsService } from './advanced-integrations-settings.service.js';
+import { ConflictService } from './conflict.service.js';
 import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
+import { DeadLetterService } from './dead-letter.service.js';
 import {
   AuthorizeSchema,
+  ConflictResolveSchema,
   ConnectionCreateSchema,
   ConnectionPatchSchema,
   CredentialWriteSchema,
   EmptyBodySchema,
+  MappingCreateSchema,
+  MappingPatchSchema,
+  MappingPreviewSchema,
+  OutboundEventSchema,
+  OutboundPushSchema,
+  SyncRunSchema,
+  WebhookProcessSchema,
 } from './dto/advanced-integrations-shapes.js';
+import { ExternalLinkService } from './external-link.service.js';
 import { IntegrationRegistry } from './integration-registry.service.js';
+import { MappingService } from './mapping.service.js';
 import { OAuthFlowService } from './oauth-flow.service.js';
+import { OutboundSyncService } from './outbound-sync.service.js';
+import { SyncOrchestrator } from './sync-orchestrator.service.js';
+import { WebhookIngressService } from './webhook-ingress.service.js';
 
 /**
  * Phase 19-INT.2–19-INT.5 — the `AdvancedIntegrations` control-plane API
@@ -48,6 +63,13 @@ export class AdvancedIntegrationsController {
     @Inject(IntegrationRegistry) private readonly registry: IntegrationRegistry,
     @Inject(ConnectionLifecycleService) private readonly connections: ConnectionLifecycleService,
     @Inject(OAuthFlowService) private readonly oauth: OAuthFlowService,
+    @Inject(MappingService) private readonly mappings: MappingService,
+    @Inject(SyncOrchestrator) private readonly orchestrator: SyncOrchestrator,
+    @Inject(ConflictService) private readonly conflicts: ConflictService,
+    @Inject(DeadLetterService) private readonly deadLetters: DeadLetterService,
+    @Inject(ExternalLinkService) private readonly links: ExternalLinkService,
+    @Inject(WebhookIngressService) private readonly webhooks: WebhookIngressService,
+    @Inject(OutboundSyncService) private readonly outbound: OutboundSyncService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
@@ -206,12 +228,238 @@ export class AdvancedIntegrationsController {
   }
 
   // ---------------------------------------------------------------------------
+  // 19-INT.7 — external id links
+  // ---------------------------------------------------------------------------
+
+  @Get('action/connections/:id/links')
+  async listLinks(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return { list: await this.links.list(id) };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 19-INT.8 — mappings
+  // ---------------------------------------------------------------------------
+
+  @Get('action/mappings')
+  async listMappings() {
+    await this.permissions.assert('use');
+    return { list: await this.mappings.listAllActive() };
+  }
+
+  @Post('action/mappings')
+  async createMapping(@Body() body: unknown) {
+    const input = parse(MappingCreateSchema, body);
+    return this.mappings.create({
+      connectionId: await resolveConnectionId(this.connections, input.providerKey),
+      objectType: input.objectType,
+      crmEntityType: input.crmEntityType,
+      direction: input.direction,
+      syncMode: input.syncMode,
+      conflictPolicy: input.conflictPolicy,
+      deletionPolicy: input.deletionPolicy,
+      fieldAuthority: input.fieldAuthority,
+      fields: input.fields.map((field) => ({
+        sourcePath: field.sourcePath,
+        targetField: field.targetField,
+        transform: (field.transform ?? null) as never,
+        required: field.required,
+        direction: field.direction,
+      })),
+    });
+  }
+
+  @Get('action/mappings/:id')
+  async getMapping(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return this.mappings.get(id);
+  }
+
+  @Patch('action/mappings/:id')
+  async updateMapping(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(MappingPatchSchema, body);
+    return this.mappings.update(id, {
+      ...(input.crmEntityType === undefined ? {} : { crmEntityType: input.crmEntityType }),
+      ...(input.direction === undefined ? {} : { direction: input.direction }),
+      ...(input.syncMode === undefined ? {} : { syncMode: input.syncMode }),
+      ...(input.conflictPolicy === undefined ? {} : { conflictPolicy: input.conflictPolicy }),
+      ...(input.deletionPolicy === undefined ? {} : { deletionPolicy: input.deletionPolicy }),
+      ...(input.fieldAuthority === undefined ? {} : { fieldAuthority: input.fieldAuthority }),
+      ...(input.fields === undefined
+        ? {}
+        : {
+            fields: input.fields.map((field) => ({
+              sourcePath: field.sourcePath,
+              targetField: field.targetField,
+              transform: (field.transform ?? null) as never,
+              required: field.required,
+              direction: field.direction,
+            })),
+          }),
+    });
+  }
+
+  @Post('action/mappings/:id/activate')
+  async activateMapping(@Param('id') id: string) {
+    return this.mappings.activate(id);
+  }
+
+  @Post('action/mappings/:id/retire')
+  async retireMapping(@Param('id') id: string) {
+    return this.mappings.retire(id);
+  }
+
+  /** A dry run: what the mapping would write, without writing it. */
+  @Post('action/mappings/:id/preview')
+  async previewMapping(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(MappingPreviewSchema, body);
+    return this.mappings.preview(id, input.sample);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 19-INT.9 — sync runs
+  // ---------------------------------------------------------------------------
+
+  @Post('action/mappings/:id/sync')
+  async runSync(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(SyncRunSchema, body ?? {});
+    return this.orchestrator.runInbound(id, {
+      ...(input.runType === undefined ? {} : { runType: input.runType }),
+      ...(input.triggerSource === undefined ? {} : { triggerSource: input.triggerSource }),
+      ...(input.maxRecords === undefined ? {} : { maxRecords: input.maxRecords }),
+      ...(input.pageSize === undefined ? {} : { pageSize: input.pageSize }),
+    });
+  }
+
+  @Get('action/connections/:id/runs')
+  async listRuns(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return { list: await this.orchestrator.listRuns(id) };
+  }
+
+  @Get('action/runs/:id')
+  async getRun(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return this.orchestrator.getRun(id);
+  }
+
+  @Post('action/runs/:id/cancel')
+  async cancelRun(@Param('id') id: string) {
+    return this.orchestrator.cancelRun(id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 19-INT.10 — conflicts
+  // ---------------------------------------------------------------------------
+
+  @Get('action/connections/:id/conflicts')
+  async listConflicts(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return { list: await this.conflicts.listOpen(id) };
+  }
+
+  @Post('action/conflicts/:id/resolve')
+  async resolveConflict(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(ConflictResolveSchema, body);
+    return this.conflicts.resolve(id, input.resolution);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 19-INT.11 — dead letters
+  // ---------------------------------------------------------------------------
+
+  @Get('action/connections/:id/dead-letters')
+  async listDeadLetters(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return { list: await this.deadLetters.listOpen(id) };
+  }
+
+  @Post('action/dead-letters/:id/replay')
+  async replayDeadLetter(@Param('id') id: string) {
+    return this.deadLetters.markReplayed(id);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 19-INT.12 — webhook deliveries
+  // ---------------------------------------------------------------------------
+
+  @Get('action/connections/:id/webhook-deliveries')
+  async listWebhookDeliveries(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return { list: await this.webhooks.listDeliveries(id) };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 19-INT.13 — outbound operations
+  // ---------------------------------------------------------------------------
+
+  @Get('action/connections/:id/outbound')
+  async listOutbound(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return { list: await this.outbound.listOperations(id) };
+  }
+
+  // ---------------------------------------------------------------------------
   // worker-authorized operations
   //
   // The worker has no user session, so `@Public()` skips session authentication and the shared
   // worker→API capability in `x-worker-secret` is the authorisation — compared in constant time and
   // refused when no capability is configured.
   // ---------------------------------------------------------------------------
+
+  /**
+   * A CRM domain event, delivered by the worker.
+   *
+   * The worker has no session, so the shared worker→API capability is the authorisation. The
+   * endpoint turns the event into outbound operations, and the echo guard decides whether the
+   * provider should hear about it at all.
+   */
+  @HttpCode(200)
+  @Post('action/outbound-event')
+  async outboundEvent(@Headers('x-worker-secret') secret: string | undefined, @Body() body: unknown) {
+    this.assertWorkerSecret(secret);
+    const input = parse(OutboundEventSchema, body);
+    return runAsAdvancedIntegrationsSystem(this.scope, 'outbound-event', () =>
+      this.outbound.handleEvent({
+        eventId: input.eventId,
+        eventType: input.eventType,
+        entityType: input.entityType,
+        entityId: input.entityId,
+      }),
+    );
+  }
+
+  /**
+   * Process one verified provider callback.
+   *
+   * The worker calls this after the ingress recorded the delivery. The receipt's status is the
+   * idempotency guard, so a retried job does not apply the event twice.
+   */
+  @HttpCode(200)
+  @Post('action/process-webhook-event')
+  async processWebhookEvent(@Headers('x-worker-secret') secret: string | undefined, @Body() body: unknown) {
+    this.assertWorkerSecret(secret);
+    const input = parse(WebhookProcessSchema, body);
+    return runAsAdvancedIntegrationsSystem(this.scope, 'process-webhook-event', () =>
+      this.webhooks.processDelivery({
+        connectionId: input.connectionId,
+        deliveryId: input.deliveryId,
+        providerKey: input.providerKey,
+        objectType: input.objectType,
+        externalId: input.externalId,
+        eventType: input.eventType,
+      }),
+    );
+  }
+
+  /** Push one queued outbound operation to the provider. */
+  @HttpCode(200)
+  @Post('action/push-outbound')
+  async pushOutbound(@Headers('x-worker-secret') secret: string | undefined, @Body() body: unknown) {
+    this.assertWorkerSecret(secret);
+    const input = parse(OutboundPushSchema, body);
+    return runAsAdvancedIntegrationsSystem(this.scope, 'push-outbound', () => this.outbound.push(input.operationId));
+  }
 
   @HttpCode(200)
   @Post('action/notify-expiring-credentials')
@@ -234,6 +482,24 @@ export class AdvancedIntegrationsController {
       throw new AuthenticationFailedError('Invalid worker capability.');
     }
   }
+}
+
+/**
+ * The connection a provider key names.
+ *
+ * The mapping builder addresses a connection by its provider and the connection's name; the
+ * caller must be allowed to see it, so the lookup goes through the connection service.
+ */
+async function resolveConnectionId(
+  connections: ConnectionLifecycleService,
+  providerKey: string,
+): Promise<string> {
+  const all = await connections.list();
+  const found = all.find((connection) => connection.providerKey === providerKey);
+  if (!found) {
+    throw new ValidationError(`No connection for provider "${providerKey}" exists.`, { providerKey });
+  }
+  return found.id;
 }
 
 function parse<T extends ZodTypeAny>(schema: T, body: unknown): T['_output'] {
