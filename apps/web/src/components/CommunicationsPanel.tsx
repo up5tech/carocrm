@@ -44,7 +44,6 @@ export function CommunicationsPanel({ entityType, entityId }: { entityType: stri
   return (
     <Card
       className="carocrm-card"
-      size="small"
       title={
         <Space>
           <PhoneOutlined />

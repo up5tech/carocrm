@@ -553,7 +553,6 @@ export function VoiceInboxPage() {
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: 16, alignItems: 'start' }}>
       <Card
         className="carocrm-card"
-        size="small"
         title={
           <Space>
             <PhoneOutlined />
@@ -650,7 +649,7 @@ export function VoiceInboxPage() {
         </Space>
       </Card>
 
-      <Card className="carocrm-card" size="small">
+      <Card className="carocrm-card">
         {surface === 'calls' ? (
           <CallsPanel />
         ) : selected === undefined ? (

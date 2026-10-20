@@ -79,7 +79,6 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base }
   return (
     <Card
       className="carocrm-card"
-      size="small"
       title={<Typography.Text strong>{label ?? fieldLabel(name)}</Typography.Text>}
       extra={
         <Space.Compact>
@@ -300,7 +299,6 @@ export function EntityDetailPage() {
         {panels.map((panel) => (          <Card
             key={panel.name}
             className="carocrm-card"
-            size="small"
             title={<Typography.Text strong>{panel.label ?? panel.name}</Typography.Text>}
           >
             <Descriptions
@@ -314,7 +312,7 @@ export function EntityDetailPage() {
         ))}
 
         {others.length > 0 ? (
-          <Card className="carocrm-card" size="small" title={<Typography.Text strong>{t('core.common.other')}</Typography.Text>}>
+          <Card className="carocrm-card" title={<Typography.Text strong>{t('core.common.other')}</Typography.Text>}>
             <Descriptions column={{ xs: 1, md: 2 }} colon={false} labelStyle={labelStyle} contentStyle={contentStyle} items={describe(others)} />
           </Card>
         ) : null}

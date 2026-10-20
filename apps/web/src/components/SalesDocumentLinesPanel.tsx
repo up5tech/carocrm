@@ -130,7 +130,7 @@ export function SalesDocumentLinesPanel({ kind, id }: SalesDocumentLinesPanelPro
 
   if (loadError !== null) {
     return (
-      <Card className="carocrm-card" size="small" title={<Typography.Text strong>{t('sales.document.lines')}</Typography.Text>}>
+      <Card className="carocrm-card" title={<Typography.Text strong>{t('sales.document.lines')}</Typography.Text>}>
         <Alert type="error" showIcon message={t('sales.document.linesFailed')} description={loadError} />
       </Card>
     );

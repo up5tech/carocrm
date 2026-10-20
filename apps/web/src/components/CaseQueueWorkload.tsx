@@ -47,7 +47,7 @@ export function CaseQueueWorkload({ queueId }: CaseQueueWorkloadProps) {
 
   if (denied) {
     return (
-      <Card className="carocrm-card" size="small" title={<Typography.Text strong>{t('web.serviceDesk.workload')}</Typography.Text>}>
+      <Card className="carocrm-card" title={<Typography.Text strong>{t('web.serviceDesk.workload')}</Typography.Text>}>
         <Typography.Text type="secondary">{t('web.serviceDesk.workloadDenied')}</Typography.Text>
       </Card>
     );

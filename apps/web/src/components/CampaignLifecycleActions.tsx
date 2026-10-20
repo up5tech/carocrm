@@ -165,7 +165,6 @@ export function CampaignLifecycleActions({ campaignId, onChanged }: CampaignLife
   return (
     <Card
       className="carocrm-card"
-      size="small"
       title={<Typography.Text strong>{t('web.marketingAutomation.lifecycle')}</Typography.Text>}
       extra={<Tag color="blue">{t(`marketing.status.${caps.status}`)}</Tag>}
     >
