@@ -420,8 +420,15 @@ export class VoiceCallService {
     const account = await this.accounts.resolve(row.account_key);
     const adapter = this.registry.resolve(account.providerKey);
     const capability = callControlCapabilityFor(action);
-    if (!effectiveCapabilities(adapter.info, account.capabilities).includes(capability)) {
-      throw new ValidationError(`Provider "${account.providerKey}" does not declare ${capability}.`);
+    // Name the real cause: an adapter that cannot do it and an account that was never granted it need
+    // different fixes from the operator.
+    if (!adapter.info.capabilities.includes(capability)) {
+      throw new ValidationError(`Provider "${account.providerKey}" does not implement ${capability}.`);
+    }
+    if (!account.capabilities.includes(capability)) {
+      throw new ValidationError(
+        `Provider account "${account.key}" is not granted ${capability}; grant it on the account before this call can be controlled.`,
+      );
     }
     if (adapter.controlCall === undefined) throw new ValidationError('This provider adapter cannot control calls.');
     if (row.provider_call_id === null) {
