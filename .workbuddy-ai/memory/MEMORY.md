@@ -130,7 +130,14 @@ Curated, long-lived notes. Daily logs live next to this file as `YYYY-MM-DD.md`.
 - Transcription/AI (VC.16): adapter `fetchTranscript` is optional; AI goes through
   `AIProviderGateway` only, with redacted+truncated text, `ai_review_status` starts `pending`.
 - Panels (VC.17): record-ACL-aware panel + touchpoint counts; panels only read, so no duplicate
-  Activities. Portal deliberately not extended (no customer-facing surface).
+  Activities.
+- UI pass (2026-10-20): `/voice-inbox` (`VoiceInboxPage`) = inbox + composer + call log +
+  click-to-call form; `CommunicationsPanel` on Account/Contact/Lead/Opportunity/Case detail;
+  `IncomingCallBanner` polls `action/calls/incoming` in the internal shell only. Media playback is
+  always API bytes — no provider URL/token in the browser. Portal deliberately not extended.
+- ACL note: synthetic permission entities (`CommunicationConversation`, `VoiceProviderAccount`,
+  `AIAgent`) need no metadata seeding — `roleLevel` falls back to the `*` wildcard and admins get
+  `'all'`.
 - Tests: domain 35, base 24, calls 9, messaging 10, inbox 22 (**100**). Integration suites set
   `ENCRYPTION_KEY` + `REPORT_WORKER_SECRET` before `bootApi()`; the inbox suite stubs `fetch` for the
   media download and cleans children before the account (FK cascade hides receipts otherwise).

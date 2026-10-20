@@ -66,10 +66,24 @@ warnings, recording reference + SSRF refusal, private fetch + authorized playbac
 an outsider, transcript retrieval (idempotent), enrichment refusal while disabled, enrichment with
 provenance, review state, panel ACL/refusals, and panel + touchpoint output.
 
+## User surfaces (19-VC.12–19-VC.17 UI pass, 2026-10-20)
+
+| Surface | Route / mount | Notes |
+| --- | --- | --- |
+| Unified inbox | `/voice-inbox` (`VoiceInboxPage`) | Conversation filters, merged timeline, composer with snippet picker and server-computed segment hints, internal-note switch, assignment/status select, handoff modal, click-to-call form |
+| Call detail | right column of the inbox | Authorized recording playback (bytes from the API, never a provider URL), transcript request, AI draft with approve/dismiss |
+| Communications panel | record detail (Account/Contact/Lead/Opportunity/Case) | Renders nothing when unreadable or empty; call rows expand lazily |
+| Incoming-call banner | internal shell | Polls `action/calls/incoming`; shows only server-addressed calls, number only; hidden in the portal shell |
+
+Navigation gained a `voiceInbox` entry (`/voice-inbox`, order 77) gated on
+`CommunicationConversation:read` — the same synthetic capability the API asserts; a role reaches it
+through its own grant or its `*` wildcard, exactly as `AIAgent` has always worked.
+
 ## Deliberately not built
 
-- SPA screens (inbox, composer, call popup, media player, CRM panel widget). The APIs and tests exist;
-  a dedicated UI phase is a separate deliverable.
+- A click-to-call button beside a phone **field** on the record form (the Calls tab accepts any
+  number; wiring the field renderer is form work, and the API already takes
+  `relatedEntityType`/`relatedEntityId`).
 - Portal conversation surface — no product requirement, and a second ACL surface would need its own
   proof that internal notes cannot leak.
 - A live telephony or speech vendor. The simulator and the fake AI adapter are the only providers, by

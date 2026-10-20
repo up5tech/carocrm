@@ -1,6 +1,7 @@
-import { PhoneOutlined, ReloadOutlined } from '@ant-design/icons';
+import { MessageOutlined, PhoneOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Card, Col, Empty, Row, Skeleton, Space, Table, Tag, Typography } from 'antd';
+import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { VoiceProviderAccountView } from '../api/types.js';
@@ -10,12 +11,13 @@ import { t } from '../state/i18n.js';
  * Phase 19-VC.2–19-VC.5 — the Voice & Communications workspace (first surface).
  *
  * One read-only diagnostics page: platform dependencies, feature flags, provider adapters, accounts
- * (credential presence only, never a value) and the webhook receipt log. The interactive surfaces —
- * click-to-call, the incoming-call panel and the unified inbox — arrive in 19-VC.8/19-VC.9/19-VC.12;
- * this page exists so the module's navigation entry is real and an operator can see why a provider is
- * not working. Every fact comes from the server's own health report; nothing is inferred here.
+ * (credential presence only, never a value) and the webhook receipt log. It links to the agent
+ * inbox (`/voice-inbox`, 19-VC.12–17); click-to-call and the incoming-call banner live on the inbox
+ * and the record panel. Every fact comes from the server's own health report; nothing is inferred
+ * here.
  */
 export function VoiceCommunicationsPage() {
+  const navigate = useNavigate();
   const health = useQuery({
     queryKey: ['voiceCommunications', 'health'],
     queryFn: () => api.voiceCommunicationsHealth(),
@@ -136,9 +138,14 @@ export function VoiceCommunicationsPage() {
           </Typography.Title>
           <Typography.Text type="secondary">{t('voice.page.subtitle')}</Typography.Text>
         </div>
-        <Button icon={<ReloadOutlined />} onClick={() => void health.refetch()}>
-          {t('voice.page.reload')}
-        </Button>
+        <Space>
+          <Button icon={<MessageOutlined />} onClick={() => navigate('/voice-inbox')}>
+            {t('voice.inbox.openInbox')}
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={() => void health.refetch()}>
+            {t('voice.page.reload')}
+          </Button>
+        </Space>
       </Space>
 
       <Alert

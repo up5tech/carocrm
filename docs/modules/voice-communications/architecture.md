@@ -41,6 +41,10 @@ optional integrations are detected by a metadata marker, never by an import.
 | Channel policy | `voice-policy.service.ts` | The single send-eligibility decision, with explainable refusals. |
 | Health / navigation | `*-module-health.service.ts`, `*-navigation.service.ts` | Facts read from the running platform; ACL-scoped menu visibility. |
 | HTTP | `voice-communications.controller.ts`, `voice-webhook.controller.ts` | Static admin prefix and public provider prefix. |
+| SPA — inbox | `apps/web/src/pages/VoiceInboxPage.tsx` | Conversation list + timeline + composer + call log; click-to-call; snippet picker; assignment, status, handoff. |
+| SPA — call detail | `apps/web/src/components/VoiceCallDetail.tsx` | Recordings (authorized playback) and transcript / AI draft with review state. |
+| SPA — record panel | `apps/web/src/components/CommunicationsPanel.tsx` | Communications panel on Account/Contact/Lead/Opportunity/Case detail; lazy call expansion. |
+| SPA — incoming call | `apps/web/src/components/IncomingCallBanner.tsx` | Polls `action/calls/incoming`; number only; internal shell only (never the portal). |
 | Persistence | `database/migrations/051…054_phase19_voice_communications*.sql` | Fifteen tables, additive only. |
 
 ## 3. Data flow
@@ -57,6 +61,18 @@ body ceiling → replay window → adapter signature → `voice_webhook_events` 
 
 The HTTP response is `202` with the receipt id and a duplicate flag. Nothing about the CRM is
 disclosed to the provider.
+
+## 3.1 Surface map (routes and navigation)
+
+| Route | Component | Gate (server-side) |
+| --- | --- | --- |
+| `/voice-inbox` | `VoiceInboxPage` | `CommunicationConversation:read` (nav seed `voiceInbox`) |
+| `/voice-communications` | `VoiceCommunicationsPage` (diagnostics) | `VoiceProviderAccount:read` |
+| record detail panel | `CommunicationsPanel` | the record's own read level via the panel API |
+
+The SPA never decides access: every list is the server's ACL-filtered answer, and a refused action is
+rendered with the server's own reason (`ApiError.message`). Media playback is fetched as bytes from
+the API, so no provider URL or token ever reaches the browser.
 
 ## 4. Persistence choices
 

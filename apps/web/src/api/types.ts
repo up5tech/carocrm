@@ -1905,3 +1905,173 @@ export interface VoiceWebhookEventList {
   readonly list: readonly VoiceWebhookEventView[];
   readonly total: number;
 }
+
+/**
+ * Phase 19-VC.12–19-VC.17 — the inbox, composer, media, transcript and panel contracts the SPA
+ * renders. Presentation only: every list is the server's, and no type here adds an authorization
+ * path. Internal notes are surfaced with a flag so the UI can badge them, never as customer text.
+ */
+export interface VoiceConversationView {
+  readonly id: string;
+  readonly accountKey: string;
+  readonly channel: string;
+  readonly status: string;
+  readonly subject: string | null;
+  readonly externalThreadId: string | null;
+  readonly unreadCount: number;
+  readonly assignedUserId: string | null;
+  readonly assignedTeamId: string | null;
+  readonly lastActivityAt: string | null;
+  readonly lastInboundAt: string | null;
+  readonly relatedEntityType: string | null;
+  readonly relatedEntityId: string | null;
+  readonly caseId: string | null;
+  readonly archived: boolean;
+}
+
+export interface VoiceInboxList {
+  readonly list: readonly VoiceConversationView[];
+  readonly total: number;
+}
+
+export interface VoiceTimelineEntry {
+  readonly kind: 'message' | 'event';
+  readonly id: string;
+  readonly at: string;
+  readonly message?: {
+    readonly direction: 'inbound' | 'outbound';
+    readonly body: string | null;
+    readonly state: string;
+    readonly isInternalNote: boolean;
+    readonly authorUserId: string | null;
+    readonly channel: string;
+  };
+  readonly event?: {
+    readonly kind: string;
+    readonly actorUserId: string | null;
+    readonly actorType: string;
+    readonly fromValue: string | null;
+    readonly toValue: string | null;
+    readonly detail: string | null;
+  };
+}
+
+export interface VoiceConversationHistoryEntry {
+  readonly id: string;
+  readonly kind: string;
+  readonly actorUserId: string | null;
+  readonly actorType: string;
+  readonly fromValue: string | null;
+  readonly toValue: string | null;
+  readonly detail: string | null;
+  readonly createdAt: string;
+}
+
+export interface VoiceSnippetView {
+  readonly id: string;
+  readonly key: string;
+  readonly name: string;
+  readonly channel: 'sms' | 'mms' | 'whatsapp' | 'any';
+  readonly body: string;
+  readonly placeholders: readonly string[];
+  readonly active: boolean;
+}
+
+export interface VoiceSnippetRender {
+  readonly body: string;
+  readonly segments: {
+    readonly encoding: 'GSM-7' | 'UCS-2';
+    readonly segments: number;
+    readonly characters: number;
+    readonly charsPerSegment: number;
+  };
+}
+
+export interface VoiceComposerValidation {
+  readonly ok: boolean;
+  readonly segments: VoiceSnippetRender['segments'];
+  readonly warnings: readonly string[];
+}
+
+export interface VoiceMessageView {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly channel: string;
+  readonly direction: 'inbound' | 'outbound';
+  readonly body: string | null;
+  readonly state: string;
+  readonly providerMessageId: string | null;
+  readonly isInternalNote: boolean;
+  readonly templateKey: string | null;
+  readonly failureCategory: string | null;
+  readonly sentAt: string | null;
+  readonly deliveredAt: string | null;
+  readonly createdAt: string;
+}
+
+export interface VoiceCallSessionView {
+  readonly id: string;
+  readonly accountKey: string;
+  readonly direction: 'inbound' | 'outbound';
+  readonly state: string;
+  readonly providerCallId: string | null;
+  readonly fromNumber: string | null;
+  readonly toNumber: string | null;
+  readonly fromDisplay: string | null;
+  readonly toDisplay: string | null;
+  readonly startedAt: string | null;
+  readonly answeredAt: string | null;
+  readonly endedAt: string | null;
+  readonly durationSeconds: number | null;
+  readonly result: string | null;
+  readonly failureCategory: string | null;
+  readonly assignedUserId: string | null;
+  readonly activityId: string | null;
+  readonly createdAt: string;
+}
+
+export interface VoiceMediaView {
+  readonly id: string;
+  readonly kind: string;
+  readonly messageId: string | null;
+  readonly callSessionId: string | null;
+  readonly providerRef: string | null;
+  readonly mimeType: string | null;
+  readonly sizeBytes: number | null;
+  readonly durationSeconds: number | null;
+  readonly scanStatus: string;
+  readonly retentionAt: string | null;
+  readonly createdAt: string;
+}
+
+export interface VoiceTranscriptView {
+  readonly id: string;
+  readonly callSessionId: string;
+  readonly state: 'pending' | 'ready' | 'failed';
+  readonly language: string | null;
+  readonly segments: readonly {
+    readonly startMs: number;
+    readonly endMs: number | null;
+    readonly speaker: string | null;
+    readonly text: string;
+  }[];
+  readonly text: string | null;
+  readonly ai: {
+    readonly summary: string | null;
+    readonly topics: readonly string[];
+    readonly actions: readonly string[];
+    readonly suggestedReply: string | null;
+    readonly reviewStatus: 'none' | 'pending' | 'approved' | 'dismissed';
+    readonly connectionKey: string | null;
+    readonly model: string | null;
+    readonly generatedAt: string | null;
+  };
+  readonly error: string | null;
+}
+
+export interface VoiceRecordPanelView {
+  readonly record: { readonly entityType: string; readonly id: string };
+  readonly conversations: readonly VoiceConversationView[];
+  readonly calls: readonly VoiceCallSessionView[];
+  readonly total: { readonly conversations: number; readonly calls: number };
+}

@@ -1,7 +1,7 @@
 # Voice & Communications — compatibility and behavior reference
 
 > Phase 19-VC.0 deliverable (`PLAN_Phase_19_Voice_Communications.md` §1.3, §16).
-> Status: **19-VC.0–19-VC.17 delivered** (server side; dedicated screens remain a follow-up).
+> Status: **19-VC.0–19-VC.17 delivered** (API + SPA surfaces).
 > Canonical module name: `VoiceCommunications` (no `Ua` prefix). API prefix:
 > `/api/v1/VoiceCommunications`; webhook prefix: `/api/v1/integrations/voice-communications`.
 
@@ -18,18 +18,20 @@ The product behavior is CRM-oriented telephony and one-to-one messaging, not a P
 
 | Behavior | Reference | Implementation status |
 | --- | --- | --- |
-| Click-to-call from a phone field | EspoCRM VoIP Integration overview | API implemented (19-VC.8); the phone-field button is not built (no SPA screens in this phase) |
-| Incoming-call popup with caller context | EspoCRM VoIP Integration overview | Server side implemented (19-VC.9): notification row + ACL-filtered context; the popup component is not built |
+| Click-to-call from a phone field | EspoCRM VoIP Integration overview | Implemented (19-VC.8): a Calls tab on `/voice-inbox` places a call with a client-generated idempotency key; a per-field button on the record form is not built |
+| Incoming-call popup with caller context | EspoCRM VoIP Integration overview | Implemented (19-VC.9): a banner polls `action/calls/incoming` and shows only the server-addressed calls, number only |
 | Call logging as an Activity | EspoCRM Activities and Calendar | Implemented (19-VC.7): one `Call` Activity per session, created/updated through the entity service |
 | SMS/MMS send + delivery callbacks | Twilio Message resource docs | SMS implemented through the simulator (19-VC.10); MMS not implemented; live adapter pending |
 | WhatsApp Business templates and service window | Twilio WhatsApp API / templates docs | Window policy (19-VC.6) + template approval/variables (19-VC.11), simulator only |
 | Provider webhook signature validation | Twilio webhook security docs | Contract + fake HMAC adapter (19-VC.5); provider-specific validators per adapter |
-| Unified inbox: list, timeline, read state, status | EspoCRM / general CRM inbox behavior | Implemented as an API (19-VC.12); no dedicated SPA screen |
+| Unified inbox: list, timeline, read state, status | EspoCRM / general CRM inbox behavior | Implemented (19-VC.12): `/voice-inbox` with filters, merged timeline, composer, history drawer |
+
+
 | Conversation assignment and Service Desk handoff | EspoCRM assignment + Service Desk case flow | Implemented (19-VC.13): user/team assignment with history, idempotent Case handoff |
 | One-to-one service snippets and composer checks | EspoCRM email templates (one-to-one use) | Implemented (19-VC.14): local snippets, strict placeholders, segment hints; no campaign model |
 | Call recording metadata, playback and retention | Twilio recording docs | Implemented with the simulator (19-VC.15): reference, SSRF-checked private fetch, ACL playback, retention sweep |
 | Transcript and AI summary / suggested reply | Twilio transcription + AI summarization | Implemented with the simulator and the fake AI adapter (19-VC.16); draft-only, opt-in |
-| Communications panel on a CRM record | EspoCRM stream/panels | API implemented (19-VC.17): record-ACL-aware conversations + calls, touchpoints for Customer Success |
+| Communications panel on a CRM record | EspoCRM stream/panels | Implemented (19-VC.17): the panel renders on Account/Contact/Lead/Opportunity/Case detail, ACL-aware, nothing rendered without history |
 
 This is a clean-room reimplementation. No EspoCRM PHP class, frontend asset, icon, translation or
 branding is copied. Provider behavior is treated as a versioned external contract; each adapter
@@ -103,13 +105,15 @@ later sub-phase:
 - **Recording and transcription are off by default and must be enabled explicitly.** With the flag
   off, a recording callback registers nothing. Transcription requires a provider adapter that offers
   `fetchTranscript`; AI enrichment additionally requires an approved AI gateway connection.
-- **No dedicated SPA screens** for the inbox, composer, call popup, media player or CRM panel. Every
-  behavior is reachable through the API and is exercised by the integration suite; the screens are a
-  separate UI phase, not a missing backend capability.
-- **The Portal is not extended.** There is no customer-facing conversation surface: adding one
+- **The Portal is still not extended.** There is no customer-facing conversation surface: adding one
   without an explicit product requirement would create a second ACL surface whose internal-note
-  exclusion would have to be re-proved. The inbox API never exposes internal notes to a
+  exclusion would have to be re-proved. The internal inbox never exposes internal notes to a
   non-agent caller, and any future portal projection must filter `is_internal_note = false`.
+- **Click-to-call is not wired to phone fields**. The Calls tab accepts any number, but a button
+  beside a Contact's phone (with its record link pre-filled) is a field-renderer change that belongs
+  with the form work; the API already accepts `relatedEntityType`/`relatedEntityId`.
+- **The inbox polls.** The platform has no realtime gateway (audit §2), so the banner and lists use
+  10–30 s refetch intervals instead of a push channel.
 - **Customer Success consumes events, not records.** `voiceCommunications.*` events carry ids and
   verbs only (no bodies), and the panel touchpoint endpoint returns counts and recency. Neither
   creates a second Activity, so the "no duplicate Activities" rule holds by construction.

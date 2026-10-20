@@ -59,7 +59,6 @@ import type {
   PortalRoleRow,
   PortalRow,
   PreferenceItem,
-  SetupChecklistView,
   Principal,
   ProcessCatalog,
   ProcessDefinitionShape,
@@ -105,13 +104,26 @@ import type {
   SettingsDocument,
   SettingsPatch,
   SettingsView,
+  SetupChecklistView,
   TeamRow,
   UserAccountType,
   UserInput,
   UserRow,
+  VoiceCallSessionView,
   VoiceCommunicationsHealthView,
   VoiceCommunicationsSettingsView,
+  VoiceComposerValidation,
+  VoiceConversationHistoryEntry,
+  VoiceConversationView,
+  VoiceInboxList,
+  VoiceMediaView,
+  VoiceMessageView,
   VoiceProviderAccountView,
+  VoiceRecordPanelView,
+  VoiceSnippetRender,
+  VoiceSnippetView,
+  VoiceTimelineEntry,
+  VoiceTranscriptView,
   VoiceWebhookEventList,
   WebhookDeliveryRow,
   WebhookEndpointRow,
@@ -1294,4 +1306,94 @@ export const api = {
     request<{ list: VoiceProviderAccountView[] }>('/VoiceCommunications/action/accounts'),
   voiceCommunicationsWebhookEvents: (limit = 25) =>
     request<VoiceWebhookEventList>(`/VoiceCommunications/action/webhook-events${simpleQuery({ limit })}`),
+
+  // Phase 19-VC.12–19-VC.17 — the agent workspace. Every method maps to one documented action; the
+  // server owns ACL, policy and idempotency, so the UI never decides who may do what.
+  voiceInbox: (params: { status?: string; channel?: string; assignee?: string; limit?: number; offset?: number } = {}) =>
+    request<VoiceInboxList>(`/VoiceCommunications/action/inbox${simpleQuery(params)}`),
+  voiceConversationTimeline: (id: string, params: { limit?: number; offset?: number } = {}) =>
+    request<{ entries: VoiceTimelineEntry[] }>(
+      `/VoiceCommunications/action/conversations/${encodeURIComponent(id)}/timeline${simpleQuery(params)}`,
+    ),
+  voiceConversationHistory: (id: string) =>
+    request<{ list: VoiceConversationHistoryEntry[] }>(
+      `/VoiceCommunications/action/conversations/${encodeURIComponent(id)}/history`,
+    ),
+  voiceMarkConversationRead: (id: string) =>
+    request<{ unreadCount: number }>(`/VoiceCommunications/action/conversations/${encodeURIComponent(id)}/read`, post({})),
+  voiceSetConversationStatus: (id: string, status: string, reason?: string) =>
+    request<VoiceConversationView>(
+      `/VoiceCommunications/action/conversations/${encodeURIComponent(id)}/status`,
+      post({ status, ...(reason !== undefined ? { reason } : {}) }),
+    ),
+  voiceAssignConversation: (id: string, input: { userId?: string | null; teamId?: string | null; reason?: string }) =>
+    request<VoiceConversationView>(
+      `/VoiceCommunications/action/conversations/${encodeURIComponent(id)}/assign`,
+      post(input),
+    ),
+  voiceHandoffConversation: (id: string, input: { subject: string; description: string; reason?: string }) =>
+    request<{ caseId: string; duplicate: boolean }>(
+      `/VoiceCommunications/action/conversations/${encodeURIComponent(id)}/case/handoff`,
+      post(input),
+    ),
+  voiceLinkConversationRecord: (id: string, input: { entityType: string; entityId: string }) =>
+    request<{ linked: boolean }>(
+      `/VoiceCommunications/action/conversations/${encodeURIComponent(id)}/link-record`,
+      post(input),
+    ),
+  voiceSnippets: (channel?: string) =>
+    request<{ list: VoiceSnippetView[] }>(`/VoiceCommunications/action/snippets${simpleQuery({ channel })}`),
+  voiceRenderSnippet: (key: string, variables: Record<string, string>) =>
+    request<VoiceSnippetRender>(
+      `/VoiceCommunications/action/snippets/${encodeURIComponent(key)}/render`,
+      post({ variables }),
+    ),
+  voiceValidateComposer: (channel: 'sms' | 'mms' | 'whatsapp', body: string) =>
+    request<VoiceComposerValidation>('/VoiceCommunications/action/composer/validate', post({ channel, body })),
+  voiceSendMessage: (input: {
+    channel: 'sms' | 'mms' | 'whatsapp';
+    conversationId: string;
+    body: string;
+    idempotencyKey: string;
+    isInternalNote?: boolean;
+    templateKey?: string;
+  }) => request<{ message: VoiceMessageView; duplicate: boolean }>('/VoiceCommunications/action/messages/send', post(input)),
+  voiceInitiateCall: (input: { to: string; idempotencyKey: string; relatedEntityType?: string; relatedEntityId?: string }) =>
+    request<{ session: VoiceCallSessionView; duplicate: boolean }>(
+      '/VoiceCommunications/action/calls/initiate',
+      post(input),
+    ),
+  voiceCalls: (params: { state?: string; limit?: number; offset?: number } = {}) =>
+    request<{ list: VoiceCallSessionView[] }>(`/VoiceCommunications/action/calls${simpleQuery(params)}`),
+  voiceIncomingCalls: () =>
+    request<{ list: VoiceCallSessionView[] }>('/VoiceCommunications/action/calls/incoming'),
+  voiceCallMedia: (callId: string) =>
+    request<{ list: VoiceMediaView[] }>(`/VoiceCommunications/action/calls/${encodeURIComponent(callId)}/media`),
+  voiceMediaPlayback: (mediaId: string) =>
+    request<{ contentType: string; filename: string; dataBase64: string }>(
+      `/VoiceCommunications/action/media/${encodeURIComponent(mediaId)}/playback`,
+    ),
+  voiceCallTranscript: (callId: string) =>
+    request<{ transcript: VoiceTranscriptView | null }>(
+      `/VoiceCommunications/action/calls/${encodeURIComponent(callId)}/transcript`,
+    ),
+  voiceRequestTranscript: (callId: string) =>
+    request<VoiceTranscriptView>(
+      `/VoiceCommunications/action/calls/${encodeURIComponent(callId)}/transcript/request`,
+      post({}),
+    ),
+  voiceEnrichTranscript: (callId: string) =>
+    request<VoiceTranscriptView>(
+      `/VoiceCommunications/action/calls/${encodeURIComponent(callId)}/transcript/enrich`,
+      post({}),
+    ),
+  voiceReviewTranscript: (callId: string, status: 'approved' | 'dismissed') =>
+    request<VoiceTranscriptView>(
+      `/VoiceCommunications/action/calls/${encodeURIComponent(callId)}/transcript/review`,
+      post({ status }),
+    ),
+  voiceRecordPanel: (entityType: string, entityId: string, params: { limit?: number; offset?: number } = {}) =>
+    request<VoiceRecordPanelView>(
+      `/VoiceCommunications/action/panels/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}${simpleQuery(params)}`,
+    ),
 };

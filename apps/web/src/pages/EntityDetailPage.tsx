@@ -9,6 +9,7 @@ import { CampaignLifecycleActions } from '../components/CampaignLifecycleActions
 import { CaseConversation } from '../components/CaseConversation.js';
 import { CaseLifecycleActions } from '../components/CaseLifecycleActions.js';
 import { CaseQueueWorkload } from '../components/CaseQueueWorkload.js';
+import { CommunicationsPanel } from '../components/CommunicationsPanel.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
 import { PortalCaseConversation } from '../components/PortalCaseConversation.js';
@@ -338,6 +339,12 @@ export function EntityDetailPage() {
             />
           );
         })}
+
+        {/* Phase 19-VC.17 — communication history in the record's own context. The panel asks the
+            server for this record; it renders nothing when the record is unreadable or has no
+            history, and it never loads bodies until a call is opened. Portal users get no panel:
+            customer-facing surfaces stay out of scope (see the compatibility doc). */}
+        {base !== '/portal' ? <CommunicationsPanel entityType={entity} entityId={id} /> : null}
 
         {/* Phase 19-SD.6 — a Case gets the visibility-aware conversation panel: an explicit public /
             internal composer and a timeline that badges every entry's visibility. SD.11 gives the

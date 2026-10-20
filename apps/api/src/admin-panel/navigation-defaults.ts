@@ -62,9 +62,19 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     inQuickSearch: true,
     permission: { entity: 'AIAgent', action: 'read' },
   },
-  // Phase 19-VC: the module's records are dedicated tables, not metadata entities, so the page is
-  // gated on the same synthetic capability its admin API asserts (`VoiceProviderAccount:read`).
-  // The record surfaces (calls, inbox) join this page in 19-VC.9/19-VC.12.
+  // Phase 19-VC: the module's records are dedicated tables, not metadata entities, so each page is
+  // gated on the same synthetic capability its API asserts. The inbox needs the conversation
+  // capability (`CommunicationConversation:read`); diagnostics need `VoiceProviderAccount:read`.
+  {
+    key: 'voiceInbox',
+    kind: 'page',
+    route: '/voice-inbox',
+    labelKey: 'voice.nav.inbox',
+    icon: 'MessageOutlined',
+    order: 77,
+    inQuickSearch: true,
+    permission: { entity: 'CommunicationConversation', action: 'read' },
+  },
   {
     key: 'voiceCommunications',
     kind: 'page',

@@ -15,6 +15,7 @@ import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 import { navAccent } from '../theme.js';
 import { CommandPalette } from './CommandPalette.js';
 import { navIcon } from './entityIcons.js';
+import { IncomingCallBanner } from './IncomingCallBanner.js';
 
 const { Sider, Content, Footer } = Layout;
 
@@ -224,6 +225,9 @@ function InternalShell({ children }: { children: ReactNode }) {
           <Content className="carocrm-content">
             {/* Screen-reader announcements for moves that happen by keyboard in the settings tabs. */}
             <span id="carocrm-live-region" className="carocrm-live-region" role="status" aria-live="polite" />
+            {/* Phase 19-VC.9: only the calls the server addressed to this user appear, and only here —
+                the portal shell has no internal call surface at all. */}
+            <IncomingCallBanner />
             {children}
           </Content>
           <Footer className="carocrm-footer">
