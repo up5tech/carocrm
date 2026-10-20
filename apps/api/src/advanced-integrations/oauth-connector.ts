@@ -44,6 +44,13 @@ export interface OAuthExchangeContext {
   /** The PKCE verifier, when the flow used one. */
   readonly codeVerifier: string | null;
   readonly scopes: readonly string[];
+  /**
+   * The connection's OAuth client secret.
+   *
+   * It comes from the credential vault, so it is per connection: two connections of one provider
+   * never share a secret, and the platform never holds a deployment-wide client secret.
+   */
+  readonly clientSecret: string | null;
 }
 
 /** The provider's answer to a token request. */
@@ -65,6 +72,8 @@ export interface OAuthRefreshContext {
   readonly providerKey: string;
   readonly refreshToken: string;
   readonly scopes: readonly string[];
+  /** The connection's OAuth client secret, from the credential vault. */
+  readonly clientSecret: string | null;
 }
 
 export interface OAuthRevokeContext {
@@ -72,6 +81,8 @@ export interface OAuthRevokeContext {
   readonly providerKey: string;
   readonly accessToken: string | null;
   readonly refreshToken: string | null;
+  /** The connection's OAuth client secret, from the credential vault. */
+  readonly clientSecret: string | null;
 }
 
 /**

@@ -1,12 +1,13 @@
 # Advanced Integrations — compatibility and behavior reference
 
 > Phase 19-INT.0 deliverable (`PLAN_Phase_19_Advanced_Integrations.md` §3.3, §4.2, §19 `19-INT.0`).
-> Status: **audit complete; no connector implemented**.
+> Status: **audit complete; the control plane and nine connectors are implemented (19-INT.0–19-INT.24).**
 > Canonical module name: `AdvancedIntegrations` (no `Ua` prefix). API prefix:
-> `/api/v1/AdvancedIntegrations`; proposed webhook prefix:
+> `/api/v1/AdvancedIntegrations`; webhook prefix:
 > `/api/v1/integrations/advanced-integrations`.
 > Repository audit: `docs/implementation/advanced-integrations-audit.md`.
 > Provider matrix: `docs/compatibility/advanced-integrations/provider-matrix.md`.
+> Per-connector contracts: `docs/compatibility/advanced-integrations/providers.md`.
 
 This document records the external behavior this module reimplements, the decisions taken against
 the repository as it actually exists, and the compatibility limits a deploying organization must
@@ -25,17 +26,17 @@ CRM records and keeping them in sync — not a general-purpose integration platf
 | Browse a registry of supported providers, their capabilities and setup requirements | Plan §1.1.1 | **Delivered (19-INT.3)** — `GET /api/v1/AdvancedIntegrations/action/providers` |
 | Create, validate, enable, pause, reconnect, rotate and revoke a connection | Plan §1.1.2 | **Delivered (19-INT.4)** — the state machine, the vault and the lifecycle service |
 | Organization-level and user-level connection ownership | Plan §1.1.3 | **Delivered (19-INT.4)** — organization-level is the default; user-level is supported by the data model (feature contract §4) |
-| OAuth 2.0 authorization, refresh, minimum-scope consent, expiry, revocation, reconnect | Plan §1.1.4 | **Delivered (19-INT.5)** — single-use hashed state, PKCE, allowlisted redirect, scope verification, per-connection refresh lock. Still **no connector is registered**, so no provider can use it yet |
-| One-way and two-way sync per supported object | Plan §1.1.5 | Not started (19-INT.9) |
-| Map CRM entities and fields to provider objects, with transformations, defaults and filters | Plan §1.1.6 | Not started (19-INT.8) |
-| Initial full sync, then incremental/delta sync where the provider supports it | Plan §1.1.7 | Not started (19-INT.9) |
-| Queue inbound and outbound changes asynchronously with rate limits, bounded retries, backoff, idempotency and dead letters | Plan §1.1.8 | Platform job queue is reused; dead letters, provider rate limits and circuit breaking are **new** (audit §2) |
-| Detect duplicates and conflicts without silently overwriting CRM data | Plan §1.1.9 | Not started (19-INT.10) |
-| Receive provider webhooks through a secure endpoint with signature validation, replay protection, deduplication and fast acknowledgement | Plan §1.1.10 | Not started (19-INT.12). No generic ingress exists today (audit §1.1) |
-| Inspect connection health, sync lag, error rates, quotas, next runs and webhook failures | Plan §1.1.11 | Partly delivered — the module health endpoint exists (19-INT.2); sync lag, quotas and webhook failures arrive with 19-INT.14. **No metrics facility exists** (audit §1.1) |
-| Keep a redacted audit trail of credential, configuration, sync, conflict and replay actions | Plan §1.1.12 | Kernel audit hook is reused; module-level actions need explicit rows (audit §2) |
-| Use connector-specific integration points with the named providers by delivery tier | Plan §1.1.13 | Not started; see the provider matrix |
-| Add future connector packages through a documented adapter contract | Plan §1.1.14 | The **capability declaration** and the registry contract landed in 19-INT.3; the full typed port lands in 19-INT.6 |
+| OAuth 2.0 authorization, refresh, minimum-scope consent, expiry, revocation, reconnect | Plan §1.1.4 | **Delivered (19-INT.5)** — single-use hashed state, PKCE, allowlisted redirect, scope verification, per-connection refresh lock. **Seven OAuth connectors are registered** (19-INT.16–19-INT.23) |
+| One-way and two-way sync per supported object | Plan §1.1.5 | **Delivered (19-INT.9)** — the orchestrator, with per-connector direction declarations |
+| Map CRM entities and fields to provider objects, with transformations, defaults and filters | Plan §1.1.6 | **Delivered (19-INT.8)** — versioned mappings, an allowlisted transformation set, a dry-run preview |
+| Initial full sync, then incremental/delta sync where the provider supports it | Plan §1.1.7 | **Delivered (19-INT.9)** — checkpoints, and a controlled resync when a provider's cursor expires |
+| Queue inbound and outbound changes asynchronously with rate limits, bounded retries, backoff, idempotency and dead letters | Plan §1.1.8 | **Delivered (19-INT.9, 19-INT.11)** — the platform job queue, dead letters, provider rate limits and circuit breaking |
+| Detect duplicates and conflicts without silently overwriting CRM data | Plan §1.1.9 | **Delivered (19-INT.10)** — the four policies, per-field authority, an explicit resolution |
+| Receive provider webhooks through a secure endpoint with signature validation, replay protection, deduplication and fast acknowledgement | Plan §1.1.10 | **Delivered (19-INT.12)** — one shared ingress; six connectors verify their own provider's scheme (19-INT.16–19-INT.23) |
+| Inspect connection health, sync lag, error rates, quotas, next runs and webhook failures | Plan §1.1.11 | **Delivered (19-INT.14)** — the catalog, the connection detail and the run drawer. **No metrics facility exists** (audit §1.1) |
+| Keep a redacted audit trail of credential, configuration, sync, conflict and replay actions | Plan §1.1.12 | **Partly delivered** — the kernel audit hook is reused; the provider event trail lives in the Sales provider-event log and the enrichment decision rows |
+| Use connector-specific integration points with the named providers by delivery tier | Plan §1.1.13 | **Delivered for nine connectors** — Google Workspace, Microsoft 365, Zoom, Stripe, Mailchimp, Meta Lead Ads, Shopify, QuickBooks Online, generic REST. See `providers.md` |
+| Add future connector packages through a documented adapter contract | Plan §1.1.14 | **Delivered (19-INT.3, 19-INT.6)** — the versioned capability declaration, the typed adapter port and a reusable conformance suite |
 
 Reference pages (unchanged from the plan §3.1/§3.2): EspoCRM extension catalog, EspoCRM Google /
 Outlook / Zoom / Stripe / Mailchimp integrations, EspoCRM webhook administration; Google Calendar
@@ -132,14 +133,16 @@ documentation is reviewed at that connector's audit phase.
 | Artifact | Status |
 | --- | --- |
 | `docs/compatibility/advanced-integrations.md` | **This document** |
-| `docs/compatibility/advanced-integrations/provider-matrix.md` | **Delivered** (initial version) |
-| `docs/compatibility/advanced-integrations/providers.md` | Pending — authored per connector in 19-INT.16/17/18/19 |
-| `docs/compatibility/advanced-integrations/oauth-scopes.md` | Pending — the OAuth **mechanism** is delivered (19-INT.5, ADR 0001–0004); the per-provider scope lists need each vendor's current documentation |
-| `docs/compatibility/advanced-integrations/sync-semantics.md` | Pending — the **consistency contract** is delivered (feature contract §5.2–§5.7); the per-provider pagination/cursor facts need each vendor's current documentation |
-| `docs/compatibility/advanced-integrations/webhook-security.md` | Pending — requires per-provider signature schemes; the shared ingress contract lands in 19-INT.12 |
+| `docs/compatibility/advanced-integrations/provider-matrix.md` | **Delivered** (updated by 19-INT.16–19-INT.24) |
+| `docs/compatibility/advanced-integrations/providers.md` | **Delivered** (19-INT.16–19-INT.24) — the per-connector contract of the nine delivered connectors |
+| `docs/compatibility/advanced-integrations/oauth-scopes.md` | **Delivered** (19-INT.16–19-INT.24) — the mechanism and the per-provider scope sets, with the honesty clause that they are the implementation's pins |
+| `docs/compatibility/advanced-integrations/sync-semantics.md` | **Delivered** (19-INT.16–19-INT.24) — the engine's contract and each provider's pagination and cursor facts |
+| `docs/compatibility/advanced-integrations/webhook-security.md` | **Delivered** (19-INT.16–19-INT.24) — the shared ingress and each provider's signature scheme, including Mailchimp's weak vendor primitive |
 
-A placeholder that asserts unverified scope lists would be worse than an honest gap, so these
-remain unwritten until they can be correct.
+The last four artifacts were deliberately left unwritten until a connector existed. They are now
+written — from the implementation, not from a wish — and each carries the same honesty clause:
+**no connector was verified against a live vendor account**, so every provider-side fact is the
+implementation's own pin.
 
 ---
 
@@ -182,5 +185,24 @@ remain unwritten until they can be correct.
 **Colour is never the only signal** anywhere in the module: the status rail is always paired with a
 text label (AGENTS.md §8, plan §15.6).
 
-**Still not delivered, and deliberately so:** no provider connector and no cross-module contract
-routing. Those are 19-INT.16 and 19-INT.25.
+### 19-INT.16–19-INT.24 — the connectors
+
+| Area | Delivered |
+| --- | --- |
+| The connector kit | One JSON-over-HTTP path, one OAuth 2.0 flow, one base class and one signature library for nine connectors. The platform's timeout, no-redirect rule, address check, payload ceiling and normalized errors are inherited, not re-implemented. |
+| Registration | `ConnectorRegistrar` registers nine connectors in code. A connector that breaks the conformance suite stops the module from loading. The fake provider is registered outside production only. |
+| Google Workspace | Calendar and Contacts, with the private-event policy enforced in the connector and an expired `syncToken` reported as a controlled resync. |
+| Microsoft 365 | Outlook calendar and contacts over Graph delta queries, a re-validated next link, a `403` translated into an actionable scope failure, and an explicit subscription renewal. |
+| Zoom | Meetings, with a create that **reconciles** through a `tracking_fields` marker, so a retry after an ambiguous timeout does not create a second meeting. Recordings are not implemented. |
+| Stripe | Read-only. A payment event is **claimed** by the Sales bridge and applied through `PaymentService.ingestProviderEvent`; the generic mapping path cannot write a payment. No charge can be created through this connector. |
+| Mailchimp | Audience members and campaigns. A resubscribe without consent evidence is refused, and an external unsubscribe, complaint or bounce is routed to the consent service with the provider's event id. |
+| Meta Lead Ads | Lead form submissions, deduplicated by the provider's submission id, with the consent provenance carried and never inferred. |
+| Shopify | The first ecommerce provider: orders, customers and products, inbound only, with the store's decimal money and a re-validated page link. |
+| QuickBooks Online | The first accounting provider: customers, invoices and payments, read-only, with the `LastUpdatedTime` watermark, the decimal money preserved and the sandbox as the default environment. |
+| Generic REST | A vetted endpoint: an allowlisted base URL, paths and methods, explicit response pointers, a bounded payload and an SSRF check at save time **and** at request time. Read-only, so no arbitrary outbound request is possible. |
+| Data enrichment | A bounded provider port, per-field opt-in, protected fields, a preview/accept/reject decision with full provenance, a daily quota and a cache. The profile and the decision rows are the module's own tables. |
+| Cross-module bridges | The Stripe payment bridge and the Mailchimp consent bridge claim a provider event for the domain that owns it. Both are optional, so a deployment without Sales or Marketing Automation still loads the module. |
+
+**Still not delivered, and deliberately so:** the observability, retention and threat-model work
+(19-INT.26), the end-to-end release evidence (19-INT.27), the cross-module contracts for the
+remaining modules (19-INT.25), and any verification against a live vendor account.

@@ -7,6 +7,7 @@ import { sql } from 'kysely';
 import { DatabaseService } from '../database/database.service.js';
 import { JobsService } from '../jobs/jobs.service.js';
 import type { NormalizedProviderEvent } from './connector-adapter.port.js';
+import { ConnectorEventHandlerRegistry } from './connector-event-handlers.js';
 import { ConnectorExecutor } from './connector-executor.service.js';
 import { MappingService } from './mapping.service.js';
 import { ProviderError, redactProviderError } from './provider-error.js';
@@ -46,6 +47,8 @@ export interface WebhookIngressResult {
   readonly eventCount: number;
   /** A stable reason code when the delivery was rejected. */
   readonly reason: string | null;
+  /** How many events a domain handler claimed, so the generic path did not apply them. */
+  readonly handledCount: number;
 }
 
 export interface WebhookIngressInput {
@@ -80,6 +83,7 @@ export class WebhookIngressService {
     @Inject(ConnectorExecutor) private readonly executor: ConnectorExecutor,
     @Inject(MappingService) private readonly mappings: MappingService,
     @Inject(SyncOrchestrator) private readonly orchestrator: SyncOrchestrator,
+    @Inject(ConnectorEventHandlerRegistry) private readonly handlers: ConnectorEventHandlerRegistry,
   ) {}
 
   /**
@@ -93,7 +97,7 @@ export class WebhookIngressService {
     if (connection === null) {
       // The endpoint is unknown. Nothing is recorded, so an attacker cannot use it to fill the
       // receipt table.
-      return { status: 'rejected', deliveryId: null, eventCount: 0, reason: 'unknown_endpoint' };
+      return { status: 'rejected', deliveryId: null, eventCount: 0, reason: 'unknown_endpoint', handledCount: 0 };
     }
 
     let events: readonly NormalizedProviderEvent[];
@@ -147,11 +151,12 @@ export class WebhookIngressService {
         errorDetail: redacted.detail,
         payload: null,
       });
-      return { status: 'rejected', deliveryId: null, eventCount: 0, reason: redacted.detail ?? redacted.code };
+      return { status: 'rejected', deliveryId: null, eventCount: 0, reason: redacted.detail ?? redacted.code, handledCount: 0 };
     }
 
     let accepted = 0;
     let duplicates = 0;
+    let handled = 0;
     for (const event of events) {
       const written = await this.writeReceipt({
         connectionId: connection.id,
@@ -169,6 +174,19 @@ export class WebhookIngressService {
         continue;
       }
       accepted += 1;
+      // A provider event that belongs to a domain contract is claimed by that domain's handler.
+      // The generic mapping path must not apply it as well.
+      const claimed = await this.handlers.dispatch({
+        providerKey: input.providerKey,
+        connectionId: connection.id,
+        deliveryId: event.deliveryId,
+        objectType: event.objectType,
+        eventType: event.eventType,
+        externalId: event.externalId,
+        fields: event.fields,
+        occurredAt: event.occurredAt,
+      });
+      if (claimed) handled += 1;
       await this.jobs.enqueue({
         job: WEBHOOK_PROCESS_JOB,
         data: {
@@ -179,14 +197,15 @@ export class WebhookIngressService {
           externalId: event.externalId,
           eventType: event.eventType,
           kind: input.kind,
+          handled: claimed,
         },
       });
     }
 
     if (accepted === 0 && duplicates > 0) {
-      return { status: 'duplicate', deliveryId: null, eventCount: events.length, reason: 'duplicate_delivery' };
+      return { status: 'duplicate', deliveryId: null, eventCount: events.length, reason: 'duplicate_delivery', handledCount: handled };
     }
-    return { status: 'accepted', deliveryId: null, eventCount: accepted, reason: null };
+    return { status: 'accepted', deliveryId: null, eventCount: accepted, reason: null, handledCount: handled };
   }
 
   /**
@@ -206,6 +225,14 @@ export class WebhookIngressService {
     objectType: string;
     externalId: string | null;
     eventType: string;
+    /**
+     * True when a domain handler already claimed the event.
+     *
+     * The generic mapping path is then **skipped**: a payment event belongs to the Sales domain
+     * service and a consent event to the consent service, and applying them here as well would
+     * bypass the invariants those services own.
+     */
+    handled?: boolean | undefined;
   }): Promise<{ readonly status: string; readonly outcome: string }> {
     const rows = await sql<{
       id: string;
@@ -224,6 +251,10 @@ export class WebhookIngressService {
     }
     if (receipt.status === 'processed') {
       return { status: 'processed', outcome: 'already_processed' };
+    }
+    if (input.handled === true) {
+      await this.markDelivery(input.connectionId, input.deliveryId, 'processed', null);
+      return { status: 'processed', outcome: 'handled_by_domain' };
     }
 
     const mapping = await this.mappings.findActive(input.connectionId, input.objectType);

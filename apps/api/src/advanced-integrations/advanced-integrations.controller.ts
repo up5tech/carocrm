@@ -27,6 +27,9 @@ import {
   ConnectionPatchSchema,
   CredentialWriteSchema,
   EmptyBodySchema,
+  EnrichmentPreviewSchema,
+  EnrichmentProfileCreateSchema,
+  EnrichmentProfilePatchSchema,
   MappingCreateSchema,
   MappingPatchSchema,
   MappingPreviewSchema,
@@ -36,6 +39,7 @@ import {
   SyncRunSchema,
   WebhookProcessSchema,
 } from './dto/advanced-integrations-shapes.js';
+import { EnrichmentService } from './enrichment.service.js';
 import { ExternalLinkService } from './external-link.service.js';
 import { IntegrationRegistry } from './integration-registry.service.js';
 import { MappingService } from './mapping.service.js';
@@ -79,6 +83,7 @@ export class AdvancedIntegrationsController {
     @Inject(OutboundSyncService) private readonly outbound: OutboundSyncService,
     @Inject(ConnectionDetailService) private readonly details: ConnectionDetailService,
     @Inject(ConnectorExecutor) private readonly executor: ConnectorExecutor,
+    @Inject(EnrichmentService) private readonly enrichment: EnrichmentService,
     @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
@@ -408,6 +413,128 @@ export class AdvancedIntegrationsController {
   async listOutbound(@Param('id') id: string) {
     await this.permissions.assert('use');
     return { list: await this.outbound.listOperations(id) };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 19-INT.17 — provider subscription renewal
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Renew the provider's push subscriptions for a connection.
+   *
+   * A provider whose subscriptions expire (Microsoft Graph, for one) silently stops delivering, so
+   * the renewal is an explicit, operator-visible action rather than a side effect of a read.
+   */
+  @Post('action/connections/:id/renew-subscriptions')
+  async renewSubscriptions(@Param('id') id: string) {
+    await this.permissions.assert('connectionAdmin');
+    const connection = await this.connections.get(id);
+    const provider = this.registry.requireExecutable(connection.providerKey);
+    const adapter = provider.adapter;
+    if (adapter === null || adapter.renewSubscriptions === undefined) {
+      throw new ValidationError(`Provider "${connection.providerKey}" has no subscriptions to renew.`, {
+        providerKey: connection.providerKey,
+      });
+    }
+    return this.executor.call(id, async (context, current) => {
+      const renew = current.renewSubscriptions;
+      if (renew === undefined) {
+        throw new ValidationError(`Provider "${connection.providerKey}" has no subscriptions to renew.`, {
+          providerKey: connection.providerKey,
+        });
+      }
+      return renew.call(current, context);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 19-INT.24 — data enrichment
+  // ---------------------------------------------------------------------------
+
+  @Get('action/enrichment/profiles')
+  async listEnrichmentProfiles() {
+    await this.permissions.assert('use');
+    return { list: await this.enrichment.listProfiles() };
+  }
+
+  @Get('action/enrichment/profiles/:id')
+  async getEnrichmentProfile(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return this.enrichment.getProfile(id);
+  }
+
+  @Post('action/enrichment/profiles')
+  async createEnrichmentProfile(@Body() body: unknown) {
+    const input = parse(EnrichmentProfileCreateSchema, body);
+    return this.enrichment.createProfile({
+      providerKey: input.providerKey,
+      connectionId: input.connectionId,
+      name: input.name,
+      entityType: input.entityType,
+      allowedFields: input.allowedFields,
+      ...(input.protectedFields === undefined ? {} : { protectedFields: input.protectedFields }),
+      ...(input.dailyQuota === undefined ? {} : { dailyQuota: input.dailyQuota }),
+      ...(input.costPerCredit === undefined ? {} : { costPerCredit: input.costPerCredit }),
+      ...(input.cacheTtlSeconds === undefined ? {} : { cacheTtlSeconds: input.cacheTtlSeconds }),
+      ...(input.providerOptions === undefined ? {} : { providerOptions: input.providerOptions }),
+      ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+    });
+  }
+
+  @Patch('action/enrichment/profiles/:id')
+  async updateEnrichmentProfile(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(EnrichmentProfilePatchSchema, body);
+    return this.enrichment.updateProfile(id, {
+      ...(input.name === undefined ? {} : { name: input.name }),
+      ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+      ...(input.allowedFields === undefined ? {} : { allowedFields: input.allowedFields }),
+      ...(input.protectedFields === undefined ? {} : { protectedFields: input.protectedFields }),
+      ...(input.dailyQuota === undefined ? {} : { dailyQuota: input.dailyQuota }),
+      ...(input.costPerCredit === undefined ? {} : { costPerCredit: input.costPerCredit }),
+      ...(input.cacheTtlSeconds === undefined ? {} : { cacheTtlSeconds: input.cacheTtlSeconds }),
+      ...(input.providerOptions === undefined ? {} : { providerOptions: input.providerOptions }),
+    });
+  }
+
+  @Delete('action/enrichment/profiles/:id')
+  async deleteEnrichmentProfile(@Param('id') id: string) {
+    await this.enrichment.deleteProfile(id);
+    return { deleted: true };
+  }
+
+  /**
+   * Ask the provider about one record and hold the answer for a decision.
+   *
+   * Nothing is written to the CRM: the result is `pending` until somebody accepts it.
+   */
+  @Post('action/enrichment/profiles/:id/preview')
+  async previewEnrichment(@Param('id') id: string, @Body() body: unknown) {
+    const input = parse(EnrichmentPreviewSchema, body);
+    return this.enrichment.preview({ profileId: id, recordId: input.recordId });
+  }
+
+  /** Accept a pending result and write the accepted values to the CRM. */
+  @Post('action/enrichment/results/:id/accept')
+  async acceptEnrichment(@Param('id') id: string) {
+    return this.enrichment.accept(id);
+  }
+
+  /** Reject a pending result. Nothing is written to the CRM. */
+  @Post('action/enrichment/results/:id/reject')
+  async rejectEnrichment(@Param('id') id: string) {
+    return this.enrichment.reject(id);
+  }
+
+  @Get('action/enrichment/profiles/:id/results')
+  async listEnrichmentResults(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return { list: await this.enrichment.listResults(id) };
+  }
+
+  @Get('action/enrichment/profiles/:id/usage')
+  async enrichmentUsage(@Param('id') id: string) {
+    await this.permissions.assert('use');
+    return this.enrichment.usageToday(id);
   }
 
   // ---------------------------------------------------------------------------

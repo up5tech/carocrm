@@ -174,6 +174,63 @@ export const WebhookProcessSchema = z
     objectType: z.string().trim().min(1).max(64),
     externalId: z.string().trim().min(1).max(200).nullable(),
     eventType: z.string().trim().min(1).max(80),
+    /**
+     * True when a domain handler already claimed the event. The generic mapping path must then be
+     * skipped, or the event would be applied twice — once by the domain that owns it and once by
+     * the generic mapping.
+     */
+    handled: z.boolean().optional(),
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
+// 19-INT.17 / 19-INT.24
+// ---------------------------------------------------------------------------
+
+/** The fields a profile may opt in to. */
+const EnrichmentFieldSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z][A-Za-z0-9_]*$/, 'A field name starts with a letter and contains letters, digits or underscores.');
+
+export const EnrichmentProfileCreateSchema = z
+  .object({
+    providerKey: ProviderKeySchema,
+    connectionId: z.string().trim().min(1).max(64),
+    name: z.string().trim().min(1).max(120),
+    entityType: z.string().trim().min(1).max(64),
+    /** The fields the profile may ask the provider about. At least one. */
+    allowedFields: z.array(EnrichmentFieldSchema).min(1).max(50),
+    /** The fields the profile may never write, whatever the provider answers. */
+    protectedFields: z.array(EnrichmentFieldSchema).max(50).optional(),
+    /** The daily credit ceiling. Zero means no daily limit. */
+    dailyQuota: z.number().int().min(0).max(1_000_000).optional(),
+    costPerCredit: z.number().min(0).max(1_000_000).optional(),
+    cacheTtlSeconds: z.number().int().min(0).max(2_592_000).optional(),
+    /** The non-secret provider configuration: the endpoint and the field maps. */
+    providerOptions: z.record(z.string().trim().min(1).max(64), z.unknown()).optional(),
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+
+export const EnrichmentProfilePatchSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    enabled: z.boolean().optional(),
+    allowedFields: z.array(EnrichmentFieldSchema).min(1).max(50).optional(),
+    protectedFields: z.array(EnrichmentFieldSchema).max(50).optional(),
+    dailyQuota: z.number().int().min(0).max(1_000_000).optional(),
+    costPerCredit: z.number().min(0).max(1_000_000).optional(),
+    cacheTtlSeconds: z.number().int().min(0).max(2_592_000).optional(),
+    providerOptions: z.record(z.string().trim().min(1).max(64), z.unknown()).optional(),
+  })
+  .strict();
+
+export const EnrichmentPreviewSchema = z
+  .object({
+    recordId: z.string().trim().min(1).max(64),
   })
   .strict();
 

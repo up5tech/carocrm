@@ -6,17 +6,22 @@ import { AdvancedIntegrationsSettingsService } from './advanced-integrations-set
 import { ConflictService } from './conflict.service.js';
 import { ConnectionDetailService } from './connection-detail.service.js';
 import { ConnectionLifecycleService,CREDENTIAL_VAULT } from './connection-lifecycle.service.js';
+import { ConnectorEventHandlerRegistry } from './connector-event-handlers.js';
 import { ConnectorExecutor } from './connector-executor.service.js';
+import { ConnectorRegistrar } from './connector-registrar.service.js';
 import { EncryptedCredentialVault } from './credential-vault.js';
 import { DeadLetterService } from './dead-letter.service.js';
+import { ENRICHMENT_ADAPTERS,EnrichmentService } from './enrichment.service.js';
 import { ExternalLinkService } from './external-link.service.js';
 import { IntegrationRegistry } from './integration-registry.service.js';
+import { MailchimpConsentBridge } from './mailchimp-consent.bridge.js';
 import { MappingService } from './mapping.service.js';
 import { AdvancedIntegrationsOAuthCallbackController } from './oauth-callback.controller.js';
 import { OAuthFlowService } from './oauth-flow.service.js';
 import { OutboundSyncService } from './outbound-sync.service.js';
 import { RecordOriginService } from './record-origin.service.js';
 import { ProviderCircuitBreaker, ProviderRateLimiter } from './resilience.js';
+import { StripePaymentBridge } from './stripe-payment.bridge.js';
 import { SyncOrchestrator } from './sync-orchestrator.service.js';
 import { AdvancedIntegrationsWebhookController } from './webhook.controller.js';
 import { WebhookIngressService } from './webhook-ingress.service.js';
@@ -73,6 +78,23 @@ export const ADVANCED_INTEGRATIONS_PROVIDERS = [
   ConnectorExecutor,
   // 19-INT.14 — the connector catalog and the connection detail document.
   ConnectionDetailService,
+  // 19-INT.16–19-INT.24 — the delivered connectors. The registrar is code-registered, so a
+  // capability can never drift from the adapter that implements it.
+  ConnectorRegistrar,
+  // 19-INT.19 / 19-INT.20 — the cross-module bridges that claim a provider event for the domain
+  // that owns it. They are optional: a deployment without Sales or Marketing Automation still
+  // loads this module.
+  ConnectorEventHandlerRegistry,
+  StripePaymentBridge,
+  MailchimpConsentBridge,
+  // 19-INT.24 — the bounded enrichment service: profiles, preview, accept, reject, quota.
+  EnrichmentService,
+  {
+    // The enrichment providers. The token exists so a test can substitute a provider that never
+    // opens a socket, and so a second provider can be added without touching the service.
+    provide: ENRICHMENT_ADAPTERS,
+    useValue: [],
+  },
 ] as const;
 
 export {
@@ -96,10 +118,14 @@ export {
 } from './advanced-integrations-module.js';
 export { ConflictService } from './conflict.service.js';
 export { ConnectionDetailService } from './connection-detail.service.js';
+export { ConnectorEventHandlerRegistry } from './connector-event-handlers.js';
 export { ConnectorExecutor } from './connector-executor.service.js';
+export { ConnectorRegistrar } from './connector-registrar.service.js';
 export { DeadLetterService } from './dead-letter.service.js';
+export { EnrichmentService } from './enrichment.service.js';
 export { ExternalLinkService } from './external-link.service.js';
 export { IntegrationRegistry } from './integration-registry.service.js';
+export { MailchimpConsentBridge } from './mailchimp-consent.bridge.js';
 export { MappingService } from './mapping.service.js';
 export { OAUTH_CALLBACK_PATH, OAuthFlowService } from './oauth-flow.service.js';
 export { OutboundSyncService } from './outbound-sync.service.js';
@@ -111,6 +137,7 @@ export {
   ProviderCircuitBreaker,
   ProviderRateLimiter,
 } from './resilience.js';
+export { StripePaymentBridge } from './stripe-payment.bridge.js';
 export { SyncOrchestrator } from './sync-orchestrator.service.js';
 export { WebhookIngressService } from './webhook-ingress.service.js';
 export { ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX } from './webhook-prefix.js';

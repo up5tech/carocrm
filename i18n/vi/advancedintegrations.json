@@ -14,8 +14,8 @@
     "title": "Tích hợp nâng cao",
     "subtitle": "Các kết nối tích hợp mà bản cài đặt này cung cấp, các kết nối tới chúng và trạng thái uỷ quyền.",
     "loadFailed": "Không tải được module.",
-    "loadFailedHint": "Kiểm tra migration 057 đã được áp dụng và bạn có quyền quản trị của module.",
-    "empty": "Chưa có kết nối tích hợp nào được đăng ký. Chưa thể kết nối cho tới khi có một kết nối tích hợp được triển khai."
+    "loadFailedHint": "Kiểm tra migration 057 và 059 đã được áp dụng và bạn có quyền quản trị của module.",
+    "empty": "Bản cài đặt này chưa đăng ký kết nối tích hợp nào. Chưa thể kết nối cho tới khi có một kết nối tích hợp được đăng ký."
   },
   "providers": {
     "title": "Kết nối tích hợp",
@@ -23,7 +23,7 @@
     "searchPlaceholder": "Tìm kết nối tích hợp",
     "noResults": "Không có kết nối tích hợp nào khớp với tìm kiếm.",
     "loadFailed": "Không tải được danh mục kết nối tích hợp.",
-    "empty": "Chưa có kết nối tích hợp nào được đăng ký. Bộ điều khiển đã sẵn sàng, nhưng chưa thể kết nối cho tới khi có một kết nối tích hợp được triển khai.",
+    "empty": "Bản cài đặt này chưa đăng ký kết nối tích hợp nào. Bộ điều khiển đã sẵn sàng, nhưng chưa thể kết nối cho tới khi có một kết nối tích hợp được đăng ký.",
     "objects": "Đối tượng",
     "authentication": "Xác thực",
     "connections": "Kết nối",
@@ -32,7 +32,17 @@
     "docs": "Tài liệu",
     "connect": "Kết nối",
     "executableYes": "Sẵn sàng",
-    "executableNo": "Chưa có bộ kết nối nào được gắn cho nhà cung cấp này, nên chưa thể dùng."
+    "executableNo": "Chưa có bộ kết nối nào được gắn cho nhà cung cấp này, nên chưa thể dùng.",
+    "setupGoogleWorkspace": "Đăng ký một OAuth client trong Google Cloud console, đặt redirect URI là callback của nền tảng, và đặt client id vào INTEGRATION_OAUTH_CLIENT_IDS. Client secret được lưu trên kết nối.",
+    "setupMicrosoft365": "Đăng ký một ứng dụng trong Microsoft Entra admin center, thêm redirect URI dưới dạng web platform, cấp quyền Calendar và Contacts, và đặt client id vào INTEGRATION_OAUTH_CLIENT_IDS.",
+    "setupZoom": "Tạo một ứng dụng Server-to-Server OAuth trong Zoom App Marketplace, cấp quyền meeting, và đặt client id vào INTEGRATION_OAUTH_CLIENT_IDS. Client secret được lưu trên kết nối.",
+    "setupStripe": "Tạo một API key giới hạn chỉ với quyền đọc cần thiết, lưu nó làm API key của kết nối, và lưu webhook signing secret làm webhook secret.",
+    "setupMailchimp": "Tạo một OAuth app trong Mailchimp, đặt redirect URI là callback của nền tảng, và đặt client id vào INTEGRATION_OAUTH_CLIENT_IDS. Đặt tài khoản nhà cung cấp của kết nối là data centre, ví dụ us21.",
+    "setupMetaLeadAds": "Tạo một business app trong Meta for Developers, xin quyền leads, đặt redirect URI là callback của nền tảng, và đặt client id vào INTEGRATION_OAUTH_CLIENT_IDS. Đặt tài khoản nhà cung cấp của kết nối là ad account id.",
+    "setupShopify": "Tạo một custom app trong cửa hàng, cấp quyền đọc cần thiết, lưu access token làm API key, và lưu app client secret làm webhook secret. Đặt tài khoản nhà cung cấp của kết nối là shop domain.",
+    "setupQuickbooksOnline": "Tạo một ứng dụng trong Intuit developer portal, đặt redirect URI là callback của nền tảng, và đặt client id vào INTEGRATION_OAUTH_CLIENT_IDS. Đặt tài khoản nhà cung cấp của kết nối là company id.",
+    "setupGenericRest": "Nêu base URL, các đường dẫn và phương thức được cho phép, các con trỏ phản hồi và chế độ xác thực trong tùy chọn của kết nối. Địa chỉ được kiểm tra khi lưu kết nối, và connector chỉ đọc.",
+    "setupFakeProvider": "Một nhà cung cấp giả lập, xác định trong bộ nhớ, dành cho phát triển cục bộ và kiểm thử. Nó không bao giờ được đăng ký trong production."
   },
   "connections": {
     "title": "Kết nối",

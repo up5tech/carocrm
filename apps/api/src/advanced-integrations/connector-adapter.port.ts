@@ -38,6 +38,14 @@ export interface ConnectorCredential {
   readonly clientSecret: string | null;
   /** ISO timestamp at which the access token stops being usable. */
   readonly expiresAt: string | null;
+  /**
+   * The shared secret the provider signs its webhooks with.
+   *
+   * It lives in the vault like every other credential, so a connector never receives a signing
+   * secret through the ordinary configuration object — a configuration key that looks like a
+   * credential is refused by `assertConfigIsSafe`.
+   */
+  readonly webhookSecret: string | null;
 }
 
 export interface ConnectorContext {
@@ -46,6 +54,25 @@ export interface ConnectorContext {
   readonly credential: ConnectorCredential;
   /** A non-secret provider account/tenant label, when the connection names one. */
   readonly tenantRef: string | null;
+  /**
+   * The connection's **non-secret** configuration.
+   *
+   * A connector needs per-connection facts the credential cannot carry: which calendars to sync,
+   * which store to read, which enrichment profile to use. They arrive here rather than as
+   * constructor arguments, because the adapter instance is shared by every connection of that
+   * provider while the configuration is per connection.
+   *
+   * The value passed here has already passed `assertConfigIsSafe`, so it holds no credential.
+   */
+  readonly options: Readonly<Record<string, unknown>>;
+  /**
+   * The permission classes the provider actually granted.
+   *
+   * A connector checks them **before** a privileged operation, so a connection that was granted a
+   * read-only scope refuses a write with an actionable `SCOPE_MISSING` instead of sending a
+   * request the provider will reject.
+   */
+  readonly grantedScopes: readonly string[];
 }
 
 /** One field of a provider object. */
@@ -141,6 +168,12 @@ export interface UpsertObjectInput {
   readonly objectType: string;
   /** The provider's identifier, when the object already exists. */
   readonly externalId: string | null;
+  /**
+   * The provider's parent identifier, when the object lives inside a container — a calendar, a
+   * folder, a project. A connector needs it to address the object, because the same id may exist
+   * in two containers.
+   */
+  readonly externalParentId: string | null;
   readonly fields: Readonly<Record<string, unknown>>;
   /** The provider's idempotency key, when it supports one. */
   readonly idempotencyKey: string | null;
@@ -150,6 +183,8 @@ export interface DeleteObjectInput {
   readonly context: ConnectorContext;
   readonly objectType: string;
   readonly externalId: string;
+  /** The provider's parent identifier, when the object lives inside a container. */
+  readonly externalParentId: string | null;
 }
 
 export interface ExternalMutationResult {
@@ -259,6 +294,27 @@ export interface ConnectorAdapter {
   exchangeCode?(context: OAuthExchangeContext): Promise<OAuthTokenSet>;
   refreshCredentials?(context: OAuthRefreshContext): Promise<OAuthTokenSet>;
   revokeCredentials?(context: OAuthRevokeContext): Promise<void>;
+
+  /**
+   * Renew the provider's **push** subscriptions for this connection.
+   *
+   * Only a provider that pushes changes needs it, and only a connector that implements webhooks
+   * may implement it. It is a separate operation rather than a side effect of a read, because a
+   * read must stay read-only (plan §7.4) and a renewal is a write to the provider.
+   */
+  renewSubscriptions?(context: ConnectorContext): Promise<SubscriptionRenewalResult>;
+}
+
+/** The outcome of a subscription renewal. */
+export interface SubscriptionRenewalResult {
+  /** The subscriptions that were renewed. */
+  readonly renewed: readonly string[];
+  /** The subscriptions that were created because none existed. */
+  readonly created: readonly string[];
+  /** The earliest moment a renewed subscription expires, when one is known. */
+  readonly expiresAt: string | null;
+  /** A non-secret diagnostic for the operator. Never a credential. */
+  readonly detail: string | null;
 }
 
 /**

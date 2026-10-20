@@ -189,6 +189,7 @@ export class OutboundSyncService {
             context,
             objectType: mapping.objectType,
             externalId,
+            externalParentId: link?.externalParentId ?? null,
           });
           return;
         }
@@ -203,6 +204,7 @@ export class OutboundSyncService {
           context,
           objectType: mapping.objectType,
           externalId,
+          externalParentId: link?.externalParentId ?? null,
           fields: operation.payload,
           idempotencyKey: operation.idempotencyKey,
         });

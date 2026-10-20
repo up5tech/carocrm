@@ -66,6 +66,15 @@ const ConfigSchema = z.object({
    * directory is deployment-owned, so there is no upload path at runtime.
    */
   extensionsDir: z.string().default('extensions'),
+  /**
+   * The OAuth **client ids** of the installed connectors, as a JSON object keyed by provider key,
+   * e.g. `{"google-workspace":"1234.apps.googleusercontent.com"}`.
+   *
+   * A client id is not a secret, so it lives in the deployment configuration rather than in the
+   * credential vault. The matching **client secret** is per connection and lives in the vault, so
+   * two installations — or two connections of one installation — never share a secret.
+   */
+  integrationOauthClientIds: z.string().default('{}'),
   /** Version extensions are checked against; mirrors the platform release. */
   platformVersion: z.string().default(PLATFORM_VERSION),
 });
@@ -139,6 +148,7 @@ export function buildConfig(): AppConfig {
     marketingWebhookSecret: process.env.MARKETING_WEBHOOK_SECRET,
     encryptionKey: process.env.ENCRYPTION_KEY,
     extensionsDir: process.env.EXTENSIONS_DIR,
+    integrationOauthClientIds: process.env.INTEGRATION_OAUTH_CLIENT_IDS,
     platformVersion: process.env.PLATFORM_VERSION,
   });
 }

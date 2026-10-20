@@ -1,6 +1,17 @@
 # Phase 19 — Advanced Integrations Module (`AdvancedIntegrations`)
 
-> **Status:** Planned  
+> **Status:** 🟡 **In progress** (2026-10-20): 19-INT.0–19-INT.24 implemented and verified.
+> The control plane, the sync engine, the administration UX and **nine connectors** are delivered:
+> Google Workspace, Microsoft 365, Zoom, Stripe, Mailchimp, Meta Lead Ads, Shopify (the first
+> ecommerce provider), QuickBooks Online (the first accounting provider), the generic REST
+> connector, plus the bounded data-enrichment provider.
+> **Remaining:** 19-INT.25 (cross-module contracts for the remaining modules), 19-INT.26
+> (observability, retention, threat model) and 19-INT.27 (end-to-end release evidence).
+> **No connector was verified against a live vendor account** — the provider-side facts are the
+> implementation's own pins. Deferrals and limitations: `docs/compatibility/advanced-integrations.md`
+> and `docs/compatibility/advanced-integrations/providers.md` §4.
+> This document remains the scope, architecture reference and implementation roadmap.
+>
 > **Parent roadmap:** `PLAN.md` — Phase 19: Advanced Domains  
 > **Module name:** `AdvancedIntegrations`  
 > **Module class:** `AdvancedIntegrationsModule`  

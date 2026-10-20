@@ -1,13 +1,16 @@
 import { expect, type Page, test } from '@playwright/test';
 
 /**
- * Phase 19-INT.14 / 19-INT.15 — the Advanced Integrations workspace in the browser.
+ * Phase 19-INT.14 / 19-INT.15 / 19-INT.16–19-INT.24 — the Advanced Integrations workspace in the
+ * browser.
  *
- * No connector is registered in a production build — connectors arrive with 19-INT.16 — so the
- * browser-observable behaviour of this page is its **empty states** and its **capability gating**.
- * That is exactly what this spec checks: the page loads, the five surfaces are reachable, an
- * empty catalog says what to do rather than rendering a blank panel, and the module never claims a
- * connector is configured.
+ * The **catalog** is now populated: nine connectors are registered in code, so an administrator
+ * sees them before connecting anything. What is still empty is everything that requires a
+ * connection — the connections, the mappings, the runs and the conflicts — and those empty states
+ * are what this spec checks, together with the capability gating.
+ *
+ * The fake provider is **not** registered in a production build, so the catalog a browser sees
+ * holds only the nine real connectors.
  *
  * The end-to-end configuration of a *fake* connector is covered by the API suite
  * (`apps/api/test/advanced-integrations-admin.test.ts`), because a fake connector is registered in
@@ -39,10 +42,13 @@ test('an administrator reaches every surface of the connector workspace', async 
   await expect(page.getByRole('tab', { name: 'Sync runs' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Conflicts' })).toBeVisible();
 
-  // The catalog is empty in a production build, and it says so.
-  await expect(
-    page.getByText('No connector is registered yet. The control plane is available', { exact: false }),
-  ).toBeVisible();
+  // The catalog holds the delivered connectors. A visible row is an *available* connector, never a
+  // configured one — the connections tab is where that is shown.
+  await expect(page.getByText('Google Workspace', { exact: true })).toBeVisible();
+  await expect(page.getByText('Stripe', { exact: true })).toBeVisible();
+  await expect(page.getByText('Generic REST API', { exact: true })).toBeVisible();
+  // The fake provider is never registered in a production build.
+  await expect(page.getByText('Fake provider', { exact: true })).toHaveCount(0);
 
   await page.getByRole('tab', { name: 'Connections' }).click();
   await expect(page.getByText('No connection yet', { exact: false })).toBeVisible();

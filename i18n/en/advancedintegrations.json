@@ -14,8 +14,8 @@
     "title": "Advanced Integrations",
     "subtitle": "The connectors this installation offers, the connections to them, and their authorization state.",
     "loadFailed": "The module could not be loaded.",
-    "loadFailedHint": "Check that migration 057 is applied and that you hold the module's administrative capability.",
-    "empty": "No connector is registered yet. Nothing can be connected until a connector is delivered."
+    "loadFailedHint": "Check that migrations 057 and 059 are applied and that you hold the module's administrative capability.",
+    "empty": "This installation registered no connector. Nothing can be connected until one is registered."
   },
   "providers": {
     "title": "Connectors",
@@ -23,7 +23,7 @@
     "searchPlaceholder": "Search connectors",
     "noResults": "No connector matches that search.",
     "loadFailed": "The connector catalog could not be loaded.",
-    "empty": "No connector is registered yet. The control plane is available, but nothing can be connected until a connector is delivered.",
+    "empty": "This installation registered no connector. The control plane is available, but nothing can be connected until one is registered.",
     "objects": "Objects",
     "authentication": "Authentication",
     "connections": "Connections",
@@ -32,7 +32,17 @@
     "docs": "Documentation",
     "connect": "Connect",
     "executableYes": "Ready",
-    "executableNo": "No connector is bound to this provider, so it cannot be used yet."
+    "executableNo": "No connector is bound to this provider, so it cannot be used yet.",
+    "setupGoogleWorkspace": "Register an OAuth client in the Google Cloud console, set the redirect URI to the platform callback, and put the client id in INTEGRATION_OAUTH_CLIENT_IDS. The client secret is stored on the connection.",
+    "setupMicrosoft365": "Register an application in the Microsoft Entra admin center, add the redirect URI as a web platform, grant the delegated Calendar and Contacts permissions, and put the client id in INTEGRATION_OAUTH_CLIENT_IDS.",
+    "setupZoom": "Create a Server-to-Server OAuth app in the Zoom App Marketplace, grant the meeting scopes, and put the client id in INTEGRATION_OAUTH_CLIENT_IDS. The client secret is stored on the connection.",
+    "setupStripe": "Create a restricted API key with only the read permissions the connector needs, store it on the connection as the API key, and store the webhook signing secret as the webhook secret.",
+    "setupMailchimp": "Create an OAuth app in Mailchimp, set the redirect URI to the platform callback, and put the client id in INTEGRATION_OAUTH_CLIENT_IDS. Set the connection provider account to the data centre, for example us21.",
+    "setupMetaLeadAds": "Create a business app in Meta for Developers, request the leads permission, set the redirect URI to the platform callback, and put the client id in INTEGRATION_OAUTH_CLIENT_IDS. Set the connection provider account to the ad account id.",
+    "setupShopify": "Create a custom app in the store, grant the read scopes the connector needs, store the access token as the API key, and store the app client secret as the webhook secret. Set the connection provider account to the shop domain.",
+    "setupQuickbooksOnline": "Create an app in the Intuit developer portal, set the redirect URI to the platform callback, and put the client id in INTEGRATION_OAUTH_CLIENT_IDS. Set the connection provider account to the company id.",
+    "setupGenericRest": "Name the base URL, the allowlisted paths and methods, the response pointers and the authentication mode in the connection options. The address is checked when the connection is saved, and the connector reads only.",
+    "setupFakeProvider": "A deterministic in-process provider for local development and tests. It is never registered in production."
   },
   "connections": {
     "title": "Connections",

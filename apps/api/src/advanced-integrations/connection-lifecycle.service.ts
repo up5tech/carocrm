@@ -236,7 +236,19 @@ export class ConnectionLifecycleService {
   async transition(
     id: string,
     to: ConnectionStatus,
-    extra: { grantedScopes?: readonly string[]; lastErrorCode?: string | null } = {},
+    extra: {
+      grantedScopes?: readonly string[] | undefined;
+      /**
+       * The scopes this connection actually needs.
+       *
+       * The provider declares a scope set for the whole connector, but an operator may narrow
+       * what a connection asks for. When the authorization flow narrowed the request, the
+       * connection's requirement becomes the narrowed set — otherwise a connection that asked for
+       * less would report a permanently missing scope.
+       */
+      requiredScopes?: readonly string[] | undefined;
+      lastErrorCode?: string | null | undefined;
+    } = {},
   ): Promise<IntegrationConnectionView> {
     await this.permissions.assert('connectionAdmin');
     const current = await this.requireRow(id);
@@ -245,7 +257,10 @@ export class ConnectionLifecycleService {
 
     const grantedScopes =
       extra.grantedScopes === undefined ? parseScopes(current.granted_scopes) : [...new Set(extra.grantedScopes)];
-    const requiredScopes = parseScopes(current.required_scopes);
+    const requiredScopes =
+      extra.requiredScopes === undefined
+        ? parseScopes(current.required_scopes)
+        : [...new Set(extra.requiredScopes)];
 
     if (to === 'connected') {
       const settings = await this.settings.settings();
@@ -265,6 +280,7 @@ export class ConnectionLifecycleService {
       update integration_connections set
         status = ${to},
         granted_scopes = ${JSON.stringify(grantedScopes)}::jsonb,
+        required_scopes = ${JSON.stringify(requiredScopes)}::jsonb,
         enabled = ${to === 'connected' || to === 'degraded' ? true : to === 'paused' || to === 'revoked' ? false : current.enabled},
         last_error_code = ${extra.lastErrorCode === undefined ? current.last_error_code : extra.lastErrorCode},
         modified_at = ${now},

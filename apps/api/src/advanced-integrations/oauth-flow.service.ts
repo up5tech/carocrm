@@ -56,6 +56,7 @@ export const OAUTH_REDIRECT_URI = OAUTH_CALLBACK_PATH;
 /** The OAuth credential kinds the vault stores. */
 const KIND_ACCESS_TOKEN = 'oauth_access_token';
 const KIND_REFRESH_TOKEN = 'oauth_refresh_token';
+const KIND_CLIENT_SECRET = 'client_secret';
 
 export interface OAuthAuthorizationStartResult {
   readonly connectionId: string;
@@ -232,6 +233,7 @@ export class OAuthFlowService {
       redirectUri: row.redirect_uri,
       codeVerifier: row.code_verifier,
       scopes: parseScopes(row.requested_scopes),
+      clientSecret: await this.vault.read({ connectionId: row.connection_id, kind: KIND_CLIENT_SECRET }),
     };
 
     let tokens: OAuthTokenSet;
@@ -246,12 +248,16 @@ export class OAuthFlowService {
 
     const required = connection.requiredScopes;
     const granted = [...new Set(tokens.grantedScopes)];
-    const missing = required.filter((scope) => !granted.includes(scope));
+    // The flow asked for exactly these scopes, so the connection's requirement becomes the set
+    // that was asked for — narrower when the operator narrowed the request.
+    const asked = parseScopes(row.requested_scopes);
+    const missing = asked.filter((scope) => !granted.includes(scope));
     if (missing.length > 0) {
       // The grant is real but insufficient. The connection must not look usable, and the missing
       // permission class is reported without exposing anything about the credential.
       await this.connections.transition(row.connection_id, 'reauthorization_required', {
         grantedScopes: granted,
+        requiredScopes: asked,
         lastErrorCode: 'SCOPE_MISSING',
       });
       return {
@@ -264,7 +270,10 @@ export class OAuthFlowService {
       };
     }
 
-    await this.connections.transition(row.connection_id, 'connected', { grantedScopes: granted });
+    await this.connections.transition(row.connection_id, 'connected', {
+      grantedScopes: granted,
+      requiredScopes: asked.length > 0 ? asked : required,
+    });
     return {
       connectionId: row.connection_id,
       providerKey: row.provider_key,
@@ -327,6 +336,7 @@ export class OAuthFlowService {
         providerKey: connection.providerKey,
         refreshToken,
         scopes: connection.grantedScopes,
+        clientSecret: await this.vault.read({ connectionId, kind: KIND_CLIENT_SECRET }),
       };
       let tokens: OAuthTokenSet;
       try {
@@ -362,6 +372,7 @@ export class OAuthFlowService {
         providerKey: connection.providerKey,
         accessToken,
         refreshToken,
+        clientSecret: await this.vault.read({ connectionId, kind: KIND_CLIENT_SECRET }),
       };
       try {
         await adapter.revokeCredentials(context);

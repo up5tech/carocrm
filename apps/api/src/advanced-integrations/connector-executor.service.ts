@@ -109,7 +109,13 @@ export class ConnectorExecutor {
     }
     await this.breaker.beforeRequest(circuitKey);
 
-    const context = await this.buildContext(connectionId, connection.providerKey, connection.tenantRef);
+    const context = await this.buildContext(
+      connectionId,
+      connection.providerKey,
+      connection.tenantRef,
+      connection.connectionOptions,
+      connection.grantedScopes,
+    );
     try {
       const value = await operation(context, adapter);
       await this.breaker.recordSuccess(circuitKey);
@@ -130,11 +136,14 @@ export class ConnectorExecutor {
     connectionId: string,
     providerKey: string,
     tenantRef: string | null,
+    options: Readonly<Record<string, unknown>>,
+    grantedScopes: readonly string[],
   ): Promise<ConnectorContext> {
     const accessToken = await this.vault.read({ connectionId, kind: 'oauth_access_token' });
     const refreshToken = await this.vault.read({ connectionId, kind: 'oauth_refresh_token' });
     const apiKey = await this.vault.read({ connectionId, kind: 'api_key' });
     const clientSecret = await this.vault.read({ connectionId, kind: 'client_secret' });
+    const webhookSecret = await this.vault.read({ connectionId, kind: 'webhook_secret' });
     const access = await this.vault.describe({ connectionId, kind: 'oauth_access_token' });
     return {
       connectionId,
@@ -146,7 +155,10 @@ export class ConnectorExecutor {
         apiKey,
         clientSecret,
         expiresAt: access?.expiresAt ?? null,
+        webhookSecret,
       },
+      options,
+      grantedScopes,
     };
   }
 }
