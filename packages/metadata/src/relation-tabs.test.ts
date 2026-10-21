@@ -2,23 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addTab,
-  emptyRelationTabs,
   type EntityRelationTabs,
+  EntityRelationTabsSchema,
   moveRelation,
   normalizeArrangement,
   orderTabs,
   OTHER_TAB_ID,
-  RelationTabsSchema,
   removeTab,
   renameTab,
   resolveEntityTabs,
-  resolveMode,
   seedArrangement,
   slugifyTabId,
   tabsOf,
   unassignedOf,
   uniqueTabId,
-  withEntity,
 } from './relation-tabs.js';
 
 /**
@@ -238,107 +235,95 @@ describe('relation-tab arrangement', () => {
     });
   });
 
-  describe('the preference as a whole', () => {
-    it('resolves the mode from the entity, then from the default', () => {
-      const preference = withEntity(
-        { ...emptyRelationTabs(), mode: 'tabs' },
-        'Account',
-        { mode: 'stacked', tabs: [] },
+  describe('resolveEntityTabs', () => {
+    const labelOf = (relation: string): string => relation.charAt(0).toUpperCase() + relation.slice(1);
+
+    it('renders the stacked page for an entity that was never arranged', () => {
+      const resolved = resolveEntityTabs(undefined, ['contacts', 'leads'], labelOf);
+      expect(resolved.mode).toBe('stacked');
+      expect(resolved.tabs).toEqual([]);
+    });
+
+    it('drops a relation the entity no longer has and reports the unplaced ones', () => {
+      const resolved = resolveEntityTabs(
+        { mode: 'tabs', tabs: [{ id: 'people', label: 'People', order: 0, relations: ['contacts', 'gone'] }] },
+        ['contacts', 'leads'],
+        labelOf,
       );
-      expect(resolveMode(preference, 'Account')).toBe('stacked');
-      expect(resolveMode(preference, 'Opportunity')).toBe('tabs');
-      expect(resolveMode(emptyRelationTabs(), 'Account')).toBe('stacked');
-    });
-
-    it('leaves the other entities untouched when one changes', () => {
-      const preference = withEntity(emptyRelationTabs(), 'Account', { mode: 'tabs', tabs: [] });
-      const next = withEntity(preference, 'Opportunity', { mode: 'tabs', tabs: [] });
-      expect(Object.keys(next.entities).sort()).toEqual(['Account', 'Opportunity']);
-    });
-
-    it('resolves the tabs and the unassigned pool of one entity', () => {
-      const preference = withEntity(emptyRelationTabs(), 'Account', {
-        mode: 'tabs',
-        tabs: [{ id: 'people', label: 'People', order: 0, relations: ['contacts', 'gone'] }],
-      });
-      const resolved = resolveEntityTabs(preference, 'Account', ['contacts', 'leads']);
       expect(resolved.mode).toBe('tabs');
       expect(resolved.tabs[0]?.relations).toEqual(['contacts']);
       expect(resolved.unassigned).toEqual(['leads']);
     });
+
+    it('gives every relation a tab of its own when the entity has no arrangement yet', () => {
+      const resolved = resolveEntityTabs({ mode: 'tabs', tabs: [] }, ['cases', 'contacts'], labelOf);
+      expect(resolved.tabs.map((tab) => tab.id)).toEqual(['cases', 'contacts']);
+      expect(resolved.unassigned).toEqual([]);
+    });
   });
 
-  describe('RelationTabsSchema', () => {
+  describe('EntityRelationTabsSchema', () => {
     const valid = {
       mode: 'tabs',
-      entities: {
-        Account: {
-          mode: 'tabs',
-          tabs: [{ id: 'people', label: 'People', order: 10, relations: ['contacts'] }],
-        },
-      },
+      tabs: [{ id: 'people', label: 'People', order: 10, relations: ['contacts'] }],
     };
 
     it('accepts a valid arrangement', () => {
-      expect(RelationTabsSchema.safeParse(valid).success).toBe(true);
+      expect(EntityRelationTabsSchema.safeParse(valid).success).toBe(true);
     });
 
     it('refuses a relation listed in two tabs', () => {
       const duplicated = {
         mode: 'tabs',
-        entities: {
-          Account: {
-            mode: 'tabs',
-            tabs: [
-              { id: 'a', label: 'A', order: 0, relations: ['contacts'] },
-              { id: 'b', label: 'B', order: 1, relations: ['contacts'] },
-            ],
-          },
-        },
+        tabs: [
+          { id: 'a', label: 'A', order: 0, relations: ['contacts'] },
+          { id: 'b', label: 'B', order: 1, relations: ['contacts'] },
+        ],
       };
-      expect(RelationTabsSchema.safeParse(duplicated).success).toBe(false);
+      expect(EntityRelationTabsSchema.safeParse(duplicated).success).toBe(false);
     });
 
     it('refuses a label longer than 40 characters', () => {
-      const oversized = {
-        mode: 'tabs',
-        entities: {
-          Account: { mode: 'tabs', tabs: [{ id: 'a', label: 'x'.repeat(41), order: 0, relations: [] }] },
-        },
-      };
-      expect(RelationTabsSchema.safeParse(oversized).success).toBe(false);
+      const oversized = { mode: 'tabs', tabs: [{ id: 'a', label: 'x'.repeat(41), order: 0, relations: [] }] };
+      expect(EntityRelationTabsSchema.safeParse(oversized).success).toBe(false);
     });
 
-    it('refuses more than 20 tabs of one entity', () => {
+    it('refuses more than 20 tabs', () => {
       const many = {
         mode: 'tabs',
-        entities: {
-          Account: {
-            mode: 'tabs',
-            tabs: Array.from({ length: 21 }, (_unused, index) => ({
-              id: `tab-${index}`,
-              label: `Tab ${index}`,
-              order: index,
-              relations: [],
-            })),
-          },
-        },
+        tabs: Array.from({ length: 21 }, (_unused, index) => ({
+          id: `tab-${index}`,
+          label: `Tab ${index}`,
+          order: index,
+          relations: [],
+        })),
       };
-      expect(RelationTabsSchema.safeParse(many).success).toBe(false);
+      expect(EntityRelationTabsSchema.safeParse(many).success).toBe(false);
     });
 
     it('refuses an id that is not a slug', () => {
-      const bad = {
+      const bad = { mode: 'tabs', tabs: [{ id: 'People!', label: 'People', order: 0, relations: [] }] };
+      expect(EntityRelationTabsSchema.safeParse(bad).success).toBe(false);
+    });
+
+    it('refuses the reserved Other id', () => {
+      const reserved = { mode: 'tabs', tabs: [{ id: OTHER_TAB_ID, label: 'Other', order: 0, relations: [] }] };
+      expect(EntityRelationTabsSchema.safeParse(reserved).success).toBe(false);
+    });
+
+    it('refuses two tabs that share an id', () => {
+      const duplicatedIds = {
         mode: 'tabs',
-        entities: {
-          Account: { mode: 'tabs', tabs: [{ id: 'People!', label: 'People', order: 0, relations: [] }] },
-        },
+        tabs: [
+          { id: 'a', label: 'A', order: 0, relations: [] },
+          { id: 'a', label: 'A again', order: 1, relations: [] },
+        ],
       };
-      expect(RelationTabsSchema.safeParse(bad).success).toBe(false);
+      expect(EntityRelationTabsSchema.safeParse(duplicatedIds).success).toBe(false);
     });
 
     it('refuses an unknown mode', () => {
-      expect(RelationTabsSchema.safeParse({ mode: 'grid', entities: {} }).success).toBe(false);
+      expect(EntityRelationTabsSchema.safeParse({ mode: 'grid', tabs: [] }).success).toBe(false);
     });
   });
 });

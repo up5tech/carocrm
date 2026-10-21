@@ -1,4 +1,6 @@
 /** Field + entity definitions as served by `GET /api/v1/Metadata` (PLAN §12, §79). */
+import type { EntityRelationTabs } from '@carocrm/metadata/relation-tabs.js';
+
 export interface FieldDefinition {
   type: string;
   required?: boolean | undefined;
@@ -80,6 +82,11 @@ export interface EntityDefinition {
   relations: Record<string, RelationDefinition>;
   indexes?: IndexDefinition[] | undefined;
   layouts?: Record<string, LayoutDefinition[]> | undefined;
+  /**
+   * The relation area of the record page (PLAN_Phase_20 §5.11): either today's stacked panels or the
+   * tabs the entity's detail layout arranges. Absent means the stacked page.
+   */
+  detailTabs?: EntityRelationTabs | undefined;
   acl?: AclDefinition | undefined;
   record?: { displayField?: string | undefined; nameField?: string | undefined } | undefined;
   /** Per-entity navigation behaviour (PLAN_Phase_20 §4.5); absent means "follow the platform default". */

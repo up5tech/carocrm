@@ -174,6 +174,9 @@ export class MetadataController {
     if (isRecord(patch['layouts'])) {
       this.validateLayouts(definition, patch['layouts']);
     }
+    if (isRecord(patch['detailTabs'])) {
+      this.validateDetailTabs(definition, patch['detailTabs']);
+    }
     if (isRecord(patch['nav'])) {
       this.validateNav(definition, patch['nav']);
     }
@@ -274,6 +277,29 @@ export class MetadataController {
   }
 
   /**
+   * The relation-tab arrangement is declarative metadata (PLAN_Phase_20_Settings_UX.md §5.11): it
+   * names the entity's own relations, so a tab may not reference a relation the entity does not
+   * have. This validates the declaration only and never touches the database schema
+   * (AGENTS.md §3.4). The shape of the section — tab ids, labels, one relation in one tab — is
+   * checked by the entity schema itself.
+   */
+  private validateDetailTabs(definition: EntityDefinition, section: unknown): void {
+    const allowed = new Set(Object.keys(definition.relations));
+    const tabs = (section as { tabs?: unknown }).tabs;
+    if (!Array.isArray(tabs)) return;
+    for (const tab of tabs) {
+      const relations = Array.isArray(tab?.relations) ? tab.relations : [];
+      for (const relation of relations) {
+        if (typeof relation !== 'string' || !allowed.has(relation)) {
+          throw new ValidationError(`A relation tab references unknown relation "${String(relation)}".`, {
+            entity: definition.name,
+          });
+        }
+      }
+    }
+  }
+
+  /**
    * Navigation behaviour is declarative metadata too (PLAN_Phase_20 §4.5): a group must name one the
    * instance actually renders, and a board must group by a field that exists. Hiding an entity here
    * only removes it from the menu — the record, its URL and its API stay reachable.
@@ -357,6 +383,7 @@ function schemaChangeOperation(patch: Record<string, unknown>, fieldName?: strin
   if (fieldName) return 'field.disable';
   if (Array.isArray(patch['indexes'])) return 'entity.index.update';
   if (isRecord(patch['layouts'])) return 'entity.layout.update';
+  if (isRecord(patch['detailTabs'])) return 'entity.relationTabs.update';
   if (isRecord(patch['acl'])) return 'entity.acl.update';
   if (isRecord(patch['nav'])) return 'entity.nav.update';
   return 'entity.update';

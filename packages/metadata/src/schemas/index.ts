@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { type EntityRelationTabs, EntityRelationTabsSchema } from '../relation-tabs.js';
+
 export const fieldTypes = [
   'varchar',
   'text',
@@ -185,6 +187,12 @@ export const EntityDefinitionSchema = z.object({
    * entry falls back to the flat field order, so seeded entities keep working untouched.
    */
   layouts: z.record(z.string(), z.array(LayoutDefinitionSchema)).default({}),
+  /**
+   * The relation area of the record page (PLAN_Phase_20_Settings_UX.md §5.11): either today's
+   * stacked panels or the tabs the entity's detail layout arranges. Optional — an entity without
+   * the section keeps the stacked page.
+   */
+  detailTabs: EntityRelationTabsSchema.optional(),
   record: RecordDefinitionSchema.default({}),
   client: ClientDefinitionSchema.default({}),
   nav: NavigationSectionSchema.optional(),
@@ -201,6 +209,7 @@ export type EntityDefinition = {
   indexes: IndexDefinition[];
   acl?: AclDefinition | undefined;
   layouts: Record<string, LayoutDefinition[]>;
+  detailTabs?: EntityRelationTabs | undefined;
   record: RecordDefinition;
   client: ClientDefinition;
   nav?: NavigationSection | undefined;

@@ -1,4 +1,5 @@
 import { DeleteOutlined, EditOutlined, HolderOutlined, PlusOutlined, SaveOutlined, UndoOutlined } from '@ant-design/icons';
+import { type EntityRelationTabs, normalizeArrangement } from '@carocrm/metadata/relation-tabs.js';
 import { closestCorners,type CollisionDetection, DndContext, type DragEndEvent, type DragOverEvent, DragOverlay, type DragStartEvent, KeyboardSensor, PointerSensor, pointerWithin, rectIntersection, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -8,6 +9,7 @@ import { useEffect, useState } from 'react';
 import type { EntityDefinition, LayoutDefinition, LayoutPanel, LayoutViewType } from '../api/types.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, useMetadata } from '../state/metadata.js';
+import { RelationTabsEditor } from './RelationTabsEditor.js';
 
 /** Views an admin can lay out by hand (PLAN §8). */
 const LAYOUT_VIEWS: LayoutViewType[] = ['list', 'detail', 'edit'];
@@ -72,6 +74,18 @@ function layoutDraftOf(entity: EntityDefinition, view: LayoutViewType): LayoutDr
   const panels = [...panelsOf(entity, view)].sort((a, b) => a.position - b.position);
   const assigned = new Set(panels.flatMap((panel) => panel.fields ?? []));
   return { panels, disabled: memberFieldNames(entity).filter((name) => !assigned.has(name)) };
+}
+
+/**
+ * The relation-tab arrangement of an entity as the editor shows it; absent means today's stacked
+ * panels.
+ *
+ * It is reconciled against the entity's own relations on the way in: a stored tab that still names a
+ * relation the entity no longer has would otherwise be sent back on the next save and refused, and
+ * the record page already hides it. Reconciling here keeps the two views of the section identical.
+ */
+function relationTabsOf(entity: EntityDefinition): EntityRelationTabs {
+  return normalizeArrangement(entity.detailTabs, Object.keys(entity.relations ?? {}));
 }
 
 /** Which draft container currently holds a drag id — panel body, pool, or the chip's owner. */
@@ -239,6 +253,9 @@ export function LayoutEditor({ entity, save, showInlineActions = true, onState }
   const [form] = Form.useForm<PanelDraft>();
   const [view, setView] = useState<LayoutViewType>('detail');
   const [draft, setDraft] = useState<LayoutDraft>(() => layoutDraftOf(entity, view));
+  // The relation tabs belong to the detail view but are not panels: they are their own section of
+  // the definition and keep their identity while the admin switches between views.
+  const [tabs, setTabs] = useState<EntityRelationTabs>(() => relationTabsOf(entity));
   const [dirty, setDirty] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [groupModal, setGroupModal] = useState<{ mode: 'add' } | { mode: 'edit'; original: string } | null>(null);
@@ -250,14 +267,24 @@ export function LayoutEditor({ entity, save, showInlineActions = true, onState }
     setDirty(false);
   }, [entity, view]);
 
+  // A refetched definition (a save elsewhere) or another entity: the stored arrangement wins. The
+  // tab section does not depend on the view, so switching views must not discard it.
+  useEffect(() => {
+    setTabs(relationTabsOf(entity));
+  }, [entity]);
+
   const resetDraft = () => {
     setDraft(layoutDraftOf(entity, view));
+    setTabs(relationTabsOf(entity));
     setDirty(false);
   };
 
   const persistDraft = () => {
     const panels = draft.panels.map((panel, index) => ({ ...panel, position: index }));
-    void save(layoutSection(entity, view, panels), t('web.entityAdmin.layoutSaved'));
+    // The tab section is written only when it changed, so a panels-only save never rewrites it.
+    const next = { ...layoutSection(entity, view, panels) };
+    if (JSON.stringify(tabs) !== JSON.stringify(relationTabsOf(entity))) next['detailTabs'] = tabs;
+    void save(next, t('web.entityAdmin.layoutSaved'));
   };
 
   // Published every render, like the settings shell's own contract: the host reads `dirty` for its bar
@@ -395,6 +422,15 @@ export function LayoutEditor({ entity, save, showInlineActions = true, onState }
     setDirty(true);
   };
 
+  /** A tab edit is a draft edit: it joins the same dirty state and the same Save. */
+  const changeTabs = (next: EntityRelationTabs) => {
+    setTabs(next);
+    setDirty(true);
+  };
+
+  const relationNames = Object.keys(entity.relations ?? {});
+  const relationLabelOf = (relation: string) => entity.relations[relation]?.label ?? fieldLabel(relation);
+
   const activeField = activeId !== null && !activeId.startsWith(PANEL_ID_PREFIX) ? activeId : null;
   const activePanel = activeId !== null && activeId.startsWith(PANEL_ID_PREFIX) ? draft.panels.find((panel) => `${PANEL_ID_PREFIX}${panel.name}` === activeId) : undefined;
 
@@ -457,6 +493,22 @@ export function LayoutEditor({ entity, save, showInlineActions = true, onState }
             <LayoutPreview view={view} draft={draft} labelOf={labelOf} />
           </Col>
         </Row>
+        {view === 'detail' && relationNames.length >= 2 ? (
+          <Row gutter={[16, 16]}>
+            <Col span={24}>
+              {/* The relation area is part of the detail layout: it is arranged here, next to the
+                  panels, and the record page only renders what this section says (§5.11). */}
+              <RelationTabsEditor
+                entity={entity.name}
+                value={tabs}
+                onChange={changeTabs}
+                labelOf={relationLabelOf}
+                relationNames={relationNames}
+              />
+            </Col>
+          </Row>
+        ) : null}
+
         <DragOverlay dropAnimation={null}>
           {activeField !== null ? <LayoutFieldRow name={activeField} label={labelOf(activeField)} overlay /> : null}
           {activePanel ? (

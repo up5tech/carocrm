@@ -5,21 +5,21 @@ import { z } from 'zod';
  *
  * A record page renders one card per relationship, stacked in metadata order. That is unreadable
  * for an Account or an Opportunity with eight relations, and nothing on the page can be reordered
- * by the person who actually works the record. This module is the arrangement the user builds:
- * per user, per entity, either today's stacked panels or tabs they create, rename, reorder and
- * fill themselves.
+ * by the person who works the record. This module is the arrangement that turns those cards into
+ * tabs: per entity, either today's stacked panels or tabs an administrator creates, renames,
+ * reorders and fills in the **detail layout settings** (Entity Manager → Layout → detail).
  *
- * It is deliberately a **preference**, not entity metadata and not a settings document: two people
- * opening the same Account legitimately want different arrangements. The schema lives here — not in
- * the API — so the server validates a write and the SPA normalizes a read with the same code.
+ * The arrangement is **entity metadata**, not a per-user preference: it is part of the record
+ * page's layout, so it is configured once, by an administrator, next to the field panels it
+ * sits under, and every user of the entity sees the same tabs.
  *
  * Two invariants shape everything below:
  *
- * - **No relation can be lost.** A relation the user placed in no tab renders in an implicit,
+ * - **No relation can be lost.** A relation placed in no tab renders in an implicit,
  *   non-deletable *Other* tab that is computed on read and never stored. Deleting a tab returns
  *   its relations to that pool; it never deletes them.
- * - **A relation belongs to one tab.** Moving it is a move, never a copy, so the same link list can
- *   never appear twice on a page.
+ * - **A relation belongs to one tab.** Moving it is a move, never a copy, so the same link list
+ *   can never appear twice on a page.
  */
 
 /** How the relation area of a record page renders. `stacked` is today's behaviour. */
@@ -27,23 +27,22 @@ export const RelationTabModeSchema = z.enum(['stacked', 'tabs']);
 export type RelationTabMode = z.infer<typeof RelationTabModeSchema>;
 
 /** Limits of the arrangement. They are generous enough for any real entity and small enough to store. */
-export const RELATION_TAB_MAX_ENTITIES = 200;
 export const RELATION_TAB_MAX_TABS = 20;
 export const RELATION_TAB_MAX_LABEL = 40;
 export const RELATION_TAB_MAX_RELATIONS = 60;
 export const RELATION_TAB_MAX_RELATION_NAME = 60;
 
 /**
- * The id of the computed *Other* tab. It is reserved: a user tab may never take it, so a link to
- * `?tab=other` always means the implicit pool and never a user tab.
+ * The id of the computed *Other* tab. It is reserved: an arranged tab may never take it, so a link
+ * to `?tab=other` always means the implicit pool and never a real tab.
  */
 export const OTHER_TAB_ID = 'other';
 
-/** One user-defined tab: a group of relation names shown together. */
+/** One arranged tab: a group of relation names shown together. */
 export const RelationTabSchema = z.object({
   /** Stable slug. A rename never changes it, so a `?tab=` link survives the rename. */
   id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
-  /** User data: what the user typed, deliberately not translated. */
+  /** Administrator data: what was typed, deliberately not translated. */
   label: z.string().min(1).max(RELATION_TAB_MAX_LABEL),
   /** Position in the strip. Ties break by the stored order. */
   order: z.number().int().min(0).max(100_000),
@@ -53,8 +52,13 @@ export const RelationTabSchema = z.object({
 export type RelationTab = z.infer<typeof RelationTabSchema>;
 
 /**
- * The arrangement of one entity. The `refine` is the "one relation, one tab" rule: a write that
- * lists the same relation twice is refused with `422` rather than silently rendered twice.
+ * The arrangement of one entity — the `detailTabs` section of an entity definition.
+ *
+ * Two rules are enforced here rather than in the UI:
+ *
+ * - a relation may appear in **at most one** tab, so the same link list is never rendered twice;
+ * - the reserved `other` id is never taken by an arranged tab, so the implicit pool always has a
+ *   name of its own.
  */
 export const EntityRelationTabsSchema = z
   .object({
@@ -73,24 +77,14 @@ export const EntityRelationTabsSchema = z
       return true;
     },
     { message: 'A relation may appear in at most one tab of an entity.' },
-  );
-export type EntityRelationTabs = z.infer<typeof EntityRelationTabsSchema>;
-
-/**
- * The whole per-user preference. `mode` is the default for entities the user has not configured;
- * an entity entry overrides it. Relation names are deliberately **not** checked against entity
- * metadata here: a preference written before a relation was renamed must keep working, so unknown
- * names are dropped on read (see `normalizeArrangement`) and never refused on write.
- */
-export const RelationTabsSchema = z
-  .object({
-    mode: RelationTabModeSchema,
-    entities: z.record(z.string().min(1).max(100), EntityRelationTabsSchema),
+  )
+  .refine((entity) => entity.tabs.every((tab) => tab.id !== OTHER_TAB_ID), {
+    message: `"${OTHER_TAB_ID}" is reserved for the implicit pool of unassigned relations.`,
   })
-  .refine((value) => Object.keys(value.entities).length <= RELATION_TAB_MAX_ENTITIES, {
-    message: 'Too many entities in the relation-tab arrangement.',
+  .refine((entity) => new Set(entity.tabs.map((tab) => tab.id)).size === entity.tabs.length, {
+    message: 'Two tabs of an entity may not share the same id.',
   });
-export type RelationTabs = z.infer<typeof RelationTabsSchema>;
+export type EntityRelationTabs = z.infer<typeof EntityRelationTabsSchema>;
 
 /**
  * The slug a tab id is built from: lowercase, diacritics folded, everything else a dash. It is
@@ -127,11 +121,6 @@ export function emptyEntityArrangement(mode: RelationTabMode = 'stacked'): Entit
   return { mode, tabs: [] };
 }
 
-/** The whole preference with nothing configured. */
-export function emptyRelationTabs(): RelationTabs {
-  return { mode: 'stacked', entities: {} };
-}
-
 /** The tabs of an arrangement, in display order. Ties break by the stored position. */
 export function tabsOf(entity: EntityRelationTabs | null | undefined): RelationTab[] {
   if (!entity) return [];
@@ -142,19 +131,18 @@ export function tabsOf(entity: EntityRelationTabs | null | undefined): RelationT
 }
 
 /**
- * The default arrangement of an entity the user has never arranged: **one tab per relation**.
+ * The default arrangement of an entity that has never been arranged: **one tab per relation**.
  *
- * It is computed, never stored. A user who switches an entity to tab mode and never touches the
- * editor keeps an empty stored value, so the preference stays exactly as small as the user made
- * it; the first edit materializes the arrangement.
+ * It is computed, never stored. An entity switched to tab mode without an explicit arrangement
+ * shows one tab per relation, so the strip is useful from the first render; the first edit
+ * materializes the arrangement.
  *
  * Why one tab per relation and not a single *Other* tab holding everything: the mode promises a
  * strip, and one tab with every relation in it is today's stacked page under another name — and it
  * would fetch every relation on the first paint, which is the cost the mode exists to remove. The
- * *Other* pool stays what it is for: the relations the user has moved out of a tab.
+ * *Other* pool stays what it is for: the relations that were moved out of a tab.
  *
- * `labelOf` supplies the tab label — the relation's own display name. A seeded tab that the user
- * keeps keeps that label; a tab the user renames is user data and is never translated again.
+ * `labelOf` supplies the tab label — the relation's own display name.
  */
 export function seedArrangement(
   relationNames: readonly string[],
@@ -186,9 +174,9 @@ export function unassignedOf(entity: EntityRelationTabs, relationNames: readonly
 /**
  * Reconciles a stored arrangement with the relations an entity actually has.
  *
- * Unknown relation names are dropped (the relation was renamed or removed since the preference was
- * written), a relation listed in two tabs keeps its first tab, and the tab order is preserved. The
- * dropped relations are *not* deleted from the stored preference: the stored value stays the
+ * Unknown relation names are dropped (the relation was renamed or removed since the arrangement
+ * was written), a relation listed in two tabs keeps its first tab, and the tab order is preserved.
+ * The dropped relations are *not* deleted from the stored arrangement: the stored value stays the
  * source of truth for writes, and only the view is reconciled.
  */
 export function normalizeArrangement(
@@ -284,28 +272,6 @@ export function orderTabs(entity: EntityRelationTabs, tabIds: readonly string[])
   return { ...entity, tabs: ordered.map((tab, index) => ({ ...tab, order: index })) };
 }
 
-/**
- * The mode that applies to an entity: its own setting when it has one, the user's default
- * otherwise. An entity the user never configured follows the default, which is `stacked` — so a user
- * who never opens the control sees today's page.
- */
-export function resolveMode(preference: RelationTabs | null | undefined, entity: string): RelationTabMode {
-  const stored = preference?.entities[entity];
-  if (stored?.mode === 'tabs') return 'tabs';
-  if (stored?.mode === 'stacked') return 'stacked';
-  return preference?.mode === 'tabs' ? 'tabs' : 'stacked';
-}
-
-/** The preference with one entity's arrangement replaced. Other entities are untouched. */
-export function withEntity(preference: RelationTabs, entity: string, arrangement: EntityRelationTabs): RelationTabs {
-  return { ...preference, entities: { ...preference.entities, [entity]: arrangement } };
-}
-
-/** The arrangement stored for an entity, or an empty one. */
-export function entityArrangement(preference: RelationTabs | null | undefined, entity: string): EntityRelationTabs {
-  return preference?.entities[entity] ?? emptyEntityArrangement();
-}
-
 /** What the record page needs to render one entity's relation area. */
 export interface ResolvedRelationTabs {
   /** The mode that applies to this entity. */
@@ -319,12 +285,23 @@ export interface ResolvedRelationTabs {
 /**
  * Resolves the relation area of one entity: the mode, the reconciled tabs and the unassigned pool.
  * The stored arrangement stays untouched — only this view is reconciled.
+ *
+ * An entity that has never been arranged and is not in tab mode shows the stacked page, so the
+ * arrangement of an entity nobody configured is never computed for nothing.
  */
 export function resolveEntityTabs(
-  preference: RelationTabs | null | undefined,
-  entity: string,
+  stored: EntityRelationTabs | null | undefined,
   relationNames: readonly string[],
+  labelOf: (relation: string) => string,
 ): ResolvedRelationTabs {
-  const arrangement = normalizeArrangement(entityArrangement(preference, entity), relationNames);
-  return { mode: resolveMode(preference, entity), tabs: tabsOf(arrangement), unassigned: unassignedOf(arrangement, relationNames) };
+  const mode = stored?.mode === 'tabs' ? 'tabs' : 'stacked';
+  if (mode === 'stacked') return { mode, tabs: [], unassigned: [] };
+  const arrangement = normalizeArrangement(stored, relationNames);
+  const tabs = tabsOf(arrangement);
+  // An entity in tab mode without an arrangement shows one tab per relation.
+  if (tabs.length === 0) {
+    const seeded = seedArrangement(relationNames, labelOf);
+    return { mode, tabs: seeded, unassigned: [] };
+  }
+  return { mode, tabs, unassigned: unassignedOf(arrangement, relationNames) };
 }

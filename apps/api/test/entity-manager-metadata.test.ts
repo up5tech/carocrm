@@ -65,6 +65,75 @@ describe('Phase 8 — entity layout configuration', () => {
   });
 });
 
+/**
+ * Phase 20.18 — the record-page relation tabs (PLAN_Phase_20_Settings_UX.md §5.11).
+ *
+ * The arrangement is entity metadata: it belongs to the entity's detail layout, so it is written
+ * through the same `POST /Metadata/:entity` route as the panels. The rules are the schema's — a
+ * relation belongs to at most one tab, and a tab may only name a relation the entity has.
+ */
+describe('Phase 20.18 — record-page relation tabs', () => {
+  const arrangement = {
+    mode: 'tabs',
+    tabs: [
+      { id: 'people', label: 'People', order: 0, relations: ['contacts'] },
+      { id: 'commercial', label: 'Commercial', order: 1, relations: ['quotes', 'invoices'] },
+    ],
+  };
+
+  afterAll(async () => {
+    // Leave the entity on the stacked page, exactly as it was before the test.
+    await call('POST', `/api/v1/Metadata/${ENTITY}`, adminToken, { detailTabs: { mode: 'stacked', tabs: [] } });
+  });
+
+  it('stores the arrangement on the entity and serves it back', async () => {
+    const ok = await call('POST', `/api/v1/Metadata/${ENTITY}`, adminToken, { detailTabs: arrangement });
+    expect(ok.status).toBe(200);
+    expect(ok.body['detailTabs']).toMatchObject({ mode: 'tabs' });
+
+    const read = await call('GET', `/api/v1/Metadata/${ENTITY}`, adminToken);
+    const served = read.body['detailTabs'] as { mode?: string; tabs?: { id: string }[] };
+    expect(served.mode).toBe('tabs');
+    expect(served.tabs?.map((tab) => tab.id)).toEqual(['people', 'commercial']);
+
+    // The record page reads the whole metadata document, not one entity at a time, so the section
+    // has to survive the list route and the label translation it applies.
+    const bulk = await call('GET', '/api/v1/Metadata', adminToken);
+    const fromList = (bulk.body[ENTITY] as { detailTabs?: { mode?: string } } | undefined)?.detailTabs;
+    expect(fromList?.mode).toBe('tabs');
+  });
+
+  it('refuses a relation listed in two tabs', async () => {
+    const duplicated = {
+      mode: 'tabs',
+      tabs: [
+        { id: 'a', label: 'A', order: 0, relations: ['contacts'] },
+        { id: 'b', label: 'B', order: 1, relations: ['contacts'] },
+      ],
+    };
+    const refused = await call('POST', `/api/v1/Metadata/${ENTITY}`, adminToken, { detailTabs: duplicated });
+    expect(refused.status).toBe(422);
+    expect(errorOf(refused.body)).toBe('VALIDATION_FAILED');
+  });
+
+  it('refuses a tab that names a relation the entity does not have', async () => {
+    const unknown = {
+      mode: 'tabs',
+      tabs: [{ id: 'x', label: 'X', order: 0, relations: ['aRelationThatNoLongerExists'] }],
+    };
+    const refused = await call('POST', `/api/v1/Metadata/${ENTITY}`, adminToken, { detailTabs: unknown });
+    expect(refused.status).toBe(422);
+    expect(errorOf(refused.body)).toBe('VALIDATION_FAILED');
+  });
+
+  it('leaves the stored arrangement untouched when a write is refused', async () => {
+    const read = await call('GET', `/api/v1/Metadata/${ENTITY}`, adminToken);
+    const served = read.body['detailTabs'] as { mode?: string; tabs?: { id: string }[] };
+    expect(served.mode).toBe('tabs');
+    expect(served.tabs?.map((tab) => tab.id)).toEqual(['people', 'commercial']);
+  });
+});
+
 describe('Phase 8 — entity index configuration', () => {
   it('accepts a valid index and refuses unknown / reserved field keys', async () => {
     const ok = await call('POST', `/api/v1/Metadata/${ENTITY}`, adminToken, {

@@ -147,14 +147,16 @@ behaviour, so none of them is an EspoCRM compatibility question.
 
 ## Known limitations after sub-phase 20.18 (record-page relation tabs)
 
-The relation area of a record page can render as today's stacked panels or as tabs the user
-arranges (PLAN_Phase_20_Settings_UX.md §5.11). The arrangement is a per-user preference, so no
-upstream behaviour is changed; these are the gaps in the shipped arrangement.
+The relation area of a record page can render as today's stacked panels or as tabs the
+administrator arranges in the entity's **detail layout settings**
+(PLAN_Phase_20_Settings_UX.md §5.11). The arrangement is entity metadata, written through
+`POST /Metadata/:entity` next to `layouts`; the record page only renders it and offers no editor.
+These are the gaps in the shipped arrangement.
 
-- **The in-app navigation blocker for a dirty draft is missing.** Leaving the record page with a
-  browser reload warns; an in-app link from outside the record page is not intercepted, because
-  the app is mounted with a plain `BrowserRouter` — the same limitation the settings shell
-  documents.
+- **The in-app navigation blocker for a dirty draft is missing.** A tab edit rides the layout
+  editor's draft, so it inherits that editor's save bar and dirty guard; an in-app link outside the
+  settings shell is not intercepted, because the app is mounted with a plain `BrowserRouter` — the
+  same limitation the settings shell documents.
 - **A relation cannot be reordered inside a tab.** The chip moves between tabs; the order of the
   relations within a tab follows the entity's own relation order.
 - **The tab strip scrolls instead of wrapping.** A very wide arrangement scrolls horizontally rather
@@ -162,14 +164,21 @@ upstream behaviour is changed; these are the gaps in the shipped arrangement.
 - **The implicit *Other* tab cannot be renamed or moved.** It is the computed fallback pool, and
   its id is reserved so a `?tab=other` link always means the pool.
 - **A tab that lost every relation to the ACL is hidden, not emptied.** Its stored arrangement is
-  kept, because permissions can come back; a user who wants it back can restore the relation.
-- **The arrangement is not shared.** There is no role-scoped or team-scoped default arrangement; the
-  only shared control is the top-level "use tabs for all record types" default, which each user
-  sets for themselves.
+  kept, because permissions can come back.
+- **The arrangement is not per user.** It is one layout per entity: every user of that entity sees
+  the same tabs. That is deliberate — the record page is a shared surface and a page whose sections
+  move per viewer cannot be referenced in support, training or a link — but it is a deviation from
+  the first draft of the sub-phase, which kept the strip in a per-user preference. There is no
+  role-scoped or team-scoped variant either.
+- **A stored section that names a relation the entity no longer has is not refused on write until it
+  is edited.** The record page and the layout editor both reconcile it against
+  `definition.relations`, so the stale name is dropped rather than resurfacing; a direct API patch
+  that still carries it is refused with `422`.
+- **A `detailTabs` preference written by the first implementation is inert.** The name was removed
+  from `PREFERENCE_SCHEMAS`; an existing row stays in `user_preferences`, but no route serves it and
+  the arrangement now lives in the entity's `detailTabs` metadata. No migration removes the row.
 - **The UI half has no automated coverage.** This repository has no frontend test runner, so the
-  component is covered by the unit tests of the pure helpers
-  (`packages/metadata/src/relation-tabs.test.ts`), the API tests of the preference
-  (`apps/api/test/user-preferences.test.ts`) and a browser walkthrough.
-- **The `detailTabs` preference is not covered by an axe audit** either, for the same reason the
-  20.16 audit is missing.
-
+  components are covered by the unit tests of the pure helpers
+  (`packages/metadata/src/relation-tabs.test.ts`), the API tests of the metadata section
+  (`apps/api/test/entity-manager-metadata.test.ts`) and a browser walkthrough.
+- **The editor is not covered by an axe audit**, for the same reason the 20.16 audit is missing.

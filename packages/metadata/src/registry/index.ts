@@ -130,6 +130,9 @@ export class MetadataRegistry {
         relations: this.getRelations(name),
         indexes: def.indexes ?? [],
         layouts: def.layouts ?? {},
+        // The record page's relation area (PLAN_Phase_20 §5.11). The SPA reads the whole document in
+        // one call, so a section omitted here never reaches the page that renders it.
+        detailTabs: def.detailTabs,
         record: def.record,
         client: def.client,
         nav: def.nav,

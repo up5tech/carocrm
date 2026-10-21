@@ -37,8 +37,9 @@ Code: `apps/web/src/pages/EntityDetailPage.tsx`, `apps/web/src/pages/EntityEditP
 - **Next-action band** — there is no computed "Log a call / Create invoice / Advance stage" band. It
   is a hint, not an automation, and it needs the activity model to be reliable.
 - **Inline-editable name** — the name is edited through the form, not in the header.
-- **Progressive disclosure** — the detail page renders its panels in one column. The collapsible /
-  tabbed variant is not built.
+- **Progressive disclosure** — the detail page renders its field panels in one column. The
+  collapsible variant is not built. Relation panels can be grouped into tabs, but that is the
+  entity's layout (`detailTabs`, see `docs/ux/record-tabs.md`), not a fold for field panels.
 - **"Save & new"** — the form offers Save and Cancel only.
 - **Smart defaults** — a new record starts empty apart from what the entity metadata provides.
 - **Focus management on validation failure** — the first invalid field is not focused

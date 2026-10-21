@@ -1207,22 +1207,14 @@ body {
    Phase 20.18 — the record page's relation area in tab mode (§5.11).
 
    The stacked panels are the record page's own cards; in tab mode the same
-   cards live under a tab strip, so the area only adds the toolbar, the strip
-   and the arrangement editor.
+   cards live under a tab strip. The arrangement editor below lives in the
+   entity's detail layout settings, not on the record page.
    --------------------------------------------------------------------------- */
 .carocrm-relation-area {
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-width: 0;
-}
-.carocrm-relation-loading {
-  align-items: center;
-  padding: 24px 0;
-}
-.carocrm-relation-toolbar {
-  display: flex;
-  justify-content: flex-end;
 }
 .carocrm-relation-panels {
   display: flex;
@@ -1246,7 +1238,7 @@ body {
   color: #8c8c8c;
   font-size: 12px;
 }
-/* The arrangement editor: one block per tab, plus the computed "Other" pool. */
+/* The layout settings' arrangement editor: one block per tab, plus the computed "Other" pool. */
 .carocrm-relation-editor {
   display: flex;
   flex-direction: column;
@@ -1307,10 +1299,6 @@ body {
 /* On a phone the chip takes the whole width and its "Move to…" select grows with it, so the
    editor stays readable without horizontal scrolling. */
 @media (max-width: 390px) {
-  .carocrm-relation-toolbar {
-    justify-content: flex-start;
-  }
-
   .carocrm-relation-chip {
     width: 100%;
   }

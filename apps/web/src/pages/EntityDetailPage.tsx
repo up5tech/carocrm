@@ -13,12 +13,11 @@ import { CommunicationsPanel } from '../components/CommunicationsPanel.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
 import { PortalCaseConversation } from '../components/PortalCaseConversation.js';
-import { type RelationAccess,RelationTabs } from '../components/RelationTabs.js';
+import { type RelationAccess, RelationTabs } from '../components/RelationTabs.js';
 import { SalesDocumentLinesPanel } from '../components/SalesDocumentLinesPanel.js';
 import { StreamPanel } from '../components/StreamPanel.js';
 import { salesDocumentKind } from '../sales/documents.js';
 import { PORTAL_HIDDEN_CASE_FIELDS } from '../service-desk/portal-case-fields.js';
-import { useDetailTabs } from '../state/detail-tabs.js';
 import { t } from '../state/i18n.js';
 import { evaluateEntityLogic } from '../state/logic.js';
 import {
@@ -184,9 +183,9 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
 /**
  * The relation area of a record page (PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
  *
- * The user chooses per entity whether the relations render as today's stacked panels or as tabs
- * they arrange themselves. The arrangement lives in the user's `detailTabs` preference; this
- * component only decides which rendering to use and hands the panels over.
+ * The entity's `detailTabs` metadata decides whether the relations render as today's stacked panels
+ * or as tabs an administrator arranged in Entity Manager → Layout → detail. This component only
+ * reads that section and hands the panels over; the record page offers no editor of its own.
  *
  * Three things stay outside the tab area, because they are not link lists:
  *
@@ -224,8 +223,9 @@ function RelationSection({
   );
 
   // The portal stays stacked: customer-facing surfaces are out of scope (§5.11 rule 9), so the
-  // arrangement is neither fetched nor offered there.
-  const controller = useDetailTabs(entity, linkRelations, labelOf, base !== '/portal');
+  // entity's arrangement is ignored there.
+  const arrangement = base === '/portal' ? undefined : definition?.detailTabs;
+  const tabsMode = arrangement?.mode === 'tabs';
 
   const renderPanel = useCallback(
     (relation: string, report: (access: RelationAccess) => void) => (
@@ -239,11 +239,11 @@ function RelationSection({
         targetDefinition={metadata?.[definition?.relations[relation]?.target ?? ''] ?? undefined}
         onAccess={report}
         // In tab mode a relation the caller may not read renders nothing; the stacked page keeps
-        // today's empty card, so a user who never opens the control sees the same page (§5.11).
-        hideWhenDenied={controller.mode === 'tabs'}
+        // today's empty card, so an entity whose layout is untouched sees the same page (§5.11).
+        hideWhenDenied={tabsMode}
       />
     ),
-    [entity, id, definition, metadata, base, controller.mode],
+    [entity, id, definition, metadata, base, tabsMode],
   );
 
   return (
@@ -252,8 +252,7 @@ function RelationSection({
         <SalesDocumentLinesPanel kind={documentKind} id={id} />
       ) : null}
       <RelationTabs
-        entity={entity}
-        controller={controller}
+        arrangement={arrangement}
         relationNames={linkRelations}
         labelOf={labelOf}
         renderPanel={renderPanel}

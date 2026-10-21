@@ -1,4 +1,3 @@
-import { RelationTabsSchema } from '@carocrm/metadata/relation-tabs.js';
 import { z } from 'zod';
 
 /**
@@ -23,17 +22,6 @@ export const PREFERENCE_SCHEMAS = {
   favorites: z.array(z.string().min(3).max(200)).max(500),
   lastVisited: z.array(z.string().min(1).max(200)).max(50),
   dismissedSetupSteps: z.array(z.string().min(1).max(64)).max(50),
-  /**
-   * Record-page relation tabs (PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18): the user's
-   * per-entity arrangement of the relation panels, either today's stacked panels or tabs they
-   * create, rename, reorder and fill themselves.
-   *
-   * The schema lives in `@carocrm/metadata` so the server validates a write and the SPA normalizes
-   * a read with the same code. Relation names are deliberately not checked against entity metadata:
-   * a preference written before a relation was renamed must keep working, so an unknown name is
-   * dropped on read and never refused on write.
-   */
-  detailTabs: RelationTabsSchema,
 } as const;
 
 export type PreferenceName = keyof typeof PREFERENCE_SCHEMAS;
