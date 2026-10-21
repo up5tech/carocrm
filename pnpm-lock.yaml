@@ -457,6 +457,19 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/docs:
+    dependencies:
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
   packages/document:
     devDependencies:
       '@types/node':

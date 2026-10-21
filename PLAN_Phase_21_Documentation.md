@@ -1119,7 +1119,14 @@ defaults apply.
 Each sub-phase is independently reviewable and leaves the tree green. Do not attempt the whole phase
 in one pass.
 
-### Phase 21.0 — Audit, content contract and parser skeleton 📋
+> **Progress (2026-10-21).** 21.0, 21.1 and 21.4 are done; 21.3 is done except its screenshots, which need
+> a browser pass this scope excluded. `packages/docs` (parser, index, search, links, lint) is green with
+> 172 unit tests, `content/docs/en/` carries the 17 P0 pages plus four section descriptors, and the corpus
+> lint runs inside `pnpm test` from `packages/docs/src/corpus.test.ts` rather than
+> `apps/api/test/docs-content.test.ts` — that file needs the Phase 21.2 module, which is not built yet.
+> 21.2, 21.5–21.10 remain unimplemented, so `/docs` is not yet reachable by a reader.
+
+### Phase 21.0 — Audit, content contract and parser skeleton ✅
 
 Tasks:
 
@@ -1136,7 +1143,7 @@ Tasks:
 Acceptance: `pnpm --filter @carocrm/docs build` and the package's unit tests pass; the authoring guide
 describes exactly what the parser will accept.
 
-### Phase 21.1 — The docs engine 📋
+### Phase 21.1 — The docs engine ✅
 
 Tasks:
 
@@ -1171,7 +1178,7 @@ Acceptance: the three endpoints answer for an admin and a CRM user with the §10
 shows the entry and loses it when `showInSidebar` is false without a restart; `pnpm typecheck` and
 `pnpm lint` are clean.
 
-### Phase 21.3 — Administrator handbook content 📋
+### Phase 21.3 — Administrator handbook content ✅ (screenshots pending)
 
 Tasks: the six P0 admin pages (§4.8), each written from the shipped screens, each with at least one
 app link and one "what can go wrong" section; screenshots for `settings-overview` and `main-menu`
@@ -1180,7 +1187,7 @@ only.
 Acceptance: every P0 admin page passes the lint; every settings tab named in the page exists in
 `GET /AdminPanel`; the `docKey` of each of those tabs resolves.
 
-### Phase 21.4 — CRM user guide content 📋
+### Phase 21.4 — CRM user guide content ✅
 
 Tasks: the seven P0 user pages; the `getting-started` section complete (four pages).
 
