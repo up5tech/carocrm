@@ -2741,3 +2741,566 @@ body {
     gap: 4px 18px;
   }
 }
+
+/* ---- Phase 21.5: the in-app handbook (PLAN_Phase_21_Documentation.md §9.3, §5.10, §5.8) ---- */
+
+.carocrm-doc {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.carocrm-doc-grid {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 200px;
+  gap: 32px;
+  align-items: start;
+}
+
+.carocrm-doc-prose {
+  min-width: 0;
+  /* 65–75 characters is the readable band; a 2560px monitor gets prose, not a full-width wall of text. */
+  max-width: 72ch;
+  font-size: 15px;
+  line-height: 1.65;
+  color: #31373d;
+}
+
+.carocrm-doc-prose h1 {
+  margin: 0 0 8px;
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 600;
+}
+
+.carocrm-doc-prose h2,
+.carocrm-doc-side h2,
+.carocrm-doc-doors + .carocrm-doc-start h2,
+.carocrm-doc-recent h2 {
+  margin: 32px 0 8px;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+}
+
+.carocrm-doc-prose h3 {
+  margin: 24px 0 6px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.carocrm-doc-prose h4 {
+  margin: 20px 0 4px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  color: #5b636d;
+}
+
+/* A heading that can take focus is what makes an anchor link land somewhere a keyboard can feel. */
+.carocrm-doc-prose :is(h1, h2, h3, h4):focus-visible {
+  outline: 2px solid #438eff;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.carocrm-doc-prose p {
+  margin: 0 0 0.9em;
+}
+
+.carocrm-doc-prose ul,
+.carocrm-doc-prose ol {
+  margin: 0 0 0.9em;
+  padding-left: 22px;
+}
+
+.carocrm-doc-prose li {
+  margin-bottom: 4px;
+}
+
+.carocrm-doc-lede {
+  margin: 0 0 24px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: #737b85;
+}
+
+.carocrm-doc-code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f5f7fa;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.92em;
+}
+
+.carocrm-doc-pre {
+  margin: 0 0 1em;
+  padding: 12px 14px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #f5f7fa;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.carocrm-doc-pre code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+/* A table scrolls inside its own container so the page never scrolls sideways at 390px (§5.10). */
+.carocrm-doc-table-scroll {
+  margin: 0 0 1em;
+  overflow-x: auto;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+}
+
+.carocrm-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.carocrm-doc-table th,
+.carocrm-doc-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #eff2f7;
+  text-align: left;
+  vertical-align: top;
+}
+
+.carocrm-doc-table th {
+  background: #fafafa;
+  font-weight: 600;
+  color: #5b636d;
+  white-space: nowrap;
+}
+
+.carocrm-doc-table tr:last-child td {
+  border-bottom: none;
+}
+
+.carocrm-doc-figure {
+  margin: 0 0 1em;
+}
+
+.carocrm-doc-figure img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+}
+
+.carocrm-doc-figure figcaption {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #737b85;
+}
+
+.carocrm-doc-callout {
+  margin: 0 0 1em;
+}
+
+.carocrm-doc-callout p:last-child {
+  margin-bottom: 0;
+}
+
+.carocrm-doc-rule {
+  margin: 28px 0;
+  border: none;
+  border-top: 1px solid #eff2f7;
+}
+
+.carocrm-doc-crumb {
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #737b85;
+}
+
+.carocrm-doc-ext-icon {
+  margin-inline-start: 3px;
+  font-size: 11px;
+  color: #737b85;
+}
+
+/* A link the reader cannot follow is said in place, not answered with a 404 that looks broken (§9.2). */
+.carocrm-doc-deadlink {
+  color: #fa626b;
+  font-style: italic;
+}
+
+.carocrm-doc-fallback {
+  margin-bottom: 16px;
+}
+
+.carocrm-doc-fallback-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-inline-start: 6px;
+  border-radius: 50%;
+  background: #f8ac59;
+  vertical-align: middle;
+}
+
+.carocrm-doc-disclaimer {
+  margin-top: 28px;
+  padding-top: 12px;
+  border-top: 1px solid #eff2f7;
+  font-size: 13px;
+  color: #737b85;
+}
+
+.carocrm-doc-missing {
+  padding: 24px 0;
+}
+
+/* ---- left rail: sections, then the pages of the one you are in ---- */
+
+.carocrm-doc-rail {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.carocrm-doc-rail-home {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #737b85;
+}
+
+.carocrm-doc-rail-section {
+  margin-bottom: 14px;
+}
+
+.carocrm-doc-rail-section-title {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #31373d;
+}
+
+.carocrm-doc-rail-section-title:hover {
+  background: #f5f7fa;
+}
+
+.carocrm-doc-rail-pages {
+  margin: 4px 0 0;
+  padding: 0 0 0 8px;
+  list-style: none;
+  border-inline-start: 1px solid #eff2f7;
+}
+
+.carocrm-doc-rail-page {
+  display: block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #5b636d;
+}
+
+.carocrm-doc-rail-page:hover {
+  background: #f5f7fa;
+  color: #438eff;
+}
+
+.carocrm-doc-rail-page[aria-current='page'] {
+  background: #f0f8ff;
+  color: #438eff;
+  font-weight: 600;
+}
+
+/* ---- right rail: contents + the actions that end at a screen ---- */
+
+.carocrm-doc-side {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+
+.carocrm-doc-toc {
+  font-size: 13px;
+}
+
+.carocrm-doc-toc-title {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #737b85;
+}
+
+.carocrm-doc-toc ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-inline-start: 1px solid #eff2f7;
+}
+
+.carocrm-doc-toc li {
+  margin: 0;
+}
+
+.carocrm-doc-toc-item--sub a {
+  padding-inline-start: 12px;
+}
+
+.carocrm-doc-toc a {
+  display: block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: #5b636d;
+}
+
+.carocrm-doc-toc a:hover {
+  color: #438eff;
+}
+
+.carocrm-doc-toc a[aria-current='true'] {
+  color: #438eff;
+  font-weight: 600;
+  background: #f0f8ff;
+}
+
+.carocrm-doc-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ---- landing, section cards, pager ---- */
+
+.carocrm-doc-doors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.carocrm-doc-door,
+.carocrm-doc-card {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: inherit;
+}
+
+.carocrm-doc-door:hover,
+.carocrm-doc-card:hover {
+  border-color: #438eff;
+}
+
+.carocrm-doc-door-title,
+.carocrm-doc-card-title {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: #31373d;
+}
+
+.carocrm-doc-door-summary,
+.carocrm-doc-card-summary {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #737b85;
+}
+
+.carocrm-doc-door-pages {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: #5b636d;
+}
+
+.carocrm-doc-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carocrm-doc-card-updated {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #737b85;
+}
+
+.carocrm-doc-linklist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carocrm-doc-linklist li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eff2f7;
+}
+
+.carocrm-doc-start-summary {
+  font-size: 13px;
+  color: #737b85;
+}
+
+.carocrm-doc-related ul {
+  padding-left: 20px;
+}
+
+.carocrm-doc-pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid #eff2f7;
+  font-size: 14px;
+}
+
+/* Between 900 and 1180 the contents list competes with the prose for nothing (§5.10 hides it); the
+   component already knows the width, and this is the backstop so CSS and JS cannot disagree. */
+@media (min-width: 900px) and (max-width: 1179px) {
+  .carocrm-doc-toc {
+    display: none;
+  }
+}
+
+.carocrm-doc-toc-details {
+  border: 1px solid #eff2f7;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.carocrm-doc-toc-details > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5b636d;
+}
+
+.carocrm-doc-toc-details[open] > summary {
+  margin-bottom: 8px;
+}
+
+/* Two columns when the table of contents no longer fits; one column, and no sideways page, on a phone. */
+@media (max-width: 1179px) {
+  .carocrm-doc-grid {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .carocrm-doc-side {
+    grid-column: 1 / -1;
+    position: static;
+    max-height: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .carocrm-doc-tools {
+    flex-direction: row;
+  }
+}
+
+@media (max-width: 899px) {
+  .carocrm-doc-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .carocrm-doc-rail {
+    position: static;
+    max-height: none;
+  }
+
+  .carocrm-doc-prose {
+    max-width: none;
+  }
+
+  .carocrm-doc-pager {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+.carocrm-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Print is a deliverable, not an accident (§5.8): an administrator hands this to someone as a sheet.
+ * The chrome disappears, the measure becomes the page, a link prints its own target, and every page
+ * of the handbook starts on a new sheet.
+ */
+@media print {
+  .carocrm-sider,
+  .carocrm-header,
+  .carocrm-footer,
+  .carocrm-doc-rail,
+  .carocrm-doc-side,
+  .carocrm-doc-pager,
+  .carocrm-doc-crumb {
+    display: none !important;
+  }
+
+  .carocrm-doc-grid {
+    display: block;
+  }
+
+  .carocrm-doc-prose {
+    max-width: none;
+    font-size: 11pt;
+    color: #000000;
+  }
+
+  .carocrm-doc-prose a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 9pt;
+    color: #555555;
+  }
+
+  .carocrm-doc-table-scroll {
+    overflow: visible;
+  }
+
+  .carocrm-doc-prose h2,
+  .carocrm-doc-prose h3 {
+    break-after: avoid;
+  }
+
+  .carocrm-doc-callout,
+  .carocrm-doc-pre,
+  .carocrm-doc-table-scroll {
+    break-inside: avoid;
+  }
+}

@@ -1,4 +1,5 @@
 /** Field + entity definitions as served by `GET /api/v1/Metadata` (PLAN §12, §79). */
+import type { DocPage, DocSearchHit, DocSection } from '@carocrm/docs';
 import type { EntityRelationTabs } from '@carocrm/metadata/relation-tabs.js';
 
 export interface FieldDefinition {
@@ -2842,3 +2843,44 @@ export interface CRMChatSettingsView {
   readonly features: Record<string, boolean>;
   readonly effectiveFeatures: Record<string, boolean>;
 }
+
+/**
+ * Phase 21.5 — the in-app handbook (PLAN_Phase_21_Documentation.md §8.2, §9.1).
+ *
+ * The block contract is imported from `@carocrm/docs` rather than copied: the API serialises the engine's
+ * `DocBlock` tree and the SPA renders it, so a type duplicated here would be a second definition of the
+ * product's content model, free to drift. The tree/page/search views below are the HTTP shapes, which the
+ * engine does not own.
+ */
+export type { DocBlock, DocCalloutVariant, DocInline, DocPage, DocPageMeta, DocSearchHit, DocSection, DocTocEntry } from '@carocrm/docs';
+
+export interface DocsTreeView {
+  readonly enabled: boolean;
+  readonly externalUrl: string | null;
+  readonly locale: string;
+  readonly fallbackLocale: string;
+  readonly hash: string;
+  readonly sections: readonly DocSection[];
+}
+
+export interface DocsPageView {
+  readonly page: DocPage;
+}
+
+export interface DocsSearchView {
+  readonly query: string;
+  readonly locale: string;
+  readonly total: number;
+  readonly hits: readonly DocSearchHit[];
+}
+
+/** The `docs` settings document, read through the settings-document registry (§6.1). */
+export interface DocsSettingsView {
+  readonly enabled: boolean;
+  readonly showInSidebar: boolean;
+  readonly showHelpMenu: boolean;
+  readonly externalUrl: string | null;
+  readonly landingPage: string | null;
+  readonly supportEmail: string | null;
+}
+

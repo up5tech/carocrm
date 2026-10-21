@@ -5,6 +5,7 @@ audience: user
 order: 30
 tags: [profile, language, timezone, avatar]
 related: [getting-started/sign-in, admin/branding-and-localization]
+updated: 2026-10-21
 ---
 
 Open your profile with the **My profile** item in the [avatar menu](getting-started/find-your-way), or go

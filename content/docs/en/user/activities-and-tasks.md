@@ -5,6 +5,7 @@ audience: user
 order: 30
 tags: [task, call, meeting, calendar]
 related: [user/record-page, user/dashboards-and-reports]
+updated: 2026-10-21
 ---
 
 There are two different things called a task in this product, and mixing them up is the most common

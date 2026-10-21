@@ -5,6 +5,7 @@ audience: admin
 order: 60
 tags: [entity, field, layout, metadata]
 related: [admin/settings-overview, admin/main-menu]
+updated: 2026-10-21
 ---
 
 The CRM is driven by metadata: what a record type is, which fields it has, how its screens are arranged. All

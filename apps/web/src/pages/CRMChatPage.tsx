@@ -42,6 +42,7 @@ export function CRMChatPage() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [search, setSearch] = useState('');
+  const [composerReset, setComposerReset] = useState(0);
 
   const capabilities = useQuery({
     queryKey: ['crmChat', 'capabilities'],
@@ -236,8 +237,17 @@ export function CRMChatPage() {
             className="carocrm-card"
             title={t('web.crmChat.conversationsTitle')}
             extra={
-              <Tooltip title={t('web.crmChat.newConversationUnavailable')}>
-                <Button size="small" disabled>
+              <Tooltip title={t('web.crmChat.newConversationHint')}>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setSelectedId(undefined);
+                    setOlder([]);
+                    setCursor(null);
+                    setHasMore(false);
+                    setComposerReset((current) => current + 1);
+                  }}
+                >
                   {t('web.crmChat.newConversation')}
                 </Button>
               </Tooltip>
@@ -329,7 +339,13 @@ export function CRMChatPage() {
             {selectedId === undefined ? (
               <Empty
                 image={<CustomerServiceOutlined style={{ color: '#bfc6d3', fontSize: 40 }} />}
-                description={<Typography.Text type="secondary">{t('web.crmChat.selectConversation')}</Typography.Text>}
+                description={
+                  <Typography.Text type="secondary">
+                    {data.actions.canStartTurn
+                      ? t('web.crmChat.startConversationHint')
+                      : t('web.crmChat.selectConversation')}
+                  </Typography.Text>
+                }
                 style={{ padding: '8px 0' }}
               />
             ) : null}
@@ -359,13 +375,20 @@ export function CRMChatPage() {
             <div style={{ marginTop: 16 }}>
               <CRMChatComposer
                 conversationId={selectedId}
-                enabled={data.actions.canStartTurn && selectedId !== undefined}
+                enabled={data.actions.canStartTurn}
                 maxMessageChars={data.limits.maxMessageChars}
                 turnTimeoutSeconds={data.limits.turnTimeoutSeconds}
                 canManagePrompts={promptsGranted}
-                onTurnSubmitted={() => {
-                  // Refresh conversation detail after turn submission.
-                  void detail.refetch();
+                resetSignal={composerReset}
+                onTurnSubmitted={(result) => {
+                  // The first turn creates the conversation (contract D2); select it so the streamed
+                  // answer and the history render instead of leaving the thread empty.
+                  if (result.conversationId !== null) {
+                    setSelectedId(result.conversationId);
+                    setOlder([]);
+                    setCursor(null);
+                    setHasMore(false);
+                  }
                 }}
               />
             </div>

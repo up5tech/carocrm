@@ -5,6 +5,7 @@ audience: admin
 order: 20
 tags: [brand, localization, locale, timezone]
 related: [admin/settings-overview, admin/main-menu]
+updated: 2026-10-21
 ---
 
 Two tabs, both under [Administration](/admin/settings): **General** for what the product is called, and

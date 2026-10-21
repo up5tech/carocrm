@@ -5,6 +5,7 @@ audience: admin
 order: 50
 tags: [api, keys, integration, security]
 related: [admin/users-teams-roles, admin/settings-overview]
+updated: 2026-10-21
 ---
 
 **Open this screen:** [API keys](/admin/settings/apiKeys).

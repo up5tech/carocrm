@@ -5,6 +5,7 @@ audience: user
 order: 20
 tags: [record, edit, panels, stream]
 related: [user/lists-and-views, user/stream-and-notifications]
+updated: 2026-10-21
 ---
 
 Open any row and you are on its record screen: a title bar with **Edit** and **Delete**, then the panels that

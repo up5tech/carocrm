@@ -5,6 +5,7 @@ audience: admin
 order: 30
 tags: [menu, navigation, sidebar]
 related: [admin/settings-overview, admin/branding-and-localization]
+updated: 2026-10-21
 ---
 
 **Open this screen:** [Main menu settings](/admin/settings/menu).

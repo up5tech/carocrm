@@ -5,6 +5,7 @@ audience: user
 order: 40
 tags: [keyboard, shortcuts, accessibility]
 related: [getting-started/find-your-way, user/record-page]
+updated: 2026-10-21
 ---
 
 These are the shortcuts the product has today. Nothing else is bound: there is no single-key shortcut mode,

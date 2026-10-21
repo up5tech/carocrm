@@ -13,6 +13,9 @@ import { AIAgentsPage } from './pages/AIAgentsPage.js';
 import { CalendarPage } from './pages/CalendarPage.js';
 import { CRMChatPage } from './pages/CRMChatPage.js';
 import { DashboardsPage } from './pages/DashboardsPage.js';
+import { DocsLandingPage } from './pages/docs/DocsLandingPage.js';
+import { DocsPage } from './pages/docs/DocsPage.js';
+import { DocsSectionPage } from './pages/docs/DocsSectionPage.js';
 import { EntityAdminPage } from './pages/EntityAdminPage.js';
 import { EntityBoardPage } from './pages/EntityBoardPage.js';
 import { EntityDetailPage } from './pages/EntityDetailPage.js';
@@ -125,6 +128,12 @@ export function AppRoutes() {
         {/* Phase 19-INT.14: the connector workspace, before the entity wildcard so
             "advanced-integrations" is never read as an entity name. */}
         <Route path="/advanced-integrations" element={<AdvancedIntegrationsPage />} />
+        {/* Phase 21.5: the handbook. `/docs/search` is declared before `/docs/:section` so the word
+            "search" is never read as a section name, and all four sit before the entity wildcard so
+            "docs" is never read as an entity. */}
+        <Route path="/docs" element={<DocsLandingPage />} />
+        <Route path="/docs/:section" element={<DocsSectionPage />} />
+        <Route path="/docs/:section/:slug" element={<DocsPage />} />
         {/* the signed-in user's own page, before the entity wildcard reads "profile" as an entity */}
         <Route path="/profile" element={<MyProfilePage />} />
         {/* Phase 19: the Projects views are static routes, matched before the entity wildcard */}

@@ -5,6 +5,7 @@ audience: user
 order: 40
 tags: [stream, follow, mention, notification]
 related: [user/record-page, user/activities-and-tasks]
+updated: 2026-10-21
 ---
 
 The [stream](/stream) is the running record of what happened in the CRM: notes posted on records, fields

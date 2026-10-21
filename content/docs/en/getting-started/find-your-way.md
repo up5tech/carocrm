@@ -5,6 +5,7 @@ audience: user
 order: 20
 tags: [navigation, sidebar, palette]
 related: [getting-started/your-profile, user/search]
+updated: 2026-10-21
 ---
 
 ## The sidebar

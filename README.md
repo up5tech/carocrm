@@ -92,8 +92,8 @@ existing admin password is never overwritten). `pnpm db:seed -- --demo` addition
 `.env.example` documents every variable; the ones you are most likely to touch are
 `STORAGE_DRIVER`/`S3_*` (attachments), `MAIL_TRANSPORT`/`SMTP_*` (outbound mail, and the transport
 Marketing Automation sends through), `ENCRYPTION_KEY` (32-byte hex key required by email-account
-credentials and extension secrets), `EXTENSIONS_DIR`, `REPORT_WORKER_SECRET` (scheduled report
-delivery) and the upload ceilings. Domain modules keep their configuration in settings
+credentials and extension secrets), `EXTENSIONS_DIR`, `REPORT_WORKER_SECRET` (worker-driven jobs:
+scheduled report delivery and AI Agent runs, including CRM Chat) and the upload ceilings. Domain modules keep their configuration in settings
 (`app_settings`), not in the environment — see `GET /api/v1/MarketingAutomation/action/settings`.
 
 ## Commands

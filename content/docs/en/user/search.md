@@ -5,6 +5,7 @@ audience: user
 order: 50
 tags: [search, palette, find]
 related: [getting-started/find-your-way, user/lists-and-views]
+updated: 2026-10-21
 ---
 
 Two tools answer two different questions: **search** finds a record, the **command palette** finds a screen.

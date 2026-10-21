@@ -1,7 +1,8 @@
 import { SendOutlined, StopOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Input, Space, Typography } from 'antd';
-import { useState } from 'react';
+import type { ComponentRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { CRMChatTurnResult } from '../../api/types.js';
@@ -19,7 +20,9 @@ export interface CRMChatComposerProps {
   readonly turnTimeoutSeconds: number;
   /** Whether the caller may create, edit and remove saved prompt templates. */
   readonly canManagePrompts?: boolean | undefined;
-  readonly onTurnSubmitted?: (turnId: string) => void;
+  readonly onTurnSubmitted?: (result: CRMChatTurnResult) => void;
+  /** Bumped by the page when the user starts a new conversation; clears and focuses the composer. */
+  readonly resetSignal?: number | undefined;
 }
 
 /**
@@ -35,12 +38,30 @@ export interface CRMChatComposerProps {
  * - 19-CHAT.12 — the action proposal card, when a turn asks for a write to be confirmed
  */
 export function CRMChatComposer(props: CRMChatComposerProps) {
-  const { conversationId, enabled, maxMessageChars, turnTimeoutSeconds, canManagePrompts = false, onTurnSubmitted } = props;
+  const { conversationId, enabled, maxMessageChars, turnTimeoutSeconds, canManagePrompts = false, onTurnSubmitted, resetSignal } = props;
 
   const [prompt, setPrompt] = useState('');
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
+  const textAreaRef = useRef<ComponentRef<typeof TextArea>>(null);
+  const seenResetSignal = useRef(resetSignal);
+  // The first turn starts without a conversation id and creates one on the server. Keep the live id
+  // in a ref so the stream's terminal event invalidates the right detail query, not the pre-turn key.
+  const conversationRef = useRef(conversationId);
+  useEffect(() => {
+    conversationRef.current = conversationId;
+  }, [conversationId]);
+
+  // "New" is a client-side action: the thread does not exist until the first turn. Clearing the
+  // draft and focusing the box is the only visible effect it can have before that turn.
+  useEffect(() => {
+    if (resetSignal === undefined || resetSignal === seenResetSignal.current) return;
+    seenResetSignal.current = resetSignal;
+    setPrompt('');
+    setStreamError(null);
+    textAreaRef.current?.focus();
+  }, [resetSignal]);
 
   const queryClient = useQueryClient();
 
@@ -66,8 +87,8 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
         case 'turn.completed':
         case 'turn.failed':
         case 'turn.cancelled':
-          // Invalidate queries to refresh messages.
-          void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversation', conversationId] });
+          // Invalidate queries to refresh messages, including the conversation created by turn one.
+          void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversation', conversationRef.current] });
           setCurrentTurnId(null);
           break;
         case 'heartbeat':
@@ -97,8 +118,13 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
       setCurrentTurnId(result.turnId);
       setPrompt('');
       setStreamError(null);
-      onTurnSubmitted?.(result.turnId);
+      conversationRef.current = result.conversationId ?? conversationRef.current;
+      onTurnSubmitted?.(result);
 
+      // Round one creates the thread; seed its detail cache immediately so the history appears.
+      if (result.conversationId !== null) {
+        void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversation', result.conversationId] });
+      }
       // Invalidate conversations list to show updated lastMessageAt.
       void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversations'] });
     },
@@ -186,6 +212,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
 
       {/* Composer textarea */}
       <TextArea
+        ref={textAreaRef}
         rows={3}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}

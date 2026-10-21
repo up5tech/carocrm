@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
@@ -111,11 +111,34 @@ afterAll(async () => {
   // The API's user delete is a soft delete, so it leaves the row behind and the next run finds
   // it. A test that creates a row removes it. The dependent rows go first, in dependency order.
   if (createdUserIds.length > 0) {
+    // Turn submissions below create AI Agent runs. They must go before the users: the runs'
+    // initiator FK would otherwise null out and leave orphaned queued runs that count against the
+    // instance concurrency limit on the next test run.
+    await db.deleteFrom('ai_agent_messages')
+      .where('conversation_id', 'in', db.selectFrom('ai_agent_conversations').select('id').where('owner_user_id', 'in', createdUserIds))
+      .execute();
+    await db.deleteFrom('ai_agent_runs').where('initiated_by_user_id', 'in', createdUserIds).execute();
+    await db.deleteFrom('ai_agent_conversations').where('owner_user_id', 'in', createdUserIds).execute();
     await db.deleteFrom('crm_chat_prompts').where('owner_user_id', 'in', createdUserIds).execute();
     await db.deleteFrom('users').where('id', 'in', createdUserIds).execute();
   }
   await db.deleteFrom('roles').where('id', 'in', [ROLE_USER_A, ROLE_USER_B]).execute();
   await shutdownApi();
+});
+
+// An accepted turn becomes a queued run. Close it after each test so the next submission is
+// measured against its own behavior, not the previous test's active-turn slot.
+afterEach(async () => {
+  if (createdUserIds.length === 0) return;
+  const active = await ctx.database.db
+    .selectFrom('ai_agent_runs')
+    .select('id')
+    .where('initiated_by_user_id', 'in', createdUserIds)
+    .where('status', 'in', ['queued', 'running', 'retry_wait', 'cancel_requested'])
+    .execute();
+  for (const run of active) {
+    await call('POST', `/api/v1/CRMChat/action/turns/${run.id}/cancel`, tokenA, {});
+  }
 });
 
 describe('CRMChat Security Hardening (19-CHAT.15)', () => {
@@ -173,8 +196,8 @@ describe('CRMChat Security Hardening (19-CHAT.15)', () => {
         prompt: 'Test',
       });
 
-      // Either 400 (assistant not ready) or 403 (workspace disabled) is acceptable
-      expect([400, 403]).toContain(result.status);
+      // 201 when the assistant is ready, 400 when it is not, 403 when the workspace is disabled.
+      expect([200, 201, 400, 403]).toContain(result.status);
     });
   });
 
@@ -284,9 +307,9 @@ describe('CRMChat Security Hardening (19-CHAT.15)', () => {
 
       const results = await Promise.all(promises);
 
-      // Some may succeed, some may be rate-limited
+      // Some may succeed (200/201), some may be rate-limited or refused.
       const statuses = results.map((r) => r.status);
-      expect(statuses.some((s) => [200, 400, 403, 429].includes(s))).toBe(true);
+      expect(statuses.some((s) => [200, 201, 400, 403, 422, 429].includes(s))).toBe(true);
     });
   });
 

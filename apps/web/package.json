@@ -12,6 +12,7 @@
   "dependencies": {
     "@ant-design/icons": "^5.5.0",
     "@carocrm/api-client": "workspace:*",
+    "@carocrm/docs": "workspace:*",
     "@carocrm/core": "workspace:*",
     "@carocrm/formula": "workspace:*",
     "@carocrm/metadata": "workspace:*",

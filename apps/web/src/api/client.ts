@@ -45,6 +45,9 @@ import type {
   CRMChatTurnResult,
   CRMChatTurnStatus,
   CRMChatUsageSummary,
+  DocsPageView,
+  DocsSearchView,
+  DocsTreeView,
   EmailAccountInput,
   EmailAccountRow,
   EmailTransportInfo,
@@ -469,6 +472,11 @@ export interface ScheduleRow {
   data: RecordData;
 }
 
+/** The one query every docs read accepts: the language the reader is looking at (§8.1). */
+function localeSuffix(locale: string | undefined): string {
+  return locale === undefined || locale === '' ? '' : `?locale=${encodeURIComponent(locale)}`;
+}
+
 export const api = {
   login: (userName: string, password: string) =>
     request<LoginResult>('/Authentication', { method: 'POST', body: JSON.stringify({ userName, password }) }),
@@ -506,6 +514,17 @@ export const api = {
     ),
   resetSettingsDocument: <T>(name: string) =>
     request<SettingsDocument<T>>(`/Settings/documents/${encodeURIComponent(name)}/reset`, post({})),
+
+  // Phase 21: the in-app handbook (§8.1). Three reads and no write route — documentation is content that
+  // ships with the release, and its switches live in the `docs` settings document above.
+  docsTree: (locale?: string) => request<DocsTreeView>(`/Docs/tree${localeSuffix(locale)}`),
+  docsPage: (section: string, slug: string, locale?: string) =>
+    request<DocsPageView>(`/Docs/page/${encodeURIComponent(section)}/${encodeURIComponent(slug)}${localeSuffix(locale)}`),
+  docsSearch: (q: string, locale?: string, limit?: number) => {
+    const query = new URLSearchParams({ q });
+    if (limit !== undefined) query.set('limit', String(limit));
+    return request<DocsSearchView>(`/Docs/search?${query.toString()}${locale === undefined ? '' : `&locale=${encodeURIComponent(locale)}`}`);
+  },
 
   // Module settings documents hosted by the settings shell (§8.3): each keeps its own endpoint.
   aiAgentsHealth: () => request<AIAgentsHealthView>('/AIAgents/action/health'),

@@ -5,6 +5,7 @@ audience: user
 order: 10
 tags: [lists, filters, columns, bulk]
 related: [user/record-page, user/import-export]
+updated: 2026-10-21
 ---
 
 A list is the screen you land on when you open a record type, for example [Contacts](/Contact). Everything

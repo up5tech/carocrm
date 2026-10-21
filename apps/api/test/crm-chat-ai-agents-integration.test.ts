@@ -99,15 +99,20 @@ afterAll(async () => {
 });
 
 describe('CRMChat AIAgents Integration Adapter', () => {
-  it('refuses turn submission when assistant is not configured', async () => {
-    // Without a configured assistant agent, the turn endpoint should refuse with an explicit error.
+  it('refuses an unavailable assistant and accepts a configured one', async () => {
     const result = await call('POST', '/api/v1/CRMChat/action/turns', userToken, {
       prompt: 'Test prompt',
     });
 
-    // Either 400 (invalid query/assistant not ready) or 403 (workspace disabled) is acceptable.
-    expect([400, 403]).toContain(result.status);
-    if (result.status === 400) {
+    // 201 when the shared database has a ready assistant; 400/403 when it does not.
+    expect([201, 400, 403]).toContain(result.status);
+    if (result.status === 201) {
+      // A ready assistant creates a run; cancel it so this suite holds no active-run slot.
+      const turnId = String(result.body['turnId'] ?? '');
+      expect(turnId).not.toBe('');
+      const cancelled = await call('POST', `/api/v1/CRMChat/action/turns/${turnId}/cancel`, userToken, {});
+      expect([200, 201, 204]).toContain(cancelled.status);
+    } else if (result.status === 400) {
       const errorCode = String(((result.body['error'] ?? {}) as { code?: string }).code ?? '');
       expect(errorCode).toMatch(/INVALID_QUERY|CHAT_AGENT_UNAVAILABLE/);
     }
@@ -172,8 +177,12 @@ describe('CRMChat AIAgents Integration Adapter', () => {
       prompt: 'Test',
     });
 
-    // Either 400 (assistant not ready) or 403 (workspace disabled) is acceptable here.
-    expect([400, 403]).toContain(result.status);
+    // 201 when the assistant is ready, 400 when it is not, 403 when the workspace is disabled.
+    expect([201, 400, 403]).toContain(result.status);
+    if (result.status === 201) {
+      const turnId = String(result.body['turnId'] ?? '');
+      await call('POST', `/api/v1/CRMChat/action/turns/${turnId}/cancel`, userToken, {});
+    }
   });
 
   it('requires authentication for SSE stream endpoint', async () => {

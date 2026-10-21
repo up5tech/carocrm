@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
@@ -84,10 +84,33 @@ afterAll(async () => {
   // Remove the rows this suite created, by exact id. The API's user delete is a soft delete, so
   // it would leave the row behind for the next run to find.
   if (createdUserIds.length > 0) {
+    // Turn submissions can create AI Agent runs (the assistant may be configured on the shared
+    // database). Remove the run tree before the users so the initiator FK cannot null out and leave
+    // orphaned queued runs consuming the instance concurrency budget.
+    await db.deleteFrom('ai_agent_messages')
+      .where('conversation_id', 'in', db.selectFrom('ai_agent_conversations').select('id').where('owner_user_id', 'in', createdUserIds))
+      .execute();
+    await db.deleteFrom('ai_agent_runs').where('initiated_by_user_id', 'in', createdUserIds).execute();
+    await db.deleteFrom('ai_agent_conversations').where('owner_user_id', 'in', createdUserIds).execute();
     await db.deleteFrom('users').where('id', 'in', createdUserIds).execute();
   }
   await db.deleteFrom('roles').where('id', 'in', [ROLE_EVAL_USER]).execute();
   await shutdownApi();
+});
+
+// A ready assistant turns every accepted prompt into a queued run. The per-user active-turn limit
+// would then make the next assertion fail for the wrong reason, so each test closes what it opened.
+afterEach(async () => {
+  if (createdUserIds.length === 0) return;
+  const active = await ctx.database.db
+    .selectFrom('ai_agent_runs')
+    .select('id')
+    .where('initiated_by_user_id', 'in', createdUserIds)
+    .where('status', 'in', ['queued', 'running', 'retry_wait', 'cancel_requested'])
+    .execute();
+  for (const run of active) {
+    await call('POST', `/api/v1/CRMChat/action/turns/${run.id}/cancel`, evalToken, {});
+  }
 });
 
 describe('CRMChat Evaluation Set (19-CHAT.17)', () => {
@@ -98,7 +121,7 @@ describe('CRMChat Evaluation Set (19-CHAT.17)', () => {
       });
 
       // Should accept Vietnamese input (may fail due to assistant not ready, but not language error)
-      expect([200, 400, 403]).toContain(result.status);
+      expect([200, 201, 400, 403]).toContain(result.status);
     });
 
     it('handles English prompts without error', async () => {
@@ -106,7 +129,7 @@ describe('CRMChat Evaluation Set (19-CHAT.17)', () => {
         prompt: 'Hello, can you help me?',
       });
 
-      expect([200, 400, 403]).toContain(result.status);
+      expect([200, 201, 400, 403]).toContain(result.status);
     });
 
     it('handles mixed language prompts', async () => {
@@ -114,7 +137,7 @@ describe('CRMChat Evaluation Set (19-CHAT.17)', () => {
         prompt: 'Show me các tài khoản của tôi',
       });
 
-      expect([200, 400, 403]).toContain(result.status);
+      expect([200, 201, 400, 403]).toContain(result.status);
     });
   });
 
@@ -133,7 +156,7 @@ describe('CRMChat Evaluation Set (19-CHAT.17)', () => {
       });
 
       // Should accept (may fail for other reasons)
-      expect([200, 400, 403]).toContain(result.status);
+      expect([200, 201, 400, 403]).toContain(result.status);
     });
 
     it('rejects prompts exceeding character limit', async () => {
@@ -224,7 +247,7 @@ describe('CRMChat Evaluation Set (19-CHAT.17)', () => {
       });
 
       // Should treat as text, not execute SQL
-      expect([200, 400, 403]).toContain(result.status);
+      expect([200, 201, 400, 403]).toContain(result.status);
     });
 
     it('handles prompts with script tags safely', async () => {
@@ -233,7 +256,7 @@ describe('CRMChat Evaluation Set (19-CHAT.17)', () => {
       });
 
       // Should treat as text, not execute
-      expect([200, 400, 403]).toContain(result.status);
+      expect([200, 201, 400, 403]).toContain(result.status);
     });
 
     it('handles prompts attempting to override instructions', async () => {
@@ -242,7 +265,7 @@ describe('CRMChat Evaluation Set (19-CHAT.17)', () => {
       });
 
       // Should handle safely (assistant may not be ready, but shouldn't crash)
-      expect([200, 400, 403]).toContain(result.status);
+      expect([200, 201, 400, 403]).toContain(result.status);
     });
   });
 
@@ -258,7 +281,7 @@ describe('CRMChat Evaluation Set (19-CHAT.17)', () => {
 
       // All should complete (some may be rate-limited)
       results.forEach((r) => {
-        expect([200, 400, 403, 429]).toContain(r.status);
+        expect([200, 201, 400, 403, 422, 429]).toContain(r.status);
       });
     });
   });

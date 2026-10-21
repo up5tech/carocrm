@@ -5,6 +5,7 @@ audience: admin
 order: 10
 tags: [admin, settings, permissions]
 related: [admin/main-menu, admin/users-teams-roles]
+updated: 2026-10-21
 ---
 
 Open [Administration](/admin/settings) from the sidebar or the command palette. The shell is a rail of tabs

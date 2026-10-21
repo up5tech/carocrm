@@ -5,6 +5,7 @@ audience: user
 order: 70
 tags: [csv, import, export, data]
 related: [user/lists-and-views, admin/entities-and-fields]
+updated: 2026-10-21
 ---
 
 Both buttons are on the [list screen](user/lists-and-views) of the entity you are working with, so an import

@@ -158,12 +158,19 @@ describe('CRMChat module shell (19-CHAT.2)', () => {
     // The granted role carries no Chat administration right; hiding the tab is not the check.
     expect(capabilities.find((entry) => entry.key === 'admin')?.granted).toBe(false);
 
-    // A workspace that cannot answer says so instead of offering a composer that would fail.
+    // A workspace that cannot answer says so instead of offering a composer that would fail; a
+    // configured, published assistant is equally a valid state on a shared development database.
     const assistant = recordOf(result.body['assistant']);
-    expect(['not-configured', 'unresolvable']).toContain(String(assistant['state']));
+    const assistantState = String(assistant['state']);
+    expect(['not-configured', 'unresolvable', 'ready']).toContain(assistantState);
     const actions = recordOf(result.body['actions']);
-    expect(actions['canStartTurn']).toBe(false);
-    expect(String(actions['reason'] ?? '')).not.toBe('');
+    if (assistantState === 'ready') {
+      expect(actions['canStartTurn']).toBe(true);
+      expect(actions['reason']).toBeNull();
+    } else {
+      expect(actions['canStartTurn']).toBe(false);
+      expect(String(actions['reason'] ?? '')).not.toBe('');
+    }
     expect(actions['canConfirmWrite']).toBe(false);
   });
 
@@ -196,7 +203,10 @@ describe('CRMChat module shell (19-CHAT.2)', () => {
     expect(features['readTools']).toBe(false);
     expect(recordOf(settings['safety'])['allowWrites']).toBe(false);
     const warnings = result.body['warnings'] as { code: string }[];
-    expect(warnings.some((warning) => warning.code === 'assistantNotConfigured')).toBe(true);
+    const assistant = recordOf(settings['assistant']);
+    const configured = typeof assistant['agentKey'] === 'string' && assistant['agentKey'] !== '';
+    // The warning is a function of the stored key, not of the database's default state.
+    expect(warnings.some((warning) => warning.code === 'assistantNotConfigured')).toBe(!configured);
   });
 
   it('refuses an unknown key, an out-of-range value and a wrong type', async () => {

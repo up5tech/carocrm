@@ -5,6 +5,7 @@ audience: user
 order: 60
 tags: [dashboard, dashlet, report, schedule]
 related: [user/lists-and-views, user/import-export]
+updated: 2026-10-21
 ---
 
 Two screens answer two different needs. A [dashboard](/dashboards) is a wall of live tiles you look at. A
