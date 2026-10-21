@@ -15,7 +15,7 @@ import { DatabaseService } from '../database/database.service.js';
  * ## The translation is a real mapping, not a wish list
  *
  * The source of truth is the AIAgents run timeline. Its event types are
- * `run.queued`, `run.completed`, `run.failed`, `run.canceled`, `model.completed`, `tool.proposed`,
+ * `run.queued`, `run.started`, `run.completed`, `run.failed`, `run.canceled`, `model.completed`, `tool.proposed`,
  * `tool.succeeded`, `tool.failed`, `tool.denied`, `tool.outcome_unknown`, `approval.requested` and
  * `approval.executed`. Each one is translated into the Chat vocabulary the SPA listens for. An event
  * with no user-safe translation is dropped rather than passed through, because the raw timeline
@@ -195,6 +195,15 @@ export class CRMChatStreamingService {
           },
         ];
 
+      case 'run.started':
+        return [
+          {
+            id,
+            event: 'turn.started',
+            data: { turnId, state: 'running', at: event.createdAt },
+          },
+        ];
+
       case 'tool.proposed': {
         const toolKey = this.extractString(event.payload, 'toolKey');
         return [
@@ -246,7 +255,10 @@ export class CRMChatStreamingService {
 
       case 'run.completed': {
         const events: CrmChatStreamEvent[] = [];
-        const answer = await this.assistantMessage(turnId);
+        // The run row is settled before conversation memory receives the assistant message, so the
+        // terminal event can be visible here a moment before the answer is queryable. Wait briefly
+        // for that write, otherwise the client would refresh history and miss the answer.
+        const answer = await this.awaitAssistantMessage(turnId);
         if (answer !== null) {
           events.push({
             id,
@@ -336,6 +348,22 @@ export class CRMChatStreamingService {
       .orderBy('created_at', 'desc')
       .executeTakeFirst();
     return row?.duration_ms ?? null;
+  }
+
+  /**
+   * Wait for the memory write that follows a settled run. The terminal event is appended by the run
+   * engine before conversation memory is persisted, so an immediate read can race the answer.
+   */
+  private async awaitAssistantMessage(
+    turnId: string,
+  ): Promise<{ id: string; content: string; redaction: string } | null> {
+    const deadline = Date.now() + 2_000;
+    while (Date.now() < deadline) {
+      const answer = await this.assistantMessage(turnId);
+      if (answer !== null) return answer;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return this.assistantMessage(turnId);
   }
 
   /** The assistant's final answer for a run, read back from the conversation message it wrote. */

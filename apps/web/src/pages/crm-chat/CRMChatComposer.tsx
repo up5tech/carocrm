@@ -1,6 +1,6 @@
 import { SendOutlined, StopOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Input, Space, Typography } from 'antd';
+import { Alert, Button, Input, Space, Spin, Typography } from 'antd';
 import type { ComponentRef } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -25,6 +25,9 @@ export interface CRMChatComposerProps {
   readonly resetSignal?: number | undefined;
 }
 
+/** User-safe progress phases. The server never streams hidden reasoning, only lifecycle state. */
+type TurnPhase = 'idle' | 'queued' | 'thinking' | 'tool' | 'finishing';
+
 /**
  * Phase 19-CHAT.7 — Chat composer with turn submission and streaming support.
  *
@@ -44,6 +47,9 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
+  const [turnPhase, setTurnPhase] = useState<TurnPhase>('idle');
+  const [toolLabel, setToolLabel] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const textAreaRef = useRef<ComponentRef<typeof TextArea>>(null);
   const seenResetSignal = useRef(resetSignal);
   // The first turn starts without a conversation id and creates one on the server. Keep the live id
@@ -63,6 +69,21 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
     textAreaRef.current?.focus();
   }, [resetSignal]);
 
+  // A visible clock is the honest "thinking" signal while the provider is still generating: the
+  // transport streams lifecycle/tool events, not hidden reasoning tokens.
+  useEffect(() => {
+    if (currentTurnId === null) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    setElapsedSeconds(0);
+    const timer = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1_000));
+    }, 1_000);
+    return () => clearInterval(timer);
+  }, [currentTurnId]);
+
   const queryClient = useQueryClient();
 
   // Stream hook for the current turn.
@@ -72,11 +93,24 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
     onEvent: (event) => {
       // Handle different event types.
       switch (event.event) {
+        case 'turn.started':
+          setTurnPhase(event.data['state'] === 'running' ? 'thinking' : 'queued');
+          break;
+        case 'tool.started': {
+          const label = event.data['label'];
+          setToolLabel(typeof label === 'string' && label !== '' ? label : null);
+          setTurnPhase('tool');
+          break;
+        }
+        case 'tool.completed':
+          setToolLabel(null);
+          setTurnPhase('thinking');
+          break;
         case 'assistant.message':
-          // Could append to a live message buffer here.
+          setTurnPhase('finishing');
           break;
         case 'citation.added':
-          // Could update citations list.
+          // Citations arrive in the final conversation history; nothing to do live.
           break;
         case 'approval.required': {
           // The turn paused on a write proposal. The card decides it; the composer only shows it.
@@ -84,11 +118,23 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
           if (typeof approvalId === 'string' && approvalId !== '') setPendingApprovalId(approvalId);
           break;
         }
+        case 'turn.failed': {
+          const message = event.data['message'];
+          if (typeof message === 'string' && message !== '') setStreamError(message);
+          setTurnPhase('idle');
+          setToolLabel(null);
+          void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversation', conversationRef.current] });
+          void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversations'] });
+          setCurrentTurnId(null);
+          break;
+        }
         case 'turn.completed':
-        case 'turn.failed':
         case 'turn.cancelled':
           // Invalidate queries to refresh messages, including the conversation created by turn one.
+          setTurnPhase('idle');
+          setToolLabel(null);
           void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversation', conversationRef.current] });
+          void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversations'] });
           setCurrentTurnId(null);
           break;
         case 'heartbeat':
@@ -97,9 +143,48 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
       }
     },
     onError: (error) => {
-      setStreamError(error.message);
+      const failedTurnId = currentTurnId;
+      setTurnPhase('idle');
+      setToolLabel(null);
+
+      const finish = () => {
+        setCurrentTurnId(null);
+        void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversation', conversationRef.current] });
+        void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversations'] });
+      };
+
+      // A transport close can race the final event. The run is authoritative: if it completed, show
+      // the saved answer instead of a misleading "connection closed" error.
+      if (failedTurnId === null) {
+        setStreamError(error.message);
+        finish();
+        return;
+      }
+
+      void api
+        .crmChatGetTurn(failedTurnId)
+        .then((status) => {
+          if (status.status === 'succeeded' || status.status === 'partially_succeeded') {
+            finish();
+            return;
+          }
+          setStreamError(
+            status.status === 'queued' || status.status === 'running'
+              ? t('web.crmChat.streamDisconnected')
+              : (status.failureMessage ?? error.message),
+          );
+          finish();
+        })
+        .catch(() => {
+          setStreamError(error.message);
+          finish();
+        });
     },
     onComplete: () => {
+      setTurnPhase('idle');
+      setToolLabel(null);
+      void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversation', conversationRef.current] });
+      void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversations'] });
       setCurrentTurnId(null);
     },
   });
@@ -116,6 +201,8 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
     },
     onSuccess: (result) => {
       setCurrentTurnId(result.turnId);
+      setTurnPhase('queued');
+      setToolLabel(null);
       setPrompt('');
       setStreamError(null);
       conversationRef.current = result.conversationId ?? conversationRef.current;
@@ -130,6 +217,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
     },
     onError: (error) => {
       setStreamError(error instanceof Error ? error.message : 'Failed to submit turn.');
+      setTurnPhase('idle');
     },
   });
 
@@ -146,28 +234,39 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
     if (currentTurnId) {
       void api.crmChatCancelTurn(currentTurnId).then(() => {
         setCurrentTurnId(null);
-        void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversation', conversationId] });
+        setTurnPhase('idle');
+        setToolLabel(null);
+        void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversation', conversationRef.current] });
       });
     }
   };
 
   const charCount = prompt.length;
   const isOverLimit = charCount > maxMessageChars;
-  const canSubmit = enabled && prompt.trim().length > 0 && !isOverLimit && !submitTurn.isPending && !stream.isConnected;
+  const turnActive = currentTurnId !== null;
+  const canSubmit = enabled && prompt.trim().length > 0 && !isOverLimit && !submitTurn.isPending && !stream.isConnected && !turnActive;
+
+  const progressText =
+    turnPhase === 'tool' && toolLabel !== null
+      ? t('web.crmChat.thinkingTool', { tool: toolLabel, seconds: elapsedSeconds })
+      : turnPhase === 'queued'
+        ? t('web.crmChat.thinkingQueued', { seconds: elapsedSeconds })
+        : turnPhase === 'finishing'
+          ? t('web.crmChat.thinkingFinishing', { seconds: elapsedSeconds })
+          : t('web.crmChat.thinkingRunning', { seconds: elapsedSeconds });
 
   return (
     <div>
-      {/* Streaming status indicator */}
-      {stream.isConnected && (
+      {/* Live turn progress: lifecycle and tool steps from SSE, never hidden reasoning. */}
+      {turnActive || stream.isConnected ? (
         <Alert
           type="info"
           showIcon
+          icon={<Spin size="small" />}
           message={t('web.crmChat.streamingInProgress')}
           description={
             <Space size={8}>
-              <Typography.Text type="secondary">
-                {t('web.crmChat.receivingResponse')}
-              </Typography.Text>
+              <Typography.Text type="secondary">{progressText}</Typography.Text>
               <Button size="small" danger icon={<StopOutlined />} onClick={handleCancel}>
                 {t('web.crmChat.stopGeneration')}
               </Button>
@@ -175,7 +274,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
           }
           style={{ marginBottom: 12 }}
         />
-      )}
+      ) : null}
 
       {/* Error display */}
       {streamError && (
@@ -216,7 +315,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
         rows={3}
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
-        disabled={!enabled || submitTurn.isPending || stream.isConnected}
+        disabled={!enabled || submitTurn.isPending || stream.isConnected || turnActive}
         placeholder={
           enabled
             ? t('web.crmChat.composerPlaceholder')
@@ -229,7 +328,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
             e.preventDefault();
             handleSubmit();
           }
-          if (e.key === 'Escape' && stream.isConnected) {
+          if (e.key === 'Escape' && turnActive) {
             handleCancel();
           }
         }}
@@ -258,7 +357,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
 
         <Space>
           <Button
-            disabled={!stream.isConnected}
+            disabled={!turnActive}
             onClick={handleCancel}
           >
             {t('web.crmChat.cancelTurn')}
@@ -270,7 +369,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
             loading={submitTurn.isPending}
             onClick={handleSubmit}
           >
-            {stream.isConnected ? t('web.crmChat.generating') : t('web.crmChat.send')}
+            {turnActive || stream.isConnected ? t('web.crmChat.generating') : t('web.crmChat.send')}
           </Button>
         </Space>
       </div>

@@ -2323,7 +2323,13 @@
     "executionQueue": "Queue (worker) — durable, recommended for production",
     "executionInline": "Direct (API process) — no worker; the API runs the agent and streams progress",
     "executionHint": "Direct mode starts the same durable run inside the API process, so a single-process install works without a worker. Queue mode is safer when the API restarts or scales to several instances.",
-    "settingsTitle": "CRM Chat settings"
+    "settingsTitle": "CRM Chat settings",
+    "quickAccess": "Ask AI",
+    "quickTitle": "Quick chat",
+    "quickPlaceholder": "Ask the agent a question...",
+    "quickEmpty": "Ask a question and the answer appears right here.",
+    "quickOpenFull": "Open full chat",
+    "quickActionPending": "This turn asks for a decision. Open the full chat to review it."
   },
   "adminDocs": {
     "title": "The in-app handbook",

@@ -15,6 +15,7 @@ import { useSession } from '../state/session.js';
 import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 import { navAccent } from '../theme.js';
 import { CommandPalette } from './CommandPalette.js';
+import { CRMChatQuickAccess } from './CRMChatQuickAccess.js';
 import { entityIcon, navGroupIcon, navIcon } from './entityIcons.js';
 import { IncomingCallBanner } from './IncomingCallBanner.js';
 
@@ -105,6 +106,9 @@ function InternalShell({ children }: { children: ReactNode }) {
 
   const navItems = useMemo<MenuItems>(() => toMenuItems(tree), [tree, locale]);
   const selectedKey = selectedRoute(location.pathname);
+  // The quick-chat button is only offered to a caller the server put the Chat workspace on the
+  // menu for. The tree is already ACL-filtered and feature-gated, so the shell never re-decides.
+  const chatAvailable = useMemo(() => hasRoute(tree, '/crm-chat'), [tree]);
 
   const switchLanguage = useLanguageSwitch();
   const languageMenu: MenuItems = localesEnabled().map((locale) => ({
@@ -208,6 +212,7 @@ function InternalShell({ children }: { children: ReactNode }) {
           }}
         />
         <div className="carocrm-header-actions">
+          {chatAvailable ? <CRMChatQuickAccess compact={narrow} /> : null}
           <Dropdown menu={{ items: userMenu }} trigger={['click']}>
             <span className="carocrm-avatar" title={principal?.userName}>
               {principal?.avatarId ? (
@@ -391,6 +396,16 @@ function toMenuItems(nodes: readonly NavigationNode[], depth = 0): MenuItems {
     });
   }
   return items;
+}
+
+/** Whether the resolved menu really carries a route — the shell never invents one. */
+function hasRoute(nodes: readonly NavigationNode[], route: string): boolean {
+  for (const node of nodes) {
+    if (node.route === route) return true;
+    const children = node.children;
+    if (children !== undefined && hasRoute(children, route)) return true;
+  }
+  return false;
 }
 
 /**

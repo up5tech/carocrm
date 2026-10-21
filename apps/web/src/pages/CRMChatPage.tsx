@@ -1,6 +1,6 @@
 import { CustomerServiceOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Descriptions, Divider, Empty, Form, Input, Modal, Result, Row, Select, Space, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Card, Col, Descriptions, Divider, Empty, Form, Input, Modal, Radio, Result, Row, Select, Space, Tag, Tooltip, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 
 import { api, ApiError } from '../api/client.js';
@@ -97,6 +97,7 @@ export function CRMChatPage() {
   const queryClient = useQueryClient();
   const [showSettings, setShowSettings] = useState(false);
   const [assistantKey, setAssistantKey] = useState('');
+  const [executionMode, setExecutionMode] = useState<'queue' | 'inline'>('queue');
   const isAdmin = capabilities.data?.capabilities?.some((c) => c.key === 'admin' && c.granted) === true;
 
   const settingsQuery = useQuery({
@@ -108,8 +109,14 @@ export function CRMChatPage() {
   });
 
   useEffect(() => {
-    const key = (settingsQuery.data?.settings as { assistant?: { agentKey?: string } } | undefined)?.assistant?.agentKey;
+    const settings = settingsQuery.data?.settings as
+      | { assistant?: { agentKey?: string }; execution?: { mode?: string } }
+      | undefined;
+    const key = settings?.assistant?.agentKey;
     if (typeof key === 'string') setAssistantKey(key);
+    if (settings?.execution?.mode === 'inline' || settings?.execution?.mode === 'queue') {
+      setExecutionMode(settings.execution.mode);
+    }
   }, [settingsQuery.data]);
 
   // The assistant is an AI Agent profile key, not a credential: list the published profiles so an
@@ -133,7 +140,11 @@ export function CRMChatPage() {
   }
 
   const saveSettings = useMutation({
-    mutationFn: () => api.crmChatUpdateSettings({ assistant: { agentKey: assistantKey.trim() } }),
+    mutationFn: () =>
+      api.crmChatUpdateSettings({
+        assistant: { agentKey: assistantKey.trim() },
+        execution: { mode: executionMode },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['crmChat'] });
       setShowSettings(false);
@@ -560,6 +571,21 @@ export function CRMChatPage() {
           ) : null}
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {t('web.crmChat.agentFieldHint')}
+          </Typography.Text>
+          <Divider style={{ margin: '16px 0' }} />
+          <Form.Item label={t('web.crmChat.executionFieldLabel')}>
+            <Radio.Group
+              value={executionMode}
+              onChange={(event) => setExecutionMode(event.target.value as 'queue' | 'inline')}
+            >
+              <Space direction="vertical" size={4}>
+                <Radio value="queue">{t('web.crmChat.executionQueue')}</Radio>
+                <Radio value="inline">{t('web.crmChat.executionInline')}</Radio>
+              </Space>
+            </Radio.Group>
+          </Form.Item>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t('web.crmChat.executionHint')}
           </Typography.Text>
         </Form>
       </Modal>

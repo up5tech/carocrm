@@ -883,6 +883,11 @@ export class AIAgentRunService {
       return { run: await this.get(runId), claimed: true, waitingForApproval: false };
     }
 
+    // User-visible progress without revealing reasoning: Chat turns this into `turn.started`
+    // with state `running`, so the composer can show that the agent is working before the first
+    // tool or model event lands.
+    await this.appendEvent(runId, 'run', 'run.started', 'Run started.', {}, 'user');
+
     try {
       await this.scope.runAs(
         principal,

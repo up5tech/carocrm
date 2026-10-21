@@ -18,6 +18,7 @@ export const CRMChatSettingsPatchSchema = z
   .object({
     features: CRMChatSettingsSchema.shape.features.removeDefault().partial().strict().optional(),
     assistant: CRMChatSettingsSchema.shape.assistant.removeDefault().partial().strict().optional(),
+    execution: CRMChatSettingsSchema.shape.execution.removeDefault().partial().strict().optional(),
     limits: CRMChatSettingsSchema.shape.limits.removeDefault().partial().strict().optional(),
     retention: CRMChatSettingsSchema.shape.retention.removeDefault().partial().strict().optional(),
     safety: CRMChatSettingsSchema.shape.safety.removeDefault().partial().strict().optional(),

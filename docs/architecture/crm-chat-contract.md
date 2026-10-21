@@ -76,6 +76,20 @@ Rules that hold everywhere:
 4. **Deleting a conversation does not delete CRM data, runs or audit rows.** `ai_agent_runs` keeps its
    history with `conversation_id` nulled, which is what preserves "the action happened" while removing
    "what was said".
+5. **Visibility is the server's answer, in every surface.** The workspace *and* the header quick access
+   are offered exactly to the callers the resolved navigation tree carries the Chat page for — the
+   same `CRMChatConversation:read` permission and the same `crmChat.features.workspace` flag. The SPA
+   never re-decides either, and a quick-access turn runs with the caller's own rights like any other.
+
+### 3.1 SPA surfaces
+
+| Surface | What it is | What it may not do |
+| --- | --- | --- |
+| `/crm-chat` | The workspace: conversation list, history, composer, citations, feedback, proposed actions | Nothing beyond §3 — it is an ordinary Chat client |
+| Header quick access | A compact panel in the app header that submits a turn, streams the same lifecycle events and shows the answer without leaving the current page | Decide a proposed action (it points the caller at the workspace), read another user's conversation, or bypass the assistant readiness gate |
+
+Both surfaces speak the same turn API and the same stream (§8); the quick access is a smaller
+presentation of one thread, and the thread it opens is the same conversation the workspace lists.
 
 ---
 
@@ -395,6 +409,7 @@ bumps `version` and records `updatedBy`.
 | `features.feedback` | boolean | false | Answer ratings (19-CHAT.14) |
 | `features.conversationSearch` | boolean | false | History search (19-CHAT.14) |
 | `assistant.agentKey` | string ≤ 120 | `''` | Stable key of the published answering agent; empty = not configured |
+| `execution.mode` | `queue` \| `inline` | `queue` | `queue` dispatches the run to the durable worker; `inline` starts the same run in the API process (no worker required) |
 | `limits.maxMessageChars` | int 1–20 000 | 8 000 | One user message |
 | `limits.maxContextRefs` | int 0–20 | 5 | Client-supplied record references per turn |
 | `limits.maxActiveTurnsPerUser` | int 1–5 | 1 | Concurrent turns (19-CHAT.17) |
@@ -480,7 +495,7 @@ the stream is a delivery channel that may drop and be re-established.
 
 | Event | Payload | Notes |
 | --- | --- | --- |
-| `turn.started` | `{ turnId, conversationId, state, at }` | Sent once, immediately after acceptance |
+| `turn.started` | `{ turnId, conversationId, state, at }` | Sent on acceptance (`queued`), then again when a worker/inline dispatch claims the run (`running`) |
 | `tool.started` | `{ step, toolKey, label }` | `label` is the tool's declared label — never its arguments |
 | `tool.completed` | `{ step, toolKey, status, summary, durationMs }` | `summary` is the tool's own user-safe summary |
 | `citation.added` | `CRMChatCitationView` | After the ACL re-check that produced `label`/`route` |
@@ -669,7 +684,7 @@ caller's ACL and only then builds the label and the route. Asserted in
 3. The stored citation row carries the `rechecked_at` stamp that says when the check happened.
 
 19-CHAT.6 — accepted when the stream carries the run's real timeline. The translator maps the
-`AIAgents` event types (`run.queued`, `tool.proposed`, `tool.succeeded`/`failed`/`denied`/
+`AIAgents` event types (`run.queued`, `run.started`, `tool.proposed`, `tool.succeeded`/`failed`/`denied`/
 `outcome_unknown`, `approval.requested`, `model.completed`, `run.completed`, `run.failed`,
 `run.canceled`) onto the Chat vocabulary, and derives `assistant.message` and `usage.summary` from
 the run and its provider ledger. An event with no user-safe translation is dropped rather than

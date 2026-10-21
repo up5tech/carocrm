@@ -1,7 +1,9 @@
+import { log } from '@carocrm/core/logger/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import type { RunCreateInput } from '../ai-agents/ai-agent-runs.service.js';
 import { AIAgentRunService } from '../ai-agents/ai-agent-runs.service.js';
+import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 
 /**
  * Phase 19-CHAT.5 — narrow AIAgents integration adapter
@@ -49,6 +51,7 @@ export interface CrmChatTurnStatus {
 export class CRMChatAIAgentsClientService {
   constructor(
     @Inject(AIAgentRunService) private readonly runs: AIAgentRunService,
+    @Inject(CRMChatSettingsService) private readonly settings: CRMChatSettingsService,
   ) {}
 
   /**
@@ -68,7 +71,21 @@ export class CRMChatAIAgentsClientService {
       conversationId: input.conversationId,
     };
 
+    const executionMode = (await this.settings.settings()).execution.mode;
     const run = await this.runs.create(input.agentId, runInput);
+
+    // `queue` is the durable default: BullMQ hands the run to a worker. `inline` starts the exact
+    // same run in this process, which makes a single-process install usable without a worker. The
+    // run is still enqueued by `create`, so a crash mid-run has the same recovery path as any other
+    // queued run; the lease in `execute` makes the two dispatches idempotent.
+    if (executionMode === 'inline') {
+      void this.runs.execute(run.id).catch((error: unknown) => {
+        log.error(
+          { runId: run.id, error: error instanceof Error ? error.message : 'unknown inline execution error' },
+          'crm chat inline run failed to start',
+        );
+      });
+    }
 
     return {
       turnId: run.id,

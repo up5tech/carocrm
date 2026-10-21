@@ -145,6 +145,92 @@ body {
   font-weight: 600;
 }
 
+/* ---- header quick chat (CRM Chat) ---- */
+.carocrm-quick-chat-trigger {
+  color: #737b85;
+  font-size: 14px;
+}
+
+.carocrm-quick-chat-trigger:hover {
+  color: #438eff !important;
+}
+
+.carocrm-quick-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(360px, calc(100vw - 32px));
+}
+
+.carocrm-quick-chat-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.carocrm-quick-chat-thread {
+  border: 1px solid #eff2f7;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  min-height: 96px;
+  overflow-y: auto;
+  padding: 10px 12px;
+}
+
+.carocrm-quick-chat-empty {
+  font-size: 13px;
+  margin: auto;
+  text-align: center;
+}
+
+.carocrm-quick-chat-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.carocrm-quick-chat-role {
+  color: #a1a8b3;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.carocrm-quick-chat-text {
+  color: #31373d;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.carocrm-quick-chat-line--user .carocrm-quick-chat-text {
+  color: #1f5fa9;
+}
+
+.carocrm-quick-chat-progress {
+  align-items: center;
+  color: #737b85;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.carocrm-quick-chat-compose {
+  align-items: flex-end;
+  display: flex;
+  gap: 8px;
+}
+
+.carocrm-quick-chat-compose .ant-input {
+  flex: 1 1 auto;
+  resize: none;
+}
+
 .carocrm-footer {
   background: transparent;
   text-align: center;

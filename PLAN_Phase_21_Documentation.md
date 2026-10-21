@@ -1,7 +1,10 @@
 # Phase 21 — In-App Documentation and Product Help
 
-> **Status:** 📋 **Planned, not implemented.** This document is the scope, architecture reference and
-> implementation roadmap for Phase 21. Nothing below is built yet; every section is a specification.
+> **Status:** ✅ **Implemented 2026-10-21** (21.0–21.10). This document remains the scope, architecture
+> reference and decision record for Phase 21; the progress note in §17 records what each sub-phase shipped
+> and where it deviated. Two items are open on purpose: the corpus has no screenshots (21.3 deferred) and
+> `vi` covers the P0 set only, pending a native-speaker review — both in
+> `docs/compatibility/documentation.md`.
 > **Parent roadmap:** `PLAN.md` — Phase 21 (added to §57 alongside this document)
 > **Target runtime:** the existing NestJS API + React SPA; no new service, no new database.
 > **Functional reference:** EspoCRM's in-app help surface and the documentation/onboarding patterns of

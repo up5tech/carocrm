@@ -2323,7 +2323,13 @@
     "executionQueue": "Hàng đợi (worker) — bền vững, khuyến nghị cho production",
     "executionInline": "Trực tiếp (tiến trình API) — không cần worker; API chạy agent và phát tiến trình",
     "executionHint": "Chế độ trực tiếp khởi chạy cùng một run bền vững ngay trong tiến trình API, nên bản cài một tiến trình không cần worker. Chế độ hàng đợi an toàn hơn khi API khởi động lại hoặc chạy nhiều instance.",
-    "settingsTitle": "Cài đặt CRM Chat"
+    "settingsTitle": "Cài đặt CRM Chat",
+    "quickAccess": "Hỏi AI",
+    "quickTitle": "Trò chuyện nhanh",
+    "quickPlaceholder": "Hỏi agent một câu hỏi...",
+    "quickEmpty": "Hỏi một câu và câu trả lời sẽ hiện ngay tại đây.",
+    "quickOpenFull": "Mở chat đầy đủ",
+    "quickActionPending": "Lượt này cần bạn xác nhận. Hãy mở chat đầy đủ để xem chi tiết."
   },
   "adminDocs": {
     "title": "Tài liệu trong ứng dụng",

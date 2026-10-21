@@ -55,6 +55,18 @@ export const CRMChatSettingsSchema = z
       })
       .strict()
       .default({}),
+    execution: z
+      .object({
+        /**
+         * `queue` hands the run to the durable BullMQ worker, the production default.
+         * `inline` starts the same run in the API process right after the turn is accepted, so a
+         * single-process development install answers without a separate worker. The run row, lease,
+         * quotas and audit trail are identical in both modes.
+         */
+        mode: z.enum(['queue', 'inline']).default('queue'),
+      })
+      .strict()
+      .default({}),
     limits: z
       .object({
         maxMessageChars: z.number().int().min(1).max(20_000).default(8_000),

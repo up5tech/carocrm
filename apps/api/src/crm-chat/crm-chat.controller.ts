@@ -296,11 +296,17 @@ export class CRMChatController {
       throw new InvalidQueryError('Turn not found or access denied.');
     }
 
-    // Set SSE headers.
-    reply.header('Content-Type', 'text/event-stream');
-    reply.header('Cache-Control', 'no-cache');
-    reply.header('Connection', 'keep-alive');
-    reply.header('X-Accel-Buffering', 'no'); // Disable nginx buffering if present.
+    // Take over the raw response. Fastify's reply headers are not guaranteed to reach the wire when
+    // the handler writes directly to `reply.raw`; without an explicit `text/event-stream` MIME type,
+    // the browser's EventSource aborts the connection before the first event is parsed.
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no', // Disable nginx buffering if present.
+    });
+    reply.raw.flushHeaders();
 
     // Create a writer adapter for the Fastify response.
     const writer = {

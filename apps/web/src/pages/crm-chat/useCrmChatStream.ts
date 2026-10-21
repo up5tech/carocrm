@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { CRMChatStreamEvent, CRMChatStreamEventType } from '../../api/types.js';
 
@@ -32,17 +32,29 @@ export function useCrmChatStream(options: UseCrmChatStreamOptions): UseCrmChatSt
   const [error, setError] = useState<Error | null>(null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
-  const manualDisconnectRef = useRef(false);
+
+  // The callbacks are supplied inline by the composer; keeping them in refs stops every render
+  // (including every streamed event) from tearing down and reopening the EventSource.
+  const onEventRef = useRef(onEvent);
+  const onErrorRef = useRef(onError);
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
 
   // Cleanup function.
-  const disconnect = () => {
-    manualDisconnectRef.current = true;
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
+  const disconnect = useCallback(() => {
+    const source = eventSourceRef.current;
+    eventSourceRef.current = null;
+    source?.close();
     setIsConnected(false);
-  };
+  }, []);
 
   useEffect(() => {
     // Reset state when turnId changes.
@@ -51,7 +63,10 @@ export function useCrmChatStream(options: UseCrmChatStreamOptions): UseCrmChatSt
       return;
     }
 
-    manualDisconnectRef.current = false;
+    let disposed = false;
+    let sawTerminal = false;
+    let sawAssistantMessage = false;
+
     setEvents([]);
     setError(null);
 
@@ -63,23 +78,37 @@ export function useCrmChatStream(options: UseCrmChatStreamOptions): UseCrmChatSt
     // Last-Event-ID tracking for reconnections.
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
+    // An old source can outlive its render (for example React's development StrictMode cleanup).
+    // Its late error callback must not tear down the current turn or surface a false failure.
+    const isCurrent = () => !disposed && eventSourceRef.current === eventSource;
 
     eventSource.onopen = () => {
-      if (!manualDisconnectRef.current) {
-        setIsConnected(true);
-      }
+      if (isCurrent()) setIsConnected(true);
     };
 
     eventSource.onerror = () => {
-      if (manualDisconnectRef.current) return;
+      if (!isCurrent()) return;
 
       // Check readyState: 0 = CONNECTING, 1 = OPEN, 2 = CLOSED
       if (eventSource.readyState === 2) {
-        // Connection closed permanently.
+        eventSourceRef.current = null;
         setIsConnected(false);
+
+        // The server deliberately ends a completed response. The browser can report that normal
+        // close as an error before the last buffered event is dispatched, so never show a transport
+        // error once the answer or terminal state has already arrived. The composer refreshes the
+        // saved history on complete.
+        if (sawTerminal || sawAssistantMessage) {
+          eventSource.close();
+          onCompleteRef.current?.();
+          return;
+        }
+
+        // Connection closed permanently without a terminal event.
+        eventSource.close();
         const err = new Error('SSE connection closed.');
         setError(err);
-        onError?.(err);
+        onErrorRef.current?.(err);
       }
       // For transient errors (readyState 0), EventSource will auto-reconnect.
     };
@@ -102,7 +131,7 @@ export function useCrmChatStream(options: UseCrmChatStreamOptions): UseCrmChatSt
 
     for (const eventType of eventTypes) {
       eventSource.addEventListener(eventType, (event: MessageEvent) => {
-        if (manualDisconnectRef.current) return;
+        if (!isCurrent()) return;
 
         try {
           const data = JSON.parse(event.data) as Record<string, unknown>;
@@ -113,27 +142,37 @@ export function useCrmChatStream(options: UseCrmChatStreamOptions): UseCrmChatSt
           };
 
           setEvents((prev) => [...prev, streamEvent]);
-          onEvent?.(streamEvent);
+          onEventRef.current?.(streamEvent);
+
+          if (eventType === 'assistant.message') sawAssistantMessage = true;
 
           // Auto-disconnect on terminal events.
           if (['turn.completed', 'turn.failed', 'turn.cancelled'].includes(eventType)) {
+            sawTerminal = true;
+            eventSourceRef.current = null;
             eventSource.close();
             setIsConnected(false);
-            onComplete?.();
+            onCompleteRef.current?.();
           }
         } catch (parseError) {
+          if (!isCurrent()) return;
           const err = parseError instanceof Error ? parseError : new Error('Failed to parse SSE event.');
           setError(err);
-          onError?.(err);
+          onErrorRef.current?.(err);
         }
       });
     }
 
     // Cleanup on unmount or when dependencies change.
     return () => {
-      disconnect();
+      disposed = true;
+      if (eventSourceRef.current === eventSource) {
+        eventSourceRef.current = null;
+        eventSource.close();
+        setIsConnected(false);
+      }
     };
-  }, [turnId, enabled, lastEventId, onEvent, onError, onComplete]);
+  }, [turnId, enabled, lastEventId, disconnect]);
 
   return { isConnected, events, error, disconnect };
 }

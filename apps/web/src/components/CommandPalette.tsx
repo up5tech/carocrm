@@ -109,6 +109,7 @@ export function CommandPalette() {
       { key: 'stream', label: t('web.stream.title'), route: '/stream' },
       { key: 'calendar', label: t('web.calendar.title'), route: '/calendar' },
       { key: 'tasks', label: t('web.tasks.title'), route: '/tasks' },
+      { key: 'crmChat', label: t('web.crmChat.title'), route: '/crm-chat' },
       { key: 'settings', label: t('web.adminShell.railLabel'), route: '/admin/settings' },
     ],
     [],
