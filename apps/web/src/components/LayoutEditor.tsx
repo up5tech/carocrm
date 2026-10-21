@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 
 import type { EntityDefinition, LayoutDefinition, LayoutPanel, LayoutViewType } from '../api/types.js';
 import { t } from '../state/i18n.js';
-import { fieldLabel, useMetadata } from '../state/metadata.js';
+import { detailEntries, editEntries, fieldLabel, useMetadata } from '../state/metadata.js';
 import { RelationTabsEditor } from './RelationTabsEditor.js';
 
 /** Views an admin can lay out by hand (PLAN §8). */
@@ -57,6 +57,21 @@ export function memberFieldNames(entity: EntityDefinition): string[] {
     .map(([name]) => name);
 }
 
+/**
+ * The fields the editor's pool holds.
+ *
+ * For the detail and edit views the pool is **not** a place fields disappear to: the record page
+ * renders every field it does not place in a group under a computed **Other** card, after the
+ * groups. The pool is that group, so it is computed from the fields the view can actually render —
+ * bookkeeping columns and fields the view hides are absent from the pool, exactly as they are
+ * absent from the page. The list view has no such fallback, so its pool stays the full member list.
+ */
+function poolFieldNames(entity: EntityDefinition, view: LayoutViewType): string[] {
+  if (view === 'detail') return detailEntries(entity).map((entry) => entry.name);
+  if (view === 'edit') return editEntries(entity).map((entry) => entry.name);
+  return memberFieldNames(entity);
+}
+
 function panelsOf(entity: EntityDefinition, view: LayoutViewType): LayoutPanel[] {
   return (entity.layouts?.[view] ?? []).flatMap((definition) => definition.panels ?? []);
 }
@@ -69,11 +84,11 @@ function layoutSection(entity: EntityDefinition, view: LayoutViewType, panels: L
   return { layouts: { ...entity.layouts, [view]: definitions } };
 }
 
-/** Editor draft for a view: panels in position order plus every member field not yet placed. */
+/** Editor draft for a view: panels in position order plus every renderable field not yet placed. */
 function layoutDraftOf(entity: EntityDefinition, view: LayoutViewType): LayoutDraft {
   const panels = [...panelsOf(entity, view)].sort((a, b) => a.position - b.position);
   const assigned = new Set(panels.flatMap((panel) => panel.fields ?? []));
-  return { panels, disabled: memberFieldNames(entity).filter((name) => !assigned.has(name)) };
+  return { panels, disabled: poolFieldNames(entity, view).filter((name) => !assigned.has(name)) };
 }
 
 /**
@@ -179,10 +194,25 @@ function AppendZone({ empty }: { empty: boolean }) {
   );
 }
 
-function DisabledPool({ draft, labelOf }: { draft: LayoutDraft; labelOf: (name: string) => string }) {
+/**
+ * The pool of fields no group places. On the list view it means "not a column"; on the detail and
+ * edit views it is the computed **Other** group the page renders after the panels, so the heading
+ * and the note say so instead of claiming the fields are hidden.
+ */
+function LayoutPool({ draft, view, labelOf }: { draft: LayoutDraft; view: LayoutViewType; labelOf: (name: string) => string }) {
   const { setNodeRef, isOver } = useDroppable({ id: LAYOUT_POOL_ID });
+  // The list view has no fallback for a field no panel places; the detail and edit pages do. With
+  // groups, those fields land in the computed **Other** card; without any group the page shows one
+  // plain field list, which the pool names accordingly.
+  const computedOther = view !== 'list';
+  const hasGroups = draft.panels.length > 0;
+  const title = !computedOther
+    ? t('web.entityAdmin.layoutDisabled')
+    : hasGroups
+      ? t('web.entityAdmin.layoutOtherTitle')
+      : t('web.entityAdmin.layoutFieldsTitle');
   return (
-    <Card size="small" className="carocrm-card" title={t('web.entityAdmin.layoutDisabled')}>
+    <Card size="small" className="carocrm-card" title={title}>
       <div ref={setNodeRef} className="carocrm-layout-pool" style={{ background: isOver ? '#f0f7ff' : '#fafafa' }}>
         {draft.disabled.length === 0 ? (
           <Typography.Text type="secondary">{t('web.entityAdmin.layoutPoolEmpty')}</Typography.Text>
@@ -196,6 +226,11 @@ function DisabledPool({ draft, labelOf }: { draft: LayoutDraft; labelOf: (name: 
           </SortableContext>
         )}
       </div>
+      {computedOther ? (
+        <Typography.Text type="secondary" className="carocrm-admin-note">
+          {hasGroups ? t('web.entityAdmin.layoutOtherHint') : t('web.entityAdmin.layoutFieldsHint')}
+        </Typography.Text>
+      ) : null}
     </Card>
   );
 }
@@ -234,6 +269,21 @@ function LayoutPreview({ view, draft, labelOf }: { view: LayoutViewType; draft: 
           )}
         </div>
       ))}
+      {/* The detail and edit pages render the pool after the groups: in an **Other** card when
+          groups exist, or as the page's single field list when none does. The preview names the
+          block the same way, so the saved page can not surprise the administrator. */}
+      {draft.disabled.length > 0 ? (
+        <div className="carocrm-layout-preview-panel" key="__other">
+          <p className="carocrm-layout-preview-panel-name">
+            {draft.panels.length > 0 ? t('core.common.other') : t('web.entityAdmin.layoutFieldsTitle')}
+          </p>
+          {draft.disabled.map((field) => (
+            <div className="carocrm-layout-preview-row" key={field}>
+              <span>{labelOf(field)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <Typography.Text type="secondary" className="carocrm-admin-note">
         {t('web.entityAdmin.layoutPreviewHint')}
       </Typography.Text>
@@ -487,7 +537,7 @@ export function LayoutEditor({ entity, save, showInlineActions = true, onState }
             </Card>
           </Col>
           <Col xs={24} lg={12} xl={8}>
-            <DisabledPool draft={draft} labelOf={labelOf} />
+            <LayoutPool draft={draft} view={view} labelOf={labelOf} />
           </Col>
           <Col xs={24} xl={8}>
             <LayoutPreview view={view} draft={draft} labelOf={labelOf} />

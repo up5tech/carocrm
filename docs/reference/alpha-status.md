@@ -746,7 +746,7 @@ and is now hosted by both places, so there is one editing behavior instead of tw
 
 | Deliverable | Where |
 |---|---|
-| Shared layout editor (panels, field order, disabled pool, add/rename/remove panel, keyboard sensor) | `apps/web/src/components/LayoutEditor.tsx` |
+| Shared layout editor (panels, field order, pool rendered as **Other** on detail/edit, add/rename/remove panel, keyboard sensor) | `apps/web/src/components/LayoutEditor.tsx` |
 | Settings `layout` tab with an entity picker (`?entity=` in the URL) | `apps/web/src/admin/tabs/LayoutTab.tsx` |
 | Live preview built from the draft (list = column order; detail/edit = stacked panels) | `LayoutPreview` inside the shared editor |
 | Shell save bar for a metadata-editing tab | `usesSaveBar` flag on the descriptor, honoured by `AdminSettingsShell` |

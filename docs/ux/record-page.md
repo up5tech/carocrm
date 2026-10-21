@@ -9,7 +9,9 @@ Code: `apps/web/src/pages/EntityDetailPage.tsx`, `apps/web/src/pages/EntityEditP
 
 - The body is driven by the entity's `detail` layout: the panels and the field order come from
   metadata, so an administrator changes the page without a code change.
-- Fields the layout does not place are grouped under **Other** rather than being dropped.
+- Fields the layout does not place are grouped under **Other** rather than being dropped, and the
+  layout editor shows that computed group under its pool, so the settings and the page name the
+  same fields. An entity with no detail layout renders one field list and no **Other** card.
 - Relation panels show the related records, their counts, and a **Link / New** action so a relation
   can be attached without leaving the record.
 - The Stream panel stays on the record. Posting supports `@mentions` as before; `⌘/Ctrl + Enter`

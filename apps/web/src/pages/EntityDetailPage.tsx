@@ -415,7 +415,11 @@ export function EntityDetailPage() {
           </Card>
         ))}
 
-        {others.length > 0 ? (
+        {/* Fields no panel places stay visible under **Other** — the layout editor shows the same
+            computed group, so the page and the settings never disagree (§5.5). An entity with no
+            detail layout already renders one field list in the card above; an Other card there
+            would repeat every field. */}
+        {panels.length > 0 && others.length > 0 ? (
           <Card className="carocrm-card" title={<Typography.Text strong>{t('core.common.other')}</Typography.Text>}>
             <Descriptions column={{ xs: 1, md: 2 }} colon={false} labelStyle={labelStyle} contentStyle={contentStyle} items={describe(others)} />
           </Card>

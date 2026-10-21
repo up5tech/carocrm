@@ -1241,8 +1241,10 @@ Acceptance: a layout referencing an unknown field is rejected with a clear messa
 list/detail without a code change.
 
 Delivered: the `layout` settings tab hosts the same `LayoutEditor` the Entity Manager uses — panels,
-field order, disabled pool, add/rename/remove panel, drag & drop plus dnd-kit's keyboard sensor, and a
-live preview built from the draft (list = column order; detail/edit = stacked panels). The tab opts into
+field order, the field pool (labelled **Other** on detail/edit, where the page renders it, and
+**Disabled** on list, where it only means “not a column”), add/rename/remove panel, drag & drop plus
+dnd-kit's keyboard sensor, and a live preview built from the draft (list = column order; detail/edit =
+stacked panels plus the computed **Other** group). The tab opts into
 the shell save bar with a new `usesSaveBar` descriptor flag and reports its draft to it; switching
 entity with a dirty draft asks first. Writes go through `POST /Metadata/:entity`, whose
 `validateLayouts` already refused unknown fields and views with `422` naming the offender — pinned by

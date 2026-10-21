@@ -117,9 +117,14 @@ deleting the account that would leave no active administrator is what is refused
 
 The `layout` tab hosts the same `LayoutEditor` the Entity Manager uses — one editing behavior, two
 hosts. The tab picks an entity (kept in the URL as `?entity=`), and the editor manages list/detail/edit
-panels per view: drag fields between panels and the disabled pool, drag a panel by its handle to
-reorder, add/rename/remove panels, with a live preview built from the draft (a list layout previews as
-the table's column order; detail and edit preview as stacked panels).
+panels per view: drag fields between panels and the pool, drag a panel by its handle to reorder,
+add/rename/remove panels, with a live preview built from the draft (a list layout previews as the
+table's column order; detail and edit preview as stacked panels). On the detail and edit views the
+pool is not a hiding place: it is the computed **Other** group the record page and the form render
+after the panels, so the editor labels it **Other** and previews it in that position. The pool only
+offers fields the view can render, so it lists exactly what **Other** will show. A view with no group
+yet has no **Other** card either: the pool is then the page's single field list, and the editor says
+so.
 
 - The keyboard alternative is dnd-kit's `KeyboardSensor`: focus a row, `Space` to lift, arrows to move,
   `Space` to drop. No pointer is required anywhere in the editor.
