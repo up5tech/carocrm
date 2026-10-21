@@ -164,6 +164,11 @@ function InternalShell({ children }: { children: ReactNode }) {
 
   return (
     <>
+      {/* Phase 21 §5.9: the first focusable thing on any screen jumps past the header and the navigation to
+          the content, so a keyboard reader is not forced through the whole sidebar to reach a page. */}
+      <a className="carocrm-skip-link" href="#carocrm-content">
+        {t('core.app.skipToContent')}
+      </a>
       <CommandPalette />
       <Layout style={{ minHeight: '100vh' }}>
         <header className="carocrm-header">
@@ -244,7 +249,7 @@ function InternalShell({ children }: { children: ReactNode }) {
           <div className="carocrm-drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
         ) : null}
         <Layout>
-          <Content className="carocrm-content">
+          <Content id="carocrm-content" tabIndex={-1} className="carocrm-content">
             {/* Screen-reader announcements for moves that happen by keyboard in the settings tabs. */}
             <span id="carocrm-live-region" className="carocrm-live-region" role="status" aria-live="polite" />
             {/* Phase 19-VC.9: only the calls the server addressed to this user appear, and only here —

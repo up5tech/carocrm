@@ -3208,7 +3208,7 @@ body {
 /* Two columns when the table of contents no longer fits; one column, and no sideways page, on a phone. */
 @media (max-width: 1179px) {
   .carocrm-doc-grid {
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .carocrm-doc-side {
@@ -3222,6 +3222,31 @@ body {
   .carocrm-doc-tools {
     flex-direction: row;
   }
+}
+
+/* A closed disclosure must not paint its contents. The user agent hides them, but any `display` on the
+   child outranks that, so both disclosures say it explicitly (§5.10). */
+.carocrm-doc-toc-details:not([open]) > :not(summary),
+.carocrm-doc-rail-details:not([open]) > :not(summary) {
+  display: none;
+}
+
+.carocrm-doc-rail-details {
+  grid-column: 1 / -1;
+  border: 1px solid #eff2f7;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.carocrm-doc-rail-details > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5b636d;
+}
+
+.carocrm-doc-rail-details[open] > summary {
+  margin-bottom: 8px;
 }
 
 @media (max-width: 899px) {
@@ -3242,6 +3267,14 @@ body {
   .carocrm-doc-pager {
     flex-direction: column;
     gap: 8px;
+  }
+}
+
+/* §5.10 asks for 16 px gutters on a phone; the shell gives every screen 12 px below 768 px, so the reader
+   adds the difference rather than changing the padding of every other screen. */
+@media (max-width: 768px) {
+  .carocrm-doc {
+    padding-inline: 4px;
   }
 }
 
@@ -3539,4 +3572,44 @@ body {
   padding-left: 18px;
   font-size: 13px;
   line-height: 1.6;
+}
+
+/* ---- Phase 21.9: the skip link (§5.9) ----
+   Kept in the accessibility tree and in tab order by translating it off screen rather than hiding it,
+   so the first Tab press on any screen is the link that jumps past the chrome. */
+.carocrm-skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: #fff;
+  color: #31373d;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  transform: translateY(-200%);
+  transition: transform 0.12s ease-out;
+}
+
+.carocrm-skip-link:focus,
+.carocrm-skip-link:focus-visible {
+  transform: translateY(0);
+  color: #31373d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carocrm-skip-link {
+    transition: none;
+  }
+}
+
+/* antd ships `a:focus { outline: 0 }`, which erases the keyboard indicator on every link in the app —
+   the sidebar entries included, so a Tab user cannot see where they are. `html a:focus-visible` outranks
+   it without `!important` and leaves a mouse click untouched. */
+html a:focus-visible {
+  outline: 2px solid #1890ff;
+  outline-offset: 2px;
+  border-radius: 2px;
 }

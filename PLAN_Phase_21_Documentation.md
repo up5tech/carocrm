@@ -1119,7 +1119,7 @@ defaults apply.
 Each sub-phase is independently reviewable and leaves the tree green. Do not attempt the whole phase
 in one pass.
 
-> **Progress (2026-10-21).** 21.0–21.2 and 21.4–21.8 are done; 21.3 is done except its screenshots, which need
+> **Progress (2026-10-21).** 21.0–21.2 and 21.4–21.9 are done; 21.3 is done except its screenshots, which need
 > a browser pass this scope excluded. `packages/docs` (parser, index, search, links, lint) is green with
 > 174 unit tests, `content/docs/en/` carries the 17 P0 pages plus four section descriptors, and the corpus
 > lint runs in two places: `packages/docs/src/corpus.test.ts` checks the shipped files alone, and
@@ -1145,13 +1145,18 @@ in one pass.
 > `/docs/user/lists-and-views`, and setting `externalUrl` moves **every** contextual link at once (then
 > restores). Two defects found only by looking at it: the "Learn more" link inherited the light-surface
 > colour and was unreadable on the dark tooltip, and the coverage footnote rendered literal backticks.
-> **Not built yet:** the accessibility/i18n sweep (21.9) and the e2e spec + release docs (21.10).
+> **Not built yet:** the e2e spec + release docs (21.10).
 > 21.8 is done too: the corpus is the full §4.8 inventory — 38 `en` pages across four sections (the new
 > `reference` section included) — and `vi` translates the 17 P0 pages plus the section descriptors, with
 > everything beyond them falling back to English behind the notice. Verified in Chromium: four doors on
 > `/docs`, a P1 admin page and the glossary render with zero dead links, the `vi` reader shows Vietnamese
 > for a translated page and the fallback notice for an untranslated one, and the admin `Docs` tab reports
 > 38 pages / 45% translated.
+> 21.9 is done too, and it earned its keep: there was **no skip link**, antd's `a:focus { outline: 0 }` had
+> stripped the keyboard focus ring from **every link in the app**, the search page stole the caret out of the
+> field on every debounced response, a closed `<details>` still painted its contents on a phone, and the
+> 900–1179 band left the prose 464 px instead of collapsing the rail as §5.10 specifies (now 681 px). All
+> five fixed and re-measured; the keyboard-only walkthrough completes §13.5 scenarios 1, 2, 3 and 5.
 
 ### Phase 21.0 — Audit, content contract and parser skeleton ✅
 
@@ -1284,7 +1289,7 @@ renders (`web.common.save` = **Save** / **Lưu**) — corrected in four pages, a
 **Publish** button left alone. `corpus.test.ts` now asserts the full inventory and the exact P0/`vi` split
 instead of the P0-only counts.
 
-### Phase 21.9 — Accessibility, responsive and i18n chrome 📋
+### Phase 21.9 — Accessibility, responsive and i18n chrome ✅
 
 Tasks: skip link, landmarks, `aria-current`, focus moves, live-region announcements; the 900/1180 px
 breakpoints; `web.docs.*` keys in `en` and `vi` (catalogs stay in parity — the i18n test enforces
@@ -1292,6 +1297,26 @@ count equality); keyboard-only walkthrough.
 
 Acceptance: keyboard-only completion of the five e2e scenarios; no missing i18n key; no layout break
 at 390/1024/1440 px.
+
+Done, measured in Chromium rather than asserted. Four defects only the pass found:
+
+1. There was **no skip link at all**. `core.app.skipToContent` now renders one as the first focusable
+   element of the shell, targeting `<Content id="carocrm-content" tabIndex={-1}>`.
+2. antd's `a:focus { outline: 0 }` erased the keyboard focus ring on **every link in the app**, so a Tab
+   user in the sidebar could not see where they were. `html a:focus-visible` restores it without
+   `!important` and without touching mouse clicks.
+3. Focus moved to the results list on **every debounced response**, which pulled the caret out of the
+   search field mid-word. It now moves on a submit only — including arriving with `?q=` already in the
+   address bar, which is how the landing field sends you.
+4. A closed `<details>` disclosure still **painted** its contents (an author `display` outranks the UA
+   rule), so the phone reader saw the whole TOC under a collapsed "Contents" summary.
+
+§5.10 also disagreed with the build at 900–1179 px: the rail stayed a 220 px column and left the prose
+464 px. The rail is now the disclosure the table asks for, which gives the prose 681 px at 1024.
+
+Keyboard-only walkthrough completed for scenarios 1, 2, 3 and 5 of §13.5 (scenario 4, the non-admin
+reader, is the API matrix in `docs.test.ts` and the e2e spec in 21.10). No untranslated key renders on
+the reader, the search page or the admin tab, in either language.
 
 ### Phase 21.10 — Hardening and release readiness 📋
 

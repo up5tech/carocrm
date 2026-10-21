@@ -1,5 +1,6 @@
 import { MailOutlined } from '@ant-design/icons';
 import { Alert, Card, Typography } from 'antd';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { DocsTreeView } from '../../api/types.js';
@@ -32,6 +33,7 @@ export function DocsLayout({
   readonly children: React.ReactNode;
 }) {
   const tree = useDocsTree();
+  const narrow = useNarrowReader();
 
   if (tree.isPending) {
     return (
@@ -68,9 +70,20 @@ export function DocsLayout({
   return (
     <div className="carocrm-doc">
       <div className="carocrm-doc-grid">
-        <nav className="carocrm-doc-rail" aria-label={t('web.docs.sectionsNav')}>
-          <DocsRail tree={tree.data} activeSection={activeSection} activePage={activePage} />
-        </nav>
+        {narrow ? (
+          // §5.10: below 1180 the rail is a disclosure above the prose, because a 220px column of links
+          // leaves the handbook with a measure nobody can read down.
+          <details className="carocrm-doc-rail-details">
+            <summary>{t('web.docs.sectionsNav')}</summary>
+            <nav aria-label={t('web.docs.sectionsNav')}>
+              <DocsRail tree={tree.data} activeSection={activeSection} activePage={activePage} />
+            </nav>
+          </details>
+        ) : (
+          <nav className="carocrm-doc-rail" aria-label={t('web.docs.sectionsNav')}>
+            <DocsRail tree={tree.data} activeSection={activeSection} activePage={activePage} />
+          </nav>
+        )}
         <div className="carocrm-doc-prose">{children}</div>
         <aside className="carocrm-doc-side">
           {actions !== undefined ? <div className="carocrm-doc-actions">{actions}</div> : null}
@@ -78,6 +91,18 @@ export function DocsLayout({
       </div>
     </div>
   );
+}
+
+/** The §5.10 width, read from the browser so the stylesheet and the markup cannot disagree. */
+function useNarrowReader(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 1179px)').matches);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1179px)');
+    const onChange = (event: MediaQueryListEvent): void => setNarrow(event.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return narrow;
 }
 
 function DocsRail({

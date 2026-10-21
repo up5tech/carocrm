@@ -42,10 +42,25 @@ export function DocsSearchPage() {
     if (live !== null && search.data !== undefined) live.textContent = t('web.docs.resultsAnnounce', { count: search.data.total, query });
   }, [search.data, query]);
 
+  // §5.9 moves focus to the results on a *submit*, not on every debounced keystroke — focusing whenever a
+  // response lands pulls the caret out of the field mid-word and the rest of the query is lost. Arriving
+  // here with a query already in the address bar is a submit too: it is how the landing field sends you.
+  const submitted = useRef(query !== '');
   useEffect(() => {
-    // Focus the results heading on a submit, so a keyboard reader lands on the answer, not on the field.
-    if (query !== '' && search.data !== undefined) resultsRef.current?.focus();
-  }, [query, search.data?.total]);
+    if (!submitted.current || search.data === undefined) return;
+    submitted.current = false;
+    resultsRef.current?.focus();
+  }, [search.data]);
+
+  const submit = useCallback(
+    (next: string) => {
+      submitted.current = true;
+      writeQuery(next, false);
+      // Enter on an unchanged query changes nothing, so no response arrives to carry the focus move.
+      if (next.trim() === query) resultsRef.current?.focus();
+    },
+    [writeQuery, query],
+  );
 
   const hits = search.data?.hits ?? [];
   const readerLocale = tree.data?.locale ?? 'en';
@@ -64,7 +79,7 @@ export function DocsSearchPage() {
           ariaLabel={t('web.docs.searchAria')}
           submitLabel={t('web.docs.searchSubmitHint')}
           onChange={(next) => writeQuery(next, true)}
-          onSubmit={(next) => writeQuery(next, false)}
+          onSubmit={submit}
         />
       </div>
 
