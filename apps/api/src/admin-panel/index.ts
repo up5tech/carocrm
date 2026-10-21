@@ -25,7 +25,7 @@ import { SettingsRegistryService } from './settings-registry.service.js';
 
 export { AdminPanelController, NavigationController } from './admin-panel.controller.js';
 export type { AdminPanelGroup, AdminPanelTab } from './admin-panel.service.js';
-export { AdminPanelService } from './admin-panel.service.js';
+export { AdminPanelService,adminTabDocKeys } from './admin-panel.service.js';
 export { InternalInfoController } from './internal.controller.js';
 export type { InternalInfoView } from './internal.service.js';
 export { InternalInfoService, METADATA_RESET_CONFIRM, QUEUE_PURGE_CONFIRM } from './internal.service.js';

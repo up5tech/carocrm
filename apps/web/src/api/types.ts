@@ -1379,6 +1379,8 @@ export interface AdminPanelTab {
   readonly document?: string | undefined;
   readonly moduleEndpoint?: string | undefined;
   readonly usesSaveBar?: boolean | undefined;
+  /** The handbook page that documents this screen (§21.7); the shell renders a book link for it. */
+  readonly docKey?: string | undefined;
 }
 
 export interface AdminPanelGroup {
@@ -2861,6 +2863,19 @@ export interface DocsTreeView {
   readonly fallbackLocale: string;
   readonly hash: string;
   readonly sections: readonly DocSection[];
+  /** Only an administrator receives this; it drives the `Docs` settings tab (§12). */
+  readonly diagnostics?: DocsDiagnostics;
+}
+
+export interface DocsDiagnostics {
+  readonly locales: readonly {
+    readonly locale: string;
+    readonly pages: number;
+    readonly translated: number;
+    readonly hash: string;
+    readonly warnings: readonly { readonly code: string; readonly message: string; readonly key: string | null }[];
+  }[];
+  readonly coverage: number;
 }
 
 export interface DocsPageView {

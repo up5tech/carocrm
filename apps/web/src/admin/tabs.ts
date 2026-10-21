@@ -25,4 +25,5 @@ export const TAB_COMPONENTS: Record<string, LazyExoticComponent<ComponentType>> 
   notifications: lazy(() => import('./tabs/NotificationsTab.js').then((module) => ({ default: module.NotificationsTab }))),
   webhooks: lazy(() => import('./tabs/WebhooksTab.js').then((module) => ({ default: module.WebhooksTab }))),
   internal: lazy(() => import('./tabs/InternalTab.js').then((module) => ({ default: module.InternalTab }))),
+  docs: lazy(() => import('./tabs/DocsTab.js').then((module) => ({ default: module.DocsTab }))),
 };

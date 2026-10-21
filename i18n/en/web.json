@@ -168,7 +168,9 @@
     "resultsAnnounce": "{count} results for {query}",
     "noResults": "No page matches \"{query}\".",
     "askAdministrator": "Ask your administrator",
-    "supportSubject": "Question about the documentation"
+    "supportSubject": "Question about the documentation",
+    "link": "Documentation",
+    "learnMore": "Learn more"
   },
   "language": {
     "label": "Language",
@@ -1437,7 +1439,8 @@
     "edgeOfList": "This entry is already at the edge of its list.",
     "restoreTitle": "Restore the shipped menu",
     "restoreBody": "Every rename, reorder and hidden entry you added is removed and the platform menu comes back.",
-    "restoreAction": "Restore defaults"
+    "restoreAction": "Restore defaults",
+    "restoreHint": "Reordering and hiding apply to every role at once. Read the page before you press it."
   },
   "adminUsers": {
     "title": "Users",
@@ -2234,6 +2237,11 @@
     "generating": "Generating...",
     "streamingInProgress": "Receiving response...",
     "receivingResponse": "The assistant is processing your request. You can stop generation at any time.",
+    "thinkingQueued": "Waiting for the agent... ({seconds}s)",
+    "thinkingRunning": "The agent is thinking... ({seconds}s)",
+    "thinkingTool": "Using {tool}... ({seconds}s)",
+    "thinkingFinishing": "Writing the answer... ({seconds}s)",
+    "streamDisconnected": "The progress connection closed. The turn may still be running; refresh to check the result.",
     "stopGeneration": "Stop",
     "errorTitle": "Error",
     "citations": "citations",
@@ -2311,6 +2319,35 @@
     "agentFieldEmpty": "No published agent yet. Publish an agent in AI Agents first.",
     "agentListFailed": "Could not load the agent list. Viewing AI Agents and published definitions is required.",
     "agentFieldHint": "Enable AI Agents execution and conversation memory, then publish an agent that uses conversation memory.",
+    "executionFieldLabel": "Execution mode",
+    "executionQueue": "Queue (worker) — durable, recommended for production",
+    "executionInline": "Direct (API process) — no worker; the API runs the agent and streams progress",
+    "executionHint": "Direct mode starts the same durable run inside the API process, so a single-process install works without a worker. Queue mode is safer when the API restarts or scales to several instances.",
     "settingsTitle": "CRM Chat settings"
+  },
+  "adminDocs": {
+    "title": "The in-app handbook",
+    "hint": "Switches only. The pages themselves ship with the release in content/docs.",
+    "enabled": "Enable the handbook",
+    "enabledHint": "When off, /docs and every \"Learn more\" link answer 404 and the sidebar entry disappears.",
+    "sidebar": "Show in the sidebar",
+    "sidebarHint": "Removes the entry only. An administrator can still hide it per entry under Main menu.",
+    "helpMenu": "Show in the avatar menu",
+    "helpMenuHint": "The \"Help & documentation\" item next to My profile.",
+    "external": "External handbook URL",
+    "externalHint": "Set this when the organisation keeps its own wiki: every documentation link then points there.",
+    "landing": "Landing page",
+    "landingHint": "A section/slug page key that overrides the first card on /docs.",
+    "support": "Support address",
+    "supportHint": "Shown as \"Ask your administrator\" when a search finds nothing.",
+    "coverageTitle": "What is documented",
+    "coveragePending": "Loading the coverage report.",
+    "coverageSummary": "{pages} pages in English, {percent}% translated into the other enabled languages.",
+    "localeColumn": "Locale",
+    "pagesColumn": "Pages",
+    "translatedColumn": "Translated",
+    "hashColumn": "Content hash",
+    "warningsTitle": "Content warnings",
+    "warningsNone": "No content warnings. The same rules run in the docs content test and fail a release."
   }
 }

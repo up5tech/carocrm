@@ -169,6 +169,21 @@ describe('GET /Docs/tree', () => {
     expect(res.headers['cache-control']).toContain('private');
   });
 
+  it('reports coverage and index warnings to an administrator, and to nobody else', async () => {
+    const admin = await tree(ctx.adminToken);
+    const diagnostics = admin.body['diagnostics'] as
+      | { locales: { locale: string; pages: number; translated: number; hash: string; warnings: unknown[] }[]; coverage: number }
+      | undefined;
+    expect(diagnostics).toBeDefined();
+    expect(diagnostics?.locales.map((entry) => entry.locale)).toEqual(expect.arrayContaining(['en']));
+    expect((diagnostics?.locales.find((entry) => entry.locale === 'en')?.pages ?? 0).valueOf()).toBeGreaterThanOrEqual(17);
+    expect(diagnostics?.coverage).toBe(0);
+    expect(diagnostics?.locales[0]?.hash).toBe(String(admin.body['hash']));
+
+    const regular = await tree(regularToken);
+    expect(regular.body).not.toHaveProperty('diagnostics');
+  });
+
   it('hides the administrator section from a CRM user, by key as well as by name', async () => {
     const keys = pageKeys(await tree(regularToken));
     expect(keys.some((key) => key.startsWith('admin/'))).toBe(false);

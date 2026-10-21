@@ -3484,3 +3484,59 @@ body {
   border-radius: 6px;
   font-size: 14px;
 }
+
+/* ---- Phase 21.7: contextual help (tab book icon, HelpTip "Learn more", screen Documentation link) ---- */
+
+.carocrm-docs-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #5b636d;
+  white-space: nowrap;
+}
+
+.carocrm-docs-link:hover {
+  color: #438eff;
+}
+
+/* The icon-only form sits beside a title, so it stays quiet until hovered or focused. */
+.carocrm-docs-link--compact {
+  margin-inline-start: 8px;
+  font-size: 15px;
+  color: #8c96a5;
+  vertical-align: -2px;
+}
+
+.carocrm-docs-link--compact:hover,
+.carocrm-docs-link--compact:focus-visible {
+  color: #438eff;
+}
+
+.carocrm-helptip-more {
+  display: block;
+  margin-top: 6px;
+}
+
+/* HelpTip renders on the dark tooltip surface, so the link needs the inverted palette. */
+.carocrm-helptip-more .carocrm-docs-link {
+  color: #e6ebf2;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.carocrm-helptip-more .carocrm-docs-link:hover,
+.carocrm-helptip-more .carocrm-docs-link:focus-visible {
+  color: #ffffff;
+}
+
+.carocrm-admin-docs-hash {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+.carocrm-admin-docs-warnings {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}

@@ -3,6 +3,7 @@ import { App as AntApp, Button, Card, Checkbox, Col, Form, Input, InputNumber, M
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api, type DashboardRow } from '../api/client.js';
+import { DocsLink } from '../components/docs/DocsLink.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
@@ -191,7 +192,8 @@ export function DashboardsPage() {
         <div>
           <h1 className="carocrm-page-title">{t('web.dashboards.title')}</h1>
           <p className="carocrm-page-sub">{t('web.dashboards.subtitle')}</p>
-        </div>
+        
+          <DocsLink docKey="user/dashboards-and-reports" compact /></div>
         <Space>
           <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void refresh()}>
             {t('core.common.refresh')}

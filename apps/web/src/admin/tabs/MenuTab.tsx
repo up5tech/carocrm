@@ -1,9 +1,10 @@
 import { ArrowDownOutlined, ArrowUpOutlined, RollbackOutlined } from '@ant-design/icons';
-import { Alert, App as AntApp, Button, Card, Input, Select, Skeleton, Switch, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Input, Select, Skeleton, Space, Switch, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { NavigationDocument, NavigationMenuEntry, NavigationNode } from '../../api/types.js';
 import { NAV_ICON_NAMES, navIcon } from '../../components/entityIcons.js';
+import { HelpTip } from '../../components/HelpTip.js';
 import { useNavigation } from '../../state/admin.js';
 import { t } from '../../state/i18n.js';
 import { useMetadata } from '../../state/metadata.js';
@@ -175,9 +176,14 @@ export function MenuTab() {
         className="carocrm-card"
         title={t('web.adminMenu.title')}
         extra={
-          <Button size="small" icon={<RollbackOutlined />} onClick={restoreDefaults}>
-            {t('web.adminMenu.restoreAction')}
-          </Button>
+          <Space size={4}>
+            <Button size="small" icon={<RollbackOutlined />} onClick={restoreDefaults}>
+              {t('web.adminMenu.restoreAction')}
+            </Button>
+            {/* The one control on this tab that clears every administrator's work at once is exactly
+                where a "Learn more" belongs (§5.6). */}
+            <HelpTip docKey="admin/main-menu">{t('web.adminMenu.restoreHint')}</HelpTip>
+          </Space>
         }
       >
         <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>

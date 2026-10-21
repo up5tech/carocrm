@@ -122,6 +122,17 @@ export function useDocsSettings() {
   });
 }
 
+/**
+ * Where a `docKey` points right now. An instance that hosts its own handbook sets `externalUrl`, and then
+ * **every** contextual link — the tab book icon, a HelpTip "Learn more", a screen's Documentation action —
+ * has to follow it, or the product keeps shipping half a redirect (§15.3).
+ */
+export function useDocsHref(docKey: string | undefined): string | null {
+  const settings = useDocsSettings();
+  if (docKey === undefined || docKey === '') return null;
+  return settings.data?.value.externalUrl ?? `/docs/${docKey}`;
+}
+
 /** Every page key this caller may reach, from the server-filtered tree: what a doc link is checked against. */
 export function useDocsPageKeys(): ReadonlySet<string> {
   const tree = useDocsTree();

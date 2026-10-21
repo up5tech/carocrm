@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { ProcessTaskView } from '../api/types.js';
+import { DocsLink } from '../components/docs/DocsLink.js';
 import { t } from '../state/i18n.js';
 import { useProcessTasks } from '../state/processes.js';
 import { useSession } from '../state/session.js';
@@ -64,7 +65,12 @@ export function TasksPage() {
   return (
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Card
-        title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.tasks.title')}</Typography.Title>}
+        title={(
+          <Space>
+            <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.tasks.title')}</Typography.Title>
+            <DocsLink docKey="user/activities-and-tasks" compact />
+          </Space>
+        )}
         extra={
           <Space>
             <Select

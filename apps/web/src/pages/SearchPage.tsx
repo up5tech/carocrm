@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { api, type GlobalSearchResult } from '../api/client.js';
+import { DocsLink } from '../components/docs/DocsLink.js';
 import { t } from '../state/i18n.js';
 import { navEntities, recordLabel, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
@@ -66,7 +67,8 @@ export function SearchPage() {
         <div>
           <h1 className="carocrm-page-title">{t('web.search.title')}</h1>
           <p className="carocrm-page-sub">{t('web.search.subtitle')}</p>
-        </div>
+        
+          <DocsLink docKey="user/search" compact /></div>
       </div>
       <Space.Compact style={{ width: '100%', marginBottom: 12 }}>
         <Input

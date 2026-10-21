@@ -168,7 +168,9 @@
     "resultsAnnounce": "{count} kết quả cho {query}",
     "noResults": "Không có trang nào khớp với \"{query}\".",
     "askAdministrator": "Hỏi quản trị viên của bạn",
-    "supportSubject": "Câu hỏi về tài liệu hướng dẫn"
+    "supportSubject": "Câu hỏi về tài liệu hướng dẫn",
+    "link": "Tài liệu",
+    "learnMore": "Đọc thêm"
   },
   "language": {
     "label": "Ngôn ngữ",
@@ -1437,7 +1439,8 @@
     "edgeOfList": "Mục này đã ở đầu/cuối danh sách.",
     "restoreTitle": "Khôi phục menu mặc định",
     "restoreBody": "Mọi đổi tên, sắp xếp lại và mục bạn đã ẩn sẽ bị xóa và menu mặc định quay trở lại.",
-    "restoreAction": "Khôi phục mặc định"
+    "restoreAction": "Khôi phục mặc định",
+    "restoreHint": "Việc đổi thứ tự và ẩn áp dụng cho mọi quyền cùng lúc. Hãy đọc trang này trước khi bấm."
   },
   "adminUsers": {
     "title": "Người dùng",
@@ -2234,6 +2237,11 @@
     "generating": "Đang tạo...",
     "streamingInProgress": "Đang nhận phản hồi...",
     "receivingResponse": "Trợ lý đang xử lý yêu cầu. Bạn có thể dừng bất cứ lúc nào.",
+    "thinkingQueued": "Đang chờ agent... ({seconds}s)",
+    "thinkingRunning": "Agent đang suy nghĩ... ({seconds}s)",
+    "thinkingTool": "Đang dùng {tool}... ({seconds}s)",
+    "thinkingFinishing": "Đang viết câu trả lời... ({seconds}s)",
+    "streamDisconnected": "Kết nối tiến trình đã đóng. Lượt trả lời có thể vẫn đang chạy; hãy làm mới để xem kết quả.",
     "stopGeneration": "Dừng",
     "errorTitle": "Lỗi",
     "citations": "trích dẫn",
@@ -2311,6 +2319,35 @@
     "agentFieldEmpty": "Chưa có trợ lý nào được xuất bản. Hãy xuất bản một trợ lý trong AI Agents trước.",
     "agentListFailed": "Không tải được danh sách trợ lý. Cần quyền xem AI Agents và các định nghĩa đã xuất bản.",
     "agentFieldHint": "Bật thực thi và bộ nhớ hội thoại trong AI Agents, sau đó xuất bản một trợ lý có dùng bộ nhớ hội thoại.",
+    "executionFieldLabel": "Cách chạy agent",
+    "executionQueue": "Hàng đợi (worker) — bền vững, khuyến nghị cho production",
+    "executionInline": "Trực tiếp (tiến trình API) — không cần worker; API chạy agent và phát tiến trình",
+    "executionHint": "Chế độ trực tiếp khởi chạy cùng một run bền vững ngay trong tiến trình API, nên bản cài một tiến trình không cần worker. Chế độ hàng đợi an toàn hơn khi API khởi động lại hoặc chạy nhiều instance.",
     "settingsTitle": "Cài đặt CRM Chat"
+  },
+  "adminDocs": {
+    "title": "Tài liệu trong ứng dụng",
+    "hint": "Chỉ là công tắc. Nội dung trang đi kèm bản phát hành trong content/docs.",
+    "enabled": "Bật tài liệu",
+    "enabledHint": "Khi tắt, /docs và mọi liên kết \"Đọc thêm\" trả 404 và mục trên sidebar biến mất.",
+    "sidebar": "Hiện trên sidebar",
+    "sidebarHint": "Chỉ ẩn mục này. Quản trị viên vẫn có thể ẩn từng mục trong Main menu.",
+    "helpMenu": "Hiện trong menu avatar",
+    "helpMenuHint": "Mục \"Trợ giúp & tài liệu\" cạnh My profile.",
+    "external": "URL tài liệu ngoài",
+    "externalHint": "Đặt khi tổ chức đã có wiki riêng: mọi liên kết tài liệu sẽ trỏ sang đó.",
+    "landing": "Trang mở đầu",
+    "landingHint": "Mã trang section/slug thay thế thẻ đầu tiên trên /docs.",
+    "support": "Địa chỉ hỗ trợ",
+    "supportHint": "Hiện thành \"Hỏi quản trị viên\" khi tìm kiếm không có kết quả.",
+    "coverageTitle": "Những gì đã được tài liệu hoá",
+    "coveragePending": "Đang tải báo cáo độ phủ.",
+    "coverageSummary": "{pages} trang tiếng Anh, {percent}% đã dịch sang các ngôn ngữ đang bật.",
+    "localeColumn": "Ngôn ngữ",
+    "pagesColumn": "Trang",
+    "translatedColumn": "Đã dịch",
+    "hashColumn": "Hash nội dung",
+    "warningsTitle": "Cảnh báo nội dung",
+    "warningsNone": "Không có cảnh báo nội dung. Các quy tắc này cũng chạy trong test nội dung tài liệu và sẽ chặn bản phát hành."
   }
 }

@@ -39,6 +39,24 @@ export interface DocsTree {
   readonly fallbackLocale: string;
   readonly hash: string;
   readonly sections: readonly DocSection[];
+  /** Present for an administrator only: what the `Docs` settings tab shows instead of a shell. */
+  readonly diagnostics?: DocsDiagnostics;
+}
+
+export interface DocsLocaleReport {
+  readonly locale: string;
+  /** Pages the reader can reach in this locale, counting the ones served from the fallback corpus. */
+  readonly pages: number;
+  /** Pages actually translated here — the difference between the two is the fallback notice count. */
+  readonly translated: number;
+  readonly hash: string;
+  readonly warnings: readonly { readonly code: string; readonly message: string; readonly key: string | null }[];
+}
+
+export interface DocsDiagnostics {
+  readonly locales: readonly DocsLocaleReport[];
+  /** Translated `vi` pages over English pages, 0–1. */
+  readonly coverage: number;
 }
 
 /**
@@ -100,6 +118,7 @@ export class DocsService {
       ? await Promise.all(index.sections.map(async (section) => ({ section, pages: await this.visiblePages(section) })))
       : [];
 
+    const diagnostics = await this.diagnostics();
     return {
       enabled: settings.enabled,
       externalUrl: settings.externalUrl,
@@ -107,6 +126,7 @@ export class DocsService {
       fallbackLocale: 'en',
       hash: index.hash,
       sections: sections.filter((entry) => entry.pages.length > 0).map((entry) => ({ ...entry.section, pages: entry.pages })),
+      ...(diagnostics === undefined ? {} : { diagnostics }),
     };
   }
 
@@ -151,6 +171,31 @@ export class DocsService {
     }
     if (hits.length === 0) log.debug({ locale, queryLength: q.length }, 'docs.search.empty');
     return { query: q, locale, total: hits.length, hits };
+  }
+
+  /**
+   * Coverage and index warnings for the `Docs` settings tab (§12). An administrator should be able to
+   * answer "how much of this is translated, and what is broken" from the UI; making them grep the server
+   * log is how a corpus stays broken. Only the admin tier sees it, and it is the same warnings the
+   * content lint already fails a build on.
+   */
+  private async diagnostics(): Promise<DocsDiagnostics | undefined> {
+    if (!this.registry.mayRead('admin')) return undefined;
+    const enabled = (await this.i18n.settings()).enabledLocales;
+    const locales = enabled.map((locale) => {
+      const index = this.index(locale);
+      return {
+        locale,
+        pages: index.pages.size,
+        translated: [...index.pages.values()].filter((page) => !page.fallback).length,
+        hash: index.hash,
+        warnings: index.warnings.map((warning) => ({ code: warning.code, message: warning.message, key: warning.key })),
+      };
+    });
+    const english = locales.find((report) => report.locale === 'en');
+    const vietnamese = locales.find((report) => report.locale === 'vi');
+    const coverage = english !== undefined && english.pages > 0 && vietnamese !== undefined ? vietnamese.translated / english.pages : 0;
+    return { locales, coverage };
   }
 
   /** The hash the controller publishes as an `ETag`; it is the content signature, not a request id. */

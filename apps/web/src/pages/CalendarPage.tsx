@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api, type CalendarEvent } from '../api/client.js';
+import { DocsLink } from '../components/docs/DocsLink.js';
 import { activeLocaleName, t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
@@ -181,7 +182,12 @@ export function CalendarPage() {
   return (
     <Card
       className="carocrm-card"
-      title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.calendar.title')}</Typography.Title>}
+      title={(
+          <Space>
+            <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.calendar.title')}</Typography.Title>
+            <DocsLink docKey="user/activities-and-tasks" compact />
+          </Space>
+        )}
       extra={
         <Space wrap size={12}>
           <Space wrap size={4}>

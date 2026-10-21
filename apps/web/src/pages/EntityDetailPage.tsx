@@ -10,6 +10,7 @@ import { CaseConversation } from '../components/CaseConversation.js';
 import { CaseLifecycleActions } from '../components/CaseLifecycleActions.js';
 import { CaseQueueWorkload } from '../components/CaseQueueWorkload.js';
 import { CommunicationsPanel } from '../components/CommunicationsPanel.js';
+import { DocsLink } from '../components/docs/DocsLink.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
 import { PortalCaseConversation } from '../components/PortalCaseConversation.js';
@@ -329,6 +330,7 @@ export function EntityDetailPage() {
             <Space>
               <Typography.Text strong>{definition.data?.label ?? entity}</Typography.Text>
               <Typography.Text type="secondary">{recordLabel(record, definition.data)}</Typography.Text>
+              <DocsLink docKey="user/record-page" compact />
             </Space>
           }
           extra={

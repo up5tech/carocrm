@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api, type StreamItem } from '../api/client.js';
+import { DocsLink } from '../components/docs/DocsLink.js';
 import { updateSummary } from '../components/StreamPanel.js';
 import { t } from '../state/i18n.js';
 import { useEntity, useMetadata } from '../state/metadata.js';
@@ -55,7 +56,12 @@ export function StreamPage() {
   return (
     <Card
       className="carocrm-card"
-      title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.stream.title')}</Typography.Title>}
+      title={(
+          <Space>
+            <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.stream.title')}</Typography.Title>
+            <DocsLink docKey="user/stream-and-notifications" compact />
+          </Space>
+        )}
       extra={
         <Space>
           <Segmented

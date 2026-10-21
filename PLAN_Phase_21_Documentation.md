@@ -1119,13 +1119,14 @@ defaults apply.
 Each sub-phase is independently reviewable and leaves the tree green. Do not attempt the whole phase
 in one pass.
 
-> **Progress (2026-10-21).** 21.0–21.2 and 21.4–21.6 are done; 21.3 is done except its screenshots, which need
+> **Progress (2026-10-21).** 21.0–21.2 and 21.4–21.7 are done; 21.3 is done except its screenshots, which need
 > a browser pass this scope excluded. `packages/docs` (parser, index, search, links, lint) is green with
 > 174 unit tests, `content/docs/en/` carries the 17 P0 pages plus four section descriptors, and the corpus
-> lint runs inside `pnpm test` from `packages/docs/src/corpus.test.ts` rather than
-> `apps/api/test/docs-content.test.ts`, because the lint needs no HTTP layer.
+> lint runs in two places: `packages/docs/src/corpus.test.ts` checks the shipped files alone, and
+> `apps/api/test/docs-content.test.ts` re-runs it with server knowledge (the admin tab catalog and the
+> entity route allowlist), which is the only place the §13.3 cross-check can live.
 > `apps/api/src/docs` serves `GET /Docs/{tree,page,search}` with ETag/304, the §10.2 matrix, the `docs`
-> settings document and the sidebar entry, covered by `apps/api/test/docs.test.ts` (27 tests).
+> settings document and the sidebar entry, covered by `apps/api/test/docs.test.ts` (28 tests).
 > 21.5 is done too: `/docs`, `/docs/:section` and `/docs/:section/:slug` render the block tree in a
 > three-column reader (verified in Chromium at 1440/1024/390 and in print emulation — TOC click focuses the
 > heading, no horizontal overflow, chrome hidden on paper, a CRM user sees no administrator section and gets
@@ -1136,8 +1137,16 @@ in one pass.
 > Chromium: the command palette dialog has had **no positioning since Phase 20** (it rendered below the
 > fold, so no one could see it) — fixed in `carocrm.css`; and search could not answer a prefix (`side` for
 > `sidebar`), so `searchIndex` now falls back to prefix tokens when the exact word is absent.
-> **Not built yet:** contextual `docKey` help and the admin `DocsTab` (21.7), `vi` content (21.8), the
-> accessibility/i18n sweep (21.9) and the e2e spec + release docs (21.10).
+> 21.7 is done too: admin tab descriptors carry `docKey` and `AdminSettingsShell` shows the book icon,
+> `HelpTip` gained a `docKey` "Learn more" row, eight P0 screen headers link to their page, and the new
+> `Docs` settings tab edits the `docs` document and renders coverage plus warnings from an admin-only
+> `diagnostics` block on `/Docs/tree`. Verified in Chromium: the icon resolves to `/docs/admin/main-menu`
+> and clicking it lands there, the tooltip link follows it, a CRM list header links to
+> `/docs/user/lists-and-views`, and setting `externalUrl` moves **every** contextual link at once (then
+> restores). Two defects found only by looking at it: the "Learn more" link inherited the light-surface
+> colour and was unreadable on the dark tooltip, and the coverage footnote rendered literal backticks.
+> **Not built yet:** `vi` content (21.8), the accessibility/i18n sweep (21.9) and the e2e spec + release
+> docs (21.10).
 
 ### Phase 21.0 — Audit, content contract and parser skeleton ✅
 
@@ -1233,7 +1242,7 @@ Tasks:
 Acceptance: search works without diacritics; results are shareable and back-button safe; the palette
 finds a page in ≤ 2 keystrokes after the query; a non-admin sees no admin card and no admin hits.
 
-### Phase 21.7 — Contextual help and the admin tab 📋
+### Phase 21.7 — Contextual help and the admin tab ✅
 
 Tasks:
 
@@ -1246,6 +1255,12 @@ Tasks:
 
 Acceptance: every tab with a page shows the icon and lands on the right page; changing `externalUrl`
 redirects every contextual link; the tab shows coverage and warnings without a shell.
+
+Done: items 1–3 and 5 as written. Item 4 covers **eight** headers, not six — `EntityListPage`,
+`EntityDetailPage`, `TasksPage`, `CalendarPage`, `StreamPage`, `SearchPage`, `DashboardsPage`,
+`ReportsPage` — because the two activity screens and the two reporting screens each needed their own
+entry. The ten admin tabs with a page share six distinct handbook pages, so the cross-check asserts
+`six or more` resolved keys rather than one per tab.
 
 ### Phase 21.8 — Remaining content 📋
 
