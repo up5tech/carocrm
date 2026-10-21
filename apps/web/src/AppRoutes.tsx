@@ -15,6 +15,7 @@ import { CRMChatPage } from './pages/CRMChatPage.js';
 import { DashboardsPage } from './pages/DashboardsPage.js';
 import { DocsLandingPage } from './pages/docs/DocsLandingPage.js';
 import { DocsPage } from './pages/docs/DocsPage.js';
+import { DocsSearchPage } from './pages/docs/DocsSearchPage.js';
 import { DocsSectionPage } from './pages/docs/DocsSectionPage.js';
 import { EntityAdminPage } from './pages/EntityAdminPage.js';
 import { EntityBoardPage } from './pages/EntityBoardPage.js';
@@ -132,6 +133,7 @@ export function AppRoutes() {
             "search" is never read as a section name, and all four sit before the entity wildcard so
             "docs" is never read as an entity. */}
         <Route path="/docs" element={<DocsLandingPage />} />
+        <Route path="/docs/search" element={<DocsSearchPage />} />
         <Route path="/docs/:section" element={<DocsSectionPage />} />
         <Route path="/docs/:section/:slug" element={<DocsPage />} />
         {/* the signed-in user's own page, before the entity wildcard reads "profile" as an entity */}

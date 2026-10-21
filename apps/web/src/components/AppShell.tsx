@@ -8,6 +8,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { NavigationNode } from '../api/types.js';
 import { useNavigation } from '../state/admin.js';
+import { useDocsSettings } from '../state/docs.js';
 import { activateLocale, activeLocaleName, localesEnabled, t } from '../state/i18n.js';
 import { portalBase, usePortalContext } from '../state/portal.js';
 import { useSession } from '../state/session.js';
@@ -111,8 +112,29 @@ function InternalShell({ children }: { children: ReactNode }) {
     label: t(`web.language.${locale}`),
     onClick: () => switchLanguage(locale),
   }));
+  // The handbook entry follows the instance's own switches: an organisation that moved its help to a
+  // wiki gets a link to that wiki, and `showHelpMenu: false` takes the row away without a deploy.
+  const docsSettings = useDocsSettings();
+  const helpExternal = docsSettings.data?.value.externalUrl ?? null;
+  const helpItem: MenuItems = docsSettings.data?.value.showHelpMenu === false
+    ? []
+    : [
+        {
+          key: 'help',
+          label:
+            helpExternal === null ? (
+              <Link to="/docs">{t('web.docs.menuItem')}</Link>
+            ) : (
+              <a href={helpExternal} target="_blank" rel="noopener noreferrer">
+                {t('web.docs.menuItem')}
+              </a>
+            ),
+        },
+      ];
+
   const userMenu: MenuItems = [
     { key: 'profile', label: <Link to="/profile">{t('web.profile.title')}</Link> },
+    ...helpItem,
     { key: 'language', label: t('web.language.label'), children: languageMenu },
     {
       key: 'signout',

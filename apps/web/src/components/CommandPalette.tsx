@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import type { EntityDefinition } from '../api/types.js';
+import { useDocPaletteItems } from '../state/docs.js';
 import { t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
@@ -113,6 +114,9 @@ export function CommandPalette() {
     [],
   );
 
+  // Nothing is requested until the palette is open, and the server decides what the caller may see.
+  const docsItems = useDocPaletteItems(open, mode === 'commands' ? query : '');
+
   const filteredCommands = useMemo(() => {
     if (query.trim() === '') return commandItems;
     const q = query.toLowerCase();
@@ -154,13 +158,24 @@ export function CommandPalette() {
         </div>
 
         {mode === 'commands' && (
-          <CommandGroup heading={t('web.commandPalette.commands')}>
-            {filteredCommands.map((item) => (
-              <CommandItem key={item.key} onSelect={() => select(item.route)}>
-                {item.label}
-              </CommandItem>
-            ))}
-          </CommandGroup>
+          <>
+            <CommandGroup heading={t('web.commandPalette.commands')}>
+              {filteredCommands.map((item) => (
+                <CommandItem key={item.key} onSelect={() => select(item.route)}>
+                  {item.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandSeparator />
+            <CommandGroup heading={t('web.docs.title')}>
+              {docsItems.items.map((item) => (
+                <CommandItem key={item.key} onSelect={() => select(item.path)}>
+                  {item.title}
+                  <span className="carocrm-palette-detail">{item.detail}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </>
         )}
 
         {mode === 'records' && (

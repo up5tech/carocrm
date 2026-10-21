@@ -102,6 +102,21 @@ describe('searchIndex', () => {
     expect(searchIndex(shaped, 'restore defaults').hits.map((hit) => hit.key)).toEqual(['admin/phrase', 'admin/scattered']);
   });
 
+  it('answers a prefix the reader typed before the whole word', () => {
+    // `side` is not a word in the corpus; the page about the sidebar is still the answer.
+    expect(searchIndex(index(), 'side').hits.map((hit) => hit.key)).toContain('admin/main-menu');
+    const hit = searchIndex(index(), 'side').hits.find((entry) => entry.key === 'admin/main-menu');
+    expect(hit?.snippet.text).toContain('sidebar');
+  });
+
+  it('prefers the exact word over the pages a prefix would drag in', () => {
+    const exact = searchIndex(index(), 'menu').hits;
+    const prefix = searchIndex(index(), 'men').hits;
+    expect(exact[0]?.key).toBe(prefix.find((hit) => hit.key === exact[0]?.key)?.key);
+    expect(prefix.length).toBeGreaterThanOrEqual(exact.length);
+    expect((exact[0]?.score ?? 0) / (prefix[0]?.score ?? 1)).toBeGreaterThan(0);
+  });
+
   it('returns nothing for an empty or one-character query', () => {
     expect(searchIndex(index(), '').total).toBe(0);
     expect(searchIndex(index(), 'a').total).toBe(0);
@@ -151,7 +166,7 @@ describe('snippets', () => {
 
   it('never overlaps or leaves the string', () => {
     const body = 'alpha alpha alphabetic beta alpha';
-    const snippet = snippetFor(body, tokenize(normalizeForSearch(body)).filter((term) => term.token === 'alpha'));
+    const snippet = snippetFor(body, ['alpha']);
     for (const [from, to] of snippet.ranges) {
       expect(from).toBeGreaterThanOrEqual(0);
       expect(to).toBeLessThanOrEqual(snippet.text.length);
@@ -164,14 +179,14 @@ describe('snippets', () => {
   });
 
   it('falls back to the start of the page with no ranges when the term is not in the body', () => {
-    const snippet = snippetFor('nothing relevant here', [{ token: 'zebra', start: 0 }]);
+    const snippet = snippetFor('nothing relevant here', ['zebra']);
     expect(snippet.ranges).toEqual([]);
     expect(snippet.text).toContain('nothing');
   });
 
   it('ellipsises both ends of a long page', () => {
     const body = `${'filler '.repeat(40)}needle ${'tail '.repeat(40)}`;
-    const snippet = snippetFor(body, [{ token: 'needle', start: 0 }]);
+    const snippet = snippetFor(body, ['needle']);
     expect(snippet.text.startsWith('…')).toBe(true);
     expect(snippet.text.endsWith('…')).toBe(true);
     const [range] = snippet.ranges;

@@ -1119,9 +1119,9 @@ defaults apply.
 Each sub-phase is independently reviewable and leaves the tree green. Do not attempt the whole phase
 in one pass.
 
-> **Progress (2026-10-21).** 21.0–21.2 and 21.4 are done; 21.3 is done except its screenshots, which need
+> **Progress (2026-10-21).** 21.0–21.2 and 21.4–21.6 are done; 21.3 is done except its screenshots, which need
 > a browser pass this scope excluded. `packages/docs` (parser, index, search, links, lint) is green with
-> 172 unit tests, `content/docs/en/` carries the 17 P0 pages plus four section descriptors, and the corpus
+> 174 unit tests, `content/docs/en/` carries the 17 P0 pages plus four section descriptors, and the corpus
 > lint runs inside `pnpm test` from `packages/docs/src/corpus.test.ts` rather than
 > `apps/api/test/docs-content.test.ts`, because the lint needs no HTTP layer.
 > `apps/api/src/docs` serves `GET /Docs/{tree,page,search}` with ETag/304, the §10.2 matrix, the `docs`
@@ -1130,9 +1130,14 @@ in one pass.
 > three-column reader (verified in Chromium at 1440/1024/390 and in print emulation — TOC click focuses the
 > heading, no horizontal overflow, chrome hidden on paper, a CRM user sees no administrator section and gets
 > the permission-denied card at a direct admin URL).
-> **Not built yet:** search page + landing search field, avatar-menu item and palette group (21.6),
-> contextual `docKey` help and the admin `DocsTab` (21.7), `vi` content (21.8), the a11n/i18n sweep (21.9)
-> and the e2e spec (21.10).
+> 21.6 is done too: the landing carries the search field, `/docs/search?q=…` renders ranked hits with
+> `<mark>` built from the API's `ranges`, the avatar menu has "Help & documentation", and the palette has a
+> `Documentation` group that requests nothing until it opens. Two defects surfaced while verifying it in
+> Chromium: the command palette dialog has had **no positioning since Phase 20** (it rendered below the
+> fold, so no one could see it) — fixed in `carocrm.css`; and search could not answer a prefix (`side` for
+> `sidebar`), so `searchIndex` now falls back to prefix tokens when the exact word is absent.
+> **Not built yet:** contextual `docKey` help and the admin `DocsTab` (21.7), `vi` content (21.8), the
+> accessibility/i18n sweep (21.9) and the e2e spec + release docs (21.10).
 
 ### Phase 21.0 — Audit, content contract and parser skeleton ✅
 
@@ -1215,7 +1220,7 @@ Tasks:
 Acceptance: a page renders every block type from the fixture corpus; the TOC tracks scroll; anchors
 focus the heading; print preview hides chrome; no horizontal overflow at 390 px.
 
-### Phase 21.6 — Landing, search and entry points 📋
+### Phase 21.6 — Landing, search and entry points ✅
 
 Tasks:
 

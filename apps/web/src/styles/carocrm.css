@@ -3304,3 +3304,183 @@ body {
     break-inside: avoid;
   }
 }
+
+/* ---- Phase 21.6: handbook search and the palette's documentation group ---- */
+
+.carocrm-doc-search-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  margin-bottom: 20px;
+}
+
+.carocrm-doc-search-title {
+  margin: 0 !important;
+}
+
+.carocrm-doc-search {
+  max-width: 460px;
+}
+
+.carocrm-doc-search-hint {
+  font-size: 12px;
+  color: #737b85;
+  white-space: nowrap;
+}
+
+.carocrm-doc-results-head {
+  margin: 0 0 12px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.carocrm-doc-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carocrm-doc-result {
+  display: block;
+  padding: 12px 14px;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: inherit;
+}
+
+.carocrm-doc-result:hover {
+  border-color: #438eff;
+}
+
+.carocrm-doc-results li + li {
+  margin-top: 8px;
+}
+
+.carocrm-doc-result-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #31373d;
+}
+
+.carocrm-doc-result-section {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #737b85;
+}
+
+.carocrm-doc-result-snippet {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #5b636d;
+}
+
+.carocrm-doc-result-snippet mark {
+  padding: 0 2px;
+  border-radius: 2px;
+  background: #fff3bf;
+  color: #31373d;
+}
+
+.carocrm-doc-result-locale {
+  margin-inline-start: auto;
+  font-size: 11px;
+}
+
+.carocrm-doc-noresults {
+  padding: 8px 0 16px;
+}
+
+.carocrm-doc-noresults-label {
+  margin-top: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5b636d;
+}
+
+/* The palette row shows the page summary in the same muted tone the rest of the shell uses. */
+.carocrm-palette-detail {
+  margin-inline-start: 8px;
+  font-size: 12px;
+  color: #737b85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 899px) {
+  .carocrm-doc-search {
+    max-width: none;
+    flex: 1 1 100%;
+  }
+
+  .carocrm-doc-search-hint {
+    display: none;
+  }
+}
+
+@media print {
+  .carocrm-doc-search-head,
+  .carocrm-doc-search {
+    display: none !important;
+  }
+}
+
+/*
+ * The command palette dialog (Phase 20 §4.6) renders through a portal with no positioning of its own,
+ * so it was landing at the bottom of the document instead of over the page. cmdk ships no stylesheet —
+ * the shell has to place it. Fixed here because the palette is the entry point the handbook shares.
+ */
+[cmdk-overlay] {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(49, 55, 61, 0.45);
+}
+
+[cmdk-dialog] {
+  position: fixed;
+  top: 14%;
+  left: 50%;
+  z-index: 1101;
+  width: min(560px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(49, 55, 61, 0.18);
+}
+
+[cmdk-dialog] [cmdk-input-wrap] {
+  padding: 12px 12px 0;
+}
+
+[cmdk-dialog] [cmdk-list] {
+  max-height: 60vh;
+  padding: 8px;
+}
+
+[cmdk-dialog] [cmdk-group-heading] {
+  padding: 8px 8px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #737b85;
+}
+
+[cmdk-dialog] [cmdk-item] {
+  padding: 8px;
+  border-radius: 6px;
+  font-size: 14px;
+}

@@ -116,6 +116,28 @@ export interface SearchOptions {
 }
 
 /**
+ * The postings a query term answers: the exact token when the index has it, otherwise every token that
+ * starts with it. A reader types `side` before `sidebar` and expects the sidebar page, and a handbook
+ * search that answers "no results" to a prefix is the kind of search people stop trusting. The fallback
+ * only runs when the exact word is absent, so a real match is never diluted by a partial one.
+ */
+function postingsFor(index: DocsIndex, token: string, matched: Set<string>): readonly Posting[] {
+  const exact = index.tokens.get(token);
+  if (exact !== undefined) {
+    matched.add(token);
+    return exact;
+  }
+  const prefix: Posting[] = [];
+  for (const [indexed, postings] of index.tokens) {
+    if (indexed.length > token.length && indexed.startsWith(token)) {
+      matched.add(indexed);
+      prefix.push(...postings);
+    }
+  }
+  return prefix;
+}
+
+/**
  * Ranks pages for a query. Every term is looked up in the index, a page's score is the weighted count
  * of its hits, and a page that contains the whole phrase is pushed up. Ties break on the key so two
  * runs of the same corpus answer identically.
@@ -125,9 +147,11 @@ export function searchIndex(index: DocsIndex, query: string, options: SearchOpti
   const normalizedQuery = normalizeForSearch(query);
   const terms = tokenize(normalizedQuery);
   const scores = new Map<string, number>();
+  /** The index tokens that actually answered, so the snippet marks the word, not the letters typed. */
+  const matched = new Set<string>();
 
   for (const term of terms) {
-    for (const posting of index.tokens.get(term.token) ?? []) {
+    for (const posting of postingsFor(index, term.token, matched)) {
       const weight = FIELD_WEIGHTS[posting.field] * Math.min(posting.positions.length, 3);
       scores.set(posting.key, (scores.get(posting.key) ?? 0) + weight);
     }
@@ -150,7 +174,7 @@ export function searchIndex(index: DocsIndex, query: string, options: SearchOpti
       audience: page.audience,
       locale: page.locale,
       score,
-      snippet: snippetFor(body, terms),
+      snippet: snippetFor(body, [...matched]),
     });
   }
 
@@ -161,11 +185,12 @@ export function searchIndex(index: DocsIndex, query: string, options: SearchOpti
 
 /**
  * A window of the page's own text around its earliest match, plus the offsets of every match inside
- * that window. Offsets come from the tokenized body rather than a substring scan, so a term highlights
- * whole words and never lands in the middle of a longer one.
+ * that window. `tokens` are normalized index tokens (what actually matched), and offsets come from the
+ * tokenized body rather than a substring scan, so a hit highlights whole words and never lands in the
+ * middle of a longer one.
  */
-export function snippetFor(body: string, terms: readonly Term[]): DocSnippet {
-  const wanted = new Set(terms.map((term) => term.token));
+export function snippetFor(body: string, tokens: readonly string[]): DocSnippet {
+  const wanted = new Set(tokens);
   const matches = tokenize(normalizeForSearch(body)).filter((term) => wanted.has(term.token));
   if (matches.length === 0) return { text: cut(body, 0, Math.min(body.length, SNIPPET_RADIUS * 2), true), ranges: [] };
 

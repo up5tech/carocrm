@@ -1,7 +1,9 @@
 import { Typography } from 'antd';
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
 import type { DocPageMeta } from '../../api/types.js';
+import { DocSearchInput } from '../../components/docs/DocSearchInput.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
 import { useDocsTree } from '../../state/docs.js';
@@ -20,6 +22,8 @@ import { DocsLayout } from './DocsLayout.js';
  */
 export function DocsLandingPage() {
   const tree = useDocsTree();
+  const navigate = useNavigate();
+  const [draft, setDraft] = useState('');
 
   if (tree.isPending) {
     return (
@@ -48,6 +52,20 @@ export function DocsLandingPage() {
     <DocsLayout>
       <h1 tabIndex={-1}>{t('web.docs.title')}</h1>
       <p className="carocrm-doc-lede">{t('web.docs.landingLede')}</p>
+
+      <div className="carocrm-doc-search-head">
+        <DocSearchInput
+          value={draft}
+          placeholder={t('web.docs.searchPlaceholder')}
+          ariaLabel={t('web.docs.searchAria')}
+          submitLabel={t('web.docs.searchSubmitHint')}
+          onChange={setDraft}
+          onSubmit={(next) => {
+            const q = next.trim();
+            if (q !== '') navigate(`/docs/search?q=${encodeURIComponent(q)}`);
+          }}
+        />
+      </div>
 
       <div className="carocrm-doc-doors">
         {sections.map((section) => (

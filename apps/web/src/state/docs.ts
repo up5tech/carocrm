@@ -1,7 +1,7 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, type QueryKey,useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client.js';
-import type { DocsPageView, DocsSearchView, DocsSettingsView, DocsTreeView, SettingsDocument } from '../api/types.js';
+import type { DocPageMeta, DocsPageView, DocsSearchView, DocsSettingsView, DocsTreeView, SettingsDocument } from '../api/types.js';
 import { SETTINGS_DOCUMENT_KEY } from './admin.js';
 import { i18n } from './i18n.js';
 
@@ -18,18 +18,30 @@ import { i18n } from './i18n.js';
  */
 export const DOCS_TREE_KEY = ['docs', 'tree'] as const;
 export const DOCS_PAGE_KEY = ['docs', 'page'] as const;
+export const DOCS_SEARCH_KEY = ['docs', 'search'] as const;
+
+const TREE_STALE_MS = 5 * 60_000;
 
 function readerLocale(): string {
   return i18n.language;
 }
 
+/**
+ * The tree query, shared by the reader and the command palette. The palette passes `enabled: open`, which
+ * is what keeps a shell that mounts the palette on every screen from spending a request on a handbook the
+ * user never opened (§5.7: "nothing is fetched before the palette opens").
+ */
+function treeQuery(locale: string, enabled: boolean): {
+  queryKey: QueryKey;
+  queryFn: () => Promise<DocsTreeView>;
+  staleTime: number;
+  enabled: boolean;
+} {
+  return { queryKey: [...DOCS_TREE_KEY, locale], queryFn: () => api.docsTree(locale), staleTime: TREE_STALE_MS, enabled };
+}
+
 export function useDocsTree() {
-  const locale = readerLocale();
-  return useQuery<DocsTreeView>({
-    queryKey: [...DOCS_TREE_KEY, locale],
-    queryFn: () => api.docsTree(locale),
-    staleTime: 5 * 60_000,
-  });
+  return useQuery(treeQuery(readerLocale(), true));
 }
 
 export function useDocPage(section: string | undefined, slug: string | undefined) {
@@ -38,20 +50,64 @@ export function useDocPage(section: string | undefined, slug: string | undefined
     queryKey: [...DOCS_PAGE_KEY, locale, section ?? '', slug ?? ''],
     queryFn: () => api.docsPage(section ?? '', slug ?? '', locale),
     enabled: section !== undefined && section !== '' && slug !== undefined && slug !== '',
-    staleTime: 5 * 60_000,
+    staleTime: TREE_STALE_MS,
   });
 }
 
-export function useDocSearch(query: string) {
+/** A search is worth reusing for half a minute, and the previous results stay on screen while typing. */
+export function useDocSearch(query: string, enabled = true) {
   const locale = readerLocale();
   const trimmed = query.trim();
   return useQuery<DocsSearchView>({
-    queryKey: ['docs', 'search', locale, trimmed],
+    queryKey: [...DOCS_SEARCH_KEY, locale, trimmed],
     queryFn: () => api.docsSearch(trimmed, locale),
-    enabled: trimmed.length >= 2,
+    enabled: enabled && trimmed.length >= 2,
     staleTime: 30_000,
     placeholderData: keepPreviousData,
   });
+}
+
+export interface DocPaletteItem {
+  readonly key: string;
+  readonly title: string;
+  readonly path: string;
+  readonly detail: string;
+}
+
+/**
+ * What the palette's `Documentation` group shows: ranked hits from the server once the reader has typed
+ * two characters, and the getting-started pages before that — an empty box that lists nothing looks
+ * broken, and those four pages are the right answer to "where do I start?" (§5.7).
+ *
+ * The ranking and the ACL scoping are the server's; the palette never filters content of its own.
+ */
+export function useDocPaletteItems(open: boolean, query: string): { items: readonly DocPaletteItem[]; pending: boolean } {
+  const locale = readerLocale();
+  const trimmed = query.trim();
+  const searching = open && trimmed.length >= 2;
+
+  const tree = useQuery(treeQuery(locale, open && !searching));
+  const results = useQuery<DocsSearchView>({
+    queryKey: [...DOCS_SEARCH_KEY, locale, trimmed],
+    queryFn: () => api.docsSearch(trimmed, locale, 5),
+    enabled: searching,
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
+
+  if (searching) {
+    const items = (results.data?.hits ?? []).map((hit) => ({ key: hit.key, title: hit.title, path: hit.path, detail: hit.section }));
+    return { items, pending: results.isPending && results.data === undefined };
+  }
+
+  const gettingStarted = tree.data?.sections.find((section) => section.key === 'getting-started');
+  const items: readonly DocPaletteItem[] = (gettingStarted?.pages ?? []).map((page: DocPageMeta) => ({
+    key: page.key,
+    title: page.title,
+    path: page.path,
+    detail: page.summary,
+  }));
+  return { items, pending: tree.isPending };
 }
 
 /**
