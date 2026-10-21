@@ -2186,6 +2186,46 @@
       "memory_disabled": "Conversation memory off",
       "agent_memory_off": "Agent memory is off",
       "ready": "Ready"
+    },
+    "searchPlaceholder": "Search your conversations",
+    "action": {
+      "title": "Proposed action",
+      "loading": "Loading the proposal...",
+      "unavailable": "This proposal cannot be shown.",
+      "agent": "Assistant",
+      "expires": "Expires",
+      "preview": "What would change",
+      "decided": "Decision: {status}",
+      "confirm": "Confirm",
+      "reject": "Reject",
+      "failed": "The decision could not be recorded."
+    },
+    "feedback": {
+      "up": "This answer was helpful",
+      "down": "This answer was not helpful",
+      "hint": "Rate this answer",
+      "failed": "The rating could not be recorded.",
+      "commentTitle": "What was wrong?",
+      "commentSubmit": "Send",
+      "commentPlaceholder": "Optional: what did you expect instead?"
+    },
+    "prompts": {
+      "insert": "Templates",
+      "save": "Save as template",
+      "saveHint": "Save the current message as a template you can reuse.",
+      "manage": "Manage",
+      "edit": "Edit template",
+      "delete": "Delete template",
+      "deleteConfirm": "Delete this template?",
+      "createTitle": "New template",
+      "editTitle": "Edit template",
+      "name": "Name",
+      "body": "Text",
+      "description": "Description (optional)",
+      "dataOnly": "A template is only text. It is inserted into your message and runs with your own permissions.",
+      "saveFailed": "The template could not be saved.",
+      "unavailable": "Templates are unavailable.",
+      "empty": "No saved templates yet."
     }
   }
 }

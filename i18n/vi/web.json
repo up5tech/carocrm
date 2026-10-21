@@ -2186,6 +2186,46 @@
       "memory_disabled": "Đã tắt bộ nhớ hội thoại",
       "agent_memory_off": "Agent không dùng bộ nhớ hội thoại",
       "ready": "Sẵn sàng"
+    },
+    "searchPlaceholder": "Tìm kiếm cuộc trò chuyện của bạn",
+    "action": {
+      "title": "Hành động được đề xuất",
+      "loading": "Đang tải đề xuất...",
+      "unavailable": "Không thể hiển thị đề xuất này.",
+      "agent": "Trợ lý",
+      "expires": "Hết hạn",
+      "preview": "Điều gì sẽ thay đổi",
+      "decided": "Quyết định: {status}",
+      "confirm": "Xác nhận",
+      "reject": "Từ chối",
+      "failed": "Không thể ghi nhận quyết định."
+    },
+    "feedback": {
+      "up": "Câu trả lời này hữu ích",
+      "down": "Câu trả lời này không hữu ích",
+      "hint": "Đánh giá câu trả lời này",
+      "failed": "Không thể ghi nhận đánh giá.",
+      "commentTitle": "Điều gì chưa đúng?",
+      "commentSubmit": "Gửi",
+      "commentPlaceholder": "Tùy chọn: bạn mong đợi câu trả lời nào?"
+    },
+    "prompts": {
+      "insert": "Mẫu",
+      "save": "Lưu thành mẫu",
+      "saveHint": "Lưu tin nhắn hiện tại làm mẫu để dùng lại.",
+      "manage": "Quản lý",
+      "edit": "Sửa mẫu",
+      "delete": "Xóa mẫu",
+      "deleteConfirm": "Xóa mẫu này?",
+      "createTitle": "Mẫu mới",
+      "editTitle": "Sửa mẫu",
+      "name": "Tên",
+      "body": "Nội dung",
+      "description": "Mô tả (tùy chọn)",
+      "dataOnly": "Mẫu chỉ là văn bản. Nó được chèn vào tin nhắn của bạn và chạy với quyền của bạn.",
+      "saveFailed": "Không thể lưu mẫu.",
+      "unavailable": "Không thể dùng mẫu.",
+      "empty": "Chưa có mẫu nào."
     }
   }
 }

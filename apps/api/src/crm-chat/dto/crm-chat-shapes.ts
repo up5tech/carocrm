@@ -38,6 +38,11 @@ export const CRMChatConversationListQuerySchema = z
     status: z.enum(['active', 'archived', 'all']).default('active'),
     offset: z.coerce.number().int().min(0).max(100_000).default(0),
     maxSize: z.coerce.number().int().min(1).max(50).default(25),
+    /**
+     * 19-CHAT.14 — free-text search over the caller's own threads (title *and* message bodies).
+     * The search is owner-scoped in SQL, so a term can never reach another user's conversation.
+     */
+    q: z.string().trim().min(1).max(200).optional(),
   })
   .strict();
 
@@ -90,3 +95,44 @@ export const CRMChatTurnCreateSchema = z
   .strict();
 
 export type CRMChatTurnCreateShape = z.infer<typeof CRMChatTurnCreateSchema>;
+
+/**
+ * Phase 19-CHAT.14 — answer feedback and saved prompt templates (contract §6.3, §6.5).
+ *
+ * The rating vocabulary is the one the `crm_chat_feedback` check constraint enforces (`up` / `down`),
+ * so a value the database would reject is rejected here first, as a 400 with a stable shape.
+ *
+ * A prompt template is **data**: it is inserted into the composer and submitted like any other
+ * message, under the current user's own authorization. Nothing in this shape can select a tool,
+ * an entity, a role or a permission.
+ */
+export const CRMChatFeedbackCreateSchema = z
+  .object({
+    rating: z.enum(['up', 'down']),
+    category: z.string().trim().min(1).max(60).optional(),
+    comment: z.string().trim().min(1).max(2000).optional(),
+  })
+  .strict();
+
+export type CRMChatFeedbackCreateShape = z.infer<typeof CRMChatFeedbackCreateSchema>;
+
+export const CRMChatPromptCreateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    promptTemplate: z.string().trim().min(1).max(8000),
+    description: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+export type CRMChatPromptCreateShape = z.infer<typeof CRMChatPromptCreateSchema>;
+
+export const CRMChatPromptPatchSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    promptTemplate: z.string().trim().min(1).max(8000).optional(),
+    description: z.string().trim().min(1).max(500).nullable().optional(),
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+
+export type CRMChatPromptPatchShape = z.infer<typeof CRMChatPromptPatchSchema>;

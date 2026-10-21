@@ -1,6 +1,6 @@
 import { CustomerServiceOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Descriptions, Divider, Empty, Result, Row, Space, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Card, Col, Descriptions, Divider, Empty, Input, Result, Row, Space, Tag, Tooltip, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 
 import { api, ApiError } from '../api/client.js';
@@ -41,6 +41,7 @@ export function CRMChatPage() {
   const [cursor, setCursor] = useState<number | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [search, setSearch] = useState('');
 
   const capabilities = useQuery({
     queryKey: ['crmChat', 'capabilities'],
@@ -53,9 +54,11 @@ export function CRMChatPage() {
 
   // 19-CHAT.4 — the caller's own threads. Reads only: a conversation is created by the first turn
   // (contract D2), which arrives with 19-CHAT.5, so there is nothing here that can write.
+  // 19-CHAT.14 — `search` narrows the list to the caller's own threads; the server scopes the
+  // match to the owner, so the term can never reach another user's conversation.
   const conversations = useQuery({
-    queryKey: ['crmChat', 'conversations'],
-    queryFn: () => api.crmChatConversations({ maxSize: 50 }),
+    queryKey: ['crmChat', 'conversations', search],
+    queryFn: () => api.crmChatConversations({ maxSize: 50, ...(search === '' ? {} : { q: search }) }),
     enabled: workspaceEnabled,
     staleTime: 15_000,
     retry: false,
@@ -147,6 +150,16 @@ export function CRMChatPage() {
   const assistantReady = data.assistant.state === 'ready';
   const stateTone = assistantReady ? 'green' : data.assistant.state === 'not-configured' ? 'gold' : 'red';
 
+  // 19-CHAT.14 — the search box only appears when the search feature is actually effective. The
+  // server refuses a search with the flag off, so the UI must not offer one.
+  const searchEnabled = data.features.some((feature) => feature.key === 'conversationSearch' && feature.effective);
+  // The rating buttons need both the feature and the `feedback` capability: the feature says the
+  // deployment allows ratings, the capability says this caller may record one.
+  const feedbackEnabled =
+    data.features.some((feature) => feature.key === 'feedback' && feature.effective) &&
+    data.capabilities.some((capability) => capability.key === 'feedback' && capability.granted);
+  const promptsGranted = data.capabilities.some((capability) => capability.key === 'prompts' && capability.granted);
+
   return (
     <div>
       <div className="carocrm-page-head">
@@ -182,6 +195,18 @@ export function CRMChatPage() {
               </Tooltip>
             }
           >
+            {searchEnabled ? (
+              <Input.Search
+                allowClear
+                size="small"
+                value={search}
+                maxLength={200}
+                placeholder={t('web.crmChat.searchPlaceholder')}
+                onChange={(event) => setSearch(event.target.value)}
+                style={{ marginBottom: 8 }}
+              />
+            ) : null}
+
             {conversations.isLoading ? <LoadingSkeleton rows={4} /> : null}
             {conversations.isError ? (
               <ErrorState
@@ -277,6 +302,7 @@ export function CRMChatPage() {
                   hasMore={hasMore}
                   loadingOlder={loadingOlder}
                   onLoadOlder={loadOlder}
+                  feedbackEnabled={feedbackEnabled}
                 />
               </div>
             ) : null}
@@ -288,6 +314,7 @@ export function CRMChatPage() {
                 enabled={data.actions.canStartTurn && selectedId !== undefined}
                 maxMessageChars={data.limits.maxMessageChars}
                 turnTimeoutSeconds={data.limits.turnTimeoutSeconds}
+                canManagePrompts={promptsGranted}
                 onTurnSubmitted={() => {
                   // Refresh conversation detail after turn submission.
                   void detail.refetch();

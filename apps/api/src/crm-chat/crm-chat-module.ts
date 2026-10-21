@@ -280,7 +280,7 @@ export const CRM_CHAT_MODULE = {
   id: 'CRMChat',
   name: 'CRM Chat',
   /** Delivered sub-phases; 19-CHAT.5+ add the turn endpoints and streaming. */
-  version: '0.4.0',
+  version: '1.1.0',
   minPlatformVersion: '1.0.0',
   /** Kernel module directories load in order; Chat runs after AI Agents (`390`). */
   loadOrder: 395,
@@ -288,7 +288,7 @@ export const CRM_CHAT_MODULE = {
   apiPrefix: '/api/v1/CRMChat',
   /** Frontend route of the human-facing surface. */
   frontendRoute: '/crm-chat',
-  implementedPhases: ['19-CHAT.0', '19-CHAT.1', '19-CHAT.2', '19-CHAT.3', '19-CHAT.4', '19-CHAT.5', '19-CHAT.6', '19-CHAT.7', '19-CHAT.8', '19-CHAT.9', '19-CHAT.10', '19-CHAT.11', '19-CHAT.12', '19-CHAT.13', '19-CHAT.14', '19-CHAT.15', '19-CHAT.16', '19-CHAT.17', '19-CHAT.18'],
+  implementedPhases: ['19-CHAT.0', '19-CHAT.1', '19-CHAT.2', '19-CHAT.3', '19-CHAT.4', '19-CHAT.5', '19-CHAT.6', '19-CHAT.7', '19-CHAT.8', '19-CHAT.9', '19-CHAT.10', '19-CHAT.11', '19-CHAT.12', '19-CHAT.13', '19-CHAT.14', '19-CHAT.15', '19-CHAT.16', '19-CHAT.17', '19-CHAT.18', '19-CHAT.19'],
   /** Tables the module owns. Conversation storage stays with `AIAgents`. */
   tables: CRM_CHAT_TABLES,
   /** The module cannot function without this owner; it is a dependency, not a copy. */

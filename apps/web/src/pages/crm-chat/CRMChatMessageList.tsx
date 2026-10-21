@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../api/client.js';
 import type { CRMChatCitation, CRMChatMessageView } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
+import { CRMChatFeedbackButtons } from './CRMChatFeedbackButtons.js';
 
 const { Text } = Typography;
 
@@ -14,6 +15,8 @@ export interface CRMChatMessageListProps {
   readonly hasMore: boolean;
   readonly loadingOlder: boolean;
   readonly onLoadOlder: () => void;
+  /** Whether the answer feedback feature is on for this caller. */
+  readonly feedbackEnabled?: boolean | undefined;
 }
 
 /**
@@ -27,9 +30,10 @@ export interface CRMChatMessageListProps {
  * - Redaction indicators
  * - Timestamps and role labels
  * - "Load older" pagination button
+ * - 19-CHAT.14 — answer feedback on an assistant answer
  */
 export function CRMChatMessageList(props: CRMChatMessageListProps) {
-  const { messages, olderMessages = [], hasMore, loadingOlder, onLoadOlder } = props;
+  const { messages, olderMessages = [], hasMore, loadingOlder, onLoadOlder, feedbackEnabled = false } = props;
 
   const allMessages = [...olderMessages, ...messages];
 
@@ -55,7 +59,7 @@ export function CRMChatMessageList(props: CRMChatMessageListProps) {
       {/* Messages */}
       <Space direction="vertical" size={12} style={{ width: '100%' }}>
         {allMessages.map((message) => (
-          <MessageItem key={message.id} message={message} />
+          <MessageItem key={message.id} message={message} feedbackEnabled={feedbackEnabled} />
         ))}
       </Space>
     </div>
@@ -64,9 +68,10 @@ export function CRMChatMessageList(props: CRMChatMessageListProps) {
 
 interface MessageItemProps {
   readonly message: CRMChatMessageView;
+  readonly feedbackEnabled: boolean;
 }
 
-function MessageItem({ message }: MessageItemProps) {
+function MessageItem({ message, feedbackEnabled }: MessageItemProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
 
@@ -117,6 +122,13 @@ function MessageItem({ message }: MessageItemProps) {
           </Space>
         </div>
       )}
+
+      {/* 19-CHAT.14 — rate the answer. Only an assistant answer that came from a turn can be rated. */}
+      {feedbackEnabled && isAssistant && message.turnId !== null ? (
+        <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid #f0f0f0' }}>
+          <CRMChatFeedbackButtons turnId={message.turnId} enabled />
+        </div>
+      ) : null}
     </div>
   );
 }

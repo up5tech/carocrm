@@ -28,3 +28,23 @@ Same folder, delivered after this audit:
   lifecycle, capability model, route surface, data shapes, stream and `AIAgents` contracts.
 - [`../security/crm-chat-threat-model.md`](../security/crm-chat-threat-model.md) — 19-CHAT.1 threat
   model: trust boundaries, prompt-injection reasoning, blocked action classes and phased gaps.
+
+---
+
+## Delivery status (added 2026-10-21)
+
+The audit above describes the repository as it was at 19-CHAT.0. Every gap it listed has since been
+closed, and a completion review against `PLAN_Phase_19_CRM_Chat.md` found and fixed several things
+the audit could not have seen — the module did not compile, the SSE translator mapped event names
+the runtime never emitted, the citation table was never written, and four contract routes had no
+implementation.
+
+- The audit's "real gaps" list is now historical. The current state is recorded in
+  [`../modules/crm-chat/RELEASE_NOTES.md`](../modules/crm-chat/RELEASE_NOTES.md) and in the contract's
+  §13 acceptance record.
+- The audit's "blockers" list is resolved: there is a published answering agent path
+  (`assistant.agentKey`), agent execution and memory are administrative settings, the streaming
+  adapter is exercised by the turn suites, and help retrieval reads the Service Desk knowledge base.
+- The audit's structural conclusions still hold and were not revisited: `AIAgents` owns the run
+  engine, the conversation store, the approval ledger and the usage counters, and `CRMChat` owns
+  only the citation, feedback and saved-prompt tables plus the SSE transport seam.

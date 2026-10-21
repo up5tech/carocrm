@@ -5,18 +5,20 @@ import type { FastifyReply } from 'fastify';
 import type { ZodTypeAny } from 'zod';
 import { z } from 'zod';
 
+import { CRMChatActionService } from './crm-chat-actions.service.js';
+import { CRMChatAIAgentsClientService } from './crm-chat-ai-agents-client.service.js';
 import type { AssistantReadiness } from './crm-chat-assistant.service.js';
 import { CRMChatAssistantService } from './crm-chat-assistant.service.js';
-import { CRMChatAIAgentsClientService } from './crm-chat-ai-agents-client.service.js';
-import { CRMChatContextService, type CitationSource } from './crm-chat-context.service.js';
-import { CRMChatHelpService } from './crm-chat-help.service.js';
-import { CRMChatQueryService, type QueryPlan } from './crm-chat-query.service.js';
+import { type CitationSource,CRMChatContextService } from './crm-chat-context.service.js';
 import { CRM_CHAT_CONTRACT_VERSION } from './crm-chat-contract.js';
 import {
   CRMChatConversationService,
   type CRMChatConversationView,
   type CRMChatMessagePage,
 } from './crm-chat-conversations.service.js';
+import { CRMChatCrossModuleService } from './crm-chat-cross-module.service.js';
+import { CRMChatFeedbackService } from './crm-chat-feedback.service.js';
+import { CRMChatHelpService } from './crm-chat-help.service.js';
 import {
   CRM_CHAT_FEATURES,
   CRM_CHAT_MODULE,
@@ -24,14 +26,20 @@ import {
   type CRMChatModuleDescriptor,
 } from './crm-chat-module.js';
 import { CRMChatModuleHealthService } from './crm-chat-module-health.service.js';
+import { CRMChatObservabilityService } from './crm-chat-observability.service.js';
 import { CRMChatPermissionService } from './crm-chat-permission.service.js';
 import { CRMChatPolicyService } from './crm-chat-policy.service.js';
+import { CRMChatPromptService } from './crm-chat-prompts.service.js';
+import { CRMChatQueryService, type QueryPlan } from './crm-chat-query.service.js';
 import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 import { CRMChatStreamingService } from './crm-chat-streaming.service.js';
 import {
   CRMChatConversationListQuerySchema,
   CRMChatConversationPatchSchema,
+  CRMChatFeedbackCreateSchema,
   CRMChatMessageListQuerySchema,
+  CRMChatPromptCreateSchema,
+  CRMChatPromptPatchSchema,
   CRMChatSettingsPatchSchema,
   CRMChatTurnCreateSchema,
 } from './dto/crm-chat-shapes.js';
@@ -116,6 +124,11 @@ export class CRMChatController {
     @Inject(CRMChatStreamingService) private readonly streaming: CRMChatStreamingService,
     @Inject(CRMChatModuleHealthService) private readonly health: CRMChatModuleHealthService,
     @Inject(CRMChatConversationService) private readonly conversations: CRMChatConversationService,
+    @Inject(CRMChatPromptService) private readonly prompts: CRMChatPromptService,
+    @Inject(CRMChatFeedbackService) private readonly feedback: CRMChatFeedbackService,
+    @Inject(CRMChatActionService) private readonly actions: CRMChatActionService,
+    @Inject(CRMChatCrossModuleService) private readonly crossModule: CRMChatCrossModuleService,
+    @Inject(CRMChatObservabilityService) private readonly observability: CRMChatObservabilityService,
   ) {}
 
   /**
@@ -348,7 +361,12 @@ export class CRMChatController {
   /**
    * Reauthorize citations before rendering. Ensures that each cited source is still accessible to
    * the current user at render time (permissions may have changed since the turn was created).
+   *
+   * A CRM citation is re-read through the Entity Engine, so the answer reflects the caller's
+   * *current* rights, not the rights the turn was created under. A citation that is no longer
+   * readable is reported as inaccessible rather than rendered with a stale label.
    */
+  @HttpCode(200)
   @Post('action/citations/reauthorize')
   async reauthorizeCitations(@Body() body: unknown) {
     await this.policy.assertWorkspace();
@@ -384,6 +402,118 @@ export class CRMChatController {
     await this.permissions.assert('admin');
     const patch = parse(CRMChatSettingsPatchSchema, body);
     return this.settings.update(patch);
+  }
+
+  // -------------------------------------------------------------------------
+  // 19-CHAT.12 — action proposals and confirmation
+  // -------------------------------------------------------------------------
+
+  /**
+   * The authorized projection of one proposal. Chat owns no proposal record: this is a read of the
+   * `ai_agent_approvals` row the AIAgents runtime wrote, for a proposal in the caller's own thread.
+   */
+  @Get('action/actions/:approvalId')
+  async getAction(@Param('approvalId') approvalId: string) {
+    return this.actions.get(approvalId);
+  }
+
+  /**
+   * Confirm the proposal. The product gate (`actionProposals` + `safety.allowWrites`) is Chat's;
+   * the revalidation — ACL, field rights, record state, proposal hash, expiry — is AIAgents'.
+   */
+  @HttpCode(200)
+  @Post('action/actions/:approvalId/confirm')
+  async confirmAction(@Param('approvalId') approvalId: string, @Body() body: unknown) {
+    const input = parse(z.object({ note: z.string().trim().min(1).max(1000).optional() }).strict(), body);
+    return this.actions.confirm(approvalId, input.note);
+  }
+
+  /** Reject the proposal. A rejection never needs the write switch — it removes an intent to write. */
+  @HttpCode(200)
+  @Post('action/actions/:approvalId/reject')
+  async rejectAction(@Param('approvalId') approvalId: string, @Body() body: unknown) {
+    const input = parse(z.object({ note: z.string().trim().min(1).max(1000).optional() }).strict(), body);
+    return this.actions.reject(approvalId, input.note);
+  }
+
+  // -------------------------------------------------------------------------
+  // 19-CHAT.14 — saved prompts, feedback and history search
+  // -------------------------------------------------------------------------
+
+  /** The caller's own prompt templates. Data only; nothing here is executed by the server. */
+  @Get('action/prompts')
+  async listPrompts() {
+    return this.prompts.list();
+  }
+
+  @Post('action/prompts')
+  async createPrompt(@Body() body: unknown) {
+    const input = parse(CRMChatPromptCreateSchema, body);
+    return this.prompts.create(input);
+  }
+
+  @Patch('action/prompts/:id')
+  async patchPrompt(@Param('id') id: string, @Body() body: unknown) {
+    const patch = parse(CRMChatPromptPatchSchema, body);
+    return this.prompts.patch(id, patch);
+  }
+
+  @Delete('action/prompts/:id')
+  async deletePrompt(@Param('id') id: string): Promise<{ status: true }> {
+    return this.prompts.remove(id);
+  }
+
+  /**
+   * Rate the answer a turn produced. One rating per user per answer: a second submission updates
+   * the first. The rating is an auditable fact and never changes model behaviour or permissions.
+   */
+  @HttpCode(200)
+  @Post('action/turns/:turnId/feedback')
+  async submitFeedback(@Param('turnId') turnId: string, @Body() body: unknown) {
+    const input = parse(CRMChatFeedbackCreateSchema, body);
+    return this.feedback.submit(turnId, input);
+  }
+
+  // -------------------------------------------------------------------------
+  // 19-CHAT.11 — cross-module analysis
+  // -------------------------------------------------------------------------
+
+  /** The curated cross-module paths this installation can answer. */
+  @Get('action/cross-module/scenarios')
+  async crossModuleScenarios() {
+    await this.policy.assertWorkspace();
+    return { list: this.crossModule.scenarios() };
+  }
+
+  /**
+   * Run one curated cross-module path against a record the caller may read. The caller names a
+   * scenario and its root record; the entity, the relations and the bounds are server-owned.
+   */
+  @HttpCode(200)
+  @Post('action/cross-module/analyze')
+  async analyzeCrossModule(@Body() body: unknown) {
+    await this.policy.assertWorkspace();
+    const input = parse(
+      z
+        .object({
+          scenario: z.string().trim().min(1).max(80),
+          rootId: z.string().trim().min(1).max(120),
+        })
+        .strict(),
+      body,
+    );
+    return this.crossModule.run(input.scenario, input.rootId);
+  }
+
+  // -------------------------------------------------------------------------
+  // 19-CHAT.17 — usage and observability
+  // -------------------------------------------------------------------------
+
+  /** The usage of one turn, read from the AIAgents run and its provider ledger. */
+  @Get('action/turns/:turnId/usage')
+  async turnUsage(@Param('turnId') turnId: string) {
+    await this.policy.assertWorkspace();
+    return this.observability.usageForTurn(turnId);
   }
 }
 

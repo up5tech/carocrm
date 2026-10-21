@@ -2667,6 +2667,81 @@ export interface CRMChatConversationDetail {
   readonly messages: CRMChatMessagePage;
 }
 
+/**
+ * Phase 19-CHAT.14 — a saved prompt template. The body is **data**: the SPA puts it in the
+ * composer and submits it like any other message. It can never select a tool, an entity or a
+ * permission, so the SPA treats it as plain text everywhere.
+ */
+export interface CRMChatPromptView {
+  readonly id: string;
+  readonly name: string;
+  readonly promptTemplate: string;
+  readonly description: string | null;
+  readonly enabled: boolean;
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}
+
+/** Phase 19-CHAT.14 — the caller's rating of one answer. */
+export interface CRMChatFeedbackView {
+  readonly id: string;
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly rating: 'up' | 'down';
+  readonly category: string | null;
+  readonly comment: string | null;
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}
+
+/**
+ * Phase 19-CHAT.12 — an action proposal, as the SPA may show it.
+ *
+ * `actionable` is the only field the UI may key the confirm/reject controls on: it already
+ * accounts for the decision state and the expiry, so the SPA does not re-derive them.
+ */
+export interface CRMChatActionView {
+  readonly id: string;
+  readonly runId: string;
+  readonly agentName: string;
+  readonly agentVersion: number;
+  readonly toolKey: string | null;
+  readonly actionClass: string;
+  readonly riskLevel: string;
+  readonly summary: string;
+  readonly proposal: unknown;
+  readonly targets: unknown;
+  readonly status: string;
+  readonly decidedByUserId: string | null;
+  readonly decidedAt: string | null;
+  readonly decisionNote: string | null;
+  readonly actionable: boolean;
+  readonly expiresAt: string;
+  readonly createdAt: string;
+}
+
+/** Phase 19-CHAT.11 — one curated cross-module path. */
+export interface CRMChatCrossModuleScenario {
+  readonly key: string;
+  readonly label: string;
+  readonly description: string;
+  readonly rootEntity: string;
+}
+
+/** Phase 19-CHAT.17 — the usage of one turn. */
+export interface CRMChatUsageSummary {
+  readonly turnId: string;
+  readonly runId: string;
+  readonly status: string;
+  readonly steps: number;
+  readonly modelCalls: number;
+  readonly toolCalls: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly estimatedCostUsd: number;
+  readonly costLabel: 'estimate' | 'none';
+}
+
 /** Phase 19-CHAT.5 — turn submission result (contract §8.2). */
 export interface CRMChatTurnResult {
   readonly turnId: string;

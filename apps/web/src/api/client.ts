@@ -32,14 +32,19 @@ import type {
   ApiUserRow,
   AttachmentInfo,
   CloneResult,
+  CRMChatActionView,
   CRMChatCapabilitiesView,
   CRMChatConversationDetail,
   CRMChatConversationList,
+  CRMChatCrossModuleScenario,
+  CRMChatFeedbackView,
   CRMChatHealthView,
   CRMChatMessagePage,
+  CRMChatPromptView,
   CRMChatSettingsView,
   CRMChatTurnResult,
   CRMChatTurnStatus,
+  CRMChatUsageSummary,
   EmailAccountInput,
   EmailAccountRow,
   EmailTransportInfo,
@@ -516,11 +521,20 @@ export const api = {
 
   // Phase 19-CHAT.4 — the caller's own conversations. The server scopes every read to the owner, so
   // there is no user parameter here and there must never be one.
-  crmChatConversations: (params: { status?: 'active' | 'archived' | 'all'; offset?: number; maxSize?: number } = {}) => {
+  crmChatConversations: (
+    params: {
+      status?: 'active' | 'archived' | 'all';
+      offset?: number;
+      maxSize?: number;
+      /** Phase 19-CHAT.14 — free-text search over the caller's own threads. */
+      q?: string;
+    } = {},
+  ) => {
     const query = new URLSearchParams();
     if (params.status !== undefined) query.set('status', params.status);
     if (params.offset !== undefined) query.set('offset', String(params.offset));
     if (params.maxSize !== undefined) query.set('maxSize', String(params.maxSize));
+    if (params.q !== undefined && params.q !== '') query.set('q', params.q);
     const suffix = query.toString();
     return request<CRMChatConversationList>(`/CRMChat/action/conversations${suffix === '' ? '' : `?${suffix}`}`);
   },
@@ -558,6 +572,52 @@ export const api = {
     request<{ query: string; sources: readonly unknown[]; hasResults: boolean; message?: string | undefined }>(
       `/CRMChat/action/help/search?q=${encodeURIComponent(query)}`,
     ),
+
+  // Phase 19-CHAT.14 — saved prompt templates. The body is data the SPA inserts into the
+  // composer; the server never executes it.
+  crmChatPrompts: () => request<{ list: readonly CRMChatPromptView[]; count: number }>('/CRMChat/action/prompts'),
+  crmChatCreatePrompt: (input: { name: string; promptTemplate: string; description?: string }) =>
+    request<CRMChatPromptView>('/CRMChat/action/prompts', post(input)),
+  crmChatPatchPrompt: (
+    id: string,
+    changes: { name?: string; promptTemplate?: string; description?: string | null; enabled?: boolean },
+  ) => request<CRMChatPromptView>(`/CRMChat/action/prompts/${encodeURIComponent(id)}`, patch(changes)),
+  crmChatDeletePrompt: (id: string) =>
+    request<{ status: true }>(`/CRMChat/action/prompts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** Phase 19-CHAT.14 — rate the answer a turn produced. */
+  crmChatSubmitFeedback: (turnId: string, input: { rating: 'up' | 'down'; category?: string; comment?: string }) =>
+    request<{ status: true; feedback: CRMChatFeedbackView }>(
+      `/CRMChat/action/turns/${encodeURIComponent(turnId)}/feedback`,
+      post(input),
+    ),
+
+  // Phase 19-CHAT.12 — an action proposal and its decision.
+  crmChatAction: (approvalId: string) =>
+    request<CRMChatActionView>(`/CRMChat/action/actions/${encodeURIComponent(approvalId)}`),
+  crmChatConfirmAction: (approvalId: string, note?: string) =>
+    request<{ action: CRMChatActionView; resumed: boolean }>(
+      `/CRMChat/action/actions/${encodeURIComponent(approvalId)}/confirm`,
+      post(note === undefined ? {} : { note }),
+    ),
+  crmChatRejectAction: (approvalId: string, note?: string) =>
+    request<{ action: CRMChatActionView; resumed: boolean }>(
+      `/CRMChat/action/actions/${encodeURIComponent(approvalId)}/reject`,
+      post(note === undefined ? {} : { note }),
+    ),
+
+  // Phase 19-CHAT.11 — curated cross-module paths.
+  crmChatCrossModuleScenarios: () =>
+    request<{ list: readonly CRMChatCrossModuleScenario[] }>('/CRMChat/action/cross-module/scenarios'),
+  crmChatAnalyzeCrossModule: (scenario: string, rootId: string) =>
+    request<{ steps: readonly { relation: string; label: string; count: number; records: readonly unknown[] }[] }>(
+      '/CRMChat/action/cross-module/analyze',
+      post({ scenario, rootId }),
+    ),
+
+  /** Phase 19-CHAT.17 — the usage of one turn. */
+  crmChatTurnUsage: (turnId: string) =>
+    request<CRMChatUsageSummary>(`/CRMChat/action/turns/${encodeURIComponent(turnId)}/usage`),
 
   // Phase 19-AI.2/19-AI.4 — the administrative surfaces of the module: the policy settings row and
   // the provider connections. Both are guarded by a capability the server asserts; the SPA only

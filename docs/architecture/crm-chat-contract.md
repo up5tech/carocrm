@@ -2,10 +2,10 @@
 
 > **Plan:** `PLAN_Phase_19_CRM_Chat.md` §17 (`Phase 19-CHAT.1`); decisions rest on
 > `docs/modules/crm-chat/repository-audit.md` (19-CHAT.0).
-> **Status:** delivered in 19-CHAT.1. The foundation endpoints are implemented in 19-CHAT.2 and the
-> conversation/message endpoints in 19-CHAT.4 (`apps/api/src/crm-chat/`); every other route is
-> *specified* and carries the sub-phase that delivers it.
-> **Contract version:** `1.1.0`. Any breaking change to a path, a request shape, a response shape, a
+> **Status:** delivered in 19-CHAT.1 and implemented in full through 19-CHAT.18
+> (`apps/api/src/crm-chat/`). Every route in §6 is served by the controller; the route table in
+> `crm-chat-contract.ts` is pinned against the controller by `apps/api/test/crm-chat-contract.test.ts`.
+> **Contract version:** `1.2.0`. Any breaking change to a path, a request shape, a response shape, a
 > stream event or an error code bumps the minor version and is recorded in §15.
 > **Naming:** module `CRMChat`, route slug `crm-chat`, API prefix `/api/v1/CRMChat`, SPA route
 > `/crm-chat`. No `Ua` prefix anywhere.
@@ -114,7 +114,7 @@ never returns to `running`. Chat adds no transition of its own — it only relab
 
 ### 4.3 First turn creates the thread
 
-1. The client submits `{ conversationId?: string, message, idempotencyKey, context? }`.
+1. The client submits `{ conversationId?: string, prompt, idempotencyKey?, contextRefs? }`.
 2. Chat resolves the assistant (§10) and refuses with `FEATURE_DISABLED` / `503 CHAT_AGENT_UNAVAILABLE`
    when it is not `ready`.
 3. Chat calls `AIAgentRunService.create(agentId, { input, idempotencyKey, conversationId })`.
@@ -212,7 +212,7 @@ Pagination decisions that the implementation fixes, so the client cannot get the
 
 | Method | Path | Gate | Request | Response |
 | --- | --- | --- | --- | --- |
-| `POST` | `action/turns` | `use` + `readTools` effective + assistant `ready` | `{ conversationId?, message, idempotencyKey, context? }` | `CRMChatTurnView` (202) |
+| `POST` | `action/turns` | `use` + `readTools` effective + assistant `ready` | `{ conversationId?, prompt, idempotencyKey?, contextRefs? }` | `CRMChatTurnView` (202) |
 | `GET` | `action/turns/:turnId` | `use` + owner | — | `CRMChatTurnView` |
 | `GET` | `action/turns/:turnId/events` | `use` + owner | `Last-Event-ID` | `text/event-stream` (§8) |
 | `POST` | `action/turns/:turnId/cancel` | `use` + owner | `{}` | `CRMChatTurnView` |
@@ -225,10 +225,14 @@ Submission is `POST action/turns`, not a route nested under a conversation, beca
 does not exist until the first turn: `conversationId` is optional in the body and the runtime creates
 the thread when it is absent (§4.3).
 
-`context` is the only client-supplied influence on what the agent may look at, and it is a **reference**,
-not data: `{ entity: string, id: string }` (at most `limits.maxContextRefs`). The server re-reads the
-record under the caller's ACL, and an unreadable reference is dropped with a `partialContext` flag
-rather than failing the turn.
+`contextRefs` is the only client-supplied influence on what the agent may look at, and it is a
+**reference**, not data: `{ entity: string, id: string }` (at most `limits.maxContextRefs`). The server
+re-reads the record under the caller's ACL, and an unreadable reference is dropped with a
+`partialContext` flag rather than failing the turn.
+
+`prompt` is the field name the implementation uses; an earlier draft of this contract called it
+`message`. The implemented name is the one clients send, and it is the name the SPA and the tests
+use. Changing it would be a breaking change and is recorded in §15 rather than made silently.
 
 ### 6.4 Actions — specified, delivered in 19-CHAT.12 (thin façade over `AIAgents`)
 
@@ -236,7 +240,7 @@ rather than failing the turn.
 | --- | --- | --- | --- |
 | `GET` | `action/actions/:approvalId` | `use` + owner | Authorized projection of an existing `ai_agent_approvals` row |
 | `POST` | `action/actions/:approvalId/confirm` | `use` + owner + `actionProposals` + `safety.allowWrites` | Calls `AIAgents` approve; revalidation happens there |
-| `POST` | `action/actions/:approvalId/reject` | `use` + owner | Calls `AIAgents` reject |
+| `POST` | `action/actions/:approvalId/reject` | `use` + owner | Calls `AIAgents` reject; needs no write switch, because a rejection removes an intent to write |
 
 Chat creates **no** proposal record. If the approval id is unknown or belongs to another user, the
 answer is `404 NOT_FOUND` — the same answer as a nonexistent one.
@@ -277,6 +281,34 @@ A `404` never distinguishes "does not exist" from "you may not see it", and no e
 record value, a prompt, a tool argument or a provider payload.
 
 ---
+
+### 6.7 Cross-module analysis — delivered in 19-CHAT.11
+
+| Method | Path | Gate | Notes |
+| --- | --- | --- | --- |
+| `GET` | `action/cross-module/scenarios` | `use` | The curated paths this installation can answer |
+| `POST` | `action/cross-module/analyze` | `use` | `{ scenario, rootId }`; returns per-step evidence |
+
+A scenario is **server-owned**: the caller names one of the curated paths and the record it starts
+from, and cannot inject an entity, a relation, a join or a limit. Each step follows a relation
+declared in the entity metadata, is bounded, and is read through the Entity Engine, so the caller's
+own record scope applies to every hop.
+
+A step that cannot be answered — a relation the installation does not declare, a module that is not
+installed, a target entity the caller may not read — yields a **partial** result with a per-step
+reason. It never yields a `0` that reads like "there is nothing", and it never exposes the failure
+detail of the underlying query.
+
+### 6.8 Usage and observability — delivered in 19-CHAT.17
+
+| Method | Path | Gate | Notes |
+| --- | --- | --- | --- |
+| `GET` | `action/turns/:turnId/usage` | `use` + owner | The turn's counters and its provider-ledger cost |
+
+Chat never maintains a usage counter of its own: the numbers are read from the AIAgents run and its
+provider ledger, and `costLabel` keeps AIAgents' meaning — `estimate` when the cost came from an
+administrator-maintained pricing snapshot, `none` when the deployment has no price data and the
+total is an exact `0` rather than a guess.
 
 ## 7. Data contracts
 
@@ -569,14 +601,19 @@ something outside its row is a blocker to report, not an exception to take.
 | 19-CHAT.4 | Conversation list/read/rename/archive/unarchive/delete with keyset message paging — delivered | A second owner-scoping mechanism; hard-deleting a conversation |
 | 19-CHAT.5 | Turn submission and read, cancellation | A turn state machine beside `RunStatus` |
 | 19-CHAT.6 | SSE stream + polling fallback | A WebSocket stack |
-| 19-CHAT.7 | Answer rendering (plain text + structured blocks) | A markdown parser or raw HTML |
-| 19-CHAT.8 | Citation re-read, label and route builder | Model-supplied URLs |
+| 19-CHAT.7 | Chat workspace UI | A markdown parser or raw HTML |
+| 19-CHAT.8 | Context selection, citation materialisation, re-read, label and route builder | Model-supplied URLs |
 | 19-CHAT.9 | Help-article retrieval tool wiring | A Chat-owned knowledge store |
-| 19-CHAT.10 | Read-tool policy (entity allowlist) | A tool registry copy |
-| 19-CHAT.11 | Feedback capture | Analytics without an owner |
-| 19-CHAT.12 | Approval facade and confirmation UI | A parallel proposal store |
-| 19-CHAT.13 | Usage and cost display | A locally computed price |
-| 19-CHAT.14 | Saved prompts | Shared/global templates without an admin right |
+| 19-CHAT.10 | Read-tool policy, safe query plans, filter operator allowlist | A tool registry copy; raw SQL |
+| 19-CHAT.11 | Curated cross-module paths over declared metadata relations | An implicit join; unbounded fan-out; a caller-supplied plan |
+| 19-CHAT.12 | Approval facade and confirmation UI | A parallel proposal store; a second decision path |
+| 19-CHAT.13 | Multi-step runs and approval checkpoints | A second run scheduler |
+| 19-CHAT.14 | Conversation search, saved prompts, answer feedback | Shared/global templates without an admin right; a feedback loop into model behaviour |
+| 19-CHAT.15 | Administration, feature flags and guardrails | A second settings store |
+| 19-CHAT.16 | Privacy, security and audit hardening | Logging content |
+| 19-CHAT.17 | Usage, limits and observability | A locally computed price; a Chat-owned usage counter |
+| 19-CHAT.18 | Evaluation and end-to-end verification | A production model call in a test |
+| 19-CHAT.19 | Release readiness and operational handover | — |
 
 ---
 
@@ -621,6 +658,59 @@ the database (the sweep owns that).
 6. Out-of-range `maxSize`, unknown query keys and a malformed body are `400 INVALID_QUERY`.
 7. A caller without `manage`/`delete` is refused on the mutating routes.
 
+19-CHAT.8 — accepted when a citation is never taken from the model. The runtime records a
+`result_ref` for every tool call that resolved a record; Chat re-reads that record under the
+caller's ACL and only then builds the label and the route. Asserted in
+`apps/api/test/crm-chat.test.ts` and `apps/api/test/crm-chat-conversations.test.ts`:
+
+1. A message whose records the caller may read returns citations with a server-built label and route.
+2. A record the caller may no longer read produces **no** citation — not a stale label, and not a
+   "forbidden" marker that would disclose that the record exists.
+3. The stored citation row carries the `rechecked_at` stamp that says when the check happened.
+
+19-CHAT.6 — accepted when the stream carries the run's real timeline. The translator maps the
+`AIAgents` event types (`run.queued`, `tool.proposed`, `tool.succeeded`/`failed`/`denied`/
+`outcome_unknown`, `approval.requested`, `model.completed`, `run.completed`, `run.failed`,
+`run.canceled`) onto the Chat vocabulary, and derives `assistant.message` and `usage.summary` from
+the run and its provider ledger. An event with no user-safe translation is dropped rather than
+passed through, because the raw timeline carries audit-level detail.
+
+19-CHAT.11 — accepted when a cross-module path is server-owned. The caller names a curated scenario
+and a root record; the entity, the relations and the bounds are fixed by the server. Asserted in
+`apps/api/test/crm-chat-engagement.test.ts`:
+
+1. The scenario list is served and every entry names a root entity.
+2. An unknown scenario is `404`.
+3. A root record that does not exist is `404`, not an empty analysis that would read like "this
+   account has nothing".
+4. A hop that cannot be answered produces a **partial** result with a per-step reason and never
+   exposes the underlying query's failure detail.
+
+19-CHAT.12 — accepted when the proposal façade decides nothing itself. Asserted in
+`apps/api/test/crm-chat-engagement.test.ts`:
+
+1. The caller sees their own proposal with its action class, risk level and expiry.
+2. Another user's proposal and an id that never existed both answer `404` — an id cannot be probed.
+3. A decision is recorded with its note, and a decided proposal is no longer actionable.
+4. The runtime still refuses a decision whose run has already ended; Chat does not bypass that.
+
+19-CHAT.14 — accepted when the engagement surfaces are owner-scoped and inert. Asserted in
+`apps/api/test/crm-chat-engagement.test.ts` and `apps/api/test/crm-chat-security.test.ts`:
+
+1. A template is created, listed, changed and removed by its owner; another user's copy is `404`.
+2. An empty name is refused, and a second template with the same name is refused by the owner.
+3. The stored template is returned verbatim — the server never interprets, expands or compiles it.
+4. A rating is recorded once per user per answer; a second submission updates it rather than adding
+   a second vote, and a rating the database would reject is a `400`.
+5. A rating of a turn that has no answer, or of a turn in another user's thread, is `404`.
+6. A history search returns only the caller's own threads, by title or by message body, and a term
+   that matches nothing is an empty list rather than the whole history.
+
+19-CHAT.17 — accepted when usage is read, never recomputed. The counters come from the AIAgents run
+and the cost from its provider ledger, and `costLabel` keeps AIAgents' meaning: `estimate` when the
+cost came from a pricing snapshot, `none` when the deployment has no price data and the total is an
+exact `0` rather than a guess.
+
 Later phases add their own scenario to this list; the threat model's §4 is the traceability map from
 the plan's security scenarios to the phase that tests them.
 
@@ -643,6 +733,11 @@ states the reasons they are safe.
 | `1.0.0` | 19-CHAT.2 | Foundation routes marked implemented; turn submission fixed at `POST action/turns` to match D2. Contract constants exported from `apps/api/src/crm-chat/crm-chat-contract.ts` and pinned by `apps/api/test/crm-chat-contract.test.ts`. |
 | `1.1.0` | 19-CHAT.3 | Three module tables added (citations, feedback, saved prompts). Additive migration only; no existing table altered and no conversation table created. |
 | `1.1.0` | 19-CHAT.4 | Conversation and message routes marked implemented; keyset pagination and the "delete is a marker" rule fixed; unarchive offered (reversing the plan's default). |
+| `1.2.0` | 19-CHAT.8 | Citations materialized from an ACL re-read of the runtime's `result_ref` list, and returned with each message. |
+| `1.2.0` | 19-CHAT.11 | Curated cross-module scenarios added (`action/cross-module/scenarios`, `action/cross-module/analyze`); partial results and a freshness stamp are part of the answer. |
+| `1.2.0` | 19-CHAT.12 | Action proposal routes marked implemented: a thin façade over `AIAgents` approvals that adds the `actionProposals` / `safety.allowWrites` product gate. |
+| `1.2.0` | 19-CHAT.14 | Saved prompt templates, answer feedback and conversation search marked implemented; the turn body field is documented as `prompt` / `contextRefs`, which is what the implementation and the SPA already send. |
+| `1.2.0` | 19-CHAT.17 | Per-turn usage read-out added (`action/turns/:turnId/usage`). |
 
 ---
 

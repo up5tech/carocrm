@@ -3,9 +3,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Input, Space, Typography } from 'antd';
 import { useState } from 'react';
 
-import type { CRMChatTurnResult } from '../../api/types.js';
 import { api } from '../../api/client.js';
+import type { CRMChatTurnResult } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
+import { CRMChatActionCard } from './CRMChatActionCard.js';
+import { CRMChatPromptTemplates } from './CRMChatPromptTemplates.js';
 import { useCrmChatStream } from './useCrmChatStream.js';
 
 const { TextArea } = Input;
@@ -15,6 +17,8 @@ export interface CRMChatComposerProps {
   readonly enabled: boolean;
   readonly maxMessageChars: number;
   readonly turnTimeoutSeconds: number;
+  /** Whether the caller may create, edit and remove saved prompt templates. */
+  readonly canManagePrompts?: boolean | undefined;
   readonly onTurnSubmitted?: (turnId: string) => void;
 }
 
@@ -27,13 +31,16 @@ export interface CRMChatComposerProps {
  * - SSE event streaming for real-time progress
  * - Cancel/stop generation
  * - Streaming state display
+ * - 19-CHAT.14 — saved prompt templates, inserted as plain text
+ * - 19-CHAT.12 — the action proposal card, when a turn asks for a write to be confirmed
  */
 export function CRMChatComposer(props: CRMChatComposerProps) {
-  const { conversationId, enabled, maxMessageChars, turnTimeoutSeconds, onTurnSubmitted } = props;
+  const { conversationId, enabled, maxMessageChars, turnTimeoutSeconds, canManagePrompts = false, onTurnSubmitted } = props;
 
   const [prompt, setPrompt] = useState('');
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -50,6 +57,12 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
         case 'citation.added':
           // Could update citations list.
           break;
+        case 'approval.required': {
+          // The turn paused on a write proposal. The card decides it; the composer only shows it.
+          const approvalId = event.data['approvalId'];
+          if (typeof approvalId === 'string' && approvalId !== '') setPendingApprovalId(approvalId);
+          break;
+        }
         case 'turn.completed':
         case 'turn.failed':
         case 'turn.cancelled':
@@ -150,6 +163,26 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
           style={{ marginBottom: 12 }}
         />
       )}
+
+      {/* 19-CHAT.12 — the pending write proposal. The card is the only thing that can decide it. */}
+      {pendingApprovalId === null ? null : (
+        <CRMChatActionCard
+          approvalId={pendingApprovalId}
+          onDecided={() => {
+            setPendingApprovalId(null);
+            void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversation', conversationId] });
+          }}
+        />
+      )}
+
+      {/* 19-CHAT.14 — saved prompt templates. Inserting one puts its text in the composer. */}
+      <div style={{ marginBottom: 8 }}>
+        <CRMChatPromptTemplates
+          canManage={canManagePrompts}
+          currentPrompt={prompt}
+          onInsert={(text) => setPrompt((current) => (current.trim() === '' ? text : `${current}\n${text}`))}
+        />
+      </div>
 
       {/* Composer textarea */}
       <TextArea

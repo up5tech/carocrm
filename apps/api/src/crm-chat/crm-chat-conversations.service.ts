@@ -5,6 +5,7 @@ import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import type { AIAgentConversationsTable, AIAgentMessagesTable } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
+import { CRMChatCitationService, type CRMChatCitationView } from './crm-chat-citations.service.js';
 import { CRMChatPermissionService } from './crm-chat-permission.service.js';
 import { CRMChatPolicyService } from './crm-chat-policy.service.js';
 
@@ -58,8 +59,8 @@ export interface CRMChatMessageView {
   readonly contentFormat: 'plain';
   readonly redaction: 'none' | 'summary' | 'hashed';
   readonly turnId: string | null;
-  /** Empty until 19-CHAT.8 writes citations; the field is present so the shape does not change. */
-  readonly citations: readonly unknown[];
+  /** The citations of this answer, materialised from an ACL re-read (19-CHAT.8). */
+  readonly citations: readonly CRMChatCitationView[];
   readonly createdAt: string;
   readonly completedAt: string | null;
 }
@@ -75,6 +76,8 @@ export interface CRMChatConversationListQuery {
   readonly status?: 'active' | 'archived' | 'all' | undefined;
   readonly offset?: number | undefined;
   readonly maxSize?: number | undefined;
+  /** 19-CHAT.14 — free-text search over the caller's own threads. */
+  readonly q?: string | undefined;
 }
 
 export interface CRMChatMessageListQuery {
@@ -100,6 +103,7 @@ export class CRMChatConversationService {
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CRMChatPermissionService) private readonly permissions: CRMChatPermissionService,
     @Inject(CRMChatPolicyService) private readonly policy: CRMChatPolicyService,
+    @Inject(CRMChatCitationService) private readonly citations: CRMChatCitationService,
   ) {}
 
   /** The caller's own threads, newest activity first. Deleted threads never appear. */
@@ -121,6 +125,27 @@ export class CRMChatConversationService {
       .where('owner_user_id', '=', userId)
       .where('status', '<>', 'deleted');
     if (status !== 'all') builder = builder.where('status', '=', status);
+
+    // 19-CHAT.14 — free-text search over the caller's own threads. The owner predicate is already
+    // part of the builder, so the term can only ever match this caller's rows. The match covers
+    // the thread title and the body of any message in it.
+    const term = query.q?.trim();
+    if (term !== undefined && term !== '') {
+      await this.policy.assertFeature('conversationSearch');
+      const pattern = likePattern(term);
+      builder = builder.where((eb) =>
+        eb.or([
+          eb('title', 'ilike', pattern),
+          eb.exists(
+            eb
+              .selectFrom('ai_agent_messages')
+              .select('id')
+              .whereRef('ai_agent_messages.conversation_id', '=', 'ai_agent_conversations.id')
+              .where('ai_agent_messages.content', 'ilike', pattern),
+          ),
+        ]),
+      );
+    }
 
     const totalRow = await builder.select((eb) => eb.fn.countAll<string>().as('count')).executeTakeFirst();
     const rows = await builder
@@ -179,9 +204,10 @@ export class CRMChatConversationService {
       .execute();
     const hasMore = rows.length > maxSize;
     const page = rows.slice(0, maxSize).reverse();
+    const list = await Promise.all(page.map((message) => this.toMessageView(message)));
     return {
-      list: page.map((message) => this.toMessageView(message)),
-      nextBefore: hasMore && page.length > 0 ? Number(page[0]?.seq ?? 0) : null,
+      list,
+      nextBefore: hasMore && list.length > 0 ? Number(list[0]?.sequence ?? 0) : null,
       hasMore,
     };
   }
@@ -301,7 +327,7 @@ export class CRMChatConversationService {
     };
   }
 
-  private toMessageView(row: AIAgentMessagesTable): CRMChatMessageView {
+  private async toMessageView(row: AIAgentMessagesTable): Promise<CRMChatMessageView> {
     const role: CRMChatMessageView['role'] =
       row.role === 'user' || row.role === 'assistant' || row.role === 'system' ? row.role : 'system';
     const redaction: CRMChatMessageView['redaction'] =
@@ -314,9 +340,18 @@ export class CRMChatConversationService {
       contentFormat: 'plain',
       redaction,
       turnId: row.run_id,
-      citations: [],
+      citations: await this.citations.forMessage(row),
       createdAt: row.created_at.toISOString(),
       completedAt: null,
     };
   }
+}
+
+/**
+ * Escape the LIKE wildcards in a search term so a user-supplied `%` or `_` matches literally
+ * instead of widening the search. Postgres uses the backslash as the default LIKE escape
+ * character.
+ */
+function likePattern(term: string): string {
+  return `%${term.replace(/([\\%_])/g, '\\$1')}%`;
 }

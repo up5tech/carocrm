@@ -1,3 +1,4 @@
+import { log } from '@carocrm/core/logger/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import type { KnowledgeArticleView } from '../service-desk/knowledge-base.service.js';
@@ -107,7 +108,17 @@ export class CRMChatHelpService {
 
       return matches;
     } catch (error) {
-      // If Knowledge Base is disabled or fails, return empty results
+      // The knowledge base may be disabled or unavailable. That is an ordinary outcome for a
+      // "how do I" question, so the answer is empty rather than an error — but the reason is
+      // recorded, because a silently empty help index is indistinguishable from a broken one.
+      log.warn(
+        {
+          component: 'crm-chat',
+          eventType: 'help-retrieval',
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+        },
+        'Help retrieval found no source.',
+      );
       return [];
     }
   }

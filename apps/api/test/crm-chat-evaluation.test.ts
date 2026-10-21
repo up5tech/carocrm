@@ -68,7 +68,7 @@ beforeAll(async () => {
     userName: EVAL_USER,
     email: `${EVAL_USER}@example.com`,
     password: 'TestPass123!',
-    roles: [ROLE_EVAL_USER],
+    roleIds: [ROLE_EVAL_USER],
   });
   createdUserIds.push(user.id);
 
@@ -80,17 +80,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const userId of createdUserIds) {
-    try {
-      await ctx.app.inject({
-        method: 'DELETE',
-        url: `/api/v1/User/${userId}`,
-        headers: authHeader(ctx.adminToken),
-      });
-    } catch {
-      // Ignore cleanup errors
-    }
+  const db = ctx.database.db;
+  // Remove the rows this suite created, by exact id. The API's user delete is a soft delete, so
+  // it would leave the row behind for the next run to find.
+  if (createdUserIds.length > 0) {
+    await db.deleteFrom('users').where('id', 'in', createdUserIds).execute();
   }
+  await db.deleteFrom('roles').where('id', 'in', [ROLE_EVAL_USER]).execute();
   await shutdownApi();
 });
 

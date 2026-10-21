@@ -1,15 +1,20 @@
 import type { Provider, Type } from '@nestjs/common';
 
 import { CRMChatController } from './crm-chat.controller.js';
+import { CRMChatActionService } from './crm-chat-actions.service.js';
 import { CRMChatAIAgentsClientService } from './crm-chat-ai-agents-client.service.js';
 import { CRMChatAssistantService } from './crm-chat-assistant.service.js';
+import { CRMChatCitationService } from './crm-chat-citations.service.js';
 import { CRMChatContextService } from './crm-chat-context.service.js';
 import { CRMChatConversationService } from './crm-chat-conversations.service.js';
 import { CRMChatCrossModuleService } from './crm-chat-cross-module.service.js';
+import { CRMChatFeedbackService } from './crm-chat-feedback.service.js';
 import { CRMChatHelpService } from './crm-chat-help.service.js';
 import { CRMChatModuleHealthService } from './crm-chat-module-health.service.js';
+import { CRMChatObservabilityService } from './crm-chat-observability.service.js';
 import { CRMChatPermissionService } from './crm-chat-permission.service.js';
 import { CRMChatPolicyService } from './crm-chat-policy.service.js';
+import { CRMChatPromptService } from './crm-chat-prompts.service.js';
 import { CRMChatQueryService } from './crm-chat-query.service.js';
 import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 import { CRMChatStreamingService } from './crm-chat-streaming.service.js';
@@ -17,24 +22,20 @@ import { CRM_CHAT_MENU_INVALIDATOR, noopMenuInvalidator } from './crm-chat-token
 
 export type { CRMChatCapabilitiesView } from './crm-chat.controller.js';
 export { CRMChatController } from './crm-chat.controller.js';
-export type { AssistantReadiness } from './crm-chat-assistant.service.js';
-export { CRMChatAssistantService } from './crm-chat-assistant.service.js';
-export type { CitationSource, ContextRef, ReauthorizedCitation } from './crm-chat-context.service.js';
-export { CRMChatContextService } from './crm-chat-context.service.js';
-export type { CrossModuleQuery, CrossModuleResult, CrossModuleSubQuery } from './crm-chat-cross-module.service.js';
-export { CRMChatCrossModuleService } from './crm-chat-cross-module.service.js';
-export type { HelpSearchResult, HelpSource } from './crm-chat-help.service.js';
-export { CRMChatHelpService } from './crm-chat-help.service.js';
-export type { QueryPlan, QueryResult, RecordSummary } from './crm-chat-query.service.js';
-export { CRMChatQueryService } from './crm-chat-query.service.js';
+export type { CRMChatActionDecision, CRMChatActionView } from './crm-chat-actions.service.js';
+export { CRMChatActionService } from './crm-chat-actions.service.js';
 export type {
   CrmChatTurnResult,
   CrmChatTurnStatus,
   CrmChatTurnSubmission,
 } from './crm-chat-ai-agents-client.service.js';
 export { CRMChatAIAgentsClientService } from './crm-chat-ai-agents-client.service.js';
-export type { CrmChatStreamEvent, CrmChatStreamEventType } from './crm-chat-streaming.service.js';
-export { CRMChatStreamingService } from './crm-chat-streaming.service.js';
+export type { AssistantReadiness } from './crm-chat-assistant.service.js';
+export { CRMChatAssistantService } from './crm-chat-assistant.service.js';
+export type { CRMChatCitationView } from './crm-chat-citations.service.js';
+export { CRMChatCitationService } from './crm-chat-citations.service.js';
+export type { CitationSource, ContextRef, ReauthorizedCitation } from './crm-chat-context.service.js';
+export { CRMChatContextService } from './crm-chat-context.service.js';
 export {
   CRM_CHAT_BLOCKED_CAPABILITIES,
   CRM_CHAT_CONTRACT_VERSION,
@@ -53,6 +54,16 @@ export {
   type CRMChatMessagePage,
   type CRMChatMessageView,
 } from './crm-chat-conversations.service.js';
+export type {
+  CRMChatCrossModuleResult,
+  CRMChatCrossModuleScenario,
+  CRMChatCrossModuleStepResult,
+} from './crm-chat-cross-module.service.js';
+export { CRMChatCrossModuleService } from './crm-chat-cross-module.service.js';
+export type { CRMChatFeedbackInput, CRMChatFeedbackView } from './crm-chat-feedback.service.js';
+export { CRMChatFeedbackService } from './crm-chat-feedback.service.js';
+export type { HelpSearchResult, HelpSource } from './crm-chat-help.service.js';
+export { CRMChatHelpService } from './crm-chat-help.service.js';
 export {
   type AssistantStateKey,
   CRM_CHAT_CAPABILITIES,
@@ -68,8 +79,14 @@ export {
 } from './crm-chat-module.js';
 export type { CRMChatModuleHealthView } from './crm-chat-module-health.service.js';
 export { CRMChatModuleHealthService } from './crm-chat-module-health.service.js';
+export type { CRMChatUsageSummary } from './crm-chat-observability.service.js';
+export { CRMChatObservabilityService } from './crm-chat-observability.service.js';
 export { CRMChatPermissionService } from './crm-chat-permission.service.js';
 export { CRMChatPolicyService } from './crm-chat-policy.service.js';
+export type { CRMChatPromptView } from './crm-chat-prompts.service.js';
+export { CRMChatPromptService } from './crm-chat-prompts.service.js';
+export type { QueryPlan, QueryResult, RecordSummary } from './crm-chat-query.service.js';
+export { CRMChatQueryService } from './crm-chat-query.service.js';
 export {
   type CRMChatSettings,
   CRMChatSettingsSchema,
@@ -81,6 +98,8 @@ export {
   effectiveFeatureFlags,
   rawFeatureFlags,
 } from './crm-chat-settings.service.js';
+export type { CrmChatStreamEvent, CrmChatStreamEventType } from './crm-chat-streaming.service.js';
+export { CRMChatStreamingService } from './crm-chat-streaming.service.js';
 export { CRM_CHAT_MENU_INVALIDATOR, type MenuInvalidator, noopMenuInvalidator } from './crm-chat-tokens.js';
 export { type CRMChatSettingsPatch, CRMChatSettingsPatchSchema } from './dto/crm-chat-shapes.js';
 
@@ -99,15 +118,20 @@ export const CRM_CHAT_CONTROLLERS: Type<unknown>[] = [CRMChatController];
 export const CRM_CHAT_PROVIDERS: Provider[] = [
   CRMChatSettingsService,
   CRMChatConversationService,
+  CRMChatCitationService,
   CRMChatPermissionService,
   CRMChatPolicyService,
   CRMChatAssistantService,
   CRMChatAIAgentsClientService,
   CRMChatContextService,
   CRMChatCrossModuleService,
+  CRMChatFeedbackService,
   CRMChatHelpService,
+  CRMChatObservabilityService,
+  CRMChatPromptService,
   CRMChatQueryService,
   CRMChatStreamingService,
+  CRMChatActionService,
   CRMChatModuleHealthService,
   // Default seam: an isolated module test has no navigation surface to invalidate. `AppModule`
   // overrides this with `NavigationService.invalidate()`.

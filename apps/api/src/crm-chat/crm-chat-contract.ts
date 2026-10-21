@@ -16,7 +16,7 @@ import type { CRMChatCapabilityKey, CRMChatFeatureKey } from './crm-chat-module.
  */
 
 /** Bumped whenever a path, request shape, response shape, event or error code changes incompatibly. */
-export const CRM_CHAT_CONTRACT_VERSION = '1.1.0';
+export const CRM_CHAT_CONTRACT_VERSION = '1.2.0';
 
 export type CRMChatHttpMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
@@ -157,36 +157,36 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
     method: 'POST',
     path: 'action/turns/:turnId/feedback',
     capability: 'feedback',
-    feature: 'workspace',
-    phase: '19-CHAT.11',
-    implemented: false,
+    feature: 'feedback',
+    phase: '19-CHAT.14',
+    implemented: true,
     summary: 'Rate one assistant answer authored in a conversation the caller owns.',
   },
   {
     method: 'GET',
     path: 'action/actions/:approvalId',
     capability: 'use',
-    feature: 'actionProposals',
+    feature: 'workspace',
     phase: '19-CHAT.12',
-    implemented: false,
+    implemented: true,
     summary: 'The typed proposal: targets, before/after values, side effects and expiry.',
   },
   {
     method: 'POST',
     path: 'action/actions/:approvalId/confirm',
-    capability: 'manage',
+    capability: 'use',
     feature: 'actionProposals',
     phase: '19-CHAT.12',
-    implemented: false,
+    implemented: true,
     summary: 'Confirm a proposal; requires safety.allowWrites and revalidates at execution time.',
   },
   {
     method: 'POST',
     path: 'action/actions/:approvalId/reject',
-    capability: 'manage',
-    feature: 'actionProposals',
+    capability: 'use',
+    feature: 'workspace',
     phase: '19-CHAT.12',
-    implemented: false,
+    implemented: true,
     summary: 'Reject a proposal; the run resumes without executing it.',
   },
   {
@@ -218,20 +218,47 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
   },
   {
     method: 'GET',
+    path: 'action/cross-module/scenarios',
+    capability: 'use',
+    feature: 'workspace',
+    phase: '19-CHAT.11',
+    implemented: true,
+    summary: 'The curated cross-module paths this installation can answer.',
+  },
+  {
+    method: 'POST',
+    path: 'action/cross-module/analyze',
+    capability: 'use',
+    feature: 'workspace',
+    phase: '19-CHAT.11',
+    implemented: true,
+    summary: 'Run one curated cross-module path against a record the caller may read.',
+  },
+  {
+    method: 'GET',
+    path: 'action/turns/:turnId/usage',
+    capability: 'use',
+    feature: 'workspace',
+    phase: '19-CHAT.17',
+    implemented: true,
+    summary: 'The usage of one turn, read from the AIAgents run and its provider ledger.',
+  },
+  {
+    method: 'GET',
     path: 'action/prompts',
-    capability: 'prompts',
+    capability: 'use',
     feature: 'workspace',
     phase: '19-CHAT.14',
-    implemented: false,
+    implemented: true,
     summary: 'The caller’s saved prompt templates.',
   },
   {
     method: 'POST',
     path: 'action/prompts',
-    capability: 'prompts',
+    capability: 'use',
     feature: 'workspace',
     phase: '19-CHAT.14',
-    implemented: false,
+    implemented: true,
     summary: 'Create a template; its text is data and is never executed.',
   },
   {
@@ -240,7 +267,7 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
     capability: 'prompts',
     feature: 'workspace',
     phase: '19-CHAT.14',
-    implemented: false,
+    implemented: true,
     summary: 'Rename, edit or disable one template the caller owns.',
   },
   {
@@ -249,7 +276,7 @@ export const CRM_CHAT_ROUTES: readonly CRMChatRouteContract[] = [
     capability: 'prompts',
     feature: 'workspace',
     phase: '19-CHAT.14',
-    implemented: false,
+    implemented: true,
     summary: 'Delete one template the caller owns.',
   },
 ];

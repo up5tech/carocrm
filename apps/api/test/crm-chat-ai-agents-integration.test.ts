@@ -67,7 +67,7 @@ beforeAll(async () => {
     userName: USER_CHAT,
     email: `${USER_CHAT}@example.com`,
     password: 'TestPass123!',
-    roles: [ROLE_USER],
+    roleIds: [ROLE_USER],
   });
   createdUserIds.push(user.id);
 
@@ -83,18 +83,18 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Cleanup created users by exact ID.
-  for (const userId of createdUserIds) {
-    try {
-      await ctx.app.inject({
-        method: 'DELETE',
-        url: `/api/v1/User/${userId}`,
-        headers: authHeader(ctx.adminToken),
-      });
-    } catch {
-      // Ignore cleanup errors in teardown.
-    }
+  const db = ctx.database.db;
+  // Remove the rows this suite created, by exact id. The API's user delete is a soft delete, so
+  // it would leave the row behind for the next run to find.
+  if (createdUserIds.length > 0) {
+    await db.deleteFrom('ai_agent_messages')
+      .where('conversation_id', 'in', db.selectFrom('ai_agent_conversations').select('id').where('owner_user_id', 'in', createdUserIds))
+      .execute();
+    await db.deleteFrom('ai_agent_runs').where('initiated_by_user_id', 'in', createdUserIds).execute();
+    await db.deleteFrom('ai_agent_conversations').where('owner_user_id', 'in', createdUserIds).execute();
+    await db.deleteFrom('users').where('id', 'in', createdUserIds).execute();
   }
+  await db.deleteFrom('roles').where('id', 'in', [ROLE_USER]).execute();
   await shutdownApi();
 });
 

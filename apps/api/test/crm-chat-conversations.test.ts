@@ -376,9 +376,11 @@ describe('CRMChat conversations (19-CHAT.4)', () => {
     expect(tooLarge.status).toBe(400);
     expect(errorCode(tooLarge)).toBe('INVALID_QUERY');
 
-    // `q` is a 19-CHAT.14 field: asking for it now is an error, not an unfiltered answer.
-    const unknownFilter = await call('GET', `/api/v1/CRMChat/action/conversations?q=hello`, tokenA);
-    expect(unknownFilter.status).toBe(400);
+    // `q` is the 19-CHAT.14 search field and its flag is off by default (contract §7.4), so asking
+    // for a search while the flag is off is refused rather than silently answered unfiltered.
+    const searchDisabled = await call('GET', `/api/v1/CRMChat/action/conversations?q=oldest`, tokenA);
+    expect(searchDisabled.status).toBe(403);
+    expect(errorCode(searchDisabled)).toBe('FEATURE_DISABLED');
 
     const badBefore = await call('GET', `${conversation}/messages?before=0`, tokenA);
     expect(badBefore.status).toBe(400);
@@ -398,5 +400,79 @@ describe('CRMChat conversations (19-CHAT.4)', () => {
     // A refused patch changed nothing.
     const after = await call('GET', conversation, tokenA);
     expect((after.body['conversation'] as ConversationBody).title).toBe(`${MARKER} oldest A`);
+  });
+
+  it('searches only the caller’s own threads when the search flag is on', async () => {
+    // The flag ships off (contract §7.4), so the test turns it on and puts it back afterwards.
+    // The settings row is Chat's own single row; it is snapshotted here and restored in `afterAll`.
+    const previous = await ctx.database.db
+      .selectFrom('app_settings')
+      .select(['data'])
+      .where('name', '=', 'crmChat')
+      .executeTakeFirst();
+
+    const enabled = await call(
+      'POST',
+      '/api/v1/CRMChat/action/settings',
+      ctx.adminToken,
+      { features: { conversationSearch: true } },
+    );
+    expect(enabled.status, JSON.stringify(enabled.body)).toBe(200);
+
+    try {
+      // A's own thread is found by a term in its title.
+      const found = await call('GET', `/api/v1/CRMChat/action/conversations?q=${encodeURIComponent('oldest')}`, tokenA);
+      expect(found.status, JSON.stringify(found.body)).toBe(200);
+      expect(ids(found.body)).toContain(CONVERSATION_A1);
+
+      // The same term never reaches the other user's thread: B searches for A's title word and
+      // gets nothing, because the search is scoped to the caller's own rows in SQL.
+      const otherUser = await call(
+        'GET',
+        `/api/v1/CRMChat/action/conversations?q=${encodeURIComponent('oldest')}`,
+        tokenB,
+      );
+      expect(otherUser.status).toBe(200);
+      expect(ids(otherUser.body)).not.toContain(CONVERSATION_A1);
+      expect(ids(otherUser.body)).toEqual([]);
+
+      // B still finds B's own thread by a word in its own title.
+      const ownThread = await call(
+        'GET',
+        `/api/v1/CRMChat/action/conversations?q=${encodeURIComponent('private')}`,
+        tokenB,
+      );
+      expect(ownThread.status).toBe(200);
+      expect(ids(ownThread.body)).toEqual([CONVERSATION_B1]);
+
+      // A term that matches nothing is an empty list, not the whole history.
+      const noMatch = await call(
+        'GET',
+        `/api/v1/CRMChat/action/conversations?q=${encodeURIComponent(`${MARKER}-nothing-matches`)}`,
+        tokenA,
+      );
+      expect(noMatch.status).toBe(200);
+      expect(ids(noMatch.body)).toEqual([]);
+
+      // A term that is only in a message body is found too — the search covers thread content.
+      // Only A1 carries messages, and none of the other titles contain the word.
+      const byMessage = await call(
+        'GET',
+        `/api/v1/CRMChat/action/conversations?q=${encodeURIComponent(`${MARKER} message 3`)}`,
+        tokenA,
+      );
+      expect(byMessage.status).toBe(200);
+      expect(ids(byMessage.body)).toEqual([CONVERSATION_A1]);
+    } finally {
+      if (previous === undefined) {
+        await ctx.database.db.deleteFrom('app_settings').where('name', '=', 'crmChat').execute();
+      } else {
+        await ctx.database.db
+          .updateTable('app_settings')
+          .set({ data: previous.data })
+          .where('name', '=', 'crmChat')
+          .execute();
+      }
+    }
   });
 });

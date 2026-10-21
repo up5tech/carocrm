@@ -59,6 +59,7 @@ beforeAll(async () => {
     name: `${MARKER} user A role`,
     permissions: {
       CRMChatConversation: { read: 'all', edit: 'all' },
+      CRMChatPrompt: { read: 'all', edit: 'all' },
       AIAgent: { read: 'all' },
     },
   });
@@ -68,6 +69,7 @@ beforeAll(async () => {
     name: `${MARKER} user B role`,
     permissions: {
       CRMChatConversation: { read: 'all', edit: 'all' },
+      CRMChatPrompt: { read: 'all', edit: 'all' },
       AIAgent: { read: 'all' },
     },
   });
@@ -76,7 +78,7 @@ beforeAll(async () => {
     userName: USER_A,
     email: `${USER_A}@example.com`,
     password: 'TestPass123!',
-    roles: [ROLE_USER_A],
+    roleIds: [ROLE_USER_A],
   });
   createdUserIds.push(userA.id);
 
@@ -84,7 +86,7 @@ beforeAll(async () => {
     userName: USER_B,
     email: `${USER_B}@example.com`,
     password: 'TestPass123!',
-    roles: [ROLE_USER_B],
+    roleIds: [ROLE_USER_B],
   });
   createdUserIds.push(userB.id);
 
@@ -103,17 +105,16 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  for (const userId of createdUserIds) {
-    try {
-      await ctx.app.inject({
-        method: 'DELETE',
-        url: `/api/v1/User/${userId}`,
-        headers: authHeader(ctx.adminToken),
-      });
-    } catch {
-      // Ignore cleanup errors
-    }
+  const db = ctx.database.db;
+  // Remove the rows this suite created, by exact id.
+  //
+  // The API's user delete is a soft delete, so it leaves the row behind and the next run finds
+  // it. A test that creates a row removes it. The dependent rows go first, in dependency order.
+  if (createdUserIds.length > 0) {
+    await db.deleteFrom('crm_chat_prompts').where('owner_user_id', 'in', createdUserIds).execute();
+    await db.deleteFrom('users').where('id', 'in', createdUserIds).execute();
   }
+  await db.deleteFrom('roles').where('id', 'in', [ROLE_USER_A, ROLE_USER_B]).execute();
   await shutdownApi();
 });
 
@@ -131,6 +132,39 @@ describe('CRMChat Security Hardening (19-CHAT.15)', () => {
       const result = await call('GET', '/api/v1/CRMChat/action/conversations');
 
       expect(result.status).toBe(401);
+    });
+
+    it('keeps a saved prompt template private to the user who wrote it', async () => {
+      // A writes a template; B must not see it, read it, change it or delete it. The answers for
+      // "not yours" and "not there" are the same, so an id cannot be probed for existence.
+      const created = await call('POST', '/api/v1/CRMChat/action/prompts', tokenA, {
+        name: `${MARKER} private template`,
+        promptTemplate: `${MARKER} summarise my accounts`,
+      });
+      expect(created.status).toBe(201);
+      const promptId = String((created.body as { id?: string }).id ?? '');
+      expect(promptId).not.toBe('');
+
+      const listB = await call('GET', '/api/v1/CRMChat/action/prompts', tokenB);
+      expect(listB.status).toBe(200);
+      expect(JSON.stringify(listB.body)).not.toContain(`${MARKER} summarise my accounts`);
+
+      const patchB = await call('PATCH', `/api/v1/CRMChat/action/prompts/${promptId}`, tokenB, {
+        name: `${MARKER} hijacked`,
+      });
+      expect(patchB.status).toBe(404);
+
+      const deleteB = await call('DELETE', `/api/v1/CRMChat/action/prompts/${promptId}`, tokenB);
+      expect(deleteB.status).toBe(404);
+
+      // A's template is untouched by B's attempts.
+      const listA = await call('GET', '/api/v1/CRMChat/action/prompts', tokenA);
+      expect(listA.status).toBe(200);
+      expect(JSON.stringify(listA.body)).toContain(`${MARKER} private template`);
+
+      // Clean up the row this run created.
+      const removed = await call('DELETE', `/api/v1/CRMChat/action/prompts/${promptId}`, tokenA);
+      expect(removed.status).toBe(200);
     });
 
     it('enforces workspace policy for all endpoints', async () => {

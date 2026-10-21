@@ -926,6 +926,46 @@ export interface AIAgentApprovalsTable {
   modified_at: Date;
 }
 
+/** Phase 19-CHAT.3 — a citation rendered under an assistant message (§7.4). */
+export interface CRMChatCitationsTable {
+  id: string;
+  message_id: string;
+  conversation_id: string;
+  source_type: string;
+  entity: string | null;
+  record_id: string | null;
+  label: string;
+  route: string;
+  ordinal: number;
+  rechecked_at: Date;
+  created_at: Date;
+}
+
+/** Phase 19-CHAT.3 — one rating per user per answer (§7.6). */
+export interface CRMChatFeedbackTable {
+  id: string;
+  message_id: string;
+  conversation_id: string;
+  owner_user_id: string;
+  rating: string;
+  category: string | null;
+  comment: string | null;
+  created_at: Date;
+  modified_at: Date;
+}
+
+/** Phase 19-CHAT.3 — owner-scoped reusable prompt text; data only (§7.6). */
+export interface CRMChatPromptsTable {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  prompt_template: string;
+  description: string | null;
+  enabled: boolean;
+  created_at: Date;
+  modified_at: Date;
+}
+
 /** Phase 19-AI — model request ledger; no prompt/completion by default (§12.1). */
 export interface AIAgentProviderRequestsTable {
   id: string;
@@ -1366,6 +1406,9 @@ export interface Database {
   ai_agent_eval_suites: AIAgentEvalSuitesTable;
   ai_agent_eval_cases: AIAgentEvalCasesTable;
   ai_agent_eval_runs: AIAgentEvalRunsTable;
+  crm_chat_citations: CRMChatCitationsTable;
+  crm_chat_feedback: CRMChatFeedbackTable;
+  crm_chat_prompts: CRMChatPromptsTable;
   ai_provider_connections: AIProviderConnectionsTable;
   integration_connections: IntegrationConnectionsTable;
   integration_credential_secrets: IntegrationCredentialSecretsTable;
