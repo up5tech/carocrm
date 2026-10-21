@@ -1,7 +1,5 @@
 import { CustomerServiceOutlined, ReloadOutlined } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Descriptions, Divider, Empty, Input, Result, Row, Space, Tag, Tooltip, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';import { Alert, Button, Card, Col, Descriptions, Divider, Empty, Form, Input, Modal, Result, Row, Space, Tag, Tooltip, Typography } from 'antd';import { useEffect, useState } from 'react';
 
 import { api, ApiError } from '../api/client.js';
 import type { CRMChatMessageView } from '../api/types.js';
@@ -93,6 +91,32 @@ export function CRMChatPage() {
     }
   };
 
+  const queryClient = useQueryClient();
+  const [showSettings, setShowSettings] = useState(false);
+  const [assistantKey, setAssistantKey] = useState('');
+  const isAdmin = capabilities.data?.capabilities?.some((c) => c.key === 'admin' && c.granted) === true;
+
+  const settingsQuery = useQuery({
+    queryKey: ['crmChat', 'settings'],
+    queryFn: () => api.crmChatSettings(),
+    enabled: isAdmin,
+    staleTime: 15_000,
+    retry: false,
+  });
+
+  useEffect(() => {
+    const key = (settingsQuery.data?.settings as { assistant?: { agentKey?: string } } | undefined)?.assistant?.agentKey;
+    if (typeof key === 'string') setAssistantKey(key);
+  }, [settingsQuery.data]);
+
+  const saveSettings = useMutation({
+    mutationFn: () => api.crmChatUpdateSettings({ assistant: { agentKey: assistantKey.trim() } }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['crmChat'] });
+      setShowSettings(false);
+    },
+  });
+
   const health = useQuery({
     queryKey: ['crmChat', 'health'],
     queryFn: () => api.crmChatHealth(),
@@ -100,7 +124,6 @@ export function CRMChatPage() {
     staleTime: 15_000,
     retry: false,
   });
-
   if (capabilities.isLoading) return <LoadingSkeleton rows={10} />;
   if (capabilities.isError) {
     if (capabilities.error instanceof ApiError && capabilities.error.status === 403) {
@@ -169,6 +192,9 @@ export function CRMChatPage() {
         </div>
         <Space>
           <Tag color={stateTone}>{t(assistantStateKey(data.assistant.state))}</Tag>
+          {isAdmin ? (
+            <Button onClick={() => setShowSettings(true)}>{t('web.crmChat.settingsButton')}</Button>
+          ) : null}
           <Button
             icon={<ReloadOutlined />}
             loading={capabilities.isFetching}
@@ -443,6 +469,24 @@ export function CRMChatPage() {
           </Col>
         ) : null}
       </Row>
+      <Modal
+        open={showSettings}
+        title={t('web.crmChat.settingsTitle')}        onCancel={() => setShowSettings(false)}
+        onOk={() => void saveSettings.mutate()}
+        confirmLoading={saveSettings.isPending}
+      >
+        <Form layout="vertical">
+          <Form.Item label="Assistant agent key">
+            <Input value={assistantKey} onChange={(e) => setAssistantKey(e.target.value)} placeholder="my-assistant-agent" />
+          </Form.Item>
+          {settingsQuery.data?.warnings?.length ? (
+            <Alert type="warning" showIcon message={settingsQuery.data.warnings.map((w) => w.message).join('; ')} />
+          ) : null}
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Enable AI Agents execution & memory in AI Agents settings, and publish an agent with conversation memory.
+          </Typography.Text>
+        </Form>
+      </Modal>
     </div>
   );
 }

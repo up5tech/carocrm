@@ -158,12 +158,12 @@ describe('fake adapter', () => {
 });
 
 describe('provider URL safety', () => {
-  it('rejects plain http, credentials and cloud metadata', async () => {
-    await expect(assertSafeProviderBaseUrl('http://example.com', { allowLoopback: false })).rejects.toThrow(/https/);
+  it('allows http and https and rejects credentials and cloud metadata', async () => {
+    await expect(assertSafeProviderBaseUrl('http://example.com', { allowLoopback: false })).resolves.toBeDefined();
+    await expect(assertSafeProviderBaseUrl('https://example.com', { allowLoopback: false })).resolves.toBeDefined();
     await expect(assertSafeProviderBaseUrl('https://user:pass@example.com', { allowLoopback: false })).rejects.toThrow(
       /credentials/,
-    );
-    await expect(
+    );    await expect(
       assertSafeProviderBaseUrl('https://169.254.169.254/latest', { allowLoopback: false }),
     ).rejects.toThrow(/metadata/);
   });

@@ -2806,6 +2806,44 @@ and an end user completes daily CRM work with minimal hunting, typing and contex
 
 ---
 
+## Phase 21 — In-App Documentation and Product Help
+
+Progress: 📋 planned, not implemented. Scope, architecture and work order in
+`PLAN_Phase_21_Documentation.md`.
+
+Today every capability is documented for engineers (`docs/`); the people who operate the product have
+no in-app reference. Phase 21 adds a `/docs` surface written for the two audiences that run the
+system — the **administrator** and the **CRM user** — searchable, bilingual, permission-aware and
+deep-linked from the screens it describes.
+
+Implement, as specified in `PLAN_Phase_21_Documentation.md`:
+
+- `content/docs/<locale>/<section>/<slug>.md` — versioned user-facing content with a strict
+  front-matter contract and a documented Markdown subset, kept out of the engineering `docs/` tree.
+- `packages/docs` — a pure engine (front-matter, parser to a typed block tree, index builder, search
+  with diacritic-insensitive matching, link/asset/parity lint). No HTML is produced or rendered, so no
+  XSS surface exists.
+- `apps/api/src/docs` — `GET /Docs/tree|page/:section/:slug|search`, ACL-filtered per caller,
+  `ETag`/`304`, in-memory per-locale index, no table and no migration.
+- A `docs` settings document (`enabled`, `showInSidebar`, `showHelpMenu`, `externalUrl`,
+  `landingPage`, `supportEmail`; read `user`, write `admin`) and one `docs` page seed in
+  `NAVIGATION_PAGES`, gated through `NAVIGATION_FEATURE_GATE`.
+- The SPA reader (`/docs`, `/docs/search`, `/docs/:section`, `/docs/:section/:slug`) with a
+  three-column reading layout, TOC, anchors, prev/next, print stylesheet and search snippets.
+- Contextual help: `HelpTip` gains `docKey`, admin tab descriptors gain `docKey`, and the unused
+  Phase 20 `PermissionDenied` state is consumed.
+- 38 pages in `en` across `getting-started`, `user`, `admin` and `reference`; `vi` as a first-class
+  translation with a visible per-page fallback notice.
+
+Acceptance:
+
+A new administrator configures the instance and a new CRM user completes daily work using only the
+in-app documentation, reached from the screen they are on; search works with or without Vietnamese
+diacritics; a CRM user never sees an administration page; and shipping a feature without its page
+fails the content lint rather than a customer.
+
+---
+
 # 58. API Endpoint Inventory Plan
 
 Create a machine-readable endpoint registry:

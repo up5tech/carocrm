@@ -1,10 +1,10 @@
 import { DeleteOutlined, DisconnectOutlined, EditOutlined, LinkOutlined, PlusOutlined, ProjectOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Card, Descriptions, Popconfirm, Select, Space, Spin, Table, Typography } from 'antd';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
-import { api } from '../api/client.js';
-import type { EntityDefinition } from '../api/types.js';
+import { api,ApiError } from '../api/client.js';
+import type { EntityDefinition, Metadata } from '../api/types.js';
 import { CampaignLifecycleActions } from '../components/CampaignLifecycleActions.js';
 import { CaseConversation } from '../components/CaseConversation.js';
 import { CaseLifecycleActions } from '../components/CaseLifecycleActions.js';
@@ -13,10 +13,12 @@ import { CommunicationsPanel } from '../components/CommunicationsPanel.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
 import { PortalCaseConversation } from '../components/PortalCaseConversation.js';
+import { type RelationAccess,RelationTabs } from '../components/RelationTabs.js';
 import { SalesDocumentLinesPanel } from '../components/SalesDocumentLinesPanel.js';
 import { StreamPanel } from '../components/StreamPanel.js';
 import { salesDocumentKind } from '../sales/documents.js';
 import { PORTAL_HIDDEN_CASE_FIELDS } from '../service-desk/portal-case-fields.js';
+import { useDetailTabs } from '../state/detail-tabs.js';
 import { t } from '../state/i18n.js';
 import { evaluateEntityLogic } from '../state/logic.js';
 import {
@@ -43,10 +45,19 @@ interface PanelProps {
   targetDefinition: EntityDefinition | undefined;
   /** Route base of the current app: `/portal` for portal users (PLAN §37). */
   base: string;
+  /** Reports whether the caller may read the relation (PLAN §5.11). */
+  onAccess?: ((access: RelationAccess) => void) | undefined;
+  /** Renders nothing when the relation is unreadable. Off by default: the stacked page is unchanged. */
+  hideWhenDenied?: boolean | undefined;
+}
+
+/** A refused `/Related` call is an authorization decision, not a transport failure. */
+function isDenied(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403;
 }
 
 /** One relationship panel (PLAN §20 relationship panels) with link/unlink actions. */
-function RelationPanel({ parent, parentId, name, label, targetDefinition, base }: PanelProps) {
+function RelationPanel({ parent, parentId, name, label, targetDefinition, base, onAccess, hideWhenDenied }: PanelProps) {
   const { message } = AntApp.useApp();
   const navigate = useNavigate();
   const targetName = targetDefinition?.name;
@@ -54,7 +65,12 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base }
   const [term, setTerm] = useState('');
   const [selected, setSelected] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
+  const [denied, setDenied] = useState(false);
   const linkOptions = useLinkOptions(targetName, term);
+  // The callback is read through a ref: it is a fresh arrow on every render of the parent, and the
+  // load must not restart because of it.
+  const onAccessRef = useRef(onAccess);
+  onAccessRef.current = onAccess;
 
   const load = useCallback(async () => {
     if (!targetName) return;
@@ -62,8 +78,13 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base }
     try {
       const related = await api.related(parent, parentId, name, { maxSize: 50, total: false });
       setRows(related.list);
-    } catch {
+      setDenied(false);
+      onAccessRef.current?.('granted');
+    } catch (error) {
       setRows([]);
+      const refused = isDenied(error);
+      setDenied(refused);
+      onAccessRef.current?.(refused ? 'denied' : 'granted');
     } finally {
       setLoading(false);
     }
@@ -75,6 +96,10 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base }
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A relation the caller may not read renders nothing in tab mode; the stacked page keeps today's
+  // empty card, so a user who never opens the control sees the same page as before (§5.11).
+  if (denied && hideWhenDenied === true) return null;
 
   return (
     <Card
@@ -156,6 +181,87 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base }
   );
 }
 
+/**
+ * The relation area of a record page (PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
+ *
+ * The user chooses per entity whether the relations render as today's stacked panels or as tabs
+ * they arrange themselves. The arrangement lives in the user's `detailTabs` preference; this
+ * component only decides which rendering to use and hands the panels over.
+ *
+ * Three things stay outside the tab area, because they are not link lists:
+ *
+ * - a commercial document's `items` panel — the money the document is calculated from, which can
+ *   only be written through the document command (§5.11 rule 11);
+ * - Stream and Communications, which keep their fixed position below the relation area (§5.4);
+ * - the portal, which stays stacked (§5.11 rule 9).
+ */
+function RelationSection({
+  entity,
+  id,
+  definition,
+  metadata,
+  base,
+}: {
+  entity: string;
+  id: string;
+  definition: EntityDefinition | undefined;
+  metadata: Metadata | undefined;
+  base: string;
+}) {
+  const relations = useMemo(() => Object.keys(definition?.relations ?? {}), [definition]);
+  // A commercial document's lines are not a link list: they are the money the document is
+  // calculated from. The panel stays outside the tab area, in front of the relation tabs.
+  const documentKind = salesDocumentKind(entity);
+  const documentRelation = documentKind !== undefined && relations.includes('items') ? 'items' : undefined;
+  const linkRelations = useMemo(
+    () => relations.filter((relation) => relation !== documentRelation),
+    [relations, documentRelation],
+  );
+
+  const labelOf = useCallback(
+    (relation: string) => definition?.relations[relation]?.label ?? fieldLabel(relation),
+    [definition],
+  );
+
+  // The portal stays stacked: customer-facing surfaces are out of scope (§5.11 rule 9), so the
+  // arrangement is neither fetched nor offered there.
+  const controller = useDetailTabs(entity, linkRelations, labelOf, base !== '/portal');
+
+  const renderPanel = useCallback(
+    (relation: string, report: (access: RelationAccess) => void) => (
+      <RelationPanel
+        key={relation}
+        parent={entity}
+        parentId={id}
+        name={relation}
+        label={definition?.relations[relation]?.label}
+        base={base}
+        targetDefinition={metadata?.[definition?.relations[relation]?.target ?? ''] ?? undefined}
+        onAccess={report}
+        // In tab mode a relation the caller may not read renders nothing; the stacked page keeps
+        // today's empty card, so a user who never opens the control sees the same page (§5.11).
+        hideWhenDenied={controller.mode === 'tabs'}
+      />
+    ),
+    [entity, id, definition, metadata, base, controller.mode],
+  );
+
+  return (
+    <>
+      {documentRelation !== undefined && documentKind !== undefined ? (
+        <SalesDocumentLinesPanel kind={documentKind} id={id} />
+      ) : null}
+      <RelationTabs
+        entity={entity}
+        controller={controller}
+        relationNames={linkRelations}
+        labelOf={labelOf}
+        renderPanel={renderPanel}
+      />
+    </>
+  );
+}
+
 export function EntityDetailPage() {
   const { entity, id } = useParams<{ entity: string; id: string }>();
   const navigate = useNavigate();
@@ -200,7 +306,6 @@ export function EntityDetailPage() {
   const ordered = useMemo(() => orderByLayout(entries, panels), [entries, panels]);
   const covered = useMemo(() => layoutFieldNames(panels), [panels]);
   const others = useMemo(() => ordered.filter((entry) => !covered.has(entry.name)), [ordered, covered]);
-  const relations = useMemo(() => Object.keys(definition.data?.relations ?? {}), [definition.data]);
 
   const labelStyle = { width: 200, color: '#737b85', fontWeight: 400, paddingBlock: 10 };
   const contentStyle = { paddingBlock: 10, paddingInlineEnd: 24 };
@@ -317,24 +422,11 @@ export function EntityDetailPage() {
           </Card>
         ) : null}
 
-        {relations.map((relation) => {
-          // A commercial document's lines are not a link list: they are the money the document is
-          // calculated from, and they can only be written through the document command. Every other
-          // relationship keeps the generic panel.
-          const documentKind = relation === 'items' ? salesDocumentKind(entity) : undefined;
-          if (documentKind !== undefined) return <SalesDocumentLinesPanel key={relation} kind={documentKind} id={id} />;
-          return (
-            <RelationPanel
-              key={relation}
-              parent={entity}
-              parentId={id}
-              name={relation}
-              label={definition.data?.relations[relation]?.label}
-              base={base}
-              targetDefinition={metadata.data?.[definition.data?.relations[relation]?.target ?? ''] ?? undefined}
-            />
-          );
-        })}
+        {/* The relation area: today's stacked panels, or the tabs the user arranged for this entity
+            (§5.11, sub-phase 20.18). A commercial document's line items stay in front of it. */}
+        {entity && id ? (
+          <RelationSection entity={entity} id={id} definition={definition.data} metadata={metadata.data} base={base} />
+        ) : null}
 
         {/* Phase 19-VC.17 — communication history in the record's own context. The panel asks the
             server for this record; it renders nothing when the record is unreadable or has no

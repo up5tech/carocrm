@@ -9,6 +9,10 @@
 > command palette, role-scoped default dashboards, setup checklist, accessibility hardening and
 > responsive design.
 >
+> **Added after completion — Phase 20.18 (📋 planned, not implemented):** record-page relation tabs
+> (§5.11, §17). The 20.0–20.17 work above stands as shipped; 20.18 is a new additive sub-phase with
+> its own acceptance criteria and is **not** covered by the "COMPLETE" claim.
+>
 > **Open deferrals** (documented in `docs/compatibility/settings-ux.md`, "Known limitations after
 > sub-phases 20.11–20.17"): the ACL explain helper, storage-usage figures, 2FA, cross-page
 > "select all N matching records", bulk-action outcome counts, the row kebab menu, column
@@ -67,6 +71,8 @@ At the end of this phase, authorized users can:
    wall of fields.
 9. Experience designed empty, loading, error, permission-denied and offline states everywhere.
 10. Use the product with keyboard only, at WCAG 2.2 AA, on desktop, tablet and phone.
+11. Choose, per record type, whether related records render as today's stacked panels or as tabs they
+    create, rename, reorder and fill themselves (§5.11).
 
 ### 1.2 Explicit scope boundary
 
@@ -78,6 +84,8 @@ This phase does **not** re-implement or redesign:
   area configures and displays them; it never bypasses them.
 - The Stream/timeline, attachments, audit/history, notifications, Activities, Calendar, dashboards,
   jobs, search, import/export, formulas, dynamic logic, workflows or BPM engines.
+- The relation model, the `/Related` link/unlink endpoints or relation ACL. §5.11 arranges the
+  relation *panels*; it never changes what a relation is or who may read it.
 - Portal product surfaces beyond portal **settings** (portal roles/navigation configuration).
 - Visual redesign for its own sake. This phase hardens and systematizes the existing
   `carocrm-*` design language; a wholesale restyle is a separate decision.
@@ -208,6 +216,9 @@ Confirmed gaps this phase must close:
 - List view has no column manager, no density control, no URL-encoded filter state, no inline
   editing, no scoped "select all N rows", no bulk-action undo, no row-level action menu.
 - Record detail is a flat panel list with no "next action" affordance and no sticky header.
+- Relation panels are one stacked card per relationship in metadata order
+  (`EntityDetailPage.tsx`), with no display mode and no per-user arrangement; an entity with many
+  relations buries the record itself (§5.11, 20.18).
 - No unsaved-changes guard on edit forms; no save-and-new flow.
 - Empty/loading/error states are implemented ad hoc per page rather than through shared components.
 - No accessibility audit record; keyboard support is partial (Escape on the drawer, Enter on the
@@ -497,6 +508,8 @@ surface the next action.
 - **Progressive disclosure**: primary fields above the fold; secondary fields, relations, history and
   raw metadata behind tabs or collapsible panels. The default panel set follows the entity layout.
 - **Relation panels** show counts, a quick-add input, and link/unlink with permission feedback.
+- **Relation tabs** (§5.11): the user decides whether those panels stack as today or live in tabs they
+  arrange themselves.
 - **Activity timeline** (Stream) stays on every record; posting supports `@mentions` as today.
 - **Duplicate detection** warns before creating a likely duplicate record, reusing the existing
   `record.duplicate` metadata rather than adding a new mechanism.
@@ -566,6 +579,127 @@ not be writable by other users.
 
 ---
 
+### 5.11 Record-page relation tabs (Phase 20.18)
+
+`EntityDetailPage` renders one card per relationship, stacked in metadata order
+(`apps/web/src/pages/EntityDetailPage.tsx`, the `relations.map(…)` block). That is fine for an entity
+with two relations and unreadable for an Account or an Opportunity with eight: the link lists push the
+record's own content several screens up, and nothing on the page can be reordered by the person who
+actually works the record.
+
+This sub-phase gives the user control over **that surface only**. Field panels stay governed by the
+`detail` layout (§4.6); the activity, communications and commercial panels (§5.4, 19-S.7, 19-VC.17)
+keep their fixed position below the relation area.
+
+#### Modes
+
+| Mode | Rendering |
+|------|-----------|
+| `stacked` (**default**) | Today's behaviour: one card per relation, metadata order — unchanged. |
+| `tabs` | A tab strip above the relation area; only the active tab's panels mount and fetch. |
+
+The choice is **per user, per entity**, and defaults to `stacked`, so a user who never touches the
+control sees today's page byte for byte.
+
+#### Data model
+
+A new per-user preference `detailTabs` — a preference, not a settings document and not entity
+metadata, because two people opening the same Account legitimately want different arrangements:
+
+```jsonc
+{
+  "mode": "stacked",            // the user's default for entities they have not configured
+  "entities": {
+    "Account": {
+      "mode": "tabs",
+      "tabs": [
+        { "id": "people",   "label": "People",   "order": 10, "relations": ["contacts", "opportunities"] },
+        { "id": "activity", "label": "Activity", "order": 20, "relations": ["meetings", "calls", "tasks"] }
+      ]
+    }
+  }
+}
+```
+
+- Stored in `user_preferences` under the name `detailTabs`; the schema is registered in
+  `PREFERENCE_SCHEMAS` (`apps/api/src/preferences/preference-shapes.ts`) so the **existing**
+  `GET/PUT /Preferences/detailTabs` routes serve it. **No migration, no new table, no new endpoint.**
+- The Zod schema and the pure arrangement helpers live in `packages/metadata/src/relation-tabs.ts`, so
+  the API validates and the SPA normalizes with the same code, and the logic is covered by the
+  existing vitest include (`packages/*/src/**/*.test.ts`) — this repository has **no frontend test
+  runner** (see §13.4).
+- Limits: `mode ∈ {stacked, tabs}`; ≤ 200 entities; ≤ 20 tabs per entity; `id` matching
+  `[a-z0-9][a-z0-9-]{0,39}`; `label` 1–40 characters; ≤ 60 relation names per tab, each ≤ 60
+  characters; a relation may appear in **at most one** tab of an entity (`refine` → `422`).
+- **Relation names are not validated against metadata server-side.** A preference written before a
+  relation was renamed must not start failing with `422`; the SPA reconciles the arrangement against
+  `definition.relations` on read. This is the rule the `favorites` preference already follows: unknown
+  keys are dropped on read, never refused on write.
+
+#### Behaviour rules (hard)
+
+1. **Nothing changes for a user who never opens the control.** No row → `stacked` → today's page.
+2. **No relation can be lost.** Relations placed in no tab render in an implicit, non-deletable
+   **Other** tab, always last. It is computed, never stored.
+3. **Deleting a tab is presentation, not data.** Its relations return to the unassigned pool (Other);
+   the confirmation says exactly that.
+4. **A relation belongs to one tab.** Moving it to another tab removes it from the previous one in the
+   same mutation — a move, never a copy.
+5. **Renaming never changes the id**, so a `?tab=people` link survives a rename. Ids are slugified from
+   the label once and stay stable for the life of the tab.
+6. **ACL is untouched.** Tabs are presentation over the same `/Related` calls; a tab whose relations
+   the caller cannot read is hidden and its stored arrangement is left intact, because permissions can
+   come back. Panels keep exactly today's link/unlink behaviour, including permission failures.
+7. **Empty tabs are allowed while editing** (create the tab first, move relations in later) and hidden
+   in read mode.
+8. **Zero or one relation → no toggle at all.** There is nothing to arrange; the control is not
+   rendered.
+9. **Portal stays stacked.** Customer-facing surfaces stay out of scope, consistent with the 19-VC.17
+   decision.
+10. **Switching back keeps the arrangement.** `stacked` is a rendering mode, not a reset: switching
+    forward again restores the tabs exactly as they were.
+11. **Command-backed panels do not participate.** A commercial document's `items` panel
+    (`SalesDocumentLinesPanel`) is the money the document is calculated from, not a link list, and it
+    stays outside the tab area; so do Stream and Communications.
+
+#### Interactions
+
+- A compact toolbar sits above the relation area, right-aligned: a `Segmented` (`Panels` / `Tabs`) and,
+  in tab mode, an `Edit tabs` button. Nothing else on the page moves.
+- The tab strip uses antd `Tabs` (roving tabindex, arrow keys and the ARIA `tablist` pattern come with
+  it), scrolls horizontally at 390 px, and its label shows the number of **panels** in the tab — never
+  record counts, which would cost one query per relation.
+- **Manage mode** (`Edit tabs`): tabs become rename / delete / reorder targets; relations appear as
+  chips grouped per tab plus an `Unassigned` pool. A chip moves by drag (dnd-kit, the stack the layout
+  editor already uses) **or** through its `Move to…` select — no drag-only interaction anywhere (§5.8).
+- Writes are batched into one `PUT /Preferences/detailTabs` when leaving manage mode, and issued
+  immediately on a mode switch. A rejected write restores the previous arrangement and shows an inline
+  error; the draft is never silently dropped.
+- Leaving the record page with an unsaved tab draft prompts, reusing the guard the record form uses.
+- `?tab=<id>` is written to the URL on tab change, so a refresh and a pasted link land on the same tab;
+  an unknown id falls back to the first tab and the URL is corrected.
+- Optional convenience: a `Use tabs for all record types` checkbox in manage mode writes the top-level
+  `mode` in one action instead of entity by entity.
+
+#### Performance
+
+Tab mode is *cheaper* than today on first paint: only the active tab mounts, so an entity with eight
+relations makes one `/Related` call instead of eight, and a tab that is never opened is never mounted.
+
+#### Compatibility note
+
+Upstream EspoCRM exposes relation panels as administrator-defined layout panels and has no per-user tab
+arrangement; this is an intentional Phase B enhancement. Record the deviation in
+`docs/compatibility/settings-ux.md`.
+
+#### Localization
+
+Every new string is a catalog key (`web.detail.panels`, `web.detail.tabs.*`) in `en` and `vi`.
+User-entered tab labels are **user data** and are deliberately not translated — the §5.10 "no
+hard-coded strings" rule governs the UI chrome, not what a user typed.
+
+---
+
 ## 6. Domain Model and Persistence Design
 
 ### 6.1 New and changed data
@@ -579,6 +713,7 @@ not be writable by other users.
 | `nav` entity metadata section | `metadata_entries` / `app_settings('entity')` | §4.5, additive |
 | `adminPanel` app metadata | `metadata_entries` scope `app` | tab descriptors (§4.1) |
 | `UserPreference` entity/record | existing generic record store or a dedicated table | §5.9, per user |
+| `detailTabs` per-user preference | `user_preferences` row named `detailTabs` | §5.11, per user per entity; owner-scoped; **no migration** |
 | Setup checklist | derived, not stored | §4.10 |
 
 No new table is required for the settings documents: the existing `app_settings(name, data,
@@ -690,6 +825,11 @@ enforced server-side on every settings route.
 Existing `GET/POST /Settings` (public brand/locale read, admin write) **stays** for backward
 compatibility; the write path delegates to the registry so both routes share validation.
 
+**Phase 20.18 adds no route.** The `detailTabs` preference (§5.11) rides the existing
+`GET/PUT /Preferences/:name` pair: owner-scoped by construction, `422` on an invalid arrangement, no
+new authorization surface and no new audit concern (it is user presentation, not instance
+configuration).
+
 ### 8.2 Navigation and metadata
 
 - `POST /Metadata/:entity` accepts the new `nav` section; unknown keys are rejected like any other
@@ -737,6 +877,11 @@ apps/web/src/components/
   states/EmptyState.tsx LoadingSkeleton.tsx ErrorState.tsx PermissionDenied.tsx
   CommandPalette.tsx  RecordHeader.tsx  NextAction.tsx  ColumnManager.tsx
   DensityToggle.tsx  BulkActionBar.tsx  UnsavedGuard.tsx  HelpTip.tsx
+  RelationTabs.tsx          # §5.11: tab strip + manage mode (dnd-kit + "Move to…" select)
+apps/web/src/state/
+  detail-tabs.ts            # §5.11: useDetailTabs(entity), reconciliation against definition.relations
+packages/metadata/src/
+  relation-tabs.ts          # §5.11: Zod schema + pure normalize/move/add/remove helpers + tests
 ```
 
 - Routes: `/admin/settings/:tabKey?` replacing the single `/admin/settings` route; the old URL
@@ -755,6 +900,8 @@ apps/web/src/components/
 - Every tab renders: loading skeleton, error state with Retry, permission-denied state, empty state.
 - Drag & drop (layout manager, menu order, columns) always has keyboard equivalents and announces
   the move for screen readers.
+- Relation tabs (§5.11): switching mode and leaving manage mode save immediately; a rejected save
+  reverts the arrangement and explains why; every chip has a `Move to…` equivalent to dragging.
 
 ### 9.3 Design system
 
@@ -768,7 +915,7 @@ apps/web/src/components/
 ### 9.4 State management
 
 - TanStack Query, already used, owns all server state: `['adminPanel']`, `['settings', name]`,
-  `['navigation']`, `['userPreferences']`, `['records', …]` for lists.
+  `['navigation']`, `['preferences', name]` (including `detailTabs`, §5.11), `['records', …]` for lists.
 - The navigation tree is fetched once and cached with a short stale time; a settings change
   invalidates it.
 - No new global state library is introduced.
@@ -829,6 +976,12 @@ Hard rules:
 | Drag-and-drop reorder that fails to persist | Visual order reverts and an error is shown |
 | Palette opened with no network | Empty-state message, no crash |
 | Large settings payload | Body-size limit enforced (existing limits), `413` |
+| Tab arrangement names a relation that no longer exists | Dropped on read; the rest of the arrangement is untouched; no error shown |
+| Tab arrangement lists one relation in two tabs | Refused `422` by the `detailTabs` schema |
+| Tab mode on an entity whose relations are all unreadable | The tab is hidden; the stored arrangement is untouched |
+| `?tab=` names an unknown or hidden tab | Falls back to the first tab and corrects the URL |
+| Preference write fails while arranging tabs | UI reverts to the last stored arrangement and shows an inline error |
+| Tab mode on an entity with fewer than two relations | The mode toggle is not rendered at all |
 
 ---
 
@@ -861,6 +1014,10 @@ configured primary database for integration tests — never a new database.
 - Permission matrix diffing and the "cannot lock out the last admin" rule.
 - Command palette scoring/grouping helpers.
 - Density/column preference merge (defaults + user overrides).
+- Relation-tab arrangement helpers (`packages/metadata/src/relation-tabs.ts`, §5.11): unknown relation
+  names dropped, order preserved, the implicit Other tab computed last, a relation moved between tabs
+  exactly once, ids slugified once and stable across renames, schema refusals for duplicate relations,
+  oversized labels and more than 20 tabs.
 
 ### 13.2 Repository/integration tests (existing primary database)
 
@@ -868,6 +1025,9 @@ configured primary database for integration tests — never a new database.
 - `GET /Navigation` for an admin, a regular user with limited roles, and a portal user.
 - Settings audit rows written with secrets redacted.
 - Setup checklist evaluation with incomplete and complete installations.
+- `detailTabs` round-trip through `PUT/GET /Preferences/detailTabs`: a valid arrangement survives a
+  fresh login, a duplicate relation is refused, and another account's arrangement stays invisible
+  (§5.11; extends `apps/api/test/user-preferences.test.ts`).
 
 ### 13.3 API tests
 
@@ -885,6 +1045,10 @@ configured primary database for integration tests — never a new database.
 - List view: column manager, density, inline edit validation in-cell, bulk select-all scope,
   undo toast.
 - Palette: open with `⌘/Ctrl+K`, arrow navigation, focus restore.
+- Relation tabs (§5.11) — this repository has **no frontend test runner**, so these are manual
+  browser checks, recorded in the phase report: switch to tabs and back; create, rename, reorder and
+  delete a tab; drag a relation into a tab and do the same move through `Move to…` with the keyboard
+  only; reload and reopen a `?tab=` link; delete a tab and confirm its relations land in Other.
 
 ### 13.5 End-to-end acceptance scenarios
 
@@ -901,6 +1065,9 @@ configured primary database for integration tests — never a new database.
    undone within the timeout.
 6. A first-run administrator sees the setup checklist with working deep links and can complete the
    logo + role + email steps.
+7. A user opens an Account with six relations, switches the relation area to tabs, creates a "People"
+   tab, moves Contacts and Opportunities into it by drag and by keyboard, deletes the tab, and finds
+   both relations back under Other; the next Account they open is unaffected.
 
 ### 13.6 Accessibility tests
 
@@ -919,6 +1086,8 @@ configured primary database for integration tests — never a new database.
 - Settings documents are small JSONB rows; no document may exceed a sane size (reject > 256 KB).
 - The settings shell lazy-loads tabs; the initial admin route must not pull in Sales/Service Desk
   settings code.
+- Relation tabs mount only the active tab (§5.11), so a record with eight relations issues one
+  `/Related` call on open instead of eight; tab counts are never fetched.
 - Target: settings page interactive < 1.5 s on a mid-range laptop; navigation tree available before
   first content paint; list interactions < 100 ms.
 
@@ -956,7 +1125,10 @@ configured primary database for integration tests — never a new database.
 - `docs/ux/design-principles.md` — the UX principles of §5 with concrete do/don't examples. ✅
 - `docs/ux/list-view.md` and `docs/ux/record-page.md` — the two highest-traffic surfaces. ✅
 - `docs/ux/accessibility.md` — keyboard map, focus rules, contrast tokens, known gaps. ✅
-- `docs/compatibility/settings-ux.md` — deviations from upstream administration behavior. ✅
+- `docs/ux/record-tabs.md` — relation tabs: modes, arrangement rules, the implicit Other tab, the
+  keyboard path, deferrals (📋 20.18).
+- `docs/compatibility/settings-ux.md` — deviations from upstream administration behavior. ✅ (+ the
+  §5.11 deviation when 20.18 lands)
 - Update `docs/reference/alpha-status.md` and `docs/reference/compatibility-matrix.md`. ✅
 - Update `PLAN.md` §57 status once the phase lands. ✅
 
@@ -1191,6 +1363,42 @@ a11y and e2e test suites the task list asks for — this repository has no front
 no Playwright spec covers the §13.5 scenarios. `api-spec/` remains unwritten (PLAN §58 is a plan for
 a later phase; the OpenAPI spec is generated at runtime).
 
+### Phase 20.18 — Record-page relation tabs  📋 planned, not implemented
+
+Added after 20.0–20.17 shipped; independent of them and startable on its own. Scope and rules: §5.11.
+
+Tasks:
+
+1. `packages/metadata/src/relation-tabs.ts`: `RelationTabsSchema` (`mode`, `entities`, tab shape, the
+   one-relation-one-tab `refine`) plus the pure helpers `normalizeArrangement`, `tabsOf`,
+   `unassignedOf`, `moveRelation`, `addTab`, `removeTab`, `renameTab`, `orderTabs`, `slugifyTabId` —
+   and their unit tests beside the source.
+2. Register `detailTabs` in `apps/api/src/preferences/preference-shapes.ts` using that schema. **No
+   migration** — `user_preferences` (055) already stores it.
+3. `apps/web/src/state/detail-tabs.ts`: `useDetailTabs(entity)` over `usePreference('detailTabs')`,
+   reconciling the stored arrangement against `definition.relations`, with optimistic save and
+   rollback on rejection.
+4. `apps/web/src/components/RelationTabs.tsx`: mode `Segmented`, antd `Tabs`, manage mode (add /
+   rename / reorder / delete, chip pool, dnd-kit with the keyboard sensor, `Move to…` select),
+   dirty-draft guard, `?tab=` URL sync.
+5. Refactor `EntityDetailPage.tsx`: extract a `RelationSection` that chooses stacked vs tabs and
+   leaves `RelationPanel` untouched; keep `items` (document lines), Stream and Communications outside
+   the tab area, and keep the portal stacked.
+6. i18n keys in `en` and `vi`; `docs/ux/record-tabs.md`; compatibility note; alpha status.
+
+Acceptance:
+
+- A user who never opens the control sees today's record page unchanged.
+- In tab mode a user can create, rename, reorder and delete tabs and place every relation in one; a
+  deleted tab's relations return to the implicit **Other** tab, so no relation can disappear.
+- A relation the caller cannot read renders nothing, and a tab whose relations are all unreadable is
+  hidden without altering the stored arrangement.
+- Keyboard only: create a tab, move a relation into it, and reorder tabs without dragging.
+- Refresh and a shared `?tab=` link restore the same tab; a failed save reverts with an inline error.
+- No migration, no new endpoint, no new table, and no change to `/Related` or ACL.
+
+Delivered: none yet.
+
 ---
 
 ## 18. Priorities and Release Gates
@@ -1221,6 +1429,9 @@ a later phase; the OpenAPI spec is generated at runtime).
 - Authentication/Email/Notifications/Attachments tabs.
 - Accessibility pass (WCAG 2.2 AA) and responsive hardening. (The CSS and ARIA pass is done; the automated axe audit and the contrast measurement are not — documented deferral.)
 - API keys, portals and extensions hosted in the shell.
+- Record-page relation tabs (§5.11): per-user stacked/tabs mode with a tab arrangement the user
+  creates, renames, reorders, deletes and fills by drag or keyboard. 📋 20.18 — planned, not
+  implemented.
 
 ### P2 — Post-first-release enhancements
 
@@ -1267,6 +1478,10 @@ Phase 20 is complete when all applicable checks below pass:
 - [x] OpenAPI updated; documentation and compatibility notes written. (All Phase 20 endpoints use `@ApiTags` decorators; the OpenAPI spec is generated at runtime by the NestJS Swagger module, so no static `api-spec/` directory is needed for this phase — PLAN §58 is a separate, later piece of work. Compatibility notes in `docs/compatibility/settings-ux.md`, admin docs in `docs/admin/settings.md`, UX docs in `docs/ux/`, alpha status in `docs/reference/alpha-status.md`, matrix in `docs/reference/compatibility-matrix.md`.)
 - [x] No extra database was created; no reset, truncate or broad delete was performed.
 - [x] No upstream PHP source, unlicensed assets or third-party branding were copied.
+- [ ] Record pages let a user render related records as tabs they arrange, or as today's stacked
+      panels; no relation can be lost, the arrangement is per user, and `/Related` and ACL are
+      unchanged. (**20.18 — 📋 planned, not implemented; this item is not part of the completed
+      20.0–20.17 scope.**)
 
 ---
 
@@ -1288,6 +1503,14 @@ The initial agent must:
 
 After the audit, continue in the order of §17. A sub-phase is complete only when its acceptance
 criteria and the applicable Definition of Done items are verified.
+
+**Starting 20.18 on its own:** it touches one preference schema, one new component, one page and one
+pure-helper file, so it needs no part of 20.0–20.17 re-read. Begin with
+`packages/metadata/src/relation-tabs.ts` and its unit tests (the only part covered by an automated
+suite), then wire the preference, then the component, then the page refactor. Read
+`EntityDetailPage.tsx`, `preferences/preference-shapes.ts`, `state/preferences.ts` and
+`components/LayoutEditor.tsx` before writing anything — the last one already solves drag-and-drop
+with a keyboard sensor and is the pattern to copy, not reinvent.
 
 ---
 

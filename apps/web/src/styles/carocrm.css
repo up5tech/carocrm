@@ -1203,6 +1203,124 @@ body {
   transition: background 0.15s ease;
 }
 
+/* ---------------------------------------------------------------------------
+   Phase 20.18 — the record page's relation area in tab mode (§5.11).
+
+   The stacked panels are the record page's own cards; in tab mode the same
+   cards live under a tab strip, so the area only adds the toolbar, the strip
+   and the arrangement editor.
+   --------------------------------------------------------------------------- */
+.carocrm-relation-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.carocrm-relation-loading {
+  align-items: center;
+  padding: 24px 0;
+}
+.carocrm-relation-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+.carocrm-relation-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+/* The strip scrolls rather than wrapping: the tab count is what identifies a
+   tab, and a wrapped strip changes the height of the record page on every
+   rename. */
+.carocrm-relation-tabs > .ant-tabs-nav {
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+.carocrm-relation-tab-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.carocrm-relation-tab-count {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+/* The arrangement editor: one block per tab, plus the computed "Other" pool. */
+.carocrm-relation-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.carocrm-relation-group {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  background: #fafbfc;
+  padding: 8px 10px;
+}
+.carocrm-relation-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.carocrm-relation-group-name {
+  font-weight: 600;
+}
+.carocrm-relation-group-count {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+.carocrm-relation-group-actions {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.carocrm-relation-group-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  min-height: 34px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+.carocrm-relation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+}
+.carocrm-relation-chip-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.carocrm-relation-chip-move {
+  min-width: 120px;
+}
+
+/* On a phone the chip takes the whole width and its "Move to…" select grows with it, so the
+   editor stays readable without horizontal scrolling. */
+@media (max-width: 390px) {
+  .carocrm-relation-toolbar {
+    justify-content: flex-start;
+  }
+
+  .carocrm-relation-chip {
+    width: 100%;
+  }
+
+  .carocrm-relation-chip-move {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
 /* Phase 19-S.17 — the document line-item totals panel (§9.3). Server figures only, right-aligned,
    with the resolved tax breakdown under it so a user can see which code produced which amount. */
 .sales-totals-panel {

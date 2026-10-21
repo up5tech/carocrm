@@ -155,8 +155,7 @@ Retention/deletion semantics are defined in `architecture.md` §7; the sweeper j
    (`email-accounts.service.ts` is the precedent).
 2. **No prompt storage by default.** `ai_agent_provider_requests` stores hashes, counts, latency and
    normalized outcome, not raw prompts/completions.
-3. **SSRF.** A provider `baseUrl` is administrator-supplied. Only `https` is accepted; credentials in
-   the URL are rejected; loopback is allowed only outside production and only when explicitly
+3. **SSRF.** A provider `baseUrl` is administrator-supplied. Both `http` and `https` are accepted; credentials in   the URL are rejected; loopback is allowed only outside production and only when explicitly
    enabled for a self-hosted provider; redirects are not followed.
 4. **Wildcard ACL.** A role's `*` entry grants the synthetic resources as described in §4. This is
    documented rather than hidden; high-risk actions still require approval policy in later phases.

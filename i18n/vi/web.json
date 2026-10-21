@@ -80,7 +80,30 @@
     "linkFailed": "Liên kết thất bại.",
     "unlink": "Bỏ liên kết bản ghi này?",
     "unlinkFailed": "Bỏ liên kết thất bại.",
-    "new": "Tạo mới"
+    "new": "Tạo mới",
+    "panels": "Bảng",
+    "tabs": {
+      "mode": "Thẻ",
+      "edit": "Sửa thẻ",
+      "done": "Xong",
+      "add": "Thêm thẻ",
+      "rename": "Đổi tên thẻ",
+      "label": "Tên thẻ",
+      "manageTitle": "Sắp xếp các thẻ liên kết",
+      "useForAll": "Dùng thẻ cho mọi loại bản ghi",
+      "unassigned": "Khác",
+      "emptyGroup": "Chưa có liên kết nào trong thẻ này",
+      "unsaved": "Bạn có thay đổi chưa lưu. Rời khỏi trang này sẽ mất các thay đổi đó.",
+      "saveFailed": "Không thể lưu cách sắp xếp thẻ",
+      "removeConfirm": "Xóa thẻ này? Các liên kết của nó sẽ trở lại nhóm “Khác”.",
+      "remove": "Xóa",
+      "removeAria": "Xóa thẻ {name}",
+      "renameAria": "Đổi tên thẻ {name}",
+      "moveUpAria": "Di chuyển thẻ {name} lên trên",
+      "moveDownAria": "Di chuyển thẻ {name} xuống dưới",
+      "moveRelationAria": "Chuyển liên kết {name} sang thẻ khác",
+      "dragRelationAria": "Kéo liên kết {name}"
+    }
   },
   "edit": {
     "editTitle": "Sửa {entity}",
@@ -1841,7 +1864,7 @@
     "settingsTab": "Cài đặt",
     "providersFailed": "Không tải được danh sách kết nối provider.",
     "providersAdminHint": "Một kết nối là một điểm cuối mô hình đã được duyệt. Khóa bí mật chỉ ghi: được lưu mã hóa và không bao giờ hiển thị lại.",
-    "providersAdminHintDetail": "Chỉ chấp nhận endpoint https, và runtime tự host phải truy cập được qua tên miền công cộng trừ khi cho phép loopback.",
+    "providersAdminHintDetail": "Chấp nhận cả endpoint http và https; nên dùng https cho endpoint không cục bộ. Runtime tự host phải truy cập được qua tên miền công cộng trừ khi cho phép loopback.",
     "providersConnections": "Kết nối",
     "noProviders": "Chưa cấu hình kết nối provider nào.",
     "providerAdd": "Kết nối mới",
@@ -2118,6 +2141,7 @@
   },
   "crmChat": {
     "title": "CRM Chat",
+    "settingsButton": "Cài đặt",
     "subtitle": "Hỏi về dữ liệu CRM, xem bằng chứng và xác nhận trước khi bất kỳ thay đổi nào được thực hiện.",
     "permissionDeniedHint": "CRM Chat dành cho người dùng có quyền xem hội thoại Chat trong vai trò của mình.",
     "disabledTitle": "CRM Chat đang tắt",
@@ -2226,6 +2250,7 @@
       "saveFailed": "Không thể lưu mẫu.",
       "unavailable": "Không thể dùng mẫu.",
       "empty": "Chưa có mẫu nào."
-    }
+    },
+    "settingsTitle": "Cài đặt CRM Chat"
   }
 }

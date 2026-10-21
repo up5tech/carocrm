@@ -250,14 +250,14 @@ describe('provider connections', () => {
     });
     expect(duplicate.status).toBe(409);
 
-    const http = await call('POST', '/api/v1/AIAgents/action/providers', ctx.adminToken, {
+    const unsafe = await call('POST', '/api/v1/AIAgents/action/providers', ctx.adminToken, {
       kind: 'fake',
-      key: `${PROVIDER_KEY}-http`,
-      label: 'http',
-      baseUrl: 'http://example.com/v1',
+      key: `${PROVIDER_KEY}-unsafe`,
+      label: 'unsafe',
+      baseUrl: 'http://user:pass@example.com/v1',
       models: ['fake-model'],
     });
-    expect(http.status).toBe(422);
+    expect(unsafe.status).toBe(422);
 
     const loopback = await call('POST', '/api/v1/AIAgents/action/providers', ctx.adminToken, {
       kind: 'fake',

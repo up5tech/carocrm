@@ -311,3 +311,4 @@ documentation pass, and its templates, tags, mailbox accounts and feedback loop 
 | Command palette | not an upstream feature | `⌘/Ctrl+K`, commands / records / recent modes, ACL-filtered records | P1 | implemented (this project's own) |
 | Per-user preferences | local browser storage | server-side `/Preferences` documents keyed `(user_id, name)`; ownership is structural | P1 | implemented |
 | Accessibility verification | not verified upstream | focus ring, 44 px targets, reduced motion, responsive breakpoints — **no automated axe audit, no frontend test runner** | P1 | partial, gaps in `docs/ux/accessibility.md` |
+| Record-page relation panels | administrator-defined layout panels, stacked | stacked (unchanged) **or** a per-user, per-entity tab arrangement the user creates, renames, reorders and fills; the same `/Related` calls and the same ACL | P1 | implemented, intentional deviation in `docs/compatibility/settings-ux.md` |

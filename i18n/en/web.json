@@ -80,7 +80,30 @@
     "linkFailed": "Link failed.",
     "unlink": "Unlink this record?",
     "unlinkFailed": "Unlink failed.",
-    "new": "New"
+    "new": "New",
+    "panels": "Panels",
+    "tabs": {
+      "mode": "Tabs",
+      "edit": "Edit tabs",
+      "done": "Done",
+      "add": "Add tab",
+      "rename": "Rename tab",
+      "label": "Tab name",
+      "manageTitle": "Arrange relation tabs",
+      "useForAll": "Use tabs for all record types",
+      "unassigned": "Other",
+      "emptyGroup": "No relations in this tab yet",
+      "unsaved": "You have unsaved changes. Leaving the page now discards them.",
+      "saveFailed": "The tab arrangement could not be saved",
+      "removeConfirm": "Delete this tab? Its relations move back to “Other”.",
+      "remove": "Delete",
+      "removeAria": "Delete the {name} tab",
+      "renameAria": "Rename the {name} tab",
+      "moveUpAria": "Move the {name} tab up",
+      "moveDownAria": "Move the {name} tab down",
+      "moveRelationAria": "Move the {name} relation to another tab",
+      "dragRelationAria": "Drag the {name} relation"
+    }
   },
   "edit": {
     "editTitle": "Edit {entity}",
@@ -1841,7 +1864,7 @@
     "settingsTab": "Settings",
     "providersFailed": "Provider connections could not be loaded.",
     "providersAdminHint": "A connection is one approved model endpoint. Its credential is write-only: it is stored encrypted and never shown again.",
-    "providersAdminHintDetail": "Only https endpoints are accepted, and a self-hosted runtime must be reachable under a public name unless loopback is explicitly allowed.",
+    "providersAdminHintDetail": "Both http and https endpoints are accepted; prefer https for non-local endpoints. A self-hosted runtime must be reachable under a public name unless loopback is explicitly allowed.",
     "providersConnections": "Connections",
     "noProviders": "No provider connection is configured yet.",
     "providerAdd": "New connection",
@@ -2118,6 +2141,7 @@
   },
   "crmChat": {
     "title": "CRM Chat",
+    "settingsButton": "Settings",
     "subtitle": "Ask about your CRM data, review the evidence, and confirm an action before anything changes.",
     "permissionDeniedHint": "CRM Chat is available to users whose role grants the Chat conversation capability.",
     "disabledTitle": "CRM Chat is turned off",
@@ -2226,6 +2250,7 @@
       "saveFailed": "The template could not be saved.",
       "unavailable": "Templates are unavailable.",
       "empty": "No saved templates yet."
-    }
+    },
+    "settingsTitle": "CRM Chat settings"
   }
 }

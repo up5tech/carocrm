@@ -10,9 +10,9 @@ import { ValidationError } from '@carocrm/core/errors/index.js';
  * A provider `baseUrl` is administrator-supplied, but it is still an outbound destination chosen by
  * configuration. The rules are deliberately narrow:
  *
- *  - `https` only; a plain `http` URL is refused even for a self-hosted endpoint;
- *  - no credentials in the URL;
- *  - cloud metadata and link-local destinations are always refused;
+ *  - `http` and `https` are both accepted; a plain `http` URL is allowed (credentials travel in
+ *    plaintext, so prefer `https` for non-local endpoints);
+ *  - no credentials in the URL; *  - cloud metadata and link-local destinations are always refused;
  *  - loopback is allowed **only** outside production and **only** when the connection explicitly
  *    opts in (a local Ollama/self-hosted runtime), so a normal connection cannot reach the host;
  *  - RFC1918/ULA ranges are refused.
@@ -77,8 +77,8 @@ export async function assertSafeProviderBaseUrl(raw: string, options: ProviderUr
   } catch {
     throw new ValidationError('The provider base URL is not a valid absolute URL.');
   }
-  if (url.protocol !== 'https:') {
-    throw new ValidationError('Provider base URLs must use https.');
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new ValidationError('Provider base URLs must use http or https.');
   }
   if (url.username !== '' || url.password !== '') {
     throw new ValidationError('Provider base URLs must not carry credentials.');

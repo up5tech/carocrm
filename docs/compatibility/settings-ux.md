@@ -24,6 +24,7 @@ the upstream file layout, and copies no upstream source, asset or translation.
 | An API key secret can be re-read by a super admin | Never returned after the creating response | The server stores only a hash (`auth.service.issueApiKey`), so "shown once" is a property of the data, not a UI rule. Rotation is issue-new + revoke-old, offered as one button. |
 | Layout manager is an `EntityLayoutManager` per entity panel | One shared `LayoutEditor` component hosted by both the Entity Manager and a settings `layout` tab | Copying the editor into the shell would let the two drift. The tab hosts it with the shell's save bar (`usesSaveBar` descriptor flag) and an entity picker; the Entity Manager keeps its inline actions. |
 | User list shows team membership | The list omits `teams`; the editor reads `GET /User/:id` | Keeping the page cheap matters more than one column, and the row the form writes is the row it read. `title` and `phone` are in both DTOs so a save cannot blank them. |
+| Relation panels are administrator-defined layout panels | A **per-user, per-entity** arrangement: today's stacked panels or tabs the user creates, renames, reorders and fills themselves | Upstream has no per-user relation-tab arrangement, and this is an intentional Phase B enhancement. The arrangement is a *preference*, not a settings document and not entity metadata, because two people opening the same Account legitimately want different arrangements. The panels themselves are untouched: the same `/Related` calls, the same ACL, the same link/unlink actions. See `docs/ux/record-tabs.md`. |
 
 ## Behaviour that matches upstream intent
 
@@ -143,4 +144,32 @@ behaviour, so none of them is an EspoCRM compatibility question.
 - `docs/ux/design-principles.md`, `docs/ux/list-view.md`, `docs/ux/record-page.md` and
   `docs/ux/accessibility.md` were added with the 20.17 hardening pass. They describe the shipped
   behaviour and name the gaps above.
+
+## Known limitations after sub-phase 20.18 (record-page relation tabs)
+
+The relation area of a record page can render as today's stacked panels or as tabs the user
+arranges (PLAN_Phase_20_Settings_UX.md §5.11). The arrangement is a per-user preference, so no
+upstream behaviour is changed; these are the gaps in the shipped arrangement.
+
+- **The in-app navigation blocker for a dirty draft is missing.** Leaving the record page with a
+  browser reload warns; an in-app link from outside the record page is not intercepted, because
+  the app is mounted with a plain `BrowserRouter` — the same limitation the settings shell
+  documents.
+- **A relation cannot be reordered inside a tab.** The chip moves between tabs; the order of the
+  relations within a tab follows the entity's own relation order.
+- **The tab strip scrolls instead of wrapping.** A very wide arrangement scrolls horizontally rather
+  than growing the record page.
+- **The implicit *Other* tab cannot be renamed or moved.** It is the computed fallback pool, and
+  its id is reserved so a `?tab=other` link always means the pool.
+- **A tab that lost every relation to the ACL is hidden, not emptied.** Its stored arrangement is
+  kept, because permissions can come back; a user who wants it back can restore the relation.
+- **The arrangement is not shared.** There is no role-scoped or team-scoped default arrangement; the
+  only shared control is the top-level "use tabs for all record types" default, which each user
+  sets for themselves.
+- **The UI half has no automated coverage.** This repository has no frontend test runner, so the
+  component is covered by the unit tests of the pure helpers
+  (`packages/metadata/src/relation-tabs.test.ts`), the API tests of the preference
+  (`apps/api/test/user-preferences.test.ts`) and a browser walkthrough.
+- **The `detailTabs` preference is not covered by an axe audit** either, for the same reason the
+  20.16 audit is missing.
 

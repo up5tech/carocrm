@@ -22,8 +22,7 @@ export const ProviderConnectionConfigSchema = z
   .object({
     /**
      * A self-hosted runtime (local Ollama, an on-prem gateway) may be reached over loopback. The
-     * service additionally refuses this in production and still requires `https`.
-     */
+     * service additionally refuses this in production. Both `http` and `https` base URLs are accepted.     */
     allowLoopback: z.boolean().default(false),
     /** Optional provider organization/tenant label sent as a header by the adapter. */
     organization: z.string().trim().max(200).optional(),
