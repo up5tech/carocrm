@@ -2353,7 +2353,7 @@
     "pagesColumn": "Trang",
     "translatedColumn": "Đã dịch",
     "hashColumn": "Hash nội dung",
-    "warningsTitle": "Cảnh báo nội dung",
-    "warningsNone": "Không có cảnh báo nội dung. Các quy tắc này cũng chạy trong test nội dung tài liệu và sẽ chặn bản phát hành."
+    "warningsTitle": "Cảnh báo chỉ mục",
+    "warningsNone": "Không có cảnh báo phân tích cú pháp hay liên kết. Số trang chưa dịch nằm ở bảng độ phủ bên trên."
   }
 }

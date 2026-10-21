@@ -2353,7 +2353,7 @@
     "pagesColumn": "Pages",
     "translatedColumn": "Translated",
     "hashColumn": "Content hash",
-    "warningsTitle": "Content warnings",
-    "warningsNone": "No content warnings. The same rules run in the docs content test and fail a release."
+    "warningsTitle": "Index warnings",
+    "warningsNone": "No parse or link warnings in this corpus. Untranslated pages are counted in the coverage table above."
   }
 }
