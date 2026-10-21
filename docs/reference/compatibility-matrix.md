@@ -312,3 +312,16 @@ documentation pass, and its templates, tags, mailbox accounts and feedback loop 
 | Per-user preferences | local browser storage | server-side `/Preferences` documents keyed `(user_id, name)`; ownership is structural | P1 | implemented |
 | Accessibility verification | not verified upstream | focus ring, 44 px targets, reduced motion, responsive breakpoints — **no automated axe audit, no frontend test runner** | P1 | partial, gaps in `docs/ux/accessibility.md` |
 | Record-page relation panels | administrator-defined layout panels, stacked | stacked (unchanged) **or** a per-user, per-entity tab arrangement the user creates, renames, reorders and fills; the same `/Related` calls and the same ACL | P1 | implemented, intentional deviation in `docs/compatibility/settings-ux.md` |
+
+## Phase 21 — In-app documentation (added 2026-10-21)
+
+| Capability | Espo baseline | This implementation | Priority | State |
+|---|---|---|---|---|
+| In-app documentation | no equivalent — the handbook lives outside the product | `/docs` reader over a shipped Markdown corpus, parsed to a typed block tree and rendered with the app's own components. **New design, not a parity item** | P1 | implemented |
+| Product help in context | tooltips on some fields | `docKey` on ten admin tabs and eight screen headers, `HelpTip` "Learn more"; every link follows `docs.externalUrl` | P1 | implemented |
+| Knowledge Base | an entity for customer-facing articles, with categories and portal access | **unrelated to this surface** — `/docs` never reads it, and an article is not a handbook page | P1 | separate feature |
+| Documentation authoring model | in-product article editing | files in `content/docs/**`, reviewed like code; no editor UI by design (§4.4) | — | intentional deviation |
+| Search over documentation | not applicable | in-memory inverted index per locale, diacritic-insensitive, snippet ranges computed server-side, prefix fallback | P1 | implemented |
+| Translation model | upstream language packs cover the UI strings | `en` defines the tree, `vi` supplies translations; an untranslated page serves English behind a visible notice. Coverage 17/38 | P1 | partial, see `docs/compatibility/documentation.md` |
+| Screenshots in documentation | not applicable | none authored; parser, lint and renderer support `alt`-required images and orphan detection, and the asset directory does not exist yet | P1 | deferred |
+| Accessibility verification | not verified upstream | skip link, landmarks, `aria-current`, focus moves, live-region announcements, 390/1024/1440 and print — measured in Chromium and in `e2e/docs.spec.ts`; **still no automated axe audit** | P1 | implemented, no axe |

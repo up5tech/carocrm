@@ -1119,8 +1119,8 @@ defaults apply.
 Each sub-phase is independently reviewable and leaves the tree green. Do not attempt the whole phase
 in one pass.
 
-> **Progress (2026-10-21).** 21.0–21.2 and 21.4–21.9 are done; 21.3 is done except its screenshots, which need
-> a browser pass this scope excluded. `packages/docs` (parser, index, search, links, lint) is green with
+> **Progress (2026-10-21).** **Phase 21 is complete** — 21.0–21.10, except 21.3's screenshots, which a
+> browser pass this scope excluded. `packages/docs` (parser, index, search, links, lint) is green with
 > 174 unit tests, `content/docs/en/` carries the 17 P0 pages plus four section descriptors, and the corpus
 > lint runs in two places: `packages/docs/src/corpus.test.ts` checks the shipped files alone, and
 > `apps/api/test/docs-content.test.ts` re-runs it with server knowledge (the admin tab catalog and the
@@ -1145,7 +1145,10 @@ in one pass.
 > `/docs/user/lists-and-views`, and setting `externalUrl` moves **every** contextual link at once (then
 > restores). Two defects found only by looking at it: the "Learn more" link inherited the light-surface
 > colour and was unreadable on the dark tooltip, and the coverage footnote rendered literal backticks.
-> **Not built yet:** the e2e spec + release docs (21.10).
+> **Not built yet:** nothing in scope. The two open items are both deliberate: the corpus has **no
+> screenshots** (21.3 deferred them and the plumbing already supports them), and the `vi` set is **P0 only**
+> — 17 of 38 pages — with the Vietnamese prose still needing a native-speaker review (§4.7). Both are
+> recorded in `docs/compatibility/documentation.md`.
 > 21.8 is done too: the corpus is the full §4.8 inventory — 38 `en` pages across four sections (the new
 > `reference` section included) — and `vi` translates the 17 P0 pages plus the section descriptors, with
 > everything beyond them falling back to English behind the notice. Verified in Chromium: four doors on
@@ -1318,13 +1321,22 @@ Keyboard-only walkthrough completed for scenarios 1, 2, 3 and 5 of §13.5 (scena
 reader, is the API matrix in `docs.test.ts` and the e2e spec in 21.10). No untranslated key renders on
 the reader, the search page or the admin tab, in either language.
 
-### Phase 21.10 — Hardening and release readiness 📋
+### Phase 21.10 — Hardening and release readiness ✅
 
 Tasks: `e2e/docs.spec.ts`; content lint wired into `pnpm test`; `docs/admin/documentation.md`,
 `docs/compatibility/documentation.md`, alpha status, compatibility matrix; `pnpm typecheck`,
 `pnpm lint`, `pnpm test`, `pnpm build`; a diff review for secrets, unsafe SQL and upstream assets.
 
 Acceptance: every command in §19 passes or has a documented reason; no migration; no extra database.
+
+Done. The spec found one real defect while being written: a deep link with an anchor only scrolled and
+focused when the **navigation tree** had also arrived, because the shell renders a skeleton in place of
+the prose until it does — so the effect ran, found no heading, and scrolled to the top instead. It now
+waits for both queries (`DocsPage.tsx`), and the spec has been run four times without a flake.
+
+`pnpm test` is 2235/2236 at this hour; the one failure is a pre-existing Phase 19-SD.8 SLA assertion that
+only holds inside the seeded business-hours window, recorded in `docs/reference/alpha-status.md` rather
+than weakened here.
 
 ---
 
@@ -1366,25 +1378,28 @@ Acceptance: every command in §19 passes or has a documented reason; no migratio
 
 Phase 21 is complete when all of the following hold:
 
-- [ ] `/docs` is reachable from the sidebar, the avatar menu and the command palette, and renders 38
+- [x] `/docs` is reachable from the sidebar, the avatar menu and the command palette, and renders 38
       pages in `en` across four sections.
-- [ ] A CRM user sees no administrator page in the tree, in search, or at a direct URL; a portal user
-      is refused on every route.
-- [ ] Every page carries valid front-matter, valid internal links, existing assets and non-empty alt
-      text; the content lint is part of `pnpm test` and fails on a regression.
-- [ ] Every `docKey` in the admin tab catalog and in `HelpTip` resolves to a real page.
-- [ ] Search matches with and without Vietnamese diacritics and returns highlighted snippets.
-- [ ] Anchors are addressable and focus the heading; print output is usable as a handout.
-- [ ] `en` and `vi` chrome catalogs are in parity; untranslated pages show the fallback notice.
-- [ ] The `docs` settings document round-trips through the settings API with `readLevel: user` and
+- [x] A CRM user sees no administrator page in the tree, in search, or at a direct URL; a portal user
+      is refused on every route. (`docs.test.ts` §10.2 matrix, `e2e/docs.spec.ts` scenario 4)
+- [x] Every page carries valid front-matter, valid internal links, existing assets and non-empty alt
+      text; the content lint is part of `pnpm test` and fails on a regression. (no images are authored
+      yet, so the `alt` rule has nothing to fail on — see the compatibility note)
+- [x] Every `docKey` in the admin tab catalog and in `HelpTip` resolves to a real page.
+      (`apps/api/test/docs-content.test.ts`, including a test that proves it catches a dead key)
+- [x] Search matches with and without Vietnamese diacritics and returns highlighted snippets.
+- [x] Anchors are addressable and focus the heading; print output is usable as a handout.
+- [x] `en` and `vi` chrome catalogs are in parity; untranslated pages show the fallback notice.
+- [x] The `docs` settings document round-trips through the settings API with `readLevel: user` and
       `writeLevel: admin`; `externalUrl` redirects `/docs` and every contextual link.
-- [ ] No migration, no new table, no new runtime dependency, no new database.
-- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test` and `pnpm build` pass; the e2e spec passes against the
-      seeded instance.
-- [ ] Deferrals and deviations are written down in `docs/compatibility/documentation.md`; the
+- [x] No migration, no new table, no new runtime dependency, no new database.
+- [x] `pnpm typecheck`, `pnpm lint` and `pnpm build` pass; `e2e/docs.spec.ts` passes 5/5. `pnpm test`
+      is 2235/2236 — the one failure is a pre-existing Phase 19-SD.8 SLA test that only holds inside
+      the seeded business-hours window, documented in `docs/reference/alpha-status.md`.
+- [x] Deferrals and deviations are written down in `docs/compatibility/documentation.md`; the
       authoring guide exists and matches the parser.
-- [ ] No upstream PHP source, unlicensed asset or third-party branding is copied; screenshots contain
-      no customer data and no credentials.
+- [x] No upstream PHP source, unlicensed asset or third-party branding is copied; screenshots contain
+      no customer data and no credentials. (there are no screenshots at all)
 
 ---
 

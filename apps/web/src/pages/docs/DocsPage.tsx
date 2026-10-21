@@ -10,7 +10,7 @@ import { DocTocRail } from '../../components/docs/DocTocRail.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../../components/PermissionDenied.js';
-import { useDocPage, useDocsPageKeys } from '../../state/docs.js';
+import { useDocPage, useDocsPageKeys, useDocsTree } from '../../state/docs.js';
 import { t } from '../../state/i18n.js';
 import { DocsFallbackNotice, DocsLayout } from './DocsLayout.js';
 
@@ -30,15 +30,18 @@ export function DocsPage() {
   const { message } = AntApp.useApp();
   const page = useDocPage(section, slug);
   const pageKeys = useDocsPageKeys();
+  // The shell holds the prose back until the navigation tree arrives, so a page response that wins the race
+  // still has no headings in the document. Waiting for both is what makes an anchored deep link reliable.
+  const tree = useDocsTree();
 
   useEffect(() => {
-    if (page.data === undefined) return;
+    if (page.data === undefined || tree.data === undefined) return;
     // An anchor link focuses its heading; an ordinary navigation keeps the reader at the top of the prose
     // instead of leaving them at the scroll position of the page they came from (§9.2 rule 2).
     const hash = window.location.hash.replace('#', '');
     if (hash !== '' && goToHeading(hash)) return;
     window.scrollTo({ top: 0 });
-  }, [page.data?.page.key, location.pathname]);
+  }, [page.data?.page.key, location.pathname, tree.data?.hash]);
 
   if (page.isPending) {
     return (

@@ -923,3 +923,39 @@ has no sticky header and no next-action band and the form has no "Save & new"; t
 `/` shortcut; `PermissionDenied` and `HelpTip` are not yet used by any page; and there is **no
 automated axe audit and no frontend test runner** in this repository, so the plan's 20.16 acceptance
 criterion ("axe passes on the four core surfaces") is not met.
+
+## Phase 21 — In-app documentation and product help (added 2026-10-21)
+
+Scope: `PLAN_Phase_21_Documentation.md`, sub-phases 21.0–21.10. The product now carries its own handbook:
+`/docs` renders 38 pages in `en` across four sections (`getting-started`, `user`, `admin`, `reference`),
+17 of which are translated into `vi`.
+
+| Item | State | Evidence |
+|---|---|---|
+| Docs engine | done | `packages/docs` (`@carocrm/docs`, zod only): front matter, total Markdown parser, index builder, inverted-index search, link classifier, content lint — 174 unit tests |
+| Read API | done | `GET /api/v1/Docs/{tree,page/:section/:slug,search}` with `ETag`/304, audience + ACL filtering, portal refusal, 404 `FEATURE_DISABLED` when off — 28 tests in `apps/api/test/docs.test.ts` |
+| Settings document | done | `docs` in the Phase 20 registry (`readLevel: user`, `writeLevel: admin`); toggles take effect without a restart |
+| Navigation entry | done | `BookOutlined` "Documentation" in the shipped menu, gated by `feature: { module: 'docs', flag: 'showInSidebar' }` |
+| Reader UI | done | `apps/web/src/pages/docs` + `components/docs`: three-column reader, block renderer, sticky TOC with `aria-current`, anchor focus, print stylesheet |
+| Search and entry points | done | `/docs/search?q=` with `<mark>` from server `ranges`, avatar-menu item, command-palette group, prefix fallback |
+| Contextual help | done | `docKey` on ten admin tabs (six pages) and eight screen headers, `HelpTip` "Learn more", all following `externalUrl` |
+| Admin surface | done | `/admin/settings/docs` edits the document and shows coverage, content hash and lint warnings from an admin-only `diagnostics` block |
+| Content contract | done | `pnpm test` lints the shipped corpus twice: `packages/docs/src/corpus.test.ts` on the files, `apps/api/test/docs-content.test.ts` with the tab catalog and route allowlist |
+| Accessibility and responsive | done | skip link, landmarks, focus moves, live-region announcements, the 900/1180 bands and print — measured in Chromium, and `e2e/docs.spec.ts` covers the five §13.5 scenarios |
+| Author's guide | done | `docs/reference/docs-authoring.md`, kept in sync with the parser |
+| Operations doc | done | `docs/admin/documentation.md` |
+| Deferrals | done | `docs/compatibility/documentation.md` |
+
+**No migration, no new table, no new runtime dependency, no new database.** The subsystem owns no rows;
+its only persisted state is the `docs` entry in the existing `app_settings` envelope.
+
+Gates at this pass: `pnpm typecheck` clean, `pnpm lint` clean, `pnpm build` clean, `pnpm test` 158 files /
+2236 tests, `e2e/docs.spec.ts` 5/5 (run four times, no flakes). One test in
+`apps/api/test/service-desk-sla.test.ts` ("uses each clock's saved warning thresholds") fails outside the
+seeded business-hours window: it writes `startAt = now − 60 min` and expects 50% of a 120-business-minute
+target, which only holds when that whole window falls inside working hours. It is a Phase 19-SD.8 test
+defect, unrelated to Phase 21, and it passes again during business hours.
+
+Correction to the Phase 20 note above: `PermissionDenied` and `HelpTip` **are** now used by pages —
+`PermissionDenied` backs a refused administrator handbook page and `HelpTip` carries a `docKey` on the Main
+menu tab.

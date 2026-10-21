@@ -2808,8 +2808,11 @@ and an end user completes daily CRM work with minimal hunting, typing and contex
 
 ## Phase 21 — In-App Documentation and Product Help
 
-Progress: 📋 planned, not implemented. Scope, architecture and work order in
-`PLAN_Phase_21_Documentation.md`.
+Progress: ✅ implemented 2026-10-21 (21.0–21.10). Scope, architecture and work order in
+`PLAN_Phase_21_Documentation.md`; operations in `docs/admin/documentation.md`; deferrals and deviations
+in `docs/compatibility/documentation.md`. `/docs` ships 38 `en` pages across four sections with 17
+translated into `vi`, reachable from the sidebar, the avatar menu, the command palette and the screen the
+reader is standing on.
 
 Today every capability is documented for engineers (`docs/`); the people who operate the product have
 no in-app reference. Phase 21 adds a `/docs` surface written for the two audiences that run the
