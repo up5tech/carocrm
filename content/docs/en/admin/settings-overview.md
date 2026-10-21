@@ -38,7 +38,7 @@ Three consequences people are surprised by:
 ## How saving works
 
 Settings screens are backed by a **document**: the whole tab is one JSON document that you edit and publish
-as a unit. Those tabs carry a save bar with **Publish**, **Discard** and **Reload**, and the tab in the rail
+as a unit. Those tabs carry a save bar with **Save**, **Discard** and **Reload**, and the tab in the rail
 gets a dot while the draft differs from the saved version. Record screens — users, teams, roles, API keys,
 permissions, email, internal tools — save each change immediately and have no save bar.
 

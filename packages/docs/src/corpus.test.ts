@@ -53,11 +53,12 @@ describe('the shipped documentation corpus', () => {
     expect(report.errors).toEqual([]);
   });
 
-  it('carries the P0 set: four getting-started, seven user, six admin', () => {
+  it('carries the §4.8 inventory: 4 getting-started, 13 user, 16 admin, 5 reference', () => {
     expect(english.sections.map((section) => `${section.key}:${String(section.pages.length)}`)).toEqual([
       'getting-started:4',
-      'user:7',
-      'admin:6',
+      'user:13',
+      'admin:16',
+      'reference:5',
     ]);
   });
 
@@ -74,10 +75,38 @@ describe('the shipped documentation corpus', () => {
     expect(withLink.length).toBeGreaterThanOrEqual(12);
   });
 
-  it('is structured for `vi` before it is translated', () => {
+  it('translates the 17 P0 pages into `vi` and falls back to English for the rest', () => {
     const vietnamese = buildIndex(files, { locale: 'vi' });
-    expect(vietnamese.sections.map((section) => section.pages.length)).toEqual([4, 7, 6]);
-    expect(vietnamese.pages.get('admin/main-menu')).toMatchObject({ fallback: true, locale: 'en' });
+    // `en` still defines the tree, so a `vi` reader sees all four sections and all 38 pages.
+    expect(vietnamese.sections.map((section) => section.pages.length)).toEqual([4, 13, 16, 5]);
+
+    const p0 = [
+      'getting-started/sign-in',
+      'getting-started/find-your-way',
+      'getting-started/your-profile',
+      'getting-started/keyboard-shortcuts',
+      'user/lists-and-views',
+      'user/record-page',
+      'user/activities-and-tasks',
+      'user/stream-and-notifications',
+      'user/search',
+      'user/dashboards-and-reports',
+      'user/import-export',
+      'admin/settings-overview',
+      'admin/branding-and-localization',
+      'admin/main-menu',
+      'admin/users-teams-roles',
+      'admin/api-keys',
+      'admin/entities-and-fields',
+    ];
+    expect(p0).toHaveLength(17);
+    for (const key of p0) {
+      expect(vietnamese.pages.get(key)).toMatchObject({ fallback: false, locale: 'vi' });
+    }
+    // Nothing beyond the P0 set is translated yet, and each of those pages carries the flag that makes the
+    // reader see it is reading English (§4.7).
+    expect([...vietnamese.pages.values()].filter((page) => !page.fallback)).toHaveLength(17);
+    expect(vietnamese.pages.get('reference/glossary')).toMatchObject({ fallback: true, locale: 'en' });
   });
 
   it('finds an admin page from a diacritic-free query', () => {

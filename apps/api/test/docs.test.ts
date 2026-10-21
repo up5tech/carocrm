@@ -163,7 +163,7 @@ describe('GET /Docs/tree', () => {
     expect(res.status).toBe(200);
     expect(res.body['enabled']).toBe(true);
     expect(String(res.body['hash'])).toHaveLength(64);
-    expect(sections(res).map((section) => section.key)).toEqual(['getting-started', 'user', 'admin']);
+    expect(sections(res).map((section) => section.key)).toEqual(['getting-started', 'user', 'admin', 'reference']);
     expect(pageKeys(res)).toContain('admin/main-menu');
     expect(res.headers['etag']).toMatch(/^W\/"[0-9a-f]{64}-en"$/);
     expect(res.headers['cache-control']).toContain('private');
@@ -176,8 +176,14 @@ describe('GET /Docs/tree', () => {
       | undefined;
     expect(diagnostics).toBeDefined();
     expect(diagnostics?.locales.map((entry) => entry.locale)).toEqual(expect.arrayContaining(['en']));
-    expect((diagnostics?.locales.find((entry) => entry.locale === 'en')?.pages ?? 0).valueOf()).toBeGreaterThanOrEqual(17);
-    expect(diagnostics?.coverage).toBe(0);
+    const english = diagnostics?.locales.find((entry) => entry.locale === 'en');
+    const vietnamese = diagnostics?.locales.find((entry) => entry.locale === 'vi');
+    expect((english?.pages ?? 0).valueOf()).toBeGreaterThanOrEqual(38);
+    expect(english?.translated).toBe(english?.pages); // `en` defines the corpus, so none of it is a fallback.
+    // 21.8 translated the P0 set and nothing beyond it, so `vi` sits strictly between the two.
+    expect((vietnamese?.translated ?? 0).valueOf()).toBeGreaterThan(0);
+    expect((vietnamese?.translated ?? 0).valueOf()).toBeLessThan(vietnamese?.pages ?? 0);
+    expect(diagnostics?.coverage).toBeCloseTo((vietnamese?.translated ?? 0) / (english?.pages ?? 1), 5);
     expect(diagnostics?.locales[0]?.hash).toBe(String(admin.body['hash']));
 
     const regular = await tree(regularToken);
@@ -210,13 +216,18 @@ describe('GET /Docs/page/:section/:slug', () => {
   });
 
   it('ends the corpus on a page with nothing after it', async () => {
-    const res = await call('GET', '/api/v1/Docs/page/admin/entities-and-fields', ctx.adminToken);
+    const res = await call('GET', '/api/v1/Docs/page/reference/release-notes', ctx.adminToken);
     const page = res.body['page'] as Record<string, unknown>;
     expect(page['next']).toBeNull();
     // The last page of a section that is not the corpus's last points at the next section's index,
     // so the reader is never left believing the handbook simply ran out (§5.3).
     const edge = await call('GET', '/api/v1/Docs/page/getting-started/keyboard-shortcuts', ctx.adminToken);
     expect((edge.body['page'] as Record<string, unknown>)['next']).toMatchObject({ key: 'user', path: '/docs/user' });
+    const lastAdmin = await call('GET', '/api/v1/Docs/page/admin/audit-jobs-and-operations', ctx.adminToken);
+    expect((lastAdmin.body['page'] as Record<string, unknown>)['next']).toMatchObject({
+      key: 'reference',
+      path: '/docs/reference',
+    });
   });
 
   it('renders a raw HTML payload as text, never as markup', async () => {
@@ -254,13 +265,17 @@ describe('GET /Docs/page/:section/:slug', () => {
   });
 
   it('serves the English page with a fallback flag when the locale has no translation', async () => {
-    const res = await call('GET', '/api/v1/Docs/page/admin/main-menu?locale=vi', ctx.adminToken);
+    const res = await call('GET', '/api/v1/Docs/page/reference/glossary?locale=vi', ctx.adminToken);
     expect(res.status).toBe(200);
     const page = res.body['page'] as Record<string, unknown>;
     expect(page['fallback']).toBe(true);
     expect(page['locale']).toBe('en');
-    const translated = await tree(ctx.adminToken, '?locale=vi');
-    expect(String(translated.body['locale'])).toBe('vi');
+    // The P0 set is translated, so the same request on one of those pages is not a fallback.
+    const translated = await call('GET', '/api/v1/Docs/page/admin/main-menu?locale=vi', ctx.adminToken);
+    expect(translated.status).toBe(200);
+    expect(translated.body['page']).toMatchObject({ fallback: false, locale: 'vi' });
+    const treeRes = await tree(ctx.adminToken, '?locale=vi');
+    expect(String(treeRes.body['locale'])).toBe('vi');
   });
 
   it('falls back to the instance default rather than faulting on a bookmark with a bad locale', async () => {
@@ -306,12 +321,15 @@ describe('GET /Docs/search', () => {
     }
   });
 
-  it('searches a translated request against the fallback corpus and says which language answered', async () => {
+  it('searches a Vietnamese request across both locales and says which language answered', async () => {
     const res = await call('GET', '/api/v1/Docs/search?q=sidebar&locale=vi', ctx.adminToken);
     expect(res.status).toBe(200);
     const hits = res.body['hits'] as { key: string; locale: string }[];
     expect(hits.length).toBeGreaterThan(0);
-    expect(hits.every((hit) => hit.locale === 'en')).toBe(true);
+    // A translated page answers in `vi`; one the corpus has not translated yet still answers in `en`,
+    // and the hit carries which of the two the reader is looking at (§4.7).
+    expect(hits.every((hit) => hit.locale === 'vi' || hit.locale === 'en')).toBe(true);
+    expect(hits.some((hit) => hit.locale === 'vi')).toBe(true);
     expect(res.body['locale']).toBe('vi');
   });
 

@@ -1119,7 +1119,7 @@ defaults apply.
 Each sub-phase is independently reviewable and leaves the tree green. Do not attempt the whole phase
 in one pass.
 
-> **Progress (2026-10-21).** 21.0–21.2 and 21.4–21.7 are done; 21.3 is done except its screenshots, which need
+> **Progress (2026-10-21).** 21.0–21.2 and 21.4–21.8 are done; 21.3 is done except its screenshots, which need
 > a browser pass this scope excluded. `packages/docs` (parser, index, search, links, lint) is green with
 > 174 unit tests, `content/docs/en/` carries the 17 P0 pages plus four section descriptors, and the corpus
 > lint runs in two places: `packages/docs/src/corpus.test.ts` checks the shipped files alone, and
@@ -1145,8 +1145,13 @@ in one pass.
 > `/docs/user/lists-and-views`, and setting `externalUrl` moves **every** contextual link at once (then
 > restores). Two defects found only by looking at it: the "Learn more" link inherited the light-surface
 > colour and was unreadable on the dark tooltip, and the coverage footnote rendered literal backticks.
-> **Not built yet:** `vi` content (21.8), the accessibility/i18n sweep (21.9) and the e2e spec + release
-> docs (21.10).
+> **Not built yet:** the accessibility/i18n sweep (21.9) and the e2e spec + release docs (21.10).
+> 21.8 is done too: the corpus is the full §4.8 inventory — 38 `en` pages across four sections (the new
+> `reference` section included) — and `vi` translates the 17 P0 pages plus the section descriptors, with
+> everything beyond them falling back to English behind the notice. Verified in Chromium: four doors on
+> `/docs`, a P1 admin page and the glossary render with zero dead links, the `vi` reader shows Vietnamese
+> for a translated page and the fallback notice for an untranslated one, and the admin `Docs` tab reports
+> 38 pages / 45% translated.
 
 ### Phase 21.0 — Audit, content contract and parser skeleton ✅
 
@@ -1262,13 +1267,22 @@ Done: items 1–3 and 5 as written. Item 4 covers **eight** headers, not six —
 entry. The ten admin tabs with a page share six distinct handbook pages, so the cross-check asserts
 `six or more` resolved keys rather than one per tab.
 
-### Phase 21.8 — Remaining content 📋
+### Phase 21.8 — Remaining content ✅
 
 Tasks: the P1 admin pages (ten), P1 user pages (six), the `reference` section (five), plus the `vi`
 translation of `getting-started` and the P0 pages.
 
 Acceptance: 38 pages in `en`, lint clean, `vi` covers `getting-started` + all P0 pages with a visible
 fallback notice elsewhere.
+
+Done, and the corpus is now the §4.8 inventory exactly: `getting-started` 4, `user` 13, `admin` 16,
+`reference` 5 = 38 pages in `en`. `vi` carries the 17 P0 pages plus the root and three section
+descriptors; everything beyond that still answers in English and says so. Two things the pass fixed
+beyond the new pages: the P0 `admin` section descriptor and `settings-overview` named the save-bar button
+**Publish**, which is the internal hook name (`usePublishTabActions`) rather than the label the product
+renders (`web.common.save` = **Save** / **Lưu**) — corrected in four pages, and the workflow editor's real
+**Publish** button left alone. `corpus.test.ts` now asserts the full inventory and the exact P0/`vi` split
+instead of the P0-only counts.
 
 ### Phase 21.9 — Accessibility, responsive and i18n chrome 📋
 
