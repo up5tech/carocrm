@@ -80,6 +80,9 @@ importers:
       '@carocrm/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@carocrm/docs':
+        specifier: workspace:*
+        version: link:../../packages/docs
       '@carocrm/document':
         specifier: workspace:*
         version: link:../../packages/document

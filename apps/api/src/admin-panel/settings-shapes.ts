@@ -176,6 +176,38 @@ export const NotificationsSettingsSchema = z
 
 export type NotificationsSettings = z.infer<typeof NotificationsSettingsSchema>;
 
+/**
+ * The in-app documentation surface (PLAN_Phase_21_Documentation.md §6.1).
+ *
+ * It only decides **whether and where** the handbook is reachable. The content itself is files in
+ * `content/docs/`, not rows, so there is nothing here to author — which is the point: an instance can
+ * turn the surface off, point it at its own wiki, or hide the sidebar entry without touching a corpus.
+ */
+export const DocsSettingsSchema = z
+  .object({
+    /** When false the docs endpoints answer 404 and the SPA renders the disabled state. */
+    enabled: z.boolean().default(true),
+    /** Drives the navigation feature gate; a flag can only remove an entry, never reveal one. */
+    showInSidebar: z.boolean().default(true),
+    /** The avatar-menu "Help & documentation" item. */
+    showHelpMenu: z.boolean().default(true),
+    /** An organisation that hosts its own handbook: `/docs` answers 301 to this instead. */
+    externalUrl: z.string().url().nullable().default(null),
+    /** Overrides the landing's first card with a `section/slug` page key. */
+    landingPage: z
+      .string()
+      .regex(/^[a-z0-9-]+\/[a-z0-9-]+$/, 'landingPage must be a section/slug page key')
+      .nullable()
+      .default(null),
+    /** The "Ask your administrator" address shown in empty states. */
+    supportEmail: z.string().email().nullable().default(null),
+  })
+  .strict();
+
+export type DocsSettings = z.infer<typeof DocsSettingsSchema>;
+
+export const DEFAULT_DOCS_SETTINGS: DocsSettings = DocsSettingsSchema.parse({});
+
 export const DEFAULT_NAVIGATION_SETTINGS: NavigationSettings = NavigationSettingsSchema.parse({});
 export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = SecuritySettingsSchema.parse({});
 export const DEFAULT_FILE_STORAGE_SETTINGS: FileStorageSettings = FileStorageSettingsSchema.parse({});

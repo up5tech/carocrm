@@ -12,10 +12,12 @@ import { SettingsRegistryService } from './settings-registry.service.js';
 import {
   BRAND_DOCUMENT_SCHEMA,
   type BrandDocument,
+  DEFAULT_DOCS_SETTINGS,
   DEFAULT_FILE_STORAGE_SETTINGS,
   DEFAULT_NAVIGATION_SETTINGS,
   DEFAULT_NOTIFICATIONS_SETTINGS,
   DEFAULT_SECURITY_SETTINGS,
+  DocsSettingsSchema,
   FileStorageSettingsSchema,
   I18N_DOCUMENT_SCHEMA,
   type I18nDocument,
@@ -118,7 +120,28 @@ export class PlatformSettingsRegistrar implements OnModuleInit {
       storage: 'envelope',
     };
 
-    for (const document of [brandDocument, i18nDocument, navigationDocument, securityDocument, fileStorageDocument, notificationsDocument]) {
+    const docsDocument: SettingsDocumentDefinition = {
+      name: 'docs',
+      group: 'documentation',
+      labelKey: 'web.adminPanel.tabs.docs',
+      descriptionKey: 'web.adminPanel.descriptions.docs',
+      // Every signed-in reader may see the handbook's own switches; only an administrator changes them.
+      readLevel: 'user',
+      writeLevel: 'admin',
+      schema: DocsSettingsSchema,
+      defaults: DEFAULT_DOCS_SETTINGS,
+      storage: 'envelope',
+    };
+
+    for (const document of [
+      brandDocument,
+      i18nDocument,
+      navigationDocument,
+      securityDocument,
+      fileStorageDocument,
+      notificationsDocument,
+      docsDocument,
+    ]) {
       if (!this.registry.has(document.name)) this.registry.register(document);
     }
   }

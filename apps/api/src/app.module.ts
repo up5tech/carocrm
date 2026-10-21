@@ -29,6 +29,7 @@ import type { MenuInvalidator } from './crm-chat/index.js';
 import { CRM_CHAT_CONTROLLERS, CRM_CHAT_MENU_INVALIDATOR, CRM_CHAT_PROVIDERS, CRMChatSettingsService } from './crm-chat/index.js';
 import { CUSTOMER_SUCCESS_CONTROLLERS, CUSTOMER_SUCCESS_PROVIDERS } from './customer-success/index.js';
 import { DatabaseService } from './database/database.service.js';
+import { DOCS_CONTROLLERS, DOCS_PROVIDERS, DocsSettingsService } from './docs/index.js';
 import { DOCUMENT_CONTROLLERS, DOCUMENT_PROVIDERS } from './document/index.js';
 import { EMAIL_CONTROLLERS, EMAIL_PROVIDERS } from './email/index.js';
 import { ENTITY_CONTROLLERS, ENTITY_PROVIDERS } from './entity/entity.module.js';
@@ -142,6 +143,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     ...ADVANCED_INTEGRATIONS_CONTROLLERS,
     // `/api/v1/DocumentTemplate` and `/api/v1/document/action/preview` are static prefixes too.
     ...DOCUMENT_CONTROLLERS,
+    // Phase 21: `/api/v1/Docs/{tree,page,search}` is a static prefix and must be matched before the
+    // generic `:entity` wildcard, or a page read becomes "record `tree` of entity `Docs`".
+    ...DOCS_CONTROLLERS,
     // Generic `/api/v1/:entity` wildcard routes stay last so static routes win.
     ...ENTITY_CONTROLLERS,
   ],
@@ -186,6 +190,8 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // the connection lifecycle and the OAuth flow.
     ...ADVANCED_INTEGRATIONS_PROVIDERS,
     ...DOCUMENT_PROVIDERS,
+    // Phase 21: the in-app handbook — the content read path and the `docs` settings document's cache.
+    ...DOCS_PROVIDERS,
     ...ENTITY_PROVIDERS,
     ...ATTACHMENT_PROVIDERS,
     ...SETTINGS_PROVIDERS,
@@ -210,6 +216,12 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
           if (module === 'crmChat' && flag === 'workspace') {
             const chat = ref.get(CRMChatSettingsService, { strict: false });
             return (await chat.settings()).features.workspace;
+          }
+          // Phase 21: the handbook is a module page with no entity, so its own document decides whether
+          // the sidebar carries it. The gate runs after the ACL, so this can only remove an entry.
+          if (module === 'docs' && flag === 'showInSidebar') {
+            const docs = ref.get(DocsSettingsService, { strict: false });
+            return (await docs.settings()).showInSidebar;
           }
           return true;
         },

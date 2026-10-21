@@ -65,7 +65,8 @@ export class NavigationService {
   ) {
     // A menu edit has to show on the next render, not after the TTL expires.
     this.documents.onChanged((name) => {
-      if (name === 'navigation') this.invalidate();
+      // `docs` carries the sidebar flag, so hiding the handbook entry has to show on the next render too.
+      if (name === 'navigation' || name === 'docs') this.invalidate();
     });
   }
 

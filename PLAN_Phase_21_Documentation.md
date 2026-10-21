@@ -1119,12 +1119,15 @@ defaults apply.
 Each sub-phase is independently reviewable and leaves the tree green. Do not attempt the whole phase
 in one pass.
 
-> **Progress (2026-10-21).** 21.0, 21.1 and 21.4 are done; 21.3 is done except its screenshots, which need
+> **Progress (2026-10-21).** 21.0–21.2 and 21.4 are done; 21.3 is done except its screenshots, which need
 > a browser pass this scope excluded. `packages/docs` (parser, index, search, links, lint) is green with
 > 172 unit tests, `content/docs/en/` carries the 17 P0 pages plus four section descriptors, and the corpus
 > lint runs inside `pnpm test` from `packages/docs/src/corpus.test.ts` rather than
-> `apps/api/test/docs-content.test.ts` — that file needs the Phase 21.2 module, which is not built yet.
-> 21.2, 21.5–21.10 remain unimplemented, so `/docs` is not yet reachable by a reader.
+> `apps/api/test/docs-content.test.ts`, because the lint needs no HTTP layer.
+> `apps/api/src/docs` now serves `GET /Docs/{tree,page,search}` with ETag/304, the §10.2 matrix, the `docs`
+> settings document and the sidebar entry, covered by `apps/api/test/docs.test.ts` (27 tests).
+> **Not built yet:** the SPA (21.5–21.7), so a reader still has no `/docs` route in the browser — only the
+> API exists. 21.8–21.10 remain.
 
 ### Phase 21.0 — Audit, content contract and parser skeleton ✅
 
@@ -1159,7 +1162,7 @@ Tasks:
 Acceptance: the engine builds an index from a 5-page fixture in under 100 ms; every lint rule has a
 failing fixture and a passing one; search finds `cau hinh` in a page containing "Cấu hình".
 
-### Phase 21.2 — API module, settings document and navigation 📋
+### Phase 21.2 — API module, settings document and navigation ✅
 
 Tasks:
 

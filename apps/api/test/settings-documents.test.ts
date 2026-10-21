@@ -97,10 +97,11 @@ describe('settings document registry API', () => {
     for (const name of DOCUMENTS) expect(names).toContain(name);
 
     // The catalog answers with what this caller may read, so a regular user is offered the brand and
-    // locale documents the shell needs (§10) and nothing else.
+    // locale documents the shell needs, plus the `docs` switches every reader is allowed to know about
+    // (PLAN_Phase_21_Documentation.md §6.1), and nothing else.
     const limited = await call('GET', '/api/v1/Settings/documents', regularToken);
     expect(limited.status).toBe(200);
-    expect((limited.body['documents'] as { name: string }[]).map((entry) => entry.name)).toEqual(['brand', 'i18n']);
+    expect((limited.body['documents'] as { name: string }[]).map((entry) => entry.name)).toEqual(['brand', 'i18n', 'docs']);
 
     const denied = await call('GET', '/api/v1/Settings/documents/navigation', regularToken);
     expect(denied.status).toBe(403);

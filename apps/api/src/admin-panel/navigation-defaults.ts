@@ -117,6 +117,19 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     inQuickSearch: true,
     permission: { entity: 'IntegrationConnection', action: 'read' },
   },
+  // Phase 21: the handbook is a static page like the others, and the only gate on it is the instance
+  // document — every signed-in reader may open `/docs`, and an administrator can take the row away.
+  // `feature` is consulted after the ACL, so this flag can remove an entry but never reveal one.
+  {
+    key: 'docs',
+    kind: 'page',
+    route: '/docs',
+    labelKey: 'web.docs.title',
+    icon: 'BookOutlined',
+    order: 80,
+    inQuickSearch: true,
+    feature: { module: 'docs', flag: 'showInSidebar' },
+  },
 ];
 
 export const NAVIGATION_CONTAINER_GROUPS: readonly NavigationGroupSeed[] = [

@@ -122,6 +122,9 @@
     "duplicateHint": "Đã có bản ghi tên \"{name}\". Vẫn tạo?",
     "duplicateCreateAnyway": "Vẫn tạo"
   },
+  "docs": {
+    "title": "Tài liệu"
+  },
   "language": {
     "label": "Ngôn ngữ",
     "switched": "Đã đổi ngôn ngữ.",
@@ -1299,6 +1302,7 @@
     },
     "tabs": {
       "advancedIntegrations": "Tích hợp nâng cao",
+      "docs": "Tài liệu",
       "general": "Chung",
       "localization": "Ngôn ngữ và thời gian",
       "menu": "Menu chính",
@@ -1320,6 +1324,7 @@
     },
     "descriptions": {
       "advancedIntegrations": "Kết nối tới các hệ thống bên thứ ba đã được phê duyệt, gồm kết nối, quyền và uỷ quyền.",
+      "docs": "Bật trung tâm trợ giúp trong ứng dụng, chọn vị trí hiển thị và trỏ tới tài liệu riêng của bạn.",
       "general": "Tiêu đề trang, logo và dòng chân trang của hệ thống này.",
       "localization": "Ngôn ngữ người dùng có thể chọn, ngôn ngữ mặc định và múi giờ làm việc.",
       "menu": "Bật/tắt, đổi tên, sắp xếp và tô màu menu chính cho tất cả mọi người.",
@@ -2253,6 +2258,12 @@
       "unavailable": "Không thể dùng mẫu.",
       "empty": "Chưa có mẫu nào."
     },
+    "agentFieldLabel": "Trợ lý AI",
+    "agentFieldPlaceholder": "Chọn trợ lý đã xuất bản",
+    "agentKeyInputPlaceholder": "Khóa trợ lý (ví dụ: my-assistant-agent)",
+    "agentFieldEmpty": "Chưa có trợ lý nào được xuất bản. Hãy xuất bản một trợ lý trong AI Agents trước.",
+    "agentListFailed": "Không tải được danh sách trợ lý. Cần quyền xem AI Agents và các định nghĩa đã xuất bản.",
+    "agentFieldHint": "Bật thực thi và bộ nhớ hội thoại trong AI Agents, sau đó xuất bản một trợ lý có dùng bộ nhớ hội thoại.",
     "settingsTitle": "Cài đặt CRM Chat"
   }
 }

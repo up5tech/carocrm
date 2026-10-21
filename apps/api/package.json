@@ -15,6 +15,7 @@
     "@carocrm/core": "workspace:*",
     "@carocrm/metadata": "workspace:*",
     "@carocrm/document": "workspace:*",
+    "@carocrm/docs": "workspace:*",
     "@carocrm/entity-engine": "workspace:*",
     "@carocrm/formula": "workspace:*",
     "@carocrm/extension-sdk": "workspace:*",

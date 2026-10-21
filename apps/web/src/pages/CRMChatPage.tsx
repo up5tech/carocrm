@@ -1,6 +1,6 @@
 import { CustomerServiceOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Descriptions, Divider, Empty, Form, Input, Modal, Result, Row, Space, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Card, Col, Descriptions, Divider, Empty, Form, Input, Modal, Result, Row, Select, Space, Tag, Tooltip, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 
 import { api, ApiError } from '../api/client.js';
@@ -110,6 +110,26 @@ export function CRMChatPage() {
     const key = (settingsQuery.data?.settings as { assistant?: { agentKey?: string } } | undefined)?.assistant?.agentKey;
     if (typeof key === 'string') setAssistantKey(key);
   }, [settingsQuery.data]);
+
+  // The assistant is an AI Agent profile key, not a credential: list the published profiles so an
+  // administrator picks one instead of typing a key from memory. The stored value stays the key.
+  const assistantAgents = useQuery({
+    queryKey: ['crmChat', 'assistantAgents'],
+    queryFn: () => api.aiAgentsAgents({ status: 'published', maxSize: 50 }),
+    enabled: showSettings && isAdmin,
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  const agentOptions = (assistantAgents.data?.list ?? []).map((agent) => ({
+    value: agent.key,
+    label: `${agent.name} (${agent.key})`,
+  }));
+  // A configured key may no longer be published (or readable); keep it selectable so saving another
+  // field never silently clears the current assistant.
+  if (assistantKey !== '' && !agentOptions.some((option) => option.value === assistantKey)) {
+    agentOptions.unshift({ value: assistantKey, label: assistantKey });
+  }
 
   const saveSettings = useMutation({
     mutationFn: () => api.crmChatUpdateSettings({ assistant: { agentKey: assistantKey.trim() } }),
@@ -473,19 +493,50 @@ export function CRMChatPage() {
       </Row>
       <Modal
         open={showSettings}
-        title={t('web.crmChat.settingsTitle')}        onCancel={() => setShowSettings(false)}
+        title={t('web.crmChat.settingsTitle')}
+        onCancel={() => setShowSettings(false)}
         onOk={() => void saveSettings.mutate()}
         confirmLoading={saveSettings.isPending}
       >
         <Form layout="vertical">
-          <Form.Item label="Assistant agent key">
-            <Input value={assistantKey} onChange={(e) => setAssistantKey(e.target.value)} placeholder="my-assistant-agent" />
+          {assistantAgents.isError ? (
+            <Alert
+              type="error"
+              showIcon
+              message={t('web.crmChat.agentListFailed')}
+              style={{ marginBottom: 12 }}
+            />
+          ) : null}
+          <Form.Item label={t('web.crmChat.agentFieldLabel')}>
+            {assistantAgents.isError ? (
+              // A Chat administrator without AI Agents read access can still set the key by hand;
+              // the picker stays the default path whenever the list is readable.
+              <Input
+                value={assistantKey}
+                onChange={(event) => setAssistantKey(event.target.value)}
+                placeholder={t('web.crmChat.agentKeyInputPlaceholder')}
+              />
+            ) : (
+              <Select
+                showSearch
+                allowClear
+                optionFilterProp="label"
+                loading={assistantAgents.isLoading}
+                placeholder={t('web.crmChat.agentFieldPlaceholder')}
+                value={assistantKey === '' ? undefined : assistantKey}
+                options={agentOptions}
+                onChange={(value?: string) => setAssistantKey(value ?? '')}
+                notFoundContent={
+                  assistantAgents.isLoading ? undefined : t('web.crmChat.agentFieldEmpty')
+                }
+              />
+            )}
           </Form.Item>
           {settingsQuery.data?.warnings?.length ? (
             <Alert type="warning" showIcon message={settingsQuery.data.warnings.map((w) => w.message).join('; ')} />
           ) : null}
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Enable AI Agents execution & memory in AI Agents settings, and publish an agent with conversation memory.
+            {t('web.crmChat.agentFieldHint')}
           </Typography.Text>
         </Form>
       </Modal>

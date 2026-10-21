@@ -122,6 +122,9 @@
     "duplicateHint": "A record named \"{name}\" already exists. Create anyway?",
     "duplicateCreateAnyway": "Create anyway"
   },
+  "docs": {
+    "title": "Documentation"
+  },
   "language": {
     "label": "Language",
     "switched": "Language switched.",
@@ -1299,6 +1302,7 @@
     },
     "tabs": {
       "advancedIntegrations": "Advanced Integrations",
+      "docs": "Documentation",
       "general": "General",
       "localization": "Language and time",
       "menu": "Main menu",
@@ -1320,6 +1324,7 @@
     },
     "descriptions": {
       "advancedIntegrations": "Connectors to approved third-party systems, with connections, permissions and authorization.",
+      "docs": "Enable the in-app handbook, choose where it appears, and point it at your own wiki.",
       "general": "Page title, logo and the footer line this instance shows.",
       "localization": "Languages people can switch to, the starting language and the working time zone.",
       "menu": "Enable, rename, reorder and colour the main menu for everyone.",
@@ -2253,6 +2258,12 @@
       "unavailable": "Templates are unavailable.",
       "empty": "No saved templates yet."
     },
+    "agentFieldLabel": "Assistant agent",
+    "agentFieldPlaceholder": "Select a published agent",
+    "agentKeyInputPlaceholder": "Agent key (e.g. my-assistant-agent)",
+    "agentFieldEmpty": "No published agent yet. Publish an agent in AI Agents first.",
+    "agentListFailed": "Could not load the agent list. Viewing AI Agents and published definitions is required.",
+    "agentFieldHint": "Enable AI Agents execution and conversation memory, then publish an agent that uses conversation memory.",
     "settingsTitle": "CRM Chat settings"
   }
 }
