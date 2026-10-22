@@ -64,7 +64,14 @@ export interface RecordArtifactInput {
   sourceVersionId?: string | null;
   documentOrder?: number;
   providerDocumentId?: string | null;
-  createdById?: string;
+  createdById?: string | undefined;
+  /**
+   * The row's id, when the caller has already used it to name a storage object.
+   *
+   * ES.5 writes the snapshot bytes under a key derived from this id, so the id has to exist before the
+   * row does; leaving it unset keeps the previous behaviour for every other caller.
+   */
+  id?: string | undefined;
   /** The policy the row is classified under; the retention rule is not a caller's choice. */
   settings: ESignatureSettings;
 }
@@ -125,7 +132,7 @@ export class SignatureDocumentSnapshotRepository {
     const row = await this.db
       .insertInto('signature_document_snapshots')
       .values({
-        id: randomUUID(),
+        id: input.id?.trim() || randomUUID(),
         request_id: input.requestId,
         artifact_kind: input.artifactKind,
         source_attachment_id: input.sourceAttachmentId ?? null,
@@ -183,13 +190,59 @@ export class SignatureDocumentSnapshotRepository {
     return row === undefined ? undefined : toSnapshot(row);
   }
 
-  private async findByHash(requestId: string, kind: SignatureArtifactKind, hash: string): Promise<SignatureDocumentSnapshot | undefined> {
+  /**
+   * The artifact already recorded for these exact bytes.
+   *
+   * Public because idempotency is a question callers ask before they copy anything: a retried download
+   * job, or a document attached twice, must find the existing row rather than write a second object
+   * (plan §16).
+   */
+  async findByHash(requestId: string, kind: SignatureArtifactKind, hash: string): Promise<SignatureDocumentSnapshot | undefined> {
     const row = await this.db
       .selectFrom('signature_document_snapshots')
       .selectAll()
       .where('request_id', '=', requestId)
       .where('artifact_kind', '=', kind)
       .where('content_hash_sha256', '=', hash)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirst();
+    return row === undefined ? undefined : toSnapshot(row);
+  }
+
+  /** A snapshot the caller named, or a refusal: an unknown id is not an empty result (plan §4.5). */
+  async requireById(id: string): Promise<SignatureDocumentSnapshot> {
+    const found = await this.findById(id);
+    if (found === undefined) throw new ValidationError(`No signature document snapshot "${id}".`, { id });
+    return found;
+  }
+
+  /**
+   * A snapshot of one specific request.
+   *
+   * The request id is checked, not assumed: a snapshot belongs to exactly one request, and an id from
+   * another request must not be readable or detachable through this one (plan §12.4).
+   */
+  async requireForRequest(id: string, requestId: string): Promise<SignatureDocumentSnapshot> {
+    const found = await this.requireById(id);
+    if (found.requestId !== requestId) {
+      throw new ValidationError('That document does not belong to this signature request.', { id, requestId });
+    }
+    return found;
+  }
+
+  /**
+   * The snapshot already taken from this attachment.
+   *
+   * Asked before any byte is read: attaching the same file twice is the same snapshot, and re-copying
+   * it would put a second object where the evidence says there is one (plan §16).
+   */
+  async findBySourceAttachment(requestId: string, attachmentId: string): Promise<SignatureDocumentSnapshot | undefined> {
+    const row = await this.db
+      .selectFrom('signature_document_snapshots')
+      .selectAll()
+      .where('request_id', '=', requestId)
+      .where('artifact_kind', '=', 'source_snapshot')
+      .where('source_attachment_id', '=', attachmentId)
       .where('deleted_at', 'is', null)
       .executeTakeFirst();
     return row === undefined ? undefined : toSnapshot(row);

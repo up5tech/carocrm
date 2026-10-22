@@ -1,14 +1,15 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 to 19-ES.4 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 through 19-ES.4 delivered** (ES.1 registers the module and the security contract;
+> Phase 19-ES.0 to 19-ES.5 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 through 19-ES.5 delivered** (ES.1 registers the module and the security contract;
 > ES.2 adds the schema and the domain rules; ES.3 adds the provider contract, the registry and the
 > in-process fake; ES.4 adds DocuSign's OAuth grant, the connection lifecycle and the live adapter's
 > connection operations). **A DocuSign adapter now exists, but nothing in this module has been verified
 > against a live account**: every provider behaviour below was proved against an injected stub transport,
 > and the demo-account validation is ES.22's.
 > Evidence: `docs/implementation/esignature-es1-completion-report.md`, `esignature-es2-completion-report.md`,
-> `esignature-es3-completion-report.md`, `esignature-es4-completion-report.md`.
+> `esignature-es3-completion-report.md`, `esignature-es4-completion-report.md`,
+> `esignature-es5-completion-report.md`.
 > Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`.
 > Webhook prefix (reserved in ES.1, endpoint delivered in ES.11, which also extends the raw-body hook):
 > `/api/v1/integrations/esignature`.
@@ -56,11 +57,14 @@ redirect URIs, secrets and stored account identities are fully separate.
 
 | Behavior | Status | Notes |
 | --- | --- | --- |
+| Immutable document snapshot (copy + SHA-256 of the submitted bytes) | **Delivered ES.5** | `esignature-document.service.ts` copies through `AttachmentService.download`, so the parent record's ACL is the gate, and verifies the copy against the attachment's own checksum. A snapshot survives its source: replacing or deleting the attachment changes nothing about what was recorded. |
+| Provider-signed documents and completion certificates as separate artifacts | **Storage delivered ES.5; retrieval ES.15** | `storeDerivedArtifact` accepts only the derived kinds and writes under a kind-segmented key, so a provider result cannot address a source object. Idempotent by content hash and provider document id (plan §16). |
+| DocuSign per-document size and format limits | **Expected, not verified** | `DOCUSIGN_DOCUMENT_RESTRICTIONS` (25 MiB, the documented accepted formats) is the ceiling the settings cannot lift. The ES.0 audit verified the API surface, not these numbers; ES.22 re-checks them against a live account. |
 | Connection record and its lifecycle rules | **Delivered ES.2 (storage) + ES.4 (authorization, test, switch, disconnect)** | The row stores environment, account id, base URI, granted scopes and health stamps; no credential column exists — `esignature_credential_secrets` holds those, encrypted, and no read path returns a value. `reauthorization_required` also clears `is_active`, which is what stops a send after a revoked consent. |
 | Local request persistence and the guarded lifecycle | Delivered ES.2 | Dedicated tables plus the state machine; an envelope id is unique per connection, and a CRM command cannot enter a provider-owned state |
 | Local draft request (no provider call) | Storage ES.2, API ES.6 | A draft is local only; a provider envelope does not exist until preparation |
 | Envelope preparation (provider draft) | Planned ES.9 | Idempotent via correlation; unsent provider drafts abandoned safely |
-| Documents from CRM attachments | Planned ES.5 | Authorized bytes only; immutable snapshot + SHA-256 of the exact submitted bytes; source file never overwritten |
+| Documents from CRM attachments | **Delivered ES.5** (the draft UI that drives it: ES.6) | Authorized bytes only — the attachment service's own ACL is the sole reader; immutable snapshot plus the SHA-256 of the exact submitted bytes; the source file is never overwritten, and the snapshot outlives it |
 | Provider templates + role mapping | Planned ES.7 | Template IDs stay bound to the owning account; roles validated against an allowlist |
 | Signers, CC, routing order | Planned ES.8 | Sequential/parallel routing; explicit sender affirmation of signer identity |
 | Remote signing | Planned ES.10/ES.13 | DocuSign controls the signing journey and sends signing emails from the DocuSign account |

@@ -245,7 +245,6 @@ export const ESIGNATURE_FEATURES: readonly ESignatureFeatureDescriptor[] = [
  */
 export const PENDING_FEATURES: readonly { readonly key: string; readonly phase: string }[] = [
   { key: 'requests', phase: '19-ES.6' },
-  { key: 'documents', phase: '19-ES.5' },
   { key: 'templates', phase: '19-ES.7' },
   { key: 'send', phase: '19-ES.9–19-ES.10' },
   { key: 'webhooks', phase: '19-ES.11' },
@@ -460,6 +459,41 @@ export const DOCUSIGN_PROVIDER_CAPABILITIES: Readonly<Record<ESignatureProviderC
 };
 
 /**
+ * The document restrictions DocuSign's eSignature API is documented to impose, as far as the audit
+ * could establish them (`docs/implementation/esignature-audit.md` §4 verified the API surface, not the
+ * per-document limits).
+ *
+ * They are a **ceiling the settings cannot lift**, not a policy: the effective limit for an attachment
+ * is the tighter of this table and the `ESignature` settings document (plan §4.5 asks for "file type,
+ * count, size **and provider-supported format**", and only the provider knows the last one). A format
+ * the provider does not accept is refused before any bytes are copied, so a request never discovers at
+ * send time that its document was unsignable. ES.22 re-verifies the numbers against a live demo
+ * account; a correction lands here and nowhere else.
+ */
+export const DOCUSIGN_DOCUMENT_RESTRICTIONS = {
+  /** The documented per-document size ceiling, in bytes (25 MiB). */
+  maxDocumentBytes: 26_214_400,
+  /** Formats DocuSign accepts for an eSignature envelope, lower-case and without the dot. */
+  supportedExtensions: [
+    'pdf',
+    'doc',
+    'docx',
+    'rtf',
+    'txt',
+    'xls',
+    'xlsx',
+    'htm',
+    'html',
+    'xml',
+    'bmp',
+    'gif',
+    'jpg',
+    'jpeg',
+    'png',
+  ] as const,
+} as const;
+
+/**
  * The stable module error codes (plan §8.2, audit §5.8).
  *
  * A caller switches on these; the human-readable text is the i18n catalog's job
@@ -526,7 +560,7 @@ export const ESIGNATURE_TABLES = [
 ] as const;
 
 /** Sub-phases delivered so far, reported verbatim by the health endpoint. */
-export const IMPLEMENTED_PHASES = ['19-ES.0', '19-ES.1', '19-ES.2', '19-ES.3', '19-ES.4'] as const;
+export const IMPLEMENTED_PHASES = ['19-ES.0', '19-ES.1', '19-ES.2', '19-ES.3', '19-ES.4', '19-ES.5'] as const;
 
 export const ESIGNATURE_MODULE = {
   id: 'ESignature',

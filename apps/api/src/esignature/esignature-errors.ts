@@ -91,6 +91,38 @@ export function notSupportedByProviderError(capability: string, providerKey: str
   );
 }
 
+/**
+ * A document could not become part of a request (plan §4.5, §12.9).
+ *
+ * `reason` is the machine-readable half of the answer and is deliberately one of a closed list:
+ * `not_readable` covers the ACL refusal (the caller may not see the source file), while
+ * `type_not_allowed`, `too_large`, `too_many` and `empty` are policy refusals an administrator can
+ * explain, and `storage_unavailable` / `checksum_mismatch` are installation faults that must never be
+ * reported as if the user had done something wrong. The filename is safe to include; the bytes never are.
+ */
+export function signatureDocumentNotReadableError(
+  reason:
+    | 'not_readable'
+    | 'type_not_allowed'
+    | 'too_large'
+    | 'too_many'
+    | 'empty'
+    | 'storage_unavailable'
+    | 'checksum_mismatch',
+  detail: { filename?: string; limitBytes?: number; limitCount?: number; allowed?: readonly string[] } = {},
+): ESignatureError {
+  const messages: Record<typeof reason, string> = {
+    not_readable: 'The source document cannot be read by this user, so it cannot be attached to a signature request.',
+    type_not_allowed: 'That document type is not allowed by the signature policy or by the provider.',
+    too_large: 'The document is larger than the signature policy or the provider permits.',
+    too_many: 'This request already holds the maximum number of documents.',
+    empty: 'The document has no bytes to sign.',
+    storage_unavailable: 'The stored document could not be read, so no snapshot was created.',
+    checksum_mismatch: 'The stored document did not match its recorded checksum, so no snapshot was created.',
+  };
+  return new ESignatureError('SIGNATURE_DOCUMENT_NOT_READABLE', messages[reason], { reason, ...detail }, 422);
+}
+
 /** `ENCRYPTION_KEY` absent: a credential can neither be stored nor read, so nothing may reach a provider. */
 export function encryptionKeyMissingError(): ESignatureError {
   return new ESignatureError(

@@ -247,6 +247,7 @@ The delivered shape, the constraints and the rules that came with them are recor
 | `ESignature` settings document, permissions (synthetic ACL resources), nav entry, i18n catalog | ES.1 **done** |
 | Additive migration for the eight tables in §6 (+ indexes, dedup/uniqueness constraints) | ES.2 **done** (`064_phase19_esignature.sql`, applied) |
 | Provider adapter port + `FakeSignatureProviderAdapter` + error taxonomy extension (`unknown_outcome`) | ES.3 **done** (`apps/api/src/esignature/providers/`) |
+| Secure document snapshots (copy, hash, policy, derived-artifact separation) | **Delivered ES.5** — `esignature-document.service.ts` over the attachment service's ACL and the platform `FILE_STORAGE_TOKEN`; no new table |
 | DocuSign OAuth (authorize/callback/refresh/userinfo account + base-URI persistence, vault storage) | **Delivered ES.4** — `esignature-connection.service.ts`, `signature-oauth-state.repository.ts`, `esignature-credential-vault.ts`, `providers/docusign/*`; verified against a stub transport, not a live demo account |
 | Secure snapshot service over `AttachmentService` + `packages/files` checksums | ES.5 |
 | Draft CRUD + source-record linking with linked-record ACL | ES.6 |

@@ -16,6 +16,7 @@ import { ESignatureController } from './esignature.controller.js';
 import { ESignatureConnectionService } from './esignature-connection.service.js';
 import { ESignatureConnectionGate } from './esignature-connection-gate.service.js';
 import { ESignatureCredentialVault } from './esignature-credential-vault.js';
+import { ESignatureDocumentService } from './esignature-document.service.js';
 import { ESignatureModuleHealthService } from './esignature-module-health.service.js';
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
 import { ESignatureOAuthCallbackController } from './esignature-oauth-callback.controller.js';
@@ -99,6 +100,10 @@ export const ESIGNATURE_PROVIDERS = [
   SignatureOAuthStateRepository,
   ESignatureCredentialVault,
   ESignatureConnectionService,
+  // Phase 19-ES.5 — the document snapshot service. It reads a CRM file only through the attachment
+  // service (which owns the ACL), copies it once into this module's own storage prefix, and refuses
+  // anything the settings policy or DocuSign cannot accept (plan §4.5).
+  ESignatureDocumentService,
   docuSignTransportProvider,
   // Phase 19-ES.3 — the provider port. The registry answers for every adapter the build ships, and
   // `signatureProviderAdaptersProvider` decides which one answers for `docusign`.
@@ -131,6 +136,14 @@ export {
   type ESignatureCredentialVaultPort,
   type ESignatureStoredCredential,
 } from './esignature-credential-vault.js';
+export {
+  type AttachResult,
+  documentCeiling,
+  ESignatureDocumentService,
+  extensionOf,
+  SNAPSHOT_STORAGE_ROOT,
+  type SnapshotRefusal,
+} from './esignature-document.service.js';
 export {
   AUDIT_ACTIONS,
   CONNECTED_STATUS,
