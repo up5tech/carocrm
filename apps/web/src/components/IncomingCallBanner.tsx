@@ -1,12 +1,13 @@
 import { CloseOutlined, PhoneFilled, PhoneOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { App as AntApp, Button, Card, Input, Space, Tag, Typography } from 'antd';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { VoiceCallControlAction, VoiceCallerMatch, VoiceIncomingCallView } from '../api/types.js';
 import { t } from '../state/i18n.js';
+import { subscribeNotificationPush } from '../state/notifications.js';
 
 /**
  * Phase 19-VC.9 — the incoming-call banner
@@ -16,15 +17,28 @@ import { t } from '../state/i18n.js';
  * **which controls** a call accepts, so this component renders the number, the permitted caller
  * matches and exactly the actions `controls` names. A hang-up button never appears for a provider
  * that cannot perform one, and the API re-checks every action anyway — a hidden button is not a
- * permission. Polling is the documented transport because the platform has no realtime gateway.
+ * permission.
+ *
+ * Delivery is pushed: the voice module writes an `incoming call` notification, the notification
+ * stream carries it to this tab, and the banner re-reads the ringing calls it is allowed to see.
+ * There is no polling interval — a ring reaches the operator as soon as the channel does.
  */
 export function IncomingCallBanner() {
+  const queryClient = useQueryClient();
   const incoming = useQuery({
     queryKey: ['voice', 'incoming'],
     queryFn: () => api.voiceIncomingCalls(),
-    refetchInterval: 10_000,
     retry: false,
   });
+  useEffect(
+    () =>
+      subscribeNotificationPush((event) => {
+        if (event.type.startsWith('VoiceCommunications')) {
+          void queryClient.invalidateQueries({ queryKey: ['voice', 'incoming'] });
+        }
+      }),
+    [queryClient],
+  );
   const [dismissed, setDismissed] = useState<readonly string[]>([]);
   const visible = (incoming.data?.list ?? []).filter((call) => !dismissed.includes(call.id));
   if (visible.length === 0) return null;

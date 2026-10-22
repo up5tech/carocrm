@@ -57,6 +57,39 @@ const STREAM_PATH = '/api/v1/Notification/stream';
 const INITIAL_RETRY_MS = 1_000;
 const MAX_RETRY_MS = 30_000;
 
+/** One push frame as the server sends it: recipient, row id and the writing module's type. */
+export interface NotificationPushEvent {
+  readonly userId: string;
+  readonly id: string;
+  readonly type: string;
+}
+
+const pushListeners = new Set<(event: NotificationPushEvent) => void>();
+
+/**
+ * Lets another surface react to the same live stream — the incoming-call banner does — without
+ * opening a second SSE connection or inventing its own polling loop.
+ */
+export function subscribeNotificationPush(
+  listener: (event: NotificationPushEvent) => void,
+): () => void {
+  pushListeners.add(listener);
+  return () => {
+    pushListeners.delete(listener);
+  };
+}
+
+function parsePushEvent(data: string): NotificationPushEvent | undefined {
+  try {
+    const parsed = JSON.parse(data) as Partial<Record<keyof NotificationPushEvent, unknown>>;
+    const { userId, id, type } = parsed;
+    if (typeof userId !== 'string' || typeof id !== 'string' || typeof type !== 'string') return undefined;
+    return { userId, id, type };
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Keeps the inbox live: one server-sent-event stream per signed-in tab, invalidating both queries
  * whenever the server says a notification was created for this user.
@@ -108,8 +141,17 @@ export function useNotificationStream(enabled = true): void {
               const frame = buffer.slice(0, boundary);
               buffer = buffer.slice(boundary + 2);
               // The event body is not rendered; it only says "this user's inbox changed".
-              if (frame.split('\n').some((line) => line.startsWith('data:'))) {
+              const data = frame
+                .split('\n')
+                .filter((line) => line.startsWith('data:'))
+                .map((line) => line.slice('data:'.length).trim())
+                .join('\n');
+              if (data !== '') {
                 void client.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
+                const event = parsePushEvent(data);
+                if (event !== undefined) {
+                  for (const listener of pushListeners) listener(event);
+                }
               }
               boundary = buffer.indexOf('\n\n');
             }
