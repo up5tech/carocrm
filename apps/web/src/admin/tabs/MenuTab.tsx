@@ -1,4 +1,4 @@
-import { ArrowDownOutlined, ArrowUpOutlined, RollbackOutlined } from '@ant-design/icons';
+import { ArrowDownOutlined, ArrowUpOutlined, HolderOutlined, RollbackOutlined } from '@ant-design/icons';
 import { Alert, App as AntApp, Button, Card, Input, Select, Skeleton, Space, Switch, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -193,7 +193,7 @@ export function MenuTab() {
           {current.map((row) => (
             <li
               key={row.key}
-              className={`carocrm-menu-row carocrm-menu-row--${row.kind}${row.enabled ? '' : ' is-off'}`}
+              className={`carocrm-menu-row carocrm-menu-row--${row.kind}${row.enabled ? '' : ' is-off'}${dragKey === row.key ? ' is-dragging' : ''}`}
               style={{ paddingLeft: 8 + row.depth * 18, borderLeftColor: navAccent(row.accent).fg }}
               draggable
               onDragStart={() => setDragKey(row.key)}
@@ -206,6 +206,9 @@ export function MenuTab() {
                 drop(row.key);
               }}
             >
+              <span className="carocrm-menu-row-grip" aria-hidden="true" title={t('web.adminMenu.dragHint')}>
+                <HolderOutlined />
+              </span>
               <div className="carocrm-menu-row-top">
                 <span className="carocrm-menu-row-icon" aria-hidden="true">
                   {row.icon !== undefined ? navIcon(row.icon) : null}
@@ -216,9 +219,11 @@ export function MenuTab() {
                     {row.key}
                   </Typography.Text>
                 </span>
-                <Switch size="small" checked={row.enabled} aria-label={t('web.adminMenu.enableEntry')} onChange={(checked) => patch(row.key, { enabled: checked })} />
-                <Button icon={<ArrowUpOutlined />} onClick={() => move(row.key, -1)} aria-label={t('web.adminShell.movedUp')} />
-                <Button icon={<ArrowDownOutlined />} onClick={() => move(row.key, 1)} aria-label={t('web.adminShell.movedDown')} />
+                <div className="carocrm-menu-row-actions">
+                  <Switch size="small" checked={row.enabled} aria-label={t('web.adminMenu.enableEntry')} onChange={(checked) => patch(row.key, { enabled: checked })} />
+                  <Button size="small" icon={<ArrowUpOutlined />} onClick={() => move(row.key, -1)} aria-label={t('web.adminShell.movedUp')} />
+                  <Button size="small" icon={<ArrowDownOutlined />} onClick={() => move(row.key, 1)} aria-label={t('web.adminShell.movedDown')} />
+                </div>
               </div>
               <div className="carocrm-menu-row-fields">
                 <Input
@@ -234,7 +239,7 @@ export function MenuTab() {
                   placeholder={t('web.adminMenu.icon')}
                   allowClear
                   value={row.icon}
-                  options={NAV_ICON_NAMES.map((name) => ({ value: name, label: name }))}
+                  options={NAV_ICON_NAMES.map((name) => ({ value: name, label: <span className="carocrm-menu-select-option"><span className="carocrm-menu-select-icon">{navIcon(name)}</span>{name}</span> }))}
                   onChange={(value?: string) => patch(row.key, { icon: value })}
                 />
                 <Select
@@ -243,7 +248,7 @@ export function MenuTab() {
                   placeholder={t('web.adminMenu.accent')}
                   allowClear
                   value={row.accent}
-                  options={NAV_ACCENT_NAMES.map((name) => ({ value: name, label: name }))}
+                  options={NAV_ACCENT_NAMES.map((name) => ({ value: name, label: <span className="carocrm-menu-select-option"><span className="carocrm-menu-select-swatch" style={{ background: navAccent(name).fg }} />{name}</span> }))}
                   onChange={(value?: string) => patch(row.key, { accent: value })}
                 />
               </div>
@@ -252,7 +257,7 @@ export function MenuTab() {
         </ul>
       </Card>
 
-      <Card className="carocrm-card" title={t('web.adminMenu.previewTitle')}>
+      <Card className="carocrm-card carocrm-menu-preview-card" title={t('web.adminMenu.previewTitle')}>
         <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
           {t('web.adminMenu.previewHint')}
         </Typography.Paragraph>

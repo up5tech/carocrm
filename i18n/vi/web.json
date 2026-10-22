@@ -1476,6 +1476,7 @@
     "accent": "Màu nhấn",
     "labelKeyPlaceholder": "Key nhãn (không bắt buộc)",
     "enableEntry": "Hiển thị trong menu",
+  "dragHint": "Kéo để sắp xếp lại",
     "edgeOfList": "Mục này đã ở đầu/cuối danh sách.",
     "restoreTitle": "Khôi phục menu mặc định",
     "restoreBody": "Mọi đổi tên, sắp xếp lại và mục bạn đã ẩn sẽ bị xóa và menu mặc định quay trở lại.",

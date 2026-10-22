@@ -26,6 +26,14 @@ function secondsBetween(from: string | null, to: string | null): string {
   return ms < 1_000 ? `${String(Math.round(ms))} ms` : `${(ms / 1_000).toFixed(1)} s`;
 }
 
+function jobLabel(value: string): string {
+  return value
+    .split('.')
+    .map((part) => part.replace(/([a-z])([A-Z])/g, '$1 $2'))
+    .map((part) => (part === '' ? part : part.charAt(0).toUpperCase() + part.slice(1)))
+    .join(' · ');
+}
+
 function parseData(raw: string | undefined): Record<string, unknown> {
   const text = (raw ?? '').trim();
   if (text === '') return {};
@@ -140,6 +148,7 @@ export function AdminJobsPage() {
         <Space style={{ marginBottom: 12 }}>
           <Select
             allowClear
+            aria-label={t('web.adminJobs.statusPlaceholder')}
             placeholder={t('web.adminJobs.statusPlaceholder')}
             style={{ width: 160 }}
             value={status}
@@ -165,7 +174,14 @@ export function AdminJobsPage() {
             },
           }}
           columns={[
-            { title: t('web.adminJobs.job'), dataIndex: 'job', width: 200 },
+            { title: t('web.adminJobs.job'), dataIndex: 'job', width: 200, render: (value: string) => (
+                <span title={value}>
+                  {jobLabel(value)}
+                  <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11 }}>
+                    {value}
+                  </Typography.Text>
+                </span>
+              ) },
             {
               title: t('web.common.status'),
               dataIndex: 'status',
@@ -215,7 +231,14 @@ export function AdminJobsPage() {
           pagination={false}
           columns={[
             { title: t('web.adminJobs.id'), dataIndex: 'id', width: 180 },
-            { title: t('web.adminJobs.job'), dataIndex: 'job', width: 200 },
+            { title: t('web.adminJobs.job'), dataIndex: 'job', width: 200, render: (value: string) => (
+                <span title={value}>
+                  {jobLabel(value)}
+                  <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11 }}>
+                    {value}
+                  </Typography.Text>
+                </span>
+              ) },
             { title: t('web.adminJobs.cron'), dataIndex: 'scheduling', width: 120, render: (value: string) => <Typography.Text code>{value}</Typography.Text> },
             { title: t('web.adminJobs.data'), dataIndex: 'data', render: (value: Record<string, unknown>) => JSON.stringify(value ?? {}) },
             { title: t('web.adminJobs.lastRun'), dataIndex: 'lastRunAt', width: 150, render: (value: string | null) => timeText(value) },
@@ -278,14 +301,15 @@ export function AdminJobsPage() {
             }
           }}
         >
-          <Form.Item name="id" rules={[{ required: true, pattern: /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/, message: t('web.adminJobs.idPattern') }]}>
+          <Form.Item name="id" label={t('web.adminJobs.id')} rules={[{ required: true, pattern: /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/, message: t('web.adminJobs.idPattern') }]}>
             <Input placeholder={t('web.adminJobs.idPlaceholder')} style={{ width: 170 }} />
           </Form.Item>
-          <Form.Item name="job" rules={[{ required: true, pattern: /^[a-z][a-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*){1,3}$/, message: t('web.adminJobs.jobPattern') }]}>
+          <Form.Item name="job" label={t('web.adminJobs.job')} rules={[{ required: true, pattern: /^[a-z][a-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*){1,3}$/, message: t('web.adminJobs.jobPattern') }]}>
             <Input placeholder="system.cleanupOutbox" style={{ width: 190 }} />
           </Form.Item>
           <Form.Item
             name="scheduling"
+            label={t('web.adminJobs.cron')}
             rules={[
               { required: true },
               {
@@ -299,10 +323,10 @@ export function AdminJobsPage() {
           >
             <Input placeholder="0 * * * *" style={{ width: 120 }} />
           </Form.Item>
-          <Form.Item name="data">
+          <Form.Item name="data" label={t('web.adminJobs.data')}>
             <Input placeholder='{"retentionDays":7}' style={{ width: 180 }} />
           </Form.Item>
-          <Form.Item name="enabled" valuePropName="checked">
+          <Form.Item name="enabled" label={t('web.adminJobs.enabled')} valuePropName="checked">
             <Switch />
           </Form.Item>
           <Button type="primary" htmlType="submit">

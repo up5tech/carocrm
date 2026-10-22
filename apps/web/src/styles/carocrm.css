@@ -1992,6 +1992,16 @@ body {
 .carocrm-admin-rail {
   position: sticky;
   top: 16px;
+  /* The rail is its own scroll container: it must not grow with the whole document, otherwise
+     the tab list rides along with the page instead of scrolling inside the rail. Pinning it to
+     the viewport height hands the overflow to the rail itself. */
+  max-height: calc(100vh - 32px);
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d6dce5 transparent;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -1999,6 +2009,23 @@ body {
   border: 1px solid #f0f0f0;
   border-radius: 8px;
   background: #fff;
+}
+
+.carocrm-admin-rail::-webkit-scrollbar {
+  width: 6px;
+}
+
+.carocrm-admin-rail::-webkit-scrollbar-thumb {
+  background: #d6dce5;
+  border-radius: 3px;
+}
+
+.carocrm-admin-rail::-webkit-scrollbar-thumb:hover {
+  background: #bcc4d0;
+}
+
+.carocrm-admin-rail::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .carocrm-admin-group-title {
@@ -2171,16 +2198,22 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 10px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border: 1px solid #f0f0f0;
   border-left: 3px solid #e6e9ef;
-  border-radius: 6px;
+  border-radius: 8px;
   background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .carocrm-menu-row:hover {
   border-color: #dfe5ee;
   background: #fbfcfe;
+  box-shadow: 0 1px 4px rgba(67, 142, 255, 0.06);
+}
+
+.carocrm-menu-row.is-dragging {
+  opacity: 0.6;
 }
 
 .carocrm-menu-row.is-off {
@@ -2188,10 +2221,33 @@ body {
   opacity: 0.7;
 }
 
+.carocrm-menu-row-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  color: #bcc4d0;
+  cursor: grab;
+  user-select: none;
+}
+
+.carocrm-menu-row-grip:active {
+  cursor: grabbing;
+}
+
 .carocrm-menu-row-icon {
   display: inline-flex;
   flex: none;
   color: #737b85;
+}
+
+.carocrm-menu-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-left: auto;
 }
 
 .carocrm-menu-row-label {
@@ -2244,6 +2300,25 @@ body {
   width: min(132px, 100%);
 }
 
+.carocrm-menu-select-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.carocrm-menu-select-icon {
+  display: inline-flex;
+  color: #737b85;
+}
+
+.carocrm-menu-select-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
 .carocrm-menu-preview {
   display: flex;
   flex-direction: column;
@@ -2263,6 +2338,13 @@ body {
   letter-spacing: 0.8px;
   text-transform: uppercase;
   color: #a1a8b3;
+}
+
+.carocrm-menu-preview-card {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
 }
 
 /* ---- Phase 20: policy rows of a hosted module document ---- */
@@ -2321,6 +2403,8 @@ body {
   .carocrm-admin-rail {
     position: static;
     flex-direction: row;
+    max-height: none;
+    overflow-y: visible;
     overflow-x: auto;
     gap: 20px;
   }

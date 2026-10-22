@@ -1476,6 +1476,7 @@
     "accent": "Accent",
     "labelKeyPlaceholder": "Label key (optional)",
     "enableEntry": "Show in the menu",
+  "dragHint": "Drag to reorder",
     "edgeOfList": "This entry is already at the edge of its list.",
     "restoreTitle": "Restore the shipped menu",
     "restoreBody": "Every rename, reorder and hidden entry you added is removed and the platform menu comes back.",
