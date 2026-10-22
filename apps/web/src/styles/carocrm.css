@@ -246,6 +246,22 @@ body {
   box-shadow: none !important;
 }
 
+/* The rail is its own scroll container. Without this the sider is a flex child of the page row and
+   therefore as tall as the whole document, so `.carocrm-sider-scroll` never overflowed and the menu
+   rode along with the page instead of scrolling. Pinning it under the sticky 70px header and giving
+   it the remaining viewport height hands the overflow to the menu, which keeps its own scrollbar
+   while the content column scrolls independently. Desktop only: below 769px the rail is a
+   full-height off-canvas drawer (see the narrow-viewport block at the end of this file). */
+@media only screen and (min-width: 769px) {
+  .carocrm-sider {
+    align-self: flex-start;
+    height: calc(100vh - 70px);
+    overflow: hidden;
+    position: sticky;
+    top: 70px;
+  }
+}
+
 .carocrm-sider .ant-layout-sider-children {
   display: flex;
   flex-direction: column;
@@ -285,10 +301,33 @@ body {
   font-weight: 500;
 }
 
+/* `min-height: 0` is what actually lets this box shrink below its content inside the flex column,
+   so the menu — not the page — owns the scrollbar. */
 .carocrm-sider-scroll {
   flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-color: #d6dce5 transparent;
+  scrollbar-width: thin;
+}
+
+.carocrm-sider-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.carocrm-sider-scroll::-webkit-scrollbar-thumb {
+  background: #d6dce5;
+  border-radius: 3px;
+}
+
+.carocrm-sider-scroll::-webkit-scrollbar-thumb:hover {
+  background: #bcc4d0;
+}
+
+.carocrm-sider-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* ---- content ---- */
