@@ -2420,5 +2420,16 @@
     "open": "Open in a panel",
     "expand": "Expand",
     "collapse": "Collapse"
+  },
+  "email": {
+    "inbox": {
+      "all": "All emails",
+      "inbox": "Inbox",
+      "outbound": "Outbound",
+      "drafts": "Drafts",
+      "sent": "Sent",
+      "queued": "Queued",
+      "failed": "Failed"
+    }
   }
 }

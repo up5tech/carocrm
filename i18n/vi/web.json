@@ -2418,5 +2418,16 @@
     "open": "Mở trong cửa sổ",
     "expand": "Mở rộng",
     "collapse": "Thu gọn"
+  },
+  "email": {
+    "inbox": {
+      "all": "Tất cả email",
+      "inbox": "Hộp thư đến",
+      "outbound": "Email gửi đi",
+      "drafts": "Bản nháp",
+      "sent": "Đã gửi",
+      "queued": "Đang chờ",
+      "failed": "Thất bại"
+    }
   }
 }

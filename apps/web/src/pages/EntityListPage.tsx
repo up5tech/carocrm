@@ -139,6 +139,34 @@ export function EntityListPage() {
     setOffset(0);
   }, [inboxView, entityName, caseInboxViews]);
 
+  const emailInboxViews = useMemo(() => ([
+    { key: 'all', label: t('web.email.inbox.all'), drafts: [] as FilterDraft[] },
+    { key: 'inbox', label: t('web.email.inbox.inbox'), drafts: [{ field: 'direction', operator: 'equals', value: 'Inbound' }] },
+    { key: 'outbound', label: t('web.email.inbox.outbound'), drafts: [{ field: 'direction', operator: 'equals', value: 'Outbound' }] },
+    { key: 'drafts', label: t('web.email.inbox.drafts'), drafts: [{ field: 'status', operator: 'equals', value: 'Draft' }] },
+    { key: 'sent', label: t('web.email.inbox.sent'), drafts: [{ field: 'status', operator: 'equals', value: 'Sent' }] },
+    { key: 'queued', label: t('web.email.inbox.queued'), drafts: [{ field: 'status', operator: 'equals', value: 'Queued' }] },
+    { key: 'failed', label: t('web.email.inbox.failed'), drafts: [{ field: 'status', operator: 'equals', value: 'Failed' }] },
+  ]), []);
+
+  useEffect(() => {
+    if (entityName !== 'Email') return;
+    const view = emailInboxViews.find((v) => v.key === inboxView);
+    if (!view) return;
+    setDrafts(view.drafts);
+    setOffset(0);
+  }, [inboxView, entityName, emailInboxViews]);
+
+  useEffect(() => {
+    const views =
+      entityName === 'Case' ? caseInboxViews
+      : entityName === 'Email' ? emailInboxViews
+      : [{ key: 'all' }];
+    if (!views.some((view) => view.key === inboxView)) {
+      setInboxView('all');
+    }
+  }, [entityName, inboxView, caseInboxViews, emailInboxViews]);
+
   // Clicking through pages faster than the network answers means several list requests are in
   // flight at once and they do not necessarily come back in order. Only the newest one may write
   // to the grid, otherwise page 3 lands after page 5 and the table shows the wrong rows.
@@ -507,6 +535,10 @@ export function EntityListPage() {
 
       {entityName === 'Case' ? (
         <Tabs activeKey={inboxView} onChange={setInboxView} items={caseInboxViews.map((v) => ({ key: v.key, label: v.label }))} style={{ marginBottom: 12 }} />
+      ) : null}
+
+      {entityName === 'Email' ? (
+        <Tabs activeKey={inboxView} onChange={setInboxView} items={emailInboxViews.map((v) => ({ key: v.key, label: v.label }))} style={{ marginBottom: 12 }} />
       ) : null}
 
       {loadError !== null ? (
