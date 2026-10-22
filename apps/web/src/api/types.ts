@@ -316,6 +316,9 @@ export interface SettingsPatch {
 
 export type Metadata = Record<string, EntityDefinition>;
 
+/** Batch-resolved link display labels: response key → target record id → label. */
+export type LinkLabels = Record<string, Record<string, string>>;
+
 export interface ListResult<T = Record<string, unknown>> {
   list: T[];
   total?: number;
@@ -1173,6 +1176,7 @@ export interface MarketingCampaignTransitionRow {
   validationHash: string | null;
   idempotencyKey: string | null;
   occurredAt: string | null;
+  _linkLabels?: LinkLabels;
 }
 
 export interface MarketingNavigationVisibility {
@@ -1249,6 +1253,7 @@ export interface ServiceDeskTransitionRow {
   actorUserId: string | null;
   actorType: string;
   occurredAt: string | null;
+  _linkLabels?: LinkLabels;
 }
 
 export interface ServiceDeskAssignmentResult {
@@ -1277,6 +1282,7 @@ export interface ServiceDeskAssignmentRow {
   actorUserId: string | null;
   actorType: string;
   occurredAt: string | null;
+  _linkLabels?: LinkLabels;
 }
 
 export interface ServiceDeskQueueWorkload {
@@ -1291,7 +1297,7 @@ export interface ServiceDeskQueueWorkload {
     isActive: boolean;
   };
   source: 'members' | 'team' | 'none';
-  members: readonly { userId: string; activeCases: number }[];
+  members: readonly { userId: string; activeCases: number; _linkLabels?: LinkLabels }[];
   unassigned: number;
 }
 

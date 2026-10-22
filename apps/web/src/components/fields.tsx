@@ -4,37 +4,57 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { api } from '../api/client.js';
-import type { FieldDefinition } from '../api/types.js';
+import type { FieldDefinition, LinkLabels } from '../api/types.js';
 import { formatDateTime, formatNumber, t } from '../state/i18n.js';
 import { fieldLabel, recordLabel } from '../state/metadata.js';
 import { isJsonPayload, JsonFieldValue } from './JsonValue.js';
 
 const { Link } = Typography;
 
+/** Reads `_linkLabels` off a row; `undefined` means the server did not resolve them. */
+export function linkLabelsOf(row: { _linkLabels?: unknown } | undefined): LinkLabels | undefined {
+  const value = row?._linkLabels;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  return value as LinkLabels;
+}
+
 function enumOptions(field: FieldDefinition): string[] {
   return field.values ?? field.enum ?? [];
 }
 
 /** Resolves a linked record id to its display label (PLAN §40.2 relationship-aware fields). */
-export function LinkValue({ entity, id }: { entity: string; id: string }) {
-  const [label, setLabel] = useState<string | undefined>(undefined);
+export function LinkValue({
+  entity,
+  id,
+  label,
+  resolve = true,
+}: {
+  entity: string;
+  id: string;
+  /** Label already resolved by the API; skips the per-record detail request. */
+  label?: string | undefined;
+  /** Whether a missing label should be fetched. A supplied (even empty) label map is authoritative. */
+  resolve?: boolean;
+}) {
+  const [loaded, setLoaded] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    if (!resolve || label !== undefined) return;
     let active = true;
     api
       .get(entity, id)
       .then((record) => {
-        if (active) setLabel(recordLabel(record));
+        if (active) setLoaded(recordLabel(record));
       })
       .catch(() => {
-        if (active) setLabel(undefined);
+        if (active) setLoaded(undefined);
       });
     return () => {
       active = false;
     };
-  }, [entity, id]);
+  }, [entity, id, label, resolve]);
 
-  return <RouterLink to={`/${entity}/${encodeURIComponent(id)}`}>{label ?? id}</RouterLink>;
+  return <RouterLink to={`/${entity}/${encodeURIComponent(id)}`}>{label ?? loaded ?? id}</RouterLink>;
 }
 
 /**
@@ -48,12 +68,18 @@ export function FieldValue({
   value,
   variant = 'detail',
   label,
+  fieldName,
+  linkLabels,
 }: {
   field: FieldDefinition;
   value: unknown;
   variant?: 'detail' | 'inline';
   /** The field's resolved label; only the JSON payload renderer needs it. */
   label?: string;
+  /** Metadata name of the field, used to look its link labels up. */
+  fieldName?: string;
+  /** Labels returned with the record; when present, link fields never fetch their target. */
+  linkLabels?: LinkLabels | undefined;
 }) {
   if (value === undefined || value === null || value === '') return <span style={{ color: 'rgba(0,0,0,0.25)' }}>—</span>;
 
@@ -109,7 +135,8 @@ export function FieldValue({
       const target = field.entityKey;
       const id = String(value);
       if (!target) return <span>{id}</span>;
-      return <LinkValue entity={target} id={id} />;
+      const resolved = fieldName !== undefined ? linkLabels?.[fieldName]?.[id] : undefined;
+      return <LinkValue entity={target} id={id} label={resolved} resolve={linkLabels === undefined} />;
     }
     case 'linkMultiple':
     case 'attachmentMultiple': {
@@ -120,7 +147,12 @@ export function FieldValue({
         <span>
           {ids.map((id) => (
             <span key={String(id)}>
-              <LinkValue entity={target} id={String(id)} />{' '}
+              <LinkValue
+                entity={target}
+                id={String(id)}
+                label={fieldName !== undefined ? linkLabels?.[fieldName]?.[String(id)] : undefined}
+                resolve={linkLabels === undefined}
+              />{' '}
             </span>
           ))}
         </span>

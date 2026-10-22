@@ -23,7 +23,7 @@ import type {
   MarketingCampaignTransitionRow,
 } from '../api/types.js';
 import { formatDateTime, t } from '../state/i18n.js';
-import { LinkValue } from './fields.js';
+import { linkLabelsOf,LinkValue } from './fields.js';
 
 interface CampaignLifecycleActionsProps {
   readonly campaignId: string;
@@ -312,7 +312,18 @@ export function CampaignLifecycleActions({ campaignId, onChanged }: CampaignLife
             title: t('web.marketingAutomation.history.actor'),
             dataIndex: 'actorUserId',
             width: 170,
-            render: (value: string | null) => (value ? <LinkValue entity="User" id={value} /> : '—'),
+            render: (value: string | null, row: MarketingCampaignTransitionRow) => {
+              if (!value) return '—';
+              const labels = linkLabelsOf(row);
+              return (
+                <LinkValue
+                  entity="User"
+                  id={value}
+                  label={labels?.['actorUserId']?.[value]}
+                  resolve={labels === undefined}
+                />
+              );
+            },
           },
         ]}
       />

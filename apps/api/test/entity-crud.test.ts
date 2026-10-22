@@ -325,6 +325,25 @@ describe('generic entity API — relations', () => {
     expect(related.status).toBe(200);
     const list = related.body['list'] as Record<string, unknown>[];
     expect(list.some((item) => item['id'] === contactId)).toBe(true);
+    // A related row carries the linked account's label, so the SPA does not fetch it per row.
+    const row = list.find((item) => item['id'] === contactId) as Record<string, Record<string, Record<string, string>>>;
+    expect(row['_linkLabels']?.['accountId']?.[accountId]).toBe(`Rel ${runId}`);
+
+    const read = await call('GET', `/api/v1/Contact/${contactId}`);
+    expect(read.status).toBe(200);
+    expect((read.body['_linkLabels'] as Record<string, Record<string, string>>)['accountId']?.[accountId]).toBe(
+      `Rel ${runId}`,
+    );
+
+    const contactList = await call(
+      'GET',
+      `/api/v1/Contact?where=${encodeURIComponent(JSON.stringify([{ field: 'id', operator: 'equals', value: contactId }]))}`,
+    );
+    const listed = (contactList.body['list'] as Record<string, unknown>[])[0] as Record<
+      string,
+      Record<string, Record<string, string>>
+    >;
+    expect(listed['_linkLabels']?.['accountId']?.[accountId]).toBe(`Rel ${runId}`);
   });
 
   it('links and unlinks explicitly through entity_links', async () => {

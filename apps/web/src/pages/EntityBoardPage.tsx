@@ -18,7 +18,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api, type WhereClause } from '../api/client.js';
 import type { FieldDefinition } from '../api/types.js';
-import { FieldValue } from '../components/fields.js';
+import { FieldValue, linkLabelsOf } from '../components/fields.js';
 import { t } from '../state/i18n.js';
 import {
   boardGroupFields,
@@ -456,7 +456,13 @@ function BoardCardContent({
           {cardEntries.map((entry) => (
             <span key={entry.name} className="carocrm-board-card-field">
               <span className="carocrm-board-card-field-label">{fieldLabel(entry.name, entry.field)}</span>
-              <FieldValue field={entry.field} value={row[entry.name]} variant="inline" />
+              <FieldValue
+                field={entry.field}
+                value={row[entry.name]}
+                variant="inline"
+                fieldName={entry.name}
+                linkLabels={linkLabelsOf(row)}
+              />
             </span>
           ))}
         </div>

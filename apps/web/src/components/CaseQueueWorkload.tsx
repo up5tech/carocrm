@@ -13,7 +13,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client.js';
 import type { ServiceDeskQueueWorkload } from '../api/types.js';
 import { t } from '../state/i18n.js';
-import { LinkValue } from './fields.js';
+import { linkLabelsOf,LinkValue } from './fields.js';
 
 interface CaseQueueWorkloadProps {
   readonly queueId: string;
@@ -75,7 +75,17 @@ export function CaseQueueWorkload({ queueId }: CaseQueueWorkloadProps) {
               {
                 title: t('web.serviceDesk.columnAgent'),
                 dataIndex: 'userId',
-                render: (value: string) => <LinkValue entity="User" id={value} />,
+                render: (value: string, row: { userId: string; activeCases: number; _linkLabels?: unknown }) => {
+                  const labels = linkLabelsOf(row);
+                  return (
+                    <LinkValue
+                      entity="User"
+                      id={value}
+                      label={labels?.['userId']?.[value]}
+                      resolve={labels === undefined}
+                    />
+                  );
+                },
               },
               {
                 title: t('web.serviceDesk.columnActiveCases'),

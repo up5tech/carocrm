@@ -7,7 +7,7 @@ search/import/export/dashboards, the extension SDK, the workflow engine and the 
 | Capability | Espo baseline | This implementation | Priority | State |
 |---|---|---|---|---|
 | CRUD REST API under `/api/v1` | v9.3.x | generic `/api/v1/:entity` + relations | P0 | implemented |
-| List envelope `{list,total,offset,count}` | v9.3.x | same shape; `?total=false` opts out of the count | P0 | implemented |
+| List envelope `{list,total,offset,count}` | v9.3.x | same shape; `?total=false` opts out of the count; each record adds `_linkLabels` (link field → record id → display label) resolved in one batched, ACL-scoped read per target entity | P0 | implemented |
 | Error envelope `{error:{code,message,details}}` | v9.3.x (plain `error` string upstream) | machine codes per PLAN §47 — intentional deviation | P0 | implemented |
 | Metadata (`GET /Metadata`) | v9.3.x | DB-backed scopes, version header, admin patch | P0 | implemented |
 | Entity Manager (custom entities/fields) | v9.3.x | metadata patch API + admin UI (create entity, add/disable fields) | P0 | implemented |

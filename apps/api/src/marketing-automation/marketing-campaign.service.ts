@@ -88,6 +88,7 @@ export interface CampaignTransitionView {
   readonly validationHash: string | null;
   readonly idempotencyKey: string | null;
   readonly occurredAt: string | null;
+  _linkLabels?: Record<string, Record<string, string>>;
 }
 
 /** The commands whose permission to proceed is the send-readiness report (§5.1). */
@@ -130,6 +131,7 @@ export class MarketingCampaignService {
     const list = rows
       .map((row) => toTransitionView(row.id, row.data))
       .sort((left, right) => (left.occurredAt ?? "").localeCompare(right.occurredAt ?? ""));
+    await this.entities.attachLinkLabels(list, { actorUserId: "User" });
     return { list };
   }
 

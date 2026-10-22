@@ -38,6 +38,10 @@ missing records are `404`.
 | GET | `/action/case/:id/duplicateCandidates` | `Case` read | up to ten readable duplicate candidates |
 | POST | `/action/case/:id/merge` | record `edit` | `{intoCaseId}`; atomic, audited merge |
 
+`history`, `assignments` and `workload` rows carry `_linkLabels` (response key → record id → label),
+resolved in one batch per target entity under that entity's read ACL. The panel renders the actor,
+assignee and queue from those labels instead of fetching each linked record.
+
 ## Channels
 
 | Method | Path | Permission | Purpose |

@@ -21,7 +21,7 @@ import type {
   ServiceDeskTransitionRow,
 } from '../api/types.js';
 import { formatDateTime, t } from '../state/i18n.js';
-import { LinkValue } from './fields.js';
+import { linkLabelsOf,LinkValue } from './fields.js';
 
 interface CaseLifecycleActionsProps {
   readonly caseId: string;
@@ -285,7 +285,18 @@ export function CaseLifecycleActions({ caseId, onChanged }: CaseLifecycleActions
             title: t('web.serviceDesk.columnActor'),
             dataIndex: 'actorUserId',
             width: 180,
-            render: (value: string | null) => (value ? <LinkValue entity="User" id={value} /> : '—'),
+            render: (value: string | null, row: ServiceDeskTransitionRow) => {
+              if (!value) return '—';
+              const labels = linkLabelsOf(row);
+              return (
+                <LinkValue
+                  entity="User"
+                  id={value}
+                  label={labels?.['actorUserId']?.[value]}
+                  resolve={labels === undefined}
+                />
+              );
+            },
           },
         ]}
       />
@@ -305,12 +316,34 @@ export function CaseLifecycleActions({ caseId, onChanged }: CaseLifecycleActions
               {
                 title: t('web.serviceDesk.columnAssignedTo'),
                 dataIndex: 'assignedUserId',
-                render: (value: string | null) => (value ? <LinkValue entity="User" id={value} /> : t('web.serviceDesk.unassigned')),
+                render: (value: string | null, row: ServiceDeskAssignmentRow) => {
+                  if (!value) return t('web.serviceDesk.unassigned');
+                  const labels = linkLabelsOf(row);
+                  return (
+                    <LinkValue
+                      entity="User"
+                      id={value}
+                      label={labels?.['assignedUserId']?.[value]}
+                      resolve={labels === undefined}
+                    />
+                  );
+                },
               },
               {
                 title: t('web.serviceDesk.columnQueue'),
                 dataIndex: 'queueId',
-                render: (value: string | null) => (value ? <LinkValue entity="CaseQueue" id={value} /> : '—'),
+                render: (value: string | null, row: ServiceDeskAssignmentRow) => {
+                  if (!value) return '—';
+                  const labels = linkLabelsOf(row);
+                  return (
+                    <LinkValue
+                      entity="CaseQueue"
+                      id={value}
+                      label={labels?.['queueId']?.[value]}
+                      resolve={labels === undefined}
+                    />
+                  );
+                },
               },
               { title: t('web.serviceDesk.columnStrategy'), dataIndex: 'strategy', width: 130 },
               { title: t('web.serviceDesk.columnReason'), dataIndex: 'reason', render: (value: string | null) => value ?? '—' },

@@ -101,6 +101,7 @@ export interface CaseAssignmentView {
   readonly actorUserId: string | null;
   readonly actorType: string;
   readonly occurredAt: string | null;
+  _linkLabels?: Record<string, Record<string, string>>;
 }
 
 export interface QueueView {
@@ -117,7 +118,11 @@ export interface QueueView {
 export interface QueueWorkload {
   readonly queue: QueueView;
   readonly source: "members" | "team" | "none";
-  readonly members: readonly { readonly userId: string; readonly activeCases: number }[];
+  readonly members: readonly {
+    readonly userId: string;
+    readonly activeCases: number;
+    _linkLabels?: Record<string, Record<string, string>>;
+  }[];
   readonly unassigned: number;
 }
 
@@ -175,6 +180,15 @@ export class CaseAssignmentService {
     const list = rows
       .map((row) => toAssignmentView(row.id, row.data))
       .sort((left, right) => (left.occurredAt ?? "").localeCompare(right.occurredAt ?? ""));
+    await this.entities.attachLinkLabels(list, {
+      previousAssignedUserId: "User",
+      assignedUserId: "User",
+      previousTeamId: "Team",
+      teamId: "Team",
+      queueId: "CaseQueue",
+      routingRuleId: "RoutingRule",
+      actorUserId: "User",
+    });
     return { list };
   }
 
@@ -260,10 +274,12 @@ export class CaseAssignmentService {
     await this.assertWorkloadAccess(queue);
     const eligibility = await this.eligibleAgents(queue);
     const counts = await this.records.activeCaseCounts(eligibility.userIds);
+    const members = eligibility.userIds.map((userId) => ({ userId, activeCases: counts.get(userId) ?? 0 }));
+    await this.entities.attachLinkLabels(members, { userId: "User" });
     return {
       queue,
       source: eligibility.source,
-      members: eligibility.userIds.map((userId) => ({ userId, activeCases: counts.get(userId) ?? 0 })),
+      members,
       unassigned: await this.records.countUnassignedInQueue(queueId),
     };
   }

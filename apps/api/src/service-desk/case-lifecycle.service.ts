@@ -85,6 +85,7 @@ export interface CaseTransitionView {
   readonly actorUserId: string | null;
   readonly actorType: string;
   readonly occurredAt: string | null;
+  _linkLabels?: Record<string, Record<string, string>>;
 }
 
 @Injectable()
@@ -131,6 +132,7 @@ export class CaseLifecycleService {
     const list = rows
       .map((row) => toTransitionView(row.id, row.data))
       .sort((left, right) => (left.occurredAt ?? "").localeCompare(right.occurredAt ?? ""));
+    await this.entities.attachLinkLabels(list, { actorUserId: "User" });
     return { list };
   }
 

@@ -326,10 +326,16 @@ describe('assignment, queues and routing (§5.3, 19-SD.5)', () => {
 
     const history = await call('GET', `/api/v1/ServiceDesk/action/case/${id}/assignments`);
     expect(history.status).toBe(200);
-    const list = history.body['list'] as { assignedUserId: string; previousAssignedUserId: string | null }[];
+    const list = history.body['list'] as {
+      assignedUserId: string;
+      previousAssignedUserId: string | null;
+      _linkLabels?: Record<string, Record<string, string>>;
+    }[];
     expect(list).toHaveLength(1);
     expect(list[0]?.assignedUserId).toBe(agentA.id);
     expect(list[0]?.previousAssignedUserId).toBeNull();
+    // The panel renders the agent from this batch label instead of fetching the user per row.
+    expect(list[0]?._linkLabels?.['assignedUserId']?.[agentA.id]).toContain('Tester');
   });
 
   it('assigns a case to a team', async () => {
@@ -482,9 +488,14 @@ describe('assignment, queues and routing (§5.3, 19-SD.5)', () => {
 
     const res = await call('GET', `/api/v1/ServiceDesk/action/queues/${queueId}/workload`);
     expect(res.status, JSON.stringify(res.body)).toBe(200);
-    const members = res.body['members'] as { userId: string; activeCases: number }[];
+    const members = res.body['members'] as {
+      userId: string;
+      activeCases: number;
+      _linkLabels?: Record<string, Record<string, string>>;
+    }[];
     const memberA = members.find((member) => member.userId === agentA.id);
     expect(memberA?.activeCases).toBeGreaterThanOrEqual(1);
+    expect(memberA?._linkLabels?.['userId']?.[agentA.id]).toContain('Tester');
     expect(res.body['unassigned']).toBeGreaterThanOrEqual(1);
   });
 

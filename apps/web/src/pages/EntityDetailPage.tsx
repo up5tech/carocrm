@@ -11,7 +11,7 @@ import { CaseLifecycleActions } from '../components/CaseLifecycleActions.js';
 import { CaseQueueWorkload } from '../components/CaseQueueWorkload.js';
 import { CommunicationsPanel } from '../components/CommunicationsPanel.js';
 import { DocsLink } from '../components/docs/DocsLink.js';
-import { FieldValue, useLinkOptions } from '../components/fields.js';
+import { FieldValue, linkLabelsOf, useLinkOptions } from '../components/fields.js';
 import { isJsonPayload } from '../components/JsonValue.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
 import { PortalCaseConversation } from '../components/PortalCaseConversation.js';
@@ -356,7 +356,14 @@ export function EntityDetailPage() {
     list.map((entry) => ({
       key: entry.name,
       label: fieldLabel(entry.name, entry.field, metadata.data),
-      children: <FieldValue field={entry.field} value={record?.[entry.name]} />,
+      children: (
+        <FieldValue
+          field={entry.field}
+          value={record?.[entry.name]}
+          fieldName={entry.name}
+          linkLabels={linkLabelsOf(record ?? undefined)}
+        />
+      ),
     }));
 
   /**

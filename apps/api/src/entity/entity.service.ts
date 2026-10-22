@@ -15,6 +15,7 @@ import type { AclPredicate } from '../acl/acl-api.service.js';
 import { AclApiService } from '../acl/acl-api.service.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
+import { DatabaseService } from '../database/database.service.js';
 import { HookRegistry } from '../hooks/hook.registry.js';
 import { RecordLogicService } from '../logic/record-logic.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
@@ -62,6 +63,12 @@ export interface RecordMutation {
 
 const LINK_SINGLE_TYPES: ReadonlySet<string> = new Set(['link', 'linkOne', 'foreign']);
 const LINK_MULTIPLE_TYPES: ReadonlySet<string> = new Set(['linkMultiple', 'attachmentMultiple']);
+/**
+ * Link targets that live in the identity tables rather than `entity_records`. Their read
+ * endpoints are administrator-only, so label resolution mirrors that gate instead of the
+ * metadata ACL (which has no definition for them).
+ */
+const IDENTITY_LINK_TARGETS: ReadonlySet<string> = new Set(['User', 'Team']);
 const PHYSICAL_RESIDENT: ReadonlySet<string> = new Set([
   'id',
   'name',
@@ -83,6 +90,7 @@ export class EntityCrudService {
     @Inject(ENTITY_STORE) private readonly store: PostgresRecordStore,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
     @Inject(AclApiService) private readonly acl: AclApiService,
+    @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(HookRegistry) private readonly hooks: HookRegistry,
     @Inject(RecordLogicService) private readonly logic: RecordLogicService,
@@ -99,7 +107,7 @@ export class EntityCrudService {
     const acl = await this.acl.recordPredicate(entity, 'read');
     const countTotal = wantsTotal(query);
     const result = await this.store.findMany(entity, { translated, acl, countTotal });
-    const list = await Promise.all(result.list.map((record) => this.serialize(entity, record, translated.select)));
+    const list = await this.serializeMany(entity, result.list, translated.select);
     return {
       list,
       offset: result.offset,
@@ -128,7 +136,9 @@ export class EntityCrudService {
     await this.acl.assertAccess(entity, 'read');
     const record = await this.loadScoped(entity, 'read', id);
     const projection = select !== undefined ? this.translate(entity, { select }).select : undefined;
-    return this.serialize(entity, record, projection);
+    const dto = await this.serialize(entity, record, projection);
+    await this.attachLinkLabels([dto], this.linkTargetsOf(entity));
+    return dto;
   }
 
   /**
@@ -168,7 +178,7 @@ export class EntityCrudService {
 
     const countTotal = wantsTotal(query);
     const result = await this.store.findMany(target, { translated, acl, anyOf, countTotal });
-    const list = await Promise.all(result.list.map((record) => this.serialize(target, record, translated.select)));
+    const list = await this.serializeMany(target, result.list, translated.select);
     return {
       list,
       offset: result.offset,
@@ -551,6 +561,145 @@ export class EntityCrudService {
     }
     return this.acl.stripRestricted(entity, dto);
   }
+
+  private async serializeMany(
+    entity: string,
+    records: readonly EntityRecord[],
+    select?: readonly string[] | undefined,
+  ): Promise<Record<string, unknown>[]> {
+    const dtos = await Promise.all(records.map((record) => this.serialize(entity, record, select)));
+    await this.attachLinkLabels(dtos, this.linkTargetsOf(entity));
+    return dtos;
+  }
+
+  /** Link fields of an entity and the entity each points at, as `attachLinkLabels` expects. */
+  private linkTargetsOf(entity: string): Record<string, string> {
+    const links: Record<string, string> = {};
+    for (const [name, def] of Object.entries(this.metadata.registry.getFields(entity))) {
+      if (!isLinkField(def)) continue;
+      const target = def.entityKey;
+      if (!target || !this.isLabelTarget(target)) continue;
+      links[name] = target;
+    }
+    return links;
+  }
+
+  private isLabelTarget(target: string): boolean {
+    return this.metadata.registry.hasEntity(target) || IDENTITY_LINK_TARGETS.has(target);
+  }
+
+  /**
+   * Adds `_linkLabels` (row key → target id → display label) to a batch of response rows.
+   *
+   * `links` maps a row key to the entity its ids reference, so both generic record pages and
+   * module-specific panels (workload, lifecycle history) can resolve their link columns the same
+   * way. Labels are resolved once per target entity for the whole batch, under that entity's read
+   * ACL: a target the caller cannot read (or that no longer exists) has no entry, and the client
+   * shows the id it already has. The map is present whenever a linked key appears in the rows,
+   * even if empty, so clients can treat it as authoritative instead of fetching each record.
+   */
+  async attachLinkLabels<T extends object>(rows: readonly T[], links: Readonly<Record<string, string>>): Promise<void> {
+    if (rows.length === 0) return;
+    const entries = Object.entries(links).filter(
+      ([name, target]) => this.isLabelTarget(target) && rows.some((row) => name in row),
+    );
+    if (entries.length === 0) return;
+
+    const idsByTarget = new Map<string, Set<string>>();
+    for (const [name, target] of entries) {
+      for (const row of rows) {
+        for (const id of linkIds((row as Record<string, unknown>)[name])) {
+          const ids = idsByTarget.get(target) ?? new Set<string>();
+          ids.add(id);
+          idsByTarget.set(target, ids);
+        }
+      }
+    }
+
+    const labelsByTarget = new Map<string, Map<string, string>>();
+    for (const [target, ids] of idsByTarget) {
+      if (ids.size === 0) continue;
+      const labels = await this.linkLabelsFor(target, ids);
+      if (labels.size > 0) labelsByTarget.set(target, labels);
+    }
+
+    for (const row of rows) {
+      const dto = row as Record<string, unknown>;
+      const labels: Record<string, Record<string, string>> = {};
+      for (const [name, target] of entries) {
+        const targetLabels = labelsByTarget.get(target);
+        if (targetLabels === undefined) continue;
+        const fieldLabels: Record<string, string> = {};
+        for (const id of linkIds(dto[name])) {
+          const label = targetLabels.get(id);
+          if (label !== undefined) fieldLabels[id] = label;
+        }
+        labels[name] = fieldLabels;
+      }
+      dto['_linkLabels'] = labels;
+    }
+  }
+
+  private async linkLabelsFor(target: string, ids: ReadonlySet<string>): Promise<Map<string, string>> {
+    if (IDENTITY_LINK_TARGETS.has(target)) return this.identityLabels(target, ids);
+    try {
+      await this.acl.assertAccess(target, 'read');
+    } catch {
+      return new Map();
+    }
+    const acl = await this.acl.recordPredicate(target, 'read');
+    const found = await this.store.findMany(target, {
+      anyOf: { ids: [...ids] },
+      acl,
+      countTotal: false,
+      limit: ids.size,
+    });
+    const fields = this.metadata.registry.getFields(target);
+    const displayField = this.metadata.registry.getEntity(target)?.record.displayField;
+    const visible = new Set(await this.acl.visibleFields(target));
+    const readable = (field: string): boolean => !(field in fields) || visible.has(field);
+    const labels = new Map<string, string>();
+    for (const record of found.list) {
+      const display = displayField !== undefined && readable(displayField) ? record.data[displayField] : undefined;
+      if (typeof display === 'string' && display !== '') {
+        labels.set(record.id, display);
+        continue;
+      }
+      const name = record.data['name'];
+      if (typeof name === 'string' && name !== '' && readable('name')) labels.set(record.id, name);
+    }
+    return labels;
+  }
+
+  /**
+   * Labels for the identity tables. `GET /User/:id` and `GET /Team/:id` are administrator-only,
+   * so a non-admin page keeps the raw id it saw when the client fetched those endpoints itself.
+   */
+  private async identityLabels(target: string, ids: ReadonlySet<string>): Promise<Map<string, string>> {
+    const labels = new Map<string, string>();
+    if (!this.scope.isAdmin || ids.size === 0) return labels;
+    if (target === 'User') {
+      const rows = await this.database.db
+        .selectFrom('users')
+        .select(['id', 'first_name', 'last_name', 'user_name'])
+        .where('id', 'in', [...ids])
+        .where('is_deleted', '=', false)
+        .execute();
+      for (const row of rows) {
+        const name = [row.first_name, row.last_name].filter(Boolean).join(' ') || row.user_name;
+        labels.set(row.id, name);
+      }
+    } else if (target === 'Team') {
+      const rows = await this.database.db
+        .selectFrom('teams')
+        .select(['id', 'name'])
+        .where('id', 'in', [...ids])
+        .where('is_deleted', '=', false)
+        .execute();
+      for (const row of rows) labels.set(row.id, row.name);
+    }
+    return labels;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -559,6 +708,11 @@ export class EntityCrudService {
 
 function isLinkField(def: FieldDefinition): boolean {
   return LINK_SINGLE_TYPES.has(def.type) || LINK_MULTIPLE_TYPES.has(def.type);
+}
+
+function linkIds(value: unknown): string[] {
+  const source = Array.isArray(value) ? value : [value];
+  return source.filter((item): item is string => typeof item === 'string' && item !== '');
 }
 
 function readVersion(value: unknown): number | undefined {  if (value === undefined || value === null || value === '') return undefined;

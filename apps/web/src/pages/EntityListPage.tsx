@@ -7,7 +7,7 @@ import { api, ApiError, type SavedFilterRow, type WhereClause } from '../api/cli
 import { DocsLink } from '../components/docs/DocsLink.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ErrorState } from '../components/ErrorState.js';
-import { FieldValue } from '../components/fields.js';
+import { FieldValue, linkLabelsOf } from '../components/fields.js';
 import { isJsonPayload } from '../components/JsonValue.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { t } from '../state/i18n.js';
@@ -579,7 +579,13 @@ export function EntityListPage() {
                       {String(row[entry.name] ?? '')}
                     </Link>
                   ) : (
-                    <FieldValue field={entry.field} value={row[entry.name]} variant="inline" />
+                    <FieldValue
+                      field={entry.field}
+                      value={row[entry.name]}
+                      variant="inline"
+                      fieldName={entry.name}
+                      linkLabels={linkLabelsOf(row)}
+                    />
                   )}
                   {editError && isEditing ? <Typography.Text type="danger" style={{ fontSize: 11 }}>{editError}</Typography.Text> : null}
                 </div>
