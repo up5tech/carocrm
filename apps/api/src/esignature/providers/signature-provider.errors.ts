@@ -136,6 +136,21 @@ export function toModuleError(error: unknown, providerKey: string): ESignatureEr
           { providerCode: error.code, retryAfterMs: error.retryAfterMs },
           429,
         );
+      case 'configuration_invalid':
+        return new ESignatureError(
+          'SIGNATURE_CONNECTION_NOT_AVAILABLE',
+          'The installed DocuSign credentials are not valid, so this connection cannot be authorized.',
+          { providerCode: error.code, category: error.category },
+          422,
+        );
+      case 'transient':
+      case 'provider_outage':
+        return new ESignatureError(
+          'SIGNATURE_CONNECTION_NOT_AVAILABLE',
+          'The signature provider could not be reached. The request has not been sent again.',
+          { providerCode: error.code, category: error.category },
+          503,
+        );
       case 'not_found':
         return new ESignatureError(
           'SIGNATURE_REQUEST_INVALID_STATE',

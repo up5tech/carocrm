@@ -66,7 +66,10 @@ export interface SignatureConnection {
  * and nothing but a completed authorization leaves it (plan §9.2).
  */
 export const CONNECTION_TRANSITIONS: Readonly<Record<ESignatureConnectionStatus, readonly ESignatureConnectionStatus[]>> = {
-  not_connected: ['connected', 'error', 'disabled'],
+  // `reauthorization_required` is reachable from `not_connected` since ES.4, because DocuSign can
+  // answer a first authorization with a grant that is real but insufficient: the consent exists, the
+  // scopes do not, and the state that says so is exactly this one (plan §6.1 `consentStatus`).
+  not_connected: ['connected', 'reauthorization_required', 'error', 'disabled'],
   connected: ['reauthorization_required', 'disabled', 'error'],
   reauthorization_required: ['connected', 'disabled', 'not_connected', 'error'],
   disabled: ['connected', 'not_connected'],
@@ -168,11 +171,11 @@ export class SignatureConnectionRepository {
   async create(input: {
     name: string;
     environment: ESignatureConnectionEnvironment;
-    oauthClientId?: string;
-    redirectUri?: string;
-    connectReference?: string;
-    createdById?: string;
-    id?: string;
+    oauthClientId?: string | undefined;
+    redirectUri?: string | undefined;
+    connectReference?: string | undefined;
+    createdById?: string | undefined;
+    id?: string | undefined;
   }): Promise<SignatureConnection> {
     const name = input.name.trim();
     if (name === '') throw new ValidationError('A signature connection needs a name.');
@@ -220,13 +223,13 @@ export class SignatureConnectionRepository {
     id: string,
     context: {
       accountId: string;
-      accountName?: string;
+      accountName?: string | undefined;
       baseUri: string;
-      subjectUserId?: string;
+      subjectUserId?: string | undefined;
       grantedScopes: readonly string[];
-      consentStatus?: 'granted' | 'insufficient' | 'revoked';
-      oauthClientId?: string;
-      redirectUri?: string;
+      consentStatus?: 'granted' | 'insufficient' | 'revoked' | undefined;
+      oauthClientId?: string | undefined;
+      redirectUri?: string | undefined;
     },
   ): Promise<SignatureConnection> {
     const current = await this.require(id);
@@ -258,7 +261,15 @@ export class SignatureConnectionRepository {
   }
 
   /** Move a connection, through the same table a caller cannot bypass. */
-  async setStatus(id: string, to: ESignatureConnectionStatus, details: { errorCode?: string; byId?: string } = {}): Promise<SignatureConnection> {
+  async setStatus(
+    id: string,
+    to: ESignatureConnectionStatus,
+    details: {
+      errorCode?: string | undefined;
+      byId?: string | undefined;
+      consentStatus?: 'unknown' | 'granted' | 'insufficient' | 'revoked' | undefined;
+    } = {},
+  ): Promise<SignatureConnection> {
     const current = await this.require(id);
     assertConnectionTransition(current.status, to);
     const row = await this.db
@@ -267,7 +278,7 @@ export class SignatureConnectionRepository {
         status: to,
         // Only an authorization can put a connection back into `connected`; deactivating is separate.
         is_active: to === CONNECTED_STATUS ? current.isActive : false,
-        consent_status: to === 'reauthorization_required' ? 'revoked' : current.consentStatus,
+        consent_status: details.consentStatus ?? (to === 'reauthorization_required' ? 'revoked' : current.consentStatus),
         last_error_at: to === 'error' || to === 'reauthorization_required' ? new Date() : current.lastErrorAt ? new Date(current.lastErrorAt) : null,
         last_error_code: details.errorCode ?? (to === 'error' || to === 'reauthorization_required' ? current.lastErrorCode : null),
         modified_at: new Date(),
@@ -279,8 +290,46 @@ export class SignatureConnectionRepository {
     return toConnection(row);
   }
 
+  /**
+   * Edit the non-secret profile of a connection.
+   *
+   * The environment and the provider key are not editable, and `status` is not reachable from here:
+   * an existing connection is never silently moved between demo and production (plan §9.4), and only
+   * an authorization or an operator switch moves its state.
+   */
+  async updateProfile(
+    id: string,
+    patch: {
+      name?: string | undefined;
+      redirectUri?: string | undefined;
+      connectReference?: string | undefined;
+      oauthClientId?: string | undefined;
+    },
+    byId?: string | undefined,
+  ): Promise<SignatureConnection> {
+    const current = await this.require(id);
+    const name = patch.name?.trim();
+    if (patch.name !== undefined && (name === undefined || name === '')) {
+      throw new ValidationError('A signature connection needs a name.');
+    }
+    const row = await this.db
+      .updateTable('esignature_connections')
+      .set({
+        ...(name !== undefined && name !== '' ? { name } : {}),
+        ...(patch.redirectUri !== undefined ? { redirect_uri: patch.redirectUri.trim() } : {}),
+        ...(patch.connectReference !== undefined ? { connect_reference: patch.connectReference.trim() || null } : {}),
+        ...(patch.oauthClientId !== undefined ? { oauth_client_id: patch.oauthClientId.trim() || null } : {}),
+        modified_at: new Date(),
+        ...(byId !== undefined ? { modified_by_id: byId } : {}),
+      })
+      .where('id', '=', current.id)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    return toConnection(row);
+  }
+
   /** The operator's switch. It stops calls; it never deletes history (plan §21.12). */
-  async setActive(id: string, isActive: boolean, byId?: string): Promise<SignatureConnection> {
+  async setActive(id: string, isActive: boolean, byId?: string | undefined): Promise<SignatureConnection> {
     const current = await this.require(id);
     if (isActive && current.status !== CONNECTED_STATUS) {
       throw new ValidationError('A connection must be authorized before it can be activated.', { status: current.status });
@@ -327,7 +376,7 @@ export class SignatureConnectionRepository {
    * dropped out from under a state it has not reached — and only the `deleted_at` flag makes it
    * invisible. Nothing here removes a request, an event, an artifact or an audit row.
    */
-  async disconnect(id: string, byId?: string): Promise<SignatureConnection> {
+  async disconnect(id: string, byId?: string | undefined): Promise<SignatureConnection> {
     const current = await this.require(id);
     assertConnectionTransition(current.status, 'disabled');
     const row = await this.db

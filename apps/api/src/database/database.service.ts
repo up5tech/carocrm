@@ -1553,6 +1553,42 @@ export interface SignatureAuditEntriesTable {
   created_at: Date;
 }
 
+// ---------------------------------------------------------------------------
+// Phase 19-ES.4 — the module's own credential vault and authorization states (migration 065).
+// Mirrors Advanced Integrations' vault exactly (same `kind` vocabulary, same AES-256-GCM payload),
+// because both of those tables foreign-key `integration_connections (id)` and cannot hold an
+// ESignature connection's credential. `payload_encrypted` is the only credential-shaped column in
+// this module's schema, and no read path returns it.
+// ---------------------------------------------------------------------------
+
+export interface ESignatureCredentialSecretsTable {
+  id: string;
+  connection_id: string;
+  kind: string;
+  state: string;
+  payload_encrypted: string;
+  expires_at: Date | null;
+  created_at: Date;
+  modified_at: Date;
+  rotated_at: Date | null;
+  revoked_at: Date | null;
+}
+
+export interface ESignatureOauthStatesTable {
+  /** The SHA-256 hash of the state; the state itself is never stored. */
+  id: string;
+  connection_id: string;
+  provider_key: string;
+  environment: string;
+  initiated_by: string;
+  code_verifier: string | null;
+  redirect_uri: string;
+  requested_scopes: unknown;
+  created_at: Date;
+  expires_at: Date;
+  consumed_at: Date | null;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
@@ -1651,6 +1687,8 @@ export interface Database {
   signature_webhook_inbox: SignatureWebhookInboxTable;
   signature_template_mappings: SignatureTemplateMappingsTable;
   signature_audit_entries: SignatureAuditEntriesTable;
+  esignature_credential_secrets: ESignatureCredentialSecretsTable;
+  esignature_oauth_states: ESignatureOauthStatesTable;
 }
 
 export type Db = Kysely<Database>;

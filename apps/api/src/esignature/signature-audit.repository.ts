@@ -49,11 +49,11 @@ export interface SignatureAuditEntry {
 export interface AuditInput {
   action: ESignatureAuditAction;
   requestId?: string | null;
-  connectionId?: string | null;
-  recipientId?: string | null;
-  documentId?: string | null;
-  actor?: { type: 'user' | 'system'; id?: string; name?: string };
-  target?: { entityType?: string; id?: string };
+  connectionId?: string | null | undefined;
+  recipientId?: string | null | undefined;
+  documentId?: string | null | undefined;
+  actor?: { type: 'user' | 'system'; id?: string | undefined; name?: string | undefined };
+  target?: { entityType?: string | undefined; id?: string | undefined };
   outcome?: 'ok' | 'refused';
   reasonSafe?: string | null;
   detail?: Record<string, unknown>;

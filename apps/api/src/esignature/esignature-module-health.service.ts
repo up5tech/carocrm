@@ -187,7 +187,7 @@ export class ESignatureModuleHealthService {
         detail:
           missingStructures.length === 0
             ? `${String(ESIGNATURE_TABLES.length)} signature tables are present.`
-            : `Missing: ${missingStructures.join(', ')}. Apply migration 064_phase19_esignature.sql.`,
+            : `Missing: ${missingStructures.join(', ')}. Apply migrations 064_phase19_esignature.sql and 065_phase19_esignature_oauth.sql.`,
       },
       {
         name: 'secret-encryption',
@@ -197,13 +197,14 @@ export class ESignatureModuleHealthService {
           : 'ENCRYPTION_KEY is not configured; no provider credential can be stored or read, so no connection can be used.',
       },
       {
-        // The contract and the fake exist since ES.3; the DocuSign adapter arrives with ES.4. In
-        // production the fake is not registered at all, so `none` there is the correct, expected answer.
+        // Since ES.4 a live DocuSign adapter is bound in production; outside it the fake answers, and
+        // saying so is the point — an operator who reads "live" while a fake is bound would believe a
+        // connection test contacted a provider. `none` means nothing can be attempted.
         name: 'provider-adapter',
-        ok: true,
+        ok: adapterMode !== 'none',
         detail:
           adapterMode === 'none'
-            ? 'No signature provider adapter is bound, so no provider operation can be attempted. The DocuSign adapter arrives with 19-ES.4.'
+            ? 'No signature provider adapter is bound, so no provider operation can be attempted.'
             : `A "${adapterMode}" adapter is bound for "${PROVIDER_KEY_DOCUSIGN}" (${boundAdapter?.adapterVersion ?? ''}, API ${boundAdapter?.providerApiVersion ?? ''}). A fake adapter can never sign a real contract.`,
       },
       {

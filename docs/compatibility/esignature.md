@@ -1,12 +1,14 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 to 19-ES.3 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 through 19-ES.3 delivered** (ES.1 registers the module and the security contract;
+> Phase 19-ES.0 to 19-ES.4 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 through 19-ES.4 delivered** (ES.1 registers the module and the security contract;
 > ES.2 adds the schema and the domain rules; ES.3 adds the provider contract, the registry and the
-> in-process fake). **No DocuSign code exists yet and no provider call is possible** — the real adapter
-> arrives with ES.4, and nothing has been verified against a live account.
+> in-process fake; ES.4 adds DocuSign's OAuth grant, the connection lifecycle and the live adapter's
+> connection operations). **A DocuSign adapter now exists, but nothing in this module has been verified
+> against a live account**: every provider behaviour below was proved against an injected stub transport,
+> and the demo-account validation is ES.22's.
 > Evidence: `docs/implementation/esignature-es1-completion-report.md`, `esignature-es2-completion-report.md`,
-> `esignature-es3-completion-report.md`.
+> `esignature-es3-completion-report.md`, `esignature-es4-completion-report.md`.
 > Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`.
 > Webhook prefix (reserved in ES.1, endpoint delivered in ES.11, which also extends the raw-body hook):
 > `/api/v1/integrations/esignature`.
@@ -38,7 +40,8 @@ or branding is copied. DocuSign product names are used only to describe the exte
 
 | Flow | Status | Why |
 | --- | --- | --- |
-| Confidential Authorization Code Grant | **Default, planned (ES.4)** | An administrator explicitly connects a CRM-owned confidential client; matches the platform's existing OAuth machinery (single-use hashed `state`, PKCE option, exact callback path, advisory-lock refresh in `apps/api/src/advanced-integrations/oauth-flow.service.ts`) |
+| Confidential Authorization Code Grant | **Delivered ES.4, unverified against a live account** | An administrator explicitly connects a CRM-owned confidential client with `signature` + `impersonation` (`extended` optional, `agent`/`admin` never requested). Single-use hashed `state`, mandatory PKCE S256, an allowlisted absolute redirect URI stored per connection, `userinfo` deciding the account id and data-center base URI, and an advisory-lock single-flight refresh — the machinery of `apps/api/src/advanced-integrations/oauth-flow.service.ts`, over this module's own state and vault tables. |
+| Server-to-server JWT grant | **Not implemented, deliberately** | Plan §9.2 makes it non-default: it needs an approved consent model, a private key in the vault and a separate security review. Adding it later is a new client in `providers/docusign/`, not a flag on this one. |
 | JWT bearer grant | Not default; out of the first release | Only for approved server-to-server consent + certificate/key model; requires a separate admin setup path and security review (plan §9.2) |
 | Any other grant | Never | DocuSign deprecates legacy grants; a new integration must not use them |
 
@@ -53,7 +56,7 @@ redirect URIs, secrets and stored account identities are fully separate.
 
 | Behavior | Status | Notes |
 | --- | --- | --- |
-| Connection record and its lifecycle rules | Storage delivered ES.2; authorization ES.4 | The row stores environment, account id, base URI, granted scopes and health stamps; no credential column exists — the vault holds those |
+| Connection record and its lifecycle rules | **Delivered ES.2 (storage) + ES.4 (authorization, test, switch, disconnect)** | The row stores environment, account id, base URI, granted scopes and health stamps; no credential column exists — `esignature_credential_secrets` holds those, encrypted, and no read path returns a value. `reauthorization_required` also clears `is_active`, which is what stops a send after a revoked consent. |
 | Local request persistence and the guarded lifecycle | Delivered ES.2 | Dedicated tables plus the state machine; an envelope id is unique per connection, and a CRM command cannot enter a provider-owned state |
 | Local draft request (no provider call) | Storage ES.2, API ES.6 | A draft is local only; a provider envelope does not exist until preparation |
 | Envelope preparation (provider draft) | Planned ES.9 | Idempotent via correlation; unsent provider drafts abandoned safely |
@@ -126,7 +129,8 @@ terminal state backwards; ambiguity triggers reconciliation (plan §4.7, §10.3)
 
 | Configuration | Status |
 | --- | --- |
-| Fake adapter (no provider) — full lifecycle | **Delivered ES.3** — the initial slice runs end to end against it, including the lost-send/`send_unknown` recovery (`apps/api/test/esignature-flow.test.ts`) |
+| Fake adapter (no provider) — full lifecycle | **Delivered ES.3** — the initial slice runs end to end against it, including the lost-send/`send_unknown` recovery (`apps/api/test/esignature-flow.test.ts`). It is bound outside production, so a development install answers a Test Connection from the fake and the API says so (`adapterMode`). |
+| Live DocuSign adapter | **Partially delivered ES.4** — `connectionStatus` (Test Connection) and `accountContext` only | The envelope, recipient, artifact and Connect operations are declared `false` until ES.9/ES.11/ES.15 write them, so the gate refuses them by name rather than admitting an operation that does not exist (plan §5.2). |
 | DocuSign demo/developer account, single account, authorization-code grant, remote signing, Connect events | Planned deliberate smoke test in ES.22 with synthetic documents/signers; recorded here with date when executed |
 | Production account | Not tested; remains disabled until an explicit administrator enablement (plan §9.4) |
 

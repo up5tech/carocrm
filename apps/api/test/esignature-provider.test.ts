@@ -27,14 +27,14 @@ import {
   type SignatureProviderAdapter,
   type SignatureProviderContext,
 } from '../src/esignature/providers/signature-provider.port.js';
+import { SignatureProviderRegistry } from '../src/esignature/providers/signature-provider.registry.js';
 import {
   connectSignature,
   rawBodyHash,
   readSignatureHeader,
-  verifyConnectSignature,
   valueHash,
+  verifyConnectSignature,
 } from '../src/esignature/providers/signature-provider-signature.js';
-import { SignatureProviderRegistry } from '../src/esignature/providers/signature-provider.registry.js';
 
 /**
  * Phase 19-ES.3 — the provider contract, the registry and the fake adapter

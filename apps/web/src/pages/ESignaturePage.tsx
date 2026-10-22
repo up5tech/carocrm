@@ -9,15 +9,17 @@ import { EmptyState } from '../components/EmptyState.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { t } from '../state/i18n.js';
+import { ESignatureConnectionsPanel } from './esignature/ESignatureConnectionsPanel.js';
 
 /**
  * Phase 19-ES.1 — the ESignature module page
  * (`PLAN_Phase_19_ESignature.md` §13.1, §18 `19-ES.1`).
  *
- * ES.1 registers the module and its security contract; the request list, the send wizard and the
- * progress view arrive with ES.6 and ES.13. What this page can honestly show today is the state the
- * acceptance criteria ask about: whether the module is switched on, why the gate that stands in front
- * of every provider call is closed, and which rights the caller holds.
+ * ES.1 registered the module and its security contract; ES.4 added the provider connections, because
+ * an administrator cannot reach the state the gate reports without a way to create and authorize one.
+ * The request list, the send wizard and the progress view arrive with ES.6 and ES.13. What this page
+ * shows today is the state the acceptance criteria ask about: whether the module is switched on, which
+ * connection stands behind it, why the gate is closed, and which rights the caller holds.
  *
  * Everything on screen is the server's answer. A right the caller lacks is reported by the server and
  * the matching endpoint refuses it too — rendering is never the enforcement (AGENTS.md §5.3).
@@ -48,6 +50,9 @@ export function ESignaturePage() {
 
   const view: ESignatureHealthView = health.data;
   const entries = capabilities.data?.capabilities ?? [];
+  const granted = new Set(entries.filter((entry) => entry.granted).map((entry) => entry.key));
+  const canReadConnections = granted.has('connectionRead');
+  const canManageConnections = granted.has('connectionManage');
 
   return (
     <div className="carocrm-page" style={{ maxWidth: 1080, margin: '0 auto' }}>
@@ -78,6 +83,8 @@ export function ESignaturePage() {
           action={<Button onClick={() => void health.refetch()}>{t('core.common.reload')}</Button>}
         />
       )}
+
+      {canReadConnections ? <ESignatureConnectionsPanel canManage={canManageConnections} /> : null}
 
       <Card className="carocrm-card" title={t('esignature.features.title')} style={{ marginBottom: 16 }}>
         <Table<ESignatureHealthView['features'][number]>

@@ -55,7 +55,10 @@ import type {
   EmailTemplatePreviewView,
   EmailTransportInfo,
   EntityDefinition,
+  ESignatureAuthorizationStart,
   ESignatureCapabilitiesView,
+  ESignatureConnectionTest,
+  ESignatureConnectionView,
   ESignatureHealthView,
   ESignatureNavView,
   ESignatureSettingsView,
@@ -1787,4 +1790,25 @@ export const api = {
     request<ESignatureSettingsView>('/ESignature/action/settings', post(patch)),
   eSignatureGateOperations: () => request<{ operations: readonly string[] }>('/ESignature/action/gate/operations'),
   eSignatureGateCheck: (operation: string) => request<{ operation: string; admitted: boolean }>('/ESignature/action/gate/check', post({ operation })),
+
+  // Phase 19-ES.4 — the provider connection lifecycle. A secret is a write parameter only: no method
+  // here can read one back, because no endpoint returns one.
+  eSignatureConnections: () => request<readonly ESignatureConnectionView[]>('/ESignature/connections'),
+  createESignatureConnection: (input: Record<string, unknown>) =>
+    request<ESignatureConnectionView>('/ESignature/connections', post(input)),
+  updateESignatureConnection: (id: string, input: Record<string, unknown>) =>
+    request<ESignatureConnectionView>(`/ESignature/connections/${encodeURIComponent(id)}`, patch(input)),
+  storeESignatureConnectionSecret: (id: string, kind: string, value: string) =>
+    request<ESignatureConnectionView>(`/ESignature/connections/${encodeURIComponent(id)}/secret`, post({ kind, value })),
+  authorizeESignatureConnection: (id: string) =>
+    request<ESignatureAuthorizationStart>(`/ESignature/connections/${encodeURIComponent(id)}/authorize`, post({})),
+  testESignatureConnection: (id: string) =>
+    request<ESignatureConnectionTest>(`/ESignature/connections/${encodeURIComponent(id)}/test`, post({})),
+  setESignatureConnectionActive: (id: string, active: boolean) =>
+    request<ESignatureConnectionView>(`/ESignature/connections/${encodeURIComponent(id)}/${active ? 'enable' : 'disable'}`, post({})),
+  disconnectESignatureConnection: (id: string) =>
+    request<{ credentialsRemoved: number; statesDiscarded: number; hadRequests: boolean }>(
+      `/ESignature/connections/${encodeURIComponent(id)}/disconnect`,
+      post({}),
+    ),
 };

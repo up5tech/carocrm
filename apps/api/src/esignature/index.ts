@@ -13,23 +13,66 @@
  */
 
 import { ESignatureController } from './esignature.controller.js';
+import { ESignatureConnectionService } from './esignature-connection.service.js';
 import { ESignatureConnectionGate } from './esignature-connection-gate.service.js';
+import { ESignatureCredentialVault } from './esignature-credential-vault.js';
 import { ESignatureModuleHealthService } from './esignature-module-health.service.js';
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
+import { ESignatureOAuthCallbackController } from './esignature-oauth-callback.controller.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { DocuSignAdapter } from './providers/docusign/docusign-adapter.js';
+import {
+  createDefaultDocuSignTransport,
+  DOCUSIGN_TRANSPORT,
+  type DocuSignTransport,
+} from './providers/docusign/docusign-transport.js';
 import { createFakeSignatureProviderAdapter } from './providers/fake-signature-provider.adapter.js';
+import type { SignatureProviderAdapter } from './providers/signature-provider.port.js';
 import { SIGNATURE_PROVIDER_ADAPTERS,SignatureProviderRegistry } from './providers/signature-provider.registry.js';
 import { SignatureAuditRepository } from './signature-audit.repository.js';
 import { SignatureConnectionRepository } from './signature-connection.repository.js';
 import { SignatureDocumentSnapshotRepository } from './signature-document-snapshot.repository.js';
+import { SignatureOAuthStateRepository } from './signature-oauth-state.repository.js';
 import { SignatureProviderEventRepository } from './signature-provider-event.repository.js';
 import { SignatureRecipientRepository } from './signature-recipient.repository.js';
 import { SignatureRequestRepository } from './signature-request.repository.js';
 import { SignatureTemplateMappingRepository } from './signature-template-mapping.repository.js';
 import { SignatureWebhookInboxRepository } from './signature-webhook-inbox.repository.js';
 
-export const ESIGNATURE_CONTROLLERS = [ESignatureController] as const;
+// Two controllers, in this order: the public OAuth callback is a route a browser arrives at with no
+// session, and keeping it out of `ESignatureController` is what lets that controller's invariant —
+// every route checks a capability — stay true. Both are registered before `ENTITY_CONTROLLERS`.
+export const ESIGNATURE_CONTROLLERS = [ESignatureOAuthCallbackController, ESignatureController] as const;
+
+/**
+ * The one HTTP door to DocuSign. A test replaces this token and no socket is opened (plan §17.3); the
+ * default is the platform's own destination gate, so a stored base URI that points at a private or
+ * metadata address is refused before the request leaves the process (plan §9.3, SSRF).
+ *
+ * Declared outside the providers tuple: `as const` would make `inject` readonly, which Nest's
+ * `FactoryProvider` type does not accept.
+ */
+const docuSignTransportProvider = {
+  provide: DOCUSIGN_TRANSPORT,
+  useFactory: () => createDefaultDocuSignTransport(),
+};
+
+/**
+ * The provider adapters this build binds.
+ *
+ * The fake is withheld in production exactly as the connector registrar withholds its own
+ * (`advanced-integrations/connector-registrar.service.ts:243`): a test double reachable by production
+ * code would report a signature request as sent when nothing was. Since ES.4 the live DocuSign adapter
+ * takes its place there, so `docusign` has exactly one answer in every build — and every build can say
+ * which one it got (plan §9.4).
+ */
+const signatureProviderAdaptersProvider = {
+  provide: SIGNATURE_PROVIDER_ADAPTERS,
+  useFactory: (transport: DocuSignTransport): SignatureProviderAdapter[] =>
+    process.env.NODE_ENV === 'production' ? [new DocuSignAdapter(transport)] : [createFakeSignatureProviderAdapter()],
+  inject: [DOCUSIGN_TRANSPORT],
+};
 
 export const ESIGNATURE_PROVIDERS = [
   // The capability gate, the settings document, the visibility report, the module health view and
@@ -50,23 +93,44 @@ export const ESIGNATURE_PROVIDERS = [
   SignatureWebhookInboxRepository,
   SignatureTemplateMappingRepository,
   SignatureAuditRepository,
+  // Phase 19-ES.4 — the connection lifecycle. The state repository, the vault and the service are the
+  // only paths between an administrator, DocuSign's identity host and a stored credential: no
+  // controller reads a secret, and no credential-shaped value is ever a response field (plan §4.1).
+  SignatureOAuthStateRepository,
+  ESignatureCredentialVault,
+  ESignatureConnectionService,
+  docuSignTransportProvider,
   // Phase 19-ES.3 — the provider port. The registry answers for every adapter the build ships, and
-  // the fake is withheld in production exactly as the connector registrar withholds its own
-  // (`advanced-integrations/connector-registrar.service.ts:243`): a test double that can be reached by
-  // production code would report a signature request as sent when nothing was.
+  // `signatureProviderAdaptersProvider` decides which one answers for `docusign`.
   SignatureProviderRegistry,
-  {
-    provide: SIGNATURE_PROVIDER_ADAPTERS,
-    useFactory: () => (process.env.NODE_ENV === 'production' ? [] : [createFakeSignatureProviderAdapter()]),
-  },
+  signatureProviderAdaptersProvider,
 ] as const;
 
 export { ESignatureController } from './esignature.controller.js';
+export {
+  ESIGNATURE_SYSTEM_PRINCIPAL,
+  runAsESignatureSystem,
+} from './esignature-authority.js';
+export {
+  assertRedirectUri,
+  ESIGNATURE_OAUTH_CALLBACK_PATH,
+  ESignatureConnectionService,
+  type SignatureAuthorizationOutcome,
+  type SignatureAuthorizationStart,
+  type SignatureConnectionTest,
+  type SignatureConnectionView,
+  type SignatureCredentialView,
+} from './esignature-connection.service.js';
 export {
   ESIGNATURE_OPERATIONS,
   type ESignatureOperation,
   type GateAssessment,
 } from './esignature-connection-gate.service.js';
+export {
+  ESignatureCredentialVault,
+  type ESignatureCredentialVaultPort,
+  type ESignatureStoredCredential,
+} from './esignature-credential-vault.js';
 export {
   AUDIT_ACTIONS,
   CONNECTED_STATUS,
@@ -118,6 +182,7 @@ export {
   PROVIDER_CAPABILITY_KEYS,
   REQUIRED_CAPABILITIES,
 } from './esignature-module.js';
+export { ESignatureOAuthCallbackController } from './esignature-oauth-callback.controller.js';
 export {
   artifactRetentionFor,
   type ESignatureRetentionClass,
@@ -215,6 +280,12 @@ export {
   type SignatureArtifactKind,
   type SignatureDocumentSnapshot,
 } from './signature-document-snapshot.repository.js';
+export {
+  type ConsumedOAuthState,
+  type NewOAuthState,
+  OAUTH_STATE_TTL_SECONDS,
+  SignatureOAuthStateRepository,
+} from './signature-oauth-state.repository.js';
 export {
   buildEventDedupKey,
   payloadDigest,

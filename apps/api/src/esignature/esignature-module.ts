@@ -244,7 +244,6 @@ export const ESIGNATURE_FEATURES: readonly ESignatureFeatureDescriptor[] = [
  * does not exist yet is a false promise in an admin screen.
  */
 export const PENDING_FEATURES: readonly { readonly key: string; readonly phase: string }[] = [
-  { key: 'connections', phase: '19-ES.4' },
   { key: 'requests', phase: '19-ES.6' },
   { key: 'documents', phase: '19-ES.5' },
   { key: 'templates', phase: '19-ES.7' },
@@ -509,11 +508,14 @@ export const ESIGNATURE_JOB_NAMES = [
 ] as const;
 
 /**
- * The structures this module owns, created by the additive migration
- * `database/migrations/064_phase19_esignature.sql`. No other module may write them (audit §6).
+ * The structures this module owns, created by the additive migrations
+ * `database/migrations/064_phase19_esignature.sql` and `065_phase19_esignature_oauth.sql`. No other
+ * module may write them (audit §6).
  */
 export const ESIGNATURE_TABLES = [
   'esignature_connections',
+  'esignature_credential_secrets',
+  'esignature_oauth_states',
   'signature_requests',
   'signature_recipients',
   'signature_document_snapshots',
@@ -524,7 +526,7 @@ export const ESIGNATURE_TABLES = [
 ] as const;
 
 /** Sub-phases delivered so far, reported verbatim by the health endpoint. */
-export const IMPLEMENTED_PHASES = ['19-ES.0', '19-ES.1', '19-ES.2'] as const;
+export const IMPLEMENTED_PHASES = ['19-ES.0', '19-ES.1', '19-ES.2', '19-ES.3', '19-ES.4'] as const;
 
 export const ESIGNATURE_MODULE = {
   id: 'ESignature',

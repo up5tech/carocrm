@@ -1,10 +1,18 @@
 import { InvalidQueryError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, HttpCode, Inject, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
 
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
-import { OperationProbeSchema, SettingsPatchSchema } from './dto/esignature-shapes.js';
+import {
+  ConnectionAuthorizeSchema,
+  ConnectionCreateSchema,
+  ConnectionSecretSchema,
+  ConnectionUpdateSchema,
+  OperationProbeSchema,
+  SettingsPatchSchema,
+} from './dto/esignature-shapes.js';
+import { ESignatureConnectionService } from './esignature-connection.service.js';
 import { ESIGNATURE_OPERATIONS,ESignatureConnectionGate } from './esignature-connection-gate.service.js';
 import { ESignatureModuleHealthService } from './esignature-module-health.service.js';
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
@@ -37,6 +45,7 @@ export class ESignatureController {
     @Inject(ESignatureSettingsService) private readonly settings: ESignatureSettingsService,
     @Inject(ESignatureNavigationService) private readonly navigation: ESignatureNavigationService,
     @Inject(ESignatureConnectionGate) private readonly gate: ESignatureConnectionGate,
+    @Inject(ESignatureConnectionService) private readonly connections: ESignatureConnectionService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -95,6 +104,112 @@ export class ESignatureController {
   }
 
   // ---------------------------------------------------------------------------
+  // connections (19-ES.4)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The provider connections an administrator can see.
+   *
+   * The capability check lives in the service, not here — and it is `connectionRead`, not `use`: this
+   * answer names the provider account the CRM would send documents through and inventories which
+   * credentials are stored. A signature user has no business reading either (plan §12).
+   */
+  @Get('connections')
+  async listConnections() {
+    return this.connections.list();
+  }
+
+  @Get('connections/:id')
+  async getConnection(@Param('id') id: string) {
+    return this.connections.get(this.parseId(id));
+  }
+
+  /**
+   * Create a connection and store its client secret in the same call.
+   *
+   * The response is the redacted view: the secret that was just written is not in it, and cannot be
+   * read back from anywhere in this module (plan §8.1).
+   */
+  @HttpCode(201)
+  @Post('connections')
+  async createConnection(@Body() body: unknown) {
+    const input = this.parse(ConnectionCreateSchema, body);
+    return this.connections.create(input);
+  }
+
+  @HttpCode(200)
+  @Patch('connections/:id')
+  async updateConnection(@Param('id') id: string, @Body() body: unknown) {
+    return this.connections.update(this.parseId(id), this.parse(ConnectionUpdateSchema, body));
+  }
+
+  /** Write-only credential rotation. The value goes to the vault and is never returned. */
+  @HttpCode(200)
+  @Post('connections/:id/secret')
+  async storeConnectionSecret(@Param('id') id: string, @Body() body: unknown) {
+    const { kind, value } = this.parse(ConnectionSecretSchema, body);
+    return this.connections.storeSecret(this.parseId(id), kind, value);
+  }
+
+  /**
+   * Begin the DocuSign authorization flow: returns the URL the browser is sent to.
+   *
+   * This is the bootstrap path, so it is deliberately not gated by an existing connection — the guard
+   * is the capability plus the module and feature switches inside the service.
+   */
+  @HttpCode(200)
+  @Post('connections/:id/authorize')
+  async authorizeConnection(@Param('id') id: string, @Body() body: unknown) {
+    const { scopes } = this.parse(ConnectionAuthorizeSchema, body);
+    return this.connections.authorize(this.parseId(id), scopes);
+  }
+
+  /**
+   * Re-authorize a connection whose consent expired, was revoked, or was never sufficient.
+   *
+   * The same flow as `authorize`, as its own verb because the administrator's *reason* differs and the
+   * audit trail records which action was taken (plan §9.2).
+   */
+  @HttpCode(200)
+  @Post('connections/:id/re-authorize')
+  async reauthorizeConnection(@Param('id') id: string, @Body() body: unknown) {
+    const { scopes } = this.parse(ConnectionAuthorizeSchema, body);
+    return this.connections.authorize(this.parseId(id), scopes);
+  }
+
+  /** Test Connection: the gate decides admission, then the bound adapter answers. Performs no write. */
+  @HttpCode(200)
+  @Post('connections/:id/test')
+  async testConnection(@Param('id') id: string) {
+    return this.connections.test(this.parseId(id));
+  }
+
+  /** The operator's switch, split into two verbs because the audit action is different either way. */
+  @HttpCode(200)
+  @Post('connections/:id/enable')
+  async enableConnection(@Param('id') id: string) {
+    return this.connections.setActive(this.parseId(id), true);
+  }
+
+  @HttpCode(200)
+  @Post('connections/:id/disable')
+  async disableConnection(@Param('id') id: string) {
+    return this.connections.setActive(this.parseId(id), false);
+  }
+
+  /**
+   * Disconnect: destroy the stored credentials, then soft-delete the connection.
+   *
+   * History survives (plan §21.12); the answer says whether this connection had requests, so an
+   * administrator learns what they just stopped before they learn it from a support ticket.
+   */
+  @HttpCode(200)
+  @Post('connections/:id/disconnect')
+  async disconnectConnection(@Param('id') id: string) {
+    return this.connections.disconnect(this.parseId(id));
+  }
+
+  // ---------------------------------------------------------------------------
   // the gate
   // ---------------------------------------------------------------------------
 
@@ -129,5 +244,19 @@ export class ESignatureController {
       });
     }
     return parsed.data;
+  }
+
+  /**
+   * A connection id from the path.
+   *
+   * Shape only — the repository's own `findById` decides whether the row exists, and an unknown id is a
+   * refusal rather than a hint about which ids this installation holds.
+   */
+  private parseId(value: string): string {
+    const id = value.trim();
+    if (id === '' || id.length > 64) {
+      throw new InvalidQueryError('Invalid ESignature request.', { issues: [{ path: 'id', message: 'A connection identifier is at most 64 characters.' }] });
+    }
+    return id;
   }
 }

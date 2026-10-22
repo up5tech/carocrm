@@ -3147,3 +3147,61 @@ export interface ESignatureSettingsView {
   readonly effective: Readonly<Record<string, boolean>>;
   readonly integrationKeyEnvVars: readonly string[];
 }
+
+// Phase 19-ES.4 — the provider connections. The view is the server's redacted answer: a credential is
+// reported as a kind, a state and an expiry, never as a value (plan §8.1, §12.13).
+export interface ESignatureCredentialView {
+  readonly kind: string;
+  readonly label: string;
+  readonly state: 'active' | 'revoked';
+  readonly expiresAt: string | null;
+  readonly rotatedAt: string | null;
+}
+
+export interface ESignatureConnectionView {
+  readonly id: string;
+  readonly name: string;
+  readonly providerKey: string;
+  readonly environment: 'demo' | 'production';
+  readonly status: 'not_connected' | 'connected' | 'reauthorization_required' | 'disabled' | 'error';
+  readonly isActive: boolean;
+  readonly oauthClientId: string | null;
+  readonly redirectUri: string | null;
+  readonly accountId: string | null;
+  readonly accountName: string | null;
+  readonly baseUri: string | null;
+  readonly grantedScopes: readonly string[];
+  readonly consentStatus: string;
+  readonly lastAuthAt: string | null;
+  readonly lastSuccessfulApiAt: string | null;
+  readonly lastWebhookAt: string | null;
+  readonly lastErrorAt: string | null;
+  readonly lastErrorCode: string | null;
+  readonly pendingAuthorization: boolean;
+  readonly credentials: readonly ESignatureCredentialView[];
+  readonly hasClientSecret: boolean;
+  readonly hasRefreshToken: boolean;
+  readonly accessTokenExpiresAt: string | null;
+  readonly adapterMode: 'live' | 'fake' | 'disabled' | 'none';
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}
+
+/** `POST /ESignature/connections/:id/authorize`. The URL is the only place the state appears. */
+export interface ESignatureAuthorizationStart {
+  readonly connectionId: string;
+  readonly environment: 'demo' | 'production';
+  readonly authorizationUrl: string;
+  readonly expiresAt: string;
+  readonly scopes: readonly string[];
+}
+
+/** `POST /ESignature/connections/:id/test`. */
+export interface ESignatureConnectionTest {
+  readonly connectionId: string;
+  readonly environment: 'demo' | 'production';
+  readonly reachable: boolean;
+  readonly checkedAt: string;
+  readonly detailCode: string;
+  readonly adapterMode: 'live' | 'fake' | 'disabled';
+}

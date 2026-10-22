@@ -106,18 +106,22 @@ export type SignatureRecipientType = (typeof RECIPIENT_TYPES)[number];
  * named in an admin screen. A secret is never a settings field, never a column of a record table,
  * never in a response, and never in a log line.
  *
- * The names are the vault's own vocabulary, deliberately not invented again: the vault table's `kind`
- * column is a CHECK-constrained allowlist shared with Advanced Integrations, and this module reuses
- * that vault as-is (audit §1, §6). So `client_secret` is the DocuSign OAuth client secret,
- * `oauth_refresh_token` the refresh token, and `webhook_secret` the Connect HMAC secret. ES.4 wires
- * the vault to a connection; nothing here can read a value back.
+ * The names are the vault's own vocabulary, deliberately not invented again: the `kind` column of
+ * `integration_credential_secrets` is a CHECK-constrained allowlist shared with Advanced Integrations,
+ * and `esignature_credential_secrets` (ES.4, migration `065`) mirrors it. `api_key` and
+ * `signing_secret` are excluded because no DocuSign credential has that shape. `oauth_access_token`
+ * joins the module's list in ES.4, when the flow that produces it exists: a short-lived bearer value
+ * is still a credential, so it is stored encrypted and never handed to the browser.
+ *
+ * ES.4 wires the vault to a connection; nothing here can read a value back.
  */
-export const SECRET_KINDS = ['client_secret', 'oauth_refresh_token', 'webhook_secret'] as const;
+export const SECRET_KINDS = ['client_secret', 'oauth_access_token', 'oauth_refresh_token', 'webhook_secret'] as const;
 export type ESignatureSecretKind = (typeof SECRET_KINDS)[number];
 
 /** The plain-language meaning of each kind, for the admin screen and the runbook. */
 export const SECRET_KIND_LABELS: Readonly<Record<ESignatureSecretKind, string>> = {
   client_secret: 'DocuSign OAuth client secret',
+  oauth_access_token: 'DocuSign OAuth access token (short-lived)',
   oauth_refresh_token: 'DocuSign refresh token',
   webhook_secret: 'DocuSign Connect HMAC secret',
 };
@@ -153,8 +157,14 @@ export const AUDIT_ACTIONS = [
   'artifact.downloaded',
   'artifact.viewed',
   'connection.created',
+  'connection.updated',
   'connection.authorized',
   'connection.reauthorized',
+  // Added by 19-ES.4, the phase that can perform them: a connection test is an outbound call and a
+  // rotated client secret is an administrator action, so both belong in the trail. Neither may
+  // record a value — the row keeps the outcome and a safe reason only.
+  'connection.tested',
+  'connection.secretRotated',
   'connection.enabled',
   'connection.disabled',
   'connection.disconnected',
