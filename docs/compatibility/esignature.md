@@ -1,8 +1,10 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 and 19-ES.1 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 + 19-ES.1 delivered** (ES.1 registers the module and the security contract; no
-> schema, adapter or provider call yet — see `docs/implementation/esignature-es1-completion-report.md`).
+> Phase 19-ES.0, 19-ES.1 and 19-ES.2 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 + 19-ES.1 + 19-ES.2 delivered** (ES.1 registers the module and the security
+> contract; ES.2 adds the schema and the domain rules — still no adapter and no provider call).
+> Evidence: `docs/implementation/esignature-es1-completion-report.md` and
+> `docs/implementation/esignature-es2-completion-report.md`.
 > Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`.
 > Webhook prefix (reserved in ES.1, endpoint delivered in ES.11, which also extends the raw-body hook):
 > `/api/v1/integrations/esignature`.
@@ -49,8 +51,9 @@ redirect URIs, secrets and stored account identities are fully separate.
 
 | Behavior | Status | Notes |
 | --- | --- | --- |
-| Connection + Test Connection | Planned ES.4 | Stores account ID, base URI, granted scopes, environment badge; health view redacted |
-| Local draft request (no provider call) | Planned ES.6 | Draft is local only; a provider envelope does not exist until preparation |
+| Connection record and its lifecycle rules | Storage delivered ES.2; authorization ES.4 | The row stores environment, account id, base URI, granted scopes and health stamps; no credential column exists — the vault holds those |
+| Local request persistence and the guarded lifecycle | Delivered ES.2 | Dedicated tables plus the state machine; an envelope id is unique per connection, and a CRM command cannot enter a provider-owned state |
+| Local draft request (no provider call) | Storage ES.2, API ES.6 | A draft is local only; a provider envelope does not exist until preparation |
 | Envelope preparation (provider draft) | Planned ES.9 | Idempotent via correlation; unsent provider drafts abandoned safely |
 | Documents from CRM attachments | Planned ES.5 | Authorized bytes only; immutable snapshot + SHA-256 of the exact submitted bytes; source file never overwritten |
 | Provider templates + role mapping | Planned ES.7 | Template IDs stay bound to the owning account; roles validated against an allowlist |

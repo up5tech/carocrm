@@ -104,11 +104,23 @@ export type SignatureRecipientType = (typeof RECIPIENT_TYPES)[number];
  *
  * These are the **only** values that may enter the credential vault, and the only ones that may be
  * named in an admin screen. A secret is never a settings field, never a column of a record table,
- * never in a response, and never in a log line. The vault port is reused from Advanced Integrations
- * (`CREDENTIAL_VAULT` over `integration_credential_secrets` + `ENCRYPTION_KEY`); ES.4 wires it.
+ * never in a response, and never in a log line.
+ *
+ * The names are the vault's own vocabulary, deliberately not invented again: the vault table's `kind`
+ * column is a CHECK-constrained allowlist shared with Advanced Integrations, and this module reuses
+ * that vault as-is (audit §1, §6). So `client_secret` is the DocuSign OAuth client secret,
+ * `oauth_refresh_token` the refresh token, and `webhook_secret` the Connect HMAC secret. ES.4 wires
+ * the vault to a connection; nothing here can read a value back.
  */
-export const SECRET_KINDS = ['oauth_client_secret', 'oauth_refresh_token', 'connect_hmac_secret'] as const;
+export const SECRET_KINDS = ['client_secret', 'oauth_refresh_token', 'webhook_secret'] as const;
 export type ESignatureSecretKind = (typeof SECRET_KINDS)[number];
+
+/** The plain-language meaning of each kind, for the admin screen and the runbook. */
+export const SECRET_KIND_LABELS: Readonly<Record<ESignatureSecretKind, string>> = {
+  client_secret: 'DocuSign OAuth client secret',
+  oauth_refresh_token: 'DocuSign refresh token',
+  webhook_secret: 'DocuSign Connect HMAC secret',
+};
 
 /**
  * Application-level audit actions (plan §6.6).

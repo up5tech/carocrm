@@ -22,7 +22,6 @@
       "module_disabled": "Module đang bị tắt trong phần cài đặt.",
       "connections_disabled": "Khả năng quản lý kết nối nhà cung cấp đang bị tắt trong phần cài đặt.",
       "encryption_key_missing": "Chưa cấu hình ENCRYPTION_KEY nên không đọc được thông tin xác thực đã lưu và không kết nối nào dùng được.",
-      "schema_pending": "Các bảng chữ ký chưa được tạo; chúng ra mắt ở pha 19-ES.2.",
       "no_enabled_connection": "Chưa có kết nối DocuSign nào ở trạng thái đã xác thực và đang hoạt động. Quản trị viên cần xác thực một kết nối trước."
     },
     "adminNote": "Quản trị viên có thể bật module và các tính năng trong Cài đặt, Tích hợp, Chữ ký điện tử.",

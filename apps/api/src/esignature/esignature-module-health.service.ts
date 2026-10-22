@@ -170,13 +170,14 @@ export class ESignatureModuleHealthService {
 
     const checks: { name: string; ok: boolean; detail: string }[] = [
       {
-        // ES.1 owns no table: the schema is ES.2's, so this reports the plan rather than a fault.
+        // ES.2 owns the schema, so a missing table is now a real fault: without it, a request cannot
+        // be stored and a provider answer has nowhere to land.
         name: 'schema',
-        ok: true,
+        ok: missingStructures.length === 0,
         detail:
           missingStructures.length === 0
             ? `${String(ESIGNATURE_TABLES.length)} signature tables are present.`
-            : `Not created yet (delivered by 19-ES.2): ${missingStructures.join(', ')}.`,
+            : `Missing: ${missingStructures.join(', ')}. Apply migration 064_phase19_esignature.sql.`,
       },
       {
         name: 'secret-encryption',

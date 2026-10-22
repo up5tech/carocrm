@@ -1,8 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
 
-import { DatabaseService } from '../database/database.service.js';
-import { CONNECTED_STATUS, ESIGNATURE_MODULE_KEY, PROVIDER_KEY_DOCUSIGN } from './esignature-domain.js';
+import { ESIGNATURE_MODULE_KEY, PROVIDER_KEY_DOCUSIGN } from './esignature-domain.js';
 import {
   encryptionKeyMissingError,
   notSupportedByProviderError,
@@ -11,12 +9,12 @@ import {
 } from './esignature-errors.js';
 import {
   DOCUSIGN_PROVIDER_CAPABILITIES,
-  ESIGNATURE_TABLES,
   type ESignatureFeatureDescriptor,
   type ESignatureProviderCapabilityKey,
 } from './esignature-module.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { SignatureConnectionRepository } from './signature-connection.repository.js';
 
 /**
  * Phase 19-ES.1 — the single gate in front of every provider operation
@@ -32,11 +30,13 @@ import { ESignatureSettingsService } from './esignature-settings.service.js';
  *    (plan §5.2): a provider that cannot do it says so with `NOT_SUPPORTED_BY_PROVIDER`.
  * 3. **Is there a connection in the only state that permits it?** `connected`, `isActive`, on the
  *    first provider key — and `ENCRYPTION_KEY` configured, because a connection whose credential
- *    cannot be decrypted is a connection that must not be used (plan §4.1, §9.2).
+ *    cannot be decrypted is a connection that must not be used (plan §4.1, §9.2). The answer comes
+ *    from `SignatureConnectionRepository`, so the gate and the records agree by construction rather
+ *    than by two queries that can drift.
  *
- * Until ES.4 stores connections, answer 3 is *always* "no": there is no enabled connection in the
- * system, and the reason is reported as `no_connection` rather than hidden behind a generic failure.
- * Every command endpoint of ES.6–ES.16 calls `assertOperation` before it touches an adapter, so a
+ * Answer 3 is currently "no" for a real reason: a connection row exists only once an administrator
+ * authorizes one (ES.4), and the reason is reported as `no_enabled_connection` rather than hidden
+ * behind a generic failure. Every command endpoint of ES.6–ES.16 calls `assertOperation` before it touches an adapter, so a
  * send, a view, a download or a correction can never be reached while the connection is missing,
  * disabled, or awaiting reauthorization.
  */
@@ -98,10 +98,9 @@ export interface GateAssessment {
   readonly moduleEnabled: boolean;
   readonly connectionsEnabled: boolean;
   readonly encryptionConfigured: boolean;
-  readonly connectionTablesPresent: boolean;
   readonly enabledConnections: number;
   /** A stable, non-revealing reason the gate is closed. */
-  readonly reason: 'ready' | 'module_disabled' | 'connections_disabled' | 'encryption_key_missing' | 'schema_pending' | 'no_enabled_connection';
+  readonly reason: 'ready' | 'module_disabled' | 'connections_disabled' | 'encryption_key_missing' | 'no_enabled_connection';
   /** What an administrator must do next, in one line. Never a secret, never a provider body. */
   readonly detail: string;
 }
@@ -109,9 +108,9 @@ export interface GateAssessment {
 @Injectable()
 export class ESignatureConnectionGate {
   constructor(
-    @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(ESignatureSettingsService) private readonly settings: ESignatureSettingsService,
     @Inject(ESignaturePermissionService) private readonly permissions: ESignaturePermissionService,
+    @Inject(SignatureConnectionRepository) private readonly connections: SignatureConnectionRepository,
   ) {}
 
   rule(operation: ESignatureOperation): OperationRule {
@@ -147,8 +146,8 @@ export class ESignatureConnectionGate {
     if (settingsView.effective.connections !== true) throw signatureModuleDisabledError(`${ESIGNATURE_MODULE_KEY}.connections`);
     if (!this.settings.encryptionConfigured()) throw encryptionKeyMissingError();
 
-    const state = await this.connectionState();
-    if (!state.tablesPresent || state.enabledConnections === 0) {
+    const enabledConnections = await this.connections.countUsable();
+    if (enabledConnections === 0) {
       throw providerNotConnectedError('no_connection');
     }
   }
@@ -157,105 +156,53 @@ export class ESignatureConnectionGate {
   async assessment(): Promise<GateAssessment> {
     const settingsView = await this.settings.read();
     const encryptionConfigured = this.settings.encryptionConfigured();
-    const state = await this.connectionState();
+    const enabledConnections = await this.connections.countUsable();
+
+    const closed = (reason: GateAssessment['reason'], detail: string, flags: Partial<GateAssessment>): GateAssessment => ({
+      ready: false,
+      moduleEnabled: false,
+      connectionsEnabled: false,
+      encryptionConfigured: false,
+      enabledConnections,
+      reason,
+      detail,
+      ...flags,
+    });
 
     if (settingsView.settings.enabled !== true) {
-      return {
-        ready: false,
+      return closed('module_disabled', 'The module is switched off, so nothing can reach a provider.', {
         moduleEnabled: false,
-        connectionsEnabled: false,
-        encryptionConfigured,
-        connectionTablesPresent: state.tablesPresent,
-        enabledConnections: state.enabledConnections,
-        reason: 'module_disabled',
-        detail: 'The module is switched off, so nothing can reach a provider.',
-      };
+      });
     }
     if (settingsView.effective.connections !== true) {
-      return {
-        ready: false,
+      return closed('connections_disabled', 'The connection control plane is not enabled, so no provider operation is possible.', {
         moduleEnabled: true,
-        connectionsEnabled: false,
-        encryptionConfigured,
-        connectionTablesPresent: state.tablesPresent,
-        enabledConnections: state.enabledConnections,
-        reason: 'connections_disabled',
-        detail: 'The connection control plane is not enabled, so no provider operation is possible.',
-      };
+      });
     }
     if (!encryptionConfigured) {
-      return {
-        ready: false,
+      return closed('encryption_key_missing', 'ENCRYPTION_KEY is not configured, so a stored credential cannot be read and no provider operation is possible.', {
         moduleEnabled: true,
         connectionsEnabled: true,
         encryptionConfigured: false,
-        connectionTablesPresent: state.tablesPresent,
-        enabledConnections: state.enabledConnections,
-        reason: 'encryption_key_missing',
-        detail: 'ENCRYPTION_KEY is not configured, so a stored credential cannot be read and no provider operation is possible.',
-      };
+      });
     }
-    if (!state.tablesPresent) {
-      return {
-        ready: false,
+    if (enabledConnections === 0) {
+      return closed('no_enabled_connection', 'No connection is connected and active, so every provider operation is refused.', {
         moduleEnabled: true,
         connectionsEnabled: true,
-        encryptionConfigured,
-        connectionTablesPresent: false,
-        enabledConnections: 0,
-        reason: 'schema_pending',
-        detail: 'The signature tables have not been created yet; they arrive with phase 19-ES.2.',
-      };
-    }
-    if (state.enabledConnections === 0) {
-      return {
-        ready: false,
-        moduleEnabled: true,
-        connectionsEnabled: true,
-        encryptionConfigured,
-        connectionTablesPresent: true,
-        enabledConnections: 0,
-        reason: 'no_enabled_connection',
-        detail: 'No connection is connected and active, so every provider operation is refused.',
-      };
+        encryptionConfigured: true,
+      });
     }
     return {
       ready: true,
       moduleEnabled: true,
       connectionsEnabled: true,
-      encryptionConfigured,
-      connectionTablesPresent: true,
-      enabledConnections: state.enabledConnections,
+      encryptionConfigured: true,
+      enabledConnections,
       reason: 'ready',
       detail: 'An enabled connection exists, so authorized provider operations are admitted.',
     };
   }
-
-  /**
-   * How many connections are in the only usable state.
-   *
-   * Read through `information_schema` first: ES.1 ships no migration, so asking a table that does
-   * not exist yet would crash the health endpoint instead of reporting that the schema is pending.
-   */
-  private async connectionState(): Promise<{ tablesPresent: boolean; enabledConnections: number }> {
-    const connectionTable = ESIGNATURE_TABLES[0];
-    if (connectionTable === undefined) return { tablesPresent: false, enabledConnections: 0 };
-    const exists = await sql<{ name: string }>`
-      select table_name as name
-      from information_schema.tables
-      where table_schema = current_schema() and table_name = ${connectionTable}
-      limit 1
-    `.execute(this.database.db);
-    if (exists.rows.length === 0) return { tablesPresent: false, enabledConnections: 0 };
-
-    const counted = await sql<{ count: string }>`
-      select count(*)::text as count
-      from esignature_connections
-      where provider_key = ${PROVIDER_KEY_DOCUSIGN}
-        and status = ${CONNECTED_STATUS}
-        and is_active = true
-    `.execute(this.database.db);
-    const raw = counted.rows[0]?.count ?? '0';
-    return { tablesPresent: true, enabledConnections: Number.parseInt(raw, 10) || 0 };
-  }
 }
+
+

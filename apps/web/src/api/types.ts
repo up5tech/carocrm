@@ -3067,7 +3067,6 @@ export interface ESignatureGateState {
   readonly moduleEnabled: boolean;
   readonly connectionsEnabled: boolean;
   readonly encryptionConfigured: boolean;
-  readonly connectionTablesPresent: boolean;
   readonly enabledConnections: number;
   readonly reason: string;
   readonly detail: string;

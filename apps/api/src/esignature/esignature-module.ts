@@ -508,7 +508,10 @@ export const ESIGNATURE_JOB_NAMES = [
   'esignature.cleanupExpiredTemporaryArtifacts',
 ] as const;
 
-/** The module-owned structures ES.2 will create; the health check reports them as pending until then. */
+/**
+ * The structures this module owns, created by the additive migration
+ * `database/migrations/064_phase19_esignature.sql`. No other module may write them (audit §6).
+ */
 export const ESIGNATURE_TABLES = [
   'esignature_connections',
   'signature_requests',
@@ -521,7 +524,7 @@ export const ESIGNATURE_TABLES = [
 ] as const;
 
 /** Sub-phases delivered so far, reported verbatim by the health endpoint. */
-export const IMPLEMENTED_PHASES = ['19-ES.0', '19-ES.1'] as const;
+export const IMPLEMENTED_PHASES = ['19-ES.0', '19-ES.1', '19-ES.2'] as const;
 
 export const ESIGNATURE_MODULE = {
   id: 'ESignature',
@@ -544,7 +547,7 @@ export const ESIGNATURE_MODULE = {
   webhookPrefix: '/api/v1/integrations/esignature',
   /** Provider products this release addresses (plan §1). */
   providerKeys: [PROVIDER_KEY_DOCUSIGN],
-  /** Tables the module will own; no other module may write them (audit §6). */
+  /** Tables the module owns; no other module may write them (audit §6). */
   tables: ESIGNATURE_TABLES,
   implementedPhases: IMPLEMENTED_PHASES,
 } as const;

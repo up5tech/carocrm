@@ -150,6 +150,7 @@ describe('module registration (19-ES.1)', () => {
     });
     expect(String(module['id'])).not.toMatch(/^Ua/);
     expect(module['implementedPhases']).toContain('19-ES.1');
+    expect(module['implementedPhases']).toContain('19-ES.2');
     expect(module['providerKeys']).toEqual(['docusign']);
   });
 
@@ -176,15 +177,16 @@ describe('module registration (19-ES.1)', () => {
     }
   });
 
-  it('lists the structures ES.2 will create as absent today, without failing', async () => {
+  it('reports the schema ES.2 created as present, read from the running database', async () => {
     const health = await call('GET', '/api/v1/ESignature/action/health', ctx.adminToken);
     const structures = health.body['structures'] as { name: string; present: boolean }[];
     expect(structures.map((entry) => entry.name)).toContain('signature_requests');
-    expect(structures.every((entry) => entry.present)).toBe(false);
+    expect(structures.map((entry) => entry.name)).toContain('signature_audit_entries');
+    expect(structures.every((entry) => entry.present), structures.filter((entry) => !entry.present).map((entry) => entry.name).join(', ')).toBe(true);
     const checks = health.body['checks'] as { name: string; ok: boolean; detail: string }[];
     const schema = checks.find((check) => check.name === 'schema');
     expect(schema?.ok, schema?.detail).toBe(true);
-    expect(schema?.detail).toContain('19-ES.2');
+    expect(schema?.detail).toContain('tables are present');
   });
 });
 
@@ -271,7 +273,7 @@ describe('the connection gate in front of every provider call', () => {
     const health = await call('GET', '/api/v1/ESignature/action/health', ctx.adminToken);
     const gate = health.body['gate'] as { ready: boolean; reason: string };
     expect(gate.ready).toBe(false);
-    expect(['connections_disabled', 'encryption_key_missing', 'schema_pending', 'no_enabled_connection']).toContain(gate.reason);
+    expect(['connections_disabled', 'encryption_key_missing', 'no_enabled_connection']).toContain(gate.reason);
     await patchSettings({ enabled: false, features: { connections: false, send: false } });
   });
 

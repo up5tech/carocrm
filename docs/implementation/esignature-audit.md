@@ -204,11 +204,13 @@ Verified 2026-10-22 (public docs + npm registry):
 - Secrets must never be reachable through the generic entity API; connection rows reference
   the encrypted vault only (same invariant as `credential-vault.ts:24-26`).
 
-Planned tables (final shape decided in ES.2, additive migration only):
+Planned tables (delivered by ES.2 in `database/migrations/064_phase19_esignature.sql`):
 `esignature_connections`, `signature_requests`, `signature_recipients`,
 `signature_document_snapshots`, `signature_provider_events` (append-only + dedup unique key),
 `signature_webhook_inbox`, `signature_template_mappings`, `signature_audit_entries`.
 Source records remain ordinary CRM entities referenced by `(sourceEntityType, sourceRecordId)`.
+The delivered shape, the constraints and the rules that came with them are recorded in
+`docs/implementation/esignature-es2-completion-report.md`.
 
 ---
 
@@ -242,7 +244,7 @@ Source records remain ordinary CRM entities referenced by `(sourceEntityType, so
 | --- | --- |
 | ESignature module barrel + `app.module.ts` spreads + `/api/v1/ESignature` controller | ES.1 **done** |
 | `ESignature` settings document, permissions (synthetic ACL resources), nav entry, i18n catalog | ES.1 **done** |
-| Additive migration for the eight tables in §6 (+ indexes, dedup/uniqueness constraints) | ES.2 |
+| Additive migration for the eight tables in §6 (+ indexes, dedup/uniqueness constraints) | ES.2 **done** (`064_phase19_esignature.sql`, applied) |
 | Provider adapter port + `FakeSignatureProviderAdapter` + error taxonomy extension (`unknown_outcome`) | ES.3 |
 | DocuSign OAuth (authorize/callback/refresh/userinfo account + base-URI persistence, vault storage) | ES.4 |
 | Secure snapshot service over `AttachmentService` + `packages/files` checksums | ES.5 |

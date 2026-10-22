@@ -1336,6 +1336,223 @@ export interface IntegrationRecordOriginsTable {
   recorded_at: Date;
 }
 
+// ---------------------------------------------------------------------------
+// Phase 19-ES.2 — ESignature persistence (migration 064).
+// Dedicated tables, not `entity_records`: the request state machine and the send guard must be the
+// only mutation path, and a secret is unreachable through the generic entity API. The columns carry
+// no credential — the vault owns those. See docs/implementation/esignature-audit.md §6.
+// ---------------------------------------------------------------------------
+
+export interface ESignatureConnectionsTable {
+  id: string;
+  name: string;
+  provider_key: string;
+  environment: string;
+  status: string;
+  is_active: boolean;
+  oauth_client_id: string | null;
+  redirect_uri: string | null;
+  account_id: string | null;
+  account_name: string | null;
+  base_uri: string | null;
+  subject_user_id: string | null;
+  granted_scopes: unknown;
+  consent_status: string;
+  public_id: string;
+  connect_reference: string | null;
+  last_auth_at: Date | null;
+  last_successful_api_at: Date | null;
+  last_webhook_at: Date | null;
+  last_error_at: Date | null;
+  last_error_code: string | null;
+  created_at: Date;
+  modified_at: Date;
+  created_by_id: string | null;
+  modified_by_id: string | null;
+  deleted_at: Date | null;
+}
+
+export interface SignatureRequestsTable {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  provider_key: string;
+  connection_id: string | null;
+  provider_envelope_id: string | null;
+  provider_status_raw: string | null;
+  source_entity_type: string | null;
+  source_record_id: string | null;
+  subject: string | null;
+  message: string | null;
+  email_blurb: string | null;
+  created_by_id: string | null;
+  assigned_user_id: string | null;
+  team_ids: unknown;
+  prepared_by_id: string | null;
+  approved_by_id: string | null;
+  sent_by_id: string | null;
+  prepared_at: Date | null;
+  sent_at: Date | null;
+  completed_at: Date | null;
+  declined_at: Date | null;
+  voided_at: Date | null;
+  expired_at: Date | null;
+  expires_at: Date | null;
+  approval_required: boolean;
+  approval_status: string;
+  approval_reason: string | null;
+  approved_at: Date | null;
+  approved_digest: string | null;
+  send_attempt_id: string | null;
+  outgoing_snapshot: unknown;
+  outgoing_digest: string | null;
+  last_reconciled_at: Date | null;
+  last_provider_sync_at: Date | null;
+  failure_category: string | null;
+  failure_code: string | null;
+  failure_message_safe: string | null;
+  version: number;
+  created_at: Date;
+  modified_at: Date;
+  modified_by_id: string | null;
+  deleted_at: Date | null;
+}
+
+export interface SignatureRecipientsTable {
+  id: string;
+  request_id: string;
+  provider_recipient_id: string | null;
+  recipient_type: string;
+  crm_contact_id: string | null;
+  name: string;
+  email: string;
+  role_name: string | null;
+  routing_order: number;
+  status: string;
+  provider_status_raw: string | null;
+  sent_at: Date | null;
+  delivered_at: Date | null;
+  viewed_at: Date | null;
+  completed_at: Date | null;
+  declined_at: Date | null;
+  decline_reason_safe: string | null;
+  authentication_method: string | null;
+  last_status_event_id: string | null;
+  created_at: Date;
+  modified_at: Date;
+  created_by_id: string | null;
+  modified_by_id: string | null;
+  deleted_at: Date | null;
+}
+
+export interface SignatureDocumentSnapshotsTable {
+  id: string;
+  request_id: string;
+  artifact_kind: string;
+  source_attachment_id: string | null;
+  source_version_id: string | null;
+  display_name: string;
+  mime_type: string;
+  byte_size: string;
+  content_hash_sha256: string;
+  storage_ref: string | null;
+  document_order: number;
+  provider_document_id: string | null;
+  retention_class: string;
+  created_at: Date;
+  created_by_id: string | null;
+  deleted_at: Date | null;
+}
+
+export interface SignatureProviderEventsTable {
+  id: string;
+  connection_id: string | null;
+  request_id: string | null;
+  provider_key: string;
+  provider_account_id: string | null;
+  provider_envelope_id: string | null;
+  dedup_key: string;
+  provider_event_id: string | null;
+  event_type_normalized: string;
+  provider_event_type_raw: string | null;
+  recipient_provider_id: string | null;
+  provider_occurred_at: Date | null;
+  received_at: Date;
+  processed_at: Date | null;
+  payload_hash: string;
+  event_data: unknown;
+  signature_verification_status: string;
+  processing_status: string;
+  attempt_count: number;
+  last_processing_error_safe: string | null;
+  correlation_id: string | null;
+  purge_after: Date | null;
+  created_at: Date;
+}
+
+export interface SignatureWebhookInboxTable {
+  id: string;
+  connection_id: string | null;
+  routing_public_id: string | null;
+  provider_key: string;
+  provider_account_id: string | null;
+  provider_envelope_id: string | null;
+  dedup_key: string;
+  payload_hash: string;
+  content_length: number;
+  signature_status: string;
+  content_type: string | null;
+  payload_minimized: unknown;
+  received_at: Date;
+  state: string;
+  processed_at: Date | null;
+  attempt_count: number;
+  last_error_safe: string | null;
+  correlation_id: string | null;
+  purge_after: Date | null;
+}
+
+export interface SignatureTemplateMappingsTable {
+  id: string;
+  name: string;
+  mapping_type: string;
+  connection_id: string;
+  provider_template_id: string;
+  provider_template_name: string | null;
+  supported_source_entities: unknown;
+  role_mappings: unknown;
+  field_mappings: unknown;
+  default_subject: string | null;
+  default_message: string | null;
+  is_active: boolean;
+  version: number;
+  created_at: Date;
+  modified_at: Date;
+  created_by_id: string | null;
+  modified_by_id: string | null;
+  deleted_at: Date | null;
+}
+
+export interface SignatureAuditEntriesTable {
+  id: string;
+  request_id: string | null;
+  connection_id: string | null;
+  recipient_id: string | null;
+  document_id: string | null;
+  action: string;
+  actor_type: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  target_entity_type: string | null;
+  target_id: string | null;
+  outcome: string;
+  reason_safe: string | null;
+  detail: unknown;
+  correlation_id: string | null;
+  created_at: Date;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
@@ -1426,6 +1643,14 @@ export interface Database {
   integration_webhook_deliveries: IntegrationWebhookDeliveriesTable;
   integration_outbound_operations: IntegrationOutboundOperationsTable;
   integration_record_origins: IntegrationRecordOriginsTable;
+  esignature_connections: ESignatureConnectionsTable;
+  signature_requests: SignatureRequestsTable;
+  signature_recipients: SignatureRecipientsTable;
+  signature_document_snapshots: SignatureDocumentSnapshotsTable;
+  signature_provider_events: SignatureProviderEventsTable;
+  signature_webhook_inbox: SignatureWebhookInboxTable;
+  signature_template_mappings: SignatureTemplateMappingsTable;
+  signature_audit_entries: SignatureAuditEntriesTable;
 }
 
 export type Db = Kysely<Database>;

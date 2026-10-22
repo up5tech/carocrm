@@ -18,6 +18,14 @@ import { ESignatureModuleHealthService } from './esignature-module-health.servic
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { SignatureAuditRepository } from './signature-audit.repository.js';
+import { SignatureConnectionRepository } from './signature-connection.repository.js';
+import { SignatureDocumentSnapshotRepository } from './signature-document-snapshot.repository.js';
+import { SignatureProviderEventRepository } from './signature-provider-event.repository.js';
+import { SignatureRecipientRepository } from './signature-recipient.repository.js';
+import { SignatureRequestRepository } from './signature-request.repository.js';
+import { SignatureTemplateMappingRepository } from './signature-template-mapping.repository.js';
+import { SignatureWebhookInboxRepository } from './signature-webhook-inbox.repository.js';
 
 export const ESIGNATURE_CONTROLLERS = [ESignatureController] as const;
 
@@ -29,6 +37,17 @@ export const ESIGNATURE_PROVIDERS = [
   ESignatureNavigationService,
   ESignatureModuleHealthService,
   ESignatureConnectionGate,
+  // Phase 19-ES.2 — the persistence of the module's own records. One repository per aggregate: the
+  // state machine, the optimistic-concurrency check and the append-only rules live in these files,
+  // which is why there is no generic `/api/v1/SignatureRequest` route to bypass them with.
+  SignatureConnectionRepository,
+  SignatureRequestRepository,
+  SignatureRecipientRepository,
+  SignatureDocumentSnapshotRepository,
+  SignatureProviderEventRepository,
+  SignatureWebhookInboxRepository,
+  SignatureTemplateMappingRepository,
+  SignatureAuditRepository,
 ] as const;
 
 export { ESignatureController } from './esignature.controller.js';
@@ -47,6 +66,7 @@ export {
   PROVIDER_KEYS,
   RECIPIENT_TYPES,
   REQUEST_STATUSES,
+  SECRET_KIND_LABELS,
   SECRET_KINDS,
   SIGNATURE_APPROVE_PERMISSION_ENTITY,
   SIGNATURE_AUDIT_PERMISSION_ENTITY,
@@ -88,9 +108,80 @@ export {
   REQUIRED_CAPABILITIES,
 } from './esignature-module.js';
 export {
+  artifactRetentionFor,
+  type ESignatureRetentionClass,
+  isAppendOnly,
+  purgeAfterFor,
+  RETENTION_CLASSES,
+  type RetentionDecision,
+  retentionPolicy,
+  SOFT_DELETE_RULES,
+} from './esignature-retention.js';
+export {
   DEFAULT_ESIGNATURE_SETTINGS,
   type ESignatureSettings,
   ESignatureSettingsSchema,
   ESignatureSettingsService,
   type ESignatureSettingsView,
 } from './esignature-settings.service.js';
+export {
+  approvalStillApplies,
+  buildSnapshot,
+  canonicalJson,
+  type OutgoingSnapshotData,
+  outgoingSnapshotDigest,
+  readSnapshot,
+  SNAPSHOT_VERSION,
+  snapshotDigest,
+  type SnapshotEnvelope,
+} from './esignature-snapshot.js';
+export {
+  allowedTargets,
+  ATTENTION_STATUSES,
+  RECIPIENT_STATUSES,
+  REQUEST_TRANSITIONS,
+  type SignatureRecipientStatus,
+  TRANSITION_ORIGINS,
+  type TransitionOrigin,
+} from './esignature-state-machine.js';
+export {
+  redactDetail,
+  type SignatureAuditEntry,
+} from './signature-audit.repository.js';
+export {
+  assertConnectionTransition,
+  canConnectionTransition,
+  CONNECTION_TRANSITIONS,
+  type SignatureConnection,
+} from './signature-connection.repository.js';
+export {
+  ARTIFACT_KINDS,
+  type SignatureArtifactKind,
+  type SignatureDocumentSnapshot,
+} from './signature-document-snapshot.repository.js';
+export {
+  buildEventDedupKey,
+  payloadDigest,
+  type SignatureProviderEvent,
+} from './signature-provider-event.repository.js';
+export {
+  type RecipientInput,
+  type SignatureRecipient,
+} from './signature-recipient.repository.js';
+export {
+  type RequestDraftInput,
+  type RequestListFilters,
+  type SignatureRequest,
+} from './signature-request.repository.js';
+export {
+  type ESignatureMappingType,
+  MAPPING_TYPES,
+  normalizeFieldMappings,
+  normalizeRoleMappings,
+  type SignatureTemplateMapping,
+} from './signature-template-mapping.repository.js';
+export {
+  deliveryDedupKey,
+  payloadHashOf,
+  type SignatureWebhookDelivery,
+} from './signature-webhook-inbox.repository.js';
