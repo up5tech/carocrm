@@ -5,7 +5,7 @@ audience: user
 order: 20
 tags: [record, edit, panels, stream]
 related: [user/lists-and-views, user/stream-and-notifications]
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 Open any row and you are on its record screen: a title bar with **Edit** and **Delete**, then the panels that
@@ -19,9 +19,11 @@ any panel appear under **Other**, at the bottom. Nothing is hidden from you by a
 difference is only where it sits.
 
 Under the panels are the relations: the accounts, contacts, cases or projects this record belongs to. Each
-relation panel lists up to 50 rows and offers **Link existing**, **New** and **Unlink**. When a record has
-several relations, they appear as tabs instead of stacked panels, and the tab you are looking at is written
-into the address, so a link can open a record already on the right tab.
+relation panel shows one page of its rows — five by default, and the pager under the table shows how many
+rows the relation has in all and steps through them; you can widen the page there too. The panel offers
+**Link existing**, **New** and **Unlink**. When a record has several relations, they appear as tabs instead
+of stacked panels, and the tab you are looking at is written into the address, so a link can open a record
+already on the right tab.
 
 > [!NOTE]
 > **New** on a relation panel opens a blank create form. It does not pre-fill the parent record, so link the

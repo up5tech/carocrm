@@ -43,10 +43,28 @@ export interface StoreFindQuery extends EntityQuery {
   attrsContains?: readonly AttrContainsClause[] | undefined;
   ids?: readonly string[] | undefined;
   /**
+   * OR-group over the link conditions above. A relation panel's related set is the **union** of
+   * the rows whose link attribute points at the parent and the rows linked explicitly through
+   * `entity_links`; stating it as one predicate lets the store page and count the union itself,
+   * so `offset`/`maxSize` page the relation instead of one of its two sources.
+   */
+  anyOf?: StoreFindAnyOf | undefined;
+  /**
    * Skip the `count(*)` round-trip (`?total=false`). When false the returned
    * `total` is `0` and must not be surfaced by the caller.
    */
   countTotal?: boolean | undefined;
+}
+
+/**
+ * The two ways a record can belong to a relation, joined by `or` instead of `and`: a link
+ * attribute that points at the parent, and an explicit `entity_links` row. Each branch is
+ * optional; a branch list that ends up empty matches nothing, never everything.
+ */
+export interface StoreFindAnyOf {
+  readonly attrsEquals?: readonly AttrEqualsClause[] | undefined;
+  readonly attrsContains?: readonly AttrContainsClause[] | undefined;
+  readonly ids?: readonly string[] | undefined;
 }
 
 export interface StoreReportRelation {
@@ -629,7 +647,24 @@ function buildConditions(query: StoreFindQuery): RawBuilder<boolean>[] {
   if (ids !== undefined) {
     out.push(ids.length === 0 ? sql<boolean>`false` : sql<boolean>`${col('id')} in (${sql.join(ids)})`);
   }
+  if (query.anyOf !== undefined) out.push(anyOfSql(query.anyOf));
   return out;
+}
+
+/** `( attr-match or attr-contains or id in (…))` — an empty group matches nothing. */
+function anyOfSql(anyOf: StoreFindAnyOf): RawBuilder<boolean> {
+  const branches: RawBuilder<boolean>[] = [];
+  for (const clause of anyOf.attrsEquals ?? []) {
+    branches.push(sql<boolean>`${attrText(clause.field)} = ${clause.value}`);
+  }
+  for (const clause of anyOf.attrsContains ?? []) {
+    branches.push(sql<boolean>`(attrs -> ${clause.field}::text) @> ${JSON.stringify([clause.value])}::jsonb`);
+  }
+  if (anyOf.ids !== undefined) {
+    branches.push(anyOf.ids.length === 0 ? sql<boolean>`false` : sql<boolean>`${col('id')} in (${sql.join([...anyOf.ids])})`);
+  }
+  if (branches.length === 0) return sql<boolean>`false`;
+  return sql<boolean>`( ${sql.join(branches, sql` or `)} )`;
 }
 
 function orderClauses(translated?: TranslatedQuery): RawBuilder<unknown>[] {

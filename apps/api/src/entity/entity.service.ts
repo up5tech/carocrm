@@ -19,7 +19,7 @@ import { HookRegistry } from '../hooks/hook.registry.js';
 import { RecordLogicService } from '../logic/record-logic.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
-import type { PostgresRecordStore, StoreFindQuery, StoreReportAggregateResult, StoreReportRelation } from './entity-record.store.js';
+import type { PostgresRecordStore, StoreFindAnyOf, StoreReportAggregateResult, StoreReportRelation } from './entity-record.store.js';
 import { ENTITY_STORE } from './entity-record.store.js';
 
 /** PLAN §16.2 list envelope always carries `total`; `?total=false` opts out (cheap lists). */
@@ -133,8 +133,12 @@ export class EntityCrudService {
 
   /**
    * Related records of a parent, resolved through metadata relations.
-   * Children are matched by their link attribute (single or multiple) and by
-   * explicit `entity_links` rows written through the link endpoints.
+   * Children are matched by their link attribute (single or multiple) **or** by explicit
+   * `entity_links` rows written through the link endpoints.
+   *
+   * The two sources are one predicate, not two reads stitched together: `offset`, `maxSize` and
+   * `total` then describe the relation itself, so page 2 of a panel is page 2 of the relation and
+   * a record reachable both ways is listed (and counted) once.
    */
   async related(entity: string, id: string, relationName: string, query: ListQuery = {}): Promise<ListEnvelope> {
     this.assertEntity(entity);
@@ -152,35 +156,24 @@ export class EntityCrudService {
     const acl = await this.acl.recordPredicate(target, 'read');
 
     const attrMatch = this.attrMatchFor(entity, target, relationName, relation.mappedBy);
-    const attrsQuery: StoreFindQuery = { translated, acl };
-    if (attrMatch?.multiple) attrsQuery.attrsContains = [{ field: attrMatch.field, value: id }];
-    else if (attrMatch) attrsQuery.attrsEquals = [{ field: attrMatch.field, value: id }];
-
-    const byAttrs = await this.store.findMany(target, attrsQuery);
-    const merged: EntityRecord[] = [...byAttrs.list];
-    const seen = new Set(merged.map((record) => record.id));
-
     const linkedIds = await this.store.linkedRecordIds(entity, id, relationName, target);
-    const missing = linkedIds.filter((linkedId) => !seen.has(linkedId));
-    if (missing.length > 0) {
-      const byLinks = await this.store.findMany(target, { translated, acl, ids: missing });
-      for (const record of byLinks.list) {
-        if (seen.has(record.id)) continue;
-        seen.add(record.id);
-        merged.push(record);
-      }
-    }
+    const anyOf: StoreFindAnyOf = {
+      ...(attrMatch === undefined
+        ? {}
+        : attrMatch.multiple
+          ? { attrsContains: [{ field: attrMatch.field, value: id }] }
+          : { attrsEquals: [{ field: attrMatch.field, value: id }] }),
+      ids: linkedIds,
+    };
 
-    const offset = translated?.offset ?? 0;
-    const limit = translated?.limit ?? merged.length;
-    const page = merged.slice(offset, offset + limit);
-    const list = await Promise.all(page.map((record) => this.serialize(target, record, translated?.select)));
     const countTotal = wantsTotal(query);
+    const result = await this.store.findMany(target, { translated, acl, anyOf, countTotal });
+    const list = await Promise.all(result.list.map((record) => this.serialize(target, record, translated.select)));
     return {
       list,
-      offset,
+      offset: result.offset,
       count: list.length,
-      ...(countTotal ? { total: merged.length } : {}),
+      ...(countTotal ? { total: result.total } : {}),
     };
   }
 

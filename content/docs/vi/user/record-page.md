@@ -5,7 +5,7 @@ audience: user
 order: 20
 tags: [record, edit, panels, stream]
 related: [user/lists-and-views, user/stream-and-notifications]
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 Mở bất kỳ dòng nào, bạn sẽ ở trên màn hình bản ghi của nó: một thanh tiêu đề có **Sửa** và **Xóa**, rồi các
@@ -19,9 +19,10 @@ nào sẽ xuất hiện dưới **Khác**, ở cuối trang. Một trường ch�
 bạn; khác nhau chỉ ở chỗ nó nằm đâu.
 
 Dưới các bảng là phần quan hệ: các tài khoản, liên hệ, Case hay dự án mà bản ghi này thuộc về. Mỗi bảng quan hệ
-liệt kê tối đa 50 dòng và có **liên kết sẵn có**, **Tạo mới** và **Bỏ liên kết**. Khi một bản ghi có nhiều quan
-hệ, chúng hiện dưới dạng thẻ thay vì các bảng xếp chồng, và thẻ bạn đang xem được ghi vào địa chỉ, nên một đường
-link có thể mở bản ghi vào ngay đúng thẻ.
+hiển thị một trang dòng — mặc định năm dòng, và dãy số trang bên dưới cho biết quan hệ có tất cả bao nhiêu dòng
+để bạn chuyển qua lại; bạn cũng đổi được số dòng mỗi trang ở đó. Bảng có **liên kết sẵn có**, **Tạo mới** và
+**Bỏ liên kết**. Khi một bản ghi có nhiều quan hệ, chúng hiện dưới dạng thẻ thay vì các bảng xếp chồng, và thẻ bạn
+đang xem được ghi vào địa chỉ, nên một đường link có thể mở bản ghi vào ngay đúng thẻ.
 
 > [!NOTE]
 > **Tạo mới** trên một bảng quan hệ mở ra một biểu mẫu trống. Nó không điền sẵn bản ghi cha, nên hãy liên kết

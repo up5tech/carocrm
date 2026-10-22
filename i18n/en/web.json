@@ -81,6 +81,7 @@
     "unlink": "Unlink this record?",
     "unlinkFailed": "Unlink failed.",
     "new": "New",
+    "relatedRange": "{{from}}–{{to}} of {{total}}",
     "panels": "Panels",
     "tabs": {
       "mode": "Tabs",

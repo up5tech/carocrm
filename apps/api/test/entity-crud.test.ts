@@ -364,6 +364,41 @@ describe('generic entity API — relations', () => {
     const res = await call('GET', '/api/v1/Account/no-such-account/contacts');
     expect(res.status).toBe(404);
   });
+
+  // A relation panel pages over the relation, not over one of the two ways a record can belong to
+  // it: the page must be a page of the union, and `total` its size.
+  it('pages a relation through offset/maxSize and reports the relation size as total', async () => {
+    const account = await call('POST', '/api/v1/Account', { name: `Paged ${runId}` });
+    const pagedId = String(account.body['id']);
+    const contactIds: string[] = [];
+    for (const suffix of ['A', 'B', 'C']) {
+      const contact = await call('POST', '/api/v1/Contact', {
+        firstName: `Paged${suffix}`,
+        lastName: `${suffix} ${runId}`,
+        accountId: pagedId,
+      });
+      contactIds.push(String(contact.body['id']));
+    }
+    // Reachable both ways — the attr and an `entity_links` row — and still counted once.
+    await call('PUT', `/api/v1/Account/${pagedId}/contacts/${contactIds[0] as string}`);
+
+    const first = await call('GET', `/api/v1/Account/${pagedId}/contacts?offset=0&maxSize=2`);
+    expect(first.status).toBe(200);
+    expect(first.body['total']).toBe(3);
+    expect(first.body['count']).toBe(2);
+    const firstIds = (first.body['list'] as Record<string, unknown>[]).map((row) => row['id']);
+
+    const second = await call('GET', `/api/v1/Account/${pagedId}/contacts?offset=2&maxSize=2`);
+    expect(second.status).toBe(200);
+    expect(second.body['total']).toBe(3);
+    const secondList = second.body['list'] as Record<string, unknown>[];
+    expect(secondList).toHaveLength(1);
+    expect(firstIds).not.toContain(secondList[0]?.['id']);
+    expect([...firstIds, secondList[0]?.['id']].sort()).toEqual([...contactIds].sort());
+
+    const cheap = await call('GET', `/api/v1/Account/${pagedId}/contacts?maxSize=2&total=false`);
+    expect(cheap.body['total']).toBeUndefined();
+  });
 });
 
 describe('generic entity API — removable records', () => {

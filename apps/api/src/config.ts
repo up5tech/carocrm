@@ -40,8 +40,21 @@ const ConfigSchema = z.object({
    * `@carocrm/mail` from the environment, and a broken `smtp` configuration fails at boot.
    */
   mailTransport: z.enum(['none', 'memory', 'smtp', 'relay']).default('none'),
-  /** Global API rate limit per minute; the SPA spends many small calls per screen. */
-  rateLimitMax: z.coerce.number().int().positive().default(300),
+  /**
+   * Global API rate limit per minute **per client**. The SPA spends many small calls per screen
+   * (metadata, layout, preferences, the list itself), and a user clicking through pages can reach a
+   * few hundred a minute without doing anything abusive — 300 turned ordinary paging into a 429
+   * that blocked the whole session for the rest of the window.
+   */
+  rateLimitMax: z.coerce.number().int().positive().default(600),
+  /**
+   * Fastify `trustProxy`. Behind nginx/Traefik every request arrives from the proxy's address, so
+   * without this the limiter puts **all** users into one bucket. `false` (default) keeps the socket
+   * address, which is the safe choice when the API is exposed directly; `true` trusts the left-most
+   * `X-Forwarded-For` hop, a number is the hop count, and a comma-separated list is a set of trusted
+   * CIDR ranges.
+   */
+  trustProxy: z.string().default('false'),
   /** BullMQ queue the API produces into; must match the worker's WORKER_QUEUE_NAME. */
   jobQueueName: z.string().min(1).default('crm-jobs'),
   jobAttempts: z.coerce.number().int().min(1).max(10).default(3),
@@ -129,6 +142,7 @@ export function buildConfig(): AppConfig {
     logLevel: process.env.LOG_LEVEL,
     corsOrigins: process.env.CORS_ORIGINS,
     rateLimitMax: process.env.RATE_LIMIT_MAX,
+    trustProxy: process.env.TRUST_PROXY,
     storageDriver: process.env.STORAGE_DRIVER,
     s3Bucket: process.env.S3_BUCKET,
     s3Region: process.env.S3_REGION,

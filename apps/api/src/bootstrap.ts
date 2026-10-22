@@ -5,6 +5,7 @@ import { dirname,resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
+import { RateLimitError } from '@carocrm/core/errors/index.js';
 import { log } from '@carocrm/core/logger/index.js';
 import { ExtensionHost as ExtensionHostClass, loadExtensions } from '@carocrm/extension-sdk';
 import * as cookie from '@fastify/cookie';
@@ -16,7 +17,7 @@ import * as swagger from '@fastify/swagger';
 import { NestFactory } from '@nestjs/core';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { FastifyAdapter } from '@nestjs/platform-fastify';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Pool } from 'pg';
 
 import { ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX } from './advanced-integrations/webhook-prefix.js';
@@ -96,6 +97,20 @@ function asPlugin(mod: unknown): FastifyPluginLike {
   return fn;
 }
 
+/**
+ * Turns `TRUST_PROXY` into what Fastify expects: `false`/`true`, a hop count, or a list of ranges.
+ *
+ * Kept out of `config.ts` because the schema only validates that the value is a string; the meaning
+ * of `"2"` versus `"10.0.0.0/8"` is Fastify's, not the config's.
+ */
+function trustProxySetting(raw: string): boolean | number | string[] {
+  const value = raw.trim();
+  if (value === '' || value.toLowerCase() === 'false') return false;
+  if (value.toLowerCase() === 'true') return true;
+  if (/^\d+$/.test(value)) return Number(value);
+  return value.split(',').map((entry) => entry.trim()).filter((entry) => entry !== '');
+}
+
 export interface CreateAppOptions {
   skipMigrations?: boolean;
   /** Pre-built extension host (tests inject one); otherwise it is loaded from `EXTENSIONS_DIR`. */
@@ -116,7 +131,11 @@ export async function createApp(
   const host = options.extensions ?? (await loadExtensionHost(config));
   setExtensionHost(host);
 
-  const adapter = new FastifyAdapter({ logger: false, bodyLimit: 32 * 1024 * 1024 });
+  const adapter = new FastifyAdapter({
+    logger: false,
+    bodyLimit: 32 * 1024 * 1024,
+    trustProxy: trustProxySetting(config.trustProxy),
+  });
   const app = await NestFactory.create<NestFastifyApplication>(createExtensionHostModule(host), adapter, { abortOnError: true });
 
   // Phase 19-INT.12: preserve the exact bytes of a provider callback body.
@@ -159,7 +178,19 @@ export async function createApp(
     credentials: true,
   });
   await app.register(asPlugin(helmet), { global: true });
-  await app.register(asPlugin(rateLimit), { max: config.rateLimitMax, timeWindow: '1 minute', global: true });
+  await app.register(asPlugin(rateLimit), {
+    max: config.rateLimitMax,
+    timeWindow: '1 minute',
+    global: true,
+    // CORS preflights are browser bookkeeping, not API calls: counting them would halve the real
+    // budget of every cross-origin deployment.
+    allowList: (request: FastifyRequest) => request.method === 'OPTIONS',
+    // Answer with the platform's own error so the envelope says `RATE_LIMITED` / 429 instead of a
+    // bare `Error` that the exception filter could only treat as a crash. The plugin still writes
+    // `Retry-After`, and `after` ("40 seconds") tells the caller how long the window has left.
+    errorResponseBuilder: (_request: FastifyRequest, context: { after: string }) =>
+      new RateLimitError(`Rate limit exceeded, retry in ${context.after}.`),
+  });
   // One file per request; the attachment service enforces the same ceiling while streaming, so a
   // larger body fails with 413 instead of filling the disk (PLAN §25 size limits).
   await app.register(asPlugin(multipart), {

@@ -1,9 +1,9 @@
 import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Card, Col, Dropdown, Input, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Typography } from 'antd';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { api, type SavedFilterRow, type WhereClause } from '../api/client.js';
+import { api, ApiError, type SavedFilterRow, type WhereClause } from '../api/client.js';
 import { DocsLink } from '../components/docs/DocsLink.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ErrorState } from '../components/ErrorState.js';
@@ -138,8 +138,14 @@ export function EntityListPage() {
     setOffset(0);
   }, [inboxView, entityName, caseInboxViews]);
 
+  // Clicking through pages faster than the network answers means several list requests are in
+  // flight at once and they do not necessarily come back in order. Only the newest one may write
+  // to the grid, otherwise page 3 lands after page 5 and the table shows the wrong rows.
+  const loadSeq = useRef(0);
+
   const load = useCallback(async () => {
     if (!entityName) return;
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
       const where: WhereClause = drafts
@@ -155,17 +161,24 @@ export function EntityListPage() {
         trimmed !== ''
           ? await api.entitySearch(entityName, { q: trimmed, where, orderBy, offset, maxSize: pageSize })
           : await api.list(entityName, { where, orderBy, offset, maxSize: pageSize });
+      if (seq !== loadSeq.current) return;
       setRows(result.list);
       setTotal(result.total ?? result.list.length);
       setLoadError(null);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : t('web.edit.notFound'));
-      setRows([]);
-      setTotal(0);
+      if (seq !== loadSeq.current) return;
+      // A throttled page is transient — it is not a reason to empty a grid the user is reading.
+      if (error instanceof ApiError && error.code === 'RATE_LIMITED') {
+        void message.warning(error.message);
+      } else {
+        setLoadError(error instanceof Error ? error.message : t('web.edit.notFound'));
+        setRows([]);
+        setTotal(0);
+      }
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
-  }, [entityName, drafts, textQuery, orderBy, offset, pageSize]);
+  }, [entityName, drafts, textQuery, orderBy, offset, pageSize, message]);
 
   useEffect(() => {
     void load();

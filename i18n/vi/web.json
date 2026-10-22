@@ -81,6 +81,7 @@
     "unlink": "Bỏ liên kết bản ghi này?",
     "unlinkFailed": "Bỏ liên kết thất bại.",
     "new": "Tạo mới",
+    "relatedRange": "{{from}}–{{to}} trên {{total}}",
     "panels": "Bảng",
     "tabs": {
       "mode": "Thẻ",

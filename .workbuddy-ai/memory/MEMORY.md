@@ -28,6 +28,11 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`. Per-module detail lives in
 - `users`/`teams` are identity tables, not metadata entities — validate against them directly.
 - Entity ACL `delete: 'no'` blocks DELETE even for admins; tests must remove such rows by id.
 - Synthetic permission entities need no metadata seed — `roleLevel` falls back to `*`; admins `all`.
+- `/Related` is one **union** predicate (`StoreFindQuery.anyOf`: attr match *or* `entity_links` ids).
+  Never page the attribute query and stitch link rows afterwards — `offset` then applies twice.
+- Fastify hooks/plugins (`@fastify/rate-limit`, body parser, multipart) throw plain `Error`s that
+  carry only `statusCode`, and Nest routes them into `GlobalExceptionFilter`. Anything there that
+  only handles `AppError`/`HttpException` silently turns a 429/413 into a 500.
 
 ## Test seams
 

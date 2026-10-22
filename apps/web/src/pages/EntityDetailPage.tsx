@@ -58,6 +58,12 @@ function isDenied(error: unknown): boolean {
   return error instanceof ApiError && error.status === 403;
 }
 
+/**
+ * How many related records one panel page holds. A relation panel is a summary of the relation, not
+ * a list view, so the page is small — the pager is what makes a long relation reachable.
+ */
+const RELATED_PAGE_SIZE = 5;
+
 /** One relationship panel (PLAN §20 relationship panels) with link/unlink actions. */
 function RelationPanel({ parent, parentId, name, label, targetDefinition, base, onAccess, hideWhenDenied }: PanelProps) {
   const { message } = AntApp.useApp();
@@ -68,35 +74,59 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
   const [selected, setSelected] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [denied, setDenied] = useState(false);
+  // The panel pages over the relation server-side: `total` is the relation's size, so the pager
+  // stays right however many rows are linked and only one page is ever fetched.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(RELATED_PAGE_SIZE);
+  const [total, setTotal] = useState(0);
   const linkOptions = useLinkOptions(targetName, term);
   // The callback is read through a ref: it is a fresh arrow on every render of the parent, and the
   // load must not restart because of it.
   const onAccessRef = useRef(onAccess);
   onAccessRef.current = onAccess;
 
-  const load = useCallback(async () => {
-    if (!targetName) return;
-    setLoading(true);
-    try {
-      const related = await api.related(parent, parentId, name, { maxSize: 50, total: false });
-      setRows(related.list);
-      setDenied(false);
-      onAccessRef.current?.('granted');
-    } catch (error) {
-      setRows([]);
-      const refused = isDenied(error);
-      setDenied(refused);
-      onAccessRef.current?.(refused ? 'denied' : 'granted');
-    } finally {
-      setLoading(false);
-    }
-  }, [parent, parentId, name, targetName]);
+  const load = useCallback(
+    async (nextPage: number, nextSize: number) => {
+      if (!targetName) return;
+      setLoading(true);
+      try {
+        const read = (offset: number) => api.related(parent, parentId, name, { offset, maxSize: nextSize });
+        let offset = Math.max(0, nextPage - 1) * nextSize;
+        let related = await read(offset);
+        // Unlinking can empty the last page. Step back to the page that still has rows instead of
+        // leaving the pager pointing past the end of the relation.
+        if (related.list.length === 0 && offset > 0) {
+          const lastOffset = Math.floor(Math.max(0, (related.total ?? 0) - 1) / nextSize) * nextSize;
+          if (lastOffset !== offset) {
+            offset = lastOffset;
+            related = await read(offset);
+          }
+        }
+        setRows(related.list);
+        setTotal(related.total ?? offset + related.list.length);
+        setPage(Math.floor(offset / nextSize) + 1);
+        setPageSize(nextSize);
+        setDenied(false);
+        onAccessRef.current?.('granted');
+      } catch (error) {
+        setRows([]);
+        setTotal(0);
+        setPage(1);
+        const refused = isDenied(error);
+        setDenied(refused);
+        onAccessRef.current?.(refused ? 'denied' : 'granted');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [parent, parentId, name, targetName],
+  );
 
   const linkedIds = useMemo(() => new Set(rows.map((row) => String(row['id']))), [rows]);
   const candidates = linkOptions.filter((option) => !linkedIds.has(option.value));
 
   useEffect(() => {
-    void load();
+    void load(1, RELATED_PAGE_SIZE);
   }, [load]);
 
   // A relation the caller may not read renders nothing in tab mode; the stacked page keeps today's
@@ -128,7 +158,7 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
                 await api.link(parent, parentId, name, selected);
                 setSelected(undefined);
                 void message.success(t('web.detail.linked'));
-                await load();
+                await load(page, pageSize);
               } catch (error) {
                 void message.error(error instanceof Error ? error.message : t('web.detail.linkFailed'));
               }
@@ -149,7 +179,18 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
         size="small"
         loading={loading}
         dataSource={rows}
-        pagination={false}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          size: 'small',
+          showSizeChanger: true,
+          pageSizeOptions: [5, 10, 20, 50],
+          showTotal: (count, range) => t('web.detail.relatedRange', { from: range[0], to: range[1], total: count }),
+          onChange: (nextPage, nextSize) => {
+            void load(nextPage, nextSize);
+          },
+        }}
         columns={[
           {
             title: targetDefinition?.label ?? name,
@@ -167,7 +208,7 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
               onConfirm={async () => {
                   try {
                     await api.unlink(parent, parentId, name, String(row['id']));
-                    await load();
+                    await load(page, pageSize);
                   } catch (error) {
                     void message.error(error instanceof Error ? error.message : t('web.detail.unlinkFailed'));
                   }

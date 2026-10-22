@@ -21,6 +21,41 @@ function isUniqueViolation(exception: unknown): boolean {
 }
 
 /**
+ * The platform error code that belongs to an HTTP status.
+ *
+ * Shared by the Nest and the Fastify branches below so a status means the same code whichever layer
+ * produced it — a throttled request must read `RATE_LIMITED` whether it came from a guard or from
+ * the `@fastify/rate-limit` hook.
+ */
+function codeForStatus(status: number): string {
+  switch (status) {
+    case 400: return 'BAD_REQUEST';
+    case 401: return 'AUTHENTICATION_REQUIRED';
+    case 403: return 'AUTHORIZATION_DENIED';
+    case 404: return 'RECORD_NOT_FOUND';
+    case 409: return 'DUPLICATE_RECORD';
+    case 413: return 'FILE_TOO_LARGE';
+    case 422: return 'VALIDATION_FAILED';
+    case 429: return 'RATE_LIMITED';
+    default: return status >= 500 ? 'INTERNAL_ERROR' : 'BAD_REQUEST';
+  }
+}
+
+/**
+ * Status of an error thrown by a Fastify plugin or hook.
+ *
+ * The rate limiter, the body parser and the multipart guard throw plain `Error`s that carry only
+ * `statusCode`; Nest hands them to this filter like any other exception. Without this branch they
+ * fell through to `InternalServerError`, so a 429 reached the SPA as `INTERNAL_ERROR` / 500 and the
+ * client could not tell "slow down" from "the server crashed".
+ */
+function hookStatus(exception: unknown): number | undefined {
+  if (typeof exception !== 'object' || exception === null) return undefined;
+  const status = (exception as { statusCode?: unknown }).statusCode;
+  return typeof status === 'number' && status >= 400 && status <= 599 ? status : undefined;
+}
+
+/**
  * Query parameters that must never reach a log line.
  *
  * The OAuth callback carries the authorization code and the single-use state in its query string
@@ -67,23 +102,21 @@ export class GlobalExceptionFilter {
     const reply = host.switchToHttp().getResponse<FastifyReply>();
     const request = host.switchToHttp().getRequest<FastifyRequest>();
 
+    const hookErrorStatus = hookStatus(exception);
     let error: AppError;
     if (exception instanceof AppError) {
       error = exception;
     } else if (exception instanceof HttpException) {
       const status = exception.getStatus();
-      const mapped =
-        status === 401 ? 'AUTHENTICATION_REQUIRED' :
-        status === 403 ? 'AUTHORIZATION_DENIED' :
-        status === 404 ? 'RECORD_NOT_FOUND' :
-        status === 409 ? 'DUPLICATE_RECORD' :
-        status === 422 ? 'VALIDATION_FAILED' : 'BAD_REQUEST';
-      error = new AppError(mapped, exception.message, undefined, status);
+      error = new AppError(codeForStatus(status), exception.message, undefined, status);
     } else if (isUniqueViolation(exception)) {
       // A database unique constraint is the last line of defence for an invariant the API could
       // not express in a single check (Phase 19: one membership per user per project, one
       // dependency edge). It answers 409, not 500, and never repeats the SQL that produced it.
       error = new AppError('DUPLICATE_RECORD', 'That record already exists.', undefined, 409);
+    } else if (hookErrorStatus !== undefined) {
+      const message = exception instanceof Error ? exception.message : `HTTP ${hookErrorStatus}.`;
+      error = new AppError(codeForStatus(hookErrorStatus), message, undefined, hookErrorStatus);
     } else if (exception instanceof Error && 'validation' in exception) {
       error = new AppError('VALIDATION_FAILED', 'Validation failed.', { details: String(exception) }, 422);
     } else {
@@ -92,6 +125,12 @@ export class GlobalExceptionFilter {
 
     const translated = translateErrorMessage(getLocale() ?? 'en', error.code, error.message);
     const details: Record<string, unknown> = { ...(error.details ?? {}) };
+    // A throttled caller needs the number, not just the sentence: the rate limiter already wrote
+    // `Retry-After`, so it travels in the body as well and the SPA can back off without parsing prose.
+    if (error.statusCode === 429) {
+      const retryAfter = Number(reply.getHeader('retry-after'));
+      if (Number.isFinite(retryAfter) && retryAfter > 0) details['retryAfterSeconds'] = retryAfter;
+    }
     // The catalog text is the generic face of the code ("Validation failed."), which tells an
     // operator nothing. When it replaces a more specific message, that message travels as
     // `details.reason` so a caller can still explain WHY the request was refused — a blocked

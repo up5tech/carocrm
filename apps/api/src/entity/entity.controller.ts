@@ -98,12 +98,15 @@ function toListQuery(query: Record<string, string | string[] | undefined>): List
   const orderBy = query['orderBy'] ?? query['order'];
   const offset = query['offset'];
   const maxSize = query['maxSize'] ?? query['limit'];
+  const total = query['total'];
 
   if (where !== undefined) out.where = where;
   if (select !== undefined) out.select = select;
   if (orderBy !== undefined) out.orderBy = orderBy;
   if (offset !== undefined) out.offset = offset;
   if (maxSize !== undefined) out.maxSize = maxSize;
+  // `?total=false` skips the `count(*)` — a pager needs it, a cheap lookup does not.
+  if (total !== undefined) out.total = total;
   return out;
 }
 

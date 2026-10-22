@@ -677,6 +677,11 @@ arranges something.
 11. **Command-backed panels do not participate.** A commercial document's `items` panel
     (`SalesDocumentLinesPanel`) is the money the document is calculated from, not a link list, and it
     stays outside the tab area; so do Stream and Communications.
+12. **Every relation panel pages its relation.** A panel asks `/Related` for one page
+    (`offset`/`maxSize`, `total` for the pager) instead of a capped slice, so a relation larger than a
+    page stays reachable. The page is a page of the **relation**, not of one of the two ways a record
+    can belong to it: the attribute match and the `entity_links` rows are one union in the query, so a
+    record reachable both ways is listed and counted once.
 
 #### The editor (Layout settings → detail)
 
