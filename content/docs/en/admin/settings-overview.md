@@ -35,6 +35,11 @@ Three consequences people are surprised by:
   message "This section is not available to you" — the data behind it is refused by the server.
 - Module tabs appear only if the module is installed, so a fresh instance has a shorter rail.
 
+Four pages go deeper than the rail does, and each is the guide for the tab or module it names:
+[Module settings](admin/module-settings) for the per-module documents, [Configuring CRM Chat](admin/crm-chat)
+and [Configuring AI agents](admin/ai-agents) for the two modules with their own policy, and
+[Files and storage](admin/files-and-storage) for the upload limits the server actually enforces.
+
 ## How saving works
 
 Settings screens are backed by a **document**: the whole tab is one JSON document that you edit and publish

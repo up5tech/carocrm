@@ -65,6 +65,16 @@ JSON of a role stays small.
 A role can also restrict **fields**: per entity, a read level and an edit level for each field. A field you
 may not read is stripped from the record before it reaches the browser — it is not merely hidden.
 
+> [!WARNING]
+> Not every right is an entity permission. The AI Agents and CRM Chat modules check **synthetic
+> resources** — `AIAgent`, `AIAgentProvider`, `AIAgentPolicy`, `CRMChatConversation`, `CRMChatAdmin` — and
+> this screen builds its matrix from entity metadata, so those rows are not listed and cannot be granted
+> here. In practice module access is administrator-only in this build: an administrator or a `sysAdmin`
+> role bypasses ACL, and a stored role that carries the `*` wildcard also passes. Granting a CRM user a
+> single module right means writing the role's JSON through the API. See
+> [Configuring AI agents](admin/ai-agents) and [Configuring CRM Chat](admin/crm-chat) for which right each
+> tab needs.
+
 A role that is assigned to a user, an API account or a team cannot be deleted. Remove the assignment first.
 
 ## Teams

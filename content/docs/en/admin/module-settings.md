@@ -30,8 +30,10 @@ module's own endpoint is the authority — a value it does not accept is refused
 not know is refused rather than stored and ignored. That refusal is the reason the generic policy tabs render an
 enumerated value as a plain field: the tab never guesses a list the module has not published.
 
-Two of these documents carry enough policy to deserve their own guide rather than a row in a table:
-[Configuring CRM Chat](admin/crm-chat) and [Configuring AI agents](admin/ai-agents).
+Seven of these documents carry enough policy to deserve their own guide rather than a row in a table:
+[CRM Chat](admin/crm-chat), [AI agents](admin/ai-agents), [Sales](admin/sales),
+[Service Desk](admin/service-desk), [Customer Success](admin/customer-success),
+[Marketing](admin/marketing) and [Voice and messaging](admin/voice).
 
 ## What starts off
 

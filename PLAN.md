@@ -2810,7 +2810,7 @@ and an end user completes daily CRM work with minimal hunting, typing and contex
 
 Progress: ✅ implemented 2026-10-21 (21.0–21.10). Scope, architecture and work order in
 `PLAN_Phase_21_Documentation.md`; operations in `docs/admin/documentation.md`; deferrals and deviations
-in `docs/compatibility/documentation.md`. `/docs` ships 41 `en` pages across four sections with 17
+in `docs/compatibility/documentation.md`. `/docs` ships 46 `en` pages across four sections with 17
 translated into `vi`, reachable from the sidebar, the avatar menu, the command palette and the screen the
 reader is standing on.
 
@@ -2835,7 +2835,7 @@ Implement, as specified in `PLAN_Phase_21_Documentation.md`:
   three-column reading layout, TOC, anchors, prev/next, print stylesheet and search snippets.
 - Contextual help: `HelpTip` gains `docKey`, admin tab descriptors gain `docKey`, and the unused
   Phase 20 `PermissionDenied` state is consumed.
-- 41 pages in `en` across `getting-started`, `user`, `admin` and `reference`; `vi` as a first-class
+- 46 pages in `en` across `getting-started`, `user`, `admin` and `reference`; `vi` as a first-class
   translation with a visible per-page fallback notice.
 
 Acceptance:
