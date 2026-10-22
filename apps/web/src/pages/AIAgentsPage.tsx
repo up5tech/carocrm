@@ -4,6 +4,7 @@ import { Alert, Button, Skeleton, Space, Tabs, Typography } from 'antd';
 import { useCallback, useMemo, useState } from 'react';
 
 import { api } from '../api/client.js';
+import { DocsLink } from '../components/docs/DocsLink.js';
 import { t } from '../state/i18n.js';
 import { AIAgentsAgentsTab } from './ai-agents/AIAgentsAgentsTab.js';
 import { AIAgentsApprovalsTab } from './ai-agents/AIAgentsApprovalsTab.js';
@@ -138,6 +139,7 @@ export function AIAgentsPage() {
           <Space size={8}>
             <RobotOutlined />
             {t('web.aiAgents.title')}
+            <DocsLink docKey="user/ai-agents" compact />
           </Space>
         </Typography.Title>
         <Space size={[8, 4]} wrap>

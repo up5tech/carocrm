@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { api, ApiError } from '../api/client.js';
 import type { CRMChatMessageView } from '../api/types.js';
+import { DocsLink } from '../components/docs/DocsLink.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
@@ -179,7 +180,10 @@ export function CRMChatPage() {
       <div>
         <div className="carocrm-page-head">
           <div>
-            <h1 className="carocrm-page-title">{t('web.crmChat.title')}</h1>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <h1 className="carocrm-page-title">{t('web.crmChat.title')}</h1>
+              <DocsLink docKey="user/chat-and-voice" compact />
+            </div>
             <p className="carocrm-page-sub">{t('web.crmChat.subtitle')}</p>
           </div>
         </div>
@@ -221,7 +225,10 @@ export function CRMChatPage() {
     <div>
       <div className="carocrm-page-head">
         <div>
-          <h1 className="carocrm-page-title">{t('web.crmChat.title')}</h1>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <h1 className="carocrm-page-title">{t('web.crmChat.title')}</h1>
+            <DocsLink docKey="user/chat-and-voice" compact />
+          </div>
           <p className="carocrm-page-sub">{t('web.crmChat.subtitle')}</p>
         </div>
         <Space>

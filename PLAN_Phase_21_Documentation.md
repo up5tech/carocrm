@@ -336,8 +336,9 @@ file is a PNG or WebP under 400 KB, and that `alt` is non-empty.
 
 ### 4.8 Content inventory
 
-Thirty-eight pages across four sections. `P0` = required before the phase can be called usable; `P1` =
-required before the phase is done.
+Forty-one pages across four sections. `P0` = required before the phase can be called usable; `P1` =
+required before the phase is done. Three rows were added after the modules shipped: `user/ai-agents`,
+`admin/crm-chat` and `admin/ai-agents`.
 
 **`getting-started` (audience: user, visible to all) — P0**
 
@@ -369,7 +370,8 @@ required before the phase is done.
 | `projects` | Projects | Plan, board, Gantt, members, settings |
 | `customer-success` | Customer success | Health, plans, playbooks, reviews |
 | `marketing` | Campaigns and audiences | Campaign lifecycle, target lists, consent/suppression |
-| `chat-and-voice` | Chat and the voice inbox | `/crm-chat`, `/voice-inbox`, call log, composer |
+| `chat-and-voice` | CRM Chat and the voice inbox | `/crm-chat` (including the header's quick-chat panel), `/voice-inbox`, call log, composer |
+| `ai-agents` | AI agents | `/ai-agents` — overview, agents, conversations, runs, approvals, evaluations, usage; providers and settings point at the admin page. *Added after the module shipped; not in the original 38-page inventory.* |
 
 **`admin` (audience: admin) — P0**
 
@@ -396,6 +398,8 @@ required before the phase is done.
 | `portals` | Portals | Portal users, navigation, ACL scope |
 | `audit-jobs-and-operations` | Audit log, jobs and operations | `/admin/audit-log`, `/admin/jobs`, failed job triage |
 | `first-run` | First-run checklist | Mirrors the setup checklist items and their routes |
+| `crm-chat` | Configuring CRM Chat | The `crmChat` document, the assistant, execution mode, the switches and `allowWrites`. *Added with the configuration guides.* |
+| `ai-agents` | Configuring AI agents | Providers, credentials and allowlist, ceilings, approvals, retention, budgets, the evaluation gate. *Added with the configuration guides.* |
 
 **`reference` (audience: user) — P1**
 
@@ -1091,7 +1095,7 @@ defaults apply.
 
 ### 15.3 Backward compatibility and upgrade notes
 
-- An existing installation upgrades with no action: `/docs` appears in the sidebar with 38 pages, and
+- An existing installation upgrades with no action: `/docs` appears in the sidebar with 41 pages, and
   `vi` pages appear as they are translated.
 - An installation that does not want it turns the entry off in **Main Menu** (`docs` → off) or sets
   `docs.enabled = false`.
@@ -1113,7 +1117,7 @@ defaults apply.
 | `docs/compatibility/documentation.md` | Deferrals, deviations from this plan, known limitations |
 | `docs/reference/alpha-status.md` | Phase 21 status line |
 | `docs/reference/compatibility-matrix.md` | "In-app documentation — new design — P1" row |
-| `content/docs/**` | The 38 pages themselves (this is the product deliverable, not an afterthought) |
+| `content/docs/**` | The 41 pages themselves (this is the product deliverable, not an afterthought) |
 
 ---
 
@@ -1150,14 +1154,14 @@ in one pass.
 > colour and was unreadable on the dark tooltip, and the coverage footnote rendered literal backticks.
 > **Not built yet:** nothing in scope. The two open items are both deliberate: the corpus has **no
 > screenshots** (21.3 deferred them and the plumbing already supports them), and the `vi` set is **P0 only**
-> — 17 of 38 pages — with the Vietnamese prose still needing a native-speaker review (§4.7). Both are
+> — 17 of 41 pages — with the Vietnamese prose still needing a native-speaker review (§4.7). Both are
 > recorded in `docs/compatibility/documentation.md`.
 > 21.8 is done too: the corpus is the full §4.8 inventory — 38 `en` pages across four sections (the new
 > `reference` section included) — and `vi` translates the 17 P0 pages plus the section descriptors, with
 > everything beyond them falling back to English behind the notice. Verified in Chromium: four doors on
 > `/docs`, a P1 admin page and the glossary render with zero dead links, the `vi` reader shows Vietnamese
 > for a translated page and the fallback notice for an untranslated one, and the admin `Docs` tab reports
-> 38 pages / 45% translated.
+> 41 pages / 41% translated.
 > 21.9 is done too, and it earned its keep: there was **no skip link**, antd's `a:focus { outline: 0 }` had
 > stripped the keyboard focus ring from **every link in the app**, the search page stole the caret out of the
 > field on every debounced response, a closed `<details>` still painted its contents on a phone, and the
@@ -1287,7 +1291,8 @@ Acceptance: 38 pages in `en`, lint clean, `vi` covers `getting-started` + all P0
 fallback notice elsewhere.
 
 Done, and the corpus is now the §4.8 inventory exactly: `getting-started` 4, `user` 13, `admin` 16,
-`reference` 5 = 38 pages in `en`. `vi` carries the 17 P0 pages plus the root and three section
+`reference` 5 = 38 pages in `en` — plus `user/ai-agents`, added when that module shipped, for 39 in the tree
+today (§4.8). `vi` carries the 17 P0 pages plus the root and three section
 descriptors; everything beyond that still answers in English and says so. Two things the pass fixed
 beyond the new pages: the P0 `admin` section descriptor and `settings-overview` named the save-bar button
 **Publish**, which is the internal hook name (`usePublishTabActions`) rather than the label the product
@@ -1381,7 +1386,7 @@ than weakened here.
 
 Phase 21 is complete when all of the following hold:
 
-- [x] `/docs` is reachable from the sidebar, the avatar menu and the command palette, and renders 38
+- [x] `/docs` is reachable from the sidebar, the avatar menu and the command palette, and renders 41
       pages in `en` across four sections.
 - [x] A CRM user sees no administrator page in the tree, in search, or at a direct URL; a portal user
       is refused on every route. (`docs.test.ts` §10.2 matrix, `e2e/docs.spec.ts` scenario 4)

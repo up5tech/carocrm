@@ -24,7 +24,7 @@ packages/docs/src/
   corpus.test.ts                    the shipped corpus is the contract test
 
 content/docs/
-  en/{getting-started,user,admin,reference}/*.md   38 pages + section descriptors
+  en/{getting-started,user,admin,reference}/*.md   41 pages + section descriptors
   vi/…                                              the 17 P0 pages, translated
   redirects.json                                    old slug → new key
 

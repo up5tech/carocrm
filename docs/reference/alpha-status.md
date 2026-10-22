@@ -927,7 +927,7 @@ criterion ("axe passes on the four core surfaces") is not met.
 ## Phase 21 — In-app documentation and product help (added 2026-10-21)
 
 Scope: `PLAN_Phase_21_Documentation.md`, sub-phases 21.0–21.10. The product now carries its own handbook:
-`/docs` renders 38 pages in `en` across four sections (`getting-started`, `user`, `admin`, `reference`),
+`/docs` renders 41 pages in `en` across four sections (`getting-started`, `user`, `admin`, `reference`),
 17 of which are translated into `vi`.
 
 | Item | State | Evidence |

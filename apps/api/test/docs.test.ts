@@ -223,7 +223,7 @@ describe('GET /Docs/page/:section/:slug', () => {
     // so the reader is never left believing the handbook simply ran out (§5.3).
     const edge = await call('GET', '/api/v1/Docs/page/getting-started/keyboard-shortcuts', ctx.adminToken);
     expect((edge.body['page'] as Record<string, unknown>)['next']).toMatchObject({ key: 'user', path: '/docs/user' });
-    const lastAdmin = await call('GET', '/api/v1/Docs/page/admin/audit-jobs-and-operations', ctx.adminToken);
+    const lastAdmin = await call('GET', '/api/v1/Docs/page/admin/ai-agents', ctx.adminToken);
     expect((lastAdmin.body['page'] as Record<string, unknown>)['next']).toMatchObject({
       key: 'reference',
       path: '/docs/reference',

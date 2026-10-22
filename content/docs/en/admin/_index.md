@@ -16,7 +16,9 @@ screens an administrator opens most: [branding, language and time](branding-and-
 The rest cover one area each: [email and notifications](email-and-notifications),
 [files and storage](files-and-storage), [workflows and processes](workflows-and-processes),
 [extensions](extensions), [integrations](integrations), [module settings](module-settings),
-[portals](portals) and the [audit log, jobs and operations](audit-jobs-and-operations).
+[portals](portals), the [audit log, jobs and operations](audit-jobs-and-operations), and the two
+modules with enough policy of their own to need a guide: [CRM Chat](crm-chat) and
+[AI agents](ai-agents).
 
 Two things are true across all of them. Every change is enforced by the server, not by what the screen
 shows you. And every setting belongs to a document that is saved as a whole, with one **Save** button —

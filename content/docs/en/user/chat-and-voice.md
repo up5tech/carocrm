@@ -1,11 +1,11 @@
 ---
-title: Chat and the voice inbox
-summary: The CRM Chat workspace, the voice inbox, the call log and what the composer can and cannot do.
+title: CRM Chat and the voice inbox
+summary: The CRM Chat workspace and its quick-chat panel, then the voice inbox, the call log and what the composer can and cannot do.
 audience: user
 order: 130
-tags: [chat, voice, calls, sms, assistant]
+tags: [chat, crm-chat, voice, calls, sms, assistant]
 related: [user/stream-and-notifications, user/record-page, admin/settings-overview]
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 There are two surfaces here and they do not talk to each other. [CRM Chat](/crm-chat) is a thread
@@ -34,6 +34,20 @@ Three regions:
 
 **New** is client-side. It clears the draft and focuses the box; the thread itself is only created on
 the server when the first message is accepted.
+
+## Quick chat from the header
+
+The header carries an **Ask AI** button on every screen — a small panel, not a second workspace. It
+appears only when the server put Chat on your menu, so an instance without the module never shows it.
+
+Type a question and press **Enter**; the answer arrives in the panel, role-labelled, with a **Stop
+generation** button while the turn runs. Asking again from the same panel continues the same
+conversation, and **New conversation** starts a fresh one. **Open full chat** opens `/crm-chat`, where
+your conversations are listed. The panel shows answers only: no citations, no attachments and no record
+previews.
+
+If the assistant wants to change a record, the turn asks for a decision — and a decision is taken on the
+full page, where the proposal card is, not in the panel. The panel says so and links there.
 
 ## The composer
 
@@ -118,6 +132,7 @@ real phone until a production adapter is registered.
 
 ## Where to go next
 
+- [Configuring CRM Chat](admin/crm-chat) — the switches, the assistant and the safety gate an administrator controls.
 - [Stream and notifications](user/stream-and-notifications) — where case handoffs and call notes land.
 - [Record page](user/record-page) — how a call or a case sits on the CRM record itself.
 - [Settings overview](admin/settings-overview) — the switches this page mentions.
