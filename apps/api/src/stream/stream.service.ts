@@ -375,11 +375,14 @@ export class StreamService {
       .where('user_id', '=', principal.userId);
     if (options.unreadOnly) query = query.where('is_read', '=', false);
     const rows = await query.orderBy('created_at', 'desc').limit(options.maxSize).offset(options.offset).execute();
-    const totalRow = await this.db
+    // The total answers the filter that was asked for, so `unreadOnly=true` reports the unread
+    // count the header badge shows rather than the size of the whole inbox.
+    let totalQuery = this.db
       .selectFrom('notifications')
       .select((eb) => eb.fn.countAll<string>().as('total'))
-      .where('user_id', '=', principal.userId)
-      .executeTakeFirst();
+      .where('user_id', '=', principal.userId);
+    if (options.unreadOnly) totalQuery = totalQuery.where('is_read', '=', false);
+    const totalRow = await totalQuery.executeTakeFirst();
     return {
       list: rows.map((row) => ({
         id: row.id,

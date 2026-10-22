@@ -5,7 +5,7 @@ audience: user
 order: 40
 tags: [stream, follow, mention, notification]
 related: [user/record-page, user/activities-and-tasks]
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 The [stream](/stream) is the running record of what happened in the CRM: notes posted on records, fields
@@ -41,13 +41,20 @@ to a field is summarized in the stream as `Label → value`.
 To pull a colleague in, write **@** and their name. A mention creates an in-app notification for them — but
 only for internal staff, never for a portal user.
 
-## Where notifications are not
+## The notification bell
 
-This is the part people look for and cannot find. There is **no notification bell and no unread badge** in
-the interface. A mention or an assignment is recorded, and the data is there, but nothing surfaces it in the
-header today. The practical consequences:
+The bell in the header is your own inbox. The badge on it is the number of unread notifications addressed
+to you; it updates live as notifications arrive, and again each time you open the panel. A live connection
+is kept open while the app is in the tab — including notifications created by background jobs and
+workflows, which arrive the same way.
 
-- Do not rely on a mention to get someone's attention. Mention them *and* tell them.
+Clicking the bell lists your latest notifications, newest first — a mention, a case assigned to you or
+replied to, an SLA warning or breach, a process task, a customer-success alert, an incoming call. Clicking
+a notification opens the record it points at and marks it read; the check on a row marks only that one, and
+**Mark all as read** clears the badge in one go. Reading is always explicit: opening the panel never clears
+anything.
+
+- A mention notifies internal staff only, and never a portal user.
 - Reminders on activities are stored as in-app rows too; there is no email or popup delivery.
 - The one message that does leave the system is a **scheduled report's** CSV, which is emailed to the person
   who scheduled it.

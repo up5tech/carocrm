@@ -17,11 +17,14 @@
  */
 import type { Provider, Type } from '@nestjs/common';
 
+import { NotificationEventsService } from './notification-events.service.js';
 import { NoteController, NotificationController, StreamController } from './stream.controller.js';
 import { StreamService } from './stream.service.js';
 import type { StreamEntityMetadataLookup } from './stream-hooks.js';
 import { STREAM_METADATA_LOOKUP, StreamUpdateHookService } from './stream-hooks.js';
 
+export type { NotificationEvent } from './notification-events.service.js';
+export { NotificationEventsService } from './notification-events.service.js';
 export { NoteController, NotificationController, StreamController } from './stream.controller.js';
 export type {
   CreateStreamItemInput,
@@ -55,6 +58,8 @@ export const STREAM_PROVIDERS: Provider[] = [
   { provide: STREAM_METADATA_LOOKUP, useFactory: (): StreamEntityMetadataLookup => () => undefined },
   StreamService,
   StreamUpdateHookService,
+  // Live delivery of notification inserts, listened for on the database channel (migration 063).
+  NotificationEventsService,
 ];
 
 export const STREAM_CONTROLLERS: Type<unknown>[] = [NoteController, StreamController, NotificationController];

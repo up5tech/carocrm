@@ -462,6 +462,19 @@
     "post": "Post",
     "postHint": "⌘/Ctrl + Enter to post"
   },
+  "notifications": {
+    "title": "Notifications",
+    "ariaLabel": "Notifications, {count} unread",
+    "markRead": "Mark as read",
+    "markAllRead": "Mark all as read",
+    "markedAllRead": "All notifications marked as read.",
+    "markAllFailed": "Could not mark the notifications as read.",
+    "markReadFailed": "Could not mark the notification as read.",
+    "loadFailed": "Failed to load notifications.",
+    "empty": "No notifications yet.",
+    "mentionIn": "You were mentioned in {entity}",
+    "record": "a record"
+  },
   "dashboards": {
     "title": "Dashboards",
     "subtitle": "List, chart and KPI dashlets queried through the shared Query Engine.",

@@ -1,11 +1,11 @@
 ---
 title: Dòng hoạt động và thông báo
-summary: Dòng hoạt động hiển thị gì, theo dõi chạy ra sao, nhắc tên thì được gì, và thông báo nằm ở đâu — và không nằm ở đâu.
+summary: Dòng hoạt động hiển thị gì, theo dõi chạy ra sao, nhắc tên thì được gì, và chuông thông báo hoạt động thế nào.
 audience: user
 order: 40
 tags: [stream, follow, mention, notification]
 related: [user/record-page, user/activities-and-tasks]
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 [Dòng hoạt động](/stream) là nhật ký chạy liên tục của những gì đã xảy ra trong CRM: ghi chú đăng trên bản ghi,
@@ -41,13 +41,19 @@ trên trường được tóm tắt trong dòng hoạt động dưới dạng `N
 Để kéo một đồng nghiệp vào, hãy viết **@** kèm tên người đó. Một lời nhắc sẽ tạo thông báo trong ứng dụng cho họ
 — nhưng chỉ cho nhân sự nội bộ, không bao giờ cho người dùng portal.
 
-## Chỗ nào không có thông báo
+## Chuông thông báo
 
-Đây là phần mọi người đi tìm và không tìm thấy. Giao diện **không có chuông thông báo và không có huy hiệu chưa
-đọc**. Một lời nhắc hay một lượt giao việc đều được ghi lại, dữ liệu nằm đó, nhưng hôm nay không có gì đưa nó lên
-thanh đầu trang. Hệ quả trên thực tế:
+Chuông trên thanh đầu trang là hộp thư riêng của bạn. Huy hiệu trên chuông là số thông báo chưa đọc gửi cho
+bạn; nó cập nhật ngay khi thông báo mới đến, và làm mới lại mỗi lần bạn mở bảng. Kết nối trực tiếp được giữ
+mở khi ứng dụng đang ở trong tab — kể cả thông báo do tác vụ nền và quy trình tạo ra cũng đến theo cách này.
 
-- Đừng trông vào một lời nhắc để thu hút sự chú ý của ai đó. Hãy nhắc tên họ *và* nói với họ.
+Bấm vào chuông để xem những thông báo mới nhất, mới nhất ở trên — một lời nhắc tên, một ca được giao cho bạn
+hoặc có phản hồi, cảnh báo hay vi phạm SLA, một việc trong quy trình, một cảnh báo chăm sóc khách hàng, một
+cuộc gọi đến. Bấm vào một thông báo sẽ mở bản ghi tương ứng và đánh dấu đã đọc; nút dấu tích trên từng dòng chỉ
+đánh dấu dòng đó, còn **Đánh dấu tất cả đã đọc** xoá huy hiệu một lần. Việc đọc luôn là hành động rõ ràng: mở
+bảng không bao giờ tự xoá gì.
+
+- Một lời nhắc chỉ thông báo cho nhân sự nội bộ, không bao giờ cho người dùng portal.
 - Lời nhắc trên hoạt động cũng chỉ được lưu thành bản ghi trong ứng dụng; không có kênh chuyển qua email hay popup.
 - Tin nhắn duy nhất thực sự đi ra ngoài hệ thống là CSV của một **báo cáo có lịch gửi**, được gửi tới email của
   người đã lên lịch đó.

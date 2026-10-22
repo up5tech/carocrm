@@ -353,6 +353,14 @@ export interface NotificationItem {
   createdAt: string;
 }
 
+export interface NotificationListResult {
+  list: NotificationItem[];
+  /** Notifications matching the query's filter; with `unreadOnly` this is the unread count. */
+  total: number;
+  offset: number;
+  count: number;
+}
+
 export interface CalendarEvent {
   activityType: string;
   activityId: string;
@@ -991,11 +999,16 @@ export const api = {
     request<{ followed: boolean }>(`/${encodeURIComponent(entity)}/${encodeURIComponent(id)}/subscription`),
   activityStream: (params: { view?: 'all' | 'followed' | 'own'; maxSize?: number; offset?: number } = {}) =>
     request<StreamListResult>(`/Stream${simpleQuery({ view: params.view, maxSize: params.maxSize, offset: params.offset })}`),
-  notifications: (params: { unreadOnly?: boolean; maxSize?: number } = {}) =>
-    request<ListResult & { list: NotificationItem[] }>(
-      `/Notification${simpleQuery({ unreadOnly: params.unreadOnly ? 'true' : undefined, maxSize: params.maxSize })}`,
+  notifications: (params: { unreadOnly?: boolean; maxSize?: number; offset?: number } = {}) =>
+    request<NotificationListResult>(
+      `/Notification${simpleQuery({
+        unreadOnly: params.unreadOnly ? 'true' : undefined,
+        maxSize: params.maxSize,
+        offset: params.offset,
+      })}`,
     ),
   markNotificationRead: (id: string) => request<unknown>(`/Notification/${encodeURIComponent(id)}/Read`, { method: 'POST' }),
+  markAllNotificationsRead: () => request<{ status: boolean; updated: number }>('/Notification/Read-all', { method: 'POST' }),
 
   calendar: (params: {
     from: string;

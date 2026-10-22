@@ -462,6 +462,19 @@
     "post": "Đăng",
     "postHint": "⌘/Ctrl + Enter để đăng"
   },
+  "notifications": {
+    "title": "Thông báo",
+    "ariaLabel": "Thông báo, {count} chưa đọc",
+    "markRead": "Đánh dấu đã đọc",
+    "markAllRead": "Đánh dấu tất cả đã đọc",
+    "markedAllRead": "Đã đánh dấu tất cả thông báo là đã đọc.",
+    "markAllFailed": "Không đánh dấu được thông báo.",
+    "markReadFailed": "Không đánh dấu được thông báo là đã đọc.",
+    "loadFailed": "Không tải được thông báo.",
+    "empty": "Chưa có thông báo nào.",
+    "mentionIn": "Bạn được nhắc đến trong {entity}",
+    "record": "một bản ghi"
+  },
   "dashboards": {
     "title": "Bảng điều khiển",
     "subtitle": "Các dashlet dạng danh sách, biểu đồ và KPI được truy vấn qua Query Engine dùng chung.",

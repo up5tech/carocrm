@@ -20,6 +20,7 @@ import { DocsLink } from './docs/DocsLink.js';
 import { PageDocsProvider, usePageDocsKey } from './docs/PageDocs.js';
 import { entityIcon, navGroupIcon, navIcon } from './entityIcons.js';
 import { IncomingCallBanner } from './IncomingCallBanner.js';
+import { NotificationsMenu } from './NotificationsMenu.js';
 
 const { Sider, Content, Footer } = Layout;
 
@@ -219,6 +220,7 @@ function InternalShell({ children }: { children: ReactNode }) {
         />
         <div className="carocrm-header-actions">
           {chatAvailable ? <CRMChatQuickAccess compact={narrow} /> : null}
+          <NotificationsMenu />
           <DocsLink docKey={pageDocsKey} compact className="carocrm-header-docs" />
           <Dropdown menu={{ items: userMenu }} trigger={['click']}>
             <span className="carocrm-avatar" title={principal?.userName}>

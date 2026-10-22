@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { NotificationEventsService } from '../src/stream/index.js';
 import type { ApiContext, TestUser } from './support/boot-api.js';
 import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
 
@@ -301,5 +302,53 @@ describe('mentions and notifications', () => {
     });
     const mentions = created.body['mentions'] as Array<Record<string, unknown>>;
     expect(mentions.map((mention) => mention['userId'])).toContain(mentioned.id);
+  });
+
+  it('pushes a notification insert to the recipient event channel', async () => {
+    const events = ctx.app.get(NotificationEventsService);
+    await events.whenReady();
+    const id = `agent-test-realtime-${runId}`;
+    const received = new Promise<string>((resolve) => {
+      const unsubscribe = events.subscribe(mentioned.id, (event) => {
+        unsubscribe();
+        resolve(event.id);
+      });
+    });
+    try {
+      await ctx.database.db
+        .insertInto('notifications')
+        .values({
+          id,
+          type: 'AgentTestRealtime',
+          user_id: mentioned.id,
+          data: JSON.stringify({ title: 'AGENT_TEST realtime push' }),
+          is_read: false,
+          created_at: new Date(),
+        })
+        .execute();
+      await expect(received).resolves.toBe(id);
+    } finally {
+      await ctx.database.db.deleteFrom('notifications').where('id', '=', id).execute();
+    }
+  });
+
+  it('reports the unread total and marks every notification read at once', async () => {
+    await call('POST', '/api/v1/Note', poster.token, {
+      type: 'Post',
+      parentId: taskId,
+      parentType: 'Task',
+      post: `batch read @${mentioned.userName}`,
+    });
+    // `maxSize=1` is what the header badge asks for: the count must not shrink to the page size.
+    const unread = await call('GET', '/api/v1/Notification?unreadOnly=true&maxSize=1', mentioned.token);
+    expect(unread.status).toBe(200);
+    expect(Number(unread.body['total'] ?? 0)).toBeGreaterThan(0);
+
+    const cleared = await call('POST', '/api/v1/Notification/Read-all', mentioned.token);
+    expect(cleared.status).toBe(201);
+    expect(Number(cleared.body['updated'] ?? 0)).toBeGreaterThan(0);
+
+    const after = await call('GET', '/api/v1/Notification?unreadOnly=true&maxSize=1', mentioned.token);
+    expect(Number(after.body['total'] ?? 0)).toBe(0);
   });
 });

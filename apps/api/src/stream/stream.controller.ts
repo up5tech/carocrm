@@ -1,8 +1,13 @@
 import { InvalidQueryError, ValidationError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Delete, Get, Inject, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, Post, Put, Query, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 
+import type { RequestScope } from '../common/request-scope.js';
+import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
+import type { NotificationEvent } from './notification-events.service.js';
+import { NotificationEventsService } from './notification-events.service.js';
 import type { StreamItemDto, StreamListOptions } from './stream.service.js';
 import { StreamService } from './stream.service.js';
 
@@ -145,7 +150,11 @@ export class StreamController {
 @ApiTags('stream')
 @Controller('api/v1/Notification')
 export class NotificationController {
-  constructor(@Inject(StreamService) private readonly stream: StreamService) {}
+  constructor(
+    @Inject(StreamService) private readonly stream: StreamService,
+    @Inject(NotificationEventsService) private readonly events: NotificationEventsService,
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+  ) {}
 
   @Get()
   async list(@Query() query: unknown): Promise<{
@@ -162,6 +171,50 @@ export class NotificationController {
     };
     const result = await this.stream.listNotifications(options);
     return { ...result, offset: options.offset, count: result.list.length };
+  }
+
+  /**
+   * Live inbox for the signed-in user (PLAN §26).
+   *
+   * A server-sent-event stream is used rather than a WebSocket because delivery is one-way and the
+   * browser can consume it with a plain authenticated `fetch`. Each connection receives only the
+   * notifications addressed to its own principal — the database publishes every insert, and this
+   * subscription is keyed by the caller's user id, so another user's event is never written to it.
+   * The client re-reads `GET /Notification` on an event; the event itself is not rendered.
+   */
+  @Get('stream')
+  async streamNotifications(@Res() reply: FastifyReply): Promise<void> {
+    const principal = this.scope.requirePrincipal();
+    // Take over the response before touching the socket, exactly as the CRM Chat turn stream does:
+    // Nest's reply writer is not used for the rest of this request.
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    reply.raw.flushHeaders();
+    reply.raw.write(': connected\n\n');
+
+    const write = (event: NotificationEvent): void => {
+      if (reply.raw.writableEnded) return;
+      reply.raw.write(`event: notification\ndata: ${JSON.stringify(event)}\n\n`);
+    };
+    const unsubscribe = this.events.subscribe(principal.userId, write);
+    // Proxies and load balancers drop an idle connection; a comment frame keeps it warm without
+    // delivering an event the client would act on.
+    const heartbeat = setInterval(() => {
+      if (!reply.raw.writableEnded) reply.raw.write(': keep-alive\n\n');
+    }, 25_000);
+    heartbeat.unref();
+
+    const close = (): void => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    };
+    reply.raw.on('close', close);
+    reply.raw.on('error', close);
   }
 
   @Post('Read-all')

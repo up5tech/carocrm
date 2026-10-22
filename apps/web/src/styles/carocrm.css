@@ -126,12 +126,131 @@ body {
   vertical-align: 0;
 }
 
+/* ---- header notifications ---- */
+.carocrm-notification-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.carocrm-notification-trigger:hover {
+  background: #f0f8ff;
+  color: #438eff;
+}
+
+.carocrm-notification-trigger:focus-visible {
+  background: #f0f8ff;
+  color: #438eff;
+  outline: 2px solid #438eff;
+  outline-offset: 2px;
+}
+
+.carocrm-notification-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(360px, calc(100vw - 40px));
+}
+
+.carocrm-notification-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.carocrm-notification-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(420px, 60vh);
+  overflow-y: auto;
+}
+
+.carocrm-notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 4px;
+  border-bottom: 1px solid #f3f5f8;
+}
+
+.carocrm-notification-item:last-child {
+  border-bottom: 0;
+}
+
+.carocrm-notification-item.is-unread {
+  background: #f5f9ff;
+}
+
+.carocrm-notification-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.carocrm-notification-title {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1f2733;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.carocrm-notification-item.is-unread .carocrm-notification-title {
+  font-weight: 600;
+}
+
+.carocrm-notification-title:hover {
+  color: #438eff;
+  text-decoration: underline;
+}
+
+.carocrm-notification-text {
+  margin-top: 2px;
+  color: #4b5563;
+  display: -webkit-box;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.carocrm-notification-time {
+  font-size: 11px;
+}
+
+.carocrm-notification-state {
+  display: grid;
+  place-items: center;
+  padding: 24px 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.carocrm-notification-read {
+  color: #737b85;
+}
+
 .carocrm-avatar {
   width: 34px;
   height: 34px;
   border-radius: 50%;
   display: grid;
   place-items: center;
+  cursor: pointer;
   color: #fff;
   font-size: 13px;
   font-weight: 600;
