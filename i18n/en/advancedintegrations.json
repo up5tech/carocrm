@@ -55,7 +55,21 @@
     "setupShopify": "Create a custom app in the store, grant the read scopes the connector needs, store the access token as the API key, and store the app client secret as the webhook secret. Set the connection provider account to the shop domain.",
     "setupQuickbooksOnline": "Create an app in the Intuit developer portal, set the redirect URI to the platform callback, and put the client id in INTEGRATION_OAUTH_CLIENT_IDS. Set the connection provider account to the company id.",
     "setupGenericRest": "Name the base URL, the allowlisted paths and methods, the response pointers and the authentication mode in the connection options. The address is checked when the connection is saved, and the connector reads only.",
-    "setupFakeProvider": "A deterministic in-process provider for local development and tests. It is never registered in production."
+    "setupFakeProvider": "A deterministic in-process provider for local development and tests. It is never registered in production.",
+    "infoHint": "See what data this connector exchanges",
+    "infoTitle": "What {provider} integrates",
+    "infoClose": "Close",
+    "infoDataTitle": "Data exchanged",
+    "infoDataHint": "Read pulls provider records into the CRM. Write sends CRM changes to the provider. Webhook means the provider pushes changes as they happen.",
+    "infoRead": "Read into CRM",
+    "infoWrite": "Write to provider",
+    "infoWebhook": "Webhook events",
+    "infoNoObjects": "This connector declares no data objects.",
+    "infoScopesTitle": "Access scopes",
+    "infoScopesRequired": "Required",
+    "infoScopesOptional": "Optional",
+    "infoScopesNone": "This connector declares no scopes.",
+    "infoAuthTitle": "Authentication"
   },
   "connections": {
     "title": "Connections",

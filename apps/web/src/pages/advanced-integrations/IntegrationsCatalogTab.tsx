@@ -1,5 +1,6 @@
+import { InfoCircleOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Input, Skeleton, Tooltip } from 'antd';
+import { Button, Input, Modal, Skeleton, Space, Tag, Tooltip, Typography } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { api } from '../../api/client.js';
@@ -47,6 +48,7 @@ interface CatalogGroup {
 export function IntegrationsCatalogTab() {
   const [search, setSearch] = useState('');
   const [wizardProvider, setWizardProvider] = useState<IntegrationCatalogProvider | null>(null);
+  const [infoProvider, setInfoProvider] = useState<IntegrationCatalogProvider | null>(null);
   const catalog = useQuery({
     queryKey: ['advancedIntegrations', 'catalog'],
     queryFn: () => api.integrationCatalog(),
@@ -147,6 +149,7 @@ export function IntegrationsCatalogTab() {
                           key={provider.providerKey}
                           provider={provider}
                           onConnect={() => setWizardProvider(provider)}
+                          onInfo={() => setInfoProvider(provider)}
                         />
                       ))}
                     </ul>
@@ -161,6 +164,8 @@ export function IntegrationsCatalogTab() {
       {wizardProvider === null ? null : (
         <ConnectionWizard provider={wizardProvider} onClose={() => setWizardProvider(null)} />
       )}
+
+      <IntegrationInfoModal provider={infoProvider} onClose={() => setInfoProvider(null)} />
     </div>
   );
 }
@@ -177,9 +182,11 @@ function SummaryFact({ value, label }: { readonly value: number; readonly label:
 function CatalogRow({
   provider,
   onConnect,
+  onInfo,
 }: {
   readonly provider: IntegrationCatalogProvider;
   readonly onConnect: () => void;
+  readonly onInfo: () => void;
 }) {
   const tone: ConnectionTone = provider.executable
     ? provider.healthyCount > 0
@@ -221,6 +228,17 @@ function CatalogRow({
       <div className="carocrm-int-provider-body">
         <div className="carocrm-int-provider-title">
           <span className="carocrm-int-provider-name">{provider.displayName}</span>
+          {/* The row states how much it carries; this explains exactly which data that is. */}
+          <Tooltip title={t('advancedintegrations.providers.infoHint')}>
+            <Button
+              type="text"
+              size="small"
+              className="carocrm-int-info"
+              icon={<InfoCircleOutlined />}
+              aria-label={t('advancedintegrations.providers.infoTitle', { provider: provider.displayName })}
+              onClick={onInfo}
+            />
+          </Tooltip>
           <TonePill tone={TIER_TONES[provider.tier]} label={provider.tier} />
           <span className="carocrm-int-auth" title={t('advancedintegrations.providers.authentication')}>
             {provider.authentication.replaceAll('_', ' ')}
@@ -291,6 +309,112 @@ function CatalogRow({
         )}
       </div>
     </li>
+  );
+}
+
+/**
+ * What one connector actually exchanges, opened from the row's info icon.
+ *
+ * The row can only say "six objects"; this says which six and in which direction, which is the
+ * question an operator asks before granting an OAuth scope. Directions are derived from the
+ * capability flags the adapter declares: `read` pulls provider records into the CRM, `write` sends
+ * CRM changes back, and `webhook` means the provider pushes changes itself.
+ */
+function IntegrationInfoModal({
+  provider,
+  onClose,
+}: {
+  readonly provider: IntegrationCatalogProvider | null;
+  readonly onClose: () => void;
+}) {
+  if (provider === null) return null;
+  const required = provider.requiredScopes;
+  const optional = provider.optionalScopes;
+
+  return (
+    <Modal
+      open
+      onCancel={onClose}
+      width={680}
+      footer={<Button onClick={onClose}>{t('advancedintegrations.providers.infoClose')}</Button>}
+      title={
+        <Space size={8}>
+          <InfoCircleOutlined style={{ color: '#438eff' }} />
+          <span>{t('advancedintegrations.providers.infoTitle', { provider: provider.displayName })}</span>
+        </Space>
+      }
+    >
+      <p className="carocrm-int-info-desc">{provider.description}</p>
+
+      <h6 className="carocrm-int-info-heading">{t('advancedintegrations.providers.infoDataTitle')}</h6>
+      <p className="carocrm-int-info-hint">{t('advancedintegrations.providers.infoDataHint')}</p>
+      {provider.objects.length === 0 ? (
+        <Typography.Text type="secondary">{t('advancedintegrations.providers.infoNoObjects')}</Typography.Text>
+      ) : (
+        <ul className="carocrm-int-info-objects">
+          {provider.objects.map((object) => (
+            <li key={object.objectType} className="carocrm-int-info-object">
+              <div className="carocrm-int-info-object-name">
+                <span>{object.label}</span>
+                <code>{object.objectType}</code>
+              </div>
+              <Space size={[4, 4]} wrap>
+                {object.read ? (
+                  <Tag color="blue">{t('advancedintegrations.providers.infoRead')}</Tag>
+                ) : null}
+                {object.write ? (
+                  <Tag color="green">{t('advancedintegrations.providers.infoWrite')}</Tag>
+                ) : null}
+                {object.webhook ? (
+                  <Tag color="gold">{t('advancedintegrations.providers.infoWebhook')}</Tag>
+                ) : null}
+              </Space>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h6 className="carocrm-int-info-heading">{t('advancedintegrations.providers.infoScopesTitle')}</h6>
+      {required.length === 0 && optional.length === 0 ? (
+        <Typography.Text type="secondary">
+          {t('advancedintegrations.providers.infoScopesNone')}
+        </Typography.Text>
+      ) : (
+        <div className="carocrm-int-info-scopes">
+          {required.length === 0 ? null : (
+            <div className="carocrm-int-info-scope-row">
+              <span className="carocrm-int-info-scope-label">
+                {t('advancedintegrations.providers.infoScopesRequired')}
+              </span>
+              <Space size={[4, 4]} wrap>
+                {required.map((scope) => (
+                  <Tag key={`required:${scope}`} color="blue" title={scope}>
+                    {scope}
+                  </Tag>
+                ))}
+              </Space>
+            </div>
+          )}
+          {optional.length === 0 ? null : (
+            <div className="carocrm-int-info-scope-row">
+              <span className="carocrm-int-info-scope-label">
+                {t('advancedintegrations.providers.infoScopesOptional')}
+              </span>
+              <Space size={[4, 4]} wrap>
+                {optional.map((scope) => (
+                  <Tag key={`optional:${scope}`} title={scope}>
+                    {scope}
+                  </Tag>
+                ))}
+              </Space>
+            </div>
+          )}
+        </div>
+      )}
+
+      <h6 className="carocrm-int-info-heading">{t('advancedintegrations.providers.infoAuthTitle')}</h6>
+      <Typography.Text>{provider.authentication.replaceAll('_', ' ')}</Typography.Text>
+    </Modal>
   );
 }
 

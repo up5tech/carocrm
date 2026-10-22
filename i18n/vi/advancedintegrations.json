@@ -55,7 +55,21 @@
     "setupShopify": "Tạo một custom app trong cửa hàng, cấp quyền đọc cần thiết, lưu access token làm API key, và lưu app client secret làm webhook secret. Đặt tài khoản nhà cung cấp của kết nối là shop domain.",
     "setupQuickbooksOnline": "Tạo một ứng dụng trong Intuit developer portal, đặt redirect URI là callback của nền tảng, và đặt client id vào INTEGRATION_OAUTH_CLIENT_IDS. Đặt tài khoản nhà cung cấp của kết nối là company id.",
     "setupGenericRest": "Nêu base URL, các đường dẫn và phương thức được cho phép, các con trỏ phản hồi và chế độ xác thực trong tùy chọn của kết nối. Địa chỉ được kiểm tra khi lưu kết nối, và connector chỉ đọc.",
-    "setupFakeProvider": "Một nhà cung cấp giả lập, xác định trong bộ nhớ, dành cho phát triển cục bộ và kiểm thử. Nó không bao giờ được đăng ký trong production."
+    "setupFakeProvider": "Một nhà cung cấp giả lập, xác định trong bộ nhớ, dành cho phát triển cục bộ và kiểm thử. Nó không bao giờ được đăng ký trong production.",
+    "infoHint": "Xem connector này trao đổi những dữ liệu gì",
+    "infoTitle": "{provider} tích hợp những gì",
+    "infoClose": "Đóng",
+    "infoDataTitle": "Dữ liệu trao đổi",
+    "infoDataHint": "Read kéo dữ liệu từ đối tác về CRM. Write gửi thay đổi từ CRM sang đối tác. Webhook nghĩa là đối tác tự đẩy thay đổi khi có.",
+    "infoRead": "Đọc về CRM",
+    "infoWrite": "Ghi sang đối tác",
+    "infoWebhook": "Sự kiện webhook",
+    "infoNoObjects": "Connector này không khai báo đối tượng dữ liệu nào.",
+    "infoScopesTitle": "Phạm vi truy cập",
+    "infoScopesRequired": "Bắt buộc",
+    "infoScopesOptional": "Tuỳ chọn",
+    "infoScopesNone": "Connector này không khai báo phạm vi nào.",
+    "infoAuthTitle": "Xác thực"
   },
   "connections": {
     "title": "Kết nối",

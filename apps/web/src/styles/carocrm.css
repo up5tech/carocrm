@@ -3083,6 +3083,94 @@ body {
   cursor: default;
 }
 
+/* the info icon and the popup it opens — what a connector actually exchanges */
+.carocrm-int-info.ant-btn {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  color: #9aa3ad;
+}
+
+.carocrm-int-info.ant-btn:hover {
+  color: #438eff;
+  background: #f0f8ff;
+}
+
+.carocrm-int-info-desc {
+  margin: 0 0 18px;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.carocrm-int-info-heading {
+  margin: 18px 0 6px;
+  color: #31373d;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.carocrm-int-info-hint {
+  margin: 0 0 8px;
+  color: #737b85;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.carocrm-int-info-objects {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid #eff2f7;
+  list-style: none;
+}
+
+.carocrm-int-info-object {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid #eff2f7;
+}
+
+.carocrm-int-info-object-name {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  color: #31373d;
+  font-size: 13px;
+}
+
+.carocrm-int-info-object-name code {
+  color: #9aa3ad;
+  font-size: 11px;
+}
+
+.carocrm-int-info-scopes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.carocrm-int-info-scope-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.carocrm-int-info-scope-label {
+  flex: 0 0 70px;
+  padding-top: 2px;
+  color: #737b85;
+  font-size: 12px;
+}
+
 .carocrm-int-provider-actions {
   grid-area: actions;
   display: flex;
