@@ -57,6 +57,18 @@ export interface ProcessView {
   issues: { code: string; message: string; path?: string | undefined }[];
 }
 
+/**
+ * What a "Start approval" menu needs: the identity of a process a participant may start on a
+ * record type. Deliberately not a `ProcessView` — nodes, actions and versions stay admin-only.
+ */
+export interface AvailableProcessView {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  entityType: string;
+}
+
 export interface CreateProcessInput {
   key: string;
   name: string;
@@ -107,6 +119,42 @@ export class ProcessService {
     const row = await this.processRow(id);
     const versions = await this.versionsByProcess([row.id]);
     return toView(row, versions.get(row.id) ?? []);
+  }
+
+  /**
+   * The processes a participant may start on a record of `entityType`.
+   *
+   * This is the *only* participant-facing read of the definition table, and it exists because a
+   * "Start approval" menu has to know which approvals exist: without it, starting a process required
+   * knowing its key in advance, which is not a user interface. Definitions stay admin-only for the
+   * reason they always were — a published process runs actions with system authority — so nothing
+   * about nodes, actions or assignees leaves the server here; a participant gets the identity of a
+   * process that is published, enabled, and bound to this record type (or to any record).
+   */
+  async available(entityType: string): Promise<{ list: AvailableProcessView[] }> {
+    this.scope.requirePrincipal(); // authentication only: approvals are started by participants
+    const type = String(entityType ?? '').trim();
+    if (!/^[A-Z][A-Za-z0-9]{1,49}$/.test(type)) {
+      throw new ValidationError('An entity type is required to list the processes available for it.', { entityType: type });
+    }
+    const rows = await this.database.db
+      .selectFrom('process_definitions')
+      .select(['id', 'key', 'name', 'description', 'entity_type'])
+      .where('is_deleted', '=', false)
+      .where('is_active', '=', true)
+      .where('published_version_id', 'is not', null)
+      .where('entity_type', 'in', [type, ANY_ENTITY])
+      .orderBy('name', 'asc')
+      .execute();
+    return {
+      list: rows.map((row) => ({
+        id: row.id,
+        key: row.key,
+        name: row.name,
+        description: row.description,
+        entityType: row.entity_type,
+      })),
+    };
   }
 
   /** Creates the process and its first (draft) version. Nothing can run until it is published. */
