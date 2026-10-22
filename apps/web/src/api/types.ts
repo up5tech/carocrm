@@ -3048,3 +3048,96 @@ export interface DocsSettingsView {
   readonly supportEmail: string | null;
 }
 
+
+// ---------------------------------------------------------------------------
+// Phase 19-ES.1 — the ESignature control plane.
+// ---------------------------------------------------------------------------
+
+/** One module right with its label and whether the caller holds it. */
+export interface ESignatureCapabilityEntry {
+  readonly key: string;
+  readonly label: string;
+  readonly description: string;
+  readonly granted: boolean;
+}
+
+/** The gate that stands in front of every provider operation, reported rather than enforced twice. */
+export interface ESignatureGateState {
+  readonly ready: boolean;
+  readonly moduleEnabled: boolean;
+  readonly connectionsEnabled: boolean;
+  readonly encryptionConfigured: boolean;
+  readonly connectionTablesPresent: boolean;
+  readonly enabledConnections: number;
+  readonly reason: string;
+  readonly detail: string;
+}
+
+/** `GET /ESignature/action/capabilities`. */
+export interface ESignatureCapabilitiesView {
+  readonly capabilities: readonly ESignatureCapabilityEntry[];
+  readonly provider: ESignatureGateState;
+}
+
+export interface ESignatureHealthFeature {
+  readonly key: string;
+  readonly label: string;
+  readonly enabled: boolean;
+  readonly implemented: boolean;
+  readonly effective: boolean;
+  readonly settingsPath: string;
+  readonly requires: readonly string[];
+  readonly pendingPhase: string | null;
+}
+
+/** `GET /ESignature/action/health`: what the module needs, what is switched on, and why the gate is closed. */
+export interface ESignatureHealthView {
+  readonly module: {
+    readonly id: string;
+    readonly name: string;
+    readonly version: string;
+    readonly loadOrder: number;
+    readonly apiPrefix: string;
+    readonly webhookPrefix: string;
+    readonly frontendRoute: string;
+    readonly providerKeys: readonly string[];
+    readonly implementedPhases: readonly string[];
+  };
+  readonly ok: boolean;
+  readonly dependencies: readonly { id: string; label: string; present: boolean; missing: readonly string[] }[];
+  readonly optionalIntegrations: readonly { id: string; label: string; provides: string; status: string }[];
+  readonly features: readonly ESignatureHealthFeature[];
+  readonly providerCapabilities: Readonly<Record<string, boolean>>;
+  readonly structures: readonly { name: string; present: boolean }[];
+  readonly settings: {
+    readonly key: string;
+    readonly version: number;
+    readonly updatedAt: string | null;
+    readonly updatedBy: string | null;
+    readonly warnings: readonly { code: string; message: string }[];
+  };
+  readonly gate: ESignatureGateState;
+  readonly checks: readonly { name: string; ok: boolean; detail: string }[];
+}
+
+/** The module's own navigation answer (`GET /ESignature/action/nav`), the page's quiet source of truth. */
+export interface ESignatureNavView {
+  readonly visible: boolean;
+  readonly admin: boolean;
+  readonly enabled: boolean;
+  readonly ready: boolean;
+  readonly reason: string;
+}
+
+/** `GET /ESignature/action/settings`: the versioned document plus the effective feature answer. */
+export interface ESignatureSettingsView {
+  readonly settings: Record<string, unknown>;
+  readonly version: number;
+  readonly updatedAt: string | null;
+  readonly updatedBy: string | null;
+  readonly defaults: Record<string, unknown>;
+  readonly warnings: readonly SettingsDocumentWarning[];
+  readonly pendingFeatures: readonly { key: string; phase: string }[];
+  readonly effective: Readonly<Record<string, boolean>>;
+  readonly integrationKeyEnvVars: readonly string[];
+}

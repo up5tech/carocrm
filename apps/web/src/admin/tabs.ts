@@ -16,6 +16,8 @@ export const TAB_COMPONENTS: Record<string, LazyExoticComponent<ComponentType>> 
     import('./tabs/VoiceCommunicationsSettingsTab.js').then((module) => ({ default: module.VoiceCommunicationsSettingsTab })),
   ),
   customerSuccess: lazy(() => import('./tabs/CustomerSuccessSettingsTab.js').then((module) => ({ default: module.CustomerSuccessSettingsTab }))),
+  // Phase 19-ES.1: the module document (features, document limits, signing and approval policy).
+  eSignature: lazy(() => import('./tabs/ESignatureSettingsTab.js').then((module) => ({ default: module.ESignatureSettingsTab }))),
   users: lazy(() => import('./tabs/UsersTab.js').then((module) => ({ default: module.UsersTab }))),
   teams: lazy(() => import('./tabs/TeamsTab.js').then((module) => ({ default: module.TeamsTab }))),
   roles: lazy(() => import('./tabs/RolesTab.js').then((module) => ({ default: module.RolesTab }))),

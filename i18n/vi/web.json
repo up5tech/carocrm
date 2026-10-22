@@ -1409,7 +1409,8 @@
       "internal": "Hệ thống",
       "permissions": "Tổng quan quyền",
       "email": "Email",
-      "webhooks": "Webhook"
+      "webhooks": "Webhook",
+      "eSignature": "Chữ ký điện tử"
     },
     "descriptions": {
       "advancedIntegrations": "Kết nối tới các hệ thống bên thứ ba đã được phê duyệt, gồm kết nối, quyền và uỷ quyền.",
@@ -1439,7 +1440,8 @@
       "permissions": "Những gì metadata và từng phân quyền khai báo, chỉ để xem.",
       "email": "Hộp thư gửi đi, trạng thái kết nối và chữ ký.",
       "webhooks": "Địa chỉ webhook gửi đi và lịch sử gửi.",
-      "internal": "Thông tin hệ thống và khu vực nguy hiểm có khoá xác nhận."
+      "internal": "Thông tin hệ thống và khu vực nguy hiểm có khoá xác nhận.",
+      "eSignature": "Kết nối nhà cung cấp, giới hạn tài liệu, chính sách ký và quy tắc phê duyệt cho chữ ký điện tử."
     }
   },
   "adminShell": {
@@ -1479,7 +1481,7 @@
     "accent": "Màu nhấn",
     "labelKeyPlaceholder": "Key nhãn (không bắt buộc)",
     "enableEntry": "Hiển thị trong menu",
-  "dragHint": "Kéo để sắp xếp lại",
+    "dragHint": "Kéo để sắp xếp lại",
     "edgeOfList": "Mục này đã ở đầu/cuối danh sách.",
     "restoreTitle": "Khôi phục menu mặc định",
     "restoreBody": "Mọi đổi tên, sắp xếp lại và mục bạn đã ẩn sẽ bị xóa và menu mặc định quay trở lại.",

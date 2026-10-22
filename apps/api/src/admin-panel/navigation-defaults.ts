@@ -121,6 +121,20 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     inQuickSearch: true,
     permission: { entity: 'IntegrationConnection', action: 'read' },
   },
+  // Phase 19-ES.1: the e-signature workspace. Its records are dedicated tables, not metadata
+  // entities (audit §6), so the page is gated on the same synthetic capability its API asserts, and
+  // on the module's own `enabled` switch — an unconfigured installation does not carry the entry.
+  {
+    key: 'esignature',
+    kind: 'page',
+    route: '/esignature',
+    labelKey: 'esignature.module.label',
+    icon: 'FileSearchOutlined',
+    order: 81,
+    inQuickSearch: true,
+    permission: { entity: 'SignatureRequest', action: 'read' },
+    feature: { module: 'eSignature', flag: 'enabled' },
+  },
   // Phase 21: the handbook is a static page like the others, and the only gate on it is the instance
   // document — every signed-in reader may open `/docs`, and an administrator can take the row away.
   // `feature` is consulted after the ACL, so this flag can remove an entry but never reveal one.

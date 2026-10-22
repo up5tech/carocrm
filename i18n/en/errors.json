@@ -13,5 +13,16 @@
   "INTERNAL_ERROR": "Internal server error.",
   "FORBIDDEN": "Forbidden.",
   "NOT_FOUND": "Not found.",
-  "BAD_REQUEST": "Bad request."
+  "BAD_REQUEST": "Bad request.",
+  "SIGNATURE_MODULE_DISABLED": "The e-signature module is not enabled on this instance.",
+  "SIGNATURE_CONNECTION_NOT_AVAILABLE": "No signature provider connection is available for this operation.",
+  "PROVIDER_NOT_CONNECTED": "No enabled signature provider connection is available, so no request can be sent.",
+  "PROVIDER_OUTCOME_UNKNOWN": "The provider may have accepted the request but no confirmation was received. The request is held for reconciliation and has not been sent again.",
+  "SIGNATURE_REQUEST_INVALID_STATE": "The signature request is not in a state that allows this action.",
+  "SIGNATURE_APPROVAL_REQUIRED": "This signature request needs an approval before it can be sent.",
+  "RECIPIENT_NOT_AUTHORIZED": "That recipient is not part of this signature request.",
+  "SIGNATURE_DOCUMENT_NOT_READABLE": "The document for this signature request cannot be read.",
+  "SIGNATURE_SOURCE_RECORD_NOT_READABLE": "The record linked to this signature request cannot be read.",
+  "NOT_SUPPORTED_BY_PROVIDER": "The signature provider does not support this operation in this release.",
+  "ENCRYPTION_KEY_MISSING": "ENCRYPTION_KEY is not configured, so provider credentials cannot be read and no provider operation is possible."
 }

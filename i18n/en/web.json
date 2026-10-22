@@ -1409,7 +1409,8 @@
       "internal": "Instance",
       "permissions": "Permissions",
       "email": "Email",
-      "webhooks": "Webhooks"
+      "webhooks": "Webhooks",
+      "eSignature": "E-Signature"
     },
     "descriptions": {
       "advancedIntegrations": "Connectors to approved third-party systems, with connections, permissions and authorization.",
@@ -1439,7 +1440,8 @@
       "permissions": "What the shipped metadata and every role state, read-only.",
       "email": "Outbound mailboxes, the transport status and signatures.",
       "webhooks": "Outgoing webhook endpoints and their delivery history.",
-      "internal": "Instance facts and the guarded danger zone."
+      "internal": "Instance facts and the guarded danger zone.",
+      "eSignature": "Provider connections, document limits, signing policy and approval rules for electronic signatures."
     }
   },
   "adminShell": {
@@ -1479,7 +1481,7 @@
     "accent": "Accent",
     "labelKeyPlaceholder": "Label key (optional)",
     "enableEntry": "Show in the menu",
-  "dragHint": "Drag to reorder",
+    "dragHint": "Drag to reorder",
     "edgeOfList": "This entry is already at the edge of its list.",
     "restoreTitle": "Restore the shipped menu",
     "restoreBody": "Every rename, reorder and hidden entry you added is removed and the platform menu comes back.",

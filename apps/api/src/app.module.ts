@@ -37,6 +37,7 @@ import type { PostgresRecordStore } from './entity/entity-record.store.js';
 import { ENTITY_STORE } from './entity/entity-record.store.js';
 import type { AfterSaveHook } from './entity/hooks.js';
 import { KERNEL_HOOKS_TOKEN } from './entity/hooks.js';
+import { ESIGNATURE_CONTROLLERS, ESIGNATURE_PROVIDERS, ESignatureSettingsService } from './esignature/index.js';
 import { DOMAIN_EVENT_CONTROLLERS, DOMAIN_EVENT_PROVIDERS, EntityEventHookService, registerEntityEventHook } from './events/index.js';
 import type { ExtensionHost as ExtensionHostType } from './extensions/extension-host.js';
 import { EXTENSION_HOST, extensionHost } from './extensions/extension-host.js';
@@ -141,6 +142,10 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // `/api/v1/integrations/advanced-integrations/...` are static prefixes and must be matched before
     // the generic `:entity` wildcard.
     ...ADVANCED_INTEGRATIONS_CONTROLLERS,
+    // Phase 19-ES.1: `/api/v1/ESignature/action/...` is a static prefix and must be matched before
+    // the generic `:entity` wildcard. The DocuSign Connect prefix `/api/v1/integrations/esignature/...`
+    // arrives with 19-ES.11 and joins the same spread.
+    ...ESIGNATURE_CONTROLLERS,
     // `/api/v1/DocumentTemplate` and `/api/v1/document/action/preview` are static prefixes too.
     ...DOCUMENT_CONTROLLERS,
     // Phase 21: `/api/v1/Docs/{tree,page,search}` is a static prefix and must be matched before the
@@ -189,6 +194,9 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 19-INT: the permission gate, module settings, provider registry, the credential vault,
     // the connection lifecycle and the OAuth flow.
     ...ADVANCED_INTEGRATIONS_PROVIDERS,
+    // Phase 19-ES.1: the capability matrix, the settings document, the module health view, the
+    // visibility report and the single gate that stands in front of every provider operation.
+    ...ESIGNATURE_PROVIDERS,
     ...DOCUMENT_PROVIDERS,
     // Phase 21: the in-app handbook — the content read path and the `docs` settings document's cache.
     ...DOCS_PROVIDERS,
@@ -222,6 +230,12 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
           if (module === 'docs' && flag === 'showInSidebar') {
             const docs = ref.get(DocsSettingsService, { strict: false });
             return (await docs.settings()).showInSidebar;
+          }
+          // Phase 19-ES.1: an unconfigured installation must not carry the page at all. The gate runs
+          // after the ACL, so switching the module off can only remove the entry, never reveal one.
+          if (module === 'eSignature' && flag === 'enabled') {
+            const esignature = ref.get(ESignatureSettingsService, { strict: false });
+            return (await esignature.settings()).enabled;
           }
           return true;
         },

@@ -55,6 +55,10 @@ import type {
   EmailTemplatePreviewView,
   EmailTransportInfo,
   EntityDefinition,
+  ESignatureCapabilitiesView,
+  ESignatureHealthView,
+  ESignatureNavView,
+  ESignatureSettingsView,
   ExtensionInstallResult,
   ExtensionListResult,
   ExtensionNavItem,
@@ -1772,4 +1776,15 @@ export const api = {
     request<{ list: readonly { id: string; status: string; operationType: string; errorCode: string | null; createdAt: string }[] }>(
       `/AdvancedIntegrations/action/connections/${encodeURIComponent(connectionId)}/outbound`,
     ),
+
+  // Phase 19-ES.1 — the ESignature control plane: identity, capabilities, the security policy and
+  // the gate. Every read is answered from the server's own ACL; the page never infers a right.
+  eSignatureHealth: () => request<ESignatureHealthView>('/ESignature/action/health'),
+  eSignatureCapabilities: () => request<ESignatureCapabilitiesView>('/ESignature/action/capabilities'),
+  eSignatureNav: () => request<ESignatureNavView>('/ESignature/action/nav'),
+  eSignatureSettings: () => request<ESignatureSettingsView>('/ESignature/action/settings'),
+  saveESignatureSettings: (patch: Record<string, unknown>) =>
+    request<ESignatureSettingsView>('/ESignature/action/settings', post(patch)),
+  eSignatureGateOperations: () => request<{ operations: readonly string[] }>('/ESignature/action/gate/operations'),
+  eSignatureGateCheck: (operation: string) => request<{ operation: string; admitted: boolean }>('/ESignature/action/gate/check', post({ operation })),
 };

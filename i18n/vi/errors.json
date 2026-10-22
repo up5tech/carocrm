@@ -13,5 +13,16 @@
   "INTERNAL_ERROR": "Lỗi hệ thống.",
   "FORBIDDEN": "Bị cấm.",
   "NOT_FOUND": "Không tìm thấy.",
-  "BAD_REQUEST": "Yêu cầu không hợp lệ."
+  "BAD_REQUEST": "Yêu cầu không hợp lệ.",
+  "SIGNATURE_MODULE_DISABLED": "Module chữ ký điện tử chưa được bật trên hệ thống này.",
+  "SIGNATURE_CONNECTION_NOT_AVAILABLE": "Không có kết nối nhà cung cấp chữ ký nào cho thao tác này.",
+  "PROVIDER_NOT_CONNECTED": "Chưa có kết nối nhà cung cấp chữ ký nào được bật, nên không thể gửi yêu cầu.",
+  "PROVIDER_OUTCOME_UNKNOWN": "Nhà cung cấp có thể đã nhận yêu cầu nhưng hệ thống không nhận được xác nhận. Yêu cầu được giữ để đối soát và đã không được gửi lại.",
+  "SIGNATURE_REQUEST_INVALID_STATE": "Yêu cầu ký không ở trạng thái cho phép thao tác này.",
+  "SIGNATURE_APPROVAL_REQUIRED": "Yêu cầu ký này cần được phê duyệt trước khi gửi.",
+  "RECIPIENT_NOT_AUTHORIZED": "Người nhận đó không thuộc yêu cầu ký này.",
+  "SIGNATURE_DOCUMENT_NOT_READABLE": "Không đọc được tài liệu của yêu cầu ký này.",
+  "SIGNATURE_SOURCE_RECORD_NOT_READABLE": "Không đọc được bản ghi liên kết với yêu cầu ký này.",
+  "NOT_SUPPORTED_BY_PROVIDER": "Nhà cung cấp chữ ký không hỗ trợ thao tác này trong phiên bản đầu tiên.",
+  "ENCRYPTION_KEY_MISSING": "Chưa cấu hình ENCRYPTION_KEY nên không đọc được thông tin xác thực và không thao tác nhà cung cấp nào thực hiện được."
 }

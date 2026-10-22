@@ -1,6 +1,7 @@
 # Phase 19-ES.0 — Repository audit and feature contract
 
-> `PLAN_Phase_19_ESignature.md` §18 `Phase 19-ES.0`.
+> `PLAN_Phase_19_ESignature.md` §18 `Phase 19-ES.0`. Continued by
+> `docs/implementation/esignature-es1-completion-report.md` (19-ES.1).
 > Acceptance: no code or migration before this document; no assumption that a planned service
 > exists; provider scope and integration contracts agreed; no test database and no duplicate
 > generic entity created.
@@ -239,8 +240,8 @@ Source records remain ordinary CRM entities referenced by `(sourceEntityType, so
 
 | Gap | First phase |
 | --- | --- |
-| ESignature module barrel + `app.module.ts` spreads + `/api/v1/ESignature` controller | ES.1 |
-| `ESignature` settings document, permissions (synthetic ACL resources), nav entry, i18n catalog | ES.1 |
+| ESignature module barrel + `app.module.ts` spreads + `/api/v1/ESignature` controller | ES.1 **done** |
+| `ESignature` settings document, permissions (synthetic ACL resources), nav entry, i18n catalog | ES.1 **done** |
 | Additive migration for the eight tables in §6 (+ indexes, dedup/uniqueness constraints) | ES.2 |
 | Provider adapter port + `FakeSignatureProviderAdapter` + error taxonomy extension (`unknown_outcome`) | ES.3 |
 | DocuSign OAuth (authorize/callback/refresh/userinfo account + base-URI persistence, vault storage) | ES.4 |
@@ -276,8 +277,9 @@ with the fake adapter end-to-end and, deliberately, once against the demo accoun
 
 - Reused as-is: `ENCRYPTION_KEY` (required — vault encryption), `RATE_LIMIT_MAX`,
   `UPLOAD_MAX_MB`, `JOB_*` worker settings.
-- Candidate reuse: `INTEGRATION_OAUTH_CLIENT_IDS` (JSON, non-secret) may carry the demo and
-  production DocuSign integration keys; otherwise they live in the `ESignature` settings
-  document. Decided in ES.1.
+- Integration keys (decided in ES.1): the `ESignature` settings document holds the demo and
+  production DocuSign client ids. `INTEGRATION_OAUTH_CLIENT_IDS` (one map keyed by provider) is not
+  reused, because a DocuSign identity is per environment. Optional names a deployment may inject
+  instead: `DOCUSIGN_DEMO_INTEGRATION_KEY`, `DOCUSIGN_PRODUCTION_INTEGRATION_KEY`.
 - No new mandatory environment variables are expected: per-connection secrets (client secret,
   refresh token, Connect HMAC secret) belong in the encrypted vault, not in the environment.

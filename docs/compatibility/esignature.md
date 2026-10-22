@@ -1,10 +1,11 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 deliverable (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 delivered** (audit + contract only; no runtime code yet).
-> Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`;
-> webhook prefix: to be finalized in ES.11 (raw-body hook extension required — see the audit
-> §8, `docs/implementation/esignature-audit.md`).
+> Phase 19-ES.0 and 19-ES.1 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 + 19-ES.1 delivered** (ES.1 registers the module and the security contract; no
+> schema, adapter or provider call yet — see `docs/implementation/esignature-es1-completion-report.md`).
+> Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`.
+> Webhook prefix (reserved in ES.1, endpoint delivered in ES.11, which also extends the raw-body hook):
+> `/api/v1/integrations/esignature`.
 
 This document records the exact provider surface this module reimplements, the decisions taken
 against the repository as it actually exists, and the compatibility limits a deploying
@@ -123,8 +124,12 @@ terminal state backwards; ambiguity triggers reconciliation (plan §4.7, §10.3)
 ## 8. Environment and secret handling (names only)
 
 - Reused env: `ENCRYPTION_KEY` (vault), `RATE_LIMIT_MAX`, `UPLOAD_MAX_MB`, worker `JOB_*`.
-- Non-secret integration keys: `INTEGRATION_OAUTH_CLIENT_IDS` (JSON) or the `ESignature`
-  settings document — decided in ES.1.
+- Non-secret integration keys: **the `ESignature` settings document** (`provider.demoIntegrationKey`,
+  `provider.productionIntegrationKey`), decided in ES.1. `INTEGRATION_OAUTH_CLIENT_IDS` is not reused:
+  it is one JSON map keyed by provider, and DocuSign identities are per environment (demo and
+  production never share a client). `DOCUSIGN_DEMO_INTEGRATION_KEY` /
+  `DOCUSIGN_PRODUCTION_INTEGRATION_KEY` are recorded as names a deployment may inject instead; both
+  are public client ids, and no new mandatory variable was added.
 - Per-connection secrets (client secret, refresh token, Connect HMAC secret) live only in
   the encrypted credential vault. No secret values are ever committed, logged, returned by
   the API, or embedded in frontend builds or documentation (plan §4.1, §21).
