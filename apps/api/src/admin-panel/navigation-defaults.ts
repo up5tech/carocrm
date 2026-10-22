@@ -56,6 +56,10 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
   { key: 'stream', kind: 'page', route: '/stream', labelKey: 'core.app.stream', icon: 'NotificationOutlined', order: PAGE_ORDER[4] ?? 50 },
   { key: 'calendar', kind: 'page', route: '/calendar', labelKey: 'core.app.calendar', icon: 'CalendarOutlined', order: PAGE_ORDER[5] ?? 60 },
   { key: 'myTasks', kind: 'page', route: '/tasks', labelKey: 'core.app.myTasks', icon: 'CarryOutOutlined', order: PAGE_ORDER[6] ?? 70 },
+  // Phase 16: the participant's own approvals — what they started and where it ended up. No
+  // permission gate: every signed-in person may be a participant, and the API scopes the list to
+  // the instances they started or hold a task in.
+  { key: 'myProcesses', kind: 'page', route: '/processes', labelKey: 'core.app.myProcesses', icon: 'ApartmentOutlined', order: 72 },
   // Phase 19-AI: the module page is not a metadata entity, so its visibility is checked against the
   // synthetic `AIAgent:read` permission (the same capability the API asserts).
   {

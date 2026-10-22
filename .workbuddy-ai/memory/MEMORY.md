@@ -73,6 +73,22 @@ Curated, long-lived notes. Daily logs live next to this file as `YYYY-MM-DD.md`.
 - Workspace packages resolve through `dist/`: after changing a package run `pnpm install` then
   `pnpm build` before `pnpm typecheck`/API tests.
 
+## BPM (Phase 16) — participant surface
+
+- Definitions stay admin-only (`/Process`); participants use `/Process/action/available?entityType=`
+  (published + enabled + type-or-`*`, identity only), `/ProcessInstance` (list/detail, `entityType`
+  + `entityId` narrow it to one record — half a filter is a 422) and `/ProcessTask`.
+- Instance visibility = initiator **or** task holder/candidate role. Both `maySeeInstance` and
+  `instanceParticipantClause` must agree; a list that drops the initiator hides the approval they
+  just submitted.
+- UI: `ProcessPanel` on record detail (start/cancel/trail), `/processes` (`MyProcessesPage`, nav
+  seed `myProcesses`), `/tasks` (answers), shared `ProcessTrailModal` with the admin instances tab.
+- Dev servers: a stale `tsx watch` on :3030 keeps serving old routes (the new process logs
+  "listening" then fails to bind). Restart it after adding a route. The dev API also rate-limits
+  bursts into 500s on `/Navigation`, `/Settings`, `/ProcessInstance` — wait, it is not a code fault.
+- `pnpm --filter @carocrm/web build` dies at `emptyDir(dist)` in this sandbox; use
+  `vite build --outDir /tmp/...` to check the bundle.
+
 ## Environment notes
 
 - **Full-suite flake (pre-existing):** one-fork `pnpm test` aborts at random file boundaries;

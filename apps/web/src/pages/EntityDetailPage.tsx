@@ -14,6 +14,7 @@ import { DocsLink } from '../components/docs/DocsLink.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
 import { PortalCaseConversation } from '../components/PortalCaseConversation.js';
+import { ProcessPanel } from '../components/ProcessPanel.js';
 import { type RelationAccess, RelationTabs } from '../components/RelationTabs.js';
 import { SalesDocumentLinesPanel } from '../components/SalesDocumentLinesPanel.js';
 import { StreamPanel } from '../components/StreamPanel.js';
@@ -432,6 +433,12 @@ export function EntityDetailPage() {
         {entity && id ? (
           <RelationSection entity={entity} id={id} definition={definition.data} metadata={metadata.data} base={base} />
         ) : null}
+
+        {/* Phase 16 — the approvals on this record. The panel names the processes this record type
+            offers, starts one, and shows what already ran here; it renders nothing when the record
+            has no history and no process is available. Portal users get no panel: starting an
+            approval is an internal action, and the API refuses portal principals anyway. */}
+        {entity && id && base !== '/portal' ? <ProcessPanel entityType={entity} entityId={id} /> : null}
 
         {/* Phase 19-VC.17 — communication history in the record's own context. The panel asks the
             server for this record; it renders nothing when the record is unreadable or has no

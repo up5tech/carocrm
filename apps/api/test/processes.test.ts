@@ -707,3 +707,108 @@ describe('process execution — multi-step approval', () => {
     await api('POST', `/api/v1/ProcessInstance/${view.id}/action/cancel`);
   });
 });
+
+/**
+ * The participant surface (the UI a non-admin actually uses).
+ *
+ * The engine was always participant-facing server-side, but two things were missing for a screen to
+ * exist: a way to *discover* the processes a record type offers without admin rights, and a way to
+ * ask "what ran on this record". Both are asserted here, together with the visibility rule the
+ * instance list has to honour — the person who started an approval keeps seeing it after the token
+ * moves on, exactly as `getInstance` already allowed.
+ */
+describe('participant surface — start menu and record scope', () => {
+  const KEY = `participant-${RUN}`;
+  let definitionId: string;
+
+  function twoStepDefinition(): Record<string, unknown> {
+    return {
+      entityType: 'Account',
+      start: 'first',
+      nodes: [
+        {
+          id: 'first',
+          type: 'userTask',
+          name: 'First look',
+          assignee: { type: 'user', value: manager.id },
+          outcomes: [{ value: 'ok', label: 'OK', next: 'second' }],
+        },
+        {
+          id: 'second',
+          type: 'userTask',
+          name: 'Second look',
+          assignee: { type: 'user', value: stranger.id },
+          outcomes: [{ value: 'ok', label: 'OK', next: 'end' }],
+        },
+        { id: 'end', type: 'end', name: 'Done' },
+      ],
+    };
+  }
+
+  async function availableKeys(token: string, entityType = 'Account'): Promise<string[]> {
+    const res = await api('GET', `/api/v1/Process/action/available?entityType=${entityType}`, token);
+    expect(res.statusCode).toBe(200);
+    return (res.json() as { list: { key: string }[] }).list.map((entry) => entry.key);
+  }
+
+  it('names only the published, enabled processes a participant may start on a record type', async () => {
+    const process = await createProcess({ key: KEY, name: `${RUN} participant`, definition: twoStepDefinition() });
+    definitionId = process.id;
+    const draftOnly = `draftonly-${RUN}`;
+    await createProcess({ key: draftOnly, name: `${RUN} draft only`, definition: twoStepDefinition() });
+
+    // A draft cannot be started, so it must not be offered.
+    expect(await availableKeys(manager.token)).not.toContain(KEY);
+
+    await api('POST', `/api/v1/Process/${definitionId}/action/publish`);
+    // Published but disabled is still not startable.
+    expect(await availableKeys(manager.token)).not.toContain(KEY);
+
+    await api('POST', `/api/v1/Process/${definitionId}/action/enable`);
+    const keys = await availableKeys(manager.token);
+    expect(keys).toContain(KEY);
+    expect(keys).not.toContain(draftOnly);
+
+    // The process binds to Account, so another record type must not offer it.
+    expect(await availableKeys(manager.token, 'Case')).not.toContain(KEY);
+
+    // The menu is participant-facing; the definitions behind it stay admin-only.
+    expect((await api('GET', '/api/v1/Process', manager.token)).statusCode).toBe(403);
+    expect((await api('GET', '/api/v1/Process/action/available', manager.token)).statusCode).toBe(422);
+  });
+
+  it('scopes the instance list to one record and keeps the initiator on it', async () => {
+    const accountA = await createAccount({ name: `AGENT_TEST_ participant A ${RUN}` });
+    const accountB = await createAccount({ name: `AGENT_TEST_ participant B ${RUN}` });
+
+    const onA = await start(KEY, accountA, manager.token);
+    const onB = await start(KEY, accountB, manager.token);
+
+    const scoped = await api('GET', `/api/v1/ProcessInstance?entityType=Account&entityId=${accountA}`, manager.token);
+    expect(scoped.statusCode).toBe(200);
+    const onRecordA = (scoped.json() as { list: InstanceView[] }).list;
+    expect(onRecordA.map((row) => row.id)).toEqual([onA.id]);
+
+    // Answering moves the token to the second approver: the starter must still see their approval,
+    // and so must the person who now holds the task.
+    const answered = await api('POST', `/api/v1/ProcessTask/${at(onA.tasks, 0).id}/action/complete`, manager.token, { outcome: 'ok' });
+    expect(answered.statusCode).toBe(200);
+    expect((answered.json() as InstanceView).currentNode).toBe('second');
+
+    const forInitiator = (await api('GET', `/api/v1/ProcessInstance?entityType=Account&entityId=${accountA}`, manager.token)).json() as {
+      list: InstanceView[];
+    };
+    expect(forInitiator.list.map((row) => row.id)).toContain(onA.id);
+
+    const forAssignee = (await api('GET', `/api/v1/ProcessInstance?entityType=Account&entityId=${accountA}`, stranger.token)).json() as {
+      list: InstanceView[];
+    };
+    expect(forAssignee.list.map((row) => row.id)).toContain(onA.id);
+    // The second approver holds no task on B, so B's approval is not theirs to see.
+    expect(forAssignee.list.some((row) => row.id === onB.id)).toBe(false);
+
+    // Half a record filter is a client bug, not a broad list.
+    expect((await api('GET', '/api/v1/ProcessInstance?entityType=Account', manager.token)).statusCode).toBe(422);
+    expect((await api('GET', '/api/v1/ProcessInstance?entityId=AGENT_TEST_x', manager.token)).statusCode).toBe(422);
+  });
+});

@@ -1,31 +1,16 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, StopOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, App as AntApp, Button, Card, Descriptions, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tabs, Tag, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tabs, Tag, Typography } from 'antd';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { Metadata, ProcessInstanceView, ProcessView } from '../api/types.js';
+import { INSTANCE_STATUS_COLORS, ProcessTrailModal, TASK_STATUS_COLORS } from '../components/ProcessTrailModal.js';
 import { t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { useProcesses, useProcessInstances } from '../state/processes.js';
 import { useSession } from '../state/session.js';
-
-const INSTANCE_STATUS_COLORS: Record<string, string> = {
-  completed: 'success',
-  failed: 'error',
-  waiting: 'warning',
-  running: 'processing',
-  cancelled: 'default',
-};
-
-const TASK_STATUS_COLORS: Record<string, string> = {
-  open: 'processing',
-  overdue: 'error',
-  escalated: 'orange',
-  completed: 'success',
-  cancelled: 'default',
-};
 
 /**
  * Process admin (PLAN §36).
@@ -370,75 +355,7 @@ function InstanceTable({ instances, loading, onChanged }: { instances: ProcessIn
         ]}
       />
 
-      <Modal open={open !== null} title={open === null ? '' : t('web.processes.auditTrail', { name: open.processName })} footer={null} width={720} onCancel={() => setOpen(null)}>
-        {open === null ? null : (
-          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-            <Descriptions size="small" column={2} bordered>
-              <Descriptions.Item label={t('web.common.status')}>
-                <Tag color={INSTANCE_STATUS_COLORS[open.status] ?? 'default'}>{open.status}</Tag>
-                {open.outcome !== null ? <Tag>{open.outcome}</Tag> : null}
-              </Descriptions.Item>
-              <Descriptions.Item label={t('web.adminAudit.record')}>
-                <Link to={`/${open.entityType}/${open.entityId}`}>
-                  {open.entityType}/{open.entityId}
-                </Link>
-              </Descriptions.Item>
-              <Descriptions.Item label={t('web.processes.version')}>{t('web.processes.versionValue', { version: String(open.version ?? '—') })}</Descriptions.Item>
-              <Descriptions.Item label={t('web.workflows.started')}>{open.startedAt.slice(0, 19).replace('T', ' ')}</Descriptions.Item>
-              {open.error !== null ? (
-                <Descriptions.Item label={t('web.workflows.error')} span={2}>
-                  <Typography.Text type="danger">{open.error}</Typography.Text>
-                </Descriptions.Item>
-              ) : null}
-            </Descriptions>
-
-            <Table
-              rowKey="id"
-              size="small"
-              pagination={false}
-              title={() => t('web.processes.tasks')}
-              dataSource={open.tasks}
-              locale={{ emptyText: t('web.processes.noTasks') }}
-              columns={[
-                { title: t('web.workflowEditor.step'), dataIndex: 'name' },
-                {
-                  title: t('web.common.status'),
-                  dataIndex: 'status',
-                  render: (status: string) => <Tag color={TASK_STATUS_COLORS[status] ?? 'default'}>{status}</Tag>,
-                },
-                { title: t('web.processes.assignee'), render: (_value: unknown, row) => row.assigneeId ?? row.assigneeRoleId ?? '—' },
-                {
-                  title: t('web.tasks.columnAnswer'),
-                  render: (_value: unknown, row) =>
-                    row.outcome === null ? (
-                      '—'
-                    ) : (
-                      <Space direction="vertical" size={0}>
-                        <Typography.Text strong>{row.outcome}</Typography.Text>
-                        {row.comment !== null ? <Typography.Text type="secondary">“{row.comment}”</Typography.Text> : null}
-                      </Space>
-                    ),
-                },
-                { title: t('web.common.due'), render: (_value: unknown, row) => (row.dueAt === null ? '—' : row.dueAt.slice(0, 19).replace('T', ' ')) },
-              ]}
-            />
-
-            <Table
-              rowKey="id"
-              size="small"
-              pagination={false}
-              title={() => t('web.processes.events')}
-              dataSource={open.events}
-              locale={{ emptyText: t('web.processes.noEvents') }}
-              columns={[
-                { title: t('web.adminAudit.when'), width: 160, render: (_value: unknown, row) => row.createdAt.slice(0, 19).replace('T', ' ') },
-                { title: t('web.processes.event'), dataIndex: 'type', width: 160, render: (type: string) => <Tag>{type}</Tag> },
-                { title: t('web.processes.whatHappened'), dataIndex: 'message' },
-              ]}
-            />
-          </Space>
-        )}
-      </Modal>
+      <ProcessTrailModal instance={open} allowCancel onClose={() => setOpen(null)} onChanged={onChanged} />
     </>
   );
 }

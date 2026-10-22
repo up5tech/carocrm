@@ -311,8 +311,19 @@ export class ProcessRuntimeService {
 
   // ---------------------------------------------------------------- instances
 
-  /** Admins see everything; other people see processes they started or take part in. */
-  async listInstances(input: { definitionId?: string | undefined; status?: string | undefined; offset?: number; limit?: number }): Promise<{
+  /**
+   * Admins see everything; other people see processes they started or take part in. A record filter
+   * (`entityType` + `entityId`) narrows that to one record, which is what the panel on a record page
+   * asks for — the participant scope still applies on top, so a panel can never widen visibility.
+   */
+  async listInstances(input: {
+    definitionId?: string | undefined;
+    status?: string | undefined;
+    entityType?: string | undefined;
+    entityId?: string | undefined;
+    offset?: number;
+    limit?: number;
+  }): Promise<{
     list: ProcessInstanceView[];
     total: number;
     offset: number;
@@ -323,12 +334,20 @@ export class ProcessRuntimeService {
     const limit = clampLimit(input.limit);
 
     const statusFilter = instanceStatus(input.status).status;
+    const entityType = input.entityType === undefined ? undefined : requireEntityType(input.entityType);
+    const entityId = input.entityId === undefined ? undefined : requireEntityId(input.entityId);
+    if ((entityType === undefined) !== (entityId === undefined)) {
+      throw new ValidationError('Filter a process list by record with both "entityType" and "entityId".');
+    }
+
     let base = this.database.db
       .selectFrom('process_instances as i')
       .innerJoin('process_definitions as d', 'd.id', 'i.definition_id')
       .where('d.is_deleted', '=', false);
     if (input.definitionId !== undefined) base = base.where('i.definition_id', '=', input.definitionId);
     if (statusFilter !== undefined) base = base.where('i.status', '=', statusFilter);
+    if (entityType !== undefined) base = base.where('i.entity_type', '=', entityType);
+    if (entityId !== undefined) base = base.where('i.entity_id', '=', entityId);
 
     const scoped = this.scope.isAdmin ? base : base.where(this.instanceParticipantClause());
 
@@ -817,12 +836,18 @@ export class ProcessRuntimeService {
     return this.assigneeClause('t', me, roleIds);
   }
 
-  /** The instance has a task the current person holds or is eligible for. */
+  /**
+   * The instance was started by the current person, or has a task they hold or are eligible for.
+   *
+   * The initiator half is not an optimisation: `maySeeInstance` already lets the starter open the
+   * instance, and a list that omitted it would show a person an empty "my approvals" page for the
+   * approval they just submitted the moment it moved on to the next approver.
+   */
   private instanceParticipantClause(): Expression<SqlBool> {
     const me = this.scope.userId ?? '';
     const roleIds = this.scope.roleIds();
     const assignee = this.assigneeClause('t', me, roleIds);
-    return sql<SqlBool>`exists (select 1 from process_tasks t where t.instance_id = i.id and ${assignee})`;
+    return sql<SqlBool>`(${sql.ref('i.initiated_by')} = ${me} or exists (select 1 from process_tasks t where t.instance_id = i.id and ${assignee}))`;
   }
 
   private assigneeClause(alias: 't', userId: string, roleIds: readonly string[]): Expression<SqlBool> {

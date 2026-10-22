@@ -359,6 +359,30 @@
     "commentPlaceholder": "Why? (kept on the task for the audit trail)",
     "signIn": "Sign in to see your tasks."
   },
+  "recordProcess": {
+    "title": "Approvals",
+    "start": "Start approval",
+    "empty": "No approval has run on this record yet.",
+    "startedAt": "Started {date}",
+    "waitingOn": "Waiting on {names}",
+    "noOpenStep": "No step is waiting",
+    "started": "Approval started."
+  },
+  "myProcesses": {
+    "title": "My approvals",
+    "subtitle": "Approvals you started or took part in, including the ones now waiting on someone else. Open one to read its full trail.",
+    "columnApproval": "Approval",
+    "columnWaiting": "Current step",
+    "empty": "You have not started or taken part in an approval yet.",
+    "scope": {
+      "all": "Everything",
+      "running": "Running",
+      "waiting": "Waiting",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "failed": "Failed"
+    }
+  },
   "calendar": {
     "title": "Calendar",
     "loadFailed": "Failed to load the calendar.",

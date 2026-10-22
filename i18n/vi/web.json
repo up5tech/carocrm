@@ -359,6 +359,30 @@
     "commentPlaceholder": "Vì sao? (được lưu trên nhiệm vụ để phục vụ dấu vết kiểm toán)",
     "signIn": "Đăng nhập để xem nhiệm vụ của bạn."
   },
+  "recordProcess": {
+    "title": "Phê duyệt",
+    "start": "Bắt đầu phê duyệt",
+    "empty": "Bản ghi này chưa có quy trình phê duyệt nào.",
+    "startedAt": "Bắt đầu {date}",
+    "waitingOn": "Đang chờ {names}",
+    "noOpenStep": "Không có bước nào đang chờ",
+    "started": "Đã bắt đầu quy trình phê duyệt."
+  },
+  "myProcesses": {
+    "title": "Phê duyệt của tôi",
+    "subtitle": "Các quy trình bạn đã khởi tạo hoặc tham gia, kể cả những quy trình đang chờ người khác xử lý. Mở một quy trình để xem toàn bộ lịch sử.",
+    "columnApproval": "Quy trình",
+    "columnWaiting": "Bước hiện tại",
+    "empty": "Bạn chưa khởi tạo hay tham gia quy trình phê duyệt nào.",
+    "scope": {
+      "all": "Tất cả",
+      "running": "Đang chạy",
+      "waiting": "Đang chờ",
+      "completed": "Hoàn thành",
+      "cancelled": "Đã huỷ",
+      "failed": "Thất bại"
+    }
+  },
   "calendar": {
     "title": "Lịch",
     "loadFailed": "Không tải được lịch.",

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { api } from '../api/client.js';
 import type {
+  AvailableProcessListResult,
   ProcessCatalog,
   ProcessDefinitionShape,
   ProcessInstanceListResult,
@@ -46,10 +47,40 @@ export function useProcessCatalog(admin: boolean | undefined) {
   });
 }
 
-export function useProcessInstances(params: { status?: string | undefined; definitionId?: string | undefined } = {}) {
+export function useProcessInstances(params: {
+  status?: string | undefined;
+  definitionId?: string | undefined;
+  entityType?: string | undefined;
+  entityId?: string | undefined;
+  limit?: number | undefined;
+} = {}) {
   return useQuery<ProcessInstanceListResult>({
-    queryKey: ['processes', 'instances', params.status ?? 'all', params.definitionId ?? ''],
+    queryKey: [
+      'processes',
+      'instances',
+      params.status ?? 'all',
+      params.definitionId ?? '',
+      params.entityType ?? '',
+      params.entityId ?? '',
+      params.limit ?? 0,
+    ],
     queryFn: () => api.processInstances(params),
+    retry: false,
+  });
+}
+
+/**
+ * The processes this person may start on a record type.
+ *
+ * Participants have no access to definitions, so this is the only way a start menu can name them.
+ * A 403 is not an error state worth showing: an account with no approval configured simply has an
+ * empty menu, and the panel stays hidden.
+ */
+export function useAvailableProcesses(entityType: string | undefined) {
+  return useQuery<AvailableProcessListResult>({
+    queryKey: ['processes', 'available', entityType ?? ''],
+    queryFn: () => api.availableProcesses(entityType ?? ''),
+    enabled: Boolean(entityType),
     retry: false,
   });
 }

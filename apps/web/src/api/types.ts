@@ -631,6 +631,19 @@ export interface ProcessListResult {
   total: number;
 }
 
+/** What a participant may start on a record type — identity only, never the definition itself. */
+export interface AvailableProcessView {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  entityType: string;
+}
+
+export interface AvailableProcessListResult {
+  list: AvailableProcessView[];
+}
+
 export interface ProcessTaskView {
   id: string;
   instanceId: string;

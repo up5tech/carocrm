@@ -114,13 +114,14 @@ Statuses: instance `running | waiting | completed | cancelled | failed`; task
 |---|---|---|
 | `GET /api/v1/Process` | admin | definitions with version state, enable state and issues |
 | `GET /api/v1/Process/action/catalog` | admin | action catalog + node/assignee kinds for the editor |
+| `GET /api/v1/Process/action/available?entityType=` | any signed-in user | the start menu: published + enabled processes bound to this record type (identity only) |
 | `POST /api/v1/Process/action/validate` | admin | validate without saving |
 | `POST /api/v1/Process` · `PUT /:id` | admin | create / save draft (strictly validated) |
 | `POST /api/v1/Process/:id/action/publish` | admin | freeze the version (once) |
 | `POST /api/v1/Process/:id/action/enable\|disable` | admin | gate starting new instances |
 | `DELETE /api/v1/Process/:id` | admin | soft delete; instances keep their history |
 | `POST /api/v1/ProcessInstance` | any reader of the record | start by `processId` or `processKey` |
-| `GET /api/v1/ProcessInstance[/:id]` | scoped | list/detail — full views including tasks + events |
+| `GET /api/v1/ProcessInstance[/:id]` | scoped | list/detail — full views including tasks + events; `entityType` + `entityId` narrow the list to one record |
 | `POST /api/v1/ProcessInstance/:id/action/cancel` | initiator or admin | stop and cancel open tasks |
 | `GET /api/v1/ProcessTask` | per person | my tasks (assignee or role candidate); `all=true` is admin-only |
 | `GET /api/v1/ProcessTask/:id` | assignee/candidate | one task |
@@ -130,6 +131,32 @@ Definitions are admin-only because a process runs actions with system authority.
 deliberately participant-facing: the person approving a discount needs no admin rights and sees
 nothing they are not part of. A record you may not read is *missing* (404), as everywhere else.
 
+`action/available` is the one participant-facing read of the definition table, and it exists because
+a start button needs to *name* the approvals: without it, starting a process required knowing its
+`key` in advance. It returns identity and description only — never nodes, actions or assignees — and
+only for a process that is published, enabled and bound to the requested record type (or to `*`).
+
+`GET /ProcessInstance` accepts `entityType` + `entityId` **together** (half a filter is a 422, not a
+broad list). The participant scope still applies on top, and that scope counts the initiator: an
+approval stays on the submitter's list after the token moves to the next approver, which is the same
+rule `GET /ProcessInstance/:id` already enforced.
+
+## 5.1 The participant UI
+
+The engine was always participant-facing server-side; the screens came later, and they are the ones
+a non-admin actually uses:
+
+| Surface | Where | What it answers |
+|---|---|---|
+| Record panel | `ProcessPanel` on the record detail page | "which approvals does this record type offer, start one, and what already ran here" |
+| My approvals | `/processes` (`MyProcessesPage`) | "what did I start, and where did it end up" — filterable by status |
+| My tasks | `/tasks` (`TasksPage`) | "what is waiting for me" — the answer buttons |
+| Trail | `ProcessTrailModal`, shared by all three | the tasks, their answers and every event, in order |
+
+Starting and cancelling are the server's decisions on every surface: the panel offers what
+`action/available` returned and reports a refusal verbatim. Portal users get none of these screens —
+an approval is an internal action.
+
 ## 6. Layout
 
 | Piece | Where |
@@ -138,7 +165,9 @@ nothing they are not part of. A record you may not read is *missing* (404), as e
 | Definitions, versioning, catalog | `apps/api/src/processes/process.service.ts` |
 | State machine, tasks, timers, ACL scoping | `apps/api/src/processes/process-runtime.service.ts` |
 | Worker: service tasks, due/escalation timers | `apps/worker/src/bpm/` |
-| Admin page, editor, my-tasks page | `apps/web/src/pages/ProcessesPage.tsx`, `ProcessEditorPage.tsx`, `TasksPage.tsx` |
+| Admin page, editor | `apps/web/src/pages/ProcessesPage.tsx`, `ProcessEditorPage.tsx` |
+| Participant pages | `apps/web/src/pages/MyProcessesPage.tsx` (`/processes`), `TasksPage.tsx` (`/tasks`) |
+| Record panel + shared trail | `apps/web/src/components/ProcessPanel.tsx`, `ProcessTrailModal.tsx` |
 | Tables | `database/migrations/012_phase16_bpm.sql` |
 
 **Deviation from PLAN §36's table list:** definition nodes live inside

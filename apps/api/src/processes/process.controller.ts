@@ -30,6 +30,15 @@ export class ProcessController {
     return this.processes.catalog();
   }
 
+  /**
+   * What a participant may start on a record type. Declared before `:id` so "action" is never read
+   * as a process id. Not admin-only: this is the start menu, and it exposes identity only.
+   */
+  @Get('action/available')
+  async available(@Query('entityType') entityType: string | undefined): Promise<Awaited<ReturnType<ProcessService['available']>>> {
+    return this.processes.available(entityType ?? '');
+  }
+
   @HttpCode(200)
   @Post('action/validate')
   async validate(@Body() body: unknown): Promise<{ valid: boolean; issues: { code: string; message: string; path?: string | undefined }[] }> {
@@ -112,6 +121,9 @@ export class ProcessInstanceController {
     return this.runtime.listInstances({
       ...(query['definitionId'] === undefined ? {} : { definitionId: query['definitionId'] }),
       ...(query['status'] === undefined ? {} : { status: query['status'] }),
+      // Record-scoped lists power the process panel on a record; the participant scope still applies.
+      ...(query['entityType'] === undefined ? {} : { entityType: query['entityType'] }),
+      ...(query['entityId'] === undefined ? {} : { entityId: query['entityId'] }),
       ...(query['offset'] === undefined ? {} : { offset: Number(query['offset']) }),
       ...(query['limit'] === undefined ? {} : { limit: Number(query['limit']) }),
     });

@@ -31,6 +31,7 @@ import type {
   ApiKeySecret,
   ApiUserRow,
   AttachmentInfo,
+  AvailableProcessListResult,
   CloneResult,
   CRMChatActionView,
   CRMChatCapabilitiesView,
@@ -1141,6 +1142,9 @@ export const api = {
   processes: () => request<ProcessListResult>('/Process'),
   process: (id: string) => request<ProcessView>(`/Process/${encodeURIComponent(id)}`),
   processCatalog: () => request<ProcessCatalog>('/Process/action/catalog'),
+  /** The start menu on a record: published + enabled processes bound to this type (or any). */
+  availableProcesses: (entityType: string) =>
+    request<AvailableProcessListResult>(`/Process/action/available${simpleQuery({ entityType })}`),
   validateProcess: (definition: ProcessDefinitionShape) =>
     request<{ valid: boolean; issues: ProcessIssue[] }>('/Process/action/validate', { method: 'POST', body: JSON.stringify({ definition }) }),
   createProcess: (input: { key: string; name: string; description?: string; definition: ProcessDefinitionShape }) =>
@@ -1152,8 +1156,14 @@ export const api = {
     request<ProcessView>(`/Process/${encodeURIComponent(id)}/action/${enabled ? 'enable' : 'disable'}`, { method: 'POST' }),
   deleteProcess: (id: string) => request<unknown>(`/Process/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
-  processInstances: (params: { definitionId?: string | undefined; status?: string | undefined; offset?: number | undefined; limit?: number | undefined } = {}) =>
-    request<ProcessInstanceListResult>(`/ProcessInstance${simpleQuery(params)}`),
+  processInstances: (params: {
+    definitionId?: string | undefined;
+    status?: string | undefined;
+    entityType?: string | undefined;
+    entityId?: string | undefined;
+    offset?: number | undefined;
+    limit?: number | undefined;
+  } = {}) => request<ProcessInstanceListResult>(`/ProcessInstance${simpleQuery(params)}`),
   processInstance: (id: string) => request<ProcessInstanceView>(`/ProcessInstance/${encodeURIComponent(id)}`),
   startProcess: (input: { processId?: string; processKey?: string; entityType: string; entityId: string }) =>
     request<ProcessInstanceView>('/ProcessInstance', { method: 'POST', body: JSON.stringify(input) }),
