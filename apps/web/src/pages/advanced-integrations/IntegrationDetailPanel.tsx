@@ -136,7 +136,7 @@ export function IntegrationDetailPanel({
 
       <div className="carocrm-diff" style={{ gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)' }}>
         <div>
-          <Descriptions column={1} size="small" colon={false} labelStyle={{ width: 160 }}>
+          <Descriptions column={1} size="small" colon={false} styles={{ label: { width: 160 } }}>
             <Descriptions.Item label={t('advancedintegrations.connections.status')}>
               <ConnectionStatusPill status={connection.status} />
             </Descriptions.Item>

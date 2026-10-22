@@ -91,7 +91,7 @@
     "resumed": "The connection is running again.",
     "revoked": "The connection is revoked.",
     "secretRotated": "The secret was replaced.",
-    "reconciled": "{{count}} mappings will do a full re-sync on their next run.",
+    "reconciled": "{count} mappings will do a full re-sync on their next run.",
     "detailFailed": "The connection could not be loaded."
   },
   "wizard": {
@@ -202,7 +202,7 @@
     "noFields": "No field differs.",
     "authorityHint": "The rule next to a field decides who wins it. A resolution is always deliberate.",
     "stale": "This record changed again after the conflict was detected.",
-    "staleHint": "The two sides are older states. The provider's value cannot be applied to a stale comparison; re-run the sync and resolve the fresh conflict. (changed on: {{side}})",
+    "staleHint": "The two sides are older states. The provider's value cannot be applied to a stale comparison; re-run the sync and resolve the fresh conflict. (changed on: {side})",
     "resolved": "The conflict is resolved.",
     "empty": "No open conflict.",
     "selectConnection": "Choose a connection",

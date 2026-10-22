@@ -81,7 +81,7 @@
     "unlink": "Unlink this record?",
     "unlinkFailed": "Unlink failed.",
     "new": "New",
-    "relatedRange": "{{from}}–{{to}} of {{total}}",
+    "relatedRange": "{from}–{to} of {total}",
     "panels": "Panels",
     "tabs": {
       "mode": "Tabs",
@@ -1166,9 +1166,9 @@
     "fieldsHint": "field=value, field2=value2",
     "createRecordEntityType": "entity type (Task)",
     "createRecordFields": "name=Follow up, status=Planned",
-    "userId": "user id, or {{assignedUserId}}",
+    "userId": "user id, or {assignedUserId}",
     "message": "message",
-    "emailTo": "to (use {{emailAddress}})",
+    "emailTo": "to (use {emailAddress})",
     "emailSubject": "subject",
     "emailBody": "body",
     "jobName": "job name"

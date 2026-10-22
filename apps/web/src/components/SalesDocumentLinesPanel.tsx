@@ -138,7 +138,7 @@ export function SalesDocumentLinesPanel({ kind, id }: SalesDocumentLinesPanelPro
 
   return (
     <Card
-      className="carocrm-card"
+      className="carocrm-card carocrm-document-lines-card"
       size="small"
       loading={loading}
       title={

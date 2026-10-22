@@ -81,7 +81,7 @@
     "unlink": "Bỏ liên kết bản ghi này?",
     "unlinkFailed": "Bỏ liên kết thất bại.",
     "new": "Tạo mới",
-    "relatedRange": "{{from}}–{{to}} trên {{total}}",
+    "relatedRange": "{from}–{to} trên {total}",
     "panels": "Bảng",
     "tabs": {
       "mode": "Thẻ",
@@ -1166,9 +1166,9 @@
     "fieldsHint": "trường=giá trị, trường2=giá trị2",
     "createRecordEntityType": "loại thực thể (Task)",
     "createRecordFields": "name=Follow up, status=Planned",
-    "userId": "id người dùng, hoặc {{assignedUserId}}",
+    "userId": "id người dùng, hoặc {assignedUserId}",
     "message": "thông báo",
-    "emailTo": "người nhận (dùng {{emailAddress}})",
+    "emailTo": "người nhận (dùng {emailAddress})",
     "emailSubject": "tiêu đề",
     "emailBody": "nội dung",
     "jobName": "tên tác vụ"

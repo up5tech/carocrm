@@ -385,6 +385,36 @@ body {
   box-shadow: none;
 }
 
+/* The document lines panel carries three actions in its card head. Give the
+   head room for 36px buttons instead of letting the small-card header clip
+   them, and wrap the actions below the title when the panel is narrow. */
+.carocrm-card.carocrm-document-lines-card .ant-card-head {
+  min-height: 56px;
+  padding-block: 10px;
+}
+.carocrm-card.carocrm-document-lines-card .ant-card-head-wrapper {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.carocrm-card.carocrm-document-lines-card .ant-card-extra {
+  margin-inline-start: auto;
+}
+@media (max-width: 720px) {
+  .carocrm-card.carocrm-document-lines-card .ant-card-head-wrapper {
+    align-items: flex-start;
+  }
+  .carocrm-card.carocrm-document-lines-card .ant-card-head-title {
+    flex: 1 1 100%;
+  }
+  .carocrm-card.carocrm-document-lines-card .ant-card-extra {
+    width: 100%;
+    margin-inline-start: 0;
+  }
+  .carocrm-card.carocrm-document-lines-card .ant-card-extra .ant-space {
+    flex-wrap: wrap;
+  }
+}
+
 .carocrm-label {
   font-size: 11px;
   font-weight: 600;

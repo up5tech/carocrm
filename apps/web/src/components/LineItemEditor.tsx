@@ -460,7 +460,7 @@ export function LineItemEditor({
           size="small"
           min={0}
           max={100}
-          addonAfter="%"
+          suffix="%"
           value={record.discountPercent === null ? null : Number(record.discountPercent)}
           disabled={disabled}
           aria-label={t('sales.document.discount')}
@@ -495,7 +495,7 @@ export function LineItemEditor({
               size="small"
               min={0}
               max={100}
-              addonAfter="%"
+              suffix="%"
               value={record.taxRatePercent === null ? null : Number(record.taxRatePercent)}
               disabled={disabled}
               placeholder={t('sales.document.taxRatePercent')}

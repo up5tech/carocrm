@@ -91,7 +91,7 @@
     "resumed": "Kết nối đã chạy lại.",
     "revoked": "Kết nối đã bị thu hồi.",
     "secretRotated": "Khoá đã được thay thế.",
-    "reconciled": "{{count}} ánh xạ sẽ đồng bộ lại toàn bộ ở lần chạy kế tiếp.",
+    "reconciled": "{count} ánh xạ sẽ đồng bộ lại toàn bộ ở lần chạy kế tiếp.",
     "detailFailed": "Không tải được kết nối."
   },
   "wizard": {
@@ -202,7 +202,7 @@
     "noFields": "Không có trường nào khác nhau.",
     "authorityHint": "Quy tắc cạnh mỗi trường quyết định ai thắng trường đó. Mọi cách giải quyết đều là một quyết định có chủ đích.",
     "stale": "Bản ghi này đã thay đổi thêm sau khi phát hiện xung đột.",
-    "staleHint": "Hai phía đều là trạng thái cũ. Không thể áp dụng giá trị của nhà cung cấp cho một so sánh đã cũ; hãy đồng bộ lại và giải quyết xung đột mới. (thay đổi ở: {{side}})",
+    "staleHint": "Hai phía đều là trạng thái cũ. Không thể áp dụng giá trị của nhà cung cấp cho một so sánh đã cũ; hãy đồng bộ lại và giải quyết xung đột mới. (thay đổi ở: {side})",
     "resolved": "Xung đột đã được giải quyết.",
     "empty": "Không có xung đột nào đang mở.",
     "selectConnection": "Chọn một kết nối",

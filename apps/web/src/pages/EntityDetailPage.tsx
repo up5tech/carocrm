@@ -381,7 +381,7 @@ export function EntityDetailPage() {
     return (
       <>
         {plain.length === 0 ? null : (
-          <Descriptions column={{ xs: 1, md: 2 }} colon={false} labelStyle={labelStyle} contentStyle={contentStyle} items={describe(plain)} />
+          <Descriptions column={{ xs: 1, md: 2 }} colon={false} styles={{ label: labelStyle, content: contentStyle }} items={describe(plain)} />
         )}
         {payloads.map((entry) => (
           <section className="carocrm-json-block" key={entry.name}>
