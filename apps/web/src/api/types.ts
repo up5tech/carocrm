@@ -3107,6 +3107,13 @@ export interface ESignatureHealthView {
   readonly optionalIntegrations: readonly { id: string; label: string; provides: string; status: string }[];
   readonly features: readonly ESignatureHealthFeature[];
   readonly providerCapabilities: Readonly<Record<string, boolean>>;
+  /** Which adapter is bound in this build, and in which mode: `live`, `fake` or absent. */
+  readonly providerAdapters: readonly {
+    readonly providerKey: string;
+    readonly mode: string;
+    readonly adapterVersion: string;
+    readonly providerApiVersion: string;
+  }[];
   readonly structures: readonly { name: string; present: boolean }[];
   readonly settings: {
     readonly key: string;

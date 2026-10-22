@@ -1,10 +1,12 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0, 19-ES.1 and 19-ES.2 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 + 19-ES.1 + 19-ES.2 delivered** (ES.1 registers the module and the security
-> contract; ES.2 adds the schema and the domain rules — still no adapter and no provider call).
-> Evidence: `docs/implementation/esignature-es1-completion-report.md` and
-> `docs/implementation/esignature-es2-completion-report.md`.
+> Phase 19-ES.0 to 19-ES.3 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 through 19-ES.3 delivered** (ES.1 registers the module and the security contract;
+> ES.2 adds the schema and the domain rules; ES.3 adds the provider contract, the registry and the
+> in-process fake). **No DocuSign code exists yet and no provider call is possible** — the real adapter
+> arrives with ES.4, and nothing has been verified against a live account.
+> Evidence: `docs/implementation/esignature-es1-completion-report.md`, `esignature-es2-completion-report.md`,
+> `esignature-es3-completion-report.md`.
 > Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`.
 > Webhook prefix (reserved in ES.1, endpoint delivered in ES.11, which also extends the raw-body hook):
 > `/api/v1/integrations/esignature`.
@@ -99,6 +101,10 @@ terminal state backwards; ambiguity triggers reconciliation (plan §4.7, §10.3)
   configuration options, certificate of completion retention) depends on the DocuSign account
   plan and account settings; the admin runbook must verify the account's capabilities before
   enabling dependent features.
+- The Connect HMAC **mechanism** (base64 SHA-256 over the raw body, constant-time compare) is implemented
+  in `providers/signature-provider-signature.ts`; the **exact header layout and payload fixture** are
+  captured from a demo account in ES.11 before any installation is called verified. The fake adapter
+  signs with the same mechanism and is not evidence about DocuSign's wire format.
 - Connect must be configured on the DocuSign account (or via an approved management path) to
   point at the CRM webhook URL; event coverage and delivery guarantees are the provider's.
 - Provider status vocabulary and payload shapes evolve; stored raw event metadata is
@@ -120,7 +126,7 @@ terminal state backwards; ambiguity triggers reconciliation (plan §4.7, §10.3)
 
 | Configuration | Status |
 | --- | --- |
-| Fake adapter (no provider) — full lifecycle | The only configuration used by automated tests (ES.3+) |
+| Fake adapter (no provider) — full lifecycle | **Delivered ES.3** — the initial slice runs end to end against it, including the lost-send/`send_unknown` recovery (`apps/api/test/esignature-flow.test.ts`) |
 | DocuSign demo/developer account, single account, authorization-code grant, remote signing, Connect events | Planned deliberate smoke test in ES.22 with synthetic documents/signers; recorded here with date when executed |
 | Production account | Not tested; remains disabled until an explicit administrator enablement (plan §9.4) |
 

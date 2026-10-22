@@ -18,6 +18,8 @@ import { ESignatureModuleHealthService } from './esignature-module-health.servic
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { createFakeSignatureProviderAdapter } from './providers/fake-signature-provider.adapter.js';
+import { SIGNATURE_PROVIDER_ADAPTERS,SignatureProviderRegistry } from './providers/signature-provider.registry.js';
 import { SignatureAuditRepository } from './signature-audit.repository.js';
 import { SignatureConnectionRepository } from './signature-connection.repository.js';
 import { SignatureDocumentSnapshotRepository } from './signature-document-snapshot.repository.js';
@@ -48,6 +50,15 @@ export const ESIGNATURE_PROVIDERS = [
   SignatureWebhookInboxRepository,
   SignatureTemplateMappingRepository,
   SignatureAuditRepository,
+  // Phase 19-ES.3 — the provider port. The registry answers for every adapter the build ships, and
+  // the fake is withheld in production exactly as the connector registrar withholds its own
+  // (`advanced-integrations/connector-registrar.service.ts:243`): a test double that can be reached by
+  // production code would report a signature request as sent when nothing was.
+  SignatureProviderRegistry,
+  {
+    provide: SIGNATURE_PROVIDER_ADAPTERS,
+    useFactory: () => (process.env.NODE_ENV === 'production' ? [] : [createFakeSignatureProviderAdapter()]),
+  },
 ] as const;
 
 export { ESignatureController } from './esignature.controller.js';
@@ -144,6 +155,51 @@ export {
   TRANSITION_ORIGINS,
   type TransitionOrigin,
 } from './esignature-state-machine.js';
+export {
+  createFakeSignatureProviderAdapter,
+  type FakeProviderOptions,
+  FakeSignatureProviderAdapter,
+} from './providers/fake-signature-provider.adapter.js';
+export {
+  classifyAdapterError,
+  type ESignatureProviderErrorCategory,
+  isSendOutcomeUnknownError,
+  NotSupportedByProviderError,
+  redactAdapterError,
+  SendOutcomeUnknownError,
+  toModuleError,
+} from './providers/signature-provider.errors.js';
+export {
+  artifactIdentity,
+  correlationId,
+  idempotencyKey,
+  prepareIdentity,
+  sendIdentity,
+} from './providers/signature-provider.idempotency.js';
+export {
+  adapterSupports,
+  assertAdapterContract,
+  BASE_SIGNATURE_PROVIDER_CAPABILITIES,
+  FUTURE_SIGNATURE_PROVIDER_OPERATIONS,
+  type PreparedEnvelope,
+  type PrepareEnvelopeInput,
+  type ProviderArtifact,
+  type ProviderEnvelopeStatus,
+  type ProviderRecipientStatus,
+  type ProviderWebhookNotification,
+  redactContext,
+  type SendEnvelopeInput,
+  SIGNATURE_PROVIDER_OPERATIONS,
+  type SignatureProviderAdapter,
+  type SignatureProviderCapabilities,
+  type SignatureProviderContext,
+  type SignatureProviderOperation,
+  type VerifyWebhookInput,
+} from './providers/signature-provider.port.js';
+export {
+  SIGNATURE_PROVIDER_ADAPTERS,
+  type SignatureProviderDescriptor,
+} from './providers/signature-provider.registry.js';
 export {
   redactDetail,
   type SignatureAuditEntry,

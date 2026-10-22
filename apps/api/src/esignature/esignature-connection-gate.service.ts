@@ -14,6 +14,7 @@ import {
 } from './esignature-module.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { SignatureProviderRegistry } from './providers/signature-provider.registry.js';
 import { SignatureConnectionRepository } from './signature-connection.repository.js';
 
 /**
@@ -111,6 +112,7 @@ export class ESignatureConnectionGate {
     @Inject(ESignatureSettingsService) private readonly settings: ESignatureSettingsService,
     @Inject(ESignaturePermissionService) private readonly permissions: ESignaturePermissionService,
     @Inject(SignatureConnectionRepository) private readonly connections: SignatureConnectionRepository,
+    @Inject(SignatureProviderRegistry) private readonly providers: SignatureProviderRegistry,
   ) {}
 
   rule(operation: ESignatureOperation): OperationRule {
@@ -138,7 +140,7 @@ export class ESignatureConnectionGate {
     if (rule.feature !== undefined && settingsView.effective[rule.feature] !== true) {
       throw signatureModuleDisabledError(`${ESIGNATURE_MODULE_KEY}.${rule.feature}`);
     }
-    if (!DOCUSIGN_PROVIDER_CAPABILITIES[rule.providerCapability]) {
+    if (!this.supportedOnProvider(rule.providerCapability)) {
       throw notSupportedByProviderError(rule.providerCapability, PROVIDER_KEY_DOCUSIGN);
     }
     if (!rule.reachesProvider) return;
@@ -150,6 +152,20 @@ export class ESignatureConnectionGate {
     if (enabledConnections === 0) {
       throw providerNotConnectedError('no_connection');
     }
+  }
+
+  /**
+   * Whether the provider can perform an operation.
+   *
+   * The bound adapter is authoritative once one exists (plan §5.2's contract), because a declaration
+   * that drifts from an implementation is exactly the silent no-op the plan forbids. With no adapter
+   * registered the declared contract answers, so an operation of a later sub-phase is refused here
+   * rather than admitted and then failing inside an adapter.
+   */
+  supportedOnProvider(capability: ESignatureProviderCapabilityKey): boolean {
+    const adapter = this.providers.resolve(PROVIDER_KEY_DOCUSIGN);
+    if (adapter !== undefined) return adapter.capabilities[capability] === true;
+    return DOCUSIGN_PROVIDER_CAPABILITIES[capability] === true;
   }
 
   /** The health endpoint's answer: what the gate would decide, with no side effect and no secret. */

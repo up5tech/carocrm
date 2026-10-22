@@ -119,6 +119,9 @@
     "correctEnvelope": "Chỉnh sửa phong bao",
     "downloadCompletedDocuments": "Tài liệu đã ký",
     "downloadCompletionEvidence": "Bằng chứng hoàn tất",
-    "verifyWebhook": "Sự kiện trạng thái đã xác minh"
+    "verifyWebhook": "Sự kiện trạng thái đã xác minh",
+    "adapterNone": "Chưa gắn bộ chuyển đổi nhà cung cấp nào",
+    "adapterFake": "Đang dùng bộ giả lập cho kiểm thử ({version})",
+    "adapterLive": "Đang dùng bộ chuyển đổi thật ({version})"
   }
 }

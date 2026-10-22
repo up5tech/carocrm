@@ -119,6 +119,9 @@
     "correctEnvelope": "Chỉnh sửa phong bao",
     "downloadCompletedDocuments": "Tài liệu đã ký",
     "downloadCompletionEvidence": "Bằng chứng hoàn tất",
-    "verifyWebhook": "Sự kiện trạng thái đã xác minh"
+    "verifyWebhook": "Sự kiện trạng thái đã xác minh",
+    "adapterNone": "No provider adapter is bound",
+    "adapterFake": "Test adapter bound ({version})",
+    "adapterLive": "Live adapter bound ({version})"
   }
 }

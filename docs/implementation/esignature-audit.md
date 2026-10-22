@@ -1,7 +1,8 @@
 # Phase 19-ES.0 — Repository audit and feature contract
 
 > `PLAN_Phase_19_ESignature.md` §18 `Phase 19-ES.0`. Continued by
-> `docs/implementation/esignature-es1-completion-report.md` (19-ES.1).
+> `esignature-es1-completion-report.md` (19-ES.1), `esignature-es2-completion-report.md` (19-ES.2)
+> and `esignature-es3-completion-report.md` (19-ES.3).
 > Acceptance: no code or migration before this document; no assumption that a planned service
 > exists; provider scope and integration contracts agreed; no test database and no duplicate
 > generic entity created.
@@ -245,7 +246,7 @@ The delivered shape, the constraints and the rules that came with them are recor
 | ESignature module barrel + `app.module.ts` spreads + `/api/v1/ESignature` controller | ES.1 **done** |
 | `ESignature` settings document, permissions (synthetic ACL resources), nav entry, i18n catalog | ES.1 **done** |
 | Additive migration for the eight tables in §6 (+ indexes, dedup/uniqueness constraints) | ES.2 **done** (`064_phase19_esignature.sql`, applied) |
-| Provider adapter port + `FakeSignatureProviderAdapter` + error taxonomy extension (`unknown_outcome`) | ES.3 |
+| Provider adapter port + `FakeSignatureProviderAdapter` + error taxonomy extension (`unknown_outcome`) | ES.3 **done** (`apps/api/src/esignature/providers/`) |
 | DocuSign OAuth (authorize/callback/refresh/userinfo account + base-URI persistence, vault storage) | ES.4 |
 | Secure snapshot service over `AttachmentService` + `packages/files` checksums | ES.5 |
 | Draft CRUD + source-record linking with linked-record ACL | ES.6 |

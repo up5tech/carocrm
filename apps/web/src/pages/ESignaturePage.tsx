@@ -103,7 +103,7 @@ export function ESignaturePage() {
         )}
       </Card>
 
-      <Card className="carocrm-card" title={t('esignature.provider.title')}>
+      <Card className="carocrm-card" title={t('esignature.provider.title')} extra={adapterSummary(view)} style={{ marginBottom: 16 }}>
         <Space size={[8, 8]} wrap>
           {Object.entries(view.providerCapabilities).map(([key, supported]) => (
             <Tag key={key} color={supported ? 'green' : 'default'}>
@@ -114,6 +114,19 @@ export function ESignaturePage() {
       </Card>
     </div>
   );
+}
+
+/**
+ * Which adapter answers for the provider, in words an operator can act on.
+ *
+ * A fake adapter is a real fact about the installation: nothing it "sends" ever reaches a signer, so
+ * the page says which one is bound rather than letting a green tick imply a live integration.
+ */
+function adapterSummary(view: ESignatureHealthView): string {
+  const [adapter] = view.providerAdapters;
+  if (adapter === undefined) return t('esignature.provider.adapterNone');
+  if (adapter.mode === 'fake') return t('esignature.provider.adapterFake', { version: adapter.adapterVersion });
+  return t('esignature.provider.adapterLive', { version: adapter.adapterVersion });
 }
 
 function featureColumns(): ColumnsType<ESignatureHealthView['features'][number]> {

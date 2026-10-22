@@ -6,6 +6,7 @@ import { HookRegistry } from '../hooks/hook.registry.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import { ESignatureConnectionGate } from './esignature-connection-gate.service.js';
+import { PROVIDER_KEY_DOCUSIGN } from './esignature-domain.js';
 import {
   DOCUSIGN_PROVIDER_CAPABILITIES,
   ESIGNATURE_FEATURES,
@@ -18,6 +19,7 @@ import {
   REQUIRED_CAPABILITIES,
 } from './esignature-module.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { type SignatureProviderDescriptor, SignatureProviderRegistry } from './providers/signature-provider.registry.js';
 
 /**
  * Phase 19-ES.1 — module health and the security contract, readable
@@ -82,6 +84,8 @@ export interface ESignatureHealthView {
   }[];
   /** What the first provider adapter commits to, per operation (plan §5.2). */
   readonly providerCapabilities: Readonly<Record<string, boolean>>;
+  /** The adapters actually bound in this build, and in which mode (plan §9.4, ES.3). */
+  readonly providerAdapters: readonly SignatureProviderDescriptor[];
   readonly structures: readonly { readonly name: string; readonly present: boolean }[];
   readonly settings: {
     readonly key: string;
@@ -103,6 +107,7 @@ export class ESignatureModuleHealthService {
     @Inject(ESignatureConnectionGate) private readonly gate: ESignatureConnectionGate,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(HookRegistry) private readonly hooks: HookRegistry,
+    @Inject(SignatureProviderRegistry) private readonly providers: SignatureProviderRegistry,
   ) {}
 
   async health(): Promise<ESignatureHealthView> {
@@ -167,6 +172,11 @@ export class ESignatureModuleHealthService {
     const missingStructures = structures.filter((entry) => !entry.present).map((entry) => entry.name);
 
     const gate = await this.gate.assessment();
+    // The bound adapter answers for the capability surface once one exists; the declared contract is
+    // what is reported until then, so an operator never reads "supported" for code that is not there.
+    const boundAdapter = this.providers.resolve(PROVIDER_KEY_DOCUSIGN);
+    const boundCapabilities = boundAdapter?.capabilities ?? null;
+    const adapterMode = boundAdapter?.mode ?? 'none';
 
     const checks: { name: string; ok: boolean; detail: string }[] = [
       {
@@ -187,9 +197,14 @@ export class ESignatureModuleHealthService {
           : 'ENCRYPTION_KEY is not configured; no provider credential can be stored or read, so no connection can be used.',
       },
       {
+        // The contract and the fake exist since ES.3; the DocuSign adapter arrives with ES.4. In
+        // production the fake is not registered at all, so `none` there is the correct, expected answer.
         name: 'provider-adapter',
         ok: true,
-        detail: 'No adapter is implemented yet (19-ES.3 contract, 19-ES.4 DocuSign). The gate refuses every provider operation until then.',
+        detail:
+          adapterMode === 'none'
+            ? 'No signature provider adapter is bound, so no provider operation can be attempted. The DocuSign adapter arrives with 19-ES.4.'
+            : `A "${adapterMode}" adapter is bound for "${PROVIDER_KEY_DOCUSIGN}" (${boundAdapter?.adapterVersion ?? ''}, API ${boundAdapter?.providerApiVersion ?? ''}). A fake adapter can never sign a real contract.`,
       },
       {
         name: 'connection-gate',
@@ -231,7 +246,8 @@ export class ESignatureModuleHealthService {
       dependencies,
       optionalIntegrations,
       features,
-      providerCapabilities: DOCUSIGN_PROVIDER_CAPABILITIES,
+      providerCapabilities: boundCapabilities ?? DOCUSIGN_PROVIDER_CAPABILITIES,
+      providerAdapters: this.providers.report(),
       structures,
       settings: {
         key: ESIGNATURE_SETTINGS_KEY,
