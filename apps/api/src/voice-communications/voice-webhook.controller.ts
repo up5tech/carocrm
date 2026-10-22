@@ -1,5 +1,5 @@
 import { NotFoundError } from "@carocrm/core/errors/index.js";
-import { Body, Controller, Headers, HttpCode, Inject, Param, Post } from "@nestjs/common";
+import { Body, Controller, Headers, HttpCode, Inject, Param, Post, Req } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { Public } from "../auth/auth.guard.js";
@@ -34,6 +34,7 @@ export class VoiceWebhookController {
     @Param("kind") kind: string,
     @Body() body: unknown,
     @Headers() headers: Record<string, string | undefined>,
+    @Req() request: { readonly url?: string | undefined; readonly protocol?: string | undefined },
   ) {
     if (!WEBHOOK_KINDS.has(kind)) {
       throw new NotFoundError(`Unknown webhook kind "${kind}".`);
@@ -41,8 +42,33 @@ export class VoiceWebhookController {
     const payload = typeof body === "object" && body !== null && !Array.isArray(body)
       ? (body as Record<string, unknown>)
       : {};
-    return this.ingress.ingest({ providerKey, accountKey, headers, body: payload });
+    const url = absoluteCallbackUrl(request, headers);
+    return this.ingress.ingest({ providerKey, accountKey, headers, body: payload, ...(url === undefined ? {} : { url }) });
   }
+}
+
+/**
+ * Twilio signs the absolute callback URL. Fastify's own `request.url` is a path, so the public origin
+ * is reconstructed from the forwarded/host headers; an operator can pin the exact URL with the
+ * account's `webhookUrl` instead of relying on proxy headers. A wrong URL can only cause a failed
+ * signature check, never a bypass: the secret is still required.
+ */
+function absoluteCallbackUrl(
+  request: { readonly url?: string | undefined; readonly protocol?: string | undefined },
+  headers: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  const path = request.url;
+  if (path === undefined || path.trim() === "") return undefined;
+  if (/^https?:\/\//i.test(path)) return path;
+  const forwardedProto = firstHeaderValue(headers["x-forwarded-proto"]);
+  const protocol = forwardedProto ?? request.protocol ?? "https";
+  const host = firstHeaderValue(headers["x-forwarded-host"]) ?? firstHeaderValue(headers["host"]);
+  return host === undefined ? path : `${protocol}://${host}${path}`;
+}
+
+function firstHeaderValue(value: string | undefined): string | undefined {
+  const first = value?.split(",")[0]?.trim();
+  return first === undefined || first === "" ? undefined : first;
 }
 
 const WEBHOOK_KINDS = new Set(["voice-events", "message-events", "status-events", "media-events"]);

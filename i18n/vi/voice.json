@@ -53,7 +53,6 @@
     "never": "Chưa bao giờ"
   },
   "settings": {
-    "title": "Cài đặt Thoại & Liên lạc",
     "saved": "Đã lưu cài đặt Thoại & Liên lạc.",
     "saveFailed": "Không lưu được cài đặt.",
     "failedHint": "Module từ chối toàn bộ tài liệu. Hãy sửa giá trị được nêu ở trên; chưa có gì được lưu.",

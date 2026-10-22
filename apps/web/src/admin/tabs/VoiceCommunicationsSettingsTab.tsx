@@ -532,12 +532,13 @@ function ProviderAccountsSection({ accounts, loading }: { accounts: readonly Voi
   });
 
   const openCreate = (): void => {
+    const firstProvider = catalog.data?.providers.find((provider) => provider.mode !== 'disabled')?.key ?? '';
     setEditing(null);
-    setAdapterKey(catalog.data?.providers.find((provider) => provider.mode !== 'disabled')?.key ?? '');
+    setAdapterKey(firstProvider);
     accountForm.resetFields();
     accountForm.setFieldsValue({
       key: '',
-      providerKey: '',
+      providerKey: firstProvider,
       label: '',
       environment: 'test',
       capabilities: [],
@@ -728,7 +729,7 @@ function ProviderAccountsSection({ accounts, loading }: { accounts: readonly Voi
         confirmLoading={saveAccount.isPending}
         onCancel={() => setOpen(false)}
         onOk={() => accountForm.submit()}
-        width={640}
+        width={840}
         forceRender
       >
         <Form form={accountForm} layout="vertical" onFinish={(values) => saveAccount.mutate(values)}>
@@ -756,6 +757,7 @@ function ProviderAccountsSection({ accounts, loading }: { accounts: readonly Voi
                   showSearch
                   optionFilterProp="label"
                   options={providerOptions}
+                  popupMatchSelectWidth={false}
                   onChange={(value: string) => setAdapterKey(value)}
                   notFoundContent={t('voice.settings.noAdapters')}
                 />

@@ -40,6 +40,8 @@ export interface WebhookIngestInput {
   readonly accountKey: string;
   readonly headers: Readonly<Record<string, string | undefined>>;
   readonly body: Record<string, unknown>;
+  /** Absolute callback URL reconstructed by the controller, needed by URL-signing providers. */
+  readonly url?: string | undefined;
   readonly rawBody?: string | undefined;
 }
 
@@ -128,7 +130,12 @@ export class VoiceWebhookIngressService {
     let validated;
     try {
       validated = await adapter.validateWebhook(
-        { headers: input.headers, body: input.body, ...(input.rawBody !== undefined ? { rawBody: input.rawBody } : {}) },
+        {
+          headers: input.headers,
+          body: input.body,
+          ...(input.url !== undefined ? { url: input.url } : {}),
+          ...(input.rawBody !== undefined ? { rawBody: input.rawBody } : {}),
+        },
         account,
       );
     } catch (error) {
@@ -149,11 +156,21 @@ export class VoiceWebhookIngressService {
       throw new AuthenticationFailedError("Provider callback signature is not valid for this account.");
     }
 
+    // The adapter may have read a vendor-specific body (Twilio sends form parameters, not the
+    // generic `type`/`eventId` shape), so the idempotency key is derived from what it authenticated.
+    // Recomputing it only after validation also prevents two different Twilio callbacks from sharing
+    // the pre-validation "unknown" digest.
+    const validatedDedupKey = webhookDedupKey({
+      providerEventId: validated.providerEventId,
+      eventType: validated.eventType,
+      externalId: validated.externalId,
+      occurredAt: validated.occurredAt,
+    });
     const eventId = await this.persistReceipt({
       accountKey: account.key,
       providerKey: account.providerKey,
       providerEventId: validated.providerEventId,
-      dedupKey,
+      dedupKey: validatedDedupKey,
       eventType: validated.eventType,
       signatureValid: true,
       status: "received",
@@ -166,7 +183,7 @@ export class VoiceWebhookIngressService {
       // communication event (§15 `19-VC.5` acceptance "duplicate callbacks do not duplicate records").
       const existing = (await sql<{ id: string; processing_status: string }>`
         select id, processing_status from voice_webhook_events
-        where account_key = ${account.key} and dedup_key = ${dedupKey}
+        where account_key = ${account.key} and dedup_key = ${validatedDedupKey}
       `.execute(this.database.db)).rows[0];
       return {
         eventId: existing?.id ?? "",

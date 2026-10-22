@@ -437,7 +437,12 @@ export class VoiceCallService {
 
     let result: CallControlResult;
     try {
-      result = await adapter.controlCall({ account, providerCallId: row.provider_call_id, action });
+      result = await adapter.controlCall({
+        account,
+        providerCallId: row.provider_call_id,
+        action,
+        state: current,
+      });
     } catch (error) {
       const detail = error instanceof VoiceProviderError
         ? `${error.message} (${error.category})`

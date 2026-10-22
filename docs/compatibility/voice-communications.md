@@ -21,9 +21,9 @@ The product behavior is CRM-oriented telephony and one-to-one messaging, not a P
 | Click-to-call from a phone field | EspoCRM VoIP Integration overview | Implemented (19-VC.8): a Calls tab on `/voice-inbox` places a call with a client-generated idempotency key; a per-field button on the record form is not built |
 | Incoming-call popup with caller context | EspoCRM VoIP Integration overview | Implemented (19-VC.9): a banner polls `action/calls/incoming` and shows only the server-addressed calls, number only |
 | Call logging as an Activity | EspoCRM Activities and Calendar | Implemented (19-VC.7): one `Call` Activity per session, created/updated through the entity service |
-| SMS/MMS send + delivery callbacks | Twilio Message resource docs | SMS implemented through the simulator (19-VC.10); MMS not implemented; live adapter pending |
-| WhatsApp Business templates and service window | Twilio WhatsApp API / templates docs | Window policy (19-VC.6) + template approval/variables (19-VC.11), simulator only |
-| Provider webhook signature validation | Twilio webhook security docs | Contract + fake HMAC adapter (19-VC.5); provider-specific validators per adapter |
+| SMS/MMS send + delivery callbacks | Twilio Message resource docs | SMS through the simulator and the Twilio adapter (unit-tested, not live-verified); MMS not implemented |
+| WhatsApp Business templates and service window | Twilio WhatsApp API / templates docs | Window policy (19-VC.6) + template approval/variables (19-VC.11); Twilio ContentSid mapping implemented |
+| Provider webhook signature validation | Twilio webhook security docs | Fake/Asterisk canonical HMAC and Twilio URL+form signature validators |
 | Unified inbox: list, timeline, read state, status | EspoCRM / general CRM inbox behavior | Implemented (19-VC.12): `/voice-inbox` with filters, merged timeline, composer, history drawer |
 
 
@@ -87,21 +87,33 @@ later sub-phase:
    regex rejects. The module emits `voiceCommunications.call.initiated` and its siblings
    (`voiceCommunications.message.received`, …), exactly as Customer Success namespaced
    `customerSuccess.*`. The semantic contract is unchanged.
-9. **Webhook signatures are verified against canonical JSON for the fake adapter.** Fastify parses
-   the body before the controller runs and no raw-body capture is configured. The fake adapter signs
-   `HMAC-SHA256(secret, timestamp + "." + canonicalJson(body))`. A provider that signs exact raw
-   bytes (Twilio) needs a raw-body capture added with that adapter in 19-VC.10; the adapter contract
-   accepts `rawBody` when present and the ingress passes it through.
+9. **Webhook signatures are verified by the adapter that owns them.** The fake and Asterisk bridge
+   adapters sign `HMAC-SHA256(secret, timestamp + "." + canonicalJson(body))`. Twilio signs its form
+   parameters and the absolute callback URL with HMAC-SHA1, so its adapter reconstructs the URL and
+   reads the parsed form; it does not need a raw-body capture. The adapter contract still accepts
+   `rawBody` for a future provider that signs exact bytes, and the ingress passes it through.
 
 ---
 
 ## 3. Compatibility limits (honest list)
 
-- **No live provider is implemented.** Only the simulator and the adapter contract exist. No call is
-  placed, no message is sent, no external host is contacted; the simulator refuses every destination
-  outside its `sandboxRecipients` allowlist.
-- **No PBX adapter** (Asterisk, 3CX, Starface, Binotel, iexPBX) exists. Each will be marked
-  `not-implemented` in the capability matrix until it has an adapter and contract tests.
+- **Twilio and Asterisk adapters are implemented but not live-verified here.** The unit tests inject
+  `fetch`, so the repository never contacts Twilio or a PBX, sends a message or places a call. Before
+  calling either production-ready, run the documented setup against a real account and update the
+  provider matrix; no test-access credentials are assumed by this repository.
+- **Asterisk inbound events need a deployment-side bridge.** The adapter speaks ARI outbound and
+  accepts signed canonical events; it does not open an ARI WebSocket itself. This keeps the durable
+  receipt, idempotency and replay path in the module that already owns it. 3CX, Starface, Binotel and
+  iexPBX remain `not-implemented`.
+- **Twilio cannot answer a call through the REST API, and neither live adapter sends media/MMS.**
+  Twilio's inbound answer belongs in the TwiML handler; the adapter therefore declares
+  `voice.callHangup` but not `voice.callAnswer`. MMS and attachment sends are refused rather than
+  silently downgraded to text, because the module stores attachment ids and Twilio needs a public
+  media URL.
+- **Twilio recording playback is not available through the module.** A recording callback is
+  normalized for diagnostics, but Twilio recording URLs require account authentication; the media
+  service deliberately does not hold a provider credential. Asterisk bridge recording URLs have the
+  same limitation until a proxy is configured.
 - **Recording and transcription are off by default and must be enabled explicitly.** With the flag
   off, a recording callback registers nothing. Transcription requires a provider adapter that offers
   `fetchTranscript`; AI enrichment additionally requires an approved AI gateway connection.
@@ -116,10 +128,10 @@ later sub-phase:
   10–30 s refetch intervals instead of a push channel.
 - **Agent-side call control is capability-gated, not assumed.** The incoming-call popup offers
   Accept and Decline/Hang up only when the call's provider account grants `voice.callAnswer` /
-  `voice.callHangup` (`POST …/action/calls/:id/control` re-checks the same rule). The simulator
-  declares both; no production adapter does yet, so a live provider shows the popup without controls
-  until its adapter implements `controlCall`. Hold, transfer and mute remain unimplemented — the
-  capability list has no key for them, and the UI never implies support (§7.1).
+  `voice.callHangup` (`POST …/action/calls/:id/control` re-checks the same rule). The simulator and
+  Asterisk declare both; Twilio declares only hang-up, because its REST API has no agent-side answer.
+  Hold, transfer and mute remain unimplemented — the capability list has no key for them, and the UI
+  never implies support (§7.1).
 - **Some provider operations remain API-only.** The Voice & Communications admin tab edits the
   settings document, provider accounts, credentials and sender numbers. Endpoint team routing
   (`teamId`) and WhatsApp template approval still require the module API.
@@ -127,7 +139,8 @@ later sub-phase:
   verbs only (no bodies), and the panel touchpoint endpoint returns counts and recency. Neither
   creates a second Activity, so the "no duplicate Activities" rule holds by construction.
 - **MMS is not implemented**; the channel exists in the domain and the settings gate, but no adapter
-  path sends it.
+  path sends it. Twilio inbound MMS callbacks are normalized as text messages; their media is not
+  downloaded or persisted.
 - **Delivery state is never inferred.** The normalized message state machine only moves forward on
   an actual callback; absent a callback the state remains `sent`/`unknown`, never `delivered`.
 - **WhatsApp service-window policy is evaluated with an injectable clock** and returns
@@ -149,6 +162,8 @@ later sub-phase:
 | Adapter contract | `apps/api/src/voice-communications/voice-provider.ts` |
 | Normalized states | `apps/api/src/voice-communications/voice-communications-domain.ts` |
 | Fake adapter signature | HMAC-SHA256 over `timestamp + "." + canonical JSON` |
+| Twilio adapter | REST `2010-04-01`; `X-Twilio-Signature` HMAC-SHA1 over URL + sorted form fields |
+| Asterisk adapter | ARI HTTP API; inbound bridge HMAC-SHA256 over `timestamp + "." + canonical JSON` |
 
 Provider API versions are pinned per adapter when the adapter is implemented; this document records
 the pinned version in `docs/modules/voice-communications/providers.md`.

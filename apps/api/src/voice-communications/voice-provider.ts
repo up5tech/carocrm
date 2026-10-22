@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import { Injectable } from "@nestjs/common";
 
@@ -12,9 +12,9 @@ import {
   type MessageState,
   type ProviderCapability,
   type ProviderEventKind,
-  stableStringify,
   type VoiceChannel,
 } from "./voice-communications-domain.js";
+import { constantTimeEqual, signCanonicalWebhook } from "./voice-provider-crypto.js";
 
 /**
  * Phase 19-VC.4 — the provider adapter contract, the registry and the simulator
@@ -71,6 +71,12 @@ export interface ResolvedProviderAccount {
 export interface ProviderWebhookRequest {
   readonly headers: Readonly<Record<string, string | undefined>>;
   readonly body: Record<string, unknown>;
+  /**
+   * The absolute callback URL when the ingress could reconstruct it. Twilio signs the URL and the
+   * form parameters, so its adapter needs both; an account-level `webhookUrl` is checked as an
+   * additional candidate because a proxy may rewrite the URL the controller sees.
+   */
+  readonly url?: string | undefined;
   /** Present only when a raw-body capture is configured; a provider that signs exact bytes needs it. */
   readonly rawBody?: string | undefined;
 }
@@ -185,6 +191,12 @@ export interface CallControlInput {
   readonly account: ResolvedProviderAccount;
   readonly providerCallId: string;
   readonly action: CallControlAction;
+  /**
+   * The call's current domain state. A vendor may need it to choose the right control: Twilio, for
+   * example, must cancel a ringing call but complete an answered one, and the Calls resource rejects
+   * the wrong transition. Adapters that do not care may ignore it.
+   */
+  readonly state?: CallState | undefined;
 }
 
 export interface CallControlResult {
@@ -591,18 +603,7 @@ export interface TranscriptFetchResult {
 
 /** Sign the simulator's documented payload. Exported so a test and the admin simulator use one rule. */
 export function signFakeWebhook(secret: string, timestamp: string, body: Record<string, unknown>): string {
-  return createHmac("sha256", secret).update(`${timestamp}.${stableStringify(body)}`).digest("hex");
-}
-
-function constantTimeEqual(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  try {
-    return timingSafeEqual(a, b);
-  } catch {
-    return false;
-  }
+  return signCanonicalWebhook(secret, timestamp, body);
 }
 
 function stringOf(value: unknown): string | null {

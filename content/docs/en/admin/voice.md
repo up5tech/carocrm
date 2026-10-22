@@ -82,6 +82,30 @@ A provider account is created and enabled through the module's account endpoints
 Policy evaluates in order: the channel flag, a resolving account, the account being enabled and not
 unhealthy, the adapter's channel capability, consent, suppression, quiet hours, WhatsApp's window, then length.
 
+### Live adapters
+
+Two production adapters are registered in this build. They are **experimental** until exercised
+against a real account; the repository's tests use an injected transport and never contact a vendor.
+
+| Key | Channels | Credential | Required config |
+| --- | --- | --- | --- |
+| `twilio` | voice, SMS, WhatsApp | Account Auth Token | `accountSid`, plus `twimlUrl` or `twiml` for calls; `webhookSecret` is the same Auth Token |
+| `asterisk` | voice (ARI + signed event bridge) | ARI password | `ariUrl`, `ariUsername`, `ariApp`; `webhookSecret` signs bridge callbacks |
+
+Twilio also accepts `messagingServiceSid`, `defaultFrom`, `webhookBaseUrl`, `webhookUrl`,
+`templateContentSids`, `record` and `timeoutSeconds`. Register the sender number as an endpoint for
+the channel where possible. `webhookBaseUrl` is what makes Twilio status callbacks point at this
+module; without it, calls and messages still send but their later status is not reported.
+
+The Asterisk adapter speaks ARI for outbound calls, answers and hang-ups. Inbound events need a small
+deployment-side bridge that subscribes to the ARI WebSocket and posts signed canonical JSON to
+`…/integrations/voice-communications/asterisk/{accountKey}/voice-events`; the exact event contract is
+in `docs/modules/voice-communications/providers.md`. Set `allowInsecureHttp` only for a PBX you reach
+over plain HTTP on a trusted network.
+
+Neither live adapter sends MMS/attachments, and Twilio does not offer an agent-side answer API. See
+the provider compatibility notes before promising those operations to users.
+
 ## Policy
 
 | Field | Default | Accepted | What the policy does |
@@ -139,8 +163,9 @@ redacted before truncation, and the module calls the platform's AI gateway. The 
 
 ## What a live deployment needs
 
-- A registered live adapter. This build ships a simulator (`fake`, outside production only) and a
-  disabled adapter (`none`); unknown keys resolve to disabled. `VoiceProviderRegistry.register` adds live.
+- A registered live adapter. This build ships the `twilio` and `asterisk` adapters, plus a simulator
+  (`fake`, outside production only) and a disabled adapter (`none`); unknown keys resolve to disabled.
+  Production adapters are registered in code, never installed at runtime.
 - A provider account with the adapter's credential, enabled. Enabling a live account requires the
   credential; an adapter that validates webhooks also requires the account's webhook secret.
 - `ENCRYPTION_KEY` for the credential and webhook secret, and a public URL for the webhook route.
@@ -167,6 +192,7 @@ redacted before truncation, and the module calls the platform's AI gateway. The 
 
 ## Where to go next
 
+- [Voice & Communications settings](/admin/settings/voiceCommunications) — edit the document, accounts and sender numbers.
 - [The voice inbox](user/chat-and-voice) — the surfaces these switches enable.
 - [Integrations](admin/integrations) — credentials and connections the platform already stores.
 - [Module settings](admin/module-settings) — the document map and what each module starts with.

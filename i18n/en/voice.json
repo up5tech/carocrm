@@ -53,7 +53,6 @@
     "never": "Never"
   },
   "settings": {
-    "title": "Voice & Communications settings",
     "saved": "Voice & Communications settings saved.",
     "saveFailed": "The settings could not be saved.",
     "failedHint": "The module refused the document as a whole. Correct the value named above; nothing was stored.",

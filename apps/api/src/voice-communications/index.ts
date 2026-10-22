@@ -18,6 +18,7 @@ import { VoicePanelService } from "./voice-panel.service.js";
 import { VoicePolicyService } from "./voice-policy.service.js";
 import { VoiceProviderRegistry } from "./voice-provider.js";
 import { VoiceProviderAccountsService } from "./voice-provider-accounts.service.js";
+import { VoiceProviderBindingService } from "./voice-provider-binding.service.js";
 import { VoiceTranscriptionService } from "./voice-transcription.service.js";
 import { VoiceWebhookController } from "./voice-webhook.controller.js";
 import { VoiceWebhookIngressService } from "./voice-webhook-ingress.service.js";
@@ -54,6 +55,7 @@ export const VOICE_COMMUNICATIONS_PROVIDERS: Provider[] = [
   // the metadata package.
   { provide: PHONE_NORMALIZER, useFactory: () => new LibPhoneNumberNormalizer() },
   VoiceProviderRegistry,
+  VoiceProviderBindingService,
   VoiceProviderAccountsService,
   VoiceCallNotificationService,
   VoiceCallService,
@@ -81,6 +83,8 @@ export { VoiceConsentService } from "./voice-consent.service.js";
 export { VoiceContactResolverService } from "./voice-contact-resolver.service.js";
 export { VoiceEventProcessorService } from "./voice-event-processor.service.js";
 export { VoicePolicyService } from "./voice-policy.service.js";
-export { FakeVoiceProvider, signFakeWebhook,VoiceProviderRegistry } from "./voice-provider.js";
+export { FakeVoiceProvider, signFakeWebhook, VoiceProviderRegistry } from "./voice-provider.js";
 export { VoiceProviderAccountsService } from "./voice-provider-accounts.service.js";
+export { AsteriskProviderAdapter } from "./voice-provider-asterisk.js";
+export { TwilioProviderAdapter } from "./voice-provider-twilio.js";
 export { VoiceWebhookIngressService } from "./voice-webhook-ingress.service.js";

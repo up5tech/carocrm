@@ -204,6 +204,9 @@ export class VoiceMessagingService {
       throw new ValidationError(`Provider "${account.providerKey}" does not declare ${capability ?? 'this channel'}.`);
     }
     if (adapter.sendMessage === undefined) throw new ValidationError('This provider adapter cannot send messages.');
+    // The account's active endpoint is the sender. A provider that needs a From address (Twilio)
+    // receives the registered number; a provider that does not (the simulator) can ignore it.
+    const fromAddress = await this.findSender(accountKey, input.channel);
 
     const message = await this.insertMessage({
       conversationId: conversation.id,
@@ -248,6 +251,7 @@ export class VoiceMessagingService {
         body,
         channel: input.channel,
         idempotencyKey: input.idempotencyKey,
+        ...(fromAddress !== null ? { fromAddress } : {}),
         ...(input.templateKey !== undefined ? { templateKey: input.templateKey } : {}),
         ...(input.templateLanguage !== undefined ? { templateLanguage: input.templateLanguage } : {}),
         ...(input.templateVariables !== undefined ? { templateVariables: input.templateVariables } : {}),
@@ -368,6 +372,15 @@ export class VoiceMessagingService {
   }
 
   // ------------------------------------------------------------------------- internals
+
+  private async findSender(accountKey: string, channel: MessageChannel): Promise<string | null> {
+    const row = (await sql<{ address: string }>`
+      select address from voice_endpoints
+      where account_key = ${accountKey} and channel = ${channel} and active = true
+      order by created_at asc limit 1
+    `.execute(this.database.db)).rows[0];
+    return row?.address ?? null;
+  }
 
   private async resolveConversation(input: SendMessageInput, accountKey: string): Promise<ConversationRow> {
     if (input.conversationId !== undefined) {

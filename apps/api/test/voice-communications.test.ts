@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import { sql } from "kysely";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -68,6 +70,30 @@ async function publicPost(url: string, payload: Record<string, unknown>, headers
     body = {};
   }
   return { status: res.statusCode, body };
+}
+
+async function publicPostForm(url: string, payload: Record<string, string>, headers: Record<string, string>) {
+  const res = await ctx.app.inject({
+    method: "POST",
+    url,
+    headers: { "content-type": "application/x-www-form-urlencoded", ...headers },
+    payload: new URLSearchParams(payload).toString(),
+  });
+  let body: Record<string, unknown> = {};
+  try {
+    body = res.json() as Record<string, unknown>;
+  } catch {
+    body = {};
+  }
+  return { status: res.statusCode, body };
+}
+
+/** Twilio's signature over the URL plus sorted form fields, independent of the adapter's helper. */
+function twilioSignature(secret: string, url: string, payload: Record<string, string>): string {
+  const material = Object.keys(payload)
+    .sort()
+    .reduce((accumulator, key) => `${accumulator}${key}${payload[key]}`, url);
+  return createHmac("sha1", secret).update(material, "utf8").digest("base64");
 }
 
 async function createContact(phoneNumber: string, suffix: string): Promise<string> {
@@ -259,6 +285,47 @@ describe("provider accounts and health (19-VC.4)", () => {
     expect(res.body["ok"]).toBe(true);
     const read = await call("GET", `/api/v1/VoiceCommunications/action/accounts/${accountKey}`);
     expect((read.body["lastHealth"] as Record<string, unknown>)["status"]).toBe("healthy");
+  });
+
+  it("registers the Twilio adapter and deduplicates two distinct form callbacks", async () => {
+    const key = `agent_test_twilio_${runId}`;
+    const secret = `twilio_auth_${runId}`;
+    const callbackUrl = `https://crm.example.com/api/v1/integrations/voice-communications/twilio/${key}/status-events`;
+    const account = await call("POST", "/api/v1/VoiceCommunications/action/accounts", {
+      key,
+      providerKey: "twilio",
+      label: marker("twilio adapter"),
+      environment: "test",
+      enabled: true,
+      capabilities: ["voice.inboundEvents", "voice.callStatusCallbacks", "webhook.signatureValidation"],
+      config: { accountSid: "AC_agent_test", webhookUrl: callbackUrl },
+      credential: secret,
+      webhookSecret: secret,
+    });
+    expect(account.status, JSON.stringify(account.body)).toBe(201);
+    createdAccountKeys.push(key);
+
+    const callbacks = [
+      { CallSid: `CA_${runId}`, CallStatus: "ringing", Direction: "inbound-api", From: TEST_PHONE_E164, To: "+14155550199" },
+      { CallSid: `CA_${runId}`, CallStatus: "completed", Direction: "inbound-api", From: TEST_PHONE_E164, To: "+14155550199" },
+    ];
+    const accepted: boolean[] = [];
+    for (const payload of callbacks) {
+      const res = await publicPostForm(
+        `/api/v1/integrations/voice-communications/twilio/${key}/status-events`,
+        payload,
+        { "x-twilio-signature": twilioSignature(secret, callbackUrl, payload) },
+      );
+      expect(res.status, JSON.stringify(res.body)).toBe(202);
+      accepted.push(res.body["duplicate"] === true);
+    }
+    // Different statuses for the same CallSid are two callbacks, not one. Before the validator-derived
+    // dedup key, both looked like the generic "unknown" digest and the second was silently dropped.
+    expect(accepted).toEqual([false, false]);
+    const receipts = await sql<{ count: number }>`
+      select count(*)::int as count from voice_webhook_events where account_key = ${key}
+    `.execute(ctx.database.db);
+    expect(receipts.rows[0]?.count).toBe(2);
   });
 
   it("normalizes an endpoint address to E.164", async () => {
