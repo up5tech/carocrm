@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api, type StreamItem } from '../api/client.js';
-import { DocsLink } from '../components/docs/DocsLink.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { updateSummary } from '../components/StreamPanel.js';
 import { t } from '../state/i18n.js';
 import { useEntity, useMetadata } from '../state/metadata.js';
@@ -22,6 +22,7 @@ function authorLabel(item: StreamItem): string {
 
 /** Global activity stream (PLAN §26): followed records, own posts, or both. */
 export function StreamPage() {
+  usePageDocs('user/stream-and-notifications');
   const { message } = AntApp.useApp();
   const metadata = useMetadata();
   const [view, setView] = useState<View>('followed');
@@ -57,10 +58,7 @@ export function StreamPage() {
     <Card
       className="carocrm-card"
       title={(
-          <Space>
-            <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.stream.title')}</Typography.Title>
-            <DocsLink docKey="user/stream-and-notifications" compact />
-          </Space>
+          <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.stream.title')}</Typography.Title>
         )}
       extra={
         <Space>

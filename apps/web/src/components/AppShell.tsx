@@ -16,6 +16,8 @@ import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 import { navAccent } from '../theme.js';
 import { CommandPalette } from './CommandPalette.js';
 import { CRMChatQuickAccess } from './CRMChatQuickAccess.js';
+import { DocsLink } from './docs/DocsLink.js';
+import { PageDocsProvider, usePageDocsKey } from './docs/PageDocs.js';
 import { entityIcon, navGroupIcon, navIcon } from './entityIcons.js';
 import { IncomingCallBanner } from './IncomingCallBanner.js';
 
@@ -47,8 +49,11 @@ type MenuItems = Required<MenuProps>['items'];
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const { principal } = useSession();
-  if (principal?.type === 'portal') return <PortalShell>{children}</PortalShell>;
-  return <InternalShell>{children}</InternalShell>;
+  return (
+    <PageDocsProvider>
+      {principal?.type === 'portal' ? <PortalShell>{children}</PortalShell> : <InternalShell>{children}</InternalShell>}
+    </PageDocsProvider>
+  );
 }
 
 /**
@@ -94,6 +99,7 @@ function InternalShell({ children }: { children: ReactNode }) {
   // Labels are resolved for the request locale on the server, so switching language re-fetches the
   // tree instead of repainting the old one.
   const locale = activeLocaleName();
+  const pageDocsKey = usePageDocsKey();
 
   // A direct hit on a deep URL (bookmark, link, refresh) must still show where the user is, so the
   // submenu that owns the selected entry opens on arrival. `defaultOpenKeys` cannot do this: antd
@@ -213,6 +219,7 @@ function InternalShell({ children }: { children: ReactNode }) {
         />
         <div className="carocrm-header-actions">
           {chatAvailable ? <CRMChatQuickAccess compact={narrow} /> : null}
+          <DocsLink docKey={pageDocsKey} compact className="carocrm-header-docs" />
           <Dropdown menu={{ items: userMenu }} trigger={['click']}>
             <span className="carocrm-avatar" title={principal?.userName}>
               {principal?.avatarId ? (

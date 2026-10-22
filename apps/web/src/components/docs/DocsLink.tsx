@@ -6,12 +6,13 @@ import { useDocsHref } from '../../state/docs.js';
 import { t } from '../../state/i18n.js';
 
 /**
- * The one way a screen links to its handbook page (§5.6): the admin tab header, a HelpTip's "Learn more",
- * and a module screen's Documentation action all render this, so they all follow `externalUrl` and all
- * disappear together when the instance switches the handbook off.
+ * The one way a screen links to its handbook page (§5.6): the shell header's current-screen book and a
+ * HelpTip's "Learn more" both render this, so they follow `externalUrl` and disappear together when the
+ * instance switches the handbook off.
  *
- * `compact` is the icon-only form used where a text link would push a page title around; it still carries
- * an accessible name, because an icon with no label is a button nobody can find out anything about.
+ * `compact` is the icon-only form the header uses, where a text link would crowd the account menu; it
+ * still carries an accessible name, because an icon with no label is a button nobody can find out
+ * anything about.
  */
 export function DocsLink({
   docKey,

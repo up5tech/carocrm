@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { ProcessTaskView } from '../api/types.js';
-import { DocsLink } from '../components/docs/DocsLink.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { t } from '../state/i18n.js';
 import { useProcessTasks } from '../state/processes.js';
 import { useSession } from '../state/session.js';
@@ -31,6 +31,7 @@ const TASK_STATUS_COLORS: Record<string, string> = {
  * someone who no longer holds the task, is refused server-side and reported here verbatim.
  */
 export function TasksPage() {
+  usePageDocs('user/activities-and-tasks');
   const { message } = AntApp.useApp();
   const { principal } = useSession();
   const queryClient = useQueryClient();
@@ -66,10 +67,7 @@ export function TasksPage() {
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       <Card
         title={(
-          <Space>
-            <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.tasks.title')}</Typography.Title>
-            <DocsLink docKey="user/activities-and-tasks" compact />
-          </Space>
+          <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.tasks.title')}</Typography.Title>
         )}
         extra={
           <Space>

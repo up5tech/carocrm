@@ -4,7 +4,7 @@ import { Alert, Button, Skeleton, Space, Tabs, Typography } from 'antd';
 import { useCallback, useMemo, useState } from 'react';
 
 import { api } from '../api/client.js';
-import { DocsLink } from '../components/docs/DocsLink.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { t } from '../state/i18n.js';
 import { AIAgentsAgentsTab } from './ai-agents/AIAgentsAgentsTab.js';
 import { AIAgentsApprovalsTab } from './ai-agents/AIAgentsApprovalsTab.js';
@@ -25,6 +25,7 @@ import { AIAgentsUsageTab } from './ai-agents/AIAgentsUsageTab.js';
  * endpoint regardless — the tabs are orientation, not authorization.
  */
 export function AIAgentsPage() {
+  usePageDocs('user/ai-agents');
   const capabilities = useQuery({
     queryKey: ['aiAgents', 'capabilities'],
     queryFn: () => api.aiAgentsCapabilities(),
@@ -139,7 +140,6 @@ export function AIAgentsPage() {
           <Space size={8}>
             <RobotOutlined />
             {t('web.aiAgents.title')}
-            <DocsLink docKey="user/ai-agents" compact />
           </Space>
         </Typography.Title>
         <Space size={[8, 4]} wrap>

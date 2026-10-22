@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { api, ApiError } from '../api/client.js';
 import type { CRMChatMessageView } from '../api/types.js';
-import { DocsLink } from '../components/docs/DocsLink.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
@@ -36,6 +36,7 @@ function assistantStateKey(state: string): string {
  * the capability but a disabled workspace gets `FEATURE_DISABLED`.
  */
 export function CRMChatPage() {
+  usePageDocs('user/chat-and-voice');
   const [showHealth, setShowHealth] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [older, setOlder] = useState<readonly CRMChatMessageView[]>([]);
@@ -180,10 +181,7 @@ export function CRMChatPage() {
       <div>
         <div className="carocrm-page-head">
           <div>
-            <div style={{ display: 'flex', alignItems: 'center' }}>
-              <h1 className="carocrm-page-title">{t('web.crmChat.title')}</h1>
-              <DocsLink docKey="user/chat-and-voice" compact />
-            </div>
+            <h1 className="carocrm-page-title">{t('web.crmChat.title')}</h1>
             <p className="carocrm-page-sub">{t('web.crmChat.subtitle')}</p>
           </div>
         </div>
@@ -225,10 +223,7 @@ export function CRMChatPage() {
     <div>
       <div className="carocrm-page-head">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <h1 className="carocrm-page-title">{t('web.crmChat.title')}</h1>
-            <DocsLink docKey="user/chat-and-voice" compact />
-          </div>
+          <h1 className="carocrm-page-title">{t('web.crmChat.title')}</h1>
           <p className="carocrm-page-sub">{t('web.crmChat.subtitle')}</p>
         </div>
         <Space>

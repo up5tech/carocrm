@@ -3,7 +3,7 @@ import { Suspense, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import type { AdminPanelTab } from '../api/types.js';
-import { DocsLink } from '../components/docs/DocsLink.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { navIcon } from '../components/entityIcons.js';
 import { ErrorState } from '../components/ErrorState.js';
@@ -30,6 +30,8 @@ export function AdminSettingsShell() {
 
   const tabs = useMemo(() => panel.data?.groups.flatMap((group) => [...group.tabs]) ?? [], [panel.data]);
   const active = tabs.find((tab) => tab.key === tabKey);
+  // The tab descriptor's handbook key is what the shell header links to while that tab is open.
+  usePageDocs(active?.docKey);
   // The bar belongs to a form over one draft: a settings document, a hosted module document, or a tab
   // that opted in (the layout manager writes entity metadata). Record tabs save per action instead.
   const hasDocument = active?.document !== undefined || active?.moduleEndpoint !== undefined || active?.usesSaveBar === true;
@@ -93,12 +95,7 @@ export function AdminSettingsShell() {
     return (
         <div className="carocrm-admin-panel">
           <header className="carocrm-admin-tab-head">
-            <h1 className="carocrm-page-title">
-              {t(active.labelKey)}
-              {/* One field on the tab descriptor covers all of them: a tab with a handbook page shows the
-                  book, and the content lint fails the build when the key stops resolving. */}
-              <DocsLink docKey={active.docKey} compact className="carocrm-admin-tab-help" />
-            </h1>
+            <h1 className="carocrm-page-title">{t(active.labelKey)}</h1>
             {active.descriptionKey !== undefined ? <p className="carocrm-page-sub">{t(active.descriptionKey)}</p> : null}
           </header>
           <Suspense fallback={<Skeleton active paragraph={{ rows: 6 }} />}>

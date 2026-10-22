@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { ReportDefinitionShape, ReportKind, ReportRow, ReportRunResult, ReportScheduleRow } from '../api/types.js';
-import { DocsLink } from '../components/docs/DocsLink.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, navEntities, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
@@ -30,6 +30,7 @@ const SCALAR_TYPES = new Set(['varchar', 'text', 'email', 'phone', 'url', 'enum'
 const NUMERIC_TYPES = new Set(['int', 'float', 'decimal', 'currency']);
 
 export function ReportsPage() {
+  usePageDocs('user/dashboards-and-reports');
   const metadata = useMetadata();
   const { principal } = useSession();
   const { message } = AntApp.useApp();
@@ -329,8 +330,7 @@ export function ReportsPage() {
         <div>
           <h1 className="carocrm-page-title">{t('web.reports.title')}</h1>
           <p className="carocrm-page-sub">{t('web.reports.subtitle')}</p>
-        
-          <DocsLink docKey="user/dashboards-and-reports" compact /></div>
+        </div>
         <Space wrap>
           <Button icon={<PlusOutlined />} onClick={resetBuilder}>{t('web.reports.new')}</Button>
           <Button icon={<PlayCircleOutlined />} loading={loading} onClick={() => void runSaved()}>{t('web.reports.runPreview')}</Button>

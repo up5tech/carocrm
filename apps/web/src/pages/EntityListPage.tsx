@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { api, ApiError, type SavedFilterRow, type WhereClause } from '../api/client.js';
-import { DocsLink } from '../components/docs/DocsLink.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { FieldValue, linkLabelsOf } from '../components/fields.js';
@@ -30,6 +30,7 @@ function operatorOptions(): { value: string; label: string }[] {
 }
 
 export function EntityListPage() {
+  usePageDocs('user/lists-and-views');
   const { entity: entityName } = useParams<{ entity: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -363,7 +364,6 @@ export function EntityListPage() {
         <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>
           {definition.data?.label ?? entityName}
         </Typography.Title>
-        <DocsLink docKey="user/lists-and-views" compact />
         <Space wrap>
           {canBoard ? (
             <Button icon={<AppstoreOutlined />} onClick={() => navigate(`${base}/${entityName}/board`)}>

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { ProcessInstanceView } from '../api/types.js';
-import { DocsLink } from '../components/docs/DocsLink.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { INSTANCE_STATUS_COLORS, ProcessTrailModal } from '../components/ProcessTrailModal.js';
 import { t } from '../state/i18n.js';
 import { useProcessInstances } from '../state/processes.js';
@@ -22,6 +22,7 @@ type Scope = (typeof SCOPES)[number];
  * the person who submitted it.
  */
 export function MyProcessesPage() {
+  usePageDocs('user/activities-and-tasks');
   const [scope, setScope] = useState<Scope>('all');
   const [open, setOpen] = useState<ProcessInstanceView | null>(null);
   const instances = useProcessInstances(scope === 'all' ? {} : { status: scope });
@@ -38,7 +39,6 @@ export function MyProcessesPage() {
             <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>
               {t('web.myProcesses.title')}
             </Typography.Title>
-            <DocsLink docKey="user/activities-and-tasks" compact />
           </Space>
         }
         extra={

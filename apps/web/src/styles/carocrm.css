@@ -118,6 +118,14 @@ body {
   cursor: pointer;
 }
 
+/* The current screen's handbook link sits beside the account menu, not in each page title. */
+.carocrm-header-docs.carocrm-docs-link--compact {
+  display: inline-flex;
+  margin-inline-start: 0;
+  color: inherit;
+  vertical-align: 0;
+}
+
 .carocrm-avatar {
   width: 34px;
   height: 34px;
@@ -1832,6 +1840,19 @@ body {
     inset: 0;
     z-index: 20;
     background: rgba(0, 0, 0, 0.28);
+  }
+  /* The 212px wordmark leaves no room for the account actions: on a 390px phone the avatar was
+     already clipped before the current-screen docs link joined the header. The mark alone
+     identifies the app there. */
+  .carocrm-header {
+    gap: 10px;
+    padding: 0 12px;
+  }
+  .carocrm-brand {
+    width: auto;
+  }
+  .carocrm-brand > span:last-child {
+    display: none;
   }
   .carocrm-content {
     padding: 12px;

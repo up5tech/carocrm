@@ -10,7 +10,7 @@ import { CaseConversation } from '../components/CaseConversation.js';
 import { CaseLifecycleActions } from '../components/CaseLifecycleActions.js';
 import { CaseQueueWorkload } from '../components/CaseQueueWorkload.js';
 import { CommunicationsPanel } from '../components/CommunicationsPanel.js';
-import { DocsLink } from '../components/docs/DocsLink.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { FieldValue, linkLabelsOf, useLinkOptions } from '../components/fields.js';
 import { isJsonPayload } from '../components/JsonValue.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
@@ -306,6 +306,7 @@ function RelationSection({
 }
 
 export function EntityDetailPage() {
+  usePageDocs('user/record-page');
   const { entity, id } = useParams<{ entity: string; id: string }>();
   const navigate = useNavigate();
   const { principal } = useSession();
@@ -410,7 +411,6 @@ export function EntityDetailPage() {
             <Space>
               <Typography.Text strong>{definition.data?.label ?? entity}</Typography.Text>
               <Typography.Text type="secondary">{recordLabel(record, definition.data)}</Typography.Text>
-              <DocsLink docKey="user/record-page" compact />
             </Space>
           }
           extra={

@@ -4,13 +4,14 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { api, type GlobalSearchResult } from '../api/client.js';
-import { DocsLink } from '../components/docs/DocsLink.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { t } from '../state/i18n.js';
 import { navEntities, recordLabel, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
 
 /** Global search (PLAN §30): one query across readable entities, ACL enforced server-side. */
 export function SearchPage() {
+  usePageDocs('user/search');
   const metadata = useMetadata();
   const { principal } = useSession();
   const { message } = AntApp.useApp();
@@ -67,8 +68,7 @@ export function SearchPage() {
         <div>
           <h1 className="carocrm-page-title">{t('web.search.title')}</h1>
           <p className="carocrm-page-sub">{t('web.search.subtitle')}</p>
-        
-          <DocsLink docKey="user/search" compact /></div>
+        </div>
       </div>
       <Space.Compact style={{ width: '100%', marginBottom: 12 }}>
         <Input

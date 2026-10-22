@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api, type CalendarEvent } from '../api/client.js';
-import { DocsLink } from '../components/docs/DocsLink.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { activeLocaleName, t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
@@ -81,6 +81,7 @@ function EventChip({
 
 /** Calendar view (PLAN §27): month grid of activity occurrences with drag-to-reschedule. */
 export function CalendarPage() {
+  usePageDocs('user/activities-and-tasks');
   const { message } = AntApp.useApp();
   const { principal } = useSession();
   const metadata = useMetadata();
@@ -183,10 +184,7 @@ export function CalendarPage() {
     <Card
       className="carocrm-card"
       title={(
-          <Space>
-            <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.calendar.title')}</Typography.Title>
-            <DocsLink docKey="user/activities-and-tasks" compact />
-          </Space>
+          <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.calendar.title')}</Typography.Title>
         )}
       extra={
         <Space wrap size={12}>
