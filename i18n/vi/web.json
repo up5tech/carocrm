@@ -2379,5 +2379,24 @@
     "hashColumn": "Hash nội dung",
     "warningsTitle": "Cảnh báo chỉ mục",
     "warningsNone": "Không có cảnh báo phân tích cú pháp hay liên kết. Số trang chưa dịch nằm ở bảng độ phủ bên trên."
+  },
+  "json": {
+    "raw": "JSON gốc",
+    "structured": "Dạng bảng",
+    "copy": "Sao chép JSON",
+    "copied": "Đã sao chép JSON",
+    "copyFailed": "Sao chép thất bại",
+    "fields": "{count} trường",
+    "items": "{count} mục",
+    "moreFields": "+{count} nữa",
+    "showAll": "Xem tất cả {count}",
+    "showLess": "Thu gọn",
+    "empty": "Trống",
+    "fields_other": "{count} trường",
+    "items_other": "{count} mục",
+    "badge": "JSON",
+    "open": "Mở trong cửa sổ",
+    "expand": "Mở rộng",
+    "collapse": "Thu gọn"
   }
 }

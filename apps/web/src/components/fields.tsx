@@ -7,6 +7,7 @@ import { api } from '../api/client.js';
 import type { FieldDefinition } from '../api/types.js';
 import { formatDateTime, formatNumber, t } from '../state/i18n.js';
 import { fieldLabel, recordLabel } from '../state/metadata.js';
+import { isJsonPayload, JsonFieldValue } from './JsonValue.js';
 
 const { Link } = Typography;
 
@@ -36,9 +37,30 @@ export function LinkValue({ entity, id }: { entity: string; id: string }) {
   return <RouterLink to={`/${entity}/${encodeURIComponent(id)}`}>{label ?? id}</RouterLink>;
 }
 
-/** Read-mode rendering for every Alpha field type (PLAN §13 field registry). */
-export function FieldValue({ field, value }: { field: FieldDefinition; value: unknown }) {
+/**
+ * Read-mode rendering for every Alpha field type (PLAN §13 field registry).
+ *
+ * `variant` is the only difference between the record page and a list cell: a JSON payload is a
+ * structured block on the record page and a one-line summary in a table cell.
+ */
+export function FieldValue({
+  field,
+  value,
+  variant = 'detail',
+  label,
+}: {
+  field: FieldDefinition;
+  value: unknown;
+  variant?: 'detail' | 'inline';
+  /** The field's resolved label; only the JSON payload renderer needs it. */
+  label?: string;
+}) {
   if (value === undefined || value === null || value === '') return <span style={{ color: 'rgba(0,0,0,0.25)' }}>—</span>;
+
+  // A JSON payload is never printed raw (PLAN §13): the payload's own structure is the layout.
+  if (isJsonPayload(field.type, value)) {
+    return <JsonFieldValue value={value} variant={variant} {...(label === undefined ? {} : { label })} />;
+  }
 
   switch (field.type) {
     case 'bool':

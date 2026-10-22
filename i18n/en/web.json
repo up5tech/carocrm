@@ -2379,5 +2379,26 @@
     "hashColumn": "Content hash",
     "warningsTitle": "Index warnings",
     "warningsNone": "No parse or link warnings in this corpus. Untranslated pages are counted in the coverage table above."
+  },
+  "json": {
+    "raw": "Raw JSON",
+    "structured": "Formatted",
+    "copy": "Copy JSON",
+    "copied": "JSON copied",
+    "copyFailed": "Copy failed",
+    "fields": "{count} fields",
+    "items": "{count} items",
+    "moreFields": "+{count} more",
+    "showAll": "Show all {count}",
+    "showLess": "Show less",
+    "empty": "Empty",
+    "fields_one": "{count} field",
+    "fields_other": "{count} fields",
+    "items_one": "{count} item",
+    "items_other": "{count} items",
+    "badge": "JSON",
+    "open": "Open in a panel",
+    "expand": "Expand",
+    "collapse": "Collapse"
   }
 }

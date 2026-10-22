@@ -12,6 +12,7 @@ import { CaseQueueWorkload } from '../components/CaseQueueWorkload.js';
 import { CommunicationsPanel } from '../components/CommunicationsPanel.js';
 import { DocsLink } from '../components/docs/DocsLink.js';
 import { FieldValue, useLinkOptions } from '../components/fields.js';
+import { isJsonPayload } from '../components/JsonValue.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
 import { PortalCaseConversation } from '../components/PortalCaseConversation.js';
 import { ProcessPanel } from '../components/ProcessPanel.js';
@@ -317,6 +318,36 @@ export function EntityDetailPage() {
       children: <FieldValue field={entry.field} value={record?.[entry.name]} />,
     }));
 
+  /**
+   * A panel's fields, with JSON payloads lifted out of the grid.
+   *
+   * The Descriptions grid puts three fields per row, so a cell is ~360px wide: a multi-kilobyte
+   * snapshot wraps one character per line there. A payload is a block of its own, so it renders
+   * full width under the field list rather than fighting the grid's span arithmetic (which is
+   * row-position dependent and warns when a span does not fit).
+   */
+  const fieldGroups = (list: FieldEntry[]) => {
+    const isPayload = (entry: FieldEntry) => isJsonPayload(entry.field.type, record?.[entry.name]);
+    const payloads = list.filter(isPayload);
+    const plain = list.filter((entry) => !isPayload(entry));
+    return (
+      <>
+        {plain.length === 0 ? null : (
+          <Descriptions column={{ xs: 1, md: 2 }} colon={false} labelStyle={labelStyle} contentStyle={contentStyle} items={describe(plain)} />
+        )}
+        {payloads.map((entry) => (
+          <section className="carocrm-json-block" key={entry.name}>
+            <FieldValue
+              field={entry.field}
+              value={record?.[entry.name]}
+              label={fieldLabel(entry.name, entry.field, metadata.data)}
+            />
+          </section>
+        ))}
+      </>
+    );
+  };
+
   if (!entity || !id) return <Card>{t('web.detail.missingParams')}</Card>;
 
   return (
@@ -375,15 +406,7 @@ export function EntityDetailPage() {
             </Space>
           }
         >
-          {panels.length === 0 ? (
-            <Descriptions
-              column={{ xs: 1, md: 2 }}
-              colon={false}
-              labelStyle={labelStyle}
-              contentStyle={contentStyle}
-              items={describe(ordered)}
-            />
-          ) : null}
+          {panels.length === 0 ? fieldGroups(ordered) : null}
         </Card>
 
         {/* Phase 19-S.7/19-S.17 — the commercial hand-off from a deal. The panel only navigates: the
@@ -408,13 +431,7 @@ export function EntityDetailPage() {
             className="carocrm-card"
             title={<Typography.Text strong>{panel.label ?? panel.name}</Typography.Text>}
           >
-            <Descriptions
-              column={{ xs: 1, md: 2 }}
-              colon={false}
-              labelStyle={labelStyle}
-              contentStyle={contentStyle}
-              items={describe(ordered.filter((entry) => panelFieldNames(panel).has(entry.name)))}
-            />
+            {fieldGroups(ordered.filter((entry) => panelFieldNames(panel).has(entry.name)))}
           </Card>
         ))}
 
@@ -424,7 +441,7 @@ export function EntityDetailPage() {
             would repeat every field. */}
         {panels.length > 0 && others.length > 0 ? (
           <Card className="carocrm-card" title={<Typography.Text strong>{t('core.common.other')}</Typography.Text>}>
-            <Descriptions column={{ xs: 1, md: 2 }} colon={false} labelStyle={labelStyle} contentStyle={contentStyle} items={describe(others)} />
+            {fieldGroups(others)}
           </Card>
         ) : null}
 

@@ -446,6 +446,258 @@ body {
 .carocrm-pill--red { background: #fdecec; color: #fa626b; }
 .carocrm-pill--grey { background: #f2f3f5; color: #737b85; }
 
+/* ---------------------------------------------------------------------------
+   JSON payloads held by a record field (a frozen document snapshot, a tax
+   breakdown, a health result).
+
+   The payload is opaque, so the layout has to carry the structure: labelled rows,
+   a hairline indent for nesting, a real table for arrays of records. Monospace is
+   reserved for identifiers — the rest reads like the record page, not a log dump.
+   --------------------------------------------------------------------------- */
+.carocrm-json {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* A payload leaves the field grid and becomes its own block under the panel's fields. */
+.carocrm-json-block {
+  border-top: 1px solid #f0f0f0;
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
+.carocrm-json-title {
+  color: #31373d;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.carocrm-json-bar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 26px;
+}
+
+/* The payload is collapsed to this line until the reader asks for it. */
+.carocrm-json-body {
+  padding-top: 6px;
+}
+
+/* Expanding in place shows the whole payload: a preview with hidden content needs a "there is
+   more" affordance, and macOS overlay scrollbars do not provide one. The modal is the bounded
+   reading surface; the inline expansion is the in-context one. */
+.carocrm-json-body--modal {
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.carocrm-json-modal-title {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.carocrm-json-modal-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.carocrm-json-modal-toolbar .ant-btn {
+  color: #737b85;
+  font-size: 12px;
+}
+
+.carocrm-json-raw--modal {
+  max-height: calc(100vh - 280px);
+}
+
+.carocrm-json-badge {
+  background: #f2f3f5;
+  border-radius: 4px;
+  color: #737b85;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  line-height: 18px;
+  padding: 0 6px;
+}
+
+.carocrm-json-count {
+  color: #a1a8b3;
+  font-size: 12px;
+}
+
+.carocrm-json-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.carocrm-json-actions .ant-btn {
+  color: #737b85;
+  font-size: 12px;
+  padding-inline: 6px;
+}
+
+.carocrm-json-rows {
+  margin: 0;
+}
+
+.carocrm-json-rows--nested {
+  border-left: 1px solid #eff2f7;
+  margin-top: 2px;
+  padding-left: 10px;
+}
+
+.carocrm-json-row {
+  align-items: baseline;
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 3px 0;
+}
+
+/* Key beside value only when the cell is wide enough to hold both; below that the key becomes a
+   caption above its value, which is how the record reads on a phone anyway. */
+@media (min-width: 992px) {
+  .carocrm-json-row {
+    gap: 12px;
+    grid-template-columns: minmax(96px, 150px) minmax(0, 1fr);
+  }
+}
+
+.carocrm-json-key {
+  color: #737b85;
+  font-size: 12.5px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.carocrm-json-value {
+  margin: 0;
+  min-width: 0;
+}
+
+.carocrm-json-text {
+  color: #31373d;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.carocrm-json-null {
+  color: #b8bec6;
+}
+
+.carocrm-json-code {
+  background: #f7f8fa;
+  border-radius: 4px;
+  color: #5b636d;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+  padding: 1px 5px;
+}
+
+.carocrm-json-raw {
+  background: #f7f8fa;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  color: #5b636d;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+}
+
+.carocrm-json-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.carocrm-json-table {
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.carocrm-json-table th {
+  border-bottom: 1px solid #eff2f7;
+  color: #737b85;
+  font-weight: 500;
+  padding: 5px 14px 5px 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.carocrm-json-table td {
+  border-bottom: 1px solid #f7f8fa;
+  color: #31373d;
+  padding: 5px 14px 5px 0;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.carocrm-json-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* A caption for screen readers only: the table already sits under its field label. */
+.carocrm-json-caption {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.carocrm-json-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.carocrm-json-chip {
+  background: #f7f8fa;
+  border-radius: 4px;
+  color: #5b636d;
+  font-size: 12.5px;
+  line-height: 20px;
+  padding: 0 6px;
+}
+
+.carocrm-json-inline {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.carocrm-json-inline-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carocrm-json-inline-count {
+  color: #a1a8b3;
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .carocrm-json-key {
+    font-size: 11.5px;
+  }
+}
+
 /* ---- login ---- */
 .carocrm-auth {
   min-height: 100vh;

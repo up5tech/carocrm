@@ -8,6 +8,7 @@ import { DocsLink } from '../components/docs/DocsLink.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { FieldValue } from '../components/fields.js';
+import { isJsonPayload } from '../components/JsonValue.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { t } from '../state/i18n.js';
 import { boardGroupFields, fieldLabel, filterEntries, layoutPanelsFor, listEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
@@ -548,7 +549,10 @@ export function EntityListPage() {
                   </Space.Compact>
                 );
               }
-              const canEdit = ['varchar', 'text', 'int', 'float', 'decimal'].includes(entry.field.type);
+              // Raw JSON in a one-line cell is unreadable and a single-line input would corrupt it,
+              // so a JSON payload is summarised here and edited on the record page instead.
+              const canEdit =
+                ['varchar', 'text', 'int', 'float', 'decimal'].includes(entry.field.type) && !isJsonPayload(entry.field.type, row[entry.name]);
               return (
                 <div
                   role={canEdit ? 'button' : undefined}
@@ -562,7 +566,7 @@ export function EntityListPage() {
                       {String(row[entry.name] ?? '')}
                     </Link>
                   ) : (
-                    <FieldValue field={entry.field} value={row[entry.name]} />
+                    <FieldValue field={entry.field} value={row[entry.name]} variant="inline" />
                   )}
                   {editError && isEditing ? <Typography.Text type="danger" style={{ fontSize: 11 }}>{editError}</Typography.Text> : null}
                 </div>

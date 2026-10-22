@@ -2763,6 +2763,8 @@ Implement in separate modules:
   `PLAN_Phase_19_AI_Agents.md` and `docs/modules/ai-agents/`).
 - Voice/communications.
 - Advanced integrations.
+- ESignature
+- Omnichannel
 
 Do not put these directly into the kernel.
 

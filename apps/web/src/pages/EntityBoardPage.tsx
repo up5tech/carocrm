@@ -456,7 +456,7 @@ function BoardCardContent({
           {cardEntries.map((entry) => (
             <span key={entry.name} className="carocrm-board-card-field">
               <span className="carocrm-board-card-field-label">{fieldLabel(entry.name, entry.field)}</span>
-              <FieldValue field={entry.field} value={row[entry.name]} />
+              <FieldValue field={entry.field} value={row[entry.name]} variant="inline" />
             </span>
           ))}
         </div>
