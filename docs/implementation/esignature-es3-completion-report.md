@@ -113,6 +113,17 @@ children before parents. After the run all eight ESignature tables hold 0 rows, 
 test database, schema or container was created, and no credential was read, written or needed: the
 fake ignores the bearer token it is handed, which is the point.
 
+**Live check** (scratch build on ports 3033/8083, the user's own dev servers untouched, the
+installation restored afterwards by deleting the `ESignature` settings row): `GET
+/ESignature/action/health` reported the bound adapter as
+`{ providerKey: 'docusign', mode: 'fake', adapterVersion: 'fake-1.0.0' }` with the six later
+operations `false`, and its check line read *"A \"fake\" adapter is bound for \"docusign\" …
+A fake adapter can never sign a real contract."* The module page rendered that in the provider card's
+header (`Test adapter bound (fake-1.0.0)`), with no raw i18n keys on screen; both locale catalogs serve
+the three new keys (`/api/v1/I18n?locale=en` and `?locale=vi`), and the dev SPA's cached catalog in
+`localStorage` is what decides which of them a given browser session shows. All eight module tables
+held 0 rows afterwards.
+
 ## 6. Decisions taken in this phase
 
 **Capability flags exist for operations with no method.** The alternative — methods that throw
