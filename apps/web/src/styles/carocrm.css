@@ -4332,3 +4332,180 @@ html a:focus-visible {
   outline-offset: 2px;
   border-radius: 2px;
 }
+
+/* ---- Email template designer (PLAN Phase 11 "Email templates") ----
+   Draft on the left, the mailbox on the right. The preview column sticks so the result stays visible
+   while the source scrolls, and the frame narrows to a phone width instead of faking a device chrome. */
+.carocrm-etpl {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.carocrm-etpl-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+textarea.carocrm-etpl-source,
+.carocrm-etpl-source textarea {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+.carocrm-etpl-tokens {
+  margin: 4px 0 12px;
+}
+
+.carocrm-etpl-tokens-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.carocrm-etpl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.carocrm-etpl-chip {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid #dfe3e8;
+  border-radius: 6px;
+  background: #f7f9fb;
+  color: #31373d;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.carocrm-etpl-chip:hover {
+  border-color: #1890ff;
+  background: #f2f8ff;
+  color: #1890ff;
+}
+
+.carocrm-etpl-chip:focus-visible {
+  outline: 2px solid #1890ff;
+  outline-offset: 2px;
+}
+
+.carocrm-etpl-preview {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.carocrm-etpl-preview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.carocrm-etpl-sample {
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.carocrm-etpl-sample-type {
+  width: 104px;
+}
+
+.carocrm-etpl-sample-record {
+  flex: 1;
+  min-width: 140px;
+  max-width: 240px;
+}
+
+.carocrm-etpl-frame {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  border: 1px solid #e3e7ec;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+  transition: max-width 0.15s ease-out;
+}
+
+.carocrm-etpl-frame--mobile {
+  max-width: 375px;
+}
+
+.carocrm-etpl-subject {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf0f3;
+  background: #fafbfc;
+}
+
+.carocrm-etpl-subject-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8c96a5;
+}
+
+.carocrm-etpl-subject-value {
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.carocrm-etpl-iframe {
+  display: block;
+  width: 100%;
+  height: 420px;
+  border: 0;
+  background: #fff;
+}
+
+.carocrm-etpl-empty {
+  padding: 32px 16px;
+  font-size: 13px;
+  text-align: center;
+  color: #8c96a5;
+}
+
+.carocrm-etpl-spinner {
+  margin-left: 6px;
+}
+
+.carocrm-etpl-note {
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .carocrm-etpl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .carocrm-etpl-preview {
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .carocrm-etpl-meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carocrm-etpl-frame {
+    transition: none;
+  }
+}

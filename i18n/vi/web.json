@@ -2429,5 +2429,26 @@
       "queued": "Đang chờ",
       "failed": "Thất bại"
     }
+  },
+  "emailTemplate": {
+    "placeholders": "Biến thay thế",
+    "placeholderHint": "Đây là các field của {entity}. Bấm để chèn tại vị trí con trỏ; bản xem trước lấy giá trị của bản ghi bạn chọn ở khung bên phải.",
+    "subjectHint": "Biến thay thế lấy giá trị từ bản ghi mà email được tạo trên đó. Chiến dịch gửi cá nhân hóa cho người nhận theo bộ biến marketing đã cho phép.",
+    "preview": "Xem trước",
+    "desktop": "Máy tính",
+    "mobile": "Điện thoại",
+    "sampleType": "Loại bản ghi mẫu",
+    "sampleRecord": "Xem với một bản ghi",
+    "sampleEmpty": "Không tìm thấy bản ghi",
+    "htmlTab": "HTML",
+    "textTab": "Văn bản thuần",
+    "noSubject": "(không có chủ đề)",
+    "nothingToPreview": "Nhập chủ đề hoặc nội dung để xem trước.",
+    "previewFailed": "Không tạo được bản xem trước.",
+    "unresolved": "Sẽ trống khi gửi: {tokens}",
+    "unresolvedHint": "Bản ghi mẫu không có giá trị đọc được cho các biến này. Một biến không phải là field của bản ghi sẽ luôn gửi ra trống.",
+    "personalisedWith": "Đã xem trước với {record}.",
+    "otherFields": "Các field khác",
+    "tokenAppended": "Bấm vào phần nội dung cần sửa, rồi bấm lại biến thay thế."
   }
 }

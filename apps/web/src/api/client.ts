@@ -51,6 +51,8 @@ import type {
   DocsTreeView,
   EmailAccountInput,
   EmailAccountRow,
+  EmailTemplatePreviewInput,
+  EmailTemplatePreviewView,
   EmailTransportInfo,
   EntityDefinition,
   ExtensionInstallResult,
@@ -918,6 +920,10 @@ export const api = {
   verifyEmailAccount: (id: string) => request<{ verified: boolean; error: string | null }>(`/EmailAccount/${encodeURIComponent(id)}/action/verify`, { method: 'POST' }),
   emailTransport: () => request<EmailTransportInfo>('/Email/action/transport'),
   verifyEmailTransport: () => request<{ transport: string; verified: boolean; error: string | null }>('/Email/action/verify', { method: 'POST' }),
+  // The designer previews the draft it holds in memory, so the content travels in the body and nothing
+  // is stored: the response is the rendered parts plus the tokens that did not resolve.
+  previewEmailTemplate: (input: EmailTemplatePreviewInput) =>
+    request<EmailTemplatePreviewView>('/EmailTemplate/action/preview', post(input)),
 
   webhookEndpoints: () => request<{ list: WebhookEndpointRow[]; total: number }>('/WebhookEndpoint'),
   createWebhookEndpoint: (input: { name: string; url: string; events?: string[]; secret?: string; enabled?: boolean }) =>

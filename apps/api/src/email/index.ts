@@ -2,7 +2,7 @@
  * Email module barrel (PLAN §28) — integrator entry point.
  *
  * Wire into AppModule:
- *   controllers: [...EMAIL_CONTROLLERS]   // before ENTITY_CONTROLLERS: `Email` is a static prefix
+ *   controllers: [...EMAIL_CONTROLLERS]   // before ENTITY_CONTROLLERS: `Email`/`EmailTemplate` are static prefixes
  *   providers:   [...EMAIL_PROVIDERS]
  *
  * Needs CONFIG_TOKEN, DatabaseService, REQUEST_SCOPE_TOKEN, EntityCrudService, AclApiService and
@@ -20,6 +20,8 @@ import { EmailController } from './email.controller.js';
 import { EmailService } from './email.service.js';
 import { EmailAccountController } from './email-account.controller.js';
 import { EmailAccountsService } from './email-accounts.service.js';
+import { EmailTemplateController } from './email-template.controller.js';
+import { EmailTemplatePreviewService } from './email-template-preview.service.js';
 
 export {
   DELIVERY_STATUSES,
@@ -36,6 +38,12 @@ export type { EmailDeliveryView, QueuedEmail } from './email.service.js';
 export { EmailService } from './email.service.js';
 export { EmailAccountController } from './email-account.controller.js';
 export { EmailAccountsService, type EmailAccountView } from './email-accounts.service.js';
+export { EmailTemplateController } from './email-template.controller.js';
+export {
+  type EmailTemplatePreview,
+  EmailTemplatePreviewService,
+  PREVIEW_SAMPLE_ENTITIES,
+} from './email-template-preview.service.js';
 export type { MailTransportInfo } from '@carocrm/mail';
 
 /**
@@ -60,6 +68,7 @@ export const EMAIL_PROVIDERS: Provider[] = [
   },
   EmailAccountsService,
   EmailService,
+  EmailTemplatePreviewService,
 ];
 
-export const EMAIL_CONTROLLERS: Type<unknown>[] = [EmailAccountController, EmailController];
+export const EMAIL_CONTROLLERS: Type<unknown>[] = [EmailAccountController, EmailController, EmailTemplateController];

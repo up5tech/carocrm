@@ -2431,5 +2431,26 @@
       "queued": "Queued",
       "failed": "Failed"
     }
+  },
+  "emailTemplate": {
+    "placeholders": "Placeholders",
+    "placeholderHint": "These are {entity} fields. Click one to insert it at the cursor; the preview fills it with the values of the record you pick on the right.",
+    "subjectHint": "Placeholders resolve from the record the email is built on. A campaign send personalises the recipient through the approved marketing placeholders.",
+    "preview": "Preview",
+    "desktop": "Desktop",
+    "mobile": "Mobile",
+    "sampleType": "Sample record type",
+    "sampleRecord": "Preview with a record",
+    "sampleEmpty": "No record found",
+    "htmlTab": "HTML",
+    "textTab": "Plain text",
+    "noSubject": "(no subject)",
+    "nothingToPreview": "Write a subject or a body to see the preview.",
+    "previewFailed": "The preview could not be rendered.",
+    "unresolved": "Empty in the sent email: {tokens}",
+    "unresolvedHint": "The sample record carries no readable value for these placeholders. A placeholder that is not a field of the record will go out empty every time.",
+    "personalisedWith": "Previewed with {record}.",
+    "otherFields": "Other fields",
+    "tokenAppended": "Click inside the part you want to change, then click the placeholder again."
   }
 }

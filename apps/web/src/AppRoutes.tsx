@@ -17,6 +17,7 @@ import { DocsLandingPage } from './pages/docs/DocsLandingPage.js';
 import { DocsPage } from './pages/docs/DocsPage.js';
 import { DocsSearchPage } from './pages/docs/DocsSearchPage.js';
 import { DocsSectionPage } from './pages/docs/DocsSectionPage.js';
+import { EmailTemplateDesignerPage } from './pages/EmailTemplateDesignerPage.js';
 import { EntityAdminPage } from './pages/EntityAdminPage.js';
 import { EntityBoardPage } from './pages/EntityBoardPage.js';
 import { EntityDetailPage } from './pages/EntityDetailPage.js';
@@ -149,6 +150,10 @@ export function AppRoutes() {
         <Route path="/Project/:id/members" element={<ProjectMembersPage />} />
         <Route path="/Project/:id/settings" element={<ProjectSettingsPage />} />
         <Route path="/Case/dashboard" element={<ServiceDeskDashboardPage />} />
+        {/* The email template workspace owns the create and edit routes of one entity, so it is declared
+            before the entity wildcard that would otherwise serve its generic form. */}
+        <Route path="/EmailTemplate/create" element={<EmailTemplateDesignerPage />} />
+        <Route path="/EmailTemplate/:id/edit" element={<EmailTemplateDesignerPage />} />
         {/* declared before the entity wildcard so "board" is never read as a record id */}
         <Route path="/:entity/board" element={<EntityBoardPage />} />
         <Route path="/:entity" element={<EntityListPage />} />

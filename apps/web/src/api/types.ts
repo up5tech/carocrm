@@ -234,6 +234,26 @@ export interface EmailTransportInfo {
   holdsMessages: boolean;
 }
 
+/** The draft parts the designer previews, plus the one sample record it personalises with. */
+export interface EmailTemplatePreviewInput {
+  subject?: string | null;
+  body?: string | null;
+  bodyHtml?: string | null;
+  sampleEntityType?: string;
+  sampleEntityId?: string;
+}
+
+export interface EmailTemplatePreviewView {
+  subject: string | null;
+  body: string | null;
+  bodyHtml: string | null;
+  /** Every `{{token}}` the draft names, in order of first appearance. */
+  placeholders: string[];
+  /** Tokens the sample record has no readable value for: they go out empty. */
+  unresolved: string[];
+  sample: { type: string; id: string; label: string } | null;
+}
+
 export interface WebhookEndpointRow {
   id: string;
   name: string;

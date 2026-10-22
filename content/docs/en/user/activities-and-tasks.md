@@ -1,11 +1,11 @@
 ---
 title: Activities, tasks and the calendar
-summary: Tasks, calls and meetings, the approval inbox at /tasks, and the month grid that shows them.
+summary: Tasks, calls and meetings, the approval inbox at /tasks, email templates, and the month grid that shows them.
 audience: user
 order: 30
-tags: [task, call, meeting, calendar]
+tags: [task, call, meeting, email-template, calendar]
 related: [user/record-page, user/dashboards-and-reports]
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 There are two different things called a task in this product, and mixing them up is the most common
@@ -32,6 +32,27 @@ daily, weekly, monthly or yearly.
 Activities attach to the records they belong to. Today the case screen and the project screen expose those
 relation panels; on an account or a contact you create the activity itself and link the people and accounts
 into it.
+
+## Email templates
+
+[Email Templates](/EmailTemplate) are the reusable subject and body behind an outbound email. The edit
+screen is a workspace rather than a form: the draft on the left, the message as a recipient sees it on the
+right.
+
+- Write the body as HTML or as plain text — the two tabs are the two parts a send can carry.
+- Click a placeholder under the editor to insert it at the cursor. The list is the field set of the record
+  type chosen on the right, so `{{firstName}}` on a contact template means that contact's first name.
+- Pick a **sample record** to see the placeholders filled with real values. The values come from records you
+  are allowed to read, and nothing is stored or sent while you preview.
+- Switch the frame between desktop and phone width before you send anything to a mobile mailbox.
+
+When a placeholder has no value in the sample record the preview says so instead of hiding it: that token
+will be empty in the message that goes out. A name that is not a field of the record at all is the usual
+cause.
+
+> [!NOTE]
+> A campaign send personalises with the approved marketing placeholders (`recipientName`, `unsubscribeUrl`
+> and the rest listed in the marketing guide), which is a narrower set than a contact's own fields.
 
 ## The month grid
 
