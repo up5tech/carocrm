@@ -399,7 +399,10 @@
     "nextMonth": "Tháng sau",
     "entries": "{count} mục",
     "more": "+{count} nữa",
-    "dayEmpty": "Không có mục nào trong ngày này."
+    "dayEmpty": "Không có mục nào trong ngày này.",
+    "createTask": "Tạo công việc",
+    "taskCreated": "Đã tạo công việc.",
+    "createTaskFailed": "Không tạo được công việc."
   },
   "profile": {
     "title": "Hồ sơ của tôi",

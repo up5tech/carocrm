@@ -1,11 +1,16 @@
-import { LeftOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
+import { LeftOutlined, PlusOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
 import {
   App as AntApp,
   Button,
   Calendar,
   Card,
   Checkbox,
+  DatePicker,
+  Form,
+  Input,
+  Modal,
   Segmented,
+  Select,
   Space,
   Spin,
   Typography,
@@ -88,7 +93,9 @@ export function CalendarPage() {
   const locale = activeLocaleName();
   // The panel month drives the grid and the fetch window. Selecting a day is a separate state:
   // a day click used to move the panel, so clicking an adjacent-month cell jumped months.
+  const [view, setView] = useState<'month' | 'week'>('month');
   const [month, setMonth] = useState<Dayjs>(() => dayjs().startOf('month'));
+  const [week, setWeek] = useState<Dayjs>(() => dayjs().startOf('week'));
   const [selected, setSelected] = useState<Dayjs>(() => dayjs());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [entities, setEntities] = useState<string[]>([...ACTIVITY_ENTITIES]);
@@ -96,6 +103,10 @@ export function CalendarPage() {
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState<CalendarEvent | null>(null);
   const [dropDay, setDropDay] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createForm] = Form.useForm();
+  const watchedType = (Form.useWatch('activityType', createForm) as string | undefined) ?? 'Task';
   const zone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
 
   const load = useCallback(async () => {
@@ -105,8 +116,10 @@ export function CalendarPage() {
     }
     setLoading(true);
     try {
-      const start = month.startOf('month').startOf('week');
-      const end = month.startOf('month').endOf('month').endOf('week');
+      const start =
+        view === 'week' ? week.startOf('week').startOf('day') : month.startOf('month').startOf('week');
+      const end =
+        view === 'week' ? week.endOf('week').endOf('day') : month.startOf('month').endOf('month').endOf('week');
       const result = await api.calendar({
         from: start.toISOString(),
         to: end.toISOString(),
@@ -122,7 +135,7 @@ export function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [month, entities, onlyMine, principal, zone, message]);
+  }, [view, month, week, entities, onlyMine, principal, zone, message]);
 
   useEffect(() => {
     void load();
@@ -143,6 +156,11 @@ export function CalendarPage() {
     () => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(month.toDate()),
     [locale, month],
   );
+  const weekTitle = useMemo(() => {
+    const start = week.startOf('week');
+    const end = week.endOf('week');
+    return `${new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(start.toDate())} – ${new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' }).format(end.toDate())}`;
+  }, [locale, week]);
   const selectedTitle = useMemo(
     () => new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(selected.toDate()),
     [locale, selected],
@@ -176,9 +194,56 @@ export function CalendarPage() {
     }
   };
 
+  const handleCreateTask = async (values: Record<string, unknown>): Promise<void> => {
+    setCreating(true);
+    try {
+      const type = String(values['activityType'] ?? 'Task');
+      const isTask = type === 'Task';
+      const payload: Record<string, unknown> = {
+        name: values['name'],
+        status: values['status'] ?? (isTask ? 'Not Started' : 'Planned'),
+        ...(values['dateStart'] ? { dateStart: dayjs(values['dateStart'] as string | Dayjs).toISOString() } : {}),
+        ...(values['dateEnd'] ? { dateEnd: dayjs(values['dateEnd'] as string | Dayjs).toISOString() } : {}),
+        ...(typeof values['description'] === 'string' && values['description'].trim() !== ''
+          ? { description: values['description'] }
+          : {}),
+        ...(principal?.id ? { assignedUserId: principal.id } : {}),
+        ...(isTask ? { priority: values['priority'] ?? 'Normal' } : {}),
+        ...(type === 'Call' ? { direction: values['direction'] ?? 'Internal' } : {}),
+      };
+      await api.create(type, payload);
+      void message.success(t('web.calendar.taskCreated'));
+      setCreateOpen(false);
+      createForm.resetFields();
+      await load();
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('web.calendar.createTaskFailed'));
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const entityLabel = (name: string): string => metadata.data?.[name]?.label ?? name;
   const selectedDay = selected.format('YYYY-MM-DD');
   const selectedEvents = byDay.get(selectedDay) ?? [];
+  const weekDays = useMemo(() => {
+    const start = week.startOf('week');
+    return Array.from({ length: 7 }, (_, index) => start.add(index, 'day'));
+  }, [week]);
+
+  useEffect(() => {
+    if (!createOpen) return;
+    createForm.setFieldsValue({
+      activityType: 'Task',
+      name: '',
+      status: 'Not Started',
+      priority: 'Normal',
+      direction: 'Internal',
+      dateStart: dayjs(selected).hour(9).minute(0).second(0),
+      dateEnd: null,
+      description: '',
+    });
+  }, [createOpen, selected, createForm]);
 
   return (
     <Card
@@ -212,6 +277,14 @@ export function CalendarPage() {
               { value: 'mine', label: t('web.calendar.onlyMine') },
             ]}
           />
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateOpen(true)}
+            aria-label="Create task New task Create New"
+          >
+            {t('web.calendar.createTask')}
+          </Button>
           <Button icon={<ReloadOutlined />} onClick={() => void load()}>
             {t('core.common.refresh')}
           </Button>
@@ -233,6 +306,76 @@ export function CalendarPage() {
             if (cell && !cell.classList.contains('ant-picker-cell-in-view')) event.stopPropagation();
           }}
         >
+          {view === 'week' ? (
+            <div>
+              <div className="carocrm-cal-header">
+                <Space.Compact>
+                  <Button icon={<LeftOutlined />} aria-label={t('web.calendar.prevMonth')} onClick={() => setWeek((w) => w.subtract(1, 'week'))} />
+                  <Button icon={<RightOutlined />} aria-label={t('web.calendar.nextMonth')} onClick={() => setWeek((w) => w.add(1, 'week'))} />
+                </Space.Compact>
+                <Button onClick={() => { setWeek(dayjs().startOf('week')); setSelected(dayjs()); }}>
+                  {t('web.calendar.today')}
+                </Button>
+                <Segmented
+                  value={view}
+                  onChange={(value) => setView(value as 'month' | 'week')}
+                  options={[
+                    { value: 'month', label: 'Month' },
+                    { value: 'week', label: 'Week' },
+                  ]}
+                />
+                <Typography.Text className="carocrm-cal-month">{weekTitle}</Typography.Text>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8, marginTop: 8 }}>
+                {weekDays.map((date) => {
+                  const day = date.format('YYYY-MM-DD');
+                  const dayEvents = byDay.get(day) ?? [];
+                  const className = [
+                    'carocrm-cal-cell',
+                    date.isSame(selected, 'day') ? 'carocrm-cal-cell--selected' : '',
+                    date.isSame(dayjs(), 'day') ? 'carocrm-cal-cell--today' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
+                  return (
+                    <div
+                      key={day}
+                      className={className}
+                      data-drag-over={dropDay === day ? 'true' : undefined}
+                      onClick={() => setSelected(date)}
+                      onDragOver={(event) => {
+                        if (!dragging) return;
+                        event.preventDefault();
+                        if (dropDay !== day) setDropDay(day);
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        const dropped = dragging;
+                        stopDrag();
+                        if (dropped) void reschedule(dropped, day);
+                      }}
+                      style={{ minHeight: 120, border: '1px solid #f0f0f0', borderRadius: 8, padding: 6 }}
+                    >
+                      <span className="carocrm-cal-day">{String(date.date())}</span>
+                      <div className="carocrm-cal-events">
+                        {dayEvents.slice(0, CELL_EVENTS).map((event) => (
+                          <EventChip
+                            key={`${event.activityType}-${event.activityId}-${event.start}`}
+                            event={event}
+                            onDragStart={setDragging}
+                            onDragEnd={stopDrag}
+                          />
+                        ))}
+                        {dayEvents.length > CELL_EVENTS ? (
+                          <span className="carocrm-cal-more">{t('web.calendar.more', { count: String(dayEvents.length - CELL_EVENTS) })}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
           <Calendar
             value={month}
             locale={locale.toLowerCase().startsWith('vi') ? calendarViVN : calendarEnUS}
@@ -242,9 +385,17 @@ export function CalendarPage() {
                   <Button icon={<LeftOutlined />} aria-label={t('web.calendar.prevMonth')} onClick={() => setMonth((m) => m.subtract(1, 'month'))} />
                   <Button icon={<RightOutlined />} aria-label={t('web.calendar.nextMonth')} onClick={() => setMonth((m) => m.add(1, 'month'))} />
                 </Space.Compact>
-                <Button onClick={() => { setMonth(dayjs().startOf('month')); setSelected(dayjs()); }}>
+                <Button onClick={() => { setMonth(dayjs().startOf('month')); setWeek(dayjs().startOf('week')); setSelected(dayjs()); }}>
                   {t('web.calendar.today')}
                 </Button>
+                <Segmented
+                  value={view}
+                  onChange={(value) => setView(value as 'month' | 'week')}
+                  options={[
+                    { value: 'month', label: 'Month' },
+                    { value: 'week', label: 'Week' },
+                  ]}
+                />
                 <Typography.Text className="carocrm-cal-month">{monthTitle}</Typography.Text>
                 <Typography.Text type="secondary" className="carocrm-cal-total">
                   {t('web.calendar.entries', { count: String(events.length) })}
@@ -301,6 +452,7 @@ export function CalendarPage() {
               );
             }}
           />
+          )}
         </div>
         <div className="carocrm-cal-day-panel">
           <Typography.Text className="carocrm-cal-day-panel-title">{selectedTitle}</Typography.Text>
@@ -320,6 +472,66 @@ export function CalendarPage() {
           )}
         </div>
       </Spin>
+      <Modal
+        open={createOpen}
+        title={t('web.calendar.createTask')}
+        onCancel={() => setCreateOpen(false)}
+        confirmLoading={creating}
+        destroyOnHidden
+        footer={[
+          <Button key="cancel" onClick={() => setCreateOpen(false)}>
+            {t('core.common.cancel')}
+          </Button>,
+          <Button key="save" type="primary" loading={creating} onClick={() => createForm.submit()}>
+            {t('web.edit.save')}
+          </Button>,
+          <Button key="create" loading={creating} onClick={() => createForm.submit()}>
+            {t('web.list.create')}
+          </Button>,
+        ]}
+      >
+        <Form form={createForm} layout="vertical" onFinish={(values) => void handleCreateTask(values as Record<string, unknown>)}>
+          <Form.Item name="activityType" label="Type">
+            <Select
+              options={['Task', 'Call', 'Meeting'].map((value) => ({ value, label: value }))}
+            />
+          </Form.Item>
+          <Form.Item name="name" label="Name" rules={[{ required: true, message: t('web.edit.required', { field: 'Name' }) }]}>
+            <Input autoFocus maxLength={255} />
+          </Form.Item>
+          <Form.Item name="status" label="Status">
+            <Select
+              options={(watchedType === 'Task'
+                ? ['Not Started', 'Started', 'Completed', 'Canceled', 'Deferred']
+                : ['Planned', 'Held', 'Not Held']
+              ).map((value) => ({ value, label: value }))}
+            />
+          </Form.Item>
+          {watchedType === 'Task' ? (
+            <Form.Item name="priority" label="Priority">
+              <Select
+                options={['Low', 'Normal', 'High', 'Urgent'].map((value) => ({ value, label: value }))}
+              />
+            </Form.Item>
+          ) : null}
+          {watchedType === 'Call' ? (
+            <Form.Item name="direction" label="Direction">
+              <Select
+                options={['Internal', 'Outbound', 'Inbound'].map((value) => ({ value, label: value }))}
+              />
+            </Form.Item>
+          ) : null}
+          <Form.Item name="dateStart" label="Date Start">
+            <DatePicker showTime style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="dateEnd" label="Date End">
+            <DatePicker showTime style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="description" label="Description">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Card>
   );
 }

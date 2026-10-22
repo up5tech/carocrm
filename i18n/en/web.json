@@ -399,7 +399,10 @@
     "nextMonth": "Next month",
     "entries": "{count} entries",
     "more": "+{count} more",
-    "dayEmpty": "Nothing scheduled on this day."
+    "dayEmpty": "Nothing scheduled on this day.",
+    "createTask": "Create task",
+    "taskCreated": "Task created.",
+    "createTaskFailed": "Failed to create task."
   },
   "profile": {
     "title": "My profile",
