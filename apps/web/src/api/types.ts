@@ -1977,12 +1977,79 @@ export interface VoiceCommunicationsHealthView {
   readonly checks: readonly { readonly name: string; readonly ok: boolean; readonly detail: string }[];
 }
 
+/** The validated `voiceCommunications` document (19-VC.2 §13). */
+export interface VoiceCommunicationsSettings {
+  readonly features: {
+    readonly voice: boolean;
+    readonly sms: boolean;
+    readonly mms: boolean;
+    readonly whatsapp: boolean;
+    readonly recordings: boolean;
+    readonly transcripts: boolean;
+    readonly aiEnrichment: boolean;
+  };
+  readonly provider: {
+    readonly defaultAccountKey: string;
+  };
+  readonly policy: {
+    readonly defaultRegion: string;
+    readonly requireConsent: {
+      readonly sms: boolean;
+      readonly mms: boolean;
+      readonly whatsapp: boolean;
+    };
+    readonly quietHours: {
+      readonly enabled: boolean;
+      readonly start: string;
+      readonly end: string;
+      readonly timezone: string;
+    };
+    readonly whatsappWindowHours: number;
+    readonly maxMessageLength: number;
+    readonly maxSendsPerMinute: number;
+  };
+  readonly webhook: {
+    readonly replayWindowSeconds: number;
+  };
+  readonly media: {
+    readonly fetchMode: 'off' | 'privateStorage';
+    readonly allowedHosts: readonly string[];
+    readonly allowLoopback: boolean;
+    readonly maxBytes: number;
+    readonly retentionDays: number;
+    readonly noticeRequired: boolean;
+  };
+  readonly ai: {
+    readonly connectionKey: string;
+    readonly model: string;
+    readonly maxTranscriptChars: number;
+  };
+}
+
 export interface VoiceCommunicationsSettingsView {
-  readonly settings: Record<string, unknown>;
+  readonly settings: VoiceCommunicationsSettings;
   readonly version: number;
   readonly updatedAt: string | null;
   readonly updatedBy: string | null;
+  readonly defaults: VoiceCommunicationsSettings;
   readonly warnings: readonly { readonly code: string; readonly message: string }[];
+}
+
+/** One adapter the registry can resolve, as the admin screen needs it (§6.3). */
+export interface VoiceProviderInfo {
+  readonly key: string;
+  readonly label: string;
+  readonly mode: string;
+  readonly capabilities: readonly string[];
+  readonly channels: readonly string[];
+  readonly ratePerMinute: number;
+  readonly maxConcurrency: number;
+  readonly webhookSignature: string;
+}
+
+export interface VoiceProviderCatalogView {
+  readonly providers: readonly VoiceProviderInfo[];
+  readonly defaultAccountKey: string;
 }
 
 export interface VoiceProviderAccountView {
@@ -1994,6 +2061,7 @@ export interface VoiceProviderAccountView {
   readonly enabled: boolean;
   readonly capabilities: readonly string[];
   readonly effectiveCapabilities: readonly string[];
+  readonly config: Record<string, unknown>;
   readonly hasCredential: boolean;
   readonly credentialHint: string | null;
   readonly hasWebhookSecret: boolean;
@@ -2005,6 +2073,48 @@ export interface VoiceProviderAccountView {
   };
   readonly createdAt: string;
   readonly modifiedAt: string;
+}
+
+export interface VoiceProviderAccountInput {
+  readonly key: string;
+  readonly providerKey: string;
+  readonly label: string;
+  readonly environment: 'test' | 'production';
+  readonly capabilities: readonly string[];
+  readonly config: Record<string, unknown>;
+  readonly credential?: string;
+  readonly webhookSecret?: string;
+}
+
+export interface VoiceProviderAccountPatch {
+  readonly label?: string;
+  readonly environment?: 'test' | 'production';
+  readonly capabilities?: readonly string[];
+  readonly config?: Record<string, unknown>;
+  readonly credential?: string | null;
+  readonly webhookSecret?: string | null;
+}
+
+/** A sender number (or WhatsApp phone id) registered for one provider account. */
+export interface VoiceEndpointView {
+  readonly id: string;
+  readonly accountKey: string;
+  readonly key: string;
+  readonly channel: string;
+  readonly address: string;
+  readonly displayAddress: string;
+  readonly country: string | null;
+  readonly active: boolean;
+  readonly teamId: string | null;
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}
+
+export interface VoiceEndpointInput {
+  readonly key: string;
+  readonly channel: string;
+  readonly address: string;
+  readonly active: boolean;
 }
 
 export interface VoiceWebhookEventView {

@@ -166,6 +166,18 @@ describe("module registration and settings (19-VC.2)", () => {
     expect(res.status).toBe(200);
     expect(res.body["visible"]).toBe(true);
   });
+
+  it("lists the Voice & Communications administration tab for an administrator", async () => {
+    const res = await call("GET", "/api/v1/AdminPanel");
+    expect(res.status).toBe(200);
+    const groups = res.body["groups"] as { tabs: { key: string; route: string; moduleEndpoint?: string; docKey?: string }[] }[];
+    const tab = groups.flatMap((group) => group.tabs).find((entry) => entry.key === "voiceCommunications");
+    expect(tab).toMatchObject({
+      route: "/admin/settings/voiceCommunications",
+      moduleEndpoint: "VoiceCommunications",
+      docKey: "admin/voice",
+    });
+  });
 });
 
 describe("provider accounts and health (19-VC.4)", () => {

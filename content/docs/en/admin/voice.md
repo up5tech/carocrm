@@ -16,10 +16,12 @@ and transcripts. [CRM Chat and the voice inbox](user/chat-and-voice) shows the u
 
 The document is one row in the platform settings store (`app_settings`, name `voiceCommunications`).
 A fresh instance has no row: the service answers with defaults and version 0 until the first write.
-[Module settings](admin/module-settings) lists it beside the other module documents.
+[Settings → Voice & Communications](/admin/settings/voiceCommunications) edits it beside the other
+module documents, with a save bar, a version number and the server's warnings. The same tab manages
+provider accounts and their sender numbers, which are separate rows and save immediately.
 
-[Voice](/voice-communications) is a diagnostics screen: it reads the health report and displays the
-document's warnings, but it has no editor. Provider accounts are separate rows.
+[Voice](/voice-communications) is the read-only diagnostics screen: it reads the health report and
+displays the document's warnings, the adapters and the webhook receipt log.
 
 ## Reading and writing the document
 

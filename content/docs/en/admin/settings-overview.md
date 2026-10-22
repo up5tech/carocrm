@@ -25,7 +25,8 @@ two administrators can land on different screens from the same URL.
 | Users, Teams, Roles, Portals | `/admin/settings/users`, `/teams`, `/roles`, `/admin/portals` |
 | Authentication, Permissions, API keys, Internal | `/admin/settings/authentication`, `/permissions`, `/apiKeys`, `/internal` |
 | Email, Notifications, Webhooks | `/admin/settings/email`, `/notifications`, `/webhooks` |
-| Sales, Service Desk, Customer Success, Marketing, Chat, Voice, Extensions, Workflows, Processes | Their own module pages, reached from the same rail |
+| Sales, Service Desk, Customer Success, Voice & Communications | Their own tabs, reached from the same rail |
+| Marketing, Chat, Extensions, Workflows, Processes | Their own module pages |
 
 Three consequences people are surprised by:
 

@@ -31,7 +31,8 @@ export interface ModuleDocumentForm<T> {
   readonly version: number;
   edit: (patch: Partial<T>) => void;
   replace: (value: T) => void;
-  save: (next?: T) => Promise<void>;
+  /** Resolves `true` when the server accepted the write, so a form can clear its own dirty state. */
+  save: (next?: T) => Promise<boolean>;
   discard: () => void;
   reload: () => Promise<void>;
 }
@@ -83,17 +84,29 @@ export function useModuleDocument<T extends object>(input: {
     },
     save: async (next) => {
       const source = next ?? draft;
-      if (source === undefined) return;
+      if (source === undefined) return false;
       setSaving(true);
       setFailed(null);
       try {
-        await input.persist(source as unknown as Record<string, unknown>);
-        await client.invalidateQueries({ queryKey: input.queryKey });
+        const persisted = await input.persist(source as unknown as Record<string, unknown>);
+        // Adopt the server's own copy of the accepted document: the module may uppercase a region or
+        // fill a default, and comparing the pre-normalization draft would leave the tab looking dirty.
+        // Every settings endpoint answers with the whole view, so no second GET is needed.
+        if (isSettingsView<T>(persisted)) {
+          client.setQueryData(input.queryKey, persisted);
+          setDraft(persisted.settings);
+        } else {
+          await client.invalidateQueries({ queryKey: input.queryKey });
+          const fresh = client.getQueryData<ModuleSettingsView<T>>(input.queryKey)?.settings;
+          setDraft(fresh ?? source);
+        }
         input.onSaved();
+        return true;
       } catch (error) {
         // The module answers a refused policy change with its own reason; that reason is the whole
         // diagnostic, so it is shown rather than replaced by a generic failure string.
         setFailed(error instanceof Error ? error.message : input.failedMessage);
+        return false;
       } finally {
         setSaving(false);
       }
@@ -108,4 +121,9 @@ export function useModuleDocument<T extends object>(input: {
       await query.refetch();
     },
   };
+}
+
+/** The module settings endpoints answer with the whole view; the guard keeps the cast honest. */
+function isSettingsView<T>(value: unknown): value is ModuleSettingsView<T> {
+  return typeof value === 'object' && value !== null && 'settings' in value && 'version' in value;
 }

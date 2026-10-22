@@ -21,7 +21,7 @@ and of what is switched on when an instance is fresh.
 | `customerSuccess` | [Settings → Customer Success](/admin/settings/customerSuccess) | features, lifecycle, segments, assignment, health, renewal, playbooks, jobs |
 | `marketingAutomation` | Its module endpoint; no administration tab in this build | features, defaults, sender, limits, provider, delivery, safety |
 | `crmChat` | The settings dialog on [Chat](/crm-chat) | features, assistant, execution, limits, retention, safety |
-| `voiceCommunications` | Its module endpoint; the Voice screen shows its warnings | features, provider, policy, webhook, media, AI |
+| `voiceCommunications` | [Settings → Voice & Communications](/admin/settings/voiceCommunications) | features, provider, policy, webhook, media, AI |
 | `aiAgents` | The Settings tab of [AI agents](/ai-agents) | features, provider, limits, approval, retention, safety, tools, data policy |
 
 The three tabs in the rail behave like any other draft tab of [the administration area](admin/settings-overview):

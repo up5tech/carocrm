@@ -120,9 +120,9 @@ later sub-phase:
   declares both; no production adapter does yet, so a live provider shows the popup without controls
   until its adapter implements `controlCall`. Hold, transfer and mute remain unimplemented — the
   capability list has no key for them, and the UI never implies support (§7.1).
-- **A provider account's capability grant is API-only.** `PATCH …/action/accounts/:key` sets it; the
-  Voice & Communications admin screen lists accounts and their grants but has no editor yet, so
-  granting a new capability to an existing account is still an administrator API call.
+- **Some provider operations remain API-only.** The Voice & Communications admin tab edits the
+  settings document, provider accounts, credentials and sender numbers. Endpoint team routing
+  (`teamId`) and WhatsApp template approval still require the module API.
 - **Customer Success consumes events, not records.** `voiceCommunications.*` events carry ids and
   verbs only (no bodies), and the panel touchpoint endpoint returns counts and recency. Neither
   creates a second Activity, so the "no duplicate Activities" rule holds by construction.

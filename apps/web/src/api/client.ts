@@ -155,11 +155,16 @@ import type {
   VoiceComposerValidation,
   VoiceConversationHistoryEntry,
   VoiceConversationView,
+  VoiceEndpointInput,
+  VoiceEndpointView,
   VoiceInboxList,
   VoiceIncomingCallView,
   VoiceMediaView,
   VoiceMessageView,
+  VoiceProviderAccountInput,
+  VoiceProviderAccountPatch,
   VoiceProviderAccountView,
+  VoiceProviderCatalogView,
   VoiceRecordPanelView,
   VoiceSnippetRender,
   VoiceSnippetView,
@@ -1505,15 +1510,43 @@ export const api = {
   serviceDeskCsatSubmit: (input: { token: string; rating: number; feedback?: string }) =>
     request<{ submitted: boolean }>(`/ServiceDesk/action/csat/submit`, post(input)),
 
-  // Phase 19-VC.2–19-VC.5 — Voice & Communications diagnostics. Read-only on this page: provider
-  // account creation and credential rotation are administrative API operations until the full admin
-  // screen lands in 19-VC.18, and no method here ever sends or reads a secret.
+  // Phase 19-VC.2–19-VC.5 — Voice & Communications diagnostics and its admin screen (19-VC.18).
+  // The settings document, provider accounts and sender numbers are writable here; credentials are
+  // write-only, so no method here ever returns a stored secret.
   voiceCommunicationsHealth: () =>
     request<VoiceCommunicationsHealthView>('/VoiceCommunications/action/health'),
   voiceCommunicationsSettings: () =>
     request<VoiceCommunicationsSettingsView>('/VoiceCommunications/action/settings'),
+  saveVoiceCommunicationsSettings: (input: Record<string, unknown>) =>
+    request<VoiceCommunicationsSettingsView>('/VoiceCommunications/action/settings', post(input)),
   voiceCommunicationsAccounts: () =>
     request<{ list: VoiceProviderAccountView[] }>('/VoiceCommunications/action/accounts'),
+  voiceProviderCatalog: () =>
+    request<VoiceProviderCatalogView>('/VoiceCommunications/action/providers'),
+  createVoiceProviderAccount: (input: VoiceProviderAccountInput) =>
+    request<VoiceProviderAccountView>('/VoiceCommunications/action/accounts', post(input)),
+  updateVoiceProviderAccount: (key: string, input: VoiceProviderAccountPatch) =>
+    request<VoiceProviderAccountView>(`/VoiceCommunications/action/accounts/${encodeURIComponent(key)}`, patch(input)),
+  removeVoiceProviderAccount: (key: string) =>
+    request<{ success: boolean }>(`/VoiceCommunications/action/accounts/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+    }),
+  setVoiceProviderAccountEnabled: (key: string, enabled: boolean) =>
+    request<VoiceProviderAccountView>(`/VoiceCommunications/action/accounts/${encodeURIComponent(key)}/enabled`, post({ enabled })),
+  voiceProviderAccountHealth: (key: string) =>
+    request<{ ok: boolean; checkedAt: string; detail: string; persisted: boolean }>(
+      `/VoiceCommunications/action/accounts/${encodeURIComponent(key)}/health`,
+      post({}),
+    ),
+  voiceProviderEndpoints: (key: string) =>
+    request<{ list: VoiceEndpointView[] }>(`/VoiceCommunications/action/accounts/${encodeURIComponent(key)}/endpoints`),
+  createVoiceProviderEndpoint: (key: string, input: VoiceEndpointInput) =>
+    request<VoiceEndpointView>(`/VoiceCommunications/action/accounts/${encodeURIComponent(key)}/endpoints`, post(input)),
+  setVoiceProviderEndpointActive: (key: string, endpointKey: string, active: boolean) =>
+    request<VoiceEndpointView>(
+      `/VoiceCommunications/action/accounts/${encodeURIComponent(key)}/endpoints/${encodeURIComponent(endpointKey)}`,
+      patch({ active }),
+    ),
   voiceCommunicationsWebhookEvents: (limit = 25) =>
     request<VoiceWebhookEventList>(`/VoiceCommunications/action/webhook-events${simpleQuery({ limit })}`),
 
