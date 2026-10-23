@@ -97,6 +97,20 @@ export function ESignatureSettingsTab() {
     if (document.value !== undefined) {
       form.setFieldsValue(document.value);
       setDirty(false);
+      // Default-on convenience: a module that is on but has every feature off is treated as a
+      // freshly enabled installation, so the control plane is ticked on for the administrator.
+      // Embedded signing stays off until an allowlist exists (plan §4.6).
+      const enabled = (document.value as { enabled?: boolean }).enabled === true;
+      const features = ((document.value as { features?: Record<string, boolean> }).features ?? {}) as Record<string, boolean>;
+      const nonEmbedded = FEATURE_KEYS.filter((key) => key !== 'embeddedSigning');
+      const allOff = nonEmbedded.every((key) => features[key] !== true);
+      if (enabled && allOff) {
+        const next = { ...features };
+        for (const key of nonEmbedded) next[key] = true;
+        next.embeddedSigning = features.embeddedSigning === true;
+        form.setFieldsValue({ features: next });
+        setDirty(true);
+      }
     }
   }, [document.value, form]);
 
@@ -172,7 +186,22 @@ export function ESignatureSettingsTab() {
           style={{ marginBottom: 16 }}
         >
           <Form.Item name="enabled" label={t('esignature.features.enabled')} valuePropName="checked" style={{ marginBottom: 0 }}>
-            <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
+            <Switch
+              checkedChildren={t('core.common.yes')}
+              unCheckedChildren={t('core.common.no')}
+              onChange={(checked) => {
+                if (!checked) return;
+                const features = (form.getFieldValue('features') ?? {}) as Record<string, boolean | undefined>;
+                const nonEmbedded = FEATURE_KEYS.filter((key) => key !== 'embeddedSigning');
+                const allOff = nonEmbedded.every((key) => features[key] !== true);
+                if (!allOff) return;
+                const next = { ...features };
+                for (const key of nonEmbedded) next[key] = true;
+                next.embeddedSigning = features.embeddedSigning === true;
+                form.setFieldsValue({ features: next });
+                setDirty(true);
+              }}
+            />
           </Form.Item>
         </Card>
 

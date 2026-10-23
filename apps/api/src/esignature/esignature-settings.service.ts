@@ -389,6 +389,20 @@ export class ESignatureSettingsService {
     this.refuseSecretSizedValues(patch);
     const current = await this.read();
     const merged = deepMerge(current.settings as unknown as Record<string, unknown>, patch as Record<string, unknown>);
+    // Default-on convenience: turning the module on also turns on its feature control plane unless
+    // the caller named features explicitly. External side effects still need a connected provider,
+    // and embedded signing stays off until an allowlist exists (plan §4.6).
+    const patchRecord = patch as Record<string, unknown>;
+    const wasDisabled = current.settings.enabled !== true;
+    if (patchRecord.enabled === true && wasDisabled && !isObject(patchRecord.features)) {
+      const features = (merged.features ?? {}) as Record<string, unknown>;
+      for (const feature of ESIGNATURE_FEATURES) {
+        if (feature.key === 'embeddedSigning') continue;
+        if (features[feature.key] !== false) features[feature.key] = true;
+      }
+      features.requests = true;
+      merged.features = features;
+    }
     const parsed = ESignatureSettingsSchema.safeParse(merged);
     if (!parsed.success) {
       throw new ValidationError('Invalid ESignature settings.', {
