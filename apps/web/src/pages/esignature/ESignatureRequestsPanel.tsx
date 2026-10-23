@@ -64,7 +64,7 @@ interface EditorValues {
 
 type DrawerState = { mode: 'create' } | { mode: 'view' | 'edit'; id: string };
 
-export function ESignatureRequestsPanel(props: { readonly canPrepare: boolean }) {
+export function ESignatureRequestsPanel(props: { readonly canPrepare: boolean; readonly canSend: boolean }) {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<string>('');
@@ -195,6 +195,7 @@ export function ESignatureRequestsPanel(props: { readonly canPrepare: boolean })
             id={drawer.id}
             mode={drawer.mode}
             canPrepare={props.canPrepare}
+            canSend={props.canSend}
             onEdit={() => setDrawer({ mode: 'edit', id: drawer.id })}
             onSaved={() => {
               message.success(t('esignature.requests.saved'));
@@ -217,6 +218,7 @@ function RequestDetail(props: {
   id: string;
   mode: 'view' | 'edit';
   canPrepare: boolean;
+  canSend: boolean;
   onEdit: () => void;
   onSaved: () => void;
   onDocumentsChanged: () => void;
@@ -267,6 +269,7 @@ function RequestDetail(props: {
       <PreviewSection
         request={request}
         canPrepare={props.canPrepare}
+        canSend={props.canSend}
         onPrepared={() => {
           props.onDocumentsChanged();
           void detail.refetch();
@@ -432,7 +435,7 @@ function RequestEditor(props: {
  * produces a different one, which is why the request drops back to `draft` rather than keeping a
  * preview nobody reviewed.
  */
-function PreviewSection(props: { request: ESignatureRequestView; canPrepare: boolean; onPrepared: () => void }) {
+function PreviewSection(props: { request: ESignatureRequestView; canPrepare: boolean; canSend: boolean; onPrepared: () => void }) {
   const { message } = AntApp.useApp();
   const [confirmed, setConfirmed] = useState(false);
   const [pending, setPending] = useState(false);
@@ -530,6 +533,7 @@ function PreviewSection(props: { request: ESignatureRequestView; canPrepare: boo
             </Space>
           ) : null}
           <EnvelopeSection request={props.request} canPrepare={props.canPrepare} onChanged={props.onPrepared} />
+          <SendSection request={props.request} canSend={props.canSend} onChanged={props.onPrepared} />
         </Space>
       )}
     </Card>
@@ -604,6 +608,92 @@ function EnvelopeSection(props: { request: ESignatureRequestView; canPrepare: bo
             </Popconfirm>
           ) : null}
         </>
+      )}
+    </Space>
+  );
+}
+
+/**
+ * Sending, and the two recoveries (ES.10).
+ *
+ * A send is the one irreversible act, so it carries its own confirmation. `send_unknown` offers
+ * **reconciliation only** — never a second send — and `provider_error` offers the recovery that makes a
+ * deliberate retry possible again.
+ */
+function SendSection(props: { request: ESignatureRequestView; canSend: boolean; onChanged: () => void }) {
+  const { message } = AntApp.useApp();
+  const [confirmed, setConfirmed] = useState(false);
+  const [pending, setPending] = useState(false);
+  const { status } = props.request;
+
+  const act = async (work: () => Promise<unknown>, success: string, fail: string): Promise<void> => {
+    setPending(true);
+    try {
+      await work();
+      message.success(success);
+      props.onChanged();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : fail);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  if (status === 'send_unknown') {
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        message={t('esignature.send.unknown')}
+        action={
+          <Button size="small" loading={pending} onClick={() => void act(() => api.reconcileESignatureRequest(props.request.id), t('esignature.send.reconciled'), t('esignature.send.reconcileFailed'))}>
+            {t('esignature.send.reconcile')}
+          </Button>
+        }
+      />
+    );
+  }
+  if (status === 'provider_error') {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message={t('esignature.send.failed', { code: props.request.providerStatusRaw ?? 'send' })}
+        action={
+          <Button size="small" loading={pending} onClick={() => void act(() => api.recoverESignatureSend(props.request.id), t('esignature.send.recovered'), t('esignature.send.recoverFailed'))}>
+            {t('esignature.send.recover')}
+          </Button>
+        }
+      />
+    );
+  }
+  if (status !== 'ready_to_send' || props.request.providerEnvelopeId === null) return null;
+  return (
+    <Space size={10} wrap>
+      <Checkbox checked={confirmed} disabled={!props.canSend} onChange={(event) => setConfirmed(event.target.checked)}>
+        {t('esignature.send.confirm')}
+      </Checkbox>
+      {props.canSend ? (
+        <Button
+          danger
+          type="primary"
+          size="small"
+          disabled={!confirmed}
+          loading={pending}
+          onClick={() =>
+            void act(
+              () => api.sendESignatureRequest(props.request.id, { version: props.request.version, confirm: true }),
+              t('esignature.send.sent'),
+              t('esignature.send.sendFailed'),
+            )
+          }
+        >
+          {t('esignature.send.sendNow')}
+        </Button>
+      ) : (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t('esignature.send.noRight')}
+        </Typography.Text>
       )}
     </Space>
   );

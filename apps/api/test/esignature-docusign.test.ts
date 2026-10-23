@@ -319,15 +319,14 @@ describe('the live DocuSign adapter (19-ES.4)', () => {
     expect(adapter.mode).toBe('live');
     expect(adapter.capabilities.connectionStatus).toBe(true);
     expect(adapter.capabilities.accountContext).toBe(true);
-    // ES.9 moved envelope *preparation* into the adapter; the send itself is ES.10's.
+    // ES.9 prepared the envelope; ES.10 sends it. Status sync, artifacts and Connect are still refused.
     expect(DOCUSIGN_ES4_CAPABILITIES.prepareEnvelope).toBe(true);
-    for (const operation of ['sendEnvelope', 'envelopeStatus', 'listRecipients', 'downloadCompletedDocuments', 'downloadCompletionEvidence', 'verifyWebhook'] as const) {
+    expect(DOCUSIGN_ES4_CAPABILITIES.sendEnvelope).toBe(true);
+    for (const operation of ['envelopeStatus', 'listRecipients', 'downloadCompletedDocuments', 'downloadCompletionEvidence', 'verifyWebhook'] as const) {
       expect(DOCUSIGN_ES4_CAPABILITIES[operation], operation).toBe(false);
     }
     // The method bodies exist only as a fence; reaching one means the caller skipped the registry.
-    await expect(adapter.sendEnvelope(context(), { signatureRequestId: 'r', providerEnvelopeId: 'e', idempotencyKey: 'k', correlationId: null })).rejects.toBeInstanceOf(
-      NotSupportedByProviderError,
-    );
+    await expect(adapter.envelopeStatus(context(), 'e')).rejects.toBeInstanceOf(NotSupportedByProviderError);
     await expect(adapter.verifyAndParseWebhook({ providerKey: 'docusign', connectionId: null, rawBody: new Uint8Array(), headers: {}, contentType: null, signingSecret: null, requireSignature: true, maxPayloadBytes: 1024 })).rejects.toThrow(
       /does not support/,
     );

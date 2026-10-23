@@ -86,7 +86,7 @@ export function ESignaturePage() {
         />
       )}
 
-      {granted.has('use') ? <ESignatureRequestsPanel canPrepare={granted.has('manageDraft')} /> : null}
+      {granted.has('use') ? <ESignatureRequestsPanel canPrepare={granted.has('manageDraft')} canSend={granted.has('send')} /> : null}
 
       {granted.has('templateMappingManage') ? <ESignatureTemplatesPanel /> : null}
 

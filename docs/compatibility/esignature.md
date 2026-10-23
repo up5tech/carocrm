@@ -1,7 +1,7 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 to 19-ES.9 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 through 19-ES.9 delivered** (ES.1 registers the module and the security contract;
+> Phase 19-ES.0 to 19-ES.10 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 through 19-ES.10 delivered** (ES.1 registers the module and the security contract;
 > ES.2 adds the schema and the domain rules; ES.3 adds the provider contract, the registry and the
 > in-process fake; ES.4 adds DocuSign's OAuth grant, the connection lifecycle and the live adapter's
 > connection operations). **A DocuSign adapter now exists, but nothing in this module has been verified
@@ -11,7 +11,7 @@
 > `esignature-es3-completion-report.md`, `esignature-es4-completion-report.md`,
 > `esignature-es5-completion-report.md`, `esignature-es6-completion-report.md`,
 > `esignature-es7-completion-report.md`, `esignature-es8-completion-report.md`,
-> `esignature-es9-completion-report.md`.
+> `esignature-es9-completion-report.md`, `esignature-es10-completion-report.md`.
 > Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`.
 > Webhook prefix (reserved in ES.1, endpoint delivered in ES.11, which also extends the raw-body hook):
 > `/api/v1/integrations/esignature`.
@@ -59,6 +59,7 @@ redirect URIs, secrets and stored account identities are fully separate.
 
 | Behavior | Status | Notes |
 | --- | --- | --- |
+| Controlled send + ambiguous outcome recovery | **Delivered ES.10** | `POST /api/v1/ESignature/requests/:id/send` (`{version, confirm}`), `…/send/recover`, `…/reconcile`. One action claims one attempt under a unique index and one provider send; a 4xx is a definite refusal (`provider_error`), a lost answer or 5xx is `send_unknown` and is **never** resent — only reconciliation can conclude it (sent, or provably unsent → recoverable). |
 | Provider draft envelope + abandonment | **Delivered ES.9** | `POST /api/v1/ESignature/requests/:id/envelope` (`{version}`) and `…/envelope/abandon`. The envelope is created with `status: 'created'` (no email, no invitation); the local request stays `ready_to_send`. A retry returns the recorded envelope without a second provider call; an edit after preparation is refused with `PREVIEW_OUTDATED`. Sending is ES.10. |
 | Send preview and preparation (immutable snapshot, digest, approval routing) | **Delivered ES.8** | `GET /api/v1/ESignature/requests/:id/preview` and `POST …/prepare` (body `{version, confirm}`). Preparation refuses with a named problem list (no document, no signer, duplicate signer address, past expiry, unfilled template role, missing tab value, foreign/inactive mapping); it makes **no provider call**. A draft edit after preparation returns the request to `draft` and drops the snapshot and approval. |
 | Provider template catalog and the CRM mapping (roles → recipients, tabs → CRM fields) | **Delivered ES.7** | `POST /api/v1/ESignature/templates/catalog/refresh`, `GET templates/catalog/:connectionId/:templateId`, and `GET/POST/PATCH templates/mappings`. The catalog is read-only; a mapping is validated against that connection's **live** template and the metadata registry, so an unknown role, tab or field is refused when it is saved. |

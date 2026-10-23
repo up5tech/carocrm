@@ -498,7 +498,15 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
 
   private requireEnvelope(id: string): FakeEnvelope {
     const found = this.envelopes.get(id);
-    if (found === undefined) throw new Error(`The fake has no envelope "${id}".`);
+    if (found === undefined) {
+      // A stable provider failure, not a thrown string: the caller distinguishes "the provider has no
+      // such envelope" (definite) from "the answer was lost" (ambiguous).
+      throw new ProviderError('NOT_FOUND', `The fake has no envelope "${id}".`, {
+        category: 'not_found',
+        retryable: false,
+        detail: 'envelope_not_found',
+      });
+    }
     return found;
   }
 

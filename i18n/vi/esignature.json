@@ -340,5 +340,20 @@
     "envelopeAbandon": "Xoá bản nháp",
     "envelopeAbandonConfirm": "Xoá bản nháp tại nhà cung cấp? Chưa có gì được gửi từ đó.",
     "envelopeAbandoned": "Đã xoá bản nháp tại nhà cung cấp."
+  },
+  "send": {
+    "confirm": "Tôi xác nhận gửi phong bao này tới các người nhận ở trên.",
+    "sendNow": "Gửi ngay",
+    "sent": "Đã gửi phong bao.",
+    "sendFailed": "Không gửi được phong bao.",
+    "noRight": "Bạn không có quyền gửi yêu cầu này.",
+    "unknown": "Nhà cung cấp có thể đã nhận phong bao nhưng phản hồi bị mất. Hãy đối soát trước khi làm bất cứ điều gì khác.",
+    "reconcile": "Đối soát với nhà cung cấp",
+    "reconciled": "Đã đối soát xong.",
+    "reconcileFailed": "Không đối soát được.",
+    "failed": "Nhà cung cấp từ chối lần gửi này ({code}). Chưa có gì được gửi.",
+    "recover": "Đưa về sẵn sàng gửi",
+    "recovered": "Yêu cầu đã sẵn sàng gửi lại.",
+    "recoverFailed": "Không khôi phục được yêu cầu."
   }
 }

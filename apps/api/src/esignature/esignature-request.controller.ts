@@ -12,6 +12,7 @@ import {
   RequestListQuerySchema,
   RequestPrepareSchema,
   RequestRecipientsSchema,
+  RequestSendSchema,
   RequestUpdateSchema,
 } from './dto/esignature-shapes.js';
 import { REQUEST_STATUSES, type SignatureRequestStatus } from './esignature-domain.js';
@@ -119,6 +120,34 @@ export class ESignatureRequestController {
   @Post(':id/envelope/abandon')
   async abandonEnvelope(@Param('id') id: string) {
     return this.requests.abandonProviderEnvelope(this.id(id));
+  }
+
+  /**
+   * Send the prepared draft (ES.10). The one irreversible act: `confirm: true`, a current version, a
+   * matching prepared preview, the approval the policy requires, and an existing provider envelope.
+   *
+   * Exactly one of three answers: the request is `sent`; a definite refusal left it in `provider_error`
+   * (recoverable); or the outcome is unknown and it is held in `send_unknown` for reconciliation — never
+   * retried here.
+   */
+  @HttpCode(200)
+  @Post(':id/send')
+  async send(@Param('id') id: string, @Body() body: unknown) {
+    return this.requests.send(this.id(id), this.parse(RequestSendSchema, body));
+  }
+
+  /** Return a request whose send was definitely refused to a state a deliberate retry can use. */
+  @HttpCode(200)
+  @Post(':id/send/recover')
+  async recoverSend(@Param('id') id: string) {
+    return this.requests.recoverSend(this.id(id));
+  }
+
+  /** Ask the provider what happened to an ambiguous send; the only way out of `send_unknown`. */
+  @HttpCode(200)
+  @Post(':id/reconcile')
+  async reconcileSend(@Param('id') id: string) {
+    return this.requests.reconcileSend(this.id(id));
   }
 
   @Get(':id/recipients')

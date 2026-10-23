@@ -1832,6 +1832,21 @@ export const api = {
       `/ESignature/requests/${encodeURIComponent(id)}/envelope`,
       post(input),
     ),
+  /** The deliberate send (ES.10). Exactly one effective send per action; ambiguous outcomes are held. */
+  sendESignatureRequest: (id: string, input: { version: number; confirm: boolean }) =>
+    request<{ request: ESignatureRequestView; providerStatusRaw: string; sentAt: string | null }>(
+      `/ESignature/requests/${encodeURIComponent(id)}/send`,
+      post(input),
+    ),
+  /** Return a request whose send was definitely refused to a retryable state. */
+  recoverESignatureSend: (id: string) =>
+    request<{ request: ESignatureRequestView }>(`/ESignature/requests/${encodeURIComponent(id)}/send/recover`, post({})),
+  /** Ask the provider what happened to an ambiguous send. */
+  reconcileESignatureRequest: (id: string) =>
+    request<{ request: ESignatureRequestView; providerStatus: string; reconciled: boolean }>(
+      `/ESignature/requests/${encodeURIComponent(id)}/reconcile`,
+      post({}),
+    ),
   /** Delete the provider draft while nothing has been sent. */
   abandonESignatureEnvelope: (id: string) =>
     request<{ request: ESignatureRequestView; deleted: boolean }>(`/ESignature/requests/${encodeURIComponent(id)}/envelope/abandon`, post({})),

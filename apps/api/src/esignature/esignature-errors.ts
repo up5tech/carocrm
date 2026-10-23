@@ -61,6 +61,21 @@ export function signatureModuleDisabledError(feature: string): ESignatureError {
   );
 }
 
+/**
+ * The approval policy requires a decision, and none has been given for these exact bytes.
+ *
+ * Plan §11.1/§11.2: a request whose source type requires approval may not leave the CRM until someone
+ * approved the digest the sender is about to send. The message says which, never who.
+ */
+export function signatureApprovalRequiredError(requestId: string): ESignatureError {
+  return new ESignatureError(
+    'SIGNATURE_APPROVAL_REQUIRED',
+    'This request needs an approval for its current contents before it can be sent.',
+    { requestId },
+    409,
+  );
+}
+
 /** The request is not in a state that permits the requested transition. */
 export function signatureRequestInvalidStateError(status: string, attempted: string): ESignatureError {
   return new ESignatureError(

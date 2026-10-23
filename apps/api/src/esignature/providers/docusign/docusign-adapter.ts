@@ -1,6 +1,6 @@
 import { ProviderError } from '../../../advanced-integrations/provider-error.js';
 import { PROVIDER_KEY_DOCUSIGN } from '../../esignature-domain.js';
-import { NotSupportedByProviderError } from '../signature-provider.errors.js';
+import { NotSupportedByProviderError, SendOutcomeUnknownError } from '../signature-provider.errors.js';
 import {
   BASE_SIGNATURE_PROVIDER_CAPABILITIES,
   type PreparedEnvelope,
@@ -60,9 +60,9 @@ export const DOCUSIGN_ES4_CAPABILITIES: SignatureProviderCapabilities = Object.f
   // ES.7 — the template catalog, read-only (plan §6.7 forbids updating a provider template).
   listTemplates: true,
   templateDetails: true,
-  // ES.9 — envelope preparation. Sending is ES.10's, and remains refused until it exists.
+  // ES.9 — envelope preparation. ES.10 — the deliberate send of that draft.
   prepareEnvelope: true,
-  sendEnvelope: false,
+  sendEnvelope: true,
   envelopeStatus: false,
   listRecipients: false,
   downloadCompletedDocuments: false,
@@ -382,8 +382,60 @@ export class DocuSignAdapter implements SignatureProviderAdapter {
     return { deleted: true };
   }
 
-  async sendEnvelope(_context: SignatureProviderContext, _input: SendEnvelopeInput): Promise<SentEnvelope> {
-    throw this.refuse('sendEnvelope');
+  /**
+   * Send the prepared draft (plan §4.3, §18 `19-ES.10`).
+   *
+   * DocuSign's send is `PUT /envelopes/{id}` with `status: 'sent'`; that is the one irreversible act in
+   * this module, so its failure handling is asymmetric on purpose:
+   *
+   *  - a **4xx** is a definite refusal — the envelope was not sent, and the request may be corrected and
+   *    tried again;
+   *  - a **transport failure or a 5xx** means the provider may have accepted the request and only the
+   *    answer was lost, so it is raised as `SendOutcomeUnknownError` and the platform never retries it;
+   *  - a **429** is a definite refusal with the provider's own guidance attached.
+   *
+   * The recipients are returned as the provider reported them so the local projection can start from
+   * facts rather than from an assumption that "sent" means "everyone was notified".
+   */
+  async sendEnvelope(context: SignatureProviderContext, input: SendEnvelopeInput): Promise<SentEnvelope> {
+    let response;
+    try {
+      response = await this.transport.request({
+        method: 'PUT',
+        url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/envelopes/${encodeURIComponent(input.providerEnvelopeId)}`,
+        headers: { authorization: `Bearer ${context.accessToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'sent' }),
+        timeoutMs: context.timeoutMs,
+      });
+    } catch (error) {
+      // The request may have reached DocuSign. Never let a lost answer become a retry.
+      if (error instanceof ProviderError && (error.category === 'authorization' || error.category === 'rate_limited')) throw error;
+      throw new SendOutcomeUnknownError({
+        correlationId: input.correlationId ?? 'unknown',
+        idempotencyKey: input.idempotencyKey,
+        providerEnvelopeId: input.providerEnvelopeId,
+      });
+    }
+    if (response.status >= 500) {
+      throw new SendOutcomeUnknownError({
+        correlationId: input.correlationId ?? 'unknown',
+        idempotencyKey: input.idempotencyKey,
+        providerEnvelopeId: input.providerEnvelopeId,
+      });
+    }
+    if (response.status >= 400) throw providerErrorForStatus(response.status);
+
+    const body = parseJson(response.body);
+    const recipients = Array.isArray(body['recipients'])
+      ? (body['recipients'] as unknown[]).flatMap((entry) => parseSentRecipient(entry))
+      : [];
+    return {
+      providerEnvelopeId: stringOf(body['envelopeId']) ?? input.providerEnvelopeId,
+      status: 'sent',
+      providerStatusRaw: stringOf(body['status']) ?? 'sent',
+      sentAt: stringOf(body['statusDateTime']) ?? new Date().toISOString(),
+      recipients,
+    };
   }
 
   async envelopeStatus(_context: SignatureProviderContext, _providerEnvelopeId: string): Promise<ProviderEnvelopeStatus> {
@@ -434,6 +486,40 @@ export function detailCodeForStatus(status: number): DocuSignDetailCode {
   if (status >= 500) return 'provider_outage';
   return 'response_invalid';
 }
+
+/** A recipient DocuSign reported back after the send, normalized to the contract's vocabulary. */
+function parseSentRecipient(entry: unknown): ProviderRecipientStatus[] {
+  const recipient = asObject(entry);
+  const providerRecipientId = stringOf(recipient['recipientId']);
+  const status = stringOf(recipient['status']);
+  if (providerRecipientId === null || status === null) return [];
+  const normalized = SENT_RECIPIENT_STATUSES[status.toLowerCase()] ?? 'unknown';
+  return [
+    {
+      providerRecipientId,
+      recipientId: stringOf(recipient['clientUserId']) ?? providerRecipientId,
+      status: normalized,
+      providerStatusRaw: status,
+      name: stringOf(recipient['name']) ?? '',
+      email: stringOf(recipient['email']) ?? '',
+      routingOrder: Number(recipient['routingOrder']) || 0,
+      roleName: stringOf(recipient['roleName']),
+      occurredAt: stringOf(recipient['statusDateTime']),
+      declineReasonSafe: null,
+    },
+  ];
+}
+
+/** DocuSign's recipient state words, as the send answer reports them. */
+const SENT_RECIPIENT_STATUSES: Readonly<Record<string, ProviderRecipientStatus['status']>> = {
+  created: 'pending',
+  sent: 'sent',
+  delivered: 'delivered',
+  completed: 'completed',
+  declined: 'declined',
+  autoresponded: 'completed',
+  waiting: 'pending',
+};
 
 /** The lower-case extension DocuSign expects for a document, defaulting to `pdf` when a name has none. */
 function extensionOfName(name: string): string {

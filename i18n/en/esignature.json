@@ -340,5 +340,20 @@
     "envelopeAbandon": "Delete draft",
     "envelopeAbandonConfirm": "Delete the provider draft? Nothing has been sent from it.",
     "envelopeAbandoned": "The provider draft was deleted."
+  },
+  "send": {
+    "confirm": "I confirm sending this envelope to the recipients above.",
+    "sendNow": "Send now",
+    "sent": "The envelope was sent.",
+    "sendFailed": "The envelope could not be sent.",
+    "noRight": "You do not hold the send right for this request.",
+    "unknown": "The provider may have accepted this envelope, but the answer was lost. Reconcile before doing anything else.",
+    "reconcile": "Reconcile with the provider",
+    "reconciled": "The reconciliation completed.",
+    "reconcileFailed": "The reconciliation could not complete.",
+    "failed": "The provider refused this send ({code}). Nothing was sent.",
+    "recover": "Return to ready to send",
+    "recovered": "The request is ready to send again.",
+    "recoverFailed": "The request could not be recovered."
   }
 }

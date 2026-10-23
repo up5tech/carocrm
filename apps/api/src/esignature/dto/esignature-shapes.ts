@@ -180,6 +180,14 @@ export const RequestPrepareSchema = z
 /** Creating the provider draft from a prepared request: only the version is the caller's choice. */
 export const RequestEnvelopeSchema = z.object({ version: z.coerce.number().int().min(1) }).strict();
 
+/** The deliberate send: version, and the sender's confirmation — which must be deliberate, not defaulted. */
+export const RequestSendSchema = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    confirm: z.boolean(),
+  })
+  .strict();
+
 export const RequestDocumentAttachSchema = z
   .object({
     attachmentId: z.string().trim().min(1).max(64),

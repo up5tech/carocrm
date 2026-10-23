@@ -696,6 +696,38 @@ export class SignatureRequestRepository {
   }
 
   /**
+   * Forget a send attempt after a definite rejection.
+   *
+   * A provider that refused the send (a validation error, a revoked grant) did not act, so the request
+   * may try again — but only through a deliberate new attempt, never by re-using the refused one. A
+   * request that is sending, sent or ambiguous is refused here: its attempt is evidence.
+   */
+  async releaseSendAttempt(id: string, expectedVersion: number, actorId?: string): Promise<SignatureRequest> {
+    const current = await this.requireById(id);
+    if (current.status !== 'ready_to_send' && current.status !== 'provider_error') {
+      throw new ValidationError('Only a request whose send definitely failed can release its attempt.', {
+        code: 'SIGNATURE_REQUEST_INVALID_STATE',
+        status: current.status,
+      });
+    }
+    if (current.version !== expectedVersion) throw new ConcurrencyConflictError('SignatureRequest', id);
+    const row = await this.db
+      .updateTable('signature_requests')
+      .set({
+        send_attempt_id: null,
+        version: current.version + 1,
+        modified_at: new Date(),
+        ...(actorId === undefined ? {} : { modified_by_id: actorId }),
+      })
+      .where('id', '=', id)
+      .where('version', '=', expectedVersion)
+      .returningAll()
+      .executeTakeFirst();
+    if (row === undefined) throw new ConcurrencyConflictError('SignatureRequest', id);
+    return toRequest(row);
+  }
+
+  /**
    * Forget a provider draft that was abandoned at the provider.
    *
    * Only an unsent request may release its envelope: once `sending` began the id is evidence of a real

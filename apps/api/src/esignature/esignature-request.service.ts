@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { AuthorizationDeniedError, ConcurrencyConflictError, ValidationError } from '@carocrm/core/errors/index.js';
 import type { RecordStorePort } from '@carocrm/entity-engine/entity-manager/index.js';
 import type { EntityRecord } from '@carocrm/entity-engine/types/index.js';
@@ -5,6 +7,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
 import { AclApiService, type AclRecordLike } from '../acl/acl-api.service.js';
+import { ProviderError } from '../advanced-integrations/provider-error.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
 import { ENTITY_STORE } from '../entity/entity-record.store.js';
@@ -13,14 +16,20 @@ import { ESignatureConnectionService } from './esignature-connection.service.js'
 import { ESignatureConnectionGate } from './esignature-connection-gate.service.js';
 import { ESignatureDocumentService } from './esignature-document.service.js';
 import type { SignatureRequestStatus } from './esignature-domain.js';
-import { providerNotConnectedError, signatureModuleDisabledError, signatureRequestInvalidStateError } from './esignature-errors.js';
+import {
+  providerNotConnectedError,
+  providerOutcomeUnknownError,
+  signatureApprovalRequiredError,
+  signatureModuleDisabledError,
+  signatureRequestInvalidStateError,
+} from './esignature-errors.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { buildSignaturePreview, type SignaturePreview } from './esignature-preview.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
-import { buildSnapshot } from './esignature-snapshot.js';
+import { approvalStillApplies, buildSnapshot } from './esignature-snapshot.js';
 import { isEditable } from './esignature-state-machine.js';
-import { toModuleError } from './providers/signature-provider.errors.js';
-import { correlationId, prepareIdentity } from './providers/signature-provider.idempotency.js';
+import { classifyAdapterError, isSendOutcomeUnknownError, redactAdapterError, toModuleError } from './providers/signature-provider.errors.js';
+import { correlationId, prepareIdentity, sendIdentity } from './providers/signature-provider.idempotency.js';
 import type { PrepareEnvelopeInput } from './providers/signature-provider.port.js';
 import { SignatureProviderRegistry } from './providers/signature-provider.registry.js';
 import { type AuditInput, SignatureAuditRepository } from './signature-audit.repository.js';
@@ -602,6 +611,266 @@ export class ESignatureRequestService {
     return { request: await this.view(released), deleted };
   }
 
+  // ---------------------------------------------------------------------------
+  // the deliberate send, and its recovery (19-ES.10)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Send the prepared provider draft.
+   *
+   * The single irreversible act of this module, so the guards come first and the provider call is the
+   * last thing that happens:
+   *
+   *  - the `send` capability (separate from drafting), the module switch and the record scope;
+   *  - `confirm: true`, a current version, a stored preview that still matches, and — when the policy
+   *    requires it — an approval **for this digest**;
+   *  - a provider envelope must already exist (ES.9 created it), and the connection must be connected.
+   *
+   * One deliberate action is claimed once: `claimSendAttempt` writes the attempt token into the row
+   * under a unique index, then the request moves to `sending`. A second click, a refresh or a retry
+   * finds the state changed and is refused; the token is never re-used, and the provider call is keyed by
+   * it. The outcome is then exactly one of three: `sent` (the provider confirmed), `provider_error` (a
+   * definite refusal, recoverable and retryable), or `send_unknown` (the answer was lost — reconciliation
+   * only, never a blind resend).
+   */
+  async send(id: string, input: { version: number; confirm: boolean }): Promise<{ request: SignatureRequestView; providerStatusRaw: string; sentAt: string | null }> {
+    const request = await this.loadScoped(id, 'send');
+    await this.gate.assertOperation('sendEnvelope');
+    if (input.confirm !== true) {
+      throw new ValidationError('Sending a signature request needs an explicit sender confirmation.', { code: 'CONFIRMATION_REQUIRED' });
+    }
+    if (request.status !== 'ready_to_send') throw signatureRequestInvalidStateError(request.status, 'send');
+    if (request.providerEnvelopeId === null) {
+      throw new ValidationError('The request has no provider draft yet, so there is nothing to send.', { code: 'SIGNATURE_REQUEST_INVALID_STATE' });
+    }
+    if (request.outgoingSnapshot === null || request.outgoingDigest === null) {
+      throw new ValidationError('The request has no prepared preview, so it cannot be sent.', { code: 'PREVIEW_REQUIRED' });
+    }
+    const preview = await this.buildPreview(request);
+    if (preview.digest !== request.outgoingDigest) {
+      throw new ValidationError('The request changed after its preview was recorded. Prepare the preview again before sending.', { code: 'PREVIEW_OUTDATED' });
+    }
+    if (preview.approvalRequired && !approvalStillApplies(request.approvedDigest, request.outgoingDigest)) {
+      throw signatureApprovalRequiredError(id);
+    }
+    if (request.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
+    const connection = request.connectionId === null ? undefined : await this.connections.findById(request.connectionId);
+    if (connection === undefined) throw providerNotConnectedError('no_connection');
+    const context = await this.connectionService.contextFor(connection);
+    const adapter = this.providers.assertOperation(connection.providerKey, 'sendEnvelope');
+    const providerEnvelopeId = request.providerEnvelopeId;
+
+    // The claim is the single-flight gate: a fresh token per deliberate action, written under a unique
+    // index before anything leaves the process.
+    const attemptId = randomUUID();
+    const claimed = await this.requests.claimSendAttempt(id, input.version, attemptId, request.outgoingSnapshot);
+    const sending = await this.requests.transition(id, {
+      expectedVersion: claimed.version,
+      to: 'sending',
+      origin: 'local',
+      ...(this.scope.userId === undefined ? {} : { actorId: this.scope.userId }),
+    });
+    const identity = sendIdentity({
+      connectionId: connection.id,
+      signatureRequestId: id,
+      sendAttemptId: attemptId,
+      providerEnvelopeId,
+      fallbackCorrelationId: correlationId(),
+    });
+
+    try {
+      const sent = await adapter.sendEnvelope(context, {
+        signatureRequestId: id,
+        providerEnvelopeId,
+        idempotencyKey: identity.idempotencyKey,
+        correlationId: identity.correlationId,
+      });
+      const occurredAt = Date.parse(sent.sentAt);
+      const confirmed = await this.requests.transition(id, {
+        expectedVersion: sending.version,
+        to: 'sent',
+        origin: 'provider',
+        providerStatusRaw: sent.providerStatusRaw,
+        ...(Number.isNaN(occurredAt) ? {} : { occurredAt: new Date(occurredAt) }),
+      });
+      await this.audit.append({
+        action: 'send.completed',
+        requestId: id,
+        actor: this.actorRef(),
+        detail: { providerStatus: sent.providerStatusRaw, recipientCount: sent.recipients.length, attemptId },
+      });
+      return { request: await this.view(confirmed), providerStatusRaw: sent.providerStatusRaw, sentAt: confirmed.sentAt };
+    } catch (error) {
+      const unknownOutcome =
+        isSendOutcomeUnknownError(error) ||
+        (error instanceof ProviderError && (error.code === 'TIMEOUT' || error.code === 'NETWORK_ERROR' || error.category === 'provider_outage' || error.category === 'transient'));
+      if (unknownOutcome) {
+        // The provider may have sent it. The request holds the attempt token and nothing else; the only
+        // legal next step is reconciliation (plan §4.3, §16).
+        await this.requests.transition(id, {
+          expectedVersion: sending.version,
+          to: 'send_unknown',
+          origin: 'provider',
+          failure: {
+            category: 'unknown_outcome',
+            code: 'SEND_OUTCOME_UNKNOWN',
+            messageSafe: 'The provider may have accepted the envelope, but the answer was lost.',
+          },
+        });
+        await this.audit.append({
+          action: 'send.outcome_unknown',
+          requestId: id,
+          actor: this.actorRef(),
+          detail: { attemptId },
+        });
+        throw providerOutcomeUnknownError(identity.correlationId);
+      }
+      // A definite refusal: nothing was sent, so the request may be corrected and tried again after a
+      // deliberate recovery.
+      const moduleError = toModuleError(error, connection.providerKey);
+      const redacted = redactAdapterError(error);
+      await this.requests.transition(id, {
+        expectedVersion: sending.version,
+        to: 'provider_error',
+        origin: 'provider',
+        failure: { category: classifyAdapterError(error), code: redacted.code, messageSafe: moduleError.message.slice(0, 500) },
+      });
+      await this.audit.append({
+        action: 'send.completed',
+        requestId: id,
+        actor: this.actorRef(),
+        outcome: 'refused',
+        reasonSafe: redacted.category,
+        detail: { providerCode: redacted.code, attemptId },
+      });
+      throw moduleError;
+    }
+  }
+
+  /**
+   * Return a request whose send was definitely refused to `ready_to_send`.
+   *
+   * The attempt token is released, so the next send is a new deliberate action rather than a replay of
+   * the refused one. A request that is sending, sent or ambiguous is refused: its attempt is evidence.
+   */
+  async recoverSend(id: string): Promise<{ request: SignatureRequestView }> {
+    const request = await this.loadScoped(id, 'send');
+    if (request.status !== 'provider_error') throw signatureRequestInvalidStateError(request.status, 'recover the send');
+    const restored = await this.requests.transition(id, {
+      expectedVersion: request.version,
+      to: 'ready_to_send',
+      origin: 'local',
+      ...(this.scope.userId === undefined ? {} : { actorId: this.scope.userId }),
+    });
+    const released = await this.requests.releaseSendAttempt(id, restored.version, this.scope.userId);
+    await this.audit.append({
+      action: 'request.updated',
+      requestId: id,
+      actor: this.actorRef(),
+      detail: { change: 'send_attempt_released', fromStatus: 'provider_error' },
+    });
+    return { request: await this.view(released) };
+  }
+
+  /**
+   * Ask the provider what actually happened to an ambiguous send.
+   *
+   * ES.10's acceptance is that an ambiguous outcome is never a blind retry, so this is the only command
+   * that may move a request out of `sending`/`send_unknown` without a new send attempt:
+   *
+   *  - the envelope left the CRM → `sent` (and, when the provider is already further along, the state it
+   *    reports, through the transitions the state machine allows);
+   *  - it is still a draft → the send did not take effect → `provider_error`, which `recover` can return
+   *    to a retryable state;
+   *  - anything else → still ambiguous, answered with the stable `PROVIDER_OUTCOME_UNKNOWN`.
+   *
+   * ES.12 later projects the full envelope and recipient state from Connect events; this command exists
+   * so the send itself has a safe way out.
+   */
+  async reconcileSend(id: string): Promise<{ request: SignatureRequestView; providerStatus: string; reconciled: boolean }> {
+    const request = await this.loadScoped(id, 'send');
+    if (request.status !== 'send_unknown' && request.status !== 'sending') {
+      throw signatureRequestInvalidStateError(request.status, 'reconcile the send');
+    }
+    if (request.providerEnvelopeId === null) throw providerNotConnectedError('no_connection');
+    const connection = request.connectionId === null ? undefined : await this.connections.findById(request.connectionId);
+    if (connection === undefined) throw providerNotConnectedError('no_connection');
+    const context = await this.connectionService.contextFor(connection);
+    const adapter = this.providers.assertOperation(connection.providerKey, 'envelopeStatus');
+    let providerStatus;
+    try {
+      providerStatus = await adapter.envelopeStatus(context, request.providerEnvelopeId);
+    } catch (error) {
+      throw toModuleError(error, connection.providerKey);
+    }
+
+    if (providerStatus.status === 'draft') {
+      const failed = await this.requests.transition(id, {
+        expectedVersion: request.version,
+        to: 'provider_error',
+        origin: 'reconciliation',
+        failure: {
+          category: 'permanent_validation',
+          code: 'PROVIDER_NOT_SENT',
+          messageSafe: 'The provider still holds the envelope as a draft, so the earlier send did not take effect.',
+        },
+      });
+      await this.audit.append({
+        action: 'reconciliation.completed',
+        requestId: id,
+        actor: this.actorRef(),
+        outcome: 'refused',
+        reasonSafe: 'provider_draft_unsent',
+        detail: { providerStatus: providerStatus.status },
+      });
+      return { request: await this.view(failed), providerStatus: providerStatus.status, reconciled: true };
+    }
+
+    if (providerStatus.status === 'unknown') {
+      await this.audit.append({
+        action: 'reconciliation.completed',
+        requestId: id,
+        actor: this.actorRef(),
+        outcome: 'refused',
+        reasonSafe: 'provider_status_unknown',
+      });
+      throw providerOutcomeUnknownError(correlationId());
+    }
+
+    // Everything else means the envelope left the CRM. Record that first — it is the fact the send was
+    // missing — and then the state the provider actually reports, if it is further along.
+    let current = await this.requests.transition(id, {
+      expectedVersion: request.version,
+      to: 'sent',
+      origin: 'reconciliation',
+      providerStatusRaw: providerStatus.providerStatusRaw,
+    });
+    const further: Partial<Record<typeof providerStatus.status, 'delivered' | 'partially_signed' | 'completed' | 'declined' | 'voided' | 'expired'>> = {
+      delivered: 'delivered',
+      partially_signed: 'partially_signed',
+      completed: 'completed',
+      declined: 'declined',
+      voided: 'voided',
+      expired: 'expired',
+    };
+    const target = further[providerStatus.status];
+    if (target !== undefined) {
+      current = await this.requests.transition(id, {
+        expectedVersion: current.version,
+        to: target,
+        origin: 'provider',
+        providerStatusRaw: providerStatus.providerStatusRaw,
+      });
+    }
+    await this.audit.append({
+      action: 'reconciliation.completed',
+      requestId: id,
+      actor: this.actorRef(),
+      detail: { providerStatus: providerStatus.providerStatusRaw, reconciledTo: current.status },
+    });
+    return { request: await this.view(current), providerStatus: providerStatus.providerStatusRaw, reconciled: true };
+  }
+
   private async buildPreview(request: SignatureRequest): Promise<SignaturePreview> {
     const [documents, recipients] = await Promise.all([
       this.snapshots.listForRequest(request.id, ['source_snapshot']),
@@ -739,8 +1008,8 @@ export class ESignatureRequestService {
    * only editable by someone who may read it. The record is never returned to a caller who is out of
    * scope — the refusal says nothing about whether the id exists.
    */
-  private async loadScoped(id: string, mode: 'read' | 'write' = 'read'): Promise<SignatureRequest> {
-    await this.permissions.assert(mode === 'read' ? 'use' : 'manageDraft');
+  private async loadScoped(id: string, mode: 'read' | 'write' | 'send' = 'read'): Promise<SignatureRequest> {
+    await this.permissions.assert(mode === 'read' ? 'use' : mode === 'write' ? 'manageDraft' : 'send');
     await this.assertModuleEnabled();
     const request = await this.requests.requireById(id);
     await this.assertRecordAccess(request);
