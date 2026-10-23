@@ -29,7 +29,7 @@ const TABLE_STYLE = { width: '100%', 'border-collapse': 'collapse' } as const;
 
 /** A neutral placeholder image (inline SVG data URI) — never a network request. */
 const PLACEHOLDER_IMAGE =
-  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='560' height='180'><rect width='100%' height='100%' fill='%23eef1f5'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%238c96a5' font-family='sans-serif' font-size='14'>560 &#215; 180</text></svg>";
+  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='560' height='180'><rect width='100%' height='100%' fill='%23f5f5f5'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23a1a8b3' font-family='sans-serif' font-size='14'>560 &#215; 180</text></svg>";
 
 function section(columns: 1 | 2 | 3): ComponentDefinitionDefined {
   const width = columns === 1 ? '100%' : `${Math.floor(100 / columns)}%`;
@@ -99,7 +99,7 @@ export const EMAIL_BLOCKS: EmailBlockSpec[] = [
     content: {
       type: 'text',
       content: 'Section heading',
-      style: { 'font-size': '20px', 'font-weight': '700', color: '#1f2329', margin: '0 0 8px' },
+      style: { 'font-size': '20px', 'font-weight': '700', color: '#31373d', margin: '0 0 8px' },
     },
   },
   {
@@ -117,7 +117,7 @@ export const EMAIL_BLOCKS: EmailBlockSpec[] = [
             {
               tagName: 'td',
               attributes: { align: 'center' },
-              style: { 'border-radius': '6px', background: '#1677ff' },
+              style: { 'border-radius': '6px', background: '#438eff' },
               components: [
                 {
                   tagName: 'a',
@@ -154,7 +154,7 @@ export const EMAIL_BLOCKS: EmailBlockSpec[] = [
     id: 'etpl-divider',
     labelKey: 'divider',
     media: icon('<line x1="3" y1="12" x2="21" y2="12"/>'),
-    content: bar({ tagName: 'div', style: { height: '0' } }, { 'border-top': '1px solid #e3e7ec', 'font-size': '0', 'line-height': '0' }),
+    content: bar({ tagName: 'div', style: { height: '0' } }, { 'border-top': '1px solid #eff2f7', 'font-size': '0', 'line-height': '0' }),
   },
   {
     id: 'etpl-spacer',

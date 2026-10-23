@@ -57,6 +57,18 @@ const DEVICES = [
   { id: 'mobile', name: '', width: '375' },
 ];
 
+/**
+ * A loose text run (one that does not start with a tag) is not editable in GrapesJS as-is,
+ * because it is parsed into `textnode`s. Wrapping it in a `<p>` makes the whole run a single
+ * editable `text` component, so templates authored as plain text + `<br>` (including seeded
+ * ones) can be edited by clicking in the canvas.
+ */
+function wrapLooseText(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed === '' || trimmed.startsWith('<')) return value;
+  return `<p>${value}</p>`;
+}
+
 export const EmailVisualEditor = forwardRef<EmailVisualEditorHandle, EmailVisualEditorProps>(({ value, onChange }, ref) => {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
@@ -79,7 +91,12 @@ export const EmailVisualEditor = forwardRef<EmailVisualEditorHandle, EmailVisual
       noticeOnUnload: false,
       // Devices only resize the frame — no media rules are generated for the export.
       devicePreviewMode: true,
-      components: value,
+      // Treat <br> as inline text so a loose text run (text nodes + <br>) becomes an
+      // editable `text` component instead of a pile of non-editable `textnode`s —
+      // otherwise templates written as plain text + <br> (e.g. seeded ones) cannot be
+      // edited by clicking in the canvas.
+      parser: { textTags: ['br'] },
+      components: wrapLooseText(value),
       style: '',
       styleManager: {
         sectors: [
@@ -157,6 +174,22 @@ export const EmailVisualEditor = forwardRef<EmailVisualEditorHandle, EmailVisual
     // manager and layers stay one click away in the same panel.
     editor.runCommand('open-blocks');
 
+    // Text in an email is what the designer edits most, so a single click on a text block
+    // drops straight into typing instead of requiring the non-obvious double-click that
+    // GrapesJS defaults to (which made existing templates look uneditable).
+    const tryEditText = (component: unknown) => {
+      const target = Array.isArray(component) ? (component as unknown[])[0] : component;
+      if (target === null || target === undefined) return;
+      if (typeof (target as { get?: (k: string) => unknown }).get !== 'function') return;
+      if ((target as { get: (k: string) => unknown }).get('type') !== 'text') return;
+      const view = (target as { getView?: () => unknown }).getView?.();
+      if (view !== undefined && view !== null) {
+        const v = view as { onActive?: (ev?: unknown) => unknown };
+        if (typeof v.onActive === 'function') v.onActive();
+        editor.getModel().setEditing(view as never);
+      }
+    };
+    editor.on('component:selected', tryEditText);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const publish = () => {
       if (timer !== undefined) clearTimeout(timer);
@@ -189,7 +222,7 @@ export const EmailVisualEditor = forwardRef<EmailVisualEditorHandle, EmailVisual
     if (editor === null) return;
     if (value !== lastExportRef.current) {
       lastExportRef.current = value;
-      editor.setComponents(value);
+      editor.setComponents(wrapLooseText(value));
     }
   }, [value]);
 
