@@ -177,6 +177,9 @@ export const RequestPrepareSchema = z
   })
   .strict();
 
+/** Creating the provider draft from a prepared request: only the version is the caller's choice. */
+export const RequestEnvelopeSchema = z.object({ version: z.coerce.number().int().min(1) }).strict();
+
 export const RequestDocumentAttachSchema = z
   .object({
     attachmentId: z.string().trim().min(1).max(64),
@@ -225,6 +228,8 @@ const FieldMappingSchema = z
     tabName: z.string().trim().min(1).max(120),
     crmField: z.string().trim().min(1).max(120),
     required: z.boolean(),
+    /** The template role the tab belongs to; required by the service when the template names one. */
+    roleName: z.string().trim().min(1).max(120).nullable().optional(),
   })
   .strict();
 

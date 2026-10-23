@@ -247,8 +247,8 @@ async function createMapping(targetConnection: string, name: string, withRequire
       supportedSourceEntities: ['Account'],
       roleMappings: [{ roleName: 'Signer 1', recipientType: 'signer', routingOrder: 1, source: 'crmField', crmField: 'emailAddress' }],
       fieldMappings: [
-        { tabName: 'Full Name', crmField: 'name', required: true },
-        ...(withRequiredCompany ? [{ tabName: 'Company', crmField: 'description', required: true }] : []),
+        { tabName: 'Full Name', crmField: 'name', required: true, roleName: 'Signer 1' },
+        ...(withRequiredCompany ? [{ tabName: 'Company', crmField: 'description', required: true, roleName: 'Signer 2' }] : []),
       ],
       isActive: true,
     }),

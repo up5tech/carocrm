@@ -265,10 +265,10 @@ describe('the connection gate in front of every provider call', () => {
   it('refuses a send before a connection exists, and names the reason', async () => {
     await patchSettings({ enabled: true, features: { connections: true, send: true } });
     const probe = await call('POST', '/api/v1/ESignature/action/gate/check', ctx.adminToken, { operation: 'sendEnvelope' });
-    // The connections feature ships in ES.4, so the effective flag is still false: the gate closes
-    // on the module policy, and the health view says which phase will open it.
-    expect(probe.status, JSON.stringify(probe.body)).toBe(403);
-    expect(errorCode(probe)).toBe('SIGNATURE_MODULE_DISABLED');
+    // Both features are implemented by now (connections ES.4, send ES.9), so the gate reaches its last
+    // question and refuses for the real reason: there is no usable connection (ES.1 acceptance).
+    expect(probe.status, JSON.stringify(probe.body)).toBe(409);
+    expect(errorCode(probe)).toBe('PROVIDER_NOT_CONNECTED');
 
     const health = await call('GET', '/api/v1/ESignature/action/health', ctx.adminToken);
     const gate = health.body['gate'] as { ready: boolean; reason: string };

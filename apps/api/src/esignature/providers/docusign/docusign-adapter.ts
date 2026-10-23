@@ -60,8 +60,8 @@ export const DOCUSIGN_ES4_CAPABILITIES: SignatureProviderCapabilities = Object.f
   // ES.7 — the template catalog, read-only (plan §6.7 forbids updating a provider template).
   listTemplates: true,
   templateDetails: true,
-  // Delivered by their own sub-phases. Declaring them false is what makes the gate's refusal precise.
-  prepareEnvelope: false,
+  // ES.9 — envelope preparation. Sending is ES.10's, and remains refused until it exists.
+  prepareEnvelope: true,
   sendEnvelope: false,
   envelopeStatus: false,
   listRecipients: false,
@@ -284,8 +284,102 @@ export class DocuSignAdapter implements SignatureProviderAdapter {
     };
   }
 
-  async prepareEnvelope(_context: SignatureProviderContext, _input: PrepareEnvelopeInput): Promise<PreparedEnvelope> {
-    throw this.refuse('prepareEnvelope');
+  /**
+   * Create the provider-side **draft** envelope (plan §4.3, §18 `19-ES.9`).
+   *
+   * `status: 'created'` is DocuSign's "draft": nothing is emailed, no signer is invited, and the
+   * envelope can still be replaced or deleted. The local request is not marked sent here — ES.10's
+   * send is the only thing that moves it to `sending`.
+   *
+   * Two shapes, chosen by whether the request carries a template:
+   *
+   *  - **template** — `templateId` + `templateRoles` (name, email, role, routing) with the mapped tab
+   *    values nested under the role they belong to. The template supplies the documents.
+   *  - **documents** — the snapshotted bytes as base64 with a name and extension, and `recipients`
+   *    with the same routing and the same tab placement.
+   *
+   * The idempotency key and the request id travel as text custom fields, so a human looking at the
+   * DocuSign account can tell which CRM request an envelope belongs to even after a lost response.
+   */
+  async prepareEnvelope(context: SignatureProviderContext, input: PrepareEnvelopeInput): Promise<PreparedEnvelope> {
+    const customFields = {
+      textCustomFields: [
+        { name: 'CRMRequestId', value: input.signatureRequestId, required: 'false', show: 'true' },
+        { name: 'CRMPrepareKey', value: input.idempotencyKey, required: 'false', show: 'true' },
+      ],
+    };
+    const body =
+      input.templateId !== null
+        ? {
+            status: 'created',
+            emailSubject: input.subject ?? 'Please sign',
+            ...(input.emailBlurb === null ? {} : { emailBlurb: input.emailBlurb }),
+            templateId: input.templateId,
+            // Only a template envelope has template roles; a document envelope addresses recipients by id.
+            templateRoles: templateRolesFor(input),
+            customFields,
+          }
+        : {
+            status: 'created',
+            emailSubject: input.subject ?? 'Please sign',
+            ...(input.emailBlurb === null ? {} : { emailBlurb: input.emailBlurb }),
+            documents: input.documents.map((document, index) => ({
+              documentId: String(index + 1),
+              name: document.displayName,
+              fileExtension: extensionOfName(document.displayName),
+              documentBase64: Buffer.from(document.bytes).toString('base64'),
+            })),
+            recipients: documentRecipientsFor(input),
+            customFields,
+          };
+
+    const response = await this.transport.request({
+      method: 'POST',
+      url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/envelopes`,
+      headers: { authorization: `Bearer ${context.accessToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      timeoutMs: context.timeoutMs,
+    });
+    if (response.status >= 400) throw providerErrorForStatus(response.status);
+    const parsed = parseJson(response.body);
+    const providerEnvelopeId = stringOf(parsed['envelopeId']);
+    if (providerEnvelopeId === null) {
+      throw new ProviderError('UNKNOWN', 'DocuSign accepted the envelope request but returned no envelope id.', {
+        category: 'permanent_validation',
+        retryable: false,
+        detail: 'envelope_id_missing',
+        status: response.status,
+      });
+    }
+    return {
+      providerEnvelopeId,
+      status: 'draft',
+      preparedAt: stringOf(parsed['statusDateTime']) ?? new Date().toISOString(),
+      idempotencyKey: input.idempotencyKey,
+      // Our snapshot id → the provider's document id, so later phases can name a document unambiguously.
+      providerDocumentIds: Object.fromEntries(input.documents.map((document, index) => [document.documentSnapshotId, String(index + 1)])),
+    };
+  }
+
+  /**
+   * Delete a draft envelope.
+   *
+   * DocuSign permits deleting an envelope that has not been sent; that is exactly the recovery the
+   * plan's ES.9 task asks for. A 404 means it is already gone, which the caller treats as success; a
+   * sent envelope is not deleted here (DocuSign refuses, and voiding is ES.16's deliberate action).
+   */
+  async abandonDraftEnvelope(context: SignatureProviderContext, providerEnvelopeId: string): Promise<{ deleted: boolean }> {
+    const id = providerEnvelopeId.trim();
+    if (id === '') return { deleted: false };
+    const response = await this.transport.request({
+      method: 'DELETE',
+      url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/envelopes/${encodeURIComponent(id)}`,
+      headers: { authorization: `Bearer ${context.accessToken}` },
+      timeoutMs: context.timeoutMs,
+    });
+    if (response.status === 404) return { deleted: false };
+    if (response.status >= 400) throw providerErrorForStatus(response.status);
+    return { deleted: true };
   }
 
   async sendEnvelope(_context: SignatureProviderContext, _input: SendEnvelopeInput): Promise<SentEnvelope> {
@@ -339,6 +433,111 @@ export function detailCodeForStatus(status: number): DocuSignDetailCode {
   if (status === 429) return 'rate_limited';
   if (status >= 500) return 'provider_outage';
   return 'response_invalid';
+}
+
+/** The lower-case extension DocuSign expects for a document, defaulting to `pdf` when a name has none. */
+function extensionOfName(name: string): string {
+  const dot = name.lastIndexOf('.');
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+  return ext === '' ? 'pdf' : ext;
+}
+
+/** Group the mapped tab values by the role that fills them. */
+function tabsByRole(input: PrepareEnvelopeInput): Map<string | null, { tabLabel: string; value: string }[]> {
+  const grouped = new Map<string | null, { tabLabel: string; value: string }[]>();
+  for (const field of input.mappedFields ?? []) {
+    const list = grouped.get(field.roleName) ?? [];
+    list.push({ tabLabel: field.tabLabel, value: field.value });
+    grouped.set(field.roleName, list);
+  }
+  return grouped;
+}
+
+/** How a tab with no role is placed: only allowed when the envelope has exactly one role to put it on. */
+function soleRole(input: PrepareEnvelopeInput): string | null {
+  const roles = [...new Set(input.recipients.map((recipient) => recipient.roleName).filter((role): role is string => role !== null))];
+  return roles.length === 1 ? roles[0] ?? null : null;
+}
+
+function tabsForRole(input: PrepareEnvelopeInput, roleName: string | null): { textTabs: { tabLabel: string; value: string }[] } | undefined {
+  const grouped = tabsByRole(input);
+  const unresolvable = grouped.get(null) ?? [];
+  const own = grouped.get(roleName) ?? [];
+  if (roleName === null) return own.length === 0 ? undefined : { textTabs: own };
+  const fallback = soleRole(input) === roleName ? unresolvable : [];
+  const tabs = [...own, ...fallback];
+  return tabs.length === 0 ? undefined : { textTabs: tabs };
+}
+
+/**
+ * The `templateRoles` DocuSign expects: one entry per recipient that names a template role, with the
+ * mapped tabs nested under it. A recipient without a role cannot fill a template role, and an
+ * unresolvable tab (no role, several roles in the template) is refused rather than guessed.
+ */
+function templateRolesFor(input: PrepareEnvelopeInput): {
+  email: string;
+  name: string;
+  roleName: string;
+  routingOrder: number;
+  tabs?: { textTabs: { tabLabel: string; value: string }[] };
+}[] {
+  const grouped = tabsByRole(input);
+  if ((grouped.get(null) ?? []).length > 0 && soleRole(input) === null) {
+    throw new ProviderError('INVALID_REQUEST', 'A mapped tab has no role, and this template has more than one role to choose from.', {
+      category: 'permanent_validation',
+      retryable: false,
+      detail: 'tab_role_required',
+    });
+  }
+  const roles = input.recipients.filter((recipient) => recipient.roleName !== null);
+  if (roles.length !== input.recipients.length) {
+    throw new ProviderError('INVALID_REQUEST', 'Every recipient of a template envelope must name its template role.', {
+      category: 'permanent_validation',
+      retryable: false,
+      detail: 'template_role_missing',
+    });
+  }
+  return roles.map((recipient) => {
+    const tabs = tabsForRole(input, recipient.roleName);
+    return {
+      email: recipient.email,
+      name: recipient.name,
+      roleName: recipient.roleName ?? '',
+      routingOrder: recipient.routingOrder,
+      ...(tabs === undefined ? {} : { tabs }),
+    };
+  });
+}
+
+/** The `recipients` DocuSign expects for a document envelope, with the same tab placement. */
+function documentRecipientsFor(input: PrepareEnvelopeInput): {
+  signers: { email: string; name: string; recipientId: string; routingOrder: number; tabs?: { textTabs: { tabLabel: string; value: string }[] } }[];
+  carbonCopies: { email: string; name: string; recipientId: string; routingOrder: number }[];
+} {
+  const grouped = tabsByRole(input);
+  if ((grouped.get(null) ?? []).length > 0 && soleRole(input) === null) {
+    throw new ProviderError('INVALID_REQUEST', 'A mapped tab has no role, and this request has more than one role to choose from.', {
+      category: 'permanent_validation',
+      retryable: false,
+      detail: 'tab_role_required',
+    });
+  }
+  const toSigner = (recipient: PrepareEnvelopeInput['recipients'][number]): { email: string; name: string; recipientId: string; routingOrder: number; tabs?: { textTabs: { tabLabel: string; value: string }[] } } => {
+    const tabs = tabsForRole(input, recipient.roleName);
+    return {
+      email: recipient.email,
+      name: recipient.name,
+      recipientId: recipient.recipientId,
+      routingOrder: recipient.routingOrder,
+      ...(tabs === undefined ? {} : { tabs }),
+    };
+  };
+  return {
+    signers: input.recipients.filter((recipient) => recipient.recipientType === 'signer').map(toSigner),
+    carbonCopies: input.recipients
+      .filter((recipient) => recipient.recipientType === 'carbon_copy')
+      .map((recipient) => ({ email: recipient.email, name: recipient.name, recipientId: recipient.recipientId, routingOrder: recipient.routingOrder })),
+  };
 }
 
 /** The DocuSign tab collections a template can carry, as they appear in `documents[].tabs`. */

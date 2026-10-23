@@ -101,7 +101,8 @@ export interface MappingProblem {
     | 'unknown_tab'
     | 'missing_required_tab'
     | 'duplicate_role'
-    | 'duplicate_tab';
+    | 'duplicate_tab'
+    | 'tab_role_mismatch';
   readonly message: string;
   readonly where: string;
 }
@@ -498,6 +499,17 @@ export function validateMappingDefinition(
     const templateTab = templateTabs.get(field.tabName);
     if (templateTab === undefined) {
       problems.push({ code: 'unknown_tab', message: `The template has no tab "${field.tabName}".`, where });
+    } else if ((field.roleName ?? null) !== templateTab.roleName) {
+      // A tab belongs to a role. Sending a value to the wrong signer is a contract signed by the wrong
+      // person, so the mapping must name exactly the role the template puts the tab on (ES.9).
+      problems.push({
+        code: 'tab_role_mismatch',
+        message:
+          templateTab.roleName === null
+            ? `The tab "${field.tabName}" belongs to no role in the template, so the mapping must not name one.`
+            : `The tab "${field.tabName}" belongs to the role "${templateTab.roleName}".`,
+        where,
+      });
     }
     problems.push(...fieldProblems(entities, field.crmField, `${where}.crmField`, lookup));
   });

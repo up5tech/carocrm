@@ -244,7 +244,6 @@ export const ESIGNATURE_FEATURES: readonly ESignatureFeatureDescriptor[] = [
  * does not exist yet is a false promise in an admin screen.
  */
 export const PENDING_FEATURES: readonly { readonly key: string; readonly phase: string }[] = [
-  { key: 'send', phase: '19-ES.9–19-ES.10' },
   { key: 'webhooks', phase: '19-ES.11' },
   { key: 'embeddedSigning', phase: '19-ES.14' },
   { key: 'artifacts', phase: '19-ES.15' },
@@ -568,6 +567,7 @@ export const IMPLEMENTED_PHASES = [
   '19-ES.6',
   '19-ES.7',
   '19-ES.8',
+  '19-ES.9',
 ] as const;
 
 export const ESIGNATURE_MODULE = {

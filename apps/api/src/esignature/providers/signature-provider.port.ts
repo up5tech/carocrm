@@ -148,6 +148,21 @@ export interface PrepareEnvelopeRecipient {
   readonly authenticationMethod: string | null;
 }
 
+/**
+ * One tab value, with the template role it belongs to.
+ *
+ * The role is on the field rather than inferred at send time: a template's tabs belong to specific
+ * recipients, and sending a value to the wrong role is a contract signed by the wrong person. The role
+ * comes from the reviewed mapping (ES.7) and is carried in the snapshot (ES.8), so ES.9 sends exactly
+ * what was reviewed.
+ */
+export interface MappedFieldInput {
+  readonly tabLabel: string;
+  /** `null` when the mapping did not name one: the adapter may only place such a tab on a single-role template. */
+  readonly roleName: string | null;
+  readonly value: string;
+}
+
 export interface PrepareEnvelopeInput {
   readonly signatureRequestId: string;
   /** The caller's own stable key: the same key twice must not create a second provider object. */
@@ -159,6 +174,8 @@ export interface PrepareEnvelopeInput {
   readonly expiresAt: string | null;
   readonly documents: readonly PrepareEnvelopeDocument[];
   readonly recipients: readonly PrepareEnvelopeRecipient[];
+  /** The tab values the mapping resolved, already frozen in the snapshot. */
+  readonly mappedFields?: readonly MappedFieldInput[] | undefined;
 }
 
 export interface PreparedEnvelope {
@@ -326,6 +343,16 @@ export interface SignatureProviderAdapter {
   sendEnvelope(context: SignatureProviderContext, input: SendEnvelopeInput): Promise<SentEnvelope>;
   envelopeStatus(context: SignatureProviderContext, providerEnvelopeId: string): Promise<ProviderEnvelopeStatus>;
   listRecipients(context: SignatureProviderContext, providerEnvelopeId: string): Promise<readonly ProviderRecipientStatus[]>;
+
+  /**
+   * Delete an unsent provider draft.
+   *
+   * The plan asks for "safe cleanup/abandonment of unsent provider drafts where the provider permits
+   * it" (ES.9): a draft envelope invites nobody, so removing it is the correct recovery from a
+   * preparation that was made against the wrong request or superseded by an edit. `deleted: false`
+   * means the provider no longer has it — which is the outcome the caller wanted either way.
+   */
+  abandonDraftEnvelope(context: SignatureProviderContext, providerEnvelopeId: string): Promise<{ readonly deleted: boolean }>;
 
   downloadCompletedDocuments(context: SignatureProviderContext, providerEnvelopeId: string): Promise<readonly ProviderArtifact[]>;
   downloadCompletionEvidence(context: SignatureProviderContext, providerEnvelopeId: string): Promise<readonly ProviderArtifact[]>;

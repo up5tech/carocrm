@@ -319,7 +319,9 @@ describe('the live DocuSign adapter (19-ES.4)', () => {
     expect(adapter.mode).toBe('live');
     expect(adapter.capabilities.connectionStatus).toBe(true);
     expect(adapter.capabilities.accountContext).toBe(true);
-    for (const operation of ['prepareEnvelope', 'sendEnvelope', 'envelopeStatus', 'listRecipients', 'downloadCompletedDocuments', 'downloadCompletionEvidence', 'verifyWebhook'] as const) {
+    // ES.9 moved envelope *preparation* into the adapter; the send itself is ES.10's.
+    expect(DOCUSIGN_ES4_CAPABILITIES.prepareEnvelope).toBe(true);
+    for (const operation of ['sendEnvelope', 'envelopeStatus', 'listRecipients', 'downloadCompletedDocuments', 'downloadCompletionEvidence', 'verifyWebhook'] as const) {
       expect(DOCUSIGN_ES4_CAPABILITIES[operation], operation).toBe(false);
     }
     // The method bodies exist only as a fence; reaching one means the caller skipped the registry.
@@ -425,6 +427,102 @@ describe('the DocuSign template catalog (19-ES.7, plan §6.7)', () => {
     ];
     const detail = await new DocuSignAdapter(transport).templateDetails(context(), 'tpl-1');
     expect(detail.fields).toEqual([{ tabLabel: 'Orphan', roleName: null, documentId: 'doc-1', fieldType: 'text', required: false }]);
+  });
+});
+
+describe('the DocuSign envelope preparation (19-ES.9, plan §4.3)', () => {
+  it('creates a draft envelope from the snapshotted documents and the routing', async () => {
+    const transport = stubTransport();
+    transport.bodies = [JSON.stringify({ envelopeId: 'env-1', status: 'created', statusDateTime: '2026-01-02T03:04:05Z' })];
+    const prepared = await new DocuSignAdapter(transport).prepareEnvelope(context(), {
+      signatureRequestId: 'request-1',
+      idempotencyKey: 'prepare-key-1',
+      correlationId: 'corr-1',
+      templateId: null,
+      subject: 'Please sign',
+      emailBlurb: 'Hello',
+      expiresAt: null,
+      documents: [
+        { documentSnapshotId: 'snap-1', displayName: 'agreement.pdf', mimeType: 'application/pdf', documentOrder: 1, bytes: new TextEncoder().encode('%PDF-1.4'), contentHashSha256: 'a'.repeat(64) },
+      ],
+      recipients: [
+        { recipientId: 'r1', name: 'Signer One', email: 'one@example.invalid', recipientType: 'signer', routingOrder: 1, roleName: 'Signer 1', authenticationMethod: null },
+        { recipientId: 'r2', name: 'Copy', email: 'copy@example.invalid', recipientType: 'carbon_copy', routingOrder: 2, roleName: null, authenticationMethod: null },
+      ],
+      mappedFields: [{ tabLabel: 'Full Name', roleName: 'Signer 1', value: 'Agent Test' }],
+    });
+    const call = transport.calls[0];
+    expect(call?.method).toBe('POST');
+    expect(call?.url).toBe('https://demo.docusign.net/restapi/v2.1/accounts/acct-9/envelopes');
+    const body = JSON.parse(String(call?.body)) as Record<string, unknown>;
+    expect(body['status']).toBe('created');
+    expect(body['emailSubject']).toBe('Please sign');
+    expect(String((body['documents'] as { documentBase64: string }[])[0]?.documentBase64)).toBe(Buffer.from('%PDF-1.4').toString('base64'));
+    const recipients = body['recipients'] as { signers: { recipientId: string; routingOrder: number; tabs: { textTabs: { tabLabel: string; value: string }[] } }[]; carbonCopies: { recipientId: string }[] };
+    expect(recipients.signers.map((signer) => signer.recipientId)).toEqual(['r1']);
+    expect(recipients.signers[0]?.tabs.textTabs).toEqual([{ tabLabel: 'Full Name', value: 'Agent Test' }]);
+    expect(recipients.carbonCopies.map((copy) => copy.recipientId)).toEqual(['r2']);
+    expect(JSON.stringify(body)).toContain('CRMRequestId');
+    expect(prepared).toMatchObject({ providerEnvelopeId: 'env-1', status: 'draft', idempotencyKey: 'prepare-key-1' });
+    expect(prepared.providerDocumentIds).toEqual({ 'snap-1': '1' });
+  });
+
+  it('creates a template draft with the roles and tab values nested under them', async () => {
+    const transport = stubTransport();
+    transport.bodies = [JSON.stringify({ envelopeId: 'env-2', status: 'created' })];
+    await new DocuSignAdapter(transport).prepareEnvelope(context(), {
+      signatureRequestId: 'request-2',
+      idempotencyKey: 'prepare-key-2',
+      correlationId: null,
+      templateId: 'tpl-1',
+      subject: 'Contract',
+      emailBlurb: null,
+      expiresAt: null,
+      documents: [],
+      recipients: [{ recipientId: 'r1', name: 'Signer One', email: 'one@example.invalid', recipientType: 'signer', routingOrder: 1, roleName: 'Signer 1', authenticationMethod: null }],
+      mappedFields: [
+        { tabLabel: 'Full Name', roleName: 'Signer 1', value: 'Agent Test' },
+        { tabLabel: 'Company', roleName: 'Signer 1', value: 'CaroCRM' },
+      ],
+    });
+    const body = JSON.parse(String(transport.calls[0]?.body)) as Record<string, unknown>;
+    expect(body['templateId']).toBe('tpl-1');
+    expect(body['documents']).toBeUndefined();
+    const roles = body['templateRoles'] as { roleName: string; email: string; tabs: { textTabs: { tabLabel: string; value: string }[] } }[];
+    expect(roles).toHaveLength(1);
+    expect(roles[0]?.roleName).toBe('Signer 1');
+    expect(roles[0]?.tabs.textTabs.map((tab) => tab.tabLabel)).toEqual(['Full Name', 'Company']);
+  });
+
+  it('refuses a template envelope whose recipients do not name their roles', async () => {
+    const transport = stubTransport();
+    const failure = await new DocuSignAdapter(transport)
+      .prepareEnvelope(context(), {
+        signatureRequestId: 'request-3',
+        idempotencyKey: 'k',
+        correlationId: null,
+        templateId: 'tpl-1',
+        subject: null,
+        emailBlurb: null,
+        expiresAt: null,
+        documents: [],
+        recipients: [{ recipientId: 'r1', name: 'Signer', email: 's@example.invalid', recipientType: 'signer', routingOrder: 1, roleName: null, authenticationMethod: null }],
+      })
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ProviderError);
+    expect((failure as ProviderError).detail).toBe('template_role_missing');
+    expect(transport.calls).toHaveLength(0);
+  });
+
+  it('deletes a draft envelope and treats a missing one as already gone', async () => {
+    const transport = stubTransport();
+    transport.statuses = [204, 404];
+    transport.bodies = ['', ''];
+    const adapter = new DocuSignAdapter(transport);
+    expect(await adapter.abandonDraftEnvelope(context(), 'env-1')).toEqual({ deleted: true });
+    expect(transport.calls[0]?.method).toBe('DELETE');
+    expect(transport.calls[0]?.url).toBe('https://demo.docusign.net/restapi/v2.1/accounts/acct-9/envelopes/env-1');
+    expect(await adapter.abandonDraftEnvelope(context(), 'env-2')).toEqual({ deleted: false });
   });
 });
 

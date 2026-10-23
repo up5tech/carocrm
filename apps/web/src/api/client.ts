@@ -1826,6 +1826,15 @@ export const api = {
   /** Record the preview. `confirm` is the sender's deliberate act; nothing is sent here. */
   prepareESignatureRequest: (id: string, input: { version: number; confirm: boolean }) =>
     request<{ request: ESignatureRequestView; preview: ESignatureSendPreview }>(`/ESignature/requests/${encodeURIComponent(id)}/prepare`, post(input)),
+  /** Create the provider-side draft (ES.9). A draft: no invitation is sent. */
+  createESignatureEnvelope: (id: string, input: { version: number }) =>
+    request<{ request: ESignatureRequestView; envelope: { providerEnvelopeId: string; status: string; createdAt: string; created: boolean } }>(
+      `/ESignature/requests/${encodeURIComponent(id)}/envelope`,
+      post(input),
+    ),
+  /** Delete the provider draft while nothing has been sent. */
+  abandonESignatureEnvelope: (id: string) =>
+    request<{ request: ESignatureRequestView; deleted: boolean }>(`/ESignature/requests/${encodeURIComponent(id)}/envelope/abandon`, post({})),
   eSignatureRequestDocuments: (id: string) =>
     request<readonly ESignatureRequestDocument[]>(`/ESignature/requests/${encodeURIComponent(id)}/documents`),
   attachESignatureRequestDocument: (id: string, attachmentId: string) =>

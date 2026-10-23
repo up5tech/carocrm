@@ -3246,6 +3246,8 @@ export interface ESignatureRequestView {
   readonly status: string;
   readonly providerKey: string;
   readonly connectionId: string | null;
+  readonly providerEnvelopeId: string | null;
+  readonly providerStatusRaw: string | null;
   readonly source: ESignatureRequestSource | null;
   readonly subject: string | null;
   readonly message: string | null;

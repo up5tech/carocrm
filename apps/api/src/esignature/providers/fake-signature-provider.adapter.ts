@@ -185,6 +185,16 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
     else if (done > 0) envelope.state = 'partially_signed';
   }
 
+  /** Remove a draft envelope. A sent one is kept: it is the provider's record of an invitation. */
+  async abandonDraftEnvelope(context: SignatureProviderContext, providerEnvelopeId: string): Promise<{ deleted: boolean }> {
+    this.record('abandonDraftEnvelope', context, { providerEnvelopeId });
+    const envelope = this.envelopes.get(providerEnvelopeId);
+    if (envelope === undefined || envelope.state !== 'draft') return { deleted: false };
+    this.envelopes.delete(providerEnvelopeId);
+    this.byIdempotencyKey.delete(envelope.idempotencyKey);
+    return { deleted: true };
+  }
+
   async connectionStatus(context: SignatureProviderContext): Promise<ProviderConnectionStatus> {
     this.record('connectionStatus', context, {});
     return { reachable: true, checkedAt: this.stamp(), detailCode: null };
@@ -245,7 +255,14 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
    * create uncontrolled duplicate provider drafts" both rest on this being a lookup, not a creation.
    */
   async prepareEnvelope(context: SignatureProviderContext, input: PrepareEnvelopeInput): Promise<PreparedEnvelope> {
-    this.record('prepareEnvelope', context, { signatureRequestId: input.signatureRequestId, documents: input.documents.length });
+    this.record('prepareEnvelope', context, {
+      signatureRequestId: input.signatureRequestId,
+      documents: input.documents.length,
+      templateId: input.templateId,
+      recipients: input.recipients.length,
+      // Lets a test assert that the reviewed tab values reached the provider input.
+      mappedTabs: (input.mappedFields ?? []).length,
+    });
     const existing = this.byIdempotencyKey.get(input.idempotencyKey);
     if (existing !== undefined) {
       const envelope = this.requireEnvelope(existing);

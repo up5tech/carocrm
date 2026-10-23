@@ -330,6 +330,15 @@
     "role": "Template role",
     "confirm": "I have reviewed the documents, recipients and routing above.",
     "prepare": "Prepare this request",
-    "prepared": "The preview was recorded. Nothing has been sent."
+    "prepared": "The preview was recorded. Nothing has been sent.",
+    "envelopeHint": "Create the provider draft when the review is final. A draft invites nobody and can be deleted.",
+    "envelopeCreate": "Create provider draft",
+    "envelopeCreated": "The provider draft was created. Nothing has been sent.",
+    "envelopeExisting": "This request already has a provider draft.",
+    "envelopeFailed": "The provider draft could not be created.",
+    "envelopeId": "Draft: {id}",
+    "envelopeAbandon": "Delete draft",
+    "envelopeAbandonConfirm": "Delete the provider draft? Nothing has been sent from it.",
+    "envelopeAbandoned": "The provider draft was deleted."
   }
 }

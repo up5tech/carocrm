@@ -330,6 +330,15 @@
     "role": "Vai trò trong mẫu",
     "confirm": "Tôi đã xem lại tài liệu, người nhận và thứ tự gửi ở trên.",
     "prepare": "Chuẩn bị yêu cầu này",
-    "prepared": "Đã ghi bản xem trước. Chưa có gì được gửi."
+    "prepared": "Đã ghi bản xem trước. Chưa có gì được gửi.",
+    "envelopeHint": "Tạo bản nháp tại nhà cung cấp khi bản xem trước đã chốt. Bản nháp không mời ai và có thể xoá.",
+    "envelopeCreate": "Tạo bản nháp nhà cung cấp",
+    "envelopeCreated": "Đã tạo bản nháp tại nhà cung cấp. Chưa có gì được gửi.",
+    "envelopeExisting": "Yêu cầu này đã có bản nháp tại nhà cung cấp.",
+    "envelopeFailed": "Không tạo được bản nháp tại nhà cung cấp.",
+    "envelopeId": "Bản nháp: {id}",
+    "envelopeAbandon": "Xoá bản nháp",
+    "envelopeAbandonConfirm": "Xoá bản nháp tại nhà cung cấp? Chưa có gì được gửi từ đó.",
+    "envelopeAbandoned": "Đã xoá bản nháp tại nhà cung cấp."
   }
 }

@@ -695,6 +695,40 @@ export class SignatureRequestRepository {
     return toRequest(row);
   }
 
+  /**
+   * Forget a provider draft that was abandoned at the provider.
+   *
+   * Only an unsent request may release its envelope: once `sending` began the id is evidence of a real
+   * attempt and must never be cleared (plan §4.3). The provider call happens first; this is the local
+   * half of the same deliberate action.
+   */
+  async releaseProviderEnvelope(id: string, expectedVersion: number, actorId?: string): Promise<SignatureRequest> {
+    const current = await this.requireById(id);
+    if (current.version !== expectedVersion) throw new ConcurrencyConflictError('SignatureRequest', id);
+    if (current.status !== 'ready_to_send' && current.status !== 'pending_approval') {
+      throw new ValidationError('Only a request that has not been sent can release its provider draft.', {
+        code: 'SIGNATURE_REQUEST_INVALID_STATE',
+        status: current.status,
+      });
+    }
+    const row = await this.db
+      .updateTable('signature_requests')
+      .set({
+        provider_envelope_id: null,
+        provider_status_raw: null,
+        last_provider_sync_at: new Date(),
+        version: current.version + 1,
+        modified_at: new Date(),
+        ...(actorId === undefined ? {} : { modified_by_id: actorId }),
+      })
+      .where('id', '=', id)
+      .where('version', '=', expectedVersion)
+      .returningAll()
+      .executeTakeFirst();
+    if (row === undefined) throw new ConcurrencyConflictError('SignatureRequest', id);
+    return toRequest(row);
+  }
+
   /** Soft delete. A sent request is never removed: it is evidence of what was signed. */
   async softDelete(id: string, actorId?: string): Promise<SignatureRequest> {
     const current = await this.requireById(id);

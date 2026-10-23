@@ -529,9 +529,83 @@ function PreviewSection(props: { request: ESignatureRequestView; canPrepare: boo
               </Button>
             </Space>
           ) : null}
+          <EnvelopeSection request={props.request} canPrepare={props.canPrepare} onChanged={props.onPrepared} />
         </Space>
       )}
     </Card>
+  );
+}
+
+/**
+ * The provider draft (ES.9): created from the prepared snapshot, and abandoned while nothing is sent.
+ *
+ * A draft envelope invites nobody — the signers are not emailed until ES.10 sends — so abandoning it is
+ * a safe recovery from a preparation made against the wrong request.
+ */
+function EnvelopeSection(props: { request: ESignatureRequestView; canPrepare: boolean; onChanged: () => void }) {
+  const { message } = AntApp.useApp();
+  const [pending, setPending] = useState(false);
+  const ready = props.request.status === 'ready_to_send';
+  if (!ready) return null;
+
+  const create = async (): Promise<void> => {
+    setPending(true);
+    try {
+      const result = await api.createESignatureEnvelope(props.request.id, { version: props.request.version });
+      message.success(result.envelope.created ? t('esignature.preview.envelopeCreated') : t('esignature.preview.envelopeExisting'));
+      props.onChanged();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('esignature.preview.envelopeFailed'));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const abandon = async (): Promise<void> => {
+    setPending(true);
+    try {
+      await api.abandonESignatureEnvelope(props.request.id);
+      message.success(t('esignature.preview.envelopeAbandoned'));
+      props.onChanged();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('esignature.preview.envelopeFailed'));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <Space size={8} wrap>
+      {props.request.providerEnvelopeId === null ? (
+        <>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t('esignature.preview.envelopeHint')}
+          </Typography.Text>
+          {props.canPrepare ? (
+            <Button size="small" loading={pending} onClick={() => void create()}>
+              {t('esignature.preview.envelopeCreate')}
+            </Button>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <Tag color="blue">{t('esignature.preview.envelopeId', { id: props.request.providerEnvelopeId })}</Tag>
+          <Tag>{props.request.providerStatusRaw ?? 'draft'}</Tag>
+          {props.canPrepare ? (
+            <Popconfirm
+              title={t('esignature.preview.envelopeAbandonConfirm')}
+              okText={t('core.common.confirm')}
+              cancelText={t('core.common.cancel')}
+              onConfirm={() => void abandon()}
+            >
+              <Button size="small" danger loading={pending}>
+                {t('esignature.preview.envelopeAbandon')}
+              </Button>
+            </Popconfirm>
+          ) : null}
+        </>
+      )}
+    </Space>
   );
 }
 

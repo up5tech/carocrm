@@ -22,7 +22,7 @@ import { assertProviderUrl, ProviderHttpError } from '../../../advanced-integrat
  */
 
 export interface DocuSignHttpRequest {
-  readonly method: 'GET' | 'POST';
+  readonly method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   readonly url: string;
   readonly headers?: Readonly<Record<string, string>>;
   readonly body?: string;

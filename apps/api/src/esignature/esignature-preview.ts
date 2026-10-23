@@ -94,7 +94,10 @@ export function buildSignaturePreview(input: PreviewInputs): SignaturePreview {
   const signers = recipients.filter((recipient) => recipient.recipientType === 'signer');
   const problems: PreviewProblem[] = [];
 
-  if (documents.length === 0) {
+  // A template envelope carries the template's own documents, so a mapped request does not need a local
+  // one; a document request does (plan §6.7, §4.5).
+  const usesTemplate = request.templateMappingId !== null;
+  if (documents.length === 0 && !usesTemplate) {
     problems.push({ code: 'no_documents', message: 'The request has no document to sign.', where: 'documents' });
   }
   if (documents.length > settings.documents.maxDocumentsPerRequest) {
@@ -216,7 +219,20 @@ export function buildSignaturePreview(input: PreviewInputs): SignaturePreview {
               remindersEnabled: settings.signing.remindersEnabled,
             },
           },
-          ...(mapping === null ? {} : { templateMappingId: mapping.id, templateMappingVersion: mapping.version }),
+          ...(mapping === null
+            ? {}
+            : {
+                templateMappingId: mapping.id,
+                templateMappingVersion: mapping.version,
+                // The values the provider will put in the template's tabs. They are part of the reviewed
+                // payload: a source record edited after the preview must change the digest (ES.9).
+                mappedFields: mapping.fieldMappings.flatMap((field) => {
+                  const value = input.sourceValues?.[field.crmField];
+                  if (value === undefined || value === null) return [];
+                  const text = typeof value === 'string' ? value : typeof value === 'number' || typeof value === 'boolean' ? String(value) : '';
+                  return text.trim() === '' ? [] : [{ tabLabel: field.tabName, roleName: field.roleName ?? null, value: text.slice(0, 500) }];
+                }),
+              }),
         };
 
   const digest = data === null ? null : outgoingSnapshotDigest(data);

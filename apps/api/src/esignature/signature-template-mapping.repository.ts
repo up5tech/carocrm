@@ -44,6 +44,14 @@ export interface SignatureFieldMapping {
   readonly tabName: string;
   readonly crmField: string;
   readonly required: boolean;
+  /**
+   * The template role the tab belongs to (ES.7/ES.9).
+   *
+   * Optional on the type because rows written before ES.7 lack it; a template that declares a role for
+   * the tab requires the mapping to name the same one, and ES.9 refuses to place an unaddressed tab on a
+   * multi-role envelope.
+   */
+  readonly roleName?: string | null | undefined;
 }
 
 export interface SignatureTemplateMapping {
@@ -262,7 +270,7 @@ export function normalizeFieldMappings(values: readonly unknown[]): SignatureFie
   return values.map((raw, index) => {
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) throw new ValidationError(`Field mapping ${String(index)} must be an object.`);
     const entry = raw as Record<string, unknown>;
-    const allowed = new Set(['tabName', 'crmField', 'required']);
+    const allowed = new Set(['tabName', 'crmField', 'required', 'roleName']);
     for (const key of Object.keys(entry)) {
       if (!allowed.has(key)) throw new ValidationError(`Field mapping ${String(index)} has an unknown property "${key}".`, { key });
     }
@@ -270,7 +278,8 @@ export function normalizeFieldMappings(values: readonly unknown[]): SignatureFie
     const crmField = literal(entry['crmField'], `field mapping ${String(index)}.crmField`);
     const required = entry['required'];
     if (typeof required !== 'boolean') throw new ValidationError('A field mapping states whether the tab is required.', { index });
-    return { tabName, crmField, required };
+    const roleName = entry['roleName'] === null || entry['roleName'] === undefined ? null : literal(entry['roleName'], `field mapping ${String(index)}.roleName`);
+    return { tabName, crmField, required, roleName };
   });
 }
 

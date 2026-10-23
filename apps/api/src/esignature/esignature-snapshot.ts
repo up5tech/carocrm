@@ -71,6 +71,13 @@ export interface OutgoingSnapshotData {
    */
   readonly templateMappingId?: string | null | undefined;
   readonly templateMappingVersion?: number | null | undefined;
+  /**
+   * The tab values the mapping resolved, with the template role each belongs to (ES.7/ES.8).
+   *
+   * They are in the snapshot because they are part of what was reviewed: a source record edited between
+   * the preview and the send must change the digest, not the envelope.
+   */
+  readonly mappedFields?: readonly { readonly tabLabel: string; readonly roleName: string | null; readonly value: string }[] | undefined;
 }
 
 export interface SnapshotEnvelope<T> {

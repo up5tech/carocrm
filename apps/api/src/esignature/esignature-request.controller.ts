@@ -8,6 +8,7 @@ import {
   RequestCreateSchema,
   RequestDocumentAttachSchema,
   RequestDocumentReplaceSchema,
+  RequestEnvelopeSchema,
   RequestListQuerySchema,
   RequestPrepareSchema,
   RequestRecipientsSchema,
@@ -99,6 +100,25 @@ export class ESignatureRequestController {
   @Post(':id/prepare')
   async prepare(@Param('id') id: string, @Body() body: unknown) {
     return this.requests.prepare(this.id(id), this.parse(RequestPrepareSchema, body));
+  }
+
+  /**
+   * Create the provider-side draft envelope from the prepared snapshot (ES.9).
+   *
+   * A draft: no invitation, no email, and the request stays `ready_to_send`. A retry returns the
+   * envelope already recorded; an edit after preparation is refused until the preview is prepared again.
+   */
+  @HttpCode(200)
+  @Post(':id/envelope')
+  async prepareEnvelope(@Param('id') id: string, @Body() body: unknown) {
+    return this.requests.prepareEnvelopeAtProvider(this.id(id), this.parse(RequestEnvelopeSchema, body));
+  }
+
+  /** Delete the provider draft and forget it, while nothing has been sent. */
+  @HttpCode(200)
+  @Post(':id/envelope/abandon')
+  async abandonEnvelope(@Param('id') id: string) {
+    return this.requests.abandonProviderEnvelope(this.id(id));
   }
 
   @Get(':id/recipients')

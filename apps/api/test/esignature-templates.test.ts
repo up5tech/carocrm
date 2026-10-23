@@ -131,7 +131,7 @@ function mappingPayload(overrides: Record<string, unknown> = {}): Record<string,
     providerTemplateId: TEMPLATE,
     supportedSourceEntities: ['Account'],
     roleMappings: [{ roleName: 'Signer 1', recipientType: 'signer', routingOrder: 1, source: 'crmField', crmField: 'emailAddress' }],
-    fieldMappings: [{ tabName: 'Full Name', crmField: 'name', required: true }],
+    fieldMappings: [{ tabName: 'Full Name', crmField: 'name', required: true, roleName: 'Signer 1' }],
     ...overrides,
   };
 }
@@ -282,8 +282,8 @@ describe('configuring a mapping (acceptance 1, 2)', () => {
   it('refuses an unknown tab, and a required data tab left unmapped', async () => {
     const unknownTab = await call('POST', '/api/v1/ESignature/templates/mappings', ctx.adminToken, mappingPayload({
       fieldMappings: [
-        { tabName: 'Full Name', crmField: 'name', required: true },
-        { tabName: 'Not A Tab', crmField: 'name', required: false },
+        { tabName: 'Full Name', crmField: 'name', required: true, roleName: 'Signer 1' },
+        { tabName: 'Not A Tab', crmField: 'name', required: false, roleName: 'Signer 1' },
       ],
     }));
     expect(unknownTab.status).toBe(422);
@@ -296,13 +296,13 @@ describe('configuring a mapping (acceptance 1, 2)', () => {
 
   it('refuses a field the source entity does not carry, and a field type a tab cannot hold', async () => {
     const unknownField = await call('POST', '/api/v1/ESignature/templates/mappings', ctx.adminToken, mappingPayload({
-      fieldMappings: [{ tabName: 'Full Name', crmField: 'noSuchField', required: true }],
+      fieldMappings: [{ tabName: 'Full Name', crmField: 'noSuchField', required: true, roleName: 'Signer 1' }],
     }));
     expect(unknownField.status).toBe(422);
     expect(problems(unknownField)).toContain('unknown_field');
 
     const notMappable = await call('POST', '/api/v1/ESignature/templates/mappings', ctx.adminToken, mappingPayload({
-      fieldMappings: [{ tabName: 'Full Name', crmField: 'assignedUserId', required: true }],
+      fieldMappings: [{ tabName: 'Full Name', crmField: 'assignedUserId', required: true, roleName: 'Signer 1' }],
     }));
     expect(notMappable.status).toBe(422);
     expect(problems(notMappable)).toContain('field_type_not_mappable');
@@ -332,7 +332,7 @@ describe('configuring a mapping (acceptance 1, 2)', () => {
         providerTemplateId: TEMPLATE,
         supportedSourceEntities: ['Account'],
         roleMappings: [],
-        fieldMappings: [{ tabName: 'Full Name', crmField: 'name', required: true }],
+        fieldMappings: [{ tabName: 'Full Name', crmField: 'name', required: true, roleName: 'Signer 1' }],
       },
       detail,
     );

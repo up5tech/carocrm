@@ -2,19 +2,27 @@ import { AuthorizationDeniedError, ConcurrencyConflictError, ValidationError } f
 import type { RecordStorePort } from '@carocrm/entity-engine/entity-manager/index.js';
 import type { EntityRecord } from '@carocrm/entity-engine/types/index.js';
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 
-import { AclApiService,type AclRecordLike } from '../acl/acl-api.service.js';
+import { AclApiService, type AclRecordLike } from '../acl/acl-api.service.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
+import { DatabaseService } from '../database/database.service.js';
 import { ENTITY_STORE } from '../entity/entity-record.store.js';
-import { METADATA_STORE,type MetadataStoreService } from '../metadata/metadata-store.service.js';
+import { METADATA_STORE, type MetadataStoreService } from '../metadata/metadata-store.service.js';
+import { ESignatureConnectionService } from './esignature-connection.service.js';
+import { ESignatureConnectionGate } from './esignature-connection-gate.service.js';
 import { ESignatureDocumentService } from './esignature-document.service.js';
 import type { SignatureRequestStatus } from './esignature-domain.js';
-import { signatureModuleDisabledError, signatureRequestInvalidStateError } from './esignature-errors.js';
+import { providerNotConnectedError, signatureModuleDisabledError, signatureRequestInvalidStateError } from './esignature-errors.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { buildSignaturePreview, type SignaturePreview } from './esignature-preview.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { buildSnapshot } from './esignature-snapshot.js';
 import { isEditable } from './esignature-state-machine.js';
+import { toModuleError } from './providers/signature-provider.errors.js';
+import { correlationId, prepareIdentity } from './providers/signature-provider.idempotency.js';
+import type { PrepareEnvelopeInput } from './providers/signature-provider.port.js';
+import { SignatureProviderRegistry } from './providers/signature-provider.registry.js';
 import { type AuditInput, SignatureAuditRepository } from './signature-audit.repository.js';
 import { SignatureConnectionRepository } from './signature-connection.repository.js';
 import { type SignatureDocumentSnapshot, SignatureDocumentSnapshotRepository } from './signature-document-snapshot.repository.js';
@@ -101,6 +109,9 @@ export interface SignatureRequestView {
   readonly status: SignatureRequestStatus;
   readonly providerKey: string;
   readonly connectionId: string | null;
+  /** The provider's draft envelope, once ES.9 prepared one. Null until then, and after an abandonment. */
+  readonly providerEnvelopeId: string | null;
+  readonly providerStatusRaw: string | null;
   /** The template mapping the draft uses, when it uses one (ES.8). */
   readonly templateMappingId: string | null;
   readonly source: SignatureRequestSourceView | null;
@@ -168,6 +179,10 @@ export class ESignatureRequestService {
     @Inject(SignatureAuditRepository) private readonly audit: SignatureAuditRepository,
     @Inject(SignatureConnectionRepository) private readonly connections: SignatureConnectionRepository,
     @Inject(SignatureTemplateMappingRepository) private readonly mappings: SignatureTemplateMappingRepository,
+    @Inject(ESignatureConnectionGate) private readonly gate: ESignatureConnectionGate,
+    @Inject(ESignatureConnectionService) private readonly connectionService: ESignatureConnectionService,
+    @Inject(SignatureProviderRegistry) private readonly providers: SignatureProviderRegistry,
+    @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(AclApiService) private readonly acl: AclApiService,
     @Inject(ENTITY_STORE) private readonly store: RecordStorePort,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
@@ -427,6 +442,166 @@ export class ESignatureRequestService {
     return { request: await this.view(updated), preview: await this.buildPreview(updated) };
   }
 
+  // ---------------------------------------------------------------------------
+  // provider envelope preparation (19-ES.9)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Create the provider-side **draft** envelope from the prepared snapshot.
+   *
+   * Nothing is sent: `status: 'created'` at DocuSign means a draft, no invitation and no email (plan
+   * §4.3, §18 `19-ES.9`). The local request stays `ready_to_send` and gains the envelope id; ES.10 is the
+   * only thing that moves it to `sending`.
+   *
+   * Three guards make a retry safe rather than duplicating:
+   *
+   *  - an envelope already recorded is returned as-is, with no provider call;
+   *  - the whole call runs under a per-request advisory lock, so two concurrent clicks serialise and the
+   *    loser sees the winner's envelope;
+   *  - the idempotency key is derived from the request and the *snapshot digest*, so a retried call of
+   *    the same reviewed payload is the same key to the adapter, and a changed draft is a different one
+   *    — which the stale-preview guard refuses before it gets that far.
+   */
+  async prepareEnvelopeAtProvider(
+    id: string,
+    input: { version: number },
+  ): Promise<{ request: SignatureRequestView; envelope: { providerEnvelopeId: string; status: string; createdAt: string; created: boolean } }> {
+    const request = await this.loadScoped(id, 'write');
+    await this.gate.assertOperation('prepareEnvelope');
+    if (request.status !== 'ready_to_send') throw signatureRequestInvalidStateError(request.status, 'create a provider envelope');
+    if (request.providerEnvelopeId !== null) {
+      return {
+        request: await this.view(request),
+        envelope: { providerEnvelopeId: request.providerEnvelopeId, status: request.providerStatusRaw ?? 'draft', createdAt: request.modifiedAt, created: false },
+      };
+    }
+    if (request.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
+    if (request.outgoingSnapshot === null || request.outgoingDigest === null) {
+      throw new ValidationError('The request has no prepared preview, so no provider envelope can be created from it.', { code: 'PREVIEW_REQUIRED' });
+    }
+    // The stored snapshot must still describe the request: an edit after preparation makes it stale.
+    const preview = await this.buildPreview(request);
+    if (preview.digest !== request.outgoingDigest) {
+      throw new ValidationError('The request changed after its preview was recorded. Prepare the preview again before creating an envelope.', { code: 'PREVIEW_OUTDATED' });
+    }
+    const snapshot = request.outgoingSnapshot;
+    const snapshotDigest = request.outgoingDigest;
+    const connection = request.connectionId === null ? undefined : await this.connections.findById(request.connectionId);
+    if (connection === undefined) throw providerNotConnectedError('no_connection');
+
+    return this.database.db.transaction().execute(async (tx) => {
+      // Serialise preparations for this request: two clicks must not create two provider drafts.
+      await sql`select pg_advisory_xact_lock(hashtext(${id}))`.execute(tx);
+      const current = await this.requests.requireById(id);
+      if (current.providerEnvelopeId !== null) {
+        return {
+          request: await this.view(current),
+          envelope: { providerEnvelopeId: current.providerEnvelopeId, status: current.providerStatusRaw ?? 'draft', createdAt: current.modifiedAt, created: false },
+        };
+      }
+      if (current.status !== 'ready_to_send') throw signatureRequestInvalidStateError(current.status, 'create a provider envelope');
+      if (current.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
+
+      const context = await this.connectionService.contextFor(connection);
+      const adapter = this.providers.assertOperation(connection.providerKey, 'prepareEnvelope');
+      // A template envelope carries the template's documents; only a document envelope needs the bytes.
+      const documents: { documentSnapshotId: string; displayName: string; mimeType: string; documentOrder: number; bytes: Uint8Array; contentHashSha256: string }[] = [];
+      if (snapshot.data.templateId === null) {
+        for (const document of snapshot.data.documents) {
+          const opened = await this.documents.openSnapshot(document.documentSnapshotId);
+          documents.push({
+            documentSnapshotId: document.documentSnapshotId,
+            displayName: document.displayName,
+            mimeType: document.mimeType,
+            documentOrder: document.documentOrder,
+            bytes: opened.bytes,
+            contentHashSha256: document.contentHashSha256,
+          });
+        }
+      }
+      const identity = prepareIdentity({
+        connectionId: connection.id,
+        signatureRequestId: id,
+        snapshotDigest,
+        fallbackCorrelationId: correlationId(),
+      });
+      const envelopeInput: PrepareEnvelopeInput = {
+        signatureRequestId: id,
+        idempotencyKey: identity.idempotencyKey,
+        correlationId: identity.correlationId,
+        templateId: snapshot.data.templateId,
+        subject: snapshot.data.subject,
+        emailBlurb: snapshot.data.emailBlurb,
+        expiresAt: snapshot.data.expiresAt,
+        documents,
+        recipients: snapshot.data.recipients.map((recipient) => ({
+          recipientId: recipient.recipientId,
+          name: recipient.name,
+          email: recipient.email,
+          recipientType: recipient.recipientType === 'carbon_copy' ? 'carbon_copy' : 'signer',
+          routingOrder: recipient.routingOrder,
+          roleName: recipient.roleName,
+          authenticationMethod: recipient.authenticationMethod,
+        })),
+        mappedFields: snapshot.data.mappedFields ?? [],
+      };
+      let prepared;
+      try {
+        prepared = await adapter.prepareEnvelope(context, envelopeInput);
+      } catch (error) {
+        // A transport failure here may still have created a draft at the provider; the stable failure
+        // says so by category, and the abandon/reconcile path is the operator's next step.
+        throw toModuleError(error, connection.providerKey);
+      }
+      const updated = await this.requests.attachProviderEnvelope(id, current.version, prepared.providerEnvelopeId, prepared.status);
+      await this.audit.append({
+        action: 'request.prepared',
+        requestId: id,
+        actor: this.actorRef(),
+        detail: { envelopeCreated: true, envelopeStatus: prepared.status, providerDocumentCount: Object.keys(prepared.providerDocumentIds).length },
+      });
+      return {
+        request: await this.view(updated),
+        envelope: { providerEnvelopeId: prepared.providerEnvelopeId, status: 'draft', createdAt: prepared.preparedAt, created: true },
+      };
+    });
+  }
+
+  /**
+   * Delete the provider draft and forget it locally.
+   *
+   * Only an unsent request may do this, and only while it still names an envelope; the provider call is
+   * attempted first, and the id is cleared either way — a draft the provider already lost needs no local
+   * trace, and leaving the id behind would block the next preparation forever.
+   */
+  async abandonProviderEnvelope(id: string): Promise<{ request: SignatureRequestView; deleted: boolean }> {
+    const request = await this.loadScoped(id, 'write');
+    if (request.providerEnvelopeId === null) {
+      throw new ValidationError('The request has no provider envelope to abandon.', { code: 'SIGNATURE_REQUEST_INVALID_STATE' });
+    }
+    if (request.status !== 'ready_to_send' && request.status !== 'pending_approval') {
+      throw signatureRequestInvalidStateError(request.status, 'abandon the provider draft');
+    }
+    const connection = request.connectionId === null ? undefined : await this.connections.findById(request.connectionId);
+    if (connection === undefined) throw providerNotConnectedError('no_connection');
+    const adapter = this.providers.require(connection.providerKey);
+    const context = await this.connectionService.contextFor(connection);
+    let deleted = false;
+    try {
+      ({ deleted } = await adapter.abandonDraftEnvelope(context, request.providerEnvelopeId));
+    } catch (error) {
+      throw toModuleError(error, connection.providerKey);
+    }
+    const released = await this.requests.releaseProviderEnvelope(id, request.version, this.scope.userId);
+    await this.audit.append({
+      action: 'request.updated',
+      requestId: id,
+      actor: this.actorRef(),
+      detail: { change: 'provider_draft_abandoned', providerDeleted: deleted },
+    });
+    return { request: await this.view(released), deleted };
+  }
+
   private async buildPreview(request: SignatureRequest): Promise<SignaturePreview> {
     const [documents, recipients] = await Promise.all([
       this.snapshots.listForRequest(request.id, ['source_snapshot']),
@@ -515,6 +690,8 @@ export class ESignatureRequestService {
       status: request.status,
       providerKey: request.providerKey,
       connectionId: request.connectionId,
+      providerEnvelopeId: request.providerEnvelopeId,
+      providerStatusRaw: request.providerStatusRaw,
       templateMappingId: request.templateMappingId,
       source: await this.resolveSource(request.sourceEntityType, request.sourceRecordId),
       subject: request.subject,
