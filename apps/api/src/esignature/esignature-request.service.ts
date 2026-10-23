@@ -25,6 +25,7 @@ import {
   signatureApprovalRequiredError,
   signatureModuleDisabledError,
   signatureRequestInvalidStateError,
+  signatureResendRateLimitedError,
 } from './esignature-errors.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { buildSignaturePreview, type SignaturePreview } from './esignature-preview.js';
@@ -1155,6 +1156,203 @@ export class ESignatureRequestService {
       },
     });
     return { artifacts: stored.map(toDocumentView), created };
+  }
+
+  /**
+   * Send a reminder to the outstanding recipients (ES.16).
+   *
+   * The permission (`send`), the state (an envelope that is open), the installation policy
+   * (`remindersEnabled`) and the cooldown are all checked before the provider is asked. Only a
+   * successful call starts the cooldown window, so a refused attempt neither spams nor locks the user.
+   */
+  async resendNotification(id: string, input: { recipientId?: string | null | undefined }): Promise<{
+    request: SignatureRequestView;
+    resentAt: string;
+    recipientId: string | null;
+  }> {
+    const request = await this.loadScoped(id, 'send');
+    await this.gate.assertOperation('resendNotifications');
+    const settings = await this.settingsService.settings();
+    if (!settings.signing.remindersEnabled) throw signatureActionNotAvailableError('resend', 'reminders_disabled');
+    if (request.status !== 'sent' && request.status !== 'delivered' && request.status !== 'partially_signed') {
+      throw signatureRequestInvalidStateError(request.status, 'send a reminder');
+    }
+    if (request.providerEnvelopeId === null || request.connectionId === null) throw providerNotConnectedError('no_connection');
+    const connection = await this.connections.findById(request.connectionId);
+    if (connection === undefined) throw providerNotConnectedError('no_connection');
+
+    const cooldownMs = settings.signing.resendCooldownMinutes * 60_000;
+    if (cooldownMs > 0) {
+      const last = await this.audit.latestSuccessfulAt(request.id, ['reminder.sent']);
+      if (last !== null) {
+        const elapsed = Date.now() - last.getTime();
+        if (elapsed < cooldownMs) throw signatureResendRateLimitedError(Math.ceil((cooldownMs - elapsed) / 1000));
+      }
+    }
+
+    const recipient = input.recipientId === undefined || input.recipientId === null ? null : await this.recipients.assertMatches(request.id, input.recipientId);
+    if (recipient !== null && (recipient.status === 'completed' || recipient.status === 'declined' || recipient.status === 'canceled')) {
+      throw signatureRequestInvalidStateError(recipient.status, 'remind this recipient');
+    }
+    const context = await this.connectionService.contextFor(connection);
+    const adapter = this.providers.assertOperation(connection.providerKey, 'resendNotifications');
+    const recipientProviderIds =
+      recipient === null ? [] : [await this.providerRecipientIdFor(recipient, request.providerEnvelopeId, adapter, context)];
+    const identity = idempotencyKey({
+      purpose: 'resendNotifications',
+      connectionId: connection.id,
+      signatureRequestId: request.id,
+      providerEnvelopeId: request.providerEnvelopeId,
+      // A new click is a new platform request id; a transport retry of one click keeps it.
+      discriminator: `${recipient?.id ?? 'all'}:${correlationId()}`,
+    });
+    let result;
+    try {
+      result = await adapter.resendNotifications(context, {
+        providerEnvelopeId: request.providerEnvelopeId,
+        recipientProviderIds,
+        idempotencyKey: identity,
+        correlationId: correlationId(),
+      });
+    } catch (error) {
+      throw toModuleError(error, connection.providerKey);
+    }
+    await this.audit.append({
+      action: 'reminder.sent',
+      requestId: request.id,
+      connectionId: connection.id,
+      ...(recipient === null ? {} : { recipientId: recipient.id }),
+      actor: this.actorRef(),
+      detail: { providerStatus: result.providerStatusRaw },
+    });
+    return {
+      request: await this.view(await this.requests.requireById(request.id)),
+      resentAt: result.resentAt,
+      recipientId: recipient?.id ?? null,
+    };
+  }
+
+  /**
+   * Withdraw a sent envelope (ES.16).
+   *
+   * Only an open envelope may be voided; a completed, declined, expired or already-voided request is
+   * refused before the provider is asked, which is what makes "completion cannot be reversed by a
+   * local status edit" true at this command as well. The reason is audited and sent to the provider,
+   * and the local state moves only after the provider confirms.
+   */
+  async voidRequest(
+    id: string,
+    input: { version: number; confirm: boolean; reason: string },
+  ): Promise<{ request: SignatureRequestView; voidedAt: string | null; reason: string }> {
+    const request = await this.loadScoped(id, 'send');
+    if (input.confirm !== true) {
+      throw new ValidationError('Voiding a signature request needs an explicit confirmation.', { code: 'CONFIRMATION_REQUIRED' });
+    }
+    await this.gate.assertOperation('voidEnvelope');
+    if (request.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
+    if (request.status !== 'sent' && request.status !== 'delivered' && request.status !== 'partially_signed') {
+      throw signatureRequestInvalidStateError(request.status, 'void');
+    }
+    if (request.providerEnvelopeId === null || request.connectionId === null) throw providerNotConnectedError('no_connection');
+    const reason = input.reason.trim();
+    const connection = await this.connections.findById(request.connectionId);
+    if (connection === undefined) throw providerNotConnectedError('no_connection');
+    const context = await this.connectionService.contextFor(connection);
+    const adapter = this.providers.assertOperation(connection.providerKey, 'voidEnvelope');
+    await this.audit.append({
+      action: 'void.requested',
+      requestId: request.id,
+      connectionId: connection.id,
+      actor: this.actorRef(),
+      reasonSafe: reason,
+      detail: { status: request.status },
+    });
+    const identity = idempotencyKey({
+      purpose: 'voidEnvelope',
+      connectionId: connection.id,
+      signatureRequestId: request.id,
+      providerEnvelopeId: request.providerEnvelopeId,
+      discriminator: 'void',
+    });
+    let result;
+    try {
+      result = await adapter.voidEnvelope(context, {
+        providerEnvelopeId: request.providerEnvelopeId,
+        reason,
+        idempotencyKey: identity,
+        correlationId: correlationId(),
+      });
+    } catch (error) {
+      const moduleError = toModuleError(error, connection.providerKey);
+      const redacted = redactAdapterError(error);
+      await this.audit.append({
+        action: 'void.completed',
+        requestId: request.id,
+        connectionId: connection.id,
+        actor: this.actorRef(),
+        outcome: 'refused',
+        reasonSafe: redacted.category,
+        detail: { reason, providerCode: redacted.code },
+      });
+      throw moduleError;
+    }
+    const voidedAt = parseDate(result.voidedAt);
+    const voided = await this.requests.transition(request.id, {
+      expectedVersion: request.version,
+      to: 'voided',
+      origin: 'provider',
+      providerStatusRaw: result.providerStatusRaw,
+      ...(voidedAt === null ? {} : { occurredAt: voidedAt }),
+    });
+    await this.audit.append({
+      action: 'void.completed',
+      requestId: request.id,
+      connectionId: connection.id,
+      actor: this.actorRef(),
+      reasonSafe: reason,
+      detail: { providerStatus: result.providerStatusRaw },
+    });
+    return { request: await this.view(voided), voidedAt: voided.voidedAt, reason };
+  }
+
+  /**
+   * The correction exception path (ES.16).
+   *
+   * Deliberately closed in this release: the state and the actor are checked and the refusal is
+   * audited with its reason, but the provider is never called because the adapter declares
+   * `correctEnvelope: false` until ES.22 verifies the live behaviour. A terminal request is refused
+   * by the state machine above the capability, so a completed contract cannot be re-opened here.
+   */
+  async correctRequest(id: string, input: { confirm: boolean; reason: string }): Promise<never> {
+    const request = await this.loadScoped(id, 'send');
+    if (input.confirm !== true) {
+      throw new ValidationError('Correcting a signature request needs an explicit confirmation.', { code: 'CONFIRMATION_REQUIRED' });
+    }
+    await this.permissions.assert('correct');
+    if (request.status !== 'sent' && request.status !== 'delivered' && request.status !== 'partially_signed') {
+      throw signatureRequestInvalidStateError(request.status, 'correct');
+    }
+    const reason = input.reason.trim();
+    if (!this.gate.supportedOnProvider('correctEnvelope')) {
+      await this.audit.append({
+        action: 'correct.requested',
+        requestId: request.id,
+        actor: this.actorRef(),
+        outcome: 'refused',
+        reasonSafe: 'provider_not_supported',
+        detail: { reason },
+      });
+      throw notSupportedByProviderError('correctEnvelope', request.providerKey);
+    }
+    await this.audit.append({
+      action: 'correct.requested',
+      requestId: request.id,
+      actor: this.actorRef(),
+      outcome: 'refused',
+      reasonSafe: 'not_implemented',
+      detail: { reason },
+    });
+    throw signatureActionNotAvailableError('correct', 'provider_not_supported');
   }
 
   /**

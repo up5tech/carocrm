@@ -115,6 +115,16 @@ export function signatureActionNotAvailableError(
   return new ESignatureError('SIGNATURE_ACTION_NOT_AVAILABLE', messages[reason], { action, refusal: reason, ...detail }, 422);
 }
 
+/** A reminder was asked for again inside the configured cooldown. */
+export function signatureResendRateLimitedError(retryAfterSeconds: number): ESignatureError {
+  return new ESignatureError(
+    'SIGNATURE_RESEND_RATE_LIMITED',
+    'A reminder was sent for this request recently. Wait before sending another one.',
+    { retryAfterSeconds },
+    429,
+  );
+}
+
 /** A delivery that failed verification. The inbox keeps the evidence; the caller learns nothing useful. */
 export function signatureWebhookRejectedError(reason: string): ESignatureError {
   return new ESignatureError('SIGNATURE_WEBHOOK_REJECTED', 'The delivery was refused.', { reason }, 401);

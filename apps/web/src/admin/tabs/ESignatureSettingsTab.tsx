@@ -49,7 +49,7 @@ interface FormValues {
   features: FeatureFlags;
   provider: { demoIntegrationKey: string; productionIntegrationKey: string };
   documents: { maxDocumentBytes: number; maxDocumentsPerRequest: number; allowedExtensions: string[] };
-  signing: { defaultExpiryDays: number; remindersEnabled: boolean; embeddedReturnHosts: string[] };
+  signing: { defaultExpiryDays: number; remindersEnabled: boolean; resendCooldownMinutes: number; embeddedReturnHosts: string[] };
   webhooks: { endpointUrl: string; requireHmac: boolean; maxPayloadBytes: number };
   retention: { webhookPayloadDays: number; completedArtifactDays: number };
   approval: { requiredForSourceEntities: string[] };
@@ -237,6 +237,15 @@ export function ESignatureSettingsTab() {
                 <Col xs={24} md={12}>
                   <Form.Item name={['signing', 'remindersEnabled']} label={t('esignature.settings.remindersEnabled')} valuePropName="checked">
                     <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    name={['signing', 'resendCooldownMinutes']}
+                    label={t('esignature.settings.resendCooldownMinutes')}
+                    extra={t('esignature.settings.resendCooldownMinutesHint')}
+                  >
+                    <InputNumber min={0} max={1_440} style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
                 <Col xs={24}>

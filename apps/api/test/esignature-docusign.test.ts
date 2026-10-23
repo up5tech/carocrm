@@ -27,8 +27,8 @@ import {
   type DocuSignTransport,
   formBody,
 } from '../src/esignature/providers/docusign/docusign-transport.js';
-import { NotSupportedByProviderError } from '../src/esignature/providers/signature-provider.errors.js';
 import type { SignatureProviderContext } from '../src/esignature/providers/signature-provider.port.js';
+import { connectSignature } from '../src/esignature/providers/signature-provider-signature.js';
 
 /**
  * Phase 19-ES.4 — the DocuSign wire mapping, proved without a network
@@ -53,6 +53,7 @@ interface Stubbed extends DocuSignTransport {
   readonly calls: DocuSignHttpRequest[];
   bodies: string[];
   statuses: number[];
+  binaryBodies: Uint8Array[];
 }
 
 function stubTransport(): Stubbed {
@@ -61,11 +62,15 @@ function stubTransport(): Stubbed {
     calls,
     bodies: [],
     statuses: [],
+    binaryBodies: [],
     // The platform transport answers with the status and the body rather than throwing on 4xx, because
     // DocuSign puts the OAuth error *name* in the body and the caller has to read it (plan §9.2).
     async request(input: DocuSignHttpRequest): Promise<DocuSignHttpResponse> {
       calls.push(input);
       const index = calls.length - 1;
+      if (input.binary === true) {
+        return { status: this.statuses[index] ?? 200, headers: {}, body: '', bytes: this.binaryBodies[index] ?? new Uint8Array() };
+      }
       return { status: this.statuses[index] ?? 200, headers: {}, body: this.bodies[index] ?? JSON.stringify({ ok: true }) };
     },
   };
@@ -314,22 +319,43 @@ describe('the live DocuSign adapter (19-ES.4)', () => {
     expect(account).toMatchObject({ accountId: 'acct-9', accountName: 'Named', userId: 'user-77' });
   });
 
-  it('declares only the connection operations, and refuses the rest by name', async () => {
+  it('declares the implemented operations, including status, artifacts and Connect, and refuses correction', async () => {
     const adapter = new DocuSignAdapter(stubTransport());
     expect(adapter.mode).toBe('live');
     expect(adapter.capabilities.connectionStatus).toBe(true);
     expect(adapter.capabilities.accountContext).toBe(true);
-    // ES.9 prepared the envelope; ES.10 sends it. Status sync, artifacts and Connect are still refused.
-    expect(DOCUSIGN_ES4_CAPABILITIES.prepareEnvelope).toBe(true);
-    expect(DOCUSIGN_ES4_CAPABILITIES.sendEnvelope).toBe(true);
-    for (const operation of ['envelopeStatus', 'listRecipients', 'downloadCompletedDocuments', 'downloadCompletionEvidence', 'verifyWebhook'] as const) {
-      expect(DOCUSIGN_ES4_CAPABILITIES[operation], operation).toBe(false);
+    for (const operation of [
+      'listTemplates',
+      'templateDetails',
+      'prepareEnvelope',
+      'sendEnvelope',
+      'envelopeStatus',
+      'listRecipients',
+      'recipientView',
+      'resendNotifications',
+      'voidEnvelope',
+      'downloadCompletedDocuments',
+      'downloadCompletionEvidence',
+      'verifyWebhook',
+    ] as const) {
+      expect(DOCUSIGN_ES4_CAPABILITIES[operation], operation).toBe(true);
     }
-    // The method bodies exist only as a fence; reaching one means the caller skipped the registry.
-    await expect(adapter.envelopeStatus(context(), 'e')).rejects.toBeInstanceOf(NotSupportedByProviderError);
-    await expect(adapter.verifyAndParseWebhook({ providerKey: 'docusign', connectionId: null, rawBody: new Uint8Array(), headers: {}, contentType: null, signingSecret: null, requireSignature: true, maxPayloadBytes: 1024 })).rejects.toThrow(
-      /does not support/,
-    );
+    expect(DOCUSIGN_ES4_CAPABILITIES.correctEnvelope).toBe(false);
+    // With no signature configured, a delivery is refused by name rather than thrown: the inbox is
+    // the record of the attempt, and the endpoint must still answer.
+    const parsed = await adapter.verifyAndParseWebhook({
+      providerKey: 'docusign',
+      connectionId: null,
+      expectedAccountId: null,
+      rawBody: new TextEncoder().encode('{"event":"envelope-completed"}'),
+      headers: {},
+      contentType: 'application/json',
+      signingSecret: null,
+      requireSignature: true,
+      maxPayloadBytes: 1024,
+    });
+    expect(parsed.verified).toBe(false);
+    expect(parsed.refusalReason).toBe('no_secret');
   });
 });
 
@@ -561,5 +587,145 @@ describe('the transport destination gate (19-ES.4, plan §9.3)', () => {
     const response = await open.request({ method: 'GET', url: local });
     expect(response.status).toBe(200);
     expect(response.body).toContain('ok');
+  });
+});
+
+describe('the DocuSign status, signing and artifact operations (19-ES.11–19-ES.16)', () => {
+  it('reads the envelope status and recipients with the raw provider words preserved', async () => {
+    const transport = stubTransport();
+    transport.bodies = [
+      JSON.stringify({
+        status: 'completed',
+        statusDateTime: '2026-01-01T09:20:00.000Z',
+        recipients: { signers: [{ recipientId: '1', clientUserId: 'local-r1', status: 'completed', email: 's@example.com', name: 'Signer' }] },
+      }),
+      JSON.stringify({ signers: [{ recipientId: '1', clientUserId: 'local-r1', status: 'completed', email: 's@example.com', name: 'Signer' }] }),
+    ];
+    const adapter = new DocuSignAdapter(transport);
+    const status = await adapter.envelopeStatus(context(), 'env-1');
+    expect(transport.calls[0]?.url).toBe('https://demo.docusign.net/restapi/v2.1/accounts/acct-9/envelopes/env-1');
+    expect(status).toMatchObject({ status: 'completed', providerStatusRaw: 'completed', occurredAt: '2026-01-01T09:20:00.000Z' });
+    expect(status.recipients[0]).toMatchObject({ providerRecipientId: '1', recipientId: 'local-r1', status: 'completed' });
+
+    const recipients = await adapter.listRecipients(context(), 'env-1');
+    expect(transport.calls[1]?.url).toBe('https://demo.docusign.net/restapi/v2.1/accounts/acct-9/envelopes/env-1/recipients');
+    expect(recipients[0]?.email).toBe('s@example.com');
+  });
+
+  it('asks for one recipient view with the client user id that was set at preparation', async () => {
+    const transport = stubTransport();
+    transport.bodies = [JSON.stringify({ url: 'https://demo.docusign.net/signing/session-1' })];
+    const view = await new DocuSignAdapter(transport).recipientView(context(), {
+      providerEnvelopeId: 'env-1',
+      recipientProviderId: '1',
+      recipientId: 'local-r1',
+      email: 's@example.com',
+      name: 'Signer',
+      returnUrl: 'https://crm.example.com/esignature',
+      cancelUrl: null,
+      correlationId: 'corr-1',
+    });
+    expect(transport.calls[0]?.url).toBe('https://demo.docusign.net/restapi/v2.1/accounts/acct-9/envelopes/env-1/views/recipient');
+    const body = JSON.parse(String(transport.calls[0]?.body)) as Record<string, unknown>;
+    expect(body).toMatchObject({ recipientId: '1', clientUserId: 'local-r1', returnUrl: 'https://crm.example.com/esignature' });
+    expect(view.url).toContain('/signing/session-1');
+    expect(view.expiresAt).not.toBeNull();
+  });
+
+  it('resends to the named recipients and voids with the recorded reason', async () => {
+    const transport = stubTransport();
+    transport.bodies = [JSON.stringify({ status: 'sent' }), JSON.stringify({ status: 'voided', statusDateTime: '2026-01-01T10:00:00.000Z' })];
+    const adapter = new DocuSignAdapter(transport);
+    await adapter.resendNotifications(context(), {
+      providerEnvelopeId: 'env-1',
+      recipientProviderIds: ['1'],
+      idempotencyKey: 'key',
+      correlationId: 'corr',
+    });
+    expect(transport.calls[0]?.url).toBe('https://demo.docusign.net/restapi/v2.1/accounts/acct-9/envelopes/env-1/recipients');
+    expect(JSON.parse(String(transport.calls[0]?.body))).toEqual({ resend_envelope: 'true', signers: [{ recipientId: '1' }] });
+
+    const voided = await adapter.voidEnvelope(context(), {
+      providerEnvelopeId: 'env-1',
+      reason: 'wrong counterparty',
+      idempotencyKey: 'key',
+      correlationId: 'corr',
+    });
+    expect(transport.calls[1]?.url).toBe('https://demo.docusign.net/restapi/v2.1/accounts/acct-9/envelopes/env-1');
+    expect(JSON.parse(String(transport.calls[1]?.body))).toEqual({ status: 'voided', voidedReason: 'wrong counterparty' });
+    expect(voided).toMatchObject({ providerStatusRaw: 'voided', voidedAt: '2026-01-01T10:00:00.000Z' });
+  });
+
+  it('downloads the signed documents and the certificate as bytes with content hashes', async () => {
+    const transport = stubTransport();
+    transport.bodies = [
+      JSON.stringify({
+        envelopeDocuments: [
+          { documentId: '1', name: 'agreement.pdf' },
+          { documentId: 'certificate', name: 'certificate.pdf' },
+        ],
+      }),
+    ];
+    transport.binaryBodies = [new TextEncoder().encode('%PDF-1.4 signed'), new TextEncoder().encode('%PDF-1.4 certificate')];
+    const adapter = new DocuSignAdapter(transport);
+    const documents = await adapter.downloadCompletedDocuments(context(), 'env-1');
+    expect(documents).toHaveLength(1);
+    expect(documents[0]).toMatchObject({ artifactKind: 'provider_signed_document', providerDocumentId: '1', displayName: 'agreement.pdf' });
+    expect(documents[0]?.contentHashSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(transport.calls[1]?.binary).toBe(true);
+
+    const evidence = await adapter.downloadCompletionEvidence(context(), 'env-1');
+    expect(evidence[0]).toMatchObject({ artifactKind: 'completion_evidence', providerDocumentId: 'certificate' });
+    expect(evidence[0]?.contentHashSha256).not.toBe(documents[0]?.contentHashSha256);
+  });
+
+  it('verifies a Connect delivery before parsing it, and refuses a different account', async () => {
+    const secret = 'connect-secret';
+    const raw = new TextEncoder().encode(
+      JSON.stringify({
+        event: 'envelope-completed',
+        generatedDateTime: '2026-01-01T09:20:00.000Z',
+        data: {
+          accountId: 'acct-9',
+          envelopeId: 'env-1',
+          recipientId: '1',
+          recipients: { signers: [{ recipientId: '1', status: 'completed', email: 's@example.com', name: 'Signer' }] },
+        },
+      }),
+    );
+    const adapter = new DocuSignAdapter(stubTransport());
+    const parsed = await adapter.verifyAndParseWebhook({
+      providerKey: 'docusign',
+      connectionId: 'conn-1',
+      expectedAccountId: 'acct-9',
+      rawBody: raw,
+      headers: { 'x-docusign-signature-1': connectSignature(secret, raw), 'content-type': 'application/json' },
+      contentType: 'application/json',
+      signingSecret: secret,
+      requireSignature: true,
+      maxPayloadBytes: 262_144,
+    });
+    expect(parsed).toMatchObject({
+      verified: true,
+      providerEnvelopeId: 'env-1',
+      providerAccountId: 'acct-9',
+      eventTypeNormalized: 'completed',
+      recipientProviderId: '1',
+      recipientStatusRaw: 'completed',
+    });
+    expect(parsed.minimized).toEqual({ envelopeId: 'env-1', eventType: 'envelope-completed', recipientId: '1', recipientStatus: 'completed' });
+
+    const misrouted = await adapter.verifyAndParseWebhook({
+      providerKey: 'docusign',
+      connectionId: 'conn-1',
+      expectedAccountId: 'acct-other',
+      rawBody: raw,
+      headers: { 'x-docusign-signature-1': connectSignature(secret, raw) },
+      contentType: 'application/json',
+      signingSecret: secret,
+      requireSignature: true,
+      maxPayloadBytes: 262_144,
+    });
+    expect(misrouted).toMatchObject({ verified: false, refusalReason: 'account_mismatch', providerEnvelopeId: null });
   });
 });

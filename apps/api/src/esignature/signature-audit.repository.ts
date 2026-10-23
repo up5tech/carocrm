@@ -155,6 +155,26 @@ export class SignatureAuditRepository {
       .executeTakeFirst();
     return Number.parseInt(String(row?.n ?? '0'), 10) || 0;
   }
+
+  /**
+   * When this request last performed one of `actions` successfully.
+   *
+   * Used by the reminder cooldown (ES.16): only a *successful* provider call may start the window,
+   * so a refused attempt neither spams nor locks the sender out.
+   */
+  async latestSuccessfulAt(requestId: string, actions: readonly ESignatureAuditAction[]): Promise<Date | null> {
+    if (actions.length === 0) return null;
+    const row = await this.db
+      .selectFrom('signature_audit_entries')
+      .select('created_at')
+      .where('request_id', '=', requestId)
+      .where('action', 'in', [...actions])
+      .where('outcome', '=', 'ok')
+      .orderBy('created_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    return row?.created_at ?? null;
+  }
 }
 
 /**

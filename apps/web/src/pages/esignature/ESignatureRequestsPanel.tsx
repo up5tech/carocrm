@@ -12,6 +12,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Popconfirm,
   Select,
   Space,
@@ -72,7 +73,13 @@ interface EditorValues {
 
 type DrawerState = { mode: 'create' } | { mode: 'view' | 'edit'; id: string };
 
-export function ESignatureRequestsPanel(props: { readonly canPrepare: boolean; readonly canSend: boolean }) {
+export function ESignatureRequestsPanel(props: {
+  readonly canPrepare: boolean;
+  readonly canSend: boolean;
+  readonly canVoid: boolean;
+  readonly canDownload: boolean;
+  readonly canCorrect: boolean;
+}) {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<string>('');
@@ -216,6 +223,9 @@ export function ESignatureRequestsPanel(props: { readonly canPrepare: boolean; r
             mode={drawer.mode}
             canPrepare={props.canPrepare}
             canSend={props.canSend}
+            canVoid={props.canVoid}
+            canDownload={props.canDownload}
+            canCorrect={props.canCorrect}
             onEdit={() => setDrawer({ mode: 'edit', id: drawer.id })}
             onSaved={() => {
               message.success(t('esignature.requests.saved'));
@@ -239,6 +249,9 @@ function RequestDetail(props: {
   mode: 'view' | 'edit';
   canPrepare: boolean;
   canSend: boolean;
+  canVoid: boolean;
+  canDownload: boolean;
+  canCorrect: boolean;
   onEdit: () => void;
   onSaved: () => void;
   onDocumentsChanged: () => void;
@@ -299,10 +312,12 @@ function RequestDetail(props: {
           void detail.refetch();
         }}
       />
-      <DocumentsList
-        requestId={request.id}
-        documents={[...request.documents]}
-        editable={request.editable && props.canPrepare}
+      <LifecycleActions
+        request={request}
+        canSend={props.canSend}
+        canVoid={props.canVoid}
+        canDownload={props.canDownload}
+        canCorrect={props.canCorrect}
         onChanged={() => {
           props.onDocumentsChanged();
           void detail.refetch();
@@ -830,6 +845,144 @@ function RecipientsTable(props: {
   );
 }
 
+/**
+ * Post-send actions (ES.12, ES.15, ES.16).
+ *
+ * Every button is gated twice: the capability the caller holds (the server enforces it again) and the
+ * state that makes the action meaningful. A terminal request offers downloads and reconciliation, not
+ * reminders or a void.
+ */
+function LifecycleActions(props: {
+  request: ESignatureRequestView;
+  canSend: boolean;
+  canVoid: boolean;
+  canDownload: boolean;
+  canCorrect: boolean;
+  onChanged: () => void;
+}) {
+  const { message } = AntApp.useApp();
+  const [pending, setPending] = useState(false);
+  const [voidOpen, setVoidOpen] = useState(false);
+  const [voidReason, setVoidReason] = useState('');
+  const { status } = props.request;
+  const open = status === 'sent' || status === 'delivered' || status === 'partially_signed';
+  const reconcilable = open || status === 'sending' || status === 'send_unknown' || status === 'reconciliation_required' || status === 'completed';
+
+  const act = async (work: () => Promise<unknown>, success: string, fail: string): Promise<void> => {
+    setPending(true);
+    try {
+      await work();
+      message.success(success);
+      props.onChanged();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : fail);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const voidIt = async (): Promise<void> => {
+    const reason = voidReason.trim();
+    if (reason.length < 3) {
+      message.error(t('esignature.actions.voidReasonRequired'));
+      return;
+    }
+    await act(
+      () => api.voidESignatureRequest(props.request.id, { version: props.request.version, confirm: true, reason }),
+      t('esignature.actions.voided'),
+      t('esignature.actions.voidFailed'),
+    );
+    setVoidOpen(false);
+    setVoidReason('');
+  };
+
+  if (!open && status !== 'completed' && !reconcilable) return null;
+  return (
+    <Card size="small" title={t('esignature.actions.title')} style={{ marginTop: 8 }}>
+      <Space size={8} wrap>
+        {reconcilable ? (
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            loading={pending}
+            onClick={() =>
+              void act(
+                () => api.reconcileESignatureRequest(props.request.id),
+                t('esignature.actions.synced'),
+                t('esignature.actions.syncFailed'),
+              )
+            }
+          >
+            {t('esignature.actions.syncStatus')}
+          </Button>
+        ) : null}
+        {open && props.canSend ? (
+          <Button
+            size="small"
+            loading={pending}
+            onClick={() =>
+              void act(
+                () => api.resendESignatureNotification(props.request.id),
+                t('esignature.actions.reminderSent'),
+                t('esignature.actions.reminderFailed'),
+              )
+            }
+          >
+            {t('esignature.actions.remind')}
+          </Button>
+        ) : null}
+        {open && props.canVoid ? (
+          <Button danger size="small" icon={<StopOutlined />} onClick={() => setVoidOpen(true)}>
+            {t('esignature.actions.void')}
+          </Button>
+        ) : null}
+        {status === 'completed' && props.canDownload ? (
+          <Button
+            size="small"
+            icon={<DownloadOutlined />}
+            loading={pending}
+            onClick={() =>
+              void act(
+                () => api.retrieveESignatureArtifacts(props.request.id),
+                t('esignature.actions.artifactsRetrieved'),
+                t('esignature.actions.artifactsFailed'),
+              )
+            }
+          >
+            {t('esignature.actions.retrieveArtifacts')}
+          </Button>
+        ) : null}
+        {open && props.canCorrect ? (
+          <Button
+            size="small"
+            disabled
+            title={t('esignature.actions.correctUnavailable')}
+          >
+            {t('esignature.actions.correct')}
+          </Button>
+        ) : null}
+      </Space>
+      <Modal
+        open={voidOpen}
+        title={t('esignature.actions.voidTitle')}
+        okText={t('esignature.actions.voidConfirm')}
+        okButtonProps={{ danger: true, loading: pending }}
+        cancelText={t('core.common.cancel')}
+        onOk={() => void voidIt()}
+        onCancel={() => setVoidOpen(false)}
+      >
+        <Typography.Paragraph type="secondary">{t('esignature.actions.voidHint')}</Typography.Paragraph>
+        <Input.TextArea
+          rows={3}
+          maxLength={500}
+          value={voidReason}
+          onChange={(event) => setVoidReason(event.target.value)}
+          placeholder={t('esignature.actions.voidReason')}
+        />
+      </Modal>
+    </Card>
+  );
+}
 
 function TimelineSection(props: { requestId: string }) {
   const timeline = useQuery({

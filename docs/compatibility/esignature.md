@@ -1,20 +1,21 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 to 19-ES.10 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 through 19-ES.10 delivered** (ES.1 registers the module and the security contract;
+> Phase 19-ES.0 to 19-ES.16 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 through 19-ES.16 delivered** (ES.1 registers the module and the security contract;
 > ES.2 adds the schema and the domain rules; ES.3 adds the provider contract, the registry and the
-> in-process fake; ES.4 adds DocuSign's OAuth grant, the connection lifecycle and the live adapter's
-> connection operations). **A DocuSign adapter now exists, but nothing in this module has been verified
-> against a live account**: every provider behaviour below was proved against an injected stub transport,
-> and the demo-account validation is ES.22's.
-> Evidence: `docs/implementation/esignature-es1-completion-report.md`, `esignature-es2-completion-report.md`,
-> `esignature-es3-completion-report.md`, `esignature-es4-completion-report.md`,
-> `esignature-es5-completion-report.md`, `esignature-es6-completion-report.md`,
-> `esignature-es7-completion-report.md`, `esignature-es8-completion-report.md`,
-> `esignature-es9-completion-report.md`, `esignature-es10-completion-report.md`.
+> in-process fake; ES.4 adds DocuSign's OAuth grant, the connection lifecycle and the live adapter;
+> ES.5–ES.10 add documents, drafts, templates, preparation and the controlled send; ES.11–ES.16 add
+> Connect intake and projection, the progress UI, embedded signing, completed artifacts, and
+> reminders/void). **Nothing in this module has been verified against a live DocuSign account**: every
+> provider behaviour below was proved against an injected stub transport or the fake adapter, and the
+> demo-account validation is ES.22's.
+> Evidence: `docs/implementation/esignature-es1-completion-report.md` through
+> `esignature-es16-completion-report.md` (one report per delivered sub-phase).
 > Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`.
-> Webhook prefix (reserved in ES.1, endpoint delivered in ES.11, which also extends the raw-body hook):
-> `/api/v1/integrations/esignature`.
+> Webhook prefix: `/api/v1/integrations/esignature`.
+> Note: the Connect HMAC scheme is implemented from DocuSign's documented
+> `X-DocuSign-Signature-1` (base64 HMAC-SHA-256 over the raw body); ES.22 must confirm it against a
+> captured demo-account delivery before an installation is called verified.
 
 This document records the exact provider surface this module reimplements, the decisions taken
 against the repository as it actually exists, and the compatibility limits a deploying
@@ -65,33 +66,34 @@ redirect URIs, secrets and stored account identities are fully separate.
 | Provider template catalog and the CRM mapping (roles → recipients, tabs → CRM fields) | **Delivered ES.7** | `POST /api/v1/ESignature/templates/catalog/refresh`, `GET templates/catalog/:connectionId/:templateId`, and `GET/POST/PATCH templates/mappings`. The catalog is read-only; a mapping is validated against that connection's **live** template and the metadata registry, so an unknown role, tab or field is refused when it is saved. |
 | Draft request CRUD, recipients and documents, with record-scope ACL and a linked-record check | **Delivered ES.6** | `GET/POST /api/v1/ESignature/requests`, `GET/PATCH /:id`, recipients and documents sub-routes. The prefix is the module's own (`/api/v1/ESignature`), not the lower-case spelling in the plan. A request that left the draft answers 409 `SIGNATURE_REQUEST_INVALID_STATE`, and there is no generic `/api/v1/SignatureRequest` route at all. |
 | Immutable document snapshot (copy + SHA-256 of the submitted bytes) | **Delivered ES.5** | `esignature-document.service.ts` copies through `AttachmentService.download`, so the parent record's ACL is the gate, and verifies the copy against the attachment's own checksum. A snapshot survives its source: replacing or deleting the attachment changes nothing about what was recorded. |
-| Provider-signed documents and completion certificates as separate artifacts | **Storage delivered ES.5; retrieval ES.15** | `storeDerivedArtifact` accepts only the derived kinds and writes under a kind-segmented key, so a provider result cannot address a source object. Idempotent by content hash and provider document id (plan §16). |
+| Provider-signed documents and completion certificates as separate artifacts | **Delivered ES.15** | `storeDerivedArtifact` accepts only the derived kinds and writes under a kind-segmented key, so a provider result cannot address a source object. Idempotent by content hash and provider document id (plan §16). |
 | DocuSign per-document size and format limits | **Expected, not verified** | `DOCUSIGN_DOCUMENT_RESTRICTIONS` (25 MiB, the documented accepted formats) is the ceiling the settings cannot lift. The ES.0 audit verified the API surface, not these numbers; ES.22 re-checks them against a live account. |
 | Connection record and its lifecycle rules | **Delivered ES.2 (storage) + ES.4 (authorization, test, switch, disconnect)** | The row stores environment, account id, base URI, granted scopes and health stamps; no credential column exists — `esignature_credential_secrets` holds those, encrypted, and no read path returns a value. `reauthorization_required` also clears `is_active`, which is what stops a send after a revoked consent. |
 | Local request persistence and the guarded lifecycle | Delivered ES.2 | Dedicated tables plus the state machine; an envelope id is unique per connection, and a CRM command cannot enter a provider-owned state |
 | Local draft request (no provider call) | Storage ES.2, API ES.6 | A draft is local only; a provider envelope does not exist until preparation |
-| Envelope preparation (provider draft) | Planned ES.9 | Idempotent via correlation; unsent provider drafts abandoned safely |
+| Envelope preparation (provider draft) | **Delivered ES.9** | Idempotent via the snapshot digest; unsent provider drafts are abandoned safely (ES.9). |
 | Documents from CRM attachments | **Delivered ES.5** (the draft UI that drives it: ES.6) | Authorized bytes only — the attachment service's own ACL is the sole reader; immutable snapshot plus the SHA-256 of the exact submitted bytes; the source file is never overwritten, and the snapshot outlives it |
 | Provider templates + role mapping | Planned ES.7 | Template IDs stay bound to the owning account; roles validated against an allowlist |
-| Signers, CC, routing order | Planned ES.8 | Sequential/parallel routing; explicit sender affirmation of signer identity |
-| Remote signing | Planned ES.10/ES.13 | DocuSign controls the signing journey and sends signing emails from the DocuSign account |
-| Embedded signing (recipient view) | Planned ES.14, **off by default** | Server-side generation for a matched recipient only; short-lived URL never persisted/logged/analyzed |
-| Reminders / resend | Planned ES.16 | Permission + rate policy guarded |
-| Void with reason | Planned ES.16 | Only in provider-allowed states; audited |
-| Correction | Planned ES.16, exception path | Only when provider state permits; fresh preview + full audit |
-| Completed documents + certificate | Planned ES.15 | Stored as new derived artifacts (attachments) on the request; deduped by provider document identity / content hash |
-| Connect status events | Planned ES.11/ES.12 | Verified inbox, dedup, async projection; reconciliation for gaps |
-| Status/recipient reconciliation | Planned ES.12/ES.20 | Bounded job + operator action; no blanket polling |
-| Approval before send | Planned ES.17 | Module policy; approval binds to the exact reviewed snapshot version |
+| Signers, CC, routing order | **Delivered ES.8** | Sequential/parallel routing; explicit sender affirmation of signer identity. |
+| Remote signing | **Delivered ES.10; progress UI ES.13** | DocuSign controls the signing journey and sends signing emails. The CRM shows the signer progress and the event/audit timeline without opening the provider dashboard. |
+| Embedded signing (recipient view) | **Delivered ES.14, off by default** | A recipient marked `embedded` at preparation gets a server-generated view only when the signed-in user is that recipient and the return/cancel host is allowlisted; the URL is never persisted, audited or logged. |
+| Reminders / resend | **Delivered ES.16** | Requires `send`, an open envelope, the `remindersEnabled` policy and the configured cooldown; only a successful provider call starts the window. |
+| Void with reason | **Delivered ES.16** | Only `sent`/`delivered`/`partially_signed`; an explicit confirmation and reason are required and audited before and after the provider call. |
+| Correction | **Refused by name (ES.16)** | The service checks state and the `correct` right, audits the refusal, and never calls the provider: `correctEnvelope` stays capability-false until ES.22 verifies the live behaviour. |
+| Completed documents + certificate | **Delivered ES.15** | Stored as new derived artifacts on the request under the `artifacts` feature; deduped by provider document identity and content hash; download requires `downloadCompleted`. |
+| Connect status events | **Delivered ES.11/ES.12** | Raw-body HMAC verification before parsing, a durable unique inbox, best-effort queue hand-off, one normalized event per delivery, monotonic recipient/envelope projection and a reconciliation command for gaps. |
+| Status/recipient reconciliation | **Delivered ES.12 (operator action)** | `POST …/reconcile` reads the envelope and recipients from the provider and projects them; terminal drift moves only through reconciliation. No scheduled sweep is registered yet (ES.20). |
+| Approval before send | Planned ES.17 | Module policy; approval binds to the exact reviewed snapshot version. |
 
-## 4. Local state ↔ provider state mapping (draft — verify against demo payloads in ES.12)
+## 4. Local state ↔ provider state mapping (delivered ES.12 — live fixtures pending ES.22)
 
 Local request states (plan §4.7): `draft`, `pending_approval`, `ready_to_send`, `sending`,
 `send_unknown`, `sent`, `delivered` (aggregate, only if unambiguous), `partially_signed`,
 `completed`, `declined`, `voided`, `expired`, `provider_error`, `reconciliation_required`.
 
-Expected provider vocabulary (unverified against live fixtures at ES.0 — **the mapper is
-corrected from demo-account captures in ES.12, never from this table alone**):
+The vocabulary below is what the ES.12 mapper (`esignature-status-mapper.ts`) implements. It is
+proved against the fake and stub transports; **captured demo-account payloads in ES.22 remain the
+authority** and any correction lands in that one mapper.
 
 | Provider envelope status | Local target | Rule |
 | --- | --- | --- |
@@ -141,7 +143,7 @@ terminal state backwards; ambiguity triggers reconciliation (plan §4.7, §10.3)
 | Configuration | Status |
 | --- | --- |
 | Fake adapter (no provider) — full lifecycle | **Delivered ES.3** — the initial slice runs end to end against it, including the lost-send/`send_unknown` recovery (`apps/api/test/esignature-flow.test.ts`). It is bound outside production, so a development install answers a Test Connection from the fake and the API says so (`adapterMode`). |
-| Live DocuSign adapter | **Partially delivered ES.4** — `connectionStatus` (Test Connection) and `accountContext` only | The envelope, recipient, artifact and Connect operations are declared `false` until ES.9/ES.11/ES.15 write them, so the gate refuses them by name rather than admitting an operation that does not exist (plan §5.2). |
+| Live DocuSign adapter | **Delivered ES.4–ES.16** — every operation except `correctEnvelope` | Connection, templates, envelope preparation/send, status and recipients, recipient view, resend, void, signed documents, certificate and Connect verification are implemented; correction remains declared `false`, so the gate refuses it by name (plan §5.2). |
 | DocuSign demo/developer account, single account, authorization-code grant, remote signing, Connect events | Planned deliberate smoke test in ES.22 with synthetic documents/signers; recorded here with date when executed |
 | Production account | Not tested; remains disabled until an explicit administrator enablement (plan §9.4) |
 

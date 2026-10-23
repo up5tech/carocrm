@@ -208,6 +208,28 @@ export const RequestEmbeddedViewSchema = z
   })
   .strict();
 
+/** A reminder. An omitted recipient means "every outstanding recipient", the provider's own action. */
+export const RequestResendSchema = z
+  .object({ recipientId: z.string().trim().min(1).max(64).nullable().optional() })
+  .strict();
+
+/** Withdrawal needs a reason and an explicit confirmation; both are sent to the provider and audited. */
+export const RequestVoidSchema = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    confirm: z.boolean(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
+
+/** Correction is an exception path; the shape is still strict so a malformed request is a 400. */
+export const RequestCorrectSchema = z
+  .object({
+    confirm: z.boolean(),
+    reason: z.string().trim().min(3).max(500),
+  })
+  .strict();
+
 /** The worker's webhook-processing payload: the durable inbox row, nothing else. */
 export const WebhookProcessSchema = z.object({ inboxId: z.string().trim().min(1).max(64) }).strict();
 

@@ -28,6 +28,8 @@ import {
   type SignatureProviderCapabilities,
   type SignatureProviderContext,
   type VerifyWebhookInput,
+  type VoidEnvelopeInput,
+  type VoidResult,
 } from '../signature-provider.port.js';
 import { rawBodyHash, readSignatureHeaders, verifyConnectSignature } from '../signature-provider-signature.js';
 import { parseDocuSignUserinfo, selectDocuSignAccount } from './docusign-oauth.js';
@@ -76,9 +78,13 @@ export const DOCUSIGN_ES4_CAPABILITIES: SignatureProviderCapabilities = Object.f
   verifyWebhook: true,
   // ES.14 — embedded signing. ES.16 — reminder/resend and void.
   recipientView: true,
+  resendNotifications: true,
+  voidEnvelope: true,
   // ES.15 — completed documents and the certificate of completion.
   downloadCompletedDocuments: true,
   downloadCompletionEvidence: true,
+  // Plan §5.2/§16: correction is an exception path whose live behaviour is verified in ES.22.
+  correctEnvelope: false,
 });
 
 /** A stable code for the health view. Never a provider body, never a token. */
@@ -527,8 +533,42 @@ export class DocuSignAdapter implements SignatureProviderAdapter {
     return { url, expiresAt: new Date(Date.now() + 5 * 60_000).toISOString() };
   }
 
+  /** Resend the invitation to the outstanding recipients (ES.16). */
+  async resendNotifications(context: SignatureProviderContext, input: ResendNotificationsInput): Promise<ResendResult> {
+    const ids = input.recipientProviderIds.map((id) => id.trim()).filter((id) => id !== '');
+    const response = await this.transport.request({
+      method: 'PUT',
+      url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/envelopes/${encodeURIComponent(input.providerEnvelopeId)}/recipients`,
+      headers: { authorization: `Bearer ${context.accessToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        resend_envelope: 'true',
+        ...(ids.length === 0 ? {} : { signers: ids.map((recipientId) => ({ recipientId })) }),
+      }),
+      timeoutMs: context.timeoutMs,
+    });
+    if (response.status >= 400) throw providerErrorForStatus(response.status);
+    const body = parseJson(response.body);
+    return {
+      resentAt: stringOf(body['statusDateTime']) ?? new Date().toISOString(),
+      providerStatusRaw: stringOf(body['status']) ?? 'sent',
+    };
   }
 
+  /** Withdraw a sent envelope with a recorded reason (ES.16). */
+  async voidEnvelope(context: SignatureProviderContext, input: VoidEnvelopeInput): Promise<VoidResult> {
+    const response = await this.transport.request({
+      method: 'PUT',
+      url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/envelopes/${encodeURIComponent(input.providerEnvelopeId)}`,
+      headers: { authorization: `Bearer ${context.accessToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'voided', voidedReason: input.reason.slice(0, 500) }),
+      timeoutMs: context.timeoutMs,
+    });
+    if (response.status >= 400) throw providerErrorForStatus(response.status);
+    const body = parseJson(response.body);
+    return {
+      voidedAt: stringOf(body['statusDateTime']) ?? new Date().toISOString(),
+      providerStatusRaw: stringOf(body['status']) ?? 'voided',
+    };
   }
 
   /**

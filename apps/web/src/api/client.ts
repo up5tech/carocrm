@@ -1858,6 +1858,18 @@ export const api = {
     request<ESignatureEmbeddedView>(`/ESignature/requests/${encodeURIComponent(id)}/embedded-view`, post(input)),
   retrieveESignatureArtifacts: (id: string) =>
     request<ESignatureArtifactRetrieval>(`/ESignature/requests/${encodeURIComponent(id)}/artifacts/retrieve`, post({})),
+  resendESignatureNotification: (id: string, recipientId?: string | null) =>
+    request<{ request: ESignatureRequestView; resentAt: string; recipientId: string | null }>(
+      `/ESignature/requests/${encodeURIComponent(id)}/resend-notification`,
+      post(recipientId === undefined || recipientId === null ? {} : { recipientId }),
+    ),
+  voidESignatureRequest: (id: string, input: { version: number; confirm: boolean; reason: string }) =>
+    request<{ request: ESignatureRequestView; voidedAt: string | null; reason: string }>(
+      `/ESignature/requests/${encodeURIComponent(id)}/void`,
+      post(input),
+    ),
+  correctESignatureRequest: (id: string, input: { confirm: boolean; reason: string }) =>
+    request<never>(`/ESignature/requests/${encodeURIComponent(id)}/correct`, post(input)),
   /** Delete the provider draft while nothing has been sent. */
   abandonESignatureEnvelope: (id: string) =>
     request<{ request: ESignatureRequestView; deleted: boolean }>(`/ESignature/requests/${encodeURIComponent(id)}/envelope/abandon`, post({})),

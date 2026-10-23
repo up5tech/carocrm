@@ -49,6 +49,8 @@ export const SIGNATURE_PROVIDER_OPERATIONS = [
   // ES.14 — a short-lived embedded signing URL for one matched recipient.
   'recipientView',
   // ES.16 — reminders/resends and withdrawal. Correction stays a future operation.
+  'resendNotifications',
+  'voidEnvelope',
   'downloadCompletedDocuments',
   'downloadCompletionEvidence',
   'verifyWebhook',
@@ -58,13 +60,11 @@ export type SignatureProviderOperation = (typeof SIGNATURE_PROVIDER_OPERATIONS)[
 /**
  * The operations a later sub-phase will add. Declared here so "not supported yet" is a stated fact
  * rather than an absent key an operator has to interpret.
+ *
+ * Correction is the only one left after ES.16: plan §5.2 and §16 keep it an exception path whose
+ * live behaviour has to be verified (ES.22) before an installation may offer it.
  */
-export const FUTURE_SIGNATURE_PROVIDER_OPERATIONS = [
-  'recipientView',
-  'resendNotifications',
-  'voidEnvelope',
-  'correctEnvelope',
-] as const;
+export const FUTURE_SIGNATURE_PROVIDER_OPERATIONS = ['correctEnvelope'] as const;
 export type FutureSignatureProviderOperation = (typeof FUTURE_SIGNATURE_PROVIDER_OPERATIONS)[number];
 
 /** What one adapter can actually do, per operation. */

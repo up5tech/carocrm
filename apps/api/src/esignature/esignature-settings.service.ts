@@ -111,6 +111,11 @@ export const ESignatureSettingsSchema = z
         /** Whether the reminder action is offered at all (ES.16 policy). */
         remindersEnabled: z.boolean().default(false),
         /**
+         * How long after a reminder the same request must wait before another (ES.16 rate policy).
+         * `0` disables the cooldown; the default is a deliberate friction against reminder spam.
+         */
+        resendCooldownMinutes: z.number().int().min(0).max(1_440).default(5),
+        /**
          * Hosts an embedded-signing `returnUrl`/`cancelUrl` may point at (plan §4.6, §12.7).
          * Empty means embedded signing cannot produce a view even when the flag is on — a return URL
          * outside an allowlist is an open redirect with a live signing session attached.

@@ -27,6 +27,8 @@ import {
   type SignatureProviderCapabilities,
   type SignatureProviderContext,
   type VerifyWebhookInput,
+  type VoidEnvelopeInput,
+  type VoidResult,
 } from './signature-provider.port.js';
 import {
   connectSignature,
@@ -414,6 +416,39 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
     };
   }
 
+  /** A reminder: the fake records the call and answers as a provider that accepted it. */
+  async resendNotifications(context: SignatureProviderContext, input: ResendNotificationsInput): Promise<ResendResult> {
+    this.record('resendNotifications', context, {
+      providerEnvelopeId: input.providerEnvelopeId,
+      recipients: input.recipientProviderIds.length,
+    });
+    const envelope = this.requireEnvelope(input.providerEnvelopeId);
+    if (envelope.state !== 'sent' && envelope.state !== 'delivered' && envelope.state !== 'partially_signed') {
+      throw new ProviderError('INVALID_REQUEST', 'The envelope is not open, so nothing can be resent.', {
+        category: 'permanent_validation',
+        retryable: false,
+        detail: 'envelope_not_open',
+      });
+    }
+    return { resentAt: this.stamp(), providerStatusRaw: envelope.state };
+  }
+
+  /** Withdraw the envelope; every signer who has not finished is canceled. */
+  async voidEnvelope(context: SignatureProviderContext, input: VoidEnvelopeInput): Promise<VoidResult> {
+    this.record('voidEnvelope', context, { providerEnvelopeId: input.providerEnvelopeId, reasonLength: input.reason.length });
+    const envelope = this.requireEnvelope(input.providerEnvelopeId);
+    if (envelope.state === 'completed' || envelope.state === 'voided' || envelope.state === 'declined' || envelope.state === 'expired') {
+      throw new ProviderError('INVALID_REQUEST', 'The envelope is already closed.', {
+        category: 'permanent_validation',
+        retryable: false,
+        detail: 'envelope_not_voidable',
+      });
+    }
+    this.advance(input.providerEnvelopeId, 'voided');
+    return { voidedAt: this.stamp(), providerStatusRaw: 'voided' };
+  }
+
+  /**
    * The signed documents, as derived artifacts.
    *
    * Bytes are deterministic from the source hash, so the same envelope yields the same artifact hash

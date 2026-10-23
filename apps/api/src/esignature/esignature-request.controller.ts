@@ -5,6 +5,7 @@ import type { FastifyReply } from 'fastify';
 import type { ZodTypeAny } from 'zod';
 
 import {
+  RequestCorrectSchema,
   RequestCreateSchema,
   RequestDocumentAttachSchema,
   RequestDocumentReplaceSchema,
@@ -14,8 +15,10 @@ import {
   RequestListQuerySchema,
   RequestPrepareSchema,
   RequestRecipientsSchema,
+  RequestResendSchema,
   RequestSendSchema,
   RequestUpdateSchema,
+  RequestVoidSchema,
 } from './dto/esignature-shapes.js';
 import { REQUEST_STATUSES, type SignatureRequestStatus } from './esignature-domain.js';
 import { ESignatureRequestService } from './esignature-request.service.js';
@@ -176,6 +179,27 @@ export class ESignatureRequestController {
   @Post(':id/artifacts/retrieve')
   async retrieveArtifacts(@Param('id') id: string) {
     return this.requests.retrieveCompletedArtifacts(this.id(id));
+  }
+
+  /** Remind the outstanding signers (ES.16). Policy and cooldown are enforced before the call. */
+  @HttpCode(200)
+  @Post(':id/resend-notification')
+  async resendNotification(@Param('id') id: string, @Body() body: unknown) {
+    return this.requests.resendNotification(this.id(id), this.parse(RequestResendSchema, body));
+  }
+
+  /** Withdraw a sent envelope with a recorded reason (ES.16). Confirmation is explicit. */
+  @HttpCode(200)
+  @Post(':id/void')
+  async voidRequest(@Param('id') id: string, @Body() body: unknown) {
+    return this.requests.voidRequest(this.id(id), this.parse(RequestVoidSchema, body));
+  }
+
+  /** The correction exception path. Refused until the provider declares the capability (ES.22). */
+  @HttpCode(200)
+  @Post(':id/correct')
+  async correctRequest(@Param('id') id: string, @Body() body: unknown) {
+    return this.requests.correctRequest(this.id(id), this.parse(RequestCorrectSchema, body));
   }
 
   @Get(':id/recipients')
