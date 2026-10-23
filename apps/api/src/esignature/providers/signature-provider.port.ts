@@ -46,6 +46,9 @@ export const SIGNATURE_PROVIDER_OPERATIONS = [
   'sendEnvelope',
   'envelopeStatus',
   'listRecipients',
+  // ES.14 — a short-lived embedded signing URL for one matched recipient.
+  'recipientView',
+  // ES.16 — reminders/resends and withdrawal. Correction stays a future operation.
   'downloadCompletedDocuments',
   'downloadCompletionEvidence',
   'verifyWebhook',
@@ -146,6 +149,13 @@ export interface PrepareEnvelopeRecipient {
   readonly routingOrder: number;
   readonly roleName: string | null;
   readonly authenticationMethod: string | null;
+  /**
+   * The provider's embedded-recipient id, when this signer signs inside the CRM (ES.14).
+   *
+   * A recipient with a client user id is not emailed by the provider — the sender must ask for a
+   * recipient view — which is why it is only set for a recipient the draft marked as embedded.
+   */
+  readonly clientUserId: string | null;
 }
 
 /**
@@ -202,6 +212,55 @@ export interface SentEnvelope {
   readonly providerStatusRaw: string;
   readonly sentAt: string;
   readonly recipients: readonly ProviderRecipientStatus[];
+}
+
+/** One signer's embedded signing session (ES.14). The URL is a bearer credential. */
+export interface RecipientViewInput {
+  readonly providerEnvelopeId: string;
+  /** The provider's id for the recipient row. */
+  readonly recipientProviderId: string;
+  /** Our local recipient id; the provider knows it as the `clientUserId` set at preparation. */
+  readonly recipientId: string;
+  readonly email: string;
+  readonly name: string;
+  readonly returnUrl: string;
+  readonly cancelUrl: string | null;
+  readonly correlationId: string | null;
+}
+
+export interface RecipientView {
+  /** Short-lived and never stored, logged or audited. */
+  readonly url: string;
+  readonly expiresAt: string | null;
+}
+
+export interface ResendNotificationsInput {
+  readonly providerEnvelopeId: string;
+  /**
+   * The provider recipient ids to remind. Empty means every outstanding recipient, which is the
+   * provider's own "resend envelope" action rather than a per-person reminder.
+   */
+  readonly recipientProviderIds: readonly string[];
+  readonly idempotencyKey: string;
+  readonly correlationId: string | null;
+}
+
+export interface ResendResult {
+  readonly resentAt: string;
+  readonly providerStatusRaw: string;
+}
+
+export interface VoidEnvelopeInput {
+  readonly providerEnvelopeId: string;
+  /** A safe human reason, recorded in the audit trail and sent to the provider. */
+  readonly reason: string;
+  readonly idempotencyKey: string;
+  readonly correlationId: string | null;
+}
+
+export interface VoidResult {
+  readonly voidedAt: string;
+  readonly providerStatusRaw: string;
 }
 
 /** The normalized envelope state. `providerStatusRaw` is preserved for troubleshooting (plan §4.7). */
@@ -349,6 +408,13 @@ export interface SignatureProviderAdapter {
   envelopeStatus(context: SignatureProviderContext, providerEnvelopeId: string): Promise<ProviderEnvelopeStatus>;
   listRecipients(context: SignatureProviderContext, providerEnvelopeId: string): Promise<readonly ProviderRecipientStatus[]>;
 
+  /** One short-lived embedded signing URL for a matched recipient (ES.14). */
+  recipientView(context: SignatureProviderContext, input: RecipientViewInput): Promise<RecipientView>;
+  /** Remind the outstanding recipients (ES.16). A no-op is never claimed: the provider is asked. */
+  resendNotifications(context: SignatureProviderContext, input: ResendNotificationsInput): Promise<ResendResult>;
+  /** Withdraw a sent envelope (ES.16). */
+  voidEnvelope(context: SignatureProviderContext, input: VoidEnvelopeInput): Promise<VoidResult>;
+
   /**
    * Delete an unsent provider draft.
    *
@@ -393,13 +459,13 @@ export const BASE_SIGNATURE_PROVIDER_CAPABILITIES: SignatureProviderCapabilities
   downloadCompletedDocuments: true,
   downloadCompletionEvidence: true,
   verifyWebhook: true,
-  // The template catalog is read-only and arrives with ES.7; the rest are later phases and are
-  // refused by name until they exist.
+  // The template catalog is read-only and arrived with ES.7.
   listTemplates: true,
   templateDetails: true,
-  recipientView: false,
-  resendNotifications: false,
-  voidEnvelope: false,
+  // ES.14 and ES.16 deliver these three.
+  recipientView: true,
+  resendNotifications: true,
+  voidEnvelope: true,
   // Plan §5.2 and §16: correction is an exception path, off until the demo behaviour is verified.
   correctEnvelope: false,
 });
@@ -442,6 +508,12 @@ function methodFor(operation: SignatureProviderOperation | FutureSignatureProvid
       return 'envelopeStatus';
     case 'listRecipients':
       return 'listRecipients';
+    case 'recipientView':
+      return 'recipientView';
+    case 'resendNotifications':
+      return 'resendNotifications';
+    case 'voidEnvelope':
+      return 'voidEnvelope';
     case 'downloadCompletedDocuments':
       return 'downloadCompletedDocuments';
     case 'downloadCompletionEvidence':

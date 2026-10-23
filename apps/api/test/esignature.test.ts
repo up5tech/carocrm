@@ -357,13 +357,13 @@ describe('settings document and secret handling (plan §4.1, §12.11)', () => {
   });
 
   it('reports a flag whose phase has not shipped as pending, not as working', async () => {
-    await patchSettings({ enabled: true, features: { embeddedSigning: true } });
+    await patchSettings({ enabled: true, features: { approvals: true } });
     const view = await readSettings();
     const effective = view.body['effective'] as Record<string, boolean>;
-    expect(effective['embeddedSigning']).toBe(false);
+    expect(effective['approvals']).toBe(false);
     const warnings = view.body['warnings'] as { code: string }[];
-    expect(warnings.map((warning) => warning.code)).toContain('pending:embeddedSigning');
-    await patchSettings({ enabled: false, features: { embeddedSigning: false } });
+    expect(warnings.map((warning) => warning.code)).toContain('pending:approvals');
+    await patchSettings({ enabled: false, features: { approvals: false } });
   });
 
   it('refuses an embedded signing view path when no return host is allowlisted', async () => {
@@ -371,8 +371,11 @@ describe('settings document and secret handling (plan §4.1, §12.11)', () => {
     const view = await readSettings();
     const warnings = view.body['warnings'] as { code: string }[];
     expect(warnings.map((warning) => warning.code)).toContain('embeddedNoReturnHosts');
+    // The feature is implemented now (ES.14), so the gate reaches its connection question and refuses
+    // for the real reason: this installation has no usable connection.
     const probe = await call('POST', '/api/v1/ESignature/action/gate/check', ctx.adminToken, { operation: 'recipientView' });
-    expect(probe.status).toBe(403);
+    expect([409, 422]).toContain(probe.status);
+    expect(['PROVIDER_NOT_CONNECTED', 'ENCRYPTION_KEY_MISSING', 'SIGNATURE_MODULE_DISABLED']).toContain(errorCode(probe));
     await patchSettings({
       enabled: false,
       features: { connections: false, send: false, embeddedSigning: false },

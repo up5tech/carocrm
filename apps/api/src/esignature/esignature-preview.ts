@@ -48,6 +48,7 @@ export interface PreviewProblem {
     | 'mapping_connection_mismatch'
     | 'missing_role'
     | 'missing_tab_value'
+    | 'embedded_signing_disabled'
     | 'source_values_unavailable';
   readonly message: string;
   readonly where: string;
@@ -126,6 +127,13 @@ export function buildSignaturePreview(input: PreviewInputs): SignaturePreview {
   }
   if (request.expiresAt !== null && Date.parse(request.expiresAt) <= Date.now()) {
     problems.push({ code: 'expiry_in_past', message: 'The expiry date has already passed.', where: 'expiresAt' });
+  }
+  if (settings.features.embeddedSigning !== true && recipients.some((recipient) => recipient.authenticationMethod === 'embedded')) {
+    problems.push({
+      code: 'embedded_signing_disabled',
+      message: 'A recipient signs inside the CRM, but embedded signing is switched off; the provider would never invite them.',
+      where: 'recipients',
+    });
   }
   if (connection === null) {
     problems.push({ code: 'connection_missing', message: 'The request does not name a provider connection.', where: 'connectionId' });

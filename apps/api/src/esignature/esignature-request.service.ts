@@ -17,8 +17,11 @@ import { ESignatureConnectionGate } from './esignature-connection-gate.service.j
 import { ESignatureDocumentService } from './esignature-document.service.js';
 import type { SignatureRequestStatus } from './esignature-domain.js';
 import {
+  ESignatureError,
+  notSupportedByProviderError,
   providerNotConnectedError,
   providerOutcomeUnknownError,
+  signatureActionNotAvailableError,
   signatureApprovalRequiredError,
   signatureModuleDisabledError,
   signatureRequestInvalidStateError,
@@ -594,6 +597,8 @@ export class ESignatureRequestService {
 
       const context = await this.connectionService.contextFor(connection);
       const adapter = this.providers.assertOperation(connection.providerKey, 'prepareEnvelope');
+      const settings = await this.settingsService.settings();
+      const embeddedAllowed = settings.features.embeddedSigning === true;
       // A template envelope carries the template's documents; only a document envelope needs the bytes.
       const documents: { documentSnapshotId: string; displayName: string; mimeType: string; documentOrder: number; bytes: Uint8Array; contentHashSha256: string }[] = [];
       if (snapshot.data.templateId === null) {
@@ -632,6 +637,10 @@ export class ESignatureRequestService {
           routingOrder: recipient.routingOrder,
           roleName: recipient.roleName,
           authenticationMethod: recipient.authenticationMethod,
+          clientUserId:
+            embeddedAllowed && recipient.recipientType === 'signer' && recipient.authenticationMethod === 'embedded'
+              ? recipient.recipientId
+              : null,
         })),
         mappedFields: snapshot.data.mappedFields ?? [],
       };
@@ -1012,6 +1021,76 @@ export class ESignatureRequestService {
     return { request: await this.view(current), providerStatus: providerStatus.providerStatusRaw, reconciled: true };
   }
 
+  // ---------------------------------------------------------------------------
+  // embedded signing, completed artifacts and lifecycle actions (19-ES.14–19-ES.16)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Generate one recipient's embedded signing URL (ES.14).
+   *
+   * Three checks stand between the caller and a signing session:
+   *
+   *  1. the module's `embeddedSigning` feature and the provider's `recipientView` capability (the gate);
+   *  2. the caller's record scope, and the caller's own email matching the named recipient — a signer
+   *     may ask for their own session, never somebody else's;
+   *  3. the return/cancel hosts are on the installation's allowlist, because a signing URL that returns
+   *     to an arbitrary host is an open redirect with a live session attached.
+   *
+   * The URL is returned and never stored, audited or logged. Opening the browser session does not
+   * complete anything: the provider's event or a reconciliation does (plan §4.6).
+   */
+  async createEmbeddedView(
+    id: string,
+    input: { recipientId: string; returnUrl: string; cancelUrl?: string | null | undefined },
+  ): Promise<{ url: string; expiresAt: string | null }> {
+    const request = await this.loadScoped(id);
+    await this.gate.assertOperation('recipientView');
+    if (request.status !== 'sent' && request.status !== 'delivered' && request.status !== 'partially_signed') {
+      throw signatureRequestInvalidStateError(request.status, 'start embedded signing');
+    }
+    if (request.providerEnvelopeId === null || request.connectionId === null) throw providerNotConnectedError('no_connection');
+    const recipient = await this.recipients.assertMatches(request.id, input.recipientId);
+    if (recipient.recipientType !== 'signer' || recipient.authenticationMethod !== 'embedded') {
+      throw signatureActionNotAvailableError('embeddedView', 'recipient_not_embedded', { recipientId: recipient.id });
+    }
+    await this.assertSignerIdentity(recipient);
+    const settings = await this.settingsService.settings();
+    this.assertReturnUrl(input.returnUrl, settings.signing.embeddedReturnHosts);
+    if (input.cancelUrl !== undefined && input.cancelUrl !== null) {
+      this.assertReturnUrl(input.cancelUrl, settings.signing.embeddedReturnHosts);
+    }
+    const connection = await this.connections.findById(request.connectionId);
+    if (connection === undefined) throw providerNotConnectedError('no_connection');
+    const context = await this.connectionService.contextFor(connection);
+    const adapter = this.providers.assertOperation(connection.providerKey, 'recipientView');
+    const providerRecipientId = await this.providerRecipientIdFor(recipient, request.providerEnvelopeId, adapter, context);
+    let view;
+    try {
+      view = await adapter.recipientView(context, {
+        providerEnvelopeId: request.providerEnvelopeId,
+        recipientProviderId: providerRecipientId,
+        recipientId: recipient.id,
+        email: recipient.email,
+        name: recipient.name,
+        returnUrl: input.returnUrl,
+        cancelUrl: input.cancelUrl ?? null,
+        correlationId: correlationId(),
+      });
+    } catch (error) {
+      throw toModuleError(error, connection.providerKey);
+    }
+    await this.audit.append({
+      action: 'embedded_view.created',
+      requestId: request.id,
+      connectionId: connection.id,
+      recipientId: recipient.id,
+      actor: this.actorRef(),
+      // `expiresAt` is a fact; the URL itself is a bearer credential and the repository drops it.
+      detail: { expiresAt: view.expiresAt },
+    });
+    return { url: view.url, expiresAt: view.expiresAt };
+  }
+
   /**
    * Record the provider's recipient ids against the local rows, when it has just told us them.
    *
@@ -1029,6 +1108,60 @@ export class ESignatureRequestService {
       );
       if (match !== undefined) await this.recipients.attachProviderId(match.id, providerRecipient.providerRecipientId);
     }
+  }
+
+  /** The provider's id for a local recipient, looked up and recorded when it is not yet known. */
+  private async providerRecipientIdFor(
+    recipient: SignatureRecipient,
+    providerEnvelopeId: string,
+    adapter: SignatureProviderAdapter,
+    context: SignatureProviderContext,
+  ): Promise<string> {
+    if (recipient.providerRecipientId !== null) return recipient.providerRecipientId;
+    const providerRecipients = await adapter.listRecipients(context, providerEnvelopeId);
+    const found = providerRecipients.find(
+      (entry) => entry.recipientId === recipient.id || entry.email.trim().toLowerCase() === recipient.email.trim().toLowerCase(),
+    );
+    if (found === undefined) {
+      throw signatureActionNotAvailableError('embeddedView', 'recipient_not_matched', { recipientId: recipient.id });
+    }
+    await this.recipients.attachProviderId(recipient.id, found.providerRecipientId);
+    return found.providerRecipientId;
+  }
+
+  /** The signed-in user must be the named signer; a recipient view is a bearer session for that person. */
+  private async assertSignerIdentity(recipient: SignatureRecipient): Promise<void> {
+    const userId = this.scope.userId;
+    if (userId === undefined) {
+      throw new ESignatureError('RECIPIENT_NOT_AUTHORIZED', 'The signing link belongs to another recipient.', { recipientId: recipient.id }, 403);
+    }
+    const user = await this.database.db
+      .selectFrom('users')
+      .select('email_address')
+      .where('id', '=', userId)
+      .where('is_deleted', '=', false)
+      .executeTakeFirst();
+    const email = user?.email_address?.trim().toLowerCase() ?? '';
+    if (email === '' || email !== recipient.email.trim().toLowerCase()) {
+      throw new ESignatureError('RECIPIENT_NOT_AUTHORIZED', 'The signing link belongs to another recipient.', { recipientId: recipient.id }, 403);
+    }
+  }
+
+  /** A return/cancel URL may only point at an allowlisted host, over HTTPS (loopback aside). */
+  private assertReturnUrl(value: string, allowedHosts: readonly string[]): void {
+    let url: URL;
+    try {
+      url = new URL(value);
+    } catch {
+      throw signatureActionNotAvailableError('embeddedView', 'return_url_not_allowed');
+    }
+    const host = url.host.toLowerCase();
+    const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    if (url.protocol !== 'https:' && !(loopback && url.protocol === 'http:')) {
+      throw signatureActionNotAvailableError('embeddedView', 'return_url_not_allowed');
+    }
+    const allowlist = allowedHosts.map((entry) => entry.trim().toLowerCase()).filter((entry) => entry !== '');
+    if (!allowlist.includes(host)) throw signatureActionNotAvailableError('embeddedView', 'return_url_not_allowed');
   }
 
   /** Whether this caller may see raw provider diagnostics (plan §13.4: audit readers and admins). */

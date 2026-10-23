@@ -3304,6 +3304,12 @@ export interface ESignatureTimelineEntry {
   readonly reasonSafe: string | null;
   readonly detail: Readonly<Record<string, unknown>>;
 }
+
+/** Phase 19-ES.14 — the one-time signing URL; it is never stored or logged. */
+export interface ESignatureEmbeddedView {
+  readonly url: string;
+  readonly expiresAt: string | null;
+}
 }
 
 // Phase 19-ES.7 — the template catalog and the mappings built from it.

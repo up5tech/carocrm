@@ -23,6 +23,7 @@
   "RECIPIENT_NOT_AUTHORIZED": "That recipient is not part of this signature request.",
   "SIGNATURE_DOCUMENT_NOT_READABLE": "The document for this signature request cannot be read.",
   "SIGNATURE_SOURCE_RECORD_NOT_READABLE": "The record linked to this signature request cannot be read.",
+  "SIGNATURE_ACTION_NOT_AVAILABLE": "This signature action is not available for the request's current state or this installation's policy.",
   "SIGNATURE_WEBHOOK_REJECTED": "The provider delivery was refused.",
   "NOT_SUPPORTED_BY_PROVIDER": "The signature provider does not support this operation in this release.",
   "ENCRYPTION_KEY_MISSING": "ENCRYPTION_KEY is not configured, so provider credentials cannot be read and no provider operation is possible."

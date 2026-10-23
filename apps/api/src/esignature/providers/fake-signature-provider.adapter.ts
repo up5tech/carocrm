@@ -17,6 +17,10 @@ import {
   type ProviderTemplateDetail,
   type ProviderTemplateSummary,
   type ProviderWebhookNotification,
+  type RecipientView,
+  type RecipientViewInput,
+  type ResendNotificationsInput,
+  type ResendResult,
   type SendEnvelopeInput,
   type SentEnvelope,
   type SignatureProviderAdapter,
@@ -83,6 +87,7 @@ interface FakeRecipient {
   recipientType: 'signer' | 'carbon_copy';
   routingOrder: number;
   roleName: string | null;
+  clientUserId: string | null;
   status: FakeRecipientState;
   occurredAt: string | null;
   declineReasonSafe: string | null;
@@ -263,6 +268,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
       recipients: input.recipients.length,
       // Lets a test assert that the reviewed tab values reached the provider input.
       mappedTabs: (input.mappedFields ?? []).length,
+      embeddedRecipients: input.recipients.filter((recipient) => recipient.clientUserId !== null).length,
     });
     const existing = this.byIdempotencyKey.get(input.idempotencyKey);
     if (existing !== undefined) {
@@ -294,6 +300,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
         recipientType: recipient.recipientType,
         routingOrder: recipient.routingOrder,
         roleName: recipient.roleName,
+        clientUserId: recipient.clientUserId,
         status: 'pending',
         occurredAt: null,
         declineReasonSafe: null,
@@ -364,6 +371,49 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
   }
 
   /**
+   * The fake's embedded signing link.
+   *
+   * A real recipient view is a bearer URL with a short life; the fake returns a deterministic-looking
+   * one that carries no secret and is never stored, which is enough for the domain to prove it
+   * authorized the right recipient before asking.
+   */
+  async recipientView(context: SignatureProviderContext, input: RecipientViewInput): Promise<RecipientView> {
+    this.record('recipientView', context, {
+      providerEnvelopeId: input.providerEnvelopeId,
+      recipientId: input.recipientId,
+      returnUrlHost: safeHost(input.returnUrl),
+    });
+    const envelope = this.requireEnvelope(input.providerEnvelopeId);
+    if (envelope.state !== 'sent' && envelope.state !== 'delivered' && envelope.state !== 'partially_signed') {
+      throw new ProviderError('INVALID_REQUEST', 'The envelope is not open for signing.', {
+        category: 'permanent_validation',
+        retryable: false,
+        detail: 'envelope_not_open',
+      });
+    }
+    const recipient = envelope.recipients.find(
+      (entry) => entry.providerRecipientId === input.recipientProviderId || entry.recipientId === input.recipientId,
+    );
+    if (recipient === undefined) {
+      throw new ProviderError('NOT_FOUND', 'The fake has no such recipient on this envelope.', {
+        category: 'not_found',
+        retryable: false,
+        detail: 'recipient_not_found',
+      });
+    }
+    if (recipient.status === 'completed' || recipient.status === 'declined' || recipient.status === 'canceled') {
+      throw new ProviderError('INVALID_REQUEST', 'The recipient has already finished signing.', {
+        category: 'permanent_validation',
+        retryable: false,
+        detail: 'recipient_finished',
+      });
+    }
+    return {
+      url: `https://fake.docusign.invalid/signing/${stableSuffix(`${envelope.id}:${recipient.providerRecipientId}:${input.recipientId}`)}`,
+      expiresAt: new Date(FAKE_EPOCH_MS + this.sequence * 1000 + 5 * 60_000).toISOString(),
+    };
+  }
+
    * The signed documents, as derived artifacts.
    *
    * Bytes are deterministic from the source hash, so the same envelope yields the same artifact hash
@@ -590,6 +640,15 @@ function normalizeEventType(value: string | null): string {
 
 function hashOf(value: string): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+/** A URL's host, or `null` when it cannot be parsed — a diagnostic field, never the URL itself. */
+function safeHost(value: string): string | null {
+  try {
+    return new URL(value).host.toLowerCase();
+  } catch {
+    return null;
+  }
 }
 
 function stableSuffix(value: string): string {

@@ -59,6 +59,7 @@ import type {
   ESignatureCapabilitiesView,
   ESignatureConnectionTest,
   ESignatureConnectionView,
+  ESignatureEmbeddedView,
   ESignatureHealthView,
   ESignatureNavView,
   ESignatureRequestDocument,
@@ -1852,6 +1853,8 @@ export const api = {
     request<{ list: readonly ESignatureTimelineEntry[] }>(
       `/ESignature/requests/${encodeURIComponent(id)}/events?limit=${String(limit)}`,
     ),
+  createESignatureEmbeddedView: (id: string, input: { recipientId: string; returnUrl: string; cancelUrl?: string | null }) =>
+    request<ESignatureEmbeddedView>(`/ESignature/requests/${encodeURIComponent(id)}/embedded-view`, post(input)),
   /** Delete the provider draft while nothing has been sent. */
   abandonESignatureEnvelope: (id: string) =>
     request<{ request: ESignatureRequestView; deleted: boolean }>(`/ESignature/requests/${encodeURIComponent(id)}/envelope/abandon`, post({})),

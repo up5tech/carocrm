@@ -16,6 +16,10 @@ import {
   type ProviderTemplateRole,
   type ProviderTemplateSummary,
   type ProviderWebhookNotification,
+  type RecipientView,
+  type RecipientViewInput,
+  type ResendNotificationsInput,
+  type ResendResult,
   type SendEnvelopeInput,
   type SentEnvelope,
   type SignatureProviderAdapter,
@@ -69,6 +73,8 @@ export const DOCUSIGN_ES4_CAPABILITIES: SignatureProviderCapabilities = Object.f
   envelopeStatus: true,
   listRecipients: true,
   verifyWebhook: true,
+  // ES.14 — embedded signing. ES.16 — reminder/resend and void.
+  recipientView: true,
 });
 
 /** A stable code for the health view. Never a provider body, never a token. */
@@ -482,6 +488,41 @@ export class DocuSignAdapter implements SignatureProviderAdapter {
 
   async downloadCompletedDocuments(_context: SignatureProviderContext, _providerEnvelopeId: string): Promise<readonly ProviderArtifact[]> {
     throw this.refuse('downloadCompletedDocuments');
+  /**
+   * Ask DocuSign for one signer's embedded signing URL (ES.14).
+   *
+   * The recipient must have been created with the same `clientUserId` this module uses locally (its
+   * recipient row id), which is why only a draft marked `embedded` sets one at preparation. The
+   * answer's URL is a bearer credential: it is returned to the caller and never written anywhere.
+   */
+  async recipientView(context: SignatureProviderContext, input: RecipientViewInput): Promise<RecipientView> {
+    const response = await this.transport.request({
+      method: 'POST',
+      url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/envelopes/${encodeURIComponent(input.providerEnvelopeId)}/views/recipient`,
+      headers: { authorization: `Bearer ${context.accessToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        returnUrl: input.returnUrl,
+        authenticationMethod: 'none',
+        email: input.email,
+        userName: input.name,
+        recipientId: input.recipientProviderId,
+        clientUserId: input.recipientId,
+        ...(input.cancelUrl === null ? {} : { cancelUrl: input.cancelUrl }),
+      }),
+      timeoutMs: context.timeoutMs,
+    });
+    if (response.status >= 400) throw providerErrorForStatus(response.status);
+    const url = stringOf(parseJson(response.body)['url']);
+    if (url === null) {
+      throw new ProviderError('UNKNOWN', 'DocuSign returned no signing URL.', {
+        category: 'permanent_validation',
+        retryable: false,
+        detail: 'recipient_view_url_missing',
+      });
+    }
+    // DocuSign's recipient-view URLs are short-lived; five minutes is the conservative answer a caller
+    // may show, not an expiry the provider promised. The URL itself is never stored.
+    return { url, expiresAt: new Date(Date.now() + 5 * 60_000).toISOString() };
   }
 
   async downloadCompletionEvidence(_context: SignatureProviderContext, _providerEnvelopeId: string): Promise<readonly ProviderArtifact[]> {
@@ -718,6 +759,7 @@ function templateRolesFor(input: PrepareEnvelopeInput): {
   name: string;
   roleName: string;
   routingOrder: number;
+  clientUserId?: string;
   tabs?: { textTabs: { tabLabel: string; value: string }[] };
 }[] {
   const grouped = tabsByRole(input);
@@ -743,6 +785,7 @@ function templateRolesFor(input: PrepareEnvelopeInput): {
       name: recipient.name,
       roleName: recipient.roleName ?? '',
       routingOrder: recipient.routingOrder,
+      ...(recipient.clientUserId === null ? {} : { clientUserId: recipient.clientUserId }),
       ...(tabs === undefined ? {} : { tabs }),
     };
   });
@@ -750,8 +793,8 @@ function templateRolesFor(input: PrepareEnvelopeInput): {
 
 /** The `recipients` DocuSign expects for a document envelope, with the same tab placement. */
 function documentRecipientsFor(input: PrepareEnvelopeInput): {
-  signers: { email: string; name: string; recipientId: string; routingOrder: number; tabs?: { textTabs: { tabLabel: string; value: string }[] } }[];
-  carbonCopies: { email: string; name: string; recipientId: string; routingOrder: number }[];
+  signers: { email: string; name: string; recipientId: string; routingOrder: number; clientUserId?: string; tabs?: { textTabs: { tabLabel: string; value: string }[] } }[];
+  carbonCopies: { email: string; name: string; recipientId: string; routingOrder: number; clientUserId?: string }[];
 } {
   const grouped = tabsByRole(input);
   if ((grouped.get(null) ?? []).length > 0 && soleRole(input) === null) {
@@ -761,13 +804,14 @@ function documentRecipientsFor(input: PrepareEnvelopeInput): {
       detail: 'tab_role_required',
     });
   }
-  const toSigner = (recipient: PrepareEnvelopeInput['recipients'][number]): { email: string; name: string; recipientId: string; routingOrder: number; tabs?: { textTabs: { tabLabel: string; value: string }[] } } => {
+  const toSigner = (recipient: PrepareEnvelopeInput['recipients'][number]): { email: string; name: string; recipientId: string; routingOrder: number; clientUserId?: string; tabs?: { textTabs: { tabLabel: string; value: string }[] } } => {
     const tabs = tabsForRole(input, recipient.roleName);
     return {
       email: recipient.email,
       name: recipient.name,
       recipientId: recipient.recipientId,
       routingOrder: recipient.routingOrder,
+      ...(recipient.clientUserId === null ? {} : { clientUserId: recipient.clientUserId }),
       ...(tabs === undefined ? {} : { tabs }),
     };
   };
@@ -775,7 +819,13 @@ function documentRecipientsFor(input: PrepareEnvelopeInput): {
     signers: input.recipients.filter((recipient) => recipient.recipientType === 'signer').map(toSigner),
     carbonCopies: input.recipients
       .filter((recipient) => recipient.recipientType === 'carbon_copy')
-      .map((recipient) => ({ email: recipient.email, name: recipient.name, recipientId: recipient.recipientId, routingOrder: recipient.routingOrder })),
+      .map((recipient) => ({
+        email: recipient.email,
+        name: recipient.name,
+        recipientId: recipient.recipientId,
+        routingOrder: recipient.routingOrder,
+        ...(recipient.clientUserId === null ? {} : { clientUserId: recipient.clientUserId }),
+      })),
   };
 }
 

@@ -230,6 +230,14 @@
     "recipientType": "Type",
     "recipientStatus": "Status",
     "routingOrder": "Order",
+    "signingMode": "Signing",
+    "signingModes": {
+      "email": "Email invitation",
+      "embedded": "Embedded in CRM"
+    },
+    "signNow": "Sign now",
+    "embeddedOpened": "A signing session was opened in a new tab.",
+    "embeddedFailed": "The signing session could not be started.",
     "addRecipient": "Add recipient",
     "removeRecipient": "Remove recipient",
     "noRecipients": "No recipients yet.",

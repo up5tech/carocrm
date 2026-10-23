@@ -196,6 +196,18 @@ export const RequestEventsQuerySchema = z
   .object({ limit: z.coerce.number().int().min(1).max(200).default(100) })
   .strict();
 
+/**
+ * A recipient view request. The URLs are validated against the installation's allowlist in the
+ * service; the shape only refuses what can never be a URL.
+ */
+export const RequestEmbeddedViewSchema = z
+  .object({
+    recipientId: z.string().trim().min(1).max(64),
+    returnUrl: z.string().trim().url().max(2_000),
+    cancelUrl: z.string().trim().url().max(2_000).nullable().optional(),
+  })
+  .strict();
+
 /** The worker's webhook-processing payload: the durable inbox row, nothing else. */
 export const WebhookProcessSchema = z.object({ inboxId: z.string().trim().min(1).max(64) }).strict();
 

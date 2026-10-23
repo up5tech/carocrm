@@ -86,6 +86,35 @@ export function signatureRequestInvalidStateError(status: string, attempted: str
   );
 }
 
+/**
+ * A policy or provider-state refusal on a lifecycle action (ES.16).
+ *
+ * Distinct from an invalid state: the request may be sendable, but this installation has not allowed
+ * reminders, or the provider does not offer the operation. The stable code lets the SPA disable the
+ * action instead of showing a failure a user cannot fix.
+ */
+export function signatureActionNotAvailableError(
+  action: 'resend' | 'void' | 'correct' | 'embeddedView' | 'artifacts',
+  reason:
+    | 'reminders_disabled'
+    | 'recipient_not_embedded'
+    | 'recipient_not_matched'
+    | 'return_url_not_allowed'
+    | 'not_completed'
+    | 'provider_not_supported',
+  detail: Record<string, unknown> = {},
+): ESignatureError {
+  const messages: Record<typeof reason, string> = {
+    reminders_disabled: 'Reminders are switched off for this installation, so no resend was made.',
+    recipient_not_embedded: 'That recipient does not sign inside the CRM, so no embedded view can be generated.',
+    recipient_not_matched: 'The signed-in user is not the recipient this signing link is for.',
+    return_url_not_allowed: 'The return URL is not on this installation\'s allowlist, so no signing link was generated.',
+    not_completed: 'The request has not completed, so there are no completed documents to retrieve.',
+    provider_not_supported: 'The provider does not offer this action in this release.',
+  };
+  return new ESignatureError('SIGNATURE_ACTION_NOT_AVAILABLE', messages[reason], { action, refusal: reason, ...detail }, 422);
+}
+
 /** A delivery that failed verification. The inbox keeps the evidence; the caller learns nothing useful. */
 export function signatureWebhookRejectedError(reason: string): ESignatureError {
   return new ESignatureError('SIGNATURE_WEBHOOK_REJECTED', 'The delivery was refused.', { reason }, 401);

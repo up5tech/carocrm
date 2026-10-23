@@ -230,6 +230,14 @@
     "recipientType": "Loại",
     "recipientStatus": "Trạng thái",
     "routingOrder": "Thứ tự",
+    "signingMode": "Cách ký",
+    "signingModes": {
+      "email": "Thư mời qua email",
+      "embedded": "Ký nhúng trong CRM"
+    },
+    "signNow": "Ký ngay",
+    "embeddedOpened": "Đã mở phiên ký trong thẻ mới.",
+    "embeddedFailed": "Không bắt đầu được phiên ký.",
     "addRecipient": "Thêm người nhận",
     "removeRecipient": "Xóa người nhận",
     "noRecipients": "Chưa có người nhận.",

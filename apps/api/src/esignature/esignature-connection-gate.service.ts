@@ -84,7 +84,9 @@ const OPERATION_RULES: Record<ESignatureOperation, OperationRule> = {
   sendEnvelope: { capability: 'send', feature: 'send', providerCapability: 'sendEnvelope', reachesProvider: true },
   envelopeStatus: { capability: 'use', feature: 'webhooks', providerCapability: 'envelopeStatus', reachesProvider: true },
   listRecipients: { capability: 'use', feature: 'webhooks', providerCapability: 'listRecipients', reachesProvider: true },
-  recipientView: { capability: 'send', feature: 'embeddedSigning', providerCapability: 'recipientView', reachesProvider: true },
+  // A recipient view is generated for the signer, not for the sender: the caller needs to read the
+  // request (and the service proves the caller is the named recipient), not the send right.
+  recipientView: { capability: 'use', feature: 'embeddedSigning', providerCapability: 'recipientView', reachesProvider: true },
   resendNotifications: { capability: 'send', feature: 'send', providerCapability: 'resendNotifications', reachesProvider: true },
   voidEnvelope: { capability: 'void', feature: 'send', providerCapability: 'voidEnvelope', reachesProvider: true },
   correctEnvelope: { capability: 'correct', feature: 'send', providerCapability: 'correctEnvelope', reachesProvider: true },

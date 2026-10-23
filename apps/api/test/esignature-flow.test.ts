@@ -474,8 +474,9 @@ describe('the initial slice, end to end with the fake provider', () => {
   it('answers through the registry the operations this release does not offer', () => {
     const { providers } = services();
     expect(providers.supports(PROVIDER_KEY_DOCUSIGN, 'prepareEnvelope')).toBe(true);
-    expect(providers.supports(PROVIDER_KEY_DOCUSIGN, 'voidEnvelope')).toBe(false);
-    expect(providers.supports(PROVIDER_KEY_DOCUSIGN, 'recipientView')).toBe(false);
+    expect(providers.supports(PROVIDER_KEY_DOCUSIGN, 'voidEnvelope')).toBe(true);
+    expect(providers.supports(PROVIDER_KEY_DOCUSIGN, 'recipientView')).toBe(true);
+    expect(providers.supports(PROVIDER_KEY_DOCUSIGN, 'resendNotifications')).toBe(true);
     expect(providers.supports(PROVIDER_KEY_DOCUSIGN, 'correctEnvelope')).toBe(false);
     // The bound adapter is the fake, and a fake is never a live integration.
     expect(providers.report().every((descriptor) => descriptor.mode === 'fake')).toBe(true);

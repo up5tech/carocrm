@@ -1,4 +1,4 @@
-import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, DownloadOutlined, EditOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, StopOutlined, UploadOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
@@ -57,6 +57,7 @@ interface RecipientDraft {
   name: string;
   email: string;
   recipientType: 'signer' | 'carbon_copy';
+  authenticationMethod?: 'embedded' | null;
   routingOrder: number;
 }
 
@@ -284,7 +285,11 @@ function RequestDetail(props: {
         <Descriptions.Item label={t('esignature.requests.fieldUpdated')}>{formatMoment(request.modifiedAt)}</Descriptions.Item>
       </Descriptions>
 
-      <RecipientsTable recipients={[...request.recipients]} />
+      <RecipientsTable
+        requestId={request.id}
+        recipients={[...request.recipients]}
+        canEmbedded={request.status === 'sent' || request.status === 'delivered' || request.status === 'partially_signed'}
+      />
       <PreviewSection
         request={request}
         canPrepare={props.canPrepare}
@@ -333,6 +338,7 @@ function RequestEditor(props: {
             name: recipient.name,
             email: recipient.email,
             recipientType: recipient.recipientType,
+            ...(recipient.authenticationMethod === 'embedded' ? { authenticationMethod: 'embedded' as const } : {}),
             routingOrder: recipient.routingOrder,
           })),
         };
@@ -342,7 +348,11 @@ function RequestEditor(props: {
     try {
       const recipients = values.recipients
         .filter((entry) => entry.name.trim() !== '' && entry.email.trim() !== '')
-        .map((entry, index) => ({ ...entry, routingOrder: entry.routingOrder ?? index + 1 }));
+        .map((entry, index) => ({
+          ...entry,
+          routingOrder: entry.routingOrder ?? index + 1,
+          authenticationMethod: entry.authenticationMethod === 'embedded' ? 'embedded' : null,
+        }));
       const source: Record<string, unknown> =
         props.mode === 'create'
           ? // Creation omits an unset link; the strict create shape has no nullable source fields.
@@ -415,6 +425,17 @@ function RequestEditor(props: {
                 </Form.Item>
                 <Form.Item name={[field.name, 'routingOrder']} style={{ marginBottom: 0 }}>
                   <InputNumber min={1} max={100} style={{ width: 70 }} />
+                </Form.Item>
+                <Form.Item name={[field.name, 'authenticationMethod']} style={{ marginBottom: 0 }}>
+                  <Select
+                    allowClear
+                    style={{ width: 170 }}
+                    placeholder={t('esignature.requests.signingModes.email')}
+                    options={[
+                      { value: 'embedded', label: t('esignature.requests.signingModes.embedded') },
+                      { value: null, label: t('esignature.requests.signingModes.email') },
+                    ]}
+                  />
                 </Form.Item>
                 <Button size="small" type="text" icon={<DeleteOutlined />} onClick={() => remove(field.name)} aria-label={t('esignature.requests.removeRecipient')} />
               </Space>
@@ -720,7 +741,31 @@ function SendSection(props: { request: ESignatureRequestView; canSend: boolean; 
   );
 }
 
-function RecipientsTable(props: { recipients: ESignatureRequestRecipient[] }) {
+function RecipientsTable(props: {
+  requestId: string;
+  recipients: ESignatureRequestRecipient[];
+  canEmbedded: boolean;
+}) {
+  const { message } = AntApp.useApp();
+  const [busy, setBusy] = useState<string | null>(null);
+
+  /** A one-time URL: opened in a new tab, never stored, never rendered as text. */
+  const openEmbedded = async (recipient: ESignatureRequestRecipient): Promise<void> => {
+    setBusy(recipient.id);
+    try {
+      const view = await api.createESignatureEmbeddedView(props.requestId, {
+        recipientId: recipient.id,
+        returnUrl: `${window.location.origin}/esignature`,
+      });
+      window.open(view.url, '_blank', 'noopener,noreferrer');
+      message.success(t('esignature.requests.embeddedOpened'));
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('esignature.requests.embeddedFailed'));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <Space direction="vertical" size={6} style={{ width: '100%' }}>
       <Typography.Title level={5} style={{ margin: 0 }}>
@@ -738,8 +783,6 @@ function RecipientsTable(props: { recipients: ESignatureRequestRecipient[] }) {
             { title: t('esignature.requests.routingOrder'), dataIndex: 'routingOrder', width: 70 },
             { title: t('esignature.requests.recipientName'), dataIndex: 'name' },
             { title: t('esignature.requests.recipientEmail'), dataIndex: 'email' },
-            { title: t('esignature.requests.recipientType'), dataIndex: 'recipientType', render: (value: string) => t(`esignature.requests.recipientTypes.${value}`) },
-            { title: t('esignature.requests.routingOrder'), dataIndex: 'routingOrder', width: 100 },
             {
               title: t('esignature.requests.recipientType'),
               dataIndex: 'recipientType',
@@ -751,6 +794,25 @@ function RecipientsTable(props: { recipients: ESignatureRequestRecipient[] }) {
               dataIndex: 'status',
               width: 130,
               render: (value: string) => <Tag color={recipientStatusColor(value)}>{t(`esignature.requests.recipientStatuses.${value}`)}</Tag>,
+            },
+            {
+              title: t('esignature.requests.signingMode'),
+              dataIndex: 'authenticationMethod',
+              width: 130,
+              render: (value: string | null) =>
+                value === 'embedded' ? <Tag color="blue">{t('esignature.requests.signingModes.embedded')}</Tag> : <Tag>{t('esignature.requests.signingModes.email')}</Tag>,
+            },
+            {
+              title: '',
+              key: 'actions',
+              width: 130,
+              render: (_value: unknown, row) =>
+                props.canEmbedded && row.authenticationMethod === 'embedded' && row.recipientType === 'signer' &&
+                row.status !== 'completed' && row.status !== 'declined' && row.status !== 'canceled' ? (
+                  <Button size="small" type="link" icon={<LinkOutlined />} loading={busy === row.id} onClick={() => void openEmbedded(row)}>
+                    {t('esignature.requests.signNow')}
+                  </Button>
+                ) : null,
             },
           ]}
         />

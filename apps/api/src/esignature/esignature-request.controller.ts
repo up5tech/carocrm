@@ -8,6 +8,7 @@ import {
   RequestCreateSchema,
   RequestDocumentAttachSchema,
   RequestDocumentReplaceSchema,
+  RequestEmbeddedViewSchema,
   RequestEnvelopeSchema,
   RequestEventsQuerySchema,
   RequestListQuerySchema,
@@ -156,6 +157,18 @@ export class ESignatureRequestController {
   async events(@Param('id') id: string, @Query() query: unknown) {
     const parsed = this.parse(RequestEventsQuerySchema, query);
     return { list: await this.requests.timeline(this.id(id), parsed.limit) };
+  }
+
+  /**
+   * One recipient's short-lived embedded signing URL (ES.14).
+   *
+   * The caller must be the named signer and the return host must be allowlisted. The URL is returned
+   * once and never stored; opening it does not complete anything.
+   */
+  @HttpCode(200)
+  @Post(':id/embedded-view')
+  async embeddedView(@Param('id') id: string, @Body() body: unknown) {
+    return this.requests.createEmbeddedView(this.id(id), this.parse(RequestEmbeddedViewSchema, body));
   }
 
   @Get(':id/recipients')
