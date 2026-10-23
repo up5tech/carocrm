@@ -427,6 +427,8 @@ export const PROVIDER_CAPABILITY_KEYS = [
   'templateDetails',
   'prepareEnvelope',
   'sendEnvelope',
+  // A provider with no unsent draft creates and sends in one call.
+  'sendNewEnvelope',
   'envelopeStatus',
   'listRecipients',
   'recipientView',

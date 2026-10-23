@@ -38,6 +38,13 @@ import {
   DOCUSIGN_TRANSPORT,
   type DocuSignTransport,
 } from './providers/docusign/docusign-transport.js';
+import { DropboxSignAdapter } from './providers/dropbox-sign/dropbox-sign-adapter.js';
+import { createDropboxSignAuthStrategy } from './providers/dropbox-sign/dropbox-sign-auth.strategy.js';
+import {
+  createDefaultDropboxSignTransport,
+  DROPBOX_SIGN_TRANSPORT,
+  type DropboxSignTransport,
+} from './providers/dropbox-sign/dropbox-sign-transport.js';
 import { createFakeSignatureProviderAdapter } from './providers/fake-signature-provider.adapter.js';
 import type { SignatureProviderAdapter } from './providers/signature-provider.port.js';
 import { SIGNATURE_PROVIDER_ADAPTERS,SignatureProviderRegistry } from './providers/signature-provider.registry.js';
@@ -82,6 +89,12 @@ const docuSignTransportProvider = {
   useFactory: () => createDefaultDocuSignTransport(),
 };
 
+/** Dropbox Sign's HTTP door. Same destination gate, a byte-oriented body and response. */
+const dropboxSignTransportProvider = {
+  provide: DROPBOX_SIGN_TRANSPORT,
+  useFactory: () => createDefaultDropboxSignTransport(),
+};
+
 /**
  * The provider adapters this build binds.
  *
@@ -93,9 +106,11 @@ const docuSignTransportProvider = {
  */
 const signatureProviderAdaptersProvider = {
   provide: SIGNATURE_PROVIDER_ADAPTERS,
-  useFactory: (transport: DocuSignTransport): SignatureProviderAdapter[] =>
-    process.env.NODE_ENV === 'production' ? [new DocuSignAdapter(transport)] : [createFakeSignatureProviderAdapter()],
-  inject: [DOCUSIGN_TRANSPORT],
+  useFactory: (docusign: DocuSignTransport, dropboxSign: DropboxSignTransport): SignatureProviderAdapter[] =>
+    process.env.NODE_ENV === 'production'
+      ? [new DocuSignAdapter(docusign), new DropboxSignAdapter(dropboxSign)]
+      : [createFakeSignatureProviderAdapter()],
+  inject: [DOCUSIGN_TRANSPORT, DROPBOX_SIGN_TRANSPORT],
 };
 
 /**
@@ -107,11 +122,15 @@ const signatureProviderAdaptersProvider = {
  */
 const signatureProviderAuthsProvider = {
   provide: SIGNATURE_PROVIDER_AUTHS,
-  useFactory: (transport: DocuSignTransport): SignatureProviderAuthStrategy[] => [createDocuSignAuthStrategy(transport)],
-  inject: [DOCUSIGN_TRANSPORT],
+  useFactory: (docusign: DocuSignTransport, dropboxSign: DropboxSignTransport): SignatureProviderAuthStrategy[] => [
+    createDocuSignAuthStrategy(docusign),
+    createDropboxSignAuthStrategy(dropboxSign),
+  ],
+  inject: [DOCUSIGN_TRANSPORT, DROPBOX_SIGN_TRANSPORT],
 };
 
 export const ESIGNATURE_PROVIDERS = [
+  dropboxSignTransportProvider,
   // The capability gate, the settings document, the visibility report, the module health view and
   // the single gate that stands in front of every provider operation.
   ESignaturePermissionService,

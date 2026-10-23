@@ -110,6 +110,8 @@ describe('the adapter contract', () => {
       'templateDetails',
       'prepareEnvelope',
       'sendEnvelope',
+      // A provider with no unsent draft creates and sends in one call.
+      'sendNewEnvelope',
       'envelopeStatus',
       'listRecipients',
       'recipientView',

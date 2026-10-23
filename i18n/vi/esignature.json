@@ -12,7 +12,7 @@
   },
   "page": {
     "title": "Chữ ký điện tử",
-    "subtitle": "Bản nháp yêu cầu ký và kết nối nhà cung cấp được quản lý tại đây. Việc gửi sẽ ra mắt cùng cơ chế bảo vệ gửi.",
+    "subtitle": "Soạn, gửi và theo dõi yêu cầu ký, đồng thời quản trị tài khoản nhà cung cấp phía sau. Mọi thao tác trên trang này đều do máy chủ quyết định.",
     "loadFailed": "Không tải được module.",
     "loadFailedHint": "Kiểm tra bạn có quyền đọc của module và quản trị viên đã bật module hay chưa.",
     "notEnabled": "Chữ ký điện tử đang tắt trên hệ thống này, nên không thể soạn hay gửi yêu cầu ký nào.",
@@ -22,13 +22,29 @@
       "module_disabled": "Module đang bị tắt trong phần cài đặt.",
       "connections_disabled": "Khả năng quản lý kết nối nhà cung cấp đang bị tắt trong phần cài đặt.",
       "encryption_key_missing": "Chưa cấu hình ENCRYPTION_KEY nên không đọc được thông tin xác thực đã lưu và không kết nối nào dùng được.",
-      "no_enabled_connection": "Chưa có kết nối DocuSign nào ở trạng thái đã xác thực và đang hoạt động. Quản trị viên cần xác thực một kết nối trước."
+      "no_enabled_connection": "Chưa có kết nối nhà cung cấp nào được cấp quyền và đang bật. Quản trị viên cần kết nối một nhà cung cấp trước."
     },
     "adminNote": "Quản trị viên có thể bật module và các tính năng trong Cài đặt, Tích hợp, Chữ ký điện tử.",
     "phases": "Các pha đã hoàn thành",
     "provider": "Nhà cung cấp",
     "foundationOk": "Nền tảng hệ thống",
-    "foundationMissing": "Nền tảng hệ thống còn thiếu thành phần"
+    "foundationMissing": "Nền tảng hệ thống còn thiếu thành phần",
+    "stats": {
+      "gate": "Sẵn sàng gửi",
+      "gateHint": "Cài đặt, một kết nối đang bật và khoá mã hoá",
+      "ready": "Sẵn sàng",
+      "notReady": "Cần thiết lập",
+      "features": "Tính năng hiệu lực",
+      "featuresHint": "Đã bật và đã triển khai trong bản này",
+      "providers": "Bộ chuyển đổi",
+      "providersHint": "Được gắn trong bản này",
+      "checks": "Kiểm tra nền tảng",
+      "checksHint": "Phụ thuộc, cấu trúc và cài đặt"
+    },
+    "diagnostics": "Chẩn đoán và quyền",
+    "diagnosticsHint": "Công tắc tính năng, quyền bạn đang có và khả năng của các bộ chuyển đổi đã gắn.",
+    "moduleOn": "Đang bật",
+    "moduleOff": "Đang tắt"
   },
   "features": {
     "title": "Tính năng",
@@ -150,9 +166,10 @@
   },
   "connections": {
     "title": "Kết nối nhà cung cấp",
+    "hint": "Kết nối là tài khoản nhà cung cấp mà tài liệu được gửi qua. Thông tin xác thực chỉ ghi vào: màn hình này lưu hoặc thay thế, không bao giờ đọc lại.",
     "loadFailed": "Không tải được danh sách kết nối.",
-    "empty": "Chưa có kết nối DocuSign",
-    "emptyHint": "Tạo một kết nối kèm client secret OAuth, rồi xác thực nó. Không gửi được yêu cầu nào cho tới khi có kết nối đã xác thực và đang hoạt động.",
+    "empty": "Chưa có kết nối nhà cung cấp",
+    "emptyHint": "Tạo kết nối với thông tin xác thực mà nhà cung cấp yêu cầu, rồi kết nối. Không thể gửi gì cho đến khi có kết nối đã uỷ quyền và đang bật.",
     "create": "Kết nối mới",
     "created": "Đã tạo kết nối chữ ký điện tử.",
     "updated": "Đã cập nhật kết nối chữ ký điện tử.",
@@ -164,7 +181,7 @@
     "fieldClientId": "Khóa tích hợp (OAuth client id)",
     "clientIdHint": "Là giá trị công khai. Để trống nếu dùng khóa đã cấu hình trong cài đặt module.",
     "fieldRedirectUri": "Đường dẫn OAuth redirect",
-    "redirectUriHint": "Đúng đường dẫn đã đăng ký với tích hợp DocuSign này và phải trỏ tới đường dẫn callback của nền tảng.",
+    "redirectUriHint": "Đúng đường dẫn đã đăng ký với ứng dụng của nhà cung cấp này và phải trỏ tới đường dẫn callback của nền tảng.",
     "fieldClientSecret": "OAuth client secret",
     "secretHint": "Được lưu ở dạng mã hóa và không hiển thị lại. Không có thành phần nào ở màn hình này đọc được bí mật.",
     "fieldSecretValue": "Giá trị bí mật",
@@ -175,7 +192,8 @@
       "client_secret": "Client secret",
       "oauth_access_token": "Access token",
       "oauth_refresh_token": "Refresh token",
-      "webhook_secret": "Secret của Connect"
+      "webhook_secret": "Secret của Connect",
+      "api_key": "API key"
     },
     "environments": {
       "demo": "Demo",
@@ -216,13 +234,31 @@
     "disconnectedWithHistory": "Đã ngắt kết nối; hủy {credentials} thông tin xác thực. Các yêu cầu ký đã có vẫn được giữ.",
     "testOk": "Kết nối đã trả lời.",
     "testFailed": "Kết nối không trả lời ({code}).",
-    "fakeAdapterNote": "Bộ chuyển đổi {mode} đã trả lời, nên chưa có gì tới DocuSign.",
-    "providerNotInstalled": "chưa được cài đặt trong bản dựng này"
+    "fakeAdapterNote": "Adapter {mode} đã trả lời, nên không có yêu cầu nào tới nhà cung cấp thật.",
+    "providerNotInstalled": "chưa được cài đặt trong bản dựng này",
+    "fieldApiKey": "API key",
+    "apiKeyHint": "Được mã hoá khi lưu và được kiểm tra với nhà cung cấp trước khi tạo kết nối. Màn hình này không thể đọc lại giá trị.",
+    "replaceApiKey": "Thay API key",
+    "count": "{count} kết nối",
+    "authStyles": {
+      "oauth2_authorization_code": "OAuth 2.0",
+      "api_key": "API key",
+      "unknown": "Không rõ"
+    },
+    "adapterModes": {
+      "live": "Bộ chuyển đổi thật",
+      "fake": "Bộ chuyển đổi giả lập",
+      "disabled": "Bộ chuyển đổi đã tắt",
+      "none": "Chưa có bộ chuyển đổi"
+    },
+    "moreActions": "Thao tác khác",
+    "emptyCta": "Kết nối nhà cung cấp"
   },
   "requests": {
     "title": "Yêu cầu ký",
+    "hint": "Mọi yêu cầu theo góc nhìn của máy chủ. Mở một yêu cầu để xem tài liệu, người ký và lịch sử nhà cung cấp.",
     "empty": "Chưa có yêu cầu ký nào",
-    "emptyHint": "Tạo bản nháp, đính kèm tài liệu và chỉ định người ký. Việc gửi sẽ ra mắt cùng cơ chế bảo vệ gửi.",
+    "emptyHint": "Tạo bản nháp, đính kèm tài liệu, chỉ định người ký rồi gửi từ màn hình xem trước.",
     "loadFailed": "Không tải được danh sách yêu cầu ký.",
     "create": "Yêu cầu mới",
     "detail": "Yêu cầu ký",
@@ -243,6 +279,9 @@
     "allStatuses": "Mọi trạng thái",
     "searchPlaceholder": "Tìm theo tên hoặc chủ đề",
     "recipientSearchPlaceholder": "Tìm người nhận",
+    "resultCount": "{count} yêu cầu",
+    "emptyFiltered": "Không có yêu cầu nào khớp bộ lọc.",
+    "clearFilters": "Xoá bộ lọc",
     "fieldName": "Tên",
     "fieldSource": "Bản ghi nguồn",
     "fieldSubject": "Tiêu đề email",
@@ -478,6 +517,7 @@
   },
   "templates": {
     "title": "Ánh xạ mẫu",
+    "hint": "Ánh xạ vai trò và trường của mẫu nhà cung cấp với CRM này trước khi yêu cầu có thể dùng mẫu đó.",
     "selectConnection": "Chọn kết nối nhà cung cấp",
     "selectConnectionHint": "Chọn kết nối có tài khoản chứa các mẫu.",
     "refresh": "Làm mới danh mục",
@@ -488,7 +528,7 @@
     "saved": "Đã lưu ánh xạ mẫu.",
     "saveFailed": "Không lưu được ánh xạ mẫu.",
     "noConnections": "Chưa có kết nối nhà cung cấp",
-    "noConnectionsHint": "Hãy kết nối và xác thực một tài khoản DocuSign trước khi ánh xạ mẫu của tài khoản đó.",
+    "noConnectionsHint": "Hãy kết nối và xác thực một tài khoản nhà cung cấp trước khi ánh xạ mẫu của tài khoản đó.",
     "columnTemplate": "Mẫu",
     "columnShared": "Phạm vi",
     "shared": "Dùng chung tài khoản",

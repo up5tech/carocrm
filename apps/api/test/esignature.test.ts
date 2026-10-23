@@ -153,7 +153,7 @@ describe('module registration (19-ES.1)', () => {
     expect(module['implementedPhases']).toContain('19-ES.2');
     // The module knows every cataloged provider; the catalog says which integration is installed.
     expect(module['providerKeys']).toEqual(['docusign', 'dropbox_sign']);
-    expect(module['availableProviderKeys']).toEqual(['docusign']);
+    expect(module['availableProviderKeys']).toEqual(['docusign', 'dropbox_sign']);
   });
 
   it('reports the platform foundation the module builds on, read from the running system', async () => {

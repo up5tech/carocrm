@@ -3187,6 +3187,10 @@ export interface ESignatureConnectionView {
   readonly providerLabel: string;
   /** `declared` means the provider is cataloged but its integration is not installed here. */
   readonly providerStatus: 'available' | 'declared' | 'unknown';
+  /** An API-key provider stores `api_key`; an OAuth provider stores client/refresh credentials. */
+  readonly authStyle: 'oauth2_authorization_code' | 'api_key' | null;
+  readonly hasApiKey: boolean;
+  readonly webhookSecretKind: 'webhook_secret' | 'api_key' | null;
   readonly createdAt: string;
   readonly modifiedAt: string;
 }
@@ -3201,6 +3205,8 @@ export interface ESignatureProviderCatalogEntry {
   readonly description: string;
   readonly authStyle: 'oauth2_authorization_code' | 'api_key';
   readonly integrationStatus: 'available' | 'declared';
+  /** `direct` providers create and send in one call; there is no provider draft step. */
+  readonly envelopeDrafting: 'draft' | 'direct';
   readonly capabilities: Readonly<Record<string, boolean>>;
   readonly documentLimits: { readonly maxDocumentBytes: number; readonly supportedExtensions: readonly string[] } | null;
   readonly oauthClientIdEnvVars: readonly string[];
@@ -3275,6 +3281,8 @@ export interface ESignatureRequestView {
   readonly connectionId: string | null;
   readonly providerEnvelopeId: string | null;
   readonly providerStatusRaw: string | null;
+  /** A `direct` provider sends at creation time, so the draft step is skipped. */
+  readonly providerDrafting: 'draft' | 'direct';
   readonly source: ESignatureRequestSource | null;
   readonly subject: string | null;
   readonly message: string | null;

@@ -123,6 +123,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
   readonly providerApiVersion = 'fake-v2.1';
   readonly mode = 'fake' as const;
   readonly capabilities: SignatureProviderCapabilities;
+  readonly envelopeDrafting = 'draft' as const;
 
   private readonly envelopes = new Map<string, FakeEnvelope>();
   private readonly byIdempotencyKey = new Map<string, string>();

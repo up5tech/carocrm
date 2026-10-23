@@ -1,6 +1,6 @@
-import { PlusOutlined } from '@ant-design/icons';
+import { MoreOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, App as AntApp, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd';
+import { Alert, App as AntApp, Badge, Button, Card, Dropdown, Form, Input, Modal, Segmented, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useState } from 'react';
 
@@ -34,16 +34,19 @@ interface CreateValues {
   environment: 'demo' | 'production';
   oauthClientId?: string;
   redirectUri?: string;
-  clientSecret: string;
+  /** OAuth providers only. */
+  clientSecret?: string;
+  /** API-key providers only. */
+  apiKey?: string;
 }
 
 interface SecretValues {
-  kind: 'client_secret' | 'webhook_secret';
+  kind: 'api_key' | 'client_secret' | 'webhook_secret';
   value: string;
 }
 
 export function ESignatureConnectionsPanel(props: { readonly canManage: boolean }) {
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
   const queryClient = useQueryClient();
   const [createForm] = Form.useForm<CreateValues>();
   const [secretForm] = Form.useForm<SecretValues>();
@@ -64,6 +67,11 @@ export function ESignatureConnectionsPanel(props: { readonly canManage: boolean 
     queryFn: () => api.eSignatureProviderCatalog(),
     staleTime: 300_000,
   });
+  // Which credential the form asks for is the provider's answer, not the screen's assumption: an
+  // OAuth provider needs a client secret and a redirect URI, an API-key provider needs only its key.
+  const selectedProviderKey = Form.useWatch('providerKey', createForm);
+  const selectedProvider = catalog.data?.providers.find((provider) => provider.key === selectedProviderKey);
+  const apiKeyProvider = selectedProvider?.authStyle === 'api_key';
   const providerOptions = (catalog.data?.providers ?? []).map((provider) => ({
     value: provider.key,
     disabled: provider.integrationStatus !== 'available',
@@ -152,12 +160,18 @@ export function ESignatureConnectionsPanel(props: { readonly canManage: boolean 
   return (
     <Card
       className="carocrm-card"
-      title={t('esignature.connections.title')}
+      title={
+        <div>
+          <div>{t('esignature.connections.title')}</div>
+          <div style={{ marginTop: 2, color: '#737b85', fontSize: 12, fontWeight: 400 }}>{t('esignature.connections.hint')}</div>
+        </div>
+      }
       extra={
-        <Space size={8}>
-          <Button size="small" onClick={() => void connections.refetch()}>
-            {t('core.common.reload')}
-          </Button>
+        <Space size={8} wrap>
+          {rows.length === 0 ? null : <Tag>{t('esignature.connections.count', { count: rows.length })}</Tag>}
+          <Tooltip title={t('core.common.reload')}>
+            <Button size="small" icon={<ReloadOutlined />} aria-label={t('core.common.reload')} onClick={() => void connections.refetch()} />
+          </Tooltip>
           {props.canManage ? (
             <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
               {t('esignature.connections.create')}
@@ -168,7 +182,14 @@ export function ESignatureConnectionsPanel(props: { readonly canManage: boolean 
       style={{ marginBottom: 16 }}
     >
       {rows.length === 0 ? (
-        <EmptyState title={t('esignature.connections.empty')} description={t('esignature.connections.emptyHint')} />
+        <Space direction="vertical" size={14} style={{ width: '100%', alignItems: 'center' }}>
+          <EmptyState title={t('esignature.connections.empty')} description={t('esignature.connections.emptyHint')} />
+          {props.canManage ? (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreating(true)}>
+              {t('esignature.connections.emptyCta')}
+            </Button>
+          ) : null}
+        </Space>
       ) : (
         <Table<ESignatureConnectionView>
           size="small"
@@ -180,10 +201,21 @@ export function ESignatureConnectionsPanel(props: { readonly canManage: boolean 
             onAuthorize: (id) => authorize.mutate(id),
             onTest: (id) => test.mutate(id),
             onToggle: (row) => setActive.mutate({ id: row.id, active: !row.isActive }),
-            onDisconnect: (id) => disconnect.mutate(id),
+            // Disconnecting deletes credentials, so it asks twice: once in the menu, once in a
+            // confirmation that names the consequence rather than a bare "are you sure".
+            onDisconnect: (row) =>
+              modal.confirm({
+                title: t('esignature.connections.disconnectConfirm'),
+                content: t('esignature.connections.disconnectConfirmHint'),
+                okText: t('core.common.confirm'),
+                cancelText: t('core.common.cancel'),
+                okButtonProps: { danger: true },
+                onOk: () => disconnect.mutate(row.id),
+              }),
             onSecret: (row) => {
               setSecretTarget(row);
-              secretForm.setFieldsValue({ kind: 'client_secret', value: '' });
+              const kind = row.authStyle === 'api_key' ? 'api_key' : 'client_secret';
+              secretForm.setFieldsValue({ kind, value: '' });
             },
           })}
         />
@@ -239,33 +271,54 @@ export function ESignatureConnectionsPanel(props: { readonly canManage: boolean 
           <Form.Item name="name" label={t('esignature.connections.fieldName')} rules={[{ required: true }]}>
             <Input maxLength={120} />
           </Form.Item>
+          {selectedProvider === undefined ? null : (
+            <Typography.Paragraph type="secondary" style={{ marginTop: -4, marginBottom: 16, fontSize: 12 }}>
+              {selectedProvider.description}
+            </Typography.Paragraph>
+          )}
           <Form.Item
             name="environment"
             label={t('esignature.connections.fieldEnvironment')}
             extra={t('esignature.connections.environmentHint')}
             rules={[{ required: true }]}
           >
-            <Select
+            {/* Two mutually exclusive environments, never a free choice: a segmented control says so
+                at a glance, where a dropdown reads like a preference. */}
+            <Segmented
+              block
               options={[
                 { value: 'demo', label: t('esignature.connections.environments.demo') },
                 { value: 'production', label: t('esignature.connections.environments.production') },
               ]}
             />
           </Form.Item>
-          <Form.Item name="oauthClientId" label={t('esignature.connections.fieldClientId')} extra={t('esignature.connections.clientIdHint')}>
-            <Input maxLength={128} placeholder="b8f0…" autoComplete="off" spellCheck={false} />
-          </Form.Item>
-          <Form.Item name="redirectUri" label={t('esignature.connections.fieldRedirectUri')} extra={t('esignature.connections.redirectUriHint')}>
-            <Input maxLength={500} placeholder="https://crm.example.com/api/v1/ESignature/oauth/callback" autoComplete="off" spellCheck={false} />
-          </Form.Item>
-          <Form.Item
-            name="clientSecret"
-            label={t('esignature.connections.fieldClientSecret')}
-            extra={t('esignature.connections.secretHint')}
-            rules={[{ required: true }]}
-          >
-            <Input.Password maxLength={512} autoComplete="new-password" />
-          </Form.Item>
+          {apiKeyProvider ? (
+            <Form.Item
+              name="apiKey"
+              label={t('esignature.connections.fieldApiKey')}
+              extra={t('esignature.connections.apiKeyHint')}
+              rules={[{ required: true }]}
+            >
+              <Input.Password maxLength={512} autoComplete="new-password" />
+            </Form.Item>
+          ) : (
+            <>
+              <Form.Item name="oauthClientId" label={t('esignature.connections.fieldClientId')} extra={t('esignature.connections.clientIdHint')}>
+                <Input maxLength={128} placeholder="b8f0…" autoComplete="off" spellCheck={false} />
+              </Form.Item>
+              <Form.Item name="redirectUri" label={t('esignature.connections.fieldRedirectUri')} extra={t('esignature.connections.redirectUriHint')}>
+                <Input maxLength={500} placeholder="https://crm.example.com/api/v1/ESignature/oauth/callback" autoComplete="off" spellCheck={false} />
+              </Form.Item>
+              <Form.Item
+                name="clientSecret"
+                label={t('esignature.connections.fieldClientSecret')}
+                extra={t('esignature.connections.secretHint')}
+                rules={[{ required: true }]}
+              >
+                <Input.Password maxLength={512} autoComplete="new-password" />
+              </Form.Item>
+            </>
+          )}
         </Form>
       </Modal>
 
@@ -282,10 +335,14 @@ export function ESignatureConnectionsPanel(props: { readonly canManage: boolean 
         <Form form={secretForm} layout="vertical" onFinish={(values) => saveSecret.mutate(values)}>
           <Form.Item name="kind" label={t('esignature.connections.credentialKind')}>
             <Select
-              options={[
-                { value: 'client_secret', label: t('esignature.connections.kinds.client_secret') },
-                { value: 'webhook_secret', label: t('esignature.connections.kinds.webhook_secret') },
-              ]}
+              options={
+                secretTarget?.authStyle === 'api_key'
+                  ? [{ value: 'api_key', label: t('esignature.connections.kinds.api_key') }]
+                  : [
+                      { value: 'client_secret', label: t('esignature.connections.kinds.client_secret') },
+                      { value: 'webhook_secret', label: t('esignature.connections.kinds.webhook_secret') },
+                    ]
+              }
             />
           </Form.Item>
           <Form.Item name="value" label={t('esignature.connections.fieldSecretValue')} rules={[{ required: true }]}>
@@ -306,7 +363,7 @@ function columns(
     onAuthorize: (id: string) => void;
     onTest: (id: string) => void;
     onToggle: (row: ESignatureConnectionView) => void;
-    onDisconnect: (id: string) => void;
+    onDisconnect: (row: ESignatureConnectionView) => void;
     onSecret: (row: ESignatureConnectionView) => void;
   },
 ): ColumnsType<ESignatureConnectionView> {
@@ -317,7 +374,7 @@ function columns(
       render: (name: string, row) => (
         <Space direction="vertical" size={2}>
           <Typography.Text strong>{name}</Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" style={MONO_CAPTION} title={row.oauthClientId ?? t('esignature.connections.noClientId')}>
             {row.oauthClientId ?? t('esignature.connections.noClientId')}
           </Typography.Text>
         </Space>
@@ -330,7 +387,12 @@ function columns(
       render: (_key: string, row) => (
         <Space direction="vertical" size={2}>
           <Typography.Text>{row.providerLabel}</Typography.Text>
-          {row.providerStatus === 'declared' ? <Tag color="orange">{t('esignature.connections.providerNotInstalled')}</Tag> : null}
+          <Space size={6} wrap>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t(`esignature.connections.authStyles.${row.authStyle ?? 'unknown'}`)}
+            </Typography.Text>
+            {row.providerStatus === 'declared' ? <Tag color="orange">{t('esignature.connections.providerNotInstalled')}</Tag> : null}
+          </Space>
         </Space>
       ),
     },
@@ -345,11 +407,17 @@ function columns(
       dataIndex: 'status',
       width: 200,
       render: (status: ESignatureConnectionView['status'], row) => (
-        <Space size={[4, 4]} wrap>
-          <Tag color={statusColor(status)}>{t(`esignature.connections.statuses.${status}`)}</Tag>
-          {row.isActive ? <Tag color="green">{t('esignature.connections.active')}</Tag> : <Tag>{t('esignature.connections.inactive')}</Tag>}
-          {row.pendingAuthorization ? <Tag color="orange">{t('esignature.connections.pendingAuthorization')}</Tag> : null}
-          {row.adapterMode === 'live' ? null : <Tag title={t('esignature.connections.fakeAdapterNote', { mode: row.adapterMode })}>{row.adapterMode}</Tag>}
+        <Space direction="vertical" size={4}>
+          <Badge status={statusBadge(status)} text={t(`esignature.connections.statuses.${status}`)} />
+          <Space size={[4, 4]} wrap>
+            {row.isActive ? <Tag color="green">{t('esignature.connections.active')}</Tag> : <Tag>{t('esignature.connections.inactive')}</Tag>}
+            {row.pendingAuthorization ? <Tag color="orange">{t('esignature.connections.pendingAuthorization')}</Tag> : null}
+            <Tooltip title={t('esignature.connections.fakeAdapterNote', { mode: row.adapterMode })}>
+              <Tag color={row.adapterMode === 'live' ? 'green' : row.adapterMode === 'fake' ? 'orange' : 'default'}>
+                {t(`esignature.connections.adapterModes.${row.adapterMode}`)}
+              </Tag>
+            </Tooltip>
+          </Space>
         </Space>
       ),
     },
@@ -361,15 +429,22 @@ function columns(
           <Typography.Text type="secondary">{t('esignature.connections.notAuthorized')}</Typography.Text>
         ) : (
           <Space direction="vertical" size={2}>
-            <Typography.Text>{row.accountName ?? accountId}</Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {row.baseUri ?? ''}
+            <Typography.Text strong>{row.accountName ?? accountId}</Typography.Text>
+            <Typography.Text type="secondary" style={MONO_CAPTION} title={accountId}>
+              {row.accountId ?? accountId}
             </Typography.Text>
-            <Space size={[4, 4]} wrap>
-              {(row.grantedScopes ?? []).map((scope) => (
-                <Tag key={scope}>{scope}</Tag>
-              ))}
-            </Space>
+            {row.baseUri === null ? null : (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {row.baseUri}
+              </Typography.Text>
+            )}
+            {(row.grantedScopes ?? []).length === 0 ? null : (
+              <Space size={[4, 4]} wrap>
+                {(row.grantedScopes ?? []).map((scope) => (
+                  <Tag key={scope}>{scope}</Tag>
+                ))}
+              </Space>
+            )}
           </Space>
         ),
     },
@@ -380,11 +455,18 @@ function columns(
       render: (_credentials: ESignatureConnectionView['credentials'], row) => (
         <Space direction="vertical" size={2}>
           <Space size={[4, 4]} wrap>
-            {row.credentials.map((entry) => (
-              <Tag key={entry.kind} color={entry.state === 'active' ? 'green' : 'default'} title={entry.expiresAt ?? undefined}>
-                {t(`esignature.connections.kinds.${entry.kind}`)}
-              </Tag>
-            ))}
+            {row.credentials.length === 0 ? (
+              <Typography.Text type="secondary">—</Typography.Text>
+            ) : (
+              row.credentials.map((entry) => (
+                <Tooltip
+                  key={entry.kind}
+                  title={entry.expiresAt === null ? t(`esignature.connections.kinds.${entry.kind}`) : `${t(`esignature.connections.kinds.${entry.kind}`)} · ${entry.expiresAt}`}
+                >
+                  <Tag color={entry.state === 'active' ? 'green' : 'default'}>{t(`esignature.connections.kinds.${entry.kind}`)}</Tag>
+                </Tooltip>
+              ))
+            )}
           </Space>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {row.lastSuccessfulApiAt === null
@@ -399,32 +481,44 @@ function columns(
           {
             title: t('esignature.connections.columnActions'),
             key: 'actions',
-            width: 320,
+            width: 180,
+            // One primary verb and a menu. Five equally weighted buttons made the destructive one
+            // look like its neighbours; the verb an operator actually needs stays visible.
             render: (_unknown: unknown, row: ESignatureConnectionView) => (
               <Space size={4} wrap>
-                <Button size="small" type="primary" onClick={() => actions.onAuthorize(row.id)}>
-                  {row.status === 'not_connected' ? t('esignature.connections.authorize') : t('esignature.connections.reauthorize')}
-                </Button>
-                <Button size="small" disabled={row.status !== 'connected'} onClick={() => actions.onTest(row.id)}>
-                  {t('esignature.connections.test')}
-                </Button>
-                <Button size="small" onClick={() => actions.onToggle(row)}>
-                  {row.isActive ? t('esignature.connections.disable') : t('esignature.connections.enable')}
-                </Button>
-                <Button size="small" onClick={() => actions.onSecret(row)}>
-                  {t('esignature.connections.rotateSecretAction')}
-                </Button>
-                <Popconfirm
-                  title={t('esignature.connections.disconnectConfirm')}
-                  description={t('esignature.connections.disconnectConfirmHint')}
-                  okText={t('core.common.confirm')}
-                  cancelText={t('core.common.cancel')}
-                  onConfirm={() => actions.onDisconnect(row.id)}
-                >
-                  <Button size="small" danger>
-                    {t('esignature.connections.disconnect')}
+                {row.authStyle === 'api_key' ? (
+                  // An API key has no consent screen; replacing the key is the only reconnection path, and
+                  // the server re-validates it before the connection becomes usable again.
+                  <Button size="small" type="primary" onClick={() => actions.onSecret(row)}>
+                    {t('esignature.connections.replaceApiKey')}
                   </Button>
-                </Popconfirm>
+                ) : (
+                  <Button size="small" type="primary" onClick={() => actions.onAuthorize(row.id)}>
+                    {row.status === 'not_connected' ? t('esignature.connections.authorize') : t('esignature.connections.reauthorize')}
+                  </Button>
+                )}
+                <Tooltip title={t('esignature.connections.moreActions')}>
+                  <Dropdown
+                    trigger={['click']}
+                    menu={{
+                      items: [
+                        { key: 'test', label: t('esignature.connections.test'), disabled: row.status !== 'connected' },
+                        { key: 'toggle', label: row.isActive ? t('esignature.connections.disable') : t('esignature.connections.enable') },
+                        ...(row.authStyle === 'api_key' ? [] : [{ key: 'secret', label: t('esignature.connections.rotateSecretAction') }]),
+                        { type: 'divider' as const },
+                        { key: 'disconnect', label: t('esignature.connections.disconnect'), danger: true },
+                      ],
+                      onClick: ({ key }) => {
+                        if (key === 'test') actions.onTest(row.id);
+                        else if (key === 'toggle') actions.onToggle(row);
+                        else if (key === 'secret') actions.onSecret(row);
+                        else if (key === 'disconnect') actions.onDisconnect(row);
+                      },
+                    }}
+                  >
+                    <Button size="small" icon={<MoreOutlined />} aria-label={t('esignature.connections.moreActions')} />
+                  </Dropdown>
+                </Tooltip>
               </Space>
             ),
           },
@@ -433,9 +527,19 @@ function columns(
   ];
 }
 
-function statusColor(status: ESignatureConnectionView['status']): string {
-  if (status === 'connected') return 'green';
-  if (status === 'reauthorization_required' || status === 'error') return 'red';
-  if (status === 'disabled') return 'orange';
+/**
+ * The lifecycle as a status dot: success means "a send can go out through this connection".
+ * Red is reserved for the two states that stop sends (`reauthorization_required`, `error`).
+ */
+function statusBadge(status: ESignatureConnectionView['status']): 'success' | 'error' | 'warning' | 'default' {
+  if (status === 'connected') return 'success';
+  if (status === 'reauthorization_required' || status === 'error') return 'error';
+  if (status === 'not_connected') return 'warning';
   return 'default';
 }
+
+/** Identifiers and account ids read best in a fixed-width face at caption size. */
+const MONO_CAPTION = {
+  fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
+  fontSize: 12,
+} as const;

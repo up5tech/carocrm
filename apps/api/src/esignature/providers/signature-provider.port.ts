@@ -44,6 +44,8 @@ export const SIGNATURE_PROVIDER_OPERATIONS = [
   'templateDetails',
   'prepareEnvelope',
   'sendEnvelope',
+  // A provider with no unsent draft creates and sends in one call (`envelopeDrafting: 'direct'`).
+  'sendNewEnvelope',
   'envelopeStatus',
   'listRecipients',
   // ES.14 — a short-lived embedded signing URL for one matched recipient.
@@ -88,6 +90,14 @@ export interface SignatureProviderContext {
   readonly baseUri: string;
   readonly grantedScopes: readonly string[];
   readonly accessToken: string;
+  /**
+   * The provider's public application/client id, when the installation configured one.
+   *
+   * Not a credential: it identifies the API app that owns callbacks and branding. An OAuth provider
+   * already recorded it at authorization time; an API-key provider may use it to associate a request
+   * with its app. `null` means none is configured and the adapter must omit the field.
+   */
+  readonly clientId: string | null;
   /** A per-call correlation id, from the platform's request context. Never a secret. */
   readonly correlationId: string | null;
   /** An implementation-owned timeout bound; the adapter must not wait forever. */
@@ -212,6 +222,17 @@ export interface SentEnvelope {
   readonly providerStatusRaw: string;
   readonly sentAt: string;
   readonly recipients: readonly ProviderRecipientStatus[];
+}
+
+/**
+ * The answer to a provider that has no unsent draft: the send is also the creation.
+ *
+ * Providers such as Dropbox Sign create and invite in one call, so there is no envelope id to record
+ * at preparation time. The result carries the document ids the provider assigned, keyed by our
+ * snapshot id, so the artifact binding is still established as soon as the request exists.
+ */
+export interface SentNewEnvelope extends SentEnvelope {
+  readonly providerDocumentIds: Readonly<Record<string, string>>;
 }
 
 /** One signer's embedded signing session (ES.14). The URL is a bearer credential. */
@@ -394,6 +415,15 @@ export interface SignatureProviderAdapter {
   readonly providerApiVersion: string;
   readonly mode: 'live' | 'fake' | 'disabled';
   readonly capabilities: SignatureProviderCapabilities;
+  /**
+   * Whether the provider has an unsent draft step, or creates and sends in one call.
+   *
+   * `draft` is the DocuSign shape: prepare an envelope, review it, then send it deliberately. `direct`
+   * means the provider's create operation is the send — a deliberate, irreversible act — and the
+   * adapter implements `sendNewEnvelope` instead of a reachable `prepareEnvelope`. The request service
+   * reads this flag to choose the path and never guesses from capabilities.
+   */
+  readonly envelopeDrafting: 'draft' | 'direct';
 
   connectionStatus(context: SignatureProviderContext): Promise<ProviderConnectionStatus>;
   accountContext(context: SignatureProviderContext): Promise<ProviderAccountContext>;
@@ -405,6 +435,16 @@ export interface SignatureProviderAdapter {
 
   prepareEnvelope(context: SignatureProviderContext, input: PrepareEnvelopeInput): Promise<PreparedEnvelope>;
   sendEnvelope(context: SignatureProviderContext, input: SendEnvelopeInput): Promise<SentEnvelope>;
+
+  /**
+   * Create **and send** in one provider call, for a provider with no unsent draft.
+   *
+   * Declared exactly when `envelopeDrafting` is `direct`. The input is the same reviewed envelope
+   * prepared for the send (documents, recipients, subject, expiry), and the caller has already checked
+   * the preview, the approval and the sender's confirmation. The key in `input.idempotencyKey` is the
+   * same stable attempt token the draft path uses.
+   */
+  sendNewEnvelope?(context: SignatureProviderContext, input: PrepareEnvelopeInput): Promise<SentNewEnvelope>;
   envelopeStatus(context: SignatureProviderContext, providerEnvelopeId: string): Promise<ProviderEnvelopeStatus>;
   listRecipients(context: SignatureProviderContext, providerEnvelopeId: string): Promise<readonly ProviderRecipientStatus[]>;
 
@@ -454,6 +494,7 @@ export const BASE_SIGNATURE_PROVIDER_CAPABILITIES: SignatureProviderCapabilities
   accountContext: true,
   prepareEnvelope: true,
   sendEnvelope: true,
+  sendNewEnvelope: false,
   envelopeStatus: true,
   listRecipients: true,
   downloadCompletedDocuments: true,
@@ -484,6 +525,12 @@ export function assertAdapterContract(adapter: SignatureProviderAdapter): void {
   if (adapter.capabilities.verifyWebhook === true && typeof adapter.verifyAndParseWebhook !== 'function') {
     problems.push('capabilities.verifyWebhook without verifyAndParseWebhook()');
   }
+  if (adapter.envelopeDrafting !== 'draft' && adapter.envelopeDrafting !== 'direct') {
+    problems.push('envelopeDrafting must be "draft" or "direct"');
+  }
+  if (adapter.envelopeDrafting === 'direct' && typeof adapter.sendNewEnvelope !== 'function') {
+    problems.push('envelopeDrafting "direct" without sendNewEnvelope()');
+  }
   if (problems.length > 0) {
     throw new Error(`Signature provider adapter "${adapter.providerKey}" is incomplete: ${problems.join(', ')}.`);
   }
@@ -504,6 +551,8 @@ function methodFor(operation: SignatureProviderOperation | FutureSignatureProvid
       return 'prepareEnvelope';
     case 'sendEnvelope':
       return 'sendEnvelope';
+    case 'sendNewEnvelope':
+      return 'sendNewEnvelope';
     case 'envelopeStatus':
       return 'envelopeStatus';
     case 'listRecipients':

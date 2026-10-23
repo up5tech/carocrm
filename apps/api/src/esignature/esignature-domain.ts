@@ -118,18 +118,21 @@ export type SignatureRecipientType = (typeof RECIPIENT_TYPES)[number];
  *
  * The names are the vault's own vocabulary, deliberately not invented again: the `kind` column of
  * `integration_credential_secrets` is a CHECK-constrained allowlist shared with Advanced Integrations,
- * and `esignature_credential_secrets` (ES.4, migration `065`) mirrors it. `api_key` and
- * `signing_secret` are excluded because no DocuSign credential has that shape. `oauth_access_token`
- * joins the module's list in ES.4, when the flow that produces it exists: a short-lived bearer value
- * is still a credential, so it is stored encrypted and never handed to the browser.
+ * and `esignature_credential_secrets` (ES.4, migration `065`) mirrors it. `api_key` joins the list with
+ * Dropbox Sign (migration `070`): an API-key provider's whole credential is that key, it also verifies
+ * the provider's callbacks, and it is never a settings field. `signing_secret` stays excluded because
+ * no provider in the catalog authenticates with a bare shared secret. `oauth_access_token` is the
+ * short-lived bearer value of an OAuth connection: still a credential, so still encrypted and never
+ * handed to the browser.
  *
  * ES.4 wires the vault to a connection; nothing here can read a value back.
  */
-export const SECRET_KINDS = ['client_secret', 'oauth_access_token', 'oauth_refresh_token', 'webhook_secret'] as const;
+export const SECRET_KINDS = ['api_key', 'client_secret', 'oauth_access_token', 'oauth_refresh_token', 'webhook_secret'] as const;
 export type ESignatureSecretKind = (typeof SECRET_KINDS)[number];
 
 /** The plain-language meaning of each kind, for the admin screen and the runbook. */
 export const SECRET_KIND_LABELS: Readonly<Record<ESignatureSecretKind, string>> = {
+  api_key: 'Provider API key',
   client_secret: 'OAuth client secret',
   oauth_access_token: 'OAuth access token (short-lived)',
   oauth_refresh_token: 'OAuth refresh token',
@@ -142,6 +145,7 @@ export const SECRET_KIND_LABELS: Readonly<Record<ESignatureSecretKind, string>> 
  */
 export const SECRET_KIND_OAUTH_ACCESS_TOKEN: ESignatureSecretKind = 'oauth_access_token';
 export const SECRET_KIND_OAUTH_REFRESH_TOKEN: ESignatureSecretKind = 'oauth_refresh_token';
+export const SECRET_KIND_API_KEY: ESignatureSecretKind = 'api_key';
 export const SECRET_KIND_CLIENT_SECRET: ESignatureSecretKind = 'client_secret';
 export const SECRET_KIND_WEBHOOK_SECRET: ESignatureSecretKind = 'webhook_secret';
 

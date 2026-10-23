@@ -6,6 +6,7 @@ import type { ESignatureStoredCredential } from './esignature-credential-vault.j
 import { ESignatureCredentialVault } from './esignature-credential-vault.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { signatureProviderDescriptor } from './providers/signature-provider.catalog.js';
 import { SignatureConnectionRepository } from './signature-connection.repository.js';
 import {
   type FailedJobList,
@@ -214,7 +215,13 @@ export class ESignatureOperationsService {
       (credentials.get(connectionId) ?? []).some((entry) => entry.kind === kind && entry.state === 'active');
 
     const reauthorization = connections.filter((connection) => connection.status === 'reauthorization_required').length;
-    const activeWithoutRefresh = active.filter((connection) => !activeKind(connection.id, 'oauth_refresh_token')).length;
+    // An API-key connection has no refresh token by design; counting it would report a gap that the
+    // provider's authentication style makes impossible.
+    const activeWithoutRefresh = active.filter(
+      (connection) =>
+        signatureProviderDescriptor(connection.providerKey)?.authStyle !== 'api_key' &&
+        !activeKind(connection.id, 'oauth_refresh_token'),
+    ).length;
     const tokenRefreshOk = reauthorization === 0 && activeWithoutRefresh === 0;
     const tokenRefreshDetail =
       reauthorization === 0 && activeWithoutRefresh === 0
@@ -224,7 +231,10 @@ export class ESignatureOperationsService {
     const webhooksEffective = settings.settings.enabled === true && settings.effective.webhooks === true;
     const missingWebhookSecrets =
       webhooksEffective && settings.settings.webhooks.requireHmac
-        ? active.filter((connection) => !activeKind(connection.id, 'webhook_secret')).length
+        ? active.filter((connection) => {
+          const kind = signatureProviderDescriptor(connection.providerKey)?.webhookSecretKind ?? null;
+          return kind !== null && !activeKind(connection.id, kind);
+        }).length
         : 0;
     const webhookSecretsOk = missingWebhookSecrets === 0;
     const webhookSecretsDetail = !webhooksEffective
@@ -302,7 +312,7 @@ function toConnectionHealth(
   const active = view.credentials.filter((entry) => entry.state === 'active');
   const kinds = new Set(active.map((entry) => entry.kind));
   const tokenState = tokenStateOf(view);
-  const webhookConfigured = kinds.has('webhook_secret');
+  const webhookConfigured = view.webhookSecretKind !== null && kinds.has(view.webhookSecretKind);
   const lastErrorAt = view.lastErrorAt === null ? null : new Date(view.lastErrorAt);
   const recentError =
     lastErrorAt !== null &&
@@ -316,10 +326,14 @@ function toConnectionHealth(
   else if (view.status === 'error') issues.push('connection_error');
   else if (view.status === 'not_connected') issues.push('not_connected');
   else if (view.status === 'disabled') issues.push('disabled');
-  if (tokenState === 'missing') issues.push('token_missing');
-  else if (tokenState === 'expired') issues.push('token_expired');
-  else if (tokenState === 'expiring') issues.push('token_expiring');
-  if (!view.hasRefreshToken) issues.push('no_refresh_token');
+  if (view.authStyle !== 'api_key') {
+    if (tokenState === 'missing') issues.push('token_missing');
+    else if (tokenState === 'expired') issues.push('token_expired');
+    else if (tokenState === 'expiring') issues.push('token_expiring');
+    if (!view.hasRefreshToken) issues.push('no_refresh_token');
+  } else if (!view.hasApiKey) {
+    issues.push('token_missing');
+  }
   if (webhooksEnabled && settings.settings.webhooks.requireHmac && !webhookConfigured) issues.push('no_webhook_secret');
   if (recentError) issues.push('recent_provider_error');
   if ((webhook?.deadLetter ?? 0) > 0) issues.push('webhook_dead_letter');
@@ -362,6 +376,8 @@ function toConnectionHealth(
 
 function tokenStateOf(view: SignatureConnectionView): ConnectionHealthView['token']['state'] {
   if (view.status === 'reauthorization_required') return 'reauthorization_required';
+  // An API key does not expire; its presence is the whole health question.
+  if (view.authStyle === 'api_key') return view.hasApiKey ? 'valid' : 'missing';
   if (view.accessTokenExpiresAt === null) return 'missing';
   const expiresAt = new Date(view.accessTokenExpiresAt).getTime();
   if (!Number.isFinite(expiresAt)) return 'missing';

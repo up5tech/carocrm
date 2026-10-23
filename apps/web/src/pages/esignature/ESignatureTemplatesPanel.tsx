@@ -136,7 +136,12 @@ export function ESignatureTemplatesPanel() {
   return (
     <Card
       className="carocrm-card"
-      title={t('esignature.templates.title')}
+      title={
+        <div>
+          <div>{t('esignature.templates.title')}</div>
+          <div style={{ marginTop: 2, color: '#737b85', fontSize: 12, fontWeight: 400 }}>{t('esignature.templates.hint')}</div>
+        </div>
+      }
       extra={
         <Space size={8} wrap>
           <Select

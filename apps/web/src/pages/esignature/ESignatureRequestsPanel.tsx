@@ -19,6 +19,7 @@ import {
   Table,
   Tag,
   Timeline,
+  Tooltip,
   Typography,
   Upload,
 } from 'antd';
@@ -42,13 +43,16 @@ import { t } from '../../state/i18n.js';
  * Phase 19-ES.6 — the signature request list and draft editor
  * (`PLAN_Phase_19_ESignature.md` §8.2, §13.2, §13.3, §18 `19-ES.6`).
  *
- * The acceptance the screen exists for: a user can **create, edit and view a draft**. Everything it
- * shows is the server's answer — the list query is filtered and scoped server-side, the detail carries
- * `editable` from the state machine, and a linked CRM record whose own ACL hides it arrives with
- * `accessible: false` and no name, which this screen renders as "restricted" rather than inventing one.
+ * The list and the drawer are one screen on purpose: a request is reviewed, corrected and sent in the
+ * same place it is found. Everything shown is the server's answer — the list query is filtered and
+ * scoped server-side, the detail carries `editable` from the state machine, and a linked CRM record
+ * whose own ACL hides it arrives with `accessible: false` and no name, which this screen renders as
+ * "restricted" rather than inventing one.
  *
- * Sending is not here: the wizard (§13.3) and the send guard arrive with ES.8–ES.10. Until then a draft
- * stops at documents and recipients, which is exactly what this phase owns.
+ * Sending is guarded server-side (§11.1): the preview, the confirmation, the approval policy and the
+ * single-flight attempt live in `ESignatureRequestService`, and this screen only offers the verbs the
+ * caller holds. A provider with no unsent draft (`providerDrafting: 'direct'`) skips the draft step,
+ * because its create call *is* the send.
  */
 
 const SOURCE_ENTITIES = ['Account', 'Contact', 'Quote', 'Project', 'Case', 'Campaign', 'CustomerSuccessProfile'] as const;
@@ -89,6 +93,10 @@ export function ESignatureRequestsPanel(props: {
   const [approvalStatus, setApprovalStatus] = useState<string>('');
   const [q, setQ] = useState('');
   const [recipient, setRecipient] = useState('');
+  // The inputs keep their own text so a "clear filters" action can empty them too; the query keys
+  // above are what the server saw, and only a submitted search moves them.
+  const [qInput, setQInput] = useState('');
+  const [recipientInput, setRecipientInput] = useState('');
   const [drawer, setDrawer] = useState<DrawerState | null>(null);
   const openedFromLink = useRef(false);
 
@@ -111,6 +119,15 @@ export function ESignatureRequestsPanel(props: {
   });
 
   const reload = () => void queryClient.invalidateQueries({ queryKey: ['eSignature', 'requests'] });
+  const hasFilters = status !== '' || approvalStatus !== '' || q !== '' || recipient !== '';
+  const clearFilters = () => {
+    setStatus('');
+    setApprovalStatus('');
+    setQ('');
+    setRecipient('');
+    setQInput('');
+    setRecipientInput('');
+  };
   // The detail is its own query: a save or a document change must invalidate it too, or the drawer
   // keeps rendering the copy it fetched before the edit.
   const reloadDetail = (id: string) => void queryClient.invalidateQueries({ queryKey: ['eSignature', 'request', id] });
@@ -176,25 +193,54 @@ export function ESignatureRequestsPanel(props: {
   }
 
   return (
-    <Card className="carocrm-card" title={t('esignature.requests.title')} style={{ marginBottom: 16 }}>
+    <Card
+      className="carocrm-card"
+      title={
+        <div>
+          <div>{t('esignature.requests.title')}</div>
+          <div style={{ marginTop: 2, color: '#737b85', fontSize: 12, fontWeight: 400 }}>{t('esignature.requests.hint')}</div>
+        </div>
+      }
+      extra={
+        <Space size={8} wrap>
+          {requests.data.total === 0 ? null : <Tag>{t('esignature.requests.resultCount', { count: requests.data.total })}</Tag>}
+          <Tooltip title={t('core.common.reload')}>
+            <Button size="small" icon={<ReloadOutlined />} aria-label={t('core.common.reload')} onClick={() => void requests.refetch()} />
+          </Tooltip>
+          {props.canPrepare ? (
+            <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setDrawer({ mode: 'create' })}>
+              {t('esignature.requests.create')}
+            </Button>
+          ) : null}
+        </Space>
+      }
+      style={{ marginBottom: 16 }}
+    >
       <Space size={8} wrap style={{ marginBottom: 12 }}>
         <Input.Search
           allowClear
           size="small"
-          style={{ width: 190 }}
+          style={{ width: 200 }}
+          value={qInput}
+          aria-label={t('esignature.requests.searchPlaceholder')}
           placeholder={t('esignature.requests.searchPlaceholder')}
+          onChange={(event) => setQInput(event.target.value)}
           onSearch={(value) => setQ(value.trim())}
         />
         <Input.Search
           allowClear
           size="small"
-          style={{ width: 190 }}
+          style={{ width: 200 }}
+          value={recipientInput}
+          aria-label={t('esignature.requests.recipientSearchPlaceholder')}
           placeholder={t('esignature.requests.recipientSearchPlaceholder')}
+          onChange={(event) => setRecipientInput(event.target.value)}
           onSearch={(value) => setRecipient(value.trim())}
         />
         <Select
           size="small"
-          style={{ minWidth: 160 }}
+          style={{ minWidth: 170 }}
+          aria-label={t('esignature.requests.columnApproval')}
           value={approvalStatus}
           onChange={setApprovalStatus}
           options={[
@@ -206,7 +252,8 @@ export function ESignatureRequestsPanel(props: {
         />
         <Select
           size="small"
-          style={{ minWidth: 160 }}
+          style={{ minWidth: 170 }}
+          aria-label={t('esignature.requests.columnStatus')}
           value={status}
           onChange={setStatus}
           options={[
@@ -214,17 +261,26 @@ export function ESignatureRequestsPanel(props: {
             ...STATUS_FILTERS.map((value) => ({ value, label: t(`esignature.requests.statuses.${value}`) })),
           ]}
         />
-        <Button size="small" onClick={() => void requests.refetch()}>
-          {t('core.common.reload')}
-        </Button>
-        {props.canPrepare ? (
-          <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setDrawer({ mode: 'create' })}>
-            {t('esignature.requests.create')}
+        {hasFilters ? (
+          <Button size="small" type="link" onClick={clearFilters}>
+            {t('esignature.requests.clearFilters')}
           </Button>
         ) : null}
       </Space>
       {requests.data.list.length === 0 ? (
-        <EmptyState title={t('esignature.requests.empty')} description={t('esignature.requests.emptyHint')} />
+        <Space direction="vertical" size={14} style={{ width: '100%', alignItems: 'center' }}>
+          <EmptyState
+            title={hasFilters ? t('esignature.requests.emptyFiltered') : t('esignature.requests.empty')}
+            description={t('esignature.requests.emptyHint')}
+          />
+          {hasFilters ? (
+            <Button onClick={clearFilters}>{t('esignature.requests.clearFilters')}</Button>
+          ) : props.canPrepare ? (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setDrawer({ mode: 'create' })}>
+              {t('esignature.requests.create')}
+            </Button>
+          ) : null}
+        </Space>
       ) : (
         <Table<ESignatureRequestListRow>
           size="small"
@@ -671,7 +727,9 @@ function PreviewSection(props: { request: ESignatureRequestView; canPrepare: boo
               </Button>
             </Space>
           ) : null}
-          <EnvelopeSection request={props.request} canPrepare={props.canPrepare} onChanged={props.onPrepared} />
+          {props.request.providerDrafting === 'direct' ? null : (
+            <EnvelopeSection request={props.request} canPrepare={props.canPrepare} onChanged={props.onPrepared} />
+          )}
           <SendSection request={props.request} canSend={props.canSend} onChanged={props.onPrepared} />
         </Space>
       )}
@@ -688,7 +746,8 @@ function PreviewSection(props: { request: ESignatureRequestView; canPrepare: boo
 function EnvelopeSection(props: { request: ESignatureRequestView; canPrepare: boolean; onChanged: () => void }) {
   const { message } = AntApp.useApp();
   const [pending, setPending] = useState(false);
-  const ready = props.request.status === 'ready_to_send';
+  // A direct provider has no unsent draft to create or abandon: its send is the create call.
+  const ready = props.request.status === 'ready_to_send' && props.request.providerDrafting !== 'direct';
   if (!ready) return null;
 
   const create = async (): Promise<void> => {
@@ -806,7 +865,10 @@ function SendSection(props: { request: ESignatureRequestView; canSend: boolean; 
       />
     );
   }
-  if (status !== 'ready_to_send' || props.request.providerEnvelopeId === null) return null;
+  const sendable =
+    status === 'ready_to_send' &&
+    (props.request.providerEnvelopeId !== null || props.request.providerDrafting === 'direct');
+  if (!sendable) return null;
   return (
     <Space size={10} wrap>
       <Checkbox checked={confirmed} disabled={!props.canSend} onChange={(event) => setConfirmed(event.target.checked)}>

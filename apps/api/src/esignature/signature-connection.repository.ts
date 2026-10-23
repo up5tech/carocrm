@@ -249,7 +249,10 @@ export class SignatureConnectionRepository {
     },
   ): Promise<SignatureConnection> {
     const current = await this.require(id);
-    assertConnectionTransition(current.status, 'connected');
+    // Re-validating an already-connected credential (an API-key replacement) re-binds the account in
+    // place; it does not move the connection. Every other source state must be able to reach
+    // `connected` through the state machine, and one that cannot is still refused.
+    if (current.status !== 'connected') assertConnectionTransition(current.status, 'connected');
     if (context.accountId.trim() === '') throw new ValidationError('The provider returned no account, so the connection cannot be authorized.');
     if (context.baseUri.trim() === '') throw new ValidationError('The provider returned no account base URI, so the connection cannot be used.');
     const row = await this.db

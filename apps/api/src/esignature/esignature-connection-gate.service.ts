@@ -64,6 +64,15 @@ interface OperationRule {
   readonly feature?: ESignatureFeatureDescriptor['key'];
   /** The provider capability the adapter must declare (plan §5.2). */
   readonly providerCapability: ESignatureProviderCapabilityKey;
+  /**
+   * A second capability that satisfies the same product action.
+   *
+   * Sending is one action with two provider shapes: a provider that sends a prepared draft
+   * (`sendEnvelope`) and one that creates and sends in one call (`sendNewEnvelope`). The gate asks for
+   * the action, so it accepts either shape; the request service then dispatches to the one the
+   * adapter actually declares.
+   */
+  readonly alternateProviderCapabilities?: readonly ESignatureProviderCapabilityKey[];
   /** Whether the provider is contacted at all; a local command never passes the connection check. */
   readonly reachesProvider: boolean;
 }
@@ -77,7 +86,13 @@ const OPERATION_RULES: Record<ESignatureOperation, OperationRule> = {
   listTemplates: { capability: 'templateMappingManage', feature: 'templates', providerCapability: 'listTemplates', reachesProvider: true },
   templateDetails: { capability: 'templateMappingManage', feature: 'templates', providerCapability: 'templateDetails', reachesProvider: true },
   prepareEnvelope: { capability: 'manageDraft', feature: 'send', providerCapability: 'prepareEnvelope', reachesProvider: true },
-  sendEnvelope: { capability: 'send', feature: 'send', providerCapability: 'sendEnvelope', reachesProvider: true },
+  sendEnvelope: {
+    capability: 'send',
+    feature: 'send',
+    providerCapability: 'sendEnvelope',
+    alternateProviderCapabilities: ['sendNewEnvelope'],
+    reachesProvider: true,
+  },
   envelopeStatus: { capability: 'use', feature: 'webhooks', providerCapability: 'envelopeStatus', reachesProvider: true },
   listRecipients: { capability: 'use', feature: 'webhooks', providerCapability: 'listRecipients', reachesProvider: true },
   // A recipient view is generated for the signer, not for the sender: the caller needs to read the
@@ -138,7 +153,7 @@ export class ESignatureConnectionGate {
     if (rule.feature !== undefined && settingsView.effective[rule.feature] !== true) {
       throw signatureModuleDisabledError(`${ESIGNATURE_MODULE_KEY}.${rule.feature}`);
     }
-    if (!this.supportedOnProvider(rule.providerCapability, providerKey)) {
+    if (!this.supportedAnyOnProvider([rule.providerCapability, ...(rule.alternateProviderCapabilities ?? [])], providerKey)) {
       throw notSupportedByProviderError(rule.providerCapability, providerKey);
     }
     if (!rule.reachesProvider) return;
@@ -161,11 +176,20 @@ export class ESignatureConnectionGate {
    * rather than admitted and then failing inside an adapter.
    */
   supportedOnProvider(capability: ESignatureProviderCapabilityKey, providerKey: string = PROVIDER_KEY_DOCUSIGN): boolean {
+    return this.supportedAnyOnProvider([capability], providerKey);
+  }
+
+  /** Whether the provider declares at least one of the shapes a single product action may take. */
+  supportedAnyOnProvider(
+    capabilities: readonly ESignatureProviderCapabilityKey[],
+    providerKey: string = PROVIDER_KEY_DOCUSIGN,
+  ): boolean {
     const adapter = this.providers.resolve(providerKey);
-    if (adapter !== undefined) return adapter.capabilities[capability] === true;
+    if (adapter !== undefined) return capabilities.some((capability) => adapter.capabilities[capability] === true);
     // No adapter: the catalog's declaration answers, so an operation a planned provider does not
     // implement is refused here rather than admitted and failing inside a nonexistent adapter.
-    return signatureProviderDescriptor(providerKey)?.capabilities[capability] === true;
+    const declared = signatureProviderDescriptor(providerKey)?.capabilities;
+    return declared !== undefined && capabilities.some((capability) => declared[capability] === true);
   }
 
   /** The health endpoint's answer: what the gate would decide, with no side effect and no secret. */

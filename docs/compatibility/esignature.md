@@ -35,7 +35,7 @@ or branding is copied. DocuSign product names are used only to describe the exte
 
 | Item | Decision |
 | --- | --- |
-| Provider | DocuSign (reference adapter, `available`). The module is provider-neutral: a catalog lists every provider this build knows, and `dropbox_sign` is listed as `declared` but not installed |
+| Provider | DocuSign (reference adapter, `available`) and Dropbox Sign (API-key adapter, `available`). The module is provider-neutral: a catalog lists every provider this build knows, its authentication style and whether its integration is installed |
 | API | **eSignature REST API v2.1** (`/restapi/v2.1/accounts/{accountId}/…`) — envelopes, recipients, templates, views, combined documents |
 | Out of surface | CLM, Rooms, MA, Click, Connect *management* APIs (beyond minimal Connect event configuration), billing, bulk send, eSign admin APIs |
 | API base URI | Discovered per account from `GET {authHost}/oauth/userinfo` → `accounts[]` → `base_uri`; REST calls go to `{base_uri}/restapi/v2.1/accounts/{account_id}/`. A data-center host is never hard-coded |
@@ -52,13 +52,32 @@ declared availability. It is exposed read-only at `GET /api/v1/ESignature/action
 | Provider key | Label | Auth style | Status | Connectable |
 | --- | --- | --- | --- | --- |
 | `docusign` | DocuSign | OAuth 2.0 authorization code (PKCE, confidential client) | `available` | Yes — auth strategy and adapter are bound |
-| `dropbox_sign` | Dropbox Sign | API key (planned) | `declared` | No — no adapter, auth strategy or webhook verification is installed |
+| `dropbox_sign` | Dropbox Sign | API key (HTTP Basic, key as username) | `available` | Yes — auth strategy and adapter are bound; there is no consent screen |
+
+What the Dropbox Sign integration (API v3) does differently, all declared by its adapter rather than
+assumed by the caller:
+
+- **No unsent provider draft.** `signature_request/send` creates and notifies in one call, so
+  `envelopeDrafting` is `direct` and the request workspace skips the provider-draft step. The local
+  preview, the send confirmation, the approval gate and the single-flight attempt still apply.
+- **No embedded signing.** Dropbox Sign requires all signers of a request to use the same flow, so
+  the capability is `false` and the service refuses an embedded configuration instead of building a
+  mixed request.
+- **No completion evidence.** The audit trail is exposed only inside the ZIP archive, which this
+  adapter does not unpack; signed documents are still retrieved.
+- **Callback verification uses the API key.** `event_hash` is HMAC-SHA256 over `event_time +
+  event_type` keyed by the account's API key — there is no separate Connect secret — and the endpoint
+  must answer `200` with the body `Hello API Event Received` or the provider retries and eventually
+  disables it.
 
 Rules enforced by code, not documentation:
 
 - A connection may only name an `available` provider that has an authorization strategy registered.
-  `dropbox_sign` is refused at create time with a 400 validation refusal that names the missing
-  integration, not at the first send.
+  A `declared` provider is refused at create time with a 400 validation refusal that names the
+  missing integration, not at the first send.
+- An API-key provider's key is verified against the provider **before** it is stored and binds the
+  account; an OAuth provider goes through its consent flow. An API-key connection has no
+  `re-authorize` verb — replacing the key is the only reconnection path, and it re-checks the key.
 - Capability support is answered by the bound adapter, falling back to the catalog declaration. A
   `declared` provider declares nothing, so the gate refuses every operation for it.
 - A request fixes its provider when its draft is created (or inherits it from the chosen connection)
@@ -67,7 +86,9 @@ Rules enforced by code, not documentation:
   `.production`). The pre-catalog `provider.demoIntegrationKey` / `provider.productionIntegrationKey`
   pair is still read as a fallback for DocuSign so an upgrade does not orphan existing connections.
 - Database allowlists were widened by `database/migrations/069_phase19_esignature_provider_catalog.sql`
-  (additive; no row is rewritten).
+  and `database/migrations/070_phase19_esignature_api_key_credential.sql` (both additive; no row is
+  rewritten). Migration `070` adds `api_key` to the vault's `kind` allowlist so an API-key provider's
+  credential can be stored encrypted.
 
 ## 2. Supported OAuth flows
 

@@ -63,14 +63,21 @@ export const ConnectionCreateSchema = z
     providerKey: z.enum(SIGNATURE_PROVIDER_KEYS).optional(),
     name: z.string().trim().min(1).max(120),
     environment: EnvironmentSchema,
-    /** Written straight to the vault. Never read back, never echoed, never logged (plan §4.1). */
-    clientSecret: z.string().min(1).max(512),
+    /** An OAuth provider's client secret. Written straight to the vault, never echoed (plan §4.1). */
+    clientSecret: z.string().min(1).max(512).optional(),
+    /** An API-key provider's key. Same rule: vault only, never echoed or logged. */
+    apiKey: z.string().min(1).max(512).optional(),
     /** A public OAuth integration key. Optional: the settings document may already hold it. */
     oauthClientId: z.string().trim().max(128).optional(),
     redirectUri: z.string().trim().max(500).optional(),
     connectReference: z.string().trim().max(120).optional(),
   })
-  .strict();
+  .strict()
+  // The provider decides which one it needs; refusing "neither" here keeps the service's error about a
+  // missing credential from being reachable with an empty body.
+  .refine((value) => value.clientSecret !== undefined || value.apiKey !== undefined, {
+    message: 'A connection needs its credential: the OAuth client secret or the provider API key.',
+  });
 
 export const ConnectionUpdateSchema = z
   .object({
@@ -90,7 +97,7 @@ export const ConnectionUpdateSchema = z
  */
 export const ConnectionSecretSchema = z
   .object({
-    kind: z.enum(['client_secret', 'webhook_secret']),
+    kind: z.enum(['api_key', 'client_secret', 'webhook_secret']),
     value: z.string().min(1).max(512),
   })
   .strict();

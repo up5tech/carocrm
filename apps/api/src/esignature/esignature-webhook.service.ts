@@ -14,6 +14,7 @@ import { ESIGNATURE_ARTIFACT_JOB,ESIGNATURE_WEBHOOK_PROCESS_JOB } from './esigna
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { mapProviderEvent, normalizeProviderEventType } from './esignature-status-mapper.js';
+import { signatureProviderDescriptor, signatureProviderWebhookSecretKind } from './providers/signature-provider.catalog.js';
 import type { ProviderWebhookNotification } from './providers/signature-provider.port.js';
 import { SignatureProviderRegistry } from './providers/signature-provider.registry.js';
 import { rawBodyHash } from './providers/signature-provider-signature.js';
@@ -61,9 +62,17 @@ export interface WebhookIngestInput {
 
 export interface WebhookIngestResult {
   readonly status: 'accepted' | 'duplicate' | 'rejected' | 'refused';
-  readonly httpStatus: 202 | 401 | 404 | 413;
+  readonly httpStatus: 200 | 202 | 401 | 404 | 413;
   readonly inboxId: string | null;
   readonly reason: string | null;
+  /**
+   * The exact body a provider requires instead of a generic acknowledgement.
+   *
+   * Dropbox Sign retries every callback whose response body is not `Hello API Event Received`, and
+   * eventually disables the endpoint. The catalog names the text; the controller sends it verbatim.
+   */
+  readonly responseBody?: string | null;
+  readonly responseContentType?: 'text/plain';
 }
 
 export interface WebhookProcessResult {
@@ -108,9 +117,14 @@ export class ESignatureWebhookService {
       return { status: 'refused', httpStatus: 404, inboxId: null, reason: 'provider_unsupported' };
     }
 
+    // The credential that verifies a delivery is a property of the provider: DocuSign uses a dedicated
+    // Connect secret, Dropbox Sign derives its `event_hash` from the account API key. The catalog
+    // names it, so this service never guesses a vault kind from a vendor name.
+    const acknowledgement = signatureProviderDescriptor(connection.providerKey)?.webhookAcknowledgement ?? null;
+    const secretKind = signatureProviderWebhookSecretKind(connection.providerKey);
     let signingSecret: string | null = null;
     try {
-      signingSecret = await this.vault.read({ connectionId: connection.id, kind: 'webhook_secret' });
+      signingSecret = secretKind === null ? null : await this.vault.read({ connectionId: connection.id, kind: secretKind });
     } catch {
       // An unreadable vault is the same operational answer as no secret: the delivery cannot be
       // verified, and the inbox will say so. It must not make the endpoint throw.
@@ -180,11 +194,23 @@ export class ESignatureWebhookService {
     }
 
     if (!accepted.created) {
-      return { status: 'duplicate', httpStatus: 202, inboxId: accepted.delivery.id, reason: 'duplicate_delivery' };
+      return {
+        status: 'duplicate',
+        httpStatus: acknowledgement?.status ?? 202,
+        inboxId: accepted.delivery.id,
+        reason: 'duplicate_delivery',
+        ...(acknowledgement === null ? {} : { responseBody: acknowledgement.body, responseContentType: 'text/plain' as const }),
+      };
     }
 
     await this.enqueue(ESIGNATURE_WEBHOOK_PROCESS_JOB, { inboxId: accepted.delivery.id });
-    return { status: 'accepted', httpStatus: 202, inboxId: accepted.delivery.id, reason: null };
+    return {
+      status: 'accepted',
+      httpStatus: acknowledgement?.status ?? 202,
+      inboxId: accepted.delivery.id,
+      reason: null,
+      ...(acknowledgement === null ? {} : { responseBody: acknowledgement.body, responseContentType: 'text/plain' as const }),
+    };
   }
 
   /**

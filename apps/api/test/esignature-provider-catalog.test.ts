@@ -37,6 +37,7 @@ let ctx: ApiContext;
 let app: NestFastifyApplication;
 let baseline: unknown = null;
 const createdConnections: string[] = [];
+const createdRequests: string[] = [];
 
 async function call(method: Method, url: string, token?: string, payload?: unknown): Promise<CallResult> {
   const res = await app.inject({
@@ -83,6 +84,10 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const db = ctx.database.db;
+  if (createdRequests.length > 0) {
+    await db.deleteFrom('signature_audit_entries').where('request_id', 'in', createdRequests).execute();
+    await db.deleteFrom('signature_requests').where('id', 'in', createdRequests).execute();
+  }
   if (createdConnections.length > 0) {
     await db.deleteFrom('esignature_credential_secrets').where('connection_id', 'in', createdConnections).execute();
     await db.deleteFrom('signature_audit_entries').where('connection_id', 'in', createdConnections).execute();
@@ -118,9 +123,18 @@ describe('provider catalog', () => {
     expect((docusign?.['documentLimits'] as { supportedExtensions: string[] }).supportedExtensions).toContain('pdf');
 
     const dropbox = providers.find((entry) => entry['key'] === 'dropbox_sign');
-    expect(dropbox).toMatchObject({ label: 'Dropbox Sign', authStyle: 'api_key', integrationStatus: 'declared' });
-    // A declared provider must not claim a capability it cannot perform.
-    expect(Object.values(dropbox?.['capabilities'] as Record<string, boolean>).every((value) => value === false)).toBe(true);
+    expect(dropbox).toMatchObject({
+      label: 'Dropbox Sign',
+      authStyle: 'api_key',
+      integrationStatus: 'available',
+      envelopeDrafting: 'direct',
+      webhookSecretKind: 'api_key',
+    });
+    const capabilities = dropbox?.['capabilities'] as Record<string, boolean>;
+    expect(capabilities['sendNewEnvelope']).toBe(true);
+    // API v3 has no unsent draft and this adapter does not claim embedded signing.
+    expect(capabilities['prepareEnvelope']).toBe(false);
+    expect(capabilities['recipientView']).toBe(false);
     expect(dropbox?.['documentLimits']).toBeNull();
 
     // The answer is metadata only: no credential field, no stored client id.
@@ -131,7 +145,10 @@ describe('provider catalog', () => {
     expect(SIGNATURE_PROVIDER_CATALOG.map((entry) => entry.key)).toEqual([...SIGNATURE_PROVIDER_KEYS]);
     expect(SIGNATURE_PROVIDER_CATALOG.filter((entry) => entry.integrationStatus === 'available').map((entry) => entry.key)).toEqual([
       'docusign',
+      'dropbox_sign',
     ]);
+    // Every installed provider is executed by an adapter in production; none is left as a promise.
+    expect(SIGNATURE_PROVIDER_CATALOG.filter((entry) => entry.integrationStatus === 'declared')).toEqual([]);
   });
 });
 
@@ -174,26 +191,28 @@ describe('connection creation is provider-aware', () => {
     });
   });
 
-  it('refuses a cataloged provider whose integration is not installed, and writes no row', async () => {
+  it('refuses an API-key provider without its key, and writes no row', async () => {
     const before = await ctx.database.db
       .selectFrom('esignature_connections')
       .select((eb) => eb.fn.countAll<string>().as('n'))
       .where('provider_key', '=', 'dropbox_sign')
+      .where('name', '=', marker('missing_key_provider'))
       .executeTakeFirst();
     const refused = await call('POST', '/api/v1/ESignature/connections', ctx.adminToken, {
       providerKey: 'dropbox_sign',
-      name: marker('declared_provider'),
+      name: marker('missing_key_provider'),
       environment: 'demo',
+      // An OAuth client secret is the wrong credential for this provider and must not be accepted.
       clientSecret: CLIENT_SECRET,
-      redirectUri: REDIRECT_URI,
     });
     expect(refused.status, JSON.stringify(refused.body)).toBe(422);
-    expect(JSON.stringify(refused.body)).toMatch(/planned integration/i);
+    expect(JSON.stringify(refused.body)).toMatch(/API key/i);
     expect(JSON.stringify(refused.body)).not.toContain(CLIENT_SECRET);
     const after = await ctx.database.db
       .selectFrom('esignature_connections')
       .select((eb) => eb.fn.countAll<string>().as('n'))
       .where('provider_key', '=', 'dropbox_sign')
+      .where('name', '=', marker('missing_key_provider'))
       .executeTakeFirst();
     expect(String(after?.n)).toBe(String(before?.n));
   });
@@ -208,7 +227,7 @@ describe('connection creation is provider-aware', () => {
     expect(refused.status).toBe(400);
   });
 
-  it('does not admit an operation for a declared provider', async () => {
+  it('does not admit a provider-draft operation for a direct-send provider', async () => {
     const probe = await call('POST', '/api/v1/ESignature/action/gate/check', ctx.adminToken, {
       operation: 'prepareEnvelope',
       providerKey: 'dropbox_sign',
@@ -219,17 +238,21 @@ describe('connection creation is provider-aware', () => {
 });
 
 describe('requests name a provider', () => {
-  it('refuses a request for a declared provider before anything is stored', async () => {
-    const refused = await call('POST', '/api/v1/ESignature/requests', ctx.adminToken, {
-      name: marker('declared_request'),
+  it('stores the provider key and reports the provider’s drafting mode', async () => {
+    const created = await call('POST', '/api/v1/ESignature/requests', ctx.adminToken, {
+      name: marker('direct_request'),
       providerKey: 'dropbox_sign',
     });
-    expect(refused.status, JSON.stringify(refused.body)).toBe(422);
-    const stored = await ctx.database.db
-      .selectFrom('signature_requests')
-      .select('id')
-      .where('name', '=', marker('declared_request'))
-      .executeTakeFirst();
-    expect(stored).toBeUndefined();
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    createdRequests.push(String(created.body['id']));
+    expect(created.body).toMatchObject({ providerKey: 'dropbox_sign', providerDrafting: 'direct' });
+    // A DocuSign request keeps the provider-draft step.
+    const docusign = await call('POST', '/api/v1/ESignature/requests', ctx.adminToken, {
+      name: marker('draft_request'),
+      providerKey: 'docusign',
+    });
+    expect(docusign.status, JSON.stringify(docusign.body)).toBe(201);
+    createdRequests.push(String(docusign.body['id']));
+    expect(docusign.body).toMatchObject({ providerKey: 'docusign', providerDrafting: 'draft' });
   });
 });

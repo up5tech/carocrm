@@ -470,6 +470,14 @@ body {
   margin-bottom: 16px;
 }
 
+/* A title and a row of actions cannot share one line on a phone; wrap instead of squeezing both. */
+@media (max-width: 720px) {
+  .carocrm-page-head {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+}
+
 .carocrm-page-title {
   margin: 0;
   font-size: 22px;

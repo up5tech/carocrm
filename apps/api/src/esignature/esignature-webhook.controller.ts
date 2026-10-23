@@ -41,8 +41,8 @@ export class ESignatureWebhookController {
     @Param('publicId') publicId: string,
     @Headers() headers: Record<string, string | undefined>,
     @Req() request: FastifyRequest,
-    @Res({ passthrough: true }) reply: FastifyReply,
-  ): Promise<{ status: string }> {
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
     const id = publicId.trim();
     if (id === '' || id.length > 64) throw new InvalidQueryError('Unknown signature webhook endpoint.');
     const rawBody = (request as { rawBody?: string | null }).rawBody;
@@ -63,6 +63,12 @@ export class ESignatureWebhookController {
       rawBody: new TextEncoder().encode(rawBody),
     });
     reply.status(result.httpStatus);
-    return { status: result.status };
+    if (result.responseBody !== undefined && result.responseBody !== null) {
+      // A provider that requires an exact wording gets exactly that wording: an acknowledgement it
+      // does not recognise is a failed delivery, whatever the status code says.
+      void reply.type('text/plain; charset=utf-8').send(result.responseBody);
+      return;
+    }
+    void reply.send({ status: result.status });
   }
 }

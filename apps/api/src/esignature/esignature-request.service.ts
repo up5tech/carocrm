@@ -34,7 +34,7 @@ import { buildSignatureEvent, eventForStatus } from './esignature-events.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { buildSignaturePreview, type SignaturePreview } from './esignature-preview.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
-import { approvalStillApplies, buildSnapshot } from './esignature-snapshot.js';
+import { approvalStillApplies, buildSnapshot, type OutgoingSnapshotData, type SnapshotEnvelope } from './esignature-snapshot.js';
 import { canTransitionFrom, isEditable, isTerminalStatus } from './esignature-state-machine.js';
 import { signatureProviderDescriptor, signatureProviderLabel } from './providers/signature-provider.catalog.js';
 import { classifyAdapterError, isSendOutcomeUnknownError, redactAdapterError, toModuleError } from './providers/signature-provider.errors.js';
@@ -166,6 +166,13 @@ export interface SignatureRequestView {
   readonly status: SignatureRequestStatus;
   readonly providerKey: string;
   readonly connectionId: string | null;
+  /**
+   * Whether the provider prepares an unsent draft or creates-and-sends in one call.
+   *
+   * The screen uses it to skip the provider-draft step: a direct provider has no envelope to create
+   * before the deliberate send, and offering one would be an action that can only fail.
+   */
+  readonly providerDrafting: 'draft' | 'direct';
   /** The provider's draft envelope, once ES.9 prepared one. Null until then, and after an abandonment. */
   readonly providerEnvelopeId: string | null;
   readonly providerStatusRaw: string | null;
@@ -868,53 +875,13 @@ export class ESignatureRequestService {
 
       const context = await this.connectionService.contextFor(connection);
       const adapter = this.providers.assertOperation(connection.providerKey, 'prepareEnvelope');
-      const settings = await this.settingsService.settings();
-      const embeddedAllowed = settings.features.embeddedSigning === true;
-      // A template envelope carries the template's documents; only a document envelope needs the bytes.
-      const documents: { documentSnapshotId: string; displayName: string; mimeType: string; documentOrder: number; bytes: Uint8Array; contentHashSha256: string }[] = [];
-      if (snapshot.data.templateId === null) {
-        for (const document of snapshot.data.documents) {
-          const opened = await this.documents.openSnapshot(document.documentSnapshotId);
-          documents.push({
-            documentSnapshotId: document.documentSnapshotId,
-            displayName: document.displayName,
-            mimeType: document.mimeType,
-            documentOrder: document.documentOrder,
-            bytes: opened.bytes,
-            contentHashSha256: document.contentHashSha256,
-          });
-        }
-      }
       const identity = prepareIdentity({
         connectionId: connection.id,
         signatureRequestId: id,
         snapshotDigest,
         fallbackCorrelationId: correlationId(),
       });
-      const envelopeInput: PrepareEnvelopeInput = {
-        signatureRequestId: id,
-        idempotencyKey: identity.idempotencyKey,
-        correlationId: identity.correlationId,
-        templateId: snapshot.data.templateId,
-        subject: snapshot.data.subject,
-        emailBlurb: snapshot.data.emailBlurb,
-        expiresAt: snapshot.data.expiresAt,
-        documents,
-        recipients: snapshot.data.recipients.map((recipient) => ({
-          recipientId: recipient.recipientId,
-          name: recipient.name,
-          email: recipient.email,
-          recipientType: recipient.recipientType === 'carbon_copy' ? 'carbon_copy' : 'signer',
-          routingOrder: recipient.routingOrder,
-          roleName: recipient.roleName,
-          authenticationMethod: recipient.authenticationMethod,
-          clientUserId:
-            embeddedAllowed && recipient.recipientType === 'signer' && recipient.authenticationMethod === 'embedded'
-              ? recipient.recipientId
-              : null,
-        })),
-        mappedFields: snapshot.data.mappedFields ?? [],
-      };
+      const envelopeInput = await this.envelopeInputFor(snapshot, identity, id);
       let prepared;
       try {
         prepared = await adapter.prepareEnvelope(context, envelopeInput);
@@ -935,6 +902,61 @@ export class ESignatureRequestService {
         envelope: { providerEnvelopeId: prepared.providerEnvelopeId, status: 'draft', createdAt: prepared.preparedAt, created: true },
       };
     });
+  }
+
+  /**
+   * The reviewed envelope, as both provider paths receive it.
+   *
+   * Preparation and a direct send must hand the provider the *same* shape, or the two paths would
+   * disagree about what was reviewed. Documents are opened only for a document request: a template
+   * envelope carries the template's own files, and loading local bytes for it would be work whose
+   * result the adapter never uses.
+   */
+  private async envelopeInputFor(
+    snapshot: SnapshotEnvelope<OutgoingSnapshotData>,
+    identity: { readonly idempotencyKey: string; readonly correlationId: string },
+    signatureRequestId: string,
+  ): Promise<PrepareEnvelopeInput> {
+    const settings = await this.settingsService.settings();
+    const embeddedAllowed = settings.features.embeddedSigning === true;
+    const documents: { documentSnapshotId: string; displayName: string; mimeType: string; documentOrder: number; bytes: Uint8Array; contentHashSha256: string }[] = [];
+    if (snapshot.data.templateId === null) {
+      for (const document of snapshot.data.documents) {
+        const opened = await this.documents.openSnapshot(document.documentSnapshotId);
+        documents.push({
+          documentSnapshotId: document.documentSnapshotId,
+          displayName: document.displayName,
+          mimeType: document.mimeType,
+          documentOrder: document.documentOrder,
+          bytes: opened.bytes,
+          contentHashSha256: document.contentHashSha256,
+        });
+      }
+    }
+    return {
+      signatureRequestId,
+      idempotencyKey: identity.idempotencyKey,
+      correlationId: identity.correlationId,
+      templateId: snapshot.data.templateId,
+      subject: snapshot.data.subject,
+      emailBlurb: snapshot.data.emailBlurb,
+      expiresAt: snapshot.data.expiresAt,
+      documents,
+      recipients: snapshot.data.recipients.map((recipient) => ({
+        recipientId: recipient.recipientId,
+        name: recipient.name,
+        email: recipient.email,
+        recipientType: recipient.recipientType === 'carbon_copy' ? 'carbon_copy' : 'signer',
+        routingOrder: recipient.routingOrder,
+        roleName: recipient.roleName,
+        authenticationMethod: recipient.authenticationMethod,
+        clientUserId:
+          embeddedAllowed && recipient.recipientType === 'signer' && recipient.authenticationMethod === 'embedded'
+            ? recipient.recipientId
+            : null,
+      })),
+      mappedFields: snapshot.data.mappedFields ?? [],
+    };
   }
 
   /**
@@ -1001,7 +1023,13 @@ export class ESignatureRequestService {
       throw new ValidationError('Sending a signature request needs an explicit sender confirmation.', { code: 'CONFIRMATION_REQUIRED' });
     }
     if (request.status !== 'ready_to_send') throw signatureRequestInvalidStateError(request.status, 'send');
-    if (request.providerEnvelopeId === null) {
+    const drafting =
+      this.providers.resolve(request.providerKey)?.envelopeDrafting ??
+      signatureProviderDescriptor(request.providerKey)?.envelopeDrafting ??
+      'draft';
+    // A draft provider must have created its envelope first (ES.9). A direct provider has nothing to
+    // create: the send itself is the provider's create call, so a missing envelope id is expected.
+    if (request.providerEnvelopeId === null && drafting !== 'direct') {
       throw new ValidationError('The request has no provider draft yet, so there is nothing to send.', { code: 'SIGNATURE_REQUEST_INVALID_STATE' });
     }
     if (request.outgoingSnapshot === null || request.outgoingDigest === null) {
@@ -1021,8 +1049,13 @@ export class ESignatureRequestService {
     const connection = request.connectionId === null ? undefined : await this.connections.findById(request.connectionId);
     if (connection === undefined) throw providerNotConnectedError('no_connection');
     const context = await this.connectionService.contextFor(connection);
-    const adapter = this.providers.assertOperation(connection.providerKey, 'sendEnvelope');
     const providerEnvelopeId = request.providerEnvelopeId;
+    const direct = providerEnvelopeId === null;
+    // One product action, two provider shapes. The gate admits either; the adapter declares which one
+    // it actually implements, and this is the only place that chooses.
+    const adapter = this.providers.assertOperation(connection.providerKey, direct ? 'sendNewEnvelope' : 'sendEnvelope');
+    const sendNewEnvelope = adapter.sendNewEnvelope;
+    if (direct && sendNewEnvelope === undefined) throw providerNotConnectedError('no_connection');
 
     // The claim is the single-flight gate: a fresh token per deliberate action, written under a unique
     // index before anything leaves the process.
@@ -1043,19 +1076,39 @@ export class ESignatureRequestService {
     });
 
     try {
-      const sent = await adapter.sendEnvelope(context, {
-        signatureRequestId: id,
-        providerEnvelopeId,
-        idempotencyKey: identity.idempotencyKey,
-        correlationId: identity.correlationId,
-      });
+      let sent;
+      if (direct) {
+        if (request.outgoingSnapshot === null) {
+          throw new ValidationError('The request has no prepared preview, so it cannot be sent.', { code: 'PREVIEW_REQUIRED' });
+        }
+        if (sendNewEnvelope === undefined) throw providerNotConnectedError('no_connection');
+        sent = await sendNewEnvelope.call(
+          adapter,
+          context,
+          await this.envelopeInputFor(request.outgoingSnapshot, identity, id),
+        );
+      } else {
+        sent = await adapter.sendEnvelope(context, {
+          signatureRequestId: id,
+          // Narrowed by `direct` above; the draft path always has an envelope id.
+          providerEnvelopeId: providerEnvelopeId as string,
+          idempotencyKey: identity.idempotencyKey,
+          correlationId: identity.correlationId,
+        });
+      }
       // The provider's recipient ids are what later Connect events join on. Recording them now, from
       // the send answer, keeps the projection possible even when the event carries no email.
       await this.attachProviderRecipientIds(id, sent.recipients).catch(() => undefined);
       const occurredAt = Date.parse(sent.sentAt);
       const confirmed = await runInTransaction(this.database.db, async (tx) => {
+        // For a direct provider the envelope id arrives with the send answer. Recording it and moving
+        // the request happen in one transaction, so there is no committed state that names a `sending`
+        // request with an envelope nobody can reach.
+        const current = direct
+          ? await this.requests.attachProviderEnvelope(id, sending.version, sent.providerEnvelopeId, sent.providerStatusRaw)
+          : sending;
         const transitioned = await this.requests.transition(id, {
-          expectedVersion: sending.version,
+          expectedVersion: current.version,
           to: 'sent',
           origin: 'provider',
           providerStatusRaw: sent.providerStatusRaw,
@@ -1191,7 +1244,15 @@ export class ESignatureRequestService {
       'expired',
     ];
     if (!reconcilable.includes(request.status)) throw signatureRequestInvalidStateError(request.status, 'reconcile');
-    if (request.providerEnvelopeId === null) throw providerNotConnectedError('no_connection');
+    if (request.providerEnvelopeId === null) {
+      // A direct provider creates the request inside the send, so an ambiguous outcome leaves no id to
+      // ask about. This is the one case reconciliation cannot close by envelope id: the operator finds
+      // the request in the provider console by the correlation metadata the adapter attached.
+      throw new ValidationError(
+        'The provider may have created this request, but its id was never received. Find it in the provider console using the correlation id recorded in the audit trail before deciding what to do.',
+        { code: 'RECONCILIATION_REQUIRES_ENVELOPE', requestId: id },
+      );
+    }
     const connection = request.connectionId === null ? undefined : await this.connections.findById(request.connectionId);
     if (connection === undefined) throw providerNotConnectedError('no_connection');
     const context = await this.connectionService.contextFor(connection);
@@ -1412,7 +1473,10 @@ export class ESignatureRequestService {
   }> {
     const request = await this.loadScoped(id);
     await this.gate.assertOperation('downloadCompletedDocuments', request.providerKey);
-    await this.gate.assertOperation('downloadCompletionEvidence', request.providerKey);
+    // Completion evidence is a separate capability. A provider that cannot retrieve an audit trail
+    // (Dropbox Sign exposes it only inside a ZIP this integration does not unpack) still has signed
+    // documents to fetch; refusing the whole retrieval here would hide them for no reason.
+    const evidenceSupported = this.gate.supportedOnProvider('downloadCompletionEvidence', request.providerKey);
     if (request.status !== 'completed') throw signatureActionNotAvailableError('artifacts', 'not_completed');
     if (request.providerEnvelopeId === null || request.connectionId === null) throw providerNotConnectedError('no_connection');
     const connection = await this.connections.findById(request.connectionId);
@@ -1424,7 +1488,7 @@ export class ESignatureRequestService {
     try {
       providerArtifacts = [
         ...(await adapter.downloadCompletedDocuments(context, request.providerEnvelopeId)),
-        ...(await adapter.downloadCompletionEvidence(context, request.providerEnvelopeId)),
+        ...(evidenceSupported ? await adapter.downloadCompletionEvidence(context, request.providerEnvelopeId) : []),
       ];
     } catch (error) {
       throw toModuleError(error, connection.providerKey);
@@ -1886,6 +1950,10 @@ export class ESignatureRequestService {
       status: request.status,
       providerKey: request.providerKey,
       connectionId: request.connectionId,
+      providerDrafting:
+        this.providers.resolve(request.providerKey)?.envelopeDrafting ??
+        signatureProviderDescriptor(request.providerKey)?.envelopeDrafting ??
+        'draft',
       providerEnvelopeId: request.providerEnvelopeId,
       // The provider's own status word is a diagnostic; plan §13.4 keeps it for readers of the audit
       // trail rather than every request reader. The normalized status above is the product answer.

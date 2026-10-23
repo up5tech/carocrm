@@ -108,6 +108,8 @@ export class DocuSignAdapter implements SignatureProviderAdapter {
   /** A live integration. It can only act on a credential the platform resolved from the vault. */
   readonly mode = 'live' as const;
   readonly capabilities = DOCUSIGN_ES4_CAPABILITIES;
+  /** DocuSign creates an unsent envelope first; sending it is a separate, deliberate call. */
+  readonly envelopeDrafting = 'draft' as const;
 
   constructor(private readonly transport: DocuSignTransport) {}
 

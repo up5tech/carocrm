@@ -13,6 +13,7 @@ import {
   type ESignatureConnectionEnvironment,
   type ESignatureConnectionStatus,
   type ESignatureSecretKind,
+  SECRET_KIND_API_KEY,
   SECRET_KIND_CLIENT_SECRET,
   SECRET_KIND_LABELS,
   SECRET_KIND_OAUTH_ACCESS_TOKEN,
@@ -22,6 +23,7 @@ import { encryptionKeyMissingError, providerNotConnectedError } from './esignatu
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { type ESignatureSettings, ESignatureSettingsService,oauthClientIdFor } from './esignature-settings.service.js';
 import {
+  type SignatureProviderAuthStyle,
   type SignatureProviderDescriptor,
   signatureProviderDescriptor,
   signatureProviderLabel,
@@ -78,7 +80,7 @@ export const ESIGNATURE_OAUTH_CALLBACK_PATH = '/api/v1/ESignature/oauth/callback
 const REFRESH_SKEW_MS = 60_000;
 
 /** A credential an administrator may write. An access or refresh token is the flow's, not theirs. */
-const OPERATOR_SECRET_KINDS: readonly ESignatureSecretKind[] = ['client_secret', 'webhook_secret'];
+const OPERATOR_SECRET_KINDS: readonly ESignatureSecretKind[] = ['api_key', 'client_secret', 'webhook_secret'];
 
 export interface SignatureCredentialView {
   readonly kind: ESignatureSecretKind;
@@ -115,6 +117,12 @@ export interface SignatureConnectionView {
   readonly credentials: readonly SignatureCredentialView[];
   readonly hasClientSecret: boolean;
   readonly hasRefreshToken: boolean;
+  /** An API-key provider's credential exists. Never the key itself. */
+  readonly hasApiKey: boolean;
+  /** How this provider authenticates, so the admin screen shows the right form and verbs. */
+  readonly authStyle: SignatureProviderAuthStyle | null;
+  /** The credential kind that verifies this provider's deliveries, or `null` when none is defined. */
+  readonly webhookSecretKind: 'webhook_secret' | 'api_key' | null;
   readonly accessTokenExpiresAt: string | null;
   /** Which adapter answers for this provider in this build. A fake can never sign a real contract. */
   readonly adapterMode: SignatureProviderAdapter['mode'] | 'none';
@@ -223,6 +231,9 @@ export class ESignatureConnectionService {
       credentials: credentials.map((entry) => toCredentialView(entry)),
       hasClientSecret: activeOf(SECRET_KIND_CLIENT_SECRET) !== undefined,
       hasRefreshToken: activeOf(SECRET_KIND_OAUTH_REFRESH_TOKEN) !== undefined,
+      hasApiKey: activeOf(SECRET_KIND_API_KEY) !== undefined,
+      authStyle: signatureProviderDescriptor(connection.providerKey)?.authStyle ?? null,
+      webhookSecretKind: signatureProviderDescriptor(connection.providerKey)?.webhookSecretKind ?? null,
       accessTokenExpiresAt: activeOf(SECRET_KIND_OAUTH_ACCESS_TOKEN)?.expiresAt ?? null,
       adapterMode: this.providers.resolve(connection.providerKey)?.mode ?? 'none',
       providerLabel: signatureProviderLabel(connection.providerKey),
@@ -248,7 +259,10 @@ export class ESignatureConnectionService {
     providerKey?: string | undefined;
     name: string;
     environment: ESignatureConnectionEnvironment;
-    clientSecret: string;
+    /** An OAuth provider's client secret. Ignored for an API-key provider. */
+    clientSecret?: string | undefined;
+    /** An API-key provider's key. Ignored for an OAuth provider. */
+    apiKey?: string | undefined;
     oauthClientId?: string | undefined;
     redirectUri?: string | undefined;
     connectReference?: string | undefined;
@@ -258,11 +272,13 @@ export class ESignatureConnectionService {
     // provider, and a provider whose authorization style this command cannot create are three
     // different refusals, and each names what is wrong.
     const descriptor = this.connectableProvider(input.providerKey ?? PROVIDER_KEY_DOCUSIGN);
-    this.assertOAuthProvider(descriptor);
     // A connectable provider must also have a strategy in this build; the check is here, before a
     // row exists, so a half-configured connection is never visible to the next administrator.
-    this.authStrategy(descriptor);
-    const secret = input.clientSecret.trim();
+    const auth = this.authStrategy(descriptor);
+    if (descriptor.authStyle === 'api_key') return this.createWithApiKey(input, settings, descriptor, auth);
+
+    this.assertOAuthProvider(descriptor);
+    const secret = (input.clientSecret ?? '').trim();
     if (secret === '') throw new ValidationError(`A ${descriptor.label} connection needs its OAuth client secret.`);
     if (secret.length > 512) throw new ValidationError(`That value is too long to be a ${descriptor.label} client secret.`);
     const explicitClientId = (input.oauthClientId ?? '').trim();
@@ -286,6 +302,72 @@ export class ESignatureConnectionService {
       detail: { providerKey: connection.providerKey, environment: connection.environment, clientIdPresent: clientId !== '' },
     });
     return this.view(connection);
+  }
+
+  /**
+   * Create an API-key connection, verified and connected in the same action.
+   *
+   * There is no consent screen to send the administrator to, so a row left in `not_connected` would
+   * have no path forward. The key is checked against the provider **before** it is stored: a key the
+   * account endpoint refuses is not written at all, and a key it accepts names the account the
+   * connection is bound to. The key itself reaches the vault and nothing else.
+   */
+  private async createWithApiKey(
+    input: {
+      name: string;
+      environment: ESignatureConnectionEnvironment;
+      apiKey?: string | undefined;
+      oauthClientId?: string | undefined;
+      connectReference?: string | undefined;
+    },
+    settings: ESignatureSettings,
+    descriptor: SignatureProviderDescriptor,
+    auth: SignatureProviderAuthStrategy,
+  ): Promise<SignatureConnectionView> {
+    const key = (input.apiKey ?? '').trim();
+    if (key === '') throw new ValidationError(`A ${descriptor.label} connection needs its API key.`);
+    if (key.length > 512) throw new ValidationError(`That value is too long to be a ${descriptor.label} API key.`);
+    let account: Awaited<ReturnType<SignatureProviderAuthStrategy['accountContext']>>;
+    try {
+      account = await auth.accountContext({ environment: input.environment, accessToken: key });
+    } catch (error) {
+      throw toModuleError(error, descriptor.key);
+    }
+    // The public app key (used for branding and app callbacks) may come from the request or settings;
+    // it is never the API key.
+    const explicitClientId = (input.oauthClientId ?? '').trim();
+    const clientId = explicitClientId !== '' ? explicitClientId : this.integrationKey(settings, descriptor.key, input.environment);
+    const connection = await this.connections.create({
+      providerKey: descriptor.key,
+      name: input.name,
+      environment: input.environment,
+      oauthClientId: clientId,
+      connectReference: input.connectReference,
+      createdById: this.actorId(),
+    });
+    await this.vault.store({ connectionId: connection.id, kind: SECRET_KIND_API_KEY, value: key });
+    const authorized = await this.connections.recordAuthorized(connection.id, {
+      accountId: account.accountId,
+      accountName: account.accountName ?? undefined,
+      baseUri: account.baseUri,
+      subjectUserId: account.subjectUserId ?? undefined,
+      grantedScopes: [],
+      consentStatus: 'granted',
+      oauthClientId: clientId,
+    });
+    await this.audit.append({
+      action: 'connection.created',
+      connectionId: authorized.id,
+      actor: this.actorRef(),
+      detail: { providerKey: authorized.providerKey, environment: authorized.environment, authStyle: descriptor.authStyle },
+    });
+    await this.audit.append({
+      action: 'connection.authorized',
+      connectionId: authorized.id,
+      actor: this.actorRef(),
+      detail: { environment: authorized.environment, accountId: authorized.accountId, authStyle: descriptor.authStyle },
+    });
+    return this.view(authorized);
   }
 
   /** Rename a connection, re-point its redirect URI, or annotate its Connect configuration. */
@@ -319,13 +401,53 @@ export class ESignatureConnectionService {
   async storeSecret(id: string, kind: ESignatureSecretKind, value: string): Promise<SignatureConnectionView> {
     await this.assertControlPlane();
     if (!OPERATOR_SECRET_KINDS.includes(kind)) {
-      throw new ValidationError('Only the OAuth client secret and the Connect webhook secret are entered by an administrator.', {
+      throw new ValidationError('Only an API key, the OAuth client secret and the Connect webhook secret are entered by an administrator.', {
         allowed: [...OPERATOR_SECRET_KINDS],
       });
     }
     const connection = await this.require(id);
+    const descriptor = this.requireProviderDescriptor(connection.providerKey);
     const secret = value.trim();
     if (secret === '' || secret.length > 512) throw new ValidationError('That value is not a credential this module can store.');
+
+    if (kind === SECRET_KIND_API_KEY) {
+      if (descriptor.authStyle !== 'api_key') {
+        throw new ValidationError(`${descriptor.label} does not authenticate with an API key.`, { providerKey: descriptor.key });
+      }
+      // A replaced key is re-checked against the provider and re-binds the account. A connection that
+      // was in `reauthorization_required` becomes usable again only after that check succeeds.
+      const auth = this.authStrategy(descriptor);
+      let account: Awaited<ReturnType<SignatureProviderAuthStrategy['accountContext']>>;
+      try {
+        account = await auth.accountContext({ environment: connection.environment, accessToken: secret });
+      } catch (error) {
+        throw toModuleError(error, descriptor.key);
+      }
+      await this.vault.store({ connectionId: connection.id, kind, value: secret });
+      const authorized = await this.connections.recordAuthorized(connection.id, {
+        accountId: account.accountId,
+        accountName: account.accountName ?? undefined,
+        baseUri: account.baseUri,
+        subjectUserId: account.subjectUserId ?? undefined,
+        grantedScopes: [],
+        consentStatus: 'granted',
+        oauthClientId: connection.oauthClientId ?? undefined,
+      });
+      await this.audit.append({
+        action: 'connection.secretRotated',
+        connectionId: connection.id,
+        actor: this.actorRef(),
+        detail: { kind },
+      });
+      await this.audit.append({
+        action: connection.status === 'connected' ? 'connection.reauthorized' : 'connection.authorized',
+        connectionId: connection.id,
+        actor: this.actorRef(),
+        detail: { environment: connection.environment, accountId: authorized.accountId, authStyle: descriptor.authStyle },
+      });
+      return this.view(authorized);
+    }
+
     await this.vault.store({ connectionId: connection.id, kind, value: secret });
     await this.audit.append({
       action: 'connection.secretRotated',
@@ -353,6 +475,12 @@ export class ESignatureConnectionService {
     const connection = await this.require(id);
     if (connection.status === 'disabled') throw providerNotConnectedError('disabled');
     const descriptor = this.requireProviderDescriptor(connection.providerKey);
+    if (descriptor.authStyle === 'api_key') {
+      throw new ValidationError(
+        `${descriptor.label} authenticates with an API key and has no consent screen. Replace the key to re-check the connection.`,
+        { providerKey: descriptor.key, code: 'API_KEY_REPLACEMENT_REQUIRED' },
+      );
+    }
     this.assertOAuthProvider(descriptor);
     const auth = this.authStrategy(descriptor);
     const storedClientId = (connection.oauthClientId ?? '').trim();
@@ -572,8 +700,10 @@ export class ESignatureConnectionService {
    * checked, because "some connection is usable" must not let an operator test a different one.
    */
   async test(id: string): Promise<SignatureConnectionTest> {
-    await this.gate.assertOperation('testConnection');
     const connection = await this.require(id);
+    // Admission is per provider: an installation with only a Dropbox Sign connection must be able to
+    // test that connection, not be refused because no DocuSign connection happens to exist.
+    await this.gate.assertOperation('testConnection', connection.providerKey);
     // The bound adapter answers, so an installation reports the same thing the gate admitted (ES.3's
     // rule) and an operator can see whether a fake answered.
     const adapter = this.providers.assertOperation(connection.providerKey, 'connectionStatus');
@@ -581,7 +711,9 @@ export class ESignatureConnectionService {
 
     // A token the provider no longer accepts is not a diagnostic detail; it is a state change. Try the
     // documented recovery first — a refresh — and only a refresh that does not help moves the connection.
-    if (!status.reachable && status.detailCode === 'token_expired' && (await this.tryRefresh(connection.id))) {
+    // An API-key connection has nothing to refresh: the key itself must be replaced.
+    const oauth = signatureProviderDescriptor(connection.providerKey)?.authStyle === 'oauth2_authorization_code';
+    if (oauth && !status.reachable && status.detailCode === 'token_expired' && (await this.tryRefresh(connection.id))) {
       const retried = await adapter.connectionStatus(await this.contextFor(await this.require(connection.id)));
       if (retried.reachable) status = { ...retried, detailCode: 'ok_after_refresh' };
     }
@@ -687,6 +819,27 @@ export class ESignatureConnectionService {
       );
     }
     if (connection.accountId === null || connection.baseUri === null) throw providerNotConnectedError('not_authorized');
+    const descriptor = this.requireProviderDescriptor(connection.providerKey);
+
+    // An API key *is* the credential: there is nothing to refresh, and a key the provider stopped
+    // accepting moves the connection to reauthorization through the adapter's 401 classification.
+    if (descriptor.authStyle === 'api_key') {
+      const apiKey = await this.vault.read({ connectionId: connection.id, kind: SECRET_KIND_API_KEY });
+      if (apiKey === null) throw providerNotConnectedError('not_authorized');
+      return {
+        connectionId: connection.id,
+        providerKey: connection.providerKey,
+        environment: connection.environment,
+        accountId: connection.accountId,
+        baseUri: connection.baseUri,
+        grantedScopes: connection.grantedScopes,
+        accessToken: apiKey,
+        clientId: connection.oauthClientId,
+        correlationId: correlationId(),
+        timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
+      };
+    }
+
     if (await this.needsRefresh(connection.id)) await this.refresh(connection.id);
     const accessToken = await this.vault.read({ connectionId: connection.id, kind: SECRET_KIND_OAUTH_ACCESS_TOKEN });
     if (accessToken === null) throw providerNotConnectedError('not_authorized');
@@ -698,6 +851,7 @@ export class ESignatureConnectionService {
       baseUri: connection.baseUri,
       grantedScopes: connection.grantedScopes,
       accessToken,
+      clientId: connection.oauthClientId,
       correlationId: correlationId(),
       timeoutMs: DEFAULT_PROVIDER_TIMEOUT_MS,
     };

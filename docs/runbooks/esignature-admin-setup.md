@@ -8,19 +8,40 @@
 - `ENCRYPTION_KEY` configured (32-byte hex) so provider credentials can be stored encrypted.
 - `UPLOAD_MAX_MB` and storage driver configured for document snapshots and derived artifacts.
 - Redis + BullMQ available if background jobs are used.
-- DocuSign developer/demo account for sandbox validation before production.
+- A DocuSign developer/demo account for sandbox validation before production, **or** a Dropbox Sign
+  account with an API key for the same purpose.
 
 ## 2. Create and verify a connection
 
-1. Open **Admin → E-Signature → Connections** (or `/esignature`).
-2. Create a named connection, select **Demo** or **Production** explicitly, enter the integration
+Open **Admin → E-Signature → Connections** (or `/esignature`) and pick the provider first: the form
+follows the provider's authentication style.
+
+### 2a. DocuSign (OAuth)
+
+1. Create a named connection, select **Demo** or **Production** explicitly, enter the integration
    key (client id) and redirect URI.
-3. Complete OAuth through the backend-controlled callback. The CRM resolves the account id and the
+2. Complete OAuth through the backend-controlled callback. The CRM resolves the account id and the
    account-specific API base URI from DocuSign `userinfo`.
-4. Verify the connection: account id, user, granted scopes, environment, token expiry metadata and
+3. Verify the connection: account id, user, granted scopes, environment, token expiry metadata and
    last successful API call.
-5. Store the Connect HMAC secret in the encrypted vault (never in settings or logs).
-6. Configure DocuSign Connect to call `POST /api/v1/integrations/esignature/:publicId` with HMAC.
+4. Store the Connect HMAC secret in the encrypted vault (never in settings or logs).
+5. Configure DocuSign Connect to call `POST /api/v1/integrations/esignature/:publicId` with HMAC.
+
+### 2b. Dropbox Sign (API key)
+
+1. Create a named connection, select **Demo** or **Production** explicitly and paste the account's
+   API key. The CRM calls the provider's account endpoint **before** storing anything: a refused key
+   creates no connection.
+2. Verify the connection: account id, environment and **Test Connection**.
+3. No consent step and no separate callback secret exist. The callback's `event_hash` is derived from
+   the same API key, so the endpoint is verified as soon as the connection is connected.
+4. Register the callback in the Dropbox Sign app settings as
+   `POST /api/v1/integrations/esignature/:publicId`. It must answer `Hello API Event Received`; the
+   module does that for accepted and duplicate deliveries and never for refused ones.
+5. To rotate the key, use **Replace API key** on the connection: the new key is re-checked and
+   re-binds the account. A failed check leaves the previous, working credential in place.
+6. This provider has no unsent draft, no embedded signing and no audit-trail retrieval; requests are
+   created when they are sent. See `docs/compatibility/esignature.md` §1.1.
 
 ## 3. Configure templates and policy
 

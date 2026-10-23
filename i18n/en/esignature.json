@@ -12,7 +12,7 @@
   },
   "page": {
     "title": "E-Signature",
-    "subtitle": "Draft signature requests and the provider connections behind them are administered here. Sending arrives with the send guard.",
+    "subtitle": "Draft, send and track signature requests, and administer the provider accounts behind them. Every action on this page is the server's answer.",
     "loadFailed": "The module could not be loaded.",
     "loadFailedHint": "Check that you hold the module read right and that an administrator has switched the module on.",
     "notEnabled": "E-Signature is switched off on this instance, so no signature request can be prepared or sent.",
@@ -22,13 +22,29 @@
       "module_disabled": "The module is switched off in the settings.",
       "connections_disabled": "Provider connection administration is switched off in the settings.",
       "encryption_key_missing": "ENCRYPTION_KEY is not configured, so a stored credential cannot be read and no connection can be used.",
-      "no_enabled_connection": "No DocuSign connection is authorized and active. An administrator has to authorize one first."
+      "no_enabled_connection": "No provider connection is authorized and active. An administrator has to connect a provider first."
     },
     "adminNote": "An administrator can switch the module and its features on under Settings, Integrations, E-Signature.",
     "phases": "Delivered phases",
     "provider": "Provider",
     "foundationOk": "Platform foundation",
-    "foundationMissing": "Platform foundation is missing parts"
+    "foundationMissing": "Platform foundation is missing parts",
+    "stats": {
+      "gate": "Send readiness",
+      "gateHint": "Settings, an active connection and the encryption key",
+      "ready": "Ready",
+      "notReady": "Needs setup",
+      "features": "Features in effect",
+      "featuresHint": "Switched on and implemented in this build",
+      "providers": "Provider adapters",
+      "providersHint": "Adapters bound in this build",
+      "checks": "Foundation checks",
+      "checksHint": "Dependencies, structures and settings"
+    },
+    "diagnostics": "Diagnostics and rights",
+    "diagnosticsHint": "Feature switches, the rights you hold, and what the bound adapters support.",
+    "moduleOn": "Module on",
+    "moduleOff": "Module off"
   },
   "features": {
     "title": "Features",
@@ -150,9 +166,10 @@
   },
   "connections": {
     "title": "Provider connections",
+    "hint": "A connection is the provider account documents are sent through. Credentials are write-only: this screen can store or replace them, never read them back.",
     "loadFailed": "The provider connections could not be loaded.",
-    "empty": "No DocuSign connection yet",
-    "emptyHint": "Create one with its OAuth client secret, then authorize it. Nothing can be sent until a connection is authorized and active.",
+    "empty": "No provider connection yet",
+    "emptyHint": "Create one with the credential its provider uses, then connect it. Nothing can be sent until a connection is authorized and active.",
     "create": "New connection",
     "created": "The signature connection was created.",
     "updated": "The signature connection was updated.",
@@ -164,7 +181,7 @@
     "fieldClientId": "Integration key (OAuth client id)",
     "clientIdHint": "Public by nature. Leave it empty to use the key configured in the module settings.",
     "fieldRedirectUri": "OAuth redirect URI",
-    "redirectUriHint": "Exactly the URI registered with this DocuSign integration, and it has to point at this platform callback path.",
+    "redirectUriHint": "Exactly the URI registered with this provider's application, and it has to point at this platform callback path.",
     "fieldClientSecret": "OAuth client secret",
     "secretHint": "Stored encrypted and never shown again. Nothing in this screen can read a secret back.",
     "fieldSecretValue": "Secret value",
@@ -175,7 +192,8 @@
       "client_secret": "Client secret",
       "oauth_access_token": "Access token",
       "oauth_refresh_token": "Refresh token",
-      "webhook_secret": "Connect secret"
+      "webhook_secret": "Connect secret",
+      "api_key": "API key"
     },
     "environments": {
       "demo": "Demo",
@@ -216,13 +234,31 @@
     "disconnectedWithHistory": "Disconnected; {credentials} credential(s) destroyed. Existing signature requests were kept.",
     "testOk": "The connection answered.",
     "testFailed": "The connection did not answer ({code}).",
-    "fakeAdapterNote": "A {mode} adapter answered, so nothing reached DocuSign.",
-    "providerNotInstalled": "not installed in this build"
+    "fakeAdapterNote": "A {mode} adapter answered, so nothing reached a real provider.",
+    "providerNotInstalled": "not installed in this build",
+    "fieldApiKey": "API key",
+    "apiKeyHint": "Stored encrypted and verified against the provider before the connection is created. Nothing in this screen can read it back.",
+    "replaceApiKey": "Replace API key",
+    "count": "{count} connections",
+    "authStyles": {
+      "oauth2_authorization_code": "OAuth 2.0",
+      "api_key": "API key",
+      "unknown": "Unknown"
+    },
+    "adapterModes": {
+      "live": "Live adapter",
+      "fake": "Fake adapter",
+      "disabled": "Adapter disabled",
+      "none": "No adapter"
+    },
+    "moreActions": "More actions",
+    "emptyCta": "Connect a provider"
   },
   "requests": {
     "title": "Signature requests",
+    "hint": "Every request as the server sees it. Open one to review its documents, recipients and provider history.",
     "empty": "No signature requests yet",
-    "emptyHint": "Create a draft, attach the documents and name the signers. Sending arrives with the send guard.",
+    "emptyHint": "Create a draft, attach the documents, name the signers, then send it from the preview.",
     "loadFailed": "The signature requests could not be loaded.",
     "create": "New request",
     "detail": "Signature request",
@@ -243,6 +279,9 @@
     "allStatuses": "All statuses",
     "searchPlaceholder": "Search name or subject",
     "recipientSearchPlaceholder": "Search a recipient",
+    "resultCount": "{count} requests",
+    "emptyFiltered": "No request matches these filters.",
+    "clearFilters": "Clear filters",
     "fieldName": "Name",
     "fieldSource": "Source record",
     "fieldSubject": "Email subject",
@@ -478,6 +517,7 @@
   },
   "templates": {
     "title": "Template mappings",
+    "hint": "Map a provider template’s roles and fields to this CRM before a request can use it.",
     "selectConnection": "Choose a provider connection",
     "selectConnectionHint": "Choose the connection whose account holds the templates.",
     "refresh": "Refresh catalog",
@@ -488,7 +528,7 @@
     "saved": "The template mapping was saved.",
     "saveFailed": "The template mapping could not be saved.",
     "noConnections": "No provider connection yet",
-    "noConnectionsHint": "Connect and authorize a DocuSign account before mapping its templates.",
+    "noConnectionsHint": "Connect and authorize a provider account before mapping its templates.",
     "columnTemplate": "Template",
     "columnShared": "Visibility",
     "shared": "Account shared",
@@ -601,7 +641,8 @@
     "title": "Actions",
     "requestApproval": "Request approval",
     "approvalRequested": "The request was sent to the approval queue.",
-    "approvalRequestFailed": "The request could not be sent for approval.",    "syncStatus": "Refresh from provider",
+    "approvalRequestFailed": "The request could not be sent for approval.",
+    "syncStatus": "Refresh from provider",
     "synced": "The request was reconciled with the provider.",
     "syncFailed": "The request could not be reconciled.",
     "remind": "Send a reminder",
