@@ -6,6 +6,7 @@ import {
   AutoComplete,
   Button,
   Card,
+  Checkbox,
   Descriptions,
   Drawer,
   Form,
@@ -263,6 +264,14 @@ function RequestDetail(props: {
       </Descriptions>
 
       <RecipientsTable recipients={[...request.recipients]} />
+      <PreviewSection
+        request={request}
+        canPrepare={props.canPrepare}
+        onPrepared={() => {
+          props.onDocumentsChanged();
+          void detail.refetch();
+        }}
+      />
       <DocumentsList
         requestId={request.id}
         documents={[...request.documents]}
@@ -413,6 +422,116 @@ function RequestEditor(props: {
         </Button>
       </Space>
     </Form>
+  );
+}
+
+/**
+ * The send preview (ES.8): exactly what a send would carry, and everything that blocks it.
+ *
+ * The digest shown here is the identity of those bytes — preparing records it, and any later edit
+ * produces a different one, which is why the request drops back to `draft` rather than keeping a
+ * preview nobody reviewed.
+ */
+function PreviewSection(props: { request: ESignatureRequestView; canPrepare: boolean; onPrepared: () => void }) {
+  const { message } = AntApp.useApp();
+  const [confirmed, setConfirmed] = useState(false);
+  const [pending, setPending] = useState(false);
+  const preview = useQuery({
+    queryKey: ['eSignature', 'request', props.request.id, 'preview'],
+    queryFn: () => api.eSignatureRequestPreview(props.request.id),
+  });
+  const view = preview.data;
+  const canPrepare = props.request.editable && props.canPrepare && view?.ready === true;
+
+  const prepare = async (): Promise<void> => {
+    if (view === null || view === undefined) return;
+    setPending(true);
+    try {
+      await api.prepareESignatureRequest(props.request.id, { version: view.requestVersion, confirm: true });
+      message.success(t('esignature.preview.prepared'));
+      props.onPrepared();
+      await preview.refetch();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('esignature.preview.failed'));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <Card
+      size="small"
+      title={t('esignature.preview.title')}
+      extra={
+        view?.digest === null || view?.digest === undefined ? null : (
+          <Typography.Text code style={{ fontSize: 11 }}>
+            {view.digest.slice(0, 16)}…
+          </Typography.Text>
+        )
+      }
+      style={{ marginTop: 8 }}
+    >
+      {preview.isError ? (
+        <Typography.Text type="danger">{t('esignature.preview.failed')}</Typography.Text>
+      ) : view === undefined ? (
+        <Typography.Text type="secondary">{t('esignature.preview.loading')}</Typography.Text>
+      ) : (
+        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+          {view.problems.length > 0 ? (
+            <Alert
+              type="error"
+              showIcon
+              message={t('esignature.preview.blocked')}
+              description={
+                <ul className="carocrm-admin-warnings">
+                  {view.problems.map((problem) => (
+                    <li key={`${problem.code}:${problem.where}`}>{problem.message}</li>
+                  ))}
+                </ul>
+              }
+            />
+          ) : (
+            <Alert type="success" showIcon message={t('esignature.preview.ready')} />
+          )}
+          {view.staleStoredPreview ? <Alert type="warning" showIcon message={t('esignature.preview.stale')} /> : null}
+          <Descriptions size="small" column={2} bordered>
+            <Descriptions.Item label={t('esignature.preview.documents')}>{view.data?.documents.length ?? 0}</Descriptions.Item>
+            <Descriptions.Item label={t('esignature.preview.recipients')}>{view.data?.recipients.length ?? 0}</Descriptions.Item>
+            <Descriptions.Item label={t('esignature.preview.account')}>
+              {view.data === null ? '—' : `${view.data.environment} · ${view.data.accountId ?? '—'}`}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('esignature.preview.approval')}>
+              {view.approvalRequired ? <Tag color="orange">{t('esignature.preview.approvalRequired')}</Tag> : <Tag>{t('esignature.preview.approvalNotRequired')}</Tag>}
+            </Descriptions.Item>
+          </Descriptions>
+          {view.data === null ? null : (
+            <Table
+              size="small"
+              rowKey={(row: { email: string; routingOrder: number }) => `${row.email}:${String(row.routingOrder)}`}
+              pagination={false}
+              dataSource={[...view.data.recipients]}
+              columns={[
+                { title: t('esignature.requests.routingOrder'), dataIndex: 'routingOrder', width: 80 },
+                { title: t('esignature.requests.recipientName'), dataIndex: 'name' },
+                { title: t('esignature.requests.recipientEmail'), dataIndex: 'email' },
+                { title: t('esignature.requests.recipientType'), dataIndex: 'recipientType', render: (value: string) => t(`esignature.requests.recipientTypes.${value}`) },
+                { title: t('esignature.preview.role'), dataIndex: 'roleName', render: (value: string | null) => value ?? '—' },
+              ]}
+            />
+          )}
+          {canPrepare ? (
+            <Space size={10} wrap>
+              <Checkbox checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)}>
+                {t('esignature.preview.confirm')}
+              </Checkbox>
+              <Button type="primary" size="small" disabled={!confirmed} loading={pending} onClick={() => void prepare()}>
+                {t('esignature.preview.prepare')}
+              </Button>
+            </Space>
+          ) : null}
+        </Space>
+      )}
+    </Card>
   );
 }
 

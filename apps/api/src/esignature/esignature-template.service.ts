@@ -342,23 +342,7 @@ export class ESignatureTemplateService {
     input: { providedRoles: readonly string[]; values: Readonly<Record<string, unknown>> },
   ): Promise<MappingUsageCheck> {
     await this.assertManage();
-    const mapping = await this.mappings.requireById(mappingId);
-    const provided = new Set(input.providedRoles);
-    const missingRoles = mapping.roleMappings
-      .filter((role) => !provided.has(role.roleName))
-      .map((role) => role.roleName);
-    const missingValues = mapping.fieldMappings
-      .filter((field) => field.required)
-      .filter((field) => {
-        const value = input.values[field.crmField];
-        return value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
-      })
-      .map((field) => ({ tabName: field.tabName, crmField: field.crmField }));
-    return {
-      usable: missingRoles.length === 0 && missingValues.length === 0,
-      missingRoles,
-      missingValues,
-    };
+    return evaluateMappingUsage(await this.mappings.requireById(mappingId), input);
   }
 
   // ---------------------------------------------------------------------------
@@ -432,6 +416,26 @@ export class ESignatureTemplateService {
     const id = this.scope.userId;
     return id === undefined || id === 'system' ? { type: 'system' } : { type: 'user', id };
   }
+}
+
+/**
+ * What a concrete request is missing for this mapping: unfilled roles, and required tabs whose mapped
+ * CRM value is blank. Pure, so the preview (ES.8) and the send path (ES.9) ask the same question.
+ */
+export function evaluateMappingUsage(
+  mapping: Pick<SignatureTemplateMapping, 'roleMappings' | 'fieldMappings'>,
+  input: { providedRoles: readonly string[]; values: Readonly<Record<string, unknown>> },
+): MappingUsageCheck {
+  const provided = new Set(input.providedRoles);
+  const missingRoles = mapping.roleMappings.filter((role) => !provided.has(role.roleName)).map((role) => role.roleName);
+  const missingValues = mapping.fieldMappings
+    .filter((field) => field.required)
+    .filter((field) => {
+      const value = input.values[field.crmField];
+      return value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
+    })
+    .map((field) => ({ tabName: field.tabName, crmField: field.crmField }));
+  return { usable: missingRoles.length === 0 && missingValues.length === 0, missingRoles, missingValues };
 }
 
 /**

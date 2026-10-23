@@ -214,6 +214,11 @@ export {
   REQUIRED_CAPABILITIES,
 } from './esignature-module.js';
 export { ESignatureOAuthCallbackController } from './esignature-oauth-callback.controller.js';
+export {
+  buildSignaturePreview,
+  type PreviewProblem,
+  type SignaturePreview,
+} from './esignature-preview.js';
 export { ESignatureRequestController } from './esignature-request.controller.js';
 export {
   ESignatureRequestService,

@@ -9,6 +9,7 @@ import {
   RequestDocumentAttachSchema,
   RequestDocumentReplaceSchema,
   RequestListQuerySchema,
+  RequestPrepareSchema,
   RequestRecipientsSchema,
   RequestUpdateSchema,
 } from './dto/esignature-shapes.js';
@@ -76,6 +77,28 @@ export class ESignatureRequestController {
   async update(@Param('id') id: string, @Body() body: unknown) {
     const { version, ...patch } = this.parse(RequestUpdateSchema, body);
     return this.requests.update(this.id(id), { version, patch });
+  }
+
+  /**
+   * The send preview (plan §13.3 step 6): exactly what a send would carry, and everything that would
+   * block it. A read: no version bump, no snapshot stored, no provider contact.
+   */
+  @Get(':id/preview')
+  async preview(@Param('id') id: string) {
+    return this.requests.preview(this.id(id));
+  }
+
+  /**
+   * Record the immutable preview and move the request on.
+   *
+   * The body carries `confirm: true` — the sender's deliberate act — and `version`, so a stale screen
+   * cannot prepare a draft somebody else has since edited. No provider is contacted here; ES.9 creates
+   * the envelope, and only ES.10 sends it.
+   */
+  @HttpCode(200)
+  @Post(':id/prepare')
+  async prepare(@Param('id') id: string, @Body() body: unknown) {
+    return this.requests.prepare(this.id(id), this.parse(RequestPrepareSchema, body));
   }
 
   @Get(':id/recipients')

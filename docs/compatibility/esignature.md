@@ -1,7 +1,7 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 to 19-ES.7 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 through 19-ES.7 delivered** (ES.1 registers the module and the security contract;
+> Phase 19-ES.0 to 19-ES.8 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 through 19-ES.8 delivered** (ES.1 registers the module and the security contract;
 > ES.2 adds the schema and the domain rules; ES.3 adds the provider contract, the registry and the
 > in-process fake; ES.4 adds DocuSign's OAuth grant, the connection lifecycle and the live adapter's
 > connection operations). **A DocuSign adapter now exists, but nothing in this module has been verified
@@ -10,7 +10,7 @@
 > Evidence: `docs/implementation/esignature-es1-completion-report.md`, `esignature-es2-completion-report.md`,
 > `esignature-es3-completion-report.md`, `esignature-es4-completion-report.md`,
 > `esignature-es5-completion-report.md`, `esignature-es6-completion-report.md`,
-> `esignature-es7-completion-report.md`.
+> `esignature-es7-completion-report.md`, `esignature-es8-completion-report.md`.
 > Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`.
 > Webhook prefix (reserved in ES.1, endpoint delivered in ES.11, which also extends the raw-body hook):
 > `/api/v1/integrations/esignature`.
@@ -58,6 +58,7 @@ redirect URIs, secrets and stored account identities are fully separate.
 
 | Behavior | Status | Notes |
 | --- | --- | --- |
+| Send preview and preparation (immutable snapshot, digest, approval routing) | **Delivered ES.8** | `GET /api/v1/ESignature/requests/:id/preview` and `POST …/prepare` (body `{version, confirm}`). Preparation refuses with a named problem list (no document, no signer, duplicate signer address, past expiry, unfilled template role, missing tab value, foreign/inactive mapping); it makes **no provider call**. A draft edit after preparation returns the request to `draft` and drops the snapshot and approval. |
 | Provider template catalog and the CRM mapping (roles → recipients, tabs → CRM fields) | **Delivered ES.7** | `POST /api/v1/ESignature/templates/catalog/refresh`, `GET templates/catalog/:connectionId/:templateId`, and `GET/POST/PATCH templates/mappings`. The catalog is read-only; a mapping is validated against that connection's **live** template and the metadata registry, so an unknown role, tab or field is refused when it is saved. |
 | Draft request CRUD, recipients and documents, with record-scope ACL and a linked-record check | **Delivered ES.6** | `GET/POST /api/v1/ESignature/requests`, `GET/PATCH /:id`, recipients and documents sub-routes. The prefix is the module's own (`/api/v1/ESignature`), not the lower-case spelling in the plan. A request that left the draft answers 409 `SIGNATURE_REQUEST_INVALID_STATE`, and there is no generic `/api/v1/SignatureRequest` route at all. |
 | Immutable document snapshot (copy + SHA-256 of the submitted bytes) | **Delivered ES.5** | `esignature-document.service.ts` copies through `AttachmentService.download`, so the parent record's ACL is the gate, and verifies the copy against the attachment's own checksum. A snapshot survives its source: replacing or deleting the attachment changes nothing about what was recorded. |

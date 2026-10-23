@@ -3357,3 +3357,35 @@ export interface ESignatureTemplateMapping {
   readonly createdAt: string;
   readonly modifiedAt: string;
 }
+
+// Phase 19-ES.8 — the send preview. `problems` is what blocks preparation; `digest` is the identity of
+// exactly these bytes, recipients and policy.
+export interface ESignaturePreviewProblem {
+  readonly code: string;
+  readonly message: string;
+  readonly where: string;
+}
+
+export interface ESignatureSendPreview {
+  readonly requestId: string;
+  readonly requestVersion: number;
+  readonly requestStatus: string;
+  readonly data: {
+    readonly templateId: string | null;
+    readonly subject: string | null;
+    readonly message: string | null;
+    readonly environment: string;
+    readonly accountId: string | null;
+    readonly documents: readonly { readonly displayName: string; readonly contentHashSha256: string; readonly documentOrder: number }[];
+    readonly recipients: readonly { readonly name: string; readonly email: string; readonly recipientType: string; readonly routingOrder: number; readonly roleName: string | null }[];
+    readonly templateMappingId?: string | null | undefined;
+    readonly templateMappingVersion?: number | null | undefined;
+  } | null;
+  readonly digest: string | null;
+  readonly problems: readonly ESignaturePreviewProblem[];
+  readonly ready: boolean;
+  readonly approvalRequired: boolean;
+  readonly approvedForThisDigest: boolean;
+  readonly storedDigest: string | null;
+  readonly staleStoredPreview: boolean;
+}

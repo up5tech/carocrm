@@ -247,6 +247,7 @@ The delivered shape, the constraints and the rules that came with them are recor
 | `ESignature` settings document, permissions (synthetic ACL resources), nav entry, i18n catalog | ES.1 **done** |
 | Additive migration for the eight tables in §6 (+ indexes, dedup/uniqueness constraints) | ES.2 **done** (`064_phase19_esignature.sql`, applied) |
 | Provider adapter port + `FakeSignatureProviderAdapter` + error taxonomy extension (`unknown_outcome`) | ES.3 **done** (`apps/api/src/esignature/providers/`) |
+| Send preview + preparation (immutable snapshot with a digest, approval-policy routing, invalidation on draft change) | **Delivered ES.8** — `esignature-preview.ts` (pure) + `prepare`/`preview` in `esignature-request.service.ts`; migration `066` adds the mapping binding |
 | Template catalog + mapping validation (read-only catalog, roles/tabs against the live template, source fields against metadata) | **Delivered ES.7** — `esignature-template.service.ts`; nothing writes a provider template |
 | Signature request draft API (list/detail/create/update, recipients, documents) with capability + record-scope ACL and linked-record ACL | **Delivered ES.6** — `esignature-request.service.ts` / `esignature-request.controller.ts`; the list is scoped by a SQL predicate mirroring `entity-record.store.ts` |
 | Secure document snapshots (copy, hash, policy, derived-artifact separation) | **Delivered ES.5** — `esignature-document.service.ts` over the attachment service's ACL and the platform `FILE_STORAGE_TOKEN`; no new table |

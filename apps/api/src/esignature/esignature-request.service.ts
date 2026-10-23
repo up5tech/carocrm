@@ -1,4 +1,4 @@
-import { AuthorizationDeniedError, ValidationError } from '@carocrm/core/errors/index.js';
+import { AuthorizationDeniedError, ConcurrencyConflictError, ValidationError } from '@carocrm/core/errors/index.js';
 import type { RecordStorePort } from '@carocrm/entity-engine/entity-manager/index.js';
 import type { EntityRecord } from '@carocrm/entity-engine/types/index.js';
 import { Inject, Injectable } from '@nestjs/common';
@@ -11,12 +11,16 @@ import { ESignatureDocumentService } from './esignature-document.service.js';
 import type { SignatureRequestStatus } from './esignature-domain.js';
 import { signatureModuleDisabledError, signatureRequestInvalidStateError } from './esignature-errors.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
+import { buildSignaturePreview, type SignaturePreview } from './esignature-preview.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { buildSnapshot } from './esignature-snapshot.js';
 import { isEditable } from './esignature-state-machine.js';
 import { type AuditInput, SignatureAuditRepository } from './signature-audit.repository.js';
+import { SignatureConnectionRepository } from './signature-connection.repository.js';
 import { type SignatureDocumentSnapshot, SignatureDocumentSnapshotRepository } from './signature-document-snapshot.repository.js';
 import { type SignatureRecipient, SignatureRecipientRepository } from './signature-recipient.repository.js';
 import { type RequestAccessScope, type SignatureRequest, SignatureRequestRepository } from './signature-request.repository.js';
+import { SignatureTemplateMappingRepository } from './signature-template-mapping.repository.js';
 
 /**
  * Phase 19-ES.6 — signature request draft and CRUD
@@ -97,6 +101,8 @@ export interface SignatureRequestView {
   readonly status: SignatureRequestStatus;
   readonly providerKey: string;
   readonly connectionId: string | null;
+  /** The template mapping the draft uses, when it uses one (ES.8). */
+  readonly templateMappingId: string | null;
   readonly source: SignatureRequestSourceView | null;
   readonly subject: string | null;
   readonly message: string | null;
@@ -136,6 +142,7 @@ export interface SignatureRequestListRow {
 
 export interface RequestDraftPatch {
   readonly name?: string | undefined;
+  readonly templateMappingId?: string | null | undefined;
   readonly description?: string | null | undefined;
   readonly subject?: string | null | undefined;
   readonly message?: string | null | undefined;
@@ -159,6 +166,8 @@ export class ESignatureRequestService {
     @Inject(SignatureRecipientRepository) private readonly recipients: SignatureRecipientRepository,
     @Inject(SignatureDocumentSnapshotRepository) private readonly snapshots: SignatureDocumentSnapshotRepository,
     @Inject(SignatureAuditRepository) private readonly audit: SignatureAuditRepository,
+    @Inject(SignatureConnectionRepository) private readonly connections: SignatureConnectionRepository,
+    @Inject(SignatureTemplateMappingRepository) private readonly mappings: SignatureTemplateMappingRepository,
     @Inject(AclApiService) private readonly acl: AclApiService,
     @Inject(ENTITY_STORE) private readonly store: RecordStorePort,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
@@ -215,6 +224,9 @@ export class ESignatureRequestService {
     if (input.sourceEntityType !== undefined && input.sourceEntityType !== null) {
       await this.assertSourceReadable(input.sourceEntityType, input.sourceRecordId ?? null);
     }
+    if (input.templateMappingId !== undefined && input.templateMappingId !== null) {
+      await this.assertMappingBindable(input.connectionId ?? null, input.templateMappingId);
+    }
 
     const created = await this.requests.createDraft({
       name: input.name,
@@ -224,6 +236,7 @@ export class ESignatureRequestService {
       ...(input.emailBlurb !== undefined && input.emailBlurb !== null ? { emailBlurb: input.emailBlurb } : {}),
       ...(input.expiresAt !== undefined && input.expiresAt !== null ? { expiresAt: input.expiresAt } : {}),
       ...(input.connectionId !== undefined && input.connectionId !== null ? { connectionId: input.connectionId } : {}),
+      ...(input.templateMappingId !== undefined && input.templateMappingId !== null ? { templateMappingId: input.templateMappingId } : {}),
       ...(input.sourceEntityType !== undefined && input.sourceEntityType !== null ? { sourceEntityType: input.sourceEntityType } : {}),
       ...(input.sourceRecordId !== undefined && input.sourceRecordId !== null ? { sourceRecordId: input.sourceRecordId } : {}),
       ...(input.approvalRequired !== undefined ? { approvalRequired: input.approvalRequired } : {}),
@@ -254,6 +267,10 @@ export class ESignatureRequestService {
       const recordId = patch.sourceRecordId !== undefined ? patch.sourceRecordId : request.sourceRecordId;
       if (entityType !== null && recordId !== null) await this.assertSourceReadable(entityType, recordId);
     }
+    if (patch.templateMappingId !== undefined) {
+      const connectionId = patch.connectionId !== undefined ? patch.connectionId : request.connectionId;
+      if (patch.templateMappingId !== null) await this.assertMappingBindable(connectionId, patch.templateMappingId);
+    }
     const updated = await this.requests.updateDraft(
       request.id,
       input.version,
@@ -267,6 +284,7 @@ export class ESignatureRequestService {
         ...(patch.connectionId !== undefined ? { connectionId: patch.connectionId } : {}),
         ...(patch.sourceEntityType !== undefined ? { sourceEntityType: patch.sourceEntityType } : {}),
         ...(patch.sourceRecordId !== undefined ? { sourceRecordId: patch.sourceRecordId } : {}),
+        ...(patch.templateMappingId !== undefined ? { templateMappingId: patch.templateMappingId } : {}),
         ...(patch.assignedUserId !== undefined ? { assignedUserId: patch.assignedUserId } : {}),
         ...(patch.teamIds !== undefined ? { teamIds: patch.teamIds } : {}),
       },
@@ -278,7 +296,8 @@ export class ESignatureRequestService {
       actor: this.actorRef(),
       detail: { fields: Object.keys(patch).sort().join(',') },
     });
-    return this.view(updated);
+    await this.dropStalePreparation(updated.id);
+    return this.view(await this.requests.requireById(updated.id));
   }
 
   // ---------------------------------------------------------------------------
@@ -311,6 +330,7 @@ export class ESignatureRequestService {
       actor: this.actorRef(),
       detail: { count: stored.length },
     });
+    await this.dropStalePreparation(request.id);
     return stored.map(toRecipientView);
   }
 
@@ -330,18 +350,22 @@ export class ESignatureRequestService {
       attachmentId: input.attachmentId,
       ...(input.documentOrder === undefined ? {} : { documentOrder: input.documentOrder }),
     });
+    await this.dropStalePreparation(request.id);
     return toDocumentView(result.snapshot);
   }
 
   async replaceDocument(id: string, documentOrder: number, attachmentId: string): Promise<SignatureRequestDocumentView> {
     const request = await this.loadScoped(id, 'write');
     const result = await this.documents.replaceDocument({ requestId: request.id, documentOrder, attachmentId });
+    await this.dropStalePreparation(request.id);
     return toDocumentView(result.snapshot);
   }
 
   async detachDocument(id: string, snapshotId: string): Promise<{ detached: string }> {
     const request = await this.loadScoped(id, 'write');
-    return this.documents.detachDocument(request.id, snapshotId);
+    const detached = await this.documents.detachDocument(request.id, snapshotId);
+    await this.dropStalePreparation(request.id);
+    return detached;
   }
 
   async openDocument(id: string, snapshotId: string): Promise<{ document: SignatureRequestDocumentView; bytes: Buffer }> {
@@ -351,6 +375,128 @@ export class ESignatureRequestService {
       throw new ValidationError('That document does not belong to this signature request.', { snapshotId });
     }
     return { document: toDocumentView(opened.snapshot), bytes: opened.bytes };
+  }
+
+  // ---------------------------------------------------------------------------
+  // preview and preparation (19-ES.8)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * What a send would carry, right now. Read-only: no write, no version bump, no provider call.
+   *
+   * The review screen shows this; the sender confirms it; `prepare` records it. Preparing from the same
+   * function is what makes "the preview accurately reflects the final request" a property of the code
+   * rather than a promise the two screens keep to each other.
+   */
+  async preview(id: string): Promise<SignaturePreview> {
+    return this.buildPreview(await this.loadScoped(id));
+  }
+
+  /**
+   * Record the immutable preview and move the request to the state the policy allows.
+   *
+   * `confirm` is required and must be literally `true`: plan §13.3 step 7 asks for an explicit sender
+   * confirmation, and a defaulted boolean would let a retried request look confirmed by accident.
+   * Nothing here reaches a provider — an envelope is ES.9's job (plan §4.3).
+   */
+  async prepare(id: string, input: { version: number; confirm: boolean }): Promise<{ request: SignatureRequestView; preview: SignaturePreview }> {
+    const request = await this.loadScoped(id, 'write');
+    if (input.confirm !== true) {
+      throw new ValidationError('Preparing a signature request needs an explicit sender confirmation.', { code: 'CONFIRMATION_REQUIRED' });
+    }
+    if (request.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
+    const preview = await this.buildPreview(request);
+    if (!preview.ready || preview.data === null) {
+      throw new ValidationError('The request is not ready to prepare.', { problems: preview.problems });
+    }
+
+    const snapshot = buildSnapshot(`SignatureRequest:${request.id}`, preview.data);
+    const updated = await this.requests.recordPreparation(request.id, input.version, {
+      snapshot,
+      preparedById: this.scope.userId ?? 'system',
+      targetStatus: preview.approvalRequired ? 'pending_approval' : 'ready_to_send',
+      approvalRequired: preview.approvalRequired,
+      approvalStatus: preview.approvalRequired ? (preview.approvedForThisDigest ? 'approved' : 'pending') : 'not_required',
+    });
+    await this.audit.append({
+      action: 'request.prepared',
+      requestId: request.id,
+      actor: this.actorRef(),
+      detail: { digest: updated.outgoingDigest, targetStatus: updated.status, approvalRequired: preview.approvalRequired },
+    });
+    return { request: await this.view(updated), preview: await this.buildPreview(updated) };
+  }
+
+  private async buildPreview(request: SignatureRequest): Promise<SignaturePreview> {
+    const [documents, recipients] = await Promise.all([
+      this.snapshots.listForRequest(request.id, ['source_snapshot']),
+      this.recipients.listForRequest(request.id),
+    ]);
+    const settings = await this.settingsService.settings();
+    const connection = request.connectionId === null ? undefined : await this.connections.findById(request.connectionId);
+    const mapping = request.templateMappingId === null ? undefined : await this.mappings.findById(request.templateMappingId);
+    let sourceValues: Record<string, unknown> | null = null;
+    if (request.sourceEntityType !== null && request.sourceRecordId !== null) {
+      const record = await this.store.findById(request.sourceEntityType, request.sourceRecordId);
+      // The preview reads the source record's values only when the caller may read the record itself;
+      // otherwise the mapping's required tabs are reported as unavailable rather than filled from data
+      // the request's own screen could not show.
+      if (record !== undefined && (await this.acl.canAccessRecord(request.sourceEntityType, 'read', sourceShape(record))).allowed) {
+        sourceValues = record.data;
+      }
+    }
+    return buildSignaturePreview({
+      request,
+      documents,
+      recipients,
+      settings,
+      connection:
+        connection === undefined
+          ? null
+          : { environment: connection.environment, accountId: connection.accountId, status: connection.status },
+      mapping: mapping ?? null,
+      sourceValues,
+    });
+  }
+
+  /**
+   * The guard on binding a mapping to a draft.
+   *
+   * A mapping is configuration for one account's template, so it may only be bound to a request that
+   * sends through the same connection, and only while it is active. Binding is a draft-time choice; a
+   * retired mapping that a request already names stays named (the snapshot is the evidence).
+   */
+  private async assertMappingBindable(connectionId: string | null, mappingId: string): Promise<void> {
+    const mapping = await this.mappings.requireById(mappingId);
+    if (connectionId === null) {
+      throw new ValidationError('A template mapping can only be used by a request with a provider connection.', { code: 'MAPPING_REQUIRES_CONNECTION' });
+    }
+    if (mapping.connectionId !== connectionId) {
+      throw new ValidationError('That template mapping belongs to a different provider connection.', { code: 'MAPPING_CONNECTION_MISMATCH' });
+    }
+    if (!mapping.isActive) throw new ValidationError('That template mapping is switched off.', { code: 'MAPPING_INACTIVE' });
+  }
+
+  /**
+   * Drop a preparation the draft has outgrown.
+   *
+   * Called after every draft mutation. A stored preview that no longer matches the draft is removed and
+   * the request returns to `draft`, taking any approval given for the old bytes with it (plan §11.2).
+   * A request that never prepared anything is left untouched, and one that is already sending is not
+   * reachable here (its edits were refused before the mutation ran).
+   */
+  private async dropStalePreparation(requestId: string): Promise<void> {
+    const before = await this.requests.requireById(requestId);
+    if (before.outgoingDigest === null && before.status !== 'pending_approval' && before.status !== 'ready_to_send') return;
+    const after = await this.requests.invalidatePreparation(requestId, this.scope.userId);
+    if (after.version !== before.version) {
+      await this.audit.append({
+        action: 'request.updated',
+        requestId,
+        actor: this.actorRef(),
+        detail: { change: 'preparation_invalidated', fromStatus: before.status },
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -369,6 +515,7 @@ export class ESignatureRequestService {
       status: request.status,
       providerKey: request.providerKey,
       connectionId: request.connectionId,
+      templateMappingId: request.templateMappingId,
       source: await this.resolveSource(request.sourceEntityType, request.sourceRecordId),
       subject: request.subject,
       message: request.message,

@@ -1375,6 +1375,7 @@ export interface ESignatureConnectionsTable {
 export interface SignatureRequestsTable {
   id: string;
   name: string;
+  template_mapping_id: string | null;
   description: string | null;
   status: string;
   provider_key: string;

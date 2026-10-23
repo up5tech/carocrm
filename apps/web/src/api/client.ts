@@ -65,6 +65,7 @@ import type {
   ESignatureRequestList,
   ESignatureRequestRecipient,
   ESignatureRequestView,
+  ESignatureSendPreview,
   ESignatureSettingsView,
   ESignatureTemplateCatalog,
   ESignatureTemplateDetail,
@@ -1820,6 +1821,11 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ recipients }),
     }),
+  /** The send preview (ES.8): what a send would carry, and everything that would block it. */
+  eSignatureRequestPreview: (id: string) => request<ESignatureSendPreview>(`/ESignature/requests/${encodeURIComponent(id)}/preview`),
+  /** Record the preview. `confirm` is the sender's deliberate act; nothing is sent here. */
+  prepareESignatureRequest: (id: string, input: { version: number; confirm: boolean }) =>
+    request<{ request: ESignatureRequestView; preview: ESignatureSendPreview }>(`/ESignature/requests/${encodeURIComponent(id)}/prepare`, post(input)),
   eSignatureRequestDocuments: (id: string) =>
     request<readonly ESignatureRequestDocument[]>(`/ESignature/requests/${encodeURIComponent(id)}/documents`),
   attachESignatureRequestDocument: (id: string, attachmentId: string) =>

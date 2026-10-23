@@ -61,6 +61,16 @@ export interface OutgoingSnapshotData {
   readonly recipients: readonly RecipientSnapshotEntry[];
   /** The policy that was in force when the send was confirmed (plan §11.2). */
   readonly policy: Readonly<Record<string, unknown>>;
+  /**
+   * The mapping the preview was built from, when it uses one (ES.7/ES.8).
+   *
+   * The **version** is part of the identity: a mapping edited after the preview changes what ES.9 would
+   * send, so the digest must change with it. Optional so a document-only request's snapshot has no such
+   * key at all rather than a null one — `canonicalJson` drops `undefined`, and an absent key and a null
+   * key must not be two ways to say the same thing.
+   */
+  readonly templateMappingId?: string | null | undefined;
+  readonly templateMappingVersion?: number | null | undefined;
 }
 
 export interface SnapshotEnvelope<T> {

@@ -8,7 +8,7 @@ import { DatabaseService } from '../database/database.service.js';
 import { currentTx } from '../entity/tx-context.js';
 import { PROVIDER_KEY_DOCUSIGN, REQUEST_STATUSES, type SignatureRequestStatus } from './esignature-domain.js';
 import type { OutgoingSnapshotData, SnapshotEnvelope } from './esignature-snapshot.js';
-import { readSnapshot } from './esignature-snapshot.js';
+import { approvalStillApplies, readSnapshot } from './esignature-snapshot.js';
 import {
   assertEditable,
   assertTransition,
@@ -43,6 +43,8 @@ import {
 export interface SignatureRequest {
   readonly id: string;
   readonly name: string;
+  /** The template mapping the draft was prepared from, when it uses one (ES.8). */
+  readonly templateMappingId: string | null;
   readonly description: string | null;
   readonly status: SignatureRequestStatus;
   readonly providerKey: string;
@@ -107,6 +109,7 @@ const SERVER_OWNED_FIELDS = [
 
 export interface RequestDraftInput {
   name: string;
+  templateMappingId?: string | null;
   description?: string;
   providerKey?: string;
   connectionId?: string | null;
@@ -298,6 +301,7 @@ export class SignatureRequestRepository {
         status: 'draft',
         provider_key: providerKey,
         connection_id: input.connectionId ?? null,
+        template_mapping_id: input.templateMappingId?.trim() || null,
         source_entity_type: input.sourceEntityType ?? null,
         source_record_id: input.sourceRecordId?.trim() || null,
         subject: input.subject?.trim() || null,
@@ -329,7 +333,23 @@ export class SignatureRequestRepository {
   async updateDraft(
     id: string,
     expectedVersion: number,
-    patch: Partial<Pick<SignatureRequest, 'name' | 'description' | 'subject' | 'message' | 'emailBlurb' | 'expiresAt' | 'connectionId' | 'sourceEntityType' | 'sourceRecordId' | 'assignedUserId' | 'teamIds'>> &
+    patch: Partial<
+      Pick<
+        SignatureRequest,
+        | 'name'
+        | 'description'
+        | 'subject'
+        | 'message'
+        | 'emailBlurb'
+        | 'expiresAt'
+        | 'connectionId'
+        | 'sourceEntityType'
+        | 'sourceRecordId'
+        | 'assignedUserId'
+        | 'teamIds'
+        | 'templateMappingId'
+      >
+    > &
       Record<string, unknown>,
     actorId?: string,
   ): Promise<SignatureRequest> {
@@ -352,6 +372,7 @@ export class SignatureRequestRepository {
         ...(patch.message !== undefined ? { message: asStringOrNull(patch.message) } : {}),
         ...(patch.emailBlurb !== undefined ? { email_blurb: asStringOrNull(patch.emailBlurb) } : {}),
         ...(patch.connectionId !== undefined ? { connection_id: asStringOrNull(patch.connectionId) } : {}),
+        ...(patch.templateMappingId !== undefined ? { template_mapping_id: asStringOrNull(patch.templateMappingId) } : {}),
         ...(patch.sourceEntityType !== undefined ? { source_entity_type: asStringOrNull(patch.sourceEntityType) } : {}),
         ...(patch.sourceRecordId !== undefined ? { source_record_id: asStringOrNull(patch.sourceRecordId) } : {}),
         ...(patch.assignedUserId !== undefined ? { assigned_user_id: asStringOrNull(patch.assignedUserId) } : {}),
@@ -586,6 +607,94 @@ export class SignatureRequestRepository {
     return toRequest(row);
   }
 
+  /**
+   * Record a preparation: the immutable preview, its digest, and the state that follows from it.
+   *
+   * The transition is validated the same way every other one is — a request that is already sending
+   * cannot be re-prepared, and only a local origin may reach `ready_to_send`/`pending_approval`. An
+   * approval survives only when it was given for *this* digest: a preview rebuilt after an edit is a
+   * different thing to approve (plan §11.2).
+   */
+  async recordPreparation(
+    id: string,
+    expectedVersion: number,
+    input: {
+      snapshot: SnapshotEnvelope<OutgoingSnapshotData>;
+      preparedById: string;
+      targetStatus: 'pending_approval' | 'ready_to_send';
+      approvalRequired: boolean;
+      approvalStatus: 'pending' | 'not_required' | 'approved';
+    },
+  ): Promise<SignatureRequest> {
+    const current = await this.requireById(id);
+    assertTransition(current.status, input.targetStatus, 'local');
+    if (current.version !== expectedVersion) throw new ConcurrencyConflictError('SignatureRequest', id);
+    const approvalApplies = approvalStillApplies(current.approvedDigest, input.snapshot.digest);
+    const now = new Date();
+    const row = await this.db
+      .updateTable('signature_requests')
+      .set({
+        status: input.targetStatus,
+        // The preparation records the *effective* requirement: the approval policy may demand one the
+        // draft did not ask for (plan §11.1), and the row must say which decision was taken.
+        approval_required: input.approvalRequired,
+        outgoing_snapshot: JSON.stringify(input.snapshot),
+        outgoing_digest: input.snapshot.digest,
+        prepared_by_id: input.preparedById,
+        prepared_at: now,
+        approval_status: input.approvalRequired && !approvalApplies ? input.approvalStatus : input.approvalStatus === 'approved' || approvalApplies ? 'approved' : 'not_required',
+        // A new preview replaces the approval it does not match; an approval for these exact bytes stands.
+        ...(approvalApplies ? {} : { approved_digest: null, approved_at: null, approved_by_id: null, approval_reason: null }),
+        version: current.version + 1,
+        modified_at: now,
+        modified_by_id: input.preparedById,
+      })
+      .where('id', '=', id)
+      .where('version', '=', expectedVersion)
+      .returningAll()
+      .executeTakeFirst();
+    if (row === undefined) throw new ConcurrencyConflictError('SignatureRequest', id);
+    return toRequest(row);
+  }
+
+  /**
+   * Drop a preparation because the draft changed.
+   *
+   * Returns the request to `draft` and removes the snapshot and any approval bound to it: the plan's
+   * "invalidate prior approval/preview when a relevant document, recipient or mapping changes". A
+   * request that is already sending is left alone — that edit is refused by the caller, not silently
+   * applied here.
+   */
+  async invalidatePreparation(id: string, actorId?: string): Promise<SignatureRequest> {
+    const current = await this.requireById(id);
+    if (current.status !== 'pending_approval' && current.status !== 'ready_to_send') return current;
+    assertTransition(current.status, 'draft', 'local');
+    const now = new Date();
+    const row = await this.db
+      .updateTable('signature_requests')
+      .set({
+        status: 'draft',
+        outgoing_snapshot: null,
+        outgoing_digest: null,
+        prepared_by_id: null,
+        prepared_at: null,
+        approved_digest: null,
+        approved_at: null,
+        approved_by_id: null,
+        approval_reason: null,
+        approval_status: current.approvalRequired ? 'pending' : 'not_required',
+        version: current.version + 1,
+        modified_at: now,
+        ...(actorId === undefined ? {} : { modified_by_id: actorId }),
+      })
+      .where('id', '=', id)
+      .where('version', '=', current.version)
+      .returningAll()
+      .executeTakeFirst();
+    if (row === undefined) throw new ConcurrencyConflictError('SignatureRequest', id);
+    return toRequest(row);
+  }
+
   /** Soft delete. A sent request is never removed: it is evidence of what was signed. */
   async softDelete(id: string, actorId?: string): Promise<SignatureRequest> {
     const current = await this.requireById(id);
@@ -657,6 +766,7 @@ export class SignatureRequestRepository {
 function toRequest(row: {
   id: string;
   name: string;
+  template_mapping_id: string | null;
   description: string | null;
   status: string;
   provider_key: string;
@@ -708,6 +818,7 @@ function toRequest(row: {
   return {
     id: row.id,
     name: row.name,
+    templateMappingId: row.template_mapping_id,
     description: row.description,
     status: row.status as SignatureRequestStatus,
     providerKey: row.provider_key,

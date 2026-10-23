@@ -114,6 +114,7 @@ export const RequestCreateSchema = z
     /** ISO instant. A bare date is not an instant, so the caller cannot silently change the timezone. */
     expiresAt: z.string().datetime({ offset: true }).optional(),
     connectionId: z.string().trim().max(64).optional(),
+    templateMappingId: z.string().trim().max(64).optional(),
     sourceEntityType: SourceEntitySchema.optional(),
     sourceRecordId: z.string().trim().min(1).max(64).optional(),
     approvalRequired: z.boolean().optional(),
@@ -137,6 +138,7 @@ export const RequestUpdateSchema = z
     emailBlurb: NullableText(2_000).optional(),
     expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
     connectionId: z.string().trim().max(64).nullable().optional(),
+    templateMappingId: z.string().trim().max(64).nullable().optional(),
     sourceEntityType: SourceEntitySchema.nullable().optional(),
     sourceRecordId: z.string().trim().min(1).max(64).nullable().optional(),
     assignedUserId: z.string().trim().max(64).nullable().optional(),
@@ -164,6 +166,14 @@ export const RequestRecipientsSchema = z
       )
       .min(1)
       .max(50),
+  })
+  .strict();
+
+/** The sender's confirmation is a body field because it must be deliberate, not a default. */
+export const RequestPrepareSchema = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    confirm: z.boolean(),
   })
   .strict();
 

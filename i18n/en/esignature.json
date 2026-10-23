@@ -313,5 +313,23 @@
     "defaultSubject": "Default email subject",
     "defaultMessage": "Default message",
     "anyRole": "Any role"
+  },
+  "preview": {
+    "title": "Send preview",
+    "loading": "Building the preview…",
+    "failed": "The preview could not be built.",
+    "blocked": "This request cannot be prepared yet",
+    "ready": "The request is ready to prepare.",
+    "stale": "The stored preview no longer matches this draft; prepare it again before sending.",
+    "documents": "Documents",
+    "recipients": "Recipients",
+    "account": "Provider account",
+    "approval": "Approval",
+    "approvalRequired": "Required before sending",
+    "approvalNotRequired": "Not required",
+    "role": "Template role",
+    "confirm": "I have reviewed the documents, recipients and routing above.",
+    "prepare": "Prepare this request",
+    "prepared": "The preview was recorded. Nothing has been sent."
   }
 }

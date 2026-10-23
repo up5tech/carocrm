@@ -313,5 +313,23 @@
     "defaultSubject": "Tiêu đề email mặc định",
     "defaultMessage": "Lời nhắn mặc định",
     "anyRole": "Mọi vai trò"
+  },
+  "preview": {
+    "title": "Xem trước khi gửi",
+    "loading": "Đang dựng bản xem trước…",
+    "failed": "Không dựng được bản xem trước.",
+    "blocked": "Chưa thể chuẩn bị yêu cầu này",
+    "ready": "Yêu cầu đã sẵn sàng để chuẩn bị.",
+    "stale": "Bản xem trước đã lưu không còn khớp với bản nháp; hãy chuẩn bị lại trước khi gửi.",
+    "documents": "Tài liệu",
+    "recipients": "Người nhận",
+    "account": "Tài khoản nhà cung cấp",
+    "approval": "Phê duyệt",
+    "approvalRequired": "Bắt buộc trước khi gửi",
+    "approvalNotRequired": "Không cần",
+    "role": "Vai trò trong mẫu",
+    "confirm": "Tôi đã xem lại tài liệu, người nhận và thứ tự gửi ở trên.",
+    "prepare": "Chuẩn bị yêu cầu này",
+    "prepared": "Đã ghi bản xem trước. Chưa có gì được gửi."
   }
 }

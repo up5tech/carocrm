@@ -558,7 +558,17 @@ export const ESIGNATURE_TABLES = [
 ] as const;
 
 /** Sub-phases delivered so far, reported verbatim by the health endpoint. */
-export const IMPLEMENTED_PHASES = ['19-ES.0', '19-ES.1', '19-ES.2', '19-ES.3', '19-ES.4', '19-ES.5', '19-ES.6', '19-ES.7'] as const;
+export const IMPLEMENTED_PHASES = [
+  '19-ES.0',
+  '19-ES.1',
+  '19-ES.2',
+  '19-ES.3',
+  '19-ES.4',
+  '19-ES.5',
+  '19-ES.6',
+  '19-ES.7',
+  '19-ES.8',
+] as const;
 
 export const ESIGNATURE_MODULE = {
   id: 'ESignature',
