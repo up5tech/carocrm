@@ -278,6 +278,11 @@ export interface ProviderTemplateDetail extends ProviderTemplateSummary {
 export interface VerifyWebhookInput {
   readonly providerKey: string;
   readonly connectionId: string | null;
+  /**
+   * The account the addressed connection belongs to. A verified payload that names a different
+   * account is authentic but misrouted, and must not change this connection's requests (plan §10.2).
+   */
+  readonly expectedAccountId: string | null;
   readonly rawBody: Uint8Array;
   readonly headers: Readonly<Record<string, string>>;
   readonly contentType: string | null;
@@ -296,7 +301,7 @@ export interface ProviderWebhookNotification {
    * `invalid_signature` is somebody forging or mangling a delivery. The operator queue has to tell
    * those two apart (plan §8.3, §10.2).
    */
-  readonly refusalReason: 'invalid_signature' | 'missing_signature' | 'no_secret' | 'too_large' | 'malformed' | null;
+  readonly refusalReason: 'invalid_signature' | 'missing_signature' | 'no_secret' | 'too_large' | 'malformed' | 'account_mismatch' | null;
   readonly providerEventId: string | null;
   readonly providerEnvelopeId: string | null;
   readonly providerAccountId: string | null;

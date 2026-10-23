@@ -22,7 +22,7 @@ import { canonicalJson } from '../esignature-snapshot.js';
 
 export { timingSafeEquals };
 
-export const CONNECT_SIGNATURE_HEADER_CANDIDATES = ['x-docusign-signature-256', 'x-fake-signature'] as const;
+export const CONNECT_SIGNATURE_HEADER_CANDIDATES = ['x-docusign-signature-1', 'x-docusign-signature-256', 'x-fake-signature'] as const;
 
 /**
  * The outcome of a verification attempt.
@@ -37,26 +37,44 @@ export interface SignatureCheck {
 }
 
 /**
- * The HMAC a DocuSign Connect configuration of this shape produces: HMAC-SHA-256 over the base64 of
- * the raw body, in base64. That is the documented Connect scheme; ES.11 confirms it against a real
- * demo-account fixture before any installation is called secure, and this file is where a correction
- * lands once, for every caller.
+ * The HMAC a DocuSign Connect configuration of this shape produces: HMAC-SHA-256 over the exact raw
+ * body, with the digest in base64, carried by `X-DocuSign-Signature-1` (ES.11).
+ *
+ * The raw bytes are decoded as UTF-8 because a Connect body is JSON; the digest is still over the
+ * bytes the provider sent rather than over a re-serialization. ES.22 confirms the header and the
+ * message with a captured demo-account fixture, and this function is where a correction lands once,
+ * for every caller.
  */
 export function connectSignature(secret: string, rawBody: Uint8Array): string {
-  return hmacSha256Base64(secret, Buffer.from(rawBody).toString('base64'));
+  return hmacSha256Base64(secret, Buffer.from(rawBody).toString('utf8'));
 }
 
 /** The first header value among the candidates, case-insensitively. Headers arrive lower-cased. */
 export function readSignatureHeader(headers: Readonly<Record<string, string>>): string | null {
+  const [first] = readSignatureHeaders(headers);
+  return first ?? null;
+}
+
+/**
+ * Every signature a delivery carries, in candidate order.
+ *
+ * DocuSign can send more than one signature header (`X-DocuSign-Signature-1`, `-2`, …). A valid
+ * match on any of them is accepted; the reverse — accepting an unknown header because *one* of
+ * several matched — is the same decision, only stated plainly.
+ */
+export function readSignatureHeaders(headers: Readonly<Record<string, string>>): string[] {
+  const found: string[] = [];
   for (const name of CONNECT_SIGNATURE_HEADER_CANDIDATES) {
     const direct = headers[name];
-    if (typeof direct === 'string' && direct.trim() !== '') return direct.trim();
+    if (typeof direct === 'string' && direct.trim() !== '') found.push(direct.trim());
   }
   for (const [key, value] of Object.entries(headers)) {
     const lowered = key.toLowerCase();
-    if ((CONNECT_SIGNATURE_HEADER_CANDIDATES as readonly string[]).includes(lowered) && value.trim() !== '') return value.trim();
+    if ((CONNECT_SIGNATURE_HEADER_CANDIDATES as readonly string[]).includes(lowered) && value.trim() !== '' && !found.includes(value.trim())) {
+      found.push(value.trim());
+    }
   }
-  return null;
+  return found;
 }
 
 /**
@@ -69,14 +87,17 @@ export function readSignatureHeader(headers: Readonly<Record<string, string>>): 
 export function verifyConnectSignature(input: {
   secret: string | null;
   rawBody: Uint8Array;
-  signature: string | null;
+  signature: string | readonly string[] | null;
   maxPayloadBytes: number;
 }): SignatureCheck {
   if (input.rawBody.byteLength > input.maxPayloadBytes) return { valid: false, reason: 'too_large' };
   if (input.secret === null || input.secret.trim() === '') return { valid: false, reason: 'no_secret' };
-  if (input.signature === null || input.signature === '') return { valid: false, reason: 'missing_signature' };
+  const signatures = typeof input.signature === 'string' ? [input.signature] : [...(input.signature ?? [])];
+  const candidates = signatures.filter((value) => typeof value === 'string' && value.trim() !== '');
+  if (candidates.length === 0) return { valid: false, reason: 'missing_signature' };
   const expected = connectSignature(input.secret, input.rawBody);
-  return { valid: timingSafeEquals(expected, input.signature), reason: null };
+  const valid = candidates.some((candidate) => timingSafeEquals(expected, candidate.trim()));
+  return { valid, reason: null };
 }
 
 /** The SHA-256 of the raw bytes, for the inbox row's evidence that "these exact bytes" arrived. */

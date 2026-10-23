@@ -24,6 +24,7 @@ import { ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX } from './advanced-integrations/we
 import { GlobalExceptionFilter } from './common/global-exception.filter.js';
 import type { AppConfig } from './config.js';
 import { buildConfig } from './config.js';
+import { ESIGNATURE_WEBHOOK_PREFIX } from './esignature/esignature-module.js';
 import type { ExtensionHost as ExtensionHostType } from './extensions/extension-host.js';
 import { setExtensionHost } from './extensions/extension-host.js';
 import { createExtensionHostModule } from './extensions/extension-host.module.js';
@@ -150,7 +151,8 @@ export async function createApp(
   const fastifyInstance = app.getHttpAdapter().getInstance() as unknown as FastifyInstance;
   fastifyInstance.decorateRequest('rawBody', null);
   fastifyInstance.addHook('preParsing', (request, _reply, payload, done) => {
-    if (!request.url.startsWith(ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX)) {
+    const esignature = request.url.startsWith(ESIGNATURE_WEBHOOK_PREFIX);
+    if (!esignature && !request.url.startsWith(ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX)) {
       done(null, payload);
       return;
     }
@@ -160,7 +162,16 @@ export async function createApp(
     payload.on('end', () => {
       const raw = Buffer.concat(chunks);
       (request as { rawBody?: string | null }).rawBody = raw.toString('utf8');
-      done(null, Readable.from(raw));
+      // The ESignature handler reads only the preserved bytes. A tolerant parser would weaken every
+      // JSON route, so the parsed body is replaced with an empty object of the same byte length for
+      // this prefix alone (padding is valid JSON whitespace): a malformed delivery reaches the
+      // adapter, is recorded as `malformed`, and changes nothing.
+      const parsed = esignature ? Buffer.alloc(raw.byteLength, 0x20) : raw;
+      if (esignature && parsed.byteLength > 0) {
+        parsed[0] = 0x7b; // {
+        if (parsed.byteLength > 1) parsed[1] = 0x7d; // }
+      }
+      done(null, Readable.from(parsed));
     });
   });
 

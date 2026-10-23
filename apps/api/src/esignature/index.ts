@@ -26,6 +26,8 @@ import { ESignatureRequestService } from './esignature-request.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { ESignatureTemplateController } from './esignature-template.controller.js';
 import { ESignatureTemplateService } from './esignature-template.service.js';
+import { ESignatureWebhookController } from './esignature-webhook.controller.js';
+import { ESignatureWebhookService } from './esignature-webhook.service.js';
 import { DocuSignAdapter } from './providers/docusign/docusign-adapter.js';
 import {
   createDefaultDocuSignTransport,
@@ -45,12 +47,12 @@ import { SignatureRequestRepository } from './signature-request.repository.js';
 import { SignatureTemplateMappingRepository } from './signature-template-mapping.repository.js';
 import { SignatureWebhookInboxRepository } from './signature-webhook-inbox.repository.js';
 
-// Three controllers, in this order: the public OAuth callback is a route a browser arrives at with no
-// session, and keeping it out of the capability-checked controllers is what lets their invariant —
-// every route checks a capability — stay true. The request surface is its own controller because it is
-// the module's largest API and the action controller is the control plane. All are registered before
+// Four controllers, in this order: the public Connect endpoint and the public OAuth callback are
+// routes a provider or a browser arrives at with no session; the request surface is the module's
+// largest API; the action controller is the control plane. All are registered before
 // `ENTITY_CONTROLLERS`.
 export const ESIGNATURE_CONTROLLERS = [
+  ESignatureWebhookController,
   ESignatureOAuthCallbackController,
   ESignatureRequestController,
   ESignatureTemplateController,
@@ -120,6 +122,8 @@ export const ESIGNATURE_PROVIDERS = [
   ESignatureRequestService,
   // Phase 19-ES.7 — the template catalog and mapping validation. Nothing here writes a provider template.
   ESignatureTemplateService,
+  // Phase 19-ES.11/ES.12 — Connect intake, the durable inbox and the event projection.
+  ESignatureWebhookService,
   docuSignTransportProvider,
   // Phase 19-ES.3 — the provider port. The registry answers for every adapter the build ships, and
   // `signatureProviderAdaptersProvider` decides which one answers for `docusign`.
@@ -279,6 +283,13 @@ export {
   type TemplateDetailView,
   validateMappingDefinition,
 } from './esignature-template.service.js';
+export { ESignatureWebhookController } from './esignature-webhook.controller.js';
+export {
+  ESignatureWebhookService,
+  MAX_PROCESSING_ATTEMPTS,
+  type WebhookIngestResult,
+  type WebhookProcessResult,
+} from './esignature-webhook.service.js';
 export {
   createFakeSignatureProviderAdapter,
   type FakeProviderOptions,

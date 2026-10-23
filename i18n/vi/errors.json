@@ -23,6 +23,7 @@
   "RECIPIENT_NOT_AUTHORIZED": "Người nhận đó không thuộc yêu cầu ký này.",
   "SIGNATURE_DOCUMENT_NOT_READABLE": "Không đọc được tài liệu của yêu cầu ký này.",
   "SIGNATURE_SOURCE_RECORD_NOT_READABLE": "Không đọc được bản ghi liên kết với yêu cầu ký này.",
+  "SIGNATURE_WEBHOOK_REJECTED": "Lần gửi sự kiện từ nhà cung cấp bị từ chối.",
   "NOT_SUPPORTED_BY_PROVIDER": "Nhà cung cấp chữ ký không hỗ trợ thao tác này trong phiên bản đầu tiên.",
   "ENCRYPTION_KEY_MISSING": "Chưa cấu hình ENCRYPTION_KEY nên không đọc được thông tin xác thực và không thao tác nhà cung cấp nào thực hiện được."
 }

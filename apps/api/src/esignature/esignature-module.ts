@@ -244,7 +244,6 @@ export const ESIGNATURE_FEATURES: readonly ESignatureFeatureDescriptor[] = [
  * does not exist yet is a false promise in an admin screen.
  */
 export const PENDING_FEATURES: readonly { readonly key: string; readonly phase: string }[] = [
-  { key: 'webhooks', phase: '19-ES.11' },
   { key: 'embeddedSigning', phase: '19-ES.14' },
   { key: 'artifacts', phase: '19-ES.15' },
   { key: 'approvals', phase: '19-ES.17' },
@@ -506,6 +505,7 @@ export const ESIGNATURE_ERROR_CODES = [
   'RECIPIENT_NOT_AUTHORIZED',
   'SIGNATURE_DOCUMENT_NOT_READABLE',
   'SIGNATURE_SOURCE_RECORD_NOT_READABLE',
+  'SIGNATURE_WEBHOOK_REJECTED',
   'NOT_SUPPORTED_BY_PROVIDER',
   'ENCRYPTION_KEY_MISSING',
 ] as const;
@@ -569,7 +569,17 @@ export const IMPLEMENTED_PHASES = [
   '19-ES.8',
   '19-ES.9',
   '19-ES.10',
+  '19-ES.11',
 ] as const;
+
+/**
+ * The DocuSign Connect prefix (`PLAN_Phase_19_ESignature.md` §8.3).
+ *
+ * The endpoint lives under the platform's integration webhook prefix because it needs the exact raw
+ * body for HMAC verification; `bootstrap.ts` preserves that body for this prefix as well as the
+ * Advanced Integrations one.
+ */
+export const ESIGNATURE_WEBHOOK_PREFIX = '/api/v1/integrations/esignature';
 
 export const ESIGNATURE_MODULE = {
   id: 'ESignature',
@@ -589,7 +599,7 @@ export const ESIGNATURE_MODULE = {
    * admin runbook all name the same endpoint. It sits under the platform's integration webhook
    * prefix because it needs the raw bytes for HMAC verification.
    */
-  webhookPrefix: '/api/v1/integrations/esignature',
+  webhookPrefix: ESIGNATURE_WEBHOOK_PREFIX,
   /** Provider products this release addresses (plan §1). */
   providerKeys: [PROVIDER_KEY_DOCUSIGN],
   /** Tables the module owns; no other module may write them (audit §6). */

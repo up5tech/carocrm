@@ -14,6 +14,7 @@ import {
 } from './handlers/advanced-integrations-handlers.js';
 import { registerAIAgentJobs } from './handlers/ai-agent-handlers.js';
 import { registerCustomerSuccessJobs } from './handlers/customer-success-handlers.js';
+import { registerESignatureJobs } from './handlers/esignature-handlers.js';
 import { registerSystemJobs } from './handlers/job-handlers.js';
 import { registerMailJobs } from './handlers/mail-handlers.js';
 import { registerMarketingJobs } from './handlers/marketing-handlers.js';
@@ -119,6 +120,13 @@ export class WorkerApplication {
     // reauthorization notice is written by the application layer. The job is inert when no worker
     // capability is configured.
     registerAdvancedIntegrationsJobs(this.jobRegistry, {
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
+      log: this.log,
+    });
+    // Phase 19-ES.11/ES.15: Connect deliveries and completed-artifact retrieval run in the API, so the
+    // state machine and the audit trail are the only writers. The jobs are inert without a capability.
+    registerESignatureJobs(this.jobRegistry, {
       apiBaseUrl: this.config.apiBaseUrl,
       secret: this.config.reportWorkerSecret,
       log: this.log,

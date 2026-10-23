@@ -1,9 +1,13 @@
-import { InvalidQueryError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post } from '@nestjs/common';
+import { timingSafeEqual } from 'node:crypto';
+
+import { AuthenticationFailedError, InvalidQueryError } from '@carocrm/core/errors/index.js';
+import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Patch, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
 
+import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
+import { type AppConfig, CONFIG_TOKEN } from '../config.js';
 import {
   ConnectionAuthorizeSchema,
   ConnectionCreateSchema,
@@ -11,13 +15,16 @@ import {
   ConnectionUpdateSchema,
   OperationProbeSchema,
   SettingsPatchSchema,
+  WebhookProcessSchema,
 } from './dto/esignature-shapes.js';
+import { runAsESignatureSystem } from './esignature-authority.js';
 import { ESignatureConnectionService } from './esignature-connection.service.js';
 import { ESIGNATURE_OPERATIONS,ESignatureConnectionGate } from './esignature-connection-gate.service.js';
 import { ESignatureModuleHealthService } from './esignature-module-health.service.js';
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { ESignatureWebhookService } from './esignature-webhook.service.js';
 
 /**
  * Phase 19-ES.1 — the `ESignature` control-plane API
@@ -46,6 +53,8 @@ export class ESignatureController {
     @Inject(ESignatureNavigationService) private readonly navigation: ESignatureNavigationService,
     @Inject(ESignatureConnectionGate) private readonly gate: ESignatureConnectionGate,
     @Inject(ESignatureConnectionService) private readonly connections: ESignatureConnectionService,
+    @Inject(ESignatureWebhookService) private readonly webhooks: ESignatureWebhookService,
+    @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -234,6 +243,36 @@ export class ESignatureController {
   async operations() {
     await this.permissions.assert('use');
     return { operations: ESIGNATURE_OPERATIONS, provider: this.scope.userType ?? 'user' };
+  }
+
+  // ---------------------------------------------------------------------------
+  // worker-authorized operations (19-ES.11+)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Apply one durably accepted Connect delivery.
+   *
+   * The worker has no user session, so `@Public()` skips session authentication and the shared
+   * worker→API capability is the authorisation, compared in constant time. The inbox row is the
+   * idempotency key: a retried job can call this again and the second answer is "already processed".
+   */
+  @Public()
+  @HttpCode(200)
+  @Post('action/process-provider-webhook')
+  async processProviderWebhook(@Headers('x-worker-secret') secret: string | undefined, @Body() body: unknown) {
+    this.assertWorkerSecret(secret);
+    const { inboxId } = this.parse(WebhookProcessSchema, body);
+    return runAsESignatureSystem(this.scope, 'process-webhook', () => this.webhooks.processDelivery(inboxId));
+  }
+
+  private assertWorkerSecret(supplied: string | undefined): void {
+    const expected = this.config.reportWorkerSecret;
+    if (expected === '' || supplied === undefined) throw new AuthenticationFailedError('Invalid worker capability.');
+    const expectedBytes = Buffer.from(expected);
+    const suppliedBytes = Buffer.from(supplied);
+    if (expectedBytes.length !== suppliedBytes.length || !timingSafeEqual(expectedBytes, suppliedBytes)) {
+      throw new AuthenticationFailedError('Invalid worker capability.');
+    }
   }
 
   private parse<T extends ZodTypeAny>(schema: T, value: unknown): T['_output'] {

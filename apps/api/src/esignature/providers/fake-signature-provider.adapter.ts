@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { ProviderError } from '../../advanced-integrations/provider-error.js';
 import { canonicalJson } from '../esignature-snapshot.js';
+import { normalizeProviderEventType } from '../esignature-status-mapper.js';
 import { SendOutcomeUnknownError } from './signature-provider.errors.js';
 import {
   adapterSupports,
@@ -26,7 +27,7 @@ import {
 import {
   connectSignature,
   rawBodyHash,
-  readSignatureHeader,
+  readSignatureHeaders,
   verifyConnectSignature,
 } from './signature-provider-signature.js';
 
@@ -409,27 +410,18 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
    */
   async verifyAndParseWebhook(input: VerifyWebhookInput): Promise<ProviderWebhookNotification> {
     const receivedAt = new Date(FAKE_EPOCH_MS + this.sequence * 1000).toISOString();
-    const rawText = new TextDecoder().decode(input.rawBody);
     const payloadHash = rawBodyHash(input.rawBody);
     if (input.rawBody.byteLength > input.maxPayloadBytes) {
       return unverified('too_large', payloadHash, receivedAt);
     }
 
-
-    let parsed: Record<string, unknown> = {};
-    try {
-      const decoded: unknown = JSON.parse(rawText);
-      if (decoded === null || typeof decoded !== 'object' || Array.isArray(decoded)) return unverified('malformed', payloadHash, receivedAt);
-      parsed = decoded as Record<string, unknown>;
-    } catch {
-      return unverified('malformed', payloadHash, receivedAt);
-    }
-
+    // Verification precedes trust: nothing in the body is parsed until the signature over those exact
+    // bytes has been checked (plan §10.2).
     if (input.requireSignature) {
       const check = verifyConnectSignature({
         secret: input.signingSecret,
         rawBody: input.rawBody,
-        signature: readSignatureHeader(input.headers),
+        signature: readSignatureHeaders(input.headers),
         maxPayloadBytes: input.maxPayloadBytes,
       });
       if (!check.valid) {
@@ -439,6 +431,20 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
       }
     }
 
+    let parsed: Record<string, unknown> = {};
+    try {
+      const decoded: unknown = JSON.parse(new TextDecoder().decode(input.rawBody));
+      if (decoded === null || typeof decoded !== 'object' || Array.isArray(decoded)) return unverified('malformed', payloadHash, receivedAt);
+      parsed = decoded as Record<string, unknown>;
+    } catch {
+      return unverified('malformed', payloadHash, receivedAt);
+    }
+
+    const providerAccountId = typeof parsed['account_id'] === 'string' ? parsed['account_id'] : null;
+    if (input.expectedAccountId !== null && input.expectedAccountId !== undefined && providerAccountId !== null && providerAccountId !== input.expectedAccountId) {
+      return unverified('account_mismatch', payloadHash, receivedAt);
+    }
+
     const eventTypeRaw = typeof parsed['event_type'] === 'string' ? parsed['event_type'] : null;
     const normalized = normalizeEventType(eventTypeRaw);
     return {
@@ -446,7 +452,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
       refusalReason: null,
       providerEventId: typeof parsed['event_id'] === 'string' ? parsed['event_id'] : null,
       providerEnvelopeId: typeof parsed['envelope_id'] === 'string' ? parsed['envelope_id'] : null,
-      providerAccountId: typeof parsed['account_id'] === 'string' ? parsed['account_id'] : null,
+      providerAccountId,
       eventTypeRaw,
       eventTypeNormalized: normalized,
       recipientProviderId: typeof parsed['recipient_id'] === 'string' ? parsed['recipient_id'] : null,
@@ -573,23 +579,13 @@ function unverified(reason: NonNullable<ProviderWebhookNotification['refusalReas
 }
 
 function normalizeEventType(value: string | null): string {
-  switch (value) {
-    case 'sent':
-    case 'delivered':
-    case 'completed':
-    case 'declined':
-    case 'voided':
-    case 'expired':
-      return value;
-    case 'sent_to_recipient_1':
-      return 'sent';
-    case 'recipient_viewed':
-      return 'delivered';
-    case 'recipient_completed':
-      return 'partially_signed';
-    default:
-      return 'unmapped';
-  }
+  if (value === null) return 'unmapped';
+  // The fake accepts the provider's prefixed form as well as its own short one, so a test can write
+  // `recipient-completed` exactly as DocuSign Connect does.
+  if (value.startsWith('sent_to_recipient')) return 'sent';
+  if (value === 'recipient_viewed') return 'viewed';
+  const normalized = normalizeProviderEventType(value);
+  return normalized;
 }
 
 function hashOf(value: string): string {

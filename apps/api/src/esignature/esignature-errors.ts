@@ -86,6 +86,11 @@ export function signatureRequestInvalidStateError(status: string, attempted: str
   );
 }
 
+/** A delivery that failed verification. The inbox keeps the evidence; the caller learns nothing useful. */
+export function signatureWebhookRejectedError(reason: string): ESignatureError {
+  return new ESignatureError('SIGNATURE_WEBHOOK_REJECTED', 'The delivery was refused.', { reason }, 401);
+}
+
 /** A send whose result the platform could not establish — never blind-retried. */
 export function providerOutcomeUnknownError(correlationId: string): ESignatureError {
   return new ESignatureError(

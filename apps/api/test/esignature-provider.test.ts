@@ -112,6 +112,9 @@ describe('the adapter contract', () => {
       'sendEnvelope',
       'envelopeStatus',
       'listRecipients',
+      'recipientView',
+      'resendNotifications',
+      'voidEnvelope',
       'downloadCompletedDocuments',
       'downloadCompletionEvidence',
       'verifyWebhook',
@@ -119,7 +122,7 @@ describe('the adapter contract', () => {
     // Correction is listed as future work but stays declared unsupported: plan §5.2 and §16 keep it an
     // exception path until the live behaviour is verified, so it must be refused rather than
     // optimistically admitted.
-    expect(FUTURE_SIGNATURE_PROVIDER_OPERATIONS).toContain('correctEnvelope');
+    expect(FUTURE_SIGNATURE_PROVIDER_OPERATIONS).toEqual(['correctEnvelope']);
     expect(FUTURE_SIGNATURE_PROVIDER_OPERATIONS).not.toContain('listTemplates');
     expect(BASE_SIGNATURE_PROVIDER_CAPABILITIES.correctEnvelope).toBe(false);
   });
@@ -169,9 +172,9 @@ describe('the registry', () => {
   it('refuses an unsupported capability before any call is made', () => {
     const registry = new SignatureProviderRegistry([createFakeSignatureProviderAdapter()]);
     expect(() => registry.assertOperation('docusign', 'correctEnvelope')).toThrow(NotSupportedByProviderError);
-    expect(() => registry.assertOperation('docusign', 'voidEnvelope')).toThrow(NotSupportedByProviderError);
+    expect(() => registry.assertOperation('docusign', 'voidEnvelope')).not.toThrow();
     expect(() => registry.assertOperation('docusign', 'sendEnvelope')).not.toThrow();
-    expect(registry.supports('docusign', 'recipientView')).toBe(false);
+    expect(registry.supports('docusign', 'recipientView')).toBe(true);
     expect(registry.supports('unknown-provider', 'sendEnvelope')).toBe(false);
   });
 
@@ -374,7 +377,15 @@ describe('the fake adapter', () => {
     expect(noHeader.refusalReason).toBe('missing_signature');
     const oversized = await fake.verifyAndParseWebhook({ ...signedToVerify(signed), maxPayloadBytes: 8 });
     expect(oversized.refusalReason).toBe('too_large');
-    const malformed = await fake.verifyAndParseWebhook({ ...signedToVerify(signed), rawBody: new TextEncoder().encode('not json') });
+    // A malformed body is refused as malformed only when it carries a valid signature over those
+    // exact bytes; otherwise verification fails first, which is the correct order (plan §10.2).
+    const malformedBody = new TextEncoder().encode('not json');
+    const malformedSignature = connectSignature('connect-secret', malformedBody);
+    const malformed = await fake.verifyAndParseWebhook({
+      ...signedToVerify(signed),
+      rawBody: malformedBody,
+      headers: { 'x-fake-signature': malformedSignature },
+    });
     expect(malformed.refusalReason).toBe('malformed');
     // An unsigned but policy-permitted delivery is still recorded, with the reason `not_required`
     // handled by the caller: the parse succeeds, the trust level is explicit.
@@ -443,8 +454,9 @@ describe('the fake adapter', () => {
   it('answers the capability declaration through the same helper the registry uses', () => {
     const fake = createFakeSignatureProviderAdapter();
     expect(adapterSupports(fake, 'sendEnvelope')).toBe(true);
-    expect(adapterSupports(fake, 'voidEnvelope')).toBe(false);
-    expect(fake.supports('recipientView')).toBe(false);
+    expect(adapterSupports(fake, 'voidEnvelope')).toBe(true);
+    expect(fake.supports('recipientView')).toBe(true);
+    expect(fake.supports('correctEnvelope')).toBe(false);
   });
 });
 
@@ -452,7 +464,7 @@ describe('the shared webhook signature kit', () => {
   const secret = 'connect-secret';
   const body = new TextEncoder().encode('{"envelope_id":"env-1","event_type":"sent"}');
 
-  it('signs the base64 of the raw bytes and matches nothing else', () => {
+  it('signs the raw bytes, and matches nothing else', () => {
     const signature = connectSignature(secret, body);
     expect(verifyConnectSignature({ secret, rawBody: body, signature, maxPayloadBytes: 262_144 })).toEqual({ valid: true, reason: null });
     const altered = new TextEncoder().encode(`${new TextDecoder().decode(body)} `);
@@ -471,6 +483,7 @@ describe('the shared webhook signature kit', () => {
   it('reads the provider header whatever case it arrives in, and nothing else', () => {
     const signature = connectSignature(secret, body);
     expect(readSignatureHeader({ 'x-fake-signature': signature })).toBe(signature);
+    expect(readSignatureHeader({ 'X-DocuSign-Signature-1': signature })).toBe(signature);
     expect(readSignatureHeader({ 'X-DocuSign-Signature-256': signature })).toBe(signature);
     expect(readSignatureHeader({ 'x-fake-signature': '   ' })).toBeNull();
     expect(readSignatureHeader({ authorization: 'bearer something' })).toBeNull();

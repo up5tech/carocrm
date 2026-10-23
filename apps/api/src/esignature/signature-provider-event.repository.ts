@@ -96,9 +96,10 @@ export class SignatureProviderEventRepository {
    */
   async append(input: AppendEventInput): Promise<{ event: SignatureProviderEvent; created: boolean }> {
     const payloadHash = payloadDigest(input.eventData);
+    const accountScope = (input.providerAccountId ?? input.connectionId ?? '').trim();
     const dedupKey = input.providerEventId !== undefined && input.providerEventId !== null && input.providerEventId.trim() !== ''
-      ? buildEventDedupKey(input.providerKey, input.providerEventId)
-      : buildEventDedupKey(input.providerKey, `${input.providerEnvelopeId ?? ''}|${input.eventTypeNormalized}|${payloadHash}`);
+      ? buildEventDedupKey(input.providerKey, `${accountScope}|${input.providerEventId}`)
+      : buildEventDedupKey(input.providerKey, `${accountScope}|${input.providerEnvelopeId ?? ''}|${input.eventTypeNormalized}|${payloadHash}`);
     const receivedAt = input.receivedAt ?? new Date();
     const id = randomUUID();
 
@@ -209,6 +210,9 @@ export class SignatureProviderEventRepository {
  * verified fields plus the payload hash — which is what plan §10.1.5 asks for, and why the hash alone
  * is never treated as semantic identity: two genuinely distinct events with an identical body would
  * collapse into one row, so the envelope and the type are part of the key.
+ *
+ * The caller also scopes the key by provider account (or connection), because an envelope id is unique
+ * within an account rather than globally: the same id under two connections is two events.
  */
 export function buildEventDedupKey(providerKey: string, discriminator: string): string {
   const trimmed = discriminator.trim();

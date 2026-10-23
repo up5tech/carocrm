@@ -1,6 +1,7 @@
 import { ProviderError } from '../../../advanced-integrations/provider-error.js';
 import { PROVIDER_KEY_DOCUSIGN } from '../../esignature-domain.js';
-import { NotSupportedByProviderError, SendOutcomeUnknownError } from '../signature-provider.errors.js';
+import { normalizeEnvelopeStatus, normalizeProviderEventType, normalizeRecipientStatus } from '../../esignature-status-mapper.js';
+import { SendOutcomeUnknownError } from '../signature-provider.errors.js';
 import {
   BASE_SIGNATURE_PROVIDER_CAPABILITIES,
   type PreparedEnvelope,
@@ -23,6 +24,7 @@ import {
   type SignatureProviderOperation,
   type VerifyWebhookInput,
 } from '../signature-provider.port.js';
+import { rawBodyHash, readSignatureHeaders, verifyConnectSignature } from '../signature-provider-signature.js';
 import { parseDocuSignUserinfo, selectDocuSignAccount } from './docusign-oauth.js';
 import { type DocuSignTransport,parseJson } from './docusign-transport.js';
 
@@ -54,7 +56,7 @@ import { type DocuSignTransport,parseJson } from './docusign-transport.js';
 /** The eSignature REST version the adapter speaks (audit §4: v2.1 only). */
 export const DOCUSIGN_REST_VERSION = 'v2.1';
 
-/** What this adapter can do today: the connection, and only the connection. */
+/** What this adapter can do today: the whole initial slice except correction. */
 export const DOCUSIGN_ES4_CAPABILITIES: SignatureProviderCapabilities = Object.freeze({
   ...BASE_SIGNATURE_PROVIDER_CAPABILITIES,
   // ES.7 — the template catalog, read-only (plan §6.7 forbids updating a provider template).
@@ -63,11 +65,7 @@ export const DOCUSIGN_ES4_CAPABILITIES: SignatureProviderCapabilities = Object.f
   // ES.9 — envelope preparation. ES.10 — the deliberate send of that draft.
   prepareEnvelope: true,
   sendEnvelope: true,
-  envelopeStatus: false,
-  listRecipients: false,
-  downloadCompletedDocuments: false,
-  downloadCompletionEvidence: false,
-  verifyWebhook: false,
+  verifyWebhook: true,
 });
 
 /** A stable code for the health view. Never a provider body, never a token. */
@@ -454,14 +452,88 @@ export class DocuSignAdapter implements SignatureProviderAdapter {
     throw this.refuse('downloadCompletionEvidence');
   }
 
-  async verifyAndParseWebhook(_input: VerifyWebhookInput): Promise<ProviderWebhookNotification> {
-    throw this.refuse('verifyWebhook');
   }
 
   private refuse(operation: SignatureProviderOperation): NotSupportedByProviderError {
     // Reaching this line means the caller did not ask the registry first. The refusal is the same one
     // the registry would have produced, so the observable contract does not depend on the path taken.
     return new NotSupportedByProviderError(operation, this.providerKey);
+
+  /**
+   * Verify and normalize one Connect delivery (ES.11).
+   *
+   * Verification happens before a single payload field is trusted. Both the modern Connect JSON shape
+   * (`event` + `data.*`) and the simplified shape the fake and older configurations use are read;
+   * the exact fixture is confirmed against a demo account in ES.22, and this parser is the one place
+   * a correction belongs.
+   */
+  async verifyAndParseWebhook(input: VerifyWebhookInput): Promise<ProviderWebhookNotification> {
+    const payloadHash = rawBodyHash(input.rawBody);
+    const receivedAt = new Date().toISOString();
+    if (input.rawBody.byteLength > input.maxPayloadBytes) return unverifiedWebhook('too_large', payloadHash, receivedAt);
+
+    if (input.requireSignature) {
+      const check = verifyConnectSignature({
+        secret: input.signingSecret,
+        rawBody: input.rawBody,
+        signature: readSignatureHeaders(input.headers),
+        maxPayloadBytes: input.maxPayloadBytes,
+      });
+      if (!check.valid) return unverifiedWebhook(check.reason ?? 'invalid_signature', payloadHash, receivedAt);
+    }
+
+    if (input.contentType !== null && input.contentType.trim() !== '' && !input.contentType.toLowerCase().includes('json')) {
+      return unverifiedWebhook('malformed', payloadHash, receivedAt);
+    }
+
+    let parsed: Record<string, unknown>;
+    try {
+      const decoded: unknown = JSON.parse(new TextDecoder().decode(input.rawBody));
+      if (decoded === null || typeof decoded !== 'object' || Array.isArray(decoded)) return unverifiedWebhook('malformed', payloadHash, receivedAt);
+      parsed = decoded as Record<string, unknown>;
+    } catch {
+      return unverifiedWebhook('malformed', payloadHash, receivedAt);
+    }
+
+    const connect = asObject(parsed['data']);
+    const providerAccountId = stringOf(connect['accountId']) ?? stringOf(parsed['account_id']);
+    if (input.expectedAccountId !== null && input.expectedAccountId !== undefined && providerAccountId !== null && providerAccountId !== input.expectedAccountId) {
+      return unverifiedWebhook('account_mismatch', payloadHash, receivedAt);
+    }
+
+    const eventTypeRaw = stringOf(parsed['event']) ?? stringOf(parsed['event_type']);
+    const providerEnvelopeId = stringOf(connect['envelopeId']) ?? stringOf(parsed['envelope_id']);
+    const providerEventId = stringOf(parsed['event_id']) ?? stringOf(connect['eventId']);
+    const recipient = connectRecipient(connect);
+    const recipientStatusRaw =
+      recipient.status ?? stringOf(connect['recipientStatus']) ?? stringOf(parsed['recipient_status']);
+    const recipientProviderId = stringOf(connect['recipientId']) ?? stringOf(parsed['recipient_id']);
+    const occurredAt =
+      stringOf(parsed['generatedDateTime']) ?? stringOf(connect['occurredAt']) ?? stringOf(parsed['occurred_at']);
+    const eventTypeNormalized = normalizeProviderEventType(eventTypeRaw);
+
+    return {
+      verified: true,
+      refusalReason: null,
+      providerEventId,
+      providerEnvelopeId,
+      providerAccountId,
+      eventTypeRaw,
+      eventTypeNormalized,
+      recipientProviderId,
+      recipientStatusRaw,
+      occurredAt,
+      // Minimized on purpose: identity and status, never a document, an email or a name (plan §12.1).
+      minimized: {
+        envelopeId: providerEnvelopeId,
+        eventType: eventTypeRaw,
+        recipientId: recipientProviderId,
+        recipientStatus: recipientStatusRaw,
+      },
+      payloadHash,
+      receivedAt,
+    };
+  }
   }
 }
 
@@ -520,6 +592,44 @@ const SENT_RECIPIENT_STATUSES: Readonly<Record<string, ProviderRecipientStatus['
   autoresponded: 'completed',
   waiting: 'pending',
 };
+
+/** The recipient a Connect payload names, when it names one. */
+function connectRecipient(connect: Record<string, unknown>): { status: string | null } {
+  const recipients = asObject(connect['recipients']);
+  const recipientId = stringOf(connect['recipientId']);
+  for (const key of ['signers', 'carbonCopies', 'inPersonSigners'] as const) {
+    const list = Array.isArray(recipients[key]) ? (recipients[key] as unknown[]) : [];
+    for (const entry of list) {
+      const recipient = asObject(entry);
+      if (recipientId === null || stringOf(recipient['recipientId']) === recipientId) {
+        return { status: stringOf(recipient['status']) };
+      }
+    }
+  }
+  return { status: null };
+}
+
+function unverifiedWebhook(
+  reason: NonNullable<ProviderWebhookNotification['refusalReason']>,
+  payloadHash: string,
+  receivedAt: string,
+): ProviderWebhookNotification {
+  return {
+    verified: false,
+    refusalReason: reason,
+    providerEventId: null,
+    providerEnvelopeId: null,
+    providerAccountId: null,
+    eventTypeRaw: null,
+    eventTypeNormalized: 'unmapped',
+    recipientProviderId: null,
+    recipientStatusRaw: null,
+    occurredAt: null,
+    minimized: {},
+    payloadHash,
+    receivedAt,
+  };
+}
 
 /** The lower-case extension DocuSign expects for a document, defaulting to `pdf` when a name has none. */
 function extensionOfName(name: string): string {
