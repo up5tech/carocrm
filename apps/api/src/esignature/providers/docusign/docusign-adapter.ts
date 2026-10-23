@@ -65,6 +65,9 @@ export const DOCUSIGN_ES4_CAPABILITIES: SignatureProviderCapabilities = Object.f
   // ES.9 — envelope preparation. ES.10 — the deliberate send of that draft.
   prepareEnvelope: true,
   sendEnvelope: true,
+  // ES.11/ES.12 — status and event synchronization.
+  envelopeStatus: true,
+  listRecipients: true,
   verifyWebhook: true,
 });
 
@@ -436,12 +439,45 @@ export class DocuSignAdapter implements SignatureProviderAdapter {
     };
   }
 
-  async envelopeStatus(_context: SignatureProviderContext, _providerEnvelopeId: string): Promise<ProviderEnvelopeStatus> {
-    throw this.refuse('envelopeStatus');
+  /**
+   * The provider's current view of the envelope, for reconciliation (ES.12).
+   *
+   * A read. It returns the normalized state and the raw word beside it, plus the recipients the
+   * provider reports, so a reconciliation can project both without a second call.
+   */
+  async envelopeStatus(context: SignatureProviderContext, providerEnvelopeId: string): Promise<ProviderEnvelopeStatus> {
+    const id = providerEnvelopeId.trim();
+    if (id === '') throw invalidEnvelopeId();
+    const response = await this.transport.request({
+      method: 'GET',
+      url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/envelopes/${encodeURIComponent(id)}`,
+      headers: { authorization: `Bearer ${context.accessToken}` },
+      timeoutMs: context.timeoutMs,
+    });
+    if (response.status >= 400) throw providerErrorForStatus(response.status);
+    const body = parseJson(response.body);
+    const statusRaw = stringOf(body['status']);
+    const recipients = parseRecipientCollections(body['recipients']);
+    return {
+      providerEnvelopeId: id,
+      status: normalizeEnvelopeStatus(statusRaw) ?? 'unknown',
+      providerStatusRaw: statusRaw ?? 'unknown',
+      occurredAt: stringOf(body['statusDateTime']),
+      recipients,
+    };
   }
 
-  async listRecipients(_context: SignatureProviderContext, _providerEnvelopeId: string): Promise<readonly ProviderRecipientStatus[]> {
-    throw this.refuse('listRecipients');
+  async listRecipients(context: SignatureProviderContext, providerEnvelopeId: string): Promise<readonly ProviderRecipientStatus[]> {
+    const id = providerEnvelopeId.trim();
+    if (id === '') throw invalidEnvelopeId();
+    const response = await this.transport.request({
+      method: 'GET',
+      url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/envelopes/${encodeURIComponent(id)}/recipients`,
+      headers: { authorization: `Bearer ${context.accessToken}` },
+      timeoutMs: context.timeoutMs,
+    });
+    if (response.status >= 400) throw providerErrorForStatus(response.status);
+    return parseRecipientCollections(parseJson(response.body));
   }
 
   async downloadCompletedDocuments(_context: SignatureProviderContext, _providerEnvelopeId: string): Promise<readonly ProviderArtifact[]> {
@@ -565,12 +601,11 @@ function parseSentRecipient(entry: unknown): ProviderRecipientStatus[] {
   const providerRecipientId = stringOf(recipient['recipientId']);
   const status = stringOf(recipient['status']);
   if (providerRecipientId === null || status === null) return [];
-  const normalized = SENT_RECIPIENT_STATUSES[status.toLowerCase()] ?? 'unknown';
   return [
     {
       providerRecipientId,
       recipientId: stringOf(recipient['clientUserId']) ?? providerRecipientId,
-      status: normalized,
+      status: normalizeRecipientStatus(status) ?? 'unknown',
       providerStatusRaw: status,
       name: stringOf(recipient['name']) ?? '',
       email: stringOf(recipient['email']) ?? '',
@@ -582,16 +617,16 @@ function parseSentRecipient(entry: unknown): ProviderRecipientStatus[] {
   ];
 }
 
-/** DocuSign's recipient state words, as the send answer reports them. */
-const SENT_RECIPIENT_STATUSES: Readonly<Record<string, ProviderRecipientStatus['status']>> = {
-  created: 'pending',
-  sent: 'sent',
-  delivered: 'delivered',
-  completed: 'completed',
-  declined: 'declined',
-  autoresponded: 'completed',
-  waiting: 'pending',
-};
+/** Every recipient collection DocuSign may use on an envelope or a recipient listing. */
+function parseRecipientCollections(value: unknown): ProviderRecipientStatus[] {
+  const collections = asObject(value);
+  const out: ProviderRecipientStatus[] = [];
+  for (const key of ['signers', 'carbonCopies', 'inPersonSigners', 'certifiedDeliveries'] as const) {
+    const list = Array.isArray(collections[key]) ? (collections[key] as unknown[]) : [];
+    for (const entry of list) out.push(...parseSentRecipient(entry));
+  }
+  return out;
+}
 
 /** The recipient a Connect payload names, when it names one. */
 function connectRecipient(connect: Record<string, unknown>): { status: string | null } {
@@ -607,6 +642,14 @@ function connectRecipient(connect: Record<string, unknown>): { status: string | 
     }
   }
   return { status: null };
+}
+
+function invalidEnvelopeId(): ProviderError {
+  return new ProviderError('INVALID_REQUEST', 'A provider envelope id is required.', {
+    category: 'permanent_validation',
+    retryable: false,
+    detail: 'envelope_id_missing',
+  });
 }
 
 function unverifiedWebhook(

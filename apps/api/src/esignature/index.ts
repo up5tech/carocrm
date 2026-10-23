@@ -271,6 +271,15 @@ export {
   TRANSITION_ORIGINS,
   type TransitionOrigin,
 } from './esignature-state-machine.js';
+export {
+  mapProviderEvent,
+  normalizeEnvelopeStatus,
+  normalizeProviderEventType,
+  normalizeRecipientStatus,
+  PROVIDER_EVENT_TYPES,
+  type ProviderEventType,
+  type StatusMapping,
+} from './esignature-status-mapper.js';
 export { ESignatureTemplateController } from './esignature-template.controller.js';
 export {
   ESignatureTemplateService,

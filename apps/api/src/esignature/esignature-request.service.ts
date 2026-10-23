@@ -27,10 +27,16 @@ import { ESignaturePermissionService } from './esignature-permission.service.js'
 import { buildSignaturePreview, type SignaturePreview } from './esignature-preview.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { approvalStillApplies, buildSnapshot } from './esignature-snapshot.js';
-import { isEditable } from './esignature-state-machine.js';
+import { canTransitionFrom, isEditable, isTerminalStatus } from './esignature-state-machine.js';
 import { classifyAdapterError, isSendOutcomeUnknownError, redactAdapterError, toModuleError } from './providers/signature-provider.errors.js';
-import { correlationId, prepareIdentity, sendIdentity } from './providers/signature-provider.idempotency.js';
-import type { PrepareEnvelopeInput } from './providers/signature-provider.port.js';
+import { correlationId, idempotencyKey, prepareIdentity, sendIdentity } from './providers/signature-provider.idempotency.js';
+import type {
+  PrepareEnvelopeInput,
+  ProviderArtifact,
+  ProviderRecipientStatus,
+  SignatureProviderAdapter,
+  SignatureProviderContext,
+} from './providers/signature-provider.port.js';
 import { SignatureProviderRegistry } from './providers/signature-provider.registry.js';
 import { type AuditInput, SignatureAuditRepository } from './signature-audit.repository.js';
 import { SignatureConnectionRepository } from './signature-connection.repository.js';
@@ -685,6 +691,9 @@ export class ESignatureRequestService {
         idempotencyKey: identity.idempotencyKey,
         correlationId: identity.correlationId,
       });
+      // The provider's recipient ids are what later Connect events join on. Recording them now, from
+      // the send answer, keeps the projection possible even when the event carries no email.
+      await this.attachProviderRecipientIds(id, sent.recipients).catch(() => undefined);
       const occurredAt = Date.parse(sent.sentAt);
       const confirmed = await this.requests.transition(id, {
         expectedVersion: sending.version,
@@ -773,57 +782,50 @@ export class ESignatureRequestService {
   }
 
   /**
-   * Ask the provider what actually happened to an ambiguous send.
+   * Ask the provider what actually happened to an envelope.
    *
-   * ES.10's acceptance is that an ambiguous outcome is never a blind retry, so this is the only command
-   * that may move a request out of `sending`/`send_unknown` without a new send attempt:
+   * ES.10's acceptance is that an ambiguous outcome is never a blind retry; ES.12 widens the same
+   * command into the operator's reconciliation for any state whose projection may have drifted:
    *
-   *  - the envelope left the CRM → `sent` (and, when the provider is already further along, the state it
-   *    reports, through the transitions the state machine allows);
-   *  - it is still a draft → the send did not take effect → `provider_error`, which `recover` can return
-   *    to a retryable state;
-   *  - anything else → still ambiguous, answered with the stable `PROVIDER_OUTCOME_UNKNOWN`.
+   *  - a request in `sending`/`send_unknown` first learns that the envelope left the CRM (`sent`),
+   *    then takes the state the provider reports;
+   *  - a terminal request may only move through reconciliation, and lands on the provider's answer;
+   *  - a provider that still holds a draft proves a send never happened (or refuses as ambiguous when
+   *    the local state says it was sent).
    *
-   * ES.12 later projects the full envelope and recipient state from Connect events; this command exists
-   * so the send itself has a safe way out.
+   * Recipients are projected from the same answer, monotonically. Nothing here writes if the provider
+   * says `unknown`.
    */
   async reconcileSend(id: string): Promise<{ request: SignatureRequestView; providerStatus: string; reconciled: boolean }> {
     const request = await this.loadScoped(id, 'send');
-    if (request.status !== 'send_unknown' && request.status !== 'sending') {
-      throw signatureRequestInvalidStateError(request.status, 'reconcile the send');
-    }
+    const reconcilable: readonly SignatureRequestStatus[] = [
+      'sending',
+      'send_unknown',
+      'reconciliation_required',
+      'sent',
+      'delivered',
+      'partially_signed',
+      'completed',
+      'declined',
+      'voided',
+      'expired',
+    ];
+    if (!reconcilable.includes(request.status)) throw signatureRequestInvalidStateError(request.status, 'reconcile');
     if (request.providerEnvelopeId === null) throw providerNotConnectedError('no_connection');
     const connection = request.connectionId === null ? undefined : await this.connections.findById(request.connectionId);
     if (connection === undefined) throw providerNotConnectedError('no_connection');
     const context = await this.connectionService.contextFor(connection);
     const adapter = this.providers.assertOperation(connection.providerKey, 'envelopeStatus');
+
     let providerStatus;
+    let providerRecipients: readonly ProviderRecipientStatus[];
     try {
-      providerStatus = await adapter.envelopeStatus(context, request.providerEnvelopeId);
+      [providerStatus, providerRecipients] = await Promise.all([
+        adapter.envelopeStatus(context, request.providerEnvelopeId),
+        adapter.listRecipients(context, request.providerEnvelopeId),
+      ]);
     } catch (error) {
       throw toModuleError(error, connection.providerKey);
-    }
-
-    if (providerStatus.status === 'draft') {
-      const failed = await this.requests.transition(id, {
-        expectedVersion: request.version,
-        to: 'provider_error',
-        origin: 'reconciliation',
-        failure: {
-          category: 'permanent_validation',
-          code: 'PROVIDER_NOT_SENT',
-          messageSafe: 'The provider still holds the envelope as a draft, so the earlier send did not take effect.',
-        },
-      });
-      await this.audit.append({
-        action: 'reconciliation.completed',
-        requestId: id,
-        actor: this.actorRef(),
-        outcome: 'refused',
-        reasonSafe: 'provider_draft_unsent',
-        detail: { providerStatus: providerStatus.status },
-      });
-      return { request: await this.view(failed), providerStatus: providerStatus.status, reconciled: true };
     }
 
     if (providerStatus.status === 'unknown') {
@@ -837,38 +839,122 @@ export class ESignatureRequestService {
       throw providerOutcomeUnknownError(correlationId());
     }
 
-    // Everything else means the envelope left the CRM. Record that first — it is the fact the send was
-    // missing — and then the state the provider actually reports, if it is further along.
-    let current = await this.requests.transition(id, {
-      expectedVersion: request.version,
-      to: 'sent',
-      origin: 'reconciliation',
-      providerStatusRaw: providerStatus.providerStatusRaw,
-    });
-    const further: Partial<Record<typeof providerStatus.status, 'delivered' | 'partially_signed' | 'completed' | 'declined' | 'voided' | 'expired'>> = {
-      delivered: 'delivered',
-      partially_signed: 'partially_signed',
-      completed: 'completed',
-      declined: 'declined',
-      voided: 'voided',
-      expired: 'expired',
-    };
-    const target = further[providerStatus.status];
-    if (target !== undefined) {
+    const before = await this.recipients.listForRequest(request.id);
+    await this.attachProviderRecipientIds(request.id, providerRecipients).catch(() => undefined);
+    let recipientUpdates = 0;
+    for (const providerRecipient of providerRecipients) {
+      const local = matchProviderRecipient(before, providerRecipient);
+      if (local === undefined || providerRecipient.status === 'unknown') continue;
+      const recipientOccurredAt = parseDate(providerRecipient.occurredAt);
+      const applied = await this.recipients.applyStatus(local.id, {
+        status: providerRecipient.status,
+        providerStatusRaw: providerRecipient.providerStatusRaw,
+        ...(recipientOccurredAt === null ? {} : { occurredAt: recipientOccurredAt }),
+        declineReasonSafe: providerRecipient.declineReasonSafe,
+      });
+      if (applied.changed) recipientUpdates += 1;
+    }
+
+    const occurredAt = parseDate(providerStatus.occurredAt);
+    let current = await this.requests.requireById(request.id);
+
+    if (providerStatus.status === 'draft') {
+      if (current.status === 'sending' || current.status === 'send_unknown' || current.status === 'reconciliation_required') {
+        const failed = await this.requests.transition(id, {
+          expectedVersion: current.version,
+          to: 'provider_error',
+          origin: 'reconciliation',
+          failure: {
+            category: 'permanent_validation',
+            code: 'PROVIDER_NOT_SENT',
+            messageSafe: 'The provider still holds the envelope as a draft, so the earlier send did not take effect.',
+          },
+        });
+        await this.audit.append({
+          action: 'reconciliation.completed',
+          requestId: id,
+          actor: this.actorRef(),
+          outcome: 'refused',
+          reasonSafe: 'provider_draft_unsent',
+          detail: { providerStatus: providerStatus.status, recipientUpdates },
+        });
+        return { request: await this.view(failed), providerStatus: providerStatus.status, reconciled: true };
+      }
+      await this.audit.append({
+        action: 'reconciliation.completed',
+        requestId: id,
+        actor: this.actorRef(),
+        outcome: 'refused',
+        reasonSafe: 'provider_draft_after_send',
+        detail: { providerStatus: providerStatus.status },
+      });
+      throw providerOutcomeUnknownError(correlationId());
+    }
+
+    const target = providerStatus.status as Exclude<typeof providerStatus.status, 'draft' | 'unknown'>;
+
+    // The missing fact, first: an envelope in flight that the provider has moved past sending.
+    if (current.status === 'sending' || current.status === 'send_unknown') {
+      current = await this.requests.transition(id, {
+        expectedVersion: current.version,
+        to: 'sent',
+        origin: 'reconciliation',
+        providerStatusRaw: providerStatus.providerStatusRaw,
+        ...(occurredAt === null ? {} : { occurredAt }),
+      });
+    }
+
+    if (current.status === target) {
+      current = await this.requests.recordReconciliation(current.id, current.version, this.scope.userId);
+    } else if (current.status === 'reconciliation_required' || isTerminalStatus(current.status)) {
+      current = await this.requests.transition(id, {
+        expectedVersion: current.version,
+        to: target,
+        origin: 'reconciliation',
+        providerStatusRaw: providerStatus.providerStatusRaw,
+        ...(occurredAt === null ? {} : { occurredAt }),
+      });
+    } else if (canTransitionFrom(current.status, target, 'provider')) {
       current = await this.requests.transition(id, {
         expectedVersion: current.version,
         to: target,
         origin: 'provider',
         providerStatusRaw: providerStatus.providerStatusRaw,
+        ...(occurredAt === null ? {} : { occurredAt }),
       });
+    } else {
+      // The provider is reporting an older state than the projection holds. The event/history is
+      // evidence of the drift; the projection is not moved backwards (plan §4.7).
+      current = await this.requests.recordReconciliation(current.id, current.version, this.scope.userId);
     }
+
     await this.audit.append({
       action: 'reconciliation.completed',
       requestId: id,
       actor: this.actorRef(),
-      detail: { providerStatus: providerStatus.providerStatusRaw, reconciledTo: current.status },
+      detail: { providerStatus: providerStatus.providerStatusRaw, reconciledTo: current.status, recipientUpdates },
     });
     return { request: await this.view(current), providerStatus: providerStatus.providerStatusRaw, reconciled: true };
+  }
+
+  /**
+   * Record the provider's recipient ids against the local rows, when it has just told us them.
+   *
+   * Matching is by email as a fallback (the provider assigns its own ids), and a row that already has
+   * an id is never overwritten: the first answer is the one the events will reference.
+   */
+  private async attachProviderRecipientIds(requestId: string, providerRecipients: readonly ProviderRecipientStatus[]): Promise<void> {
+    if (providerRecipients.length === 0) return;
+    const local = await this.recipients.listForRequest(requestId);
+    for (const providerRecipient of providerRecipients) {
+      const match = local.find(
+        (row) =>
+          row.providerRecipientId === null &&
+          (row.id === providerRecipient.recipientId || row.email.trim().toLowerCase() === providerRecipient.email.trim().toLowerCase()),
+      );
+      if (match !== undefined) await this.recipients.attachProviderId(match.id, providerRecipient.providerRecipientId);
+    }
+  }
   }
 
   private async buildPreview(request: SignatureRequest): Promise<SignaturePreview> {
@@ -1139,4 +1225,22 @@ function toDocumentView(document: SignatureDocumentSnapshot): SignatureRequestDo
     providerDocumentId: document.providerDocumentId,
     createdAt: document.createdAt,
   };
+}
+
+/** The local row a provider answer refers to: its recorded id first, then our client id, then email. */
+function matchProviderRecipient(
+  local: readonly SignatureRecipient[],
+  providerRecipient: ProviderRecipientStatus,
+): SignatureRecipient | undefined {
+  return (
+    local.find((row) => row.providerRecipientId === providerRecipient.providerRecipientId) ??
+    local.find((row) => row.id === providerRecipient.recipientId) ??
+    local.find((row) => row.email.trim().toLowerCase() === providerRecipient.email.trim().toLowerCase())
+  );
+}
+
+function parseDate(value: string | null): Date | null {
+  if (value === null) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }

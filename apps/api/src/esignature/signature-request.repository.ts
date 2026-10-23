@@ -761,6 +761,32 @@ export class SignatureRequestRepository {
     return toRequest(row);
   }
 
+  /**
+   * Record that a reconciliation answered, without changing the state.
+   *
+   * A provider that agrees with the CRM still produced a fact worth dating: the projection was
+   * checked and did not drift. Setting only `last_reconciled_at` keeps that fact separate from a
+   * transition, which is what an operator reading the row needs (plan §14).
+   */
+  async recordReconciliation(id: string, expectedVersion: number, actorId?: string): Promise<SignatureRequest> {
+    const current = await this.requireById(id);
+    if (current.version !== expectedVersion) throw new ConcurrencyConflictError('SignatureRequest', id);
+    const row = await this.db
+      .updateTable('signature_requests')
+      .set({
+        last_reconciled_at: new Date(),
+        version: current.version + 1,
+        modified_at: new Date(),
+        ...(actorId === undefined ? {} : { modified_by_id: actorId }),
+      })
+      .where('id', '=', id)
+      .where('version', '=', expectedVersion)
+      .returningAll()
+      .executeTakeFirst();
+    if (row === undefined) throw new ConcurrencyConflictError('SignatureRequest', id);
+    return toRequest(row);
+  }
+
   /** Soft delete. A sent request is never removed: it is evidence of what was signed. */
   async softDelete(id: string, actorId?: string): Promise<SignatureRequest> {
     const current = await this.requireById(id);
