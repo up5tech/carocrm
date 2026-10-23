@@ -7,13 +7,10 @@ import {
   providerNotConnectedError,
   signatureModuleDisabledError,
 } from './esignature-errors.js';
-import {
-  DOCUSIGN_PROVIDER_CAPABILITIES,
-  type ESignatureFeatureDescriptor,
-  type ESignatureProviderCapabilityKey,
-} from './esignature-module.js';
+import { type ESignatureFeatureDescriptor, type ESignatureProviderCapabilityKey } from './esignature-module.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { signatureProviderDescriptor } from './providers/signature-provider.catalog.js';
 import { SignatureProviderRegistry } from './providers/signature-provider.registry.js';
 import { SignatureConnectionRepository } from './signature-connection.repository.js';
 
@@ -28,12 +25,11 @@ import { SignatureConnectionRepository } from './signature-connection.repository
  *    enabled *and* implemented. A flag whose infrastructure arrives in a later sub-phase does not
  *    open the gate; the settings view reports it as pending, and this refuses it.
  * 2. **Does the provider support the operation?** Capability flags, not a silent no-op
- *    (plan §5.2): a provider that cannot do it says so with `NOT_SUPPORTED_BY_PROVIDER`.
- * 3. **Is there a connection in the only state that permits it?** `connected`, `isActive`, on the
- *    first provider key — and `ENCRYPTION_KEY` configured, because a connection whose credential
- *    cannot be decrypted is a connection that must not be used (plan §4.1, §9.2). The answer comes
- *    from `SignatureConnectionRepository`, so the gate and the records agree by construction rather
- *    than by two queries that can drift.
+ *    (plan §5.2): a provider that cannot do it says so with `NOT_SUPPORTED_BY_PROVIDER`.   * 3. **Is there a connection in the only state that permits it?** `connected`, `isActive`, **on the
+   *    provider the request names** — and `ENCRYPTION_KEY` configured, because a connection whose
+   *    credential cannot be decrypted is a connection that must not be used (plan §4.1, §9.2). The
+   *    answer comes from `SignatureConnectionRepository`, so the gate and the records agree by
+   *    construction rather than by two queries that can drift.
  *
  * Answer 3 is currently "no" for a real reason: a connection row exists only once an administrator
  * authorizes one (ES.4), and the reason is reported as `no_enabled_connection` rather than hidden
@@ -130,7 +126,7 @@ export class ESignatureConnectionGate {
    * act learns only that; the connection state is reported to a caller who *may* act, because that
    * is the operator who needs to know why a send is refused (plan §12.1, §12.5).
    */
-  async assertOperation(operation: ESignatureOperation): Promise<void> {
+  async assertOperation(operation: ESignatureOperation, providerKey: string = PROVIDER_KEY_DOCUSIGN): Promise<void> {
     const rule = this.rule(operation);
     await this.permissions.assert(rule.capability);
     const settingsView = await this.settings.read();
@@ -142,15 +138,15 @@ export class ESignatureConnectionGate {
     if (rule.feature !== undefined && settingsView.effective[rule.feature] !== true) {
       throw signatureModuleDisabledError(`${ESIGNATURE_MODULE_KEY}.${rule.feature}`);
     }
-    if (!this.supportedOnProvider(rule.providerCapability)) {
-      throw notSupportedByProviderError(rule.providerCapability, PROVIDER_KEY_DOCUSIGN);
+    if (!this.supportedOnProvider(rule.providerCapability, providerKey)) {
+      throw notSupportedByProviderError(rule.providerCapability, providerKey);
     }
     if (!rule.reachesProvider) return;
 
     if (settingsView.effective.connections !== true) throw signatureModuleDisabledError(`${ESIGNATURE_MODULE_KEY}.connections`);
     if (!this.settings.encryptionConfigured()) throw encryptionKeyMissingError();
 
-    const enabledConnections = await this.connections.countUsable();
+    const enabledConnections = await this.connections.countUsable(providerKey);
     if (enabledConnections === 0) {
       throw providerNotConnectedError('no_connection');
     }
@@ -164,10 +160,12 @@ export class ESignatureConnectionGate {
    * registered the declared contract answers, so an operation of a later sub-phase is refused here
    * rather than admitted and then failing inside an adapter.
    */
-  supportedOnProvider(capability: ESignatureProviderCapabilityKey): boolean {
-    const adapter = this.providers.resolve(PROVIDER_KEY_DOCUSIGN);
+  supportedOnProvider(capability: ESignatureProviderCapabilityKey, providerKey: string = PROVIDER_KEY_DOCUSIGN): boolean {
+    const adapter = this.providers.resolve(providerKey);
     if (adapter !== undefined) return adapter.capabilities[capability] === true;
-    return DOCUSIGN_PROVIDER_CAPABILITIES[capability] === true;
+    // No adapter: the catalog's declaration answers, so an operation a planned provider does not
+    // implement is refused here rather than admitted and failing inside a nonexistent adapter.
+    return signatureProviderDescriptor(providerKey)?.capabilities[capability] === true;
   }
 
   /** The health endpoint's answer: what the gate would decide, with no side effect and no secret. */

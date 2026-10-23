@@ -174,8 +174,8 @@ export class ESignatureTemplateService {
    */
   async refresh(connectionId: string): Promise<TemplateCatalogResult> {
     await this.assertManage();
-    await this.gate.assertOperation('listTemplates');
     const connection = await this.requireConnection(connectionId);
+    await this.gate.assertOperation('listTemplates', connection.providerKey);
     const adapter = this.providers.assertOperation(connection.providerKey, 'listTemplates');
     const context = await this.connectionService.contextFor(connection);
     let templates: readonly ProviderTemplateSummary[];
@@ -206,8 +206,8 @@ export class ESignatureTemplateService {
   /** One template's roles and tabs, from the account that owns the connection. */
   async detail(connectionId: string, templateId: string): Promise<TemplateDetailView> {
     await this.assertManage();
-    await this.gate.assertOperation('templateDetails');
     const connection = await this.requireConnection(connectionId);
+    await this.gate.assertOperation('templateDetails', connection.providerKey);
     const detail = await this.liveDetail(connection, templateId);
     return { ...detail, connectionId: connection.id, environment: connection.environment };
   }
@@ -240,8 +240,8 @@ export class ESignatureTemplateService {
    */
   async create(input: MappingInput): Promise<SignatureTemplateMapping> {
     await this.assertManage();
-    await this.gate.assertOperation('templateDetails');
     const connection = await this.requireConnection(input.connectionId);
+    await this.gate.assertOperation('templateDetails', connection.providerKey);
     const detail = await this.liveDetail(connection, input.providerTemplateId);
     const validation = this.validateDefinition(input, detail);
     if (!validation.valid) throw this.refusal(validation);

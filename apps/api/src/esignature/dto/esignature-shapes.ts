@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { SIGNATURE_PROVIDER_KEYS } from '../providers/signature-provider.keys.js';
+
 /**
  * Phase 19-ES.1 — request shapes (`PLAN_Phase_19_ESignature.md` §8; AGENTS.md §5.4).
  *
@@ -21,6 +23,8 @@ export const SettingsPatchSchema = z.record(z.string(), z.unknown());
 /** The operation the caller asks the gate to admit, as a probe of the security contract. */
 export const OperationProbeSchema = z
   .object({
+    /** The provider whose capability is being probed. Omitted means the reference provider. */
+    providerKey: z.enum(SIGNATURE_PROVIDER_KEYS).optional(),
     operation: z.enum([
       'testConnection',
       'listTemplates',
@@ -55,6 +59,8 @@ const EnvironmentSchema = z.enum(['demo', 'production']);
 
 export const ConnectionCreateSchema = z
   .object({
+    /** A catalog provider key. Omitted means the reference provider (`docusign`). */
+    providerKey: z.enum(SIGNATURE_PROVIDER_KEYS).optional(),
     name: z.string().trim().min(1).max(120),
     environment: EnvironmentSchema,
     /** Written straight to the vault. Never read back, never echoed, never logged (plan §4.1). */
@@ -106,6 +112,8 @@ const NullableText = (max: number) => z.string().trim().max(max).nullable();
 
 export const RequestCreateSchema = z
   .object({
+    /** The provider the request will be sent through. Omitted: the chosen connection decides. */
+    providerKey: z.enum(SIGNATURE_PROVIDER_KEYS).optional(),
     name: z.string().trim().min(1).max(200),
     description: z.string().trim().max(2_000).optional(),
     subject: z.string().trim().max(300).optional(),

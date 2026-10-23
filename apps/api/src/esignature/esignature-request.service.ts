@@ -17,7 +17,7 @@ import { METADATA_STORE, type MetadataStoreService } from '../metadata/metadata-
 import { ESignatureConnectionService } from './esignature-connection.service.js';
 import { ESignatureConnectionGate } from './esignature-connection-gate.service.js';
 import { ESignatureDocumentService } from './esignature-document.service.js';
-import type { SignatureRequestStatus } from './esignature-domain.js';
+import { PROVIDER_KEY_DOCUSIGN, type SignatureRequestStatus } from './esignature-domain.js';
 import {
   ESignatureError,
   notSupportedByProviderError,
@@ -36,6 +36,7 @@ import { buildSignaturePreview, type SignaturePreview } from './esignature-previ
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { approvalStillApplies, buildSnapshot } from './esignature-snapshot.js';
 import { canTransitionFrom, isEditable, isTerminalStatus } from './esignature-state-machine.js';
+import { signatureProviderDescriptor, signatureProviderLabel } from './providers/signature-provider.catalog.js';
 import { classifyAdapterError, isSendOutcomeUnknownError, redactAdapterError, toModuleError } from './providers/signature-provider.errors.js';
 import { correlationId, idempotencyKey, prepareIdentity, sendIdentity } from './providers/signature-provider.idempotency.js';
 import type {
@@ -313,7 +314,7 @@ export class ESignatureRequestService {
    * finds what it just made without an administrator assigning it. A linked source record is checked
    * for metadata validity and for read access before the row exists at all.
    */
-  async create(input: RequestDraftPatch & { name: string }): Promise<SignatureRequestView> {
+  async create(input: RequestDraftPatch & { name: string; providerKey?: string | undefined }): Promise<SignatureRequestView> {
     await this.permissions.assert('manageDraft');
     await this.assertModuleEnabled();
     if (input.sourceEntityType !== undefined && input.sourceEntityType !== null) {
@@ -322,10 +323,15 @@ export class ESignatureRequestService {
     if (input.templateMappingId !== undefined && input.templateMappingId !== null) {
       await this.assertMappingBindable(input.connectionId ?? null, input.templateMappingId);
     }
+    // The provider is fixed when the draft is created: it is the vendor the whole lifecycle —
+    // envelope ids, status vocabulary, signed artifacts — will be interpreted against. Choosing it
+    // from the named connection when the caller did not is the one honest default.
+    const providerKey = await this.resolveProviderKey(input.providerKey, input.connectionId ?? null);
 
     const created = await runInTransaction(this.database.db, async (tx) => {
       const draft = await this.requests.createDraft({
         name: input.name,
+        providerKey,
         ...(input.description !== undefined && input.description !== null ? { description: input.description } : {}),
         ...(input.subject !== undefined && input.subject !== null ? { subject: input.subject } : {}),
         ...(input.message !== undefined && input.message !== null ? { message: input.message } : {}),
@@ -375,6 +381,18 @@ export class ESignatureRequestService {
     if (patch.templateMappingId !== undefined) {
       const connectionId = patch.connectionId !== undefined ? patch.connectionId : request.connectionId;
       if (patch.templateMappingId !== null) await this.assertMappingBindable(connectionId, patch.templateMappingId);
+    }
+    if (patch.connectionId !== undefined && patch.connectionId !== null) {
+      // The request's provider cannot change after creation, so a connection from another provider
+      // would leave the row claiming one vendor while the envelope belongs to another.
+      const bound = await this.connections.findById(patch.connectionId);
+      if (bound === undefined) throw new ValidationError(`No signature connection "${patch.connectionId}".`, { connectionId: patch.connectionId });
+      if (bound.providerKey !== request.providerKey) {
+        throw new ValidationError(
+          `That connection belongs to ${signatureProviderLabel(bound.providerKey)}, while this request was created for ${signatureProviderLabel(request.providerKey)}.`,
+          { providerKey: request.providerKey, connectionProviderKey: bound.providerKey },
+        );
+      }
     }
     const updated = await this.requests.updateDraft(
       request.id,
@@ -813,7 +831,7 @@ export class ESignatureRequestService {
     input: { version: number },
   ): Promise<{ request: SignatureRequestView; envelope: { providerEnvelopeId: string; status: string; createdAt: string; created: boolean } }> {
     const request = await this.loadScoped(id, 'write');
-    await this.gate.assertOperation('prepareEnvelope');
+    await this.gate.assertOperation('prepareEnvelope', request.providerKey);
     if (request.status !== 'ready_to_send') throw signatureRequestInvalidStateError(request.status, 'create a provider envelope');
     if (request.providerEnvelopeId !== null) {
       return {
@@ -978,7 +996,7 @@ export class ESignatureRequestService {
    */
   async send(id: string, input: { version: number; confirm: boolean }): Promise<{ request: SignatureRequestView; providerStatusRaw: string; sentAt: string | null }> {
     const request = await this.loadScoped(id, 'send');
-    await this.gate.assertOperation('sendEnvelope');
+    await this.gate.assertOperation('sendEnvelope', request.providerKey);
     if (input.confirm !== true) {
       throw new ValidationError('Sending a signature request needs an explicit sender confirmation.', { code: 'CONFIRMATION_REQUIRED' });
     }
@@ -1334,7 +1352,7 @@ export class ESignatureRequestService {
     input: { recipientId: string; returnUrl: string; cancelUrl?: string | null | undefined },
   ): Promise<{ url: string; expiresAt: string | null }> {
     const request = await this.loadScoped(id);
-    await this.gate.assertOperation('recipientView');
+    await this.gate.assertOperation('recipientView', request.providerKey);
     if (request.status !== 'sent' && request.status !== 'delivered' && request.status !== 'partially_signed') {
       throw signatureRequestInvalidStateError(request.status, 'start embedded signing');
     }
@@ -1393,8 +1411,8 @@ export class ESignatureRequestService {
     created: number;
   }> {
     const request = await this.loadScoped(id);
-    await this.gate.assertOperation('downloadCompletedDocuments');
-    await this.gate.assertOperation('downloadCompletionEvidence');
+    await this.gate.assertOperation('downloadCompletedDocuments', request.providerKey);
+    await this.gate.assertOperation('downloadCompletionEvidence', request.providerKey);
     if (request.status !== 'completed') throw signatureActionNotAvailableError('artifacts', 'not_completed');
     if (request.providerEnvelopeId === null || request.connectionId === null) throw providerNotConnectedError('no_connection');
     const connection = await this.connections.findById(request.connectionId);
@@ -1473,7 +1491,7 @@ export class ESignatureRequestService {
     recipientId: string | null;
   }> {
     const request = await this.loadScoped(id, 'send');
-    await this.gate.assertOperation('resendNotifications');
+    await this.gate.assertOperation('resendNotifications', request.providerKey);
     const settings = await this.settingsService.settings();
     if (!settings.signing.remindersEnabled) throw signatureActionNotAvailableError('resend', 'reminders_disabled');
     if (request.status !== 'sent' && request.status !== 'delivered' && request.status !== 'partially_signed') {
@@ -1550,7 +1568,7 @@ export class ESignatureRequestService {
     if (input.confirm !== true) {
       throw new ValidationError('Voiding a signature request needs an explicit confirmation.', { code: 'CONFIRMATION_REQUIRED' });
     }
-    await this.gate.assertOperation('voidEnvelope');
+    await this.gate.assertOperation('voidEnvelope', request.providerKey);
     if (request.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
     if (request.status !== 'sent' && request.status !== 'delivered' && request.status !== 'partially_signed') {
       throw signatureRequestInvalidStateError(request.status, 'void');
@@ -1784,6 +1802,40 @@ export class ESignatureRequestService {
    * sends through the same connection, and only while it is active. Binding is a draft-time choice; a
    * retired mapping that a request already names stays named (the snapshot is the evidence).
    */
+  /**
+   * The provider a new draft belongs to.
+   *
+   * A caller may name one; otherwise the connection it picked decides; otherwise the reference
+   * provider is the default an installation already understands. A provider that is only cataloged
+   * is refused here, because every later step — envelope, status vocabulary, signed artifacts — would
+   * have nothing to interpret it with.
+   */
+  private async resolveProviderKey(requested: string | undefined, connectionId: string | null): Promise<string> {
+    const connection = connectionId === null ? undefined : await this.connections.findById(connectionId);
+    if (connectionId !== null && connection === undefined) {
+      throw new ValidationError(`No signature connection "${connectionId}".`, { connectionId });
+    }
+    const requestedKey = requested?.trim() ?? '';
+    const providerKey = requestedKey !== '' ? requestedKey : (connection?.providerKey ?? PROVIDER_KEY_DOCUSIGN);
+    const descriptor = signatureProviderDescriptor(providerKey);
+    if (descriptor === undefined) {
+      throw new ValidationError(`"${providerKey}" is not a signature provider this build knows.`, { providerKey });
+    }
+    if (descriptor.integrationStatus !== 'available') {
+      throw new ValidationError(`${descriptor.label} is cataloged as a planned integration and cannot be used for a signature request in this build.`, {
+        providerKey,
+        integrationStatus: descriptor.integrationStatus,
+      });
+    }
+    if (connection !== undefined && connection.providerKey !== providerKey) {
+      throw new ValidationError(
+        `The chosen connection belongs to ${signatureProviderLabel(connection.providerKey)}, not ${descriptor.label}.`,
+        { providerKey, connectionProviderKey: connection.providerKey },
+      );
+    }
+    return providerKey;
+  }
+
   private async assertMappingBindable(connectionId: string | null, mappingId: string): Promise<void> {
     const mapping = await this.mappings.requireById(mappingId);
     if (connectionId === null) {

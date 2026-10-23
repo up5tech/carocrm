@@ -59,7 +59,8 @@ const POLICY_ENTITIES = ['Account', 'Contact', 'Quote', 'Project', 'Case', 'Camp
 interface FormValues {
   enabled: boolean;
   features: FeatureFlags;
-  provider: { demoIntegrationKey: string; productionIntegrationKey: string };
+  /** Public OAuth client ids per provider key, per environment. No secret is ever a field. */
+  provider: { clients: Record<string, { demo: string; production: string }> };
   documents: { maxDocumentBytes: number; maxDocumentsPerRequest: number; allowedExtensions: string[] };
   signing: { defaultExpiryDays: number; remindersEnabled: boolean; resendCooldownMinutes: number; embeddedReturnHosts: string[] };
   webhooks: { endpointUrl: string; requireHmac: boolean; maxPayloadBytes: number };
@@ -80,6 +81,18 @@ export function ESignatureSettingsTab() {
     queryFn: () => api.eSignatureSettings(),
     staleTime: 30_000,
   });
+
+  // Which providers have a public client id to configure is the catalog's answer, so this screen
+  // gains a provider when the backend does — and a declared provider is not offered fields that
+  // cannot be used yet.
+  const catalog = useQuery({
+    queryKey: ['eSignature', 'providerCatalog'],
+    queryFn: () => api.eSignatureProviderCatalog(),
+    staleTime: 300_000,
+  });
+  const oauthProviders = (catalog.data?.providers ?? []).filter(
+    (provider) => provider.authStyle === 'oauth2_authorization_code' && provider.integrationStatus === 'available',
+  );
 
   const document = useModuleDocument<FormValues>({
     queryKey: ['eSignature', 'settings'],
@@ -229,22 +242,35 @@ export function ESignatureSettingsTab() {
 
         <Row gutter={16}>
           <Col xs={24} lg={12}>
-            <Card
-              className="carocrm-card"
-              title={t('esignature.settings.integrationKeys')}
-              extra={t('esignature.settings.integrationKeysHint')}
-              style={{ marginBottom: 16 }}
-            >
-              <Form.Item name={['provider', 'demoIntegrationKey']} label={t('esignature.settings.demoIntegrationKey')}>
-                <Input maxLength={128} placeholder="b8f0…" autoComplete="off" spellCheck={false} />
-              </Form.Item>
-              <Form.Item name={['provider', 'productionIntegrationKey']} label={t('esignature.settings.productionIntegrationKey')}>
-                <Input maxLength={128} autoComplete="off" spellCheck={false} />
-              </Form.Item>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t('esignature.settings.secretRefused')}
-              </Typography.Text>
-            </Card>
+            {oauthProviders.map((provider) => (
+              <Card
+                key={provider.key}
+                className="carocrm-card"
+                title={t('esignature.settings.integrationKeysFor', { provider: provider.label })}
+                extra={t('esignature.settings.integrationKeysHint')}
+                style={{ marginBottom: 16 }}
+              >
+                <Form.Item name={['provider', 'clients', provider.key, 'demo']} label={t('esignature.settings.demoIntegrationKey')}>
+                  <Input maxLength={128} placeholder="b8f0…" autoComplete="off" spellCheck={false} />
+                </Form.Item>
+                <Form.Item
+                  name={['provider', 'clients', provider.key, 'production']}
+                  label={t('esignature.settings.productionIntegrationKey')}
+                >
+                  <Input maxLength={128} autoComplete="off" spellCheck={false} />
+                </Form.Item>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('esignature.settings.secretRefused')}
+                </Typography.Text>
+                {provider.oauthClientIdEnvVars.length === 0 ? null : (
+                  <div>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {t('esignature.settings.integrationKeyEnvVars', { names: provider.oauthClientIdEnvVars.join(', ') })}
+                    </Typography.Text>
+                  </div>
+                )}
+              </Card>
+            ))}
 
             <Card className="carocrm-card" title={t('esignature.settings.documents')} style={{ marginBottom: 16 }}>
               <Row gutter={16}>

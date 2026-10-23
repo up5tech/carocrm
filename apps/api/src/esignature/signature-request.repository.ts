@@ -15,6 +15,7 @@ import {
   assertTransition,
   type TransitionOrigin,
 } from './esignature-state-machine.js';
+import { isSignatureProviderKey, SIGNATURE_PROVIDER_KEYS } from './providers/signature-provider.keys.js';
 
 /**
  * Phase 19-ES.2 — the signature request repository
@@ -313,8 +314,11 @@ export class SignatureRequestRepository {
     const name = input.name.trim();
     if (name === '') throw new ValidationError('A signature request needs a name.');
     const providerKey = input.providerKey ?? PROVIDER_KEY_DOCUSIGN;
-    if (providerKey !== PROVIDER_KEY_DOCUSIGN) {
-      throw new ValidationError('The first release addresses one signature provider.', { providerKey });
+    if (!isSignatureProviderKey(providerKey)) {
+      throw new ValidationError(`"${providerKey}" is not a signature provider this build knows.`, {
+        providerKey,
+        known: [...SIGNATURE_PROVIDER_KEYS],
+      });
     }
     if (input.sourceEntityType !== undefined && input.sourceEntityType !== null) validateEntityName(input.sourceEntityType);
     if (input.sourceRecordId !== undefined && input.sourceRecordId !== null && input.sourceRecordId.trim() === '') {

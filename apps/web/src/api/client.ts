@@ -64,6 +64,7 @@ import type {
   ESignatureHealthView,
   ESignatureNavView,
   ESignatureOperationsOverview,
+  ESignatureProviderCatalogView,
   ESignatureRecordEntry,
   ESignatureReportOverview,
   ESignatureRequestDocument,
@@ -1975,6 +1976,7 @@ export const api = {
 
   // Phase 19-ES.4 — the provider connection lifecycle. A secret is a write parameter only: no method
   // here can read one back, because no endpoint returns one.
+  eSignatureProviderCatalog: () => request<ESignatureProviderCatalogView>('/ESignature/action/provider-catalog'),
   eSignatureConnections: () => request<readonly ESignatureConnectionView[]>('/ESignature/connections'),
   createESignatureConnection: (input: Record<string, unknown>) =>
     request<ESignatureConnectionView>('/ESignature/connections', post(input)),

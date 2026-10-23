@@ -12,6 +12,8 @@
  * `ESignatureModule` (plan §0).
  */
 
+import { SIGNATURE_PROVIDER_KEYS } from './providers/signature-provider.keys.js';
+
 /** The module key as it appears in settings, events (`esignature.*`), jobs and i18n namespace text. */
 export const ESIGNATURE_MODULE_KEY = 'ESignature';
 
@@ -35,11 +37,19 @@ export const SIGNATURE_TEMPLATE_PERMISSION_ENTITY = 'SignatureTemplateMapping';
 export const SIGNATURE_AUDIT_PERMISSION_ENTITY = 'SignatureAudit';
 
 /**
- * The first and only provider key of the initial release (plan §1, §6.1). A stored connection names
- * this value; a future adapter adds a constant here and nothing above the adapter boundary changes.
+ * The provider keys this module knows (plan §1, §6.1).
+ *
+ * The names live in `providers/signature-provider.keys.ts` and the descriptors in
+ * `providers/signature-provider.catalog.ts`; this file re-exports the vocabulary so domain code does
+ * not depend on the catalog and the catalog does not depend back on the domain. A stored connection,
+ * request, event or webhook row names one of these values, and nothing above the adapter boundary
+ * assumes a particular vendor.
  */
-export const PROVIDER_KEY_DOCUSIGN = 'docusign';
-export const PROVIDER_KEYS: readonly string[] = [PROVIDER_KEY_DOCUSIGN];
+export type { SignatureProviderKey } from './providers/signature-provider.keys.js';
+export { PROVIDER_KEY_DOCUSIGN, PROVIDER_KEY_DROPBOX_SIGN, SIGNATURE_PROVIDER_KEYS } from './providers/signature-provider.keys.js';
+
+/** @deprecated Prefer `SIGNATURE_PROVIDER_KEYS`; kept as the domain's own list for existing callers. */
+export const PROVIDER_KEYS: readonly string[] = [...SIGNATURE_PROVIDER_KEYS];
 
 /** Connection lifecycle (plan §6.1 `ESignatureConnection.status`). */
 export const CONNECTION_STATUSES = [
@@ -120,11 +130,20 @@ export type ESignatureSecretKind = (typeof SECRET_KINDS)[number];
 
 /** The plain-language meaning of each kind, for the admin screen and the runbook. */
 export const SECRET_KIND_LABELS: Readonly<Record<ESignatureSecretKind, string>> = {
-  client_secret: 'DocuSign OAuth client secret',
-  oauth_access_token: 'DocuSign OAuth access token (short-lived)',
-  oauth_refresh_token: 'DocuSign refresh token',
-  webhook_secret: 'DocuSign Connect HMAC secret',
+  client_secret: 'OAuth client secret',
+  oauth_access_token: 'OAuth access token (short-lived)',
+  oauth_refresh_token: 'OAuth refresh token',
+  webhook_secret: 'Webhook signing secret',
 };
+
+/**
+ * The generic names of the credentials an OAuth provider holds, so the connection service never has
+ * to spell a vendor's prefix to reach its own vault.
+ */
+export const SECRET_KIND_OAUTH_ACCESS_TOKEN: ESignatureSecretKind = 'oauth_access_token';
+export const SECRET_KIND_OAUTH_REFRESH_TOKEN: ESignatureSecretKind = 'oauth_refresh_token';
+export const SECRET_KIND_CLIENT_SECRET: ESignatureSecretKind = 'client_secret';
+export const SECRET_KIND_WEBHOOK_SECRET: ESignatureSecretKind = 'webhook_secret';
 
 /**
  * Application-level audit actions (plan §6.6).

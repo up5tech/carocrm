@@ -13,29 +13,29 @@ import {
   type ESignatureConnectionEnvironment,
   type ESignatureConnectionStatus,
   type ESignatureSecretKind,
+  SECRET_KIND_CLIENT_SECRET,
   SECRET_KIND_LABELS,
+  SECRET_KIND_OAUTH_ACCESS_TOKEN,
+  SECRET_KIND_OAUTH_REFRESH_TOKEN,
 } from './esignature-domain.js';
 import { encryptionKeyMissingError, providerNotConnectedError } from './esignature-errors.js';
-import { DOCUSIGN_INTEGRATION_KEY_ENV_VARS } from './esignature-module.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
-import { type ESignatureSettings, ESignatureSettingsService } from './esignature-settings.service.js';
+import { type ESignatureSettings, ESignatureSettingsService,oauthClientIdFor } from './esignature-settings.service.js';
 import {
-  DOCUSIGN_KIND_ACCESS_TOKEN,
-  DOCUSIGN_KIND_CLIENT_SECRET,
-  DOCUSIGN_KIND_REFRESH_TOKEN,
-  docusignAuthorizeUrl,
-  DocuSignOAuthClient,
-  type DocuSignTokenSet,
-  type DocuSignUserAccount,
-  type DocuSignUserInfo,
-  resolveScopes,
-  selectDocuSignAccount,
-} from './providers/docusign/docusign-oauth.js';
-import { DOCUSIGN_TRANSPORT, type DocuSignTransport } from './providers/docusign/docusign-transport.js';
+  type SignatureProviderDescriptor,
+  signatureProviderDescriptor,
+  signatureProviderLabel,
+} from './providers/signature-provider.catalog.js';
 import { toModuleError } from './providers/signature-provider.errors.js';
 import { correlationId } from './providers/signature-provider.idempotency.js';
+import { PROVIDER_KEY_DOCUSIGN } from './providers/signature-provider.keys.js';
 import type { SignatureProviderAdapter, SignatureProviderContext } from './providers/signature-provider.port.js';
 import { SignatureProviderRegistry } from './providers/signature-provider.registry.js';
+import {
+  SIGNATURE_PROVIDER_AUTHS,
+  type SignatureProviderAuthStrategy,
+  type SignatureProviderTokenSet,
+} from './providers/signature-provider-auth.port.js';
 import { type AuditInput, SignatureAuditRepository } from './signature-audit.repository.js';
 import { canConnectionTransition, type SignatureConnection,SignatureConnectionRepository } from './signature-connection.repository.js';
 import { SignatureOAuthStateRepository } from './signature-oauth-state.repository.js';
@@ -118,6 +118,10 @@ export interface SignatureConnectionView {
   readonly accessTokenExpiresAt: string | null;
   /** Which adapter answers for this provider in this build. A fake can never sign a real contract. */
   readonly adapterMode: SignatureProviderAdapter['mode'] | 'none';
+  /** The provider's display name, from the catalog. A legacy row falls back to its key. */
+  readonly providerLabel: string;
+  /** Whether this build can connect to the provider, or the integration is only cataloged. */
+  readonly providerStatus: 'available' | 'declared' | 'unknown';
   readonly createdAt: string;
   readonly modifiedAt: string;
 }
@@ -160,10 +164,15 @@ export class ESignatureConnectionService {
     @Inject(SignatureConnectionRepository) private readonly connections: SignatureConnectionRepository,
     @Inject(SignatureOAuthStateRepository) private readonly states: SignatureOAuthStateRepository,
     @Inject(ESignatureCredentialVault) private readonly vault: ESignatureCredentialVaultPort,
-    @Inject(DOCUSIGN_TRANSPORT) private readonly transport: DocuSignTransport,
+    @Inject(SIGNATURE_PROVIDER_AUTHS) authStrategies: readonly SignatureProviderAuthStrategy[],
     @Inject(SignatureProviderRegistry) private readonly providers: SignatureProviderRegistry,
     @Inject(SignatureAuditRepository) private readonly audit: SignatureAuditRepository,
-  ) {}
+  ) {
+    for (const strategy of authStrategies) this.authByProvider.set(strategy.providerKey, strategy);
+  }
+
+  /** The authorization protocol each connectable provider registered in this build. */
+  private readonly authByProvider = new Map<string, SignatureProviderAuthStrategy>();
 
   // ---------------------------------------------------------------------------
   // reads
@@ -212,10 +221,12 @@ export class ESignatureConnectionService {
       lastErrorCode: connection.lastErrorCode,
       pendingAuthorization: (await this.states.countPending(connection.id)) > 0,
       credentials: credentials.map((entry) => toCredentialView(entry)),
-      hasClientSecret: activeOf(DOCUSIGN_KIND_CLIENT_SECRET) !== undefined,
-      hasRefreshToken: activeOf(DOCUSIGN_KIND_REFRESH_TOKEN) !== undefined,
-      accessTokenExpiresAt: activeOf(DOCUSIGN_KIND_ACCESS_TOKEN)?.expiresAt ?? null,
+      hasClientSecret: activeOf(SECRET_KIND_CLIENT_SECRET) !== undefined,
+      hasRefreshToken: activeOf(SECRET_KIND_OAUTH_REFRESH_TOKEN) !== undefined,
+      accessTokenExpiresAt: activeOf(SECRET_KIND_OAUTH_ACCESS_TOKEN)?.expiresAt ?? null,
       adapterMode: this.providers.resolve(connection.providerKey)?.mode ?? 'none',
+      providerLabel: signatureProviderLabel(connection.providerKey),
+      providerStatus: signatureProviderDescriptor(connection.providerKey)?.integrationStatus ?? 'unknown',
       createdAt: connection.createdAt,
       modifiedAt: connection.modifiedAt,
     };
@@ -234,6 +245,7 @@ export class ESignatureConnectionService {
    * says only that a client secret is stored.
    */
   async create(input: {
+    providerKey?: string | undefined;
     name: string;
     environment: ESignatureConnectionEnvironment;
     clientSecret: string;
@@ -242,14 +254,23 @@ export class ESignatureConnectionService {
     connectReference?: string | undefined;
   }): Promise<SignatureConnectionView> {
     const settings = await this.assertControlPlane();
+    // The provider is chosen first and never guessed: an unknown key, a cataloged-but-not-installed
+    // provider, and a provider whose authorization style this command cannot create are three
+    // different refusals, and each names what is wrong.
+    const descriptor = this.connectableProvider(input.providerKey ?? PROVIDER_KEY_DOCUSIGN);
+    this.assertOAuthProvider(descriptor);
+    // A connectable provider must also have a strategy in this build; the check is here, before a
+    // row exists, so a half-configured connection is never visible to the next administrator.
+    this.authStrategy(descriptor);
     const secret = input.clientSecret.trim();
-    if (secret === '') throw new ValidationError('A DocuSign connection needs its OAuth client secret.');
-    if (secret.length > 512) throw new ValidationError('That value is too long to be a DocuSign client secret.');
+    if (secret === '') throw new ValidationError(`A ${descriptor.label} connection needs its OAuth client secret.`);
+    if (secret.length > 512) throw new ValidationError(`That value is too long to be a ${descriptor.label} client secret.`);
     const explicitClientId = (input.oauthClientId ?? '').trim();
-    const clientId = explicitClientId !== '' ? explicitClientId : this.integrationKey(settings, input.environment);
+    const clientId = explicitClientId !== '' ? explicitClientId : this.integrationKey(settings, descriptor.key, input.environment);
     const redirectUri = assertRedirectUri((input.redirectUri ?? '').trim());
 
     const connection = await this.connections.create({
+      providerKey: descriptor.key,
       name: input.name,
       environment: input.environment,
       oauthClientId: clientId,
@@ -257,12 +278,12 @@ export class ESignatureConnectionService {
       connectReference: input.connectReference,
       createdById: this.actorId(),
     });
-    await this.vault.store({ connectionId: connection.id, kind: DOCUSIGN_KIND_CLIENT_SECRET, value: secret });
+    await this.vault.store({ connectionId: connection.id, kind: SECRET_KIND_CLIENT_SECRET, value: secret });
     await this.audit.append({
       action: 'connection.created',
       connectionId: connection.id,
       actor: this.actorRef(),
-      detail: { environment: connection.environment, clientIdPresent: clientId !== '' },
+      detail: { providerKey: connection.providerKey, environment: connection.environment, clientIdPresent: clientId !== '' },
     });
     return this.view(connection);
   }
@@ -331,27 +352,30 @@ export class ESignatureConnectionService {
     const settings = await this.assertControlPlane();
     const connection = await this.require(id);
     if (connection.status === 'disabled') throw providerNotConnectedError('disabled');
+    const descriptor = this.requireProviderDescriptor(connection.providerKey);
+    this.assertOAuthProvider(descriptor);
+    const auth = this.authStrategy(descriptor);
     const storedClientId = (connection.oauthClientId ?? '').trim();
-    const clientId = storedClientId !== '' ? storedClientId : this.integrationKey(settings, connection.environment);
+    const clientId = storedClientId !== '' ? storedClientId : this.integrationKey(settings, descriptor.key, connection.environment);
     if (clientId === '') {
       throw new ValidationError(
-        `No DocuSign integration key is configured for the "${connection.environment}" environment, so this connection cannot be authorized.`,
-        { environment: connection.environment, envVars: [...DOCUSIGN_INTEGRATION_KEY_ENV_VARS] },
+        `No ${descriptor.label} integration key is configured for the "${connection.environment}" environment, so this connection cannot be authorized.`,
+        { providerKey: descriptor.key, environment: connection.environment, envVars: [...descriptor.oauthClientIdEnvVars] },
       );
     }
-    if ((await this.vault.describe({ connectionId: connection.id, kind: DOCUSIGN_KIND_CLIENT_SECRET })) === null) {
+    if ((await this.vault.describe({ connectionId: connection.id, kind: SECRET_KIND_CLIENT_SECRET })) === null) {
       throw new ValidationError('This connection has no stored client secret, so it cannot be authorized.');
     }
     const redirectUri = assertRedirectUri((connection.redirectUri ?? '').trim());
     let scopes: string[];
     try {
-      scopes = resolveScopes(requestedScopes ?? []);
+      scopes = auth.resolveScopes(requestedScopes ?? []);
     } catch (error) {
       // A refused scope is an input the administrator can correct, not a provider failure, so it is
       // reported as a validation problem. `detail` here is always a scope name this file wrote.
       const refused = error instanceof ProviderError ? error.detail : null;
       throw new ValidationError(
-        `Those DocuSign scopes cannot be requested: the set is allowlisted to the minimum the operations need${refused === null ? '.' : ` (refused: ${refused}).`}`,
+        `Those ${descriptor.label} scopes cannot be requested: the set is allowlisted to the minimum the operations need${refused === null ? '.' : ` (refused: ${refused}).`}`,
       );
     }
 
@@ -372,10 +396,13 @@ export class ESignatureConnectionService {
       redirectUri,
       requestedScopes: scopes,
     });
+    if (auth.authorizeUrl === undefined) {
+      throw new ValidationError(`The ${descriptor.label} authorization strategy cannot build a consent URL, so this connection cannot be authorized.`, { providerKey: descriptor.key });
+    }
     return {
       connectionId: connection.id,
       environment: connection.environment,
-      authorizationUrl: docusignAuthorizeUrl({
+      authorizationUrl: auth.authorizeUrl({
         environment: connection.environment,
         clientId,
         redirectUri,
@@ -437,18 +464,23 @@ export class ESignatureConnectionService {
     }
     if (connection.status === 'disabled') throw providerNotConnectedError('disabled');
 
+    const descriptor = this.requireProviderDescriptor(connection.providerKey);
+    this.assertOAuthProvider(descriptor);
+    const auth = this.authStrategy(descriptor);
+    if (auth.exchangeCode === undefined) {
+      throw new ValidationError(`The ${descriptor.label} authorization strategy cannot exchange a code, so this connection cannot be authorized.`, { providerKey: descriptor.key });
+    }
     const settings = await this.settingsService.settings();
     const storedClientId = (connection.oauthClientId ?? '').trim();
-    const clientId = storedClientId !== '' ? storedClientId : this.integrationKey(settings, connection.environment);
-    const clientSecret = await this.vault.read({ connectionId: connection.id, kind: DOCUSIGN_KIND_CLIENT_SECRET });
+    const clientId = storedClientId !== '' ? storedClientId : this.integrationKey(settings, descriptor.key, connection.environment);
+    const clientSecret = await this.vault.read({ connectionId: connection.id, kind: SECRET_KIND_CLIENT_SECRET });
     if (clientSecret === null) {
       throw new ValidationError('This connection has no stored client secret, so it cannot be authorized.');
     }
 
-    const oauth = new DocuSignOAuthClient(this.transport);
-    let tokens: DocuSignTokenSet;
+    let tokens: SignatureProviderTokenSet;
     try {
-      tokens = await oauth.exchangeCode({
+      tokens = await auth.exchangeCode({
         environment: connection.environment,
         clientId,
         clientSecret,
@@ -463,18 +495,13 @@ export class ESignatureConnectionService {
       throw toModuleError(error, connection.providerKey);
     }
 
-    let info: DocuSignUserInfo;
+    // The provider — not this installation — decides which account the credential belongs to and
+    // where that account's API lives (plan §3.2, audit §4).
+    let account: Awaited<ReturnType<SignatureProviderAuthStrategy['accountContext']>>;
     try {
-      info = await oauth.userinfo(connection.environment, tokens.accessToken);
+      account = await auth.accountContext({ environment: connection.environment, accessToken: tokens.accessToken });
     } catch (error) {
       await this.refuseGrant(connection, error, 'ACCOUNT_LOOKUP_FAILED');
-      throw toModuleError(error, connection.providerKey);
-    }
-    let account: DocuSignUserAccount;
-    try {
-      account = selectDocuSignAccount(info, null);
-    } catch (error) {
-      await this.refuseGrant(connection, error, 'ACCOUNT_UNRESOLVED');
       throw toModuleError(error, connection.providerKey);
     }
 
@@ -511,7 +538,7 @@ export class ESignatureConnectionService {
       accountId: account.accountId,
       accountName: account.accountName ?? undefined,
       baseUri: account.baseUri,
-      subjectUserId: info.subjectUserId ?? undefined,
+      subjectUserId: account.subjectUserId ?? undefined,
       grantedScopes: granted,
       consentStatus: 'granted',
       oauthClientId: clientId,
@@ -638,7 +665,7 @@ export class ESignatureConnectionService {
 
   /** Whether a refresh is needed *now*, from the expiry stamp alone — no decryption, no provider call. */
   async needsRefresh(id: string): Promise<boolean> {
-    const current = await this.vault.describe({ connectionId: id, kind: DOCUSIGN_KIND_ACCESS_TOKEN });
+    const current = await this.vault.describe({ connectionId: id, kind: SECRET_KIND_OAUTH_ACCESS_TOKEN });
     return needsRefresh(current?.expiresAt ?? null);
   }
 
@@ -661,7 +688,7 @@ export class ESignatureConnectionService {
     }
     if (connection.accountId === null || connection.baseUri === null) throw providerNotConnectedError('not_authorized');
     if (await this.needsRefresh(connection.id)) await this.refresh(connection.id);
-    const accessToken = await this.vault.read({ connectionId: connection.id, kind: DOCUSIGN_KIND_ACCESS_TOKEN });
+    const accessToken = await this.vault.read({ connectionId: connection.id, kind: SECRET_KIND_OAUTH_ACCESS_TOKEN });
     if (accessToken === null) throw providerNotConnectedError('not_authorized');
     return {
       connectionId: connection.id,
@@ -682,12 +709,18 @@ export class ESignatureConnectionService {
       // destroyed by a second concurrent refresh, so this lock is a correctness requirement.
       await sql`select pg_advisory_xact_lock(hashtext(${id}))`.execute(tx);
 
-      const current = await this.vault.describe({ connectionId: id, kind: DOCUSIGN_KIND_ACCESS_TOKEN });
+      const current = await this.vault.describe({ connectionId: id, kind: SECRET_KIND_OAUTH_ACCESS_TOKEN });
       // Another worker may have refreshed while this one waited for the lock; it then makes no call.
       if (current !== null && !needsRefresh(current.expiresAt)) return { refreshed: false, expiresAt: current.expiresAt };
 
       const connection = await this.require(id);
-      const refreshToken = await this.vault.read({ connectionId: id, kind: DOCUSIGN_KIND_REFRESH_TOKEN });
+      const descriptor = this.requireProviderDescriptor(connection.providerKey);
+      this.assertOAuthProvider(descriptor);
+      const auth = this.authStrategy(descriptor);
+      if (auth.refresh === undefined) {
+        throw new ValidationError(`The ${descriptor.label} authorization strategy cannot refresh a token.`);
+      }
+      const refreshToken = await this.vault.read({ connectionId: id, kind: SECRET_KIND_OAUTH_REFRESH_TOKEN });
       if (refreshToken === null) {
         // A refresh with nothing to refresh is a connection a human must authorize again.
         await this.moveToReauthorization(id, 'REFRESH_TOKEN_MISSING');
@@ -695,15 +728,15 @@ export class ESignatureConnectionService {
       }
       const settings = await this.settingsService.settings();
       const storedClientId = (connection.oauthClientId ?? '').trim();
-      const clientId = storedClientId !== '' ? storedClientId : this.integrationKey(settings, connection.environment);
-      const clientSecret = await this.vault.read({ connectionId: id, kind: DOCUSIGN_KIND_CLIENT_SECRET });
+      const clientId = storedClientId !== '' ? storedClientId : this.integrationKey(settings, descriptor.key, connection.environment);
+      const clientSecret = await this.vault.read({ connectionId: id, kind: SECRET_KIND_CLIENT_SECRET });
       if (clientSecret === null) {
         await this.moveToReauthorization(id, 'CLIENT_SECRET_MISSING');
         throw providerNotConnectedError('not_authorized');
       }
-      let tokens: DocuSignTokenSet;
+      let tokens: SignatureProviderTokenSet;
       try {
-        tokens = await new DocuSignOAuthClient(this.transport).refresh({
+        tokens = await auth.refresh({
           environment: connection.environment,
           clientId,
           clientSecret,
@@ -729,19 +762,19 @@ export class ESignatureConnectionService {
     }
   }
 
-  private async storeTokens(connectionId: string, tokens: DocuSignTokenSet): Promise<void> {
+  private async storeTokens(connectionId: string, tokens: SignatureProviderTokenSet): Promise<void> {
     await this.vault.store({
       connectionId,
-      kind: DOCUSIGN_KIND_ACCESS_TOKEN,
+      kind: SECRET_KIND_OAUTH_ACCESS_TOKEN,
       value: tokens.accessToken,
       expiresAt: tokens.expiresAt,
     });
     if (tokens.refreshToken !== null) {
-      await this.vault.store({ connectionId, kind: DOCUSIGN_KIND_REFRESH_TOKEN, value: tokens.refreshToken });
+      await this.vault.store({ connectionId, kind: SECRET_KIND_OAUTH_REFRESH_TOKEN, value: tokens.refreshToken });
     } else {
-      // DocuSign rotates the refresh token on every grant. An answer without one cannot be refreshed,
-      // so the stale value is destroyed rather than left looking usable.
-      await this.vault.revoke({ connectionId, kind: DOCUSIGN_KIND_REFRESH_TOKEN });
+      // A rotating grant answers without a refresh token only when there is none to keep; the stale
+      // value is destroyed rather than left looking usable.
+      await this.vault.revoke({ connectionId, kind: SECRET_KIND_OAUTH_REFRESH_TOKEN });
     }
   }
 
@@ -809,9 +842,51 @@ export class ESignatureConnectionService {
     return view.settings;
   }
 
-  /** The DocuSign integration key (a public client id) configured for one environment. */
-  private integrationKey(settings: ESignatureSettings, environment: ESignatureConnectionEnvironment): string {
-    return this.settingsService.integrationKey(settings, environment);
+  /** The public OAuth client id configured for one provider and environment. */
+  private integrationKey(settings: ESignatureSettings, providerKey: string, environment: ESignatureConnectionEnvironment): string {
+    return oauthClientIdFor(settings, providerKey, environment);
+  }
+
+  /** The catalog descriptor for a provider key, or a stated refusal. */
+  private requireProviderDescriptor(providerKey: string): SignatureProviderDescriptor {
+    const descriptor = signatureProviderDescriptor(providerKey);
+    if (descriptor === undefined) {
+      throw new ValidationError(`"${providerKey}" is not a signature provider this build knows.`, { providerKey });
+    }
+    return descriptor;
+  }
+
+  /** A provider whose adapter and strategy must both be installed before a connection may exist. */
+  private connectableProvider(providerKey: string): SignatureProviderDescriptor {
+    const descriptor = this.requireProviderDescriptor(providerKey);
+    if (descriptor.integrationStatus !== 'available') {
+      throw new ValidationError(
+        `${descriptor.label} is cataloged as a planned integration, but no adapter or authorization strategy is installed in this build, so a connection cannot be created for it yet.`,
+        { providerKey: descriptor.key, integrationStatus: descriptor.integrationStatus },
+      );
+    }
+    return descriptor;
+  }
+
+  /** Refuse a provider whose grant is not an OAuth authorization-code flow. */
+  private assertOAuthProvider(descriptor: SignatureProviderDescriptor): void {
+    if (descriptor.authStyle !== 'oauth2_authorization_code') {
+      throw new ValidationError(
+        `${descriptor.label} does not use an OAuth authorization-code grant, so a connection cannot be authorized for it in this build.`,
+        { providerKey: descriptor.key, authStyle: descriptor.authStyle },
+      );
+    }
+  }
+
+  /** The strategy bound for a provider, or a refusal that names the missing piece. */
+  private authStrategy(descriptor: SignatureProviderDescriptor): SignatureProviderAuthStrategy {
+    const strategy = this.authByProvider.get(descriptor.key);
+    if (strategy === undefined) {
+      throw new ValidationError(`No authorization strategy is installed for ${descriptor.label} in this build.`, {
+        providerKey: descriptor.key,
+      });
+    }
+    return strategy;
   }
 
   private async require(id: string): Promise<SignatureConnection> {

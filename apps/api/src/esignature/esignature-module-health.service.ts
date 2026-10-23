@@ -20,6 +20,7 @@ import {
 } from './esignature-module.js';
 import { ESignatureOperationsService } from './esignature-operations.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { SIGNATURE_PROVIDER_CATALOG } from './providers/signature-provider.catalog.js';
 import { type SignatureProviderDescriptor, SignatureProviderRegistry } from './providers/signature-provider.registry.js';
 
 /**
@@ -67,6 +68,7 @@ export interface ESignatureHealthView {
     readonly webhookPrefix: string;
     readonly frontendRoute: string;
     readonly providerKeys: readonly string[];
+    readonly availableProviderKeys: readonly string[];
     readonly implementedPhases: readonly string[];
   };
   /** The platform foundation this module builds on. */
@@ -87,6 +89,15 @@ export interface ESignatureHealthView {
   readonly providerCapabilities: Readonly<Record<string, boolean>>;
   /** The adapters actually bound in this build, and in which mode (plan §9.4, ES.3). */
   readonly providerAdapters: readonly SignatureProviderDescriptor[];
+  /** Every provider this build knows, with its declared status and the adapter bound for it. */
+  readonly providerCatalog: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly authStyle: string;
+    readonly integrationStatus: 'available' | 'declared';
+    readonly adapterMode: SignatureProviderDescriptor['mode'] | 'none';
+    readonly capabilities: Readonly<Record<string, boolean>>;
+  }[];
   readonly structures: readonly { readonly name: string; readonly present: boolean }[];
   readonly settings: {
     readonly key: string;
@@ -178,7 +189,18 @@ export class ESignatureModuleHealthService {
     // what is reported until then, so an operator never reads "supported" for code that is not there.
     const boundAdapter = this.providers.resolve(PROVIDER_KEY_DOCUSIGN);
     const boundCapabilities = boundAdapter?.capabilities ?? null;
-    const adapterMode = boundAdapter?.mode ?? 'none';
+    const providerCatalog = SIGNATURE_PROVIDER_CATALOG.map((descriptor) => ({
+      key: descriptor.key,
+      label: descriptor.label,
+      authStyle: descriptor.authStyle,
+      integrationStatus: descriptor.integrationStatus,
+      adapterMode: this.providers.resolve(descriptor.key)?.mode ?? ('none' as const),
+      capabilities: descriptor.capabilities as Readonly<Record<string, boolean>>,
+    }));
+    const adapterSummary = providerCatalog
+      .filter((entry) => entry.adapterMode !== 'none')
+      .map((entry) => `${entry.key}: ${entry.adapterMode}`)
+      .join(', ');
 
     const checks: { name: string; ok: boolean; detail: string }[] = [
       {
@@ -203,11 +225,11 @@ export class ESignatureModuleHealthService {
         // saying so is the point — an operator who reads "live" while a fake is bound would believe a
         // connection test contacted a provider. `none` means nothing can be attempted.
         name: 'provider-adapter',
-        ok: adapterMode !== 'none',
+        ok: providerCatalog.some((entry) => entry.adapterMode !== 'none'),
         detail:
-          adapterMode === 'none'
+          adapterSummary === ''
             ? 'No signature provider adapter is bound, so no provider operation can be attempted.'
-            : `A "${adapterMode}" adapter is bound for "${PROVIDER_KEY_DOCUSIGN}" (${boundAdapter?.adapterVersion ?? ''}, API ${boundAdapter?.providerApiVersion ?? ''}). A fake adapter can never sign a real contract.`,
+            : `Bound adapters: ${adapterSummary}. A fake adapter can never sign a real contract.`,
       },
       {
         name: 'connection-gate',
@@ -247,6 +269,7 @@ export class ESignatureModuleHealthService {
         webhookPrefix: ESIGNATURE_MODULE.webhookPrefix,
         frontendRoute: ESIGNATURE_MODULE.frontendRoute,
         providerKeys: ESIGNATURE_MODULE.providerKeys,
+        availableProviderKeys: ESIGNATURE_MODULE.availableProviderKeys,
         implementedPhases: ESIGNATURE_MODULE.implementedPhases,
       },
       ok: dependencies.every((dependency) => dependency.present),
@@ -255,6 +278,7 @@ export class ESignatureModuleHealthService {
       features,
       providerCapabilities: boundCapabilities ?? DOCUSIGN_PROVIDER_CAPABILITIES,
       providerAdapters: this.providers.report(),
+      providerCatalog,
       structures,
       settings: {
         key: ESIGNATURE_SETTINGS_KEY,

@@ -12,6 +12,7 @@ import {
   type ESignatureConnectionStatus,
   PROVIDER_KEY_DOCUSIGN,
 } from './esignature-domain.js';
+import { isSignatureProviderKey, SIGNATURE_PROVIDER_KEYS } from './providers/signature-provider.keys.js';
 
 /**
  * Phase 19-ES.2 — the provider connection repository
@@ -125,15 +126,22 @@ export class SignatureConnectionRepository {
     return currentTx() ?? this.database.db;
   }
 
-  /** A live connection in the only state that permits a provider call (the gate's hot read). */
-  async countUsable(): Promise<number> {
-    const row = await this.db
+  /**
+   * A live connection in the only state that permits a provider call (the gate's hot read).
+   *
+   * Scoped to one provider when asked: a request must not be admitted because a *different*
+   * provider happens to be connected. Without a key it answers "any usable connection", which is
+   * what the module health view reports.
+   */
+  async countUsable(providerKey?: string): Promise<number> {
+    let query = this.db
       .selectFrom('esignature_connections')
       .select((eb) => eb.fn.countAll<string>().as('n'))
       .where('deleted_at', 'is', null)
       .where('status', '=', CONNECTED_STATUS)
-      .where('is_active', '=', true)
-      .executeTakeFirst();
+      .where('is_active', '=', true);
+    if (providerKey !== undefined) query = query.where('provider_key', '=', providerKey);
+    const row = await query.executeTakeFirst();
     return Number.parseInt(String(row?.n ?? '0'), 10) || 0;
   }
 
@@ -169,6 +177,7 @@ export class SignatureConnectionRepository {
    * no default, because guessing demo versus production is a plan §9.4 incident waiting to happen.
    */
   async create(input: {
+    providerKey?: string | undefined;
     name: string;
     environment: ESignatureConnectionEnvironment;
     oauthClientId?: string | undefined;
@@ -179,6 +188,13 @@ export class SignatureConnectionRepository {
   }): Promise<SignatureConnection> {
     const name = input.name.trim();
     if (name === '') throw new ValidationError('A signature connection needs a name.');
+    const providerKey = input.providerKey ?? PROVIDER_KEY_DOCUSIGN;
+    if (!isSignatureProviderKey(providerKey)) {
+      throw new ValidationError(`"${providerKey}" is not a signature provider this build knows.`, {
+        providerKey,
+        known: [...SIGNATURE_PROVIDER_KEYS],
+      });
+    }
     if (!CONNECTION_ENVIRONMENTS.includes(input.environment)) {
       throw new ValidationError('A signature connection names either the demo or the production environment.', {
         environment: input.environment,
@@ -192,7 +208,7 @@ export class SignatureConnectionRepository {
       .values({
         id,
         name,
-        provider_key: PROVIDER_KEY_DOCUSIGN,
+        provider_key: providerKey,
         environment: input.environment,
         status: 'not_connected',
         is_active: false,

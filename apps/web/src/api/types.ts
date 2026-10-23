@@ -3183,8 +3183,33 @@ export interface ESignatureConnectionView {
   readonly hasRefreshToken: boolean;
   readonly accessTokenExpiresAt: string | null;
   readonly adapterMode: 'live' | 'fake' | 'disabled' | 'none';
+  /** The catalog's display name for the provider, so the UI never hard-codes a vendor. */
+  readonly providerLabel: string;
+  /** `declared` means the provider is cataloged but its integration is not installed here. */
+  readonly providerStatus: 'available' | 'declared' | 'unknown';
   readonly createdAt: string;
   readonly modifiedAt: string;
+}
+
+/**
+ * One entry of `GET /ESignature/action/provider-catalog`.
+ * A declared provider appears in the picker but cannot be connected in this build.
+ */
+export interface ESignatureProviderCatalogEntry {
+  readonly key: string;
+  readonly label: string;
+  readonly description: string;
+  readonly authStyle: 'oauth2_authorization_code' | 'api_key';
+  readonly integrationStatus: 'available' | 'declared';
+  readonly capabilities: Readonly<Record<string, boolean>>;
+  readonly documentLimits: { readonly maxDocumentBytes: number; readonly supportedExtensions: readonly string[] } | null;
+  readonly oauthClientIdEnvVars: readonly string[];
+  readonly oauthClientIdSettingsPath: string | null;
+  readonly documentationUrl: string;
+}
+
+export interface ESignatureProviderCatalogView {
+  readonly providers: readonly ESignatureProviderCatalogEntry[];
 }
 
 /** `POST /ESignature/connections/:id/authorize`. The URL is the only place the state appears. */

@@ -33,6 +33,7 @@ import { ESignatureReportService } from './esignature-report.service.js';
 import { ESignatureRequestService } from './esignature-request.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { ESignatureWebhookService } from './esignature-webhook.service.js';
+import { SIGNATURE_PROVIDER_CATALOG } from './providers/signature-provider.catalog.js';
 
 /**
  * Phase 19-ES.1 — the `ESignature` control-plane API
@@ -97,6 +98,20 @@ export class ESignatureController {
   async nav() {
     await this.permissions.assert('use');
     return this.navigation.visibility();
+  }
+
+  /**
+   * The provider catalog: which e-signature providers this build knows, how each authenticates and
+   * whether its integration is installed.
+   *
+   * The admin screen builds its provider picker from this answer instead of hard-coding a vendor.
+   * It is readable with `connectionRead` and carries no credential — the client id in settings is
+   * public, and the matching secret never leaves the vault.
+   */
+  @Get('action/provider-catalog')
+  async providerCatalog() {
+    await this.permissions.assert('connectionRead');
+    return { providers: SIGNATURE_PROVIDER_CATALOG };
   }
 
   // ---------------------------------------------------------------------------
@@ -245,9 +260,9 @@ export class ESignatureController {
   @HttpCode(200)
   @Post('action/gate/check')
   async checkOperation(@Body() body: unknown) {
-    const { operation } = this.parse(OperationProbeSchema, body);
-    await this.gate.assertOperation(operation);
-    return { operation, admitted: true };
+    const { operation, providerKey } = this.parse(OperationProbeSchema, body);
+    await this.gate.assertOperation(operation, providerKey);
+    return { operation, providerKey: providerKey ?? null, admitted: true };
   }
 
   /** The operation names the gate knows, so a client never guesses a string. */

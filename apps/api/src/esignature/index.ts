@@ -32,6 +32,7 @@ import { ESignatureTemplateService } from './esignature-template.service.js';
 import { ESignatureWebhookController } from './esignature-webhook.controller.js';
 import { ESignatureWebhookService } from './esignature-webhook.service.js';
 import { DocuSignAdapter } from './providers/docusign/docusign-adapter.js';
+import { createDocuSignAuthStrategy } from './providers/docusign/docusign-auth.strategy.js';
 import {
   createDefaultDocuSignTransport,
   DOCUSIGN_TRANSPORT,
@@ -40,6 +41,10 @@ import {
 import { createFakeSignatureProviderAdapter } from './providers/fake-signature-provider.adapter.js';
 import type { SignatureProviderAdapter } from './providers/signature-provider.port.js';
 import { SIGNATURE_PROVIDER_ADAPTERS,SignatureProviderRegistry } from './providers/signature-provider.registry.js';
+import {
+  SIGNATURE_PROVIDER_AUTHS,
+  type SignatureProviderAuthStrategy,
+} from './providers/signature-provider-auth.port.js';
 import { SignatureAuditRepository } from './signature-audit.repository.js';
 import { SignatureConnectionRepository } from './signature-connection.repository.js';
 import { SignatureDocumentSnapshotRepository } from './signature-document-snapshot.repository.js';
@@ -90,6 +95,19 @@ const signatureProviderAdaptersProvider = {
   provide: SIGNATURE_PROVIDER_ADAPTERS,
   useFactory: (transport: DocuSignTransport): SignatureProviderAdapter[] =>
     process.env.NODE_ENV === 'production' ? [new DocuSignAdapter(transport)] : [createFakeSignatureProviderAdapter()],
+  inject: [DOCUSIGN_TRANSPORT],
+};
+
+/**
+ * The authorization strategies this build binds.
+ *
+ * A strategy is what makes a catalog entry connectable: the connection service asks the catalog which
+ * style a provider uses, then asks this list for the protocol. DocuSign is the first; a new provider
+ * registers its own here and needs no change in the connection service.
+ */
+const signatureProviderAuthsProvider = {
+  provide: SIGNATURE_PROVIDER_AUTHS,
+  useFactory: (transport: DocuSignTransport): SignatureProviderAuthStrategy[] => [createDocuSignAuthStrategy(transport)],
   inject: [DOCUSIGN_TRANSPORT],
 };
 
@@ -145,6 +163,7 @@ export const ESIGNATURE_PROVIDERS = [
   // `signatureProviderAdaptersProvider` decides which one answers for `docusign`.
   SignatureProviderRegistry,
   signatureProviderAdaptersProvider,
+  signatureProviderAuthsProvider,
 ] as const;
 
 export { ESignatureController } from './esignature.controller.js';
@@ -362,6 +381,23 @@ export {
   FakeSignatureProviderAdapter,
 } from './providers/fake-signature-provider.adapter.js';
 export {
+  availableSignatureProviderKeys,
+  declaredSignatureProviderKeys,
+  DOCUSIGN_DOCUMENT_LIMITS,
+  isSignatureProviderAvailable,
+  isSignatureProviderOAuth,
+  NO_SIGNATURE_PROVIDER_CAPABILITIES,
+  SIGNATURE_PROVIDER_CATALOG,
+  type SignatureProviderAuthStyle,
+  type SignatureProviderDescriptor as SignatureProviderCatalogEntry,
+  signatureProviderDescriptor,
+  type SignatureProviderDocumentLimits,
+  signatureProviderDocumentLimits,
+  type SignatureProviderIntegrationStatus,
+  signatureProviderLabel,
+  signatureProviderOAuthEnvVars,
+} from './providers/signature-provider.catalog.js';
+export {
   classifyAdapterError,
   type ESignatureProviderErrorCategory,
   isSendOutcomeUnknownError,
@@ -377,6 +413,12 @@ export {
   prepareIdentity,
   sendIdentity,
 } from './providers/signature-provider.idempotency.js';
+export {
+  isSignatureProviderKey,
+  PROVIDER_KEY_DROPBOX_SIGN,
+  SIGNATURE_PROVIDER_KEYS,
+  type SignatureProviderKey,
+} from './providers/signature-provider.keys.js';
 export {
   adapterSupports,
   assertAdapterContract,
@@ -401,6 +443,12 @@ export {
   SIGNATURE_PROVIDER_ADAPTERS,
   type SignatureProviderDescriptor,
 } from './providers/signature-provider.registry.js';
+export {
+  SIGNATURE_PROVIDER_AUTHS,
+  type SignatureProviderAccount,
+  type SignatureProviderAuthStrategy,
+  type SignatureProviderTokenSet,
+} from './providers/signature-provider-auth.port.js';
 export {
   redactDetail,
   type SignatureAuditEntry,

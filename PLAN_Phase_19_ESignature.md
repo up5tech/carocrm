@@ -29,7 +29,7 @@ Read these files before implementation:
 - Build an independent TypeScript/NestJS implementation based on public APIs and documented behavior. Do not copy or mechanically translate EspoCRM source files, upstream assets, translations, icons, or branding.
 - Reuse existing authentication, Users, Teams, ACL, Entity Engine, metadata, API response conventions, validation, Audit/History, Attachments/Documents, Activities, notifications, job queue, logging, settings, encryption/secrets infrastructure, and module registration when available.
 - Do not create duplicate CRM `Account`, `Contact`, `User`, `Document`, `Activity`, or generic attachment systems. `ESignature` owns signature workflow records and provider-specific mapping, not generic CRM identity or file storage.
-- Keep e-signature provider calls behind an adapter contract. **DocuSign is the first concrete adapter and the initial delivery target.** Do not add another provider before the DocuSign end-to-end path is stable.
+- Keep e-signature provider calls behind an adapter contract. **DocuSign is the first concrete adapter and the reference implementation.** The multi-provider follow-on adds a provider catalog plus an authorization-strategy contract, so another provider is a new descriptor and adapter rather than a change above the boundary. A cataloged provider whose adapter is not installed must not be connectable.
 - Use the official DocuSign Node.js SDK when it fits the repository's Node/runtime/security requirements; confirm the current stable package version at implementation time, use the existing package manager and lockfile, and avoid hand-rolling API types unnecessarily.
 - Use DocuSign's supported OAuth flows and server-side token handling. Never expose access tokens, refresh tokens, private keys, OAuth client secrets, HMAC secrets, or raw credentials to the browser.
 - Verify webhook authenticity, process webhook events idempotently, tolerate duplicate and out-of-order notifications, and preserve event evidence needed to reconcile state changes.
@@ -46,7 +46,7 @@ Read these files before implementation:
 
 Implement a secure, auditable e-signature domain module that allows authorized CRM users to prepare documents, select signers, send signature requests through DocuSign, track progress, retrieve completed documents and completion evidence, and link every signature transaction to the relevant CRM record.
 
-The first release is deliberately **DocuSign-first**, while the domain model and adapter boundary should make a future provider possible without forcing the rest of the CRM to speak DocuSign's API directly.
+Delivery is deliberately **DocuSign-first**, while the domain model, adapter boundary, provider catalog and per-provider settings now make additional providers possible without forcing the rest of the CRM to speak DocuSign's API directly.
 
 ### 1.1 Primary user outcomes
 
@@ -110,7 +110,7 @@ Authorized users must be able to:
 - Supporting every DocuSign API product. The first adapter targets the eSignature REST API capabilities needed for the agreed CRM workflows.
 - Automatic AI interpretation or acceptance of legal terms without a human decision.
 - Generating complex legal contracts from scratch. Document generation can be a future integration or use an existing document-generation module if one exists.
-- Implementing multiple signature providers in the first delivery. Add an additional adapter only after the adapter contract has been validated by the DocuSign implementation.
+- Claiming a provider is supported before its adapter, authorization strategy and webhook verification are implemented and tested. The catalog may list a planned provider (`declared`), but it cannot be connected or used for a request.
 
 ### 2.3 Important boundary with adjacent modules
 
@@ -413,7 +413,7 @@ Suggested fields:
 
 - `id`
 - `name`
-- `providerKey` — first release: `docusign`
+- `providerKey` — a key from the provider catalog; `docusign` is the reference provider
 - `environment` — `demo` or `production`
 - `status` — `not_connected`, `connected`, `reauthorization_required`, `disabled`, `error`
 - `oauthClientId` (not secret)

@@ -2,7 +2,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { ESignatureConnectionGate } from '../src/esignature/esignature-connection-gate.service.js';
-import { DEFAULT_ESIGNATURE_SETTINGS } from '../src/esignature/esignature-settings.service.js';
+import { DEFAULT_ESIGNATURE_SETTINGS, ESignatureSettingsService } from '../src/esignature/esignature-settings.service.js';
 import { buildSnapshot, type OutgoingSnapshotData } from '../src/esignature/esignature-snapshot.js';
 import { SignatureAuditRepository } from '../src/esignature/signature-audit.repository.js';
 import { SignatureConnectionRepository } from '../src/esignature/signature-connection.repository.js';
@@ -583,21 +583,44 @@ describe('template mappings', () => {
 });
 
 describe('the gate after ES.2', () => {
-  it('still refuses a send with a live connection, because the connection phase has not shipped', async () => {
+  it('still refuses a send while the connections feature is off, even with a live connection', async () => {
     const { connections, gate } = repositories();
     const connection = await connections.create({ name: marker('conn_gate2'), environment: 'demo' });
     created.connections.push(connection.id);
     await connections.recordAuthorized(connection.id, { accountId: 'acct-1', baseUri: 'https://demo.docusign.net', grantedScopes: ['signature'] });
 
-    const assessment = await gate.assessment();
-    expect(assessment.enabledConnections).toBeGreaterThan(0);
-    // The feature flag is what stays closed until ES.4, so a stray connection row cannot open the
-    // module: plan §18 acceptance holds across both mechanisms.
-    expect(assessment.ready).toBe(false);
-    // Resolved outside a request, the caller holds no capability at all, so the very first wall is
-    // the permission check. The API-level refusal of the module switch is covered in
-    // `esignature.test.ts`; either way, nothing is admitted.
-    await expect(gate.assertOperation('sendEnvelope')).rejects.toThrow(/Permission|not enabled/);
+    // The assertion needs a known policy, so the one fact it is about is pinned for the duration of
+    // the test and the row is restored byte-for-byte afterwards (AGENTS.md §3.3): an installation
+    // that is configured stays exactly as it was found.
+    const db = ctx.database.db;
+    const row = await db.selectFrom('app_settings').select('data').where('name', '=', 'ESignature').executeTakeFirst();
+    const settings = app.get(ESignatureSettingsService);
+    const current = await settings.read();
+    try {
+      await settings.update({ enabled: true, features: { ...current.settings.features, connections: false } });
+
+      const assessment = await gate.assessment();
+      expect(assessment.enabledConnections).toBeGreaterThan(0);
+      // The feature flag is what keeps the gate closed, so a stray connection row cannot open the
+      // module: plan §18 acceptance holds across both mechanisms.
+      expect(assessment.ready).toBe(false);
+      // Resolved outside a request, the caller holds no capability at all, so the very first wall is
+      // the permission check. The API-level refusal of the module switch is covered in
+      // `esignature.test.ts`; either way, nothing is admitted.
+      await expect(gate.assertOperation('sendEnvelope')).rejects.toThrow(/Permission|not enabled/);
+    } finally {
+      if (row === undefined) {
+        await db.deleteFrom('app_settings').where('name', '=', 'ESignature').execute();
+      } else {
+        const serialized = JSON.stringify(row.data);
+        await db
+          .insertInto('app_settings')
+          .values({ name: 'ESignature', data: serialized, modified_at: new Date() })
+          .onConflict((oc) => oc.column('name').doUpdateSet({ data: serialized, modified_at: new Date() }))
+          .execute();
+      }
+      settings.invalidate();
+    }
   });
 });
 

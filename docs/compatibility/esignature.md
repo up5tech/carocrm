@@ -35,12 +35,39 @@ or branding is copied. DocuSign product names are used only to describe the exte
 
 | Item | Decision |
 | --- | --- |
-| Provider | DocuSign, first and only adapter for the initial release |
+| Provider | DocuSign (reference adapter, `available`). The module is provider-neutral: a catalog lists every provider this build knows, and `dropbox_sign` is listed as `declared` but not installed |
 | API | **eSignature REST API v2.1** (`/restapi/v2.1/accounts/{accountId}/…`) — envelopes, recipients, templates, views, combined documents |
 | Out of surface | CLM, Rooms, MA, Click, Connect *management* APIs (beyond minimal Connect event configuration), billing, bulk send, eSign admin APIs |
 | API base URI | Discovered per account from `GET {authHost}/oauth/userinfo` → `accounts[]` → `base_uri`; REST calls go to `{base_uri}/restapi/v2.1/accounts/{account_id}/`. A data-center host is never hard-coded |
 | Auth hosts | Demo: `https://account-d.docusign.com` · Production: `https://account.docusign.com` |
 | Node SDK | `docusign-esign` **10.1.0** (2026-10-15, MIT, targets API v2.1-26.3.01.02, vendor states Node 12+). Adopted **behind the adapter** after dependency/license review (ES.21); SDK types never cross the adapter boundary; a thin REST fallback via the platform HTTP wrapper is allowed where the SDK lags |
+
+### 1.1 Provider catalog
+
+`SIGNATURE_PROVIDER_CATALOG` (`apps/api/src/esignature/providers/signature-provider.catalog.ts`) is
+the single source for provider keys, display names, authentication style, document limits and
+declared availability. It is exposed read-only at `GET /api/v1/ESignature/action/provider-catalog`
+(`connectionRead`) and drives the admin picker and the per-provider settings fields.
+
+| Provider key | Label | Auth style | Status | Connectable |
+| --- | --- | --- | --- | --- |
+| `docusign` | DocuSign | OAuth 2.0 authorization code (PKCE, confidential client) | `available` | Yes — auth strategy and adapter are bound |
+| `dropbox_sign` | Dropbox Sign | API key (planned) | `declared` | No — no adapter, auth strategy or webhook verification is installed |
+
+Rules enforced by code, not documentation:
+
+- A connection may only name an `available` provider that has an authorization strategy registered.
+  `dropbox_sign` is refused at create time with a 400 validation refusal that names the missing
+  integration, not at the first send.
+- Capability support is answered by the bound adapter, falling back to the catalog declaration. A
+  `declared` provider declares nothing, so the gate refuses every operation for it.
+- A request fixes its provider when its draft is created (or inherits it from the chosen connection)
+  and cannot be rebound to a connection of another provider.
+- Stored OAuth client ids are per provider and per environment (`provider.clients.<key>.demo` /
+  `.production`). The pre-catalog `provider.demoIntegrationKey` / `provider.productionIntegrationKey`
+  pair is still read as a fallback for DocuSign so an upgrade does not orphan existing connections.
+- Database allowlists were widened by `database/migrations/069_phase19_esignature_provider_catalog.sql`
+  (additive; no row is rewritten).
 
 ## 2. Supported OAuth flows
 
@@ -195,8 +222,10 @@ terminal state backwards; ambiguity triggers reconciliation (plan §4.7, §10.3)
 ## 8. Environment and secret handling (names only)
 
 - Reused env: `ENCRYPTION_KEY` (vault), `RATE_LIMIT_MAX`, `UPLOAD_MAX_MB`, worker `JOB_*`.
-- Non-secret integration keys: **the `ESignature` settings document** (`provider.demoIntegrationKey`,
-  `provider.productionIntegrationKey`), decided in ES.1. `INTEGRATION_OAUTH_CLIENT_IDS` is not reused:
+- Non-secret integration keys: **the `ESignature` settings document**, now keyed per provider
+  (`provider.clients.<providerKey>.demo` / `.production`). The original DocuSign pair
+  (`provider.demoIntegrationKey`, `provider.productionIntegrationKey`) is still read as a fallback so
+  an upgrade keeps its connections. `INTEGRATION_OAUTH_CLIENT_IDS` is not reused:
   it is one JSON map keyed by provider, and DocuSign identities are per environment (demo and
   production never share a client). `DOCUSIGN_DEMO_INTEGRATION_KEY` /
   `DOCUSIGN_PRODUCTION_INTEGRATION_KEY` are recorded as names a deployment may inject instead; both

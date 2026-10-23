@@ -7,11 +7,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import { StreamProbe } from '../attachment/attachment.probe.js';
 import { type AttachmentDto,AttachmentService, FILE_STORAGE_TOKEN } from '../attachment/index.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
+import { PROVIDER_KEY_DOCUSIGN } from './esignature-domain.js';
 import { signatureDocumentNotReadableError, signatureModuleDisabledError } from './esignature-errors.js';
-import { DOCUSIGN_DOCUMENT_RESTRICTIONS } from './esignature-module.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { type ESignatureSettings, ESignatureSettingsService } from './esignature-settings.service.js';
 import { assertEditable } from './esignature-state-machine.js';
+import { signatureProviderDocumentLimits } from './providers/signature-provider.catalog.js';
 import { type AuditInput, SignatureAuditRepository } from './signature-audit.repository.js';
 import {
   type SignatureArtifactKind,
@@ -100,11 +101,14 @@ export class ESignatureDocumentService {
   static policyIssue(
     input: { displayName: string; mimeType: string; byteSize: number; existingDocuments: number },
     settings: ESignatureSettings,
+    providerKey: string = PROVIDER_KEY_DOCUSIGN,
   ): SnapshotRefusal | null {
     const policy = settings.documents;
     const extension = extensionOf(input.displayName);
     const allowed = policy.allowedExtensions.map((value) => value.toLowerCase());
-    if (!allowed.includes(extension) || !(DOCUSIGN_DOCUMENT_RESTRICTIONS.supportedExtensions as readonly string[]).includes(extension)) {
+    const providerLimits = signatureProviderDocumentLimits(providerKey);
+    const providerAccepts = providerLimits === null || providerLimits.supportedExtensions.includes(extension);
+    if (!allowed.includes(extension) || !providerAccepts) {
       return {
         reason: 'type_not_allowed',
         message: `A ".${extension || 'unknown'}" file is not an allowed signature document. Allowed: ${allowed.join(', ')}.`,
@@ -116,7 +120,7 @@ export class ESignatureDocumentService {
       return { reason: 'type_not_allowed', message: `The declared type "${input.mimeType}" does not match the file extension.` };
     }
     if (input.byteSize <= 0) return { reason: 'empty', message: 'The document has no bytes to sign.' };
-    const ceiling = documentCeiling(settings);
+    const ceiling = documentCeiling(settings, providerKey);
     if (input.byteSize > ceiling) {
       return { reason: 'too_large', message: `The document is larger than the ${String(ceiling)} byte ceiling of this installation.` };
     }
@@ -169,6 +173,7 @@ export class ESignatureDocumentService {
     const refusal = ESignatureDocumentService.policyIssue(
       { displayName: attachment.name, mimeType: attachment.mimeType, byteSize: attachment.size, existingDocuments: existing.length },
       settings,
+      request.providerKey,
     );
     if (refusal !== null) throw signatureDocumentNotReadableError(refusal.reason, { filename: attachment.name });
 
@@ -207,6 +212,7 @@ export class ESignatureDocumentService {
         existingDocuments: occupant === undefined ? all.length : all.length - 1,
       },
       settings,
+      request.providerKey,
     );
     if (refusal !== null) throw signatureDocumentNotReadableError(refusal.reason, { filename: attachment.name });
     if (occupant !== undefined) await this.snapshots.removeFromDraft(occupant.id);
@@ -358,7 +364,7 @@ export class ESignatureDocumentService {
     change: 'attached' | 'replaced';
   }): Promise<AttachResult> {
     const { request, attachment, documentOrder, settings, change } = input;
-    const ceiling = documentCeiling(settings);
+    const ceiling = documentCeiling(settings, request.providerKey);
     const known = await this.snapshots.findBySourceAttachment(request.id, attachment.id);
     if (known !== undefined) return { snapshot: known, created: false };
 
@@ -483,9 +489,15 @@ export function extensionOf(filename: string): string {
   return base.slice(dot + 1).replace(/[^a-z0-9]/g, '');
 }
 
-/** The byte ceiling both the installation and the provider accept. */
-export function documentCeiling(settings: ESignatureSettings): number {
-  return Math.min(settings.documents.maxDocumentBytes, DOCUSIGN_DOCUMENT_RESTRICTIONS.maxDocumentBytes);
+/**
+ * The byte ceiling both the installation and the provider accept.
+ *
+ * A provider with no verified limits (a cataloged one) imposes none here: the settings policy alone
+ * decides, rather than refusing documents against a number nobody checked.
+ */
+export function documentCeiling(settings: ESignatureSettings, providerKey: string = PROVIDER_KEY_DOCUSIGN): number {
+  const providerLimit = signatureProviderDocumentLimits(providerKey)?.maxDocumentBytes;
+  return providerLimit === undefined ? settings.documents.maxDocumentBytes : Math.min(settings.documents.maxDocumentBytes, providerLimit);
 }
 
 function isPdfMime(mimeType: string): boolean {

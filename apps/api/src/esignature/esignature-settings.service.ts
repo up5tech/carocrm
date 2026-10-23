@@ -15,6 +15,12 @@ import {
   ESIGNATURE_SETTINGS_VERSION,
   PENDING_FEATURES,
 } from './esignature-module.js';
+import {
+  SIGNATURE_PROVIDER_CATALOG,
+  signatureProviderDescriptor,
+  signatureProviderOAuthEnvVars,
+} from './providers/signature-provider.catalog.js';
+import { PROVIDER_KEY_DOCUSIGN } from './providers/signature-provider.keys.js';
 
 /**
  * Phase 19-ES.1 — the module's settings and security policy
@@ -123,12 +129,32 @@ export const ESignatureSettingsSchema = z
     provider: z
       .object({
         /**
-         * The DocuSign integration key (OAuth **client** id) for the demo/developer environment.
-         * Public by nature, and never the client secret. Read from
-         * `DOCUSIGN_DEMO_INTEGRATION_KEY` when that variable is set (ES.0 audit §8, decided here).
+         * A provider's public OAuth **client** id, per environment (multi-provider follow-on).
+         *
+         * Keyed by the catalog's provider key (`docusign`, …). Public by nature — the matching
+         * client secret lives only in the encrypted vault — and kept per environment because demo
+         * and production are separate clients that are never switched silently (plan §9.2).
+         */
+        clients: z
+          .record(
+            z.string().trim().min(1).max(48),
+            z
+              .object({
+                demo: z.string().trim().max(128).default(''),
+                production: z.string().trim().max(128).default(''),
+              })
+              .strict(),
+          )
+          .default({}),
+        /**
+         * @deprecated The DocuSign integration key in its original single-provider shape.
+         *
+         * Kept so an installation that upgraded does not lose the value its connection was created
+         * with: `toView` folds it into `clients.docusign` when the new shape is absent, and saves
+         * through the new fields. Remove only with a migration that rewrites existing settings rows.
          */
         demoIntegrationKey: z.string().trim().max(128).default(''),
-        /** The same for the production environment; a distinct client id, never switched silently. */
+        /** @deprecated See `demoIntegrationKey`. */
         productionIntegrationKey: z.string().trim().max(128).default(''),
       })
       .strict()
@@ -214,7 +240,29 @@ export const ESignatureSettingsSchema = z
      */
     environmentLabel: z.string().trim().max(60).default(''),
   })
-  .strict();
+  .strict()
+  .superRefine((settings, context) => {
+    // A provider key is a closed vocabulary, and only an OAuth provider has a public client id to
+    // store. An unknown key would be a typo that silently configures nothing.
+    for (const key of Object.keys(settings.provider.clients)) {
+      const descriptor = signatureProviderDescriptor(key);
+      if (descriptor === undefined) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['provider', 'clients', key],
+          message: `"${key}" is not a signature provider this build knows.`,
+        });
+        continue;
+      }
+      if (descriptor.authStyle !== 'oauth2_authorization_code') {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['provider', 'clients', key],
+          message: `"${descriptor.label}" does not authenticate with an OAuth client id; its credential belongs in the vault, not in settings.`,
+        });
+      }
+    }
+  });
 
 export type ESignatureSettings = z.infer<typeof ESignatureSettingsSchema>;
 
@@ -267,12 +315,15 @@ export function settingsWarnings(settings: ESignatureSettings): SettingsWarning[
         'DocuSign Connect deliveries are accepted without verifying the account HMAC signature. Any caller could move a contract state; turn this back on outside a deliberate debugging session.',
     });
   }
-  if (settings.features.connections && settings.provider.demoIntegrationKey.trim() === '' && settings.provider.productionIntegrationKey.trim() === '') {
-    warnings.push({
-      code: 'noIntegrationKey',
-      message:
-        'Connections are enabled but neither a demo nor a production DocuSign integration key is configured, so no connection can be authorized.',
-    });
+  if (settings.features.connections) {
+    for (const descriptor of SIGNATURE_PROVIDER_CATALOG) {
+      if (descriptor.integrationStatus !== 'available' || descriptor.authStyle !== 'oauth2_authorization_code') continue;
+      if (oauthClientIdFor(settings, descriptor.key, 'demo') !== '' || oauthClientIdFor(settings, descriptor.key, 'production') !== '') continue;
+      warnings.push({
+        code: `noIntegrationKey:${descriptor.key}`,
+        message: `Connections are enabled but no ${descriptor.label} integration key is configured for either environment, so no ${descriptor.label} connection can be authorized.`,
+      });
+    }
   }
   if (
     settings.features.approvals &&
@@ -354,18 +405,15 @@ export class ESignatureSettingsService {
   }
 
   /**
-   * The effective DocuSign integration key (OAuth **client** id) for one environment — ES.4's single
-   * read path.
+   * The effective OAuth integration key (a **public** client id) for one provider and environment —
+   * the connection service's single read path.
    *
-   * The stored document is the only source. An operator may keep it in the deployment environment
-   * instead (see `DOCUSIGN_INTEGRATION_KEY_ENV_VARS`), which ES.4 reads while creating a connection;
-   * nothing here can read a process environment it was not given, and the result is a **public
-   * client id** — the matching secret is only ever in the vault.
+   * The stored document is the source. The legacy single-provider DocuSign fields are still honored
+   * when the per-provider entry is empty, so an upgraded installation keeps the client id its
+   * connections were created with. The matching secret is only ever in the vault.
    */
-  integrationKey(settings: ESignatureSettings, environment: 'demo' | 'production'): string {
-    return environment === 'demo'
-      ? settings.provider.demoIntegrationKey.trim()
-      : settings.provider.productionIntegrationKey.trim();
+  integrationKey(settings: ESignatureSettings, providerKey: string, environment: 'demo' | 'production'): string {
+    return oauthClientIdFor(settings, providerKey, environment);
   }
 
   /** Whether a feature gate is on *and* implemented; a pending flag is never an effective one. */
@@ -510,12 +558,52 @@ async function writeRow(database: DatabaseService, stored: StoredSettings): Prom
     .execute();
 }
 
+/**
+ * The configured public OAuth client id for one provider and environment.
+ *
+ * The per-provider entry is authoritative. The legacy single-provider DocuSign pair is a read-only
+ * fallback, so an installation that upgraded keeps the client id its existing connections were
+ * created with; the next save writes the new shape.
+ */
+export function oauthClientIdFor(
+  settings: ESignatureSettings,
+  providerKey: string,
+  environment: 'demo' | 'production',
+): string {
+  const entry = settings.provider.clients[providerKey];
+  const configured = (environment === 'demo' ? entry?.demo : entry?.production)?.trim() ?? '';
+  if (configured !== '') return configured;
+  if (providerKey !== PROVIDER_KEY_DOCUSIGN) return '';
+  return environment === 'demo'
+    ? settings.provider.demoIntegrationKey.trim()
+    : settings.provider.productionIntegrationKey.trim();
+}
+
+/** Fold the legacy DocuSign pair into the per-provider map, in memory, when it is unset. */
+function normalizeProviderClients(settings: ESignatureSettings): ESignatureSettings {
+  const legacyDemo = settings.provider.demoIntegrationKey.trim();
+  const legacyProduction = settings.provider.productionIntegrationKey.trim();
+  if (legacyDemo === '' && legacyProduction === '') return settings;
+  const docusign = settings.provider.clients[PROVIDER_KEY_DOCUSIGN];
+  if (docusign !== undefined && (docusign.demo.trim() !== '' || docusign.production.trim() !== '')) return settings;
+  return {
+    ...settings,
+    provider: {
+      ...settings.provider,
+      clients: {
+        ...settings.provider.clients,
+        [PROVIDER_KEY_DOCUSIGN]: { demo: legacyDemo, production: legacyProduction },
+      },
+    },
+  };
+}
+
 function toView(data: unknown): ESignatureSettingsView {
   const stored = isObject(data) ? (data as StoredSettings) : {};
   const parsed = ESignatureSettingsSchema.safeParse(stored.settings ?? {});
   // A stored row that no longer satisfies the schema (an upgrade changed a default) falls back to
   // defaults for the invalid parts instead of refusing to boot — the health endpoint reports what it found.
-  const settings = parsed.success ? parsed.data : DEFAULT_ESIGNATURE_SETTINGS;
+  const settings = parsed.success ? normalizeProviderClients(parsed.data) : DEFAULT_ESIGNATURE_SETTINGS;
   const storedVersion = typeof stored.version === 'number' && Number.isInteger(stored.version) ? stored.version : 0;
   const effective: Record<string, boolean> = {};
   for (const feature of ESIGNATURE_FEATURES) {
@@ -541,6 +629,7 @@ function toView(data: unknown): ESignatureSettingsView {
     ],
     pendingFeatures: PENDING_FEATURES,
     effective,
-    integrationKeyEnvVars: [...DOCUSIGN_INTEGRATION_KEY_ENV_VARS],
+    // Both the catalog's documented names and DocuSign's original pair, de-duplicated.
+    integrationKeyEnvVars: [...new Set([...signatureProviderOAuthEnvVars(), ...DOCUSIGN_INTEGRATION_KEY_ENV_VARS])],
   };
 }

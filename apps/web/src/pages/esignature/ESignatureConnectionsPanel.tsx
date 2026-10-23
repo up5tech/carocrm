@@ -29,6 +29,7 @@ import { t } from '../../state/i18n.js';
  */
 
 interface CreateValues {
+  providerKey: string;
   name: string;
   environment: 'demo' | 'production';
   oauthClientId?: string;
@@ -55,6 +56,22 @@ export function ESignatureConnectionsPanel(props: { readonly canManage: boolean 
     queryFn: () => api.eSignatureConnections(),
     staleTime: 15_000,
   });
+
+  // The provider picker is data, not a hard-coded list: a cataloged provider whose integration is
+  // not installed appears greyed out with the reason, instead of failing after the admin fills a form.
+  const catalog = useQuery({
+    queryKey: ['eSignature', 'providerCatalog'],
+    queryFn: () => api.eSignatureProviderCatalog(),
+    staleTime: 300_000,
+  });
+  const providerOptions = (catalog.data?.providers ?? []).map((provider) => ({
+    value: provider.key,
+    disabled: provider.integrationStatus !== 'available',
+    label:
+      provider.integrationStatus === 'available'
+        ? provider.label
+        : `${provider.label} · ${t('esignature.connections.providerNotInstalled')}`,
+  }));
 
   const reload = () => void queryClient.invalidateQueries({ queryKey: ['eSignature', 'connections'] });
 
@@ -205,7 +222,20 @@ export function ESignatureConnectionsPanel(props: { readonly canManage: boolean 
         onOk={() => void createForm.submit()}
         destroyOnHidden
       >
-        <Form form={createForm} layout="vertical" initialValues={{ environment: 'demo' }} onFinish={(values) => create.mutate(values)}>
+        <Form
+          form={createForm}
+          layout="vertical"
+          initialValues={{ environment: 'demo', providerKey: 'docusign' }}
+          onFinish={(values) => create.mutate(values)}
+        >
+          <Form.Item
+            name="providerKey"
+            label={t('esignature.connections.fieldProvider')}
+            extra={t('esignature.connections.providerHint')}
+            rules={[{ required: true }]}
+          >
+            <Select options={providerOptions} loading={catalog.isLoading} showSearch optionFilterProp="label" />
+          </Form.Item>
           <Form.Item name="name" label={t('esignature.connections.fieldName')} rules={[{ required: true }]}>
             <Input maxLength={120} />
           </Form.Item>
@@ -290,6 +320,17 @@ function columns(
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {row.oauthClientId ?? t('esignature.connections.noClientId')}
           </Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: t('esignature.connections.columnProvider'),
+      dataIndex: 'providerKey',
+      width: 160,
+      render: (_key: string, row) => (
+        <Space direction="vertical" size={2}>
+          <Typography.Text>{row.providerLabel}</Typography.Text>
+          {row.providerStatus === 'declared' ? <Tag color="orange">{t('esignature.connections.providerNotInstalled')}</Tag> : null}
         </Space>
       ),
     },

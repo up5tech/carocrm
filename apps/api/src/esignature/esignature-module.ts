@@ -7,11 +7,18 @@ import {
   SIGNATURE_CONNECTION_PERMISSION_ENTITY,
   SIGNATURE_CORRECT_PERMISSION_ENTITY,
   SIGNATURE_DOWNLOAD_PERMISSION_ENTITY,
+  SIGNATURE_PROVIDER_KEYS,
   SIGNATURE_REQUEST_PERMISSION_ENTITY,
   SIGNATURE_SEND_PERMISSION_ENTITY,
   SIGNATURE_TEMPLATE_PERMISSION_ENTITY,
   SIGNATURE_VOID_PERMISSION_ENTITY,
 } from './esignature-domain.js';
+import {
+  availableSignatureProviderKeys,
+  DOCUSIGN_DOCUMENT_LIMITS,
+  NO_SIGNATURE_PROVIDER_CAPABILITIES,
+  signatureProviderDescriptor,
+} from './providers/signature-provider.catalog.js';
 
 /**
  * Phase 19-ES.1 — the `ESignature` module descriptor and security contract
@@ -402,13 +409,16 @@ export const OPTIONAL_INTEGRATIONS: readonly ESignatureOptionalIntegration[] = [
 ];
 
 /**
- * The provider capabilities of the first adapter (plan §5.2, §17; audit §5.1).
+ * The provider capabilities of the reference adapter (plan §5.2, §17; audit §5.1).
  *
- * Declared here, answered by `ESignatureCapabilitiesService`, and checked **before** a call is made
- * — an operation a provider does not offer fails with `NOT_SUPPORTED_BY_PROVIDER` instead of a
- * silent no-op or a "not implemented" thrown from inside an adapter. `correctEnvelope` is declared
- * false for the initial release: it is the exception path ES.16 may open after the demo behaviour
- * is verified.
+ * Declared in the provider catalog, answered by the gate, and checked **before** a call is made — an
+ * operation a provider does not offer fails with `NOT_SUPPORTED_BY_PROVIDER` instead of a silent
+ * no-op or a "not implemented" thrown from inside an adapter. `correctEnvelope` is declared false
+ * for the initial release: it is the exception path ES.16 may open after the demo behaviour is
+ * verified.
+ *
+ * The catalog is the source of truth for every provider; these two exports keep the DocuSign-shaped
+ * names existing code and documentation use.
  */
 export const PROVIDER_CAPABILITY_KEYS = [
   'connectionStatus',
@@ -429,26 +439,9 @@ export const PROVIDER_CAPABILITY_KEYS = [
 ] as const;
 export type ESignatureProviderCapabilityKey = (typeof PROVIDER_CAPABILITY_KEYS)[number];
 
-/** What the initial release commits to, per capability key, for `docusign`. */
-export const DOCUSIGN_PROVIDER_CAPABILITIES: Readonly<Record<ESignatureProviderCapabilityKey, boolean>> = {
-  connectionStatus: true,
-  accountContext: true,
-  listTemplates: true,
-  templateDetails: true,
-  prepareEnvelope: true,
-  sendEnvelope: true,
-  envelopeStatus: true,
-  listRecipients: true,
-  recipientView: true,
-  resendNotifications: true,
-  voidEnvelope: true,
-  // Plan §4.3 and §16: an ambiguous send is reconciled, never corrected blindly, and correction is
-  // an exception path that must be verified against the live account before it is offered.
-  correctEnvelope: false,
-  downloadCompletedDocuments: true,
-  downloadCompletionEvidence: true,
-  verifyWebhook: true,
-};
+/** What the reference provider (`docusign`) commits to, read from its catalog descriptor. */
+export const DOCUSIGN_PROVIDER_CAPABILITIES: Readonly<Record<ESignatureProviderCapabilityKey, boolean>> =
+  signatureProviderDescriptor(PROVIDER_KEY_DOCUSIGN)?.capabilities ?? NO_SIGNATURE_PROVIDER_CAPABILITIES;
 
 /**
  * The document restrictions DocuSign's eSignature API is documented to impose, as far as the audit
@@ -462,28 +455,8 @@ export const DOCUSIGN_PROVIDER_CAPABILITIES: Readonly<Record<ESignatureProviderC
  * send time that its document was unsignable. ES.22 re-verifies the numbers against a live demo
  * account; a correction lands here and nowhere else.
  */
-export const DOCUSIGN_DOCUMENT_RESTRICTIONS = {
-  /** The documented per-document size ceiling, in bytes (25 MiB). */
-  maxDocumentBytes: 26_214_400,
-  /** Formats DocuSign accepts for an eSignature envelope, lower-case and without the dot. */
-  supportedExtensions: [
-    'pdf',
-    'doc',
-    'docx',
-    'rtf',
-    'txt',
-    'xls',
-    'xlsx',
-    'htm',
-    'html',
-    'xml',
-    'bmp',
-    'gif',
-    'jpg',
-    'jpeg',
-    'png',
-  ] as const,
-} as const;
+/** The DocuSign ceiling, read from its catalog descriptor (`signature-provider.catalog.ts`). */
+export const DOCUSIGN_DOCUMENT_RESTRICTIONS = DOCUSIGN_DOCUMENT_LIMITS;
 
 /**
  * The stable module error codes (plan §8.2, audit §5.8).
@@ -611,8 +584,10 @@ export const ESIGNATURE_MODULE = {
    * prefix because it needs the raw bytes for HMAC verification.
    */
   webhookPrefix: ESIGNATURE_WEBHOOK_PREFIX,
-  /** Provider products this release addresses (plan §1). */
-  providerKeys: [PROVIDER_KEY_DOCUSIGN],
+  /** Provider products this build knows (plan §1); see the catalog for which are connectable. */
+  providerKeys: [...SIGNATURE_PROVIDER_KEYS],
+  /** The subset whose adapter and auth strategy are installed in this build. */
+  availableProviderKeys: availableSignatureProviderKeys(),
   /** Tables the module owns; no other module may write them (audit §6). */
   tables: ESIGNATURE_TABLES,
   implementedPhases: IMPLEMENTED_PHASES,

@@ -54,6 +54,8 @@
     "saveFailed": "Không lưu được cài đặt.",
     "secretRefused": "Trường này không thể chứa bí mật; thông tin xác thực của nhà cung cấp chỉ được lưu trong vault được mã hóa.",
     "integrationKeys": "Khóa tích hợp của nhà cung cấp",
+    "integrationKeysFor": "Khóa tích hợp {provider}",
+    "integrationKeyEnvVars": "Quản trị viên có thể giữ giá trị này trong biến môi trường triển khai: {names}.",
     "integrationKeysHint": "Đây là client id OAuth, vốn là giá trị công khai. Client secret tương ứng không bao giờ là một trường cài đặt.",
     "demoIntegrationKey": "Khóa tích hợp demo",
     "productionIntegrationKey": "Khóa tích hợp production",
@@ -156,6 +158,8 @@
     "updated": "Đã cập nhật kết nối chữ ký điện tử.",
     "fieldName": "Tên",
     "fieldEnvironment": "Môi trường",
+    "fieldProvider": "Nhà cung cấp",
+    "providerHint": "Nhà cung cấp chữ ký điện tử mà kết nối này sẽ gửi qua. Nhà cung cấp chưa được cài đặt trong bản dựng này thì chưa thể chọn.",
     "environmentHint": "Demo và production là hai tích hợp, hai bí mật và hai tài khoản riêng. Một kết nối đã có không bao giờ bị chuyển ngầm giữa hai môi trường.",
     "fieldClientId": "Khóa tích hợp (OAuth client id)",
     "clientIdHint": "Là giá trị công khai. Để trống nếu dùng khóa đã cấu hình trong cài đặt module.",
@@ -188,6 +192,7 @@
     "inactive": "Đã dừng",
     "pendingAuthorization": "Đang xác thực",
     "columnConnection": "Kết nối",
+    "columnProvider": "Nhà cung cấp",
     "columnEnvironment": "Môi trường",
     "columnState": "Trạng thái",
     "columnAccount": "Tài khoản",
@@ -211,7 +216,8 @@
     "disconnectedWithHistory": "Đã ngắt kết nối; hủy {credentials} thông tin xác thực. Các yêu cầu ký đã có vẫn được giữ.",
     "testOk": "Kết nối đã trả lời.",
     "testFailed": "Kết nối không trả lời ({code}).",
-    "fakeAdapterNote": "Bộ chuyển đổi {mode} đã trả lời, nên chưa có gì tới DocuSign."
+    "fakeAdapterNote": "Bộ chuyển đổi {mode} đã trả lời, nên chưa có gì tới DocuSign.",
+    "providerNotInstalled": "chưa được cài đặt trong bản dựng này"
   },
   "requests": {
     "title": "Yêu cầu ký",

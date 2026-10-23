@@ -54,6 +54,8 @@
     "saveFailed": "The settings could not be saved.",
     "secretRefused": "This field cannot hold a secret; provider credentials are stored only in the encrypted vault.",
     "integrationKeys": "Provider integration keys",
+    "integrationKeysFor": "{provider} integration key",
+    "integrationKeyEnvVars": "An operator may keep this in the deployment environment instead: {names}.",
     "integrationKeysHint": "These are OAuth client ids, which are public by nature. The matching client secret is never a settings field.",
     "demoIntegrationKey": "Demo integration key",
     "productionIntegrationKey": "Production integration key",
@@ -156,6 +158,8 @@
     "updated": "The signature connection was updated.",
     "fieldName": "Name",
     "fieldEnvironment": "Environment",
+    "fieldProvider": "Provider",
+    "providerHint": "The e-signature provider this connection sends through. A provider whose integration is not installed in this build cannot be chosen yet.",
     "environmentHint": "Demo and production are separate integrations, secrets and accounts. An existing connection is never switched between them.",
     "fieldClientId": "Integration key (OAuth client id)",
     "clientIdHint": "Public by nature. Leave it empty to use the key configured in the module settings.",
@@ -188,6 +192,7 @@
     "inactive": "Stopped",
     "pendingAuthorization": "Authorization in progress",
     "columnConnection": "Connection",
+    "columnProvider": "Provider",
     "columnEnvironment": "Environment",
     "columnState": "State",
     "columnAccount": "Account",
@@ -211,7 +216,8 @@
     "disconnectedWithHistory": "Disconnected; {credentials} credential(s) destroyed. Existing signature requests were kept.",
     "testOk": "The connection answered.",
     "testFailed": "The connection did not answer ({code}).",
-    "fakeAdapterNote": "A {mode} adapter answered, so nothing reached DocuSign."
+    "fakeAdapterNote": "A {mode} adapter answered, so nothing reached DocuSign.",
+    "providerNotInstalled": "not installed in this build"
   },
   "requests": {
     "title": "Signature requests",
