@@ -196,6 +196,63 @@ export const RequestListQuerySchema = z
   })
   .strict();
 
+// ---------------------------------------------------------------------------
+// Phase 19-ES.7 — template mappings (plan §6.7, §8.2)
+// ---------------------------------------------------------------------------
+
+const RoleMappingSchema = z
+  .object({
+    roleName: z.string().trim().min(1).max(120),
+    recipientType: z.enum(['signer', 'carbon_copy']),
+    routingOrder: z.coerce.number().int().min(1).max(99),
+    source: z.enum(['crmField', 'manual']),
+    crmField: z.string().trim().min(1).max(120).nullable().optional(),
+  })
+  .strict();
+
+const FieldMappingSchema = z
+  .object({
+    tabName: z.string().trim().min(1).max(120),
+    crmField: z.string().trim().min(1).max(120),
+    required: z.boolean(),
+  })
+  .strict();
+
+export const TemplateCatalogRefreshSchema = z.object({ connectionId: z.string().trim().min(1).max(64) }).strict();
+
+export const TemplateMappingCreateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(160),
+    mappingType: z.enum(['workflow', 'document_type', 'process']).optional(),
+    connectionId: z.string().trim().min(1).max(64),
+    providerTemplateId: z.string().trim().min(1).max(128),
+    supportedSourceEntities: z.array(SourceEntitySchema).min(1).max(30),
+    roleMappings: z.array(RoleMappingSchema).min(1).max(20),
+    fieldMappings: z.array(FieldMappingSchema).max(100).default([]),
+    defaultSubject: z.string().trim().max(300).nullable().optional(),
+    defaultMessage: z.string().trim().max(2_000).nullable().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict();
+
+export const TemplateMappingUpdateSchema = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    name: z.string().trim().min(1).max(160).optional(),
+    mappingType: z.enum(['workflow', 'document_type', 'process']).optional(),
+    providerTemplateId: z.string().trim().min(1).max(128).optional(),
+    supportedSourceEntities: z.array(SourceEntitySchema).min(1).max(30).optional(),
+    roleMappings: z.array(RoleMappingSchema).min(1).max(20).optional(),
+    fieldMappings: z.array(FieldMappingSchema).max(100).optional(),
+    defaultSubject: z.string().trim().max(300).nullable().optional(),
+    defaultMessage: z.string().trim().max(2_000).nullable().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).some((key) => key !== 'version'), { message: 'At least one field is required.' });
+
+export const TemplateMappingActiveSchema = z.object({ active: z.boolean() }).strict();
+
 /** What DocuSign is allowed to put in the callback query. Anything else is not this platform's answer. */
 export const OAuthCallbackQuerySchema = z
   .object({

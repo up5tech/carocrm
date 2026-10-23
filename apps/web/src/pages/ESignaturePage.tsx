@@ -11,6 +11,7 @@ import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { t } from '../state/i18n.js';
 import { ESignatureConnectionsPanel } from './esignature/ESignatureConnectionsPanel.js';
 import { ESignatureRequestsPanel } from './esignature/ESignatureRequestsPanel.js';
+import { ESignatureTemplatesPanel } from './esignature/ESignatureTemplatesPanel.js';
 
 /**
  * Phase 19-ES.1 — the ESignature module page
@@ -86,6 +87,8 @@ export function ESignaturePage() {
       )}
 
       {granted.has('use') ? <ESignatureRequestsPanel canPrepare={granted.has('manageDraft')} /> : null}
+
+      {granted.has('templateMappingManage') ? <ESignatureTemplatesPanel /> : null}
 
       {canReadConnections ? <ESignatureConnectionsPanel canManage={canManageConnections} /> : null}
 

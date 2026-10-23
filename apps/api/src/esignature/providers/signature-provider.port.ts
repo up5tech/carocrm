@@ -39,6 +39,9 @@ import type { ESignatureConnectionEnvironment } from '../esignature-domain.js';
 export const SIGNATURE_PROVIDER_OPERATIONS = [
   'connectionStatus',
   'accountContext',
+  // ES.7 — the template catalog. Read-only by design: plan §6.7 forbids updating a provider template.
+  'listTemplates',
+  'templateDetails',
   'prepareEnvelope',
   'sendEnvelope',
   'envelopeStatus',
@@ -54,8 +57,6 @@ export type SignatureProviderOperation = (typeof SIGNATURE_PROVIDER_OPERATIONS)[
  * rather than an absent key an operator has to interpret.
  */
 export const FUTURE_SIGNATURE_PROVIDER_OPERATIONS = [
-  'listTemplates',
-  'templateDetails',
   'recipientView',
   'resendNotifications',
   'voidEnvelope',
@@ -222,6 +223,41 @@ export interface ProviderArtifact {
   readonly retrievedAt: string;
 }
 
+/** One template in the provider's catalog, as much as a picker needs. */
+export interface ProviderTemplateSummary {
+  readonly templateId: string;
+  readonly name: string;
+  readonly description: string | null;
+  /** The provider marks an account-shared template; it belongs to the account, not to the CRM user. */
+  readonly shared: boolean;
+  /** The provider's own state word, preserved for troubleshooting (plan §4.7). Never interpreted here. */
+  readonly status: string | null;
+}
+
+/** A recipient role a template expects to be filled. */
+export interface ProviderTemplateRole {
+  readonly roleName: string;
+  readonly recipientType: 'signer' | 'carbon_copy' | 'other';
+  /** The routing order the template assigns; a mapping may restate it but not silently drop the role. */
+  readonly routingOrder: number | null;
+  readonly required: boolean;
+}
+
+/** One tab a template exposes, with the role that fills it when the provider says so. */
+export interface ProviderTemplateField {
+  readonly tabLabel: string;
+  readonly roleName: string | null;
+  readonly documentId: string | null;
+  readonly fieldType: string | null;
+  readonly required: boolean;
+}
+
+/** A template and the two things a mapping is built from: its roles and its tabs (plan §6.7). */
+export interface ProviderTemplateDetail extends ProviderTemplateSummary {
+  readonly roles: readonly ProviderTemplateRole[];
+  readonly fields: readonly ProviderTemplateField[];
+}
+
 export interface VerifyWebhookInput {
   readonly providerKey: string;
   readonly connectionId: string | null;
@@ -281,6 +317,11 @@ export interface SignatureProviderAdapter {
   connectionStatus(context: SignatureProviderContext): Promise<ProviderConnectionStatus>;
   accountContext(context: SignatureProviderContext): Promise<ProviderAccountContext>;
 
+  /** The account's template catalog. Read-only: this module never writes a provider template. */
+  listTemplates(context: SignatureProviderContext): Promise<readonly ProviderTemplateSummary[]>;
+  /** One template's roles and tabs — what a mapping is validated against (plan §6.7). */
+  templateDetails(context: SignatureProviderContext, templateId: string): Promise<ProviderTemplateDetail>;
+
   prepareEnvelope(context: SignatureProviderContext, input: PrepareEnvelopeInput): Promise<PreparedEnvelope>;
   sendEnvelope(context: SignatureProviderContext, input: SendEnvelopeInput): Promise<SentEnvelope>;
   envelopeStatus(context: SignatureProviderContext, providerEnvelopeId: string): Promise<ProviderEnvelopeStatus>;
@@ -320,9 +361,10 @@ export const BASE_SIGNATURE_PROVIDER_CAPABILITIES: SignatureProviderCapabilities
   downloadCompletedDocuments: true,
   downloadCompletionEvidence: true,
   verifyWebhook: true,
-  // Delivered by their own sub-phases; refusing them today is the honest answer.
-  listTemplates: false,
-  templateDetails: false,
+  // The template catalog is read-only and arrives with ES.7; the rest are later phases and are
+  // refused by name until they exist.
+  listTemplates: true,
+  templateDetails: true,
   recipientView: false,
   resendNotifications: false,
   voidEnvelope: false,
@@ -356,6 +398,10 @@ function methodFor(operation: SignatureProviderOperation | FutureSignatureProvid
       return 'connectionStatus';
     case 'accountContext':
       return 'accountContext';
+    case 'listTemplates':
+      return 'listTemplates';
+    case 'templateDetails':
+      return 'templateDetails';
     case 'prepareEnvelope':
       return 'prepareEnvelope';
     case 'sendEnvelope':

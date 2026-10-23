@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import { ProviderError } from '../../advanced-integrations/provider-error.js';
 import { canonicalJson } from '../esignature-snapshot.js';
 import { SendOutcomeUnknownError } from './signature-provider.errors.js';
 import {
@@ -12,6 +13,8 @@ import {
   type ProviderConnectionStatus,
   type ProviderEnvelopeStatus,
   type ProviderRecipientStatus,
+  type ProviderTemplateDetail,
+  type ProviderTemplateSummary,
   type ProviderWebhookNotification,
   type SendEnvelopeInput,
   type SentEnvelope,
@@ -56,6 +59,12 @@ import {
 
 /** A fixed start, so every timestamp in a run is reproducible. */
 const FAKE_EPOCH_MS = Date.UTC(2026, 0, 1, 9, 0, 0);
+
+/** The template catalog the fake answers with. Ids are stable so a mapping can name one. */
+export const FAKE_TEMPLATES: readonly ProviderTemplateSummary[] = Object.freeze([
+  { templateId: 'fake-template-1', name: 'Fake Service Agreement', description: 'A deterministic template for tests.', shared: true, status: 'active' },
+  { templateId: 'fake-template-2', name: 'Fake Mutual NDA', description: null, shared: false, status: 'active' },
+]);
 
 /** The envelope states a test may script the provider into. */
 export const FAKE_ENVELOPE_STATES = ['draft', 'sent', 'delivered', 'partially_signed', 'completed', 'declined', 'voided', 'expired'] as const;
@@ -179,6 +188,42 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
   async connectionStatus(context: SignatureProviderContext): Promise<ProviderConnectionStatus> {
     this.record('connectionStatus', context, {});
     return { reachable: true, checkedAt: this.stamp(), detailCode: null };
+  }
+
+  /**
+   * The fake's template catalog.
+   *
+   * Deterministic ids and role names, so a test can write a mapping against them and assert that an
+   * unknown role or tab is refused without any provider traffic.
+   */
+  async listTemplates(context: SignatureProviderContext): Promise<readonly ProviderTemplateSummary[]> {
+    this.record('listTemplates', context, {});
+    return FAKE_TEMPLATES.map((template) => ({ ...template }));
+  }
+
+  async templateDetails(context: SignatureProviderContext, templateId: string): Promise<ProviderTemplateDetail> {
+    this.record('templateDetails', context, { templateId });
+    const found = FAKE_TEMPLATES.find((template) => template.templateId === templateId);
+    if (found === undefined) {
+      throw new ProviderError('NOT_FOUND', 'The signature provider has no such template.', {
+        category: 'not_found',
+        retryable: false,
+        detail: 'template_not_found',
+      });
+    }
+    return {
+      ...found,
+      roles: [
+        { roleName: 'Signer 1', recipientType: 'signer', routingOrder: 1, required: true },
+        { roleName: 'Signer 2', recipientType: 'signer', routingOrder: 2, required: false },
+        { roleName: 'CC 1', recipientType: 'carbon_copy', routingOrder: 2, required: false },
+      ],
+      fields: [
+        { tabLabel: 'Full Name', roleName: 'Signer 1', documentId: '1', fieldType: 'text', required: true },
+        { tabLabel: 'Sign Here', roleName: 'Signer 1', documentId: '1', fieldType: 'signHere', required: true },
+        { tabLabel: 'Company', roleName: 'Signer 2', documentId: '1', fieldType: 'text', required: false },
+      ],
+    };
   }
 
   async accountContext(context: SignatureProviderContext): Promise<ProviderAccountContext> {

@@ -244,7 +244,6 @@ export const ESIGNATURE_FEATURES: readonly ESignatureFeatureDescriptor[] = [
  * does not exist yet is a false promise in an admin screen.
  */
 export const PENDING_FEATURES: readonly { readonly key: string; readonly phase: string }[] = [
-  { key: 'templates', phase: '19-ES.7' },
   { key: 'send', phase: '19-ES.9–19-ES.10' },
   { key: 'webhooks', phase: '19-ES.11' },
   { key: 'embeddedSigning', phase: '19-ES.14' },
@@ -559,7 +558,7 @@ export const ESIGNATURE_TABLES = [
 ] as const;
 
 /** Sub-phases delivered so far, reported verbatim by the health endpoint. */
-export const IMPLEMENTED_PHASES = ['19-ES.0', '19-ES.1', '19-ES.2', '19-ES.3', '19-ES.4', '19-ES.5', '19-ES.6'] as const;
+export const IMPLEMENTED_PHASES = ['19-ES.0', '19-ES.1', '19-ES.2', '19-ES.3', '19-ES.4', '19-ES.5', '19-ES.6', '19-ES.7'] as const;
 
 export const ESIGNATURE_MODULE = {
   id: 'ESignature',

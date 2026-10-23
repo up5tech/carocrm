@@ -105,6 +105,9 @@ describe('the adapter contract', () => {
     expect(SIGNATURE_PROVIDER_OPERATIONS).toEqual([
       'connectionStatus',
       'accountContext',
+      // ES.7 moved the read-only catalog into the contract; nothing writes a provider template.
+      'listTemplates',
+      'templateDetails',
       'prepareEnvelope',
       'sendEnvelope',
       'envelopeStatus',
@@ -117,6 +120,7 @@ describe('the adapter contract', () => {
     // exception path until the live behaviour is verified, so it must be refused rather than
     // optimistically admitted.
     expect(FUTURE_SIGNATURE_PROVIDER_OPERATIONS).toContain('correctEnvelope');
+    expect(FUTURE_SIGNATURE_PROVIDER_OPERATIONS).not.toContain('listTemplates');
     expect(BASE_SIGNATURE_PROVIDER_CAPABILITIES.correctEnvelope).toBe(false);
   });
 

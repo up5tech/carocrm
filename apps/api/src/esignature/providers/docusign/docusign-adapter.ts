@@ -10,6 +10,10 @@ import {
   type ProviderConnectionStatus,
   type ProviderEnvelopeStatus,
   type ProviderRecipientStatus,
+  type ProviderTemplateDetail,
+  type ProviderTemplateField,
+  type ProviderTemplateRole,
+  type ProviderTemplateSummary,
   type ProviderWebhookNotification,
   type SendEnvelopeInput,
   type SentEnvelope,
@@ -53,6 +57,9 @@ export const DOCUSIGN_REST_VERSION = 'v2.1';
 /** What this adapter can do today: the connection, and only the connection. */
 export const DOCUSIGN_ES4_CAPABILITIES: SignatureProviderCapabilities = Object.freeze({
   ...BASE_SIGNATURE_PROVIDER_CAPABILITIES,
+  // ES.7 — the template catalog, read-only (plan §6.7 forbids updating a provider template).
+  listTemplates: true,
+  templateDetails: true,
   // Delivered by their own sub-phases. Declaring them false is what makes the gate's refusal precise.
   prepareEnvelope: false,
   sendEnvelope: false,
@@ -150,6 +157,133 @@ export class DocuSignAdapter implements SignatureProviderAdapter {
     };
   }
 
+  /**
+   * The account's template catalog.
+   *
+   * `count=100` is the page size the plan's admin screen can use; DocuSign caps a single page and
+   * reports `totalSetSize`, which this method returns nothing about on purpose — the screen refreshes
+   * the first page and ES.7 keeps the catalog read-only, so pagination is a later concern, not a
+   * silent truncation of a mapping (this method never decides *which* template is valid; the detail
+   * call does).
+   */
+  async listTemplates(context: SignatureProviderContext): Promise<readonly ProviderTemplateSummary[]> {
+    const response = await this.transport.request({
+      method: 'GET',
+      url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/templates?count=100&order_by=name&order=asc`,
+      headers: { authorization: `Bearer ${context.accessToken}` },
+      timeoutMs: context.timeoutMs,
+    });
+    if (response.status >= 400) throw providerErrorForStatus(response.status);
+    const body = parseJson(response.body);
+    const entries = Array.isArray(body['templates']) ? body['templates'] : [];
+    const templates: ProviderTemplateSummary[] = [];
+    for (const entry of entries) {
+      if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const template = entry as Record<string, unknown>;
+      const templateId = stringOf(template['templateId']);
+      if (templateId === null) continue;
+      templates.push({
+        templateId,
+        name: stringOf(template['name']) ?? templateId,
+        description: stringOf(template['description']),
+        shared: template['shared'] === 'true' || template['shared'] === true,
+        status: stringOf(template['status']),
+      });
+    }
+    return templates;
+  }
+
+  /**
+   * One template's roles and tabs.
+   *
+   * A mapping is validated against this answer, so it is read as data and never as instructions: roles
+   * come from `recipients.signers` / `recipients.carbonCopies`, and tabs from each document's
+   * `tabs.<kind>Tabs` collection, with the role resolved through the tab's `recipientId`. A tab whose
+   * recipient is unknown keeps `roleName: null` rather than being guessed into a role.
+   */
+  async templateDetails(context: SignatureProviderContext, templateId: string): Promise<ProviderTemplateDetail> {
+    const id = templateId.trim();
+    if (id === '') {
+      throw new ProviderError('INVALID_REQUEST', 'A template id is required.', { category: 'permanent_validation', retryable: false });
+    }
+    const response = await this.transport.request({
+      method: 'GET',
+      url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/templates/${encodeURIComponent(id)}`,
+      headers: { authorization: `Bearer ${context.accessToken}` },
+      timeoutMs: context.timeoutMs,
+    });
+    if (response.status >= 400) {
+      if (response.status === 404) {
+        throw new ProviderError('NOT_FOUND', 'The signature provider has no such template in this account.', {
+          category: 'not_found',
+          retryable: false,
+          detail: 'template_not_found',
+          status: 404,
+        });
+      }
+      throw providerErrorForStatus(response.status);
+    }
+    const body = parseJson(response.body);
+    const recipients = asObject(body['recipients']);
+    const roles: ProviderTemplateRole[] = [];
+    const roleByRecipientId = new Map<string, string>();
+    for (const [key, recipientType] of [
+      ['signers', 'signer'],
+      ['carbonCopies', 'carbon_copy'],
+    ] as const) {
+      const list = Array.isArray(recipients[key]) ? (recipients[key] as unknown[]) : [];
+      for (const entry of list) {
+        const recipient = asObject(entry);
+        const roleName = stringOf(recipient['roleName']);
+        if (roleName === null) continue;
+        const routingOrder = Number(recipient['routingOrder']);
+        roles.push({
+          roleName,
+          recipientType,
+          routingOrder: Number.isFinite(routingOrder) && routingOrder > 0 ? routingOrder : null,
+          // A template role is a slot the sender must fill; DocuSign has no "optional role" flag.
+          required: true,
+        });
+        const recipientId = stringOf(recipient['recipientId']);
+        if (recipientId !== null) roleByRecipientId.set(recipientId, roleName);
+      }
+    }
+
+    const fields: ProviderTemplateField[] = [];
+    const documents = Array.isArray(body['documents']) ? (body['documents'] as unknown[]) : [];
+    for (const entry of documents) {
+      const document = asObject(entry);
+      const documentId = stringOf(document['documentId']);
+      const tabs = asObject(document['tabs']);
+      for (const kind of DOCUSIGN_TAB_KINDS) {
+        const list = Array.isArray(tabs[kind]) ? (tabs[kind] as unknown[]) : [];
+        for (const raw of list) {
+          const tab = asObject(raw);
+          const tabLabel = stringOf(tab['tabLabel']) ?? stringOf(tab['name']);
+          if (tabLabel === null) continue;
+          const recipientId = stringOf(tab['recipientId']);
+          fields.push({
+            tabLabel,
+            roleName: recipientId === null ? null : roleByRecipientId.get(recipientId) ?? null,
+            documentId,
+            fieldType: kind.replace(/Tabs$/, ''),
+            required: tab['required'] === 'true' || tab['required'] === true,
+          });
+        }
+      }
+    }
+
+    return {
+      templateId: stringOf(body['templateId']) ?? id,
+      name: stringOf(body['name']) ?? id,
+      description: stringOf(body['description']),
+      shared: body['shared'] === 'true' || body['shared'] === true,
+      status: stringOf(body['status']),
+      roles,
+      fields,
+    };
+  }
+
   async prepareEnvelope(_context: SignatureProviderContext, _input: PrepareEnvelopeInput): Promise<PreparedEnvelope> {
     throw this.refuse('prepareEnvelope');
   }
@@ -205,6 +339,36 @@ export function detailCodeForStatus(status: number): DocuSignDetailCode {
   if (status === 429) return 'rate_limited';
   if (status >= 500) return 'provider_outage';
   return 'response_invalid';
+}
+
+/** The DocuSign tab collections a template can carry, as they appear in `documents[].tabs`. */
+const DOCUSIGN_TAB_KINDS = [
+  'textTabs',
+  'fullNameTabs',
+  'emailTabs',
+  'dateTabs',
+  'dateSignedTabs',
+  'numberTabs',
+  'ssnTabs',
+  'zipTabs',
+  'companyTabs',
+  'titleTabs',
+  'checkboxTabs',
+  'radioGroupTabs',
+  'listTabs',
+  'noteTabs',
+  'signHereTabs',
+  'initialHereTabs',
+] as const;
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function stringOf(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed === '' ? null : trimmed;
 }
 
 function providerErrorForStatus(status: number): ProviderError {

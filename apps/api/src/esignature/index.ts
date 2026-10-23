@@ -24,6 +24,8 @@ import { ESignaturePermissionService } from './esignature-permission.service.js'
 import { ESignatureRequestController } from './esignature-request.controller.js';
 import { ESignatureRequestService } from './esignature-request.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
+import { ESignatureTemplateController } from './esignature-template.controller.js';
+import { ESignatureTemplateService } from './esignature-template.service.js';
 import { DocuSignAdapter } from './providers/docusign/docusign-adapter.js';
 import {
   createDefaultDocuSignTransport,
@@ -48,7 +50,12 @@ import { SignatureWebhookInboxRepository } from './signature-webhook-inbox.repos
 // every route checks a capability — stay true. The request surface is its own controller because it is
 // the module's largest API and the action controller is the control plane. All are registered before
 // `ENTITY_CONTROLLERS`.
-export const ESIGNATURE_CONTROLLERS = [ESignatureOAuthCallbackController, ESignatureRequestController, ESignatureController] as const;
+export const ESIGNATURE_CONTROLLERS = [
+  ESignatureOAuthCallbackController,
+  ESignatureRequestController,
+  ESignatureTemplateController,
+  ESignatureController,
+] as const;
 
 /**
  * The one HTTP door to DocuSign. A test replaces this token and no socket is opened (plan §17.3); the
@@ -111,6 +118,8 @@ export const ESIGNATURE_PROVIDERS = [
   // Phase 19-ES.6 — the draft API. The capability and the record scope are checked in the service, so
   // a controller method is only ever a shape parser.
   ESignatureRequestService,
+  // Phase 19-ES.7 — the template catalog and mapping validation. Nothing here writes a provider template.
+  ESignatureTemplateService,
   docuSignTransportProvider,
   // Phase 19-ES.3 — the provider port. The registry answers for every adapter the build ships, and
   // `signatureProviderAdaptersProvider` decides which one answers for `docusign`.
@@ -253,6 +262,18 @@ export {
   TRANSITION_ORIGINS,
   type TransitionOrigin,
 } from './esignature-state-machine.js';
+export { ESignatureTemplateController } from './esignature-template.controller.js';
+export {
+  ESignatureTemplateService,
+  MAPPABLE_SOURCE_FIELD_TYPES,
+  type MappingInput,
+  type MappingProblem,
+  type MappingUsageCheck,
+  type MappingValidation,
+  type TemplateCatalogResult,
+  type TemplateDetailView,
+  validateMappingDefinition,
+} from './esignature-template.service.js';
 export {
   createFakeSignatureProviderAdapter,
   type FakeProviderOptions,

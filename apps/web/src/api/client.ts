@@ -66,6 +66,9 @@ import type {
   ESignatureRequestRecipient,
   ESignatureRequestView,
   ESignatureSettingsView,
+  ESignatureTemplateCatalog,
+  ESignatureTemplateDetail,
+  ESignatureTemplateMapping,
   ExtensionInstallResult,
   ExtensionListResult,
   ExtensionNavItem,
@@ -1825,6 +1828,19 @@ export const api = {
     request<{ detached: string }>(`/ESignature/requests/${encodeURIComponent(id)}/documents/${encodeURIComponent(documentId)}`, {
       method: 'DELETE',
     }),
+  // Phase 19-ES.7 — the template catalog is read-only; the mapping is the configuration built from it.
+  eSignatureTemplateCatalog: (connectionId: string) =>
+    request<ESignatureTemplateCatalog>('/ESignature/templates/catalog/refresh', post({ connectionId })),
+  eSignatureTemplateDetail: (connectionId: string, templateId: string) =>
+    request<ESignatureTemplateDetail>(`/ESignature/templates/catalog/${encodeURIComponent(connectionId)}/${encodeURIComponent(templateId)}`),
+  eSignatureTemplateMappings: (connectionId: string) =>
+    request<readonly ESignatureTemplateMapping[]>(`/ESignature/templates/mappings?connectionId=${encodeURIComponent(connectionId)}`),
+  createESignatureTemplateMapping: (input: Record<string, unknown>) =>
+    request<ESignatureTemplateMapping>('/ESignature/templates/mappings', post(input)),
+  updateESignatureTemplateMapping: (id: string, input: Record<string, unknown>) =>
+    request<ESignatureTemplateMapping>(`/ESignature/templates/mappings/${encodeURIComponent(id)}`, patch(input)),
+  setESignatureTemplateMappingActive: (id: string, active: boolean) =>
+    request<ESignatureTemplateMapping>(`/ESignature/templates/mappings/${encodeURIComponent(id)}/active`, post({ active })),
   /** The snapshot bytes, re-verified server-side; the browser downloads them as a file. */
   downloadESignatureDocument: async (id: string, documentId: string, filename: string): Promise<void> => {
     const token = getStoredToken();

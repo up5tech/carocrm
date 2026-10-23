@@ -3286,3 +3286,74 @@ export interface ESignatureRequestList {
   readonly list: readonly ESignatureRequestListRow[];
   readonly total: number;
 }
+
+// Phase 19-ES.7 — the template catalog and the mappings built from it.
+export interface ESignatureTemplateSummary {
+  readonly templateId: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly shared: boolean;
+  readonly status: string | null;
+}
+
+export interface ESignatureTemplateRole {
+  readonly roleName: string;
+  readonly recipientType: 'signer' | 'carbon_copy' | 'other';
+  readonly routingOrder: number | null;
+  readonly required: boolean;
+}
+
+export interface ESignatureTemplateField {
+  readonly tabLabel: string;
+  readonly roleName: string | null;
+  readonly documentId: string | null;
+  readonly fieldType: string | null;
+  readonly required: boolean;
+}
+
+export interface ESignatureTemplateDetail extends ESignatureTemplateSummary {
+  readonly connectionId: string;
+  readonly environment: string;
+  readonly roles: readonly ESignatureTemplateRole[];
+  readonly fields: readonly ESignatureTemplateField[];
+}
+
+export interface ESignatureTemplateCatalog {
+  readonly connectionId: string;
+  readonly environment: string;
+  readonly refreshedAt: string;
+  readonly templates: readonly ESignatureTemplateSummary[];
+  readonly mappings: readonly { id: string; name: string; providerTemplateId: string; presentInCatalog: boolean; catalogName: string | null }[];
+}
+
+export interface ESignatureRoleMapping {
+  readonly roleName: string;
+  readonly recipientType: 'signer' | 'carbon_copy';
+  readonly routingOrder: number;
+  readonly source: 'crmField' | 'manual';
+  readonly crmField: string | null;
+}
+
+export interface ESignatureFieldMapping {
+  readonly tabName: string;
+  readonly crmField: string;
+  readonly required: boolean;
+}
+
+export interface ESignatureTemplateMapping {
+  readonly id: string;
+  readonly name: string;
+  readonly mappingType: 'workflow' | 'document_type' | 'process';
+  readonly connectionId: string;
+  readonly providerTemplateId: string;
+  readonly providerTemplateName: string | null;
+  readonly supportedSourceEntities: readonly string[];
+  readonly roleMappings: readonly ESignatureRoleMapping[];
+  readonly fieldMappings: readonly ESignatureFieldMapping[];
+  readonly defaultSubject: string | null;
+  readonly defaultMessage: string | null;
+  readonly isActive: boolean;
+  readonly version: number;
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+}

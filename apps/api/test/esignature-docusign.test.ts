@@ -332,6 +332,102 @@ describe('the live DocuSign adapter (19-ES.4)', () => {
   });
 });
 
+describe('the DocuSign template catalog (19-ES.7, plan §6.7)', () => {
+  it('reads the account catalog from the stored base URI and skips entries without an id', async () => {
+    const transport = stubTransport();
+    transport.bodies = [
+      JSON.stringify({
+        templates: [
+          { templateId: 'tpl-1', name: 'Service Agreement', description: 'Standard', shared: 'true', status: 'active' },
+          { templateId: 'tpl-2', name: 'NDA', shared: false },
+          { name: 'no id' },
+          'not-an-object',
+        ],
+      }),
+    ];
+    const templates = await new DocuSignAdapter(transport).listTemplates(context({ baseUri: 'https://na3.docusign.net' }));
+    expect(transport.calls[0]?.url).toBe('https://na3.docusign.net/restapi/v2.1/accounts/acct-9/templates?count=100&order_by=name&order=asc');
+    expect(transport.calls[0]?.headers?.['authorization']).toBe(`Bearer ${TOKENS.access}`);
+    expect(templates.map((template) => template.templateId)).toEqual(['tpl-1', 'tpl-2']);
+    expect(templates[0]).toMatchObject({ name: 'Service Agreement', description: 'Standard', shared: true, status: 'active' });
+    expect(templates[1]).toMatchObject({ name: 'NDA', description: null, shared: false, status: null });
+  });
+
+  it('reads a template\'s roles and tabs, resolving each tab to the role that fills it', async () => {
+    const transport = stubTransport();
+    transport.bodies = [
+      JSON.stringify({
+        templateId: 'tpl-1',
+        name: 'Service Agreement',
+        shared: 'false',
+        status: 'active',
+        recipients: {
+          signers: [
+            { roleName: 'Signer 1', recipientId: '1', routingOrder: '1' },
+            { roleName: 'Signer 2', recipientId: '2', routingOrder: 2 },
+          ],
+          carbonCopies: [{ roleName: 'CC 1', recipientId: '3', routingOrder: 3 }],
+        },
+        documents: [
+          {
+            documentId: 'doc-1',
+            tabs: {
+              textTabs: [
+                { tabLabel: 'Full Name', recipientId: '1', required: 'true' },
+                { tabLabel: 'Company', recipientId: '2', required: false },
+              ],
+              signHereTabs: [{ tabLabel: 'Sign Here', recipientId: '1', required: 'true' }],
+              unknownTabs: [{ tabLabel: 'Ignored', recipientId: '1' }],
+            },
+          },
+        ],
+      }),
+    ];
+    const detail = await new DocuSignAdapter(transport).templateDetails(context(), 'tpl-1');
+    expect(transport.calls[0]?.url).toBe('https://demo.docusign.net/restapi/v2.1/accounts/acct-9/templates/tpl-1');
+    expect(detail.roles).toEqual([
+      { roleName: 'Signer 1', recipientType: 'signer', routingOrder: 1, required: true },
+      { roleName: 'Signer 2', recipientType: 'signer', routingOrder: 2, required: true },
+      { roleName: 'CC 1', recipientType: 'carbon_copy', routingOrder: 3, required: true },
+    ]);
+    expect(detail.fields.map((field) => [field.tabLabel, field.roleName, field.fieldType, field.required])).toEqual([
+      ['Full Name', 'Signer 1', 'text', true],
+      ['Company', 'Signer 2', 'text', false],
+      ['Sign Here', 'Signer 1', 'signHere', true],
+    ]);
+    // The unknown tab collection is not a template field this module understands; it is not guessed into one.
+    expect(detail.fields.map((field) => field.tabLabel)).not.toContain('Ignored');
+  });
+
+  it('reports an unknown template as a not-found provider failure, and refuses an empty id', async () => {
+    const transport = stubTransport();
+    transport.statuses = [404];
+    transport.bodies = [JSON.stringify({ errorCode: 'TEMPLATE_NOT_FOUND' })];
+    const failure = await new DocuSignAdapter(transport)
+      .templateDetails(context(), 'missing-template')
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ProviderError);
+    expect((failure as ProviderError).category).toBe('not_found');
+    expect((failure as ProviderError).code).toBe('NOT_FOUND');
+
+    await expect(new DocuSignAdapter(stubTransport()).templateDetails(context(), '   ')).rejects.toMatchObject({ category: 'permanent_validation' });
+  });
+
+  it('leaves a tab whose recipient is not a template role unattached rather than guessing', async () => {
+    const transport = stubTransport();
+    transport.bodies = [
+      JSON.stringify({
+        templateId: 'tpl-1',
+        name: 'Dangling tab',
+        recipients: { signers: [{ roleName: 'Signer 1', recipientId: '1', routingOrder: '1' }] },
+        documents: [{ documentId: 'doc-1', tabs: { textTabs: [{ tabLabel: 'Orphan', recipientId: '9', required: false }] } }],
+      }),
+    ];
+    const detail = await new DocuSignAdapter(transport).templateDetails(context(), 'tpl-1');
+    expect(detail.fields).toEqual([{ tabLabel: 'Orphan', roleName: null, documentId: 'doc-1', fieldType: 'text', required: false }]);
+  });
+});
+
 describe('the transport destination gate (19-ES.4, plan §9.3)', () => {
   const resolveTo = (addresses: string[]) => async (): Promise<string[]> => addresses;
 

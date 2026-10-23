@@ -165,6 +165,9 @@ export const AUDIT_ACTIONS = [
   // record a value — the row keeps the outcome and a safe reason only.
   'connection.tested',
   'connection.secretRotated',
+  // Added by 19-ES.7: a template mapping is configuration a provider call is built from, so creating,
+  // editing or switching one is auditable. The detail carries the field/role *names*, never their values.
+  'templateMapping.changed',
   'connection.enabled',
   'connection.disabled',
   'connection.disconnected',
