@@ -9,6 +9,7 @@ import {
   RequestDocumentAttachSchema,
   RequestDocumentReplaceSchema,
   RequestEnvelopeSchema,
+  RequestEventsQuerySchema,
   RequestListQuerySchema,
   RequestPrepareSchema,
   RequestRecipientsSchema,
@@ -148,6 +149,13 @@ export class ESignatureRequestController {
   @Post(':id/reconcile')
   async reconcileSend(@Param('id') id: string) {
     return this.requests.reconcileSend(this.id(id));
+  }
+
+  /** The activity timeline: normalized provider events and lifecycle audit entries (ES.13). */
+  @Get(':id/events')
+  async events(@Param('id') id: string, @Query() query: unknown) {
+    const parsed = this.parse(RequestEventsQuerySchema, query);
+    return { list: await this.requests.timeline(this.id(id), parsed.limit) };
   }
 
   @Get(':id/recipients')

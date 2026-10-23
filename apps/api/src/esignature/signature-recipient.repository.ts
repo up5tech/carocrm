@@ -221,6 +221,13 @@ export class SignatureRecipientRepository {
     return row === undefined ? undefined : toRecipient(row);
   }
 
+  /** A recipient the caller named, or a refusal. */
+  async requireById(id: string): Promise<SignatureRecipient> {
+    const found = await this.findById(id);
+    if (found === undefined) throw new ValidationError(`No signature recipient "${id}".`, { recipientId: id });
+    return found;
+  }
+
   async findByProviderId(requestId: string, providerRecipientId: string): Promise<SignatureRecipient | undefined> {
     const row = await this.db
       .selectFrom('signature_recipients')
@@ -241,20 +248,33 @@ export class SignatureRecipientRepository {
       .where('deleted_at', 'is', null)
       .groupBy(['status', 'recipient_type'])
       .execute();
-    let total = 0;
-    let completed = 0;
-    let declined = 0;
-    let signers = 0;
+    return summarizeProgress(rows);
+  }
+
+  /**
+   * The progress summary for a page of requests, in one query.
+   *
+   * The list screen shows "2 of 3 signers" without one follow-up query per row (plan §13.2). A
+   * request with no recipients is absent from the map and rendered as zero.
+   */
+  async progressForRequests(requestIds: readonly string[]): Promise<Map<string, { total: number; outstanding: number; completed: number; declined: number; signers: number }>> {
+    const out = new Map<string, { total: number; outstanding: number; completed: number; declined: number; signers: number }>();
+    if (requestIds.length === 0) return out;
+    const rows = await this.db
+      .selectFrom('signature_recipients')
+      .select(['request_id', 'status', 'recipient_type', (eb) => eb.fn.countAll<string>().as('n')])
+      .where('request_id', 'in', [...requestIds])
+      .where('deleted_at', 'is', null)
+      .groupBy(['request_id', 'status', 'recipient_type'])
+      .execute();
+    const grouped = new Map<string, { status: string; recipient_type: string; n: string }[]>();
     for (const row of rows) {
-      const n = Number.parseInt(row.n, 10) || 0;
-      total += n;
-      if (row.recipient_type === 'signer') {
-        signers += n;
-        if (row.status === 'completed' || row.status === 'signed') completed += n;
-      }
-      if (row.status === 'declined') declined += n;
+      const list = grouped.get(row.request_id) ?? [];
+      list.push({ status: row.status, recipient_type: row.recipient_type, n: row.n });
+      grouped.set(row.request_id, list);
     }
-    return { total, outstanding: total - completed - declined, completed, declined, signers };
+    for (const [requestId, entries] of grouped) out.set(requestId, summarizeProgress(entries));
+    return out;
   }
 
   /**
@@ -307,9 +327,31 @@ function normalizeRecipient(input: RecipientInput): {
   };
 }
 
+function summarizeProgress(rows: readonly { status: string; recipient_type: string; n: string }[]): {
+  total: number;
+  outstanding: number;
+  completed: number;
+  declined: number;
+  signers: number;
+} {
+  let total = 0;
+  let completed = 0;
+  let declined = 0;
+  let signers = 0;
+  for (const row of rows) {
+    const n = Number.parseInt(row.n, 10) || 0;
+    total += n;
+    if (row.recipient_type === 'signer') {
+      signers += n;
+      if (row.status === 'completed' || row.status === 'signed') completed += n;
+    }
+    if (row.status === 'declined') declined += n;
+  }
+  return { total, outstanding: total - completed - declined, completed, declined, signers };
+}
+
 function toRecipient(row: {
-  id: string;
-  request_id: string;
+  id: string;  request_id: string;
   provider_recipient_id: string | null;
   recipient_type: string;
   crm_contact_id: string | null;

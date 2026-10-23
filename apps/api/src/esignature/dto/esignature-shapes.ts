@@ -188,6 +188,14 @@ export const RequestSendSchema = z
   })
   .strict();
 
+// ---------------------------------------------------------------------------
+// Phase 19-ES.13–ES.16 — progress, embedded signing, artifacts and lifecycle actions
+// ---------------------------------------------------------------------------
+
+export const RequestEventsQuerySchema = z
+  .object({ limit: z.coerce.number().int().min(1).max(200).default(100) })
+  .strict();
+
 /** The worker's webhook-processing payload: the durable inbox row, nothing else. */
 export const WebhookProcessSchema = z.object({ inboxId: z.string().trim().min(1).max(64) }).strict();
 

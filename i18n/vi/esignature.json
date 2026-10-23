@@ -208,7 +208,9 @@
     "columnName": "Yêu cầu",
     "columnStatus": "Trạng thái",
     "columnApproval": "Phê duyệt",
+    "columnSigners": "Người ký",
     "columnUpdated": "Cập nhật",
+    "progress": "{done}/{total} đã ký",
     "allStatuses": "Mọi trạng thái",
     "fieldName": "Tên",
     "fieldSource": "Bản ghi nguồn",
@@ -226,6 +228,7 @@
     "recipientName": "Tên",
     "recipientEmail": "Email",
     "recipientType": "Loại",
+    "recipientStatus": "Trạng thái",
     "routingOrder": "Thứ tự",
     "addRecipient": "Thêm người nhận",
     "removeRecipient": "Xóa người nhận",
@@ -233,6 +236,17 @@
     "recipientTypes": {
       "signer": "Người ký",
       "carbon_copy": "Nhận bản sao"
+    },
+    "recipientStatuses": {
+      "pending": "Chưa gửi",
+      "sent": "Đã mời",
+      "delivered": "Đã nhận",
+      "viewed": "Đã xem",
+      "signed": "Đã ký",
+      "completed": "Đã ký",
+      "declined": "Từ chối",
+      "canceled": "Đã hủy",
+      "expired": "Hết hạn"
     },
     "documents": "Tài liệu",
     "attachDocument": "Đính kèm tài liệu",
@@ -355,5 +369,44 @@
     "recover": "Đưa về sẵn sàng gửi",
     "recovered": "Yêu cầu đã sẵn sàng gửi lại.",
     "recoverFailed": "Không khôi phục được yêu cầu."
+  },
+  "timeline": {
+    "title": "Hoạt động",
+    "loading": "Đang tải hoạt động…",
+    "loadFailed": "Không tải được hoạt động.",
+    "empty": "Chưa có hoạt động nào trên yêu cầu này.",
+    "providerEvent": "Nhà cung cấp",
+    "auditEntry": "CRM",
+    "providerTypes": {
+      "sent": "Đã gửi phong bao",
+      "delivered": "Phong bao đã được nhận",
+      "viewed": "Người nhận đã xem",
+      "signed": "Người nhận đã ký",
+      "completed": "Phong bao hoàn tất",
+      "declined": "Phong bao bị từ chối",
+      "voided": "Phong bao bị hủy",
+      "expired": "Phong bao hết hạn",
+      "partially_signed": "Đã ký một phần",
+      "failed": "Nhà cung cấp gặp lỗi",
+      "unmapped": "Sự kiện nhà cung cấp chưa ánh xạ"
+    },
+    "auditActions": {
+      "request.created": "Đã tạo yêu cầu",
+      "request.updated": "Đã cập nhật yêu cầu",
+      "request.prepared": "Đã chuẩn bị yêu cầu",
+      "documents.changed": "Đã đổi tài liệu",
+      "recipients.changed": "Đã đổi người nhận",
+      "send.completed": "Hoàn tất gửi",
+      "send.outcome_unknown": "Không rõ kết quả gửi",
+      "provider.event_accepted": "Đã nhận sự kiện nhà cung cấp",
+      "provider.event_rejected": "Sự kiện nhà cung cấp bị từ chối",
+      "embedded_view.created": "Đã mở phiên ký",
+      "reminder.sent": "Đã gửi nhắc nhở",
+      "void.requested": "Yêu cầu hủy",
+      "void.completed": "Đã hủy",
+      "correct.requested": "Yêu cầu chỉnh sửa",
+      "artifact.downloaded": "Đã lưu tài liệu hoàn tất",
+      "reconciliation.completed": "Đã đối soát"
+    }
   }
 }

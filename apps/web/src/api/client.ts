@@ -70,6 +70,7 @@ import type {
   ESignatureTemplateCatalog,
   ESignatureTemplateDetail,
   ESignatureTemplateMapping,
+  ESignatureTimelineEntry,
   ExtensionInstallResult,
   ExtensionListResult,
   ExtensionNavItem,
@@ -1846,6 +1847,10 @@ export const api = {
     request<{ request: ESignatureRequestView; providerStatus: string; reconciled: boolean }>(
       `/ESignature/requests/${encodeURIComponent(id)}/reconcile`,
       post({}),
+    ),
+  eSignatureRequestEvents: (id: string, limit = 100) =>
+    request<{ list: readonly ESignatureTimelineEntry[] }>(
+      `/ESignature/requests/${encodeURIComponent(id)}/events?limit=${String(limit)}`,
     ),
   /** Delete the provider draft while nothing has been sent. */
   abandonESignatureEnvelope: (id: string) =>

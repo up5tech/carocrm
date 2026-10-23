@@ -41,6 +41,7 @@ import { SignatureProviderRegistry } from './providers/signature-provider.regist
 import { type AuditInput, SignatureAuditRepository } from './signature-audit.repository.js';
 import { SignatureConnectionRepository } from './signature-connection.repository.js';
 import { type SignatureDocumentSnapshot, SignatureDocumentSnapshotRepository } from './signature-document-snapshot.repository.js';
+import { SignatureProviderEventRepository } from './signature-provider-event.repository.js';
 import { type SignatureRecipient, SignatureRecipientRepository } from './signature-recipient.repository.js';
 import { type RequestAccessScope, type SignatureRequest, SignatureRequestRepository } from './signature-request.repository.js';
 import { SignatureTemplateMappingRepository } from './signature-template-mapping.repository.js';
@@ -114,6 +115,29 @@ export interface SignatureRequestRecipientView {
   readonly routingOrder: number;
   readonly status: SignatureRecipient['status'];
   readonly crmContactId: string | null;
+  readonly authenticationMethod: string | null;
+  readonly declineReasonSafe: string | null;
+}
+
+export interface SignatureRequestProgress {
+  readonly total: number;
+  readonly outstanding: number;
+  readonly completed: number;
+  readonly declined: number;
+  readonly signers: number;
+}
+
+/** One row of the detail view's activity timeline; a provider event or a lifecycle audit entry. */
+export interface SignatureTimelineEntry {
+  readonly id: string;
+  readonly kind: 'provider' | 'audit';
+  readonly at: string;
+  readonly type: string;
+  readonly providerTypeRaw: string | null;
+  readonly recipientId: string | null;
+  readonly outcome: string;
+  readonly reasonSafe: string | null;
+  readonly detail: Readonly<Record<string, unknown>>;
 }
 
 /** One request, as its own screen needs it. */
@@ -164,6 +188,7 @@ export interface SignatureRequestListRow {
   readonly approvalStatus: SignatureRequest['approvalStatus'];
   readonly sentAt: string | null;
   readonly modifiedAt: string;
+  readonly progress: SignatureRequestProgress;
 }
 
 export interface RequestDraftPatch {
@@ -192,6 +217,7 @@ export class ESignatureRequestService {
     @Inject(SignatureRecipientRepository) private readonly recipients: SignatureRecipientRepository,
     @Inject(SignatureDocumentSnapshotRepository) private readonly snapshots: SignatureDocumentSnapshotRepository,
     @Inject(SignatureAuditRepository) private readonly audit: SignatureAuditRepository,
+    @Inject(SignatureProviderEventRepository) private readonly providerEvents: SignatureProviderEventRepository,
     @Inject(SignatureConnectionRepository) private readonly connections: SignatureConnectionRepository,
     @Inject(SignatureTemplateMappingRepository) private readonly mappings: SignatureTemplateMappingRepository,
     @Inject(ESignatureConnectionGate) private readonly gate: ESignatureConnectionGate,
@@ -229,7 +255,13 @@ export class ESignatureRequestService {
       ...(query.assignedUserId === undefined ? {} : { assignedUserId: query.assignedUserId }),
       ...(query.needsAttention === undefined ? {} : { needsAttention: query.needsAttention }),
     });
-    return { list: await Promise.all(list.map((row) => this.toListRow(row))), total };
+    const progress = await this.recipients.progressForRequests(list.map((row) => row.id));
+    return {
+      list: await Promise.all(
+        list.map((row) => this.toListRow(row, progress.get(row.id) ?? { total: 0, outstanding: 0, completed: 0, declined: 0, signers: 0 })),
+      ),
+      total,
+    };
   }
 
   async get(id: string): Promise<SignatureRequestView> {
@@ -405,6 +437,49 @@ export class ESignatureRequestService {
       throw new ValidationError('That document does not belong to this signature request.', { snapshotId });
     }
     return { document: toDocumentView(opened.snapshot), bytes: opened.bytes };
+  }
+
+  /**
+   * The request's activity timeline (ES.13): normalized provider events and lifecycle audit entries,
+   * newest first.
+   *
+   * Everything here is already safe to show a request reader: the provider rows carry the minimized
+   * event, and the audit rows pass through the repository's segment-based redaction. No raw body, no
+   * signing URL, no token.
+   */
+  async timeline(id: string, limit: number): Promise<readonly SignatureTimelineEntry[]> {
+    const request = await this.loadScoped(id);
+    const [events, audit, showRaw] = await Promise.all([
+      this.providerEvents.listForRequest(request.id, { limit }),
+      this.audit.listForRequest(request.id, { limit }),
+      this.canReadRawDiagnostics(),
+    ]);
+    const entries: SignatureTimelineEntry[] = [
+      ...events.map((event) => ({
+        id: event.id,
+        kind: 'provider' as const,
+        at: event.providerOccurredAt ?? event.receivedAt,
+        type: event.eventTypeNormalized,
+        // The provider's own word is diagnostics; the normalized event is the timeline's vocabulary.
+        providerTypeRaw: showRaw ? event.providerEventTypeRaw : null,
+        recipientId: event.recipientProviderId,
+        outcome: event.processingStatus,
+        reasonSafe: event.lastProcessingErrorSafe,
+        detail: event.eventData,
+      })),
+      ...audit.map((entry) => ({
+        id: entry.id,
+        kind: 'audit' as const,
+        at: entry.createdAt,
+        type: entry.action,
+        providerTypeRaw: null,
+        recipientId: entry.recipientId,
+        outcome: entry.outcome,
+        reasonSafe: entry.reasonSafe,
+        detail: entry.detail,
+      })),
+    ];
+    return entries.sort((left, right) => Date.parse(right.at) - Date.parse(left.at)).slice(0, clampTimeline(limit));
   }
 
   // ---------------------------------------------------------------------------
@@ -955,6 +1030,10 @@ export class ESignatureRequestService {
       if (match !== undefined) await this.recipients.attachProviderId(match.id, providerRecipient.providerRecipientId);
     }
   }
+
+  /** Whether this caller may see raw provider diagnostics (plan §13.4: audit readers and admins). */
+  private async canReadRawDiagnostics(): Promise<boolean> {
+    return (await this.permissions.level('auditRead')) !== 'no';
   }
 
   private async buildPreview(request: SignatureRequest): Promise<SignaturePreview> {
@@ -1034,9 +1113,10 @@ export class ESignatureRequestService {
   // ---------------------------------------------------------------------------
 
   async view(request: SignatureRequest): Promise<SignatureRequestView> {
-    const [recipients, documents] = await Promise.all([
+    const [recipients, documents, showRaw] = await Promise.all([
       this.recipients.listForRequest(request.id),
       this.snapshots.listForRequest(request.id),
+      this.canReadRawDiagnostics(),
     ]);
     return {
       id: request.id,
@@ -1046,7 +1126,9 @@ export class ESignatureRequestService {
       providerKey: request.providerKey,
       connectionId: request.connectionId,
       providerEnvelopeId: request.providerEnvelopeId,
-      providerStatusRaw: request.providerStatusRaw,
+      // The provider's own status word is a diagnostic; plan §13.4 keeps it for readers of the audit
+      // trail rather than every request reader. The normalized status above is the product answer.
+      providerStatusRaw: showRaw ? request.providerStatusRaw : null,
       templateMappingId: request.templateMappingId,
       source: await this.resolveSource(request.sourceEntityType, request.sourceRecordId),
       subject: request.subject,
@@ -1073,7 +1155,7 @@ export class ESignatureRequestService {
     };
   }
 
-  private async toListRow(request: SignatureRequest): Promise<SignatureRequestListRow> {
+  private async toListRow(request: SignatureRequest, progress: SignatureRequestProgress): Promise<SignatureRequestListRow> {
     return {
       id: request.id,
       name: request.name,
@@ -1084,6 +1166,7 @@ export class ESignatureRequestService {
       approvalStatus: request.approvalStatus,
       sentAt: request.sentAt,
       modifiedAt: request.modifiedAt,
+      progress,
     };
   }
 
@@ -1200,8 +1283,7 @@ function displayNameOf(record: EntityRecord): string {
   return typeof name === 'string' && name.trim() !== '' ? name.trim() : record.id;
 }
 
-function toRecipientView(recipient: SignatureRecipient): SignatureRequestRecipientView {
-  return {
+function toRecipientView(recipient: SignatureRecipient): SignatureRequestRecipientView {  return {
     id: recipient.id,
     name: recipient.name,
     email: recipient.email,
@@ -1210,6 +1292,8 @@ function toRecipientView(recipient: SignatureRecipient): SignatureRequestRecipie
     routingOrder: recipient.routingOrder,
     status: recipient.status,
     crmContactId: recipient.crmContactId,
+    authenticationMethod: recipient.authenticationMethod,
+    declineReasonSafe: recipient.declineReasonSafe,
   };
 }
 
@@ -1243,4 +1327,10 @@ function parseDate(value: string | null): Date | null {
   if (value === null) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function clampTimeline(limit: number): number {
+  const value = Math.trunc(limit);
+  if (!Number.isFinite(value) || value <= 0) return 100;
+  return Math.min(value, 200);
 }

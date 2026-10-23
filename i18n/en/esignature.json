@@ -208,7 +208,9 @@
     "columnName": "Request",
     "columnStatus": "Status",
     "columnApproval": "Approval",
+    "columnSigners": "Signers",
     "columnUpdated": "Updated",
+    "progress": "{done}/{total} signed",
     "allStatuses": "All statuses",
     "fieldName": "Name",
     "fieldSource": "Source record",
@@ -226,6 +228,7 @@
     "recipientName": "Name",
     "recipientEmail": "Email",
     "recipientType": "Type",
+    "recipientStatus": "Status",
     "routingOrder": "Order",
     "addRecipient": "Add recipient",
     "removeRecipient": "Remove recipient",
@@ -233,6 +236,17 @@
     "recipientTypes": {
       "signer": "Signer",
       "carbon_copy": "Carbon copy"
+    },
+    "recipientStatuses": {
+      "pending": "Not sent",
+      "sent": "Invited",
+      "delivered": "Delivered",
+      "viewed": "Viewed",
+      "signed": "Signed",
+      "completed": "Signed",
+      "declined": "Declined",
+      "canceled": "Canceled",
+      "expired": "Expired"
     },
     "documents": "Documents",
     "attachDocument": "Attach document",
@@ -355,5 +369,44 @@
     "recover": "Return to ready to send",
     "recovered": "The request is ready to send again.",
     "recoverFailed": "The request could not be recovered."
+  },
+  "timeline": {
+    "title": "Activity",
+    "loading": "Loading the activity…",
+    "loadFailed": "The activity could not be loaded.",
+    "empty": "Nothing has happened on this request yet.",
+    "providerEvent": "Provider",
+    "auditEntry": "CRM",
+    "providerTypes": {
+      "sent": "Envelope sent",
+      "delivered": "Envelope delivered",
+      "viewed": "Viewed by a recipient",
+      "signed": "Recipient signed",
+      "completed": "Envelope completed",
+      "declined": "Envelope declined",
+      "voided": "Envelope voided",
+      "expired": "Envelope expired",
+      "partially_signed": "Partially signed",
+      "failed": "Provider failure",
+      "unmapped": "Unmapped provider event"
+    },
+    "auditActions": {
+      "request.created": "Request created",
+      "request.updated": "Request updated",
+      "request.prepared": "Request prepared",
+      "documents.changed": "Documents changed",
+      "recipients.changed": "Recipients changed",
+      "send.completed": "Send completed",
+      "send.outcome_unknown": "Send outcome unknown",
+      "provider.event_accepted": "Provider event accepted",
+      "provider.event_rejected": "Provider event refused",
+      "embedded_view.created": "Signing session opened",
+      "reminder.sent": "Reminder sent",
+      "void.requested": "Void requested",
+      "void.completed": "Void completed",
+      "correct.requested": "Correction requested",
+      "artifact.downloaded": "Completed documents stored",
+      "reconciliation.completed": "Reconciliation completed"
+    }
   }
 }

@@ -3225,6 +3225,8 @@ export interface ESignatureRequestRecipient {
   readonly routingOrder: number;
   readonly status: string;
   readonly crmContactId: string | null;
+  readonly authenticationMethod: string | null;
+  readonly declineReasonSafe: string | null;
 }
 
 export interface ESignatureRequestDocument {
@@ -3282,11 +3284,26 @@ export interface ESignatureRequestListRow {
   readonly approvalStatus: string;
   readonly sentAt: string | null;
   readonly modifiedAt: string;
+  readonly progress: { readonly total: number; readonly outstanding: number; readonly completed: number; readonly declined: number; readonly signers: number };
 }
 
 export interface ESignatureRequestList {
   readonly list: readonly ESignatureRequestListRow[];
   readonly total: number;
+}
+
+/** Phase 19-ES.13 — one row of the request's activity timeline. Never a raw provider payload. */
+export interface ESignatureTimelineEntry {
+  readonly id: string;
+  readonly kind: 'provider' | 'audit';
+  readonly at: string;
+  readonly type: string;
+  readonly providerTypeRaw: string | null;
+  readonly recipientId: string | null;
+  readonly outcome: string;
+  readonly reasonSafe: string | null;
+  readonly detail: Readonly<Record<string, unknown>>;
+}
 }
 
 // Phase 19-ES.7 — the template catalog and the mappings built from it.

@@ -17,6 +17,7 @@ import {
   Space,
   Table,
   Tag,
+  Timeline,
   Typography,
   Upload,
 } from 'antd';
@@ -24,7 +25,13 @@ import type { ColumnsType } from 'antd/es/table';
 import { useState } from 'react';
 
 import { api } from '../../api/client.js';
-import type { ESignatureRequestDocument, ESignatureRequestListRow, ESignatureRequestRecipient, ESignatureRequestView } from '../../api/types.js';
+import type {
+  ESignatureRequestDocument,
+  ESignatureRequestListRow,
+  ESignatureRequestRecipient,
+  ESignatureRequestView,
+  ESignatureTimelineEntry,
+} from '../../api/types.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
@@ -110,6 +117,18 @@ export function ESignatureRequestsPanel(props: { readonly canPrepare: boolean; r
         ) : (
           <Tag color={value === 'approved' ? 'green' : value === 'rejected' ? 'red' : 'orange'}>{t(`esignature.requests.approvalStatuses.${value}`)}</Tag>
         ),
+    },
+    {
+      title: t('esignature.requests.columnSigners'),
+      key: 'progress',
+      width: 130,
+      render: (_value: unknown, row) => (
+        <Typography.Text type="secondary">
+          {row.progress.signers === 0
+            ? '—'
+            : t('esignature.requests.progress', { done: row.progress.completed, total: row.progress.signers })}
+        </Typography.Text>
+      ),
     },
     {
       title: t('esignature.requests.columnUpdated'),
@@ -284,6 +303,8 @@ function RequestDetail(props: {
           void detail.refetch();
         }}
       />
+      />
+      <TimelineSection requestId={request.id} />
     </Space>
   );
 }
@@ -714,14 +735,72 @@ function RecipientsTable(props: { recipients: ESignatureRequestRecipient[] }) {
           pagination={false}
           dataSource={props.recipients}
           columns={[
+            { title: t('esignature.requests.routingOrder'), dataIndex: 'routingOrder', width: 70 },
             { title: t('esignature.requests.recipientName'), dataIndex: 'name' },
             { title: t('esignature.requests.recipientEmail'), dataIndex: 'email' },
             { title: t('esignature.requests.recipientType'), dataIndex: 'recipientType', render: (value: string) => t(`esignature.requests.recipientTypes.${value}`) },
             { title: t('esignature.requests.routingOrder'), dataIndex: 'routingOrder', width: 100 },
+            {
+              title: t('esignature.requests.recipientType'),
+              dataIndex: 'recipientType',
+              width: 110,
+              render: (value: string) => t(`esignature.requests.recipientTypes.${value}`),
+            },
+            {
+              title: t('esignature.requests.recipientStatus'),
+              dataIndex: 'status',
+              width: 130,
+              render: (value: string) => <Tag color={recipientStatusColor(value)}>{t(`esignature.requests.recipientStatuses.${value}`)}</Tag>,
+            },
           ]}
         />
       )}
     </Space>
+  );
+}
+
+
+function TimelineSection(props: { requestId: string }) {
+  const timeline = useQuery({
+    queryKey: ['eSignature', 'request', props.requestId, 'events'],
+    queryFn: () => api.eSignatureRequestEvents(props.requestId),
+  });
+  if (timeline.isError) return <Alert type="warning" showIcon message={t('esignature.timeline.loadFailed')} />;
+  const entries = timeline.data?.list ?? [];
+  return (
+    <Card size="small" title={t('esignature.timeline.title')} style={{ marginTop: 8 }}>
+      {timeline.isLoading ? (
+        <Typography.Text type="secondary">{t('esignature.timeline.loading')}</Typography.Text>
+      ) : entries.length === 0 ? (
+        <Typography.Text type="secondary">{t('esignature.timeline.empty')}</Typography.Text>
+      ) : (
+        <Timeline
+          items={entries.map((entry: ESignatureTimelineEntry) => ({
+            color: entry.outcome === 'refused' || entry.outcome === 'failed' ? 'red' : entry.kind === 'provider' ? 'blue' : 'gray',
+            children: (
+              <Space direction="vertical" size={0}>
+                <Space size={6} wrap>
+                  <Tag color={entry.kind === 'provider' ? 'blue' : 'default'}>
+                    {entry.kind === 'provider' ? t('esignature.timeline.providerEvent') : t('esignature.timeline.auditEntry')}
+                  </Tag>
+                  <Typography.Text strong>
+                    {entry.kind === 'provider' ? t(`esignature.timeline.providerTypes.${entry.type}`) : t(`esignature.timeline.auditActions.${entry.type}`)}
+                  </Typography.Text>
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {formatMoment(entry.at)}
+                  </Typography.Text>
+                </Space>
+                {entry.reasonSafe === null ? null : (
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {entry.reasonSafe}
+                  </Typography.Text>
+                )}
+              </Space>
+            ),
+          }))}
+        />
+      )}
+    </Card>
   );
 }
 
@@ -853,6 +932,15 @@ function statusColor(status: string): string {
   if (status === 'sent' || status === 'delivered' || status === 'partially_signed') return 'blue';
   if (status === 'draft') return 'default';
   return 'gold';
+}
+
+function recipientStatusColor(status: string): string {
+  if (status === 'completed' || status === 'signed') return 'green';
+  if (status === 'declined' || status === 'expired') return 'red';
+  if (status === 'canceled') return 'volcano';
+  if (status === 'viewed') return 'purple';
+  if (status === 'delivered' || status === 'sent') return 'blue';
+  return 'default';
 }
 
 function formatMoment(value: string): string {
