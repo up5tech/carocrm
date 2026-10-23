@@ -1,5 +1,6 @@
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, App as AntApp, Card, Col, Form, Input, InputNumber, Row, Select, Space, Switch, Tag, Typography } from 'antd';
+import { Alert, App as AntApp, AutoComplete, Button, Card, Col, Form, Input, InputNumber, Row, Select, Space, Switch, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 
 import { api } from '../../api/client.js';
@@ -43,6 +44,17 @@ interface FeatureFlags {
   [key: string]: boolean;
 }
 
+interface ApprovalRuleValues {
+  label: string;
+  sourceEntityType: string;
+  field: string;
+  operator: 'equals' | 'not_equals' | 'gte' | 'lte' | 'contains';
+  value: string;
+}
+
+/** The source entities this installation usually writes signature requests from. Free text is allowed. */
+const POLICY_ENTITIES = ['Account', 'Contact', 'Quote', 'Project', 'Case', 'Campaign', 'CustomerSuccessProfile'] as const;
+
 /** The stored document, typed where this screen edits it and open-ended where the module adds more. */
 interface FormValues {
   enabled: boolean;
@@ -52,7 +64,7 @@ interface FormValues {
   signing: { defaultExpiryDays: number; remindersEnabled: boolean; resendCooldownMinutes: number; embeddedReturnHosts: string[] };
   webhooks: { endpointUrl: string; requireHmac: boolean; maxPayloadBytes: number };
   retention: { webhookPayloadDays: number; completedArtifactDays: number };
-  approval: { requiredForSourceEntities: string[] };
+  approval: { requiredForSourceEntities: string[]; preventSelfApproval: boolean; rules: ApprovalRuleValues[] };
   environmentLabel: string;
 }
 
@@ -302,11 +314,95 @@ export function ESignatureSettingsTab() {
               </Row>
             </Card>
 
-            <Card className="carocrm-card" title={t('esignature.settings.approval')} style={{ marginBottom: 16 }}>
+            <Card
+              className="carocrm-card"
+              title={t('esignature.settings.approval')}
+              extra={t('esignature.settings.approvalHint')}
+              style={{ marginBottom: 16 }}
+            >
               <Form.Item name={['approval', 'requiredForSourceEntities']} label={t('esignature.settings.requiredForSourceEntities')}>
                 <Select mode="tags" tokenSeparators={[',', ' ']} placeholder="Quote" />
               </Form.Item>
-              <Form.Item name="environmentLabel" label={t('esignature.settings.environmentLabel')}>
+              <Form.Item
+                name={['approval', 'preventSelfApproval']}
+                label={t('esignature.settings.preventSelfApproval')}
+                extra={t('esignature.settings.preventSelfApprovalHint')}
+                valuePropName="checked"
+              >
+                <Switch checkedChildren={t('core.common.yes')} unCheckedChildren={t('core.common.no')} />
+              </Form.Item>
+
+              <Typography.Title level={5} style={{ marginTop: 8 }}>
+                {t('esignature.settings.approvalRules')}
+              </Typography.Title>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t('esignature.settings.approvalRulesHint')}
+              </Typography.Text>
+              <Form.List name={['approval', 'rules']}>
+                {(fields, { add, remove }) => (
+                  <Space direction="vertical" size={10} style={{ width: '100%', marginTop: 8 }}>
+                    {fields.map((field) => (
+                      <Card key={field.key} size="small" style={{ background: 'rgba(0, 0, 0, 0.02)' }}>
+                        <Row gutter={[8, 8]} align="bottom">
+                          <Col xs={24} md={7}>
+                            <Form.Item name={[field.name, 'label']} label={t('esignature.settings.ruleLabel')} rules={[{ required: true, max: 120 }]} style={{ marginBottom: 0 }}>
+                              <Input maxLength={120} placeholder={t('esignature.settings.ruleLabelPlaceholder')} />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={12} md={4}>
+                            <Form.Item name={[field.name, 'sourceEntityType']} label={t('esignature.settings.ruleEntity')} rules={[{ required: true }]} style={{ marginBottom: 0 }}>
+                              <AutoComplete options={POLICY_ENTITIES.map((value) => ({ value }))} placeholder="Quote" />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={12} md={4}>
+                            <Form.Item name={[field.name, 'field']} label={t('esignature.settings.ruleField')} rules={[{ required: true }]} style={{ marginBottom: 0 }}>
+                              <Input maxLength={64} placeholder="amount" />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={12} md={3}>
+                            <Form.Item name={[field.name, 'operator']} label={t('esignature.settings.ruleOperator')} style={{ marginBottom: 0 }}>
+                              <Select
+                                options={[
+                                  { value: 'equals', label: t('esignature.settings.ruleOperators.equals') },
+                                  { value: 'not_equals', label: t('esignature.settings.ruleOperators.not_equals') },
+                                  { value: 'gte', label: t('esignature.settings.ruleOperators.gte') },
+                                  { value: 'lte', label: t('esignature.settings.ruleOperators.lte') },
+                                  { value: 'contains', label: t('esignature.settings.ruleOperators.contains') },
+                                ]}
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={12} md={4}>
+                            <Form.Item name={[field.name, 'value']} label={t('esignature.settings.ruleValue')} rules={[{ required: true }]} style={{ marginBottom: 0 }}>
+                              <Input maxLength={200} placeholder="10000" />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} md={2}>
+                            <Button
+                              size="small"
+                              type="text"
+                              danger
+                              icon={<DeleteOutlined />}
+                              aria-label={t('esignature.settings.ruleRemove')}
+                              onClick={() => remove(field.name)}
+                            />
+                          </Col>
+                        </Row>
+                      </Card>
+                    ))}
+                    <Button
+                      size="small"
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                      onClick={() => add({ label: '', sourceEntityType: 'Account', field: '', operator: 'equals', value: '' })}
+                    >
+                      {t('esignature.settings.ruleAdd')}
+                    </Button>
+                  </Space>
+                )}
+              </Form.List>
+
+              <Form.Item name="environmentLabel" label={t('esignature.settings.environmentLabel')} style={{ marginTop: 16 }}>
                 <Input maxLength={60} />
               </Form.Item>
             </Card>

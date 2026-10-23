@@ -20,6 +20,7 @@
   "PROVIDER_OUTCOME_UNKNOWN": "Nhà cung cấp có thể đã nhận yêu cầu nhưng hệ thống không nhận được xác nhận. Yêu cầu được giữ để đối soát và đã không được gửi lại.",
   "SIGNATURE_REQUEST_INVALID_STATE": "Yêu cầu ký không ở trạng thái cho phép thao tác này.",
   "SIGNATURE_APPROVAL_REQUIRED": "Yêu cầu ký này cần được phê duyệt trước khi gửi.",
+  "SIGNATURE_APPROVAL_SEPARATION_REQUIRED": "Người tạo hoặc chuẩn bị yêu cầu này không thể tự phê duyệt.",
   "RECIPIENT_NOT_AUTHORIZED": "Người nhận đó không thuộc yêu cầu ký này.",
   "SIGNATURE_DOCUMENT_NOT_READABLE": "Không đọc được tài liệu của yêu cầu ký này.",
   "SIGNATURE_SOURCE_RECORD_NOT_READABLE": "Không đọc được bản ghi liên kết với yêu cầu ký này.",

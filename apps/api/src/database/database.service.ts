@@ -1403,8 +1403,12 @@ export interface SignatureRequestsTable {
   approval_required: boolean;
   approval_status: string;
   approval_reason: string | null;
+  approval_requested_at: Date | null;
+  approval_requested_by_id: string | null;
   approved_at: Date | null;
   approved_digest: string | null;
+  approval_reviewed_version: number | null;
+  approval_reviewed_digest: string | null;
   send_attempt_id: string | null;
   outgoing_snapshot: unknown;
   outgoing_digest: string | null;

@@ -20,6 +20,7 @@
   "PROVIDER_OUTCOME_UNKNOWN": "The provider may have accepted the request but no confirmation was received. The request is held for reconciliation and has not been sent again.",
   "SIGNATURE_REQUEST_INVALID_STATE": "The signature request is not in a state that allows this action.",
   "SIGNATURE_APPROVAL_REQUIRED": "This signature request needs an approval before it can be sent.",
+  "SIGNATURE_APPROVAL_SEPARATION_REQUIRED": "The person who created or prepared this request cannot approve it.",
   "RECIPIENT_NOT_AUTHORIZED": "That recipient is not part of this signature request.",
   "SIGNATURE_DOCUMENT_NOT_READABLE": "The document for this signature request cannot be read.",
   "SIGNATURE_SOURCE_RECORD_NOT_READABLE": "The record linked to this signature request cannot be read.",

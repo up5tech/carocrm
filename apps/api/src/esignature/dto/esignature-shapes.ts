@@ -230,6 +230,25 @@ export const RequestCorrectSchema = z
   })
   .strict();
 
+/** The request sent to the approval queue. `version` is the reviewed preparation. */
+export const RequestApprovalRequestSchema = z.object({ version: z.coerce.number().int().min(1) }).strict();
+
+/** An approval decision. Approval's reason is optional; a rejection's reason is enforced in the service. */
+export const RequestApprovalDecisionSchema = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    reason: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
+/** A rejection always needs a reason; the service refuses a blank one with a stable code. */
+export const RequestRejectionSchema = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    reason: z.string().trim().max(500),
+  })
+  .strict();
+
 /** The worker's webhook-processing payload: the durable inbox row, nothing else. */
 export const WebhookProcessSchema = z.object({ inboxId: z.string().trim().min(1).max(64) }).strict();
 
@@ -260,6 +279,7 @@ export const RequestListQuerySchema = z
     connectionId: z.string().trim().max(64).optional(),
     assignedUserId: z.string().trim().max(64).optional(),
     needsAttention: z.enum(['true', 'false']).optional(),
+    approvalStatus: z.enum(['not_required', 'pending', 'approved', 'rejected']).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
     offset: z.coerce.number().int().min(0).default(0),
   })

@@ -11,6 +11,7 @@ import { ProviderError } from '../advanced-integrations/provider-error.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
 import { ENTITY_STORE } from '../entity/entity-record.store.js';
+import { runInTransaction } from '../entity/tx-context.js';
 import { METADATA_STORE, type MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { ESignatureConnectionService } from './esignature-connection.service.js';
 import { ESignatureConnectionGate } from './esignature-connection-gate.service.js';
@@ -23,6 +24,7 @@ import {
   providerOutcomeUnknownError,
   signatureActionNotAvailableError,
   signatureApprovalRequiredError,
+  signatureApprovalSeparationError,
   signatureModuleDisabledError,
   signatureRequestInvalidStateError,
   signatureResendRateLimitedError,
@@ -84,6 +86,7 @@ export interface RequestListQuery {
   readonly connectionId?: string | undefined;
   readonly assignedUserId?: string | undefined;
   readonly needsAttention?: boolean | undefined;
+  readonly approvalStatus?: SignatureRequest['approvalStatus'] | undefined;
   readonly limit: number;
   readonly offset: number;
 }
@@ -165,6 +168,12 @@ export interface SignatureRequestView {
   readonly approvalRequired: boolean;
   readonly approvalStatus: SignatureRequest['approvalStatus'];
   readonly approvalReason: string | null;
+  readonly approvalRequestedAt: string | null;
+  readonly approvalRequestedById: string | null;
+  readonly approvalDecidedAt: string | null;
+  readonly approvalDecidedById: string | null;
+  readonly approvalReviewedVersion: number | null;
+  readonly approvalReviewedDigest: string | null;
   readonly createdById: string | null;
   readonly assignedUserId: string | null;
   readonly teamIds: readonly string[];
@@ -258,6 +267,7 @@ export class ESignatureRequestService {
       ...(query.connectionId === undefined ? {} : { connectionId: query.connectionId }),
       ...(query.assignedUserId === undefined ? {} : { assignedUserId: query.assignedUserId }),
       ...(query.needsAttention === undefined ? {} : { needsAttention: query.needsAttention }),
+      ...(query.approvalStatus === undefined ? {} : { approvalStatus: query.approvalStatus }),
     });
     const progress = await this.recipients.progressForRequests(list.map((row) => row.id));
     return {
@@ -523,12 +533,14 @@ export class ESignatureRequestService {
     }
 
     const snapshot = buildSnapshot(`SignatureRequest:${request.id}`, preview.data);
+    // An approval already given for *these* exact bytes is not asked for again: a re-preparation
+    // after an unrelated page reload lands back in `ready_to_send`, not in the queue (ES.17).
+    const requiresDecision = preview.approvalRequired && !preview.approvedForThisDigest;
     const updated = await this.requests.recordPreparation(request.id, input.version, {
       snapshot,
       preparedById: this.scope.userId ?? 'system',
-      targetStatus: preview.approvalRequired ? 'pending_approval' : 'ready_to_send',
+      targetStatus: requiresDecision ? 'pending_approval' : 'ready_to_send',
       approvalRequired: preview.approvalRequired,
-      approvalStatus: preview.approvalRequired ? (preview.approvedForThisDigest ? 'approved' : 'pending') : 'not_required',
     });
     await this.audit.append({
       action: 'request.prepared',
@@ -536,7 +548,170 @@ export class ESignatureRequestService {
       actor: this.actorRef(),
       detail: { digest: updated.outgoingDigest, targetStatus: updated.status, approvalRequired: preview.approvalRequired },
     });
+    if (requiresDecision) {
+      await this.audit.append({
+        action: 'approval.requested',
+        requestId: request.id,
+        actor: this.actorRef(),
+        detail: {
+          digest: updated.outgoingDigest,
+          reasons: preview.approvalReasons.map((reason) => reason.label),
+          requestedBy: 'prepare',
+        },
+      });
+    }
     return { request: await this.view(updated), preview: await this.buildPreview(updated) };
+  }
+
+  // ---------------------------------------------------------------------------
+  // approval workflow (19-ES.17)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Send a prepared request to the approval queue deliberately.
+   *
+   * The policy already routes a covered request to `pending_approval` during preparation; this command
+   * is the voluntary path for a request the policy does not cover. The reviewed bytes are untouched:
+   * the snapshot and digest stay exactly as prepared, which is what makes the decision bind to them.
+   */
+  async requestApproval(id: string, input: { version: number }): Promise<SignatureRequestView> {
+    const request = await this.loadScoped(id, 'write');
+    await this.assertApprovalsEnabled();
+    if (request.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
+    if (request.outgoingDigest === null) {
+      throw new ValidationError('The request has no prepared preview to approve.', { code: 'PREVIEW_REQUIRED' });
+    }
+    const updated = await this.requests.requestApproval(id, input.version, this.scope.userId ?? 'system');
+    await this.audit.append({
+      action: 'approval.requested',
+      requestId: id,
+      actor: this.actorRef(),
+      detail: { digest: updated.outgoingDigest, requestedBy: 'sender', reviewedVersion: request.version },
+    });
+    return this.view(updated);
+  }
+
+  /**
+   * Approve the exact prepared bytes.
+   *
+   * The decision binds to the stored digest and the version the approver saw; a request that changed
+   * after preparation is back in `draft`, so there is nothing here to accidentally approve. The move
+   * to `ready_to_send` and the decision are one transaction: a concurrency failure rolls both back.
+   */
+  async approve(
+    id: string,
+    input: { version: number; reason?: string | undefined },
+  ): Promise<{ request: SignatureRequestView; decision: 'approved'; reviewedVersion: number }> {
+    const request = await this.loadScoped(id);
+    await this.assertApprovalsEnabled();
+    await this.permissions.assert('approve');
+    this.assertPendingDecision(request);
+    await this.assertSeparationOfDuties(request);
+    const digest = request.outgoingDigest;
+    if (digest === null || request.outgoingSnapshot === null) {
+      throw new ValidationError('The request has no prepared preview to approve.', { code: 'PREVIEW_REQUIRED' });
+    }
+    if (request.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
+    const reviewedVersion = request.version;
+    const ready = await runInTransaction(this.database.db, async () => {
+      const recorded = await this.requests.recordApproval(id, input.version, {
+        approverId: this.scope.userId ?? 'system',
+        status: 'approved',
+        ...(input.reason === undefined ? {} : { reason: input.reason }),
+        reviewedDigest: digest,
+        reviewedVersion,
+      });
+      return this.requests.transition(id, {
+        expectedVersion: recorded.version,
+        to: 'ready_to_send',
+        origin: 'local',
+        ...(this.scope.userId === undefined ? {} : { actorId: this.scope.userId }),
+      });
+    });
+    await this.audit.append({
+      action: 'approval.granted',
+      requestId: id,
+      actor: this.actorRef(),
+      reasonSafe: input.reason ?? null,
+      detail: { digest, reviewedVersion, status: ready.status },
+    });
+    return { request: await this.view(ready), decision: 'approved', reviewedVersion };
+  }
+
+  /**
+   * Reject the prepared bytes.
+   *
+   * The request stays in `pending_approval` with `approval_status = 'rejected'`, so the send guard
+   * refuses it and the sender can see why. Editing any reviewed input drops the preparation (and the
+   * rejection) and returns the request to `draft`; a new review then starts from new bytes.
+   */
+  async reject(
+    id: string,
+    input: { version: number; reason: string },
+  ): Promise<{ request: SignatureRequestView; decision: 'rejected'; reviewedVersion: number }> {
+    const request = await this.loadScoped(id);
+    await this.assertApprovalsEnabled();
+    await this.permissions.assert('approve');
+    this.assertPendingDecision(request);
+    await this.assertSeparationOfDuties(request);
+    const digest = request.outgoingDigest;
+    if (digest === null || request.outgoingSnapshot === null) {
+      throw new ValidationError('The request has no prepared preview to reject.', { code: 'PREVIEW_REQUIRED' });
+    }
+    const reason = input.reason.trim();
+    if (reason.length < 3) {
+      throw new ValidationError('A rejection needs a reason of at least three characters.', { code: 'APPROVAL_REASON_REQUIRED' });
+    }
+    if (request.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
+    const reviewedVersion = request.version;
+    const rejected = await this.requests.recordApproval(id, input.version, {
+      approverId: this.scope.userId ?? 'system',
+      status: 'rejected',
+      reason,
+      reviewedDigest: digest,
+      reviewedVersion,
+    });
+    await this.audit.append({
+      action: 'approval.rejected',
+      requestId: id,
+      actor: this.actorRef(),
+      reasonSafe: reason,
+      detail: { digest, reviewedVersion },
+    });
+    return { request: await this.view(rejected), decision: 'rejected', reviewedVersion };
+  }
+
+  private assertPendingDecision(request: SignatureRequest): void {
+    if (request.status !== 'pending_approval') {
+      throw signatureRequestInvalidStateError(request.status, 'decide the approval');
+    }
+    if (request.approvalStatus !== 'pending' && request.approvalStatus !== 'rejected') {
+      throw new ValidationError('This request has no approval decision to make.', {
+        code: 'SIGNATURE_REQUEST_INVALID_STATE',
+        approvalStatus: request.approvalStatus,
+      });
+    }
+  }
+
+  /**
+   * Separation of duties (ES.17): the creator and the preparer cannot decide their own request while
+   * the installation keeps the policy on. The check is deliberately not an admin bypass — an
+   * administrator who prepared the request needs a second approver just like anyone else.
+   */
+  private async assertSeparationOfDuties(request: SignatureRequest): Promise<void> {
+    const settings = await this.settingsService.settings();
+    if (!settings.approval.preventSelfApproval) return;
+    const userId = this.scope.userId;
+    if (userId === undefined || userId === request.createdById || userId === request.preparedById) {
+      throw signatureApprovalSeparationError();
+    }
+  }
+
+  private async assertApprovalsEnabled(): Promise<void> {
+    const view = await this.settingsService.read();
+    if (view.settings.enabled !== true) throw signatureModuleDisabledError('ESignature');
+    if (view.effective.requests !== true) throw signatureModuleDisabledError('ESignature.requests');
+    if (view.effective.approvals !== true) throw signatureModuleDisabledError('ESignature.approvals');
   }
 
   // ---------------------------------------------------------------------------
@@ -744,7 +919,10 @@ export class ESignatureRequestService {
     if (preview.digest !== request.outgoingDigest) {
       throw new ValidationError('The request changed after its preview was recorded. Prepare the preview again before sending.', { code: 'PREVIEW_OUTDATED' });
     }
-    if (preview.approvalRequired && !approvalStillApplies(request.approvedDigest, request.outgoingDigest)) {
+    if (
+      preview.approvalRequired &&
+      (request.approvalStatus !== 'approved' || !approvalStillApplies(request.approvedDigest, request.outgoingDigest))
+    ) {
       throw signatureApprovalRequiredError(id);
     }
     if (request.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
@@ -1535,6 +1713,12 @@ export class ESignatureRequestService {
       approvalRequired: request.approvalRequired,
       approvalStatus: request.approvalStatus,
       approvalReason: request.approvalReason,
+      approvalRequestedAt: request.approvalRequestedAt,
+      approvalRequestedById: request.approvalRequestedById,
+      approvalDecidedAt: request.approvedAt,
+      approvalDecidedById: request.approvedById,
+      approvalReviewedVersion: request.approvalReviewedVersion,
+      approvalReviewedDigest: request.approvalReviewedDigest,
       createdById: request.createdById,
       assignedUserId: request.assignedUserId,
       teamIds: request.teamIds,

@@ -93,6 +93,7 @@ export function ESignaturePage() {
           canVoid={granted.has('void')}
           canDownload={granted.has('downloadCompleted')}
           canCorrect={granted.has('correct')}
+          canApprove={granted.has('approve')}
         />
       ) : null}
 

@@ -356,14 +356,13 @@ describe('settings document and secret handling (plan §4.1, §12.11)', () => {
     await restoreSettings();
   });
 
-  it('reports a flag whose phase has not shipped as pending, not as working', async () => {
-    await patchSettings({ enabled: true, features: { approvals: true } });
+  it('makes the approval workflow effective once the module and request workspace are on', async () => {
+    await patchSettings({ enabled: true, features: { requests: true, approvals: true } });
     const view = await readSettings();
     const effective = view.body['effective'] as Record<string, boolean>;
-    expect(effective['approvals']).toBe(false);
-    const warnings = view.body['warnings'] as { code: string }[];
-    expect(warnings.map((warning) => warning.code)).toContain('pending:approvals');
-    await patchSettings({ enabled: false, features: { approvals: false } });
+    expect(effective['approvals']).toBe(true);
+    expect(view.body['pendingFeatures']).toEqual([]);
+    await patchSettings({ enabled: false, features: { requests: false, approvals: false } });
   });
 
   it('refuses an embedded signing view path when no return host is allowlisted', async () => {

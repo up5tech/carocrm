@@ -477,7 +477,7 @@ describe('preparing records an immutable preview (acceptance 1, 3)', () => {
   });
 
   it('moves a request the approval policy covers into pending approval, and keeps it out of ready_to_send', async () => {
-    await enabled({ approval: { requiredForSourceEntities: ['Account'] } });
+    await enabled({ features: { approvals: true }, approval: { requiredForSourceEntities: ['Account'] } });
     const id = await draft({ overrides: { sourceEntityType: 'Account', sourceRecordId: accountId } });
     const preview = await call('GET', `/api/v1/ESignature/requests/${id}/preview`, ctx.adminToken);
     expect(preview.body['approvalRequired']).toBe(true);
@@ -488,7 +488,7 @@ describe('preparing records an immutable preview (acceptance 1, 3)', () => {
     expect(view['approvalStatus']).toBe('pending');
     const stored = await services().requests.requireById(id);
     expect(stored.approvalRequired).toBe(true);
-    await enabled({ approval: { requiredForSourceEntities: [] } });
+    await enabled({ features: { approvals: false }, approval: { requiredForSourceEntities: [] } });
   });
 });
 

@@ -1804,12 +1804,13 @@ export const api = {
 
   // Phase 19-ES.6 — the draft surface. A list row carries only what the list screen renders; the
   // detail is the only place recipients and documents are read.
-  eSignatureRequests: (query: { status?: string; sourceEntityType?: string; sourceRecordId?: string; needsAttention?: boolean; limit?: number; offset?: number } = {}) => {
+  eSignatureRequests: (query: { status?: string; sourceEntityType?: string; sourceRecordId?: string; needsAttention?: boolean; approvalStatus?: string; limit?: number; offset?: number } = {}) => {
     const params = new URLSearchParams();
     if (query.status !== undefined && query.status !== '') params.set('status', query.status);
     if (query.sourceEntityType !== undefined && query.sourceEntityType !== '') params.set('sourceEntityType', query.sourceEntityType);
     if (query.sourceRecordId !== undefined && query.sourceRecordId !== '') params.set('sourceRecordId', query.sourceRecordId);
     if (query.needsAttention === true) params.set('needsAttention', 'true');
+    if (query.approvalStatus !== undefined && query.approvalStatus !== '') params.set('approvalStatus', query.approvalStatus);
     if (query.limit !== undefined) params.set('limit', String(query.limit));
     if (query.offset !== undefined) params.set('offset', String(query.offset));
     const suffix = params.toString() === '' ? '' : `?${params.toString()}`;
@@ -1829,6 +1830,21 @@ export const api = {
   /** Record the preview. `confirm` is the sender's deliberate act; nothing is sent here. */
   prepareESignatureRequest: (id: string, input: { version: number; confirm: boolean }) =>
     request<{ request: ESignatureRequestView; preview: ESignatureSendPreview }>(`/ESignature/requests/${encodeURIComponent(id)}/prepare`, post(input)),
+  /** Send a prepared request to the approval queue (ES.17). The reviewed bytes do not change. */
+  requestESignatureApproval: (id: string, input: { version: number }) =>
+    request<ESignatureRequestView>(`/ESignature/requests/${encodeURIComponent(id)}/request-approval`, post(input)),
+  /** Approve the exact prepared snapshot. */
+  approveESignatureRequest: (id: string, input: { version: number; reason?: string }) =>
+    request<{ request: ESignatureRequestView; decision: 'approved'; reviewedVersion: number }>(
+      `/ESignature/requests/${encodeURIComponent(id)}/approve`,
+      post(input),
+    ),
+  /** Reject the exact prepared snapshot; a reason is required and audited. */
+  rejectESignatureRequest: (id: string, input: { version: number; reason: string }) =>
+    request<{ request: ESignatureRequestView; decision: 'rejected'; reviewedVersion: number }>(
+      `/ESignature/requests/${encodeURIComponent(id)}/reject`,
+      post(input),
+    ),
   /** Create the provider-side draft (ES.9). A draft: no invitation is sent. */
   createESignatureEnvelope: (id: string, input: { version: number }) =>
     request<{ request: ESignatureRequestView; envelope: { providerEnvelopeId: string; status: string; createdAt: string; created: boolean } }>(

@@ -1,16 +1,17 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 to 19-ES.16 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 through 19-ES.16 delivered** (ES.1 registers the module and the security contract;
+> Phase 19-ES.0 to 19-ES.17 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 through 19-ES.17 delivered** (ES.1 registers the module and the security contract;
 > ES.2 adds the schema and the domain rules; ES.3 adds the provider contract, the registry and the
 > in-process fake; ES.4 adds DocuSign's OAuth grant, the connection lifecycle and the live adapter;
 > ES.5–ES.10 add documents, drafts, templates, preparation and the controlled send; ES.11–ES.16 add
 > Connect intake and projection, the progress UI, embedded signing, completed artifacts, and
-> reminders/void). **Nothing in this module has been verified against a live DocuSign account**: every
+> reminders/void; ES.17 adds the approval policy and decision workflow). **Nothing in this module has
+> been verified against a live DocuSign account**: every
 > provider behaviour below was proved against an injected stub transport or the fake adapter, and the
 > demo-account validation is ES.22's.
 > Evidence: `docs/implementation/esignature-es1-completion-report.md` through
-> `esignature-es16-completion-report.md` (one report per delivered sub-phase).
+> `esignature-es17-completion-report.md` (one report per delivered sub-phase).
 > Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`.
 > Webhook prefix: `/api/v1/integrations/esignature`.
 > Note: the Connect HMAC scheme is implemented from DocuSign's documented
@@ -83,7 +84,7 @@ redirect URIs, secrets and stored account identities are fully separate.
 | Completed documents + certificate | **Delivered ES.15** | Stored as new derived artifacts on the request under the `artifacts` feature; deduped by provider document identity and content hash; download requires `downloadCompleted`. |
 | Connect status events | **Delivered ES.11/ES.12** | Raw-body HMAC verification before parsing, a durable unique inbox, best-effort queue hand-off, one normalized event per delivery, monotonic recipient/envelope projection and a reconciliation command for gaps. |
 | Status/recipient reconciliation | **Delivered ES.12 (operator action)** | `POST …/reconcile` reads the envelope and recipients from the provider and projects them; terminal drift moves only through reconciliation. No scheduled sweep is registered yet (ES.20). |
-| Approval before send | Planned ES.17 | Module policy; approval binds to the exact reviewed snapshot version. |
+| Approval before send | **Delivered ES.17** | Source-type and value/risk rules are evaluated at preparation; a covered request stops in `pending_approval`. The decision binds to the stored digest and reviewed version; any edit (or a change to the reviewed source values) invalidates it. `SignatureApprove` is the explicit approver right, with separation of duties on by default; decisions are audited. |
 
 ## 4. Local state ↔ provider state mapping (delivered ES.12 — live fixtures pending ES.22)
 

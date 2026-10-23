@@ -1,12 +1,13 @@
 import { ValidationError } from '@carocrm/core/errors/index.js';
 import { deepMerge, isObject } from '@carocrm/core/utils/object.js';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { z } from 'zod';
 
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
 import { CRM_CHAT_MENU_INVALIDATOR, type MenuInvalidator } from '../crm-chat/index.js';
 import { DatabaseService } from '../database/database.service.js';
+import { METADATA_STORE, type MetadataStoreService } from '../metadata/metadata-store.service.js';
 import {
   DOCUSIGN_INTEGRATION_KEY_ENV_VARS,
   ESIGNATURE_FEATURES,
@@ -50,6 +51,43 @@ const EntityNameSchema = z
   .string()
   .trim()
   .regex(/^[A-Z][A-Za-z0-9]*$/, 'A source entity is named by its metadata entity id, e.g. "Quote".');
+
+/** A metadata field name an approval rule may read. Validated against the registry on save. */
+const ApprovalFieldSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z][A-Za-z0-9_]{0,62}$/, 'A field is a metadata field name.');
+
+export const APPROVAL_RULE_OPERATORS = ['equals', 'not_equals', 'gte', 'lte', 'contains'] as const;
+export type ApprovalRuleOperator = (typeof APPROVAL_RULE_OPERATORS)[number];
+
+/**
+ * One value/risk rule of the approval policy (ES.17).
+ *
+ * A rule is deliberately *data*, never an expression: it names a metadata source entity, one field,
+ * a closed operator set and a literal. The policy engine evaluates it in TypeScript; nothing is
+ * interpolated into SQL or evaluated as code (AGENTS.md §5.2). `gte`/`lte` cover monetary thresholds,
+ * `equals`/`not_equals` cover contract types and risk levels, and `contains` covers categories.
+ */
+export const ApprovalRuleSchema = z
+  .object({
+    label: z.string().trim().min(1).max(120),
+    sourceEntityType: EntityNameSchema,
+    field: ApprovalFieldSchema,
+    operator: z.enum(APPROVAL_RULE_OPERATORS),
+    value: z.string().trim().min(1).max(200),
+  })
+  .strict()
+  .superRefine((rule, context) => {
+    if ((rule.operator === 'gte' || rule.operator === 'lte') && !Number.isFinite(Number(rule.value))) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['value'],
+        message: `The "${rule.operator}" operator needs a numeric value.`,
+      });
+    }
+  });
+export type ApprovalRule = z.infer<typeof ApprovalRuleSchema>;
 
 export const ESignatureSettingsSchema = z
   .object({
@@ -159,6 +197,14 @@ export const ESignatureSettingsSchema = z
          * The policy is read by ES.17; an empty list means no source type requires approval.
          */
         requiredForSourceEntities: z.array(EntityNameSchema).max(30).default([]),
+        /** Value/risk rules evaluated against the linked source record (plan §11.1). */
+        rules: z.array(ApprovalRuleSchema).max(30).default([]),
+        /**
+         * Separation of duties (ES.17): the person who created or prepared a request may not decide
+         * its approval. On by default; a small installation can deliberately turn it off, and the
+         * setting is audited with the decision.
+         */
+        preventSelfApproval: z.boolean().default(true),
       })
       .strict()
       .default({}),
@@ -228,6 +274,17 @@ export function settingsWarnings(settings: ESignatureSettings): SettingsWarning[
         'Connections are enabled but neither a demo nor a production DocuSign integration key is configured, so no connection can be authorized.',
     });
   }
+  if (
+    settings.features.approvals &&
+    settings.approval.requiredForSourceEntities.length === 0 &&
+    settings.approval.rules.length === 0
+  ) {
+    warnings.push({
+      code: 'approvalsNoPolicy',
+      message:
+        'Approvals are enabled but no source type or value rule requires one. Only an explicit "request approval" action will use the workflow.',
+    });
+  }
   return warnings;
 }
 
@@ -265,6 +322,9 @@ export class ESignatureSettingsService {
     // rather than duplicated: one token, one navigation cache, and a module switch that leaves the
     // sidebar on the next render instead of after the TTL.
     @Inject(CRM_CHAT_MENU_INVALIDATOR) private readonly invalidateMenu: MenuInvalidator,
+    // Approval rules name metadata entities and fields; validating them against the live registry
+    // stops a typo from silently creating a policy that never matches (ES.17).
+    @Optional() @Inject(METADATA_STORE) private readonly metadata?: MetadataStoreService,
   ) {}
 
   /**
@@ -335,6 +395,7 @@ export class ESignatureSettingsService {
         issues: parsed.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
       });
     }
+    this.assertApprovalPolicyTargets(parsed.data);
     const stored: StoredSettings = {
       version: current.version + 1,
       settings: parsed.data,
@@ -352,6 +413,40 @@ export class ESignatureSettingsService {
   /** Only tests and explicit reloads call this; the row cache is otherwise write-through. */
   invalidate(): void {
     this.cache = undefined;
+  }
+
+  /**
+   * A policy that names a nonexistent entity or field is refused, not stored.
+   *
+   * The alternative — accepting it — would leave an administrator believing a rule protects a
+   * category it can never match. The metadata registry is the authority; an optional module must be
+   * installed before its fields can be named here (the integration is verified at save time).
+   */
+  private assertApprovalPolicyTargets(settings: ESignatureSettings): void {
+    const registry = this.metadata?.registry;
+    if (registry === undefined) return;
+    for (const entityType of settings.approval.requiredForSourceEntities) {
+      if (!registry.hasEntity(entityType)) {
+        throw new ValidationError(`The approval policy names "${entityType}", which is not a metadata entity.`, {
+          sourceEntityType: entityType,
+        });
+      }
+    }
+    for (const rule of settings.approval.rules) {
+      if (!registry.hasEntity(rule.sourceEntityType)) {
+        throw new ValidationError(`The approval rule "${rule.label}" names "${rule.sourceEntityType}", which is not a metadata entity.`, {
+          rule: rule.label,
+          sourceEntityType: rule.sourceEntityType,
+        });
+      }
+      if (registry.getField(rule.sourceEntityType, rule.field) === undefined) {
+        throw new ValidationError(`The approval rule "${rule.label}" names a field "${rule.field}" that "${rule.sourceEntityType}" does not have.`, {
+          rule: rule.label,
+          sourceEntityType: rule.sourceEntityType,
+          field: rule.field,
+        });
+      }
+    }
   }
 
   /**

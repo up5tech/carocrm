@@ -5,6 +5,8 @@ import type { FastifyReply } from 'fastify';
 import type { ZodTypeAny } from 'zod';
 
 import {
+  RequestApprovalDecisionSchema,
+  RequestApprovalRequestSchema,
   RequestCorrectSchema,
   RequestCreateSchema,
   RequestDocumentAttachSchema,
@@ -15,6 +17,7 @@ import {
   RequestListQuerySchema,
   RequestPrepareSchema,
   RequestRecipientsSchema,
+  RequestRejectionSchema,
   RequestResendSchema,
   RequestSendSchema,
   RequestUpdateSchema,
@@ -56,6 +59,7 @@ export class ESignatureRequestController {
       ...(parsed.connectionId === undefined ? {} : { connectionId: parsed.connectionId }),
       ...(parsed.assignedUserId === undefined ? {} : { assignedUserId: parsed.assignedUserId }),
       ...(parsed.needsAttention === undefined ? {} : { needsAttention: parsed.needsAttention === 'true' }),
+      ...(parsed.approvalStatus === undefined ? {} : { approvalStatus: parsed.approvalStatus }),
       limit: parsed.limit,
       offset: parsed.offset,
     });
@@ -106,6 +110,32 @@ export class ESignatureRequestController {
   @Post(':id/prepare')
   async prepare(@Param('id') id: string, @Body() body: unknown) {
     return this.requests.prepare(this.id(id), this.parse(RequestPrepareSchema, body));
+  }
+
+  /**
+   * Send a prepared request to the approval queue (ES.17).
+   *
+   * A voluntary review: the policy-driven path happens during preparation. The snapshot/digest are
+   * untouched, so the decision is bound to exactly what was reviewed.
+   */
+  @HttpCode(200)
+  @Post(':id/request-approval')
+  async requestApproval(@Param('id') id: string, @Body() body: unknown) {
+    return this.requests.requestApproval(this.id(id), this.parse(RequestApprovalRequestSchema, body));
+  }
+
+  /** Approve the exact prepared snapshot; the caller must hold the approval right. */
+  @HttpCode(200)
+  @Post(':id/approve')
+  async approve(@Param('id') id: string, @Body() body: unknown) {
+    return this.requests.approve(this.id(id), this.parse(RequestApprovalDecisionSchema, body));
+  }
+
+  /** Reject the exact prepared snapshot with a reason; the request cannot be sent as it stands. */
+  @HttpCode(200)
+  @Post(':id/reject')
+  async reject(@Param('id') id: string, @Body() body: unknown) {
+    return this.requests.reject(this.id(id), this.parse(RequestRejectionSchema, body));
   }
 
   /**

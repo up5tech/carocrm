@@ -1,8 +1,10 @@
+import { type ApprovalPolicyReason,evaluateApprovalPolicy } from './esignature-approval-policy.js';
 import type { ESignatureSettings } from './esignature-settings.service.js';
 import {
   approvalStillApplies,
   type OutgoingSnapshotData,
   outgoingSnapshotDigest,
+  snapshotDigest,
 } from './esignature-snapshot.js';
 import { evaluateMappingUsage } from './esignature-template.service.js';
 import type { SignatureDocumentSnapshot } from './signature-document-snapshot.repository.js';
@@ -67,6 +69,8 @@ export interface SignaturePreview {
   readonly ready: boolean;
   /** The approval the *policy* requires, which may be stricter than the draft's own flag. */
   readonly approvalRequired: boolean;
+  /** Every policy reason that requires an approval, in the order the policy declares them. */
+  readonly approvalReasons: readonly ApprovalPolicyReason[];
   /** Whether the stored approval was given for exactly these bytes. */
   readonly approvedForThisDigest: boolean;
   /** The digest of a preparation already stored on the request, if any. */
@@ -180,9 +184,14 @@ export function buildSignaturePreview(input: PreviewInputs): SignaturePreview {
     }
   }
 
-  const approvalRequired =
-    request.approvalRequired ||
-    (request.sourceEntityType !== null && settings.approval.requiredForSourceEntities.includes(request.sourceEntityType));
+  const approvalPolicy = evaluateApprovalPolicy({
+    settings,
+    sourceEntityType: request.sourceEntityType,
+    sourceValues: input.sourceValues,
+    explicitRequired: request.approvalRequired,
+  });
+  const approvalRequired = approvalPolicy.required;
+  const approvalBasisDigest = approvalRequired ? snapshotDigest(approvalPolicy.basis) : null;
 
   const data: OutgoingSnapshotData | null =
     connection === null
@@ -217,6 +226,9 @@ export function buildSignaturePreview(input: PreviewInputs): SignaturePreview {
           })),
           policy: {
             approvalRequired,
+            // A digest, not the values: a change to the reviewed source terms invalidates the stored
+            // approval without copying business data into a snapshot every request reader can see.
+            ...(approvalBasisDigest === null ? {} : { approvalBasisDigest }),
             sourceEntityType: request.sourceEntityType,
             documents: {
               maxDocumentsPerRequest: settings.documents.maxDocumentsPerRequest,
@@ -254,6 +266,7 @@ export function buildSignaturePreview(input: PreviewInputs): SignaturePreview {
     problems,
     ready: problems.length === 0 && digest !== null,
     approvalRequired,
+    approvalReasons: approvalPolicy.reasons,
     approvedForThisDigest: approvalStillApplies(request.approvedDigest, digest),
     storedDigest: request.outgoingDigest,
     staleStoredPreview: request.outgoingDigest !== null && request.outgoingDigest !== digest,

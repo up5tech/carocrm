@@ -72,8 +72,12 @@ export interface SignatureRequest {
   readonly approvalRequired: boolean;
   readonly approvalStatus: 'not_required' | 'pending' | 'approved' | 'rejected';
   readonly approvalReason: string | null;
+  readonly approvalRequestedAt: string | null;
+  readonly approvalRequestedById: string | null;
   readonly approvedAt: string | null;
   readonly approvedDigest: string | null;
+  readonly approvalReviewedVersion: number | null;
+  readonly approvalReviewedDigest: string | null;
   readonly sendAttemptId: string | null;
   readonly outgoingSnapshot: SnapshotEnvelope<OutgoingSnapshotData> | null;
   readonly outgoingDigest: string | null;
@@ -97,6 +101,10 @@ const SERVER_OWNED_FIELDS = [
   'outgoingSnapshot',
   'outgoingDigest',
   'approvedDigest',
+  'approvalRequestedAt',
+  'approvalRequestedById',
+  'approvalReviewedVersion',
+  'approvalReviewedDigest',
   'version',
   'sentAt',
   'completedAt',
@@ -557,11 +565,30 @@ export class SignatureRequestRepository {
   async recordApproval(
     id: string,
     expectedVersion: number,
-    decision: { approverId: string; status: 'approved' | 'rejected'; reason?: string; reviewedDigest: string },
+    decision: {
+      approverId: string;
+      status: 'approved' | 'rejected';
+      reason?: string;
+      reviewedDigest: string;
+      /** The request version the approver actually saw (ES.17). */
+      reviewedVersion: number;
+    },
   ): Promise<SignatureRequest> {
     const current = await this.requireById(id);
+    if (current.status !== 'pending_approval') {
+      throw new ValidationError('Only a request waiting for approval can be decided.', {
+        code: 'SIGNATURE_REQUEST_INVALID_STATE',
+        status: current.status,
+      });
+    }
+    if (current.approvalStatus !== 'pending' && current.approvalStatus !== 'rejected') {
+      throw new ValidationError('This request has no approval decision to make.', {
+        code: 'SIGNATURE_REQUEST_INVALID_STATE',
+        approvalStatus: current.approvalStatus,
+      });
+    }
     if (current.version !== expectedVersion) throw new ConcurrencyConflictError('SignatureRequest', id);
-    if (decision.reviewedDigest !== current.outgoingDigest && current.outgoingDigest !== null) {
+    if (current.outgoingDigest === null || decision.reviewedDigest !== current.outgoingDigest) {
       throw new ValidationError('The reviewed snapshot no longer matches the request.', {
         code: 'SIGNATURE_REQUEST_INVALID_STATE',
       });
@@ -572,11 +599,63 @@ export class SignatureRequestRepository {
         approval_status: decision.status,
         approved_by_id: decision.approverId,
         approved_at: new Date(),
+        // The send gate reads `approved_digest`; the review evidence keeps the digest even on a
+        // rejection, so the trail says exactly which bytes were refused (ES.17).
         approved_digest: decision.status === 'approved' ? decision.reviewedDigest : null,
+        approval_reviewed_digest: decision.reviewedDigest,
+        approval_reviewed_version: decision.reviewedVersion,
         approval_reason: decision.reason?.slice(0, 500) ?? null,
         version: current.version + 1,
         modified_at: new Date(),
         modified_by_id: decision.approverId,
+      })
+      .where('id', '=', id)
+      .where('version', '=', expectedVersion)
+      .returningAll()
+      .executeTakeFirst();
+    if (row === undefined) throw new ConcurrencyConflictError('SignatureRequest', id);
+    return toRequest(row);
+  }
+
+  /**
+   * Ask for a decision on an already-prepared request (ES.17).
+   *
+   * This is the explicit path: a sender may want a review even when the policy does not demand one.
+   * The prepared snapshot and digest stay exactly as they were; only the queue state and the request
+   * metadata change. A request with no prepared preview cannot be reviewed, because there would be
+   * no immutable bytes to decide on.
+   */
+  async requestApproval(id: string, expectedVersion: number, actorId: string): Promise<SignatureRequest> {
+    const current = await this.requireById(id);
+    if (current.status !== 'ready_to_send') {
+      throw new ValidationError('Only a prepared request can be sent for approval.', {
+        code: 'SIGNATURE_REQUEST_INVALID_STATE',
+        status: current.status,
+      });
+    }
+    if (current.outgoingDigest === null || current.outgoingSnapshot === null) {
+      throw new ValidationError('The request has no prepared preview to approve.', { code: 'PREVIEW_REQUIRED' });
+    }
+    if (current.version !== expectedVersion) throw new ConcurrencyConflictError('SignatureRequest', id);
+    assertTransition(current.status, 'pending_approval', 'local');
+    const now = new Date();
+    const row = await this.db
+      .updateTable('signature_requests')
+      .set({
+        status: 'pending_approval',
+        approval_required: true,
+        approval_status: 'pending',
+        approval_requested_at: now,
+        approval_requested_by_id: actorId,
+        approved_by_id: null,
+        approved_at: null,
+        approved_digest: null,
+        approval_reason: null,
+        approval_reviewed_version: null,
+        approval_reviewed_digest: null,
+        version: current.version + 1,
+        modified_at: now,
+        modified_by_id: actorId,
       })
       .where('id', '=', id)
       .where('version', '=', expectedVersion)
@@ -623,13 +702,14 @@ export class SignatureRequestRepository {
       preparedById: string;
       targetStatus: 'pending_approval' | 'ready_to_send';
       approvalRequired: boolean;
-      approvalStatus: 'pending' | 'not_required' | 'approved';
     },
   ): Promise<SignatureRequest> {
     const current = await this.requireById(id);
     assertTransition(current.status, input.targetStatus, 'local');
     if (current.version !== expectedVersion) throw new ConcurrencyConflictError('SignatureRequest', id);
     const approvalApplies = approvalStillApplies(current.approvedDigest, input.snapshot.digest);
+    const approvalStatus = input.approvalRequired ? (approvalApplies ? 'approved' : 'pending') : 'not_required';
+    const requiresDecision = input.approvalRequired && !approvalApplies;
     const now = new Date();
     const row = await this.db
       .updateTable('signature_requests')
@@ -642,9 +722,32 @@ export class SignatureRequestRepository {
         outgoing_digest: input.snapshot.digest,
         prepared_by_id: input.preparedById,
         prepared_at: now,
-        approval_status: input.approvalRequired && !approvalApplies ? input.approvalStatus : input.approvalStatus === 'approved' || approvalApplies ? 'approved' : 'not_required',
-        // A new preview replaces the approval it does not match; an approval for these exact bytes stands.
-        ...(approvalApplies ? {} : { approved_digest: null, approved_at: null, approved_by_id: null, approval_reason: null }),
+        approval_status: approvalStatus,
+        // A fresh preview is a fresh review subject. A decision given for *these* exact bytes stands;
+        // anything else starts a new queue item, with the requester and time recorded (ES.17).
+        ...(requiresDecision
+          ? {
+              approval_requested_at: current.approvalRequestedAt === null ? now : new Date(current.approvalRequestedAt),
+              approval_requested_by_id: current.approvalRequestedById ?? input.preparedById,
+              approval_reviewed_version: null,
+              approval_reviewed_digest: null,
+              approved_digest: null,
+              approved_at: null,
+              approved_by_id: null,
+              approval_reason: null,
+            }
+          : approvalApplies
+            ? {}
+            : {
+                approval_requested_at: null,
+                approval_requested_by_id: null,
+                approval_reviewed_version: null,
+                approval_reviewed_digest: null,
+                approved_digest: null,
+                approved_at: null,
+                approved_by_id: null,
+                approval_reason: null,
+              }),
         version: current.version + 1,
         modified_at: now,
         modified_by_id: input.preparedById,
@@ -682,6 +785,10 @@ export class SignatureRequestRepository {
         approved_at: null,
         approved_by_id: null,
         approval_reason: null,
+        approval_requested_at: null,
+        approval_requested_by_id: null,
+        approval_reviewed_version: null,
+        approval_reviewed_digest: null,
         approval_status: current.approvalRequired ? 'pending' : 'not_required',
         version: current.version + 1,
         modified_at: now,
@@ -886,8 +993,12 @@ function toRequest(row: {
   approval_required: boolean;
   approval_status: string;
   approval_reason: string | null;
+  approval_requested_at: Date | null;
+  approval_requested_by_id: string | null;
   approved_at: Date | null;
   approved_digest: string | null;
+  approval_reviewed_version: number | null;
+  approval_reviewed_digest: string | null;
   send_attempt_id: string | null;
   outgoing_snapshot: unknown;
   outgoing_digest: string | null;
@@ -938,8 +1049,12 @@ function toRequest(row: {
     approvalRequired: row.approval_required,
     approvalStatus: row.approval_status as SignatureRequest['approvalStatus'],
     approvalReason: row.approval_reason,
+    approvalRequestedAt: iso(row.approval_requested_at),
+    approvalRequestedById: row.approval_requested_by_id,
     approvedAt: iso(row.approved_at),
     approvedDigest: row.approved_digest,
+    approvalReviewedVersion: row.approval_reviewed_version,
+    approvalReviewedDigest: row.approval_reviewed_digest,
     sendAttemptId: row.send_attempt_id,
     outgoingSnapshot: snapshot,
     outgoingDigest: row.outgoing_digest,

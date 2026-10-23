@@ -79,15 +79,17 @@ export function ESignatureRequestsPanel(props: {
   readonly canVoid: boolean;
   readonly canDownload: boolean;
   readonly canCorrect: boolean;
+  readonly canApprove: boolean;
 }) {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<string>('');
+  const [approvalStatus, setApprovalStatus] = useState<string>('');
   const [drawer, setDrawer] = useState<DrawerState | null>(null);
 
   const requests = useQuery({
-    queryKey: ['eSignature', 'requests', status],
-    queryFn: () => api.eSignatureRequests({ status, limit: 100 }),
+    queryKey: ['eSignature', 'requests', status, approvalStatus],
+    queryFn: () => api.eSignatureRequests({ status, approvalStatus, limit: 100 }),
     staleTime: 10_000,
   });
 
@@ -165,6 +167,18 @@ export function ESignatureRequestsPanel(props: {
           <Select
             size="small"
             style={{ minWidth: 160 }}
+            value={approvalStatus}
+            onChange={setApprovalStatus}
+            options={[
+              { value: '', label: t('esignature.requests.allApprovals') },
+              { value: 'pending', label: t('esignature.requests.approvalStatuses.pending') },
+              { value: 'approved', label: t('esignature.requests.approvalStatuses.approved') },
+              { value: 'rejected', label: t('esignature.requests.approvalStatuses.rejected') },
+            ]}
+          />
+          <Select
+            size="small"
+            style={{ minWidth: 160 }}
             value={status}
             onChange={setStatus}
             options={[
@@ -226,6 +240,7 @@ export function ESignatureRequestsPanel(props: {
             canVoid={props.canVoid}
             canDownload={props.canDownload}
             canCorrect={props.canCorrect}
+            canApprove={props.canApprove}
             onEdit={() => setDrawer({ mode: 'edit', id: drawer.id })}
             onSaved={() => {
               message.success(t('esignature.requests.saved'));
@@ -252,6 +267,7 @@ function RequestDetail(props: {
   canVoid: boolean;
   canDownload: boolean;
   canCorrect: boolean;
+  canApprove: boolean;
   onEdit: () => void;
   onSaved: () => void;
   onDocumentsChanged: () => void;
@@ -303,6 +319,14 @@ function RequestDetail(props: {
         recipients={[...request.recipients]}
         canEmbedded={request.status === 'sent' || request.status === 'delivered' || request.status === 'partially_signed'}
       />
+      <ApprovalSection
+        request={request}
+        canApprove={props.canApprove}
+        onChanged={() => {
+          props.onDocumentsChanged();
+          void detail.refetch();
+        }}
+      />
       <PreviewSection
         request={request}
         canPrepare={props.canPrepare}
@@ -314,6 +338,7 @@ function RequestDetail(props: {
       />
       <LifecycleActions
         request={request}
+        canPrepare={props.canPrepare}
         canSend={props.canSend}
         canVoid={props.canVoid}
         canDownload={props.canDownload}
@@ -563,6 +588,20 @@ function PreviewSection(props: { request: ESignatureRequestView; canPrepare: boo
             <Alert type="success" showIcon message={t('esignature.preview.ready')} />
           )}
           {view.staleStoredPreview ? <Alert type="warning" showIcon message={t('esignature.preview.stale')} /> : null}
+          {view.approvalRequired && view.approvalReasons.length > 0 ? (
+            <Alert
+              type="warning"
+              showIcon
+              message={t('esignature.preview.approvalPolicy')}
+              description={
+                <ul className="carocrm-admin-warnings">
+                  {view.approvalReasons.map((reason) => (
+                    <li key={`${reason.code}:${reason.label}`}>{reason.label}</li>
+                  ))}
+                </ul>
+              }
+            />
+          ) : null}
           <Descriptions size="small" column={2} bordered>
             <Descriptions.Item label={t('esignature.preview.documents')}>{view.data?.documents.length ?? 0}</Descriptions.Item>
             <Descriptions.Item label={t('esignature.preview.recipients')}>{view.data?.recipients.length ?? 0}</Descriptions.Item>
@@ -846,6 +885,164 @@ function RecipientsTable(props: {
 }
 
 /**
+ * The approval decision (ES.17).
+ *
+ * A request covered by policy stops in `pending_approval`; this card is the approver's whole screen.
+ * The digest and reviewed version are shown because they are the thing being decided — an approval
+ * for different bytes is not an approval at all. Separation-of-duties refusals come from the server
+ * with their own stable code, so the buttons never pretend the decision is available to everyone.
+ */
+function ApprovalSection(props: { request: ESignatureRequestView; canApprove: boolean; onChanged: () => void }) {
+  const { message } = AntApp.useApp();
+  const [decision, setDecision] = useState<'approved' | 'rejected' | null>(null);
+  const [reason, setReason] = useState('');
+  const [pending, setPending] = useState(false);
+  const request = props.request;
+  const visible = request.approvalRequired || request.approvalStatus !== 'not_required' || request.status === 'pending_approval';
+  if (!visible) return null;
+  const canDecide =
+    props.canApprove &&
+    request.status === 'pending_approval' &&
+    (request.approvalStatus === 'pending' || request.approvalStatus === 'rejected');
+
+  const decide = async (): Promise<void> => {
+    if (decision === null) return;
+    const text = reason.trim();
+    if (decision === 'rejected' && text.length < 3) {
+      message.error(t('esignature.approval.reasonRequired'));
+      return;
+    }
+    setPending(true);
+    try {
+      if (decision === 'approved') {
+        await api.approveESignatureRequest(request.id, { version: request.version, ...(text === '' ? {} : { reason: text }) });
+        message.success(t('esignature.approval.approved'));
+      } else {
+        await api.rejectESignatureRequest(request.id, { version: request.version, reason: text });
+        message.success(t('esignature.approval.rejected'));
+      }
+      setDecision(null);
+      setReason('');
+      props.onChanged();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('esignature.approval.failed'));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <Card size="small" title={t('esignature.approval.title')} style={{ marginTop: 8 }}>
+      <Space direction="vertical" size={10} style={{ width: '100%' }}>
+        <Space size={8} wrap>
+          <Tag color={approvalColor(request.approvalStatus)}>{t(`esignature.requests.approvalStatuses.${request.approvalStatus}`)}</Tag>
+          {request.approvalReviewedVersion === null ? null : (
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('esignature.approval.reviewedVersion', { version: request.approvalReviewedVersion })}
+            </Typography.Text>
+          )}
+          {request.approvalReviewedDigest === null ? null : (
+            <Typography.Text code style={{ fontSize: 11 }}>
+              {request.approvalReviewedDigest.slice(0, 16)}…
+            </Typography.Text>
+          )}
+        </Space>
+
+        {request.status === 'pending_approval' && request.approvalStatus === 'pending' ? (
+          <Alert
+            type="warning"
+            showIcon
+            message={t('esignature.approval.waiting')}
+            description={
+              canDecide ? t('esignature.approval.waitingAction') : t('esignature.approval.waitingNoRight')
+            }
+            action={
+              canDecide ? (
+                <Space size={6} wrap>
+                  <Button size="small" type="primary" loading={pending} onClick={() => setDecision('approved')}>
+                    {t('esignature.approval.approve')}
+                  </Button>
+                  <Button size="small" danger loading={pending} onClick={() => setDecision('rejected')}>
+                    {t('esignature.approval.reject')}
+                  </Button>
+                </Space>
+              ) : null
+            }
+          />
+        ) : null}
+
+        {request.approvalStatus === 'rejected' ? (
+          <Alert
+            type="error"
+            showIcon
+            message={t('esignature.approval.rejectedNotice')}
+            description={request.approvalReason ?? undefined}
+            action={
+              canDecide ? (
+                <Button size="small" loading={pending} onClick={() => setDecision('approved')}>
+                  {t('esignature.approval.approveAfterReject')}
+                </Button>
+              ) : null
+            }
+          />
+        ) : null}
+
+        {request.approvalStatus === 'approved' ? (
+          <Alert
+            type="success"
+            showIcon
+            message={t('esignature.approval.approvedNotice', { version: request.approvalReviewedVersion ?? '—' })}
+            description={request.approvalReason ?? undefined}
+          />
+        ) : null}
+
+        <Descriptions size="small" column={2} bordered>
+          <Descriptions.Item label={t('esignature.approval.requestedAt')}>
+            {request.approvalRequestedAt === null ? '—' : formatMoment(request.approvalRequestedAt)}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('esignature.approval.requestedBy')}>{request.approvalRequestedById ?? '—'}</Descriptions.Item>
+          <Descriptions.Item label={t('esignature.approval.decidedAt')}>
+            {request.approvalDecidedAt === null ? '—' : formatMoment(request.approvalDecidedAt)}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('esignature.approval.decidedBy')}>{request.approvalDecidedById ?? '—'}</Descriptions.Item>
+        </Descriptions>
+      </Space>
+
+      <Modal
+        open={decision !== null}
+        title={decision === 'rejected' ? t('esignature.approval.rejectTitle') : t('esignature.approval.approveTitle')}
+        okText={decision === 'rejected' ? t('esignature.approval.rejectConfirm') : t('esignature.approval.approveConfirm')}
+        okButtonProps={{ danger: decision === 'rejected', loading: pending }}
+        cancelText={t('core.common.cancel')}
+        onOk={() => void decide()}
+        onCancel={() => {
+          setDecision(null);
+          setReason('');
+        }}
+      >
+        <Typography.Paragraph type="secondary">
+          {t('esignature.approval.versionHint', { version: request.approvalReviewedVersion ?? request.version })}
+        </Typography.Paragraph>
+        <Input.TextArea
+          rows={3}
+          maxLength={500}
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder={decision === 'rejected' ? t('esignature.approval.rejectReason') : t('esignature.approval.approveReason')}
+        />
+      </Modal>
+    </Card>
+  );
+}
+
+function approvalColor(status: string): string {
+  if (status === 'approved') return 'green';
+  if (status === 'rejected') return 'red';
+  if (status === 'pending') return 'orange';
+  return 'default';
+}
+
+/**
  * Post-send actions (ES.12, ES.15, ES.16).
  *
  * Every button is gated twice: the capability the caller holds (the server enforces it again) and the
@@ -854,6 +1051,7 @@ function RecipientsTable(props: {
  */
 function LifecycleActions(props: {
   request: ESignatureRequestView;
+  canPrepare: boolean;
   canSend: boolean;
   canVoid: boolean;
   canDownload: boolean;
@@ -867,6 +1065,7 @@ function LifecycleActions(props: {
   const { status } = props.request;
   const open = status === 'sent' || status === 'delivered' || status === 'partially_signed';
   const reconcilable = open || status === 'sending' || status === 'send_unknown' || status === 'reconciliation_required' || status === 'completed';
+  const canRequestApproval = props.canPrepare && status === 'ready_to_send' && props.request.approvalStatus === 'not_required';
 
   const act = async (work: () => Promise<unknown>, success: string, fail: string): Promise<void> => {
     setPending(true);
@@ -896,7 +1095,7 @@ function LifecycleActions(props: {
     setVoidReason('');
   };
 
-  if (!open && status !== 'completed' && !reconcilable) return null;
+  if (!open && status !== 'completed' && !reconcilable && !canRequestApproval) return null;
   return (
     <Card size="small" title={t('esignature.actions.title')} style={{ marginTop: 8 }}>
       <Space size={8} wrap>
@@ -914,6 +1113,21 @@ function LifecycleActions(props: {
             }
           >
             {t('esignature.actions.syncStatus')}
+          </Button>
+        ) : null}
+        {canRequestApproval ? (
+          <Button
+            size="small"
+            loading={pending}
+            onClick={() =>
+              void act(
+                () => api.requestESignatureApproval(props.request.id, { version: props.request.version }),
+                t('esignature.actions.approvalRequested'),
+                t('esignature.actions.approvalRequestFailed'),
+              )
+            }
+          >
+            {t('esignature.actions.requestApproval')}
           </Button>
         ) : null}
         {open && props.canSend ? (

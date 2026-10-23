@@ -76,6 +76,21 @@ export function signatureApprovalRequiredError(requestId: string): ESignatureErr
   );
 }
 
+/**
+ * Separation of duties refused the decision (ES.17).
+ *
+ * A stable code rather than a generic 403: the SPA explains that another approver is needed, and the
+ * refusal is auditable without exposing who prepared the request to someone who cannot read it.
+ */
+export function signatureApprovalSeparationError(): ESignatureError {
+  return new ESignatureError(
+    'SIGNATURE_APPROVAL_SEPARATION_REQUIRED',
+    'The person who created or prepared this request cannot approve it.',
+    {},
+    403,
+  );
+}
+
 /** The request is not in a state that permits the requested transition. */
 export function signatureRequestInvalidStateError(status: string, attempted: string): ESignatureError {
   return new ESignatureError(

@@ -167,6 +167,12 @@ export {
 // Phase 19-ES.6 — the draft API. The capability and the record scope are checked in the service, so a
 // controller method is only ever a shape parser.
 export {
+  type ApprovalPolicyDecision,
+  type ApprovalPolicyReason,
+  type ApprovalPolicyReasonCode,
+  evaluateApprovalPolicy,
+} from './esignature-approval-policy.js';
+export {
   AUDIT_ACTIONS,
   CONNECTED_STATUS,
   CONNECTION_ENVIRONMENTS,
@@ -245,6 +251,10 @@ export {
   SOFT_DELETE_RULES,
 } from './esignature-retention.js';
 export {
+  APPROVAL_RULE_OPERATORS,
+  type ApprovalRule,
+  type ApprovalRuleOperator,
+  ApprovalRuleSchema,
   DEFAULT_ESIGNATURE_SETTINGS,
   type ESignatureSettings,
   ESignatureSettingsSchema,

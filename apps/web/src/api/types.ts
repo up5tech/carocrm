@@ -3258,6 +3258,12 @@ export interface ESignatureRequestView {
   readonly approvalRequired: boolean;
   readonly approvalStatus: string;
   readonly approvalReason: string | null;
+  readonly approvalRequestedAt: string | null;
+  readonly approvalRequestedById: string | null;
+  readonly approvalDecidedAt: string | null;
+  readonly approvalDecidedById: string | null;
+  readonly approvalReviewedVersion: number | null;
+  readonly approvalReviewedDigest: string | null;
   readonly createdById: string | null;
   readonly assignedUserId: string | null;
   readonly teamIds: readonly string[];
@@ -3415,6 +3421,7 @@ export interface ESignatureSendPreview {
   readonly problems: readonly ESignaturePreviewProblem[];
   readonly ready: boolean;
   readonly approvalRequired: boolean;
+  readonly approvalReasons: readonly { readonly code: string; readonly label: string; readonly ruleLabel: string | null }[];
   readonly approvedForThisDigest: boolean;
   readonly storedDigest: string | null;
   readonly staleStoredPreview: boolean;

@@ -243,9 +243,7 @@ export const ESIGNATURE_FEATURES: readonly ESignatureFeatureDescriptor[] = [
  * administrator believe a switch does something: plan §18 sequences them, and a flag whose consumer
  * does not exist yet is a false promise in an admin screen.
  */
-export const PENDING_FEATURES: readonly { readonly key: string; readonly phase: string }[] = [
-  { key: 'approvals', phase: '19-ES.17' },
-];
+export const PENDING_FEATURES: readonly { readonly key: string; readonly phase: string }[] = [];
 
 export type ESignatureEvidenceKind = 'entity' | 'table' | 'column' | 'hookPhase';
 
@@ -500,6 +498,7 @@ export const ESIGNATURE_ERROR_CODES = [
   'PROVIDER_OUTCOME_UNKNOWN',
   'SIGNATURE_REQUEST_INVALID_STATE',
   'SIGNATURE_APPROVAL_REQUIRED',
+  'SIGNATURE_APPROVAL_SEPARATION_REQUIRED',
   'RECIPIENT_NOT_AUTHORIZED',
   'SIGNATURE_DOCUMENT_NOT_READABLE',
   'SIGNATURE_SOURCE_RECORD_NOT_READABLE',
@@ -575,6 +574,7 @@ export const IMPLEMENTED_PHASES = [
   '19-ES.14',
   '19-ES.15',
   '19-ES.16',
+  '19-ES.17',
 ] as const;
 
 /**
