@@ -4509,3 +4509,143 @@ textarea.carocrm-etpl-source,
     transition: none;
   }
 }
+
+/* ---- email template designer: visual mode ---- */
+
+/* The canvas owns its own panels (blocks | canvas | styles); the page only frames it. */
+.carocrm-etpl--visual {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.carocrm-gjs {
+  position: relative;
+  height: calc(100vh - 340px);
+  min-height: 560px;
+  border: 1px solid #e3e7ec;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.carocrm-gjs-host,
+.carocrm-gjs .gjs-editor {
+  height: 100%;
+}
+
+.carocrm-gjs-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #fff;
+}
+
+/* GrapesJS chrome, restyled to the app palette (its own stylesheet ships the structure). */
+.carocrm-gjs .gjs-editor {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  font-size: 13px;
+  color: #31373d;
+}
+
+.carocrm-gjs .gjs-pn-panel {
+  border-color: #eff2f7;
+}
+
+.carocrm-gjs .gjs-pn-btn {
+  color: #5a6472;
+}
+
+.carocrm-gjs .gjs-pn-btn:hover,
+.carocrm-gjs .gjs-pn-btn.gjs-pn-active {
+  color: #1677ff;
+  background: #f2f8ff;
+}
+
+.carocrm-gjs .gjs-blocks-c {
+  background: #fff;
+}
+
+.carocrm-gjs .gjs-block-category {
+  background: #fafbfc;
+  border-color: #eff2f7;
+}
+
+.carocrm-gjs .gjs-title {
+  color: #31373d;
+  font-weight: 600;
+}
+
+.carocrm-gjs .gjs-block {
+  border: 1px solid #e3e7ec;
+  border-radius: 6px;
+  color: #31373d;
+  box-shadow: none;
+}
+
+.carocrm-gjs .gjs-block:hover {
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+.carocrm-gjs .gjs-sm-sector,
+.carocrm-gjs .gjs-trt-trait,
+.carocrm-gjs .gjs-clm-tags,
+.carocrm-gjs .gjs-layer {
+  border-color: #eff2f7;
+}
+
+.carocrm-gjs .gjs-sm-sector .gjs-sm-title,
+.carocrm-gjs .gjs-clm-title,
+.carocrm-gjs .gjs-layer-title {
+  background: #fafbfc;
+  color: #31373d;
+  font-weight: 600;
+}
+
+.carocrm-gjs .gjs-field {
+  border-color: #e3e7ec;
+  border-radius: 4px;
+  color: #31373d;
+}
+
+.carocrm-gjs .gjs-field:focus {
+  border-color: #1677ff;
+}
+
+.carocrm-gjs .gjs-rte-toolbar {
+  border-color: #eff2f7;
+  border-radius: 4px;
+}
+
+.carocrm-gjs .gjs-rte-action {
+  color: #5a6472;
+}
+
+.carocrm-gjs .gjs-rte-action:hover {
+  color: #1677ff;
+}
+
+.carocrm-gjs .gjs-cv-canvas {
+  background: #eef1f5;
+}
+
+.carocrm-gjs .gjs-com-badge,
+.carocrm-gjs .gjs-com-badge-c {
+  background: #1677ff;
+}
+
+/* The preview drawer keeps the same frame the source modes show beside the editor. */
+.carocrm-etpl-drawer .carocrm-etpl-preview {
+  position: static;
+}
+
+@media (max-width: 1180px) {
+  .carocrm-gjs {
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 4 / 3;
+  }
+}
+

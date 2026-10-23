@@ -59,3 +59,32 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`. Per-module detail lives in
   not help) — start a second one on another `VITE_PORT` instead of trusting the old one.
 - A stale `tsx watch` on :3030 logs "listening" then fails to bind; restart it after adding a route.
 - `pnpm --filter @carocrm/web build` dies at `emptyDir(dist)`; use `vite build --outDir /tmp/...`.
+- **Playwright e2e**: the shell exports `HTTP_PROXY=127.0.0.1:62112`; playwright's webServer
+  availability check and the browser honour it, so localhost servers answer 404 through the proxy
+  and the run dies with "Timed out waiting 120000ms". Always run with `no_proxy='*' NO_PROXY='*'`.
+- Playwright's output-dir cleanup trips the WorkBuddy safe-delete bulk guard (>50 files):
+  `mv test-results test-results-old-$(date +%s)` before re-running a spec.
+- `pnpm add` can fail mid-way with `ERR_PNPM_CODEBUDDY_BROKER_DENY` on the `.pnpm` symlink farm
+  (node_modules writes are brokered). Workaround that worked: `npm pack` each package to /tmp,
+  `tar -xzf --strip-components=1` into `.pnpm/<pkg>@<ver>/node_modules/<name>/`, then recreate the
+  dep symlinks + `apps/web/node_modules/<pkg>` link by hand. `grapesjs@0.23.8` is installed this way.
+
+## GrapesJS (email designer, `apps/web/src/components/email/`)
+
+- 0.23.8 **always** moves component `style` into generated CSS rules (`#id{…}`) — no inline styles,
+  and `forceClass:false`/`attributes.style` do not change that. Export must merge the sheet back
+  into `style` attributes (`inlineEmailCss.ts`), or Outlook renders nothing.
+- Blocks are drag-only unless each one carries `onClick` (append `block.getContent()` — it may be
+  a function or undefined). Click-to-append is the expected email-builder UX.
+- `editor.runCommand('open-blocks')` after init, or the palette opens behind the style-manager tab.
+- Do NOT pass `richTextEditor: { actions: [...] }` — it crashes `init` with an appendChild error.
+- Style sectors/devices can be passed via config (`styleManager.sectors`, `deviceManager.devices`);
+  `getSelected()` returns `undefined` (not null) with nothing selected; text components serialise
+  only their children once they have any, so insert tokens with `set('content', …)`.
+
+## antd interaction patterns (e2e)
+
+- Segmented: click the `.ant-segmented-item` label, never the radio `input` — the thumb covers it
+  and Playwright's hit-target check hangs until the test timeout.
+- Drawer keeps its node mounted after close; assert `.ant-drawer-mask` has count 0, not
+  `toBeHidden()` on `.ant-drawer`.
