@@ -5,8 +5,10 @@ import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
 import { runInTransaction } from '../entity/tx-context.js';
+import { EventBus } from '../events/event-bus.js';
 import { JobsService } from '../jobs/jobs.service.js';
 import { ESignatureCredentialVault } from './esignature-credential-vault.js';
+import { buildSignatureEvent, eventForStatus } from './esignature-events.js';
 import { ESIGNATURE_ARTIFACT_JOB,ESIGNATURE_WEBHOOK_PROCESS_JOB } from './esignature-jobs.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { mapProviderEvent, normalizeProviderEventType } from './esignature-status-mapper.js';
@@ -81,6 +83,7 @@ export class ESignatureWebhookService {
     @Inject(SignatureRequestRepository) private readonly requests: SignatureRequestRepository,
     @Inject(SignatureRecipientRepository) private readonly recipients: SignatureRecipientRepository,
     @Inject(SignatureAuditRepository) private readonly audit: SignatureAuditRepository,
+    @Inject(EventBus) private readonly domainEvents: EventBus,
     @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
@@ -231,7 +234,7 @@ export class ESignatureWebhookService {
     }
 
     try {
-      const result = await runInTransaction(this.database.db, async () => {
+      const result = await runInTransaction(this.database.db, async (tx) => {
         const eventTypeNormalized = delivery.payloadMinimized['eventType'] === undefined
           ? 'unmapped'
           : normalizeFromInbox(delivery.payloadMinimized);
@@ -322,6 +325,33 @@ export class ESignatureWebhookService {
           },
           correlationId: delivery.correlationId,
         });
+
+        if (recipientChanged && (mapping.recipient?.status === 'completed' || mapping.recipient?.status === 'signed')) {
+          await this.domainEvents.dispatch(
+            tx,
+            buildSignatureEvent('esignature.recipientCompleted', moved, {
+              // One signer completing is one fact: a replay or a second event for the same person
+              // produces the same key, so a consumer performs its action once.
+              discriminator: mapping.recipient.recipientId,
+              ...(occurredAt === null ? {} : { occurredAt: occurredAt.toISOString() }),
+              correlationId: delivery.correlationId,
+              extra: { recipientId: mapping.recipient.recipientId, recipientStatus: mapping.recipient.status },
+            }),
+          );
+        }
+        if (envelopeMoved) {
+          const eventType = eventForStatus(moved.status);
+          if (eventType !== null) {
+            await this.domainEvents.dispatch(
+              tx,
+              buildSignatureEvent(eventType, moved, {
+                discriminator: moved.status,
+                ...(occurredAt === null ? {} : { occurredAt: occurredAt.toISOString() }),
+                correlationId: delivery.correlationId,
+              }),
+            );
+          }
+        }
 
         return {
           status: (processingStatus === 'applied' ? 'processed' : 'ignored') as 'processed' | 'ignored',

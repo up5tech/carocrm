@@ -21,6 +21,7 @@ import { ESignatureModuleHealthService } from './esignature-module-health.servic
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
 import { ESignatureOAuthCallbackController } from './esignature-oauth-callback.controller.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
+import { ESignatureRecordEntryService } from './esignature-record-entry.service.js';
 import { ESignatureRequestController } from './esignature-request.controller.js';
 import { ESignatureRequestService } from './esignature-request.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
@@ -120,6 +121,9 @@ export const ESIGNATURE_PROVIDERS = [
   // Phase 19-ES.6 — the draft API. The capability and the record scope are checked in the service, so
   // a controller method is only ever a shape parser.
   ESignatureRequestService,
+  // Phase 19-ES.18 — the CRM record entry point. It answers availability for a record detail page;
+  // no optional module is imported, and an uninstalled module is simply not a candidate.
+  ESignatureRecordEntryService,
   // Phase 19-ES.7 — the template catalog and mapping validation. Nothing here writes a provider template.
   ESignatureTemplateService,
   // Phase 19-ES.11/ES.12 — Connect intake, the durable inbox and the event projection.
@@ -206,6 +210,12 @@ export {
   signatureRequestInvalidStateError,
 } from './esignature-errors.js';
 export {
+  buildSignatureEvent,
+  ESIGNATURE_EVENT_SCHEMA_VERSION,
+  eventForStatus,
+  type SignatureEventPayload,
+} from './esignature-events.js';
+export {
   DOCUSIGN_PROVIDER_CAPABILITIES,
   ESIGNATURE_CAPABILITIES,
   ESIGNATURE_ERROR_CODES,
@@ -229,6 +239,13 @@ export {
   type PreviewProblem,
   type SignaturePreview,
 } from './esignature-preview.js';
+export {
+  ENTRY_POINT_ENTITIES,
+  ESignatureRecordEntryService,
+  type RecordEntryReason,
+  type RecordEntryRequestView,
+  type RecordEntryView,
+} from './esignature-record-entry.service.js';
 export { ESignatureRequestController } from './esignature-request.controller.js';
 export {
   ESignatureRequestService,

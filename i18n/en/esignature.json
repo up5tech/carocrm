@@ -402,6 +402,12 @@
     "recovered": "The request is ready to send again.",
     "recoverFailed": "The request could not be recovered."
   },
+  "recordEntry": {
+    "title": "E-Signature",
+    "create": "Start a signature request",
+    "empty": "No signature requests are linked to this record yet.",
+    "open": "Open"
+  },
   "approval": {
     "title": "Approval",
     "waiting": "Waiting for an approval decision",

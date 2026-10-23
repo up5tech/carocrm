@@ -526,6 +526,7 @@ export const ESIGNATURE_EVENT_TYPES = [
   'esignature.requestNeedsReconciliation',
   'esignature.completedArtifactAvailable',
 ] as const;
+export type ESignatureEventType = (typeof ESIGNATURE_EVENT_TYPES)[number];
 
 /** The durable job names the worker will register (plan §16). None is enqueued before its phase. */
 export const ESIGNATURE_JOB_NAMES = [
@@ -575,6 +576,7 @@ export const IMPLEMENTED_PHASES = [
   '19-ES.15',
   '19-ES.16',
   '19-ES.17',
+  '19-ES.18',
 ] as const;
 
 /**

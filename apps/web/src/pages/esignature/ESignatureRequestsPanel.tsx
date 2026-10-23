@@ -23,7 +23,7 @@ import {
   Upload,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type {
@@ -80,12 +80,27 @@ export function ESignatureRequestsPanel(props: {
   readonly canDownload: boolean;
   readonly canCorrect: boolean;
   readonly canApprove: boolean;
+  readonly initialSource?: { readonly entityType: string; readonly recordId: string } | null | undefined;
+  readonly initialRequestId?: string | null | undefined;
 }) {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<string>('');
   const [approvalStatus, setApprovalStatus] = useState<string>('');
   const [drawer, setDrawer] = useState<DrawerState | null>(null);
+  const openedFromLink = useRef(false);
+
+  // A CRM record page hands the user to this screen with the source already chosen; a request link
+  // opens the detail directly. It only happens once, so closing the drawer stays closed.
+  useEffect(() => {
+    if (openedFromLink.current) return;
+    openedFromLink.current = true;
+    if (props.initialRequestId !== null && props.initialRequestId !== undefined && props.initialRequestId !== '') {
+      setDrawer({ mode: 'view', id: props.initialRequestId });
+    } else if (props.canPrepare && props.initialSource !== null && props.initialSource !== undefined) {
+      setDrawer({ mode: 'create' });
+    }
+  }, [props.canPrepare, props.initialRequestId, props.initialSource]);
 
   const requests = useQuery({
     queryKey: ['eSignature', 'requests', status, approvalStatus],
@@ -223,6 +238,7 @@ export function ESignatureRequestsPanel(props: {
           <RequestEditor
             mode="create"
             canPrepare={props.canPrepare}
+            initialSource={props.initialSource ?? null}
             onSaved={(saved) => {
               message.success(t('esignature.requests.created'));
               reload();
@@ -367,6 +383,8 @@ function RequestEditor(props: {
   mode: 'create' | 'edit';
   request?: ESignatureRequestView;
   canPrepare: boolean;
+  /** The record a CRM detail page started from, pre-filled into the source fields. */
+  initialSource?: { readonly entityType: string; readonly recordId: string } | null;
   onSaved: (saved: ESignatureRequestView) => void;
   onDocumentsChanged?: () => void;
 }) {
@@ -377,7 +395,13 @@ function RequestEditor(props: {
 
   const initial: EditorValues =
     request === undefined
-      ? { name: '', recipients: [{ name: '', email: '', recipientType: 'signer', routingOrder: 1 }] }
+      ? {
+          name: '',
+          ...(props.initialSource === null || props.initialSource === undefined
+            ? {}
+            : { sourceEntityType: props.initialSource.entityType, sourceRecordId: props.initialSource.recordId }),
+          recipients: [{ name: '', email: '', recipientType: 'signer', routingOrder: 1 }],
+        }
       : {
           name: request.name,
           ...(request.subject === null ? {} : { subject: request.subject }),

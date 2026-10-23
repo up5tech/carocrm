@@ -249,6 +249,14 @@ export const RequestRejectionSchema = z
   })
   .strict();
 
+/** One CRM record's ESignature entry point (ES.18): availability is an answer, never a 403. */
+export const RecordEntryQuerySchema = z
+  .object({
+    entityType: SourceEntitySchema,
+    recordId: z.string().trim().min(1).max(64),
+  })
+  .strict();
+
 /** The worker's webhook-processing payload: the durable inbox row, nothing else. */
 export const WebhookProcessSchema = z.object({ inboxId: z.string().trim().min(1).max(64) }).strict();
 

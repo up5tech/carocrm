@@ -12,6 +12,7 @@ import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.
 import { DatabaseService } from '../database/database.service.js';
 import { ENTITY_STORE } from '../entity/entity-record.store.js';
 import { runInTransaction } from '../entity/tx-context.js';
+import { EventBus } from '../events/event-bus.js';
 import { METADATA_STORE, type MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { ESignatureConnectionService } from './esignature-connection.service.js';
 import { ESignatureConnectionGate } from './esignature-connection-gate.service.js';
@@ -29,6 +30,7 @@ import {
   signatureRequestInvalidStateError,
   signatureResendRateLimitedError,
 } from './esignature-errors.js';
+import { buildSignatureEvent, eventForStatus } from './esignature-events.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { buildSignaturePreview, type SignaturePreview } from './esignature-preview.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
@@ -237,6 +239,7 @@ export class ESignatureRequestService {
     @Inject(ESignatureConnectionService) private readonly connectionService: ESignatureConnectionService,
     @Inject(SignatureProviderRegistry) private readonly providers: SignatureProviderRegistry,
     @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(EventBus) private readonly events: EventBus,
     @Inject(AclApiService) private readonly acl: AclApiService,
     @Inject(ENTITY_STORE) private readonly store: RecordStorePort,
     @Inject(METADATA_STORE) private readonly metadata: MetadataStoreService,
@@ -304,26 +307,36 @@ export class ESignatureRequestService {
       await this.assertMappingBindable(input.connectionId ?? null, input.templateMappingId);
     }
 
-    const created = await this.requests.createDraft({
-      name: input.name,
-      ...(input.description !== undefined && input.description !== null ? { description: input.description } : {}),
-      ...(input.subject !== undefined && input.subject !== null ? { subject: input.subject } : {}),
-      ...(input.message !== undefined && input.message !== null ? { message: input.message } : {}),
-      ...(input.emailBlurb !== undefined && input.emailBlurb !== null ? { emailBlurb: input.emailBlurb } : {}),
-      ...(input.expiresAt !== undefined && input.expiresAt !== null ? { expiresAt: input.expiresAt } : {}),
-      ...(input.connectionId !== undefined && input.connectionId !== null ? { connectionId: input.connectionId } : {}),
-      ...(input.templateMappingId !== undefined && input.templateMappingId !== null ? { templateMappingId: input.templateMappingId } : {}),
-      ...(input.sourceEntityType !== undefined && input.sourceEntityType !== null ? { sourceEntityType: input.sourceEntityType } : {}),
-      ...(input.sourceRecordId !== undefined && input.sourceRecordId !== null ? { sourceRecordId: input.sourceRecordId } : {}),
-      ...(input.approvalRequired !== undefined ? { approvalRequired: input.approvalRequired } : {}),
-      ...(this.scope.userId !== undefined ? { createdById: this.scope.userId, assignedUserId: this.scope.userId } : {}),
-      teamIds: this.scope.teamIds(),
-    });
-    await this.audit.append({
-      action: 'request.created',
-      requestId: created.id,
-      actor: this.actorRef(),
-      detail: { sourceEntityType: created.sourceEntityType ?? 'none' },
+    const created = await runInTransaction(this.database.db, async (tx) => {
+      const draft = await this.requests.createDraft({
+        name: input.name,
+        ...(input.description !== undefined && input.description !== null ? { description: input.description } : {}),
+        ...(input.subject !== undefined && input.subject !== null ? { subject: input.subject } : {}),
+        ...(input.message !== undefined && input.message !== null ? { message: input.message } : {}),
+        ...(input.emailBlurb !== undefined && input.emailBlurb !== null ? { emailBlurb: input.emailBlurb } : {}),
+        ...(input.expiresAt !== undefined && input.expiresAt !== null ? { expiresAt: input.expiresAt } : {}),
+        ...(input.connectionId !== undefined && input.connectionId !== null ? { connectionId: input.connectionId } : {}),
+        ...(input.templateMappingId !== undefined && input.templateMappingId !== null ? { templateMappingId: input.templateMappingId } : {}),
+        ...(input.sourceEntityType !== undefined && input.sourceEntityType !== null ? { sourceEntityType: input.sourceEntityType } : {}),
+        ...(input.sourceRecordId !== undefined && input.sourceRecordId !== null ? { sourceRecordId: input.sourceRecordId } : {}),
+        ...(input.approvalRequired !== undefined ? { approvalRequired: input.approvalRequired } : {}),
+        ...(this.scope.userId !== undefined ? { createdById: this.scope.userId, assignedUserId: this.scope.userId } : {}),
+        teamIds: this.scope.teamIds(),
+      });
+      await this.audit.append({
+        action: 'request.created',
+        requestId: draft.id,
+        actor: this.actorRef(),
+        detail: { sourceEntityType: draft.sourceEntityType ?? 'none' },
+      });
+      await this.events.dispatch(
+        tx,
+        buildSignatureEvent('esignature.requestCreated', draft, {
+          discriminator: 'created',
+          correlationId: correlationId(),
+        }),
+      );
+      return draft;
     });
     return this.view(created);
   }
@@ -536,30 +549,47 @@ export class ESignatureRequestService {
     // An approval already given for *these* exact bytes is not asked for again: a re-preparation
     // after an unrelated page reload lands back in `ready_to_send`, not in the queue (ES.17).
     const requiresDecision = preview.approvalRequired && !preview.approvedForThisDigest;
-    const updated = await this.requests.recordPreparation(request.id, input.version, {
-      snapshot,
-      preparedById: this.scope.userId ?? 'system',
-      targetStatus: requiresDecision ? 'pending_approval' : 'ready_to_send',
-      approvalRequired: preview.approvalRequired,
-    });
-    await this.audit.append({
-      action: 'request.prepared',
-      requestId: request.id,
-      actor: this.actorRef(),
-      detail: { digest: updated.outgoingDigest, targetStatus: updated.status, approvalRequired: preview.approvalRequired },
-    });
-    if (requiresDecision) {
+    const updated = await runInTransaction(this.database.db, async (tx) => {
+      const prepared = await this.requests.recordPreparation(request.id, input.version, {
+        snapshot,
+        preparedById: this.scope.userId ?? 'system',
+        targetStatus: requiresDecision ? 'pending_approval' : 'ready_to_send',
+        approvalRequired: preview.approvalRequired,
+      });
       await this.audit.append({
-        action: 'approval.requested',
+        action: 'request.prepared',
         requestId: request.id,
         actor: this.actorRef(),
-        detail: {
-          digest: updated.outgoingDigest,
-          reasons: preview.approvalReasons.map((reason) => reason.label),
-          requestedBy: 'prepare',
-        },
+        detail: { digest: prepared.outgoingDigest, targetStatus: prepared.status, approvalRequired: preview.approvalRequired },
       });
-    }
+      await this.events.dispatch(
+        tx,
+        buildSignatureEvent('esignature.requestPrepared', prepared, {
+          discriminator: prepared.outgoingDigest ?? 'prepared',
+          correlationId: correlationId(),
+        }),
+      );
+      if (requiresDecision) {
+        await this.audit.append({
+          action: 'approval.requested',
+          requestId: request.id,
+          actor: this.actorRef(),
+          detail: {
+            digest: prepared.outgoingDigest,
+            reasons: preview.approvalReasons.map((reason) => reason.label),
+            requestedBy: 'prepare',
+          },
+        });
+        await this.events.dispatch(
+          tx,
+          buildSignatureEvent('esignature.requestApprovalRequested', prepared, {
+            discriminator: prepared.outgoingDigest ?? 'requested',
+            correlationId: correlationId(),
+          }),
+        );
+      }
+      return prepared;
+    });
     return { request: await this.view(updated), preview: await this.buildPreview(updated) };
   }
 
@@ -581,12 +611,22 @@ export class ESignatureRequestService {
     if (request.outgoingDigest === null) {
       throw new ValidationError('The request has no prepared preview to approve.', { code: 'PREVIEW_REQUIRED' });
     }
-    const updated = await this.requests.requestApproval(id, input.version, this.scope.userId ?? 'system');
-    await this.audit.append({
-      action: 'approval.requested',
-      requestId: id,
-      actor: this.actorRef(),
-      detail: { digest: updated.outgoingDigest, requestedBy: 'sender', reviewedVersion: request.version },
+    const updated = await runInTransaction(this.database.db, async (tx) => {
+      const requested = await this.requests.requestApproval(id, input.version, this.scope.userId ?? 'system');
+      await this.audit.append({
+        action: 'approval.requested',
+        requestId: id,
+        actor: this.actorRef(),
+        detail: { digest: requested.outgoingDigest, requestedBy: 'sender', reviewedVersion: request.version },
+      });
+      await this.events.dispatch(
+        tx,
+        buildSignatureEvent('esignature.requestApprovalRequested', requested, {
+          discriminator: requested.outgoingDigest ?? 'requested',
+          correlationId: correlationId(),
+        }),
+      );
+      return requested;
     });
     return this.view(updated);
   }
@@ -613,7 +653,7 @@ export class ESignatureRequestService {
     }
     if (request.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
     const reviewedVersion = request.version;
-    const ready = await runInTransaction(this.database.db, async () => {
+    const ready = await runInTransaction(this.database.db, async (tx) => {
       const recorded = await this.requests.recordApproval(id, input.version, {
         approverId: this.scope.userId ?? 'system',
         status: 'approved',
@@ -621,12 +661,20 @@ export class ESignatureRequestService {
         reviewedDigest: digest,
         reviewedVersion,
       });
-      return this.requests.transition(id, {
+      const transitioned = await this.requests.transition(id, {
         expectedVersion: recorded.version,
         to: 'ready_to_send',
         origin: 'local',
         ...(this.scope.userId === undefined ? {} : { actorId: this.scope.userId }),
       });
+      await this.events.dispatch(
+        tx,
+        buildSignatureEvent('esignature.requestApproved', transitioned, {
+          discriminator: digest,
+          correlationId: correlationId(),
+        }),
+      );
+      return transitioned;
     });
     await this.audit.append({
       action: 'approval.granted',
@@ -664,19 +712,29 @@ export class ESignatureRequestService {
     }
     if (request.version !== input.version) throw new ConcurrencyConflictError('SignatureRequest', id);
     const reviewedVersion = request.version;
-    const rejected = await this.requests.recordApproval(id, input.version, {
-      approverId: this.scope.userId ?? 'system',
-      status: 'rejected',
-      reason,
-      reviewedDigest: digest,
-      reviewedVersion,
-    });
-    await this.audit.append({
-      action: 'approval.rejected',
-      requestId: id,
-      actor: this.actorRef(),
-      reasonSafe: reason,
-      detail: { digest, reviewedVersion },
+    const rejected = await runInTransaction(this.database.db, async (tx) => {
+      const decided = await this.requests.recordApproval(id, input.version, {
+        approverId: this.scope.userId ?? 'system',
+        status: 'rejected',
+        reason,
+        reviewedDigest: digest,
+        reviewedVersion,
+      });
+      await this.audit.append({
+        action: 'approval.rejected',
+        requestId: id,
+        actor: this.actorRef(),
+        reasonSafe: reason,
+        detail: { digest, reviewedVersion },
+      });
+      await this.events.dispatch(
+        tx,
+        buildSignatureEvent('esignature.requestRejected', decided, {
+          discriminator: digest,
+          correlationId: correlationId(),
+        }),
+      );
+      return decided;
     });
     return { request: await this.view(rejected), decision: 'rejected', reviewedVersion };
   }
@@ -961,12 +1019,24 @@ export class ESignatureRequestService {
       // the send answer, keeps the projection possible even when the event carries no email.
       await this.attachProviderRecipientIds(id, sent.recipients).catch(() => undefined);
       const occurredAt = Date.parse(sent.sentAt);
-      const confirmed = await this.requests.transition(id, {
-        expectedVersion: sending.version,
-        to: 'sent',
-        origin: 'provider',
-        providerStatusRaw: sent.providerStatusRaw,
-        ...(Number.isNaN(occurredAt) ? {} : { occurredAt: new Date(occurredAt) }),
+      const confirmed = await runInTransaction(this.database.db, async (tx) => {
+        const transitioned = await this.requests.transition(id, {
+          expectedVersion: sending.version,
+          to: 'sent',
+          origin: 'provider',
+          providerStatusRaw: sent.providerStatusRaw,
+          ...(Number.isNaN(occurredAt) ? {} : { occurredAt: new Date(occurredAt) }),
+        });
+        await this.events.dispatch(
+          tx,
+          buildSignatureEvent('esignature.requestSent', transitioned, {
+            // The fact is "this request is sent", not "this attempt was used": the same fact can
+            // also arrive from a Connect event, and a consumer must dedupe the two to one action.
+            discriminator: 'sent',
+            correlationId: identity.correlationId,
+          }),
+        );
+        return transitioned;
       });
       await this.audit.append({
         action: 'send.completed',
@@ -982,15 +1052,25 @@ export class ESignatureRequestService {
       if (unknownOutcome) {
         // The provider may have sent it. The request holds the attempt token and nothing else; the only
         // legal next step is reconciliation (plan §4.3, §16).
-        await this.requests.transition(id, {
-          expectedVersion: sending.version,
-          to: 'send_unknown',
-          origin: 'provider',
-          failure: {
-            category: 'unknown_outcome',
-            code: 'SEND_OUTCOME_UNKNOWN',
-            messageSafe: 'The provider may have accepted the envelope, but the answer was lost.',
-          },
+        await runInTransaction(this.database.db, async (tx) => {
+          const unknown = await this.requests.transition(id, {
+            expectedVersion: sending.version,
+            to: 'send_unknown',
+            origin: 'provider',
+            failure: {
+              category: 'unknown_outcome',
+              code: 'SEND_OUTCOME_UNKNOWN',
+              messageSafe: 'The provider may have accepted the envelope, but the answer was lost.',
+            },
+          });
+          await this.events.dispatch(
+            tx,
+            buildSignatureEvent('esignature.requestNeedsReconciliation', unknown, {
+              discriminator: attemptId,
+              correlationId: identity.correlationId,
+            }),
+          );
+          return unknown;
         });
         await this.audit.append({
           action: 'send.outcome_unknown',
@@ -1200,6 +1280,18 @@ export class ESignatureRequestService {
       actor: this.actorRef(),
       detail: { providerStatus: providerStatus.providerStatusRaw, reconciledTo: current.status, recipientUpdates },
     });
+    if (current.status !== request.status) {
+      const eventType = eventForStatus(current.status);
+      if (eventType !== null) {
+        await this.events.dispatch(
+          this.database.db,
+          buildSignatureEvent(eventType, current, {
+            discriminator: current.status,
+            correlationId: correlationId(),
+          }),
+        );
+      }
+    }
     return { request: await this.view(current), providerStatus: providerStatus.providerStatusRaw, reconciled: true };
   }
 
@@ -1306,32 +1398,48 @@ export class ESignatureRequestService {
 
     const stored: SignatureDocumentSnapshot[] = [];
     let created = 0;
-    for (const artifact of providerArtifacts) {
-      const known = await this.snapshots.findByProviderDocumentId(request.id, artifact.artifactKind, artifact.providerDocumentId ?? '');
-      if (known !== undefined) {
-        stored.push(known);
-        continue;
+    await runInTransaction(this.database.db, async (tx) => {
+      for (const artifact of providerArtifacts) {
+        const known = await this.snapshots.findByProviderDocumentId(request.id, artifact.artifactKind, artifact.providerDocumentId ?? '');
+        if (known !== undefined) {
+          stored.push(known);
+          continue;
+        }
+        const result = await this.documents.storeDerivedArtifact({
+          requestId: request.id,
+          artifactKind: artifact.artifactKind,
+          displayName: artifact.displayName,
+          mimeType: artifact.mimeType,
+          bytes: Buffer.from(artifact.bytes),
+          ...(artifact.providerDocumentId === null ? {} : { providerDocumentId: artifact.providerDocumentId }),
+        });
+        stored.push(result.snapshot);
+        if (result.created) created += 1;
       }
-      const result = await this.documents.storeDerivedArtifact({
+      await this.audit.append({
+        action: 'artifact.downloaded',
         requestId: request.id,
-        artifactKind: artifact.artifactKind,
-        displayName: artifact.displayName,
-        mimeType: artifact.mimeType,
-        bytes: Buffer.from(artifact.bytes),
-        ...(artifact.providerDocumentId === null ? {} : { providerDocumentId: artifact.providerDocumentId }),
+        actor: this.actorRef(),
+        detail: {
+          signedDocuments: providerArtifacts.filter((artifact) => artifact.artifactKind === 'provider_signed_document').length,
+          completionEvidence: providerArtifacts.filter((artifact) => artifact.artifactKind === 'completion_evidence').length,
+          created,
+        },
       });
-      stored.push(result.snapshot);
-      if (result.created) created += 1;
-    }
-    await this.audit.append({
-      action: 'artifact.downloaded',
-      requestId: request.id,
-      actor: this.actorRef(),
-      detail: {
-        signedDocuments: providerArtifacts.filter((artifact) => artifact.artifactKind === 'provider_signed_document').length,
-        completionEvidence: providerArtifacts.filter((artifact) => artifact.artifactKind === 'completion_evidence').length,
-        created,
-      },
+      if (created > 0) {
+        const artifactIds = stored.map((artifact) => artifact.id).sort();
+        await this.events.dispatch(
+          tx,
+          buildSignatureEvent('esignature.completedArtifactAvailable', request, {
+            discriminator: artifactIds.join(','),
+            correlationId: correlationId(),
+            extra: {
+              artifactKinds: [...new Set(stored.map((artifact) => artifact.artifactKind))].sort(),
+              artifactCount: stored.length,
+            },
+          }),
+        );
+      }
     });
     return { artifacts: stored.map(toDocumentView), created };
   }
@@ -1475,20 +1583,30 @@ export class ESignatureRequestService {
       throw moduleError;
     }
     const voidedAt = parseDate(result.voidedAt);
-    const voided = await this.requests.transition(request.id, {
-      expectedVersion: request.version,
-      to: 'voided',
-      origin: 'provider',
-      providerStatusRaw: result.providerStatusRaw,
-      ...(voidedAt === null ? {} : { occurredAt: voidedAt }),
-    });
-    await this.audit.append({
-      action: 'void.completed',
-      requestId: request.id,
-      connectionId: connection.id,
-      actor: this.actorRef(),
-      reasonSafe: reason,
-      detail: { providerStatus: result.providerStatusRaw },
+    const voided = await runInTransaction(this.database.db, async (tx) => {
+      const transitioned = await this.requests.transition(request.id, {
+        expectedVersion: request.version,
+        to: 'voided',
+        origin: 'provider',
+        providerStatusRaw: result.providerStatusRaw,
+        ...(voidedAt === null ? {} : { occurredAt: voidedAt }),
+      });
+      await this.audit.append({
+        action: 'void.completed',
+        requestId: request.id,
+        connectionId: connection.id,
+        actor: this.actorRef(),
+        reasonSafe: reason,
+        detail: { providerStatus: result.providerStatusRaw },
+      });
+      await this.events.dispatch(
+        tx,
+        buildSignatureEvent('esignature.requestVoided', transitioned, {
+          discriminator: request.providerEnvelopeId ?? 'voided',
+          correlationId: correlationId(),
+        }),
+      );
+      return transitioned;
     });
     return { request: await this.view(voided), voidedAt: voided.voidedAt, reason };
   }

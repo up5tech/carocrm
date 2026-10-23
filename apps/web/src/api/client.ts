@@ -63,6 +63,7 @@ import type {
   ESignatureEmbeddedView,
   ESignatureHealthView,
   ESignatureNavView,
+  ESignatureRecordEntry,
   ESignatureRequestDocument,
   ESignatureRequestList,
   ESignatureRequestRecipient,
@@ -1817,6 +1818,10 @@ export const api = {
     return request<ESignatureRequestList>(`/ESignature/requests${suffix}`);
   },
   eSignatureRequest: (id: string) => request<ESignatureRequestView>(`/ESignature/requests/${encodeURIComponent(id)}`),
+  eSignatureRecordEntry: (entityType: string, recordId: string) =>
+    request<ESignatureRecordEntry>(
+      `/ESignature/action/record-entry?entityType=${encodeURIComponent(entityType)}&recordId=${encodeURIComponent(recordId)}`,
+    ),
   createESignatureRequest: (input: Record<string, unknown>) => request<ESignatureRequestView>('/ESignature/requests', post(input)),
   updateESignatureRequest: (id: string, input: Record<string, unknown>) =>
     request<ESignatureRequestView>(`/ESignature/requests/${encodeURIComponent(id)}`, patch(input)),

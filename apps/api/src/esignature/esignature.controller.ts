@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 
 import { AuthenticationFailedError, InvalidQueryError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
 
@@ -15,6 +15,7 @@ import {
   ConnectionSecretSchema,
   ConnectionUpdateSchema,
   OperationProbeSchema,
+  RecordEntryQuerySchema,
   SettingsPatchSchema,
   WebhookProcessSchema,
 } from './dto/esignature-shapes.js';
@@ -24,6 +25,7 @@ import { ESIGNATURE_OPERATIONS,ESignatureConnectionGate } from './esignature-con
 import { ESignatureModuleHealthService } from './esignature-module-health.service.js';
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
+import { ESignatureRecordEntryService } from './esignature-record-entry.service.js';
 import { ESignatureRequestService } from './esignature-request.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { ESignatureWebhookService } from './esignature-webhook.service.js';
@@ -57,6 +59,7 @@ export class ESignatureController {
     @Inject(ESignatureConnectionService) private readonly connections: ESignatureConnectionService,
     @Inject(ESignatureWebhookService) private readonly webhooks: ESignatureWebhookService,
     @Inject(ESignatureRequestService) private readonly requests: ESignatureRequestService,
+    @Inject(ESignatureRecordEntryService) private readonly recordEntry: ESignatureRecordEntryService,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
@@ -246,6 +249,19 @@ export class ESignatureController {
   async operations() {
     await this.permissions.assert('use');
     return { operations: ESIGNATURE_OPERATIONS, provider: this.scope.userType ?? 'user' };
+  }
+
+  /**
+   * The entry point a CRM record detail page asks for (ES.18).
+   *
+   * A 200 answer with `available: false` is deliberate: the generic record component must hide itself
+   * for a caller without the module right, a disabled module, an unsupported entity or a record whose
+   * ACL the caller cannot pass — without turning a normal "no" into an error state on every page.
+   */
+  @Get('action/record-entry')
+  async recordEntryPoint(@Query() query: unknown) {
+    const parsed = this.parse(RecordEntryQuerySchema, query);
+    return this.recordEntry.entry(parsed.entityType, parsed.recordId);
   }
 
   // ---------------------------------------------------------------------------

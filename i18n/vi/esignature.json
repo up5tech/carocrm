@@ -402,6 +402,12 @@
     "recovered": "Yêu cầu đã sẵn sàng gửi lại.",
     "recoverFailed": "Không khôi phục được yêu cầu."
   },
+  "recordEntry": {
+    "title": "Chữ ký điện tử",
+    "create": "Tạo yêu cầu ký",
+    "empty": "Chưa có yêu cầu ký nào liên kết với bản ghi này.",
+    "open": "Mở"
+  },
   "approval": {
     "title": "Phê duyệt",
     "waiting": "Đang chờ quyết định phê duyệt",

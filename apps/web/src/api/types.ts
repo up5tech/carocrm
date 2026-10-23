@@ -3298,6 +3298,22 @@ export interface ESignatureRequestList {
   readonly total: number;
 }
 
+/** Phase 19-ES.18 — the capability answer for one CRM record's detail page. */
+export interface ESignatureRecordEntry {
+  readonly available: boolean;
+  readonly reason: 'available' | 'module_disabled' | 'no_permission' | 'unsupported_entity' | 'record_missing' | 'record_restricted';
+  readonly entityType: string;
+  readonly recordId: string;
+  readonly canPrepare: boolean;
+  readonly requests: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly status: string;
+    readonly approvalStatus: string;
+    readonly modifiedAt: string;
+  }[];
+}
+
 /** Phase 19-ES.13 — one row of the request's activity timeline. Never a raw provider payload. */
 export interface ESignatureTimelineEntry {
   readonly id: string;

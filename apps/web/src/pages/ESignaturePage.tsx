@@ -2,6 +2,7 @@ import { FileSearchOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Card, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { ESignatureCapabilityEntry, ESignatureHealthView } from '../api/types.js';
@@ -27,6 +28,14 @@ import { ESignatureTemplatesPanel } from './esignature/ESignatureTemplatesPanel.
  * the matching endpoint refuses it too — rendering is never the enforcement (AGENTS.md §5.3).
  */
 export function ESignaturePage() {
+  const [searchParams] = useSearchParams();
+  const sourceEntityType = searchParams.get('sourceEntityType');
+  const sourceRecordId = searchParams.get('sourceRecordId');
+  const initialSource =
+    sourceEntityType !== null && sourceRecordId !== null
+      ? { entityType: sourceEntityType, recordId: sourceRecordId }
+      : null;
+  const initialRequestId = searchParams.get('request');
   const health = useQuery({
     queryKey: ['eSignature', 'health'],
     queryFn: () => api.eSignatureHealth(),
@@ -94,6 +103,8 @@ export function ESignaturePage() {
           canDownload={granted.has('downloadCompleted')}
           canCorrect={granted.has('correct')}
           canApprove={granted.has('approve')}
+          initialSource={initialSource}
+          initialRequestId={initialRequestId}
         />
       ) : null}
 
