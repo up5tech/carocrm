@@ -20,6 +20,7 @@ import { ESignatureDocumentService } from './esignature-document.service.js';
 import { ESignatureModuleHealthService } from './esignature-module-health.service.js';
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
 import { ESignatureOAuthCallbackController } from './esignature-oauth-callback.controller.js';
+import { ESignatureOperationsService } from './esignature-operations.service.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureRecordEntryService } from './esignature-record-entry.service.js';
 import { ESignatureReportService } from './esignature-report.service.js';
@@ -43,6 +44,7 @@ import { SignatureAuditRepository } from './signature-audit.repository.js';
 import { SignatureConnectionRepository } from './signature-connection.repository.js';
 import { SignatureDocumentSnapshotRepository } from './signature-document-snapshot.repository.js';
 import { SignatureOAuthStateRepository } from './signature-oauth-state.repository.js';
+import { SignatureOperationsRepository } from './signature-operations.repository.js';
 import { SignatureProviderEventRepository } from './signature-provider-event.repository.js';
 import { SignatureRecipientRepository } from './signature-recipient.repository.js';
 import { SignatureReportRepository } from './signature-report.repository.js';
@@ -130,6 +132,10 @@ export const ESIGNATURE_PROVIDERS = [
   // consumes `ESignatureReportService`; nothing here writes a request.
   SignatureReportRepository,
   ESignatureReportService,
+  // Phase 19-ES.20 — the recovery workbench and the new health checks. Reads only; the one command
+  // is a verified webhook-delivery retry, never a resend.
+  SignatureOperationsRepository,
+  ESignatureOperationsService,
   // Phase 19-ES.7 — the template catalog and mapping validation. Nothing here writes a provider template.
   ESignatureTemplateService,
   // Phase 19-ES.11/ES.12 — Connect intake, the durable inbox and the event projection.
@@ -241,6 +247,15 @@ export {
   REQUIRED_CAPABILITIES,
 } from './esignature-module.js';
 export { ESignatureOAuthCallbackController } from './esignature-oauth-callback.controller.js';
+export {
+  type ConnectionHealthView,
+  ESignatureOperationsService,
+  type OperationCheck,
+  type OperationsOverview,
+  type OperationsQuery,
+  type WebhookDeliveryView,
+  type WebhookDiagnosticsView,
+} from './esignature-operations.service.js';
 export {
   buildSignaturePreview,
   type PreviewProblem,
@@ -407,6 +422,12 @@ export {
   OAUTH_STATE_TTL_SECONDS,
   SignatureOAuthStateRepository,
 } from './signature-oauth-state.repository.js';
+export type {
+  FailedJobList,
+  FailedJobRow,
+  RecoveryRequestList,
+  RecoveryRequestRow,
+} from './signature-operations.repository.js';
 export {
   buildEventDedupKey,
   payloadDigest,

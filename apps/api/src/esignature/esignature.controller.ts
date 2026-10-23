@@ -16,6 +16,7 @@ import {
   ConnectionUpdateSchema,
   ESignatureReportQuerySchema,
   OperationProbeSchema,
+  OperationsQuerySchema,
   RecordEntryQuerySchema,
   SettingsPatchSchema,
   WebhookProcessSchema,
@@ -25,6 +26,7 @@ import { ESignatureConnectionService } from './esignature-connection.service.js'
 import { ESIGNATURE_OPERATIONS,ESignatureConnectionGate } from './esignature-connection-gate.service.js';
 import { ESignatureModuleHealthService } from './esignature-module-health.service.js';
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
+import { ESignatureOperationsService } from './esignature-operations.service.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureRecordEntryService } from './esignature-record-entry.service.js';
 import { ESignatureReportService } from './esignature-report.service.js';
@@ -63,6 +65,7 @@ export class ESignatureController {
     @Inject(ESignatureRequestService) private readonly requests: ESignatureRequestService,
     @Inject(ESignatureRecordEntryService) private readonly recordEntry: ESignatureRecordEntryService,
     @Inject(ESignatureReportService) private readonly reports: ESignatureReportService,
+    @Inject(ESignatureOperationsService) private readonly ops: ESignatureOperationsService,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
@@ -289,6 +292,35 @@ export class ESignatureController {
   }
 
   // ---------------------------------------------------------------------------
+  // recovery workbench (19-ES.20)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Connection health, webhook diagnostics and the recovery queues in one bounded answer.
+   *
+   * Reads the database, the redacted credential metadata and no provider endpoint. Request rows are
+   * filtered by the caller's own `SignatureRequest` record scope, so a connection operator cannot
+   * enumerate requests they could not open.
+   */
+  @Get('action/operations')
+  async operationsOverview(@Query() query: unknown) {
+    return this.ops.overview(this.parse(OperationsQuerySchema, query));
+  }
+
+  /**
+   * Retry applying one verified webhook delivery that failed or dead-lettered.
+   *
+   * This is not a resend: no provider call is made and no send is re-attempted. The delivery keeps
+   * its dedup key and the projection stays monotonic, so a repeated retry is harmless. Unverified
+   * deliveries are refused by name.
+   */
+  @HttpCode(200)
+  @Post('action/operations/webhooks/:id/retry')
+  async retryWebhookDelivery(@Param('id') id: string) {
+    return this.webhooks.retryDelivery(this.operationId(id));
+  }
+
+  // ---------------------------------------------------------------------------
   // worker-authorized operations (19-ES.11+)
   // ---------------------------------------------------------------------------
 
@@ -353,6 +385,16 @@ export class ESignatureController {
     const id = value.trim();
     if (id === '' || id.length > 64) {
       throw new InvalidQueryError('Invalid ESignature request.', { issues: [{ path: 'id', message: 'A connection identifier is at most 64 characters.' }] });
+    }
+    return id;
+  }
+
+  private operationId(value: string): string {
+    const id = value.trim();
+    if (id === '' || id.length > 64) {
+      throw new InvalidQueryError('Invalid ESignature request.', {
+        issues: [{ path: 'id', message: 'An operations record identifier is at most 64 characters.' }],
+      });
     }
     return id;
   }

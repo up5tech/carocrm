@@ -3320,6 +3320,124 @@ export interface ESignatureReportOverview {
   readonly sections: readonly ESignatureReportSection[];
 }
 
+/** Phase 19-ES.20 — the recovery workbench. All fields are redacted diagnostics, never a secret. */
+export interface ESignatureOperationCheck {
+  readonly name: string;
+  readonly ok: boolean;
+  readonly detail: string;
+}
+
+export interface ESignatureConnectionHealth {
+  readonly id: string;
+  readonly name: string;
+  readonly providerKey: string;
+  readonly environment: string;
+  readonly status: string;
+  readonly isActive: boolean;
+  readonly accountName: string | null;
+  readonly adapterMode: string;
+  readonly consentStatus: string;
+  readonly pendingAuthorization: boolean;
+  readonly token: {
+    readonly state: 'missing' | 'valid' | 'expiring' | 'expired' | 'reauthorization_required';
+    readonly expiresAt: string | null;
+    readonly hasRefreshToken: boolean;
+    readonly hasClientSecret: boolean;
+  };
+  readonly webhook: {
+    readonly configured: boolean;
+    readonly lastReceivedAt: string | null;
+    readonly pending: number;
+    readonly retryable: number;
+    readonly deadLetter: number;
+    readonly invalid: number;
+  };
+  readonly requests: Readonly<Record<string, number>>;
+  readonly lastSuccessfulApiAt: string | null;
+  readonly lastErrorAt: string | null;
+  readonly lastErrorCode: string | null;
+  readonly issues: readonly string[];
+  readonly health: 'ok' | 'attention' | 'blocked';
+}
+
+export interface ESignatureWebhookDelivery {
+  readonly id: string;
+  readonly connectionId: string | null;
+  readonly providerEnvelopeId: string | null;
+  readonly state: string;
+  readonly signatureStatus: string;
+  readonly receivedAt: string;
+  readonly processedAt: string | null;
+  readonly attemptCount: number;
+  readonly lastErrorSafe: string | null;
+  readonly contentLength: number;
+  readonly correlationId: string | null;
+  readonly retryAllowed: boolean;
+}
+
+export interface ESignatureWebhookDiagnostics {
+  readonly total: number;
+  readonly countsByState: Readonly<Record<string, number>>;
+  readonly signatureStatus: { readonly verified: number; readonly invalid: number; readonly notRequired: number };
+  readonly lastReceivedAt: string | null;
+  readonly oldestPendingAt: string | null;
+  readonly oldestPendingState: 'received' | 'retryable' | null;
+  readonly pendingLagMinutes: number | null;
+  readonly deliveries: readonly ESignatureWebhookDelivery[];
+}
+
+export interface ESignatureRecoveryRequest {
+  readonly id: string;
+  readonly status: string;
+  readonly connectionId: string | null;
+  readonly providerEnvelopeId: string | null;
+  readonly createdAt: string;
+  readonly sentAt: string | null;
+  readonly modifiedAt: string;
+  readonly lastProviderSyncAt: string | null;
+  readonly expiresAt: string | null;
+  readonly failureCategory: string | null;
+  readonly failureCode: string | null;
+  readonly failureMessageSafe: string | null;
+  readonly ageHours: number;
+  readonly reconcileAllowed: boolean;
+}
+
+export interface ESignatureRecoveryList {
+  readonly items: readonly ESignatureRecoveryRequest[];
+  readonly count: number;
+}
+
+export interface ESignatureFailedJob {
+  readonly id: string;
+  readonly job: string;
+  readonly status: string;
+  readonly attempt: number;
+  readonly maxAttempts: number;
+  readonly lastError: string | null;
+  readonly createdAt: string;
+  readonly finishedAt: string | null;
+  readonly targets: { readonly requestId: string | null; readonly inboxId: string | null };
+}
+
+export interface ESignatureOperationsOverview {
+  readonly generatedAt: string;
+  readonly moduleEnabled: boolean;
+  readonly webhooksEnabled: boolean;
+  readonly requestAccess: 'all' | 'team' | 'own' | 'none';
+  readonly connections: readonly ESignatureConnectionHealth[];
+  readonly webhook: ESignatureWebhookDiagnostics;
+  readonly worklists: {
+    readonly failed: ESignatureRecoveryList;
+    readonly stuck: ESignatureRecoveryList;
+    readonly sendUnknown: ESignatureRecoveryList;
+    readonly reconciliation: ESignatureRecoveryList;
+  };
+  readonly failedJobs: { readonly items: readonly ESignatureFailedJob[]; readonly count: number };
+  readonly checks: readonly ESignatureOperationCheck[];
+  readonly actions: { readonly canRetryWebhook: boolean; readonly canReconcile: boolean };
+}
+
 /** Phase 19-ES.18 — the capability answer for one CRM record's detail page. */
 export interface ESignatureRecordEntry {
   readonly available: boolean;

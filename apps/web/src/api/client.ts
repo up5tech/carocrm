@@ -63,6 +63,7 @@ import type {
   ESignatureEmbeddedView,
   ESignatureHealthView,
   ESignatureNavView,
+  ESignatureOperationsOverview,
   ESignatureRecordEntry,
   ESignatureReportOverview,
   ESignatureRequestDocument,
@@ -1843,6 +1844,20 @@ export const api = {
   /** The ES.19 operational aggregates, already scoped to the caller's own requests. */
   eSignatureReports: (days = 30) =>
     request<ESignatureReportOverview>(`/ESignature/action/reports?days=${encodeURIComponent(String(days))}`),
+  /** The ES.20 recovery workbench: connection health, webhook diagnostics and recovery queues. */
+  eSignatureOperations: (query: { staleAfterHours?: number; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (query.staleAfterHours !== undefined) params.set('staleAfterHours', String(query.staleAfterHours));
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    const suffix = params.toString() === '' ? '' : `?${params.toString()}`;
+    return request<ESignatureOperationsOverview>(`/ESignature/action/operations${suffix}`);
+  },
+  /** Retry applying a verified inbound delivery. Never a send; dead letters and retryable only. */
+  retryESignatureWebhook: (inboxId: string) =>
+    request<{ status: string; outcome: string; requestId: string | null; previousState: string }>(
+      `/ESignature/action/operations/webhooks/${encodeURIComponent(inboxId)}/retry`,
+      post({}),
+    ),
   eSignatureRequest: (id: string) => request<ESignatureRequestView>(`/ESignature/requests/${encodeURIComponent(id)}`),
   eSignatureRecordEntry: (entityType: string, recordId: string) =>
     request<ESignatureRecordEntry>(

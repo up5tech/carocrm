@@ -147,6 +147,9 @@ export const AUDIT_ACTIONS = [
   'send.completed',
   'provider.event_accepted',
   'provider.event_rejected',
+  // Added by ES.20: the recovery workbench retries an inbound delivery. It is an operator action on
+  // evidence, never a resend; the trail says which receipt and which state was retried.
+  'webhook.retryRequested',
   'embedded_view.created',
   'reminder.sent',
   'resend.requested',

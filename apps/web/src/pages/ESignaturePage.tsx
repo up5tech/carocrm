@@ -12,6 +12,7 @@ import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { t } from '../state/i18n.js';
 import { ESignatureConnectionsPanel } from './esignature/ESignatureConnectionsPanel.js';
+import { ESignatureOperationsPanel } from './esignature/ESignatureOperationsPanel.js';
 import { ESignatureReportsPanel } from './esignature/ESignatureReportsPanel.js';
 import { ESignatureRequestsPanel } from './esignature/ESignatureRequestsPanel.js';
 import { ESignatureTemplatesPanel } from './esignature/ESignatureTemplatesPanel.js';
@@ -112,6 +113,8 @@ export function ESignaturePage() {
       ) : null}
 
       {granted.has('use') ? <ESignatureReportsPanel days={reportDays} onDaysChange={setReportDays} /> : null}
+
+      {canReadConnections ? <ESignatureOperationsPanel /> : null}
 
       {granted.has('templateMappingManage') ? <ESignatureTemplatesPanel /> : null}
 

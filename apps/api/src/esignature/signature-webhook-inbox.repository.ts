@@ -70,6 +70,15 @@ export interface AcceptDeliveryInput {
   receivedAt?: Date;
 }
 
+export interface WebhookInboxDiagnostics {
+  readonly total: number;
+  readonly countsByState: Record<ESignatureInboxState, number>;
+  readonly signatureStatus: { readonly verified: number; readonly invalid: number; readonly notRequired: number };
+  readonly lastReceivedAt: string | null;
+  readonly oldestPendingAt: string | null;
+  readonly oldestPendingState: 'received' | 'retryable' | null;
+}
+
 @Injectable()
 export class SignatureWebhookInboxRepository {
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
@@ -151,14 +160,111 @@ export class SignatureWebhookInboxRepository {
 
   /** The operator queue: what arrived and could not be applied (plan §16, §20). */
   async listProblemDeliveries(limit = 50): Promise<SignatureWebhookDelivery[]> {
+    return this.listByState(['retryable', 'dead_letter'], limit);
+  }
+
+  /** One bounded page of deliveries in the named states, oldest first — the workbench's view. */
+  async listByState(states: readonly ESignatureInboxState[], limit = 50): Promise<SignatureWebhookDelivery[]> {
+    if (states.length === 0) return [];
     const rows = await this.db
       .selectFrom('signature_webhook_inbox')
       .selectAll()
-      .where('state', 'in', ['retryable', 'dead_letter'])
+      .where('state', 'in', [...states])
       .orderBy('received_at', 'asc')
       .limit(clamp(limit, 200))
       .execute();
     return rows.map((row) => toDelivery(row));
+  }
+
+  /**
+   * Reset a failed receipt for one operator-requested retry.
+   *
+   * Only a retryable or dead-letter receipt with a verified (or intentionally unrequired) signature
+   * qualifies; an invalid one is evidence of a rejected POST and can never be applied. The attempt
+   * counter is reset because a manual retry is a fresh, bounded attempt — without that, the very next
+   * failure would immediately dead-letter again. Returns whether this call won the state race.
+   */
+  async resetForRetry(id: string): Promise<boolean> {
+    const result = await this.db
+      .updateTable('signature_webhook_inbox')
+      .set({ state: 'retryable', attempt_count: 0, processed_at: null, last_error_safe: null })
+      .where('id', '=', id)
+      .where('state', 'in', ['retryable', 'dead_letter'])
+      .where('signature_status', 'in', ['verified', 'not_required'])
+      .executeTakeFirst();
+    return (result.numUpdatedRows ?? 0n) > 0n;
+  }
+
+  /** Counters and ages for the webhook diagnostics view; optionally narrowed to one connection. */
+  async diagnostics(connectionId?: string): Promise<WebhookInboxDiagnostics> {
+    const states = await (connectionId === undefined
+      ? this.db.selectFrom('signature_webhook_inbox').select('state')
+      : this.db.selectFrom('signature_webhook_inbox').select('state').where('connection_id', '=', connectionId))
+      .select((eb) => eb.fn.countAll<string>().as('n'))
+      .groupBy('state')
+      .execute();
+    const signatures = await (connectionId === undefined
+      ? this.db.selectFrom('signature_webhook_inbox').select('signature_status')
+      : this.db
+          .selectFrom('signature_webhook_inbox')
+          .select('signature_status')
+          .where('connection_id', '=', connectionId))
+      .select((eb) => eb.fn.countAll<string>().as('n'))
+      .groupBy('signature_status')
+      .execute();
+    const total = await (connectionId === undefined
+      ? this.db.selectFrom('signature_webhook_inbox').select((eb) => eb.fn.countAll<string>().as('n'))
+      : this.db
+          .selectFrom('signature_webhook_inbox')
+          .select((eb) => eb.fn.countAll<string>().as('n'))
+          .where('connection_id', '=', connectionId))
+      .executeTakeFirst();
+    const last = await (connectionId === undefined
+      ? this.db.selectFrom('signature_webhook_inbox').select('received_at')
+      : this.db.selectFrom('signature_webhook_inbox').select('received_at').where('connection_id', '=', connectionId))
+      .orderBy('received_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    const oldestPending = await (connectionId === undefined
+      ? this.db
+          .selectFrom('signature_webhook_inbox')
+          .select(['received_at', 'state'])
+          .where('state', 'in', ['received', 'retryable'])
+      : this.db
+          .selectFrom('signature_webhook_inbox')
+          .select(['received_at', 'state'])
+          .where('state', 'in', ['received', 'retryable'])
+          .where('connection_id', '=', connectionId))
+      .orderBy('received_at', 'asc')
+      .limit(1)
+      .executeTakeFirst();
+
+    const countsByState = Object.fromEntries(INBOX_STATES.map((state) => [state, 0])) as Record<ESignatureInboxState, number>;
+    for (const row of states) {
+      if ((INBOX_STATES as readonly string[]).includes(row.state)) {
+        countsByState[row.state as ESignatureInboxState] = Number.parseInt(row.n, 10) || 0;
+      }
+    }
+    const signatureStatus = { verified: 0, invalid: 0, notRequired: 0 };
+    for (const row of signatures) {
+      const count = Number.parseInt(row.n, 10) || 0;
+      if (row.signature_status === 'verified') signatureStatus.verified = count;
+      else if (row.signature_status === 'invalid') signatureStatus.invalid = count;
+      else if (row.signature_status === 'not_required') signatureStatus.notRequired = count;
+    }
+    return {
+      total: Number.parseInt(total?.n ?? '0', 10) || 0,
+      countsByState,
+      signatureStatus,
+      lastReceivedAt: last === undefined ? null : last.received_at.toISOString(),
+      oldestPendingAt: oldestPending === undefined ? null : oldestPending.received_at.toISOString(),
+      oldestPendingState:
+        oldestPending === undefined
+          ? null
+          : oldestPending.state === 'received' || oldestPending.state === 'retryable'
+            ? oldestPending.state
+            : null,
+    };
   }
 
   async countsByState(): Promise<Record<ESignatureInboxState, number>> {

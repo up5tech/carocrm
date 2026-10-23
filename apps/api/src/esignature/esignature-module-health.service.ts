@@ -18,6 +18,7 @@ import {
   PENDING_FEATURES,
   REQUIRED_CAPABILITIES,
 } from './esignature-module.js';
+import { ESignatureOperationsService } from './esignature-operations.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { type SignatureProviderDescriptor, SignatureProviderRegistry } from './providers/signature-provider.registry.js';
 
@@ -108,6 +109,7 @@ export class ESignatureModuleHealthService {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(HookRegistry) private readonly hooks: HookRegistry,
     @Inject(SignatureProviderRegistry) private readonly providers: SignatureProviderRegistry,
+    @Inject(ESignatureOperationsService) private readonly operations: ESignatureOperationsService,
   ) {}
 
   async health(): Promise<ESignatureHealthView> {
@@ -229,6 +231,10 @@ export class ESignatureModuleHealthService {
           : 'No return-host allowlist is configured, so an embedded signing view cannot be generated.',
       },
     ];
+    // ES.20: token refresh, Connect secret, recent provider failure, inbox backlog and credential age.
+    // These read stored stamps and credential metadata only; a provider outage cannot make this
+    // endpoint fail or slow down, and no check calls the provider.
+    checks.push(...(await this.operations.healthChecks()));
 
     return {
       module: {

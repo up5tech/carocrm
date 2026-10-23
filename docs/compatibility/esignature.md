@@ -1,17 +1,18 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 to 19-ES.19 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 through 19-ES.19 delivered** (ES.1 registers the module and the security contract;
+> Phase 19-ES.0 to 19-ES.20 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 through 19-ES.20 delivered** (ES.1 registers the module and the security contract;
 > ES.2 adds the schema and the domain rules; ES.3 adds the provider contract, the registry and the
 > in-process fake; ES.4 adds DocuSign's OAuth grant, the connection lifecycle and the live adapter;
 > ES.5–ES.10 add documents, drafts, templates, preparation and the controlled send; ES.11–ES.16 add
 > Connect intake and projection, the progress UI, embedded signing, completed artifacts, and
-> reminders/void; ES.17 adds the approval policy and decision workflow; ES.18 adds the lifecycle outbox events and the CRM record entry point; ES.19 adds authorized request search, the operational reports and the ESignature dashlet). **Nothing in this module has
+> reminders/void; ES.17 adds the approval policy and decision workflow; ES.18 adds the lifecycle outbox events and the CRM record entry point; ES.19 adds authorized request search, the operational reports and the ESignature dashlet; ES.20 adds the operations and recovery workbench, guarded webhook retry and the runbook). **Nothing in this module has
 > been verified against a live DocuSign account**: every
 > provider behaviour below was proved against an injected stub transport or the fake adapter, and the
 > demo-account validation is ES.22's.
 > Evidence: `docs/implementation/esignature-es1-completion-report.md` through
-> `esignature-es19-completion-report.md` (one report per delivered sub-phase).
+> `esignature-es20-completion-report.md` (one report per delivered sub-phase);
+> operations procedures: `docs/runbooks/esignature-operations.md`.
 > Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`.
 > Webhook prefix: `/api/v1/integrations/esignature`.
 > Note: the Connect HMAC scheme is implemented from DocuSign's documented
@@ -89,6 +90,9 @@ redirect URIs, secrets and stored account identities are fully separate.
 | CRM record entry points | **Delivered ES.18** | `GET /api/v1/ESignature/action/record-entry` answers availability for a record detail page. Account/Contact are core; Opportunity/Quote/SalesOrder/Invoice, Project/ProjectTask, Case, Campaign and CustomerSuccessProfile are candidates only while their metadata entity exists. The generic SPA card disappears on `available:false`; no optional module is imported by ESignature and no downstream business state is changed automatically. |
 | Authorized request search and filters | **Delivered ES.19** | `GET /api/v1/ESignature/requests` accepts `q` (request name/subject/source record id), `recipient` (signer snapshot name/email), status/approval/attention filters and ISO `createdFrom/To`, `sentFrom/To`, `completedFrom/To` bounds. Every predicate is applied **after** the caller's record scope, so a search can never reveal that a request outside their rows exists. |
 | Operational reports and dashlet | **Delivered ES.19** | `GET /api/v1/ESignature/action/reports?days=N` returns the curated aggregates; `…/action/reports/:key` runs one. The dashboard's existing `POST /Dashboard/:id/dashlets` accepts the `esignature` kind (`{view, days}`), and `…/action/run` executes it **as the reader**, not the dashboard owner. No aggregate returns a request name, recipient name/email, message, document or URL. |
+| Operations and recovery workbench | **Delivered ES.20** | `GET /api/v1/ESignature/action/operations?staleAfterHours&limit` returns connection health (token/webhook/credential facts, no values), webhook inbox counters and deliveries, four request queues (failed, stuck, send_unknown, reconciliation) and failed `esignature.%` jobs. Request rows obey the caller's `SignatureRequest` record scope; the panel requires `SignatureConnection:read`. No provider call is made to build the view. |
+| Guarded webhook retry | **Delivered ES.20** | `POST …/action/operations/webhooks/:id/retry` requires `connectionManage`, a verified (or explicitly unrequired) signature, and a `retryable`/`dead_letter` state. It resets the attempt window and re-runs `processDelivery`; it never calls a provider send. A repeated retry is refused by state, and every attempt writes `webhook.retryRequested`. There is no request-send retry route; `provider_error` rows are recover→send from the detail page, and `send_unknown`/stuck rows are reconcile-only. |
+| ES.20 health checks | **Delivered ES.20** | `/action/health` adds `token_refresh`, `webhook_secrets`, `provider_errors`, `webhook_inbox` and `credential_age`, derived from stored stamps and credential metadata. They report `ok:false` as data; a provider outage cannot fail the endpoint. |
 
 ### 3.1 Report date and status definitions (delivered ES.19)
 
@@ -111,7 +115,22 @@ Status meanings are the ES.12 vocabulary documented in §4 below. "Completed" he
 local status `completed`, reachable only from a verified provider event or reconciliation — never an
 inference from all recipients signing.
 
+### 3.2 Recovery queue and retry definitions (delivered ES.20)
 
+- **Stuck** — `sending` for more than 15 minutes, or an in-flight request (`sent`, `delivered`,
+  `partially_signed`) whose `coalesce(last_provider_sync_at, sent_at, modified_at)` is older than the
+  workbench's `staleAfterHours` (default 24), or whose `expires_at` has passed.
+- **Failed / send-unknown / reconciliation** — the exact statuses `provider_error`, `send_unknown`
+  and `reconciliation_required`. They are disjoint, not inferred.
+- **Reconcile** is offered for a stuck or ambiguous request and is the only recovery for
+  `send_unknown`. A `provider_error` row explicitly reports `reconcileAllowed: false`; its recovery is
+  the deliberate recover→send path on the detail page, which re-runs approval and the send guard.
+- **Webhook retry** applies only to a `verified` (or explicitly `not_required`) receipt in
+  `retryable` or `dead_letter`. It resets the bounded attempt window and re-runs the normal
+  projection; the dedup key is unchanged. An `invalid` receipt is never applied.
+- **No request-send retry exists** in any API. This is the structural answer to duplicate sends.
+
+## 4. Local state ↔ provider state mapping (delivered ES.12 — live fixtures pending ES.22)
 
 Local request states (plan §4.7): `draft`, `pending_approval`, `ready_to_send`, `sending`,
 `send_unknown`, `sent`, `delivered` (aggregate, only if unambiguous), `partially_signed`,

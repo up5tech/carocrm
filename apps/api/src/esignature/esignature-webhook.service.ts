@@ -1,4 +1,4 @@
-import { ValidationError } from '@carocrm/core/errors/index.js';
+import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import type { RequestScope } from '../common/request-scope.js';
@@ -8,8 +8,10 @@ import { runInTransaction } from '../entity/tx-context.js';
 import { EventBus } from '../events/event-bus.js';
 import { JobsService } from '../jobs/jobs.service.js';
 import { ESignatureCredentialVault } from './esignature-credential-vault.js';
+import { signatureModuleDisabledError } from './esignature-errors.js';
 import { buildSignatureEvent, eventForStatus } from './esignature-events.js';
 import { ESIGNATURE_ARTIFACT_JOB,ESIGNATURE_WEBHOOK_PROCESS_JOB } from './esignature-jobs.js';
+import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { mapProviderEvent, normalizeProviderEventType } from './esignature-status-mapper.js';
 import type { ProviderWebhookNotification } from './providers/signature-provider.port.js';
@@ -75,6 +77,7 @@ export class ESignatureWebhookService {
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(ESignatureSettingsService) private readonly settings: ESignatureSettingsService,
+    @Inject(ESignaturePermissionService) private readonly permissions: ESignaturePermissionService,
     @Inject(ESignatureCredentialVault) private readonly vault: ESignatureCredentialVault,
     @Inject(SignatureConnectionRepository) private readonly connections: SignatureConnectionRepository,
     @Inject(SignatureProviderRegistry) private readonly providers: SignatureProviderRegistry,
@@ -393,6 +396,58 @@ export class ESignatureWebhookService {
       else retryable += 1;
     }
     return { processed, retryable, deadLetter };
+  }
+
+  /**
+   * Operator-requested retry of one inbound delivery (ES.20).
+   *
+   * This is a retry of **applying evidence**, not a resend. It refuses anything that is not a
+   * verified, retryable/dead-letter receipt, resets the bounded attempt window, and lets the normal
+   * `processDelivery` path run with its transaction, monotonic projection and dedup key untouched —
+   * so a retry can never create a second transition or artifact. Every call is audited with the
+   * receipt id, the state it was in and the outcome.
+   */
+  async retryDelivery(inboxId: string): Promise<WebhookProcessResult & { previousState: string }> {
+    await this.permissions.assert('connectionManage');
+    const settingsView = await this.settings.read();
+    if (settingsView.settings.enabled !== true || settingsView.effective.webhooks !== true) {
+      throw signatureModuleDisabledError('ESignature.webhooks');
+    }
+    const delivery = await this.inbox.findById(inboxId);
+    if (delivery === undefined) throw new NotFoundError(`No webhook delivery "${inboxId}".`);
+    if (delivery.signatureStatus === 'invalid') {
+      throw new ValidationError('An unverified delivery is evidence of a rejected call and cannot be applied.', {
+        code: 'SIGNATURE_WEBHOOK_REJECTED',
+        inboxId,
+      });
+    }
+    if (delivery.state !== 'retryable' && delivery.state !== 'dead_letter') {
+      throw new ValidationError('Only a retryable or dead-letter delivery can be retried.', {
+        code: 'SIGNATURE_REQUEST_INVALID_STATE',
+        inboxId,
+        state: delivery.state,
+      });
+    }
+    const reset = await this.inbox.resetForRetry(delivery.id);
+    if (!reset) {
+      throw new ValidationError('The delivery changed state before the retry; reload the workbench.', {
+        code: 'SIGNATURE_REQUEST_INVALID_STATE',
+        inboxId,
+      });
+    }
+
+    const result = await this.processDelivery(delivery.id);
+    const principal = this.scope.principal;
+    await this.audit.append({
+      action: 'webhook.retryRequested',
+      connectionId: delivery.connectionId,
+      actor: principal === undefined ? { type: 'system' } : { type: 'user', id: principal.userId, name: principal.userName },
+      outcome: result.status === 'processed' || result.status === 'ignored' || result.status === 'duplicate' ? 'ok' : 'refused',
+      reasonSafe: result.outcome,
+      detail: { inboxId: delivery.id, previousState: delivery.state, attemptCount: delivery.attemptCount },
+      correlationId: delivery.correlationId,
+    });
+    return { ...result, previousState: delivery.state };
   }
 
   private async recordFailure(inboxId: string, requestId: string, attempt: number, error: unknown): Promise<WebhookProcessResult> {

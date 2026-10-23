@@ -350,6 +350,24 @@ export const ESignatureDashletConfigSchema = z
   .strict();
 
 // ---------------------------------------------------------------------------
+// Phase 19-ES.20 — the recovery workbench (plan §16, §18)
+// ---------------------------------------------------------------------------
+
+/**
+ * The workbench query.
+ *
+ * `staleAfterHours` is how long an in-flight envelope may go without a provider projection before it
+ * appears in the stuck list; it never changes what an action does. `limit` bounds every list in the
+ * answer; the counters are computed over the whole population.
+ */
+export const OperationsQuerySchema = z
+  .object({
+    staleAfterHours: z.coerce.number().int().min(1).max(720).default(24),
+    limit: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
 // Phase 19-ES.7 — template mappings (plan §6.7, §8.2)
 // ---------------------------------------------------------------------------
 
