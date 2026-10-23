@@ -1,12 +1,12 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 to 19-ES.20 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 through 19-ES.20 delivered** (ES.1 registers the module and the security contract;
+> Phase 19-ES.0 to 19-ES.22 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 through 19-ES.22 delivered** (ES.1 registers the module and the security contract;
 > ES.2 adds the schema and the domain rules; ES.3 adds the provider contract, the registry and the
 > in-process fake; ES.4 adds DocuSign's OAuth grant, the connection lifecycle and the live adapter;
 > ES.5–ES.10 add documents, drafts, templates, preparation and the controlled send; ES.11–ES.16 add
 > Connect intake and projection, the progress UI, embedded signing, completed artifacts, and
-> reminders/void; ES.17 adds the approval policy and decision workflow; ES.18 adds the lifecycle outbox events and the CRM record entry point; ES.19 adds authorized request search, the operational reports and the ESignature dashlet; ES.20 adds the operations and recovery workbench, guarded webhook retry and the runbook). **Nothing in this module has
+> reminders/void; ES.17 adds the approval policy and decision workflow; ES.18 adds the lifecycle outbox events and the CRM record entry point; ES.19 adds authorized request search, the operational reports and the ESignature dashlet; ES.20 adds the operations and recovery workbench, guarded webhook retry and the runbook; ES.21 records the threat-model/security review, retention and release hardening; ES.22 records the fake-adapter end-to-end QA, verification matrix and release readiness). **Nothing in this module has
 > been verified against a live DocuSign account**: every
 > provider behaviour below was proved against an injected stub transport or the fake adapter, and the
 > demo-account validation is ES.22's.
@@ -189,7 +189,7 @@ terminal state backwards; ambiguity triggers reconciliation (plan §4.7, §10.3)
 | --- | --- |
 | Fake adapter (no provider) — full lifecycle | **Delivered ES.3** — the initial slice runs end to end against it, including the lost-send/`send_unknown` recovery (`apps/api/test/esignature-flow.test.ts`). It is bound outside production, so a development install answers a Test Connection from the fake and the API says so (`adapterMode`). |
 | Live DocuSign adapter | **Delivered ES.4–ES.16** — every operation except `correctEnvelope` | Connection, templates, envelope preparation/send, status and recipients, recipient view, resend, void, signed documents, certificate and Connect verification are implemented; correction remains declared `false`, so the gate refuses it by name (plan §5.2). |
-| DocuSign demo/developer account, single account, authorization-code grant, remote signing, Connect events | Planned deliberate smoke test in ES.22 with synthetic documents/signers; recorded here with date when executed |
+| DocuSign demo/developer account, single account, authorization-code grant, remote signing, Connect events | Operator step for ES.22; not executed in this environment (no credentials). Fake-adapter E2E passed. Record date and outcome here when performed |
 | Production account | Not tested; remains disabled until an explicit administrator enablement (plan §9.4) |
 
 ## 8. Environment and secret handling (names only)
