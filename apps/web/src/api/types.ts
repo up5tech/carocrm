@@ -3310,6 +3310,11 @@ export interface ESignatureEmbeddedView {
   readonly url: string;
   readonly expiresAt: string | null;
 }
+
+/** Phase 19-ES.15 — what a completed-artifact retrieval stored. */
+export interface ESignatureArtifactRetrieval {
+  readonly artifacts: readonly ESignatureRequestDocument[];
+  readonly created: number;
 }
 
 // Phase 19-ES.7 — the template catalog and the mappings built from it.

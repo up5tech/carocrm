@@ -171,6 +171,13 @@ export class ESignatureRequestController {
     return this.requests.createEmbeddedView(this.id(id), this.parse(RequestEmbeddedViewSchema, body));
   }
 
+  /** Retrieve the signed documents and the certificate of completion (ES.15). Idempotent. */
+  @HttpCode(200)
+  @Post(':id/artifacts/retrieve')
+  async retrieveArtifacts(@Param('id') id: string) {
+    return this.requests.retrieveCompletedArtifacts(this.id(id));
+  }
+
   @Get(':id/recipients')
   async recipients(@Param('id') id: string) {
     return this.requests.listRecipients(this.id(id));

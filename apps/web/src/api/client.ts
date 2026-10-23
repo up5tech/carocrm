@@ -55,6 +55,7 @@ import type {
   EmailTemplatePreviewView,
   EmailTransportInfo,
   EntityDefinition,
+  ESignatureArtifactRetrieval,
   ESignatureAuthorizationStart,
   ESignatureCapabilitiesView,
   ESignatureConnectionTest,
@@ -1855,6 +1856,8 @@ export const api = {
     ),
   createESignatureEmbeddedView: (id: string, input: { recipientId: string; returnUrl: string; cancelUrl?: string | null }) =>
     request<ESignatureEmbeddedView>(`/ESignature/requests/${encodeURIComponent(id)}/embedded-view`, post(input)),
+  retrieveESignatureArtifacts: (id: string) =>
+    request<ESignatureArtifactRetrieval>(`/ESignature/requests/${encodeURIComponent(id)}/artifacts/retrieve`, post({})),
   /** Delete the provider draft while nothing has been sent. */
   abandonESignatureEnvelope: (id: string) =>
     request<{ request: ESignatureRequestView; deleted: boolean }>(`/ESignature/requests/${encodeURIComponent(id)}/envelope/abandon`, post({})),

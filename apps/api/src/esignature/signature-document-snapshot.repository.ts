@@ -209,6 +209,30 @@ export class SignatureDocumentSnapshotRepository {
     return row === undefined ? undefined : toSnapshot(row);
   }
 
+  /**
+   * The artifact already recorded for this provider document.
+   *
+   * The provider's document id and the content hash are two independent identities; a retried
+   * retrieval may match either, and never stores a second object for the same evidence (plan §16).
+   */
+  async findByProviderDocumentId(
+    requestId: string,
+    kind: SignatureArtifactKind,
+    providerDocumentId: string,
+  ): Promise<SignatureDocumentSnapshot | undefined> {
+    const id = providerDocumentId.trim();
+    if (id === '') return undefined;
+    const row = await this.db
+      .selectFrom('signature_document_snapshots')
+      .selectAll()
+      .where('request_id', '=', requestId)
+      .where('artifact_kind', '=', kind)
+      .where('provider_document_id', '=', id)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirst();
+    return row === undefined ? undefined : toSnapshot(row);
+  }
+
   /** A snapshot the caller named, or a refusal: an unknown id is not an empty result (plan §4.5). */
   async requireById(id: string): Promise<SignatureDocumentSnapshot> {
     const found = await this.findById(id);

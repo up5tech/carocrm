@@ -211,6 +211,9 @@ export const RequestEmbeddedViewSchema = z
 /** The worker's webhook-processing payload: the durable inbox row, nothing else. */
 export const WebhookProcessSchema = z.object({ inboxId: z.string().trim().min(1).max(64) }).strict();
 
+/** The worker's artifact-retrieval payload. */
+export const ArtifactRetrieveSchema = z.object({ requestId: z.string().trim().min(1).max(64) }).strict();
+
 export const RequestDocumentAttachSchema = z
   .object({
     attachmentId: z.string().trim().min(1).max(64),

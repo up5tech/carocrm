@@ -320,8 +320,11 @@ export class ESignatureDocumentService {
    * owning request are both checked first (plan §4.5).
    */
   async openSnapshot(snapshotId: string): Promise<{ snapshot: SignatureDocumentSnapshot; bytes: Buffer }> {
-    await this.assertDocumentsAllowed('use');
     const snapshot = await this.snapshots.requireById(snapshotId);
+    // A completed document is `artifacts` material; the source bytes are `documents` material. Reading
+    // a signed copy must not require the attachment feature to be switched on (ES.15).
+    const derived = snapshot.artifactKind === 'provider_signed_document' || snapshot.artifactKind === 'completion_evidence';
+    await this.assertDocumentsAllowed('use', { allowArtifacts: derived });
     await this.requests.requireById(snapshot.requestId);
     if (snapshot.storageRef === null) throw signatureDocumentNotReadableError('storage_unavailable', { filename: snapshot.displayName });
     let bytes: Buffer;
@@ -444,10 +447,12 @@ export class ESignatureDocumentService {
    * (plan §12) and the provider is not contacted here. The module and `documents` switches are checked
    * because a disabled module must not be writing files.
    */
-  private async assertDocumentsAllowed(capability: 'use' | 'manageDraft'): Promise<ESignatureSettings> {
+  private async assertDocumentsAllowed(capability: 'use' | 'manageDraft', options: { allowArtifacts?: boolean } = {}): Promise<ESignatureSettings> {
     await this.permissions.assert(capability);
     const view = await this.settingsService.read();
-    if (view.settings.enabled !== true || view.settings.features.documents !== true) {
+    const documents = view.settings.enabled === true && view.settings.features.documents === true;
+    const artifacts = options.allowArtifacts === true && view.settings.enabled === true && view.effective.artifacts === true;
+    if (!documents && !artifacts) {
       throw signatureModuleDisabledError('ESignature/documents');
     }
     return view.settings;

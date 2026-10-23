@@ -9,6 +9,7 @@ import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
 import {
+  ArtifactRetrieveSchema,
   ConnectionAuthorizeSchema,
   ConnectionCreateSchema,
   ConnectionSecretSchema,
@@ -23,6 +24,7 @@ import { ESIGNATURE_OPERATIONS,ESignatureConnectionGate } from './esignature-con
 import { ESignatureModuleHealthService } from './esignature-module-health.service.js';
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
+import { ESignatureRequestService } from './esignature-request.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { ESignatureWebhookService } from './esignature-webhook.service.js';
 
@@ -54,6 +56,7 @@ export class ESignatureController {
     @Inject(ESignatureConnectionGate) private readonly gate: ESignatureConnectionGate,
     @Inject(ESignatureConnectionService) private readonly connections: ESignatureConnectionService,
     @Inject(ESignatureWebhookService) private readonly webhooks: ESignatureWebhookService,
+    @Inject(ESignatureRequestService) private readonly requests: ESignatureRequestService,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
@@ -263,6 +266,21 @@ export class ESignatureController {
     this.assertWorkerSecret(secret);
     const { inboxId } = this.parse(WebhookProcessSchema, body);
     return runAsESignatureSystem(this.scope, 'process-webhook', () => this.webhooks.processDelivery(inboxId));
+  }
+
+  /**
+   * Retrieve a completed request's signed documents and completion certificate.
+   *
+   * The job is enqueued when a completion event is projected; an operator may also trigger it. The
+   * command is idempotent, so a redelivered job stores nothing new.
+   */
+  @Public()
+  @HttpCode(200)
+  @Post('action/retrieve-artifacts')
+  async retrieveArtifactsForWorker(@Headers('x-worker-secret') secret: string | undefined, @Body() body: unknown) {
+    this.assertWorkerSecret(secret);
+    const { requestId } = this.parse(ArtifactRetrieveSchema, body);
+    return runAsESignatureSystem(this.scope, 'retrieve-artifacts', () => this.requests.retrieveCompletedArtifacts(requestId));
   }
 
   private assertWorkerSecret(supplied: string | undefined): void {

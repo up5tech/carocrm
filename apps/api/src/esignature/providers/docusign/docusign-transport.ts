@@ -27,12 +27,16 @@ export interface DocuSignHttpRequest {
   readonly headers?: Readonly<Record<string, string>>;
   readonly body?: string;
   readonly timeoutMs?: number;
+  /** Read the answer as bytes (a signed PDF or a certificate), not as text. */
+  readonly binary?: boolean;
 }
 
 export interface DocuSignHttpResponse {
   readonly status: number;
   readonly headers: Readonly<Record<string, string>>;
   readonly body: string;
+  /** Present when the request asked for `binary: true`. */
+  readonly bytes?: Uint8Array;
 }
 
 /** The transport seam. A test injects a stub and no socket is ever opened (plan §17.3). */
@@ -116,12 +120,18 @@ export function createDocuSignTransport(options: DocuSignTransportOptions = {}):
         // A transport failure is classified with the platform's own rules and carries no body.
         throw errorForTransport(error);
       }
-      const body = await response.text().catch(() => '');
+      let body = '';
+      let bytes: Uint8Array | undefined;
+      if (input.binary === true) {
+        bytes = new Uint8Array(await response.arrayBuffer());
+      } else {
+        body = await response.text().catch(() => '');
+      }
       const headers: Record<string, string> = {};
       response.headers.forEach((value, key) => {
         headers[key.toLowerCase()] = value;
       });
-      return { status: response.status, headers, body };
+      return { status: response.status, headers, body, ...(bytes === undefined ? {} : { bytes }) };
     },
   };
 }

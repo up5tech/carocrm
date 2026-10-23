@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { ProviderError } from '../../../advanced-integrations/provider-error.js';
 import { PROVIDER_KEY_DOCUSIGN } from '../../esignature-domain.js';
 import { normalizeEnvelopeStatus, normalizeProviderEventType, normalizeRecipientStatus } from '../../esignature-status-mapper.js';
@@ -25,7 +27,6 @@ import {
   type SignatureProviderAdapter,
   type SignatureProviderCapabilities,
   type SignatureProviderContext,
-  type SignatureProviderOperation,
   type VerifyWebhookInput,
 } from '../signature-provider.port.js';
 import { rawBodyHash, readSignatureHeaders, verifyConnectSignature } from '../signature-provider-signature.js';
@@ -75,6 +76,9 @@ export const DOCUSIGN_ES4_CAPABILITIES: SignatureProviderCapabilities = Object.f
   verifyWebhook: true,
   // ES.14 — embedded signing. ES.16 — reminder/resend and void.
   recipientView: true,
+  // ES.15 — completed documents and the certificate of completion.
+  downloadCompletedDocuments: true,
+  downloadCompletionEvidence: true,
 });
 
 /** A stable code for the health view. Never a provider body, never a token. */
@@ -486,8 +490,6 @@ export class DocuSignAdapter implements SignatureProviderAdapter {
     return parseRecipientCollections(parseJson(response.body));
   }
 
-  async downloadCompletedDocuments(_context: SignatureProviderContext, _providerEnvelopeId: string): Promise<readonly ProviderArtifact[]> {
-    throw this.refuse('downloadCompletedDocuments');
   /**
    * Ask DocuSign for one signer's embedded signing URL (ES.14).
    *
@@ -525,16 +527,82 @@ export class DocuSignAdapter implements SignatureProviderAdapter {
     return { url, expiresAt: new Date(Date.now() + 5 * 60_000).toISOString() };
   }
 
-  async downloadCompletionEvidence(_context: SignatureProviderContext, _providerEnvelopeId: string): Promise<readonly ProviderArtifact[]> {
-    throw this.refuse('downloadCompletionEvidence');
   }
 
   }
 
-  private refuse(operation: SignatureProviderOperation): NotSupportedByProviderError {
-    // Reaching this line means the caller did not ask the registry first. The refusal is the same one
-    // the registry would have produced, so the observable contract does not depend on the path taken.
-    return new NotSupportedByProviderError(operation, this.providerKey);
+  /**
+   * The signed documents as new artifacts (ES.15).
+   *
+   * The list call names each document; the bytes are fetched one by one and hashed locally, because
+   * the content hash is what makes a retried retrieval a no-op. A certificate in the list is skipped:
+   * it is completion evidence, not a signed document.
+   */
+  async downloadCompletedDocuments(context: SignatureProviderContext, providerEnvelopeId: string): Promise<readonly ProviderArtifact[]> {
+    const id = providerEnvelopeId.trim();
+    if (id === '') throw invalidEnvelopeId();
+    const list = await this.transport.request({
+      method: 'GET',
+      url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/envelopes/${encodeURIComponent(id)}/documents`,
+      headers: { authorization: `Bearer ${context.accessToken}` },
+      timeoutMs: context.timeoutMs,
+    });
+    if (list.status >= 400) throw providerErrorForStatus(list.status);
+    const body = parseJson(list.body);
+    const entries = Array.isArray(body['envelopeDocuments']) ? (body['envelopeDocuments'] as unknown[]) : [];
+    const documents = entries
+      .map((entry) => parseEnvelopeDocument(entry))
+      .filter((entry): entry is { documentId: string; name: string; mimeType: string } => entry !== null)
+      .filter((entry) => entry.documentId !== 'certificate');
+
+    const artifacts: ProviderArtifact[] = [];
+    for (const document of documents) {
+      const bytes = await this.downloadDocumentBytes(context, id, document.documentId);
+      artifacts.push({
+        artifactKind: 'provider_signed_document',
+        providerDocumentId: document.documentId,
+        displayName: document.name,
+        mimeType: document.mimeType,
+        bytes,
+        contentHashSha256: sha256(bytes),
+        retrievedAt: new Date().toISOString(),
+      });
+    }
+    if (artifacts.length > 0) return artifacts;
+
+    // No list (an older account, or a response shape this adapter does not know): the combined PDF is
+    // the provider's own single signed document, and it is better than losing the evidence.
+    const combined = await this.downloadDocumentBytes(context, id, 'combined');
+    return [
+      {
+        artifactKind: 'provider_signed_document',
+        providerDocumentId: 'combined',
+        displayName: 'signed-document.pdf',
+        mimeType: 'application/pdf',
+        bytes: combined,
+        contentHashSha256: sha256(combined),
+        retrievedAt: new Date().toISOString(),
+      },
+    ];
+  }
+
+  /** The provider's certificate of completion, as a derived artifact (ES.15). */
+  async downloadCompletionEvidence(context: SignatureProviderContext, providerEnvelopeId: string): Promise<readonly ProviderArtifact[]> {
+    const id = providerEnvelopeId.trim();
+    if (id === '') throw invalidEnvelopeId();
+    const bytes = await this.downloadDocumentBytes(context, id, 'certificate');
+    return [
+      {
+        artifactKind: 'completion_evidence',
+        providerDocumentId: 'certificate',
+        displayName: 'certificate-of-completion.pdf',
+        mimeType: 'application/pdf',
+        bytes,
+        contentHashSha256: sha256(bytes),
+        retrievedAt: new Date().toISOString(),
+      },
+    ];
+  }
 
   /**
    * Verify and normalize one Connect delivery (ES.11).
@@ -611,6 +679,18 @@ export class DocuSignAdapter implements SignatureProviderAdapter {
       receivedAt,
     };
   }
+
+  private async downloadDocumentBytes(context: SignatureProviderContext, envelopeId: string, documentId: string): Promise<Uint8Array> {
+    const response = await this.transport.request({
+      method: 'GET',
+      url: `${restBase(context.baseUri)}/accounts/${encodeURIComponent(context.accountId)}/envelopes/${encodeURIComponent(envelopeId)}/documents/${encodeURIComponent(documentId)}`,
+      headers: { authorization: `Bearer ${context.accessToken}` },
+      timeoutMs: context.timeoutMs,
+      binary: true,
+    });
+    if (response.status >= 400) throw providerErrorForStatus(response.status);
+    if (response.bytes !== undefined) return response.bytes;
+    return new TextEncoder().encode(response.body);
   }
 }
 
@@ -669,6 +749,19 @@ function parseRecipientCollections(value: unknown): ProviderRecipientStatus[] {
   return out;
 }
 
+/** One entry of `GET /envelopes/{id}/documents`. */
+function parseEnvelopeDocument(entry: unknown): { documentId: string; name: string; mimeType: string } | null {
+  const document = asObject(entry);
+  const documentId = stringOf(document['documentId']);
+  if (documentId === null) return null;
+  const name = stringOf(document['name']) ?? stringOf(document['documentName']) ?? `document-${documentId}.pdf`;
+  return {
+    documentId,
+    name: name.slice(0, 250),
+    mimeType: name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream',
+  };
+}
+
 /** The recipient a Connect payload names, when it names one. */
 function connectRecipient(connect: Record<string, unknown>): { status: string | null } {
   const recipients = asObject(connect['recipients']);
@@ -713,6 +806,10 @@ function unverifiedWebhook(
     payloadHash,
     receivedAt,
   };
+}
+
+function sha256(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
 /** The lower-case extension DocuSign expects for a document, defaulting to `pdf` when a name has none. */

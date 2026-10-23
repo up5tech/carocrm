@@ -86,6 +86,7 @@ export function ESignaturePage() {
         />
       )}
 
+          canVoid={granted.has('void')}
 
       {granted.has('templateMappingManage') ? <ESignatureTemplatesPanel /> : null}
 

@@ -308,6 +308,15 @@ function RequestDetail(props: {
           void detail.refetch();
         }}
       />
+      <DocumentsList
+        requestId={request.id}
+        documents={[...request.documents]}
+        editable={request.editable && props.canPrepare}
+        canDownloadDerived={props.canDownload}
+        onChanged={() => {
+          props.onDocumentsChanged();
+          void detail.refetch();
+        }}
       />
       <TimelineSection requestId={request.id} />
     </Space>
@@ -870,6 +879,7 @@ function DocumentsList(props: {
   requestId: string;
   documents: ESignatureRequestDocument[];
   editable: boolean;
+  canDownloadDerived?: boolean;
   onChanged: () => void;
 }) {
   const { message } = AntApp.useApp();
@@ -941,7 +951,12 @@ function DocumentsList(props: {
               title: '',
               key: 'actions',
               width: 90,
-              render: (_unknown: unknown, row) => (
+              render: (_unknown: unknown, row) => {
+                const derived = row.artifactKind === 'provider_signed_document' || row.artifactKind === 'completion_evidence';
+                // The server refuses a derived download without `downloadCompleted`; the button says so
+                // before the click instead of turning into a 403.
+                if (derived && props.canDownloadDerived === false) return null;
+                return (
                 <Space size={2}>
                   <Button
                     size="small"
@@ -970,7 +985,8 @@ function DocumentsList(props: {
                     </Popconfirm>
                   ) : null}
                 </Space>
-              ),
+                );
+              },
             },
           ]}
         />

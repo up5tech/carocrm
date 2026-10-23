@@ -435,10 +435,13 @@ export class ESignatureRequestService {
 
   async openDocument(id: string, snapshotId: string): Promise<{ document: SignatureRequestDocumentView; bytes: Buffer }> {
     const request = await this.loadScoped(id);
-    const opened = await this.documents.openSnapshot(snapshotId);
-    if (opened.snapshot.requestId !== request.id) {
-      throw new ValidationError('That document does not belong to this signature request.', { snapshotId });
+    const snapshot = await this.snapshots.requireForRequest(snapshotId, request.id);
+    // A signed document and the certificate are `downloadCompleted` material; a source snapshot is
+    // part of reading the request. Hiding the button is not the check (plan §12, ES.15 acceptance).
+    if (snapshot.artifactKind === 'provider_signed_document' || snapshot.artifactKind === 'completion_evidence') {
+      await this.permissions.assert('downloadCompleted');
     }
+    const opened = await this.documents.openSnapshot(snapshot.id);
     return { document: toDocumentView(opened.snapshot), bytes: opened.bytes };
   }
 
@@ -1089,6 +1092,69 @@ export class ESignatureRequestService {
       detail: { expiresAt: view.expiresAt },
     });
     return { url: view.url, expiresAt: view.expiresAt };
+  }
+
+  /**
+   * Retrieve the signed documents and the certificate of completion (ES.15).
+   *
+   * Idempotent at two levels: the provider document id and the content hash each identify an existing
+   * artifact, so a retried job or a second click stores nothing new. The source snapshot is never
+   * touched — these are new derived rows with their own storage objects.
+   */
+  async retrieveCompletedArtifacts(id: string): Promise<{
+    artifacts: readonly SignatureRequestDocumentView[];
+    created: number;
+  }> {
+    const request = await this.loadScoped(id);
+    await this.gate.assertOperation('downloadCompletedDocuments');
+    await this.gate.assertOperation('downloadCompletionEvidence');
+    if (request.status !== 'completed') throw signatureActionNotAvailableError('artifacts', 'not_completed');
+    if (request.providerEnvelopeId === null || request.connectionId === null) throw providerNotConnectedError('no_connection');
+    const connection = await this.connections.findById(request.connectionId);
+    if (connection === undefined) throw providerNotConnectedError('no_connection');
+    const context = await this.connectionService.contextFor(connection);
+    const adapter = this.providers.assertOperation(connection.providerKey, 'downloadCompletedDocuments');
+
+    let providerArtifacts: readonly ProviderArtifact[];
+    try {
+      providerArtifacts = [
+        ...(await adapter.downloadCompletedDocuments(context, request.providerEnvelopeId)),
+        ...(await adapter.downloadCompletionEvidence(context, request.providerEnvelopeId)),
+      ];
+    } catch (error) {
+      throw toModuleError(error, connection.providerKey);
+    }
+
+    const stored: SignatureDocumentSnapshot[] = [];
+    let created = 0;
+    for (const artifact of providerArtifacts) {
+      const known = await this.snapshots.findByProviderDocumentId(request.id, artifact.artifactKind, artifact.providerDocumentId ?? '');
+      if (known !== undefined) {
+        stored.push(known);
+        continue;
+      }
+      const result = await this.documents.storeDerivedArtifact({
+        requestId: request.id,
+        artifactKind: artifact.artifactKind,
+        displayName: artifact.displayName,
+        mimeType: artifact.mimeType,
+        bytes: Buffer.from(artifact.bytes),
+        ...(artifact.providerDocumentId === null ? {} : { providerDocumentId: artifact.providerDocumentId }),
+      });
+      stored.push(result.snapshot);
+      if (result.created) created += 1;
+    }
+    await this.audit.append({
+      action: 'artifact.downloaded',
+      requestId: request.id,
+      actor: this.actorRef(),
+      detail: {
+        signedDocuments: providerArtifacts.filter((artifact) => artifact.artifactKind === 'provider_signed_document').length,
+        completionEvidence: providerArtifacts.filter((artifact) => artifact.artifactKind === 'completion_evidence').length,
+        created,
+      },
+    });
+    return { artifacts: stored.map(toDocumentView), created };
   }
 
   /**
