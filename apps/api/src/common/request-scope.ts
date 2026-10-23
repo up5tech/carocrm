@@ -51,8 +51,13 @@ export class RequestScope {
     return this.storage.run({ requestId }, action);
   }
 
+  /**
+   * Run an action as a principal outside an HTTP request (a report, a queue worker, a scheduled job).
+   * The principal's own locale and timezone travel with it, because a background run has no
+   * `Accept-Language` to fall back on and its output is still read by that person.
+   */
   runAs<T>(principal: AuthenticatedPrincipal, action: () => T, requestId = `report:${principal.userId}`): T {
-    return this.storage.run({ requestId, principal }, action);
+    return this.storage.run({ requestId, principal, locale: principal.locale, timezone: principal.timezone }, action);
   }
 
   get userId(): string | undefined {

@@ -128,8 +128,9 @@ export const CRM_CHAT_FEATURES: readonly CRMChatFeatureDescriptor[] = [
   },
   {
     key: 'helpRetrieval',
-    label: 'Help article answers',
-    description: 'Answer “how do I” questions from published knowledge articles through a read tool.',
+    label: 'Help answers',
+    description:
+      'Answer “how do I” questions from the product handbook and published knowledge articles through read tools.',
     settingsPath: 'features.helpRetrieval',
     requires: ['workspace'],
     defaultEnabled: false,

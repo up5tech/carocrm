@@ -1,6 +1,7 @@
 import { log } from '@carocrm/core/logger/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
+import { DocsService } from '../docs/docs.service.js';
 import type { KnowledgeArticleView } from '../service-desk/knowledge-base.service.js';
 import { KnowledgeBaseService } from '../service-desk/knowledge-base.service.js';
 
@@ -9,12 +10,19 @@ import { KnowledgeBaseService } from '../service-desk/knowledge-base.service.js'
  * (PLAN_Phase_19_CRM_Chat.md §5.3, §17 `19-CHAT.9`).
  *
  * This service answers "how do I" questions by searching approved help sources:
+ * - The in-app product handbook (`content/docs`, served by the `Docs` module)
  * - Knowledge Base articles (from ServiceDesk module)
  * - Entity metadata descriptions
- * - Module documentation
  *
  * Retrieved content is treated as untrusted data and never followed as instructions.
+ *
+ * The handbook is searched through `DocsService`, so the same audience and `requires` gates that hide a
+ * page on `/docs` hide it here too; an installation with the handbook switched off simply gets no
+ * documentation sources rather than an error.
  */
+
+/** How many sources one answer may cite, across both help corpora. */
+const MAX_HELP_SOURCES = 5;
 
 export interface HelpSource {
   readonly sourceType: 'knowledge_article' | 'entity_field' | 'module_doc';
@@ -36,11 +44,12 @@ export interface HelpSearchResult {
 export class CRMChatHelpService {
   constructor(
     @Inject(KnowledgeBaseService) private readonly knowledgeBase: KnowledgeBaseService,
+    @Inject(DocsService) private readonly docs: DocsService,
   ) {}
 
   /**
-   * Search for help content matching the user's query. Searches Knowledge Base articles first,
-   * then falls back to entity metadata if no articles found.
+   * Search for help content matching the user's query. The handbook answers questions about using the
+   * system; Knowledge Base articles answer questions about this deployment's own procedures.
    */
   async searchHelp(query: string): Promise<HelpSearchResult> {
     const normalizedQuery = query.trim().toLowerCase();
@@ -54,13 +63,14 @@ export class CRMChatHelpService {
       };
     }
 
-    // Try Knowledge Base articles first
-    const kbArticles = await this.searchKnowledgeBase(normalizedQuery);
+    const docSources = await this.searchDocumentation(normalizedQuery);
+    const kbSources = docSources.length >= MAX_HELP_SOURCES ? [] : await this.searchKnowledgeBase(normalizedQuery);
+    const sources = [...docSources, ...kbSources].slice(0, MAX_HELP_SOURCES);
 
-    if (kbArticles.length > 0) {
+    if (sources.length > 0) {
       return {
         query,
-        sources: kbArticles,
+        sources,
         hasResults: true,
       };
     }
@@ -72,6 +82,35 @@ export class CRMChatHelpService {
       hasResults: false,
       message: `No help articles found for "${query}". Try rephrasing your question or check the module documentation.`,
     };
+  }
+
+  /**
+   * Search the product handbook through the docs engine, which already filters pages the caller may not
+   * reach. Documentation scores are the engine's own units, not a 0-1 ratio like a knowledge article.
+   */
+  private async searchDocumentation(query: string): Promise<HelpSource[]> {
+    try {
+      const result = await this.docs.search(query, undefined, String(MAX_HELP_SOURCES));
+      return result.hits.map((hit) => ({
+        sourceType: 'module_doc' as const,
+        title: hit.title,
+        content: hit.snippet.text,
+        route: `/docs/${hit.key}`,
+        relevanceScore: hit.score,
+      }));
+    } catch (error) {
+      // The handbook can be switched off on an installation. That is an ordinary outcome for a
+      // "how do I" question, so the answer is the remaining sources rather than an error.
+      log.warn(
+        {
+          component: 'crm-chat',
+          eventType: 'help-retrieval',
+          errorName: error instanceof Error ? error.name : 'UnknownError',
+        },
+        'Help retrieval found no documentation source.',
+      );
+      return [];
+    }
   }
 
   /**
@@ -103,7 +142,7 @@ export class CRMChatHelpService {
       const matches = scored
         .filter(({ score }) => score > 0)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 5) // Top 5 results
+        .slice(0, MAX_HELP_SOURCES)
         .map(({ article, score }) => this.articleToHelpSource(article, score));
 
       return matches;

@@ -3,7 +3,7 @@ import { Button, Empty, Space, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 
 import { api } from '../../api/client.js';
-import type { CRMChatCitation, CRMChatMessageView } from '../../api/types.js';
+import type { CRMChatCitation, CRMChatMessageView, CRMChatReauthorizedCitation } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
 import { CRMChatFeedbackButtons } from './CRMChatFeedbackButtons.js';
 
@@ -139,8 +139,7 @@ interface CitationLinkProps {
 }
 
 function CitationLink({ citation, index }: CitationLinkProps) {
-  const [accessible, setAccessible] = useState<boolean | null>(null);
-  const [resolvedRoute, setResolvedRoute] = useState<string | undefined>(undefined);
+  const [resolved, setResolved] = useState<CRMChatReauthorizedCitation | null>(null);
 
   // Reauthorize citation on mount
   useEffect(() => {
@@ -149,16 +148,10 @@ function CitationLink({ citation, index }: CitationLinkProps) {
     const checkAccess = async () => {
       try {
         const result = await api.crmChatReauthorizeCitations([citation]);
-        if (!cancelled && result.citations && result.citations.length > 0) {
-          const reauthed = result.citations[0];
-          if (reauthed) {
-            setAccessible(reauthed.accessible);
-            setResolvedRoute(reauthed.resolvedRoute);
-          }
-        }
+        if (!cancelled) setResolved(result.citations[0] ?? { accessible: false, label: null, route: null, reason: null });
       } catch {
         if (!cancelled) {
-          setAccessible(false);
+          setResolved({ accessible: false, label: null, route: null, reason: null });
         }
       }
     };
@@ -170,7 +163,7 @@ function CitationLink({ citation, index }: CitationLinkProps) {
   }, [citation]);
 
   // Show loading state while checking
-  if (accessible === null) {
+  if (resolved === null) {
     return (
       <Tag color="default" style={{ fontSize: 11 }}>
         [{index}] Checking...
@@ -179,16 +172,18 @@ function CitationLink({ citation, index }: CitationLinkProps) {
   }
 
   // Show locked state if access revoked
-  if (!accessible) {
+  if (!resolved.accessible) {
     return (
       <Tag color="red" icon={<LockOutlined />} style={{ fontSize: 11 }}>
-        [{index}] {citation.displayLabel} (No longer accessible)
+        [{index}] {citation.label} (No longer accessible)
       </Tag>
     );
   }
 
-  // Show clickable link if accessible
-  const hasRoute = resolvedRoute && resolvedRoute.startsWith('/');
+  // The server answers with its own label and route after re-reading the source.
+  const label = resolved.label ?? citation.label;
+  const route = resolved.route ?? citation.route;
+  const hasRoute = route.startsWith('/');
   return (
     <Tag
       icon={hasRoute ? <LinkOutlined /> : undefined}
@@ -196,11 +191,11 @@ function CitationLink({ citation, index }: CitationLinkProps) {
       style={{ fontSize: 11 }}
     >
       {hasRoute ? (
-        <a href={resolvedRoute} target="_blank" rel="noopener noreferrer">
-          [{index}] {citation.displayLabel}
+        <a href={route} target="_blank" rel="noopener noreferrer">
+          [{index}] {label}
         </a>
       ) : (
-        `[${index}] ${citation.displayLabel}`
+        `[${index}] ${label}`
       )}
     </Tag>
   );

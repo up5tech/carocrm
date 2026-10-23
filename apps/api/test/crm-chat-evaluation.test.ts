@@ -34,6 +34,7 @@ const EVAL_USER = `AGENT_TEST-chat-eval-${runId}`;
 
 let ctx: ApiContext;
 let evalToken = '';
+let baselineAiSettings: unknown = null;
 const createdUserIds: string[] = [];
 
 async function call(method: Method, url: string, token?: string, payload?: unknown): Promise<CallResult> {
@@ -54,6 +55,16 @@ async function call(method: Method, url: string, token?: string, payload?: unkno
 
 beforeAll(async () => {
   ctx = await bootApi();
+
+  // This suite submits turns faster than a real model answers them, and the instance-wide
+  // concurrency ceiling would refuse the next prompt for the wrong reason. Give it headroom for the
+  // duration of the suite and put the stored document back afterwards.
+  const aiRows = await ctx.database.db.selectFrom('app_settings').select('data').where('name', '=', 'aiAgents').execute();
+  baselineAiSettings = aiRows[0]?.data ?? null;
+  const headroom = await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
+    limits: { maxConcurrency: 10 },
+  });
+  expect(headroom.status, JSON.stringify(headroom.body)).toBe(200);
 
   await createTestRole(ctx, {
     id: ROLE_EVAL_USER,
@@ -95,6 +106,16 @@ afterAll(async () => {
     await db.deleteFrom('users').where('id', 'in', createdUserIds).execute();
   }
   await db.deleteFrom('roles').where('id', 'in', [ROLE_EVAL_USER]).execute();
+  if (baselineAiSettings === null) {
+    await db.deleteFrom('app_settings').where('name', '=', 'aiAgents').execute();
+  } else {
+    const serialized = JSON.stringify(baselineAiSettings);
+    await db
+      .insertInto('app_settings')
+      .values({ name: 'aiAgents', data: serialized, modified_at: new Date() })
+      .onConflict((oc) => oc.column('name').doUpdateSet({ data: serialized, modified_at: new Date() }))
+      .execute();
+  }
   await shutdownApi();
 });
 
@@ -206,14 +227,18 @@ describe('CRMChat Evaluation Set (19-CHAT.17)', () => {
           {
             sourceType: 'crm_record',
             entity: 'Account',
-            sourceId: 'test-id',
-            displayLabel: 'Test Account',
+            recordId: 'test-id',
+            label: 'Test Account',
+            route: '',
           },
         ],
       });
 
       expect(result.status).toBe(200);
       expect(result.body).toHaveProperty('citations');
+      // The target is re-read under the caller's rights, so an unreadable record is not rendered.
+      const citations = (result.body['citations'] as { accessible: boolean }[]) ?? [];
+      expect(citations[0]).toBeDefined();
     });
 
     it('handles empty citation list', async () => {

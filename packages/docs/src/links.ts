@@ -35,6 +35,7 @@ export const DEFAULT_APP_ROUTES: readonly string[] = [
   '/voice-inbox',
   '/voice-communications',
   '/advanced-integrations',
+  '/esignature',
   '/csat',
   '/marketing/preferences',
   '/admin/settings',

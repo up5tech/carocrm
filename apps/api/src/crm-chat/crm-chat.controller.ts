@@ -9,7 +9,7 @@ import { CRMChatActionService } from './crm-chat-actions.service.js';
 import { CRMChatAIAgentsClientService } from './crm-chat-ai-agents-client.service.js';
 import type { AssistantReadiness } from './crm-chat-assistant.service.js';
 import { CRMChatAssistantService } from './crm-chat-assistant.service.js';
-import { type CitationSource,CRMChatContextService } from './crm-chat-context.service.js';
+import { CRMChatCitationService } from './crm-chat-citations.service.js';
 import { CRM_CHAT_CONTRACT_VERSION } from './crm-chat-contract.js';
 import {
   CRMChatConversationService,
@@ -118,7 +118,7 @@ export class CRMChatController {
     @Inject(CRMChatSettingsService) private readonly settings: CRMChatSettingsService,
     @Inject(CRMChatAssistantService) private readonly assistant: CRMChatAssistantService,
     @Inject(CRMChatAIAgentsClientService) private readonly aiAgents: CRMChatAIAgentsClientService,
-    @Inject(CRMChatContextService) private readonly context: CRMChatContextService,
+    @Inject(CRMChatCitationService) private readonly citations: CRMChatCitationService,
     @Inject(CRMChatHelpService) private readonly help: CRMChatHelpService,
     @Inject(CRMChatQueryService) private readonly query: CRMChatQueryService,
     @Inject(CRMChatStreamingService) private readonly streaming: CRMChatStreamingService,
@@ -368,9 +368,10 @@ export class CRMChatController {
    * Reauthorize citations before rendering. Ensures that each cited source is still accessible to
    * the current user at render time (permissions may have changed since the turn was created).
    *
-   * A CRM citation is re-read through the Entity Engine, so the answer reflects the caller's
-   * *current* rights, not the rights the turn was created under. A citation that is no longer
-   * readable is reported as inaccessible rather than rendered with a stale label.
+   * A CRM citation is re-read through the Entity Engine and a handbook citation through `DocsService`,
+   * so the answer reflects the caller's *current* rights, not the rights the turn was created under. A
+   * citation that is no longer readable is reported as inaccessible rather than rendered with a stale
+   * label, and the label and route in the reply are the server's, never the caller's.
    */
   @HttpCode(200)
   @Post('action/citations/reauthorize')
@@ -378,19 +379,23 @@ export class CRMChatController {
     await this.policy.assertWorkspace();
 
     const schema = z.object({
-      citations: z.array(
-        z.object({
-          sourceType: z.enum(['crm_record', 'query_result', 'report', 'help_document', 'approved_external_source']),
-          sourceId: z.string().optional(),
-          entity: z.string().optional(),
-          displayLabel: z.string(),
-          safeRoute: z.string().optional(),
-        }).strict(),
-      ),
+      citations: z
+        .array(
+          z
+            .object({
+              sourceType: z.enum(['crm_record', 'query_result', 'report', 'help_document', 'approved_external_source']),
+              entity: z.string().max(120).nullish(),
+              recordId: z.string().max(120).nullish(),
+              label: z.string().min(1).max(200),
+              route: z.string().max(400).default(''),
+            })
+            .strict(),
+        )
+        .max(20),
     });
 
     const input = parse(schema, body);
-    const results = await this.context.reauthorizeCitations(input.citations as CitationSource[]);
+    const results = await this.citations.reauthorize(input.citations);
 
     return { citations: results };
   }

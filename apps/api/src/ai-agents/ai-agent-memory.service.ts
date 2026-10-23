@@ -13,6 +13,7 @@ import { EntityCrudService as EntityService } from '../entity/entity.service.js'
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import type { AgentConfig } from './ai-agent-config.js';
+import { HELP_DOCUMENT_REF_KIND } from './ai-agent-tools.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 import type { AIProviderMessage } from './ai-provider.js';
@@ -654,7 +655,11 @@ export class AIAgentMemoryService {
       const record = asRecord(ref);
       const entity = typeof record['entity'] === 'string' ? record['entity'] : '';
       const id = typeof record['id'] === 'string' ? record['id'] : '';
-      if (entity === '' || id === '' || !this.metadata.registry.hasEntity(entity)) return false;
+      if (entity === '' || id === '') return false;
+      // A handbook citation names a documentation page, not a record: it has no owner and no ACL row,
+      // and Chat re-reads the page through `DocsService` when it renders the citation.
+      if (entity === HELP_DOCUMENT_REF_KIND) continue;
+      if (!this.metadata.registry.hasEntity(entity)) return false;
       try {
         await this.entities.get(entity, id, 'id');
       } catch {

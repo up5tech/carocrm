@@ -5,7 +5,7 @@ audience: user
 order: 130
 tags: [chat, crm-chat, voice, calls, sms, assistant]
 related: [user/stream-and-notifications, user/record-page, admin/settings-overview]
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 There are two surfaces here and they do not talk to each other. [CRM Chat](/crm-chat) is a thread
@@ -34,6 +34,11 @@ Three regions:
 
 **New** is client-side. It clears the draft and focuses the box; the thread itself is only created on
 the server when the first message is accepted.
+
+You can also ask the assistant how to *use* the CRM — "where do I enable two-factor sign-in?", "how do
+I schedule a report?" — and it answers from this handbook, in your own language, with a numbered source
+chip that opens the page it read. It only reaches pages you could open yourself, and when the handbook
+has nothing for your question it says so instead of guessing.
 
 ## Quick chat from the header
 

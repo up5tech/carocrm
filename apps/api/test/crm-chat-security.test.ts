@@ -251,8 +251,9 @@ describe('CRMChat Security Hardening (19-CHAT.15)', () => {
           {
             sourceType: 'crm_record',
             entity: 'Account',
-            sourceId: 'test-id',
-            displayLabel: 'Test Account',
+            recordId: 'test-id',
+            label: 'Test Account',
+            route: '',
           },
         ],
       });
@@ -268,14 +269,34 @@ describe('CRMChat Security Hardening (19-CHAT.15)', () => {
           {
             sourceType: 'crm_record',
             entity: 'Account; DROP TABLE',
-            sourceId: 'test-id',
-            displayLabel: 'Malicious',
+            recordId: 'test-id',
+            label: 'Malicious',
+            route: '',
           },
         ],
       });
 
       // Should still process but mark as inaccessible
       expect(result.status).toBe(200);
+    });
+
+    it('will not follow a handbook citation route that is not a page key', async () => {
+      const result = await call('POST', '/api/v1/CRMChat/action/citations/reauthorize', tokenA, {
+        citations: [
+          {
+            sourceType: 'help_document',
+            entity: null,
+            recordId: null,
+            label: 'Handbook',
+            route: '/docs/../../etc/passwd',
+          },
+        ],
+      });
+
+      expect(result.status).toBe(200);
+      const citations = (result.body['citations'] as { accessible: boolean; route: string | null }[]) ?? [];
+      expect(citations[0]?.accessible).toBe(false);
+      expect(citations[0]?.route).toBeNull();
     });
   });
 

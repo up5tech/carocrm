@@ -35,6 +35,7 @@ import type {
   CloneResult,
   CRMChatActionView,
   CRMChatCapabilitiesView,
+  CRMChatCitation,
   CRMChatConversationDetail,
   CRMChatConversationList,
   CRMChatCrossModuleScenario,
@@ -42,6 +43,7 @@ import type {
   CRMChatHealthView,
   CRMChatMessagePage,
   CRMChatPromptView,
+  CRMChatReauthorizedCitation,
   CRMChatSettingsView,
   CRMChatTurnResult,
   CRMChatTurnStatus,
@@ -619,10 +621,18 @@ export const api = {
   crmChatCancelTurn: (turnId: string) =>
     request<CRMChatTurnStatus>(`/CRMChat/action/turns/${encodeURIComponent(turnId)}/cancel`, post({})),
   /** Phase 19-CHAT.8 — reauthorize citations before rendering. */
-  crmChatReauthorizeCitations: (citations: readonly unknown[]) =>
-    request<{ citations: readonly { accessible: boolean; resolvedRoute?: string | undefined }[] }>(
+  crmChatReauthorizeCitations: (citations: readonly CRMChatCitation[]) =>
+    request<{ citations: readonly CRMChatReauthorizedCitation[] }>(
       '/CRMChat/action/citations/reauthorize',
-      post({ citations }),
+      post({
+        citations: citations.map((citation) => ({
+          sourceType: citation.sourceType,
+          entity: citation.entity,
+          recordId: citation.recordId,
+          label: citation.label,
+          route: citation.route,
+        })),
+      }),
     ),
   /** Phase 19-CHAT.9 — search help content for "how do I" questions. */
   crmChatSearchHelp: (query: string) =>

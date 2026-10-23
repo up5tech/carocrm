@@ -5,7 +5,7 @@ audience: admin
 order: 145
 tags: [crm-chat, chat, assistant, feature-flags, settings]
 related: [admin/settings-overview, admin/module-settings, user/chat-and-voice, user/ai-agents]
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 One validated settings document named `crmChat` decides whether [CRM Chat](/crm-chat) opens, which
@@ -61,6 +61,22 @@ above the composer; a turn can start only in `ready`.
 | `memory-disabled` | AI Agents `features.memory` is off. | Enable conversation memory. |
 | `agent-memory-off` | The published version's `memory.mode` is `none` or `checkpoint`; Chat needs `conversation`. | Republish the agent with conversation memory. |
 
+## Giving the assistant the handbook
+
+An agent answers a "how do I use this" question only when its published version grants the two
+documentation tools: `docs_search` finds handbook pages, `docs_read_page` reads one. Create the profile
+from the **Product help assistant** starter on the AI Agents tab, or add both tools to an existing
+profile and publish a new version.
+
+Both are read-only and see exactly what the asking user sees on the handbook: a page hidden from that
+reader by its audience or by its screen permission is not searched, not read, and never cited. The page
+an answer actually read appears under it as a numbered source that opens the handbook. If the handbook
+has nothing for the question, the assistant says so — an answer with no source is the designed outcome,
+not a failure.
+
+The same pages are reachable by the reader at any time from [Documentation](/docs), and
+[Configuring AI agents](admin/ai-agents) covers the tool grants themselves.
+
 ## Execution mode
 
 `execution.mode` accepts `queue` or `inline`, labelled Queue (worker) and Direct (API process). Both
@@ -87,7 +103,7 @@ not worth it. If queue-mode turns stay queued, fix the worker and secret first.
 | --- | --- | --- |
 | `features.workspace` | on | The menu entry, the page and every workspace read. Off hides the entry, refuses the reads and makes every other flag ineffective. |
 | `features.readTools` | off | The "Grounded CRM answers" entry as active. No Chat gate reads this flag; the tools an answer can use are the enabled tools on the published agent version, so the switch alone adds none. |
-| `features.helpRetrieval` | off | The "Help article answers" entry as active. No Chat gate reads it; help search is gated by the workspace, not this flag, and reads published knowledge articles. |
+| `features.helpRetrieval` | off | The "Help answers" entry as active. No Chat gate reads it: help search is gated by the workspace, and it searches the product handbook and the published knowledge articles. What an answer may read comes from the agent's published tools, not from this switch. |
 | `features.actionProposals` | off | Confirmation of a proposed write. A proposal executes only when `safety.allowWrites` is on as well; the switch does not remove write tools from the agent. |
 | `features.feedback` | off | Rating buttons and the feedback endpoint. A rating also needs the caller's `feedback` capability. |
 | `features.conversationSearch` | off | The search box and the `q` filter over the caller's own threads. The server refuses a term while the flag is off. |

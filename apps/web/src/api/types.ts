@@ -2942,12 +2942,32 @@ export interface CRMChatStreamEvent {
   readonly data: Record<string, unknown>;
 }
 
-/** Phase 19-CHAT.6 — citation rendered in a message. */
+/**
+ * Phase 19-CHAT.6 — citation rendered in a message.
+ *
+ * This is the server-materialised view (`CRMChatCitationView`): the label and route are produced
+ * server-side after an ACL re-read, so the SPA renders exactly what it is given and never composes a
+ * route of its own. `entity`/`recordId` are null for a citation that is not a CRM record, such as a
+ * handbook page cited by `docs_read_page`.
+ */
 export interface CRMChatCitation {
+  readonly id: string;
+  readonly messageId: string;
   readonly sourceType: 'crm_record' | 'query_result' | 'report' | 'help_document' | 'approved_external_source';
-  readonly displayLabel: string;
-  readonly safeRoute?: string | undefined;
-  readonly retrievedAt?: string | undefined;
+  readonly entity: string | null;
+  readonly recordId: string | null;
+  readonly label: string;
+  readonly route: string;
+  readonly ordinal: number;
+  readonly recheckedAt: string;
+}
+
+/** What `POST action/citations/reauthorize` answers for one citation. */
+export interface CRMChatReauthorizedCitation {
+  readonly accessible: boolean;
+  readonly label: string | null;
+  readonly route: string | null;
+  readonly reason: string | null;
 }
 
 export interface CRMChatHealthView {
