@@ -61,6 +61,10 @@ import type {
   ESignatureConnectionView,
   ESignatureHealthView,
   ESignatureNavView,
+  ESignatureRequestDocument,
+  ESignatureRequestList,
+  ESignatureRequestRecipient,
+  ESignatureRequestView,
   ESignatureSettingsView,
   ExtensionInstallResult,
   ExtensionListResult,
@@ -1790,6 +1794,53 @@ export const api = {
     request<ESignatureSettingsView>('/ESignature/action/settings', post(patch)),
   eSignatureGateOperations: () => request<{ operations: readonly string[] }>('/ESignature/action/gate/operations'),
   eSignatureGateCheck: (operation: string) => request<{ operation: string; admitted: boolean }>('/ESignature/action/gate/check', post({ operation })),
+
+  // Phase 19-ES.6 — the draft surface. A list row carries only what the list screen renders; the
+  // detail is the only place recipients and documents are read.
+  eSignatureRequests: (query: { status?: string; sourceEntityType?: string; sourceRecordId?: string; needsAttention?: boolean; limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (query.status !== undefined && query.status !== '') params.set('status', query.status);
+    if (query.sourceEntityType !== undefined && query.sourceEntityType !== '') params.set('sourceEntityType', query.sourceEntityType);
+    if (query.sourceRecordId !== undefined && query.sourceRecordId !== '') params.set('sourceRecordId', query.sourceRecordId);
+    if (query.needsAttention === true) params.set('needsAttention', 'true');
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    if (query.offset !== undefined) params.set('offset', String(query.offset));
+    const suffix = params.toString() === '' ? '' : `?${params.toString()}`;
+    return request<ESignatureRequestList>(`/ESignature/requests${suffix}`);
+  },
+  eSignatureRequest: (id: string) => request<ESignatureRequestView>(`/ESignature/requests/${encodeURIComponent(id)}`),
+  createESignatureRequest: (input: Record<string, unknown>) => request<ESignatureRequestView>('/ESignature/requests', post(input)),
+  updateESignatureRequest: (id: string, input: Record<string, unknown>) =>
+    request<ESignatureRequestView>(`/ESignature/requests/${encodeURIComponent(id)}`, patch(input)),
+  saveESignatureRequestRecipients: (id: string, recipients: readonly Record<string, unknown>[]) =>
+    request<readonly ESignatureRequestRecipient[]>(`/ESignature/requests/${encodeURIComponent(id)}/recipients`, {
+      method: 'PUT',
+      body: JSON.stringify({ recipients }),
+    }),
+  eSignatureRequestDocuments: (id: string) =>
+    request<readonly ESignatureRequestDocument[]>(`/ESignature/requests/${encodeURIComponent(id)}/documents`),
+  attachESignatureRequestDocument: (id: string, attachmentId: string) =>
+    request<ESignatureRequestDocument>(`/ESignature/requests/${encodeURIComponent(id)}/documents`, post({ attachmentId })),
+  detachESignatureRequestDocument: (id: string, documentId: string) =>
+    request<{ detached: string }>(`/ESignature/requests/${encodeURIComponent(id)}/documents/${encodeURIComponent(documentId)}`, {
+      method: 'DELETE',
+    }),
+  /** The snapshot bytes, re-verified server-side; the browser downloads them as a file. */
+  downloadESignatureDocument: async (id: string, documentId: string, filename: string): Promise<void> => {
+    const token = getStoredToken();
+    const response = await fetch(
+      `/api/v1/ESignature/requests/${encodeURIComponent(id)}/documents/${encodeURIComponent(documentId)}/content`,
+      { headers: token === undefined ? {} : { authorization: `Bearer ${token}` }, credentials: 'same-origin' },
+    );
+    if (!response.ok) throw new Error('download_failed');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  },
 
   // Phase 19-ES.4 — the provider connection lifecycle. A secret is a write parameter only: no method
   // here can read one back, because no endpoint returns one.

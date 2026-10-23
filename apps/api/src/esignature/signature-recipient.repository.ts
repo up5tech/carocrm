@@ -55,11 +55,11 @@ export interface SignatureRecipient {
 export interface RecipientInput {
   name: string;
   email: string;
-  recipientType?: SignatureRecipientType;
-  crmContactId?: string | null;
-  roleName?: string | null;
+  recipientType?: SignatureRecipientType | undefined;
+  crmContactId?: string | null | undefined;
+  roleName?: string | null | undefined;
   routingOrder: number;
-  authenticationMethod?: string | null;
+  authenticationMethod?: string | null | undefined;
 }
 
 @Injectable()

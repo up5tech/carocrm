@@ -96,6 +96,106 @@ export const ConnectionAuthorizeSchema = z
   })
   .strict();
 
+// ---------------------------------------------------------------------------
+// Phase 19-ES.6 — signature request drafts (plan §8.2)
+// ---------------------------------------------------------------------------
+
+/** An entity id from the metadata registry, e.g. "Account" — never a table name. */
+const SourceEntitySchema = z.string().trim().regex(/^[A-Z][A-Za-z0-9]*$/, 'A source entity is named by its metadata entity id, e.g. "Quote".');
+const NullableText = (max: number) => z.string().trim().max(max).nullable();
+
+export const RequestCreateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    description: z.string().trim().max(2_000).optional(),
+    subject: z.string().trim().max(300).optional(),
+    message: z.string().trim().max(5_000).optional(),
+    emailBlurb: z.string().trim().max(2_000).optional(),
+    /** ISO instant. A bare date is not an instant, so the caller cannot silently change the timezone. */
+    expiresAt: z.string().datetime({ offset: true }).optional(),
+    connectionId: z.string().trim().max(64).optional(),
+    sourceEntityType: SourceEntitySchema.optional(),
+    sourceRecordId: z.string().trim().min(1).max(64).optional(),
+    approvalRequired: z.boolean().optional(),
+  })
+  .strict();
+
+/**
+ * A draft edit.
+ *
+ * `version` is the optimistic check: two editors must not silently overwrite each other. A
+ * server-owned field (status, envelope, timestamps) is refused by the service rather than accepted
+ * and ignored, so a caller that believes it can set `status` is told so.
+ */
+export const RequestUpdateSchema = z
+  .object({
+    version: z.coerce.number().int().min(1),
+    name: z.string().trim().min(1).max(200).optional(),
+    description: NullableText(2_000).optional(),
+    subject: NullableText(300).optional(),
+    message: NullableText(5_000).optional(),
+    emailBlurb: NullableText(2_000).optional(),
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    connectionId: z.string().trim().max(64).nullable().optional(),
+    sourceEntityType: SourceEntitySchema.nullable().optional(),
+    sourceRecordId: z.string().trim().min(1).max(64).nullable().optional(),
+    assignedUserId: z.string().trim().max(64).nullable().optional(),
+    teamIds: z.array(z.string().trim().min(1).max(64)).max(50).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).some((key) => key !== 'version'), { message: 'At least one field is required.' });
+
+/** The whole recipient set, replaced at once (a partial edit could leave two signers in one slot). */
+export const RequestRecipientsSchema = z
+  .object({
+    recipients: z
+      .array(
+        z
+          .object({
+            name: z.string().trim().min(1).max(200),
+            email: z.string().trim().email().max(320),
+            recipientType: z.enum(['signer', 'carbon_copy']).optional(),
+            crmContactId: z.string().trim().max(64).nullable().optional(),
+            roleName: z.string().trim().max(120).nullable().optional(),
+            routingOrder: z.coerce.number().int().min(1).max(100),
+            authenticationMethod: z.string().trim().max(120).nullable().optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(50),
+  })
+  .strict();
+
+export const RequestDocumentAttachSchema = z
+  .object({
+    attachmentId: z.string().trim().min(1).max(64),
+    documentOrder: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .strict();
+
+export const RequestDocumentReplaceSchema = z.object({ attachmentId: z.string().trim().min(1).max(64) }).strict();
+
+/**
+ * The list query (plan §13.2).
+ *
+ * `status` is a comma-separated list because that is what a filter row sends, and it is validated
+ * against the module's own status vocabulary in the controller — an unknown status is a bad query, not
+ * an empty page.
+ */
+export const RequestListQuerySchema = z
+  .object({
+    status: z.string().trim().max(400).optional(),
+    sourceEntityType: SourceEntitySchema.optional(),
+    sourceRecordId: z.string().trim().max(64).optional(),
+    connectionId: z.string().trim().max(64).optional(),
+    assignedUserId: z.string().trim().max(64).optional(),
+    needsAttention: z.enum(['true', 'false']).optional(),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+  .strict();
+
 /** What DocuSign is allowed to put in the callback query. Anything else is not this platform's answer. */
 export const OAuthCallbackQuerySchema = z
   .object({

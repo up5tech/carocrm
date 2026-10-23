@@ -10,6 +10,7 @@ import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { t } from '../state/i18n.js';
 import { ESignatureConnectionsPanel } from './esignature/ESignatureConnectionsPanel.js';
+import { ESignatureRequestsPanel } from './esignature/ESignatureRequestsPanel.js';
 
 /**
  * Phase 19-ES.1 — the ESignature module page
@@ -83,6 +84,8 @@ export function ESignaturePage() {
           action={<Button onClick={() => void health.refetch()}>{t('core.common.reload')}</Button>}
         />
       )}
+
+      {granted.has('use') ? <ESignatureRequestsPanel canPrepare={granted.has('manageDraft')} /> : null}
 
       {canReadConnections ? <ESignatureConnectionsPanel canManage={canManageConnections} /> : null}
 

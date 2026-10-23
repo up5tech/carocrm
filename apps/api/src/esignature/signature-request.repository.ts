@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { ConcurrencyConflictError, DuplicateRecordError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 
 import { DatabaseService } from '../database/database.service.js';
 import { currentTx } from '../entity/tx-context.js';
@@ -122,6 +123,19 @@ export interface RequestDraftInput {
   id?: string;
 }
 
+/**
+ * The row-level scope a list is filtered to (plan §11, §13.2).
+ *
+ * The caller derives it from the platform's own level for `SignatureRequest:read`, so a role scoped to
+ * `own` sees its own drafts while `all` sees every one — the same rule the record evaluator applies to
+ * a single row, expressed as a predicate because a list cannot ask per row.
+ */
+export interface RequestAccessScope {
+  readonly kind: 'all' | 'own' | 'team';
+  readonly userId: string;
+  readonly teamIds: readonly string[];
+}
+
 export interface RequestListFilters {
   statuses?: readonly SignatureRequestStatus[];
   connectionId?: string;
@@ -137,6 +151,7 @@ export interface RequestListFilters {
   completedTo?: Date;
   limit?: number;
   offset?: number;
+  access?: RequestAccessScope;
 }
 
 @Injectable()
@@ -209,6 +224,18 @@ export class SignatureRequestRepository {
       const attention = ['send_unknown', 'provider_error', 'reconciliation_required'] as const;
       query = query.where('status', 'in', attention);
       count = count.where('status', 'in', attention);
+    }
+    if (filters.access !== undefined && filters.access.kind !== 'all') {
+      const { userId, teamIds, kind } = filters.access;
+      const teams = kind === 'team' ? [...teamIds] : [];
+      // The same predicate `entity-record.store.ts` uses for a scoped record list: assigned to me,
+      // created by me, or (for a team role) in one of my teams.
+      const scoped =
+        teams.length === 0
+          ? sql<boolean>`(assigned_user_id = ${userId} or created_by_id = ${userId})`
+          : sql<boolean>`(assigned_user_id = ${userId} or created_by_id = ${userId} or team_ids ?| cast(${teams} as text[]))`;
+      query = query.where(scoped);
+      count = count.where(scoped);
     }
     if (filters.sentFrom !== undefined) {
       query = query.where('sent_at', '>=', filters.sentFrom);

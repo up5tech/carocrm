@@ -3205,3 +3205,84 @@ export interface ESignatureConnectionTest {
   readonly detailCode: string;
   readonly adapterMode: 'live' | 'fake' | 'disabled';
 }
+
+// Phase 19-ES.6 — the signature request draft surface. `source.accessible === false` means the linked
+// CRM record exists but its own ACL hides it; the server never sends that name, so neither may the UI.
+export interface ESignatureRequestSource {
+  readonly entityType: string;
+  readonly recordId: string;
+  readonly label: string | null;
+  readonly accessible: boolean;
+  readonly missing: boolean;
+}
+
+export interface ESignatureRequestRecipient {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly recipientType: 'signer' | 'carbon_copy';
+  readonly roleName: string | null;
+  readonly routingOrder: number;
+  readonly status: string;
+  readonly crmContactId: string | null;
+}
+
+export interface ESignatureRequestDocument {
+  readonly id: string;
+  readonly artifactKind: 'source_snapshot' | 'provider_signed_document' | 'completion_evidence' | 'supporting_document';
+  readonly displayName: string;
+  readonly mimeType: string;
+  readonly byteSize: number;
+  readonly contentHashSha256: string;
+  readonly documentOrder: number;
+  readonly providerDocumentId: string | null;
+  readonly createdAt: string;
+}
+
+export interface ESignatureRequestView {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly status: string;
+  readonly providerKey: string;
+  readonly connectionId: string | null;
+  readonly source: ESignatureRequestSource | null;
+  readonly subject: string | null;
+  readonly message: string | null;
+  readonly emailBlurb: string | null;
+  readonly expiresAt: string | null;
+  readonly approvalRequired: boolean;
+  readonly approvalStatus: string;
+  readonly approvalReason: string | null;
+  readonly createdById: string | null;
+  readonly assignedUserId: string | null;
+  readonly teamIds: readonly string[];
+  readonly preparedAt: string | null;
+  readonly sentAt: string | null;
+  readonly completedAt: string | null;
+  readonly declinedAt: string | null;
+  readonly voidedAt: string | null;
+  readonly version: number;
+  readonly createdAt: string;
+  readonly modifiedAt: string;
+  readonly editable: boolean;
+  readonly recipients: readonly ESignatureRequestRecipient[];
+  readonly documents: readonly ESignatureRequestDocument[];
+}
+
+export interface ESignatureRequestListRow {
+  readonly id: string;
+  readonly name: string;
+  readonly status: string;
+  readonly source: ESignatureRequestSource | null;
+  readonly assignedUserId: string | null;
+  readonly createdById: string | null;
+  readonly approvalStatus: string;
+  readonly sentAt: string | null;
+  readonly modifiedAt: string;
+}
+
+export interface ESignatureRequestList {
+  readonly list: readonly ESignatureRequestListRow[];
+  readonly total: number;
+}

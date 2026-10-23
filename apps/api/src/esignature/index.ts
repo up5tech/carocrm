@@ -21,6 +21,8 @@ import { ESignatureModuleHealthService } from './esignature-module-health.servic
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
 import { ESignatureOAuthCallbackController } from './esignature-oauth-callback.controller.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
+import { ESignatureRequestController } from './esignature-request.controller.js';
+import { ESignatureRequestService } from './esignature-request.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { DocuSignAdapter } from './providers/docusign/docusign-adapter.js';
 import {
@@ -41,10 +43,12 @@ import { SignatureRequestRepository } from './signature-request.repository.js';
 import { SignatureTemplateMappingRepository } from './signature-template-mapping.repository.js';
 import { SignatureWebhookInboxRepository } from './signature-webhook-inbox.repository.js';
 
-// Two controllers, in this order: the public OAuth callback is a route a browser arrives at with no
-// session, and keeping it out of `ESignatureController` is what lets that controller's invariant —
-// every route checks a capability — stay true. Both are registered before `ENTITY_CONTROLLERS`.
-export const ESIGNATURE_CONTROLLERS = [ESignatureOAuthCallbackController, ESignatureController] as const;
+// Three controllers, in this order: the public OAuth callback is a route a browser arrives at with no
+// session, and keeping it out of the capability-checked controllers is what lets their invariant —
+// every route checks a capability — stay true. The request surface is its own controller because it is
+// the module's largest API and the action controller is the control plane. All are registered before
+// `ENTITY_CONTROLLERS`.
+export const ESIGNATURE_CONTROLLERS = [ESignatureOAuthCallbackController, ESignatureRequestController, ESignatureController] as const;
 
 /**
  * The one HTTP door to DocuSign. A test replaces this token and no socket is opened (plan §17.3); the
@@ -104,6 +108,9 @@ export const ESIGNATURE_PROVIDERS = [
   // service (which owns the ACL), copies it once into this module's own storage prefix, and refuses
   // anything the settings policy or DocuSign cannot accept (plan §4.5).
   ESignatureDocumentService,
+  // Phase 19-ES.6 — the draft API. The capability and the record scope are checked in the service, so
+  // a controller method is only ever a shape parser.
+  ESignatureRequestService,
   docuSignTransportProvider,
   // Phase 19-ES.3 — the provider port. The registry answers for every adapter the build ships, and
   // `signatureProviderAdaptersProvider` decides which one answers for `docusign`.
@@ -144,6 +151,8 @@ export {
   SNAPSHOT_STORAGE_ROOT,
   type SnapshotRefusal,
 } from './esignature-document.service.js';
+// Phase 19-ES.6 — the draft API. The capability and the record scope are checked in the service, so a
+// controller method is only ever a shape parser.
 export {
   AUDIT_ACTIONS,
   CONNECTED_STATUS,
@@ -196,6 +205,17 @@ export {
   REQUIRED_CAPABILITIES,
 } from './esignature-module.js';
 export { ESignatureOAuthCallbackController } from './esignature-oauth-callback.controller.js';
+export { ESignatureRequestController } from './esignature-request.controller.js';
+export {
+  ESignatureRequestService,
+  type RequestDraftPatch,
+  type RequestListQuery,
+  type SignatureRequestDocumentView,
+  type SignatureRequestListRow,
+  type SignatureRequestRecipientView,
+  type SignatureRequestSourceView,
+  type SignatureRequestView,
+} from './esignature-request.service.js';
 export {
   artifactRetentionFor,
   type ESignatureRetentionClass,
