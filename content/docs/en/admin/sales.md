@@ -4,6 +4,7 @@ summary: Enable Sales features and set the currency, pricing, tax, numbering, st
 audience: admin
 order: 131
 tags: [sales, settings, pricing, tax, numbering, inventory, subscriptions]
+aliases: ["cấu hình bán hàng", "dòng đánh số", "tỷ giá tiền tệ", "cấu hình báo giá"]
 related: [admin/module-settings, admin/settings-overview, user/sales-quotes, admin/entities-and-fields]
 updated: 2026-10-22
 ---

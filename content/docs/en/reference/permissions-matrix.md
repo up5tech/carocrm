@@ -4,6 +4,7 @@ summary: The five actions, the five levels, how several roles add up, and the re
 audience: user
 order: 40
 tags: [acl, permission, role, level, button]
+aliases: ["ma trận quyền", "bảng quyền truy cập", "vai trò và quyền"]
 related: [admin/users-teams-roles, reference/glossary, reference/troubleshooting, user/record-page]
 updated: 2026-10-21
 ---

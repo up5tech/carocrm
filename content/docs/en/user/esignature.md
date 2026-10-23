@@ -4,6 +4,7 @@ summary: Draft a request, attach the documents, name the signers, review the pre
 audience: user
 order: 85
 tags: [esignature, signature, request, signing, documents, approval]
+aliases: ["ký điện tử", "chữ ký điện tử", "gửi tài liệu ký", "trạng thái hồ sơ ký"]
 related: [user/record-page, user/lists-and-views, admin/esignature, reference/permissions-matrix, admin/audit-jobs-and-operations]
 updated: 2026-10-23
 ---

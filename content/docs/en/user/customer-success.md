@@ -4,6 +4,7 @@ summary: Health, lifecycle stages, success plans, goals, risks, playbooks and re
 audience: user
 order: 110
 tags: [customer-success, health, renewal, playbook, account]
+aliases: ["sức khỏe khách hàng", "chăm sóc khách hàng", "điểm CSAT", "gia hạn hợp đồng"]
 related: [user/record-page, user/lists-and-views, user/dashboards-and-reports, admin/entities-and-fields]
 updated: 2026-10-21
 ---

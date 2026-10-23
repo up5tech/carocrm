@@ -3,13 +3,20 @@
 Metadata-driven CRM platform: TypeScript + NestJS + Fastify + Kysely/PostgreSQL, a clean-room
 reimplementation of EspoCRM concepts (no PHP runtime, no upstream source copied).
 
-**Current state: CRM Kernel Alpha + five Phase 19 domain modules — Projects, Sales (19-S),
-Customer Success (19-CS), Service Desk (19-SD) and Marketing Automation (19-MA.0–MA.19, complete).**
+**Current state: CRM Kernel Alpha + ten Phase 19 domain modules — Projects, Sales (19-S),
+Customer Success (19-CS), Service Desk (19-SD), Marketing Automation (19-MA), Voice & Communications
+(19-VC), AI Agents (19-AI), Advanced Integrations (19-INT), CRM Chat (19-CHAT) and E-Signature
+(19-ES) — plus Phase 20 (settings, administration and end-user UX) and Phase 21 (the in-app
+handbook).**
 
 _Roadmap_ — [PLAN.md](PLAN.md) for the kernel and module roadmap, plus the phase-level plans
 [Projects](PLAN_Phase_19_Projects.md) · [Sales](PLAN_Phase_19_Sales.md) ·
 [Customer Success](PLAN_Phase_19_Customer_Success.md) · [Service Desk](PLAN_Phase_19_ServiceDesk.md) ·
-[Marketing Automation](PLAN_Phase_19_Marketing_Automation.md).
+[Marketing Automation](PLAN_Phase_19_Marketing_Automation.md) ·
+[Voice & Communications](PLAN_Phase_19_Voice_Communications.md) ·
+[AI Agents](PLAN_Phase_19_AI_Agents.md) · [Advanced Integrations](PLAN_Phase_19_Advanced_Integrations.md) ·
+[CRM Chat](PLAN_Phase_19_CRM_Chat.md) · [E-Signature](PLAN_Phase_19_ESignature.md) ·
+[Settings & UX](PLAN_Phase_20_Settings_UX.md) · [In-app documentation](PLAN_Phase_21_Documentation.md).
 
 _Kernel_ — metadata engine with DB-backed overrides, generic entity/query/ACL engines, a
 metadata-driven React SPA and Entity Manager, stream, calendar, dynamic logic + sandboxed formula
@@ -50,9 +57,44 @@ _Phase 19_ —
   retry, provider webhooks and event normalization, campaign log and statistics, journey graphs
   with enrollment/waits/conditions/actions, public lead-capture forms, cross-module CRM events,
   attribution and funnel analytics, and retention/diagnostics (Phases 19-MA.0–19-MA.19).
+- **Voice & Communications** — provider accounts (Twilio, Asterisk ARI, a simulator that only binds
+  outside production), call control with an agent context panel, SMS/WhatsApp conversations with an
+  inbox, message templates, signed provider webhooks with replay and dead-letter, and per-account
+  privacy/retention policy (Phases 19-VC.0–19-VC.17).
+- **AI Agents** — versioned agent definitions with publish/pause/resume/archive, provider connections
+  (OpenAI-compatible, Anthropic; keys write-only), a run state machine with an event timeline, tool
+  calls, retry/cancel/resume, MCP tool exposure and worker-driven execution (Phases 19-AI.0–19-AI.20).
+- **Advanced Integrations** — a connector framework with OAuth consent, field mappings with preview,
+  bidirectional sync orchestration, signed webhook ingress, dead-letter replay and per-connection
+  metrics; shipped connectors include Stripe, Mailchimp, QuickBooks Online, Shopify, Google Workspace,
+  Microsoft 365, Meta Lead Ads, Zoom, Kit and a generic REST adapter (Phases 19-INT.0–19-INT.27).
+- **CRM Chat** — an assistant over your own CRM data: conversations with SSE turn streams, tool steps
+  and usage, citations re-read under the reader's permission, prompt templates, answer ratings and
+  bounded cross-module analysis scenarios (v1.1, contract 1.2.0).
+- **E-Signature** — provider-neutral signing requests (DocuSign and Dropbox Sign adapters; a simulator
+  outside production): provider connections with an encrypted credential vault, draft/preview/prepare
+  with an approval policy, a deliberate send with double-submit protection, reconciliation and
+  recovery for a lost send answer, provider webhooks with HMAC verification and a durable inbox,
+  template mappings, signed-document artifacts, reports and an operations panel (Phases 19-ES.0–19-ES.22).
+
+_Phase 20_ — settings, administration and end-user UX: a settings-document registry with optimistic
+concurrency and audit, the tabbed administration shell with a server-resolved, ACL-filtered main menu
+(`GET /api/v1/Navigation`), per-user preferences, the list-view power pack, the command palette, the
+first-run setup checklist and the shared record/list states. See
+[PLAN_Phase_20_Settings_UX.md](PLAN_Phase_20_Settings_UX.md).
+
+_Phase 21_ — the in-app handbook: a reviewed Markdown corpus in `content/docs/` (`en` plus the `vi`
+P0 set), a pure documentation engine in `packages/docs` (documented Markdown subset, search ranking,
+a lint that fails a release on a dead link or a missing page), served at `/docs` in the SPA and
+`GET /api/v1/Docs/(tree|page|search)`, with a **Docs** tab in the administration area. See
+[PLAN_Phase_21_Documentation.md](PLAN_Phase_21_Documentation.md) and
+[docs/reference/docs-authoring.md](docs/reference/docs-authoring.md).
 
 _Not built yet_ — real inbound mail collection (`POST /api/v1/Email/action/pollInbound` runs a null
 provider until an IMAP/Graph adapter is installed), API-user attachment policies, multi-tenancy.
+Several provider integrations are delivered but flagged experimental until exercised against a real
+account (the Twilio and Asterisk voice adapters, for one); each module's compatibility note states
+which parts that applies to.
 
 Marketing Automation ships all its phases, but **sending still requires operator configuration**: the
 live adapter wraps the platform's `MailTransport` and is named by the `marketingAutomation` →
@@ -61,9 +103,10 @@ live adapter wraps the platform's `MailTransport` and is named by the `marketing
 [docs/runbooks/marketing-send-operations.md](docs/runbooks/marketing-send-operations.md).
 
 Checklist, deviations and known failures: [docs/reference/alpha-status.md](docs/reference/alpha-status.md).
-It documents the kernel Alpha scope and the Projects module; the Sales, Customer Success, Service
-Desk and Marketing Automation modules are covered instead by the audits, gap reports and release
-notes under [docs/implementation/](docs/implementation/) and [docs/compatibility/](docs/compatibility/).
+It documents the kernel Alpha scope, the Projects module and the Phase 20/21 additions; every other
+Phase 19 module is covered by its own audit, gap report or release note under
+[docs/implementation/](docs/implementation/) and its behavior reference under
+[docs/compatibility/](docs/compatibility/).
 
 ## Requirements
 
@@ -82,8 +125,9 @@ pnpm dev:all                  # API on http://127.0.0.1:3030, SPA on http://127.
 pnpm --filter @carocrm/worker dev   # outbox poller, BullMQ worker, cron scheduler
 ```
 
-`pnpm db:seed` never creates or drops a database — it runs the SQL migrations (up to
-`043_phase19_marketing_journey_runtime.sql`) and inserts idempotent configuration (admin user, roles,
+`pnpm db:seed` never creates or drops a database — it runs every pending SQL migration in
+`database/migrations/` (currently up to `070_phase19_esignature_api_key_credential.sql`) and inserts
+idempotent configuration (admin user, roles,
 teams, entity metadata, default project board, scheduled jobs) into the database you already point
 at. Sign in with `admin` / `admin` (override with `SEED_ADMIN_LOGIN` / `SEED_ADMIN_PASSWORD`; an
 existing admin password is never overwritten). `pnpm db:seed -- --demo` additionally creates a
@@ -91,8 +135,10 @@ existing admin password is never overwritten). `pnpm db:seed -- --demo` addition
 
 `.env.example` documents every variable; the ones you are most likely to touch are
 `STORAGE_DRIVER`/`S3_*` (attachments), `MAIL_TRANSPORT`/`SMTP_*` (outbound mail, and the transport
-Marketing Automation sends through), `ENCRYPTION_KEY` (32-byte hex key required by email-account
-credentials and extension secrets), `EXTENSIONS_DIR`, `REPORT_WORKER_SECRET` (worker-driven jobs:
+Marketing Automation sends through), `ENCRYPTION_KEY` (32-byte hex key: required by every module that
+stores a provider credential — email accounts, extension secrets, AI provider connections, voice
+provider accounts, the E-Signature credential vault and Advanced Integrations connector secrets),
+`EXTENSIONS_DIR`, `REPORT_WORKER_SECRET` (worker-driven jobs:
 scheduled report delivery and AI Agent runs, including CRM Chat) and the upload ceilings. Domain modules keep their configuration in settings
 (`app_settings`), not in the environment — see `GET /api/v1/MarketingAutomation/action/settings`.
 
@@ -123,25 +169,32 @@ govern them.
 ```
 apps/api        NestJS + Fastify REST API (/api/v1); one folder per module
                 (entity, metadata, acl, auth, attachment, email, document, marketing-automation,
-                projects, sales, customer-success, service-desk, portal, workflows, processes, …)
+                projects, sales, customer-success, service-desk, portal, workflows, processes,
+                voice-communications, ai-agents, advanced-integrations, crm-chat, esignature,
+                docs, admin-panel, settings, setup-checklist, preferences, …)
 apps/worker     BullMQ worker, outbox poller, cron scheduler, per-module handlers
 apps/web        metadata-driven React SPA
 packages/       core, metadata, entity-engine, query-engine, acl, files, jobs, extension-sdk,
-                workflow, bpm, formula, document, mail, search, reports (+ reserved api-client,
-                test-kit, ui-schema placeholders)
+                workflow, bpm, formula, document, mail, search, reports, docs (the handbook
+                engine behind /docs) (+ reserved api-client, test-kit, ui-schema placeholders)
 modules/        sample extension packages (field package, integration, CRM domain module)
 database/       SQL migrations, migration runner, seed data + entity metadata
 i18n/           translation catalogs per locale (`en`, `vi`), loaded by the API at boot
+content/docs/   the in-app handbook corpus (per-locale sections, reviewed like code)
 e2e/            Playwright browser specs, one per feature area
 docs/           module guide, workflows, bpm, extension SDK
-  modules/      per-module guides (projects, sales, customer-success, service-desk, document)
+  modules/      per-module guides (projects, sales, customer-success, service-desk, document,
+                voice-communications, ai-agents, crm-chat, advanced-integrations, esignature)
   marketing-automation/  campaign lifecycle, consent, templates, provider adapters, sends,
                          cross-module integration
-  reference/    alpha status and EspoCRM compatibility matrix
-  compatibility/         per-module behaviour comparison (service-desk, marketing-automation)
+  reference/    alpha status, EspoCRM compatibility matrix, handbook authoring rules
+  compatibility/         per-module behaviour reference (service-desk, marketing-automation,
+                         voice-communications, ai-agents, advanced-integrations, esignature,
+                         settings-ux, documentation)
   implementation/        audits, gap and release reports
   integrations/          cross-module contracts (sales)
-  operations/  runbooks/  backup-restore, marketing send operations
+  operations/  runbooks/  backup-restore, marketing send operations, esignature admin
+                         setup and operations, advanced integrations
 ```
 
 ## API surface (Alpha)
@@ -276,6 +329,66 @@ Marketing Automation (`/api/v1/MarketingAutomation`, see
   `GET public/click`, `GET public/open`, `POST public/form/submit`
 - provider webhooks: `POST webhook/:providerKey` and `POST webhooks/:providerKey`
 
+Voice & Communications (`/api/v1/VoiceCommunications`):
+
+- module: `action/(health|settings|nav|providers|webhook-events)`, per-account
+  `action/accounts[/:key]` with `enabled`, `health` and `endpoints`, event replay via
+  `action/webhook-events/:id/replay`
+- calls and messaging: `action/calls/(initiate|incoming|:id/(control|context|note|link))`,
+  `action/messages/send`, `action/conversations[/:id]` with `timeline`, `history`, `read`, `status`
+  and `assign`, the shared `action/inbox`, per-account `action/templates/...`
+- signed provider webhooks: `POST /api/v1/integrations/voice-communications/:providerKey/:accountKey/:kind`
+
+AI Agents (`/api/v1/AIAgents`):
+
+- providers and settings: `GET|POST action/settings`, `action/providers[/:key]` (CRUD + `check`),
+  `action/tools`, `action/templates`
+- agents: `GET|POST action/agents[/:id]` plus `versions`, `validate`, `publish`, `pause`, `resume`,
+  `archive`, `restore`
+- runs: `GET|POST action/runs[/:id]` plus `events`, `toolCalls`, `retry`, `cancel`, `input`,
+  `resume`, `execute`; triggers via `action/triggers/run`, MCP via `action/mcp/(tools|call)`,
+  worker entrypoint `action/worker/runs/:id/execute`
+
+Advanced Integrations (`/api/v1/AdvancedIntegrations`):
+
+- module: `action/(health|capabilities|nav|settings|providers[/:providerKey])`
+- connections: `GET|POST action/connections[/:id]` plus `credentials`, `pause`, `resume`, `revoke`,
+  `authorize`, `reconnect`, `links`, `runs`; mappings `action/mappings[/:id]` with `activate`,
+  `retire`, `preview`, `sync`; run inspection `action/runs[/:id]` and `cancel`
+- OAuth consent callback `GET /api/v1/integrations/advanced-integrations/oauth/callback` and signed
+  webhooks `POST /api/v1/integrations/advanced-integrations/:providerKey/:webhookKey/:kind`
+
+CRM Chat (`/api/v1/CRMChat`):
+
+- module: `action/(capabilities|health|settings)`, conversations `action/conversations[/:id]`
+  (list, rename, delete, messages), help search `action/help/search`
+- turns: `POST action/turns`, `GET action/turns/:turnId`, `POST action/turns/:turnId/cancel`,
+  SSE `GET action/turns/:turnId/events` (resumable with `Last-Event-ID`), `usage` and per-turn
+  `feedback`; grounded queries `action/query/execute`, citation re-auth `action/citations/reauthorize`
+- assistant actions and templates: `action/actions/:approvalId/(confirm|reject)`, `action/prompts[/:id]`
+  (CRUD), cross-module `action/cross-module/(scenarios|analyze)`
+
+E-Signature (`/api/v1/ESignature`, see [docs/modules/esignature/](docs/modules/esignature/README.md)):
+
+- module: `action/(health|capabilities|nav|provider-catalog|settings|gate/check|gate/operations|record-entry|reports|operations)`
+- connections: `GET|POST connections[/:id]` plus `secret`, `authorize`, `re-authorize`, `test`,
+  `enable`, `disable`, `disconnect`
+- requests: `GET|POST requests[/:id]`, `preview`, `prepare`, `request-approval`, `approve`, `reject`,
+  `envelope` (+ `abandon`), `send`, `send/recover`, `reconcile`, `events`, `embedded-view`,
+  `artifacts/retrieve`, `resend-notification`, `void`, `correct`, recipients and documents sub-routes
+- templates: `templates/catalog/(refresh|:connectionId/:templateId)`, `templates/mappings[/:id]` (+ `active`)
+- provider callbacks `POST /api/v1/integrations/esignature/:publicId`, DocuSign consent
+  `GET /api/v1/ESignature/oauth/callback`
+
+Settings, administration and the handbook (Phases 20–21):
+
+- `GET|POST /api/v1/Settings` (+ `logo`), hosted module settings documents under
+  `/api/v1/Settings/documents[/:name]` (GET, POST, `reset`)
+- `GET /api/v1/AdminPanel` (the caller's resolved tab catalog), `GET /api/v1/Navigation`
+  (ACL-filtered menu tree), `GET /api/v1/SetupChecklist`, per-user `GET|PUT /api/v1/Preferences[/:name]`
+- `GET /api/v1/Docs/(tree|page/:section/:slug|search)` — the in-app handbook; admin-only internals
+  under `/api/v1/AdminInternal`
+
 Extensions and operations:
 
 - `GET /api/v1/Extension`, `GET /api/v1/Extension/frontend` (any signed-in user),
@@ -304,11 +417,21 @@ Every module route is authenticated and ACL-checked server-side; see
 | [docs/modules/customer-success/](docs/modules/customer-success/README.md)        | Customer Success: lifecycle, health scoring, plans, risks, playbooks, renewals                      |
 | [docs/modules/service-desk/](docs/modules/service-desk/README.md)                | Service Desk: cases, state machine, assignment, conversation, SLA                                 |
 | [docs/marketing-automation/](docs/marketing-automation/campaign-lifecycle.md)     | MA: campaign lifecycle, consent/suppression, templates, provider adapters, send definitions, journey runtime, metrics, security and privacy, cross-module integration |
+| [docs/modules/voice-communications/](docs/modules/voice-communications/architecture.md) | Voice: providers, call flow, webhooks, privacy and retention, operations                         |
+| [docs/modules/ai-agents/](docs/modules/ai-agents/architecture.md)                 | AI Agents: architecture, agent schema, run state machine, providers, memory, threat model        |
+| [docs/modules/crm-chat/](docs/modules/crm-chat/RELEASE_NOTES.md)                  | CRM Chat: release notes (v1.1) and the repository audit behind its AIAgents reuse                |
+| [docs/modules/advanced-integrations/](docs/modules/advanced-integrations/feature-contract.md) | Advanced Integrations: feature contract and ADRs for the connector framework          |
+| [docs/modules/esignature/](docs/modules/esignature/README.md)                    | E-Signature: provider-neutral request model, connection gate, lifecycle, operations              |
 | [docs/runbooks/marketing-send-operations.md](docs/runbooks/marketing-send-operations.md) | operating MA sending: provider binding, limits, test send, error kinds                    |
 | [docs/runbooks/marketing-provider-incidents.md](docs/runbooks/marketing-provider-incidents.md) | MA provider incidents: credentials, webhooks, bounce spikes, stalled queues, safe resume |
+| [docs/runbooks/esignature-admin-setup.md](docs/runbooks/esignature-admin-setup.md) | E-Signature provider setup: DocuSign consent, Dropbox Sign key, Connect callbacks               |
+| [docs/runbooks/esignature-operations.md](docs/runbooks/esignature-operations.md)  | E-Signature operations: recovery queues, reconciliation, reminders, artifact retention            |
+| [docs/runbooks/advanced-integrations.md](docs/runbooks/advanced-integrations.md) | Advanced Integrations operations                                                                  |
 | [docs/implementation/](docs/implementation/service-desk-release.md)               | per-module audits, gap reports and release notes                                                  |
 | [docs/reference/alpha-status.md](docs/reference/alpha-status.md)                 | kernel Alpha + Projects checklist, deviations, verification actually run, web theme, Kanban board |
 | [docs/reference/compatibility-matrix.md](docs/reference/compatibility-matrix.md) | behaviour compared against the EspoCRM 9.3.x baseline                                             |
+| [docs/reference/docs-authoring.md](docs/reference/docs-authoring.md)             | authoring the in-app handbook: page format, the Markdown subset, what the lint refuses            |
+| [content/docs/](content/docs/en/_index.md)                                       | the handbook corpus itself (English plus the Vietnamese P0 set), rendered at `/docs`              |
 | [docs/operations/backup-restore.md](docs/operations/backup-restore.md)           | what to back up and how to restore it                                                             |
 
 ## Contributing

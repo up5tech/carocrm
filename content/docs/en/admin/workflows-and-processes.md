@@ -4,6 +4,7 @@ summary: The workflow and process builders, the five actions automation can perf
 audience: admin
 order: 100
 tags: [workflows, processes, automation, approvals, runs]
+aliases: ["quy trình tự động", "workflow", "luồng phê duyệt"]
 related: [admin/settings-overview, admin/entities-and-fields, admin/extensions, user/activities-and-tasks, user/record-page]
 updated: 2026-10-21
 ---

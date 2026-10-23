@@ -4,6 +4,7 @@ summary: What a run records, how conversation memory works, when an agent must a
 audience: user
 order: 140
 tags: [ai-agents, agents, runs, approvals, usage]
+aliases: ["trợ lý AI", "tác nhân AI", "chạy trợ lý", "hỏi AI về dữ liệu"]
 related: [user/record-page, admin/module-settings, admin/users-teams-roles]
 updated: 2026-10-21
 ---

@@ -4,6 +4,7 @@ summary: How the marketingAutomation document is read and written, what each fla
 audience: admin
 order: 134
 tags: [marketing, campaigns, consent, settings, email]
+aliases: ["cấu hình marketing", "kênh gửi chiến dịch", "danh sách mục tiêu"]
 related: [admin/module-settings, admin/settings-overview, admin/email-and-notifications, user/marketing]
 updated: 2026-10-22
 ---

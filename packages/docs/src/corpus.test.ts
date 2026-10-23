@@ -109,6 +109,18 @@ describe('the shipped documentation corpus', () => {
     expect(vietnamese.pages.get('reference/glossary')).toMatchObject({ fallback: true, locale: 'en' });
   });
 
+  it('gives every untranslated page a Vietnamese alias a reader can search for', () => {
+    // A page served in English to a Vietnamese reader is only findable by its English words unless it
+    // carries aliases. `CRMChat`'s handbook tools search the reader's own locale, so a page without an
+    // alias is invisible to the question that would have been asked about it in Vietnamese.
+    const vietnamese = buildIndex(files, { locale: 'vi' });
+    const fallbacks = [...vietnamese.pages.values()].filter((page) => page.fallback);
+    expect(fallbacks.length).toBeGreaterThan(0);
+    for (const page of fallbacks) {
+      expect(page.aliases.length, `${page.key} needs at least one alias`).toBeGreaterThan(0);
+    }
+  });
+
   it('finds an admin page from a diacritic-free query', () => {
     const vietnamese = buildIndex(files, { locale: 'vi' });
     expect(searchIndex(vietnamese, 'sidebar').hits.map((hit) => hit.key)).toContain('admin/main-menu');

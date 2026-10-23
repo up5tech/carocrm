@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
+import { restoreSettings, snapshotSettings } from './support/settings-snapshot.js';
 
 /**
  * Phase 19-CHAT.17 — Evaluation and End-to-End Verification
@@ -35,6 +36,7 @@ const EVAL_USER = `AGENT_TEST-chat-eval-${runId}`;
 let ctx: ApiContext;
 let evalToken = '';
 let baselineAiSettings: unknown = null;
+let baselineChatSettings: unknown = null;
 const createdUserIds: string[] = [];
 
 async function call(method: Method, url: string, token?: string, payload?: unknown): Promise<CallResult> {
@@ -59,12 +61,18 @@ beforeAll(async () => {
   // This suite submits turns faster than a real model answers them, and the instance-wide
   // concurrency ceiling would refuse the next prompt for the wrong reason. Give it headroom for the
   // duration of the suite and put the stored document back afterwards.
-  const aiRows = await ctx.database.db.selectFrom('app_settings').select('data').where('name', '=', 'aiAgents').execute();
-  baselineAiSettings = aiRows[0]?.data ?? null;
+  baselineAiSettings = await snapshotSettings(ctx, 'aiAgents');
   const headroom = await call('POST', '/api/v1/AIAgents/action/settings', ctx.adminToken, {
     limits: { maxConcurrency: 10 },
   });
   expect(headroom.status, JSON.stringify(headroom.body)).toBe(200);
+
+  // The help-search cases below run against a deployment that has help answers switched on.
+  baselineChatSettings = await snapshotSettings(ctx, 'crmChat');
+  const helpOn = await call('POST', '/api/v1/CRMChat/action/settings', ctx.adminToken, {
+    features: { helpRetrieval: true },
+  });
+  expect(helpOn.status, JSON.stringify(helpOn.body)).toBe(200);
 
   await createTestRole(ctx, {
     id: ROLE_EVAL_USER,
@@ -106,16 +114,8 @@ afterAll(async () => {
     await db.deleteFrom('users').where('id', 'in', createdUserIds).execute();
   }
   await db.deleteFrom('roles').where('id', 'in', [ROLE_EVAL_USER]).execute();
-  if (baselineAiSettings === null) {
-    await db.deleteFrom('app_settings').where('name', '=', 'aiAgents').execute();
-  } else {
-    const serialized = JSON.stringify(baselineAiSettings);
-    await db
-      .insertInto('app_settings')
-      .values({ name: 'aiAgents', data: serialized, modified_at: new Date() })
-      .onConflict((oc) => oc.column('name').doUpdateSet({ data: serialized, modified_at: new Date() }))
-      .execute();
-  }
+  await restoreSettings(ctx, 'aiAgents', baselineAiSettings);
+  await restoreSettings(ctx, 'crmChat', baselineChatSettings);
   await shutdownApi();
 });
 

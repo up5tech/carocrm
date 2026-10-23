@@ -4,6 +4,7 @@ summary: The campaign lifecycle, the audience lists it aims at, and the consent 
 audience: user
 order: 120
 tags: [campaign, audience, target-list, consent, suppression, email]
+aliases: ["chiến dịch marketing", "email marketing", "danh sách khách mục tiêu", "gửi chiến dịch"]
 related: [user/lists-and-views, user/record-page, user/customer-success, admin/settings-overview]
 updated: 2026-10-21
 ---

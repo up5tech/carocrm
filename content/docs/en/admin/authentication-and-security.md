@@ -4,6 +4,7 @@ summary: The password and session policy you can store, what sign-in actually en
 audience: admin
 order: 70
 tags: [security, sessions, passwords, tokens, danger-zone]
+aliases: ["đăng nhập và bảo mật", "xác thực hai lớp", "khóa phiên", "chính sách mật khẩu"]
 related: [admin/settings-overview, admin/users-teams-roles, admin/api-keys, admin/email-and-notifications, getting-started/sign-in]
 updated: 2026-10-21
 ---

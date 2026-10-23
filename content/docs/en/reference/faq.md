@@ -4,6 +4,7 @@ summary: Short answers to the questions this build really gets — each one poin
 audience: user
 order: 20
 tags: [faq, questions, password, search, import]
+aliases: ["câu hỏi thường gặp", "hỏi đáp nhanh"]
 related: [getting-started/sign-in, user/stream-and-notifications, user/import-export, reference/troubleshooting]
 updated: 2026-10-21
 ---

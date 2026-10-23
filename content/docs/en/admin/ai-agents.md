@@ -4,6 +4,7 @@ summary: Configure providers, execution limits, approvals, retention and budgets
 audience: admin
 order: 155
 tags: [ai-agents, providers, settings, approvals, budgets]
+aliases: ["cấu hình trợ lý AI", "khoá API model", "cấp công cụ cho agent", "ngân sách AI"]
 related: [admin/module-settings, admin/users-teams-roles, admin/audit-jobs-and-operations, user/ai-agents]
 updated: 2026-10-22
 ---

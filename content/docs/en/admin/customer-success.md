@@ -4,6 +4,7 @@ summary: Configure lifecycle rules, health signals and bands, renewal windows, p
 audience: admin
 order: 133
 tags: [customer-success, settings, health-scoring, playbooks, renewal]
+aliases: ["cấu hình chăm sóc khách hàng", "chỉ số sức khỏe khách hàng", "cấu hình CSAT"]
 related: [admin/settings-overview, admin/module-settings, admin/entities-and-fields, user/customer-success]
 updated: 2026-10-22
 ---

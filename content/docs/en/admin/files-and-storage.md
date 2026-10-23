@@ -4,6 +4,7 @@ summary: Where uploaded files live, the limits that really apply, the attachment
 audience: admin
 order: 90
 tags: [files, attachments, upload, storage, retention]
+aliases: ["lưu trữ tệp", "đám mây lưu trữ", "đính kèm tệp"]
 related: [admin/settings-overview, admin/authentication-and-security, admin/entities-and-fields, user/record-page, admin/workflows-and-processes]
 updated: 2026-10-21
 ---

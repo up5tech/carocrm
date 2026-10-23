@@ -4,6 +4,7 @@ summary: The support case lifecycle, queue routing, the SLA clock and satisfacti
 audience: user
 order: 90
 tags: [case, service-desk, queue, sla, csat, support]
+aliases: ["yêu cầu hỗ trợ", "case hỗ trợ khách hàng", "ticket", "chuyển case"]
 related: [user/record-page, user/lists-and-views, user/activities-and-tasks, user/stream-and-notifications, admin/settings-overview]
 updated: 2026-10-21
 ---

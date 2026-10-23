@@ -4,6 +4,7 @@ summary: Turn the module on, connect DocuSign or Dropbox Sign, and set the docum
 audience: admin
 order: 136
 tags: [esignature, signature, docusign, dropbox-sign, providers, approvals, webhooks]
+aliases: ["cấu hình ký điện tử", "kết nối nhà cung cấp ký", "mẫu tài liệu ký"]
 related: [admin/module-settings, admin/settings-overview, admin/users-teams-roles, user/esignature, admin/audit-jobs-and-operations]
 updated: 2026-10-23
 ---

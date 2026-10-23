@@ -4,6 +4,7 @@ summary: What a portal is here, how its navigation is built, and how access cont
 audience: admin
 order: 140
 tags: [portals, external-access, acl, portal-roles]
+aliases: ["cổng khách hàng", "tài khoản portal", "vai trò portal"]
 related: [admin/settings-overview, admin/users-teams-roles, admin/module-settings]
 updated: 2026-10-21
 ---

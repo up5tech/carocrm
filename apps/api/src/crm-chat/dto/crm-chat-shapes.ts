@@ -82,13 +82,20 @@ export const CRMChatTurnCreateSchema = z
     conversationId: z.string().trim().min(1).max(120).optional(),
     /** Client-generated idempotency key to prevent duplicate turns on retry. */
     idempotencyKey: z.string().trim().min(8).max(120).optional(),
-    /** Optional safe context references (record IDs the user is viewing). */
+    /**
+     * Optional safe context references (record IDs the user is viewing). The patterns are the point:
+     * a reference is interpolated into the agent's prompt, so it must look like an entity name and a
+     * record id and nothing else. How many are allowed is a deployment limit, checked against
+     * `limits.maxContextRefs` where the turn is accepted.
+     */
     contextRefs: z
       .array(
-        z.object({
-          entity: z.string().trim().min(1).max(120),
-          id: z.string().trim().min(1).max(120),
-        }).strict(),
+        z
+          .object({
+            entity: z.string().trim().regex(/^[A-Za-z][A-Za-z0-9_-]{0,119}$/, 'entity must be an entity name'),
+            id: z.string().trim().regex(/^[A-Za-z0-9_-]{1,120}$/, 'id must be a record id'),
+          })
+          .strict(),
       )
       .max(10)
       .optional(),

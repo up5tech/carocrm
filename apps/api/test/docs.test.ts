@@ -97,12 +97,37 @@ beforeAll(async () => {
   ctx = await bootApi();
   regularToken = (await createTestUser(ctx, { userName: `AGENT_TEST-p21-${runId}` })).token;
 
-  const portal = await call('POST', '/api/v1/Portal', ctx.adminToken, { name: `AGENT_TEST P21 Portal ${runId}` });
-  expect(portal.status).toBe(201);
-  portalId = String(portal.body['id']);
-  const role = await call('POST', '/api/v1/PortalRole', ctx.adminToken, { name: `AGENT_TEST P21 Role ${runId}`, permissions: {} });
-  expect(role.status).toBe(201);
-  portalRoleId = String(role.body['id']);
+  // The portal fixture is written directly. `POST /Portal` refuses when the instance already holds
+  // MAX_PORTALS live rows, and a suite must not fail because of how much unrelated data the shared
+  // database happens to carry; the portal-role *link* below still goes through the API.
+  const db = ctx.database.db;
+  portalId = `AGENT_TEST_p21_portal_${runId}`;
+  await db
+    .insertInto('portals')
+    .values({
+      id: portalId,
+      name: `AGENT_TEST P21 Portal ${runId}`,
+      url_path: `/agent-test-p21-${runId}`,
+      is_active: true,
+      settings: JSON.stringify({}),
+      is_deleted: false,
+      created_at: new Date(),
+      modified_at: new Date(),
+    })
+    .execute();
+  portalRoleId = `AGENT_TEST_p21_role_${runId}`;
+  await db
+    .insertInto('portal_roles')
+    .values({
+      id: portalRoleId,
+      name: `AGENT_TEST P21 Role ${runId}`,
+      permissions: JSON.stringify({}),
+      field_permissions: JSON.stringify({}),
+      is_deleted: false,
+      created_at: new Date(),
+      modified_at: new Date(),
+    })
+    .execute();
   await call('POST', `/api/v1/Portal/${portalId}/roles`, ctx.adminToken, { portalRoleIds: [portalRoleId] });
   const account = await call('POST', '/api/v1/Account', ctx.adminToken, { name: `AGENT_TEST P21 Acc ${runId}` });
   accountId = String(account.body['id']);
@@ -146,8 +171,15 @@ afterAll(async () => {
   if (portalUserId !== '') await ctx.database.db.deleteFrom('users').where('id', '=', portalUserId).execute().catch(() => undefined);
   const recordIds = [accountId, contactId].filter((id) => id !== '');
   if (recordIds.length > 0) await ctx.database.db.deleteFrom('entity_records').where('id', 'in', recordIds).execute().catch(() => undefined);
-  for (const id of [portalRoleId, portalId].filter((value) => value !== '')) {
-    await ctx.database.db.deleteFrom('entity_records').where('id', '=', id).execute().catch(() => undefined);
+  // Portals and portal roles are their own tables, not `entity_records` — deleting them there is what
+  // left a live portal row behind on every run until the instance cap refused the next suite.
+  if (portalId !== '') {
+    await ctx.database.db.deleteFrom('portals_portal_roles').where('portal_id', '=', portalId).execute().catch(() => undefined);
+    await ctx.database.db.deleteFrom('portals').where('id', '=', portalId).execute().catch(() => undefined);
+  }
+  if (portalRoleId !== '') {
+    await ctx.database.db.deleteFrom('portals_portal_roles').where('portal_role_id', '=', portalRoleId).execute().catch(() => undefined);
+    await ctx.database.db.deleteFrom('portal_roles').where('id', '=', portalRoleId).execute().catch(() => undefined);
   }
   await shutdownApi();
 });
@@ -340,7 +372,9 @@ describe('GET /Docs/search', () => {
   });
 
   it('returns nothing for a term that only appears in administrator content', async () => {
-    const res = await call('GET', `/api/v1/Docs/search?q=${encodeURIComponent('envelope optimistic concurrency')}`, regularToken);
+    // Both words occur only in `admin/ai-agents.md`, so any hit for a regular reader is a leak rather
+    // than a ranking accident. Pick a replacement the same way when the corpus grows.
+    const res = await call('GET', `/api/v1/Docs/search?q=${encodeURIComponent('globally concurrency')}`, regularToken);
     expect((res.body['hits'] as unknown[]).length).toBe(0);
   });
 

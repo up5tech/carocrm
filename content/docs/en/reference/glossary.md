@@ -4,6 +4,7 @@ summary: The vocabulary this interface actually uses — including the four word
 audience: user
 order: 10
 tags: [glossary, terms, vocabulary, entity, field]
+aliases: ["thuật ngữ", "từ điển hệ thống", "giải thích khái niệm"]
 related: [user/record-page, user/lists-and-views, admin/entities-and-fields, reference/permissions-matrix]
 updated: 2026-10-21
 ---

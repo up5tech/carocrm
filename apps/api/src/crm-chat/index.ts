@@ -5,7 +5,6 @@ import { CRMChatActionService } from './crm-chat-actions.service.js';
 import { CRMChatAIAgentsClientService } from './crm-chat-ai-agents-client.service.js';
 import { CRMChatAssistantService } from './crm-chat-assistant.service.js';
 import { CRMChatCitationService } from './crm-chat-citations.service.js';
-import { CRMChatContextService } from './crm-chat-context.service.js';
 import { CRMChatConversationService } from './crm-chat-conversations.service.js';
 import { CRMChatCrossModuleService } from './crm-chat-cross-module.service.js';
 import { CRMChatFeedbackService } from './crm-chat-feedback.service.js';
@@ -34,8 +33,6 @@ export type { AssistantReadiness } from './crm-chat-assistant.service.js';
 export { CRMChatAssistantService } from './crm-chat-assistant.service.js';
 export type { CRMChatCitationView } from './crm-chat-citations.service.js';
 export { CRMChatCitationService } from './crm-chat-citations.service.js';
-export type { CitationSource, ContextRef, ReauthorizedCitation } from './crm-chat-context.service.js';
-export { CRMChatContextService } from './crm-chat-context.service.js';
 export {
   CRM_CHAT_BLOCKED_CAPABILITIES,
   CRM_CHAT_CONTRACT_VERSION,
@@ -123,7 +120,6 @@ export const CRM_CHAT_PROVIDERS: Provider[] = [
   CRMChatPolicyService,
   CRMChatAssistantService,
   CRMChatAIAgentsClientService,
-  CRMChatContextService,
   CRMChatCrossModuleService,
   CRMChatFeedbackService,
   CRMChatHelpService,

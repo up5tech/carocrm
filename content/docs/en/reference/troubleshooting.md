@@ -4,6 +4,7 @@ summary: When something fails: the message you saw, the reason behind it, and th
 audience: user
 order: 30
 tags: [troubleshooting, errors, fixes, audit]
+aliases: ["khắc phục sự cố", "lỗi thường gặp", "không truy cập được"]
 related: [reference/permissions-matrix, admin/users-teams-roles, admin/settings-overview, user/lists-and-views]
 updated: 2026-10-21
 ---

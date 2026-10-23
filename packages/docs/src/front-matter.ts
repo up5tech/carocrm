@@ -14,7 +14,7 @@ import { z } from 'zod';
 
 import type { DocFrontMatter, YamlValue } from './types.js';
 
-const FRONT_MATTER_KEYS = ['title', 'summary', 'audience', 'order', 'tags', 'requires', 'related', 'updated'] as const;
+const FRONT_MATTER_KEYS = ['title', 'summary', 'audience', 'order', 'tags', 'aliases', 'requires', 'related', 'updated'] as const;
 
 /**
  * `Date.parse` is not a calendar check here: V8 rolls `2026-02-30` over to 2 March instead of calling
@@ -35,6 +35,12 @@ export const DocFrontMatterSchema = z
     audience: z.enum(['user', 'admin']),
     order: z.number().int().nonnegative(),
     tags: z.array(z.string().regex(/^[a-z0-9-]+$/, 'tags must be lowercase tokens')).default([]),
+    /**
+     * Search phrases a reader would type for this page, in any language. `tags` are machine-shaped
+     * tokens; an alias is prose (`báo cáo bán hàng`), which is how a Vietnamese question reaches a page
+     * that has not been translated yet. Indexed with the tag weight, never shown as a label.
+     */
+    aliases: z.array(z.string().trim().min(2).max(60)).default([]),
     requires: z
       .object({
         entity: z.string().min(1),

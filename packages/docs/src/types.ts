@@ -30,6 +30,8 @@ export interface DocFrontMatter {
   readonly audience: DocAudience;
   readonly order: number;
   readonly tags: readonly string[];
+  /** Search phrases in any language; see `DocFrontMatter.aliases`. */
+  readonly aliases: readonly string[];
   readonly requires: DocRequires | null;
   readonly related: readonly string[];
   readonly updated: string | null;
@@ -99,6 +101,7 @@ export interface DocPageMeta {
   readonly audience: DocAudience;
   readonly order: number;
   readonly tags: readonly string[];
+  readonly aliases: readonly string[];
   readonly requires: DocRequires | null;
   readonly updated: string | null;
   /** True when this locale does not have the page and `en` content is being served instead. */

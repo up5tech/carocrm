@@ -4,6 +4,7 @@ summary: How a package gets onto this instance, what installing and enabling rea
 audience: admin
 order: 110
 tags: [extensions, packages, modules, manifest, migrations]
+aliases: ["tiện ích mở rộng", "cài plugin", "gói mở rộng"]
 related: [admin/settings-overview, admin/main-menu, admin/entities-and-fields, admin/workflows-and-processes, admin/authentication-and-security]
 updated: 2026-10-21
 ---

@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
+import { restoreSettings, snapshotSettings } from './support/settings-snapshot.js';
 
 /**
  * Phase 19-CHAT.9 — handbook-backed help answers
@@ -40,6 +41,8 @@ const ADMIN_PAGE = 'admin/crm-chat';
 const OPEN_PAGE = 'user/chat-and-voice';
 /** The Vietnamese translation of the reports guide, which a Vietnamese reader should be sent to. */
 const VI_PAGE = 'user/dashboards-and-reports';
+/** An English-only page that a Vietnamese question reaches through its front-matter aliases. */
+const ALIAS_ONLY_PAGE = 'user/esignature';
 
 let ctx: ApiContext;
 let memberToken = '';
@@ -64,20 +67,6 @@ async function call(method: Method, url: string, token?: string, payload?: unkno
     body = {};
   }
   return { status: res.statusCode, body };
-}
-
-async function restoreSettings(name: string, baseline: unknown): Promise<void> {
-  const db = ctx.database.db;
-  if (baseline === null) {
-    await db.deleteFrom('app_settings').where('name', '=', name).execute();
-    return;
-  }
-  const serialized = JSON.stringify(baseline);
-  await db
-    .insertInto('app_settings')
-    .values({ name, data: serialized, modified_at: new Date() })
-    .onConflict((oc) => oc.column('name').doUpdateSet({ data: serialized, modified_at: new Date() }))
-    .execute();
 }
 
 /** The tool calls of one run, oldest first — what the model asked for and what the server answered. */
@@ -129,10 +118,8 @@ async function settledRun(id: string): Promise<Record<string, unknown>> {
 beforeAll(async () => {
   ctx = await bootApi();
 
-  const aiRows = await ctx.database.db.selectFrom('app_settings').select('data').where('name', '=', 'aiAgents').execute();
-  baselineAiSettings = aiRows[0]?.data ?? null;
-  const chatRows = await ctx.database.db.selectFrom('app_settings').select('data').where('name', '=', 'crmChat').execute();
-  baselineChatSettings = chatRows[0]?.data ?? null;
+  baselineAiSettings = await snapshotSettings(ctx, 'aiAgents');
+  baselineChatSettings = await snapshotSettings(ctx, 'crmChat');
 
   await createTestRole(ctx, {
     id: ROLE_MEMBER,
@@ -164,6 +151,11 @@ beforeAll(async () => {
     provider: { defaultKey: PROVIDER_KEY },
   });
   expect(aiSettings.status).toBe(200);
+
+  const chatSettings = await call('POST', '/api/v1/CRMChat/action/settings', ctx.adminToken, {
+    features: { workspace: true, helpRetrieval: true },
+  });
+  expect(chatSettings.status, JSON.stringify(chatSettings.body)).toBe(200);
 
   const agent = await call('POST', '/api/v1/AIAgents/action/agents', ctx.adminToken, {
     key: AGENT_KEY,
@@ -239,8 +231,8 @@ afterAll(async () => {
     .where('name', '=', 'aiAgents')
     .where(sql`data->'settings'->'provider'->>'defaultKey'`, '=', PROVIDER_KEY)
     .execute();
-  await restoreSettings('aiAgents', baselineAiSettings);
-  await restoreSettings('crmChat', baselineChatSettings);
+  await restoreSettings(ctx, 'aiAgents', baselineAiSettings);
+  await restoreSettings(ctx, 'crmChat', baselineChatSettings);
   if (memberUserId !== '') await db.deleteFrom('users').where('id', '=', memberUserId).execute();
   await db.deleteFrom('roles').where('id', '=', ROLE_MEMBER).execute();
   await shutdownApi();
@@ -334,6 +326,18 @@ describe('handbook read tools (19-CHAT.9)', () => {
     expect(outcome.locale).toBe('vi');
     expect(outcome.pages[0]?.key).toBe(VI_PAGE);
     expect(outcome.pages[0]?.locale).toBe('vi');
+
+    // A page that has no Vietnamese translation is still reachable through its aliases, which is the
+    // only reason a Vietnamese question can find it at all.
+    const aliased = await runTool(
+      memberToken,
+      `Ký điện tử thế nào? __FAKE_TOOL__:docs_search __FAKE_TOOL_ARGS__:{"query":"ký điện tử","maxSize":5}`,
+    );
+    await settledRun(aliased);
+    const aliasOutcome = outcomeOf((await toolCallsOf(aliased)).find((row) => row.tool_key === 'docs_search')).result as {
+      pages: { key: string }[];
+    };
+    expect(aliasOutcome.pages.map((page) => page.key)).toContain(ALIAS_ONLY_PAGE);
 
     const restored = await call('PATCH', '/api/v1/AppUser/me', memberToken, { locale: null });
     expect(restored.status).toBe(200);

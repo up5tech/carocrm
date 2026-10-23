@@ -4,6 +4,7 @@ summary: The five setup steps the home page tracks for an administrator, and the
 audience: admin
 order: 15
 tags: [first-run, setup, onboarding, admin]
+aliases: ["khởi tạo hệ thống", "cài đặt lần đầu", "việc cần làm sau cài đặt"]
 related: [admin/settings-overview, admin/main-menu, admin/users-teams-roles]
 updated: 2026-10-21
 ---

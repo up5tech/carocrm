@@ -4,6 +4,7 @@ summary: Administer case numbering, resolution, routing fallback, SLA clocks and
 audience: admin
 order: 132
 tags: [service-desk, settings, queues, sla, email-to-case, business-calendar]
+aliases: ["cấu hình bàn hỗ trợ", "hàng đợi case", "mục tiêu SLA", "tự động phân công"]
 related: [admin/settings-overview, admin/module-settings, admin/email-and-notifications, admin/portals, user/service-desk-cases]
 updated: 2026-10-22
 ---

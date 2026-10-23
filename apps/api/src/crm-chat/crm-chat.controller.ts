@@ -1,4 +1,4 @@
-import { InvalidQueryError } from '@carocrm/core/errors/index.js';
+import { AppError, InvalidQueryError } from '@carocrm/core/errors/index.js';
 import { Body, Controller, Delete, Get, Headers, HttpCode, Inject, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
@@ -238,6 +238,17 @@ export class CRMChatController {
     await this.policy.assertWorkspace();
     const input = parse(CRMChatTurnCreateSchema, body);
 
+    // How many context references a turn may carry is a deployment limit, not a client choice.
+    const { maxContextRefs } = (await this.settings.settings()).limits;
+    if ((input.contextRefs?.length ?? 0) > maxContextRefs) {
+      throw new AppError(
+        'CHAT_CONTEXT_TOO_LARGE',
+        `A turn may carry at most ${String(maxContextRefs)} context references on this installation.`,
+        { maxContextRefs },
+        422,
+      );
+    }
+
     // Verify assistant is ready before submitting.
     const readiness = await this.assistant.readiness();
     if (readiness.state !== 'ready' || !readiness.agentId) {
@@ -326,12 +337,15 @@ export class CRMChatController {
   }
 
   /**
-   * Search for CRM help content. Answers "how do I" questions by searching Knowledge Base articles
-   * and other approved help sources. Retrieved content is treated as untrusted data.
+   * Search for CRM help content. Answers "how do I" questions from the product handbook and the
+   * published knowledge articles. Retrieved content is treated as untrusted data.
+   *
+   * The endpoint belongs to `features.helpRetrieval`, so a deployment that has not turned help answers
+   * on refuses the call rather than returning an empty list that looks like "nothing was found".
    */
   @Get('action/help/search')
   async searchHelp(@Query('q') query?: string) {
-    await this.policy.assertWorkspace();
+    await this.policy.assertFeature('helpRetrieval');
 
     if (!query || query.trim().length === 0) {
       throw new InvalidQueryError('Please provide a search query using ?q=your+question');

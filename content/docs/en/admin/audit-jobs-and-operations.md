@@ -4,6 +4,7 @@ summary: What the record audit trail stores, how the job queue works, and how to
 audience: admin
 order: 150
 tags: [audit, jobs, cron, queue, troubleshooting]
+aliases: ["nhật ký hệ thống", "việc chạy nền", "giám sát tiến trình", "dấu kiểm"]
 related: [admin/settings-overview, admin/integrations, admin/users-teams-roles]
 updated: 2026-10-21
 ---

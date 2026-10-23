@@ -4,6 +4,7 @@ summary: The connector workspace, its connection states and capabilities, and th
 audience: admin
 order: 120
 tags: [integrations, connectors, webhooks, oauth, sync]
+aliases: ["tích hợp bên thứ ba", "webhook", "gọi API ra ngoài"]
 related: [admin/settings-overview, admin/users-teams-roles, admin/api-keys]
 updated: 2026-10-21
 ---

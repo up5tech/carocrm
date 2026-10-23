@@ -4,6 +4,7 @@ summary: What each optional module's settings document holds, where you edit it,
 audience: admin
 order: 130
 tags: [modules, settings, feature-flags, sales, service-desk]
+aliases: ["bật tắt module", "cài đặt module", "cờ tính năng"]
 related: [admin/settings-overview, admin/portals, admin/integrations]
 updated: 2026-10-21
 ---

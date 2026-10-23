@@ -4,6 +4,7 @@ summary: The CRM Chat workspace and its quick-chat panel, then the voice inbox, 
 audience: user
 order: 130
 tags: [chat, crm-chat, voice, calls, sms, assistant]
+aliases: ["trò chuyện với trợ lý", "cách dùng chat", "khung nhắn tin", "hộp thư thoại"]
 related: [user/stream-and-notifications, user/record-page, admin/settings-overview]
 updated: 2026-10-23
 ---

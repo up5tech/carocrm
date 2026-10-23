@@ -4,6 +4,7 @@ summary: The mailboxes and outbound transport, how a message actually leaves the
 audience: admin
 order: 80
 tags: [email, smtp, mailboxes, notifications, transport]
+aliases: ["máy chủ thư", "cấu hình SMTP", "email thông báo", "hòm thư gửi đi"]
 related: [admin/settings-overview, admin/authentication-and-security, user/stream-and-notifications, admin/files-and-storage]
 updated: 2026-10-21
 ---

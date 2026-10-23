@@ -70,6 +70,19 @@ describe('searchIndex', () => {
     expect(searchIndex(vi, 'khoa').hits.map((hit) => `${hit.key}:${hit.locale}`)).toContain('admin/api-keys:vi');
   });
 
+  it('finds an untranslated page through its Vietnamese aliases', () => {
+    const shaped = buildIndex(
+      [
+        { path: 'content/docs/en/admin/_index.md', content: '---\ntitle: Admin\nsummary: a\naudience: admin\norder: 1\n---\n' },
+        page('user', 'quotes', 'Quotes', 'Price a deal, send it, and turn it into an invoice.', '\naliases: ["báo giá", "tạo báo giá"]'),
+      ],
+      { locale: 'en' },
+    );
+    // The reader types the phrase with or without a Vietnamese keyboard; both reach the English page.
+    expect(searchIndex(shaped, 'báo giá').hits.map((hit) => hit.key)).toContain('user/quotes');
+    expect(searchIndex(shaped, 'bao gia').hits.map((hit) => hit.key)).toContain('user/quotes');
+  });
+
   it('ranks a title match above a body match', () => {
     const result = searchIndex(index(), 'menu');
     expect(result.hits[0]?.key).toBe('admin/main-menu');

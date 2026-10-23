@@ -90,6 +90,14 @@ beforeAll(async () => {
   expect(baseline.status, JSON.stringify(baseline.body)).toBe(200);
   baselineVersion = Number(baseline.body['version'] ?? 0);
 
+  // The tests below assert the *default* flag state, which a shared development database has no
+  // obligation to be in. Write it first, so the suite measures what it created; `afterAll` restores.
+  const defaults = await patchSettings({
+    features: { workspace: true, readTools: false, helpRetrieval: false, actionProposals: false, feedback: false, conversationSearch: false },
+    safety: { allowWrites: false },
+  });
+  expect(defaults.status, JSON.stringify(defaults.body)).toBe(200);
+
   await createTestRole(ctx, {
     id: ROLE_USE,
     name: `${MARKER} chat user role`,

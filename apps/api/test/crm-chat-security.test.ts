@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
+import { restoreSettings, snapshotSettings } from './support/settings-snapshot.js';
 
 /**
  * Phase 19-CHAT.15 — Privacy, Security, and Audit Hardening tests
@@ -32,6 +33,7 @@ const USER_B = `AGENT_TEST-chat-sec-b-${runId}`;
 let ctx: ApiContext;
 let tokenA = '';
 let tokenB = '';
+let baselineChatSettings: unknown = null;
 const createdUserIds: string[] = [];
 
 async function call(method: Method, url: string, token?: string, payload?: unknown): Promise<CallResult> {
@@ -52,6 +54,14 @@ async function call(method: Method, url: string, token?: string, payload?: unkno
 
 beforeAll(async () => {
   ctx = await bootApi();
+
+  // Help search belongs to `features.helpRetrieval`, so this suite turns it on and puts the stored
+  // document back afterwards.
+  baselineChatSettings = await snapshotSettings(ctx, 'crmChat');
+  const chatSettings = await call('POST', '/api/v1/CRMChat/action/settings', ctx.adminToken, {
+    features: { helpRetrieval: true },
+  });
+  expect(chatSettings.status, JSON.stringify(chatSettings.body)).toBe(200);
 
   // Create two separate roles and users to test isolation
   await createTestRole(ctx, {
@@ -123,6 +133,7 @@ afterAll(async () => {
     await db.deleteFrom('users').where('id', 'in', createdUserIds).execute();
   }
   await db.deleteFrom('roles').where('id', 'in', [ROLE_USER_A, ROLE_USER_B]).execute();
+  await restoreSettings(ctx, 'crmChat', baselineChatSettings);
   await shutdownApi();
 });
 
@@ -300,6 +311,35 @@ describe('CRMChat Security Hardening (19-CHAT.15)', () => {
     });
   });
 
+  describe('Context reference boundary', () => {
+    it('refuses a context reference that is not shaped like an entity and a record id', async () => {
+      for (const ref of [
+        { entity: 'Account; DROP TABLE', id: 'abc' },
+        { entity: 'Account', id: '../../etc/passwd' },
+        { entity: '', id: 'abc' },
+      ]) {
+        const result = await call('POST', '/api/v1/CRMChat/action/turns', tokenA, {
+          prompt: `${MARKER} context shape`,
+          contextRefs: [ref],
+        });
+        expect(result.status, JSON.stringify(ref)).toBe(400);
+      }
+    });
+
+    it('refuses more context references than the installation allows', async () => {
+      const refs = Array.from({ length: 6 }, (_, index) => ({ entity: 'Account', id: `${MARKER}${String(index)}` }));
+      const result = await call('POST', '/api/v1/CRMChat/action/turns', tokenA, {
+        prompt: `${MARKER} too many refs`,
+        contextRefs: refs,
+      });
+
+      expect(result.status).toBe(422);
+      const error = (result.body['error'] ?? {}) as { code?: string; details?: { maxContextRefs?: number } };
+      expect(error.code).toBe('CHAT_CONTEXT_TOO_LARGE');
+      expect(error.details?.maxContextRefs).toBe(5);
+    });
+  });
+
   describe('Help search safety', () => {
     it('handles help search with empty query gracefully', async () => {
       const result = await call('GET', '/api/v1/CRMChat/action/help/search', tokenA);
@@ -314,6 +354,25 @@ describe('CRMChat Security Hardening (19-CHAT.15)', () => {
       // Should return results or message, never expose internal docs
       expect(result.status).toBe(200);
       expect(result.body).toHaveProperty('hasResults');
+    });
+
+    it('refuses help search while features.helpRetrieval is off', async () => {
+      const off = await call('POST', '/api/v1/CRMChat/action/settings', ctx.adminToken, {
+        features: { helpRetrieval: false },
+      });
+      expect(off.status).toBe(200);
+
+      const refused = await call('GET', '/api/v1/CRMChat/action/help/search?q=test', tokenA);
+      const code = String(((refused.body['error'] ?? {}) as { code?: string }).code ?? '');
+      expect(refused.status, `${String(refused.status)} ${code}`).toBe(403);
+      expect(code).toBe('FEATURE_DISABLED');
+
+      const on = await call('POST', '/api/v1/CRMChat/action/settings', ctx.adminToken, {
+        features: { helpRetrieval: true },
+      });
+      expect(on.status).toBe(200);
+      const answered = await call('GET', '/api/v1/CRMChat/action/help/search?q=test', tokenA);
+      expect(answered.status).toBe(200);
     });
   });
 

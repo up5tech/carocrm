@@ -88,7 +88,10 @@ function inlinesToText(inlines: readonly DocInline[]): string {
 /** Fields as they are indexed for one page. */
 function fieldsOf(page: DocPage, body: string): Record<Posting['field'], string> {
   const headings = page.blocks.filter((block) => block.type === 'heading').map((block) => (block.type === 'heading' ? block.text : ''));
-  return { title: page.title, summary: page.summary, heading: headings.join('\n'), tag: page.tags.join(' '), body };
+  // Aliases ride the tag field: they are keyword affordances, not content, and they get the same
+  // weight a curated tag deserves.
+  const tags = [...page.tags, ...page.aliases].join(' ');
+  return { title: page.title, summary: page.summary, heading: headings.join('\n'), tag: tags, body };
 }
 
 /** Builds the inverted map: normalized token → the postings that contain it. */

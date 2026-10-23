@@ -4,6 +4,7 @@ summary: How the voiceCommunications document is read and written, what each swi
 audience: admin
 order: 135
 tags: [voice, sms, whatsapp, telephony, settings]
+aliases: ["tổng đài", "kênh thoại và tin nhắn", "tích hợp telephony", "hộp thư voice"]
 related: [admin/module-settings, user/chat-and-voice, admin/integrations, admin/files-and-storage]
 updated: 2026-10-22
 ---

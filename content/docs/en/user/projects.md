@@ -4,6 +4,7 @@ summary: Plan, board, Gantt, members and settings — the project record and the
 audience: user
 order: 100
 tags: [projects, tasks, board, gantt, plan, members]
+aliases: ["quản lý dự án", "công việc dự án", "tiến độ dự án", "nhóm dự án"]
 related: [user/record-page, user/lists-and-views, user/activities-and-tasks, admin/entities-and-fields]
 updated: 2026-10-21
 ---

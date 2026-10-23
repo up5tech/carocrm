@@ -45,6 +45,7 @@ summary: Enable, rename, reorder and group the entries in the sidebar.
 audience: admin
 order: 30
 tags: [menu, navigation, sidebar]
+aliases: ["cấu hình menu", "thanh bên"]
 requires: { entity: Team, action: read }
 related: [admin/settings-overview, reference/glossary]
 updated: 2026-10-21
@@ -58,6 +59,7 @@ updated: 2026-10-21
 | `audience` | yes | `user` or `admin`. An `admin` page is hidden from callers who are not administrators. |
 | `order` | yes | integer ≥ 0, unique inside its section. Ordering, not a display number. |
 | `tags` | no | lowercase tokens, inline array. Feeds search and "See also". |
+| `aliases` | no | 2–60 character phrases, inline array, any language. Search-only: indexed with the tag weight, never rendered. A page with no `vi` translation needs at least one, or a Vietnamese reader — and the Chat assistant answering in Vietnamese — cannot find it. |
 | `requires` | no | `{ entity: X, action: read }`. Filtered through real ACL, on top of `audience`. |
 | `related` | no | inline array of `section/slug` keys. Each must exist. |
 | `updated` | no | ISO date `YYYY-MM-DD`, must be a real calendar day. Shown as "Last reviewed". |

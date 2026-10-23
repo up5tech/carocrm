@@ -4,6 +4,7 @@ summary: The Sales document flow — draft a quote or order, price its lines, is
 audience: user
 order: 80
 tags: [sales, quote, order, invoice, document, pricing]
+aliases: ["báo giá", "tạo báo giá", "chiết khấu báo giá", "dòng tiền báo giá"]
 related: [user/record-page, user/lists-and-views, admin/entities-and-fields, admin/settings-overview]
 updated: 2026-10-21
 ---

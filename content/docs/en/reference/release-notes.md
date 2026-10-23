@@ -4,6 +4,7 @@ summary: There is no changelog screen in this application. Release notes are rep
 audience: user
 order: 50
 tags: [release, notes, version, changelog]
+aliases: ["ghi chú phát hành", "thay đổi theo phiên bản"]
 related: [reference/glossary, admin/settings-overview, getting-started/find-your-way]
 updated: 2026-10-21
 ---

@@ -26,6 +26,7 @@ describe('readFrontMatter', () => {
       audience: 'admin',
       order: 30,
       tags: ['menu', 'navigation', 'sidebar'],
+      aliases: [],
       requires: { entity: 'Team', action: 'read' },
       related: ['admin/settings-overview', 'reference/glossary'],
       updated: '2026-10-21',
@@ -37,6 +38,7 @@ describe('readFrontMatter', () => {
     const result = readFrontMatter('---\ntitle: Sign in\nsummary: How to get in.\naudience: user\norder: 10\n---\n');
     if (!result.ok) throw new Error(result.issues.join('; '));
     expect(result.data.tags).toEqual([]);
+    expect(result.data.aliases).toEqual([]);
     expect(result.data.requires).toBeNull();
     expect(result.data.related).toEqual([]);
     expect(result.data.updated).toBeNull();
@@ -167,5 +169,18 @@ describe('parseYamlSubset', () => {
   it('keeps a comma inside quotes as one value', () => {
     const { value } = parseYamlSubset('tags: ["a,b", c]');
     expect(value.tags).toEqual(['a,b', 'c']);
+  });
+
+  it('reads Vietnamese aliases', () => {
+    const result = readFrontMatter(
+      '---\ntitle: Quotes\nsummary: How to price a deal.\naudience: user\norder: 10\naliases: ["báo giá", "tạo báo giá"]\n---\n',
+    );
+    if (!result.ok) throw new Error(result.issues.join('; '));
+    expect(result.data.aliases).toEqual(['báo giá', 'tạo báo giá']);
+  });
+
+  it('rejects an alias that is not a search phrase', () => {
+    const result = readFrontMatter(`---\ntitle: Quotes\nsummary: How to price a deal.\naudience: user\norder: 10\naliases: ["${'a'.repeat(61)}"]\n---\n`);
+    expect(result.ok).toBe(false);
   });
 });

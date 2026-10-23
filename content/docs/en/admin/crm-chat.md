@@ -4,6 +4,7 @@ summary: How the crmChat document is saved, how the assistant is chosen, what ea
 audience: admin
 order: 145
 tags: [crm-chat, chat, assistant, feature-flags, settings]
+aliases: ["bật CRM Chat", "chọn trợ lý trả lời", "cài đặt chat", "cờ tính năng chat"]
 related: [admin/settings-overview, admin/module-settings, user/chat-and-voice, user/ai-agents]
 updated: 2026-10-23
 ---
@@ -103,7 +104,7 @@ not worth it. If queue-mode turns stay queued, fix the worker and secret first.
 | --- | --- | --- |
 | `features.workspace` | on | The menu entry, the page and every workspace read. Off hides the entry, refuses the reads and makes every other flag ineffective. |
 | `features.readTools` | off | The "Grounded CRM answers" entry as active. No Chat gate reads this flag; the tools an answer can use are the enabled tools on the published agent version, so the switch alone adds none. |
-| `features.helpRetrieval` | off | The "Help answers" entry as active. No Chat gate reads it: help search is gated by the workspace, and it searches the product handbook and the published knowledge articles. What an answer may read comes from the agent's published tools, not from this switch. |
+| `features.helpRetrieval` | off | The "Help answers" entry as active, and `GET action/help/search` — with it off the endpoint answers 403 rather than an empty list that looks like "nothing was found". What an answer may read still comes from the agent's published tools. |
 | `features.actionProposals` | off | Confirmation of a proposed write. A proposal executes only when `safety.allowWrites` is on as well; the switch does not remove write tools from the agent. |
 | `features.feedback` | off | Rating buttons and the feedback endpoint. A rating also needs the caller's `feedback` capability. |
 | `features.conversationSearch` | off | The search box and the `q` filter over the caller's own threads. The server refuses a term while the flag is off. |
@@ -172,4 +173,4 @@ The schema validates the numbers; it does not make every one of them effective i
 | No rating buttons | `features.feedback` is off, or the caller lacks the `feedback` capability. |
 | A long prompt is refused below the shown limit | The turn endpoint's own 4,000-character cap. |
 | History disappears on a different schedule | The AI Agents retention window is the executor, not `retention.conversationsDays`. |
-| A feature shows On but nothing changes | Check assistant readiness and the agent's own tools; `readTools` and `helpRetrieval` gate nothing here. |
+| A feature shows On but nothing changes | Check assistant readiness and the agent's own tools: what a turn may use is the published version, not these switches. `helpRetrieval` only opens the help-search endpoint. |
