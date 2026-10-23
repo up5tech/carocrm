@@ -2,8 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 import { ConcurrencyConflictError, DuplicateRecordError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
+import { type ExpressionBuilder, type RawBuilder, sql } from 'kysely';
 
+import type { Database } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import { currentTx } from '../entity/tx-context.js';
 import { PROVIDER_KEY_DOCUSIGN, REQUEST_STATUSES, type SignatureRequestStatus } from './esignature-domain.js';
@@ -156,6 +157,12 @@ export interface RequestListFilters {
   assignedUserId?: string;
   approvalStatus?: SignatureRequest['approvalStatus'];
   needsAttention?: boolean;
+  /** Free text over the request's name and subject (ES.19). */
+  q?: string;
+  /** A signer snapshot's name or email; matched inside the caller's scope only (ES.19). */
+  recipient?: string;
+  createdFrom?: Date;
+  createdTo?: Date;
   sentFrom?: Date;
   sentTo?: Date;
   completedFrom?: Date;
@@ -236,17 +243,35 @@ export class SignatureRequestRepository {
       query = query.where('status', 'in', attention);
       count = count.where('status', 'in', attention);
     }
-    if (filters.access !== undefined && filters.access.kind !== 'all') {
-      const { userId, teamIds, kind } = filters.access;
-      const teams = kind === 'team' ? [...teamIds] : [];
-      // The same predicate `entity-record.store.ts` uses for a scoped record list: assigned to me,
-      // created by me, or (for a team role) in one of my teams.
-      const scoped =
-        teams.length === 0
-          ? sql<boolean>`(assigned_user_id = ${userId} or created_by_id = ${userId})`
-          : sql<boolean>`(assigned_user_id = ${userId} or created_by_id = ${userId} or team_ids ?| cast(${teams} as text[]))`;
-      query = query.where(scoped);
-      count = count.where(scoped);
+    const access = requestAccessSql(filters.access, 'signature_requests');
+    if (access !== undefined) {
+      query = query.where(access);
+      count = count.where(access);
+    }
+    const q = likePattern(filters.q);
+    if (q !== undefined) {
+      const predicate = (eb: ExpressionBuilder<Database, 'signature_requests'>) =>
+        eb.or([eb('name', 'ilike', q), eb('subject', 'ilike', q), eb('source_record_id', 'ilike', q)]);
+      query = query.where(predicate);
+      count = count.where(predicate);
+    }
+    const recipient = likePattern(filters.recipient);
+    if (recipient !== undefined) {
+      // The signer snapshot is searched only through the request the scope already admitted, so an
+      // email lookup cannot reveal that a request exists outside the caller's rows.
+      const predicate = sql<boolean>`exists (select 1 from signature_recipients r
+        where r.request_id = signature_requests.id and r.deleted_at is null
+          and (r.name ilike ${recipient} or r.email ilike ${recipient}))`;
+      query = query.where(predicate);
+      count = count.where(predicate);
+    }
+    if (filters.createdFrom !== undefined) {
+      query = query.where('created_at', '>=', filters.createdFrom);
+      count = count.where('created_at', '>=', filters.createdFrom);
+    }
+    if (filters.createdTo !== undefined) {
+      query = query.where('created_at', '<=', filters.createdTo);
+      count = count.where('created_at', '<=', filters.createdTo);
     }
     if (filters.sentFrom !== undefined) {
       query = query.where('sent_at', '>=', filters.sentFrom);
@@ -1096,4 +1121,30 @@ function clampLimit(value: number | undefined): number {
   const limit = Math.trunc(value ?? 100);
   if (!Number.isFinite(limit) || limit <= 0) return 100;
   return Math.min(limit, 500);
+}
+
+/**
+ * The record-scope predicate as a SQL fragment, shared by the list and the ES.19 aggregates.
+ *
+ * One definition matters: a report must count exactly the rows the list would show. `alias` names
+ * the `signature_requests` table in the caller's query so the same fragment works in a join.
+ */
+export function requestAccessSql(access: RequestAccessScope | undefined, alias = 'signature_requests'): RawBuilder<boolean> | undefined {
+  if (access === undefined || access.kind === 'all') return undefined;
+  const { userId, kind, teamIds } = access;
+  const ref = sql.ref(alias);
+  if (kind === 'team' && teamIds.length > 0) {
+    return sql<boolean>`(${ref}.assigned_user_id = ${userId} or ${ref}.created_by_id = ${userId} or ${ref}.team_ids ?| cast(${[...teamIds]} as text[]))`;
+  }
+  // `own` and a team role with no teams both fall back to the same two personal columns. The
+  // `entity-record.store.ts` list uses the same rule, so a report and a list never disagree.
+  return sql<boolean>`(${ref}.assigned_user_id = ${userId} or ${ref}.created_by_id = ${userId})`;
+}
+
+/** A bounded `%term%` pattern with LIKE metacharacters escaped (the default escape is `\`). */
+export function likePattern(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (trimmed === '') return undefined;
+  return `%${trimmed.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
 }

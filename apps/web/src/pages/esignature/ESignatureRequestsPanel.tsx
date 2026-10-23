@@ -87,6 +87,8 @@ export function ESignatureRequestsPanel(props: {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<string>('');
   const [approvalStatus, setApprovalStatus] = useState<string>('');
+  const [q, setQ] = useState('');
+  const [recipient, setRecipient] = useState('');
   const [drawer, setDrawer] = useState<DrawerState | null>(null);
   const openedFromLink = useRef(false);
 
@@ -103,8 +105,8 @@ export function ESignatureRequestsPanel(props: {
   }, [props.canPrepare, props.initialRequestId, props.initialSource]);
 
   const requests = useQuery({
-    queryKey: ['eSignature', 'requests', status, approvalStatus],
-    queryFn: () => api.eSignatureRequests({ status, approvalStatus, limit: 100 }),
+    queryKey: ['eSignature', 'requests', status, approvalStatus, q, recipient],
+    queryFn: () => api.eSignatureRequests({ status, approvalStatus, q, recipient, limit: 100 }),
     staleTime: 10_000,
   });
 
@@ -174,45 +176,53 @@ export function ESignatureRequestsPanel(props: {
   }
 
   return (
-    <Card
-      className="carocrm-card"
-      title={t('esignature.requests.title')}
-      extra={
-        <Space size={8} wrap>
-          <Select
-            size="small"
-            style={{ minWidth: 160 }}
-            value={approvalStatus}
-            onChange={setApprovalStatus}
-            options={[
-              { value: '', label: t('esignature.requests.allApprovals') },
-              { value: 'pending', label: t('esignature.requests.approvalStatuses.pending') },
-              { value: 'approved', label: t('esignature.requests.approvalStatuses.approved') },
-              { value: 'rejected', label: t('esignature.requests.approvalStatuses.rejected') },
-            ]}
-          />
-          <Select
-            size="small"
-            style={{ minWidth: 160 }}
-            value={status}
-            onChange={setStatus}
-            options={[
-              { value: '', label: t('esignature.requests.allStatuses') },
-              ...STATUS_FILTERS.map((value) => ({ value, label: t(`esignature.requests.statuses.${value}`) })),
-            ]}
-          />
-          <Button size="small" onClick={() => void requests.refetch()}>
-            {t('core.common.reload')}
+    <Card className="carocrm-card" title={t('esignature.requests.title')} style={{ marginBottom: 16 }}>
+      <Space size={8} wrap style={{ marginBottom: 12 }}>
+        <Input.Search
+          allowClear
+          size="small"
+          style={{ width: 190 }}
+          placeholder={t('esignature.requests.searchPlaceholder')}
+          onSearch={(value) => setQ(value.trim())}
+        />
+        <Input.Search
+          allowClear
+          size="small"
+          style={{ width: 190 }}
+          placeholder={t('esignature.requests.recipientSearchPlaceholder')}
+          onSearch={(value) => setRecipient(value.trim())}
+        />
+        <Select
+          size="small"
+          style={{ minWidth: 160 }}
+          value={approvalStatus}
+          onChange={setApprovalStatus}
+          options={[
+            { value: '', label: t('esignature.requests.allApprovals') },
+            { value: 'pending', label: t('esignature.requests.approvalStatuses.pending') },
+            { value: 'approved', label: t('esignature.requests.approvalStatuses.approved') },
+            { value: 'rejected', label: t('esignature.requests.approvalStatuses.rejected') },
+          ]}
+        />
+        <Select
+          size="small"
+          style={{ minWidth: 160 }}
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: '', label: t('esignature.requests.allStatuses') },
+            ...STATUS_FILTERS.map((value) => ({ value, label: t(`esignature.requests.statuses.${value}`) })),
+          ]}
+        />
+        <Button size="small" onClick={() => void requests.refetch()}>
+          {t('core.common.reload')}
+        </Button>
+        {props.canPrepare ? (
+          <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setDrawer({ mode: 'create' })}>
+            {t('esignature.requests.create')}
           </Button>
-          {props.canPrepare ? (
-            <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setDrawer({ mode: 'create' })}>
-              {t('esignature.requests.create')}
-            </Button>
-          ) : null}
-        </Space>
-      }
-      style={{ marginBottom: 16 }}
-    >
+        ) : null}
+      </Space>
       {requests.data.list.length === 0 ? (
         <EmptyState title={t('esignature.requests.empty')} description={t('esignature.requests.emptyHint')} />
       ) : (

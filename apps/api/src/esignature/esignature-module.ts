@@ -577,6 +577,7 @@ export const IMPLEMENTED_PHASES = [
   '19-ES.16',
   '19-ES.17',
   '19-ES.18',
+  '19-ES.19',
 ] as const;
 
 /**

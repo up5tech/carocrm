@@ -2,6 +2,7 @@ import { FileSearchOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Alert, Button, Card, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
@@ -11,6 +12,7 @@ import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { t } from '../state/i18n.js';
 import { ESignatureConnectionsPanel } from './esignature/ESignatureConnectionsPanel.js';
+import { ESignatureReportsPanel } from './esignature/ESignatureReportsPanel.js';
 import { ESignatureRequestsPanel } from './esignature/ESignatureRequestsPanel.js';
 import { ESignatureTemplatesPanel } from './esignature/ESignatureTemplatesPanel.js';
 
@@ -29,6 +31,7 @@ import { ESignatureTemplatesPanel } from './esignature/ESignatureTemplatesPanel.
  */
 export function ESignaturePage() {
   const [searchParams] = useSearchParams();
+  const [reportDays, setReportDays] = useState(30);
   const sourceEntityType = searchParams.get('sourceEntityType');
   const sourceRecordId = searchParams.get('sourceRecordId');
   const initialSource =
@@ -107,6 +110,8 @@ export function ESignaturePage() {
           initialRequestId={initialRequestId}
         />
       ) : null}
+
+      {granted.has('use') ? <ESignatureReportsPanel days={reportDays} onDaysChange={setReportDays} /> : null}
 
       {granted.has('templateMappingManage') ? <ESignatureTemplatesPanel /> : null}
 

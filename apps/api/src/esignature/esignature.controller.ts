@@ -14,6 +14,7 @@ import {
   ConnectionCreateSchema,
   ConnectionSecretSchema,
   ConnectionUpdateSchema,
+  ESignatureReportQuerySchema,
   OperationProbeSchema,
   RecordEntryQuerySchema,
   SettingsPatchSchema,
@@ -26,6 +27,7 @@ import { ESignatureModuleHealthService } from './esignature-module-health.servic
 import { ESignatureNavigationService } from './esignature-navigation.service.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureRecordEntryService } from './esignature-record-entry.service.js';
+import { ESignatureReportService } from './esignature-report.service.js';
 import { ESignatureRequestService } from './esignature-request.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
 import { ESignatureWebhookService } from './esignature-webhook.service.js';
@@ -60,6 +62,7 @@ export class ESignatureController {
     @Inject(ESignatureWebhookService) private readonly webhooks: ESignatureWebhookService,
     @Inject(ESignatureRequestService) private readonly requests: ESignatureRequestService,
     @Inject(ESignatureRecordEntryService) private readonly recordEntry: ESignatureRecordEntryService,
+    @Inject(ESignatureReportService) private readonly reports: ESignatureReportService,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
@@ -262,6 +265,27 @@ export class ESignatureController {
   async recordEntryPoint(@Query() query: unknown) {
     const parsed = this.parse(RecordEntryQuerySchema, query);
     return this.recordEntry.entry(parsed.entityType, parsed.recordId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // operational reports (19-ES.19)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Every curated aggregate in one answer, for the module's reporting screen.
+   *
+   * Each section names its own timestamp semantics; the record scope is applied in SQL before any
+   * row is counted, and the projection carries no recipient, document or message detail.
+   */
+  @Get('action/reports')
+  async reportOverview(@Query() query: unknown) {
+    return this.reports.overview(this.parse(ESignatureReportQuerySchema, query));
+  }
+
+  /** One aggregate by key — the shape the dashboard's `esignature` dashlet consumes. */
+  @Get('action/reports/:key')
+  async reportSection(@Param('key') key: string, @Query() query: unknown) {
+    return this.reports.section(key, this.parse(ESignatureReportQuerySchema, query));
   }
 
   // ---------------------------------------------------------------------------

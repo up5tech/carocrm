@@ -9,6 +9,8 @@ import type { Database } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
 import type { ListQuery } from '../entity/entity.service.js';
 import { EntityCrudService } from '../entity/entity.service.js';
+import { ESignatureDashletConfigSchema } from '../esignature/dto/esignature-shapes.js';
+import { ESignatureReportService } from '../esignature/esignature-report.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import { ProjectTaskDashletSchema } from '../projects/dto/project-shapes.js';
@@ -31,7 +33,8 @@ export class DashboardService {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(SavedFilterService) private readonly filters: SavedFilterService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
-    @Inject(ProjectDashletService) private readonly projectTasks: ProjectDashletService) {}
+    @Inject(ProjectDashletService) private readonly projectTasks: ProjectDashletService,
+    @Inject(ESignatureReportService) private readonly eSignatureReports: ESignatureReportService) {}
   assertEntity(entity: string): void {
     this.metadata.ensureLoaded();
     if (!ENTITY_NAME.test(entity) || !this.metadata.registry.hasEntity(entity)) throw new NotFoundError(`Entity "${entity}" does not exist.`);
@@ -108,6 +111,13 @@ export class DashboardService {
       if (!scoped.success) throw new ValidationError('Invalid Project Task dashlet options.', { issues: scoped.error.issues.map((i) => i.message) });
       return;
     }
+    // An ESignature dashlet names one curated aggregate; the module's query enforces the capability
+    // and the reader's record scope when the dashlet runs (ES.19).
+    if (kind === 'esignature') {
+      const scoped = ESignatureDashletConfigSchema.safeParse(raw);
+      if (!scoped.success) throw new ValidationError('Invalid ESignature dashlet options.', { issues: scoped.error.issues.map((i) => i.message) });
+      return;
+    }
     const p = DashletConfigSchema.safeParse(raw);
     if (!p.success) throw new ValidationError('Invalid dashlet config.', { issues: p.error.issues.map((i) => i.message) });
     this.assertEntity(p.data.entity);
@@ -173,6 +183,14 @@ export class DashboardService {
       if (!scoped.success) throw new ValidationError('Project Task dashlet options are invalid.', { issues: scoped.error.issues.map((i) => i.message) });
       const result = await this.projectTasks.run(scoped.data);
       return { dashletId, kind: 'projectTasks', entity: 'ProjectTask', ...result };
+    }
+    if (dashlet.kind === 'esignature') {
+      // The aggregate runs under the reader's own scope, not the dashboard owner's: a shared
+      // dashboard never becomes a way to count requests the reader could not list (ES.19).
+      const scoped = ESignatureDashletConfigSchema.safeParse(raw);
+      if (!scoped.success) throw new ValidationError('ESignature dashlet options are invalid.', { issues: scoped.error.issues.map((i) => i.message) });
+      const section = await this.eSignatureReports.section(scoped.data.view, { days: scoped.data.days });
+      return { dashletId, kind: 'esignature', ...section };
     }
     const p = DashletConfigSchema.safeParse(raw);
     if (!p.success) throw new ValidationError('Dashlet config is invalid.', { issues: p.error.issues.map((i) => i.message) });

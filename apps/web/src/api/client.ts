@@ -64,6 +64,7 @@ import type {
   ESignatureHealthView,
   ESignatureNavView,
   ESignatureRecordEntry,
+  ESignatureReportOverview,
   ESignatureRequestDocument,
   ESignatureRequestList,
   ESignatureRequestRecipient,
@@ -1805,18 +1806,43 @@ export const api = {
 
   // Phase 19-ES.6 — the draft surface. A list row carries only what the list screen renders; the
   // detail is the only place recipients and documents are read.
-  eSignatureRequests: (query: { status?: string; sourceEntityType?: string; sourceRecordId?: string; needsAttention?: boolean; approvalStatus?: string; limit?: number; offset?: number } = {}) => {
+  eSignatureRequests: (query: {
+    status?: string;
+    sourceEntityType?: string;
+    sourceRecordId?: string;
+    needsAttention?: boolean;
+    approvalStatus?: string;
+    q?: string;
+    recipient?: string;
+    createdFrom?: string;
+    createdTo?: string;
+    sentFrom?: string;
+    sentTo?: string;
+    completedFrom?: string;
+    completedTo?: string;
+    limit?: number;
+    offset?: number;
+  } = {}) => {
     const params = new URLSearchParams();
     if (query.status !== undefined && query.status !== '') params.set('status', query.status);
     if (query.sourceEntityType !== undefined && query.sourceEntityType !== '') params.set('sourceEntityType', query.sourceEntityType);
     if (query.sourceRecordId !== undefined && query.sourceRecordId !== '') params.set('sourceRecordId', query.sourceRecordId);
     if (query.needsAttention === true) params.set('needsAttention', 'true');
     if (query.approvalStatus !== undefined && query.approvalStatus !== '') params.set('approvalStatus', query.approvalStatus);
+    if (query.q !== undefined && query.q !== '') params.set('q', query.q);
+    if (query.recipient !== undefined && query.recipient !== '') params.set('recipient', query.recipient);
+    for (const key of ['createdFrom', 'createdTo', 'sentFrom', 'sentTo', 'completedFrom', 'completedTo'] as const) {
+      const value = query[key];
+      if (value !== undefined && value !== '') params.set(key, value);
+    }
     if (query.limit !== undefined) params.set('limit', String(query.limit));
     if (query.offset !== undefined) params.set('offset', String(query.offset));
     const suffix = params.toString() === '' ? '' : `?${params.toString()}`;
     return request<ESignatureRequestList>(`/ESignature/requests${suffix}`);
   },
+  /** The ES.19 operational aggregates, already scoped to the caller's own requests. */
+  eSignatureReports: (days = 30) =>
+    request<ESignatureReportOverview>(`/ESignature/action/reports?days=${encodeURIComponent(String(days))}`),
   eSignatureRequest: (id: string) => request<ESignatureRequestView>(`/ESignature/requests/${encodeURIComponent(id)}`),
   eSignatureRecordEntry: (entityType: string, recordId: string) =>
     request<ESignatureRecordEntry>(

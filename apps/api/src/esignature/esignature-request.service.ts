@@ -89,6 +89,14 @@ export interface RequestListQuery {
   readonly assignedUserId?: string | undefined;
   readonly needsAttention?: boolean | undefined;
   readonly approvalStatus?: SignatureRequest['approvalStatus'] | undefined;
+  readonly q?: string | undefined;
+  readonly recipient?: string | undefined;
+  readonly createdFrom?: Date | undefined;
+  readonly createdTo?: Date | undefined;
+  readonly sentFrom?: Date | undefined;
+  readonly sentTo?: Date | undefined;
+  readonly completedFrom?: Date | undefined;
+  readonly completedTo?: Date | undefined;
   readonly limit: number;
   readonly offset: number;
 }
@@ -271,6 +279,14 @@ export class ESignatureRequestService {
       ...(query.assignedUserId === undefined ? {} : { assignedUserId: query.assignedUserId }),
       ...(query.needsAttention === undefined ? {} : { needsAttention: query.needsAttention }),
       ...(query.approvalStatus === undefined ? {} : { approvalStatus: query.approvalStatus }),
+      ...(query.q === undefined ? {} : { q: query.q }),
+      ...(query.recipient === undefined ? {} : { recipient: query.recipient }),
+      ...(query.createdFrom === undefined ? {} : { createdFrom: query.createdFrom }),
+      ...(query.createdTo === undefined ? {} : { createdTo: query.createdTo }),
+      ...(query.sentFrom === undefined ? {} : { sentFrom: query.sentFrom }),
+      ...(query.sentTo === undefined ? {} : { sentTo: query.sentTo }),
+      ...(query.completedFrom === undefined ? {} : { completedFrom: query.completedFrom }),
+      ...(query.completedTo === undefined ? {} : { completedTo: query.completedTo }),
     });
     const progress = await this.recipients.progressForRequests(list.map((row) => row.id));
     return {

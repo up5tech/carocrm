@@ -22,6 +22,7 @@ import { ESignatureNavigationService } from './esignature-navigation.service.js'
 import { ESignatureOAuthCallbackController } from './esignature-oauth-callback.controller.js';
 import { ESignaturePermissionService } from './esignature-permission.service.js';
 import { ESignatureRecordEntryService } from './esignature-record-entry.service.js';
+import { ESignatureReportService } from './esignature-report.service.js';
 import { ESignatureRequestController } from './esignature-request.controller.js';
 import { ESignatureRequestService } from './esignature-request.service.js';
 import { ESignatureSettingsService } from './esignature-settings.service.js';
@@ -44,6 +45,7 @@ import { SignatureDocumentSnapshotRepository } from './signature-document-snapsh
 import { SignatureOAuthStateRepository } from './signature-oauth-state.repository.js';
 import { SignatureProviderEventRepository } from './signature-provider-event.repository.js';
 import { SignatureRecipientRepository } from './signature-recipient.repository.js';
+import { SignatureReportRepository } from './signature-report.repository.js';
 import { SignatureRequestRepository } from './signature-request.repository.js';
 import { SignatureTemplateMappingRepository } from './signature-template-mapping.repository.js';
 import { SignatureWebhookInboxRepository } from './signature-webhook-inbox.repository.js';
@@ -124,6 +126,10 @@ export const ESIGNATURE_PROVIDERS = [
   // Phase 19-ES.18 — the CRM record entry point. It answers availability for a record detail page;
   // no optional module is imported, and an uninstalled module is simply not a candidate.
   ESignatureRecordEntryService,
+  // Phase 19-ES.19 — the ACL-scoped operational read model and its curated reports. The Dashlet API
+  // consumes `ESignatureReportService`; nothing here writes a request.
+  SignatureReportRepository,
+  ESignatureReportService,
   // Phase 19-ES.7 — the template catalog and mapping validation. Nothing here writes a provider template.
   ESignatureTemplateService,
   // Phase 19-ES.11/ES.12 — Connect intake, the durable inbox and the event projection.
@@ -170,6 +176,7 @@ export {
 } from './esignature-document.service.js';
 // Phase 19-ES.6 — the draft API. The capability and the record scope are checked in the service, so a
 // controller method is only ever a shape parser.
+export type { ESignatureReportKey } from './dto/esignature-shapes.js';
 export {
   type ApprovalPolicyDecision,
   type ApprovalPolicyReason,
@@ -246,6 +253,14 @@ export {
   type RecordEntryRequestView,
   type RecordEntryView,
 } from './esignature-record-entry.service.js';
+export {
+  ESIGNATURE_REPORT_DEFINITIONS,
+  type ESignatureReportOverview,
+  type ESignatureReportQuery,
+  type ESignatureReportSection,
+  ESignatureReportService,
+  type ESignatureReportWindow,
+} from './esignature-report.service.js';
 export { ESignatureRequestController } from './esignature-request.controller.js';
 export {
   ESignatureRequestService,

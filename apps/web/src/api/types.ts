@@ -3298,6 +3298,28 @@ export interface ESignatureRequestList {
   readonly total: number;
 }
 
+/** Phase 19-ES.19 — one curated operational aggregate. `data` is shaped by `key`. */
+export interface ESignatureReportWindow {
+  readonly days: number;
+  readonly from: string | null;
+  readonly to: string;
+}
+
+export interface ESignatureReportSection {
+  readonly key: string;
+  readonly label: string;
+  readonly description: string;
+  readonly generatedAt: string;
+  readonly window: ESignatureReportWindow;
+  readonly data: Record<string, unknown>;
+}
+
+export interface ESignatureReportOverview {
+  readonly generatedAt: string;
+  readonly window: ESignatureReportWindow;
+  readonly sections: readonly ESignatureReportSection[];
+}
+
 /** Phase 19-ES.18 — the capability answer for one CRM record's detail page. */
 export interface ESignatureRecordEntry {
   readonly available: boolean;

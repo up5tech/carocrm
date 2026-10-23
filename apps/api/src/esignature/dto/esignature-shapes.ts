@@ -273,11 +273,16 @@ export const RequestDocumentAttachSchema = z
 export const RequestDocumentReplaceSchema = z.object({ attachmentId: z.string().trim().min(1).max(64) }).strict();
 
 /**
- * The list query (plan §13.2).
+ * The list query (plan §13.2, §14).
  *
  * `status` is a comma-separated list because that is what a filter row sends, and it is validated
  * against the module's own status vocabulary in the controller — an unknown status is a bad query, not
  * an empty page.
+ *
+ * `q` searches the request's own subject data, and `recipient` searches the signer snapshot by name
+ * or email. Both are applied to rows the caller's record scope already allows, so a search can never
+ * widen what the caller may read. Date bounds are ISO instants, not days, for the same reason the
+ * module stores instants: a bare date would silently acquire the server's timezone.
  */
 export const RequestListQuerySchema = z
   .object({
@@ -288,8 +293,59 @@ export const RequestListQuerySchema = z
     assignedUserId: z.string().trim().max(64).optional(),
     needsAttention: z.enum(['true', 'false']).optional(),
     approvalStatus: z.enum(['not_required', 'pending', 'approved', 'rejected']).optional(),
+    q: z.string().trim().min(1).max(200).optional(),
+    recipient: z.string().trim().min(1).max(200).optional(),
+    createdFrom: z.string().datetime({ offset: true }).optional(),
+    createdTo: z.string().datetime({ offset: true }).optional(),
+    sentFrom: z.string().datetime({ offset: true }).optional(),
+    sentTo: z.string().datetime({ offset: true }).optional(),
+    completedFrom: z.string().datetime({ offset: true }).optional(),
+    completedTo: z.string().datetime({ offset: true }).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
     offset: z.coerce.number().int().min(0).default(0),
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
+// Phase 19-ES.19 — operational reports and the ESignature dashlet (plan §14)
+// ---------------------------------------------------------------------------
+
+/**
+ * The curated report keys (§14). Each key is one bounded aggregate; none returns a recipient name,
+ * an email address, a document name, a signing URL or any other record detail.
+ */
+export const ESIGNATURE_REPORT_KEYS = [
+  'status',
+  'rates',
+  'approvals',
+  'waiting',
+  'completionTime',
+  'exceptions',
+  'volume',
+] as const;
+export type ESignatureReportKey = (typeof ESIGNATURE_REPORT_KEYS)[number];
+
+/**
+ * `days = 0` means all time. A positive number is a rolling window ending now; every report's code
+ * documents which timestamp that window is applied to (status/volume: created; rates: sent;
+ * completion time: completed; the current queues ignore it).
+ */
+export const ESignatureReportQuerySchema = z
+  .object({
+    days: z.coerce.number().int().min(0).max(3_650).default(30),
+    /** Narrows the waiting-recipient report to one person; still just a count, never a row. */
+    recipient: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict();
+
+export const ESIGNATURE_DASHLET_VIEWS = ESIGNATURE_REPORT_KEYS;
+export type ESignatureDashletView = ESignatureReportKey;
+
+/** The dashlet instance's only choices: which aggregate, over which rolling window. */
+export const ESignatureDashletConfigSchema = z
+  .object({
+    view: z.enum(ESIGNATURE_REPORT_KEYS),
+    days: z.coerce.number().int().min(0).max(365).default(30),
   })
   .strict();
 

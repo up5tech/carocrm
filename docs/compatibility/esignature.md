@@ -1,17 +1,17 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 to 19-ES.18 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
-> Status: **19-ES.0 through 19-ES.18 delivered** (ES.1 registers the module and the security contract;
+> Phase 19-ES.0 to 19-ES.19 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Status: **19-ES.0 through 19-ES.19 delivered** (ES.1 registers the module and the security contract;
 > ES.2 adds the schema and the domain rules; ES.3 adds the provider contract, the registry and the
 > in-process fake; ES.4 adds DocuSign's OAuth grant, the connection lifecycle and the live adapter;
 > ES.5–ES.10 add documents, drafts, templates, preparation and the controlled send; ES.11–ES.16 add
 > Connect intake and projection, the progress UI, embedded signing, completed artifacts, and
-> reminders/void; ES.17 adds the approval policy and decision workflow; ES.18 adds the lifecycle outbox events and the CRM record entry point). **Nothing in this module has
+> reminders/void; ES.17 adds the approval policy and decision workflow; ES.18 adds the lifecycle outbox events and the CRM record entry point; ES.19 adds authorized request search, the operational reports and the ESignature dashlet). **Nothing in this module has
 > been verified against a live DocuSign account**: every
 > provider behaviour below was proved against an injected stub transport or the fake adapter, and the
 > demo-account validation is ES.22's.
 > Evidence: `docs/implementation/esignature-es1-completion-report.md` through
-> `esignature-es18-completion-report.md` (one report per delivered sub-phase).
+> `esignature-es19-completion-report.md` (one report per delivered sub-phase).
 > Canonical module name: `ESignature` (no `Ua` prefix). API prefix: `/api/v1/ESignature`.
 > Webhook prefix: `/api/v1/integrations/esignature`.
 > Note: the Connect HMAC scheme is implemented from DocuSign's documented
@@ -87,8 +87,31 @@ redirect URIs, secrets and stored account identities are fully separate.
 | Approval before send | **Delivered ES.17** | Source-type and value/risk rules are evaluated at preparation; a covered request stops in `pending_approval`. The decision binds to the stored digest and reviewed version; any edit (or a change to the reviewed source values) invalidates it. `SignatureApprove` is the explicit approver right, with separation of duties on by default; decisions are audited. |
 | Lifecycle domain events | **Delivered ES.18** | `esignature.requestCreated/prepared/approvalRequested/approved/rejected/sent/recipientCompleted/completed/declined/voided/expired/needsReconciliation/completedArtifactAvailable` are written to `outbox_events` in the transaction that caused them. Payloads carry request/provider/source references, status, correlation id and a schema version — no bytes, tokens, signing URLs or recipient emails. The semantic `dedupeKey` is stable across replays and across the send path vs a Connect event for the same fact. |
 | CRM record entry points | **Delivered ES.18** | `GET /api/v1/ESignature/action/record-entry` answers availability for a record detail page. Account/Contact are core; Opportunity/Quote/SalesOrder/Invoice, Project/ProjectTask, Case, Campaign and CustomerSuccessProfile are candidates only while their metadata entity exists. The generic SPA card disappears on `available:false`; no optional module is imported by ESignature and no downstream business state is changed automatically. |
+| Authorized request search and filters | **Delivered ES.19** | `GET /api/v1/ESignature/requests` accepts `q` (request name/subject/source record id), `recipient` (signer snapshot name/email), status/approval/attention filters and ISO `createdFrom/To`, `sentFrom/To`, `completedFrom/To` bounds. Every predicate is applied **after** the caller's record scope, so a search can never reveal that a request outside their rows exists. |
+| Operational reports and dashlet | **Delivered ES.19** | `GET /api/v1/ESignature/action/reports?days=N` returns the curated aggregates; `…/action/reports/:key` runs one. The dashboard's existing `POST /Dashboard/:id/dashlets` accepts the `esignature` kind (`{view, days}`), and `…/action/run` executes it **as the reader**, not the dashboard owner. No aggregate returns a request name, recipient name/email, message, document or URL. |
 
-## 4. Local state ↔ provider state mapping (delivered ES.12 — live fixtures pending ES.22)
+### 3.1 Report date and status definitions (delivered ES.19)
+
+Each aggregate states which timestamp its window applies to. `days=N` is a rolling window ending at
+the request's own clock; `days=0` means all time. All aggregates first apply the caller's
+`SignatureRequest:read` record scope (`own`, `team`, `all` or the administrator wildcard), exactly
+like the request list.
+
+| Report key | Population and window | What is counted |
+| --- | --- | --- |
+| `status` | Requests **created** in the window; the **current** status is reported | Count per normalized status (`draft` … `reconciliation_required`). A request created earlier and completed inside the window does not appear here — `rates` is the outcome view. |
+| `rates` | Cohort **sent** in the window (`sent_at`), whatever the current status | `completed`, `declined`, `voided`, `expired`, `inFlight` counts and rates with the sent cohort as denominator. In-flight requests are in no numerator, so the rates do not claim to sum to 100%. |
+| `approvals` | **Current** queue; window-independent | `status = pending_approval` **and** `approval_status = pending`; aged from `approval_requested_at` (older than 24 h / 3 days bins). |
+| `waiting` | **Current** state; window-independent | Requests in `sent`, `delivered` or `partially_signed` with recipients in `pending`, `sent`, `delivered` or `viewed`. Optional `recipient` narrows by signer name/email inside the caller's scope. |
+| `completionTime` | Requests **completed** in the window (`completed_at`) | Duration `completed_at − sent_at` in hours, only when both timestamps exist and the order is valid. Average is the arithmetic mean; median and p90 use `percentile_cont(0.5)` / `percentile_cont(0.9)`. |
+| `exceptions` | **Current** queue; window-independent | `send_unknown`, `provider_error`, `reconciliation_required`, split by status and by the sanitized `failure_category`. |
+| `volume` | Requests **created** in the window | Counts by CRM `source_entity_type` (empty = no linked record) and by `assigned_user_id` (empty = unassigned), top 50 each, opaque ids only. |
+
+Status meanings are the ES.12 vocabulary documented in §4 below. "Completed" here always means the
+local status `completed`, reachable only from a verified provider event or reconciliation — never an
+inference from all recipients signing.
+
+
 
 Local request states (plan §4.7): `draft`, `pending_approval`, `ready_to_send`, `sending`,
 `send_unknown`, `sent`, `delivered` (aggregate, only if unambiguous), `partially_signed`,

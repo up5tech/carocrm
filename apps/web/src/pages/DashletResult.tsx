@@ -58,6 +58,9 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
       />
     );
   }
+  if (dashlet.kind === 'esignature') {
+    return <ESignatureDashletBody keyName={String(result['key'] ?? '')} data={(result['data'] ?? {}) as Record<string, unknown>} />;
+  }
   // A grouped dashlet aggregates over a bounded scan; say so instead of showing a silent cap.
   const hint =
     result['truncated'] === true ? (
@@ -101,4 +104,84 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
       {hint}
     </div>
   );
+}
+
+/** ES.19 — one aggregate, rendered as counts. No request detail is present in the payload to show. */
+function ESignatureDashletBody({ keyName, data }: { readonly keyName: string; readonly data: Record<string, unknown> }) {
+  const rows = (value: unknown): { key: string; count: number }[] =>
+    Array.isArray(value) ? (value as { status?: string; sourceEntityType?: string; count: number }[]).map((row) => ({
+      key: row.status ?? row.sourceEntityType ?? 'none',
+      count: row.count,
+    })) : [];
+  const countTable = (value: unknown, label: (key: string) => string) => (
+    <Table
+      size="small"
+      rowKey="key"
+      pagination={false}
+      dataSource={rows(value)}
+      columns={[
+        { title: t('web.dashboards.label'), dataIndex: 'key', render: (key: string) => label(key) },
+        { title: t('web.dashboards.count'), dataIndex: 'count', width: 80 },
+      ]}
+    />
+  );
+  const line = (label: string, value: unknown) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+      <Typography.Text type="secondary">{label}</Typography.Text>
+      <Typography.Text strong>{value === null || value === undefined ? '—' : String(value)}</Typography.Text>
+    </div>
+  );
+  const percent = (value: unknown): string =>
+    typeof value === 'number' ? `${Math.round(value * 1000) / 10}%` : '—';
+  const hours = (value: unknown): string => (typeof value === 'number' ? `${value}h` : '—');
+
+  switch (keyName) {
+    case 'status':
+      return countTable(data['byStatus'], (key) => t(`esignature.requests.statuses.${key}`));
+    case 'rates':
+      return (
+        <div>
+          {line(t('esignature.reports.completionRate'), percent(data['completionRate']))}
+          {line(t('esignature.reports.outcomes.declined'), percent(data['declineRate']))}
+          {line(t('esignature.reports.outcomes.voided'), percent(data['voidRate']))}
+          {line(t('esignature.reports.outcomes.expired'), percent(data['expiryRate']))}
+          {line(t('esignature.reports.inFlight'), data['inFlight'])}
+        </div>
+      );
+    case 'approvals':
+      return (
+        <div>
+          {line(t('esignature.reports.pendingApprovals'), data['pending'])}
+          {line(t('esignature.reports.olderThan24Short'), data['olderThan24Hours'])}
+          {line(t('esignature.reports.oldestHours'), hours(data['oldestAgeHours']))}
+        </div>
+      );
+    case 'waiting':
+      return (
+        <div>
+          {line(t('esignature.reports.waitingRequests'), data['requestsWaiting'])}
+          {line(t('esignature.reports.waitingRecipients'), data['recipientsWaiting'])}
+          {countTable(data['byRecipientStatus'], (key) => t(`esignature.requests.recipientStatuses.${key}`))}
+        </div>
+      );
+    case 'completionTime':
+      return (
+        <div>
+          {line(t('esignature.reports.average'), hours(data['averageHours']))}
+          {line(t('esignature.reports.median'), hours(data['medianHours']))}
+          {line(t('esignature.reports.p90'), hours(data['p90Hours']))}
+        </div>
+      );
+    case 'exceptions':
+      return (
+        <div>
+          {line(t('esignature.reports.exceptions'), data['total'])}
+          {countTable(data['byStatus'], (key) => t(`esignature.requests.statuses.${key}`))}
+        </div>
+      );
+    case 'volume':
+      return countTable(data['bySource'], (key) => (key === 'none' ? t('esignature.reports.noSource') : key));
+    default:
+      return <Typography.Text type="secondary">{t('web.dashboards.unknownReport')}</Typography.Text>;
+  }
 }

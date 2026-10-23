@@ -144,12 +144,14 @@ export function DashboardsPage() {
               groupTypes: Array.isArray(values.groupTypes) ? values.groupTypes : [],
               maxSize: Number(values.maxSize ?? 20),
             }
-          : {
-              entity: String(values.entity),
-              maxSize: 25,
-              ...(typeof values.groupBy === 'string' && values.groupBy !== '' ? { groupBy: values.groupBy } : {}),
-              ...(typeof values.measure === 'string' && values.measure !== '' ? { measure: values.measure } : {}),
-            };
+          : kind === 'esignature'
+            ? { view: String(values.esignatureView ?? 'status'), days: Number(values.reportDays ?? 30) }
+            : {
+                entity: String(values.entity),
+                maxSize: 25,
+                ...(typeof values.groupBy === 'string' && values.groupBy !== '' ? { groupBy: values.groupBy } : {}),
+                ...(typeof values.measure === 'string' && values.measure !== '' ? { measure: values.measure } : {}),
+              };
       const created = await api.createDashlet(active.id, { name: String(values.name), kind, config });
       await load();
       setDashletOpen(false);
@@ -298,11 +300,21 @@ export function DashboardsPage() {
                 { value: 'chart', label: t('web.reports.kindChart') },
                 { value: 'kpi', label: t('web.reports.kindKpi') },
                 { value: 'projectTasks', label: t('web.dashboards.kindProjectTasks') },
+                { value: 'esignature', label: t('web.dashboards.kindESignature') },
               ]}
             />
           </Form.Item>
-          <Form.Item name="entity" label={t('web.reports.entityLabel')} rules={[{ required: dashletKind !== 'projectTasks' }]}>
-            <Select options={entities} showSearch optionFilterProp="label" disabled={dashletKind === 'projectTasks'} />
+          <Form.Item
+            name="entity"
+            label={t('web.reports.entityLabel')}
+            rules={[{ required: dashletKind !== 'projectTasks' && dashletKind !== 'esignature' }]}
+          >
+            <Select
+              options={entities}
+              showSearch
+              optionFilterProp="label"
+              disabled={dashletKind === 'projectTasks' || dashletKind === 'esignature'}
+            />
           </Form.Item>
           {dashletKind === 'projectTasks' ? (
             <>
@@ -331,12 +343,38 @@ export function DashboardsPage() {
               </Space>
             </>
           ) : null}
-          <Form.Item name="groupBy" label={t('web.dashboards.groupByLabel')}>
-            <Input placeholder={t('web.dashboards.groupByPlaceholder')} />
-          </Form.Item>
-          <Form.Item name="measure" label={t('web.dashboards.measureLabel')}>
-            <Input placeholder={t('web.dashboards.measurePlaceholder')} />
-          </Form.Item>
+          {dashletKind === 'esignature' ? (
+            <>
+              <Form.Item name="esignatureView" label={t('web.dashboards.reportView')} initialValue="status">
+                <Select
+                  options={['status', 'rates', 'approvals', 'waiting', 'completionTime', 'exceptions', 'volume'].map((value) => ({
+                    value,
+                    label: t(`esignature.reportViews.${value}`),
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item name="reportDays" label={t('web.dashboards.reportWindow')} initialValue={30}>
+                <Select
+                  options={[
+                    { value: 30, label: t('web.dashboards.windowDays', { days: 30 }) },
+                    { value: 90, label: t('web.dashboards.windowDays', { days: 90 }) },
+                    { value: 365, label: t('web.dashboards.windowDays', { days: 365 }) },
+                    { value: 0, label: t('web.dashboards.windowAll') },
+                  ]}
+                />
+              </Form.Item>
+            </>
+          ) : null}
+          {dashletKind === 'esignature' ? null : (
+            <>
+              <Form.Item name="groupBy" label={t('web.dashboards.groupByLabel')}>
+                <Input placeholder={t('web.dashboards.groupByPlaceholder')} />
+              </Form.Item>
+              <Form.Item name="measure" label={t('web.dashboards.measureLabel')}>
+                <Input placeholder={t('web.dashboards.measurePlaceholder')} />
+              </Form.Item>
+            </>
+          )}
         </Form>
       </Modal>
     </>
