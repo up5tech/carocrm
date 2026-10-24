@@ -12,7 +12,8 @@
 > `docs/implementation/lead-score-ls2-completion-report.md`).
 > **19-LS.5 delivered scoring that is computed *and kept*, 19-LS.6 delivered what decides *when* to score,
 > 19-LS.7 put it on the Lead, 19-LS.8 put the model behind an administrator's form and 19-LS.9 gave the score a
-> second input and a voice; LS.10 and later are not implemented.** A model can be configured, validated,
+> second input and a voice and 19-LS.10 wrote the **conversion contract** without writing conversion behavior;
+> LS.11 and later are not implemented.** A model can be configured, validated,
 > published, frozen and previewed
 > without writing anything; **recalculated per Lead** (evaluation row and the Lead's current-score projection
 > stored together, both readable with an explanation and a freshness verdict); and now **scored without
@@ -25,9 +26,12 @@
 > owner and one `leadScore.thresholdAction` audit row — the last two keyed by a digest of the crossing itself, so
 > a duplicate delivery cannot double-notify. An engagement source that is absent or switched off does not fail a
 > score: those rules skip, and the evaluation says which of the four states produced the answer. What is still
-> absent is conversion (19-LS.10–LS.16) — each refused with the sub-phase that owes it.
+> absent is conversion *itself* — 19-LS.10 decided its contract (state machine, combination matrix, mapping
+> policy, recovery semantics) in `docs/implementation/lead-score-conversion-contract.md`, and 19-LS.11–LS.16 owe
+> the code, each refused with the sub-phase that owes it.
 > Canonical module name: `LeadScore` (no `Ua` prefix). API prefix: `/api/v1/lead-score` plus
-> `/api/v1/leads/:leadId/{score,conversion-preview,convert}` semantics.
+> `/api/v1/leads/:leadId/{score,conversion-preview,convert}` semantics — realized, per §2.5, as
+> `LeadScore/action/score/*` (delivered) and `LeadScore/action/conversion/*` (contracted for LS.12/LS.13).
 > Baseline reference re-checked against public EspoCRM documentation on **2026-10-24**
 > (Sales Management / Leads and converting). Re-verify and update the date whenever a later
 > sub-phase changes a documented behavior.
@@ -58,10 +62,15 @@ and the audit confirms none exists (no `B2B`/`B2C`/`companyType` in code, settin
 metadata). Instead:
 
 - the `leadScore` settings row exposes `conversion.targets` (default: `Account`, `Contact`,
-  `Opportunity` all enabled);
+  `Opportunity` all enabled) — **shape decided in 19-LS.10**, contract §5.2: the section is
+  `{targets, fieldMergeAllowed, mapping}`, `targets` is a deduplicated subset of `CONVERSION_TARGETS` that
+  refuses an unknown value **and** refuses the empty list (disabling conversion entirely is
+  `features.leadConversion`'s job, and two switches for one decision is how they start disagreeing);
 - an installation that wants B2C-like behavior disables `Account` there;
 - the **backend** validates the mode independently of the UI, so a disabled target cannot be created
-  even by a direct API call (plan §7.7).
+  even by a direct API call (plan §7.7) — and an unmet choice is a refusal
+  (`LEADSCORE_TARGET_DISABLED`), never a silent downgrade to a smaller combination (§4.1's last line, and
+  contract §4.2's no-repair rule).
 
 Consequence for compatibility claims: this build does **not** reproduce upstream's B2C "conversion to
 Account is unavailable" switch, because it has no B2C switch at all. It reproduces the *effect*
@@ -87,6 +96,17 @@ core entity (`database/seed-metadata.ts:267-301`, only `name` required) and the 
 own it, so LS.16 implements it through the same conversion command rather than deferring it. Sales
 stage semantics and `SalesDocumentService.createFromOpportunity`
 (`apps/api/src/sales/document/document.service.ts:1257-1312`) are left entirely to Sales.
+
+### 2.5 Commands are module routes, not per-record paths
+
+The plan writes `/api/v1/leads/:leadId/score`, `…/conversion-preview` and `…/convert`. This build has no
+per-record custom-action route on the generic entity controller (`apps/api/src/entity/entity.controller.ts:24-98`
+offers CRUD, `massUpdate`/`massDelete`/`rowActions`, `restore` and relation routes), and every Lead Score command
+since LS.5 has lived at `/api/v1/LeadScore/action/…` behind one gate. **Decided in LS.10 and carried from LS.5:**
+the paths are `LeadScore/action/score/*` (delivered) and `LeadScore/action/conversion/{preview,convert,
+operations,operations/:id/retry}` (contracted), with the Lead named in the body as `leadId`. The plan's
+*semantics* — a Lead-scoped preview, a confirmed convert, an inspectable operation, an explicit retry — are
+unchanged; a second controller shape for one module would be a second gate to forget.
 
 ---
 
@@ -124,13 +144,18 @@ destructive Lead deletion after conversion, and any use of the score outside sal
 
 ### 4.1 Valid target combinations (backend-validated)
 
+> **Decided in 19-LS.10**, with the ACL / data / settings gate made explicit per row and two rules this table
+> did not carry (Opportunity's `accountId` is always set and its `contactIds` are **appended**, never replaced;
+> and one create-or-link decision per type, because `LeadConversionOperation` has one created/linked pair per
+> type): see `docs/implementation/lead-score-conversion-contract.md` §5.1, §6.
+
 | Combination | Available when | Notes |
 | --- | --- | --- |
 | create Contact | `Contact` in `conversion.targets` + `Contact:create` | — |
 | link existing Contact | `Contact:read` | a user who cannot read a candidate never sees it |
 | create Account | `Account` in `conversion.targets` + `Account:create` | disabled by the B2C-equivalent setting |
 | link existing Account | `Account:read` | — |
-| Account + Contact | both enabled | Contact receives `accountId` (`seed-metadata.ts:219`) |
+| Account + Contact | both enabled | Contact receives `accountId` (`database/seed-metadata.ts:238`) |
 | Contact + existing Account | both | user-confirmed relationship |
 | existing Contact + existing Account | both read/link | explicit confirmation required |
 | ± Opportunity | `Opportunity` enabled + its ACL | available for every combination above |
@@ -150,18 +175,29 @@ No new unique constraint is placed on email or phone: the current data and legit
 not support one (decision D7). Only the score-projection and conversion-operation-key partial unique
 indexes are added, following `database/migrations/032_phase19_customer_success.sql:17-25`.
 
+> **Decided in 19-LS.10** — and the stages now name the seam each one reuses rather than the helper LS.0
+> assumed had to be written: `normalizeEmailAddress`
+> (`apps/api/src/marketing-automation/marketing-automation-domain.ts:1385-1387`) for email but explicitly
+> **not** MA's consent `emailHash` as a join key; voice's `phoneMatchKeys`/`normalizePhone`
+> (`apps/api/src/voice-communications/phone-number.ts:141,201-208`) for phone, on both the international and
+> the national digit form, claiming no E.164 accuracy because a Lead carries no country to default against; a
+> module-owned `domainOf()` with a hard-coded free-mail set, since nothing in the repository derives a domain
+> at all; and the ACL rule copied from `VoiceContactResolverService`'s hidden-match counting
+> (`voice-contact-resolver.service.ts:101-167`). The `pg_trgm` indexes LS.0 pointed at key on field names that
+> do not exist (`008_phase12.sql:8-22`), so fuzzy suggestions are bounded or absent — contract §9.
+
 ### 4.3 Failure, retry and concurrency semantics
 
 | Situation | Result |
 | --- | --- |
 | Same `operationKey`, operation already `succeeded` | the original result is returned; zero new records |
-| Different key against an already-`Converted` Lead | `409 LEAD_ALREADY_CONVERTED` |
-| Preview fingerprint stale (Lead revised, target changed, mapping changed) | rejected; the user must re-preview and re-confirm |
-| Failure inside the transaction | nothing is committed — no orphan target, no half-converted Lead; operation row records `failed_retryable` with a safe failure code |
+| Different key against an already-`Converted` Lead | `409 LEADSCORE_ALREADY_CONVERTED` (the code LS.10's contract §12.1 names for LS.12/13 to add; `LEAD_ALREADY_CONVERTED` was only ever prose) |
+| Preview fingerprint stale (Lead revised, target changed, mapping changed, **or the actor's own visible-field set changed**) | rejected — `LEADSCORE_PREVIEW_STALE` naming which component moved and no values; the user must re-preview and re-confirm |
+| Failure inside the transaction | nothing is committed — no orphan target, no half-converted Lead; the operation row is settled in its own transaction as `failed_retryable` (transient) or `failed_final` (deterministic) with a token from the closed `failureCode` list |
 | Post-commit side effect fails | conversion stays `succeeded`; the side effect is retried through jobs/outbox, entities are never recreated |
-| Two concurrent attempts | the Lead `version` (`packages/entity-engine/src/entity-manager/index.ts:122-125`) plus the operation-key unique index let exactly one win |
-| Operation stuck in `processing` | the recovery view + sweeper re-check for already-created targets before any retry (LS.18) |
-| Correction of a completed conversion | **not** automatic reversal; a separate, admin-controlled procedure (unresolved item U5) |
+| Two concurrent attempts | the work transaction takes `SELECT … FOR UPDATE` on the Lead **first** and re-reads status and revision under it, so exactly one converts and the loser settles itself to `failed_final` / `already_converted`; the optimistic `version` check (`packages/entity-engine/src/entity-manager/index.ts:122-125`, store write `entity-record.store.ts:207-214`) stays as the second line, and the `operationKey` unique index is what makes a double click on one key a replay rather than two operations |
+| Operation stuck in `processing` | **LS.13's** recovery scan (not LS.18 — corrected in LS.10): the row is settled to `needs_review`/`failed_retryable` only after §10.3's accounting proves no target the row names is missing; the scan never creates a record and never re-runs a conversion |
+| Correction of a completed conversion | **not** automatic reversal; the policy is decided (contract §11.4 — a correction is a *new* operation row that may re-point or clear one reference and never deletes a target or un-converts a Lead), but **no sub-phase in plan §16 owns the mechanism** — recorded as G9, and the consequence is concrete: LS.2 made those fields server-owned for every caller, so today nobody can correct a wrong reference at all (unresolved item U5) |
 
 ### 4.4 What conversion does not do
 
@@ -187,11 +223,14 @@ index-only migration is planned (`073_phase19_lead_score.sql`), reviewed before 
 
 ### 5.2 Default field map (audited against the actual field lists)
 
+> **Decided in 19-LS.10** (contract §7). Two rows in this table were wrong about how this kernel writes a
+> name, and are corrected below: `name` is not a mappable source, and ownership is not data.
+
 | Lead | → Contact | → Account | → Opportunity |
 | --- | --- | --- | --- |
 | `firstName` | `firstName` | — | — |
-| `lastName` | `lastName` | — | — |
-| `name` | `name` | — | — |
+| `lastName` | `lastName` — **required on Contact** (`seed-metadata.ts:234`, verified: a create without it is `422 … "Field is required."`) | — | — |
+| ~~`name`~~ | **not mapped** — `EntityCrudService.withName` mirrors `name` from the metadata display field (`apps/api/src/entity/entity.service.ts:509-519`), and `lastName` *is* the display field for both Lead and Contact (`seed-metadata.ts:377`, `:247`). Mapping a derived value into a field the kernel re-derives can only disagree with it | — | — |
 | `title` | `title` | — | — |
 | `emailAddress` | `emailAddress` | `emailAddress` (account-only mode) | — |
 | `phoneNumber` | `phoneNumber` | `phoneNumber` | — |
@@ -200,7 +239,7 @@ index-only migration is planned (`073_phase19_lead_score.sql`), reviewed before 
 | `source` | `leadSource` | — | `leadSource` |
 | — | — | `website` — **unmapped: Lead has no website field** | — |
 | — | — | — | `name` — required; defaulted from the Lead and editable in the wizard |
-| `assignedUserId`, teams | carried as create defaults through the canonical service | same | same |
+| `assignedUserId`, `teams` | **not copied** — ownership is a decision, not data. The command may set `assignedUserId` only from an explicit wizard choice the actor may assign to, and `teams` only among teams the actor belongs to. Copying a Lead's team list onto a new Contact would silently widen who can read a person record, which is the opposite of plan §7.5/§14.3 (contract §7.6) | same | same |
 
 Never mapped by any generic rule: `password`, `apiKey`-shaped fields, files/attachments, consent
 evidence, the Lead's own score/diagnostic attributes, and any field the actor cannot write on the
@@ -253,9 +292,10 @@ Recorded here so no later phase silently invents behavior (plan §19's closing i
 | --- | --- | --- |
 | U1 | Lead has no ICP fields (website, company size, region), so most *fit* signals cannot be expressed on the core schema today (gap G1) | LS.3 restricts fit rules to audited fields; adding ICP fields is an Entity-Manager/metadata decision for the installing organization, documented rather than assumed |
 | U2 | Activities cannot reference a Lead, so call/meeting/task engagement is unmeasurable per Lead (gap G2) | deferred; needs an approved core-metadata change, out of LS.0–LS.18 |
-| U3 | No phone normalization facility exists (gap G3) | LS.11 builds a bounded, dependency-free normalizer; E.164 accuracy is explicitly not claimed, and behavior is documented in the LS.11 report |
+| U3 | ~~No phone normalization facility exists (gap G3)~~ **superseded in 19-LS.10** — `voice-communications/phone-number.ts` provides `normalizePhone`/`phoneMatchKeys` behind `PHONE_NORMALIZER`, with a `libphonenumber-js` implementation (`apps/api/package.json:45`) and an ACL-gated phone lookup already using it | LS.11 **reuses** that seam and adds no normalizer; it matches on the international **and** national digit forms and explicitly does not claim E.164 accuracy, because a Lead has no country field to default a national-form number against. The collision cost (a cross-country digit match becomes a *candidate*) is accepted because no stage may auto-link — contract §1.4, §9.1 |
 | U4 | `database/seed.ts:458-469` overwrites `metadata_entries` and the `entity` settings document on every seed/boot, so runtime admin overrides to entity metadata are lost (pre-existing, affects LS field definitions) | all LS field definitions live in `seed-metadata.ts`; LS settings live in a separate `leadScore` row. Reported, not worked around |
-| U5 | Reopen/correct a completed conversion | not implemented; requires an explicit admin procedure that accounts for targets edited or used in transactions since conversion (plan §7.6) |
+| U5 | Reopen/correct a completed conversion | **policy decided in 19-LS.10** (contract §11.4): a correction is a *new* `LeadConversionOperation` row that may re-point one `converted*` reference to a record the actor may read, or clear one; it never deletes a target, never un-converts a Lead, and re-checks that the target has not been used in transactions since. **The mechanism is still unimplemented and, worse, unowned** — no sub-phase in plan §16 asks for it (audit G9), and because LS.2 made those fields server-owned for every caller, an administrator has no path at all today |
+| U14 | Plan §9.4 asks for per-action abuse bounds; this build has only the global HTTP limiter (`apps/api/src/config.ts`, `bootstrap.ts`), and the LeadScore module contains no rate-limit call | **Found in 19-LS.10** (audit G10). LS.11–LS.13 bound by shape instead — hard per-stage candidate caps, one Lead per preview, and an in-flight operation whose own `processing` row is the retry mutex. Whether a per-user action budget is worth a kernel primitive is LS.18's rollout decision |
 | U6 | Bulk conversion | out of initial delivery; requires preview + per-record confirmation + permission checks before it can be enabled |
 | U7 | Multi-model concurrent scoring (one projection per model) | MVP is single active model, and LS.2 made that structural: the projection is a set of attributes on the one Lead row, so a second live model needs its own projection entity and unique index — not a reinterpretation of these fields |
 | U10 | A Lead list sorted or range-filtered by `scoreValue` cannot use `idx_entity_records_lead_score_value`: the generic store binds the attribute *name* as a parameter, which no constant-expression index matches | recorded in the migration header; the 19-LS.18 query check decides whether a narrow read model or a generated column is worth its complexity |
@@ -279,4 +319,5 @@ Recorded here so no later phase silently invents behavior (plan §19's closing i
 | 19-LS.7 | `npx playwright test e2e/lead-score.spec.ts` (**3 tests**, its own published model, rules and Lead, removed afterwards); `apps/api/test/lead-score-explanation.test.ts` (**16**, +4 for the affordance answer and the both-locale key guard) and `apps/api/test/lead-score-schema.test.ts` (**25**, +1 for the list/detail placement); the other seven LeadScore files re-run together — **218 passed / 0 failed** across nine files; full `npx vitest run` (**2,853 passed / 34 failed**, 200 files, the same seven pre-existing shared-state files as the LS.6 baseline and zero `lead-score` failures); full worker suite (**205 passed / 0 failed**); `npm run typecheck` (API + web); `npx eslint` on the module, the web app, the e2e spec and the touched suites; `npm run build` in `apps/web`; a browser pass on the running app (list columns + filter disclosure, the card, the action, the drawer, the stale state) at 1440 and 390 px; residue check | green, and the phase's criterion is checked as a boundary rather than a look: no evaluator import exists in `apps/web`, the reason block is asserted **not** to contain the rule's own input value, and the two action buttons appear only when `ScoreReadView.actions` says the caller may — including the case where a role holds `LeadScoreRecalculate` but not `Lead:edit`, which is answered `LEAD_NOT_EDITABLE` and really refused. One deviation is recorded rather than hidden: the generic `Score` detail panel LS.2 declared is removed and its fields become `inDetail: false`, because a second surface for one stored number is a defect |
 | 19-LS.8 | `npx vitest run apps/api/test/lead-score-editor.test.ts` (**14**, new); the nine pre-existing LeadScore files in two groups (**90** and **142 passed / 0 failed**); full `npx vitest run` (**2,867 passed / 34 failed**, 201 files — the same seven pre-existing shared-state files as the LS.6/LS.7 baseline, +14 being this phase's new suite, and zero `lead-score` failures); worker suite (**205 passed**); `npx playwright test e2e/lead-score-admin.spec.ts e2e/lead-score.spec.ts` (**7 passed**: 4 new + LS.7's 3); `npm run typecheck`; `npx eslint` on every touched path; `pnpm --filter @carocrm/web build` and `--filter @carocrm/api build`; a browser pass in English and Vietnamese at 1440 and 390px (list, draft form, rule builder, validation report, publish confirmation, frozen notice, new version, version diff, preview, rebuild with a working Cancel, settings), then a residue check | green, with the criterion checked as behaviour rather than layout: the browser spec types **no JSON at all** and reads the stored condition back as a sentence; the preview's zero-write claim is asserted from the record on both sides of the run; and the editor's refusals are the validator's own codes, so no option the form offers can fail a publish. Two hazards recorded rather than hidden: the nine LeadScore suites now interfere with one another over the single shared `leadScore` settings row when run as one ad-hoc group (six assertions in LS.1/LS.2/LS.3 fail **with LS.8's file excluded**, and the canonical full run is clean), and a published model cannot be torn down through the API — this phase's e2e residue had to be removed at the database level by run marker |
 | 19-LS.9 | `apps/api/test/lead-score-engagement.test.ts` (**9**, new) + the evaluator (**71**, +6), validator (**30**, +1), explanation guard (**16**, extended to every LS.9 word in both locales) and worker (**210**, +5) additions; all eleven LeadScore API files in **one group — 248 passed / 0 failed**; full `npx vitest run` (**2,883 passed / 34 failed**, 202 files — the same seven pre-existing shared-state files as the LS.6/LS.7/LS.8 baseline, +16 being this phase's new API tests, and zero `lead-score` failures); full worker suite (**210 passed / 0 failed**); `npx playwright test e2e/lead-score-admin.spec.ts e2e/lead-score.spec.ts` (**9 passed**: 2 new + LS.8's 4 + LS.7's 3); `npm run typecheck`; `npx eslint` on every touched path; `pnpm --filter @carocrm/web build` and `--filter @carocrm/api build`; migration `074_phase19_lead_score_signals.sql` applied through `database/migrate.ts` and read back from `pg_indexes`; a browser pass on a Lead that really has `marketing_events` rows, in Vietnamese at 1440px, then a residue check by exact id with the settings document and the admin locale restored | green, with the phase's own criterion checked as a refusal of the shortcut rather than a demo of the happy path: the signal being **switched off** and the Lead having **no events** are two tests that still score the Lead-field rules and name which state produced the answer, and the fourth state (`absent`) is the `information_schema` marker itself rather than a scenario this database can produce; a band crossing is asserted from `outbox_events`, `notifications` and `audit_log` — with the immediate second call asserted to write **none of them**. The browser pass is what made the provenance claim true: it found that the explanation service's field-by-field rebuild dropped the new `signal` block and that `signalState` was returned but never stored, so both are now stored, served on the current-score and history paths, and asserted by reading them back. Four deviations recorded in `docs/implementation/lead-score-ls9-completion-report.md` rather than smoothed over: no email-hash fallback (audit G6), no Voice/Activity signal (no contract, G2), no `decay_sweep` evaluation trigger (the sweep's attribution is `jobs.target.source`), and notification text in English like every other writing module |
-| 19-LS.10 … LS.18 | *not started* | each completion report must list the exact commands run and their outcomes before this table may claim support |
+| 19-LS.10 | Documentation phase: `docs/implementation/lead-score-conversion-contract.md` (new) plus §6 of the audit, this file's §2.1/§2.5/§4.1–§4.3/§5.2/§7 rows and `README.md`. Verification actually run: every load-bearing claim re-read from the file it cites; three facts confirmed against the running dev API because a citation alone would not settle them (a Contact create without `lastName` → `422 VALIDATION_FAILED {lastName: "Field is required."}`; a Contact create with `firstName`+`lastName` only → the response carries `name` mirrored from `lastName`; an administrator `POST /api/v1/LeadConversionOperation` → refused by the LS.2 write guard with `{entity, operation:'create'}`, while an evaluation create passes that gate — the asymmetry that proves the profile change contract §13.2 requires); `npx vitest run` over the eleven LeadScore API files (**248 passed / 0 failed**, all eleven green inside the full run too); full `npx vitest run` (**2,883 passed / 34 failed**, 202 files — identical to the LS.9 baseline, the 34 in the same seven pre-existing shared-state files, zero `lead-score` failures); worker suite **210 / 0**; `npm run typecheck` clean; `git status` showing five documentation paths and no source file | green, and **no code, schema, settings or metadata file was touched** — which is the phase's own exit criterion ("documented before writing conversion behavior"). The test records used for the three API confirmations were deleted by exact id and a residue query over the run marker returned nothing. What this phase produced is obligations: it corrected two stale LS.0 findings (the phone normalizer and the unusable `pg_trgm` indexes), retired a status no code may write, named the two permission/schema edits LS.13 must make before the command can exist at all, and recorded two gaps it did not invent fixes for — G9 (nobody owns the correction workflow that plan §7.6 requires, while every other caller is barred from those fields) and G10 (no per-action rate bound exists) |
+| 19-LS.11 … LS.18 | *not started* | each completion report must list the exact commands run and their outcomes before this table may claim support |

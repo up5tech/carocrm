@@ -130,8 +130,16 @@ _Phase 19_ —
   `leadScore.updated.v1`, plus `leadScore.bandChanged.v1` on a crossing, one notification for the Lead's owner
   behind `thresholdNotifications`, and one `leadScore.thresholdAction` audit row — the last two keyed by a
   digest of the crossing itself, so a redelivered job cannot interrupt anybody twice — and a `scheduled_jobs` row
-  can ask for a bounded **decay sweep** when the model has a rule that depends on time. Nothing converts yet:
-  the module ships switched off, conversion is 19-LS.10–LS.16, and those operations
+  can ask for a bounded **decay sweep** when the model has a rule that depends on time. Nothing converts yet,
+  and that is now a decided statement rather than a missing one: 19-LS.10 wrote the conversion **contract** —
+  the five-state operation machine and its transitions, the claim/work/settle transaction boundary with the
+  evidence that this kernel's entity service joins the caller's transaction, the target-combination matrix with
+  an ACL, a data and a settings gate per row, `conversion.targets` as the whole B2B/B2C surface, the mapping
+  policy (including why `name` is not a mappable source and ownership is not data), a preview fingerprint that
+  includes the actor's own field visibility, duplicate stages built on seams that already exist rather than a
+  new normalizer, and the accounting rule a retry may not skip — in
+  [docs/implementation/lead-score-conversion-contract.md](docs/implementation/lead-score-conversion-contract.md).
+  The code is owed by 19-LS.11–LS.16, and those operations
   refuse with the sub-phase that owes them (`LEADSCORE_PHASE_PENDING`). See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
