@@ -6204,3 +6204,246 @@ textarea.carocrm-etpl-source,
   display: inline-flex;
   gap: 6px;
 }
+
+/* ---- reports ----
+   A rail of saved reports beside the builder, and the results underneath: the same shape as the
+   other workspaces, so a report reads as a thing you keep rather than a form you fill in. */
+.carocrm-reports-shell {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+
+.carocrm-reports-rail {
+  background: #fff;
+  border: 1px solid #eff2f7;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+  position: sticky;
+  top: 86px;
+}
+
+.carocrm-reports-rail-head {
+  align-items: center;
+  border-bottom: 1px solid #eff2f7;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.carocrm-reports-rail-title {
+  color: #31373d;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.carocrm-reports-rail-count {
+  background: #eef4ff;
+  border-radius: 999px;
+  color: #3d6fbf;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding: 1px 8px;
+}
+
+.carocrm-reports-rail-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.carocrm-reports-shared {
+  color: #a1a8b3;
+  font-weight: 400;
+}
+
+.carocrm-reports-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ---- builder fields ---- */
+.carocrm-field-grid {
+  display: grid;
+  gap: 14px 16px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+.carocrm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  grid-column: span 12;
+  min-width: 0;
+}
+
+.carocrm-field > label,
+.carocrm-reports-group-title {
+  color: #5b636d;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.carocrm-field-hint {
+  color: #8b939d;
+  font-size: 11.5px;
+}
+
+.carocrm-field-divider {
+  border-top: 1px solid #f2f5f9;
+  grid-column: span 12;
+  margin: 2px 0;
+}
+
+@media (min-width: 720px) {
+  .carocrm-field--3 { grid-column: span 3; }
+  .carocrm-field--4 { grid-column: span 4; }
+  .carocrm-field--6 { grid-column: span 6; }
+}
+
+.carocrm-reports-filters-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.carocrm-reports-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.carocrm-filter-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.carocrm-reports-schedule {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---- results ---- */
+.carocrm-reports-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.carocrm-reports-meta .ant-tag {
+  margin: 0;
+}
+
+.carocrm-reports-metrics {
+  display: grid;
+  gap: 10px;
+  /* Tiles keep a sane width instead of stretching to the card when there is only one metric. */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 220px));
+  justify-content: start;
+  margin-bottom: 16px;
+}
+
+.carocrm-reports-metric {
+  background: #fbfcfe;
+  border: 1px solid #eff2f7;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.carocrm-reports-metric-label {
+  color: #8b939d;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.carocrm-reports-metric-value {
+  color: #31373d;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.carocrm-reports-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.carocrm-reports-bar-row {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(80px, 150px) minmax(0, 1fr) auto;
+}
+
+.carocrm-reports-bar-label {
+  color: #5b636d;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carocrm-reports-bar-track {
+  background: #f1f4f9;
+  border-radius: 999px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.carocrm-reports-bar-fill {
+  background: linear-gradient(90deg, #438eff, #7cb0ff);
+  border-radius: 999px;
+  display: block;
+  height: 100%;
+}
+
+.carocrm-reports-bar-value {
+  color: #31373d;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 48px;
+  text-align: end;
+}
+
+@media only screen and (max-width: 1180px) {
+  .carocrm-reports-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .carocrm-reports-rail {
+    max-height: none;
+    position: static;
+  }
+
+  .carocrm-reports-rail-list {
+    max-height: 240px;
+  }
+}
