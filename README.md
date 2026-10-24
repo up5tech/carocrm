@@ -434,7 +434,11 @@ Every module route is authenticated and ACL-checked server-side; see
 | [content/docs/](content/docs/en/_index.md)                                       | the handbook corpus itself (English plus the Vietnamese P0 set), rendered at `/docs`              |
 | [docs/operations/backup-restore.md](docs/operations/backup-restore.md)           | what to back up and how to restore it                                                             |
 
-## Contributing
+## Screenshots
+
+![Record tabs editor](docs/ux/record-tabs-editor.png)
+
+![Record tabs stacked](docs/ux/record-tabs-stacked.png)
 
 Read [AGENTS.MD](AGENTS.MD) first. It fixes the rules this repository is developed under:
 smallest coherent change, no unrelated refactors, migrations reviewed before they are applied, and
