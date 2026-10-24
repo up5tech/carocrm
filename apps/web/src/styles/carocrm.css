@@ -396,12 +396,12 @@ body {
 }
 
 .carocrm-sider .ant-menu-item-group-title {
-  padding: 14px 16px 6px;
-  font-size: 11px;
+  padding: 16px 16px 5px;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.8px;
+  letter-spacing: 0.9px;
   text-transform: uppercase;
-  color: #a1a8b3;
+  color: #98a1ad;
 }
 
 .carocrm-nav-group {
@@ -416,16 +416,104 @@ body {
 .carocrm-sider .ant-menu {
   background: transparent;
   border-inline-end: none !important;
-  padding: 0 8px;
+  /* Compact gutters: the old 8px menu padding plus 8px item margin inset every row twice. */
+  padding: 0 2px;
 }
 
 .carocrm-sider .ant-menu .ant-menu-item,
 .carocrm-sider .ant-menu .ant-menu-submenu-title {
+  border-radius: 9px;
   font-size: 14px;
+  font-weight: 500;
+}
+
+/* Expanded rows only: antd fixes a row at 40px and ellipsizes the title. Let a long label take a
+   second line and the row grow, so "Voice & Communications" is readable instead of "…". The
+   collapsed 72px rail keeps antd's fixed-height, hidden-label geometry. */
+.carocrm-sider .ant-menu-inline .ant-menu-item,
+.carocrm-sider .ant-menu-inline .ant-menu-submenu-title {
+  height: auto;
+  line-height: 1.35;
+  /* Tighter rows: antd's 4px block margin stacked to 8px between a parent title and its first
+     child; 2px keeps the hierarchy compact without the rows touching. */
+  margin: 2px;
+  min-height: 40px;
+  padding-block: 8px;
+  padding-inline-end: 8px;
+  white-space: normal;
+  /* antd derives the width from the theme's 8px margin token; ours is 4px, so let the row fill
+     the gutters it actually has — otherwise the hover pill is visibly short on the right. */
+  width: auto;
+}
+
+/* Keep depth indentation for nested rows, but let a root row hug the gutter. antd writes this
+   padding inline for the icon offset, so it needs the explicit override. */
+.carocrm-sider .ant-menu-inline.ant-menu-root > .ant-menu-item,
+.carocrm-sider .ant-menu-inline.ant-menu-root > .ant-menu-submenu > .ant-menu-submenu-title {
+  padding-inline-start: 16px !important;
+}
+
+/* Grouped rows (CRM, RECORDS) carry one more antd rule than root rows; give them the same gutter.
+   Direct children only, so a submenu's own (already indented) rows keep their depth. */
+.carocrm-sider .ant-menu-inline .ant-menu-item-group-list > .ant-menu-item {
+  padding-inline: 16px 8px !important;
+}
+
+/* A grouped submenu title still needs room for its chevron. */
+.carocrm-sider .ant-menu-inline .ant-menu-item-group-list > .ant-menu-submenu > .ant-menu-submenu-title {
+  padding-inline: 16px 24px !important;
+}
+
+.carocrm-sider .ant-menu-inline .ant-menu-title-content {
+  line-height: 1.35;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+/* The chevron is absolutely placed; keep the wrapped title clear of it while pulling it closer
+   to the rail edge, which is what made the right side look over-indented. */
+.carocrm-sider .ant-menu.ant-menu-inline .ant-menu-submenu-title {
+  padding-inline-end: 24px !important;
+}
+
+.carocrm-sider .ant-menu.ant-menu-inline .ant-menu-submenu-arrow {
+  inset-inline-end: 10px;
+}
+
+.carocrm-sider .ant-menu .ant-menu-item .anticon,
+.carocrm-sider .ant-menu .ant-menu-submenu-title .anticon {
+  color: #8a929d;
+  font-size: 16px;
+}
+
+.carocrm-sider .ant-menu .ant-menu-item:hover,
+.carocrm-sider .ant-menu .ant-menu-submenu-title:hover {
+  background: #f5f8fc;
+}
+
+.carocrm-sider .ant-menu .ant-menu-item:hover .anticon,
+.carocrm-sider .ant-menu .ant-menu-submenu-title:hover .anticon {
+  color: #5b636d;
 }
 
 .carocrm-sider .ant-menu-item-selected {
-  font-weight: 500;
+  font-weight: 600;
+}
+
+.carocrm-sider .ant-menu .ant-menu-item-selected::before {
+  background: #438eff;
+  border-radius: 3px;
+  content: '';
+  inset-block: 9px;
+  left: -2px;
+  position: absolute;
+  width: 3px;
+}
+
+.carocrm-sider .ant-menu .ant-menu-item-selected .anticon {
+  color: #438eff;
 }
 
 /* `min-height: 0` is what actually lets this box shrink below its content inside the flex column,
@@ -435,26 +523,18 @@ body {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* The initial centring of the active row must not be undone when an open submenu above it
+     finishes growing; scroll anchoring would otherwise pull the rail back. */
+  overflow-anchor: none;
   overscroll-behavior: contain;
-  scrollbar-color: #d6dce5 transparent;
-  scrollbar-width: thin;
+  /* A classic scrollbar takes width on the right only, which pushes the hover pill off-centre and
+     reserves dead space on the left when compensated. The rail is short and wheel/trackpad scroll
+     is discoverable, so keep it scrollable but out of the layout. */
+  scrollbar-width: none;
 }
 
 .carocrm-sider-scroll::-webkit-scrollbar {
-  width: 6px;
-}
-
-.carocrm-sider-scroll::-webkit-scrollbar-thumb {
-  background: #d6dce5;
-  border-radius: 3px;
-}
-
-.carocrm-sider-scroll::-webkit-scrollbar-thumb:hover {
-  background: #bcc4d0;
-}
-
-.carocrm-sider-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  display: none;
 }
 
 /* ---- content ---- */

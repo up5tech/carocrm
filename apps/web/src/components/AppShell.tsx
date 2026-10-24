@@ -2,7 +2,7 @@ import { AppstoreOutlined, DatabaseOutlined, MenuFoldOutlined, MenuUnfoldOutline
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
@@ -113,6 +113,41 @@ function InternalShell({ children }: { children: ReactNode }) {
 
   const navItems = useMemo<MenuItems>(() => toMenuItems(tree), [tree, locale]);
   const selectedKey = selectedRoute(location.pathname);
+
+  // A refresh always starts the rail at scrollTop 0. Once the tree and its open submenus have
+  // settled, centre the selected entry so a deep page still shows where the user is.
+  const siderScrollRef = useRef<HTMLDivElement | null>(null);
+  const menuCenteredRef = useRef(false);
+  useEffect(() => {
+    if (menuCenteredRef.current || navigation.data === undefined) return undefined;
+    const container = siderScrollRef.current;
+    if (!container) return undefined;
+    // The submenu expansion runs a short CSS motion, so measure after it starts and confirm once
+    // more before giving up the scroll position.
+    let attempts = 0;
+    let timer: number;
+    const centre = (): void => {
+      const item = container.querySelector<HTMLElement>('.ant-menu-item-selected');
+      if (!item) {
+        attempts += 1;
+        if (attempts < 10) timer = window.setTimeout(centre, 150);
+        return;
+      }
+      const itemRect = item.getBoundingClientRect();
+      const boxRect = container.getBoundingClientRect();
+      const offset = (itemRect.top + itemRect.bottom) / 2 - (boxRect.top + boxRect.bottom) / 2;
+      if (Math.abs(offset) > 1) container.scrollTop = Math.max(0, container.scrollTop + offset);
+      attempts += 1;
+      // One confirmation pass: the submenu motion above the row can still settle a frame later.
+      if (attempts < 2) {
+        timer = window.setTimeout(centre, 250);
+      } else {
+        menuCenteredRef.current = true;
+      }
+    };
+    timer = window.setTimeout(centre, 350);
+    return () => window.clearTimeout(timer);
+  }, [navigation.data, openKeys, selectedKey]);
   // The quick-chat button is only offered to a caller the server put the Chat workspace on the
   // menu for. The tree is already ACL-filtered and feature-gated, so the shell never re-decides.
   const chatAvailable = useMemo(() => hasRoute(tree, '/crm-chat'), [tree]);
@@ -245,9 +280,10 @@ function InternalShell({ children }: { children: ReactNode }) {
           }}
           trigger={null}
         >
-          <div className="carocrm-sider-scroll">
+          <div className="carocrm-sider-scroll" ref={siderScrollRef}>
             <Menu
               mode="inline"
+              inlineIndent={14}
               items={navItems}
               selectedKeys={[selectedKey]}
               openKeys={openKeys ?? []}
@@ -357,7 +393,7 @@ function PortalShell({ children }: { children: ReactNode }) {
           trigger={null}
         >
           <div className="carocrm-sider-scroll">
-            <Menu mode="inline" items={navItems} selectedKeys={[selectedKey]} />
+            <Menu mode="inline" inlineIndent={14} items={navItems} selectedKeys={[selectedKey]} />
           </div>
         </Sider>
         <Layout>
