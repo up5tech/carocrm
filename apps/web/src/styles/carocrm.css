@@ -5091,6 +5091,217 @@ textarea.carocrm-etpl-source,
   }
 }
 
+/* ---- Document template workspace ----
+   The create/edit screen reuses the email designer's two-column frame (`carocrm-etpl-*`); these
+   rules add the document-specific pieces: a page-like preview, grouped placeholders and the detail
+   hero. The preview is a sheet, not a mailbox, so it gets a paper frame and more generous margins. */
+.carocrm-dtpl-tokens {
+  margin: 4px 0 12px;
+}
+
+.carocrm-dtpl-token-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 20px;
+  margin-top: 8px;
+}
+
+.carocrm-dtpl-token-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #737b85;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.carocrm-dtpl-loop-hint {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: #f2f6ff;
+  color: #438eff;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.carocrm-dtpl-paper {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  border: 1px solid #eff2f7;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(49 55 61 / 4%), 0 8px 24px rgb(49 55 61 / 5%);
+  overflow: hidden;
+}
+
+.carocrm-dtpl-paper--detail {
+  max-width: none;
+}
+
+.carocrm-dtpl-iframe {
+  display: block;
+  width: 100%;
+  height: 520px;
+  border: 0;
+  background: #fff;
+}
+
+.carocrm-dtpl-iframe--detail {
+  height: 640px;
+}
+
+.carocrm-dtpl-preview-hint {
+  font-size: 12px;
+}
+
+.carocrm-dtpl-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.carocrm-dtpl-warnings {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 11.5px;
+  word-break: break-word;
+}
+
+.carocrm-dtpl-sample-note {
+  font-size: 12px;
+}
+
+.carocrm-dtpl-code,
+.carocrm-dtpl-code input {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12.5px;
+}
+
+.carocrm-dtpl-code-tag {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 11.5px;
+  color: #5b636d;
+  background: #f7f9fb;
+  border-color: #eff2f7;
+}
+
+.carocrm-dtpl-switches {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  padding-bottom: 6px;
+}
+
+.carocrm-dtpl-switches .ant-form-item {
+  margin-bottom: 0;
+}
+
+/* ---- Document template detail ---- */
+.carocrm-dtpl-hero .ant-card-body {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.carocrm-dtpl-hero-main {
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+}
+
+.carocrm-dtpl-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #eef5ff, #e2eeff);
+  color: #3b6fd4;
+  font-size: 22px;
+}
+
+.carocrm-dtpl-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.carocrm-dtpl-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.carocrm-dtpl-title-row .ant-typography {
+  margin: 0;
+}
+
+.carocrm-dtpl-description {
+  max-width: 720px;
+  font-size: 13px;
+}
+
+.carocrm-dtpl-tags {
+  margin-top: 2px;
+}
+
+.carocrm-dtpl-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.85fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.carocrm-dtpl-source {
+  max-height: 640px;
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  border: 1px solid #eff2f7;
+  border-radius: 8px;
+  background: #f7f9fb;
+  color: #31373d;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.carocrm-etpl-chip--static {
+  cursor: default;
+}
+
+.carocrm-etpl-chip--static:hover {
+  border-color: #eff2f7;
+  background: #f7f9fb;
+  color: #31373d;
+}
+
+@media (max-width: 1180px) {
+  .carocrm-dtpl-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .carocrm-dtpl-iframe--detail {
+    height: 520px;
+  }
+}
+
+@media (max-width: 720px) {
+  .carocrm-dtpl-token-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ---- Conversation workspace ----
    The shared frame for CRM Chat and the voice inbox: a page head, a conversation rail, a main pane
    with a toolbar / scrolling body / docked composer. Both modules are a list of threads beside the

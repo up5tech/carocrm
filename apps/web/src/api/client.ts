@@ -51,6 +51,8 @@ import type {
   DocsPageView,
   DocsSearchView,
   DocsTreeView,
+  DocumentPreviewInput,
+  DocumentPreviewView,
   EmailAccountInput,
   EmailAccountRow,
   EmailTemplatePreviewInput,
@@ -956,6 +958,10 @@ export const api = {
   // is stored: the response is the rendered parts plus the tokens that did not resolve.
   previewEmailTemplate: (input: EmailTemplatePreviewInput) =>
     request<EmailTemplatePreviewView>('/EmailTemplate/action/preview', post(input)),
+  // A document preview renders either a stored template (`templateCode`) or the draft body the
+  // designer holds in memory; the data is always supplied by the caller, never read from a catalog.
+  previewDocument: (input: DocumentPreviewInput) =>
+    request<DocumentPreviewView>('/document/action/preview', post(input)),
 
   webhookEndpoints: () => request<{ list: WebhookEndpointRow[]; total: number }>('/WebhookEndpoint'),
   createWebhookEndpoint: (input: { name: string; url: string; events?: string[]; secret?: string; enabled?: boolean }) =>

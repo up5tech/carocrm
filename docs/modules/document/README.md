@@ -13,9 +13,9 @@ from their own frozen snapshot and hand them here. The Sales module is the first
 
 | Capability | Where |
 |---|---|
-| Named, per-entity-type document templates (subject + body), listable and editable like any record | `/DocumentTemplate` (generic metadata-driven UI) |
+| Named, per-entity-type document templates (subject + body), listable and editable like any record | `/DocumentTemplate` (a dedicated designer for create/edit and a preview-first detail page) |
 | Which template a command picks when the caller names none | `GET /api/v1/document/defaultTemplate?entityType=…` |
-| A render preview of a template against caller-supplied data | `POST /api/v1/document/action/preview` (administrator only) |
+| A render preview of a stored template, or of the draft the designer is editing, against caller-supplied data | `POST /api/v1/document/action/preview` (administrator only) |
 | ACL, audit, stream, import/export and field-level protection for templates | inherited from the kernel, no module code |
 
 ## Module layout
@@ -88,7 +88,9 @@ installation without it still boots, still renders templates and still sends doc
 * **One default per entity type.** Marking a second template as default clears the previous one, so
   "the default" is never ambiguous. When none is marked, the first active template wins.
 * **A preview is an administrative act.** Rendering arbitrary data produces HTML, so
-  `document/action/preview` requires an administrator.
+  `document/action/preview` requires an administrator. It accepts either `{ templateCode, data }`
+  for a stored template or `{ body, subject?, format?, data }` for a draft that has not been saved —
+  the designer uses the second form, and both render through the same pure engine.
 * **The template body is template source.** The metadata declares `fieldPermissions.DocumentTemplate.body
   = 'no'` as the contract; a deployment that wants a role to read templates but not their source sets
   that deny in the role row's own `field_permissions` (the ACL evaluator reads the role, not the

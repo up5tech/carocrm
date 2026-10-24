@@ -73,13 +73,21 @@ export class DocumentController {
     return { code: await this.templates.defaultTemplateCode(entityType) };
   }
 
-  /** Render a preview: the named template, against data supplied by the caller. */
+  /** Render a preview: a stored template, or the draft body the designer is editing. */
   @HttpCode(200)
   @Post("document/action/preview")
   async preview(@Body() body: unknown) {
     this.requireAdmin("rendering a document preview");
     const input = parse(PreviewDocumentSchema, body);
-    return this.templates.render(input.templateCode, input.data);
+    if ("templateCode" in input) {
+      return this.templates.render(input.templateCode, input.data);
+    }
+    return this.templates.renderDraft({
+      body: input.body,
+      subject: input.subject,
+      format: input.format,
+      data: input.data,
+    });
   }
 
   /** Rendering arbitrary data produces HTML, so it is an administrative act (§13). */

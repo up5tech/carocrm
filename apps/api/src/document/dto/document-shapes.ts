@@ -11,6 +11,7 @@ export const CreateDocumentTemplateSchema = z
     code: Code,
     /** Which entity this template renders. `Document` fits any document type. */
     entityType: Code,
+    description: z.string().trim().max(2_000).optional(),
     subject: z.string().trim().max(255).optional(),
     body: z.string().trim().min(1).max(200_000),
     /** Rendering target: `html` bodies are escaped per placeholder, `text` bodies are not. */
@@ -25,6 +26,7 @@ export const CreateDocumentTemplateSchema = z
 export const UpdateDocumentTemplateSchema = z
   .object({
     name: z.string().trim().min(1).max(255).optional(),
+    description: z.string().trim().max(2_000).nullable().optional(),
     subject: z.string().trim().max(255).nullable().optional(),
     body: z.string().trim().min(1).max(200_000).optional(),
     format: z.enum(["html", "text"]).optional(),
@@ -34,13 +36,29 @@ export const UpdateDocumentTemplateSchema = z
   })
   .strict();
 
-/** A render preview: a named template, and the data it is rendered against. */
-export const PreviewDocumentSchema = z
-  .object({
-    templateCode: Code,
-    data: z.record(z.string(), z.unknown()),
-  })
-  .strict();
+const PreviewData = z.record(z.string(), z.unknown());
+
+/**
+ * A render preview: either a stored template named by its code, or the draft body the designer is
+ * editing right now. Both carry the data they are rendered against, so a preview never reads the
+ * live catalog on its own.
+ */
+export const PreviewDocumentSchema = z.union([
+  z
+    .object({
+      templateCode: Code,
+      data: PreviewData,
+    })
+    .strict(),
+  z
+    .object({
+      body: z.string().trim().min(1).max(200_000),
+      subject: z.string().trim().max(255).optional(),
+      format: z.enum(["html", "text"]).default("html"),
+      data: PreviewData,
+    })
+    .strict(),
+]);
 
 export type CreateDocumentTemplateInput = z.infer<
   typeof CreateDocumentTemplateSchema

@@ -20,6 +20,11 @@ export interface DocumentRenderResult extends TemplateRenderResult {
   readonly templateCode: string;
 }
 
+/** A draft rendered before it is stored; there is no template code yet. */
+export interface DocumentDraftRenderResult extends TemplateRenderResult {
+  readonly format: string;
+}
+
 /**
  * The `document` module — the kernel-owned way a record becomes a document.
  *
@@ -65,6 +70,7 @@ export class DocumentTemplateService {
       name: parsed.name,
       code: parsed.code,
       targetEntity: parsed.entityType,
+      description: parsed.description ?? null,
       subject: parsed.subject ?? null,
       body: parsed.body,
       format: parsed.format,
@@ -119,6 +125,25 @@ export class DocumentTemplateService {
         subject: text(fields["subject"]) ?? undefined,
       }),
     };
+  }
+
+  /**
+   * Render the body the designer is editing, before it is stored.
+   *
+   * The draft travels in the request, so this never reads a record: it is the same pure renderer and
+   * the same supplied data as `render`, and the result carries the warnings a stored template would.
+   */
+  async renderDraft(input: {
+    body: string;
+    subject?: string | undefined;
+    format: "html" | "text";
+    data: TemplateData;
+  }): Promise<DocumentDraftRenderResult> {
+    await this.acl.assertAccess("DocumentTemplate", "read");
+    const rendered = renderTemplate(input.body, input.data, {
+      subject: input.subject ?? undefined,
+    });
+    return { format: input.format, ...rendered };
   }
 
   /** The template to use when a caller does not name one. */

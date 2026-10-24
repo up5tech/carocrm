@@ -139,8 +139,13 @@ describe('document templates', () => {
     expect(template.status).toBe(201);
     const id = String(template.body['id']);
 
-    const patched = await call('PATCH', `/api/v1/DocumentTemplate/${id}`, { subject: 'Invoice {{number}}', body: 'Regards, {{name}}' });
+    const patched = await call('PATCH', `/api/v1/DocumentTemplate/${id}`, {
+      description: 'Updated by the test.',
+      subject: 'Invoice {{number}}',
+      body: 'Regards, {{name}}',
+    });
     expect(patched.status, JSON.stringify(patched.body)).toBe(200);
+    expect(patched.body['description']).toBe('Updated by the test.');
     expect(patched.body['subject']).toBe('Invoice {{number}}');
     expect(patched.body['body']).toBe('Regards, {{name}}');
 
@@ -150,6 +155,22 @@ describe('document templates', () => {
 });
 
 describe('render preview', () => {
+  it('renders a draft body the designer has not stored yet', async () => {
+    const result = await call('POST', '/api/v1/document/action/preview', {
+      body: '<p>{{name}}</p>{{#each lines}}<p>{{label}}</p>{{/each}}',
+      subject: 'Draft {{name}}',
+      format: 'html',
+      data: { name: 'Acme', lines: [{ label: 'A' }, { label: 'B' }] },
+    });
+    expect(result.status, JSON.stringify(result.body)).toBe(200);
+    expect(result.body['body']).toBe('<p>Acme</p><p>A</p><p>B</p>');
+    expect(result.body['subject']).toBe('Draft Acme');
+    expect(result.body['format']).toBe('html');
+    expect(result.body['warnings']).toEqual([]);
+    // A draft has no stored template behind it, so the response names none.
+    expect(result.body['templateCode']).toBeUndefined();
+  });
+
   it('resolves placeholders and repeats an #each block with element scoping', async () => {
     const created = await createTemplate({
       subject: 'Quote {{number}} for {{name}}',

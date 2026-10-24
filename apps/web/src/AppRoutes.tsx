@@ -17,6 +17,8 @@ import { DocsLandingPage } from './pages/docs/DocsLandingPage.js';
 import { DocsPage } from './pages/docs/DocsPage.js';
 import { DocsSearchPage } from './pages/docs/DocsSearchPage.js';
 import { DocsSectionPage } from './pages/docs/DocsSectionPage.js';
+import { DocumentTemplateDesignerPage } from './pages/DocumentTemplateDesignerPage.js';
+import { DocumentTemplateDetailPage } from './pages/DocumentTemplateDetailPage.js';
 import { EmailTemplateDesignerPage } from './pages/EmailTemplateDesignerPage.js';
 import { EntityAdminPage } from './pages/EntityAdminPage.js';
 import { EntityBoardPage } from './pages/EntityBoardPage.js';
@@ -159,6 +161,11 @@ export function AppRoutes() {
             before the entity wildcard that would otherwise serve its generic form. */}
         <Route path="/EmailTemplate/create" element={<EmailTemplateDesignerPage />} />
         <Route path="/EmailTemplate/:id/edit" element={<EmailTemplateDesignerPage />} />
+        {/* The document template workspace owns its own create/edit/detail views: a template's body is
+            source, so the generic record form is the wrong surface for it. */}
+        <Route path="/DocumentTemplate/create" element={<DocumentTemplateDesignerPage />} />
+        <Route path="/DocumentTemplate/:id/edit" element={<DocumentTemplateDesignerPage />} />
+        <Route path="/DocumentTemplate/:id" element={<DocumentTemplateDetailPage />} />
         {/* declared before the entity wildcard so "board" is never read as a record id */}
         <Route path="/:entity/board" element={<EntityBoardPage />} />
         <Route path="/:entity" element={<EntityListPage />} />

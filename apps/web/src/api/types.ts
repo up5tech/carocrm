@@ -254,6 +254,24 @@ export interface EmailTemplatePreviewView {
   sample: { type: string; id: string; label: string } | null;
 }
 
+/** A document preview: either a stored template code, or the draft body being designed. */
+export interface DocumentPreviewInput {
+  templateCode?: string;
+  body?: string;
+  subject?: string | null;
+  format?: 'html' | 'text';
+  data: Record<string, unknown>;
+}
+
+export interface DocumentPreviewView {
+  format: string;
+  subject: string;
+  body: string;
+  /** Placeholders the data could not answer; they stay in place and are reported. */
+  warnings: string[];
+  templateCode?: string | null;
+}
+
 export interface WebhookEndpointRow {
   id: string;
   name: string;

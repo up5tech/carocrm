@@ -19,7 +19,7 @@
 import 'grapesjs/dist/css/grapes.min.css';
 
 import { Spin } from 'antd';
-import grapesjs, { type Component, type Editor } from 'grapesjs';
+import grapesjs, { type Component, type ComponentDefinitionDefined, type Editor } from 'grapesjs';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 import { t } from '../../state/i18n.js';
@@ -37,10 +37,24 @@ export interface EmailVisualEditorHandle {
 }
 
 export interface EmailVisualEditorProps {
-  /** The template HTML with inline styles (the stored `bodyHtml`). */
+  /** The template HTML with inline styles (the stored `bodyHtml`, or a document body). */
   value: string;
   /** Called with the email-safe export whenever the design changes. */
   onChange: (html: string) => void;
+  /** Palette blocks; defaults to the email set. */
+  blocks?: readonly VisualBlockSpec[];
+  /** i18n prefix the block labels live under (`<prefix>.<labelKey>`). */
+  blockLabelPrefix?: string;
+  /** i18n prefix for the desktop/mobile device names (`<prefix>.desktop`). */
+  deviceLabelPrefix?: string;
+}
+
+/** The block shape the palette expects; email and document palettes share it. */
+export interface VisualBlockSpec {
+  id: string;
+  labelKey: string;
+  media: string;
+  content: ComponentDefinitionDefined;
 }
 
 /** Debounce window for the export; typing in the RTE fires `change` on every keystroke. */
@@ -69,7 +83,31 @@ function wrapLooseText(value: string): string {
   return `<p>${value}</p>`;
 }
 
-export const EmailVisualEditor = forwardRef<EmailVisualEditorHandle, EmailVisualEditorProps>(({ value, onChange }, ref) => {
+/**
+ * GrapesJS discards text nodes that sit directly inside `<tbody>` — which is exactly where a
+ * hand-written (or seeded) document template puts its `{{#each lines}}` markers. It moves them
+ * before the table, so the loop no longer wraps the rows. Wrapping each marker in a hidden row
+ * keeps the order and the loop intact; a document built from the palette already carries
+ * `data-carocrm-loop` markers and is left alone.
+ */
+function protectLoopMarkers(value: string): string {
+  if (value.includes('data-carocrm-loop') || !value.includes('{{#each')) return value;
+  const marker = (tag: string) =>
+    `<tr data-carocrm-loop="${tag}" style="display:none"><td colspan="12" style="display:none;padding:0;border:0;font-size:0;line-height:0">${tag}</td></tr>`;
+  return value.replace(/(<tbody[^>]*>)([\s\S]*?)(<\/tbody>)/gi, (_whole, open: string, inner: string, close: string) => {
+    const protectedInner = inner
+      .replace(/\{\{#each\s+[a-zA-Z0-9_.]+\}\}/g, (found: string) => marker(found))
+      .replace(/\{\{\/each\}\}/g, (found: string) => marker(found));
+    return `${open}${protectedInner}${close}`;
+  });
+}
+
+/** Everything the editor needs done to a stored body before GrapesJS parses it. */
+function prepareBody(value: string): string {
+  return wrapLooseText(protectLoopMarkers(value));
+}
+
+export const EmailVisualEditor = forwardRef<EmailVisualEditorHandle, EmailVisualEditorProps>(({ value, onChange, blocks, blockLabelPrefix, deviceLabelPrefix }, ref) => {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const lastExportRef = useRef<string>(value);
@@ -77,6 +115,18 @@ export const EmailVisualEditor = forwardRef<EmailVisualEditorHandle, EmailVisual
   onChangeRef.current = onChange;
   const firstSyncRef = useRef(true);
   const [ready, setReady] = useState(false);
+  // The palette and its labels are fixed for the life of one editor; the ref keeps the
+  // build-once effect independent of the props object each render creates.
+  const configRef = useRef({
+    blocks: blocks ?? EMAIL_BLOCKS,
+    blockLabelPrefix: blockLabelPrefix ?? 'web.emailTemplate.blocks',
+    deviceLabelPrefix: deviceLabelPrefix ?? 'web.emailTemplate',
+  });
+  configRef.current = {
+    blocks: blocks ?? EMAIL_BLOCKS,
+    blockLabelPrefix: blockLabelPrefix ?? 'web.emailTemplate.blocks',
+    deviceLabelPrefix: deviceLabelPrefix ?? 'web.emailTemplate',
+  };
 
   useEffect(() => {
     const host = hostRef.current;
@@ -96,7 +146,7 @@ export const EmailVisualEditor = forwardRef<EmailVisualEditorHandle, EmailVisual
       // otherwise templates written as plain text + <br> (e.g. seeded ones) cannot be
       // edited by clicking in the canvas.
       parser: { textTags: ['br'] },
-      components: wrapLooseText(value),
+      components: prepareBody(value),
       style: '',
       styleManager: {
         sectors: [
@@ -149,16 +199,16 @@ export const EmailVisualEditor = forwardRef<EmailVisualEditorHandle, EmailVisual
       },
       deviceManager: {
         default: 'desktop',
-        devices: DEVICES.map((device) => ({ ...device, name: t(`web.emailTemplate.${device.id}`) })),
+        devices: DEVICES.map((device) => ({ ...device, name: t(`${configRef.current.deviceLabelPrefix}.${device.id}`) })),
       },
     });
     editorRef.current = editor;
     setReady(true);
 
-    for (const block of EMAIL_BLOCKS) {
+    for (const block of configRef.current.blocks) {
       editor.BlockManager.add(block.id, {
-        label: t(`web.emailTemplate.blocks.${block.labelKey}`),
-        category: { id: 'etpl', label: t('web.emailTemplate.blocks.category'), open: true },
+        label: t(`${configRef.current.blockLabelPrefix}.${block.labelKey}`),
+        category: { id: 'etpl', label: t(`${configRef.current.blockLabelPrefix}.category`), open: true },
         media: block.media,
         content: block.content,
         // One click appends the block (drag also works): an email designer composes by
@@ -222,7 +272,7 @@ export const EmailVisualEditor = forwardRef<EmailVisualEditorHandle, EmailVisual
     if (editor === null) return;
     if (value !== lastExportRef.current) {
       lastExportRef.current = value;
-      editor.setComponents(wrapLooseText(value));
+      editor.setComponents(prepareBody(value));
     }
   }, [value]);
 
