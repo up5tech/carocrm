@@ -137,6 +137,12 @@
     "print": "In",
     "seeAlso": "Xem thêm",
     "lastReviewed": "Xem lại gần nhất ngày {date}",
+    "audience": {
+      "user": "Dành cho mọi người",
+      "admin": "Quản trị viên"
+    },
+    "pageCount_one": "{count} trang",
+    "pageCount_other": "{count} trang",
     "fallbackNotice": "Trang này chưa được dịch — đang hiển thị bản tiếng Anh.",
     "fallbackLink": "Mở bản tiếng Anh",
     "brokenLink": "Liên kết này hỏng — {key}",

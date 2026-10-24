@@ -1,5 +1,5 @@
 import { LinkOutlined, PrinterOutlined, RocketOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Space, Typography } from 'antd';
+import { App as AntApp, Button, Space, Tag, Typography } from 'antd';
 import { useEffect } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 
@@ -91,22 +91,24 @@ export function DocsPage() {
                 {t('web.docs.openScreen')}
               </Button>
             ) : null}
-            <Button
-              size="small"
-              icon={<LinkOutlined />}
-              block
-              onClick={() => {
-                void navigator.clipboard
-                  .writeText(window.location.href)
-                  .then(() => message.success(t('web.docs.linkCopied')))
-                  .catch(() => message.error(t('web.docs.copyFailed')));
-              }}
-            >
-              {t('web.docs.copyLink')}
-            </Button>
-            <Button size="small" icon={<PrinterOutlined />} block onClick={() => window.print()}>
-              {t('web.docs.print')}
-            </Button>
+            <div className="carocrm-doc-tools-list">
+              <Button
+                size="small"
+                type="text"
+                icon={<LinkOutlined />}
+                onClick={() => {
+                  void navigator.clipboard
+                    .writeText(window.location.href)
+                    .then(() => message.success(t('web.docs.linkCopied')))
+                    .catch(() => message.error(t('web.docs.copyFailed')));
+                }}
+              >
+                {t('web.docs.copyLink')}
+              </Button>
+              <Button size="small" type="text" icon={<PrinterOutlined />} onClick={() => window.print()}>
+                {t('web.docs.print')}
+              </Button>
+            </div>
           </div>
         </>
       }
@@ -123,6 +125,15 @@ export function DocsPage() {
 
       <h1 tabIndex={-1}>{doc.title}</h1>
       <p className="carocrm-doc-lede">{doc.summary}</p>
+
+      {/* Who it is for and when it was last checked — the two facts a reader weighs before trusting
+          a page. The audience is also the reason the admin disclaimer appears at the foot. */}
+      <div className="carocrm-doc-meta">
+        <Tag bordered={false} color={doc.audience === 'admin' ? 'purple' : 'blue'}>
+          {t(doc.audience === 'admin' ? 'web.docs.audience.admin' : 'web.docs.audience.user')}
+        </Tag>
+        {doc.updated !== null ? <span>{t('web.docs.lastReviewed', { date: doc.updated })}</span> : null}
+      </div>
 
       <DocBlocks blocks={doc.blocks} context={context} />
 

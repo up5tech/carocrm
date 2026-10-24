@@ -69,7 +69,9 @@ export function DocsLayout({
 
   return (
     <div className="carocrm-doc">
-      <div className="carocrm-doc-grid">
+      {/* Without a contents rail the third column would be a hole in the panel: index pages keep two
+          columns and let the prose absorb the space. */}
+      <div className={`carocrm-doc-grid${actions === undefined ? ' carocrm-doc-grid--no-side' : ''}`}>
         {narrow ? (
           // §5.10: below 1180 the rail is a disclosure above the prose, because a 220px column of links
           // leaves the handbook with a measure nobody can read down.
@@ -80,9 +82,13 @@ export function DocsLayout({
             </nav>
           </details>
         ) : (
-          <nav className="carocrm-doc-rail" aria-label={t('web.docs.sectionsNav')}>
-            <DocsRail tree={tree.data} activeSection={activeSection} activePage={activePage} />
-          </nav>
+          // The tint and the divider belong to the column, which is why the sticky list needs a
+          // wrapper: a background on the sticky element itself would end where the list ends.
+          <div className="carocrm-doc-rail-col">
+            <nav className="carocrm-doc-rail" aria-label={t('web.docs.sectionsNav')}>
+              <DocsRail tree={tree.data} activeSection={activeSection} activePage={activePage} />
+            </nav>
+          </div>
         )}
         <div className="carocrm-doc-prose">{children}</div>
         <aside className="carocrm-doc-side">

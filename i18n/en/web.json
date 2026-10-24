@@ -137,6 +137,12 @@
     "print": "Print",
     "seeAlso": "See also",
     "lastReviewed": "Last reviewed {date}",
+    "audience": {
+      "user": "For everyone",
+      "admin": "Administrators"
+    },
+    "pageCount_one": "{count} page",
+    "pageCount_other": "{count} pages",
     "fallbackNotice": "This page is not translated yet — showing English.",
     "fallbackLink": "Open the English page",
     "brokenLink": "This link is broken — {key}",

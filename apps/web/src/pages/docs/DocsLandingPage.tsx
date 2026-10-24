@@ -1,3 +1,4 @@
+import { BookOutlined, ReadOutlined, RocketOutlined, SettingOutlined } from '@ant-design/icons';
 import { Typography } from 'antd';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -9,6 +10,17 @@ import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
 import { useDocsTree } from '../../state/docs.js';
 import { t } from '../../state/i18n.js';
 import { DocsLayout } from './DocsLayout.js';
+
+/**
+ * The four doors carry a mark, not a colour per section: the icon is what makes the landing page
+ * scannable at a glance, and it is decoration only — the title still names the section.
+ */
+const SECTION_ICONS: Record<string, React.ReactNode> = {
+  'getting-started': <RocketOutlined />,
+  user: <ReadOutlined />,
+  admin: <SettingOutlined />,
+  reference: <BookOutlined />,
+};
 
 /**
  * `/docs` — the door the sidebar entry lands on (§5.2).
@@ -70,13 +82,19 @@ export function DocsLandingPage() {
       <div className="carocrm-doc-doors">
         {sections.map((section) => (
           <Link key={section.key} to={section.path} className="carocrm-doc-door">
-            <span className="carocrm-doc-door-title">{section.title}</span>
+            <span className="carocrm-doc-door-head">
+              <span className="carocrm-doc-door-icon" aria-hidden="true">
+                {SECTION_ICONS[section.key] ?? <BookOutlined />}
+              </span>
+              <span className="carocrm-doc-door-title">{section.title}</span>
+            </span>
             <span className="carocrm-doc-door-summary">{section.summary}</span>
             <ul className="carocrm-doc-door-pages">
               {section.pages.slice(0, 3).map((page) => (
                 <li key={page.key}>{page.title}</li>
               ))}
             </ul>
+            <span className="carocrm-doc-door-count">{t('web.docs.pageCount', { count: section.pages.length })}</span>
           </Link>
         ))}
       </div>
