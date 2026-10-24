@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { LEADSCORE_OPERATIONS } from '../lead-score-feature-gate.service.js';
+import { MAX_PREVIEW_SAMPLE } from '../lead-score-preview.service.js';
 
 /**
  * Phase 19-LS.1 — request shapes (`PLAN_Phase_19_LeadScore.md` §8.4, §16 `19-LS.1`; AGENTS.md §5.4).
@@ -38,6 +39,9 @@ export const OperationProbeSchema = z
  */
 const ModelIdSchema = z.string().trim().min(1).max(64);
 
+/** A Lead id named in a preview request. Shape only; the record ACL decides whether the caller may score it. */
+const LeadIdSchema = z.string().trim().min(1).max(64);
+
 /**
  * The stored record's concurrency token, sent back by an editor that loaded the model first.
  *
@@ -66,5 +70,25 @@ export const ModelArchiveSchema = ModelPublishSchema;
 export const ModelNewVersionSchema = z
   .object({
     modelId: ModelIdSchema,
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
+// Phase 19-LS.4 — the model preview (plan §6.1, §8.1, §9.4, §15.2 stage 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * A preview scores Leads and writes nothing, so its shape carries no score, no band and no setting: only
+ * which model and which Leads.
+ *
+ * `leadIds` is bounded here rather than trusted from an editor, because plan §9.4 asks that a preview never
+ * become a way to make the server evaluate the Lead table, and `maxSize` can only narrow the bound — a
+ * caller cannot raise it above `MAX_PREVIEW_SAMPLE` by asking.
+ */
+export const ModelPreviewSchema = z
+  .object({
+    modelId: ModelIdSchema,
+    leadIds: z.array(LeadIdSchema).min(1).max(MAX_PREVIEW_SAMPLE).optional(),
+    maxSize: z.number().int().min(1).max(MAX_PREVIEW_SAMPLE).optional(),
   })
   .strict();

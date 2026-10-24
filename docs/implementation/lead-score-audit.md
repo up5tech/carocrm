@@ -300,6 +300,38 @@ rule counted once (event de-duplication by `(source, entityId)` within the lookb
 weights if configured → clamp to `[scoreFloor, scoreCeiling]` → stable rounding → band lookup.
 Same `(modelVersion, input snapshot)` ⇒ same output, asserted by unit tests.
 
+**Delivered in 19-LS.4**, with the choices §6.3 left to be defined (all of them are now asserted in
+`apps/api/test/lead-score-evaluator.test.ts`):
+
+1. **evaluation order** is `priority`, then `reasonCode`, then `id`, so a tie cannot make a stored score
+   depend on the order a list query returned (compat U13).
+2. **the sign comes from the `effect`**, not from the stored number: `add` contributes `|points|`,
+   `subtract` contributes `-|points|`, `setBand` contributes 0 and may assign its band. The last matched
+   `setBand` in that order wins.
+3. **conditions are three-valued** — `matched`, `not_matched`, `unknown` (Kleene `all`/`any`/`not`, so
+   `not unknown` stays unknown). A signal is `unknown` when it was **not supplied to the evaluation at
+   all**, which is how a field hidden by field-level ACL differs from a field that is empty; the signature
+   records `not_supplied` separately for the same reason. Supplied-and-empty answers `isEmpty`/`isNotEmpty`
+   definitely and any comparison `unknown`.
+4. **weights are normalized relative influence**: `Σ(delta_d × weight_d) / Σ(weight_d)` over the dimensions
+   the evaluation actually attempted, applied after the rule deltas and before the clamp. A skipped rule
+   leaves the denominator, so it cannot dilute a score; a weight total of 0 falls back to the unweighted
+   delta and flags `LS_EVALUATION_WEIGHTS_ZERO_TOTAL`.
+5. **rounding is half away from zero** (`Math.round` sends `-0.5` to `-0`, which would make the sign of a
+   delta decide the rule), and the clamp runs first because `scoreFloor`/`scoreCeiling` are integers.
+6. **coverage** is the known share of attempted rule weight, where a rule's weight is `|points|` (1 for a
+   `setBand` rule or a draft rule with no points yet): definite answers in both sides, `neutral` unknowns
+   and errors in the denominator only, `ignore` unknowns and skips out of both. A `neutral` policy means
+   "the model wanted this weight and the Lead did not answer" — visible as a hole; `ignore` means "this
+   rule asks nothing when the signal is absent".
+7. **a band gap is reported, not invented**: a score no band covers answers `Unknown` with
+   `LS_EVALUATION_SCORE_OUTSIDE_BANDS`, and the projection writer (19-LS.5) decides whether that keeps the
+   previous band.
+8. **only a structural failure refuses a number** — an unparseable condition, a field outside the grant, or
+   more rules than `MAX_EVALUATED_RULES`. Every rule failing gives `resultState: failed` and
+   `scoreValue: null`; a model whose rules all asked nothing gives the base score at coverage 0, because
+   "nothing known" is the model's declared neutral start, not a server error.
+
 ### 5.3 Evaluation record and explanation
 
 `LeadScoreEvaluation` (append-only, `read: 'no'` at ACL, served by `GET /leads/:id/score/history`):
@@ -546,7 +578,7 @@ database only when it touches data.
 | LS.1 ✅ **delivered 2026-10-24** | `apps/api/src/lead-score/` module dir + barrel, `LEADSCORE_CONTROLLERS/PROVIDERS` spread before `app.module.ts:160/:212`, descriptor + `leadScore` settings row + 14 capability→ACL resources + 11-operation feature gate + health view. **Deviation from this plan row:** no nav entry and no `leadscore.json` catalog yet — the sidebar would point at an SPA route that only LS.7/LS.8 create, and the catalog's two real consumers at this phase are the module's error codes, which went into `i18n/*/errors.json` | `apps/api/src/lead-score/*`, `app.module.ts`, `i18n/{en,vi}/errors.json`, `docs/implementation/lead-score-ls1-completion-report.md` | 15 LS tests + 109 adjacent tests green, typecheck and lint clean, Lead CRUD proven unchanged |
 | LS.2 ✅ **delivered 2026-10-24** | 4 metadata entities + 16 Lead score/conversion attributes + the `score`/`converted` detail panels + declarative indexes; `073_phase19_lead_score.sql` (15 partial indexes, 3 unique, all enforced by test); `lead-score-write-guard.service.ts` + `lead-score-internal.ts` marker; `lead-score-vocabulary.ts` | `database/seed-metadata.ts`, `database/migrations/073_*`, `apps/api/src/lead-score/*` | migration reviewed pre-apply; schema read-back; existing Leads untouched; direct user write to `scoreValue`/`converted*` rejected |
 | LS.3 ✅ **delivered 2026-10-24** | `lead-score-condition.ts` (declarative tree only, platform `CRITERIA_OPERATORS`, per-type operator matrix, protected + scoring-output denylists, depth/predicate/node/value bounds) + `lead-score-validator.ts` (42 stable codes, errors vs warnings) + `lead-score-model.service.ts` (`validate`/`publish`/`archive`/`new-version`, all through the gate and `EntityCrudService`) + the lifecycle half of the write guard, including a **separate `beforeDelete` hook** because `EntityManager.delete` never reaches `beforeValidate` | `apps/api/src/lead-score/lead-score-{condition,validator,model.service,write-guard}.ts`, `dto/lead-score-shapes.ts`, `lead-score.controller.ts`, `i18n/{en,vi}/errors.json` | **51 LS.3 tests** (22 lifecycle + 29 pure), LS.1/LS.2 re-run green: invalid cannot publish, published cannot be written, role gates proven |
-| LS.4 | Evaluator: clamping, band resolution, rule results, coverage, deterministic hash/signature | `lead-score-evaluator.ts` (pure) | table-driven unit tests, reproducibility assertion |
+| LS.4 ✅ **delivered 2026-10-24** | `lead-score-evaluator.ts` (pure: no DB, no settings row, no clock) — three-valued condition evaluation with the platform's meaning for all 16 criteria operators, `matched`/`not_matched`/`unknown`/`skipped`/`error` rule outcomes, effect-decided sign, dimension weights as **normalized relative influence**, clamp → half-away-from-zero rounding → threshold or `setBand` resolution, coverage by rule weight, positive/negative/unknown/skipped reason codes, SHA-256 signature + inputs hash, `requiredInputFields` as the narrow projection a recalculation must fetch. **Plus the only door it opens:** `POST action/model/preview` (`lead-score-preview.service.ts`) scores a bounded ACL-owned sample and writes nothing, which is plan §15.2 stage 3. New `scoringPreview` switch; `scoring` now names **19-LS.5** because that is the phase that keeps a score | `apps/api/src/lead-score/lead-score-{evaluator,preview.service}.ts`, `dto/lead-score-shapes.ts`, `lead-score.controller.ts`, `lead-score-module.ts`, `lead-score-module-health.service.ts` | **65 pure table-driven unit tests** (reproducibility: same snapshot twice, other clock, key order, array order, whitespace, priority tie; every operator, including both readings a `bool` field admits; every missing-data shape; weights; clamp; rounding; band; every error outcome) + **12 API tests** (per-Lead scores, zero writes proved by row identity + evaluation and audit counts, record ACL, **field ACL turns a hidden signal into unknown rather than empty**, no Lead value in the answer, §9.4 bounds, gate refusal with the switch off) |
 | LS.5 | Evaluation persistence + current projection update + `GET score`/`score/history` + staleness | `lead-score-calculation.service.ts`, `lead-score-explanation.service.ts`, controller | unit + API with `AGENT_TEST_` Lead, ACL/field-level checks, pagination |
 | LS.6 | `entity.updated` subscriber, debounced job, bounded batch, decay sweep, retry | `lead-score-events.ts`, `lead-score-recalculation.job.ts`, `apps/worker/src/handlers/lead-score-handlers.ts`, `seed.ts` scheduled row | duplicate delivery produces one history row; list reads stay flat (query count asserted) |
 | LS.7 | Score panel on Lead detail, list column/filter/sort, recalculate action, history drawer | `apps/web/src/components/LeadScorePanel.tsx`, `EntityDetailPage.tsx` mount, metadata layouts | browser pass (both viewports, keyboard, band label not color-only) |

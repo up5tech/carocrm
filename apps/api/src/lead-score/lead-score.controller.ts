@@ -3,22 +3,23 @@ import { Body, Controller, Get, HttpCode, Inject, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
 
-import { ModelArchiveSchema, ModelNewVersionSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
 import { LeadScoreModelService } from './lead-score-model.service.js';
 import { LEADSCORE_CAPABILITIES, LEADSCORE_MODULE, LEADSCORE_PENDING_FEATURES } from './lead-score-module.js';
 import { LeadScoreModuleHealthService } from './lead-score-module-health.service.js';
 import { LeadScorePermissionService } from './lead-score-permission.service.js';
+import { LeadScorePreviewService } from './lead-score-preview.service.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 
 /**
  * Phase 19-LS.1 — the `LeadScore` control plane (`PLAN_Phase_19_LeadScore.md` §4.1, §8, §16 `19-LS.1`).
  *
- * Only the control plane exists at this phase: identity, the caller's rights, the settings document
- * and a probe of the gate that will stand in front of every score and every conversion. The scoring
- * engine, the model administration, the duplicate review and the conversion command arrive with
- * their own sub-phases (§16) and pass through the same permission service and the same gate rather
- * than re-implementing a check.
+ * What exists here grows with each sub-phase, and every route passes the same permission service and the
+ * same gate rather than re-implementing a check: LS.1 added identity, rights, the settings document and the
+ * gate probe; LS.3 added the model lifecycle (`validate`, `publish`, `archive`, `new-version`); LS.4 added
+ * `preview`, the one engine-backed operation that writes nothing. The score read, the recalculation and the
+ * conversion command still arrive with their own sub-phases (§16).
  *
  * Every route asserts a capability server-side; hiding a badge in the SPA is never authorization
  * (AGENTS.md §5.3). The controller owns no business rule.
@@ -36,6 +37,7 @@ export class LeadScoreController {
     @Inject(LeadScoreSettingsService) private readonly settings: LeadScoreSettingsService,
     @Inject(LeadScoreFeatureGate) private readonly gate: LeadScoreFeatureGate,
     @Inject(LeadScoreModelService) private readonly models: LeadScoreModelService,
+    @Inject(LeadScorePreviewService) private readonly preview: LeadScorePreviewService,
   ) {}
 
   /** Module health: the platform foundation, the registration invariants, the features and the gate. */
@@ -169,6 +171,22 @@ export class LeadScoreController {
   async newModelVersion(@Body() body: unknown) {
     const input = this.parse(ModelNewVersionSchema, body);
     return this.models.newVersion(input.modelId);
+  }
+
+  /**
+   * Score a bounded, authorized sample with a model and change nothing.
+   *
+   * This is plan §15.2 stage 3 — the step between administering a model and publishing one: an administrator
+   * compares the outputs against the rules they meant before a version becomes what every future score is
+   * read from. The service enforces the three things that make that safe: the sample comes from the core list
+   * path, so record and field ACL are the real ones; the answer carries no Lead values; and nothing here
+   * writes a projection, an evaluation, an audit row or an event (§6.1, §9.2, §9.4).
+   */
+  @HttpCode(200)
+  @Post('action/model/preview')
+  async previewModel(@Body() body: unknown) {
+    const input = this.parse(ModelPreviewSchema, body);
+    return this.preview.preview(input.modelId, input.leadIds, input.maxSize);
   }
 
   private parse<T extends ZodTypeAny>(schema: T, value: unknown): T['_output'] {

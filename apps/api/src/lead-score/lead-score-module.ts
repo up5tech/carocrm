@@ -13,8 +13,9 @@
  * operator sees what is *installed* rather than what a plan promised.
  *
  * **A feature carries the sub-phase that implements it, and `pendingPhase: null` is the only claim of
- * delivery.** At LS.1 everything was pending; LS.3 delivered `modelAdministration`. That is the honest
- * state and it is what plan §15.2
+ * delivery.** At LS.1 everything was pending; LS.3 delivered `modelAdministration` and LS.4 delivered
+ * `scoringPreview` — the deterministic engine and the side-effect-free sample it is allowed to run. That is
+ * the honest state and it is what plan §15.2
  * asks for: "deploy schema/metadata with scoring disabled and conversion behavior unchanged". A flag
  * here is an administrator's switch, not a claim that code exists — `effective` in the settings view
  * is `false` for a pending feature even when the switch is on.
@@ -230,10 +231,15 @@ export const LEADSCORE_CAPABILITIES: readonly LeadScoreCapabilityDefinition[] = 
  * with the phase in the response. A later phase flips it to `null` in its own commit.
  */
 export const LEADSCORE_FEATURES: readonly LeadScoreFeatureDescriptor[] = [
-  // 19-LS.3 delivered the lifecycle and the validator. `previewModel` still points at `scoring`, because a
-  // preview is an evaluation run and the evaluator is 19-LS.4 (audit §5).
+  // 19-LS.3 delivered the lifecycle and the validator.
   { key: 'modelAdministration', label: 'Score model administration', settingsPath: 'features.modelAdministration', requires: [], pendingPhase: null },
-  { key: 'scoring', label: 'Rule-based scoring', settingsPath: 'features.scoring', requires: ['modelAdministration'], pendingPhase: '19-LS.4' },
+  // 19-LS.4 delivered the deterministic engine, and the only door it opens is the side-effect-free one: plan
+  // §15.2 stage 3 is "preview scoring on a limited authorized sample", which is what `previewModel` runs.
+  { key: 'scoringPreview', label: 'Score model preview', settingsPath: 'features.scoringPreview', requires: ['modelAdministration'], pendingPhase: null },
+  // `scoring` is the switch for a score that is *computed and kept*: the projection read and the recalculation
+  // both need the evaluation rows, and those arrive with 19-LS.5. A delivered evaluator is therefore not yet
+  // a delivered `scoring` feature — the phase named here is the one an operator should come back to.
+  { key: 'scoring', label: 'Rule-based scoring', settingsPath: 'features.scoring', requires: ['modelAdministration'], pendingPhase: '19-LS.5' },
   { key: 'scoreExplanation', label: 'Score explanation and history', settingsPath: 'features.scoreExplanation', requires: ['scoring'], pendingPhase: '19-LS.5' },
   { key: 'manualRecalculation', label: 'Manual recalculation', settingsPath: 'features.manualRecalculation', requires: ['scoring'], pendingPhase: '19-LS.6' },
   { key: 'eventRecalculation', label: 'Event-driven recalculation', settingsPath: 'features.eventRecalculation', requires: ['scoring'], pendingPhase: '19-LS.6' },
@@ -361,7 +367,7 @@ export const LEADSCORE_MODULE = {
   apiPrefix: '/api/v1/LeadScore',
   settingsRow: LEADSCORE_SETTINGS_ROW,
   /** Sub-phases delivered by this module. */
-  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3'],
+  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4'],
   /**
    * The entity set this module owns, registered in `database/seed-metadata.ts` and indexed by
    * `database/migrations/073_phase19_lead_score.sql`. One list, shared with the write guard, so the

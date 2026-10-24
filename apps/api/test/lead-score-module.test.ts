@@ -158,7 +158,7 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.module.id).toBe('LeadScore');
     expect(body.module.apiPrefix).toBe('/api/v1/LeadScore');
     expect(body.module.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3']);
+    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4']);
 
     // Every required capability is a fact the view verified against this database, not a claim.
     expect(body.dependencies.every((dependency) => dependency.present)).toBe(true);
@@ -175,10 +175,11 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.ready).toBe(false);
     expect(body.reason).toContain('module switch is off');
     expect(body.features.every((feature) => feature.enabled === false)).toBe(true);
-    // 19-LS.3 shipped the model lifecycle, so that one switch is no longer pending and every other one is
-    // still tied to a phase that has not arrived. The health view says which is which.
+    // 19-LS.3 shipped the model lifecycle and 19-LS.4 shipped the deterministic engine with its
+    // side-effect-free preview, so two switches are no longer pending. Everything that *keeps* or *reads* a
+    // score is still tied to a phase that has not arrived, and the health view says which is which.
     const implemented = body.features.filter((feature) => feature.implemented).map((feature) => feature.key);
-    expect(implemented).toEqual(['modelAdministration']);
+    expect(implemented).toEqual(['modelAdministration', 'scoringPreview']);
     expect(body.features.filter((feature) => !feature.implemented).every((feature) => feature.pendingPhase !== null)).toBe(true);
     expect(body.operations.every((operation) => operation.admitted === false)).toBe(true);
     expect(body.operations.every((operation) => operation.code === 'LEADSCORE_MODULE_DISABLED')).toBe(true);
@@ -190,6 +191,7 @@ describe('module registration and health (19-LS.1)', () => {
       'entity-registration',
       'schema-indexes',
       'write-guard',
+      'scoring-engine',
       'platform-foundation',
     ]) {
       expect(body.checks.find((check) => check.name === name)?.ok).toBe(true);
@@ -338,7 +340,7 @@ describe('settings document (19-LS.1)', () => {
     // document says so out loud instead of letting an administrator believe scoring is live.
     expect(view.effective.scoring).toBe(false);
     expect(view.warnings.map((warning) => warning.code)).toContain('phasePending');
-    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('19-LS.4');
+    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('19-LS.5');
     expect(view.updatedAt).not.toBeNull();
     expect(view.updatedBy).not.toBeNull();
 
@@ -353,9 +355,8 @@ describe('feature gate (19-LS.1)', () => {
     expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true })).status).toBe(200);
 
     for (const [operation, phase] of [
-      ['readScore', '19-LS.4'],
+      ['readScore', '19-LS.5'],
       ['conversionExecute', '19-LS.13'],
-      ['previewModel', '19-LS.4'],
       ['aiInsight', '19-LS.17'],
     ] as const) {
       const result = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });

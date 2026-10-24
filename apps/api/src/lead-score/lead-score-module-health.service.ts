@@ -1,3 +1,4 @@
+import { CRITERIA_OPERATORS } from '@carocrm/formula';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
@@ -10,6 +11,7 @@ import {
   LEAD_DEAD_STATUS,
   LEADSCORE_CORE_ENTITY_TYPES,
 } from './lead-score-domain.js';
+import { SCORING_OPERATORS } from './lead-score-evaluator.js';
 import { LeadScoreFeatureGate, type LeadScoreOperationAssessment } from './lead-score-feature-gate.service.js';
 import { LEADSCORE_ENTITY_TYPES, SERVER_OWNED_LEAD_FIELDS } from './lead-score-internal.js';
 import {
@@ -190,6 +192,7 @@ export class LeadScoreModuleHealthService {
       entityRegistration(entities),
       schemaStructures(indexes),
       writeGuardRegistered(hookNames),
+      scoringEngineReadable(),
       platformFoundation(dependencies),
     ];
     const ok = dependencies.every((dependency) => dependency.present) && checks.every((check) => check.ok);
@@ -389,6 +392,28 @@ function writeGuardRegistered(hookNames: Set<string>): HealthCheck {
       missing.length === 0
         ? `${LEADSCORE_GUARD_HOOKS.length} guards registered on the phases every write passes through`
         : `not registered: ${missing.join(', ')}`,
+  };
+}
+
+/**
+ * The scoring engine gives a documented meaning to every operator the platform names.
+ *
+ * 19-LS.3 refuses an operator a field's type cannot answer, and a published version is immutable — so an
+ * operator the evaluator does not implement would read as a rule that quietly never matched, inside scores
+ * that were already stored. Comparing the two lists on every health read is what turns that into a failing
+ * check the day the platform adds one (audit §5.2-4, report `docs/implementation/lead-score-ls4-completion-report.md`).
+ */
+function scoringEngineReadable(): HealthCheck {
+  const implemented = new Set<string>(SCORING_OPERATORS);
+  const unread = CRITERIA_OPERATORS.filter((operator: string) => !implemented.has(operator));
+  const invented = SCORING_OPERATORS.filter((operator) => !CRITERIA_OPERATORS.includes(operator as (typeof CRITERIA_OPERATORS)[number]));
+  const ok = unread.length === 0 && invented.length === 0;
+  return {
+    name: 'scoring-engine',
+    ok,
+    detail: ok
+      ? `${implemented.size} criteria operators have a scoring meaning, and nothing scores with an operator the platform does not name`
+      : `unread: ${unread.join(', ') || 'none'}; not a platform operator: ${invented.join(', ') || 'none'}`,
   };
 }
 

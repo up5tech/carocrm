@@ -432,7 +432,7 @@ describe('metadata foundation (19-LS.2)', () => {
     expect(result.status).toBe(200);
     const body = result.body as unknown as { ok: boolean; checks: { name: string; ok: boolean; detail: string }[] };
     const byName = new Map(body.checks.map((check) => [check.name, check]));
-    for (const name of ['core-lead-lifecycle', 'lead-score-fields', 'lead-core-fields', 'entity-registration', 'schema-indexes', 'write-guard', 'platform-foundation']) {
+    for (const name of ['core-lead-lifecycle', 'lead-score-fields', 'lead-core-fields', 'entity-registration', 'schema-indexes', 'write-guard', 'scoring-engine', 'platform-foundation']) {
       expect(byName.get(name)?.ok, `${name}: ${byName.get(name)?.detail ?? 'absent'}`).toBe(true);
     }
     expect(body.ok).toBe(true);
@@ -646,7 +646,7 @@ describe('registered but inert (19-LS.2)', () => {
     expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true })).status).toBe(200);
     const readScore = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation: 'readScore' });
     expect((readScore.body as { code: string }).code).toBe('LEADSCORE_PHASE_PENDING');
-    expect((readScore.body as { pendingPhase: string }).pendingPhase).toBe('19-LS.4');
+    expect((readScore.body as { pendingPhase: string }).pendingPhase).toBe('19-LS.5');
     const conversion = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation: 'conversionExecute' });
     expect((conversion.body as { pendingPhase: string }).pendingPhase).toBe('19-LS.13');
     const health = await call('GET', '/api/v1/LeadScore/action/health');

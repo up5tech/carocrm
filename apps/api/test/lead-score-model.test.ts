@@ -633,7 +633,11 @@ describe('the lifecycle is a documented surface (19-LS.3)', () => {
     expect(features.get('modelAdministration')?.implemented).toBe(true);
     expect(features.get('modelAdministration')?.effective).toBe(true);
     expect(features.get('scoring')?.implemented).toBe(false);
-    expect(features.get('scoring')?.pendingPhase).toBe('19-LS.4');
+    expect(features.get('scoring')?.pendingPhase).toBe('19-LS.5');
+    // 19-LS.4 shipped the engine and its preview switch, so `previewModel` is no longer waiting on a phase —
+    // this suite leaves its own switch off, which is a different refusal with a different answer.
+    expect(features.get('scoringPreview')?.implemented).toBe(true);
+    expect(features.get('scoringPreview')?.effective).toBe(false);
     expect(body.ready).toBe(true);
 
     const operations = new Map(body.operations.map((operation) => [operation.operation, operation]));
@@ -641,13 +645,15 @@ describe('the lifecycle is a documented surface (19-LS.3)', () => {
       expect(operations.get(operation)?.admitted, operation).toBe(true);
     }
     for (const [operation, phase] of [
-      ['readScore', '19-LS.4'],
-      ['previewModel', '19-LS.4'],
+      ['readScore', '19-LS.5'],
       ['conversionExecute', '19-LS.13'],
     ] as const) {
       expect(operations.get(operation)?.admitted, operation).toBe(false);
       expect(operations.get(operation)?.pendingPhase, operation).toBe(phase);
     }
+    const preview = operations.get('previewModel');
+    expect(preview?.admitted).toBe(false);
+    expect(preview?.pendingPhase).toBeNull();
     for (const check of body.checks) expect(check.ok, `${check.name}`).toBe(true);
   });
 

@@ -5,6 +5,7 @@ import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
 import { LeadScoreModelService } from './lead-score-model.service.js';
 import { LeadScoreModuleHealthService } from './lead-score-module-health.service.js';
 import { LeadScorePermissionService } from './lead-score-permission.service.js';
+import { LeadScorePreviewService } from './lead-score-preview.service.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 import { LeadScoreWriteGuardService } from './lead-score-write-guard.service.js';
 
@@ -32,6 +33,7 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   LeadScoreSettingsService,
   LeadScorePermissionService,
   LeadScoreModelService,
+  LeadScorePreviewService,
   LeadScoreFeatureGate,
   LeadScoreModuleHealthService,
 ];
@@ -66,6 +68,17 @@ export {
   leadScoreModuleDisabledError,
   leadScorePhasePendingError,
 } from './lead-score-errors.js';
+export {
+  EVALUATION_CODES,
+  type EvaluationRequest,
+  MAX_EVALUATED_RULES,
+  requiredInputFields,
+  type RuleEvaluation,
+  type ScoreEvaluation,
+  type ScoreInputSnapshot,
+  scoreLead,
+  SCORING_OPERATORS,
+} from './lead-score-evaluator.js';
 export { LEADSCORE_OPERATIONS, LeadScoreFeatureGate, type LeadScoreOperation, type LeadScoreOperationAssessment } from './lead-score-feature-gate.service.js';
 export {
   changedKeys,
@@ -102,6 +115,7 @@ export {
   LeadScoreModuleHealthService,
 } from './lead-score-module-health.service.js';
 export { LeadScorePermissionService } from './lead-score-permission.service.js';
+export { LeadScorePreviewService, type LeadScorePreviewView,MAX_PREVIEW_SAMPLE } from './lead-score-preview.service.js';
 export {
   DEFAULT_LEADSCORE_SETTINGS,
   type LeadScoreSettings,

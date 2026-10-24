@@ -28,6 +28,7 @@ import { LEADSCORE_FEATURES, LEADSCORE_PENDING_FEATURES, type LeadScoreFeatureDe
 const FeatureFlagsSchema = z
   .object({
     modelAdministration: z.boolean().default(false),
+    scoringPreview: z.boolean().default(false),
     scoring: z.boolean().default(false),
     scoreExplanation: z.boolean().default(false),
     manualRecalculation: z.boolean().default(false),
