@@ -70,9 +70,42 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
     ) : null;
   if (dashlet.kind === 'kpi') {
     const value = result['value'] ?? result['count'];
+    const numeric = typeof value === 'number' ? value : Number(value);
+    // §5.7 KPI context: the server answers with the target the dashlet stores and — when it names a
+    // date window — the equivalent previous window, so the card can show direction instead of a
+    // bare number. Both are optional; without them the card is the number, as it always was.
+    const target = typeof result['target'] === 'number' ? result['target'] : undefined;
+    const previous = typeof result['previous'] === 'number' ? result['previous'] : undefined;
+    const percentOfTarget = target !== undefined && target !== 0 && Number.isFinite(numeric)
+      ? Math.round((numeric / target) * 100)
+      : undefined;
+    const delta = previous !== undefined && Number.isFinite(numeric) ? numeric - previous : undefined;
     return (
       <div>
         <div className="carocrm-stat-value">{typeof value === 'number' ? value.toLocaleString() : String(value ?? '—')}</div>
+        {target !== undefined ? (
+          <div className="carocrm-kpi-context">
+            <Typography.Text type="secondary">
+              {t('web.dashboards.kpiTarget', { target: target.toLocaleString() })}
+              {percentOfTarget !== undefined ? ` · ${t('web.dashboards.kpiOfTarget', { percent: percentOfTarget })}` : ''}
+            </Typography.Text>
+            <div className="carocrm-kpi-bar" aria-hidden="true">
+              <span
+                className="carocrm-kpi-bar-fill"
+                style={{ width: `${Math.max(0, Math.min(100, percentOfTarget ?? 0))}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
+        {delta !== undefined ? (
+          <Typography.Text
+            type={delta >= 0 ? 'success' : 'secondary'}
+            style={{ fontSize: 12 }}
+          >
+            {delta >= 0 ? '+' : ''}
+            {delta.toLocaleString()} {t('web.dashboards.kpiVsPrevious')}
+          </Typography.Text>
+        ) : null}
         {hint}
       </div>
     );

@@ -1,5 +1,5 @@
 import { AuthorizationDeniedError, ValidationError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, HttpCode, Inject, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 

@@ -1014,4 +1014,5 @@ Known limits:
 - The demo instance's default dashboard carries no KPI dashlet, so the pulse rail is correctly absent
   there; the "three of four dashlets" case is covered by the pure selector, not by demo data.
 - Nothing on this page is per-user configurable yet (arranged widgets and a personal home layout are
-  P2), and the KPI dashlet contract still has no comparison/target/trend, so no tile invents one.
+  P2). The KPI dashlet contract now carries an optional target and an equivalent previous-period
+  window, shown on dashboards and consumed by home's pulse rail.

@@ -107,6 +107,7 @@ import type {
   InternalInfoView,
   LayoutDefinition,
   ListResult,
+  LoginChallengeResult,
   LoginResult,
   MarketingAudiencePreview,
   MarketingCampaignCapabilities,
@@ -523,11 +524,20 @@ function localeSuffix(locale: string | undefined): string {
 
 export const api = {
   login: (userName: string, password: string) =>
-    request<LoginResult>('/Authentication', { method: 'POST', body: JSON.stringify({ userName, password }) }),
+    request<LoginResult | LoginChallengeResult>('/Authentication', { method: 'POST', body: JSON.stringify({ userName, password }) }),
+  completeLoginChallenge: (challengeId: string, code: string) =>
+    request<LoginResult>('/Authentication/challenge', { method: 'POST', body: JSON.stringify({ challengeId, code }) }),
   me: () => request<Principal>('/AppUser/me'),
   patchMyProfile: (input: ProfilePatch) => request<ProfileInfo>('/AppUser/me', { method: 'PATCH', body: JSON.stringify(input) }),
   changeMyPassword: (input: { currentPassword: string; newPassword: string }) =>
     request<{ status: boolean }>('/AppUser/me/password', post(input)),
+  // §4.9 two-factor authentication: enrollment, confirmation, disable and recovery-code rotation.
+  beginTotpSetup: () => request<{ secret: string; otpauthUri: string }>('/AppUser/me/totp/setup', post({})),
+  enableTotp: (code: string) => request<{ recoveryCodes: string[] }>('/AppUser/me/totp/enable', post({ code })),
+  disableTotp: (code: string) => request<{ status: boolean }>('/AppUser/me/totp/disable', post({ code })),
+  regenerateRecoveryCodes: (code: string) =>
+    request<{ recoveryCodes: string[] }>('/AppUser/me/totp/recovery-codes', post({ code })),
+  resetUserTotp: (id: string) => request<{ status: boolean }>(`/User/${encodeURIComponent(id)}/totp-reset`, post({})),
   /** Streams one file into the configured storage; the caller links it to a record afterwards. */
   uploadAttachment: (file: File, input?: { field?: string; role?: string; parentType?: string; parentId?: string }) => {
     const form = new FormData();
@@ -563,7 +573,8 @@ export const api = {
       administrator: boolean;
       roles: { id: string; name: string; level: string }[];
     }>('/AdminPanel/action/acl-explain', post(input)),
-  navigation: () => request<NavigationTree>('/Navigation'),
+  navigation: (previewAs?: string) =>
+    request<NavigationTree>(`/Navigation${previewAs === undefined || previewAs === '' ? '' : `?previewAs=${encodeURIComponent(previewAs)}`}`),
   settingsDocument: <T>(name: string) => request<SettingsDocument<T>>(`/Settings/documents/${encodeURIComponent(name)}`),
   saveSettingsDocument: <T>(name: string, value: Record<string, unknown>, version?: number) =>
     request<SettingsDocument<T>>(

@@ -2,7 +2,8 @@ import { ArrowDownOutlined, ArrowUpOutlined, HolderOutlined, RollbackOutlined } 
 import { Alert, App as AntApp, Button, Card, Input, Select, Skeleton, Space, Switch, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { NavigationDocument, NavigationMenuEntry, NavigationNode } from '../../api/types.js';
+import { api } from '../../api/client.js';
+import type { NavigationDocument, NavigationMenuEntry, NavigationNode, NavigationTree } from '../../api/types.js';
 import { NAV_ICON_NAMES, navIcon } from '../../components/entityIcons.js';
 import { HelpTip } from '../../components/HelpTip.js';
 import { useNavigation } from '../../state/admin.js';
@@ -47,6 +48,11 @@ export function MenuTab() {
   const { modal, message } = AntApp.useApp();
   const [rows, setRows] = useState<MenuRow[] | undefined>(undefined);
   const [dragKey, setDragKey] = useState<string | null>(null);
+  // §4.9 preview as another principal: resolve the menu the target would see.
+  const [previewUserId, setPreviewUserId] = useState<string>('');
+  const [previewUsers, setPreviewUsers] = useState<{ id: string; userName: string }[]>([]);
+  const [previewTree, setPreviewTree] = useState<NavigationTree | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const baseline = useMemo(() => {
     if (tree.data === undefined) return undefined;
@@ -64,6 +70,36 @@ export function MenuTab() {
     }
     return [...listed, ...restored];
   }, [tree.data, document.value, metadata.data]);
+
+  // Load the user list once so the preview selector can offer principals.
+  useEffect(() => {
+    let cancelled = false;
+    void api.users({ maxSize: 200 }).then((result) => {
+      if (cancelled) return;
+      setPreviewUsers((result.list ?? []).map((row) => ({ id: String(row.id), userName: String(row.userName) })));
+    }).catch(() => { /* preview is optional; ignore */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Resolve the target's menu whenever the selector changes.
+  useEffect(() => {
+    if (previewUserId === '') {
+      setPreviewTree(null);
+      return;
+    }
+    let cancelled = false;
+    setPreviewLoading(true);
+    void api.navigation(previewUserId).then((tree) => {
+      if (cancelled) return;
+      setPreviewTree(tree);
+    }).catch(() => {
+      if (cancelled) return;
+      setPreviewTree(null);
+    }).finally(() => {
+      if (!cancelled) setPreviewLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [previewUserId]);
 
   const baselineReady = baseline !== undefined && document.value !== undefined;
   useEffect(() => {
@@ -265,7 +301,46 @@ export function MenuTab() {
           <MenuPreview rows={current} />
         </nav>
       </Card>
+
+      <Card className="carocrm-card" title={t('web.adminMenu.previewAsTitle')}>
+        <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+          {t('web.adminMenu.previewAsHint')}
+        </Typography.Paragraph>
+        <Select
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          placeholder={t('web.adminMenu.previewAsPlaceholder')}
+          value={previewUserId === '' ? undefined : previewUserId}
+          onChange={(value) => setPreviewUserId(value ?? '')}
+          options={previewUsers.map((user) => ({ value: user.id, label: user.userName }))}
+          style={{ width: '100%', marginBottom: 12 }}
+        />
+        {previewLoading ? <Typography.Text type="secondary">{t('web.common.loading')}</Typography.Text> : null}
+        {previewTree !== null ? (
+          <nav className="carocrm-menu-preview" aria-label={t('web.adminMenu.previewAsTitle')}>
+            <MenuPreviewTree nodes={previewTree.items} />
+          </nav>
+        ) : null}
+      </Card>
     </div>
+  );
+}
+
+function MenuPreviewTree({ nodes }: { nodes: readonly NavigationNode[] }) {
+  return (
+    <>
+      {nodes.map((node) => (
+        <div key={node.key} className="carocrm-menu-preview-row" style={{ paddingLeft: 6 }}>
+          {node.label}
+          {node.children !== undefined && node.children.length > 0 ? (
+            <div style={{ paddingLeft: 12 }}>
+              <MenuPreviewTree nodes={node.children} />
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </>
   );
 }
 

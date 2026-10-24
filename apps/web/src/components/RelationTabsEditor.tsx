@@ -120,12 +120,18 @@ function RelationChip({
   groupId,
   options,
   onMove,
+  onShift,
+  shiftable,
 }: {
   relation: string;
   label: string;
   groupId: string;
   options: { value: string; label: string }[];
   onMove: (relation: string, groupId: string) => void;
+  /** Reorders the relation inside its own tab — the keyboard path next to the drag handle. */
+  onShift: (relation: string, delta: -1 | 1) => void;
+  /** The implicit *Other* pool has no stored order, so it offers no reordering. */
+  shiftable: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `${RELATION_ID_PREFIX}${relation}` });
   return (
@@ -143,6 +149,24 @@ function RelationChip({
         <HolderOutlined />
       </span>
       <span className="carocrm-relation-chip-name">{label}</span>
+      {shiftable ? (
+        <span className="carocrm-relation-chip-shift">
+          <Button
+            type="text"
+            size="small"
+            icon={<ArrowUpOutlined />}
+            aria-label={t('web.detail.tabs.relationMoveUp', { name: label })}
+            onClick={() => onShift(relation, -1)}
+          />
+          <Button
+            type="text"
+            size="small"
+            icon={<ArrowDownOutlined />}
+            aria-label={t('web.detail.tabs.relationMoveDown', { name: label })}
+            onClick={() => onShift(relation, 1)}
+          />
+        </span>
+      ) : null}
       <Select
         size="small"
         className="carocrm-relation-chip-move"
@@ -169,6 +193,7 @@ function RelationGroup({
   onRemove,
   onShift,
   onMoveRelation,
+  onShiftRelation,
 }: {
   group: TabGroup;
   labelOf: (relation: string) => string;
@@ -181,6 +206,7 @@ function RelationGroup({
   /** Moves the group one place up or down — the keyboard path next to the drag handle. */
   onShift: (tabId: string, delta: number) => void;
   onMoveRelation: (relation: string, groupId: string) => void;
+  onShiftRelation: (relation: string, delta: -1 | 1) => void;
 }) {
   const sortable = useSortable({ id: `${TAB_ID_PREFIX}${group.id}`, disabled: group.implicit });
   const droppable = useDroppable({ id: `${GROUP_ID_PREFIX}${group.id}` });
@@ -263,6 +289,8 @@ function RelationGroup({
               groupId={group.id}
               options={options}
               onMove={onMoveRelation}
+              onShift={onShiftRelation}
+              shiftable={!group.implicit}
             />
           ))
         )}
@@ -294,6 +322,29 @@ export function RelationTabsEditor({ entity, value, onChange, labelOf, relationN
   const moveRelationTo = useCallback(
     (relation: string, groupId: string) => {
       onChange(moveRelation(value, relation, groupId === OTHER_TAB_ID ? null : groupId));
+    },
+    [onChange, value],
+  );
+
+  /**
+   * Reorders a relation **inside its own tab** — §5.11's within-tab ordering. Drag can only choose
+   * the target group, so these buttons are the precise path (and the only one a keyboard has).
+   */
+  const shiftRelation = useCallback(
+    (relation: string, delta: -1 | 1) => {
+      const tab = value.tabs.find((candidate) => candidate.relations.includes(relation));
+      if (!tab) return;
+      const from = tab.relations.indexOf(relation);
+      const to = from + delta;
+      if (to < 0 || to >= tab.relations.length) return;
+      const next = [...tab.relations];
+      const [moved] = next.splice(from, 1);
+      if (moved === undefined) return;
+      next.splice(to, 0, moved);
+      onChange({
+        ...value,
+        tabs: value.tabs.map((candidate) => (candidate.id === tab.id ? { ...candidate, relations: next } : candidate)),
+      });
     },
     [onChange, value],
   );
@@ -393,6 +444,7 @@ export function RelationTabsEditor({ entity, value, onChange, labelOf, relationN
                     onRemove={(tabId) => onChange(removeTab(value, tabId))}
                     onShift={shiftTab}
                     onMoveRelation={moveRelationTo}
+                    onShiftRelation={shiftRelation}
                   />
                 ))}
               </div>

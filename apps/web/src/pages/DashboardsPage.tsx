@@ -19,12 +19,13 @@ import {
 import { App as AntApp, Button, Checkbox, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Tooltip } from 'antd';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { api, type DashboardRow } from '../api/client.js';
+import { api, ApiError, type DashboardRow } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
+import { PermissionDenied } from '../components/PermissionDenied.js';
 import { pickDefaultDashboard } from '../state/dashboard-default.js';
 import { t } from '../state/i18n.js';
-import { navEntities, useMetadata } from '../state/metadata.js';
+import { fieldLabel, navEntities, useMetadata } from '../state/metadata.js';
 import { usePreference } from '../state/preferences.js';
 import { useSession } from '../state/session.js';
 import { DashletResult } from './DashletResult.js';
@@ -185,6 +186,8 @@ export function DashboardsPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, Record<string, unknown>>>({});
   const [loading, setLoading] = useState(false);
+  // §20.11: a refused dashboard read renders the permission card instead of the empty state.
+  const [denied, setDenied] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [dashletOpen, setDashletOpen] = useState(false);
@@ -200,6 +203,13 @@ export function DashboardsPage() {
   const [renameForm] = Form.useForm();
   const [dashletForm] = Form.useForm();
   const dashletKind = Form.useWatch('kind', dashletForm);
+  const dashletEntity = Form.useWatch('entity', dashletForm);
+  // §5.7 KPI context: the comparison window names a field of the chosen entity, and only a
+  // date-typed field can carry one — so the picker offers exactly those.
+  const kpiDefinition = metadata.data?.[String(dashletEntity ?? '')];
+  const kpiDateFields = Object.entries(kpiDefinition?.fields ?? {})
+    .filter(([, field]) => field.type === 'date' || field.type === 'datetime')
+    .map(([name, field]) => ({ value: name, label: fieldLabel(name, field, metadata.data) }));
 
   const entities = navEntities(metadata.data, principal?.type).map((entity) => ({ value: entity.name, label: entity.label }));
   const active = dashboards.find((item) => item.id === activeId) ?? null;
@@ -249,9 +259,15 @@ export function DashboardsPage() {
     try {
       const list = await api.dashboards();
       setDashboards(list);
+      setDenied(false);
       setActiveId((prev) => (list.some((item) => item.id === prev) ? prev : (list[0]?.id ?? null)));
       return list;
     } catch (error) {
+      if (error instanceof ApiError && error.status === 403) {
+        // §20.11: an authorization decision is shown, not toasted.
+        setDenied(true);
+        return [];
+      }
       void message.error(error instanceof Error ? error.message : t('web.dashboards.loadFailed'));
       return [];
     } finally {
@@ -550,6 +566,17 @@ export function DashboardsPage() {
                 maxSize: 25,
                 ...(typeof values.groupBy === 'string' && values.groupBy !== '' ? { groupBy: values.groupBy } : {}),
                 ...(typeof values.measure === 'string' && values.measure !== '' ? { measure: values.measure } : {}),
+                // §5.7 KPI context: an optional target, and a date window that gives the number an
+                // equivalent previous period. The server only windows a KPI when both are present.
+                ...(kind === 'kpi' && values.kpiTarget !== undefined && values.kpiTarget !== null
+                  ? { target: Number(values.kpiTarget) }
+                  : {}),
+                ...(kind === 'kpi' && typeof values.kpiDateField === 'string' && values.kpiDateField !== ''
+                  ? { dateField: values.kpiDateField }
+                  : {}),
+                ...(kind === 'kpi' && values.kpiWindowDays !== undefined && values.kpiWindowDays !== null
+                  ? { windowDays: Number(values.kpiWindowDays) }
+                  : {}),
               };
       const created = await api.createDashlet(active.id, { name: String(values.name), kind, position: active.dashlets.length, config });
       await load();
@@ -757,7 +784,7 @@ export function DashboardsPage() {
           </>
         )
       ) : (
-        <EmptyState title={t('web.dashboards.empty')} />
+        denied ? <PermissionDenied /> : <EmptyState title={t('web.dashboards.empty')} />
       )}
 
       <Modal
@@ -882,6 +909,35 @@ export function DashboardsPage() {
               </Form.Item>
             </>
           )}
+          {/* §5.7 KPI context: the target the business aims at, and the date window that gives the
+              number an equivalent previous period to compare against. Both optional. */}
+          {dashletKind === 'kpi' ? (
+            <>
+              <Form.Item name="kpiTarget" label={t('web.dashboards.kpiTargetLabel')}>
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item name="kpiDateField" label={t('web.dashboards.kpiDateFieldLabel')}>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  options={kpiDateFields}
+                  placeholder={t('web.dashboards.kpiDateFieldPlaceholder')}
+                />
+              </Form.Item>
+              <Form.Item name="kpiWindowDays" label={t('web.dashboards.kpiWindowLabel')}>
+                <Select
+                  allowClear
+                  options={[
+                    { value: 7, label: t('web.dashboards.windowDays', { days: 7 }) },
+                    { value: 30, label: t('web.dashboards.windowDays', { days: 30 }) },
+                    { value: 90, label: t('web.dashboards.windowDays', { days: 90 }) },
+                    { value: 365, label: t('web.dashboards.windowDays', { days: 365 }) },
+                  ]}
+                />
+              </Form.Item>
+            </>
+          ) : null}
         </Form>
       </Modal>
     </div>

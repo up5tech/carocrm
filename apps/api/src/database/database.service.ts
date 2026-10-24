@@ -34,6 +34,11 @@ export interface UsersTable {
   timezone: string | null;
   /** The user's own profile picture: an `attachments` row, cleared when that file is deleted. */
   avatar_id: string | null;
+  /** §4.9 two-factor: live only after the enrollment code confirmed the secret. */
+  totp_enabled: boolean;
+  /** §4.9: pending/confirmed TOTP secret (base32); null when the account has no second factor. */
+  totp_secret: string | null;
+  totp_confirmed_at: Date | null;
   is_deleted: boolean;
   created_at: Date;
   modified_at: Date;
@@ -1594,9 +1599,28 @@ export interface ESignatureOauthStatesTable {
   consumed_at: Date | null;
 }
 
+/** §4.9: a password that matched on a 2FA account — one-shot, expiring, attempt-bounded. */
+export interface AuthChallengesTable {
+  id: string;
+  user_id: string;
+  expires_at: Date;
+  attempts: number;
+  created_at: Date;
+}
+
+/** §4.9 recovery codes: stored hashed, each usable exactly once (`used_at`). */
+export interface UserRecoveryCodesTable {
+  user_id: string;
+  code_hash: string;
+  used_at: Date | null;
+  created_at: Date;
+}
+
 export interface Database {
   users: UsersTable;
   user_sessions: UserSessionsTable;
+  auth_challenges: AuthChallengesTable;
+  user_recovery_codes: UserRecoveryCodesTable;
   api_users: ApiUsersTable;
   api_keys: ApiKeysTable;
   roles: RolesTable;

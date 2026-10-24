@@ -10,7 +10,11 @@ interface SessionState {
   restored: boolean;
   loading: boolean;
   error: string | null;
+  /** §4.9: set when the password matched but a TOTP code is still required. */
+  pendingChallenge: string | null;
   signIn: (userName: string, password: string) => Promise<boolean>;
+  completeChallenge: (code: string) => Promise<boolean>;
+  clearChallenge: () => void;
   loadPrincipal: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -21,7 +25,8 @@ export const useSession = create<SessionState>((set, get) => ({
   restored: false,
   loading: false,
   error: null,
-
+  pendingChallenge: null,
+ 
   async loadPrincipal() {
     // The access token is short-lived; the HttpOnly refresh cookie (14 days) can
     // mint a new one, so a returning user is not bounced to the login screen.
@@ -50,9 +55,14 @@ export const useSession = create<SessionState>((set, get) => ({
   },
 
   async signIn(userName, password) {
-    set({ loading: true, error: null });
+    set({ loading: true, error: null, pendingChallenge: null });
     try {
       const result = await api.login(userName, password);
+      if ('challengeId' in result) {
+        // §4.9: the password was only the first factor; the session is issued by the challenge.
+        set({ loading: false, pendingChallenge: result.challengeId });
+        return false;
+      }
       setStoredToken(result.accessToken);
       set({ token: result.accessToken, loading: false });
       await get().loadPrincipal();
@@ -61,6 +71,26 @@ export const useSession = create<SessionState>((set, get) => ({
       set({ loading: false, error: error instanceof Error ? error.message : t('web.login.failed') });
       return false;
     }
+  },
+
+  async completeChallenge(code) {
+    const challengeId = get().pendingChallenge;
+    if (challengeId === null) return false;
+    set({ loading: true, error: null });
+    try {
+      const result = await api.completeLoginChallenge(challengeId, code);
+      setStoredToken(result.accessToken);
+      set({ token: result.accessToken, pendingChallenge: null, loading: false });
+      await get().loadPrincipal();
+      return true;
+    } catch (error) {
+      set({ loading: false, error: error instanceof Error ? error.message : t('web.login.failed') });
+      return false;
+    }
+  },
+
+  clearChallenge() {
+    set({ pendingChallenge: null, error: null });
   },
 
   async signOut() {

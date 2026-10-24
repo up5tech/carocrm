@@ -284,6 +284,7 @@ export class IdentityService {
         title: data.title ?? null,
         phone: data.phone ?? null,
         portal_types: JSON.stringify([]),
+        totp_enabled: false,
         is_deleted: false,
         created_at: new Date(),
         modified_at: new Date(),

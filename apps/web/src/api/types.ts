@@ -397,6 +397,8 @@ export interface ProfileInfo {
   /** Phase 7A (PLAN §41.6): the user's locale/timezone, null = instance default. */
   locale: string | null;
   timezone: string | null;
+  /** §4.9: whether sign-in still owes a TOTP code after the password. */
+  twoFactorEnabled: boolean;
 }
 
 /** What the signed-in user may change about themselves; `null` clears a value. */
@@ -434,6 +436,11 @@ export interface LoginResult {
   type: string;
   role: string[];
   csrfToken: string;
+}
+
+/** §4.9: the password matched, but a TOTP code still stands between it and the session. */
+export interface LoginChallengeResult {
+  challengeId: string;
 }
 
 /** Phase 14 — extension packages (PLAN §38). */

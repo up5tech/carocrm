@@ -39,7 +39,8 @@ the upstream file layout, and copies no upstream source, asset or translation.
 - All §4.3 rows through 20.9 have a tab or a documented home. Still open: the "who can see what" explain
   helper on the Permissions tab (it needs a server-side ACL evaluation for an arbitrary principal, so the
   tab ships the composition rule + per-role summary instead), storage-usage figures on the Attachments
-  tab (needs a storage enumeration endpoint), and 2FA on the Authentication tab (P2 in the plan).
+  tab (needs a storage enumeration endpoint). 2FA (TOTP + recovery codes) is now implemented on
+  Authentication/Profile; the Authentication tab's policy editor remains P2.
 - The webhooks tab reads the `webhook-integration` **extension**. When it is not installed the routes
   answer 404 and the tab shows an installation hint; it is not a second endpoint API.
 - The danger zone is guarded and audited, but its destructive success paths are not exercised against the

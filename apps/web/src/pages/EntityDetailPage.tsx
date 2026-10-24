@@ -17,6 +17,7 @@ import { isJsonPayload } from '../components/JsonValue.js';
 import { LinkRecordModal } from '../components/LinkRecordModal.js';
 import { NextActionBand } from '../components/NextActionBand.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
+import { PermissionDenied } from '../components/PermissionDenied.js';
 import { PortalCaseConversation } from '../components/PortalCaseConversation.js';
 import { ProcessPanel } from '../components/ProcessPanel.js';
 import { RecordHeader } from '../components/RecordHeader.js';
@@ -321,14 +322,23 @@ export function EntityDetailPage() {
   const definition = useEntity(entity);
   const [record, setRecord] = useState<Record<string, unknown> | undefined>(undefined);
   const [loading, setLoading] = useState(false);
+  // §20.11: a refused read renders the permission card instead of a toast over an empty page.
+  const [denied, setDenied] = useState(false);
+  // §5.5 progressive disclosure: which field panels are open; absent entries fall back to the
+  // default (the first panel open, the rest folded).
+  const [panelOpen, setPanelOpen] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     if (!entity || !id) return;
     setLoading(true);
     try {
       setRecord(await api.get(entity, id));
+      setDenied(false);
     } catch (error) {
-      void message.error(error instanceof Error ? error.message : t('web.detail.notFound'));
+      // §20.11: 403 is an authorization decision, not a missing record — say so with the card.
+      const refused = error instanceof ApiError && error.status === 403;
+      setDenied(refused);
+      if (!refused) void message.error(error instanceof Error ? error.message : t('web.detail.notFound'));
       setRecord(undefined);
     } finally {
       setLoading(false);
@@ -403,6 +413,14 @@ export function EntityDetailPage() {
   };
 
   if (!entity || !id) return <Card>{t('web.detail.missingParams')}</Card>;
+
+  if (denied && !loading) {
+    return (
+      <div className="carocrm-card-stack">
+        <PermissionDenied />
+      </div>
+    );
+  }
 
   return (
     <Spin spinning={loading}>
@@ -497,14 +515,29 @@ export function EntityDetailPage() {
             blockers are the server's findings, never a client-side re-derivation (§8.2, AGENTS.md §5.3). */}
         {entity === 'Campaign' && base !== '/portal' ? <CampaignLifecycleActions campaignId={id} onChanged={load} /> : null}
 
-        {panels.map((panel) => (          <Card
-            key={panel.name}
-            className="carocrm-card"
-            title={<Typography.Text strong>{panel.label ?? panel.name}</Typography.Text>}
-          >
-            {fieldGroups(ordered.filter((entry) => panelFieldNames(panel).has(entry.name)))}
-          </Card>
-        ))}
+        {panels.map((panel, index) => {
+          // §5.5 progressive disclosure: the first panel carries the record's identity; the rest
+          // start folded and open on demand.
+          const open = panelOpen[panel.name] ?? index === 0;
+          return (
+            <Card
+              key={panel.name}
+              className="carocrm-card"
+              title={
+                <button
+                  type="button"
+                  className="carocrm-section-toggle carocrm-section-toggle--card"
+                  aria-expanded={open}
+                  onClick={() => setPanelOpen((prev) => ({ ...prev, [panel.name]: !open }))}
+                >
+                  <Typography.Text strong>{panel.label ?? panel.name}</Typography.Text>
+                </button>
+              }
+            >
+              {open ? fieldGroups(ordered.filter((entry) => panelFieldNames(panel).has(entry.name))) : null}
+            </Card>
+          );
+        })}
 
         {/* Fields no panel places stay visible under **Other** — the layout editor shows the same
             computed group, so the page and the settings never disagree (§5.5). An entity with no

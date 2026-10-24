@@ -9,12 +9,18 @@ import { errors as joseErrors, type JWTPayload, jwtVerify, SignJWT } from 'jose'
 import type { AppConfig } from '../config.js';
 import { CONFIG_TOKEN } from '../config.js';
 import { DatabaseService } from '../database/database.service.js';
+import { newRecoveryCodes, newTotpSecret, otpauthUri, totpVerify } from './totp.js';
 
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
 }
+
+/** §4.9: a password that matched on a 2FA account does not open a session yet. */
+export type LoginOutcome =
+  | { kind: 'ok'; tokens: AuthTokens }
+  | { kind: 'challenge'; challengeId: string };
 
 export interface PrincipalRecord {
   userId: string;
@@ -52,6 +58,8 @@ export interface ProfileDto {
   phoneNumber: string | null;
   title: string | null;
   avatarId: string | null;
+  /** §4.9: whether sign-in still owes a TOTP code after the password. */
+  twoFactorEnabled: boolean;
 }
 
 @Injectable()
@@ -65,7 +73,7 @@ export class AuthService {
     return new Uint8Array(createHash('sha256').update(this.config.jwtSecret).digest());
   }
 
-  async login(userName: string, password: string, ip?: string): Promise<AuthTokens> {
+  async login(userName: string, password: string, ip?: string): Promise<LoginOutcome> {
     const db = this.database.db;
     const user = await db
       .selectFrom('users')
@@ -85,7 +93,177 @@ export class AuthService {
     if (!ok) {
       throw new AuthenticationFailedError();
     }
+    const userType = user.type === 'admin' || user.is_admin ? 'admin' : user.type;
+    if (user.totp_enabled && user.totp_secret) {
+      // §4.9: the password was only the first factor — the session is issued by the challenge.
+      return { kind: 'challenge', challengeId: await this.createChallenge(user.id) };
+    }
+    return { kind: 'ok', tokens: await this.createSession(user.id, userType, ip) };
+  }
+
+  /**
+   * §4.9 two-factor authentication: the login challenge plus enrollment and recovery codes.
+   *
+   * The secret only becomes enforced at `enableTotp`, when a code it produced is presented, so an
+   * abandoned enrollment never locks anyone out. A challenge is single-use, expires after five
+   * minutes and is attempt-bounded — it can never become a second password-guessing oracle.
+   */
+  private async createChallenge(userId: string): Promise<string> {
+    const db = this.database.db;
+    // One live challenge per account: starting a new sign-in retires the previous one.
+    await db.deleteFrom('auth_challenges').where('user_id', '=', userId).execute();
+    const id = randomUUID();
+    await db
+      .insertInto('auth_challenges')
+      .values({ id, user_id: userId, expires_at: new Date(Date.now() + 5 * 60_000), attempts: 0, created_at: new Date() })
+      .execute();
+    return id;
+  }
+
+  async verifyChallenge(challengeId: string, code: string, ip?: string): Promise<AuthTokens> {
+    const db = this.database.db;
+    const challenge = await db
+      .selectFrom('auth_challenges')
+      .selectAll()
+      .where('id', '=', challengeId)
+      .executeTakeFirst();
+    if (!challenge || challenge.expires_at.getTime() < Date.now()) {
+      throw new AuthenticationFailedError('Sign-in challenge is invalid or expired.');
+    }
+    if (challenge.attempts >= 5) {
+      await db.deleteFrom('auth_challenges').where('id', '=', challengeId).execute();
+      throw new AuthenticationFailedError('Too many attempts. Sign in again.');
+    }
+    const user = await db
+      .selectFrom('users')
+      .selectAll()
+      .where('id', '=', challenge.user_id)
+      .where('is_deleted', '=', false)
+      .executeTakeFirst();
+    if (!user || !user.is_active || !user.totp_enabled || !user.totp_secret) {
+      throw new AuthenticationFailedError();
+    }
+    const normalized = code.trim();
+    let ok = totpVerify(user.totp_secret, normalized);
+    let usedRecoveryHash: string | null = null;
+    if (!ok) {
+      // A recovery code signs in exactly once; a consumed one must look like a wrong one.
+      const candidate = hashString(normalized.toLowerCase());
+      const recovery = await db
+        .selectFrom('user_recovery_codes')
+        .select(['code_hash'])
+        .where('user_id', '=', user.id)
+        .where('code_hash', '=', candidate)
+        .where('used_at', 'is', null)
+        .executeTakeFirst();
+      if (recovery) {
+        ok = true;
+        usedRecoveryHash = recovery.code_hash;
+      }
+    }
+    if (!ok) {
+      await db
+        .updateTable('auth_challenges')
+        .set({ attempts: challenge.attempts + 1 })
+        .where('id', '=', challengeId)
+        .execute();
+      throw new AuthenticationFailedError('Two-factor code is not valid.');
+    }
+    await db.deleteFrom('auth_challenges').where('user_id', '=', user.id).execute();
+    if (usedRecoveryHash !== null) {
+      await db
+        .updateTable('user_recovery_codes')
+        .set({ used_at: new Date() })
+        .where('user_id', '=', user.id)
+        .where('code_hash', '=', usedRecoveryHash)
+        .execute();
+    }
     return this.createSession(user.id, user.type === 'admin' || user.is_admin ? 'admin' : user.type, ip);
+  }
+
+  /** §4.9: hand out a pending secret; nothing is enforced until `enableTotp` confirms it. */
+  async beginTotpSetup(userId: string): Promise<{ secret: string; otpauthUri: string }> {
+    const db = this.database.db;
+    const user = await db.selectFrom('users').select(['user_name']).where('id', '=', userId).executeTakeFirstOrThrow();
+    const secret = newTotpSecret();
+    await db
+      .updateTable('users')
+      .set({ totp_secret: secret, totp_enabled: false, totp_confirmed_at: null, modified_at: new Date() })
+      .where('id', '=', userId)
+      .execute();
+    return { secret, otpauthUri: otpauthUri(user.user_name, secret, 'CaroCRM') };
+  }
+
+  /** Confirm enrollment with a code from the app, then issue the one-time recovery codes. */
+  async enableTotp(userId: string, code: string): Promise<string[]> {
+    const db = this.database.db;
+    if (!(await this.totpCodeOk(userId, code, false))) {
+      throw new AuthenticationFailedError('That code does not match the authenticator.');
+    }
+    await db
+      .updateTable('users')
+      .set({ totp_enabled: true, totp_confirmed_at: new Date(), modified_at: new Date() })
+      .where('id', '=', userId)
+      .execute();
+    return this.replaceRecoveryCodes(userId);
+  }
+
+  /** §4.9: turning the second factor off requires a current factor — never a silent downgrade. */
+  async disableTotp(userId: string, code: string): Promise<void> {
+    if (!(await this.totpCodeOk(userId, code, true))) {
+      throw new AuthenticationFailedError('That code is not valid.');
+    }
+    const db = this.database.db;
+    await db
+      .updateTable('users')
+      .set({ totp_enabled: false, totp_secret: null, totp_confirmed_at: null, modified_at: new Date() })
+      .where('id', '=', userId)
+      .execute();
+    await db.deleteFrom('user_recovery_codes').where('user_id', '=', userId).execute();
+    await db.deleteFrom('auth_challenges').where('user_id', '=', userId).execute();
+  }
+
+  /** Burn the remaining codes and issue a fresh set; requires a current TOTP code. */
+  async regenerateRecoveryCodes(userId: string, code: string): Promise<string[]> {
+    if (!(await this.totpCodeOk(userId, code, true))) {
+      throw new AuthenticationFailedError('That code is not valid.');
+    }
+    return this.replaceRecoveryCodes(userId);
+  }
+
+  /** §4.9 help-desk path: an administrator clears a factor the user lost; they re-enroll later. */
+  async adminResetTotp(userId: string): Promise<void> {
+    const db = this.database.db;
+    await db
+      .updateTable('users')
+      .set({ totp_enabled: false, totp_secret: null, totp_confirmed_at: null, modified_at: new Date() })
+      .where('id', '=', userId)
+      .execute();
+    await db.deleteFrom('user_recovery_codes').where('user_id', '=', userId).execute();
+    await db.deleteFrom('auth_challenges').where('user_id', '=', userId).execute();
+  }
+
+  private async totpCodeOk(userId: string, code: string, requireEnabled: boolean): Promise<boolean> {
+    const user = await this.database.db
+      .selectFrom('users')
+      .select(['totp_secret', 'totp_enabled'])
+      .where('id', '=', userId)
+      .executeTakeFirst();
+    if (!user?.totp_secret) return false;
+    if (requireEnabled && !user.totp_enabled) return false;
+    return totpVerify(user.totp_secret, code.trim());
+  }
+
+  private async replaceRecoveryCodes(userId: string): Promise<string[]> {
+    const db = this.database.db;
+    await db.deleteFrom('user_recovery_codes').where('user_id', '=', userId).execute();
+    const codes = newRecoveryCodes();
+    const now = new Date();
+    await db
+      .insertInto('user_recovery_codes')
+      .values(codes.map((raw) => ({ user_id: userId, code_hash: hashString(raw.toLowerCase()), used_at: null, created_at: now })))
+      .execute();
+    return codes;
   }
 
   async createSession(userId: string, userType: PrincipalRecord['userType'], ip?: string): Promise<AuthTokens> {
@@ -328,7 +506,7 @@ export class AuthService {
   async profile(userId: string): Promise<ProfileDto | null> {
     const user = await this.database.db
       .selectFrom('users')
-      .select(['id', 'user_name', 'first_name', 'last_name', 'email_address', 'phone', 'title', 'avatar_id'])
+      .select(['id', 'user_name', 'first_name', 'last_name', 'email_address', 'phone', 'title', 'avatar_id', 'totp_enabled'])
       .where('id', '=', userId)
       .executeTakeFirst();
     if (!user) return null;
@@ -341,6 +519,7 @@ export class AuthService {
       phoneNumber: user.phone,
       title: user.title,
       avatarId: user.avatar_id,
+      twoFactorEnabled: user.totp_enabled,
     };
   }
 

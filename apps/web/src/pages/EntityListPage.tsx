@@ -761,7 +761,9 @@ export function EntityListPage() {
             ),
             dataIndex: entry.name,
             sorter: entry.field.sortable !== false,
-            width: widths[entry.name] ?? (entry.name === displayField ? 220 : undefined),
+            ...(widths[entry.name] !== undefined || entry.name === displayField
+              ? { width: widths[entry.name] ?? 220 }
+              : {}),
             ...(entry.name === displayField ? { fixed: 'left' as const } : {}),
             render: (_: unknown, row: Record<string, unknown>) =>
               entry.name === displayField ? (

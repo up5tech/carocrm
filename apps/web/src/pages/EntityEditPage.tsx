@@ -1,12 +1,13 @@
 import { Alert, App as AntApp, Button, Card, Form, Modal, Space, Spin, Typography } from 'antd';
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useBlocker, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { api, type RecordData } from '../api/client.js';
+import { api, ApiError, type RecordData } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition } from '../api/types.js';
 import { FieldEditor } from '../components/fields.js';
 import type { SalesLine, SalesLineTotals } from '../components/LineItemEditor.js';
 import { LineItemEditor, linePayload, SalesTotalsPanel } from '../components/LineItemEditor.js';
+import { PermissionDenied } from '../components/PermissionDenied.js';
 import { useSalesPickers } from '../components/useSalesPickers.js';
 import { salesDocumentDate, salesDocumentKind } from '../sales/documents.js';
 import { PORTAL_HIDDEN_CASE_FIELDS } from '../service-desk/portal-case-fields.js';
@@ -98,6 +99,11 @@ export function EntityEditPage() {
   const formRef = useRef(form);
   formRef.current = form;
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // §20.11: a 403 on the record itself renders the permission card instead of an empty form.
+  const [denied, setDenied] = useState(false);
+  // §5.5 progressive disclosure: which sections are folded. An absent entry falls back to the
+  // default — everything after the first section starts closed.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   // §5.5: which button submitted. "Save & new" writes and stays on the create screen with the form
   // reset to its defaults so an operator can enter a batch without re-clicking Create.
   const submitIntent = useRef<'view' | 'new'>('view');
@@ -112,6 +118,26 @@ export function EntityEditPage() {
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
   }, [hasUnsavedChanges]);
+
+  // §20.13 in-app guard: `beforeunload` only covers a real page load, and SPA navigation never
+  // fires it — the data router's blocker is the path that actually protects a dirty form.
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname,
+  );
+  const blockerRef = useRef(blocker);
+  blockerRef.current = blocker;
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    Modal.confirm({
+      title: t('web.edit.leaveTitle'),
+      content: t('web.edit.leaveBody'),
+      okText: t('web.edit.leaveConfirm'),
+      cancelText: t('web.edit.stayHere'),
+      onOk: () => blockerRef.current.proceed?.(),
+      onCancel: () => blockerRef.current.reset?.(),
+    });
+  }, [blocker.state]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -209,6 +235,11 @@ export function EntityEditPage() {
       form.setFieldsValue({ ...record });
     } catch (error) {
       setLoadFailed(true);
+      if (error instanceof ApiError && error.status === 403) {
+        // §20.11: a refused read is a permission card, not a toast over an empty form.
+        setDenied(true);
+        return;
+      }
       void message.error(error instanceof Error ? error.message : t('web.edit.notFound'));
     }
   }, [entity, id, form, message]);
@@ -251,6 +282,13 @@ export function EntityEditPage() {
 
   // Editing must not start before the record is in the form: a late setFieldsValue would
   // otherwise overwrite whatever the user already typed.
+  if (denied && id !== undefined) {
+    return (
+      <Card className="carocrm-card" title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{title}</Typography.Title>}>
+        <PermissionDenied />
+      </Card>
+    );
+  }
   if (id && initial === undefined && !loadFailed) {
     return (
       <Card className="carocrm-card" title={<Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{title}</Typography.Title>}>
@@ -286,9 +324,13 @@ export function EntityEditPage() {
         onFinishFailed={({ errorFields }) => {
           const first = errorFields[0]?.name;
           if (first === undefined) return;
-          form.scrollToField(first, { behavior: 'smooth', block: 'center' });
-          const instance = form.getFieldInstance(first) as { focus?: () => void } | null;
-          instance?.focus?.();
+          // §5.5: an error inside a folded section cannot be seen — unfold everything first.
+          setCollapsed({});
+          window.requestAnimationFrame(() => {
+            form.scrollToField(first, { behavior: 'smooth', block: 'center' });
+            const instance = form.getFieldInstance(first) as { focus?: () => void } | null;
+            instance?.focus?.();
+          });
         }}
         onFinish={async (values) => {
           if (!entity) return;
@@ -363,12 +405,26 @@ export function EntityEditPage() {
         {panels.length === 0 ? (
           <div style={GRID_STYLE}>{ordered.map(renderField)}</div>
         ) : (
-          sections.map((section) => (
-            <div key={section.key} style={{ marginBottom: 16 }}>
-              <Typography.Text strong>{section.title}</Typography.Text>
-              <div style={GRID_STYLE}>{section.entries.map(renderField)}</div>
-            </div>
-          ))
+          sections.map((section, index) => {
+            // §5.5 progressive disclosure: the first section carries the fields a record is
+            // identified by; the rest start folded and open on demand.
+            const open = collapsed[section.key] ?? index === 0;
+            return (
+              <div key={section.key} style={{ marginBottom: 16 }}>
+                <button
+                  type="button"
+                  className="carocrm-section-toggle"
+                  aria-expanded={open}
+                  onClick={() => setCollapsed((prev) => ({ ...prev, [section.key]: !open }))}
+                >
+                  <Typography.Text strong>{section.title}</Typography.Text>
+                </button>
+                {open ? (
+                  <div style={GRID_STYLE}>{section.entries.map(renderField)}</div>
+                ) : null}
+              </div>
+            );
+          })
         )}
         {createKind !== undefined ? (
           <div style={{ marginTop: 8 }}>

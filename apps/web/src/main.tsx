@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp, ConfigProvider } from 'antd';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 
 import { AppRoutes } from './AppRoutes.js';
 import { i18n, initI18n, initI18nFromCache } from './state/i18n.js';
@@ -13,6 +13,11 @@ import { carocrmTheme } from './theme.js';
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
+
+// §20.13: a data router, because the unsaved-changes guard needs `useBlocker` — the plain
+// BrowserRouter offers no navigation lifecycle to intercept. One catch-all route keeps
+// AppRoutes' own <Routes> tree exactly as it was.
+const router = createBrowserRouter([{ path: '*', element: <AppRoutes /> }]);
 
 const container = document.getElementById('root');
 if (!container) throw new Error('root element missing');
@@ -27,9 +32,7 @@ const render = (): void => {
       <ConfigProvider theme={carocrmTheme}>
         <AntApp>
           <QueryClientProvider client={queryClient}>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
+            <RouterProvider router={router} />
           </QueryClientProvider>
         </AntApp>
       </ConfigProvider>

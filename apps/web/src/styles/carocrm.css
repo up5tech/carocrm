@@ -2089,6 +2089,66 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* §5.5 progressive disclosure: a section/panel header that folds its own field grid. */
+.carocrm-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0 0 10px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.carocrm-section-toggle--card {
+  margin-bottom: 0;
+}
+.carocrm-section-toggle::before {
+  content: '\25B8';
+  font-size: 11px;
+  color: #8c8c8c;
+  transition: transform 0.15s ease;
+  display: inline-block;
+}
+.carocrm-section-toggle[aria-expanded='true']::before {
+  transform: rotate(90deg);
+}
+.carocrm-section-toggle:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* §5.7 KPI context: the target bar and the previous-window delta under the big number. */
+.carocrm-kpi-context {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.carocrm-kpi-bar {
+  height: 6px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.carocrm-kpi-bar-fill {
+  display: block;
+  height: 100%;
+  background: #438eff;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* §5.11: the within-tab reorder buttons sit between the relation name and the move select. */
+.carocrm-relation-chip-shift {
+  display: inline-flex;
+  margin-left: auto;
+}
+
 /* The layout settings' arrangement editor: one block per tab, plus the computed "Other" pool. */
 .carocrm-relation-editor {
   display: flex;

@@ -31,6 +31,10 @@ export function MyProfilePage() {
   const [preferenceForm] = Form.useForm<{ locale: string | null; timezone: string | null }>();
   const [passwordForm] = Form.useForm<PasswordForm>();
   const [uploading, setUploading] = useState(false);
+  const [totpCode, setTotpCode] = useState('');
+  const [totpSetup, setTotpSetup] = useState<{ secret: string; otpauthUri: string } | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const [totpBusy, setTotpBusy] = useState(false);
   const locale = activeLocaleName();
 
   const zones = useMemo(() => timezoneOptions(), []);
@@ -113,6 +117,69 @@ export function MyProfilePage() {
       } else {
         void message.error(error instanceof Error ? error.message : t('web.profile.passwordChangeFailed'));
       }
+    }
+  };
+
+  const beginTotpSetup = async (): Promise<void> => {
+    setTotpBusy(true);
+    try {
+      const setup = await api.beginTotpSetup();
+      setTotpSetup(setup);
+      setRecoveryCodes(null);
+      setTotpCode('');
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('web.profile.totpSetupFailed'));
+    } finally {
+      setTotpBusy(false);
+    }
+  };
+
+  const enableTotp = async (): Promise<void> => {
+    if (totpCode.trim() === '') return;
+    setTotpBusy(true);
+    try {
+      const result = await api.enableTotp(totpCode.trim());
+      setRecoveryCodes(result.recoveryCodes);
+      setTotpSetup(null);
+      setTotpCode('');
+      await loadPrincipal();
+      void message.success(t('web.profile.twoFactorEnabled'));
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('web.profile.totpEnableFailed'));
+    } finally {
+      setTotpBusy(false);
+    }
+  };
+
+  const disableTotp = async (): Promise<void> => {
+    if (totpCode.trim() === '') return;
+    setTotpBusy(true);
+    try {
+      await api.disableTotp(totpCode.trim());
+      setTotpSetup(null);
+      setRecoveryCodes(null);
+      setTotpCode('');
+      await loadPrincipal();
+      void message.success(t('web.profile.twoFactorDisabled'));
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('web.profile.totpDisableFailed'));
+    } finally {
+      setTotpBusy(false);
+    }
+  };
+
+  const regenerateRecovery = async (): Promise<void> => {
+    if (totpCode.trim() === '') return;
+    setTotpBusy(true);
+    try {
+      const result = await api.regenerateRecoveryCodes(totpCode.trim());
+      setRecoveryCodes(result.recoveryCodes);
+      setTotpCode('');
+      void message.success(t('web.profile.recoveryRegenerated'));
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('web.profile.totpDisableFailed'));
+    } finally {
+      setTotpBusy(false);
     }
   };
 
@@ -277,6 +344,74 @@ export function MyProfilePage() {
             {t('web.profile.passwordChange')}
           </Button>
         </Form>
+      </Card>
+
+      <Card className="carocrm-card" title={t('web.profile.twoFactorTitle')} style={{ marginTop: 16 }}>
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+          {principal.twoFactorEnabled ? t('web.profile.twoFactorEnabledHint') : t('web.profile.twoFactorDisabledHint')}
+        </Typography.Paragraph>
+        {principal.twoFactorEnabled ? (
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Input.Password
+              placeholder={t('web.profile.twoFactorCodePlaceholder')}
+              value={totpCode}
+              onChange={(event) => setTotpCode(event.target.value)}
+              autoComplete="one-time-code"
+            />
+            <Space wrap>
+              <Button danger onClick={() => void disableTotp()} loading={totpBusy}>
+                {t('web.profile.twoFactorDisable')}
+              </Button>
+              <Button onClick={() => void regenerateRecovery()} loading={totpBusy}>
+                {t('web.profile.twoFactorRegenerate')}
+              </Button>
+            </Space>
+            {recoveryCodes !== null ? (
+              <div>
+                <Typography.Text strong>{t('web.profile.recoveryCodesTitle')}</Typography.Text>
+                <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 4 }}>
+                  {t('web.profile.recoveryCodesHint')}
+                </Typography.Paragraph>
+                <pre className="carocrm-kpi-context" style={{ whiteSpace: 'pre-wrap' }}>{recoveryCodes.join('\n')}</pre>
+              </div>
+            ) : null}
+          </Space>
+        ) : (
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            {totpSetup === null ? (
+              <Button type="primary" onClick={() => void beginTotpSetup()} loading={totpBusy}>
+                {t('web.profile.twoFactorBegin')}
+              </Button>
+            ) : (
+              <>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('web.profile.twoFactorSecretLabel')}: <code>{totpSetup.secret}</code>
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-all' }}>
+                  {totpSetup.otpauthUri}
+                </Typography.Text>
+                <Input
+                  placeholder={t('web.profile.twoFactorCodePlaceholder')}
+                  value={totpCode}
+                  onChange={(event) => setTotpCode(event.target.value)}
+                  autoComplete="one-time-code"
+                />
+                <Button type="primary" onClick={() => void enableTotp()} loading={totpBusy}>
+                  {t('web.profile.twoFactorEnable')}
+                </Button>
+              </>
+            )}
+            {recoveryCodes !== null ? (
+              <div>
+                <Typography.Text strong>{t('web.profile.recoveryCodesTitle')}</Typography.Text>
+                <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 4 }}>
+                  {t('web.profile.recoveryCodesHint')}
+                </Typography.Paragraph>
+                <pre style={{ whiteSpace: 'pre-wrap' }}>{recoveryCodes.join('\n')}</pre>
+              </div>
+            ) : null}
+          </Space>
+        )}
       </Card>
     </Space>
   );

@@ -1,5 +1,5 @@
-import { ValidationError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, HttpCode, Inject, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import { AuthorizationDeniedError, ValidationError } from '@carocrm/core/errors/index.js';
+import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -25,12 +25,27 @@ const LogoutSchema = z.object({
   refreshToken: z.string().optional(),
 });
 
+/** §4.9: the second factor that finishes a sign-in the password started. */
+const ChallengeSchema = z.object({
+  challengeId: z.string().min(1).max(64),
+  code: z.string().min(4).max(64),
+});
+
+const TotpCodeSchema = z.object({
+  code: z.string().min(4).max(64),
+});
+
 export interface LoginResult extends AuthTokens {
   userId: string;
   portalId: string | null;
   role: string[];
   type: string;
   csrfToken: string;
+}
+
+/** §4.9: what the API answers when the password matched but 2FA still stands in the way. */
+export interface LoginChallengeResult {
+  challengeId: string;
 }
 
 const ProfileSchema = z.object({
@@ -64,12 +79,35 @@ export class AuthController {
     @Body() body: unknown,
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
-  ): Promise<LoginResult> {
+  ): Promise<LoginResult | LoginChallengeResult> {
     const parsed = LoginSchema.safeParse(body);
     if (!parsed.success) {
       throw new ValidationError('Invalid login payload.', { issues: parsed.error.issues.map((i) => i.message) });
     }
-    const tokens = await this.auth.login(parsed.data.userName, parsed.data.password, request.ip);
+    const outcome = await this.auth.login(parsed.data.userName, parsed.data.password, request.ip);
+    if (outcome.kind === 'challenge') {
+      // §4.9: no cookies yet — the second factor still stands between the password and the session.
+      return { challengeId: outcome.challengeId };
+    }
+    return this.respond(outcome.tokens, request, reply);
+  }
+
+  /** §4.9: finish the sign-in the password started, with a TOTP code or a recovery code. */
+  @Public()
+  @HttpCode(200)
+  @Post('Authentication/challenge')
+  async completeChallenge(
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<LoginResult> {
+    const parsed = ChallengeSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid two-factor challenge payload.', {
+        issues: parsed.error.issues.map((i) => i.message),
+      });
+    }
+    const tokens = await this.auth.verifyChallenge(parsed.data.challengeId, parsed.data.code, request.ip);
     return this.respond(tokens, request, reply);
   }
 
@@ -162,6 +200,67 @@ export class AuthController {
       throw new ValidationError('Invalid password payload.', { issues: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`) });
     }
     await this.auth.changePassword(principal.userId, parsed.data.currentPassword, parsed.data.newPassword);
+    return { status: true };
+  }
+
+  /**
+   * §4.9 enrollment: hand out a pending secret. Nothing is enforced until `enable` sees a code it
+   * produced, so an abandoned setup cannot lock the account.
+   */
+  @HttpCode(200)
+  @Post('AppUser/me/totp/setup')
+  beginTotpSetup(): Promise<{ secret: string; otpauthUri: string }> {
+    return this.auth.beginTotpSetup(this.scope.requirePrincipal().userId);
+  }
+
+  /** Confirm the authenticator with a live code and receive the one-time recovery codes. */
+  @HttpCode(200)
+  @Post('AppUser/me/totp/enable')
+  async enableTotp(@Body() body: unknown): Promise<{ recoveryCodes: string[] }> {
+    const principal = this.scope.requirePrincipal();
+    const parsed = TotpCodeSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ValidationError('An authenticator code is required.', { issues: parsed.error.issues.map((i) => i.message) });
+    }
+    return { recoveryCodes: await this.auth.enableTotp(principal.userId, parsed.data.code) };
+  }
+
+  /** Turning 2FA off requires a current factor — never a silent security downgrade. */
+  @HttpCode(200)
+  @Post('AppUser/me/totp/disable')
+  async disableTotp(@Body() body: unknown): Promise<{ status: boolean }> {
+    const principal = this.scope.requirePrincipal();
+    const parsed = TotpCodeSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ValidationError('An authenticator code is required.', { issues: parsed.error.issues.map((i) => i.message) });
+    }
+    await this.auth.disableTotp(principal.userId, parsed.data.code);
+    return { status: true };
+  }
+
+  /** Burn the remaining recovery codes and issue a fresh set. */
+  @HttpCode(200)
+  @Post('AppUser/me/totp/recovery-codes')
+  async regenerateRecoveryCodes(@Body() body: unknown): Promise<{ recoveryCodes: string[] }> {
+    const principal = this.scope.requirePrincipal();
+    const parsed = TotpCodeSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new ValidationError('An authenticator code is required.', { issues: parsed.error.issues.map((i) => i.message) });
+    }
+    return { recoveryCodes: await this.auth.regenerateRecoveryCodes(principal.userId, parsed.data.code) };
+  }
+
+  /**
+   * §4.9 help-desk path: an administrator clears a second factor the user lost. The user enrolls
+   * again from their profile; nothing else about the account changes.
+   */
+  @HttpCode(200)
+  @Post('User/:id/totp-reset')
+  async resetUserTotp(@Param('id') id: string): Promise<{ status: boolean }> {
+    if (!this.scope.isAdmin) {
+      throw new AuthorizationDeniedError('Administrator access required.');
+    }
+    await this.auth.adminResetTotp(id);
     return { status: true };
   }
 
