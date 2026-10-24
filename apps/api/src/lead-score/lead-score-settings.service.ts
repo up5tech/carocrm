@@ -46,6 +46,25 @@ const FeatureFlagsSchema = z
   })
   .strict();
 
+/**
+ * The one policy section 19-LS.5 reads: which published model a score is computed under.
+ *
+ * Plan §5.1 and audit §5.1 choose **one active published model** rather than a per-lead or multi-model
+ * policy, and the choice has to live somewhere an administrator can see and change — that is this key, not
+ * a convention like "the newest published version", because publishing a version must not silently decide
+ * what every future score means while somebody is mid-way through a revision (plan §6.1, §9.3).
+ *
+ * The id is validated on **read**, by the calculation service, which is the only thing that can answer
+ * whether the row exists and is published. Checking it here would mean the settings document owning a
+ * second copy of a fact the record store already holds — and a stale copy of that check would then let a
+ * bad id be saved the moment a model was archived.
+ */
+const ScoringSectionSchema = z
+  .object({
+    activeModelId: z.string().trim().min(1).max(64).nullable().default(null),
+  })
+  .strict();
+
 export const LeadScoreSettingsSchema = z
   .object({
     /**
@@ -55,6 +74,7 @@ export const LeadScoreSettingsSchema = z
      */
     enabled: z.boolean().default(false),
     features: FeatureFlagsSchema.default({}),
+    scoring: ScoringSectionSchema.default({}),
   })
   .strict();
 

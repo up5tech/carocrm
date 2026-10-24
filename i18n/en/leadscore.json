@@ -1,0 +1,34 @@
+{
+  "score": {
+    "freshness": {
+      "current": "Current",
+      "stale": "Out of date",
+      "pending": "Waiting to be scored",
+      "failed": "Could not be scored",
+      "not_scored": "Not scored yet"
+    },
+    "staleBecause": {
+      "leadChanged": "The Lead has changed since this score was calculated.",
+      "modelChanged": "Another score model is active now, so this score came from a different version.",
+      "modelMissing": "No score model is active on this instance.",
+      "historyMissing": "The evaluation that produced this score can no longer be found.",
+      "reportedStale": "A recalculation was requested and has not been stored yet."
+    },
+    "outcome": {
+      "matched": "Applied",
+      "not_matched": "Did not apply",
+      "unknown": "Not enough information",
+      "skipped": "Not evaluated",
+      "expired": "Outside its time window",
+      "error": "Could not be evaluated"
+    },
+    "dimension": {
+      "fit": "Fit",
+      "intent": "Intent",
+      "engagement": "Engagement",
+      "completeness": "Completeness",
+      "recency": "Recency",
+      "negative": "Negative signals"
+    }
+  }
+}

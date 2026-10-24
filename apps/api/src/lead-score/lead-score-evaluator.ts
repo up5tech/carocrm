@@ -116,6 +116,8 @@ export interface EvaluationRequest {
 
 export interface RuleEvaluation {
   readonly ruleId: string;
+  /** The rule's own name: plan §6.5 asks for an understandable breakdown, and a code is not one. */
+  readonly ruleName: string;
   readonly reasonCode: string;
   readonly dimension: string;
   readonly effect: string;
@@ -180,7 +182,7 @@ export function scoreLead(request: EvaluationRequest): ScoreEvaluation {
   const attempted: { outcome: TriState | 'error'; weight: number; counted: boolean }[] = [];
 
   for (const rule of rules) {
-    const base = { ruleId: rule.id, reasonCode: rule.reasonCode, dimension: rule.dimension, effect: rule.effect };
+    const base = { ruleId: rule.id, ruleName: rule.name, reasonCode: rule.reasonCode, dimension: rule.dimension, effect: rule.effect };
 
     if (!rule.enabled) {
       evaluations.push({ ...base, outcome: 'skipped', points: 0, code: EVALUATION_CODES.ruleDisabled });
@@ -283,7 +285,7 @@ export function scoreLead(request: EvaluationRequest): ScoreEvaluation {
     errorCodes: dedupe(codes),
     readFields: [...readFields].sort(),
     signature: digest(signatureInput),
-    inputsHash: digest(JSON.stringify(canonicalInputs(readFields, snapshot.values))),
+    inputsHash: scoringInputsHash(readFields, snapshot.values),
   };
 }
 
@@ -307,6 +309,18 @@ export function requiredInputFields(model: ModelAttributes, rules: readonly Rule
     }
   }
   return [...names].sort();
+}
+
+/**
+ * The hash of a set of input values, in exactly the canonical form the engine signs.
+ *
+ * 19-LS.5's freshness question is "does the stored score still describe this data", and the honest answer
+ * compares the **inputs** rather than the Lead's `version` — which the projection write itself moves, so a
+ * score would report itself stale the moment it was stored. Exported so the read path reuses the one rule for
+ * what counts as missing, empty or withheld instead of copying it.
+ */
+export function scoringInputsHash(readFields: Iterable<string>, values: Readonly<Record<string, unknown>>): string {
+  return digest(JSON.stringify(canonicalInputs(new Set(readFields), values)));
 }
 
 // ---------------------------------------------------------------------------
@@ -605,7 +619,7 @@ function orderRules(rules: readonly RuleAttributes[]): RuleAttributes[] {
 }
 
 function applyEffect(rule: RuleAttributes, outcome: TriState): RuleEvaluation {
-  const base = { ruleId: rule.id, reasonCode: rule.reasonCode, dimension: rule.dimension, effect: rule.effect };
+  const base = { ruleId: rule.id, ruleName: rule.name, reasonCode: rule.reasonCode, dimension: rule.dimension, effect: rule.effect };
   if (outcome !== 'matched') return { ...base, outcome, points: 0 };
   if (rule.effect === 'setBand') {
     return { ...base, outcome: 'matched', points: 0, ...(rule.targetBand !== undefined ? { assignedBand: rule.targetBand } : {}) };
@@ -783,6 +797,7 @@ function canonicalSignature(
     },
     rules: rules.map((rule) => ({
       id: rule.id,
+      name: rule.name,
       reasonCode: rule.reasonCode,
       dimension: rule.dimension,
       effect: rule.effect,
@@ -872,6 +887,6 @@ function emptyEvaluation(
     errorCodes: dedupe(codes),
     readFields: [...readFields].sort(),
     signature: digest(JSON.stringify({ model: { id: model.id, version: model.modelVersion }, score: null, band: 'Unknown', coverage: 0, codes: dedupe(codes) })),
-    inputsHash: digest(JSON.stringify(canonicalInputs(readFields, snapshot.values))),
+    inputsHash: scoringInputsHash(readFields, snapshot.values),
   };
 }

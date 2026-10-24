@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { MAX_HISTORY_PAGE } from '../lead-score-explanation.service.js';
 import { LEADSCORE_OPERATIONS } from '../lead-score-feature-gate.service.js';
 import { MAX_PREVIEW_SAMPLE } from '../lead-score-preview.service.js';
 
@@ -90,5 +91,39 @@ export const ModelPreviewSchema = z
     modelId: ModelIdSchema,
     leadIds: z.array(LeadIdSchema).min(1).max(MAX_PREVIEW_SAMPLE).optional(),
     maxSize: z.number().int().min(1).max(MAX_PREVIEW_SAMPLE).optional(),
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
+// Phase 19-LS.5 — scoring one Lead, and reading its score back (plan §8.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Recalculating one Lead is the write half of 19-LS.5: it stores an evaluation and moves the projection, so
+ * it names one record and no filters. A batch rebuild is 19-LS.6's bounded job with its own validated
+ * filter DSL (plan §8.2), and letting a single-Lead command grow into a loop here would be that job arriving
+ * without checkpoints, progress or a rate story.
+ */
+export const ScoreRecalculateSchema = z
+  .object({
+    leadId: LeadIdSchema,
+  })
+  .strict();
+
+export const ScoreReadSchema = z
+  .object({
+    leadId: LeadIdSchema,
+  })
+  .strict();
+
+/**
+ * The history page. Both bounds are enforced here and the service applies the same ceilings again — a paging
+ * contract the client alone polices is a way to ask for a Lead's whole evaluation history in one response
+ * (plan §8.2).
+ */
+export const ScoreHistoryQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(MAX_HISTORY_PAGE).optional(),
+    offset: z.coerce.number().int().min(0).max(100_000).optional(),
   })
   .strict();

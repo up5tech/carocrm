@@ -1,11 +1,14 @@
 import type { Provider, Type } from '@nestjs/common';
 
 import { LeadScoreController } from './lead-score.controller.js';
+import { LeadScoreCalculationService } from './lead-score-calculation.service.js';
+import { LeadScoreExplanationService } from './lead-score-explanation.service.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
 import { LeadScoreModelService } from './lead-score-model.service.js';
 import { LeadScoreModuleHealthService } from './lead-score-module-health.service.js';
 import { LeadScorePermissionService } from './lead-score-permission.service.js';
 import { LeadScorePreviewService } from './lead-score-preview.service.js';
+import { LeadScoreRecords } from './lead-score-records.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 import { LeadScoreWriteGuardService } from './lead-score-write-guard.service.js';
 
@@ -33,12 +36,19 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   LeadScoreSettingsService,
   LeadScorePermissionService,
   LeadScoreModelService,
+  LeadScoreRecords,
   LeadScorePreviewService,
+  LeadScoreCalculationService,
+  LeadScoreExplanationService,
   LeadScoreFeatureGate,
   LeadScoreModuleHealthService,
 ];
 
 export { LeadScoreController } from './lead-score.controller.js';
+export {
+  LeadScoreCalculationService,
+  type ScoreWriteView,
+} from './lead-score-calculation.service.js';
 export {
   type ConditionFieldPolicy,
   type ConditionIssue,
@@ -66,6 +76,7 @@ export {
   leadScoreInvalidStateError,
   leadScoreModelImmutableError,
   leadScoreModuleDisabledError,
+  leadScoreNoActiveModelError,
   leadScorePhasePendingError,
 } from './lead-score-errors.js';
 export {
@@ -79,6 +90,13 @@ export {
   scoreLead,
   SCORING_OPERATORS,
 } from './lead-score-evaluator.js';
+export {
+  LeadScoreExplanationService,
+  MAX_HISTORY_PAGE,
+  type ScoreBreakdownEntry,
+  type ScoreHistoryView,
+  type ScoreReadView,
+} from './lead-score-explanation.service.js';
 export { LEADSCORE_OPERATIONS, LeadScoreFeatureGate, type LeadScoreOperation, type LeadScoreOperationAssessment } from './lead-score-feature-gate.service.js';
 export {
   changedKeys,
@@ -116,6 +134,7 @@ export {
 } from './lead-score-module-health.service.js';
 export { LeadScorePermissionService } from './lead-score-permission.service.js';
 export { LeadScorePreviewService, type LeadScorePreviewView,MAX_PREVIEW_SAMPLE } from './lead-score-preview.service.js';
+export { type LeadScoreEvaluationPage, LeadScoreRecords,type LeadScoreRow } from './lead-score-records.js';
 export {
   DEFAULT_LEADSCORE_SETTINGS,
   type LeadScoreSettings,

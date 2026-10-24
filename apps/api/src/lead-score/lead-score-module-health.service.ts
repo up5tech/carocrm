@@ -24,6 +24,7 @@ import {
   REQUIRED_CAPABILITIES,
 } from './lead-score-module.js';
 import { LeadScorePermissionService } from './lead-score-permission.service.js';
+import { LeadScoreRecords } from './lead-score-records.js';
 import { type LeadScoreSettings, LeadScoreSettingsService,type LeadScoreSettingsView } from './lead-score-settings.service.js';
 
 /**
@@ -98,6 +99,21 @@ export interface LeadScoreHealthView {
     readonly updatedAt: string | null;
     readonly updatedBy: string | null;
     readonly warnings: readonly { readonly code: string; readonly message: string }[];
+    /**
+     * The model a score would be computed under, read from the store rather than echoed back from the
+     * settings row (19-LS.5). Reported here instead of as a failing check, because an installation with no
+     * active model is *not configured yet*, not broken: `ok` stays about the platform and the registration
+     * invariants, while this tells an operator why `action/score/recalculate` answers
+     * `LEADSCORE_NO_ACTIVE_MODEL` and which of the three states it found.
+     */
+    readonly scoring: {
+      readonly activeModelId: string | null;
+      readonly status: string | null;
+      readonly modelVersion: number | null;
+      readonly usable: boolean;
+      /** The same `unset` / `missing` / `notPublished` vocabulary the recalculation refusal answers with. */
+      readonly state: string | null;
+    };
   };
   readonly checks: readonly HealthCheck[];
 }
@@ -153,6 +169,7 @@ export class LeadScoreModuleHealthService {
     @Inject(LeadScoreSettingsService) private readonly settings: LeadScoreSettingsService,
     @Inject(LeadScorePermissionService) private readonly permissions: LeadScorePermissionService,
     @Inject(LeadScoreFeatureGate) private readonly gate: LeadScoreFeatureGate,
+    @Inject(LeadScoreRecords) private readonly store: LeadScoreRecords,
   ) {}
 
   async health(): Promise<LeadScoreHealthView> {
@@ -218,8 +235,35 @@ export class LeadScoreModuleHealthService {
         updatedAt: settingsView.updatedAt,
         updatedBy: settingsView.updatedBy,
         warnings: settingsView.warnings,
+        scoring: await this.activeModelView(settingsView),
       },
       checks,
+    };
+  }
+
+  /**
+   * Which model a score would be computed under, read from the record store.
+   *
+   * The three states are the same codes 19-LS.5 refuses with, so an operator reading health and a caller
+   * reading the error are looking at one vocabulary: `unset`, `missing`, `notPublished`.
+   */
+  private async activeModelView(settingsView: LeadScoreSettingsView): Promise<LeadScoreHealthView['settings']['scoring']> {
+    const activeId = settingsView.settings.scoring.activeModelId;
+    if (activeId === null || activeId === undefined) {
+      return { activeModelId: null, status: null, modelVersion: null, usable: false, state: 'unset' };
+    }
+    const row = await this.store.modelById(activeId);
+    if (row === undefined) {
+      return { activeModelId: activeId, status: null, modelVersion: null, usable: false, state: 'missing' };
+    }
+    const status = typeof row.data['status'] === 'string' ? row.data['status'] : null;
+    const modelVersion = typeof row.data['modelVersion'] === 'number' ? row.data['modelVersion'] : null;
+    return {
+      activeModelId: activeId,
+      status,
+      modelVersion,
+      usable: status === 'published',
+      state: status === 'published' ? null : 'notPublished',
     };
   }
 

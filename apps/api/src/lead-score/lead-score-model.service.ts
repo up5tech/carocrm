@@ -275,7 +275,7 @@ export class LeadScoreModelService {
   }
 }
 
-function toModelAttributes(id: string, row: Record<string, unknown>): ModelAttributes {
+export function toModelAttributes(id: string, row: Record<string, unknown>): ModelAttributes {
   return {
     id,
     name: stringOr(row['name'], ''),
@@ -294,7 +294,7 @@ function toModelAttributes(id: string, row: Record<string, unknown>): ModelAttri
   };
 }
 
-function toRuleAttributes(modelId: string, row: Record<string, unknown>): RuleAttributes {
+export function toRuleAttributes(modelId: string, row: Record<string, unknown>): RuleAttributes {
   return {
     id: String(row['id'] ?? ''),
     name: stringOr(row['name'], ''),

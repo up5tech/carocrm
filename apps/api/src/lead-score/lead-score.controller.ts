@@ -1,9 +1,11 @@
 import { InvalidQueryError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, HttpCode, Inject, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
 
-import { ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { LeadScoreCalculationService } from './lead-score-calculation.service.js';
+import { LeadScoreExplanationService } from './lead-score-explanation.service.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
 import { LeadScoreModelService } from './lead-score-model.service.js';
 import { LEADSCORE_CAPABILITIES, LEADSCORE_MODULE, LEADSCORE_PENDING_FEATURES } from './lead-score-module.js';
@@ -18,8 +20,9 @@ import { LeadScoreSettingsService } from './lead-score-settings.service.js';
  * What exists here grows with each sub-phase, and every route passes the same permission service and the
  * same gate rather than re-implementing a check: LS.1 added identity, rights, the settings document and the
  * gate probe; LS.3 added the model lifecycle (`validate`, `publish`, `archive`, `new-version`); LS.4 added
- * `preview`, the one engine-backed operation that writes nothing. The score read, the recalculation and the
- * conversion command still arrive with their own sub-phases (§16).
+ * `preview`, the one engine-backed operation that writes nothing; LS.5 added the score write and its two
+ * reads (`score/recalculate`, `score/:leadId`, `score/:leadId/history`). The conversion command still
+ * arrives with its own sub-phase (§16).
  *
  * Every route asserts a capability server-side; hiding a badge in the SPA is never authorization
  * (AGENTS.md §5.3). The controller owns no business rule.
@@ -38,6 +41,8 @@ export class LeadScoreController {
     @Inject(LeadScoreFeatureGate) private readonly gate: LeadScoreFeatureGate,
     @Inject(LeadScoreModelService) private readonly models: LeadScoreModelService,
     @Inject(LeadScorePreviewService) private readonly preview: LeadScorePreviewService,
+    @Inject(LeadScoreCalculationService) private readonly calculation: LeadScoreCalculationService,
+    @Inject(LeadScoreExplanationService) private readonly explanation: LeadScoreExplanationService,
   ) {}
 
   /** Module health: the platform foundation, the registration invariants, the features and the gate. */
@@ -187,6 +192,51 @@ export class LeadScoreController {
   async previewModel(@Body() body: unknown) {
     const input = this.parse(ModelPreviewSchema, body);
     return this.preview.preview(input.modelId, input.leadIds, input.maxSize);
+  }
+
+  /**
+   * Score one Lead under the active published model and keep the result.
+   *
+   * This is the write half of 19-LS.5 and the only way a projection comes into existence: an explicit call
+   * for one record, behind `LeadScoreRecalculate` *and* the core `Lead:edit` right, because a score is
+   * written onto a Lead (plan §8.2, §9.1). Recomputing a Lead whose data has not moved records nothing new —
+   * the evaluation's deterministic key and the projection comparison make that a no-op rather than a second
+   * history row and a bumped record version (§5.4, §10.2). The queued and batch paths are 19-LS.6.
+   */
+  @HttpCode(200)
+  @Post('action/score/recalculate')
+  async recalculateScore(@Body() body: unknown) {
+    const input = this.parse(ScoreRecalculateSchema, body);
+    return this.calculation.recalculate(input.leadId);
+  }
+
+  /**
+   * The current score of one Lead, with the rules behind it and whether it is still current.
+   *
+   * Plan §16 `19-LS.5` accepts on *"users can explain the score and know whether it is current"*, so this
+   * answers both halves: the breakdown names the rules that contributed and the ones that could not answer,
+   * and the freshness block says which input revision the projection describes and why it may no longer
+   * describe this Lead. The breakdown carries no Lead value — a reason that quoted a field would turn an
+   * explanation into a way to read past field ACL (§6.5, §9.2).
+   */
+  @Get('action/score/:leadId')
+  async readScore(@Param('leadId') leadId: string) {
+    const input = this.parse(ScoreReadSchema, { leadId });
+    return this.explanation.score(input.leadId);
+  }
+
+  /**
+   * Paged evaluation history of one Lead, newest first.
+   *
+   * `LeadScoreEvaluation` is `read: 'no'` for a general entity read by design, so this Lead-scoped command is
+   * the door: the caller must be able to read the Lead *and* hold the explanation right, which is what makes
+   * "history is append-only and never browsable" a real property rather than a comment (§5.4, §8.2).
+   */
+  @Get('action/score/:leadId/history')
+  async readScoreHistory(@Param('leadId') leadId: string, @Query() query: unknown) {
+    const input = this.parse(ScoreReadSchema, { leadId });
+    const page = this.parse(ScoreHistoryQuerySchema, query ?? {});
+    return this.explanation.history(input.leadId, page.limit ?? 20, page.offset ?? 0);
   }
 
   private parse<T extends ZodTypeAny>(schema: T, value: unknown): T['_output'] {

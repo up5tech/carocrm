@@ -1,0 +1,34 @@
+{
+  "score": {
+    "freshness": {
+      "current": "Hiện hành",
+      "stale": "Đã cũ",
+      "pending": "Đang chờ tính điểm",
+      "failed": "Không tính điểm được",
+      "not_scored": "Chưa tính điểm"
+    },
+    "staleBecause": {
+      "leadChanged": "Lead này đã thay đổi kể từ khi điểm được tính.",
+      "modelChanged": "Một mô hình chấm điểm khác đang được áp dụng, nên điểm này đến từ phiên bản khác.",
+      "modelMissing": "Hệ thống chưa chọn mô hình chấm điểm nào đang hoạt động.",
+      "historyMissing": "Không còn tìm thấy lần đánh giá đã tạo ra điểm này.",
+      "reportedStale": "Một yêu cầu tính lại đã được ghi nhận nhưng chưa lưu kết quả."
+    },
+    "outcome": {
+      "matched": "Được áp dụng",
+      "not_matched": "Không áp dụng",
+      "unknown": "Chưa đủ thông tin",
+      "skipped": "Không đánh giá",
+      "expired": "Ngoài khung thời gian",
+      "error": "Không đánh giá được"
+    },
+    "dimension": {
+      "fit": "Mức phù hợp",
+      "intent": "Ý định mua",
+      "engagement": "Mức tương tác",
+      "completeness": "Mức đầy đủ dữ liệu",
+      "recency": "Tính mới đây",
+      "negative": "Tín hiệu tiêu cực"
+    }
+  }
+}

@@ -396,13 +396,15 @@ describe('the preview is the door 19-LS.4 opened, and only that door', () => {
     };
     expect(body.module.implementedPhases).toContain('19-LS.4');
     expect(body.features.find((feature) => feature.key === 'scoringPreview')?.pendingPhase).toBeNull();
-    expect(body.features.find((feature) => feature.key === 'scoring')?.pendingPhase).toBe('19-LS.5');
+    // 19-LS.5 kept the score, so `scoring` is no longer waiting on anything.
+    expect(body.features.find((feature) => feature.key === 'scoring')?.pendingPhase).toBeNull();
+    expect(body.features.find((feature) => feature.key === 'scoreExplanation')?.pendingPhase).toBeNull();
     expect(body.operations.find((operation) => operation.operation === 'previewModel')?.feature).toBe('scoringPreview');
-    // The read and the recalculation are still closed: a preview proves the engine, not the storage.
-    for (const operation of ['readScore', 'readScoreHistory', 'recalculateLead', 'batchRecalculate']) {
-      const entry = body.operations.find((candidate) => candidate.operation === operation);
-      expect(entry?.pendingPhase, operation).not.toBeNull();
-    }
+    // 19-LS.4 proved the engine; 19-LS.5 is the phase that kept the score, so those doors no longer name a
+    // pending phase. What still waits is the queued and batch recalculation.
+    expect(body.features.find((feature) => feature.key === 'manualRecalculation')?.pendingPhase).toBeNull();
+    const queued = body.operations.find((operation) => operation.operation === 'batchRecalculate');
+    expect(queued?.pendingPhase).toBe('19-LS.6');
     // The engine-health check is computed from the two operator lists, so it can fail on a real drift.
     const engine = body.checks.find((check) => check.name === 'scoring-engine');
     expect(engine?.ok).toBe(true);

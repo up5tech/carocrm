@@ -98,3 +98,28 @@ export function leadScorePhasePendingError(operation: string, feature: string, p
     blockedBy: phase,
   });
 }
+
+/**
+ * Nothing is scoring Leads right now, and the answer says which of the three states it found.
+ *
+ * 19-LS.5 computes a score only under the **active published model** (plan §5.1, audit §5.1), which an
+ * administrator chooses in the module settings. So a recalculation can be blocked by configuration rather
+ * than by the Lead or by the caller: no model chosen, a chosen row that is gone, or one that is still a
+ * draft or has been archived. Those are named separately because the fix differs every time — and the id is
+ * reported only when the row exists, so this cannot confirm that some other tenant's model id is real.
+ *
+ * The state travels as `state`, not `reason`: `GlobalExceptionFilter` overwrites `details.reason` with the
+ * localized message, which is why this module never puts an answer a caller must switch on in that key.
+ */
+export function leadScoreNoActiveModelError(state: 'unset' | 'missing' | 'notPublished', modelId?: string, modelStatus?: string): LeadScoreError {
+  const messages: Record<'unset' | 'missing' | 'notPublished', string> = {
+    unset: 'No Lead Score model is active on this instance, so nothing can be scored. Publish a model and select it in the Lead Score settings.',
+    missing: 'The active Lead Score model no longer exists, so nothing can be scored. Select the model that replaced it in the Lead Score settings.',
+    notPublished: `The active Lead Score model is "${String(modelStatus ?? '')}", and only a published version may score a Lead. Publish it, or select a published model.`,
+  };
+  return new LeadScoreError(
+    'LEADSCORE_NO_ACTIVE_MODEL',
+    messages[state],
+    { state, ...(modelId !== undefined ? { modelId } : {}), ...(modelStatus !== undefined ? { modelStatus } : {}) },
+  );
+}

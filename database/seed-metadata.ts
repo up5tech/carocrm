@@ -5045,6 +5045,10 @@ function leadScoreEntities(): MetadataSeedEntry[] {
           // The Lead's stored `version` this evaluation describes: which data revision the score is about
           // (plan §3.1 `inputAsOf`, §5.3 `sourceRevision`).
           sourceRevision: { type: 'int', inDetail: true },
+          // The hash of exactly the inputs the engine read (plan §5.3 "input watermark"). The Lead's own
+          // `version` cannot answer "has this record changed since it was scored", because storing a score
+          // moves that version — so freshness is decided on the inputs, and this is what 19-LS.5 re-compares.
+          inputsHash: { type: 'text', inDetail: true },
           trigger: { type: 'enum', values: LS_TRIGGERS, defaultValue: 'lead_change', inList: true, inDetail: true },
           resultState: { type: 'enum', values: LS_RESULT_STATES, defaultValue: 'success', inList: true, inDetail: true },
           coverage: { type: 'float', inDetail: true },
@@ -5079,7 +5083,7 @@ function leadScoreEntities(): MetadataSeedEntry[] {
               panels: [
                 { name: 'result', label: 'Result', position: 0, fields: ['leadId', 'modelId', 'modelVersion', 'scoreValue', 'qualificationBand', 'evaluationStatus', 'coverage', 'calculatedAt', 'inputsAsOf', 'sourceRevision', 'trigger', 'resultState'] },
                 { name: 'explanation', label: 'Explanation', position: 10, fields: ['ruleResults', 'positiveReasonCodes', 'negativeReasonCodes', 'skippedReasonCodes', 'errorSummary'] },
-                { name: 'run', label: 'Run', position: 20, fields: ['signature', 'correlationId', 'jobId', 'idempotencyKey', 'durationMs'] },
+                { name: 'run', label: 'Run', position: 20, fields: ['signature', 'inputsHash', 'correlationId', 'jobId', 'idempotencyKey', 'durationMs'] },
               ],
             },
           ],

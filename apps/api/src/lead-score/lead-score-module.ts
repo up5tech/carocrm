@@ -85,7 +85,8 @@ export type LeadScoreErrorCode =
   | 'LEADSCORE_PHASE_PENDING'
   | 'LEADSCORE_INVALID_STATE'
   | 'LEADSCORE_MODEL_IMMUTABLE'
-  | 'LEADSCORE_DRAFT_EXISTS';
+  | 'LEADSCORE_DRAFT_EXISTS'
+  | 'LEADSCORE_NO_ACTIVE_MODEL';
 
 export interface LeadScoreCapabilityDefinition {
   readonly key: LeadScoreCapabilityKey;
@@ -236,12 +237,13 @@ export const LEADSCORE_FEATURES: readonly LeadScoreFeatureDescriptor[] = [
   // 19-LS.4 delivered the deterministic engine, and the only door it opens is the side-effect-free one: plan
   // §15.2 stage 3 is "preview scoring on a limited authorized sample", which is what `previewModel` runs.
   { key: 'scoringPreview', label: 'Score model preview', settingsPath: 'features.scoringPreview', requires: ['modelAdministration'], pendingPhase: null },
-  // `scoring` is the switch for a score that is *computed and kept*: the projection read and the recalculation
-  // both need the evaluation rows, and those arrive with 19-LS.5. A delivered evaluator is therefore not yet
-  // a delivered `scoring` feature — the phase named here is the one an operator should come back to.
-  { key: 'scoring', label: 'Rule-based scoring', settingsPath: 'features.scoring', requires: ['modelAdministration'], pendingPhase: '19-LS.5' },
-  { key: 'scoreExplanation', label: 'Score explanation and history', settingsPath: 'features.scoreExplanation', requires: ['scoring'], pendingPhase: '19-LS.5' },
-  { key: 'manualRecalculation', label: 'Manual recalculation', settingsPath: 'features.manualRecalculation', requires: ['scoring'], pendingPhase: '19-LS.6' },
+  // 19-LS.5 computes and *keeps* a score: the evaluation row, the Lead projection, and the read of both.
+  // What it does not do is decide when to run — the event-driven and batch paths stay with 19-LS.6.
+  { key: 'scoring', label: 'Rule-based scoring', settingsPath: 'features.scoring', requires: ['modelAdministration'], pendingPhase: null },
+  // Plan §8.2's "queue a manual recalculation" arrives in two halves: LS.5 delivers the synchronous,
+  // explicitly-asked, one-Lead command; LS.6 delivers the queued/debounced job behind the same capability.
+  { key: 'manualRecalculation', label: 'Manual recalculation', settingsPath: 'features.manualRecalculation', requires: ['scoring'], pendingPhase: null },
+  { key: 'scoreExplanation', label: 'Score explanation and history', settingsPath: 'features.scoreExplanation', requires: ['scoring'], pendingPhase: null },
   { key: 'eventRecalculation', label: 'Event-driven recalculation', settingsPath: 'features.eventRecalculation', requires: ['scoring'], pendingPhase: '19-LS.6' },
   { key: 'batchRecalculation', label: 'Batch recalculation', settingsPath: 'features.batchRecalculation', requires: ['scoring'], pendingPhase: '19-LS.6' },
   { key: 'thresholdNotifications', label: 'Band-change notifications', settingsPath: 'features.thresholdNotifications', requires: ['scoring'], pendingPhase: '19-LS.9' },
@@ -367,7 +369,7 @@ export const LEADSCORE_MODULE = {
   apiPrefix: '/api/v1/LeadScore',
   settingsRow: LEADSCORE_SETTINGS_ROW,
   /** Sub-phases delivered by this module. */
-  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4'],
+  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5'],
   /**
    * The entity set this module owns, registered in `database/seed-metadata.ts` and indexed by
    * `database/migrations/073_phase19_lead_score.sql`. One list, shared with the write guard, so the
