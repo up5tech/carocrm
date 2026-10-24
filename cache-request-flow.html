@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Web Request Flow (Cache)</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 2rem; background: #0f172a; color: #e2e8f0; }
+  h1 { text-align: center; }
+  .mermaid { background: #1e293b; padding: 2rem; border-radius: 12px; }
+</style>
+</head>
+<body>
+<h1>Web Request: Browser → API → Redis → PostgreSQL</h1>
+<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant A as API
+    participant R as Redis
+    participant P as PostgreSQL
+
+    B->>A: HTTP request
+    A->>R: GET cache key
+    alt Cache hit
+        R-->>A: Cached value
+        A-->>B: 200 OK (cached)
+    else Cache miss
+        R-->>A: null
+        A->>P: SELECT query
+        P-->>A: Result rows
+        A->>R: SET cache key (TTL)
+        R-->>A: OK
+        A-->>B: 200 OK (fresh)
+    end
+</div>
+<script>mermaid.initialize({ startOnLoad: true, theme: 'dark' });</script>
+</body>
+</html>
