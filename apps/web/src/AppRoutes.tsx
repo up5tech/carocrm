@@ -28,7 +28,6 @@ import { ESignaturePage } from './pages/ESignaturePage.js';
 import { HomePage } from './pages/HomePage.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { MarketingPreferencesPage } from './pages/MarketingPreferencesPage.js';
-import { MyProcessesPage } from './pages/MyProcessesPage.js';
 import { MyProfilePage } from './pages/MyProfilePage.js';
 import { PortalCsatPage } from './pages/PortalCsatPage.js';
 import { PortalHomePage } from './pages/PortalHomePage.js';
@@ -120,9 +119,11 @@ export function AppRoutes() {
         <Route path="/dashboards" element={<DashboardsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/tasks" element={<TasksPage />} />
-        {/* Phase 16 participant surface: the approvals this person started or took part in.
-            Declared before the entity wildcard so "processes" is never read as an entity name. */}
-        <Route path="/processes" element={<MyProcessesPage />} />
+        {/* The approvals surface moved into /tasks (one page, one sidebar entry). The old route
+            still resolves — bookmarks and links in older documents keep working — and it opens the
+            approvals surface directly. Declared before the entity wildcard so "processes" is never
+            read as an entity name. */}
+        <Route path="/processes" element={<Navigate to="/tasks?tab=approvals" replace />} />
         {/* Phase 19-AI: a static module page, declared before the entity wildcard so "ai-agents"
             is never read as an entity name. Visibility is decided by the server's navigation. */}
         <Route path="/ai-agents" element={<AIAgentsPage />} />

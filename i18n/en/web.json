@@ -348,6 +348,8 @@
   "tasks": {
     "title": "My tasks",
     "subtitle": "Approvals assigned to you — directly, or to any role you are a member of. Answering moves the process forward immediately; the person who started it sees the result on the record's process trail.",
+    "tabTasks": "Tasks",
+    "tabApprovals": "Approvals",
     "scopeWaiting": "Waiting for me",
     "scopeAnswered": "Answered",
     "scopeAll": "Everything",

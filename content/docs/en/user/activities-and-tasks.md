@@ -1,11 +1,11 @@
 ---
 title: Activities, tasks and the calendar
-summary: Tasks, calls and meetings, the approval inbox at /tasks, email templates, and the month grid that shows them.
+summary: Tasks, calls and meetings, the approval inbox and the approvals you took part in at /tasks, email templates, and the month grid that shows them.
 audience: user
 order: 30
 tags: [task, call, meeting, email-template, calendar]
 related: [user/record-page, user/dashboards-and-reports]
-updated: 2026-10-22
+updated: 2026-10-24
 ---
 
 There are two different things called a task in this product, and mixing them up is the most common
@@ -68,9 +68,16 @@ the filters when something is missing.
 
 ## Approvals
 
-The [My Tasks](/tasks) page groups work waiting on you into *Waiting for me*, *Answered* and *Everything*,
-banners the overdue count, and marks an overdue due date in red. Open a row, choose the outcome and add a
+The [My Tasks](/tasks) page answers both halves of the participant's question, on one screen with a
+surface switch at the top right.
+
+**Tasks** groups the work waiting on you into *Waiting for me*, *Answered* and *Everything*, banners
+the overdue count, and marks an overdue due date in red. Open a row, choose the outcome and add a
 comment to answer it. Twenty rows are shown at a time.
+
+**Approvals** is what you started or took part in, including the ones now waiting on someone else —
+filterable by *Everything*, *Running*, *Waiting*, *Completed*, *Cancelled* and *Failed*. The *Current
+step* column names the steps still open, and **Trail** opens the full history of the approval.
 
 ## Where to go next
 

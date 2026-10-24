@@ -489,6 +489,8 @@ body {
   margin: 2px 0 0;
   color: #737b85;
   font-size: 13px;
+  /* A long subtitle used to take the whole head and push the actions onto a second row. */
+  max-width: 760px;
 }
 
 /* dashboard switcher on /dashboards */
@@ -6155,3 +6157,50 @@ textarea.carocrm-etpl-source,
 
 /* An index page has no contents rail, so its column is the whole sheet: the prose, the cards and
    the lists all use that width. */
+
+/* My tasks: the scope switch above whichever table the surface shows. */
+.carocrm-tasks-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* My tasks: the surface switch is the first thing to notice on the page, so it sits on a tinted
+   track with a raised white pill for the active surface instead of blending into the head. */
+.carocrm-surface-switch {
+  background: #f1f6fd;
+  border: 1px solid #e1ebf8;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+  padding: 3px;
+}
+
+.carocrm-surface-switch .ant-segmented {
+  background: transparent;
+  padding: 0;
+}
+
+.carocrm-surface-switch .ant-segmented-item {
+  border-radius: 7px;
+  color: #6b7684;
+  transition: color 0.15s ease;
+}
+
+.carocrm-surface-switch .ant-segmented-item:hover:not(.ant-segmented-item-selected) {
+  color: #1f6fe0;
+}
+
+.carocrm-surface-switch .ant-segmented-item-selected,
+.carocrm-surface-switch .ant-segmented-thumb {
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.16);
+  color: #1f6fe0;
+  font-weight: 600;
+}
+
+.carocrm-surface-switch-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}

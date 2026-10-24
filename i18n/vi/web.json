@@ -348,6 +348,8 @@
   "tasks": {
     "title": "Nhiệm vụ của tôi",
     "subtitle": "Các phê duyệt được giao cho bạn — trực tiếp hoặc qua vai trò bạn tham gia. Trả lời sẽ đẩy quy trình tiến ngay; người khởi tạo thấy kết quả trong dấu vết quy trình của bản ghi.",
+    "tabTasks": "Công việc",
+    "tabApprovals": "Phê duyệt",
     "scopeWaiting": "Đang chờ tôi",
     "scopeAnswered": "Đã trả lời",
     "scopeAll": "Tất cả",
