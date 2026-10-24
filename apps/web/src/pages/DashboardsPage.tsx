@@ -1,5 +1,18 @@
-import { AppstoreOutlined, DeleteOutlined, PlusOutlined, ReloadOutlined, StarOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Card, Checkbox, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space } from 'antd';
+import {
+  AppstoreOutlined,
+  BarChartOutlined,
+  DashboardOutlined,
+  DeleteOutlined,
+  FileDoneOutlined,
+  PlayCircleOutlined,
+  PlusOutlined,
+  ProjectOutlined,
+  ReloadOutlined,
+  StarFilled,
+  StarOutlined,
+  TableOutlined,
+} from '@ant-design/icons';
+import { App as AntApp, Button, Checkbox, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Tooltip } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api, type DashboardRow } from '../api/client.js';
@@ -10,6 +23,32 @@ import { navEntities, useMetadata } from '../state/metadata.js';
 import { usePreference } from '../state/preferences.js';
 import { useSession } from '../state/session.js';
 import { DashletResult } from './DashletResult.js';
+
+/** The mark and the label a dashlet header shows for its kind. */
+const DASHLET_ICONS: Record<string, React.ReactNode> = {
+  list: <TableOutlined />,
+  chart: <BarChartOutlined />,
+  kpi: <DashboardOutlined />,
+  projectTasks: <ProjectOutlined />,
+  esignature: <FileDoneOutlined />,
+};
+
+function dashletKindLabel(kind: string): string {
+  switch (kind) {
+    case 'list':
+      return t('web.reports.kindList');
+    case 'chart':
+      return t('web.reports.kindChart');
+    case 'kpi':
+      return t('web.reports.kindKpi');
+    case 'projectTasks':
+      return t('web.dashboards.kindProjectTasks');
+    case 'esignature':
+      return t('web.dashboards.kindESignature');
+    default:
+      return kind;
+  }
+}
 
 export function DashboardsPage() {
   usePageDocs('user/dashboards-and-reports');
@@ -190,13 +229,29 @@ export function DashboardsPage() {
   );
 
   return (
-    <>
+    <div className="carocrm-page">
       <div className="carocrm-page-head">
         <div>
           <h1 className="carocrm-page-title">{t('web.dashboards.title')}</h1>
           <p className="carocrm-page-sub">{t('web.dashboards.subtitle')}</p>
         </div>
-        <Space>
+        <Space size={8} wrap>
+          {dashboards.length > 0 ? (
+            <Select
+              className="carocrm-dash-select"
+              value={activeId ?? null}
+              onChange={(value: string) => {
+                chosenManually.current = true;
+                setActiveId(value);
+              }}
+              options={dashboards.map((item) => ({ value: item.id, label: `${item.name} (${item.dashlets.length})` }))}
+              placeholder={t('web.dashboards.pick')}
+              aria-label={t('web.dashboards.pick')}
+              showSearch
+              optionFilterProp="label"
+              suffixIcon={<AppstoreOutlined />}
+            />
+          ) : null}
           <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void refresh()}>
             {t('core.common.refresh')}
           </Button>
@@ -205,70 +260,77 @@ export function DashboardsPage() {
           </Button>
         </Space>
       </div>
-      {dashboards.length > 0 ? (
-        <Select
-          className="carocrm-dashboard-picker"
-          value={activeId}
-          onChange={(value: string) => {
-            chosenManually.current = true;
-            setActiveId(value);
-          }}
-          options={dashboards.map((item) => ({ value: item.id, label: `${item.name} (${item.dashlets.length})` }))}
-          placeholder={t('web.dashboards.pick')}
-          showSearch
-          optionFilterProp="label"
-          suffixIcon={<AppstoreOutlined />}
-        />
-      ) : null}
+
       {active ? (
-        <>
-          <div style={{ marginBottom: 12 }}>
-            <Button icon={<PlusOutlined />} onClick={() => setDashletOpen(true)}>
-              {t('web.dashboards.addDashlet')}
-            </Button>
+        <div className="carocrm-dash-actions">
+          <Button size="small" icon={<PlusOutlined />} onClick={() => setDashletOpen(true)}>
+            {t('web.dashboards.addDashlet')}
+          </Button>
+          <Tooltip title={defaultDashboard.value === active.id ? t('web.dashboards.isDefault') : t('web.dashboards.makeDefault')}>
             <Button
+              size="small"
               type={defaultDashboard.value === active.id ? 'primary' : 'default'}
-              icon={<StarOutlined />}
-              style={{ marginLeft: 8 }}
+              icon={defaultDashboard.value === active.id ? <StarFilled /> : <StarOutlined />}
               aria-label={t('web.dashboards.defaultAria', { name: active.name })}
+              aria-pressed={defaultDashboard.value === active.id}
               onClick={() => defaultDashboard.save(defaultDashboard.value === active.id ? null : active.id)}
             >
               {defaultDashboard.value === active.id ? t('web.dashboards.isDefault') : t('web.dashboards.makeDefault')}
             </Button>
-            <Popconfirm
-              title={t('web.dashboards.deleteConfirm', { name: active.name })}
-              onConfirm={() => void removeDashboard()}
-              okText={t('web.common.delete')}
-            >
-              <Button danger icon={<DeleteOutlined />} style={{ marginLeft: 8 }}>
-                {t('web.dashboards.deleteDashboard')}
-              </Button>
-            </Popconfirm>
+          </Tooltip>
+          <Popconfirm
+            title={t('web.dashboards.deleteConfirm', { name: active.name })}
+            onConfirm={() => void removeDashboard()}
+            okText={t('web.common.delete')}
+          >
+            <Button size="small" danger icon={<DeleteOutlined />}>
+              {t('web.dashboards.deleteDashboard')}
+            </Button>
+          </Popconfirm>
+        </div>
+      ) : null}
+
+      {active ? (
+        active.dashlets.length === 0 ? (
+          <div className="carocrm-dash-empty">
+            <DashboardOutlined />
+            <strong>{t('web.dashboards.noDashlets')}</strong>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setDashletOpen(true)}>
+              {t('web.dashboards.addDashlet')}
+            </Button>
           </div>
-          <Row gutter={[16, 16]}>
+        ) : (
+          <div className="carocrm-dash-grid">
             {active.dashlets.map((dashlet) => (
-              <Col key={dashlet.id} xs={24} lg={12}>
-                <Card
-                  className="carocrm-card"
-                  title={`${dashlet.name} · ${dashlet.kind}`}
-                  extra={
-                    <Space>
-                      <Button size="small" onClick={() => void runOne(dashlet.id)}>
-                        {t('web.common.run')}
-                      </Button>
-                      <Button size="small" danger type="text" icon={<DeleteOutlined />} onClick={() => void removeDashlet(dashlet.id)} />
-                    </Space>
-                  }
-                >
+              <section key={dashlet.id} className="carocrm-dashlet" aria-label={dashlet.name}>
+                <header className="carocrm-dashlet-head">
+                  <span className="carocrm-dashlet-icon" aria-hidden="true">
+                    {DASHLET_ICONS[dashlet.kind] ?? <DashboardOutlined />}
+                  </span>
+                  <div className="carocrm-dashlet-heading">
+                    <span className="carocrm-dashlet-title">{dashlet.name}</span>
+                    <span className="carocrm-dashlet-kind">{dashletKindLabel(dashlet.kind)}</span>
+                  </div>
+                  <div className="carocrm-dashlet-actions">
+                    <Tooltip title={t('web.common.run')}>
+                      <Button size="small" type="text" icon={<PlayCircleOutlined />} aria-label={t('web.common.run')} onClick={() => void runOne(dashlet.id)} />
+                    </Tooltip>
+                    <Popconfirm title={t('web.dashboards.deleteDashletConfirm')} onConfirm={() => void removeDashlet(dashlet.id)} okText={t('web.common.delete')}>
+                      <Button size="small" danger type="text" icon={<DeleteOutlined />} aria-label={t('web.dashboards.deleteDashlet')} />
+                    </Popconfirm>
+                  </div>
+                </header>
+                <div className="carocrm-dashlet-body">
                   <DashletResult dashlet={dashlet} result={results[dashlet.id]} />
-                </Card>
-              </Col>
+                </div>
+              </section>
             ))}
-          </Row>
-        </>
+          </div>
+        )
       ) : (
         <EmptyState title={t('web.dashboards.empty')} />
       )}
+
       <Modal
         title={t('web.dashboards.new')}
         open={createOpen}
@@ -282,6 +344,7 @@ export function DashboardsPage() {
           </Form.Item>
         </Form>
       </Modal>
+
       <Modal
         title={t('web.dashboards.addDashlet')}
         open={dashletOpen}
@@ -377,6 +440,6 @@ export function DashboardsPage() {
           )}
         </Form>
       </Modal>
-    </>
+    </div>
   );
 }
