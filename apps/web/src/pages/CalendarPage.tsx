@@ -1,10 +1,8 @@
-import { LeftOutlined, PlusOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
+import { CalendarOutlined, LeftOutlined, PlusOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
 import {
   App as AntApp,
   Button,
   Calendar,
-  Card,
-  Checkbox,
   DatePicker,
   Form,
   Input,
@@ -13,7 +11,7 @@ import {
   Select,
   Space,
   Spin,
-  Typography,
+  Tooltip,
 } from 'antd';
 import calendarEnUS from 'antd/es/calendar/locale/en_US';
 import calendarViVN from 'antd/es/calendar/locale/vi_VN';
@@ -77,9 +75,70 @@ function EventChip({
     >
       <Link to={`/${event.activityType}/${event.activityId}`} onClick={(e) => e.stopPropagation()}>
         {!event.allDay ? <span className="carocrm-cal-event-time">{timeOf(event.start)}</span> : null}
-        {event.name ?? event.activityType}
+        <span className="carocrm-cal-event-name">{event.name ?? event.activityType}</span>
         {event.recurring ? <span className="carocrm-cal-event-repeat">↻</span> : null}
       </Link>
+    </div>
+  );
+}
+
+/** The bar above the grid: month, navigation, view switch and the entity legend-as-filter. */
+function CalendarToolbar(props: {
+  readonly title: string;
+  readonly count: number;
+  readonly view: 'month' | 'week';
+  readonly onView: (view: 'month' | 'week') => void;
+  readonly onPrev: () => void;
+  readonly onNext: () => void;
+  readonly onToday: () => void;
+  readonly entities: readonly string[];
+  readonly onToggleEntity: (name: string) => void;
+  readonly entityLabel: (name: string) => string;
+}) {
+  return (
+    <div className="carocrm-cal-toolbar">
+      <Space.Compact>
+        <Tooltip title={t('web.calendar.prevMonth')}>
+          <Button icon={<LeftOutlined />} aria-label={t('web.calendar.prevMonth')} onClick={props.onPrev} />
+        </Tooltip>
+        <Tooltip title={t('web.calendar.nextMonth')}>
+          <Button icon={<RightOutlined />} aria-label={t('web.calendar.nextMonth')} onClick={props.onNext} />
+        </Tooltip>
+      </Space.Compact>
+      <Button onClick={props.onToday}>{t('web.calendar.today')}</Button>
+
+      <div className="carocrm-cal-heading">
+        <span className="carocrm-cal-month">{props.title}</span>
+        <span className="carocrm-cal-total">{t('web.calendar.entries', { count: String(props.count) })}</span>
+      </div>
+
+      <div className="carocrm-cal-toolbar-end">
+        <div className="carocrm-cal-filters" role="group" aria-label={t('web.calendar.title')}>
+          {ACTIVITY_ENTITIES.map((name) => {
+            const on = props.entities.includes(name);
+            return (
+              <button
+                key={name}
+                type="button"
+                className={`carocrm-cal-filter${on ? ' is-on' : ''}`}
+                aria-pressed={on}
+                onClick={() => props.onToggleEntity(name)}
+              >
+                <span className={`carocrm-cal-dot ${LEGEND_CLASS[name] ?? ''}`} aria-hidden="true" />
+                {props.entityLabel(name)}
+              </button>
+            );
+          })}
+        </div>
+        <Segmented
+          value={props.view}
+          onChange={(value) => props.onView(value as 'month' | 'week')}
+          options={[
+            { value: 'month', label: t('web.calendar.viewMonth') },
+            { value: 'week', label: t('web.calendar.viewWeek') },
+          ]}
+        />
+      </div>
     </div>
   );
 }
@@ -224,6 +283,8 @@ export function CalendarPage() {
   };
 
   const entityLabel = (name: string): string => metadata.data?.[name]?.label ?? name;
+  const toggleEntity = (name: string): void =>
+    setEntities((current) => (current.includes(name) ? current.filter((value) => value !== name) : [...current, name]));
   const selectedDay = selected.format('YYYY-MM-DD');
   const selectedEvents = byDay.get(selectedDay) ?? [];
   const weekDays = useMemo(() => {
@@ -245,30 +306,76 @@ export function CalendarPage() {
     });
   }, [createOpen, selected, createForm]);
 
+  const goPrev = (): void => {
+    if (view === 'week') setWeek((current) => current.subtract(1, 'week'));
+    else setMonth((current) => current.subtract(1, 'month'));
+  };
+  const goNext = (): void => {
+    if (view === 'week') setWeek((current) => current.add(1, 'week'));
+    else setMonth((current) => current.add(1, 'month'));
+  };
+  const goToday = (): void => {
+    setMonth(dayjs().startOf('month'));
+    setWeek(dayjs().startOf('week'));
+    setSelected(dayjs());
+  };
+
+  /** One day cell, shared by the month grid and the week strip. */
+  const renderCell = (date: Dayjs, options: { readonly inMonth: boolean; readonly minHeight?: number }): React.ReactNode => {
+    const day = date.format('YYYY-MM-DD');
+    const dayEvents = byDay.get(day) ?? [];
+    const className = [
+      'carocrm-cal-cell',
+      options.inMonth ? '' : 'carocrm-cal-cell--out',
+      date.isSame(selected, 'day') ? 'carocrm-cal-cell--selected' : '',
+      date.isSame(dayjs(), 'day') ? 'carocrm-cal-cell--today' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    return (
+      <div
+        className={className}
+        data-drag-over={dropDay === day ? 'true' : undefined}
+        style={options.minHeight === undefined ? undefined : { minHeight: options.minHeight }}
+        onClick={() => setSelected(date)}
+        onDragOver={(event) => {
+          if (!dragging) return;
+          event.preventDefault();
+          if (dropDay !== day) setDropDay(day);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          const dropped = dragging;
+          stopDrag();
+          if (dropped) void reschedule(dropped, day);
+        }}
+      >
+        <span className="carocrm-cal-day">{String(date.date())}</span>
+        <div className="carocrm-cal-events">
+          {dayEvents.slice(0, CELL_EVENTS).map((event) => (
+            <EventChip
+              key={`${event.activityType}-${event.activityId}-${event.start}`}
+              event={event}
+              onDragStart={setDragging}
+              onDragEnd={stopDrag}
+            />
+          ))}
+          {dayEvents.length > CELL_EVENTS ? (
+            <span className="carocrm-cal-more">{t('web.calendar.more', { count: String(dayEvents.length - CELL_EVENTS) })}</span>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <Card
-      className="carocrm-card"
-      title={(
-          <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>{t('web.calendar.title')}</Typography.Title>
-        )}
-      extra={
-        <Space wrap size={12}>
-          <Space wrap size={4}>
-            {ACTIVITY_ENTITIES.map((name) => (
-              <Checkbox
-                key={name}
-                checked={entities.includes(name)}
-                onChange={(e) =>
-                  setEntities((current) => (e.target.checked ? [...current, name] : current.filter((value) => value !== name)))
-                }
-              >
-                <span className="carocrm-cal-legend">
-                  <span className={`carocrm-cal-dot ${LEGEND_CLASS[name] ?? ''}`} />
-                  {entityLabel(name)}
-                </span>
-              </Checkbox>
-            ))}
-          </Space>
+    <div className="carocrm-page">
+      <div className="carocrm-page-head">
+        <div>
+          <h1 className="carocrm-page-title">{t('web.calendar.title')}</h1>
+          <p className="carocrm-page-sub">{t('web.calendar.hint', { zone })}</p>
+        </div>
+        <Space size={8} wrap>
           <Segmented
             value={onlyMine ? 'mine' : 'all'}
             onChange={(value) => setOnlyMine(value === 'mine')}
@@ -277,201 +384,113 @@ export function CalendarPage() {
               { value: 'mine', label: t('web.calendar.onlyMine') },
             ]}
           />
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setCreateOpen(true)}
-            aria-label="Create task New task Create New"
-          >
+          <Tooltip title={t('core.common.refresh')}>
+            <Button icon={<ReloadOutlined />} aria-label={t('core.common.refresh')} loading={loading} onClick={() => void load()} />
+          </Tooltip>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
             {t('web.calendar.createTask')}
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-            {t('core.common.refresh')}
-          </Button>
         </Space>
-      }
-    >
-      <Spin spinning={loading}>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {t('web.calendar.hint', { zone })}
-        </Typography.Text>
-        <div
-          className="carocrm-cal-grid"
-          onClickCapture={(event) => {
-            const target = event.target;
-            if (!(target instanceof Element) || target.closest('a')) return;
-            // rc-picker keeps its own visible month and follows every clicked cell, so an
-            // adjacent-month cell moved the grid even though `month` never changed.
-            const cell = target.closest('.ant-picker-cell');
-            if (cell && !cell.classList.contains('ant-picker-cell-in-view')) event.stopPropagation();
-          }}
-        >
-          {view === 'week' ? (
-            <div>
-              <div className="carocrm-cal-header">
-                <Space.Compact>
-                  <Button icon={<LeftOutlined />} aria-label={t('web.calendar.prevMonth')} onClick={() => setWeek((w) => w.subtract(1, 'week'))} />
-                  <Button icon={<RightOutlined />} aria-label={t('web.calendar.nextMonth')} onClick={() => setWeek((w) => w.add(1, 'week'))} />
-                </Space.Compact>
-                <Button onClick={() => { setWeek(dayjs().startOf('week')); setSelected(dayjs()); }}>
-                  {t('web.calendar.today')}
-                </Button>
-                <Segmented
-                  value={view}
-                  onChange={(value) => setView(value as 'month' | 'week')}
-                  options={[
-                    { value: 'month', label: 'Month' },
-                    { value: 'week', label: 'Week' },
-                  ]}
-                />
-                <Typography.Text className="carocrm-cal-month">{weekTitle}</Typography.Text>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8, marginTop: 8 }}>
-                {weekDays.map((date) => {
-                  const day = date.format('YYYY-MM-DD');
-                  const dayEvents = byDay.get(day) ?? [];
-                  const className = [
-                    'carocrm-cal-cell',
-                    date.isSame(selected, 'day') ? 'carocrm-cal-cell--selected' : '',
-                    date.isSame(dayjs(), 'day') ? 'carocrm-cal-cell--today' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ');
-                  return (
-                    <div
-                      key={day}
-                      className={className}
-                      data-drag-over={dropDay === day ? 'true' : undefined}
-                      onClick={() => setSelected(date)}
-                      onDragOver={(event) => {
-                        if (!dragging) return;
-                        event.preventDefault();
-                        if (dropDay !== day) setDropDay(day);
-                      }}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        const dropped = dragging;
-                        stopDrag();
-                        if (dropped) void reschedule(dropped, day);
-                      }}
-                      style={{ minHeight: 120, border: '1px solid #f0f0f0', borderRadius: 8, padding: 6 }}
-                    >
-                      <span className="carocrm-cal-day">{String(date.date())}</span>
-                      <div className="carocrm-cal-events">
-                        {dayEvents.slice(0, CELL_EVENTS).map((event) => (
-                          <EventChip
-                            key={`${event.activityType}-${event.activityId}-${event.start}`}
-                            event={event}
-                            onDragStart={setDragging}
-                            onDragEnd={stopDrag}
-                          />
-                        ))}
-                        {dayEvents.length > CELL_EVENTS ? (
-                          <span className="carocrm-cal-more">{t('web.calendar.more', { count: String(dayEvents.length - CELL_EVENTS) })}</span>
-                        ) : null}
+      </div>
+
+      <div className="carocrm-cal-panel">
+        <CalendarToolbar
+          title={view === 'week' ? weekTitle : monthTitle}
+          count={events.length}
+          view={view}
+          onView={setView}
+          onPrev={goPrev}
+          onNext={goNext}
+          onToday={goToday}
+          entities={entities}
+          onToggleEntity={toggleEntity}
+          entityLabel={entityLabel}
+        />
+
+        <div className="carocrm-cal-body">
+          <div
+            className="carocrm-cal-grid"
+            onClickCapture={(event) => {
+              const target = event.target;
+              if (!(target instanceof Element) || target.closest('a')) return;
+              // rc-picker keeps its own visible month and follows every clicked cell, so an
+              // adjacent-month cell moved the grid even though `month` never changed.
+              const cell = target.closest('.ant-picker-cell');
+              if (cell && !cell.classList.contains('ant-picker-cell-in-view')) event.stopPropagation();
+            }}
+          >
+            <Spin spinning={loading}>
+              {view === 'week' ? (
+                <div className="carocrm-cal-week">
+                  {weekDays.map((date) => (
+                    <div key={date.format('YYYY-MM-DD')} className="carocrm-cal-week-col">
+                      <div className="carocrm-cal-week-head">
+                        <span className="carocrm-cal-week-dow">
+                          {new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date.toDate())}
+                        </span>
                       </div>
+                      {renderCell(date, { inMonth: true, minHeight: 360 })}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+              ) : (
+                <Calendar
+                  value={month}
+                  locale={locale.toLowerCase().startsWith('vi') ? calendarViVN : calendarEnUS}
+                  headerRender={() => null}
+                  onSelect={(date, info) => {
+                    if (info.source === 'date') setSelected(date);
+                  }}
+                  fullCellRender={(date, info) => {
+                    if (info.type !== 'date') return info.originNode;
+                    const inMonth = date.month() === month.month() && date.year() === month.year();
+                    return renderCell(date, { inMonth });
+                  }}
+                />
+              )}
+            </Spin>
+          </div>
+
+          <aside className="carocrm-cal-agenda" aria-label={t('web.calendar.agenda')}>
+            <div className="carocrm-cal-agenda-head">
+              <div>
+                <div className="carocrm-cal-agenda-title">{selectedTitle}</div>
+                <div className="carocrm-cal-agenda-count">
+                  {t('web.calendar.entries', { count: String(selectedEvents.length) })}
+                </div>
               </div>
             </div>
-          ) : (
-          <Calendar
-            value={month}
-            locale={locale.toLowerCase().startsWith('vi') ? calendarViVN : calendarEnUS}
-            headerRender={() => (
-              <div className="carocrm-cal-header">
-                <Space.Compact>
-                  <Button icon={<LeftOutlined />} aria-label={t('web.calendar.prevMonth')} onClick={() => setMonth((m) => m.subtract(1, 'month'))} />
-                  <Button icon={<RightOutlined />} aria-label={t('web.calendar.nextMonth')} onClick={() => setMonth((m) => m.add(1, 'month'))} />
-                </Space.Compact>
-                <Button onClick={() => { setMonth(dayjs().startOf('month')); setWeek(dayjs().startOf('week')); setSelected(dayjs()); }}>
-                  {t('web.calendar.today')}
-                </Button>
-                <Segmented
-                  value={view}
-                  onChange={(value) => setView(value as 'month' | 'week')}
-                  options={[
-                    { value: 'month', label: 'Month' },
-                    { value: 'week', label: 'Week' },
-                  ]}
-                />
-                <Typography.Text className="carocrm-cal-month">{monthTitle}</Typography.Text>
-                <Typography.Text type="secondary" className="carocrm-cal-total">
-                  {t('web.calendar.entries', { count: String(events.length) })}
-                </Typography.Text>
+            {selectedEvents.length === 0 ? (
+              <div className="carocrm-cal-agenda-empty">
+                <CalendarOutlined />
+                <span>{t('web.calendar.dayEmpty')}</span>
+              </div>
+            ) : (
+              <div className="carocrm-cal-agenda-list">
+                {selectedEvents.map((event) => (
+                  <Link
+                    key={`${event.activityType}-${event.activityId}-${event.start}`}
+                    to={`/${event.activityType}/${event.activityId}`}
+                    className={`carocrm-cal-agenda-item ${EVENT_CLASS[event.activityType] ?? ''}`}
+                  >
+                    <span className="carocrm-cal-agenda-time">
+                      {event.allDay ? t('web.calendar.allDay') : timeOf(event.start)}
+                    </span>
+                    <span className="carocrm-cal-agenda-main">
+                      <span className="carocrm-cal-agenda-name">
+                        {event.name ?? event.activityType}
+                        {event.recurring ? <span className="carocrm-cal-event-repeat">↻</span> : null}
+                      </span>
+                      <span className="carocrm-cal-agenda-type">{entityLabel(event.activityType)}</span>
+                    </span>
+                  </Link>
+                ))}
               </div>
             )}
-            onSelect={(date, info) => {
-              if (info.source === 'date') setSelected(date);
-            }}
-            fullCellRender={(date, info) => {
-              if (info.type !== 'date') return info.originNode;
-              const day = date.format('YYYY-MM-DD');
-              const dayEvents = byDay.get(day) ?? [];
-              const inMonth = date.month() === month.month() && date.year() === month.year();
-              const className = [
-                'carocrm-cal-cell',
-                inMonth ? '' : 'carocrm-cal-cell--out',
-                date.isSame(selected, 'day') ? 'carocrm-cal-cell--selected' : '',
-                date.isSame(dayjs(), 'day') ? 'carocrm-cal-cell--today' : '',
-              ]
-                .filter(Boolean)
-                .join(' ');
-              return (
-                <div
-                  className={className}
-                  data-drag-over={dropDay === day ? 'true' : undefined}
-                  onDragOver={(event) => {
-                    if (!dragging) return;
-                    event.preventDefault();
-                    if (dropDay !== day) setDropDay(day);
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const dropped = dragging;
-                    stopDrag();
-                    if (dropped) void reschedule(dropped, day);
-                  }}
-                >
-                  <span className="carocrm-cal-day">{String(date.date())}</span>
-                  <div className="carocrm-cal-events">
-                    {dayEvents.slice(0, CELL_EVENTS).map((event) => (
-                      <EventChip
-                        key={`${event.activityType}-${event.activityId}-${event.start}`}
-                        event={event}
-                        onDragStart={setDragging}
-                        onDragEnd={stopDrag}
-                      />
-                    ))}
-                    {dayEvents.length > CELL_EVENTS ? (
-                      <span className="carocrm-cal-more">{t('web.calendar.more', { count: String(dayEvents.length - CELL_EVENTS) })}</span>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            }}
-          />
-          )}
+          </aside>
         </div>
-        <div className="carocrm-cal-day-panel">
-          <Typography.Text className="carocrm-cal-day-panel-title">{selectedTitle}</Typography.Text>
-          {selectedEvents.length === 0 ? (
-            <Typography.Text type="secondary">{t('web.calendar.dayEmpty')}</Typography.Text>
-          ) : (
-            <div className="carocrm-cal-day-list">
-              {selectedEvents.map((event) => (
-                <EventChip
-                  key={`${event.activityType}-${event.activityId}-${event.start}`}
-                  event={event}
-                  onDragStart={setDragging}
-                  onDragEnd={stopDrag}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </Spin>
+      </div>
+
       <Modal
         open={createOpen}
         title={t('web.calendar.createTask')}
@@ -492,9 +511,7 @@ export function CalendarPage() {
       >
         <Form form={createForm} layout="vertical" onFinish={(values) => void handleCreateTask(values as Record<string, unknown>)}>
           <Form.Item name="activityType" label="Type">
-            <Select
-              options={['Task', 'Call', 'Meeting'].map((value) => ({ value, label: value }))}
-            />
+            <Select options={['Task', 'Call', 'Meeting'].map((value) => ({ value, label: value }))} />
           </Form.Item>
           <Form.Item name="name" label="Name" rules={[{ required: true, message: t('web.edit.required', { field: 'Name' }) }]}>
             <Input autoFocus maxLength={255} />
@@ -509,16 +526,12 @@ export function CalendarPage() {
           </Form.Item>
           {watchedType === 'Task' ? (
             <Form.Item name="priority" label="Priority">
-              <Select
-                options={['Low', 'Normal', 'High', 'Urgent'].map((value) => ({ value, label: value }))}
-              />
+              <Select options={['Low', 'Normal', 'High', 'Urgent'].map((value) => ({ value, label: value }))} />
             </Form.Item>
           ) : null}
           {watchedType === 'Call' ? (
             <Form.Item name="direction" label="Direction">
-              <Select
-                options={['Internal', 'Outbound', 'Inbound'].map((value) => ({ value, label: value }))}
-              />
+              <Select options={['Internal', 'Outbound', 'Inbound'].map((value) => ({ value, label: value }))} />
             </Form.Item>
           ) : null}
           <Form.Item name="dateStart" label="Date Start">
@@ -532,6 +545,6 @@ export function CalendarPage() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }
