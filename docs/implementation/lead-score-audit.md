@@ -217,18 +217,38 @@ at ACL and served by scoped commands).
 
 Only one SQL migration is anticipated, and it is index-only and additive (LS.2):
 
-```
-database/migrations/073_phase19_lead_score.sql
-  uq_lead_score_current_lead      UNIQUE ON entity_records ((attrs->>'scoreModelId')) WHERE entity_type='Lead' …   -- shape re-checked in LS.2
-  uq_lead_score_op_key            UNIQUE ON entity_records ((attrs->>'operationKey')) WHERE entity_type='LeadConversionOperation' AND deleted_at IS NULL
-  idx_lead_score_value            ON entity_records ((attrs->>'scoreValue')) WHERE entity_type='Lead' AND deleted_at IS NULL
-  idx_lead_score_eval_lead        ON entity_records ((attrs->>'leadId')) WHERE entity_type='LeadScoreEvaluation'
-```
+Delivered in 19-LS.2 as `database/migrations/073_phase19_lead_score.sql` — 15 partial indexes over
+`entity_records`, each scoped `WHERE entity_type = '…' AND deleted_at IS NULL`:
+
+| Group | Indexes |
+| --- | --- |
+| Lead projection reads | `idx_entity_records_lead_score_value` (`::numeric`), `_band`, `_status`, `_calculated`, `_model` |
+| Models | `idx_entity_records_lead_score_model_status`, `uq_entity_records_lead_score_model_version` on `(name, attrs->>'modelVersion')` |
+| Rules | `idx_entity_records_lead_score_rule_model`, `uq_entity_records_lead_score_rule_reason` on `(modelId, modelVersion, reasonCode)` |
+| Evaluations | `idx_…_evaluation_lead` `(leadId, calculatedAt)`, `idx_…_evaluation_model`, `uq_…_evaluation_key` `(idempotencyKey)` |
+| Conversion operations | `uq_entity_records_lead_conversion_operation_key` `(operationKey)`, `idx_…_operation_lead`, `idx_…_operation_status` `(status, requestedAt)` |
+
+Three facts the schema had to learn from the running system, corrected here so the audit matches the
+build (each is now an assertion in `apps/api/test/lead-score-schema.test.ts`):
+
+* **no unique index on the projection.** It lives on the Lead row, which is one row per Lead, so
+  "one current score per Lead and model" holds structurally (the single-active-model policy plan §5.3
+  allows). The earlier sketch of `uq_lead_score_current_lead` on `((attrs->>'scoreModelId'))` was wrong —
+  it would have refused a second Lead scored by the same model.
+* **`version` is not available as a metadata field name.** It is `entity_records`' concurrency column,
+  consumed by `EntityCrudService.update` (`entity.service.ts:229-231`), so a model's version number is
+  `modelVersion`, matching `LeadScoreRule.modelVersion` and `Lead.scoreModelVersion`.
+* **`name` is a physical column, not an attribute.** An identity index on `attrs ->> 'name'` would index
+  NULL for every row; the model index keys on the `name` column plus `attrs->>'modelVersion'`. Metadata
+  `indexes` are documentation only — nothing in the repository generates DDL from them.
+
+
 
 `032_phase19_customer_success.sql:17-25` is the exact precedent for partial unique indexes over
-`attrs`. **The precise predicates and column types are re-derived and reviewed in LS.2 before
-applying**, per `AGENTS.MD` §3.5. Nothing is dropped, renamed, truncated or backfilled — in
-particular no score is computed during migration (plan §15.1).
+`attrs`, and `037_phase19_marketing_automation.sql` for the `IS NOT NULL` form on an optional key. The
+file was reviewed and applied as written; nothing was dropped, renamed, truncated or backfilled, and no
+score was computed during the migration (plan §15.1) — the LS.2 suite asserts no row of any type carries
+a Lead Score attribute.
 
 ---
 
@@ -520,7 +540,7 @@ database only when it touches data.
 | Phase | Scope in this repository | Main files | Verification |
 | --- | --- | --- | --- |
 | LS.1 ✅ **delivered 2026-10-24** | `apps/api/src/lead-score/` module dir + barrel, `LEADSCORE_CONTROLLERS/PROVIDERS` spread before `app.module.ts:160/:212`, descriptor + `leadScore` settings row + 14 capability→ACL resources + 11-operation feature gate + health view. **Deviation from this plan row:** no nav entry and no `leadscore.json` catalog yet — the sidebar would point at an SPA route that only LS.7/LS.8 create, and the catalog's two real consumers at this phase are the module's error codes, which went into `i18n/*/errors.json` | `apps/api/src/lead-score/*`, `app.module.ts`, `i18n/{en,vi}/errors.json`, `docs/implementation/lead-score-ls1-completion-report.md` | 15 LS tests + 109 adjacent tests green, typecheck and lint clean, Lead CRUD proven unchanged |
-| LS.2 | 4 metadata entities + Lead score/conversion fields + layouts + indexes; `073_phase19_lead_score.sql`; write guard + internal marker | `database/seed-metadata.ts`, `database/migrations/073_*`, `apps/api/src/lead-score/*` | migration reviewed pre-apply; schema read-back; existing Leads untouched; direct user write to `scoreValue`/`converted*` rejected |
+| LS.2 ✅ **delivered 2026-10-24** | 4 metadata entities + 16 Lead score/conversion attributes + the `score`/`converted` detail panels + declarative indexes; `073_phase19_lead_score.sql` (15 partial indexes, 3 unique, all enforced by test); `lead-score-write-guard.service.ts` + `lead-score-internal.ts` marker; `lead-score-vocabulary.ts` | `database/seed-metadata.ts`, `database/migrations/073_*`, `apps/api/src/lead-score/*` | migration reviewed pre-apply; schema read-back; existing Leads untouched; direct user write to `scoreValue`/`converted*` rejected |
 | LS.3 | Model/rule CRUD, draft→published→archived, immutability, criteria validator (paths, types, depth, bounds, sensitive-field denylist) | `lead-score-model.service.ts`, `lead-score-rule-validator.ts`, `dto/lead-score-shapes.ts` | unit + API: invalid model cannot publish; published version immutable; role gates |
 | LS.4 | Evaluator: clamping, band resolution, rule results, coverage, deterministic hash/signature | `lead-score-evaluator.ts` (pure) | table-driven unit tests, reproducibility assertion |
 | LS.5 | Evaluation persistence + current projection update + `GET score`/`score/history` + staleness | `lead-score-calculation.service.ts`, `lead-score-explanation.service.ts`, controller | unit + API with `AGENT_TEST_` Lead, ACL/field-level checks, pagination |

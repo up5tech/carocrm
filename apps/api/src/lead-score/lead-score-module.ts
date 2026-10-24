@@ -30,12 +30,12 @@ import {
   LEADSCORE_EXPLAIN_PERMISSION_ENTITY,
   LEADSCORE_MODEL_PERMISSION_ENTITY,
   LEADSCORE_MODEL_PUBLISH_PERMISSION_ENTITY,
-  LEADSCORE_PLANNED_ENTITY_TYPES,
   LEADSCORE_RECALCULATE_PERMISSION_ENTITY,
   LEADSCORE_SETTINGS_PERMISSION_ENTITY,
   LEADSCORE_SETTINGS_ROW,
   LEADSCORE_VIEW_PERMISSION_ENTITY,
 } from './lead-score-domain.js';
+import { LEADSCORE_ENTITY_TYPES } from './lead-score-internal.js';
 
 export interface LeadScoreFeatureDescriptor {
   readonly key: string;
@@ -352,13 +352,13 @@ export const LEADSCORE_MODULE = {
   apiPrefix: '/api/v1/LeadScore',
   settingsRow: LEADSCORE_SETTINGS_ROW,
   /** Sub-phases delivered by this module. */
-  implementedPhases: ['19-LS.0', '19-LS.1'],
+  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2'],
   /**
-   * The entity set this module owns. Empty until 19-LS.2 registers them — reporting the plan separately
-   * (`plannedEntityTypes`) is what keeps the health view honest about what exists today.
+   * The entity set this module owns, registered in `database/seed-metadata.ts` and indexed by
+   * `database/migrations/073_phase19_lead_score.sql`. One list, shared with the write guard, so the
+   * descriptor cannot claim an entity the guard does not protect (19-LS.2).
    */
-  entityTypes: [] as readonly string[],
-  plannedEntityTypes: LEADSCORE_PLANNED_ENTITY_TYPES,
+  entityTypes: LEADSCORE_ENTITY_TYPES,
 } as const;
 
 export type LeadScoreModuleDescriptor = typeof LEADSCORE_MODULE;

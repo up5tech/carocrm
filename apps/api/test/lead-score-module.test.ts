@@ -143,7 +143,7 @@ describe('module registration and health (19-LS.1)', () => {
     const result = await call('GET', '/api/v1/LeadScore/action/health');
     expect(result.status).toBe(200);
     const body = result.body as unknown as {
-      module: { id: string; version: string; apiPrefix: string; entityTypes: string[]; plannedEntityTypes: string[]; implementedPhases: string[] };
+      module: { id: string; version: string; apiPrefix: string; entityTypes: string[]; implementedPhases: string[] };
       ok: boolean;
       ready: boolean;
       reason: string;
@@ -158,7 +158,7 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.module.id).toBe('LeadScore');
     expect(body.module.apiPrefix).toBe('/api/v1/LeadScore');
     expect(body.module.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1']);
+    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2']);
 
     // Every required capability is a fact the view verified against this database, not a claim.
     expect(body.dependencies.every((dependency) => dependency.present)).toBe(true);
@@ -166,9 +166,8 @@ describe('module registration and health (19-LS.1)', () => {
       expect.arrayContaining(['entity-engine', 'crm-core-records', 'acl', 'jobs', 'settings', 'audit-stream-outbox']),
     );
 
-    // LS.1 owns no entity: the four planned types are 19-LS.2's deliverable and are reported as such.
-    expect(body.module.entityTypes).toEqual([]);
-    expect(body.module.plannedEntityTypes).toEqual(['LeadScoreModel', 'LeadScoreRule', 'LeadScoreEvaluation', 'LeadConversionOperation']);
+    // 19-LS.2 registered the four records Lead Score owns.
+    expect(body.module.entityTypes).toEqual(['LeadScoreModel', 'LeadScoreRule', 'LeadScoreEvaluation', 'LeadConversionOperation']);
 
     // The whole control plane is switched off at boot: plan §15.2 stage 1.
     expect(body.settings.enabled).toBe(false);
@@ -181,7 +180,15 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.operations.every((operation) => operation.admitted === false)).toBe(true);
     expect(body.operations.every((operation) => operation.code === 'LEADSCORE_MODULE_DISABLED')).toBe(true);
 
-    for (const name of ['core-lead-lifecycle', 'lead-fields-untouched', 'entity-registration', 'platform-foundation']) {
+    for (const name of [
+      'core-lead-lifecycle',
+      'lead-score-fields',
+      'lead-core-fields',
+      'entity-registration',
+      'schema-indexes',
+      'write-guard',
+      'platform-foundation',
+    ]) {
       expect(body.checks.find((check) => check.name === name)?.ok).toBe(true);
     }
     // The registration invariant holds because the core Lead enum is untouched, `Converted` included.
@@ -245,7 +252,8 @@ describe('capability enforcement (19-LS.1)', () => {
     const readBack = await call('GET', `/api/v1/Lead/${leadId}`, undefined, user.token);
     expect(readBack.status).toBe(200);
     expect(readBack.body['status']).toBe('New');
-    expect(Object.prototype.hasOwnProperty.call(readBack.body, 'scoreValue')).toBe(false);
+    // Ordinary Lead work needs no Lead Score permission at all.
+    expect((await call('PATCH', `/api/v1/Lead/${leadId}`, { title: 'Analyst' }, user.token)).status).toBe(200);
     expect((await call('DELETE', `/api/v1/Lead/${leadId}`, undefined, user.token)).status).toBeLessThan(300);
   });
 
@@ -406,9 +414,10 @@ describe('disabling the module leaves the core CRM alone (19-LS.1)', () => {
 
     const lead = await call('GET', `/api/v1/Lead/${leadId}`);
     expect(lead.body['status']).toBe('Converted');
-    // No Lead Score field leaked into the core record while the module was registered and switched on.
-    for (const field of ['scoreValue', 'scoreBand', 'convertedAt', 'convertedAccountId', 'conversionOperationId']) {
-      expect(Object.prototype.hasOwnProperty.call(lead.body, field)).toBe(false);
+    // Turning the module on must not have scored or converted anything by itself: the projection is
+    // written by the engine (19-LS.4) and the references by the conversion command (19-LS.13).
+    for (const field of ['scoreValue', 'convertedAt', 'convertedAccountId', 'convertedContactId', 'conversionOperationId']) {
+      expect(lead.body[field] ?? null).toBeNull();
     }
 
     const related = await call('GET', `/api/v1/Account/${accountId}/contacts`);

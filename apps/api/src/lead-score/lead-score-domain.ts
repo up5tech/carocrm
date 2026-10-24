@@ -41,16 +41,11 @@ export const LEADCONVERSION_OVERRIDE_PERMISSION_ENTITY = 'LeadConversionOverride
 export const LEADCONVERSION_FIELD_MERGE_PERMISSION_ENTITY = 'LeadConversionFieldMerge';
 export const LEADCONVERSION_RECOVER_PERMISSION_ENTITY = 'LeadConversionRecover';
 
-/**
- * The metadata entities 19-LS.2 registers, declared here so the module health view can report the
- * difference between *planned* and *present* instead of asserting an entity exists.
+/*
+ * The metadata entities this module registered in 19-LS.2 are listed once, in
+ * `lead-score-internal.ts` (`LEADSCORE_ENTITY_TYPES`), so the write guard, the descriptor and the health
+ * view cannot drift apart on the question of which records Lead Score owns.
  */
-export const LEADSCORE_PLANNED_ENTITY_TYPES = [
-  'LeadScoreModel',
-  'LeadScoreRule',
-  'LeadScoreEvaluation',
-  'LeadConversionOperation',
-] as const;
 
 /** The CRM entities this module extends but never owns (plan §0.1-2, §2.3). */
 export const LEADSCORE_CORE_ENTITY_TYPES = ['Lead', 'Contact', 'Account', 'Opportunity'] as const;

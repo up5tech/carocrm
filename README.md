@@ -83,15 +83,20 @@ _Phase 19_ —
   recovery for a lost send answer, provider webhooks with HMAC verification and a durable inbox,
   template mappings, signed-document artifacts, reports and an operations panel (Phases 19-ES.0–19-ES.22).
 - **Lead Score** — explainable, versioned lead scoring over the existing `Lead` entity plus a
-  transactional, idempotent Lead→Contact/Account/Opportunity conversion. **Phases 19-LS.0–19-LS.1 are
-  delivered: the repository audit and the module registration** — the `LeadScore` descriptor, its 14
-  capability resources, the `leadScore` settings document, the feature gate in front of all 11 planned
-  operations and the health view at `/api/v1/LeadScore/action/health`. Nothing scores and nothing
-  converts yet: every operation refuses with the sub-phase that owes it (`LEADSCORE_PHASE_PENDING`) and
-  the module ships switched off. See
+  transactional, idempotent Lead→Contact/Account/Opportunity conversion. **Phases 19-LS.0–19-LS.2 are
+  delivered: the repository audit, the module registration and the schema/metadata foundation** — the
+  `LeadScore` descriptor with its 14 capability resources, the `leadScore` settings document, the gate in
+  front of all 11 planned operations, the health view at `/api/v1/LeadScore/action/health`, the four
+  records (`LeadScoreModel`, `LeadScoreRule`, `LeadScoreEvaluation`, `LeadConversionOperation`), the
+  current-score projection and `Converted To` attributes on the core `Lead` with their detail panels, and
+  the migration that indexes and constrains them. Nothing scores and nothing converts yet — the module
+  ships switched off and every operation refuses with the sub-phase that owes it
+  (`LEADSCORE_PHASE_PENDING`) — and a client, administrator included, cannot write a score or fake a
+  conversion through the record API. See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
-  [docs/implementation/lead-score-ls1-completion-report.md](docs/implementation/lead-score-ls1-completion-report.md)
+  [docs/implementation/lead-score-ls1-completion-report.md](docs/implementation/lead-score-ls1-completion-report.md),
+  [docs/implementation/lead-score-ls2-completion-report.md](docs/implementation/lead-score-ls2-completion-report.md)
   and [docs/compatibility/lead-score.md](docs/compatibility/lead-score.md).
 
 _Phase 20_ — settings, administration and end-user UX: a settings-document registry with optimistic

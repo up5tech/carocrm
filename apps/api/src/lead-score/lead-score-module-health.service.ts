@@ -8,9 +8,10 @@ import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import {
   LEAD_CONVERTED_STATUS,
   LEAD_DEAD_STATUS,
-  LEADSCORE_PLANNED_ENTITY_TYPES,
+  LEADSCORE_CORE_ENTITY_TYPES,
 } from './lead-score-domain.js';
 import { LeadScoreFeatureGate, type LeadScoreOperationAssessment } from './lead-score-feature-gate.service.js';
+import { LEADSCORE_ENTITY_TYPES, SERVER_OWNED_LEAD_FIELDS } from './lead-score-internal.js';
 import {
   LEADSCORE_FEATURES,
   LEADSCORE_MODULE,
@@ -100,13 +101,39 @@ export interface LeadScoreHealthView {
 }
 
 /**
- * The Lead attributes 19-LS.2 adds. Their absence *now* is the LS.1 guarantee that registering this
- * module did not quietly extend the core entity; the LS.2 commit replaces the expectation with the
- * fields it registers, so a phase landing out of order fails a check instead of passing silently.
+ * The Lead attributes this module owns, and the DDL 19-LS.2 added. Both are asserted against the running
+ * system rather than reported from the plan: the fields come from the metadata registry, the indexes come
+ * from `pg_indexes`. If a seed or a migration is missing on an installation, the health view says which.
  */
-const LEADSCORE_FUTURE_LEAD_FIELDS = ['scoreValue', 'scoreBand', 'convertedAt', 'convertedAccountId', 'convertedContactId'];
+const LEADSCORE_OWNED_LEAD_FIELDS = SERVER_OWNED_LEAD_FIELDS;
 
-type FieldMap = Record<string, { values?: readonly unknown[]; enum?: readonly unknown[] }>;
+/** Every index `database/migrations/073_phase19_lead_score.sql` creates. */
+const LEADSCORE_SCHEMA_INDEXES = [
+  'idx_entity_records_lead_score_value',
+  'idx_entity_records_lead_score_band',
+  'idx_entity_records_lead_score_status',
+  'idx_entity_records_lead_score_calculated',
+  'idx_entity_records_lead_score_model',
+  'idx_entity_records_lead_score_model_status',
+  'uq_entity_records_lead_score_model_version',
+  'idx_entity_records_lead_score_rule_model',
+  'uq_entity_records_lead_score_rule_reason',
+  'idx_entity_records_lead_score_evaluation_lead',
+  'idx_entity_records_lead_score_evaluation_model',
+  'uq_entity_records_lead_score_evaluation_key',
+  'uq_entity_records_lead_conversion_operation_key',
+  'idx_entity_records_lead_conversion_operation_lead',
+  'idx_entity_records_lead_conversion_operation_status',
+] as const;
+
+/** The hook names the write guard registers; their presence is what makes the guard verifiable. */
+const LEADSCORE_GUARD_HOOKS = [
+  'leadScore.leadFieldGuard',
+  'leadScore.LeadScoreEvaluationGuard',
+  'leadScore.LeadConversionOperationGuard',
+] as const;
+
+type FieldMap = Record<string, { values?: readonly unknown[]; enum?: readonly unknown[]; inEdit?: boolean; type?: string }>;
 
 @Injectable()
 export class LeadScoreModuleHealthService {
@@ -121,6 +148,8 @@ export class LeadScoreModuleHealthService {
 
   async health(): Promise<LeadScoreHealthView> {
     const schema = await this.readSchemaFacts();
+    const indexes = await this.readIndexNames();
+    const hookNames = new Set(this.hooks.list().map((hook) => hook.name));
     const settingsView = await this.settings.read();
     const entities = new Set(this.metadata.registry.getEntities());
     const phases = new Set<string>(this.hooks.phases());
@@ -149,8 +178,11 @@ export class LeadScoreModuleHealthService {
     const features = featureList(settingsView);
     const checks: HealthCheck[] = [
       coreLeadLifecycleIntact(entities, leadFields),
-      leadFieldsUntouched(leadFields),
+      ownedLeadFieldsRegistered(entities, leadFields),
+      coreLeadFieldsStillEditable(leadFields),
       entityRegistration(entities),
+      schemaStructures(indexes),
+      writeGuardRegistered(hookNames),
       platformFoundation(dependencies),
     ];
     const ok = dependencies.every((dependency) => dependency.present) && checks.every((check) => check.ok);
@@ -179,6 +211,15 @@ export class LeadScoreModuleHealthService {
       },
       checks,
     };
+  }
+
+  /** The indexes 19-LS.2 created, read back from `pg_indexes`. */
+  private async readIndexNames(): Promise<Set<string>> {
+    const rows = await sql<{ indexname: string }>`
+      select indexname from pg_indexes
+      where schemaname = current_schema() and indexname in (${sql.join([...LEADSCORE_SCHEMA_INDEXES])})
+    `.execute(this.database.db);
+    return new Set(rows.rows.map((row) => row.indexname));
   }
 
   /** The tables and columns this module builds on, read from `information_schema` rather than asserted. */
@@ -268,30 +309,76 @@ function coreLeadLifecycleIntact(entities: Set<string>, leadFields: FieldMap): H
   };
 }
 
-function leadFieldsUntouched(leadFields: FieldMap): HealthCheck {
-  const present = LEADSCORE_FUTURE_LEAD_FIELDS.filter((field) => Object.prototype.hasOwnProperty.call(leadFields, field));
+/**
+ * The projection and the conversion references must exist on `Lead` *and* must not be editable through
+ * the record API. `inEdit` keeps them out of every generated form; the write guard is what refuses a
+ * direct API call, and the next check verifies that guard is actually registered.
+ */
+function ownedLeadFieldsRegistered(entities: Set<string>, leadFields: FieldMap): HealthCheck {
+  const missing = LEADSCORE_OWNED_LEAD_FIELDS.filter((field) => !Object.prototype.hasOwnProperty.call(leadFields, field));
+  const editable = LEADSCORE_OWNED_LEAD_FIELDS.filter((field) => leadFields[field]?.inEdit === true);
   return {
-    name: 'lead-fields-untouched',
-    ok: present.length === 0,
+    name: 'lead-score-fields',
+    ok: entities.has('Lead') && missing.length === 0 && editable.length === 0,
     detail:
-      present.length === 0
-        ? 'Lead carries no Lead Score attribute yet; Lead, Contact, Account and Opportunity stay core-owned'
-        : `19-LS.2 attributes are already on Lead: ${present.join(', ')}`,
+      missing.length > 0
+        ? `missing on Lead: ${missing.join(', ')}`
+        : editable.length > 0
+          ? `server-owned fields are marked editable: ${editable.join(', ')}`
+          : `${LEADSCORE_OWNED_LEAD_FIELDS.length} Lead Score attributes registered on Lead, none editable through the record API`,
   };
 }
 
+/** Registering the module must not have taken a core Lead field away or made it un-writable. */
+function coreLeadFieldsStillEditable(leadFields: FieldMap): HealthCheck {
+  const expectedEditable = ['name', 'firstName', 'lastName', 'title', 'emailAddress', 'phoneNumber', 'company', 'industry', 'source', 'status', 'description'];
+  const lost = expectedEditable.filter((field) => leadFields[field]?.inEdit !== true);
+  return {
+    name: 'lead-core-fields',
+    ok: lost.length === 0,
+    detail: lost.length === 0 ? `${expectedEditable.length} ordinary Lead fields still editable` : `no longer editable: ${lost.join(', ')}`,
+  };
+}
+
+/**
+ * The four records Lead Score owns must be registered metadata entities, and nothing else may be
+ * claimed as owned. This is the check 19-LS.1 pinned to the empty set; it now asserts the registration,
+ * so a seed that did not run reports a failure instead of an unchecked promise.
+ */
 function entityRegistration(entities: Set<string>): HealthCheck {
   const owned = new Set<string>(LEADSCORE_MODULE.entityTypes);
-  const registered = LEADSCORE_PLANNED_ENTITY_TYPES.filter((entity) => entities.has(entity));
+  const registered = LEADSCORE_ENTITY_TYPES.filter((entity) => entities.has(entity));
   const unexpected = registered.filter((entity) => !owned.has(entity));
   const missing = [...owned].filter((entity) => !entities.has(entity));
   return {
     name: 'entity-registration',
-    ok: unexpected.length === 0 && missing.length === 0,
+    ok: unexpected.length === 0 && missing.length === 0 && registered.length === owned.size,
     detail:
-      owned.size === 0
-        ? `LeadScore owns no metadata entity yet; planned for 19-LS.2: ${LEADSCORE_PLANNED_ENTITY_TYPES.join(', ')}`
-        : `owned: ${[...owned].join(', ')}; registered: ${registered.join(', ') || '(none)'}`,
+      missing.length > 0
+        ? `not registered in the metadata store: ${missing.join(', ')}`
+        : `${[...owned].join(', ')} registered, extending ${LEADSCORE_CORE_ENTITY_TYPES.join('/')} without owning them`,
+  };
+}
+
+/** The DDL behind the entities, read back rather than assumed. */
+function schemaStructures(indexes: Set<string>): HealthCheck {
+  const missing = LEADSCORE_SCHEMA_INDEXES.filter((name) => !indexes.has(name));
+  return {
+    name: 'schema-indexes',
+    ok: missing.length === 0,
+    detail:
+      missing.length === 0
+        ? `${LEADSCORE_SCHEMA_INDEXES.length} indexes from 073_phase19_lead_score.sql present, including the operation-key and reason-code uniques`
+        : `missing: ${missing.join(', ')}`,
+  };
+}
+
+function writeGuardRegistered(hookNames: Set<string>): HealthCheck {
+  const missing = LEADSCORE_GUARD_HOOKS.filter((name) => !hookNames.has(name));
+  return {
+    name: 'write-guard',
+    ok: missing.length === 0,
+    detail: missing.length === 0 ? `${missing.length + LEADSCORE_GUARD_HOOKS.length} beforeValidate guards registered` : `not registered: ${missing.join(', ')}`,
   };
 }
 

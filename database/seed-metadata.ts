@@ -163,6 +163,25 @@ const MA_JOURNEY_ENROLLMENT_STATES = ['Active', 'Waiting', 'Suspended', 'Exited'
 const MA_JOURNEY_STEP_STATUSES = ['Running', 'Completed', 'Failed', 'Skipped', 'Waiting'];
 // The recipient ledger (migration 041) is a table rather than an entity, so its state vocabulary lives only
 // in `marketing-automation-domain.ts` (`RECIPIENT_DELIVERY_STATUSES`) — there is no metadata enum to drift.
+// Phase 19-LS — Lead Score vocabulary (PLAN_Phase_19_LeadScore.md §3, §5; audit §4).
+//
+// These are the metadata side of the same vocabularies the module reads in
+// `apps/api/src/lead-score/lead-score-domain.ts`. They are enums rather than free text because a band,
+// an evaluation state or a conversion status is a decision point in the UI, in a filter and in an
+// export; a typo there must be a validation error, not a value nothing recognizes. `Disqualified` is a
+// band a rule or the existing `Dead` Lead status can produce — never the result of a low score (§3.3).
+const LS_BANDS = ['Unknown', 'Cold', 'Warm', 'Hot', 'Sales Ready', 'Disqualified'];
+const LS_EVALUATION_STATUSES = ['current', 'stale', 'pending', 'failed', 'not_scored'];
+const LS_MODEL_STATUSES = ['draft', 'published', 'archived'];
+const LS_DIMENSIONS = ['fit', 'intent', 'engagement', 'completeness', 'recency', 'negative'];
+const LS_RULE_EFFECTS = ['add', 'subtract', 'setBand'];
+const LS_MISSING_DATA_POLICIES = ['ignore', 'neutral'];
+const LS_SIGNAL_SOURCES = ['lead', 'marketingEvents', 'emailLinks'];
+const LS_TRIGGERS = ['lead_change', 'engagement_event', 'manual_recalculate', 'model_publish', 'batch_rebuild', 'decay_sweep'];
+const LS_RESULT_STATES = ['success', 'partial', 'failed'];
+const LS_DECAY_POLICIES = ['none', 'linear', 'halfLife'];
+const CONVERSION_STATUSES = ['previewed', 'processing', 'succeeded', 'failed_retryable', 'failed_final', 'needs_review'];
+const CONVERSION_TARGETS = ['Contact', 'Account', 'Opportunity'];
 
 export const coreMetadata: MetadataSeedEntry[] = [
   {
@@ -255,9 +274,99 @@ export const coreMetadata: MetadataSeedEntry[] = [
           inDetail: true,
           inEdit: true,
         },
+        // --- Phase 19-LS.2: the current-score projection (PLAN_Phase_19_LeadScore.md §5.3) ---
+        //
+        // These are `attrs` JSONB keys, not columns: the physical/attribute split is
+        // `PHYSICAL_KEYS` in apps/api/src/entity/entity-record.store.ts and none of these belong to it,
+        // so no core table changed to add them. The projection describes the **active** published model
+        // only; every older result stays in the immutable `LeadScoreEvaluation` history (§5.4).
+        //
+        // Nothing here is `inEdit`, and `lead-score-write-guard.service.ts` refuses a client write that
+        // sets one — a score is computed by the engine, and `Converted` must be the outcome of the
+        // conversion command rather than a field someone typed (plan §0.1-8).
+        //
+        // They are deliberately not `audited` either: a batch rebuild would write the audited value of
+        // every Lead into `audit_log`. The evaluation rows are the score's audit trail, with model
+        // version, inputs and reason codes attached; the conversion fields below *are* audited because
+        // they mark a one-off business event.
+        //
+        // `inList` stays false at this phase: an empty Score column is noise, and 19-LS.7 turns the
+        // projection into list columns and filters when it builds the UI that explains them.
+        scoreValue: { type: 'int', sortable: true, inDetail: true },
+        scoreBand: { type: 'enum', values: LS_BANDS, defaultValue: 'Unknown', sortable: true, inDetail: true },
+        scoreStatus: { type: 'enum', values: LS_EVALUATION_STATUSES, defaultValue: 'not_scored', inDetail: true },
+        scoreModelId: { type: 'link', entityKey: 'LeadScoreModel', inDetail: true },
+        scoreModelVersion: { type: 'int', inDetail: true },
+        scoreCalculatedAt: { type: 'datetime', sortable: true, inDetail: true },
+        scoreInputsAsOf: { type: 'datetime', inDetail: true },
+        // The previous stored score, so the panel can show movement without paging the history (§11.1).
+        scorePreviousValue: { type: 'int', inDetail: true },
+        // Known-signal share of the model's weight, 0-1: a 70 out of 100 built on 20% coverage must not
+        // read like a 70 built on everything (§3.1 `coverage`).
+        scoreCoverage: { type: 'float', inDetail: true },
+        // Stable reason codes as a JSON array. A code is translated by the i18n catalog and never shows
+        // raw, and it carries no field value, so a score reason cannot leak a Lead attribute the reader
+        // may not see (§6.5).
+        scoreReasonCodes: { type: 'text' },
+
+        // --- Phase 19-LS.2: the conversion result (plan §5.6) ---
+        //
+        // Explicit link fields, following `Contact.accountId` and `Opportunity.accountId`: a converted
+        // Lead names the records it produced, and the Lead row itself stays — status `Converted` plus
+        // these references, never a deleted or rewritten Lead (§0.1-8, §7.6).
+        convertedAt: { type: 'datetime', sortable: true, inDetail: true, audited: true },
+        convertedById: { type: 'link', entityKey: 'User', inDetail: true, audited: true },
+        convertedAccountId: { type: 'link', entityKey: 'Account', inDetail: true, audited: true },
+        convertedContactId: { type: 'link', entityKey: 'Contact', inDetail: true, audited: true },
+        convertedOpportunityId: { type: 'link', entityKey: 'Opportunity', inDetail: true, audited: true },
+        conversionOperationId: { type: 'link', entityKey: 'LeadConversionOperation', inDetail: true, audited: true },
       },
       relations: {},
-      indexes: [],
+      // Declarative only — `indexes` is documentation the admin UI reads (audit §4: nothing generates
+      // DDL from metadata). The PostgreSQL indexes behind them are
+      // `database/migrations/073_phase19_lead_score.sql`.
+      indexes: [
+        { name: 'idx_lead_score_value', fields: ['scoreValue'] },
+        { name: 'idx_lead_score_band', fields: ['scoreBand'] },
+        { name: 'idx_lead_score_status', fields: ['scoreStatus'] },
+        { name: 'idx_lead_score_calculated', fields: ['scoreCalculatedAt'] },
+        { name: 'idx_lead_score_model', fields: ['scoreModelId'] },
+      ],
+      // Added at LS.2, so the Lead detail view gains the two panels the projection and the conversion
+      // command fill — and the fields that were already there stay where they were: `main` lists them in
+      // the order the flat view showed, and any field a panel omits is still rendered (an "Other" card),
+      // never dropped. The list and edit views are deliberately left undeclared, so they keep the
+      // metadata-driven defaults until 19-LS.7 and 19-LS.14 give them their own layouts.
+      layouts: {
+        detail: [
+          {
+            entity: 'Lead',
+            type: 'detail',
+            panels: [
+              {
+                name: 'main',
+                label: 'Lead',
+                position: 0,
+                // `name` is first because the flat view showed it: it is `inDetail`, and a layout that
+                // omitted it would move it into the trailing "Other" card. `displayField` stays `lastName`.
+                fields: ['name', 'lastName', 'firstName', 'title', 'status', 'source', 'company', 'industry', 'emailAddress', 'phoneNumber', 'description', 'assignedUserId', 'createdAt', 'modifiedAt'],
+              },
+              {
+                name: 'score',
+                label: 'Score',
+                position: 10,
+                fields: ['scoreValue', 'scoreBand', 'scoreStatus', 'scoreModelId', 'scoreModelVersion', 'scoreCoverage', 'scoreCalculatedAt', 'scoreInputsAsOf', 'scorePreviousValue'],
+              },
+              {
+                name: 'converted',
+                label: 'Converted To',
+                position: 20,
+                fields: ['convertedAccountId', 'convertedContactId', 'convertedOpportunityId', 'convertedAt', 'convertedById', 'conversionOperationId'],
+              },
+            ],
+          },
+        ],
+      },
       record: { displayField: 'lastName', removable: true },
       client: {},
     },
@@ -926,6 +1035,17 @@ export const coreMetadata: MetadataSeedEntry[] = [
   // (PLAN_Phase_19_Marketing_Automation.md §6.1; audit §3 for the ownership decisions).
   // -------------------------------------------------------------------------
   ...marketingAutomationEntities(),
+
+  // -------------------------------------------------------------------------
+  // Phase 19-LS — Lead Score (`LeadScore`): score models, rules, evaluation history and the
+  // lead conversion operation (PLAN_Phase_19_LeadScore.md §5; audit §4, §5, §6).
+  //
+  // All four are ordinary metadata entities in `entity_records`, so the Entity Engine keeps validation,
+  // field ACL, audit, stream, attachments, hooks and search, and the module adds the evaluator and the
+  // conversion command rather than a second record layer (AGENTS.md §5.2). The only DDL is the additive
+  // index/constraint file `database/migrations/073_phase19_lead_score.sql`.
+  // -------------------------------------------------------------------------
+  ...leadScoreEntities(),
 ];
 
 /**
@@ -4737,6 +4857,306 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
         record: { displayField: 'name', removable: false, followable: false, streamable: false },
         client: { web: false },
         acl: { permissions: { MarketingJourneyStepExecution: { create: 'no', read: 'own', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 19-LS — Lead Score (PLAN_Phase_19_LeadScore.md §5; audit §4–§6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fields shared by the Lead Score entities. Declared as a hoisted function, not a `const`:
+ * `coreMetadata` above is evaluated at module load and calls `leadScoreEntities()`.
+ */
+function leadScoreFields(extra: Record<string, Record<string, unknown>> = {}): Record<string, Record<string, unknown>> {
+  return {
+    ...standardFields,
+    name: { ...standardFields['name'], required: true, audited: true },
+    ...extra,
+  };
+}
+
+/**
+ * The four records `LeadScore` owns.
+ *
+ * All of them are ordinary metadata entities in `entity_records`, so the Entity Engine keeps CRUD,
+ * validation, field-level ACL, audit, stream, attachments, hooks and search, and the module supplies
+ * the evaluator and the conversion command instead of a second record layer (AGENTS.md §5.2). The only
+ * DDL behind them is `database/migrations/073_phase19_lead_score.sql`.
+ *
+ * The structured configuration columns — a model's bands, dimension weights and allowed field paths, a
+ * rule's condition, an evaluation's per-rule results — are `text` holding JSON, because the platform has
+ * no object field type and `CustomerSuccessHealthSnapshot.components` uses the same shape for the same
+ * reason. None of it is ever executable and none of it reaches SQL: 19-LS.3's validator is what rejects a
+ * rule whose path is not metadata, whose operator is unsupported, or whose condition is a formula string
+ * (plan §5.2, §6.2).
+ */
+function leadScoreEntities(): MetadataSeedEntry[] {
+  return [
+    {
+      scope: 'entity',
+      name: 'LeadScoreModel',
+      data: {
+        name: 'LeadScoreModel',
+        label: 'Lead Score Model',
+        isEntity: true,
+        fields: leadScoreFields({
+          status: { type: 'enum', values: LS_MODEL_STATUSES, defaultValue: 'draft', inList: true, inDetail: true, inEdit: true, audited: true, sortable: true },
+          // The immutable published version (plan §5.1). A stored evaluation names this number, so every
+          // score says which rules produced it — even after the model is edited again.
+          //
+          // Named `modelVersion`, not `version`: `version` is `entity_records`' optimistic-concurrency
+          // column and an input key `EntityCrudService` consumes for the expected revision
+          // (`entity-record.store.ts:116-136`, `entity.service.ts:229-231`), so a metadata field with that
+          // name could never hold a model version. `LeadScoreRule.modelVersion` and
+          // `Lead.scoreModelVersion` already read this way; one spelling across the module is the point.
+          modelVersion: { type: 'int', defaultValue: 1, required: true, inList: true, inDetail: true, sortable: true },
+          scaleMin: { type: 'int', defaultValue: 0, inDetail: true, inEdit: true },
+          scaleMax: { type: 'int', defaultValue: 100, inDetail: true, inEdit: true },
+          baseScore: { type: 'int', defaultValue: 0, inDetail: true, inEdit: true },
+          scoreFloor: { type: 'int', defaultValue: 0, inDetail: true, inEdit: true },
+          scoreCeiling: { type: 'int', defaultValue: 100, inDetail: true, inEdit: true },
+          // Validated, non-overlapping thresholds. A band is a decision point, so it stays a list rather
+          // than free text (plan §3.3).
+          qualificationBands: { type: 'text', inDetail: true, inEdit: true },
+          dimensionWeights: { type: 'text', inDetail: true, inEdit: true },
+          // The explicit allowlist of Lead field paths this model may read — the boundary that keeps a
+          // scheduled evaluation from reaching a field it was never granted (plan §5.1, §9.2).
+          allowedFieldPaths: { type: 'text', inDetail: true, inEdit: true },
+          // And the explicit denylist, refused at save time, so a protected characteristic cannot become
+          // a scoring factor even by accident (plan §0.1-6, §9.3).
+          blockedFieldPaths: { type: 'text', inDetail: true, inEdit: true },
+          settingsJson: { type: 'text', inDetail: true, inEdit: true },
+          effectiveFrom: { type: 'datetime', inDetail: true, inEdit: true, sortable: true },
+          effectiveTo: { type: 'datetime', inDetail: true, inEdit: true, sortable: true },
+          publishedById: { type: 'link', entityKey: 'User', inDetail: true },
+          publishedAt: { type: 'datetime', inDetail: true, sortable: true },
+          archivedById: { type: 'link', entityKey: 'User', inDetail: true },
+          archivedAt: { type: 'datetime', inDetail: true },
+        }),
+        relations: {
+          // Resolved through `modelId` on the rule, exactly as `Opportunity.quotes` resolves through
+          // `opportunityId` on `Quote`.
+          rules: { type: 'oneToMany', target: 'LeadScoreRule', mappedBy: 'model' },
+        },
+        indexes: [{ name: 'idx_lead_score_model_status', fields: ['status'] }],
+        layouts: {
+          list: [{ entity: 'LeadScoreModel', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'status', 'modelVersion', 'scaleMax', 'effectiveFrom', 'publishedAt', 'modifiedAt'] }] }],
+          detail: [
+            {
+              entity: 'LeadScoreModel',
+              type: 'detail',
+              panels: [
+                { name: 'main', label: 'Model', position: 0, fields: ['name', 'status', 'modelVersion', 'description'] },
+                { name: 'scale', label: 'Scale', position: 10, fields: ['scaleMin', 'scaleMax', 'baseScore', 'scoreFloor', 'scoreCeiling'] },
+                { name: 'policy', label: 'Signals and bands', position: 20, fields: ['qualificationBands', 'dimensionWeights', 'allowedFieldPaths', 'blockedFieldPaths', 'settingsJson'] },
+                { name: 'timing', label: 'Validity', position: 30, fields: ['effectiveFrom', 'effectiveTo'] },
+                { name: 'publication', label: 'Publication', position: 40, fields: ['publishedById', 'publishedAt', 'archivedById', 'archivedAt', 'createdById', 'createdAt', 'modifiedById', 'modifiedAt'] },
+                { name: 'rules', label: 'Rules', position: 50, fields: [] },
+              ],
+            },
+          ],
+          edit: [{ entity: 'LeadScoreModel', type: 'edit', panels: [{ name: 'main', position: 0, fields: ['name', 'description', 'status', 'modelVersion', 'scaleMin', 'scaleMax', 'baseScore', 'scoreFloor', 'scoreCeiling', 'qualificationBands', 'dimensionWeights', 'allowedFieldPaths', 'blockedFieldPaths', 'settingsJson', 'effectiveFrom', 'effectiveTo'] }] }],
+        },
+        record: { displayField: 'name', removable: false, streamable: false },
+        client: {},
+        // Administration, not daily work. No role holds these rights yet, so an installation that has not
+        // configured a model sees nothing new: the default is refusal and 19-LS.3 grants deliberately.
+        acl: { permissions: { LeadScoreModel: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'LeadScoreRule',
+      data: {
+        name: 'LeadScoreRule',
+        label: 'Lead Score Rule',
+        isEntity: true,
+        fields: leadScoreFields({
+          modelId: { type: 'link', entityKey: 'LeadScoreModel', required: true, inList: true, inDetail: true, inEdit: true },
+          modelVersion: { type: 'int', required: true, inList: true, inDetail: true, sortable: true },
+          // Stable, localizable, and the identifier a stored evaluation refers back to (plan §3.1, §6.5).
+          // Unique per model version by migration 073, so two rules can never claim one reason.
+          reasonCode: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true, inEdit: true },
+          dimension: { type: 'enum', values: LS_DIMENSIONS, defaultValue: 'fit', inList: true, inDetail: true, inEdit: true },
+          enabled: { type: 'bool', defaultValue: true, inList: true, inDetail: true, inEdit: true },
+          // A declarative `{field, operator, value}` tree in JSON. The operator vocabulary is the bounded
+          // set the platform already ships; nothing here is code and nothing names a table (plan §6.2).
+          condition: { type: 'text', required: true, inDetail: true, inEdit: true },
+          points: { type: 'int', defaultValue: 0, inList: true, inDetail: true, inEdit: true },
+          effect: { type: 'enum', values: LS_RULE_EFFECTS, defaultValue: 'add', inList: true, inDetail: true, inEdit: true },
+          // Only meaningful with `setBand`. A band may come from an explicit lifecycle rule, which is how
+          // `Disqualified` stays a decision rather than a low number (plan §3.3).
+          targetBand: { type: 'enum', values: LS_BANDS, inDetail: true, inEdit: true },
+          priority: { type: 'int', defaultValue: 100, inList: true, inDetail: true, inEdit: true, sortable: true },
+          // `neutral` is the default so an absent signal is not silently read as a negative one
+          // (plan §1.2, §6.3).
+          missingDataPolicy: { type: 'enum', values: LS_MISSING_DATA_POLICIES, defaultValue: 'neutral', inDetail: true, inEdit: true },
+          signalSource: { type: 'enum', values: LS_SIGNAL_SOURCES, defaultValue: 'lead', inList: true, inDetail: true, inEdit: true },
+          eventType: { type: 'varchar', maxLength: 64, inDetail: true, inEdit: true },
+          // A bounded lookback in days: an engagement window is never an unbounded scan (§6.4, §9.4).
+          lookbackDays: { type: 'int', inDetail: true, inEdit: true },
+          decayPolicy: { type: 'enum', values: LS_DECAY_POLICIES, defaultValue: 'none', inDetail: true, inEdit: true },
+          decayHalfLifeDays: { type: 'int', inDetail: true, inEdit: true },
+        }),
+        relations: {},
+        indexes: [
+          { name: 'idx_lead_score_rule_model', fields: ['modelId'] },
+          { name: 'uq_lead_score_rule_reason', fields: ['modelId', 'modelVersion', 'reasonCode'] },
+        ],
+        layouts: {
+          list: [{ entity: 'LeadScoreRule', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'modelId', 'modelVersion', 'enabled', 'priority', 'dimension', 'effect', 'points', 'reasonCode'] }] }],
+          detail: [
+            {
+              entity: 'LeadScoreRule',
+              type: 'detail',
+              panels: [
+                { name: 'main', label: 'Rule', position: 0, fields: ['name', 'description', 'modelId', 'modelVersion', 'enabled', 'priority', 'dimension', 'reasonCode'] },
+                { name: 'effect', label: 'Effect', position: 10, fields: ['condition', 'effect', 'points', 'targetBand', 'missingDataPolicy'] },
+                { name: 'signal', label: 'Signal window', position: 20, fields: ['signalSource', 'eventType', 'lookbackDays', 'decayPolicy', 'decayHalfLifeDays'] },
+              ],
+            },
+          ],
+          edit: [{ entity: 'LeadScoreRule', type: 'edit', panels: [{ name: 'main', position: 0, fields: ['name', 'description', 'modelId', 'modelVersion', 'enabled', 'priority', 'dimension', 'reasonCode', 'condition', 'effect', 'points', 'targetBand', 'missingDataPolicy', 'signalSource', 'eventType', 'lookbackDays', 'decayPolicy', 'decayHalfLifeDays'] }] }],
+        },
+        record: { displayField: 'name', removable: true, streamable: false },
+        client: {},
+        acl: { permissions: { LeadScoreRule: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'LeadScoreEvaluation',
+      data: {
+        name: 'LeadScoreEvaluation',
+        label: 'Lead Score Evaluation',
+        isEntity: true,
+        fields: leadScoreFields({
+          leadId: { type: 'link', entityKey: 'Lead', required: true, inList: true, inDetail: true, sortable: true },
+          modelId: { type: 'link', entityKey: 'LeadScoreModel', required: true, inList: true, inDetail: true },
+          modelVersion: { type: 'int', required: true, inList: true, inDetail: true, sortable: true },
+          scoreValue: { type: 'int', inList: true, inDetail: true, sortable: true },
+          qualificationBand: { type: 'enum', values: LS_BANDS, defaultValue: 'Unknown', inList: true, inDetail: true },
+          evaluationStatus: { type: 'enum', values: LS_EVALUATION_STATUSES, defaultValue: 'current', inList: true, inDetail: true },
+          calculatedAt: { type: 'datetime', required: true, inList: true, inDetail: true, sortable: true },
+          inputsAsOf: { type: 'datetime', inDetail: true },
+          // The Lead's stored `version` this evaluation describes: which data revision the score is about
+          // (plan §3.1 `inputAsOf`, §5.3 `sourceRevision`).
+          sourceRevision: { type: 'int', inDetail: true },
+          trigger: { type: 'enum', values: LS_TRIGGERS, defaultValue: 'lead_change', inList: true, inDetail: true },
+          resultState: { type: 'enum', values: LS_RESULT_STATES, defaultValue: 'success', inList: true, inDetail: true },
+          coverage: { type: 'float', inDetail: true },
+          // Per-rule matched / not matched / unknown / skipped / expired / error with the points each
+          // carried, so a score can be explained and re-derived after the fact (§5.4). `errorSummary`
+          // holds a safe code, never a raw payload or query text (AGENTS.md §5.3).
+          ruleResults: { type: 'text', inDetail: true },
+          positiveReasonCodes: { type: 'text', inDetail: true },
+          negativeReasonCodes: { type: 'text', inDetail: true },
+          skippedReasonCodes: { type: 'text', inDetail: true },
+          errorSummary: { type: 'text', inDetail: true },
+          // SHA-256 over the canonical evaluation input and result: the reproducibility check plan §1.2
+          // asks for, and how a rebuild can prove it changed nothing.
+          signature: { type: 'text', inDetail: true },
+          correlationId: { type: 'varchar', maxLength: 64, inDetail: true },
+          jobId: { type: 'varchar', maxLength: 64, inDetail: true },
+          idempotencyKey: { type: 'varchar', maxLength: 128, inDetail: true },
+          durationMs: { type: 'int', inDetail: true },
+        }),
+        relations: {},
+        indexes: [
+          { name: 'idx_lead_score_evaluation_lead', fields: ['leadId', 'calculatedAt'] },
+          { name: 'idx_lead_score_evaluation_model', fields: ['modelId', 'calculatedAt'] },
+          { name: 'uq_lead_score_evaluation_key', fields: ['idempotencyKey'] },
+        ],
+        layouts: {
+          list: [{ entity: 'LeadScoreEvaluation', type: 'list', panels: [{ name: 'list', position: 0, fields: ['leadId', 'scoreValue', 'qualificationBand', 'evaluationStatus', 'modelVersion', 'trigger', 'resultState', 'coverage', 'calculatedAt'] }] }],
+          detail: [
+            {
+              entity: 'LeadScoreEvaluation',
+              type: 'detail',
+              panels: [
+                { name: 'result', label: 'Result', position: 0, fields: ['leadId', 'modelId', 'modelVersion', 'scoreValue', 'qualificationBand', 'evaluationStatus', 'coverage', 'calculatedAt', 'inputsAsOf', 'sourceRevision', 'trigger', 'resultState'] },
+                { name: 'explanation', label: 'Explanation', position: 10, fields: ['ruleResults', 'positiveReasonCodes', 'negativeReasonCodes', 'skippedReasonCodes', 'errorSummary'] },
+                { name: 'run', label: 'Run', position: 20, fields: ['signature', 'correlationId', 'jobId', 'idempotencyKey', 'durationMs'] },
+              ],
+            },
+          ],
+          edit: [],
+        },
+        record: { displayField: 'name', removable: false, streamable: false },
+        // Append-only and module-written, the `CustomerSuccessHealthSnapshot` shape: history is served
+        // through a Lead-scoped command rather than a general entity read, and `read: no` is what makes
+        // 19-LS.5's record-level check the only door (plan §5.4, §8.2).
+        client: { web: false },
+        acl: { permissions: { LeadScoreEvaluation: { create: 'yes', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
+    {
+      scope: 'entity',
+      name: 'LeadConversionOperation',
+      data: {
+        name: 'LeadConversionOperation',
+        label: 'Lead Conversion Operation',
+        isEntity: true,
+        fields: leadScoreFields({
+          // The caller-supplied idempotency key. Unique while present (migration 073) is what makes a
+          // replayed conversion return the original answer instead of creating a second Contact
+          // (plan §5.5, §7.8, §0.1-11).
+          operationKey: { type: 'varchar', maxLength: 128, required: true, inList: true, inDetail: true },
+          sourceLeadId: { type: 'link', entityKey: 'Lead', required: true, inList: true, inDetail: true },
+          sourceLeadRevision: { type: 'int', inDetail: true },
+          status: { type: 'enum', values: CONVERSION_STATUSES, defaultValue: 'previewed', inList: true, inDetail: true, audited: true, sortable: true },
+          requestedTargets: { type: 'multiEnum', values: CONVERSION_TARGETS, inList: true, inDetail: true },
+          // The fingerprint of the preview the caller confirmed: a stale preview must be re-confirmed
+          // rather than executed (plan §4.3 step 5, §8.3).
+          previewHash: { type: 'varchar', maxLength: 128, inDetail: true },
+          mappingVersion: { type: 'int', inDetail: true },
+          selectedMatchIds: { type: 'text', inDetail: true },
+          requestedById: { type: 'link', entityKey: 'User', inList: true, inDetail: true },
+          requestedAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
+          confirmedAt: { type: 'datetime', inDetail: true },
+          completedAt: { type: 'datetime', inDetail: true, sortable: true },
+          // Created and linked are kept apart on purpose: "the CRM already had this person" is a
+          // different fact from "the user created them just now" (plan §1.1, §11.4).
+          createdAccountId: { type: 'link', entityKey: 'Account', inDetail: true },
+          linkedAccountId: { type: 'link', entityKey: 'Account', inDetail: true },
+          createdContactId: { type: 'link', entityKey: 'Contact', inDetail: true },
+          linkedContactId: { type: 'link', entityKey: 'Contact', inDetail: true },
+          createdOpportunityId: { type: 'link', entityKey: 'Opportunity', inDetail: true },
+          linkedOpportunityId: { type: 'link', entityKey: 'Opportunity', inDetail: true },
+          resultSummary: { type: 'text', inDetail: true },
+          failureCode: { type: 'varchar', maxLength: 64, inDetail: true },
+          correlationId: { type: 'varchar', maxLength: 64, inDetail: true },
+        }),
+        relations: {},
+        indexes: [
+          { name: 'uq_lead_conversion_operation_key', fields: ['operationKey'] },
+          { name: 'idx_lead_conversion_operation_lead', fields: ['sourceLeadId'] },
+          { name: 'idx_lead_conversion_operation_status', fields: ['status', 'requestedAt'] },
+        ],
+        layouts: {
+          list: [{ entity: 'LeadConversionOperation', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'sourceLeadId', 'status', 'requestedTargets', 'requestedById', 'requestedAt', 'completedAt', 'failureCode'] }] }],
+          detail: [
+            {
+              entity: 'LeadConversionOperation',
+              type: 'detail',
+              panels: [
+                { name: 'request', label: 'Request', position: 0, fields: ['operationKey', 'sourceLeadId', 'sourceLeadRevision', 'requestedById', 'requestedAt', 'status', 'requestedTargets'] },
+                { name: 'confirmation', label: 'Confirmation', position: 10, fields: ['previewHash', 'mappingVersion', 'selectedMatchIds', 'confirmedAt', 'completedAt'] },
+                { name: 'result', label: 'Result', position: 20, fields: ['createdAccountId', 'linkedAccountId', 'createdContactId', 'linkedContactId', 'createdOpportunityId', 'linkedOpportunityId', 'resultSummary', 'failureCode'] },
+                { name: 'trace', label: 'Trace', position: 30, fields: ['correlationId'] },
+              ],
+            },
+          ],
+          edit: [],
+        },
+        record: { displayField: 'name', removable: false, streamable: false },
+        // The durable operation record is written by the conversion command and inspected through the
+        // recovery view; nobody edits a conversion outcome by hand (plan §5.5, §7.8).
+        client: { web: false },
+        acl: { permissions: { LeadConversionOperation: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
       },
     },
   ];

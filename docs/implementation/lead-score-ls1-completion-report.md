@@ -102,7 +102,7 @@ through the real HTTP API (`apps/api/test/support/boot-api.ts`), no test databas
 | --- | --- |
 | **The module loads** | `GET /api/v1/LeadScore/action/health` → 200 with the descriptor; the boot log resolves the full DI graph with `LEADSCORE_PROVIDERS` registered |
 | **…and is discoverable** | `ok: true` with all seven required capabilities reported `present` from `information_schema` and the metadata registry; `module.implementedPhases` = `['19-LS.0','19-LS.1']`; the five routes appear in the generated `GET /api/v1/OpenApi` document (asserted per path and verb) |
-| **No scoring or conversion is reachable yet** | `ready: false`, `reason` names the module switch; all 11 operations refused; with the module switched **on**, the same probe returns `LEADSCORE_PHASE_PENDING` with the right phase for `readScore` (LS.4), `publishModel` (LS.3), `conversionExecute` (LS.13) and `aiInsight` (LS.17) |
+| **No scoring or conversion is reachable yet** (state at LS.1; still true at LS.2, which added schema only) | `ready: false`, `reason` names the module switch; all 11 operations refused; with the module switched **on**, the same probe returns `LEADSCORE_PHASE_PENDING` with the right phase for `readScore` (LS.4), `publishModel` (LS.3), `conversionExecute` (LS.13) and `aiInsight` (LS.17) |
 | **Authorization is server-side** | a role with only `Lead` permissions gets **403** on all five routes; a role holding `LeadScore:read` + `LeadScoreSettings:edit` gets 200 on the control plane and still `granted: false` for `convertExecute` and `modelPublish`; the capability matrix route is gated too |
 | **The gate fails closed** | `assertOperation` called in-process with no request principal throws the capability refusal rather than falling through to configuration |
 | **Settings cannot store a typo or speculation** | `features.scingg` → 422 and nothing persisted; a top-level `scaleMax` (a value nothing reads yet) → 422; an accepted patch bumps `version` and writes the `leadScore` row in `app_settings` |
@@ -189,12 +189,19 @@ role grant keeps working, and the check degrades to a plain entity ACL rather th
 
 ## 5. What LS.2 must not forget
 
+Delivered: 19-LS.2 registered the four entities, put the projection and `Converted To` attributes on the
+`Lead` entry in `seed-metadata.ts`, added `073_phase19_lead_score.sql` (index-only), updated
+`entityTypes` and replaced the LS.1-era check with `lead-score-fields`. See
+[`lead-score-ls2-completion-report.md`](lead-score-ls2-completion-report.md).
+
 * `073_phase19_lead_score.sql` is additive and index-only (audit §4); review the SQL before applying,
   and never re-run it as a reset.
 * The score and `converted*` fields go on the **core `Lead` entry** in `database/seed-metadata.ts` —
   `database/seed.ts:458-469` rewrites `metadata_entries` on every seed, so an admin runtime patch to
   those scopes would not survive (audit §8, gap G4).
-* `LEADSCORE_MODULE.entityTypes` and the `lead-fields-untouched` health check both encode "LS.1 state"
-  and must be updated in the LS.2 commit, or LS.2 will fail its own invariant.
+* `LEADSCORE_MODULE.entityTypes` and the `lead-fields-untouched` health check both encoded "LS.1 state".
+  19-LS.2 replaced them (`entityTypes` now lists the four registered records, the check is
+  `lead-score-fields`) and re-ran this suite against the changed metadata — see
+  [`lead-score-ls2-completion-report.md`](lead-score-ls2-completion-report.md) §1.5.
 * The four resources named `LeadScore*` / `LeadConversion*` are already the intended entity names;
   registering the metadata entities must reuse them exactly.

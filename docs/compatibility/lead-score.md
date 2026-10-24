@@ -2,13 +2,17 @@
 
 > Phase 19-LS.0 onwards (`PLAN_Phase_19_LeadScore.md` §0.2, §16 `19-LS.0`).
 > Repository audit and feature contract: `docs/implementation/lead-score-audit.md`.
-> Status: **19-LS.0 and 19-LS.1 delivered** (LS.0 = audit, feature contract and decisions D1–D13;
-> LS.1 = the `LeadScore` module registration: descriptor, capability matrix, `leadScore` settings
-> document, feature gate and health view — evidence in
-> `docs/implementation/lead-score-ls1-completion-report.md`). **LS.2 and later are not implemented**,
-> so scoring and conversion behavior in §3–§7 is still the agreed contract rather than runtime
-> behavior: every operation is refused with the sub-phase that owes it, and no `LeadScore` metadata
-> entity or Lead score field exists yet.
+> Status: **19-LS.0, 19-LS.1 and 19-LS.2 delivered** (LS.0 = audit, feature contract and decisions
+> D1–D13; LS.1 = module registration: descriptor, capability matrix, `leadScore` settings document,
+> feature gate, health view; LS.2 = the schema and metadata foundation: the four `LeadScore` records,
+> the current-score projection and `Converted To` attributes on the core `Lead`, the `score`/`converted`
+> detail panels, `database/migrations/073_phase19_lead_score.sql` and the write guard that keeps those
+> attributes server-owned — evidence in
+> `docs/implementation/lead-score-ls1-completion-report.md` and
+> `docs/implementation/lead-score-ls2-completion-report.md`).
+> **LS.3 and later are not implemented.** The *structures* exist and are enforced; the *behavior* does
+> not: nothing computes a score, nothing publishes a model and nothing converts a Lead, so every
+> operation is still refused with the sub-phase that owes it and no Lead carries a score value.
 > Canonical module name: `LeadScore` (no `Ua` prefix). API prefix: `/api/v1/lead-score` plus
 > `/api/v1/leads/:leadId/{score,conversion-preview,convert}` semantics.
 > Baseline reference re-checked against public EspoCRM documentation on **2026-10-24**
@@ -77,7 +81,7 @@ stage semantics and `SalesDocumentService.createFromOpportunity`
 
 | Aspect | Agreed behavior | Status |
 | --- | --- | --- |
-| Scale | 0–100 default (`scaleMin`/`scaleMax` per model); the UI always shows the scale | LS.3 (the module settings row deliberately stores no scale yet — see the LS.1 report §3.1) |
+| Scale | 0–100 default (`scaleMin`/`scaleMax` per model, registered on `LeadScoreModel` in LS.2); the UI always shows the scale | fields exist (LS.2), validation arrives in LS.3; the module settings row deliberately stores no scale of its own — the model owns it |
 | Formula | `baseScore` → matched rule deltas in `priority` order → optional dimension weights → clamp `[scoreFloor, scoreCeiling]` → stable rounding → band lookup | LS.4 |
 | Reproducibility | same model version + same input snapshot ⇒ identical score, identical reason codes, identical signature | LS.4 unit test |
 | Missing data | `missingDataPolicy: ignore` or `neutral`, recorded as `unknown` in the breakdown; never silently 0 | LS.4 |
@@ -86,7 +90,7 @@ stage semantics and `SalesDocumentService.createFromOpportunity`
 | Explainability | every displayed score carries band, model version, `calculatedAt`, `inputsAsOf`, positive/negative reason codes, coverage and evaluation status | LS.5 |
 | Freshness | `evaluationStatus` of `current`, `stale`, `pending`, `failed` or `not_scored` | LS.5 |
 | History | append-only, immutable, ACL-gated through a Lead-scoped command rather than entity read permission | LS.5 |
-| Recalculation | event-driven (debounced), manual (rate-limited), batch (chunked, admin-only), decay sweep; all idempotent | LS.6 |
+| Recalculation | event-driven (debounced), manual (rate-limited), batch (chunked, admin-only), decay sweep; all idempotent | LS.6; the idempotency key it needs is already a unique index (LS.2) |
 | Threshold actions | emit `leadScore.updated` / `bandChanged`; **never** auto-convert, never silently rewrite unrelated Lead fields | LS.9 |
 | Sensitive attributes | protected characteristics and proxies are excluded; the model's field allowlist is admin-reviewable and a denylist is enforced at save | LS.3 |
 | AI insight | optional, operator-triggered, evidence-grounded, stored separately from the numeric score, off by default; scoring works with AI disabled | LS.17 |
@@ -188,14 +192,17 @@ target (`acl-api.service.ts:172`).
 `convertedAt`, `convertedById` (→ User), `convertedAccountId`, `convertedContactId`,
 `convertedOpportunityId`, `conversionOperationId`.
 
-### 5.4 Score projection fields on Lead (contract, added in LS.2)
+### 5.4 Score projection fields on Lead (delivered in LS.2)
 
 `scoreValue`, `scoreBand`, `scoreStatus`, `scoreModelId`, `scoreModelVersion`, `scoreCalculatedAt`,
 `scoreInputsAsOf`, `scorePreviousValue`, `scoreReasonCodes` (stable codes only — never raw field
 values). Single active model policy: the projection reflects the active published model, while
 `LeadScoreEvaluation` keeps every model/version history immutable (plan §5.3 permits this).
+None of these attributes is `inEdit`, none is writable through `/api/v1/Lead/:id` — including by an
+administrator — and the projection is deliberately not `audited`: the evaluation rows are its history, so
+a batch rebuild does not flood `audit_log`.
 
-### 5.5 New module-owned entities (contract)
+### 5.5 New module-owned entities (delivered in LS.2)
 
 `LeadScoreModel`, `LeadScoreRule`, `LeadScoreEvaluation` (append-only, module-written, read closed at
 ACL and served by a Lead-scoped command — the `CustomerSuccessHealthSnapshot` template,
@@ -231,7 +238,9 @@ Recorded here so no later phase silently invents behavior (plan §19's closing i
 | U4 | `database/seed.ts:458-469` overwrites `metadata_entries` and the `entity` settings document on every seed/boot, so runtime admin overrides to entity metadata are lost (pre-existing, affects LS field definitions) | all LS field definitions live in `seed-metadata.ts`; LS settings live in a separate `leadScore` row. Reported, not worked around |
 | U5 | Reopen/correct a completed conversion | not implemented; requires an explicit admin procedure that accounts for targets edited or used in transactions since conversion (plan §7.6) |
 | U6 | Bulk conversion | out of initial delivery; requires preview + per-record confirmation + permission checks before it can be enabled |
-| U7 | Multi-model concurrent scoring (one projection per model) | MVP is single active model; the projection shape and unique index must be revisited before adding a second live model |
+| U7 | Multi-model concurrent scoring (one projection per model) | MVP is single active model, and LS.2 made that structural: the projection is a set of attributes on the one Lead row, so a second live model needs its own projection entity and unique index — not a reinterpretation of these fields |
+| U10 | A Lead list sorted or range-filtered by `scoreValue` cannot use `idx_entity_records_lead_score_value`: the generic store binds the attribute *name* as a parameter, which no constant-expression index matches | recorded in the migration header; the 19-LS.18 query check decides whether a narrow read model or a generated column is worth its complexity |
+| U11 | `allowedFieldPaths` / `blockedFieldPaths` are stored on a model but enforced nowhere yet | 19-LS.3's validator is where the sensitive-attribute and field-path boundary actually applies; declaring the fields early makes that a check rather than a redesign |
 | U8 | Score-model quality evaluation against historically labeled outcomes (plan §12) | deferred — no labeled outcome dataset exists in this build |
 | U9 | EspoCRM parity claims for scoring | none: the reference baseline documents no lead scoring, so scoring is presented as new functionality, never as compatibility behavior |
 
@@ -241,4 +250,5 @@ Recorded here so no later phase silently invents behavior (plan §19's closing i
 | --- | --- | --- |
 | 19-LS.0 | Source reading and exhaustive greps over `apps/`, `packages/`, `modules/`, `database/`, `i18n/`, `content/`, `docs/`; `database/migrations` listing; script/seed/`boot-api` inspection for destructive setup; baseline re-checked against public EspoCRM docs on 2026-10-24 | Audit produced; no code, no migration, no database write, no new database. Nothing in §3–§6 is runtime behavior yet |
 | 19-LS.1 | `npx vitest run apps/api/test/lead-score-module.test.ts` (15 tests); adjacent suites `entity-crud`, `entity-row-actions`, `entity-manager-metadata`, `navigation`, `i18n` (55 tests) and `sales-module`, `admin-internal`, `docs`, `crm-chat` (54 tests); `npm run typecheck`; `npx eslint` on the touched files | all green. The module is registered, discoverable (health + the five `/api/v1/OpenApi` paths) and refused-everything: 11 operations closed, `ready: false`. Lead/Contact/Account/Opportunity CRUD verified unchanged with the module switched on. Settings row and test records removed by exact id afterwards |
-| 19-LS.2 … LS.18 | *not started* | each completion report must list the exact commands run and their outcomes before this table may claim support |
+| 19-LS.2 | `apps/api/test/lead-score-schema.test.ts` (**24 tests**, including the enforced unique constraints and the write guard) and the LS.1 suite re-run (**15**); adjacent `entity-crud`, `entity-row-actions`, `entity-manager-metadata`, `navigation`, `i18n`, `sales-entity-layouts`, `acl-matrix`, `dynamic-logic` and three Marketing Automation suites (**144**); full `apps/api/test` run; `npm run typecheck`; `npx eslint` on the touched files; migration applied through `database/migrate.ts` and read back from `pg_indexes` | green. Structures and ownership are runtime facts now: no row carries a score, no model publishes, every operation still refuses with its phase |
+| 19-LS.3 … LS.18 | *not started* | each completion report must list the exact commands run and their outcomes before this table may claim support |
