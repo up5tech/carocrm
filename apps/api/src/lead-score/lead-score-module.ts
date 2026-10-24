@@ -238,14 +238,17 @@ export const LEADSCORE_FEATURES: readonly LeadScoreFeatureDescriptor[] = [
   // §15.2 stage 3 is "preview scoring on a limited authorized sample", which is what `previewModel` runs.
   { key: 'scoringPreview', label: 'Score model preview', settingsPath: 'features.scoringPreview', requires: ['modelAdministration'], pendingPhase: null },
   // 19-LS.5 computes and *keeps* a score: the evaluation row, the Lead projection, and the read of both.
-  // What it does not do is decide when to run — the event-driven and batch paths stay with 19-LS.6.
+  // Deciding *when* to run is 19-LS.6's, and that is the two rows below this one.
   { key: 'scoring', label: 'Rule-based scoring', settingsPath: 'features.scoring', requires: ['modelAdministration'], pendingPhase: null },
-  // Plan §8.2's "queue a manual recalculation" arrives in two halves: LS.5 delivers the synchronous,
-  // explicitly-asked, one-Lead command; LS.6 delivers the queued/debounced job behind the same capability.
+  // Plan §8.2's "queue a manual recalculation" arrived in two halves, and both are now delivered: LS.5 is the
+  // synchronous, explicitly-asked, one-Lead command; LS.6 is the debounced job the same Lead reaches from an
+  // event or a rebuild. One switch covers them, because a reader cannot tell the two apart from the score.
   { key: 'manualRecalculation', label: 'Manual recalculation', settingsPath: 'features.manualRecalculation', requires: ['scoring'], pendingPhase: null },
   { key: 'scoreExplanation', label: 'Score explanation and history', settingsPath: 'features.scoreExplanation', requires: ['scoring'], pendingPhase: null },
-  { key: 'eventRecalculation', label: 'Event-driven recalculation', settingsPath: 'features.eventRecalculation', requires: ['scoring'], pendingPhase: '19-LS.6' },
-  { key: 'batchRecalculation', label: 'Batch recalculation', settingsPath: 'features.batchRecalculation', requires: ['scoring'], pendingPhase: '19-LS.6' },
+  // 19-LS.6 delivered both background paths: the committed `entity.updated` subscription that queues a
+  // debounced job for one Lead, and the chunked rebuild a caller starts from `action/recalculate-batch`.
+  { key: 'eventRecalculation', label: 'Event-driven recalculation', settingsPath: 'features.eventRecalculation', requires: ['scoring'], pendingPhase: null },
+  { key: 'batchRecalculation', label: 'Batch recalculation', settingsPath: 'features.batchRecalculation', requires: ['scoring'], pendingPhase: null },
   { key: 'thresholdNotifications', label: 'Band-change notifications', settingsPath: 'features.thresholdNotifications', requires: ['scoring'], pendingPhase: '19-LS.9' },
   { key: 'engagementSignals', label: 'Marketing engagement signals', settingsPath: 'features.engagementSignals', requires: ['scoring'], pendingPhase: '19-LS.9' },
   { key: 'duplicateDetection', label: 'Duplicate candidate review', settingsPath: 'features.duplicateDetection', requires: [], pendingPhase: '19-LS.11' },
@@ -369,7 +372,7 @@ export const LEADSCORE_MODULE = {
   apiPrefix: '/api/v1/LeadScore',
   settingsRow: LEADSCORE_SETTINGS_ROW,
   /** Sub-phases delivered by this module. */
-  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5'],
+  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6'],
   /**
    * The entity set this module owns, registered in `database/seed-metadata.ts` and indexed by
    * `database/migrations/073_phase19_lead_score.sql`. One list, shared with the write guard, so the

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { MAX_HISTORY_PAGE } from '../lead-score-explanation.service.js';
 import { LEADSCORE_OPERATIONS } from '../lead-score-feature-gate.service.js';
 import { MAX_PREVIEW_SAMPLE } from '../lead-score-preview.service.js';
+import { MAX_BATCH_CHUNK, MAX_BATCH_TOTAL } from '../lead-score-recalculation.service.js';
 
 /**
  * Phase 19-LS.1 — request shapes (`PLAN_Phase_19_LeadScore.md` §8.4, §16 `19-LS.1`; AGENTS.md §5.4).
@@ -125,5 +126,77 @@ export const ScoreHistoryQuerySchema = z
   .object({
     limit: z.coerce.number().int().min(1).max(MAX_HISTORY_PAGE).optional(),
     offset: z.coerce.number().int().min(0).max(100_000).optional(),
+  })
+  .strict();
+
+// ---------------------------------------------------------------------------
+// Phase 19-LS.6 — event-driven and manual recalculation (plan §8.2, §9.3, §10.2, §11.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * One condition of a rebuild filter.
+ *
+ * Shape only, on purpose: a field name and an operator are validated by the query engine against Lead
+ * metadata when the chunk runs (`packages/query-engine/src/index.ts:220,319`), which is also where a field
+ * this caller may not filter on is refused. What this file bounds is the *size* of the request — an
+ * unbounded condition list is a way to build an enormous query through a scoring endpoint.
+ * `value` is optional because the engine's no-value operators (`isEmpty`, `isClosed`, …) need none.
+ */
+const BatchFilterConditionSchema = z
+  .object({
+    field: z.string().trim().min(1).max(64),
+    operator: z.string().trim().min(1).max(32),
+    value: z.unknown(),
+  })
+  .strict();
+
+/** Conditions one rebuild may name — enough for a real segment, far below a query that needs its own review. */
+const MAX_BATCH_FILTERS = 8;
+
+/**
+ * A manual rebuild: how many Leads at most, how many per job, and which ones.
+ *
+ * `limit` and `chunkSize` can only be *lowered* by the caller — the ceilings are the service's constants, so
+ * a request cannot raise the amount of work one worker→API call holds (plan §9.4).
+ */
+export const BatchRecalculateSchema = z
+  .object({
+    limit: z.number().int().min(1).max(MAX_BATCH_TOTAL).optional(),
+    chunkSize: z.number().int().min(1).max(MAX_BATCH_CHUNK).optional(),
+    where: z.array(BatchFilterConditionSchema).max(MAX_BATCH_FILTERS).optional(),
+  })
+  .strict();
+
+/**
+ * The payload a batch job carries, checked again on the way in.
+ *
+ * A worker builds this from a stored job row, so a malformed or hand-edited row must not be able to ask for
+ * more Leads than a client could have requested through `action/recalculate-batch`: the same bounds apply on
+ * both doors, and the run cursor is validated as an id rather than trusted as one.
+ */
+export const RecalculateBatchChunkSchema = z
+  .object({
+    runId: z.string().trim().min(1).max(64),
+    limit: z.number().int().min(1).max(MAX_BATCH_TOTAL),
+    chunkSize: z.number().int().min(1).max(MAX_BATCH_CHUNK),
+    processed: z.number().int().min(0).max(MAX_BATCH_TOTAL),
+    cursor: z.string().trim().min(1).max(64).nullable(),
+    where: z.array(BatchFilterConditionSchema).max(MAX_BATCH_FILTERS),
+  })
+  .strict();
+
+/**
+ * The committed-change notification the outbox subscriber sends.
+ *
+ * `changed` is the event's own list of keys that moved, which is the whole input to the loop break: only a
+ * change that touches a field the active model reads can produce work (plan §10.4). It is bounded so a
+ * notification cannot carry a synthetic huge list, and `revision` is the Lead's version at commit time —
+ * the trigger half of the deterministic job id that collapses duplicate deliveries.
+ */
+export const LeadChangedSchema = z
+  .object({
+    leadId: LeadIdSchema,
+    revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    changed: z.array(z.string().trim().min(1).max(64)).max(512),
   })
   .strict();

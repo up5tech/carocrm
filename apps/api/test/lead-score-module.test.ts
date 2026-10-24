@@ -158,7 +158,7 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.module.id).toBe('LeadScore');
     expect(body.module.apiPrefix).toBe('/api/v1/LeadScore');
     expect(body.module.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5']);
+    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6']);
 
     // Every required capability is a fact the view verified against this database, not a claim.
     expect(body.dependencies.every((dependency) => dependency.present)).toBe(true);
@@ -175,11 +175,19 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.ready).toBe(false);
     expect(body.reason).toContain('module switch is off');
     expect(body.features.every((feature) => feature.enabled === false)).toBe(true);
-    // 19-LS.3 shipped the model lifecycle and 19-LS.4 shipped the deterministic engine with its
-    // side-effect-free preview, so two switches are no longer pending. Everything that *keeps* or *reads* a
-    // score is still tied to a phase that has not arrived, and the health view says which is which.
+    // 19-LS.3 shipped the model lifecycle, 19-LS.4 the deterministic engine with its side-effect-free preview,
+    // 19-LS.5 the score write and its two reads, and 19-LS.6 the two background recalculation paths. Everything
+    // that still waits names the phase that owes it, and the health view is what says which is which.
     const implemented = body.features.filter((feature) => feature.implemented).map((feature) => feature.key);
-    expect(implemented).toEqual(['modelAdministration', 'scoringPreview', 'scoring', 'manualRecalculation', 'scoreExplanation']);
+    expect(implemented).toEqual([
+      'modelAdministration',
+      'scoringPreview',
+      'scoring',
+      'manualRecalculation',
+      'scoreExplanation',
+      'eventRecalculation',
+      'batchRecalculation',
+    ]);
     expect(body.features.filter((feature) => !feature.implemented).every((feature) => feature.pendingPhase !== null)).toBe(true);
     expect(body.operations.every((operation) => operation.admitted === false)).toBe(true);
     expect(body.operations.every((operation) => operation.code === 'LEADSCORE_MODULE_DISABLED')).toBe(true);
@@ -299,13 +307,16 @@ describe('settings document (19-LS.1)', () => {
     };
     expect(view.settings.enabled).toBe(false);
     expect(view.defaults.enabled).toBe(false);
-    // 19-LS.5 added the one policy section the module reads: with no row at all, no model is active — the
-    // default has to be "nothing is scored", not "guess one".
-    expect(view.defaults.scoring).toEqual({ activeModelId: null });
+    // 19-LS.5 added the policy section the engine reads and 19-LS.6 the debounce the queue waits on: with no
+    // row at all, no model is active and a Lead change would wait 60 seconds. Both defaults have to be
+    // "nothing is scored yet", not "guess one".
+    expect(view.defaults.scoring).toEqual({ activeModelId: null, debounceSeconds: 60 });
     expect(Object.values(view.settings.features).every((value) => value === false)).toBe(true);
     expect(Object.values(view.effective).every((value) => value === false)).toBe(true);
     expect(view.warnings.map((warning) => warning.code)).toContain('moduleDisabled');
-    expect(view.pendingFeatures.map((entry) => entry.key)).toEqual(expect.arrayContaining(['eventRecalculation', 'leadConversion', 'aiInsight']));
+    // 19-LS.6 delivered both background paths, so the still-pending list starts at the notifications phase.
+    expect(view.pendingFeatures.map((entry) => entry.key)).toEqual(expect.arrayContaining(['thresholdNotifications', 'leadConversion', 'aiInsight']));
+    expect(view.pendingFeatures.map((entry) => entry.key)).not.toContain('eventRecalculation');
   });
 
   it('refuses an unknown switch instead of storing a typo', async () => {
@@ -326,7 +337,7 @@ describe('settings document (19-LS.1)', () => {
     const before = await call('GET', '/api/v1/LeadScore/action/settings');
     const beforeVersion = before.body['version'] as number;
 
-    const updated = await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { eventRecalculation: true } });
+    const updated = await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { duplicateDetection: true } });
     expect(updated.status).toBe(200);
     const view = updated.body as unknown as {
       version: number;
@@ -338,13 +349,14 @@ describe('settings document (19-LS.1)', () => {
     };
     expect(view.version).toBe(beforeVersion + 1);
     expect(view.settings.enabled).toBe(true);
-    expect(view.settings.features.eventRecalculation).toBe(true);
+    expect(view.settings.features.duplicateDetection).toBe(true);
     // The switch is on, the phase is not delivered, so the effective answer stays false — and the document
-    // says so out loud instead of letting an administrator believe event-driven recalculation is live.
-    // (`scoring` itself no longer earns this warning: 19-LS.5 shipped it.)
-    expect(view.effective.eventRecalculation).toBe(false);
+    // says so out loud instead of letting an administrator believe duplicate review is live.
+    // (`eventRecalculation` no longer earns this warning: 19-LS.6 shipped it, and a stored switch that now
+    // really does mean something is tested in `lead-score-recalculation.test.ts`.)
+    expect(view.effective.duplicateDetection).toBe(false);
     expect(view.warnings.map((warning) => warning.code)).toContain('phasePending');
-    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('19-LS.6');
+    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('19-LS.11');
     expect(view.updatedAt).not.toBeNull();
     expect(view.updatedBy).not.toBeNull();
 
@@ -359,7 +371,7 @@ describe('feature gate (19-LS.1)', () => {
     expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true })).status).toBe(200);
 
     for (const [operation, phase] of [
-      ['batchRecalculate', '19-LS.6'],
+      ['conversionPreview', '19-LS.12'],
       ['conversionExecute', '19-LS.13'],
       ['aiInsight', '19-LS.17'],
     ] as const) {
@@ -378,7 +390,7 @@ describe('feature gate (19-LS.1)', () => {
       expect(assessment.code).toBe('LEADSCORE_PHASE_PENDING');
       expect(assessment.pendingPhase).toBe(phase);
       expect(assessment.detail).toBe(phase);
-      expect(assessment.writes).toBe(operation === 'conversionExecute' || operation === 'aiInsight' || operation === 'batchRecalculate');
+      expect(assessment.writes).toBe(operation === 'conversionExecute' || operation === 'aiInsight');
     }
 
     // A caller without the right learns only that it is denied — never the deployment state behind it.

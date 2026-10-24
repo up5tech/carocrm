@@ -16,6 +16,7 @@ import { registerAIAgentJobs } from './handlers/ai-agent-handlers.js';
 import { registerCustomerSuccessJobs } from './handlers/customer-success-handlers.js';
 import { registerESignatureJobs } from './handlers/esignature-handlers.js';
 import { registerSystemJobs } from './handlers/job-handlers.js';
+import { registerLeadScoreDomainEvents, registerLeadScoreJobs } from './handlers/lead-score-handlers.js';
 import { registerMailJobs } from './handlers/mail-handlers.js';
 import { registerMarketingJobs } from './handlers/marketing-handlers.js';
 import { createKernelOutboxSetup } from './handlers/outbox-handlers.js';
@@ -145,6 +146,14 @@ export class WorkerApplication {
       secret: this.config.reportWorkerSecret,
       log: this.log,
     });
+    // Phase 19-LS.6: the debounced single-Lead recalculation and one chunk of a rebuild run in the API, so
+    // the projection, the history row and the write guard all stay on the application path. Both jobs are
+    // inert when no worker capability is configured.
+    registerLeadScoreJobs(this.jobRegistry, {
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
+      log: this.log,
+    });
     this.registerExtensionJobs();
 
     const outbox = createKernelOutboxSetup(this.log);
@@ -154,6 +163,13 @@ export class WorkerApplication {
     // Phase 19-INT.13: the outbound path reacts to CRM changes. The echo guard lives in the API —
     // it decides whether a change is a genuine user edit or the echo of an earlier sync.
     registerAdvancedIntegrationsDomainEvents(this.domainEvents, {
+      apiBaseUrl: this.config.apiBaseUrl,
+      secret: this.config.reportWorkerSecret,
+      log: this.log,
+    });
+    // Phase 19-LS.6: a committed Lead change hands off to the API, which decides whether it can move a score
+    // and whether a job is already waiting for this Lead. The subscriber owns no scoring rule.
+    registerLeadScoreDomainEvents(this.domainEvents, {
       apiBaseUrl: this.config.apiBaseUrl,
       secret: this.config.reportWorkerSecret,
       log: this.log,

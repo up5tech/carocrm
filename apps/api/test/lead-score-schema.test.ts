@@ -642,13 +642,27 @@ describe('the database invariants behind retry safety (19-LS.2)', () => {
 });
 
 describe('registered but inert (19-LS.2)', () => {
-  it('still refuses every operation, because schema is not behavior', async () => {
+  it('still refuses an operation whose phase has not shipped, because schema is not behavior', async () => {
     expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true })).status).toBe(200);
-    const queued = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation: 'batchRecalculate' });
-    expect((queued.body as { code: string }).code).toBe('LEADSCORE_PHASE_PENDING');
-    expect((queued.body as { pendingPhase: string }).pendingPhase).toBe('19-LS.6');
-    const conversion = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation: 'conversionExecute' });
-    expect((conversion.body as { pendingPhase: string }).pendingPhase).toBe('19-LS.13');
+    // What LS.2 registered is inert until its own phase arrives. Three phases on, the doors that still name a
+    // pending phase are the conversion and insight ones — and each names the sub-phase that owes it.
+    for (const [operation, phase] of [
+      ['conversionPreview', '19-LS.12'],
+      ['conversionExecute', '19-LS.13'],
+      ['aiInsight', '19-LS.17'],
+    ] as const) {
+      const result = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });
+      expect((result.body as { code: string }).code, operation).toBe('LEADSCORE_PHASE_PENDING');
+      expect((result.body as { pendingPhase: string }).pendingPhase, operation).toBe(phase);
+    }
+    // 19-LS.6 delivered the two background recalculation paths, so they no longer name a phase — and with the
+    // module switched on and their switches off they still refuse, which is the same rule this suite has
+    // always asserted: a registered capability answers for its switch, never for itself.
+    for (const operation of ['eventRecalculate', 'batchRecalculate']) {
+      const result = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });
+      expect((result.body as { pendingPhase: string | null }).pendingPhase, operation).toBeNull();
+      expect((result.body as { code: string }).code, operation).toBe('LEADSCORE_MODULE_DISABLED');
+    }
     const health = await call('GET', '/api/v1/LeadScore/action/health');
     expect((health.body as { ready: boolean }).ready).toBe(false);
   });

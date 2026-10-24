@@ -8,6 +8,7 @@ import { LeadScoreModelService } from './lead-score-model.service.js';
 import { LeadScoreModuleHealthService } from './lead-score-module-health.service.js';
 import { LeadScorePermissionService } from './lead-score-permission.service.js';
 import { LeadScorePreviewService } from './lead-score-preview.service.js';
+import { LeadScoreRecalculationService } from './lead-score-recalculation.service.js';
 import { LeadScoreRecords } from './lead-score-records.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 import { LeadScoreWriteGuardService } from './lead-score-write-guard.service.js';
@@ -41,10 +42,13 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   LeadScoreCalculationService,
   LeadScoreExplanationService,
   LeadScoreFeatureGate,
+  // Needs the job row and the settings document, so it is registered with the services it reads.
+  LeadScoreRecalculationService,
   LeadScoreModuleHealthService,
 ];
 
 export { LeadScoreController } from './lead-score.controller.js';
+export { LEADSCORE_SYSTEM_PRINCIPAL, runAsLeadScoreSystem } from './lead-score-authority.js';
 export {
   LeadScoreCalculationService,
   type ScoreWriteView,
@@ -134,6 +138,17 @@ export {
 } from './lead-score-module-health.service.js';
 export { LeadScorePermissionService } from './lead-score-permission.service.js';
 export { LeadScorePreviewService, type LeadScorePreviewView,MAX_PREVIEW_SAMPLE } from './lead-score-preview.service.js';
+export {
+  type BatchChunkView,
+  type BatchFilterCondition,
+  type BatchStartView,
+  LEADSCORE_JOB_NAMES,
+  LeadScoreRecalculationService,
+  MAX_BATCH_CHUNK,
+  MAX_BATCH_TOTAL,
+  type RecalculationDecision,
+  type RecalculationEnqueueView,
+} from './lead-score-recalculation.service.js';
 export { type LeadScoreEvaluationPage, LeadScoreRecords,type LeadScoreRow } from './lead-score-records.js';
 export {
   DEFAULT_LEADSCORE_SETTINGS,

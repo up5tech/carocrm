@@ -49,7 +49,12 @@ export class JobsService {
     this.attempts = config.jobAttempts;
   }
 
-  async enqueue(input: { job: string; data: Record<string, unknown>; id?: string | undefined }): Promise<JobView> {
+  /**
+   * Enqueue one job. `id` is the caller's deterministic row id — the only dedupe the table offers — and
+   * `delayMs` defers *queue* delivery, which is how a caller debounces a burst of triggers into one run
+   * without losing the durable `jobs` row an operator can still see and cancel.
+   */
+  async enqueue(input: { job: string; data: Record<string, unknown>; id?: string | undefined; delayMs?: number | undefined }): Promise<JobView> {
     const job = requireJobName(input.job);
     const data = requirePayload(input.data);
     const id = input.id === undefined ? randomUUID() : requireJobId(input.id);
@@ -58,7 +63,7 @@ export class JobsService {
     if (clash) throw new DuplicateRecordError(`Job "${id}" already exists.`);
 
     await this.insertPending(id, job, data, null);
-    const queueJobId = await this.queue.enqueue({ job, data, jobRowId: id });
+    const queueJobId = await this.queue.enqueue({ job, data, jobRowId: id, ...(input.delayMs === undefined ? {} : { delayMs: input.delayMs }) });
     await this.database.db.updateTable('jobs').set({ queue_job_id: queueJobId }).where('id', '=', id).execute();
     return this.get(id);
   }

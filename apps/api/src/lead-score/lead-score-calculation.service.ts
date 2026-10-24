@@ -11,12 +11,14 @@ import type { ScoreableField } from './lead-score-condition.js';
 import { leadScoreNoActiveModelError } from './lead-score-errors.js';
 import type { ScoreEvaluation } from './lead-score-evaluator.js';
 import { MAX_EVALUATED_RULES, requiredInputFields, scoreLead } from './lead-score-evaluator.js';
+import type { LeadScoreOperation } from './lead-score-feature-gate.service.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
 import { MODEL_DRAFT_STATUS, runAsLeadScoreInternal } from './lead-score-internal.js';
 import { LeadScoreModelService, toModelAttributes, toRuleAttributes } from './lead-score-model.service.js';
 import { LeadScoreRecords } from './lead-score-records.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 import type { ModelAttributes, RuleAttributes } from './lead-score-validator.js';
+import type { EvaluationTrigger } from './lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.5 — computing a score and *keeping* it
@@ -57,8 +59,15 @@ import type { ModelAttributes, RuleAttributes } from './lead-score-validator.js'
  *    a record nobody touched, and a `version` that churns under the reader's feet.
  */
 
-/** The trigger LS.5 writes. `lead_change`, `batch_rebuild` and `decay_sweep` belong to 19-LS.6 and 19-LS.9. */
-const EVALUATION_TRIGGER = 'manual_recalculate';
+/**
+ * The trigger of a call nobody asked for by name.
+ *
+ * `trigger` is stored provenance, so the recalculation paths 19-LS.6 added say which one ran: a job released
+ * by a committed Lead change passes `lead_change`, a Lead inside a rebuild passes `batch_rebuild`, and a
+ * reader of the history can tell "someone pressed recalculate" from "this record was edited". `decay_sweep`
+ * still belongs to 19-LS.9.
+ */
+const DEFAULT_EVALUATION_TRIGGER: EvaluationTrigger = 'manual_recalculate';
 
 /** The Lead attributes this service owns — plan §5.3 in full, all of them server-written. */
 const PROJECTION_FIELDS = [
@@ -118,13 +127,25 @@ export class LeadScoreCalculationService {
   /**
    * Score one Lead under the active published model and keep the result.
    *
-   * One Lead per call on purpose: that is what this phase can promise to be bounded and explicit. The
-   * chunked batch rebuild is 19-LS.6's job, not a loop added here (plan §8.2's two endpoints differ for the
+   * One Lead per call on purpose: that is what makes the unit bounded and the answer explicit. 19-LS.6's
+   * rebuild is a loop *around* this method, in a chunk of at most `MAX_BATCH_CHUNK` Leads with its own gate
+   * operation and its own stored trigger — not a loop added here (plan §8.2's two endpoints differ for the
    * same reason).
+   *
+   * `operation` names which switch governs the call, and `trigger` is what history will say produced the row.
+   * An explicit single-Lead request is gated by `manualRecalculation` and recorded as `manual_recalculate`;
+   * a job released by a Lead change is gated by `eventRecalculation` and recorded as `lead_change`; a Lead
+   * inside a rebuild chunk is gated by `batchRecalculation` and recorded as `batch_rebuild`. One rebuild must
+   * not be blocked by an operator choosing not to enable the interactive button, and turning a switch off must
+   * stop the work already queued behind it.
    */
-  async recalculate(leadId: string): Promise<ScoreWriteView> {
+  async recalculate(
+    leadId: string,
+    options: { operation?: LeadScoreOperation; trigger?: EvaluationTrigger } = {},
+  ): Promise<ScoreWriteView> {
     const startedAt = Date.now();
-    await this.gate.assertOperation('recalculateLead');
+    const trigger = options.trigger ?? DEFAULT_EVALUATION_TRIGGER;
+    await this.gate.assertOperation(options.operation ?? 'recalculateLead');
 
     const lead = await this.records.get('Lead', leadId);
     const model = await this.activeModel();
@@ -147,6 +168,7 @@ export class LeadScoreCalculationService {
         // "the value before this one was this one".
         const prior = await this.store.evaluationByKey(idempotencyKey);
         const evaluationId = prior?.id ?? (await this.insertEvaluation(leadId, model, evaluation, {
+          trigger,
           idempotencyKey,
           sourceRevision,
           inputsAsOf,
@@ -161,11 +183,11 @@ export class LeadScoreCalculationService {
         });
 
         if (prior !== undefined && projectionMatches(lead, projection)) {
-          return view(leadId, evaluationId, false, false, model, evaluation, { idempotencyKey, sourceRevision, inputsAsOf, calculatedAt });
+          return view(leadId, evaluationId, false, false, model, evaluation, { trigger, idempotencyKey, sourceRevision, inputsAsOf, calculatedAt });
         }
 
         await this.records.update('Lead', leadId, projection);
-        return view(leadId, evaluationId, prior === undefined, true, model, evaluation, { idempotencyKey, sourceRevision, inputsAsOf, calculatedAt });
+        return view(leadId, evaluationId, prior === undefined, true, model, evaluation, { trigger, idempotencyKey, sourceRevision, inputsAsOf, calculatedAt });
       }),
     );
   }
@@ -224,7 +246,7 @@ export class LeadScoreCalculationService {
     leadId: string,
     model: ModelAttributes,
     evaluation: ScoreEvaluation,
-    provenance: { idempotencyKey: string; sourceRevision: number; inputsAsOf: string | null; calculatedAt: string; durationMs: number },
+    provenance: { trigger: EvaluationTrigger; idempotencyKey: string; sourceRevision: number; inputsAsOf: string | null; calculatedAt: string; durationMs: number },
   ): Promise<string> {
     const failed = evaluation.resultState === 'failed';
     const data: Record<string, unknown> = {
@@ -241,7 +263,7 @@ export class LeadScoreCalculationService {
       calculatedAt: provenance.calculatedAt,
       inputsAsOf: provenance.inputsAsOf,
       sourceRevision: provenance.sourceRevision,
-      trigger: EVALUATION_TRIGGER,
+      trigger: provenance.trigger,
       resultState: evaluation.resultState,
       coverage: evaluation.coverage,
       // The whole per-rule outcome list: reason code, rule name, dimension, effect, outcome, points and the
@@ -354,7 +376,7 @@ function view(
   projectionWritten: boolean,
   model: ModelAttributes,
   evaluation: ScoreEvaluation,
-  provenance: { idempotencyKey: string; sourceRevision: number; inputsAsOf: string | null; calculatedAt: string },
+  provenance: { trigger: EvaluationTrigger; idempotencyKey: string; sourceRevision: number; inputsAsOf: string | null; calculatedAt: string },
 ): ScoreWriteView {
   return {
     leadId,
@@ -364,7 +386,7 @@ function view(
     model: { id: model.id, name: model.name, modelVersion: model.modelVersion },
     evaluation: {
       idempotencyKey: provenance.idempotencyKey,
-      trigger: EVALUATION_TRIGGER,
+      trigger: provenance.trigger,
       sourceRevision: provenance.sourceRevision,
       inputsAsOf: provenance.inputsAsOf,
       calculatedAt: provenance.calculatedAt,

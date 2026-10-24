@@ -386,7 +386,7 @@ describe('the sample is the caller’s own (plan §6.5, §9.1–§9.2)', () => {
 });
 
 describe('the preview is the door 19-LS.4 opened, and only that door', () => {
-  it('reports scoringPreview as delivered while a stored score still waits for 19-LS.5', async () => {
+  it('reports every recalculation path as delivered and names what still waits', async () => {
     const health = await call('GET', '/api/v1/LeadScore/action/health');
     const body = health.body as unknown as {
       module: { implementedPhases: string[] };
@@ -400,11 +400,17 @@ describe('the preview is the door 19-LS.4 opened, and only that door', () => {
     expect(body.features.find((feature) => feature.key === 'scoring')?.pendingPhase).toBeNull();
     expect(body.features.find((feature) => feature.key === 'scoreExplanation')?.pendingPhase).toBeNull();
     expect(body.operations.find((operation) => operation.operation === 'previewModel')?.feature).toBe('scoringPreview');
-    // 19-LS.4 proved the engine; 19-LS.5 is the phase that kept the score, so those doors no longer name a
-    // pending phase. What still waits is the queued and batch recalculation.
-    expect(body.features.find((feature) => feature.key === 'manualRecalculation')?.pendingPhase).toBeNull();
-    const queued = body.operations.find((operation) => operation.operation === 'batchRecalculate');
-    expect(queued?.pendingPhase).toBe('19-LS.6');
+    // 19-LS.4 proved the engine, 19-LS.5 kept a score and 19-LS.6 put both background paths behind it, so no
+    // recalculation door names a pending phase any more.
+    for (const feature of ['manualRecalculation', 'eventRecalculation', 'batchRecalculation']) {
+      expect(body.features.find((entry) => entry.key === feature)?.pendingPhase, feature).toBeNull();
+    }
+    for (const operation of ['recalculateLead', 'eventRecalculate', 'batchRecalculate']) {
+      expect(body.operations.find((entry) => entry.operation === operation)?.pendingPhase, operation).toBeNull();
+    }
+    // What still waits, waits loudly: a band-change notification is 19-LS.9's, and health says so.
+    const waiting = body.operations.find((operation) => operation.operation === 'aiInsight');
+    expect(waiting?.pendingPhase).toBe('19-LS.17');
     // The engine-health check is computed from the two operator lists, so it can fail on a real drift.
     const engine = body.checks.find((check) => check.name === 'scoring-engine');
     expect(engine?.ok).toBe(true);

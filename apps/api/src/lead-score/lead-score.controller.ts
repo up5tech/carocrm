@@ -1,9 +1,15 @@
-import { InvalidQueryError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
+import { timingSafeEqual } from 'node:crypto';
+
+import { AuthenticationFailedError, InvalidQueryError } from '@carocrm/core/errors/index.js';
+import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
 
-import { ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { Public } from '../auth/auth.guard.js';
+import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
+import { type AppConfig, CONFIG_TOKEN } from '../config.js';
+import { BatchRecalculateSchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { runAsLeadScoreSystem } from './lead-score-authority.js';
 import { LeadScoreCalculationService } from './lead-score-calculation.service.js';
 import { LeadScoreExplanationService } from './lead-score-explanation.service.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
@@ -12,6 +18,7 @@ import { LEADSCORE_CAPABILITIES, LEADSCORE_MODULE, LEADSCORE_PENDING_FEATURES } 
 import { LeadScoreModuleHealthService } from './lead-score-module-health.service.js';
 import { LeadScorePermissionService } from './lead-score-permission.service.js';
 import { LeadScorePreviewService } from './lead-score-preview.service.js';
+import { LeadScoreRecalculationService } from './lead-score-recalculation.service.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 
 /**
@@ -21,8 +28,10 @@ import { LeadScoreSettingsService } from './lead-score-settings.service.js';
  * same gate rather than re-implementing a check: LS.1 added identity, rights, the settings document and the
  * gate probe; LS.3 added the model lifecycle (`validate`, `publish`, `archive`, `new-version`); LS.4 added
  * `preview`, the one engine-backed operation that writes nothing; LS.5 added the score write and its two
- * reads (`score/recalculate`, `score/:leadId`, `score/:leadId/history`). The conversion command still
- * arrives with its own sub-phase (§16).
+ * reads (`score/recalculate`, `score/:leadId`, `score/:leadId/history`); LS.6 added the background half —
+ * `recalculate-batch` for an administrator, and the three `@Public()` worker routes the queue calls, which are
+ * authorized by the shared `x-worker-secret` and run under the module's documented service authority. The
+ * conversion command still arrives with its own sub-phase (§16).
  *
  * Every route asserts a capability server-side; hiding a badge in the SPA is never authorization
  * (AGENTS.md §5.3). The controller owns no business rule.
@@ -43,6 +52,9 @@ export class LeadScoreController {
     @Inject(LeadScorePreviewService) private readonly preview: LeadScorePreviewService,
     @Inject(LeadScoreCalculationService) private readonly calculation: LeadScoreCalculationService,
     @Inject(LeadScoreExplanationService) private readonly explanation: LeadScoreExplanationService,
+    @Inject(LeadScoreRecalculationService) private readonly recalculation: LeadScoreRecalculationService,
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
 
   /** Module health: the platform foundation, the registration invariants, the features and the gate. */
@@ -197,11 +209,12 @@ export class LeadScoreController {
   /**
    * Score one Lead under the active published model and keep the result.
    *
-   * This is the write half of 19-LS.5 and the only way a projection comes into existence: an explicit call
-   * for one record, behind `LeadScoreRecalculate` *and* the core `Lead:edit` right, because a score is
-   * written onto a Lead (plan §8.2, §9.1). Recomputing a Lead whose data has not moved records nothing new —
-   * the evaluation's deterministic key and the projection comparison make that a no-op rather than a second
-   * history row and a bumped record version (§5.4, §10.2). The queued and batch paths are 19-LS.6.
+   * This is the write half of 19-LS.5 and the interactive half of the same command 19-LS.6 queued behind it:
+   * an explicit call for one record, behind `LeadScoreRecalculate` *and* the core `Lead:edit` right, because a
+   * score is written onto a Lead (plan §8.2, §9.1). Recomputing a Lead whose data has not moved records nothing
+   * new — the evaluation's deterministic key and the projection comparison make that a no-op rather than a
+   * second history row and a bumped record version (§5.4, §10.2). A job runs the identical service through
+   * `action/work/recalculate`, and a rebuild through `action/recalculate-batch`.
    */
   @HttpCode(200)
   @Post('action/score/recalculate')
@@ -237,6 +250,94 @@ export class LeadScoreController {
     const input = this.parse(ScoreReadSchema, { leadId });
     const page = this.parse(ScoreHistoryQuerySchema, query ?? {});
     return this.explanation.history(input.leadId, page.limit ?? 20, page.offset ?? 0);
+  }
+
+  // ---------------------------------------------------------------------------
+  // background recalculation (19-LS.6)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Queue a bounded rebuild over the Leads a validated filter names.
+   *
+   * The request returns a job row rather than a result, for the reason plan §11.1 gives every batch: a
+   * rebuild can walk a long Lead set, and an operator needs to see its progress, its counts and a cancel
+   * button while it runs (`/admin/jobs`), not a request that has to stay open until it finishes. The work
+   * itself is chunked — one job evaluates at most `MAX_BATCH_CHUNK` Leads and hands the cursor to the next.
+   */
+  @HttpCode(200)
+  @Post('action/recalculate-batch')
+  async recalculateBatch(@Body() body: unknown) {
+    const input = this.parse(BatchRecalculateSchema, body);
+    return this.recalculation.startBatch({
+      ...(input.limit === undefined ? {} : { limit: input.limit }),
+      ...(input.chunkSize === undefined ? {} : { chunkSize: input.chunkSize }),
+      ...(input.where === undefined ? {} : { where: input.where }),
+    });
+  }
+
+  /**
+   * Worker entry: a committed Lead change happened, decide whether it is worth a job.
+   *
+   * Never a 4xx for "nothing to do": this route is called from an at-least-once outbox subscriber, so an
+   * answer like "the change cannot move this score" has to be a response, not a retry storm.
+   */
+  @Public()
+  @HttpCode(200)
+  @Post('action/work/lead-changed')
+  async workLeadChanged(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
+    this.assertWorkerSecret(secret);
+    const input = this.parse(LeadChangedSchema, body);
+    return runAsLeadScoreSystem(this.scope, 'lead-changed', () =>
+      this.recalculation.handleLeadChanged({ leadId: input.leadId, revision: input.revision, changed: input.changed }),
+    );
+  }
+
+  /** Worker entry: run the recalculation a job promised, as the documented service authority. */
+  @Public()
+  @HttpCode(200)
+  @Post('action/work/recalculate')
+  async workRecalculate(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
+    this.assertWorkerSecret(secret);
+    const input = this.parse(ScoreRecalculateSchema, body);
+    return runAsLeadScoreSystem(this.scope, 'recalculate', () => this.recalculation.recalculateQueued(input.leadId));
+  }
+
+  /** Worker entry: evaluate one chunk of a rebuild and hand the cursor to the next chunk. */
+  @Public()
+  @HttpCode(200)
+  @Post('action/work/recalculate-batch-chunk')
+  async workBatchChunk(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
+    this.assertWorkerSecret(secret);
+    const input = this.parse(RecalculateBatchChunkSchema, body);
+    return runAsLeadScoreSystem(this.scope, 'recalculate-batch-chunk', () =>
+      this.recalculation.runBatchChunk({
+        runId: input.runId,
+        limit: input.limit,
+        chunkSize: input.chunkSize,
+        processed: input.processed,
+        cursor: input.cursor,
+        where: input.where,
+      }),
+    );
+  }
+
+  /**
+   * The shared worker capability, compared in constant time and never logged.
+   *
+   * An unset secret refuses every worker route rather than leaving them open, exactly like the platform's
+   * other worker twins: a deployment that has not configured the capability cannot accidentally run
+   * background scoring, and the answer is an authentication failure, not a partial execution.
+   */
+  private assertWorkerSecret(supplied: string | undefined): void {
+    const expected = this.config.reportWorkerSecret;
+    if (expected === '' || supplied === undefined) {
+      throw new AuthenticationFailedError('Invalid worker capability.');
+    }
+    const expectedBytes = Buffer.from(expected);
+    const suppliedBytes = Buffer.from(supplied);
+    if (expectedBytes.length !== suppliedBytes.length || !timingSafeEqual(expectedBytes, suppliedBytes)) {
+      throw new AuthenticationFailedError('Invalid worker capability.');
+    }
   }
 
   private parse<T extends ZodTypeAny>(schema: T, value: unknown): T['_output'] {

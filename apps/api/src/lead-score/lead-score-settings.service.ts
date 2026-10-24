@@ -47,7 +47,8 @@ const FeatureFlagsSchema = z
   .strict();
 
 /**
- * The one policy section 19-LS.5 reads: which published model a score is computed under.
+ * The policy section 19-LS.5 and 19-LS.6 read: which published model a score is computed under, and how
+ * long a Lead waits after a change before it is recomputed.
  *
  * Plan §5.1 and audit §5.1 choose **one active published model** rather than a per-lead or multi-model
  * policy, and the choice has to live somewhere an administrator can see and change — that is this key, not
@@ -58,10 +59,16 @@ const FeatureFlagsSchema = z
  * whether the row exists and is published. Checking it here would mean the settings document owning a
  * second copy of a fact the record store already holds — and a stale copy of that check would then let a
  * bad id be saved the moment a model was archived.
+ *
+ * `debounceSeconds` is plan §10.2's debounce, and it is the difference between one job per Lead and one
+ * job per keystroke: a person correcting a Lead often saves three times in a minute. It is capped in
+ * seconds because a window long enough to matter for a queue is also long enough to make a score arrive
+ * after the call that was made about the Lead.
  */
 const ScoringSectionSchema = z
   .object({
     activeModelId: z.string().trim().min(1).max(64).nullable().default(null),
+    debounceSeconds: z.number().int().min(0).max(900).default(60),
   })
   .strict();
 

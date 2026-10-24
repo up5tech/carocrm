@@ -28,11 +28,20 @@ import { LeadScoreSettingsService } from './lead-score-settings.service.js';
  * record, a job or a provider.
  */
 
-/** The operations the module will own. LS.2+ implements them; the gate already refuses each one. */
+/**
+ * The operations the module owns. The gate refuses one whose feature has not shipped, so a route cannot
+ * forget the question; a later phase adds its own operation here rather than beside it.
+ *
+ * 19-LS.6 added `eventRecalculate`: the same write as `recalculateLead`, reached by nobody holding a session,
+ * and therefore answering to a different switch. An operator who turns off event-driven recalculation has to
+ * stop the jobs already in the queue, not only the ones that would be created next — a kill switch that only
+ * applies to new work is a setting an administrator has to remember rather than one that works.
+ */
 export const LEADSCORE_OPERATIONS = [
   'readScore',
   'readScoreHistory',
   'recalculateLead',
+  'eventRecalculate',
   'batchRecalculate',
   'validateModel',
   'createModelVersion',
@@ -62,6 +71,8 @@ const OPERATION_RULES: Readonly<Record<LeadScoreOperation, OperationRule>> = {
   readScore: { capability: 'viewScore', feature: 'scoring', writes: false },
   readScoreHistory: { capability: 'explainScore', feature: 'scoreExplanation', writes: false },
   recalculateLead: { capability: 'recalculate', feature: 'manualRecalculation', writes: true },
+  // The queued half of the same write, reached from a job rather than a session (19-LS.6).
+  eventRecalculate: { capability: 'recalculate', feature: 'eventRecalculation', writes: true },
   batchRecalculate: { capability: 'batchRecalculate', feature: 'batchRecalculation', writes: true },
   validateModel: { capability: 'modelManage', feature: 'modelAdministration', writes: false },
   // A new draft version is a write, and it is the only way to change a published model (plan §5.1).

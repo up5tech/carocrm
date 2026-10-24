@@ -406,14 +406,15 @@ describe('a published version is immutable (19-LS.3 acceptance)', () => {
     expect(lead.body['scoreBand']).toBe('Unknown');
     expect(lead.body['scoreStatus']).toBe('not_scored');
     // Plan §15.1: publishing does not silently recalculate anything — the absent projection above is the
-    // proof. A recalculation stays an explicit request: 19-LS.5 delivered the one-Lead command (its own
-    // switch, left off in this suite, so it refuses as a switch rather than as a missing phase), and the
-    // queued and batch paths are still owed by 19-LS.6.
-    const manual = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation: 'recalculateLead' });
-    expect((manual.body as { pendingPhase: string | null }).pendingPhase).toBeNull();
-    expect((manual.body as { admitted: boolean; code: string }).admitted).toBe(false);
-    const queued = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation: 'batchRecalculate' });
-    expect((queued.body as { pendingPhase: string }).pendingPhase).toBe('19-LS.6');
+    // proof. A recalculation stays an explicit request or an explicit rebuild: 19-LS.5 delivered the one-Lead
+    // command, and 19-LS.6 the queued job and the batch rebuild behind it. All three switches are left off in
+    // this suite, so each refuses as a switch rather than as a missing phase.
+    for (const operation of ['recalculateLead', 'eventRecalculate', 'batchRecalculate']) {
+      const gate = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });
+      expect((gate.body as { pendingPhase: string | null }).pendingPhase, operation).toBeNull();
+      expect((gate.body as { admitted: boolean; code: string }).admitted, operation).toBe(false);
+      expect((gate.body as { code: string }).code, operation).toBe('LEADSCORE_MODULE_DISABLED');
+    }
   });
 });
 
@@ -660,16 +661,13 @@ describe('the lifecycle is a documented surface (19-LS.3)', () => {
     for (const operation of ['validateModel', 'publishModel', 'createModelVersion']) {
       expect(operations.get(operation)?.admitted, operation).toBe(true);
     }
-    for (const [operation, phase] of [
-      ['conversionExecute', '19-LS.13'],
-      ['batchRecalculate', '19-LS.6'],
-    ] as const) {
+    for (const [operation, phase] of [['conversionExecute', '19-LS.13']] as const) {
       expect(operations.get(operation)?.admitted, operation).toBe(false);
       expect(operations.get(operation)?.pendingPhase, operation).toBe(phase);
     }
-    // Operations 19-LS.4 and 19-LS.5 delivered refuse this suite for want of a switch, not for want of code,
-    // so the answer carries no phase at all.
-    for (const operation of ['previewModel', 'readScore', 'readScoreHistory', 'recalculateLead']) {
+    // Operations 19-LS.4, 19-LS.5 and 19-LS.6 delivered refuse this suite for want of a switch, not for want
+    // of code, so the answer carries no phase at all.
+    for (const operation of ['previewModel', 'readScore', 'readScoreHistory', 'recalculateLead', 'eventRecalculate', 'batchRecalculate']) {
       const entry = operations.get(operation);
       expect(entry?.admitted, operation).toBe(false);
       expect(entry?.pendingPhase, operation).toBeNull();
