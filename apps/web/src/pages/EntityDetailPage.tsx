@@ -372,14 +372,19 @@ export function EntityDetailPage() {
     list.map((entry) => ({
       key: entry.name,
       label: fieldLabel(entry.name, entry.field, metadata.data),
-      children: (
-        <FieldValue
-          field={entry.field}
-          value={record?.[entry.name]}
-          fieldName={entry.name}
-          linkLabels={linkLabelsOf(record ?? undefined)}
-        />
-      ),
+      children:
+        entity === 'TargetListEntry' && entry.name === 'name' && record?.['memberType'] && record?.['memberId'] ? (
+          <Link to={`${base}/${String(record['memberType'])}/${String(record['memberId'])}`}>
+            {String(record['name'] ?? '')}
+          </Link>
+        ) : (
+          <FieldValue
+            field={entry.field}
+            value={record?.[entry.name]}
+            fieldName={entry.name}
+            linkLabels={linkLabelsOf(record ?? undefined)}
+          />
+        ),
     }));
 
   /**

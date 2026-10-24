@@ -767,9 +767,15 @@ export function EntityListPage() {
             ...(entry.name === displayField ? { fixed: 'left' as const } : {}),
             render: (_: unknown, row: Record<string, unknown>) =>
               entry.name === displayField ? (
-                <Link className="carocrm-row-link" to={`${base}/${entityName}/${String(row['id'])}`}>
-                  {String(row[entry.name] ?? '')}
-                </Link>
+                entityName === 'TargetListEntry' && row['memberType'] && row['memberId'] ? (
+                  <Link className="carocrm-row-link" to={`${base}/${String(row['memberType'])}/${String(row['memberId'])}`}>
+                    {String(row[entry.name] ?? '')}
+                  </Link>
+                ) : (
+                  <Link className="carocrm-row-link" to={`${base}/${entityName}/${String(row['id'])}`}>
+                    {String(row[entry.name] ?? '')}
+                  </Link>
+                )
               ) : (
                 <FieldValue
                   field={entry.field}

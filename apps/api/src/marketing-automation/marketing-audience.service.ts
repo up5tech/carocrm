@@ -165,6 +165,21 @@ export class MarketingAudienceService {
     return currentTx() ?? this.database.db;
   }
 
+  /** Resolve a human-readable label for a referenced CRM record (member). Prefers the entity's
+   *  configured display field, then falls back to common identifying fields instead of the raw id. */
+  private memberLabel(entityType: string, record: Record<string, unknown>): string | null {
+    const displayField = this.metadata.registry.getEntity(entityType)?.record?.displayField;
+    if (typeof displayField === "string" && displayField !== "") {
+      const value = record[displayField];
+      if (typeof value === "string" && value.trim() !== "") return value;
+    }
+    for (const field of ["name", "title", "subject", "userName", "emailAddress", "email", "number", "code"]) {
+      const value = record[field];
+      if (typeof value === "string" && value.trim() !== "") return value;
+    }
+    return null;
+  }
+
   // -------------------------------------------------------------------------
   // Static membership (§5.2 "explicitly selected CRM record IDs with membership audit")
   // -------------------------------------------------------------------------
@@ -215,8 +230,9 @@ export class MarketingAudienceService {
       }
       // The record has to exist and be readable by the caller: membership of a record nobody can see would
       // be an unverifiable claim about a person (§9.2).
+      let memberRecord: Record<string, unknown>;
       try {
-        await this.entities.get(member.entityType, member.entityId);
+        memberRecord = await this.entities.get(member.entityType, member.entityId);
       } catch {
         rejected.push(`${key}: no such record, or you may not read it.`);
         continue;
@@ -224,7 +240,7 @@ export class MarketingAudienceService {
       live.add(key);
       await runAsMarketingSystem(this.scope, "audienceMembership", () =>
         this.entities.create(TARGET_LIST_ENTRY_ENTITY, {
-          name: `${member.entityType} ${member.entityId}`,
+          name: this.memberLabel(member.entityType, memberRecord) ?? `${member.entityType} ${member.entityId}`,
           targetListId,
           memberType: member.entityType,
           memberId: member.entityId,
@@ -295,7 +311,7 @@ export class MarketingAudienceService {
       entryId: entry.id,
       entityType: String(entry.data["memberType"] ?? ""),
       entityId: String(entry.data["memberId"] ?? ""),
-      name: typeof record["name"] === "string" ? record["name"] : null,
+      name: this.memberLabel(String(entry.data["memberType"] ?? ""), record),
       source: typeof entry.data["source"] === "string" ? String(entry.data["source"]) : null,
       addedAt: typeof entry.data["addedAt"] === "string" ? String(entry.data["addedAt"]) : null,
     }));
@@ -653,7 +669,7 @@ export class MarketingAudienceService {
       entityId,
       emailAddress: address,
       emailHash: address === "" ? null : (emailIdentity(address, this.config.encryptionKey)?.hash ?? null),
-      name: typeof record["name"] === "string" ? record["name"] : null,
+      name: this.memberLabel(entityType, record),
       sources: [source],
       excluded: false,
     };

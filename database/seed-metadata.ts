@@ -4112,7 +4112,7 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
         isEntity: true,
         fields: {
           ...standardFields,
-          name: { ...standardFields.name, inList: false, inDetail: false, inEdit: false },
+          name: { ...standardFields.name, inList: true, inDetail: true, inEdit: false },
           targetListId: { type: 'link', entityKey: 'TargetList', required: true, inList: true, inDetail: true },
           // A reference to the canonical CRM record — identity is never copied in here (§1.2 "reuse over
           // duplication"), and the pair is what the unique index in migration 037 constrains.
@@ -4121,7 +4121,7 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
           // as an immutable input (it is the physical discriminator of `entity_records`), so an attribute
           // with that name could never be written by anything.
           memberType: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
-          memberId: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+          memberId: { type: 'varchar', maxLength: 64, required: true, inList: false, inDetail: false },
           addedById: { type: 'link', entityKey: 'User', inDetail: true },
           addedAt: { type: 'datetime', inList: true, inDetail: true, sortable: true },
           source: { type: 'enum', values: MA_TARGET_LIST_ENTRY_SOURCES, defaultValue: 'Manual', inList: true, inDetail: true },
@@ -4135,7 +4135,7 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
           { name: 'idx_entity_records_target_list_entry_record', fields: ['memberType', 'memberId'] },
         ],
         layouts: {
-          list: [{ entity: 'TargetListEntry', type: 'list', panels: [{ name: 'list', position: 0, fields: ['targetListId', 'memberType', 'memberId', 'source', 'addedAt'] }] }],
+          list: [{ entity: 'TargetListEntry', type: 'list', panels: [{ name: 'list', position: 0, fields: ['targetListId', 'memberType', 'name', 'source', 'addedAt'] }] }],
         },
         record: { displayField: 'name', removable: false, followable: false, streamable: false },
         client: { web: false },
