@@ -93,7 +93,7 @@ export function ESignaturePage() {
   const adapterModes = view.providerAdapters.map((adapter) => t(`esignature.connections.adapterModes.${adapter.mode}`)).join(' · ');
 
   return (
-    <div className="carocrm-page" style={{ maxWidth: 1080, margin: '0 auto' }}>
+    <div className="carocrm-page">
       <div className="carocrm-page-head">
         <div>
           <h1 className="carocrm-page-title">
