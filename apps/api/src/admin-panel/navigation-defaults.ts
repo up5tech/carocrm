@@ -101,7 +101,10 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     route: '/voice-communications',
     labelKey: 'voice.nav.voice',
     icon: 'PhoneOutlined',
-    order: 78,
+    // Module diagnostics are configuration, so the entry lives with the settings, not beside the
+    // inbox. It keeps its own capability gate: `parent` only changes where the entry is drawn.
+    parent: 'administration',
+    order: 947,
     inQuickSearch: true,
     permission: { entity: 'VoiceProviderAccount', action: 'read' },
   },
@@ -113,7 +116,8 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     route: '/advanced-integrations',
     labelKey: 'advancedintegrations.module.label',
     icon: 'ApiOutlined',
-    order: 79,
+    parent: 'administration',
+    order: 948,
     inQuickSearch: true,
     permission: { entity: 'IntegrationConnection', action: 'read' },
   },
@@ -126,7 +130,8 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     route: '/esignature',
     labelKey: 'esignature.module.label',
     icon: 'FileSearchOutlined',
-    order: 81,
+    // Sits under RECORDS (100) and above the Extensions/Administration containers (900+).
+    order: 200,
     inQuickSearch: true,
     permission: { entity: 'SignatureRequest', action: 'read' },
     feature: { module: 'eSignature', flag: 'enabled' },
@@ -140,13 +145,17 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     route: '/docs',
     labelKey: 'web.docs.title',
     icon: 'BookOutlined',
-    order: 80,
+    parent: 'administration',
+    order: 949,
     inQuickSearch: true,
     feature: { module: 'docs', flag: 'showInSidebar' },
   },
 ];
 
 export const NAVIGATION_CONTAINER_GROUPS: readonly NavigationGroupSeed[] = [
+  // CRM is the customer records promoted out of RECORDS into their own group: they are the entities
+  // an operator opens all day, and burying them one level down cost a click on every visit.
+  { key: 'crm', labelKey: 'web.navGroup.crm', icon: 'TeamOutlined', order: 90, container: true },
   { key: 'records', labelKey: 'core.app.records', icon: 'ProfileOutlined', order: 100, container: true },
   { key: 'extensions', labelKey: 'core.app.extensions', icon: 'ApiOutlined', order: 900, container: true },
   { key: 'administration', labelKey: 'core.app.administration', icon: 'SettingOutlined', order: 950, container: true },
@@ -158,7 +167,10 @@ export const NAVIGATION_CONTAINER_GROUPS: readonly NavigationGroupSeed[] = [
  * of leaving a dead entry. An entity's own `nav.group` metadata wins over this table (§4.5).
  */
 export const NAVIGATION_SUBGROUPS: readonly (NavigationGroupSeed & { entityNames: readonly string[] })[] = [
-  { key: 'customers', labelKey: 'web.navGroup.customers', icon: 'TeamOutlined', order: 110, container: false, entityNames: ['Account', 'Contact', 'Lead', 'Opportunity'] },
+  // `crm` is also a container (see NAVIGATION_CONTAINER_GROUPS): it stays listed here so the entity
+  // → group mapping and the metadata `nav.group` validator still know the key, and the RECORDS loop
+  // skips it because it renders as its own group.
+  { key: 'crm', labelKey: 'web.navGroup.crm', icon: 'TeamOutlined', order: 110, container: false, entityNames: ['Account', 'Contact', 'Lead', 'Opportunity'] },
   { key: 'activities', labelKey: 'web.navGroup.activities', icon: 'CarryOutOutlined', order: 120, container: false, entityNames: ['Task', 'Call', 'Meeting', 'Email', 'EmailTemplate'] },
   { key: 'serviceDesk', labelKey: 'web.navGroup.serviceDesk', icon: 'CustomerServiceOutlined', order: 130, container: false, entityNames: ['Case', 'CaseQueue', 'CaseAssignment', 'CaseTransition', 'QueueMember', 'RoutingRule', 'SLAPolicy', 'CaseSLAClock', 'CsatSurvey', 'BusinessCalendar'] },
   { key: 'knowledge', labelKey: 'web.navGroup.knowledge', icon: 'BookOutlined', order: 140, container: false, entityNames: ['KnowledgeArticle', 'KnowledgeCategory'] },

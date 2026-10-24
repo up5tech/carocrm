@@ -32,7 +32,7 @@ Cached in process for 30 s per user, keyed on the metadata version, and dropped 
 |---|---|
 | `home` `search` `dashboards` `reports` `stream` `calendar` `myTasks` | a fixed page |
 | `entity:<EntityName>` | a record entity's list route |
-| `group:<key>` | a submenu or a container group (`group:records`, `group:customers`, `group:sales-catalog`) |
+| `group:<key>` | a submenu or a container group (`group:records`, `group:crm`, `group:sales-catalog`) |
 | `extension:<packageId>:<route>` | a nav entry an installed package contributed |
 | `admin:<tabKey>` | an administration screen |
 
@@ -44,7 +44,7 @@ several entries and each needs to be addressable on its own.
 ```jsonc
 {
   "items":  [ { "key": "home", "enabled": true, "order": 10, "labelKey": "core.app.home" } ],
-  "groups": [ { "key": "customers", "enabled": true, "order": 110, "accent": "blue" } ],
+  "groups": [ { "key": "crm", "enabled": true, "order": 90, "accent": "blue" } ],
   "accentPalette": ["blue", "green", "orange", "red", "purple", "cyan", "magenta", "gold"]
 }
 ```

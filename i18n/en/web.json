@@ -1193,6 +1193,7 @@
     "portalFooter": "External portal — access limited to your records"
   },
   "navGroup": {
+    "crm": "CRM",
     "customers": "Customers",
     "activities": "Activities",
     "serviceDesk": "Service Desk",

@@ -187,6 +187,12 @@ export class NavigationService {
       if (page.feature !== undefined && !(await this.featureOn(page.feature.module, page.feature.flag))) {
         continue;
       }
+      // A page may live inside a container (the module pages that are really settings). It keeps
+      // its own permission and feature gates above; only its position changes.
+      if (page.parent !== undefined) {
+        push(page.parent, page);
+        continue;
+      }
       const node = buildNode(page);
       if (node !== null) items.push(node);
     }
@@ -196,22 +202,26 @@ export class NavigationService {
       if (container.key !== 'records') {
         children = buildChildren(container.key);
       } else {
-        children = NAVIGATION_SUBGROUPS.map((subgroup) => {
-          const membersOfSubgroup = buildChildren(subgroup.key);
-          if (membersOfSubgroup.length === 0) return null;
-          // The Project submenu is named after the Project record itself, as the sidebar has always done.
-          const project = subgroup.key === 'project' ? membersOfSubgroup.find((node) => node.key === 'entity:Project') : undefined;
-          const seed: NavigationSeed = {
-            key: `group:${subgroup.key}`,
-            kind: 'group',
-            route: '',
-            label: project?.label ?? subgroup.key,
-            labelKey: project === undefined ? subgroup.labelKey : undefined,
-            icon: project?.icon ?? subgroup.icon,
-            order: subgroup.order,
-          };
-          return buildNode(seed, membersOfSubgroup.sort(byOrder));
-        })
+        // A subgroup whose key is also a container (the CRM group) is rendered as that container,
+        // so it must not appear a second time inside RECORDS.
+        children = NAVIGATION_SUBGROUPS
+          .filter((subgroup) => !NAVIGATION_CONTAINER_GROUPS.some((container) => container.key === subgroup.key))
+          .map((subgroup) => {
+            const membersOfSubgroup = buildChildren(subgroup.key);
+            if (membersOfSubgroup.length === 0) return null;
+            // The Project submenu is named after the Project record itself, as the sidebar has always done.
+            const project = subgroup.key === 'project' ? membersOfSubgroup.find((node) => node.key === 'entity:Project') : undefined;
+            const seed: NavigationSeed = {
+              key: `group:${subgroup.key}`,
+              kind: 'group',
+              route: '',
+              label: project?.label ?? subgroup.key,
+              labelKey: project === undefined ? subgroup.labelKey : undefined,
+              icon: project?.icon ?? subgroup.icon,
+              order: subgroup.order,
+            };
+            return buildNode(seed, membersOfSubgroup.sort(byOrder));
+          })
           .filter((node): node is NavigationNode => node !== null);
         const salesChildren = NAVIGATION_SALES_GROUPS.map((group, index) => {
           const inner = buildChildren(`sales:${group.key}`);
