@@ -1,6 +1,6 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Dropdown, Empty, Input, Modal, Popconfirm, Space, Tooltip, Typography } from 'antd';
+import { Button, Dropdown, Input, Modal, Popconfirm, Space, Tooltip, Typography } from 'antd';
 import { useState } from 'react';
 
 import { api } from '../../api/client.js';
@@ -236,13 +236,6 @@ export function CRMChatPromptTemplates(props: CRMChatPromptTemplatesProps) {
         <Text type="secondary" style={{ fontSize: 11 }}>
           {t('web.crmChat.prompts.unavailable')}
         </Text>
-      ) : null}
-
-      {prompts.data !== undefined && prompts.data.list.length === 0 && canManage ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={<Text type="secondary">{t('web.crmChat.prompts.empty')}</Text>}
-        />
       ) : null}
     </Space>
   );

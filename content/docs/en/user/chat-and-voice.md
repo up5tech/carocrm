@@ -6,7 +6,7 @@ order: 130
 tags: [chat, crm-chat, voice, calls, sms, assistant]
 aliases: ["trò chuyện với trợ lý", "cách dùng chat", "khung nhắn tin", "hộp thư thoại"]
 related: [user/stream-and-notifications, user/record-page, admin/settings-overview]
-updated: 2026-10-23
+updated: 2026-10-24
 ---
 
 There are two surfaces here and they do not talk to each other. [CRM Chat](/crm-chat) is a thread
@@ -30,8 +30,12 @@ Three regions:
   and a citation chip under each answer. Citations are reauthorized when the thread renders, so a
   source you can no longer read shows as locked instead of opening something you should not see. A
   **Load older** button pages back through history.
-- The composer at the bottom, plus capability and feature cards, and a diagnostics panel you can
-  toggle.
+- The composer at the bottom. **Templates** inserts a saved sentence, **Save as template** keeps the
+  current draft, and the character counter sits beside **Send**.
+
+The capability list, the feature flags, the module facts and the health checks are not on the page
+itself: they live in the **Diagnostics** drawer, opened from the bug button in the page header. They
+answer "why can't I send?" — a question asked when something is wrong, not while reading an answer.
 
 **New** is client-side. It clears the draft and focuses the box; the thread itself is only created on
 the server when the first message is accepted.

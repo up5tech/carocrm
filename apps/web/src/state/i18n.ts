@@ -186,6 +186,27 @@ export function formatNumber(value: number): string {
   return new Intl.NumberFormat(activeLocale).format(value);
 }
 
+/**
+ * The clock time of an instant, in the user's timezone (§41.6). Chat lists and message headers
+ * show the time alone for today and fall back to `formatDateTime` for anything older, so this is
+ * kept separate rather than adding another flag to that formatter.
+ */
+export function formatClock(value: string | null | undefined): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(activeLocale, {
+    timeZone: formatTz,
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
+/** Whether two instants fall on the same calendar day in the user's timezone. */
+export function isSameCalendarDay(a: string, b: string): boolean {
+  return formatDateTime(a, false) === formatDateTime(b, false);
+}
+
 export function t(key: string, variables?: Record<string, unknown>): string {
   const translated = (variables === undefined ? i18n.t(key) : i18n.t(key, variables)) as string | undefined;
   if (translated !== undefined && translated !== key) return translated;

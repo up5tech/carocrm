@@ -1,6 +1,6 @@
 import { SendOutlined, StopOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Input, Space, Spin, Typography } from 'antd';
+import { Alert, Button, Input, Space } from 'antd';
 import type { ComponentRef } from 'react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -23,6 +23,11 @@ export interface CRMChatComposerProps {
   readonly onTurnSubmitted?: (result: CRMChatTurnResult) => void;
   /** Bumped by the page when the user starts a new conversation; clears and focuses the composer. */
   readonly resetSignal?: number | undefined;
+  /**
+   * Text the page wants to put in the composer — a suggested question from the empty state. The
+   * nonce makes a repeated suggestion of the same text a new event.
+   */
+  readonly prefill?: { readonly text: string; readonly nonce: number } | undefined;
 }
 
 /** User-safe progress phases. The server never streams hidden reasoning, only lifecycle state. */
@@ -41,7 +46,7 @@ type TurnPhase = 'idle' | 'queued' | 'thinking' | 'tool' | 'finishing';
  * - 19-CHAT.12 — the action proposal card, when a turn asks for a write to be confirmed
  */
 export function CRMChatComposer(props: CRMChatComposerProps) {
-  const { conversationId, enabled, maxMessageChars, turnTimeoutSeconds, canManagePrompts = false, onTurnSubmitted, resetSignal } = props;
+  const { conversationId, enabled, maxMessageChars, turnTimeoutSeconds, canManagePrompts = false, onTurnSubmitted, resetSignal, prefill } = props;
 
   const [prompt, setPrompt] = useState('');
   const [currentTurnId, setCurrentTurnId] = useState<string | null>(null);
@@ -52,12 +57,22 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const textAreaRef = useRef<ComponentRef<typeof TextArea>>(null);
   const seenResetSignal = useRef(resetSignal);
+  const seenPrefillNonce = useRef(prefill?.nonce);
   // The first turn starts without a conversation id and creates one on the server. Keep the live id
   // in a ref so the stream's terminal event invalidates the right detail query, not the pre-turn key.
   const conversationRef = useRef(conversationId);
   useEffect(() => {
     conversationRef.current = conversationId;
   }, [conversationId]);
+
+  // A suggested question from the empty state lands in the box, ready to edit and send. It is
+  // inserted as plain text like a template: nothing about it is submitted on the user's behalf.
+  useEffect(() => {
+    if (prefill === undefined || prefill.nonce === seenPrefillNonce.current) return;
+    seenPrefillNonce.current = prefill.nonce;
+    setPrompt(prefill.text);
+    textAreaRef.current?.focus();
+  }, [prefill]);
 
   // "New" is a client-side action: the thread does not exist until the first turn. Clearing the
   // draft and focusing the box is the only visible effect it can have before that turn.
@@ -259,21 +274,17 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
     <div>
       {/* Live turn progress: lifecycle and tool steps from SSE, never hidden reasoning. */}
       {turnActive || stream.isConnected ? (
-        <Alert
-          type="info"
-          showIcon
-          icon={<Spin size="small" />}
-          message={t('web.crmChat.streamingInProgress')}
-          description={
-            <Space size={8}>
-              <Typography.Text type="secondary">{progressText}</Typography.Text>
-              <Button size="small" danger icon={<StopOutlined />} onClick={handleCancel}>
-                {t('web.crmChat.stopGeneration')}
-              </Button>
-            </Space>
-          }
-          style={{ marginBottom: 12 }}
-        />
+        <div className="carocrm-chat-thinking" role="status" aria-live="polite">
+          <span className="carocrm-chat-dots" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="carocrm-chat-thinking-text">{progressText}</span>
+          <Button size="small" type="text" danger icon={<StopOutlined />} onClick={handleCancel}>
+            {t('web.crmChat.stopGeneration')}
+          </Button>
+        </div>
       ) : null}
 
       {/* Error display */}
@@ -300,78 +311,56 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
         />
       )}
 
-      {/* 19-CHAT.14 — saved prompt templates. Inserting one puts its text in the composer. */}
-      <div style={{ marginBottom: 8 }}>
-        <CRMChatPromptTemplates
-          canManage={canManagePrompts}
-          currentPrompt={prompt}
-          onInsert={(text) => setPrompt((current) => (current.trim() === '' ? text : `${current}\n${text}`))}
+      <div className="carocrm-chat-dock-frame">
+        {/* 19-CHAT.14 — saved prompt templates. Inserting one puts its text in the composer. */}
+        <div className="carocrm-chat-dock-tools">
+          <CRMChatPromptTemplates
+            canManage={canManagePrompts}
+            currentPrompt={prompt}
+            onInsert={(text) => setPrompt((current) => (current.trim() === '' ? text : `${current}\n${text}`))}
+          />
+        </div>
+
+        <TextArea
+          ref={textAreaRef}
+          variant="borderless"
+          autoSize={{ minRows: 1, maxRows: 6 }}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          disabled={!enabled || submitTurn.isPending || stream.isConnected || turnActive}
+          placeholder={enabled ? t('web.crmChat.composerPlaceholder') : t('web.crmChat.composerUnavailable')}
+          maxLength={maxMessageChars + 100} // Allow slight overage for UX, validate on submit
+          onKeyDown={(e) => {
+            // Submit on Enter (without Shift), cancel on Escape.
+            if (e.key === 'Enter' && !e.shiftKey && canSubmit) {
+              e.preventDefault();
+              handleSubmit();
+            }
+            if (e.key === 'Escape' && turnActive) {
+              handleCancel();
+            }
+          }}
         />
-      </div>
 
-      {/* Composer textarea */}
-      <TextArea
-        ref={textAreaRef}
-        rows={3}
-        value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        disabled={!enabled || submitTurn.isPending || stream.isConnected || turnActive}
-        placeholder={
-          enabled
-            ? t('web.crmChat.composerPlaceholder')
-            : t('web.crmChat.composerUnavailable')
-        }
-        maxLength={maxMessageChars + 100} // Allow slight overage for UX, validate on submit
-        onKeyDown={(e) => {
-          // Submit on Enter (without Shift), cancel on Escape.
-          if (e.key === 'Enter' && !e.shiftKey && canSubmit) {
-            e.preventDefault();
-            handleSubmit();
-          }
-          if (e.key === 'Escape' && turnActive) {
-            handleCancel();
-          }
-        }}
-      />
-
-      {/* Footer with controls */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          marginTop: 12,
-        }}
-      >
-        <Typography.Text
-          type={isOverLimit ? 'danger' : 'secondary'}
-          style={{ fontSize: 12 }}
-        >
-          {t('web.crmChat.composerHint', {
-            max: maxMessageChars,
-            seconds: turnTimeoutSeconds,
-          })}{' '}
-          ({charCount}/{maxMessageChars})
-        </Typography.Text>
-
-        <Space>
-          <Button
-            disabled={!turnActive}
-            onClick={handleCancel}
-          >
-            {t('web.crmChat.cancelTurn')}
-          </Button>
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            disabled={!canSubmit}
-            loading={submitTurn.isPending}
-            onClick={handleSubmit}
-          >
-            {turnActive || stream.isConnected ? t('web.crmChat.generating') : t('web.crmChat.send')}
-          </Button>
-        </Space>
+        <div className="carocrm-chat-dock-foot">
+          <span className={`carocrm-chat-dock-hint${isOverLimit ? ' is-over' : ''}`}>
+            {t('web.crmChat.composerHint', { max: maxMessageChars, seconds: turnTimeoutSeconds })}
+          </span>
+          <Space size={8}>
+            <span className={`carocrm-chat-counter${isOverLimit ? ' is-over' : ''}`}>
+              {charCount}/{maxMessageChars}
+            </span>
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              disabled={!canSubmit}
+              loading={submitTurn.isPending}
+              onClick={handleSubmit}
+            >
+              {turnActive || stream.isConnected ? t('web.crmChat.generating') : t('web.crmChat.send')}
+            </Button>
+          </Space>
+        </div>
       </div>
     </div>
   );

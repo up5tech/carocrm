@@ -2274,6 +2274,15 @@
     "archivedTag": "Archived",
     "selectConversation": "Choose a conversation on the left to read its history.",
     "startConversationHint": "Type a message below to start a new conversation.",
+    "heroTitle": "What would you like to know?",
+    "heroHint": "Ask about your CRM records. Answers name the records they used, and any change waits for your confirmation.",
+    "suggestionsTitle": "Try asking",
+    "suggestion": {
+      "opportunities": "Summarize my open opportunities",
+      "staleAccounts": "Which accounts had no activity this month?",
+      "closingQuarter": "Show the deals closing this quarter",
+      "followUpEmail": "Draft a follow-up email for my last meeting"
+    },
     "loadOlder": "Load older messages",
     "historyEmpty": "This conversation has no messages yet.",
     "redactedTag": "Redacted",

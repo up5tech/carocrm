@@ -2274,6 +2274,15 @@
     "archivedTag": "Đã lưu trữ",
     "selectConversation": "Chọn một hội thoại ở cột bên trái để xem lịch sử.",
     "startConversationHint": "Nhập tin nhắn bên dưới để bắt đầu hội thoại mới.",
+    "heroTitle": "Bạn muốn biết điều gì?",
+    "heroHint": "Hỏi về dữ liệu CRM của bạn. Câu trả lời nêu rõ bản ghi đã dùng, và mọi thay đổi chỉ diễn ra sau khi bạn xác nhận.",
+    "suggestionsTitle": "Thử hỏi",
+    "suggestion": {
+      "opportunities": "Tóm tắt các cơ hội đang mở của tôi",
+      "staleAccounts": "Tài khoản nào chưa có hoạt động trong tháng này?",
+      "closingQuarter": "Cho tôi xem các thương vụ sẽ chốt trong quý này",
+      "followUpEmail": "Soạn email theo dõi cho cuộc họp gần nhất"
+    },
     "loadOlder": "Tải tin nhắn cũ hơn",
     "historyEmpty": "Hội thoại này chưa có tin nhắn nào.",
     "redactedTag": "Đã lược bớt",

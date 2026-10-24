@@ -1,13 +1,11 @@
-import { LinkOutlined, LockOutlined } from '@ant-design/icons';
-import { Button, Empty, Space, Tag, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { LinkOutlined, LockOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
+import { Button, Tag, Tooltip } from 'antd';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { CRMChatCitation, CRMChatMessageView, CRMChatReauthorizedCitation } from '../../api/types.js';
-import { t } from '../../state/i18n.js';
+import { formatClock, formatDateTime, isSameCalendarDay, t } from '../../state/i18n.js';
 import { CRMChatFeedbackButtons } from './CRMChatFeedbackButtons.js';
-
-const { Text } = Typography;
 
 export interface CRMChatMessageListProps {
   readonly messages: readonly CRMChatMessageView[];
@@ -17,6 +15,11 @@ export interface CRMChatMessageListProps {
   readonly onLoadOlder: () => void;
   /** Whether the answer feedback feature is on for this caller. */
   readonly feedbackEnabled?: boolean | undefined;
+  /**
+   * Identifies the thread being shown. A change means the user opened another conversation, so the
+   * transcript jumps to the newest message instead of keeping the previous scroll position.
+   */
+  readonly conversationKey?: string | undefined;
 }
 
 /**
@@ -31,37 +34,71 @@ export interface CRMChatMessageListProps {
  * - Timestamps and role labels
  * - "Load older" pagination button
  * - 19-CHAT.14 — answer feedback on an assistant answer
+ *
+ * The transcript owns its scroll container: the composer below it must stay put while the
+ * conversation moves, so the page cannot scroll the whole pane.
  */
 export function CRMChatMessageList(props: CRMChatMessageListProps) {
-  const { messages, olderMessages = [], hasMore, loadingOlder, onLoadOlder, feedbackEnabled = false } = props;
+  const {
+    messages,
+    olderMessages = [],
+    hasMore,
+    loadingOlder,
+    onLoadOlder,
+    feedbackEnabled = false,
+    conversationKey,
+  } = props;
 
   const allMessages = [...olderMessages, ...messages];
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Whether the reader is parked at the newest message. A new answer only auto-scrolls when they
+  // are; scrolling someone away from the history they were reading would be hostile.
+  const stickToBottom = useRef(true);
+  const lastMessageId = allMessages[allMessages.length - 1]?.id ?? null;
+  const previousKey = useRef(conversationKey);
+  const previousLastId = useRef<string | null>(null);
+
+  const handleScroll = (): void => {
+    const element = scrollRef.current;
+    if (element === null) return;
+    stickToBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+  };
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (element === null) return;
+    const threadChanged = previousKey.current !== conversationKey;
+    const appended = previousLastId.current !== lastMessageId;
+    previousKey.current = conversationKey;
+    previousLastId.current = lastMessageId;
+    if (!threadChanged && !appended) return;
+    if (threadChanged || stickToBottom.current) {
+      element.scrollTop = element.scrollHeight;
+      stickToBottom.current = true;
+    }
+  }, [conversationKey, lastMessageId]);
 
   if (allMessages.length === 0) {
     return (
-      <Empty
-        description={<Text type="secondary">{t('web.crmChat.historyEmpty')}</Text>}
-      />
+      <div className="carocrm-chat-thread-empty" ref={scrollRef}>
+        {t('web.crmChat.historyEmpty')}
+      </div>
     );
   }
 
   return (
-    <div>
-      {/* Load older messages button */}
-      {hasMore && (
-        <div style={{ marginBottom: 12 }}>
+    <div className="carocrm-chat-thread" ref={scrollRef} onScroll={handleScroll}>
+      {hasMore ? (
+        <div className="carocrm-chat-load-older">
           <Button size="small" loading={loadingOlder} onClick={onLoadOlder}>
             {t('web.crmChat.loadOlder')}
           </Button>
         </div>
-      )}
+      ) : null}
 
-      {/* Messages */}
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
-        {allMessages.map((message) => (
-          <MessageItem key={message.id} message={message} feedbackEnabled={feedbackEnabled} />
-        ))}
-      </Space>
+      {allMessages.map((message) => (
+        <MessageItem key={message.id} message={message} feedbackEnabled={feedbackEnabled} />
+      ))}
     </div>
   );
 }
@@ -75,60 +112,48 @@ function MessageItem({ message, feedbackEnabled }: MessageItemProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
 
+  const tone = isUser ? 'user' : isAssistant ? 'assistant' : 'system';
+  const stamp =
+    isSameCalendarDay(message.createdAt, new Date().toISOString())
+      ? formatClock(message.createdAt)
+      : formatDateTime(message.createdAt, true);
+
   return (
-    <div
-      style={{
-        padding: 12,
-        borderRadius: 8,
-        backgroundColor: isUser ? '#e6f4ff' : isAssistant ? '#f6ffed' : '#fafafa',
-        border: `1px solid ${isUser ? '#91caff' : isAssistant ? '#b7eb8f' : '#d9d9d9'}`,
-      }}
-    >
-      {/* Header with role, timestamp, and tags */}
-      <Space size={6} wrap style={{ marginBottom: 8 }}>
-        <Text strong style={{ fontSize: 12 }}>
-          {t(`web.crmChat.role.${message.role}`)}
-        </Text>
-        <Text type="secondary" style={{ fontSize: 11 }}>
-          {new Date(message.createdAt).toLocaleString()}
-        </Text>
-        {message.redaction !== 'none' && (
-          <Tag color="orange">{t('web.crmChat.redactedTag')}</Tag>
-        )}
-        {message.citations && message.citations.length > 0 && (
-          <Tag color="blue">
-            {message.citations.length} {t('web.crmChat.citations')}
-          </Tag>
-        )}
-      </Space>
+    <div className={`carocrm-chat-msg carocrm-chat-msg--${tone}`}>
+      <span className={`carocrm-chat-avatar carocrm-chat-avatar--${tone}`} aria-hidden="true">
+        {isUser ? <UserOutlined /> : <RobotOutlined />}
+      </span>
 
-      {/* Message content - plain text with safe link rendering */}
-      <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
-        {message.content.split('\n').map((line, lineIdx) => (
-          <div key={lineIdx}>{line}</div>
-        ))}
-      </div>
+      <div className="carocrm-chat-msg-body">
+        <div className="carocrm-chat-msg-meta">
+          <span className="carocrm-chat-msg-role">{t(`web.crmChat.role.${message.role}`)}</span>
+          <span>{stamp}</span>
+          {message.redaction !== 'none' ? (
+            <Tag color="orange" bordered={false} style={{ margin: 0 }}>
+              {t('web.crmChat.redactedTag')}
+            </Tag>
+          ) : null}
+        </div>
 
-      {/* Citations section */}
-      {message.citations && message.citations.length > 0 && (
-        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
-          <Text type="secondary" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
-            {t('web.crmChat.sources')}:
-          </Text>
-          <Space size={[4, 4]} wrap>
+        {/* Message content - plain text, never interpreted as markup. */}
+        <div className="carocrm-chat-bubble">{message.content}</div>
+
+        {message.citations && message.citations.length > 0 ? (
+          <div className="carocrm-chat-cites">
+            <span className="carocrm-chat-cites-label">{t('web.crmChat.sources')}</span>
             {(message.citations as CRMChatCitation[]).map((citation, idx) => (
               <CitationLink key={idx} citation={citation} index={idx + 1} />
             ))}
-          </Space>
-        </div>
-      )}
+          </div>
+        ) : null}
 
-      {/* 19-CHAT.14 — rate the answer. Only an assistant answer that came from a turn can be rated. */}
-      {feedbackEnabled && isAssistant && message.turnId !== null ? (
-        <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid #f0f0f0' }}>
-          <CRMChatFeedbackButtons turnId={message.turnId} enabled />
-        </div>
-      ) : null}
+        {/* 19-CHAT.14 — rate the answer. Only an assistant answer that came from a turn can be rated. */}
+        {feedbackEnabled && isAssistant && message.turnId !== null ? (
+          <div className="carocrm-chat-msg-tools">
+            <CRMChatFeedbackButtons turnId={message.turnId} enabled />
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -165,19 +190,21 @@ function CitationLink({ citation, index }: CitationLinkProps) {
   // Show loading state while checking
   if (resolved === null) {
     return (
-      <Tag color="default" style={{ fontSize: 11 }}>
-        [{index}] Checking...
+      <Tag bordered={false} style={{ fontSize: 11 }}>
+        [{index}] …
       </Tag>
     );
   }
 
-  // Show locked state if access revoked
+  // Show locked state if access revoked. The label stays visible so the reader knows which source
+  // the answer cited; the reason, when the server gives one, explains why it is no longer readable.
   if (!resolved.accessible) {
-    return (
-      <Tag color="red" icon={<LockOutlined />} style={{ fontSize: 11 }}>
-        [{index}] {citation.label} (No longer accessible)
+    const locked = (
+      <Tag color="red" bordered={false} icon={<LockOutlined />} style={{ fontSize: 11 }}>
+        [{index}] {citation.label}
       </Tag>
     );
+    return resolved.reason === null ? locked : <Tooltip title={resolved.reason}>{locked}</Tooltip>;
   }
 
   // The server answers with its own label and route after re-reading the source.
@@ -185,11 +212,7 @@ function CitationLink({ citation, index }: CitationLinkProps) {
   const route = resolved.route ?? citation.route;
   const hasRoute = route.startsWith('/');
   return (
-    <Tag
-      icon={hasRoute ? <LinkOutlined /> : undefined}
-      color="blue"
-      style={{ fontSize: 11 }}
-    >
+    <Tag icon={hasRoute ? <LinkOutlined /> : undefined} color="blue" bordered={false} style={{ fontSize: 11 }}>
       {hasRoute ? (
         <a href={route} target="_blank" rel="noopener noreferrer">
           [{index}] {label}

@@ -1,6 +1,15 @@
-import { CustomerServiceOutlined, ReloadOutlined } from '@ant-design/icons';
+import {
+  BugOutlined,
+  CustomerServiceOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  RobotOutlined,
+  SearchOutlined,
+  SettingOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Descriptions, Divider, Empty, Form, Input, Modal, Radio, Result, Row, Select, Space, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Descriptions, Divider, Drawer, Form, Input, Modal, Radio, Select, Skeleton, Space, Tag, Tooltip, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 
 import { api, ApiError } from '../api/client.js';
@@ -9,7 +18,7 @@ import { usePageDocs } from '../components/docs/PageDocs.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
-import { formatDateTime, t } from '../state/i18n.js';
+import { formatClock, formatDateTime, isSameCalendarDay, t } from '../state/i18n.js';
 import { CRMChatComposer } from './crm-chat/CRMChatComposer.js';
 import { CRMChatMessageList } from './crm-chat/CRMChatMessageList.js';
 
@@ -21,15 +30,37 @@ function assistantStateKey(state: string): string {
   return `web.crmChat.assistantState.${state.replace(/-/g, '_')}`;
 }
 
+/** The state pill's tone. The label always says what the state is; the colour only reinforces it. */
+function assistantStateTone(state: string): 'ready' | 'warn' | 'bad' {
+  if (state === 'ready') return 'ready';
+  return state === 'not-configured' ? 'warn' : 'bad';
+}
+
+/** The rail's stamp: the clock for today, the date for anything older. */
+function railStamp(value: string): string {
+  return isSameCalendarDay(value, new Date().toISOString())
+    ? formatClock(value)
+    : formatDateTime(value, false);
+}
+
+/** One letter for the conversation avatar; a thread without a title still gets a mark. */
+function threadInitial(title: string | null): string {
+  const first = (title ?? '').trim().charAt(0);
+  return first === '' ? '#' : first;
+}
+
 /**
  * Phase 19-CHAT.2 — the CRM Chat workspace shell
  * (PLAN_Phase_19_CRM_Chat.md §6.1, §6.3, §17 `19-CHAT.2`).
  *
  * What this page is: the navigation surface, the state machine of "can this deployment chat at all?",
  * and the evidence for *why not* when it cannot. It issues two reads — capabilities and, on demand,
- * module health — and nothing else. It sends no message, because the conversation and turn APIs do not
- * exist yet (19-CHAT.4/19-CHAT.6) and a composer that silently discards input would be worse than a
- * composer that says so.
+ * module health — and nothing else. It sends no message of its own: the composer does that.
+ *
+ * The layout is a conversation workspace — rail, transcript, docked composer — because that is the
+ * shape of the task. The capability, feature-flag and module facts that used to fill four cards
+ * below the thread are still one click away in the diagnostics drawer: they answer "why can't I
+ * send?", which is a question asked when something is wrong, not while reading an answer.
  *
  * What this page is not: an authorization boundary. Every endpoint behind it is gated on the server,
  * so a caller who types the URL without the capability gets `AUTHORIZATION_DENIED`, and a caller with
@@ -37,7 +68,7 @@ function assistantStateKey(state: string): string {
  */
 export function CRMChatPage() {
   usePageDocs('user/chat-and-voice');
-  const [showHealth, setShowHealth] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [older, setOlder] = useState<readonly CRMChatMessageView[]>([]);
   const [cursor, setCursor] = useState<number | null>(null);
@@ -45,6 +76,7 @@ export function CRMChatPage() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [search, setSearch] = useState('');
   const [composerReset, setComposerReset] = useState(0);
+  const [prefill, setPrefill] = useState<{ text: string; nonce: number } | undefined>(undefined);
 
   const capabilities = useQuery({
     queryKey: ['crmChat', 'capabilities'],
@@ -156,7 +188,7 @@ export function CRMChatPage() {
   const health = useQuery({
     queryKey: ['crmChat', 'health'],
     queryFn: () => api.crmChatHealth(),
-    enabled: showHealth,
+    enabled: detailsOpen,
     staleTime: 15_000,
     retry: false,
   });
@@ -178,36 +210,36 @@ export function CRMChatPage() {
 
   if (!data.workspace.enabled) {
     return (
-      <div>
-        <div className="carocrm-page-head">
-          <div>
-            <h1 className="carocrm-page-title">{t('web.crmChat.title')}</h1>
-            <p className="carocrm-page-sub">{t('web.crmChat.subtitle')}</p>
+      <div className="carocrm-chat-page">
+        <div className="carocrm-chat-head">
+          <div className="carocrm-chat-head-main">
+            <span className="carocrm-chat-mark" aria-hidden="true">
+              <CustomerServiceOutlined />
+            </span>
+            <div>
+              <h1 className="carocrm-chat-head-title">{t('web.crmChat.title')}</h1>
+              <p className="carocrm-chat-head-sub">{t('web.crmChat.subtitle')}</p>
+            </div>
           </div>
         </div>
-        <Card className="carocrm-card">
-          <Result
-            status="warning"
-            title={t('web.crmChat.disabledTitle')}
-            subTitle={t('web.crmChat.disabledHint')}
-            extra={
-              <Space direction="vertical" size={2}>
-                <Typography.Text type="secondary">
-                  {t('web.crmChat.disabledAdminHint')} <code>crmChat.features.workspace</code>
-                </Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {t('web.crmChat.moduleVersion', { version: data.module.version })}
-                </Typography.Text>
-              </Space>
-            }
-          />
-        </Card>
+        <div className="carocrm-chat-shell carocrm-chat-shell--plain">
+          <div className="carocrm-chat-hero">
+            <span className="carocrm-chat-hero-mark" aria-hidden="true">
+              <CustomerServiceOutlined />
+            </span>
+            <h2 className="carocrm-chat-hero-title">{t('web.crmChat.disabledTitle')}</h2>
+            <p className="carocrm-chat-hero-hint">{t('web.crmChat.disabledHint')}</p>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('web.crmChat.disabledAdminHint')} <code>crmChat.features.workspace</code>
+            </Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+              {t('web.crmChat.moduleVersion', { version: data.module.version })}
+            </Typography.Text>
+          </div>
+        </div>
       </div>
     );
   }
-
-  const assistantReady = data.assistant.state === 'ready';
-  const stateTone = assistantReady ? 'green' : data.assistant.state === 'not-configured' ? 'gold' : 'red';
 
   // 19-CHAT.14 — the search box only appears when the search feature is actually effective. The
   // server refuses a search with the flag off, so the UI must not offer one.
@@ -219,18 +251,62 @@ export function CRMChatPage() {
     data.capabilities.some((capability) => capability.key === 'feedback' && capability.granted);
   const promptsGranted = data.capabilities.some((capability) => capability.key === 'prompts' && capability.granted);
 
+  const startNewConversation = (): void => {
+    setSelectedId(undefined);
+    setOlder([]);
+    setCursor(null);
+    setHasMore(false);
+    setComposerReset((current) => current + 1);
+  };
+
+  const suggestions: readonly { key: string; label: string }[] = [
+    { key: 'opportunities', label: t('web.crmChat.suggestion.opportunities') },
+    { key: 'staleAccounts', label: t('web.crmChat.suggestion.staleAccounts') },
+    { key: 'closingQuarter', label: t('web.crmChat.suggestion.closingQuarter') },
+    { key: 'followUpEmail', label: t('web.crmChat.suggestion.followUpEmail') },
+  ];
+
+  const threadTitle =
+    selectedId === undefined ? t('web.crmChat.threadTitle') : (detail.data?.conversation.title ?? t('web.crmChat.untitled'));
+  const threadMeta =
+    detail.data === undefined
+      ? null
+      : [
+          detail.data.conversation.agentName,
+          t('web.crmChat.messageCount', { count: detail.data.conversation.messageCount }),
+          formatDateTime(detail.data.conversation.lastMessageAt, true),
+        ]
+          .filter((part) => part !== '')
+          .join(' · ');
+
   return (
-    <div>
-      <div className="carocrm-page-head">
-        <div>
-          <h1 className="carocrm-page-title">{t('web.crmChat.title')}</h1>
-          <p className="carocrm-page-sub">{t('web.crmChat.subtitle')}</p>
+    <div className="carocrm-chat-page">
+      <div className="carocrm-chat-head">
+        <div className="carocrm-chat-head-main">
+          <span className="carocrm-chat-mark" aria-hidden="true">
+            <CustomerServiceOutlined />
+          </span>
+          <div>
+            <h1 className="carocrm-chat-head-title">{t('web.crmChat.title')}</h1>
+            <p className="carocrm-chat-head-sub">{t('web.crmChat.subtitle')}</p>
+          </div>
+          <span className={`carocrm-chat-status carocrm-chat-status--${assistantStateTone(data.assistant.state)}`}>
+            {t(assistantStateKey(data.assistant.state))}
+          </span>
         </div>
-        <Space>
-          <Tag color={stateTone}>{t(assistantStateKey(data.assistant.state))}</Tag>
+        <Space size={8}>
           {isAdmin ? (
-            <Button onClick={() => setShowSettings(true)}>{t('web.crmChat.settingsButton')}</Button>
+            <Tooltip title={t('web.crmChat.settingsButton')}>
+              <Button icon={<SettingOutlined />} aria-label={t('web.crmChat.settingsButton')} onClick={() => setShowSettings(true)} />
+            </Tooltip>
           ) : null}
+          <Tooltip title={t('web.crmChat.showDiagnostics')}>
+            <Button
+              icon={<BugOutlined />}
+              aria-label={t('web.crmChat.showDiagnostics')}
+              onClick={() => setDetailsOpen(true)}
+            />
+          </Tooltip>
           <Button
             icon={<ReloadOutlined />}
             loading={capabilities.isFetching}
@@ -238,47 +314,36 @@ export function CRMChatPage() {
           >
             {t('core.common.refresh')}
           </Button>
-          <Button onClick={() => setShowHealth((current) => !current)}>
-            {showHealth ? t('web.crmChat.hideDiagnostics') : t('web.crmChat.showDiagnostics')}
-          </Button>
         </Space>
       </div>
 
-      <Row gutter={[16, 16]}>
-        <Col xs={24} lg={8} xl={7}>
-          <Card
-            className="carocrm-card"
-            title={t('web.crmChat.conversationsTitle')}
-            extra={
-              <Tooltip title={t('web.crmChat.newConversationHint')}>
-                <Button
-                  size="small"
-                  onClick={() => {
-                    setSelectedId(undefined);
-                    setOlder([]);
-                    setCursor(null);
-                    setHasMore(false);
-                    setComposerReset((current) => current + 1);
-                  }}
-                >
-                  {t('web.crmChat.newConversation')}
-                </Button>
-              </Tooltip>
-            }
-          >
+      <div className="carocrm-chat-shell">
+        <aside className="carocrm-chat-rail" aria-label={t('web.crmChat.conversationsTitle')}>
+          <div className="carocrm-chat-rail-head">
             {searchEnabled ? (
-              <Input.Search
+              <Input
                 allowClear
-                size="small"
+                prefix={<SearchOutlined style={{ color: '#a1a8b3' }} />}
+                variant="filled"
                 value={search}
                 maxLength={200}
                 placeholder={t('web.crmChat.searchPlaceholder')}
                 onChange={(event) => setSearch(event.target.value)}
-                style={{ marginBottom: 8 }}
               />
             ) : null}
+            <Tooltip title={t('web.crmChat.newConversationHint')}>
+              <Button type="primary" icon={<PlusOutlined />} block onClick={startNewConversation}>
+                {t('web.crmChat.newConversation')}
+              </Button>
+            </Tooltip>
+          </div>
 
-            {conversations.isLoading ? <LoadingSkeleton rows={4} /> : null}
+          <div className="carocrm-chat-rail-list">
+            {conversations.isLoading ? (
+              <div style={{ padding: '10px 6px' }}>
+                <Skeleton active title={false} paragraph={{ rows: 4 }} />
+              </div>
+            ) : null}
             {conversations.isError ? (
               <ErrorState
                 message={conversations.error instanceof Error ? conversations.error.message : undefined}
@@ -286,84 +351,101 @@ export function CRMChatPage() {
               />
             ) : null}
             {conversations.data !== undefined && conversations.data.list.length === 0 ? (
-              <Result
-                icon={<CustomerServiceOutlined style={{ color: '#bfc6d3' }} />}
-                title={<Typography.Text strong>{t('web.crmChat.noConversations')}</Typography.Text>}
-                subTitle={<Typography.Text type="secondary">{t('web.crmChat.noConversationsHint')}</Typography.Text>}
-                style={{ padding: '8px 0' }}
-              />
+              <div className="carocrm-chat-rail-empty">
+                <CustomerServiceOutlined />
+                <strong>{t('web.crmChat.noConversations')}</strong>
+                <span>{t('web.crmChat.noConversationsHint')}</span>
+              </div>
             ) : null}
-            {conversations.data !== undefined && conversations.data.list.length > 0 ? (
-              <Space direction="vertical" size={2} style={{ width: '100%' }}>
-                {conversations.data.list.map((conversation) => (
-                  <Button
-                    key={conversation.id}
-                    type={conversation.id === selectedId ? 'primary' : 'text'}
-                    block
-                    onClick={() => setSelectedId(conversation.id)}
-                    style={{ textAlign: 'left', height: 'auto', padding: '6px 8px' }}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, whiteSpace: 'normal' }}>
-                      <span>{conversation.title ?? t('web.crmChat.untitled')}</span>
-                      <Typography.Text
-                        {...(conversation.id === selectedId ? {} : { type: 'secondary' as const })}
-                        style={{ fontSize: 11 }}
-                      >
-                        {formatDateTime(conversation.lastMessageAt, false)} ·{' '}
-                        {t('web.crmChat.messageCount', { count: conversation.messageCount })}
-                        {conversation.status === 'archived' ? ` · ${t('web.crmChat.archivedTag')}` : ''}
-                      </Typography.Text>
-                    </div>
-                  </Button>
-                ))}
-              </Space>
-            ) : null}
-            <Divider style={{ margin: '8px 0' }} />
-            <Space direction="vertical" size={2}>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t('web.crmChat.limitConversations', { max: data.limits.maxConversationsPerUser })}
-              </Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t('web.crmChat.privateByDefault')}
-              </Typography.Text>
-            </Space>
-          </Card>
-        </Col>
+            {conversations.data?.list.map((conversation) => {
+              const active = conversation.id === selectedId;
+              return (
+                <button
+                  key={conversation.id}
+                  type="button"
+                  className={`carocrm-chat-thread-item${active ? ' is-active' : ''}`}
+                  aria-current={active ? 'true' : undefined}
+                  onClick={() => setSelectedId(conversation.id)}
+                >
+                  <span className="carocrm-chat-thread-avatar" aria-hidden="true">
+                    {threadInitial(conversation.title)}
+                  </span>
+                  <span className="carocrm-chat-thread-text">
+                    <span className="carocrm-chat-thread-name">
+                      {conversation.title ?? t('web.crmChat.untitled')}
+                    </span>
+                    <span className="carocrm-chat-thread-meta">
+                      {t('web.crmChat.messageCount', { count: conversation.messageCount })}
+                      {conversation.status === 'archived' ? ` · ${t('web.crmChat.archivedTag')}` : ''}
+                    </span>
+                  </span>
+                  <span className="carocrm-chat-thread-time">{railStamp(conversation.lastMessageAt)}</span>
+                </button>
+              );
+            })}
+          </div>
 
-        <Col xs={24} lg={16} xl={17}>
-          <Card
-            className="carocrm-card"
-            title={
-              selectedId === undefined
-                ? t('web.crmChat.threadTitle')
-                : (detail.data?.conversation.title ?? t('web.crmChat.untitled'))
-            }
-          >
+          <div className="carocrm-chat-rail-foot">
+            <span>{t('web.crmChat.limitConversations', { max: data.limits.maxConversationsPerUser })}</span>
+            <span>{t('web.crmChat.privateByDefault')}</span>
+          </div>
+        </aside>
+
+        <section className="carocrm-chat-main">
+          <div className="carocrm-chat-main-head">
+            <span className="carocrm-chat-avatar carocrm-chat-avatar--assistant" aria-hidden="true">
+              <RobotOutlined />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div className="carocrm-chat-main-title">{threadTitle}</div>
+              {threadMeta === null ? null : <div className="carocrm-chat-main-sub">{threadMeta}</div>}
+            </div>
+          </div>
+
+          <div className="carocrm-chat-stage">
             {!data.actions.canStartTurn ? (
               <Alert
                 type="info"
                 showIcon
-                style={{ marginBottom: 16 }}
                 message={t('web.crmChat.notReadyTitle')}
                 description={data.actions.reason ?? data.assistant.reason}
               />
             ) : null}
 
             {selectedId === undefined ? (
-              <Empty
-                image={<CustomerServiceOutlined style={{ color: '#bfc6d3', fontSize: 40 }} />}
-                description={
-                  <Typography.Text type="secondary">
-                    {data.actions.canStartTurn
-                      ? t('web.crmChat.startConversationHint')
-                      : t('web.crmChat.selectConversation')}
-                  </Typography.Text>
-                }
-                style={{ padding: '8px 0' }}
-              />
+              <div className="carocrm-chat-hero">
+                <span className="carocrm-chat-hero-mark" aria-hidden="true">
+                  <ThunderboltOutlined />
+                </span>
+                <h2 className="carocrm-chat-hero-title">
+                  {data.actions.canStartTurn ? t('web.crmChat.heroTitle') : t('web.crmChat.notReadyTitle')}
+                </h2>
+                <p className="carocrm-chat-hero-hint">
+                  {data.actions.canStartTurn ? t('web.crmChat.heroHint') : t('web.crmChat.selectConversation')}
+                </p>
+                {data.actions.canStartTurn ? (
+                  <div className="carocrm-chat-suggestions" aria-label={t('web.crmChat.suggestionsTitle')}>
+                    {suggestions.map((suggestion) => (
+                      <button
+                        key={suggestion.key}
+                        type="button"
+                        className="carocrm-chat-suggestion"
+                        onClick={() => setPrefill({ text: suggestion.label, nonce: Date.now() })}
+                      >
+                        <ThunderboltOutlined aria-hidden="true" />
+                        <span>{suggestion.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
 
-            {selectedId !== undefined && detail.isLoading ? <LoadingSkeleton rows={6} /> : null}
+            {selectedId !== undefined && detail.isLoading ? (
+              <div className="carocrm-chat-thread" aria-busy="true">
+                <Skeleton active title={false} paragraph={{ rows: 6 }} />
+              </div>
+            ) : null}
             {selectedId !== undefined && detail.isError ? (
               <ErrorState
                 message={detail.error instanceof Error ? detail.error.message : undefined}
@@ -371,162 +453,144 @@ export function CRMChatPage() {
               />
             ) : null}
 
-            {detail.data !== undefined ? (
-              <div>
-                <CRMChatMessageList
-                  messages={detail.data.messages.list}
-                  olderMessages={older}
-                  hasMore={hasMore}
-                  loadingOlder={loadingOlder}
-                  onLoadOlder={loadOlder}
-                  feedbackEnabled={feedbackEnabled}
-                />
-              </div>
-            ) : null}
-
-            {/* Composer - enabled when assistant is ready */}
-            <div style={{ marginTop: 16 }}>
-              <CRMChatComposer
-                conversationId={selectedId}
-                enabled={data.actions.canStartTurn}
-                maxMessageChars={data.limits.maxMessageChars}
-                turnTimeoutSeconds={data.limits.turnTimeoutSeconds}
-                canManagePrompts={promptsGranted}
-                resetSignal={composerReset}
-                onTurnSubmitted={(result) => {
-                  // The first turn creates the conversation (contract D2); select it so the streamed
-                  // answer and the history render instead of leaving the thread empty.
-                  if (result.conversationId !== null) {
-                    setSelectedId(result.conversationId);
-                    setOlder([]);
-                    setCursor(null);
-                    setHasMore(false);
-                  }
-                }}
+            {selectedId !== undefined && detail.data !== undefined ? (
+              <CRMChatMessageList
+                conversationKey={selectedId}
+                messages={detail.data.messages.list}
+                olderMessages={older}
+                hasMore={hasMore}
+                loadingOlder={loadingOlder}
+                onLoadOlder={loadOlder}
+                feedbackEnabled={feedbackEnabled}
               />
+            ) : null}
+          </div>
+
+          <div className="carocrm-chat-dock">
+            <CRMChatComposer
+              conversationId={selectedId}
+              enabled={data.actions.canStartTurn}
+              maxMessageChars={data.limits.maxMessageChars}
+              turnTimeoutSeconds={data.limits.turnTimeoutSeconds}
+              canManagePrompts={promptsGranted}
+              resetSignal={composerReset}
+              prefill={prefill}
+              onTurnSubmitted={(result) => {
+                // The first turn creates the conversation (contract D2); select it so the streamed
+                // answer and the history render instead of leaving the thread empty.
+                if (result.conversationId !== null) {
+                  setSelectedId(result.conversationId);
+                  setOlder([]);
+                  setCursor(null);
+                  setHasMore(false);
+                }
+              }}
+            />
+          </div>
+        </section>
+      </div>
+
+      {/* Diagnostics: the capability, flag and module facts, plus the health checks. They explain
+          *why* the assistant cannot answer, so they live behind one button instead of under the
+          thread. */}
+      <Drawer
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        width={440}
+        title={t('web.crmChat.diagnosticsTitle')}
+        extra={
+          <Button size="small" loading={health.isFetching} onClick={() => void health.refetch()}>
+            {t('core.common.refresh')}
+          </Button>
+        }
+      >
+        <div className="carocrm-chat-panel">
+          {health.isLoading ? <LoadingSkeleton rows={4} /> : null}
+          {health.isError ? (
+            <ErrorState
+              message={health.error instanceof Error ? health.error.message : undefined}
+              onRetry={() => void health.refetch()}
+            />
+          ) : null}
+          {health.data !== undefined ? (
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              {health.data.checks.map((check) => (
+                <div key={check.name} className="carocrm-chat-fact">
+                  <div>
+                    <div className="carocrm-chat-fact-title">{check.name}</div>
+                    <div className="carocrm-chat-fact-desc">{check.detail}</div>
+                  </div>
+                  <Tag color={check.ok ? 'green' : 'red'}>{check.ok ? t('web.crmChat.featureOn') : t('web.crmChat.featureOff')}</Tag>
+                </div>
+              ))}
+              {health.data.settings.warnings.map((warning) => (
+                <Alert key={warning} type="warning" showIcon message={warning} />
+              ))}
+            </Space>
+          ) : null}
+        </div>
+
+        <div className="carocrm-chat-panel">
+          <h3 className="carocrm-chat-panel-title">{t('web.crmChat.capabilitiesTitle')}</h3>
+          {data.capabilities.map((capability) => (
+            <div key={capability.key} className="carocrm-chat-fact">
+              <div>
+                <div className="carocrm-chat-fact-title">{capability.label}</div>
+                <div className="carocrm-chat-fact-desc">{capability.description}</div>
+              </div>
+              <Tag color={capability.granted ? 'blue' : 'default'}>
+                {capability.granted ? t('web.crmChat.granted') : t('web.crmChat.notGranted')}
+              </Tag>
             </div>
-          </Card>
-        </Col>
+          ))}
+        </div>
 
-        <Col xs={24} lg={12}>
-          <Card className="carocrm-card" title={t('web.crmChat.capabilitiesTitle')}>
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              {data.capabilities.map((capability) => (
-                <div
-                  key={capability.key}
-                  style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}
-                >
-                  <div>
-                    <Typography.Text strong>{capability.label}</Typography.Text>
-                    <div>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {capability.description}
-                      </Typography.Text>
-                    </div>
-                  </div>
-                  <Tag color={capability.granted ? 'blue' : 'default'}>
-                    {capability.granted ? t('web.crmChat.granted') : t('web.crmChat.notGranted')}
-                  </Tag>
-                </div>
-              ))}
-            </Space>
-          </Card>
-        </Col>
+        <div className="carocrm-chat-panel">
+          <h3 className="carocrm-chat-panel-title">{t('web.crmChat.featuresTitle')}</h3>
+          {data.features.map((feature) => (
+            <div key={feature.key} className="carocrm-chat-fact">
+              <div>
+                <div className="carocrm-chat-fact-title">{feature.label}</div>
+                <div className="carocrm-chat-fact-desc">{feature.description}</div>
+                <Typography.Text code style={{ fontSize: 11 }}>
+                  {feature.settingsPath}
+                </Typography.Text>
+              </div>
+              <Tag color={feature.effective ? 'green' : feature.enabled ? 'gold' : 'default'}>
+                {feature.effective
+                  ? t('web.crmChat.featureOn')
+                  : feature.enabled
+                    ? t('web.crmChat.featureInactive')
+                    : t('web.crmChat.featureOff')}
+              </Tag>
+            </div>
+          ))}
+        </div>
 
-        <Col xs={24} lg={12}>
-          <Card className="carocrm-card" title={t('web.crmChat.featuresTitle')}>
-            <Space direction="vertical" size={8} style={{ width: '100%' }}>
-              {data.features.map((feature) => (
-                <div
-                  key={feature.key}
-                  style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}
-                >
-                  <div>
-                    <Typography.Text strong>{feature.label}</Typography.Text>
-                    <div>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {feature.description}
-                      </Typography.Text>
-                    </div>
-                    <Typography.Text code style={{ fontSize: 11 }}>
-                      {feature.settingsPath}
-                    </Typography.Text>
-                  </div>
-                  <Tag color={feature.effective ? 'green' : feature.enabled ? 'gold' : 'default'}>
-                    {feature.effective
-                      ? t('web.crmChat.featureOn')
-                      : feature.enabled
-                        ? t('web.crmChat.featureInactive')
-                        : t('web.crmChat.featureOff')}
-                  </Tag>
-                </div>
-              ))}
-            </Space>
-          </Card>
-        </Col>
+        <div className="carocrm-chat-panel">
+          <h3 className="carocrm-chat-panel-title">{t('web.crmChat.moduleTitle')}</h3>
+          <Descriptions size="small" column={1}>
+            <Descriptions.Item label={t('web.crmChat.moduleVersionLabel')}>{data.module.version}</Descriptions.Item>
+            <Descriptions.Item label={t('web.crmChat.moduleApiLabel')}>
+              <Typography.Text code>{data.module.apiPrefix}</Typography.Text>
+            </Descriptions.Item>
+            <Descriptions.Item label={t('web.crmChat.moduleRouteLabel')}>
+              <Typography.Text code>{data.module.frontendRoute}</Typography.Text>
+            </Descriptions.Item>
+            <Descriptions.Item label={t('web.crmChat.modulePhasesLabel')}>
+              <Space size={4} wrap>
+                {data.module.implementedPhases.map((phase) => (
+                  <Tag key={phase}>{phase}</Tag>
+                ))}
+              </Space>
+            </Descriptions.Item>
+          </Descriptions>
+          <Typography.Text type="secondary" style={{ fontSize: 11.5 }}>
+            {t('web.crmChat.roadmapHint')}
+          </Typography.Text>
+        </div>
+      </Drawer>
 
-        <Col xs={24}>
-          <Card className="carocrm-card" title={t('web.crmChat.moduleTitle')}>
-            <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 4 }}>
-              <Descriptions.Item label={t('web.crmChat.moduleVersionLabel')}>{data.module.version}</Descriptions.Item>
-              <Descriptions.Item label={t('web.crmChat.moduleApiLabel')}>
-                <Typography.Text code>{data.module.apiPrefix}</Typography.Text>
-              </Descriptions.Item>
-              <Descriptions.Item label={t('web.crmChat.moduleRouteLabel')}>
-                <Typography.Text code>{data.module.frontendRoute}</Typography.Text>
-              </Descriptions.Item>
-              <Descriptions.Item label={t('web.crmChat.modulePhasesLabel')}>
-                <Space size={4} wrap>
-                  {data.module.implementedPhases.map((phase) => (
-                    <Tag key={phase}>{phase}</Tag>
-                  ))}
-                </Space>
-              </Descriptions.Item>
-            </Descriptions>
-            <Divider style={{ margin: '12px 0' }} />
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {t('web.crmChat.roadmapHint')}
-            </Typography.Text>
-          </Card>
-        </Col>
-
-        {showHealth ? (
-          <Col xs={24}>
-            <Card
-              className="carocrm-card"
-              title={t('web.crmChat.diagnosticsTitle')}
-              extra={
-                <Button size="small" loading={health.isFetching} onClick={() => void health.refetch()}>
-                  {t('core.common.refresh')}
-                </Button>
-              }
-            >
-              {health.isLoading ? <LoadingSkeleton rows={4} /> : null}
-              {health.isError ? (
-                <ErrorState
-                  message={health.error instanceof Error ? health.error.message : undefined}
-                  onRetry={() => void health.refetch()}
-                />
-              ) : null}
-              {health.data !== undefined ? (
-                <Space direction="vertical" size={10} style={{ width: '100%' }}>
-                  {health.data.checks.map((check) => (
-                    <div key={check.name} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                      <Tag color={check.ok ? 'green' : 'red'}>{check.name}</Tag>
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {check.detail}
-                      </Typography.Text>
-                    </div>
-                  ))}
-                  {health.data.settings.warnings.map((warning) => (
-                    <Alert key={warning} type="warning" showIcon message={warning} />
-                  ))}
-                </Space>
-              ) : null}
-            </Card>
-          </Col>
-        ) : null}
-      </Row>
       <Modal
         open={showSettings}
         title={t('web.crmChat.settingsTitle')}
