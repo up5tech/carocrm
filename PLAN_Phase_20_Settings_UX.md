@@ -21,11 +21,12 @@
 > preference on the record page.
 >
 > **Open deferrals** (documented in `docs/compatibility/settings-ux.md`, "Known limitations after
-> sub-phases 20.11–20.17"): the ACL explain helper, storage-usage figures, 2FA, cross-page
+> sub-phases 20.11–20.17"): the ACL explain helper, storage-usage figures, cross-page
 > "select all N matching records", bulk-action outcome counts, the row kebab menu, column
 > reorder/resize/freeze, list virtualization, the Favorites group, the record-page sticky header and
 > next-action band, "Save & new", the palette's `/` shortcut and server-persisted recents, the setup
-> banner's per-user dismissal, `nav.quickCreate` consumption, and KPI comparison/target/trend. The
+> banner's per-user dismissal, `nav.quickCreate` consumption, and KPI trend (target and previous
+> window are implemented). 2FA and menu preview-as are implemented. The
 > plan's 20.16 acceptance criterion ("axe passes on the four core surfaces") is **not met**: this
 > repository has no frontend test runner and no axe dependency, so the accessibility pass is a manual
 > keyboard walkthrough plus a responsive check — see `docs/ux/accessibility.md`.

@@ -69,8 +69,8 @@ No interaction is drag-only. Every list that can be dragged also has move-up / m
   walkthrough is a review, not a pass.
 - **No frontend test runner.** `vitest.config.ts` includes `apps/api/test/**/*.test.ts` and
   `packages/*/src/**/*.test.ts` only, so there are no component tests and no focus/ARIA assertions.
-- **No Playwright spec for Phase 20.** `e2e/` contains specs for the earlier modules; none of the
-  plan's §13.5 scenarios (1–6) is automated.
+- **Playwright smoke for Phase 20.** `e2e/accessibility.spec.ts` checks 390px overflow on list/detail/
+  settings and a keyboard path to the command palette. It is a smoke test, not an axe audit.
 - **Focus is not moved to the first invalid field** after a failed save.
 - **The palette does not accept `/`** as a focus shortcut, and it caps results at 12 per group
   rather than the plan's 20.

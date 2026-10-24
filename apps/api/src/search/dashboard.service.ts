@@ -244,9 +244,18 @@ export class DashboardService {
       });
       previous = previousResult.total ?? previousResult.count;
     }
+    const trend =
+      previous === undefined
+        ? undefined
+        : total > previous
+          ? 'up'
+          : total < previous
+            ? 'down'
+            : 'flat';
     const context = {
       ...(p.data.target !== undefined ? { target: p.data.target } : {}),
       ...(previous !== undefined ? { previous } : {}),
+      ...(trend !== undefined ? { trend } : {}),
     };
     if (dashlet.kind === 'list') {
       return { dashletId, kind: 'list', entity: p.data.entity, count: total, scanned, truncated, list: result.list };

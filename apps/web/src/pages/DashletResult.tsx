@@ -80,6 +80,7 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
       ? Math.round((numeric / target) * 100)
       : undefined;
     const delta = previous !== undefined && Number.isFinite(numeric) ? numeric - previous : undefined;
+    const trend = typeof result['trend'] === 'string' ? result['trend'] : undefined;
     return (
       <div>
         <div className="carocrm-stat-value">{typeof value === 'number' ? value.toLocaleString() : String(value ?? '—')}</div>
@@ -102,6 +103,7 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
             type={delta >= 0 ? 'success' : 'secondary'}
             style={{ fontSize: 12 }}
           >
+            {trend === 'up' ? '↑ ' : trend === 'down' ? '↓ ' : ''}
             {delta >= 0 ? '+' : ''}
             {delta.toLocaleString()} {t('web.dashboards.kpiVsPrevious')}
           </Typography.Text>
