@@ -208,20 +208,51 @@ export class DashboardService {
     // an ungrouped KPI stays correct on 100k+ records. Grouped charts still aggregate in-process over
     // a bounded scan and say so through `truncated`.
     const plainKpi = dashlet.kind === 'kpi' && p.data.groupBy === undefined && p.data.measure === undefined;
+    // §5.7 KPI context: when the dashlet names a date field and a window, the number counts the
+    // current window and the equivalent window immediately before it is counted too — both under
+    // the reader's own scope, so a shared dashboard never counts what its reader could not list.
+    // A chart or list keeps its unwindowed semantics; the context fields only reshape a KPI.
+    const windowDays = p.data.windowDays;
+    const dateField = p.data.dateField;
+    const windowed = dashlet.kind === 'kpi' && windowDays !== undefined && dateField !== undefined;
+    const windowWhere = (from: Date, to: Date): ListQuery['where'] => {
+      const clauses = [
+        { field: dateField as string, operator: 'greaterThanOrEqual' as const, value: from.toISOString() },
+        { field: dateField as string, operator: 'lessThan' as const, value: to.toISOString() },
+      ];
+      return where === undefined ? clauses : [{ and: [where, clauses] }];
+    };
+    const now = Date.now();
+    const currentStart = new Date(now - (windowDays ?? 0) * 86_400_000);
+    const previousStart = new Date(now - 2 * (windowDays ?? 0) * 86_400_000);
+    const effectiveWhere = windowed ? windowWhere(currentStart, new Date(now)) : where;
     const budget = dashlet.kind === 'list' ? p.data.maxSize : MAX_DASHLET_SCAN;
     const result = await this.entities.list(p.data.entity, {
-      ...(where !== undefined ? { where } : {}),
+      ...(effectiveWhere !== undefined ? { where: effectiveWhere } : {}),
       maxSize: plainKpi ? 1 : budget,
       total: true,
     });
     const scanned = result.count;
     const total = result.total ?? scanned;
     const truncated = total > scanned;
+    let previous: number | undefined;
+    if (windowed) {
+      const previousResult = await this.entities.list(p.data.entity, {
+        where: windowWhere(previousStart, currentStart),
+        maxSize: 1,
+        total: true,
+      });
+      previous = previousResult.total ?? previousResult.count;
+    }
+    const context = {
+      ...(p.data.target !== undefined ? { target: p.data.target } : {}),
+      ...(previous !== undefined ? { previous } : {}),
+    };
     if (dashlet.kind === 'list') {
       return { dashletId, kind: 'list', entity: p.data.entity, count: total, scanned, truncated, list: result.list };
     }
     if (plainKpi) {
-      return { dashletId, kind: 'kpi', entity: p.data.entity, key: 'all', count: total };
+      return { dashletId, kind: 'kpi', entity: p.data.entity, key: 'all', count: total, ...context };
     }
     const groups = new Map<string, { count: number; sum: number }>();
     for (const record of result.list) {
@@ -236,7 +267,7 @@ export class DashboardService {
       ...(p.data.measure !== undefined ? (p.data.aggregation === 'avg' ? { value: entry.count === 0 ? 0 : entry.sum / entry.count } : { value: entry.sum }) : {}) }));
     if (dashlet.kind === 'kpi' && p.data.groupBy === undefined) {
       const only = buckets[0] ?? { key: 'all', count: 0 };
-      return { dashletId, kind: 'kpi', entity: p.data.entity, scanned, truncated, ...only };
+      return { dashletId, kind: 'kpi', entity: p.data.entity, scanned, truncated, ...only, ...context };
     }
     return { dashletId, kind: dashlet.kind, entity: p.data.entity, scanned, truncated, groups: buckets };
   }

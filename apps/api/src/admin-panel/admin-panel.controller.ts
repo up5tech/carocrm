@@ -61,7 +61,9 @@ export class NavigationController {
   constructor(@Inject(NavigationService) private readonly navigation: NavigationService) {}
 
   @Get()
-  async read(): Promise<NavigationTree> {
-    return this.navigation.resolve();
+  async read(@Query('previewAs') previewAs?: string): Promise<NavigationTree> {
+    // §4.9: `?previewAs=<userId>` resolves the target's menu, administrator-only (checked in the
+    // service, so the rule cannot be forgotten by another route).
+    return this.navigation.resolveFor(previewAs ?? '');
   }
 }

@@ -29,12 +29,16 @@ export function HomeHero({ principal }: { readonly principal: Principal | null }
   const entities = useMemo(() => navEntities(metadata.data, principal?.type), [metadata.data, principal?.type]);
   const createItems = useMemo(
     () =>
-      entities.map((entity) => ({
-        key: entity.name,
-        icon: entityIcon(entity.icon, entity.name),
-        label: entity.label,
-        onClick: () => navigate(`/${entity.name}/create`),
-      })),
+      // §4.5: an entity may switch itself out of the global create menu (`nav.quickCreate`,
+      // defaulting to true) — the flag the metadata validates is finally consumed here.
+      entities
+        .filter((entity) => entity.nav?.quickCreate !== false)
+        .map((entity) => ({
+          key: entity.name,
+          icon: entityIcon(entity.icon, entity.name),
+          label: entity.label,
+          onClick: () => navigate(`/${entity.name}/create`),
+        })),
     [entities, navigate],
   );
 

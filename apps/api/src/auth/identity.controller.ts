@@ -67,8 +67,8 @@ export class IdentityController {
   }
 
   @Get('Role')
-  listRoles(@Query('offset') offset?: string, @Query('maxSize') maxSize?: string) {
-    return this.identity.listRoles(Number(offset ?? 0), Number(maxSize ?? 20));
+  listRoles(@Query('offset') offset?: string, @Query('maxSize') maxSize?: string, @Query('q') q?: string) {
+    return this.identity.listRoles(Number(offset ?? 0), Number(maxSize ?? 20), q ?? '');
   }
 
   @Get('Role/:id')

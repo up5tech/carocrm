@@ -1,5 +1,11 @@
 # CaroCRM
 
+![Home](docs/screenshots/home.png)
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+![Reports](docs/screenshots/reports.png)
+
 Metadata-driven CRM platform: TypeScript + NestJS + Fastify + Kysely/PostgreSQL, a clean-room
 reimplementation of EspoCRM concepts (no PHP runtime, no upstream source copied).
 
@@ -433,12 +439,6 @@ Every module route is authenticated and ACL-checked server-side; see
 | [docs/reference/docs-authoring.md](docs/reference/docs-authoring.md)             | authoring the in-app handbook: page format, the Markdown subset, what the lint refuses            |
 | [content/docs/](content/docs/en/_index.md)                                       | the handbook corpus itself (English plus the Vietnamese P0 set), rendered at `/docs`              |
 | [docs/operations/backup-restore.md](docs/operations/backup-restore.md)           | what to back up and how to restore it                                                             |
-
-## Screenshots
-
-![Record tabs editor](docs/ux/record-tabs-editor.png)
-
-![Record tabs stacked](docs/ux/record-tabs-stacked.png)
 
 Read [AGENTS.MD](AGENTS.MD) first. It fixes the rules this repository is developed under:
 smallest coherent change, no unrelated refactors, migrations reviewed before they are applied, and

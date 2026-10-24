@@ -73,6 +73,11 @@ export const DashletConfigSchema = z.object({
   groupBy: z.string().trim().min(1).max(64).optional(),
   measure: z.string().trim().min(1).max(64).optional(),
   aggregation: z.enum(['count', 'sum', 'avg']).default('count'),
+  // §5.7 KPI context: a target the business aims at, and the date window that gives the number a
+  // previous period to compare against. Both optional — a KPI without them renders as it always did.
+  target: z.coerce.number().optional(),
+  dateField: z.string().trim().min(1).max(64).optional(),
+  windowDays: z.coerce.number().int().min(1).max(3650).optional(),
 });
 
 export interface SearchHit {

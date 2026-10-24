@@ -2041,12 +2041,15 @@ body {
   gap: 12px;
   min-width: 0;
 }
-/* The strip scrolls rather than wrapping: the tab count is what identifies a
-   tab, and a wrapped strip changes the height of the record page on every
-   rename. */
+/* The strip wraps instead of scrolling: a horizontally scrolled tab bar hides
+   tabs behind an invisible edge, and the count stays with its label either way. */
 .carocrm-relation-tabs > .ant-tabs-nav {
   margin-bottom: 12px;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.carocrm-relation-tabs > .ant-tabs-nav::before {
+  flex: 1 1 auto;
 }
 .carocrm-relation-tab-label {
   display: inline-flex;
@@ -2057,6 +2060,35 @@ body {
   color: #8c8c8c;
   font-size: 12px;
 }
+/* §5.3 list: a drag handle on each header's right edge, plus tabular figures so the
+   columns of digits line up while the page is being scanned. */
+.carocrm-col-title {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  max-width: 100%;
+}
+.carocrm-list-card .ant-table-thead > tr > th {
+  position: relative;
+}
+.carocrm-col-resize {
+  position: absolute;
+  top: 0;
+  right: -6px;
+  bottom: 0;
+  width: 11px;
+  cursor: col-resize;
+  z-index: 1;
+  touch-action: none;
+}
+.carocrm-col-resize:hover,
+.carocrm-col-resize:active {
+  background: rgba(22, 119, 255, 0.25);
+}
+.carocrm-list-card .ant-table-tbody td {
+  font-variant-numeric: tabular-nums;
+}
+
 /* The layout settings' arrangement editor: one block per tab, plus the computed "Other" pool. */
 .carocrm-relation-editor {
   display: flex;

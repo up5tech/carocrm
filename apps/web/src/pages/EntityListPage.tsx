@@ -1,6 +1,6 @@
 import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Card, Col, Dropdown, Input, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Typography } from 'antd';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { api, ApiError, type SavedFilterRow, type WhereClause } from '../api/client.js';
@@ -12,6 +12,7 @@ import { EmptyState } from '../components/EmptyState.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { FieldValue, linkLabelsOf } from '../components/fields.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
+import { PermissionDenied } from '../components/PermissionDenied.js';
 import { t } from '../state/i18n.js';
 import { boardGroupFields, type FieldEntry, fieldLabel, filterEntries, layoutPanelsFor, listEntries, massUpdateEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
 import { portalBase } from '../state/portal.js';
@@ -91,6 +92,12 @@ export function EntityListPage() {
   const [actions, setActions] = useState<RowActions | null>(null);
   const [drafts, setDrafts] = useState<FilterDraft[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // §20.11: a 403 from the list endpoint is a wall, not an error to retry — the page then renders
+  // the permission card instead of an empty grid with a red line under it.
+  const [denied, setDenied] = useState(false);
+  // §5.3: live per-column pixel widths while a header drag is in flight.
+  const [widths, setWidths] = useState<Record<string, number>>({});
+  const [selectingAll, setSelectingAll] = useState(false);
   const [textQuery, setTextQuery] = useState(urlTextQuery);
   const [savedFilters, setSavedFilters] = useState<SavedFilterRow[]>([]);
   const [activeFilterId, setActiveFilterId] = useState<string | null>(null);
@@ -134,6 +141,11 @@ export function EntityListPage() {
   // This hook must stay above the loading/error early returns below — a hook that only runs once
   // the metadata has arrived changes the hook order between renders and React tears the page down.
   const columnPref = usePreference<Record<string, string[]>>('columns');
+  // §5.3: the dragged widths are persisted per user per entity, so the layout follows the account.
+  const widthPref = usePreference<Record<string, Record<string, number>>>('columnWidths');
+  useEffect(() => {
+    setWidths(entityName ? (widthPref.value?.[entityName] ?? {}) : {});
+  }, [widthPref.value, entityName]);
   // §5.3: the stored list is both the visible set and its order — the column manager writes it.
   const visibleColumns = useMemo(() => {
     if (!entityName) return columns;
@@ -224,9 +236,9 @@ export function EntityListPage() {
   const loadSeq = useRef(0);
 
   const load = useCallback(async () => {
-    if (!entityName) return;
-    const seq = ++loadSeq.current;
-    setLoading(true);
+    if (!entityName) return;      const seq = ++loadSeq.current;
+      setLoading(true);
+      setDenied(false);
     try {
       const where: WhereClause = drafts
         .filter((draft) => draft.field && draft.operator && (draft.operator === 'isNull' || draft.operator === 'isNotNull' || String(draft.value ?? '') !== ''))
@@ -248,7 +260,13 @@ export function EntityListPage() {
     } catch (error) {
       if (seq !== loadSeq.current) return;
       // A throttled page is transient — it is not a reason to empty a grid the user is reading.
-      if (error instanceof ApiError && error.code === 'RATE_LIMITED') {
+      if (error instanceof ApiError && error.status === 403) {
+        // §20.11: the caller may not read this list at all — show the permission card, not a retry.
+        setDenied(true);
+        setRows([]);
+        setTotal(0);
+        setLoadError(null);
+      } else if (error instanceof ApiError && error.code === 'RATE_LIMITED') {
         void message.warning(error.message);
       } else {
         setLoadError(error instanceof Error ? error.message : t('web.edit.notFound'));
@@ -263,6 +281,73 @@ export function EntityListPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * §5.3: "select all N matching" — the header checkbox can only see one page, so covering the
+   * whole filtered result means walking the pages and collecting ids. The walk is bounded at 1 000
+   * so a mis-filtered ten-thousand-row list cannot lock the tab, and the cap is reported rather
+   * than silently applied.
+   */
+  const selectAllMatching = useCallback(async () => {
+    if (!entityName) return;
+    setSelectingAll(true);
+    try {
+      const where: WhereClause = drafts
+        .filter((draft) => draft.field && draft.operator && (draft.operator === 'isNull' || draft.operator === 'isNotNull' || String(draft.value ?? '') !== ''))
+        .map((draft) => ({
+          field: draft.field,
+          operator: draft.operator,
+          ...(draft.operator === 'isNull' || draft.operator === 'isNotNull' ? {} : { value: draft.value }),
+        }));
+      const trimmed = textQuery.trim();
+      const cap = Math.min(total, 1000);
+      const ids: string[] = [];
+      for (let next = 0; next < cap; next += 100) {
+        const page =
+          trimmed !== ''
+            ? await api.entitySearch(entityName, { q: trimmed, where, orderBy, offset: next, maxSize: 100 })
+            : await api.list(entityName, { where, orderBy, offset: next, maxSize: 100 });
+        for (const row of page.list) ids.push(String(row['id']));
+        if (page.list.length < 100) break;
+      }
+      setSelected(ids);
+      if (total > 1000) void message.warning(t('web.list.selectAllCapped', { count: 1000 }));
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('web.list.selectAllFailed'));
+    } finally {
+      setSelectingAll(false);
+    }
+  }, [entityName, drafts, textQuery, orderBy, total, message]);
+
+  /**
+   * §5.3: drag a header's right edge to resize its column. The live width stays in state while the
+   * pointer moves; on release it is written to the per-entity `columnWidths` preference.
+   */
+  const beginResize = useCallback(
+    (name: string, event: ReactMouseEvent) => {
+      const th = (event.currentTarget as HTMLElement).closest('th');
+      if (!th || !entityName) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const startX = event.clientX;
+      const startWidth = Math.round(th.getBoundingClientRect().width);
+      let latest = startWidth;
+      const onMove = (moveEvent: MouseEvent): void => {
+        latest = Math.max(48, Math.min(960, Math.round(startWidth + moveEvent.clientX - startX)));
+        setWidths((prev) => ({ ...prev, [name]: latest }));
+      };
+      const onUp = (): void => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        const current = { ...(widthPref.value ?? {}) };
+        current[entityName] = { ...(current[entityName] ?? {}), [name]: latest };
+        widthPref.save(current);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    },
+    [entityName, widthPref],
+  );
 
   useEffect(() => {
     if (!entityName) return;
@@ -622,19 +707,23 @@ export function EntityListPage() {
         <Tabs activeKey={inboxView} onChange={setInboxView} items={emailInboxViews.map((v) => ({ key: v.key, label: v.label }))} style={{ marginBottom: 12 }} />
       ) : null}
 
-      {loadError !== null ? (
+      {denied ? (
+        <div style={{ marginBottom: 16 }}>
+          <PermissionDenied />
+        </div>
+      ) : loadError !== null ? (
         <div style={{ marginBottom: 16 }}>
           <ErrorState message={loadError} onRetry={() => void load()} />
         </div>
       ) : null}
 
-      {rows.length === 0 && !loading ? (
+      {rows.length === 0 && !loading && !denied ? (
         <div style={{ marginBottom: 16 }}>
           <EmptyState title={t('web.list.emptyTitle')} description={t('web.list.emptyHint')} />
         </div>
       ) : null}
 
-      {rows.length > 0 || loading ? (
+      {(rows.length > 0 || loading) && !denied ? (
         <Table
         rowKey={(row) => String(row['id'])}
         loading={loading}
@@ -658,10 +747,22 @@ export function EntityListPage() {
         }}
         columns={[
           ...visibleColumns.map((entry) => ({
-            title: fieldLabel(entry.name, entry.field, metadata.data),
+            title: (
+              <span className="carocrm-col-title">
+                {fieldLabel(entry.name, entry.field, metadata.data)}
+                <span
+                  className="carocrm-col-resize"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label={t('web.list.columnResizeAria', { column: fieldLabel(entry.name, entry.field, metadata.data) })}
+                  onMouseDown={(event) => beginResize(entry.name, event)}
+                />
+              </span>
+            ),
             dataIndex: entry.name,
             sorter: entry.field.sortable !== false,
-            ...(entry.name === displayField ? { fixed: 'left' as const, width: 220 } : {}),
+            width: widths[entry.name] ?? (entry.name === displayField ? 220 : undefined),
+            ...(entry.name === displayField ? { fixed: 'left' as const } : {}),
             render: (_: unknown, row: Record<string, unknown>) =>
               entry.name === displayField ? (
                 <Link className="carocrm-row-link" to={`${base}/${entityName}/${String(row['id'])}`}>
@@ -740,6 +841,11 @@ export function EntityListPage() {
       {selected.length > 0 ? (
         <div className="carocrm-bulk-bar" role="toolbar" aria-label={t('web.list.bulkActionsAria')} style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, background: '#fff', border: '1px solid #e6e9ef', borderRadius: 8, padding: '10px 20px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <Typography.Text strong aria-live="polite">{t('web.list.selectedCount', { count: selected.length })}</Typography.Text>
+          {rows.length > 0 && total > rows.length && selected.length === rows.length ? (
+            <Button size="small" loading={selectingAll} onClick={() => void selectAllMatching()}>
+              {t('web.list.selectAllMatching', { count: total })}
+            </Button>
+          ) : null}
           {actions?.edit === true ? (
             <Button size="small" onClick={() => setBulk({ mode: 'update', ids: [...selected] })}>{t('web.list.bulkEdit')}</Button>
           ) : null}

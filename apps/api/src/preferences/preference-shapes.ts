@@ -18,6 +18,11 @@ export const PREFERENCE_SCHEMAS = {
     (value) => Object.keys(value).length <= 200,
     { message: 'Too many entities in the column set.' },
   ),
+  /** §5.3: entity → column name → pixel width, set by dragging a list header's right edge. */
+  columnWidths: z.record(
+    z.string().max(100),
+    z.record(z.string().max(100), z.number().int().min(48).max(960)),
+  ).refine((value) => Object.keys(value).length <= 200, { message: 'Too many entities in the column widths.' }),
   /** Record keys as `Entity:id`, in display order. */
   favorites: z.array(z.string().min(3).max(200)).max(500),
   lastVisited: z.array(z.string().min(1).max(200)).max(50),

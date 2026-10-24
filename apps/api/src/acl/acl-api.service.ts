@@ -288,6 +288,47 @@ export class AclApiService {
    * explanation nobody can act on is not an explanation; nothing else about the user is exposed.
    */
   async explainFor(userId: string, entity: string, action: AclAction): Promise<AclExplanation> {
+    const { user, administrator, rows } = await this.loadGrant(userId);
+    const roles: AclExplanationRole[] = rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      level: roleLevel(toDbRole(row.id, row.permissions, row.field_permissions), entity, action),
+    }));
+
+    return {
+      userId,
+      userName: user.user_name,
+      entity,
+      action,
+      level: administrator ? 'all' : maxLevel(roles.map((role) => role.level)),
+      administrator,
+      roles,
+    };
+  }
+
+  /**
+   * §4.9 menu preview: the same evaluation `canUser` runs, but for an **arbitrary internal user**
+   * instead of the request principal. The request-scoped snapshot cannot answer that, so it loads
+   * that user's grant directly — exactly like `explainFor`, and for the same reason.
+   */
+  async canUserAs(userId: string, entity: string, action: AclAction): Promise<AclRoleLevel> {
+    const { administrator, rows } = await this.loadGrant(userId);
+    if (administrator) return 'all';
+    return maxLevel(rows.map((row) => roleLevel(toDbRole(row.id, row.permissions, row.field_permissions), entity, action)));
+  }
+
+  /** Whether an arbitrary user is administrative — the administrator gates of the menu preview. */
+  async isAdminFor(userId: string): Promise<boolean> {
+    const { administrator } = await this.loadGrant(userId);
+    return administrator;
+  }
+
+  /** Load one internal user's administrative flag and role rows; throws when the user is gone. */
+  private async loadGrant(userId: string): Promise<{
+    user: { id: string; user_name: string };
+    administrator: boolean;
+    rows: { id: string; name: string; permissions: unknown; field_permissions: unknown }[];
+  }> {
     const user = await this.database.db
       .selectFrom('users')
       .select(['id', 'user_name', 'is_admin', 'type', 'assigned_role_ids'])
@@ -308,22 +349,7 @@ export class AclApiService {
           .where('id', 'in', roleIds)
           .where('is_deleted', '=', false)
           .execute();
-
-    const roles: AclExplanationRole[] = rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      level: roleLevel(toDbRole(row.id, row.permissions, row.field_permissions), entity, action),
-    }));
-
-    return {
-      userId,
-      userName: user.user_name,
-      entity,
-      action,
-      level: administrator ? 'all' : maxLevel(roles.map((role) => role.level)),
-      administrator,
-      roles,
-    };
+    return { user: { id: user.id, user_name: user.user_name }, administrator, rows };
   }
 
   /** Drop any memoised role snapshot (call after modifying roles, teams or portal assignments). */

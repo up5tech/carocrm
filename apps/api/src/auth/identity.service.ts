@@ -436,17 +436,18 @@ export class IdentityService {
     return { success: true };
   }
 
-  async listRoles(offset = 0, limit = 20) {
+  async listRoles(offset = 0, limit = 20, term = '') {
     this.requireAdmin();
-    const rows = await this.db
-      .selectFrom('roles')
-      .selectAll()
-      .where('is_deleted', '=', false)
-      .orderBy('name')
-      .limit(limit)
-      .offset(offset)
-      .execute();
-    const totalRow = await this.db.selectFrom('roles').where('is_deleted', '=', false).select((eb) => eb.fn.countAll<number>().as('total')).executeTakeFirst();
+    // §5.3: the role picker is searchable, so a filter narrows rows *and* the reported total.
+    const trimmed = term.trim();
+    let rowsQuery = this.db.selectFrom('roles').selectAll().where('is_deleted', '=', false);
+    let countQuery = this.db.selectFrom('roles').where('is_deleted', '=', false);
+    if (trimmed !== '') {
+      rowsQuery = rowsQuery.where('name', 'like', `%${trimmed}%`);
+      countQuery = countQuery.where('name', 'like', `%${trimmed}%`);
+    }
+    const rows = await rowsQuery.orderBy('name').limit(limit).offset(offset).execute();
+    const totalRow = await countQuery.select((eb) => eb.fn.countAll<number>().as('total')).executeTakeFirst();
     const list = rows.map(toRoleDto);
     return { list, total: Number(totalRow?.total ?? 0), offset, count: list.length };
   }

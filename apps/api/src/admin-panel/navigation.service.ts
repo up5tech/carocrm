@@ -1,3 +1,4 @@
+import { AuthorizationDeniedError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { AclApiService } from '../acl/acl-api.service.js';
@@ -48,6 +49,12 @@ interface ResolvedEntity {
   readonly order: number;
 }
 
+/** §4.9: the user a preview resolves the menu for — never the caller's own grant. */
+interface PreviewTarget {
+  readonly userId: string;
+  readonly isAdmin: boolean;
+}
+
 const CACHE_MS = 30_000;
 
 @Injectable()
@@ -72,12 +79,29 @@ export class NavigationService {
 
   /** The resolved tree for the principal of the current request. */
   async resolve(): Promise<NavigationTree> {
+    return this.resolveFor('');
+  }
+
+  /**
+   * §4.9 "preview as another principal": an administrator resolves the tree an **internal user**
+   * would see, without impersonating them. Every ACL decision and administrator gate below runs
+   * against the target's grant; the preview only ever *narrows* what the caller could already see.
+   */
+  async resolveFor(previewAs: string): Promise<NavigationTree> {
+    let preview: PreviewTarget | undefined;
+    if (previewAs !== '') {
+      if (!this.scope.isAdmin) {
+        throw new AuthorizationDeniedError('Only an administrator may preview the menu as another user.');
+      }
+      preview = { userId: previewAs, isAdmin: await this.acl.isAdminFor(previewAs) };
+    }
     // The metadata version is part of the key so an Entity Manager navigation edit shows on the next
-    // request; a navigation document edit drops the whole cache through `onChanged`.
-    const cacheKey = `${this.scope.userId ?? 'anonymous'}:${this.scope.userType ?? 'none'}:${this.store.version()}`;
+    // request; a navigation document edit drops the whole cache through `onChanged`. A preview gets
+    // its own key, so it can never poison the caller's own tree.
+    const cacheKey = `${this.scope.userId ?? 'anonymous'}:${this.scope.userType ?? 'none'}:${this.store.version()}${preview ? `:as:${preview.userId}` : ''}`;
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.loadedAt < CACHE_MS) return cached.tree;
-    const tree = await this.build();
+    const tree = await this.build(preview);
     this.cache.set(cacheKey, { tree, loadedAt: Date.now() });
     return tree;
   }
@@ -87,7 +111,13 @@ export class NavigationService {
     this.cache = new Map();
   }
 
-  private async build(): Promise<NavigationTree> {
+  private async build(preview?: PreviewTarget): Promise<NavigationTree> {
+    // §4.9: a preview resolves every gate below against the *target's* grant instead of the
+    // caller's; the caller must already be an administrator to reach this branch at all.
+    const isAdmin = preview?.isAdmin ?? this.scope.isAdmin;
+    const canUser: AclApiService['canUser'] = preview === undefined
+      ? (entity, action) => this.acl.canUser(entity, action)
+      : (entity, action) => this.acl.canUserAs(preview.userId, entity, action);
     const document = await this.documents.readInternal('navigation');
     const value = document.value as NavigationSettings;
     const overrides = overrideIndex(value);
@@ -126,7 +156,7 @@ export class NavigationService {
       else members.set(groupKey, [seed]);
     };
 
-    for (const entity of await this.navigableEntities()) {
+    for (const entity of await this.navigableEntities(canUser)) {
       push(entity.groupKey, {
         key: `entity:${entity.name}`,
         kind: 'entity',
@@ -139,11 +169,11 @@ export class NavigationService {
       });
     }
     for (const item of this.host.frontendNav()) {
-      if (item.adminOnly && !this.scope.isAdmin) continue;
+      if (item.adminOnly && !isAdmin) continue;
       push('extensions', { key: `extension:${item.extension}:${item.route}`, kind: 'extension', route: item.route, label: item.label, icon: item.icon, order: item.order });
     }
     for (const entry of NAVIGATION_ADMIN_ENTRIES) {
-      if (entry.level === 'admin' && !this.scope.isAdmin) continue;
+      if (entry.level === 'admin' && !isAdmin) continue;
       push('administration', entry);
     }
 
@@ -179,7 +209,7 @@ export class NavigationService {
     const items: NavigationNode[] = [];
     for (const page of NAVIGATION_PAGES) {
       if (page.permission !== undefined) {
-        const level = await this.acl.canUser(page.permission.entity, page.permission.action);
+        const level = await canUser(page.permission.entity, page.permission.action);
         if (level === 'no') continue;
       }
       // A module page can also be switched off by a deployment flag (Phase 19-CHAT). Checked after
@@ -247,14 +277,14 @@ export class NavigationService {
    * `nav` metadata, and readable by role. Sorted by label so the shipped order is the menu users had
    * before this phase.
    */
-  private async navigableEntities(): Promise<ResolvedEntity[]> {
+  private async navigableEntities(canUser: AclApiService['canUser']): Promise<ResolvedEntity[]> {
     this.store.ensureLoaded();
     const rows: Array<ResolvedEntity & { navOrder?: number }> = [];
     for (const name of this.store.registry.getEntities()) {
       const definition = this.store.registry.getEntity(name);
       if (!definition || definition.isEntity === false || definition.client?.web === false) continue;
       if (definition.nav?.hidden === true) continue;
-      if ((await this.acl.canUser(name, 'read')) === 'no') continue;
+      if ((await canUser(name, 'read')) === 'no') continue;
       const order = definition.nav?.order;
       rows.push({
         name,
