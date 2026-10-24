@@ -181,6 +181,11 @@ restores the `leadScore` settings row from the raw column, and deletes the role 
   by the phase that renders them (19-LS.5/19-LS.7); until then a breakdown shows the code.
 * **`dimensionWeights` shape is stored but uninterpreted**; how a weight normalises a score is 19-LS.4's
   documented formula (plan §6.3), and the validator deliberately only checks the shape.
+* **A field path is validated against the model's grant, not against the reading user's field ACL.**
+  Plan §9.2 asks that a score must not read a field the executing principal may not see; that is a
+  property of the read and explanation paths (19-LS.5), which apply `visibleFields`/`stripRestricted`
+  before a breakdown reaches a caller. Validation here answers a different question: what the *model* is
+  allowed to consult.
 * **Rule ordering ties are possible.** Two rules may share a `priority`; 19-LS.4 breaks ties deterministically
   (by `reasonCode`) so a stored score stays re-derivable, and the validator warns nowhere because a tie is
   not invalid.
