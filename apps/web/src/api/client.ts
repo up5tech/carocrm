@@ -106,8 +106,15 @@ import type {
   IntegrationSyncRunListResult,
   InternalInfoView,
   LayoutDefinition,
+  LeadScoreBatchStartView,
+  LeadScoreCapabilitiesView,
+  LeadScoreEditorCatalog,
+  LeadScoreHealthView,
   LeadScoreHistory,
+  LeadScorePreviewView,
   LeadScoreRead,
+  LeadScoreSettingsView,
+  LeadScoreValidationReport,
   LeadScoreWrite,
   ListResult,
   LoginChallengeResult,
@@ -2065,4 +2072,28 @@ export const api = {
   },
   leadScoreRecalculate: (leadId: string) =>
     request<LeadScoreWrite>(`/LeadScore/action/score/recalculate`, post({ leadId })),
+
+  // Phase 19-LS.8 — the administration half: the editor's vocabulary, the model lifecycle commands, the
+  // side-effect-free preview, the module settings and the rebuild. Models and rules themselves stay on the
+  // generic record API (`/LeadScoreModel`, `/LeadScoreRule`): the LS.2 write guard is what makes a published
+  // version immutable, and a second write path would be a second guard to forget.
+  leadScoreHealth: () => request<LeadScoreHealthView>('/LeadScore/action/health'),
+  leadScoreCapabilities: () => request<LeadScoreCapabilitiesView>('/LeadScore/action/capabilities'),
+  leadScoreSettings: () => request<LeadScoreSettingsView>('/LeadScore/action/settings'),
+  leadScoreSaveSettings: (patch: Record<string, unknown>) => request<LeadScoreSettingsView>('/LeadScore/action/settings', post(patch)),
+  /** The fields, per-type operators, value kinds and condition limits the editor may offer. */
+  leadScoreEditor: (modelId?: string) =>
+    request<LeadScoreEditorCatalog>(`/LeadScore/action/editor${modelId === undefined ? '' : `?modelId=${encodeURIComponent(modelId)}`}`),
+  leadScoreValidateModel: (modelId: string) => request<LeadScoreValidationReport>('/LeadScore/action/model/validate', post({ modelId })),
+  leadScorePublishModel: (modelId: string, expectedVersion?: number) =>
+    request<RecordData>('/LeadScore/action/model/publish', post({ modelId, ...(expectedVersion === undefined ? {} : { expectedVersion }) })),
+  leadScoreArchiveModel: (modelId: string, expectedVersion?: number) =>
+    request<RecordData>('/LeadScore/action/model/archive', post({ modelId, ...(expectedVersion === undefined ? {} : { expectedVersion }) })),
+  leadScoreNewVersion: (modelId: string) => request<RecordData>('/LeadScore/action/model/new-version', post({ modelId })),
+  /** Evaluates a bounded, authorized sample and stores nothing. */
+  leadScorePreview: (input: { modelId: string; leadIds?: string[]; maxSize?: number }) =>
+    request<LeadScorePreviewView>('/LeadScore/action/model/preview', post(input)),
+  /** Queues a bounded rebuild; the returned job row is what `/admin/jobs` shows. */
+  leadScoreRecalculateBatch: (input: { limit?: number; chunkSize?: number; where?: Record<string, unknown>[] }) =>
+    request<LeadScoreBatchStartView>('/LeadScore/action/recalculate-batch', post(input)),
 };

@@ -138,6 +138,21 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     permission: { entity: 'SignatureRequest', action: 'read' },
     feature: { module: 'eSignature', flag: 'enabled' },
   },
+  // Phase 19-LS.8: the scoring model workspace. Models and rules are metadata entities whose base ACL is
+  // refusal, so the entry asks for the same `LeadScoreModel:read` the module's commands assert, and the
+  // module's own `enabled` switch can take the entry away (the gate runs after the ACL).
+  {
+    key: 'leadScore',
+    kind: 'page',
+    route: '/lead-score',
+    labelKey: 'leadscore.admin.page.title',
+    icon: 'ThunderboltOutlined',
+    parent: 'administration',
+    order: 948,
+    inQuickSearch: true,
+    permission: { entity: 'LeadScoreModel', action: 'read' },
+    feature: { module: 'leadScore', flag: 'enabled' },
+  },
   // Phase 21: the handbook is a static page like the others, and the only gate on it is the instance
   // document — every signed-in reader may open `/docs`, and an administrator can take the row away.
   // `feature` is consulted after the ACL, so this flag can remove an entry but never reveal one.

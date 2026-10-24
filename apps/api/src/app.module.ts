@@ -49,7 +49,7 @@ import { I18nController } from './i18n/i18n.controller.js';
 import { I18nService } from './i18n/i18n.service.js';
 import { JOB_CONTROLLERS, JOB_PROVIDERS } from './jobs/index.js';
 import { JobsService } from './jobs/jobs.service.js';
-import { LEADSCORE_CONTROLLERS, LEADSCORE_PROVIDERS } from './lead-score/index.js';
+import { LEADSCORE_CONTROLLERS, LEADSCORE_PROVIDERS, LeadScoreSettingsService } from './lead-score/index.js';
 import { FormulaService } from './logic/formula.service.js';
 import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
 import { MARKETING_AUTOMATION_CONTROLLERS, MARKETING_AUTOMATION_PROVIDERS } from './marketing-automation/index.js';
@@ -245,6 +245,12 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
           if (module === 'eSignature' && flag === 'enabled') {
             const esignature = ref.get(ESignatureSettingsService, { strict: false });
             return (await esignature.settings()).enabled;
+          }
+          // Phase 19-LS.8: the same rule for Lead Score — an installation that switched the module off
+          // loses the page from the sidebar, and the endpoints behind it refuse the call anyway.
+          if (module === 'leadScore' && flag === 'enabled') {
+            const leadScore = ref.get(LeadScoreSettingsService, { strict: false });
+            return (await leadScore.read()).settings.enabled === true;
           }
           return true;
         },

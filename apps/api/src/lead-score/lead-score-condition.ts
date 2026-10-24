@@ -39,10 +39,13 @@ export const MAX_CONDITION_VALUE_CHARS = 512;
 
 const FIELD_NAME = /^[a-z][A-Za-z0-9]{0,63}$/;
 const OPERATORS = new Set<string>(CRITERIA_OPERATORS);
-const VALUELESS_OPERATORS: ReadonlySet<string> = new Set(['isEmpty', 'isNotEmpty', 'isTrue', 'isFalse']);
+export const VALUELESS_OPERATORS: ReadonlySet<string> = new Set(['isEmpty', 'isNotEmpty', 'isTrue', 'isFalse']);
 
 /** Operators that compare against an option list rather than an arbitrary value. */
-const LIST_OPERATORS: ReadonlySet<string> = new Set(['in', 'notIn']);
+export const LIST_OPERATORS: ReadonlySet<string> = new Set(['in', 'notIn']);
+
+/** Operators that take a list of values (`in`, `notIn`) rather than a scalar. */
+export const ARRAY_OPERATORS: ReadonlySet<string> = new Set(['in', 'notIn', 'between']);
 
 /**
  * Which operators make sense for which declared field type.
@@ -52,7 +55,7 @@ const LIST_OPERATORS: ReadonlySet<string> = new Set(['in', 'notIn']);
  * multi-value field are all nonsense, and the evaluator in 19-LS.4 would have to invent a meaning for
  * them. Inventing one later would change what a stored score meant, so the meaning is fixed now.
  */
-const OPERATORS_BY_TYPE: Readonly<Record<string, readonly string[]>> = {
+export const OPERATORS_BY_TYPE: Readonly<Record<string, readonly string[]>> = {
   varchar: ['equals', 'notEquals', 'contains', 'notContains', 'startsWith', 'endsWith', 'in', 'notIn', 'isEmpty', 'isNotEmpty'],
   text: ['equals', 'notEquals', 'contains', 'notContains', 'isEmpty', 'isNotEmpty'],
   email: ['equals', 'notEquals', 'contains', 'notContains', 'endsWith', 'in', 'notIn', 'isEmpty', 'isNotEmpty'],

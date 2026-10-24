@@ -8,9 +8,10 @@ import type { ZodTypeAny } from 'zod';
 import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
-import { BatchRecalculateSchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { BatchRecalculateSchema, EditorCatalogQuerySchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
 import { runAsLeadScoreSystem } from './lead-score-authority.js';
 import { LeadScoreCalculationService } from './lead-score-calculation.service.js';
+import { LeadScoreEditorService } from './lead-score-editor.js';
 import { LeadScoreExplanationService } from './lead-score-explanation.service.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
 import { LeadScoreModelService } from './lead-score-model.service.js';
@@ -53,6 +54,7 @@ export class LeadScoreController {
     @Inject(LeadScoreCalculationService) private readonly calculation: LeadScoreCalculationService,
     @Inject(LeadScoreExplanationService) private readonly explanation: LeadScoreExplanationService,
     @Inject(LeadScoreRecalculationService) private readonly recalculation: LeadScoreRecalculationService,
+    @Inject(LeadScoreEditorService) private readonly editor: LeadScoreEditorService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
@@ -148,6 +150,25 @@ export class LeadScoreController {
    * a half-finished draft as often as it likes. The answer is the whole list of problems, each with a
    * stable code, not only the first one (plan §6.1).
    */
+  /**
+   * The vocabulary a model editor may offer: fields, the operators each field's type can answer, the value
+   * control, the condition's structural limits and the module's vocabularies.
+   *
+   * 19-LS.8's exit criterion is that an administrator can manage a model *without editing raw JSON or
+   * running code*, and a rule's condition is stored as a JSON tree — so the form's choices have to come from
+   * the same sets the validator enforces, not from a second list the SPA keeps. A refused field is returned
+   * with its reason rather than hidden, because "why can't I score on this one" is a question the screen
+   * should answer with the module's own code.
+   */
+  @Get('action/editor')
+  async editorCatalog(@Query() query: unknown) {
+    await this.permissions.assert('modelRead');
+    const input = this.parse(EditorCatalogQuerySchema, query ?? {});
+    if (input.modelId === undefined) return this.editor.catalog();
+    const { model } = await this.models.readModel(input.modelId);
+    return this.editor.catalog(model);
+  }
+
   @HttpCode(200)
   @Post('action/model/validate')
   async validateModel(@Body() body: unknown) {

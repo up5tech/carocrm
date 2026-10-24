@@ -53,6 +53,19 @@ const LeadIdSchema = z.string().trim().min(1).max(64);
  */
 const ExpectedVersionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
 
+/**
+ * The editor catalog request: optionally the model whose allowlist should annotate the answer.
+ *
+ * A model id here changes only what is *labelled* as granted; the built-in denylists and the type matrix are
+ * the same either way, so an unknown id cannot widen what a rule may read (and the record read of that id is
+ * ACL-gated, so a model the caller may not see answers `RECORD_NOT_FOUND`).
+ */
+export const EditorCatalogQuerySchema = z
+  .object({
+    modelId: ModelIdSchema.optional(),
+  })
+  .strict();
+
 export const ModelValidateSchema = z
   .object({
     modelId: ModelIdSchema,

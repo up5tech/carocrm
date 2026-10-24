@@ -7900,3 +7900,36 @@ body.carocrm-reordering * {
     font-size: 24px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Phase 19-LS.8 — the scoring model workspace.
+
+   The condition builder is a form, not a tree widget: one row per comparison, a
+   hairline indent for the nested group, and a selected model row that reads as
+   the row the panel below describes.
+   --------------------------------------------------------------------------- */
+.carocrm-condition-group {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fcfcfd;
+}
+
+.carocrm-condition-group--inner {
+  background: #ffffff;
+  border-style: dashed;
+}
+
+.carocrm-condition-leaf {
+  padding: 2px 0;
+}
+
+.carocrm-row-selected > td {
+  background: #eef4ff !important;
+}
+
+.carocrm-score-stat {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}

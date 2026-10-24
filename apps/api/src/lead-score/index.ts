@@ -2,6 +2,7 @@ import type { Provider, Type } from '@nestjs/common';
 
 import { LeadScoreController } from './lead-score.controller.js';
 import { LeadScoreCalculationService } from './lead-score-calculation.service.js';
+import { LeadScoreEditorService } from './lead-score-editor.js';
 import { LeadScoreExplanationService } from './lead-score-explanation.service.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
 import { LeadScoreModelService } from './lead-score-model.service.js';
@@ -42,6 +43,8 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   LeadScoreCalculationService,
   LeadScoreExplanationService,
   LeadScoreFeatureGate,
+  // Reads only the metadata registry, so it is registered with the reads rather than the writers.
+  LeadScoreEditorService,
   // Needs the job row and the settings document, so it is registered with the services it reads.
   LeadScoreRecalculationService,
   LeadScoreModuleHealthService,
@@ -69,11 +72,23 @@ export {
   validateScoreCondition,
 } from './lead-score-condition.js';
 export {
+  LEADSCORE_BATCH_PERMISSION_ENTITY,
   LEADSCORE_CORE_ENTITY_TYPES,
   LEADSCORE_EVENT_NAMESPACE,
+  LEADSCORE_EXPLAIN_PERMISSION_ENTITY,
+  LEADSCORE_MODEL_PERMISSION_ENTITY,
+  LEADSCORE_MODEL_PUBLISH_PERMISSION_ENTITY,
   LEADSCORE_MODULE_KEY,
+  LEADSCORE_RECALCULATE_PERMISSION_ENTITY,
   LEADSCORE_SETTINGS_ROW,
+  LEADSCORE_VIEW_PERMISSION_ENTITY,
 } from './lead-score-domain.js';
+export {
+  type EditorCatalog,
+  type EditorField,
+  type EditorFieldRefusal,
+  LeadScoreEditorService,
+} from './lead-score-editor.js';
 export {
   leadScoreDraftExistsError,
   LeadScoreError,
@@ -116,7 +131,11 @@ export {
   SERVER_OWNED_LEAD_FIELDS,
   SERVER_OWNED_MODEL_FIELDS,
 } from './lead-score-internal.js';
-export { LeadScoreModelService } from './lead-score-model.service.js';
+export {
+  LeadScoreModelService,
+  MAX_RULES_PER_MODEL,
+  MAX_VERSIONS_PER_MODEL,
+} from './lead-score-model.service.js';
 export {
   LEADSCORE_CAPABILITIES,
   LEADSCORE_FEATURES,

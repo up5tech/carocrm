@@ -50,8 +50,9 @@ const SCORED_ENTITY = 'Lead';
  * Read bounds. A model past these is a configuration problem rather than a paging problem, so the read is
  * capped and the validator sees a complete set — never a silently truncated one.
  */
-const MAX_RULES_PER_MODEL = 200;
-const MAX_VERSIONS_PER_MODEL = 200;
+/** Exported because 19-LS.8's editor catalog reports the same numbers rather than repeating them. */
+export const MAX_RULES_PER_MODEL = 200;
+export const MAX_VERSIONS_PER_MODEL = 200;
 
 @Injectable()
 export class LeadScoreModelService {

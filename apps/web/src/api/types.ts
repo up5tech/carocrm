@@ -3793,3 +3793,274 @@ export interface LeadScoreWrite {
     readonly calculatedAt: string;
   };
 }
+
+/**
+ * Phase 19-LS.8 — the scoring model administration surface.
+ *
+ * These mirror the module's own answers (`apps/api/src/lead-score/*`), and the rule of the phase is that the
+ * editor offers what those answers say rather than what the SPA assumes: `LeadScoreEditorCatalog` is the
+ * server's field list, its per-type operator matrix and its condition limits, and `LeadScoreValidationReport`
+ * is the server's verdict. The form is a convenience over the same records the generic entity API serves, so
+ * a model can also be read or edited anywhere a record can be — the page adds no second source of truth.
+ */
+export interface LeadScoreCapabilityEntry {
+  readonly key: string;
+  readonly label: string;
+  readonly description: string;
+  readonly granted: boolean;
+}
+
+export interface LeadScoreCapabilitiesView {
+  readonly module: string;
+  readonly capabilities: readonly LeadScoreCapabilityEntry[];
+  readonly enabled: boolean;
+  readonly effective: Readonly<Record<string, boolean>>;
+  readonly pendingFeatures: readonly { readonly key: string; readonly phase: string }[];
+}
+
+export interface LeadScoreEditorField {
+  readonly name: string;
+  readonly label: string;
+  readonly type: string;
+  readonly operators: readonly string[];
+  readonly valueKind: 'text' | 'textarea' | 'number' | 'date' | 'datetime' | 'boolean' | 'option' | 'options' | 'none';
+  readonly options?: readonly string[] | undefined;
+  readonly maxLength?: number | undefined;
+  readonly scorable: boolean;
+  readonly refusal?: string | undefined;
+  readonly refusalCode?: string | undefined;
+  readonly inModelAllowlist?: boolean | undefined;
+}
+
+export interface LeadScoreEditorCatalog {
+  readonly entity: string;
+  readonly entityLabel: string;
+  readonly fields: readonly LeadScoreEditorField[];
+  readonly condition: {
+    readonly maxDepth: number;
+    readonly maxPredicates: number;
+    readonly maxNodes: number;
+    readonly maxListValues: number;
+    readonly maxValueChars: number;
+    readonly valuelessOperators: readonly string[];
+    readonly listOperators: readonly string[];
+    readonly arrayOperators: readonly string[];
+    readonly allOperators: readonly string[];
+  };
+  readonly vocabularies: {
+    readonly dimensions: readonly string[];
+    readonly effects: readonly string[];
+    readonly outcomes: readonly string[];
+    readonly missingDataPolicies: readonly string[];
+    readonly signalSources: readonly string[];
+    readonly bands: readonly string[];
+    readonly modelStatuses: readonly string[];
+    readonly evaluationStatuses: readonly string[];
+    readonly evaluationResultStates: readonly string[];
+    readonly evaluationTriggers: readonly string[];
+    readonly decayPolicies: readonly string[];
+  };
+  readonly limits: {
+    readonly maxRulesPerModel: number;
+    readonly maxVersionsPerModel: number;
+    readonly maxPreviewSample: number;
+    readonly maxBatchChunk: number;
+    readonly maxBatchTotal: number;
+  };
+  readonly model?: {
+    readonly id: string;
+    readonly name: string;
+    readonly modelVersion: number;
+    readonly status: string;
+    readonly allowedFieldPaths: readonly string[];
+    readonly blockedFieldPaths: readonly string[];
+  } | undefined;
+}
+
+/** One validator finding. `code` is stable (plan §8.4), so it is what a screen keys a translation on. */
+export interface LeadScoreValidationIssue {
+  readonly code: string;
+  readonly level: 'error' | 'warning';
+  readonly path: string;
+  readonly message: string;
+  readonly ruleId?: string | undefined;
+}
+
+export interface LeadScoreValidationReport {
+  readonly valid: boolean;
+  readonly errors: readonly LeadScoreValidationIssue[];
+  readonly warnings: readonly LeadScoreValidationIssue[];
+}
+
+/** The model record as the editor reads and writes it. JSON-shaped fields stay strings, as stored. */
+export interface LeadScoreModelRecord extends Record<string, unknown> {
+  readonly id: string;
+  name: string;
+  description?: string | undefined;
+  readonly status: string;
+  modelVersion: number;
+  scaleMin: number;
+  scaleMax: number;
+  baseScore: number;
+  scoreFloor: number;
+  scoreCeiling: number;
+  qualificationBands?: string | undefined;
+  dimensionWeights?: string | undefined;
+  allowedFieldPaths?: string | undefined;
+  blockedFieldPaths?: string | undefined;
+  settingsJson?: string | undefined;
+  effectiveFrom?: string | null | undefined;
+  effectiveTo?: string | null | undefined;
+  readonly publishedAt?: string | null | undefined;
+  readonly archivedAt?: string | null | undefined;
+  readonly modifiedAt?: string | undefined;
+  readonly version?: number | undefined;
+}
+
+export interface LeadScoreRuleRecord extends Record<string, unknown> {
+  readonly id: string;
+  name: string;
+  description?: string | undefined;
+  readonly modelId: string;
+  modelVersion: number;
+  reasonCode: string;
+  dimension: string;
+  enabled: boolean;
+  /** The stored condition: a JSON tree in a text attribute (LS.2), produced by the builder, not typed. */
+  condition: string;
+  effect: string;
+  points: number;
+  priority: number;
+  missingDataPolicy: string;
+  signalSource: string;
+  targetBand?: string | undefined;
+  eventType?: string | undefined;
+  lookbackDays?: number | undefined;
+  decayPolicy?: string | undefined;
+  decayHalfLifeDays?: number | undefined;
+}
+
+export interface LeadScorePreviewResult {
+  readonly leadId: string;
+  readonly scoreValue: number | null;
+  readonly band: string;
+  readonly bandSource: string;
+  readonly resultState: string;
+  readonly coverage: number;
+  readonly baseScore: number;
+  readonly delta: number;
+  readonly clamped: boolean;
+  readonly signature: string;
+  readonly inputsHash: string;
+  readonly sourceRevision: number;
+  readonly inputsAsOf: string | null;
+  readonly positiveReasonCodes: readonly string[];
+  readonly negativeReasonCodes: readonly string[];
+  readonly unknownReasonCodes: readonly string[];
+  readonly skippedReasonCodes: readonly string[];
+  readonly errorCodes: readonly string[];
+  readonly ruleEvaluations: readonly {
+    readonly ruleId: string;
+    readonly ruleName: string;
+    readonly reasonCode: string;
+    readonly dimension: string;
+    readonly effect: string;
+    readonly outcome: string;
+    readonly points: number;
+  }[];
+}
+
+export interface LeadScorePreviewView {
+  readonly model: {
+    readonly id: string;
+    readonly name: string;
+    readonly status: string;
+    readonly modelVersion: number;
+    readonly scaleMin: number;
+    readonly scaleMax: number;
+    readonly baseScore: number;
+    readonly scoreFloor: number;
+    readonly scoreCeiling: number;
+  };
+  readonly inputFields: readonly string[];
+  readonly sample: { readonly bound: number; readonly selected: number; readonly scored: number; readonly notReadable: number };
+  readonly distribution: {
+    readonly bands: Readonly<Record<string, number>>;
+    readonly min: number | null;
+    readonly max: number | null;
+    readonly average: number | null;
+  };
+  readonly results: readonly LeadScorePreviewResult[];
+  /** Always false: a preview evaluates and stores nothing (plan §6.1, §9.4). */
+  readonly writes: false;
+}
+
+export interface LeadScoreSettingsView {
+  readonly settings: {
+    enabled: boolean;
+    features: Readonly<Record<string, boolean>>;
+    scoring: { readonly activeModelId: string | null; readonly debounceSeconds: number };
+  };
+  readonly version: number;
+  readonly updatedAt: string | null;
+  readonly updatedBy: string | null;
+  readonly defaults: Record<string, unknown>;
+  readonly warnings: readonly { readonly code: string; readonly message: string }[];
+  readonly pendingFeatures: readonly { readonly key: string; readonly phase: string }[];
+  readonly effective: Readonly<Record<string, boolean>>;
+}
+
+export interface LeadScoreBatchStartView {
+  readonly job: { readonly id: string; readonly job: string; readonly status: string };
+  readonly runId: string;
+  readonly limit: number;
+  readonly chunkSize: number;
+}
+
+/**
+ * Phase 19-LS.8 — the module's own answer about itself (plan §12, §13).
+ *
+ * Only the parts a screen renders are typed here; the health payload stays the server's, and the SPA reads a
+ * switch off it rather than keeping a list of what this build implements (plan §0.1-4).
+ */
+export interface LeadScoreHealthView {
+  readonly module: { readonly id: string; readonly label: string };
+  readonly ok: boolean;
+  readonly ready: boolean;
+  readonly reason: string;
+  readonly features: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly settingsPath: string;
+    readonly requires: readonly string[];
+    readonly enabled: boolean;
+    readonly implemented: boolean;
+    readonly effective: boolean;
+    readonly pendingPhase: string | null;
+  }[];
+  readonly operations: readonly {
+    readonly operation: string;
+    readonly admitted: boolean;
+    readonly capability: string;
+    readonly feature: string;
+    readonly writes: boolean;
+    readonly pendingPhase: string | null;
+    readonly code: string | null;
+    readonly detail: string | null;
+  }[];
+  readonly settings: {
+    readonly version: number;
+    readonly enabled: boolean;
+    readonly updatedAt: string | null;
+    readonly updatedBy: string | null;
+    readonly warnings: readonly { readonly code: string; readonly message: string }[];
+    readonly scoring: {
+      readonly activeModelId: string | null;
+      readonly status: string | null;
+      readonly modelVersion: number | null;
+      readonly usable: boolean;
+      readonly state: string | null;
+    };
+  };
+  readonly checks: readonly { readonly name: string; readonly ok: boolean; readonly detail: string }[];
+}

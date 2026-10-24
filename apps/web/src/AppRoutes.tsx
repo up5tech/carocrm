@@ -27,6 +27,7 @@ import { EntityEditPage } from './pages/EntityEditPage.js';
 import { EntityListPage } from './pages/EntityListPage.js';
 import { EntityManagerPage } from './pages/EntityManagerPage.js';
 import { ESignaturePage } from './pages/ESignaturePage.js';
+import { LeadScorePage } from './pages/LeadScorePage.js';
 import { HomePage } from './pages/HomePage.js';
 import { LoginPage } from './pages/LoginPage.js';
 import { MarketingPreferencesPage } from './pages/MarketingPreferencesPage.js';
@@ -141,6 +142,9 @@ export function AppRoutes() {
         {/* Phase 19-ES.1: the e-signature module page, before the entity wildcard so "esignature"
             is never read as an entity name. Visibility and authorization are decided by the server. */}
         <Route path="/esignature" element={<ESignaturePage />} />
+        {/* Phase 19-LS.8: the scoring model workspace, before the entity wildcard so "lead-score"
+            is never read as an entity name. Visibility and authorization are decided by the server. */}
+        <Route path="/lead-score" element={<LeadScorePage />} />
         {/* Phase 21.5: the handbook. `/docs/search` is declared before `/docs/:section` so the word
             "search" is never read as a section name, and all four sit before the entity wildcard so
             "docs" is never read as an entity. */}

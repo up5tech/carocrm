@@ -83,10 +83,11 @@ _Phase 19_ —
   recovery for a lost send answer, provider webhooks with HMAC verification and a durable inbox,
   template mappings, signed-document artifacts, reports and an operations panel (Phases 19-ES.0–19-ES.22).
 - **Lead Score** — explainable, versioned lead scoring over the existing `Lead` entity plus a
-  transactional, idempotent Lead→Contact/Account/Opportunity conversion. **Phases 19-LS.0–19-LS.7 are
+  transactional, idempotent Lead→Contact/Account/Opportunity conversion. **Phases 19-LS.0–19-LS.8 are
   delivered: the repository audit, the module registration, the schema/metadata foundation, the model
   and rule configuration, the deterministic scoring engine, the score that is computed *and kept*, what
-  decides *when* to score, and the salesperson's surface for it** —
+  decides *when* to score, the salesperson's surface for it, and the administrator's screen for the model
+  itself** —
   the `LeadScore` descriptor with its 14 capability resources, the `leadScore` settings document, the gate
   in front of all 13 planned operations, the health view at `/api/v1/LeadScore/action/health`, the four
   records (`LeadScoreModel`, `LeadScoreRule`,
@@ -111,10 +112,17 @@ _Phase 19_ —
   reason list and the paged history with each evaluation's own breakdown, plus the Recalculate and History
   actions — rendered from the server's `actions` answer, never from a role name, and nothing about a score is
   computed in the browser. The projection is also a Lead list column and filter (`Score Value`, `Score Band`,
-  `Score Status`), so a queue can be sorted by the number without running the engine. An invalid
+  `Score Status`), so a queue can be sorted by the number without running the engine. And `/lead-score` is where
+  a model is made: `GET action/editor` answers which fields exist, which operators each field's *type* can
+  answer, what value control a comparison needs and what the parser's budgets are, and the form is built from
+  that answer — so a rule's declarative condition tree is produced by a field/operator/value builder rather than
+  typed, and no option the screen offers can fail a publish. From the same screen an administrator drafts a model
+  (bands as rows, one weight per dimension, a field grant picked from the catalog), validates it, publishes it
+  behind the server's own report, archives it, forks a new version, diffs two versions, previews a bounded sample
+  that writes nothing, queues a bounded rebuild and cancels it, and switches the module's features. An invalid
   model cannot be published and a published version cannot be written — by an administrator through the
-  record API either. Nothing converts yet and there is no model-administration screen: the module ships switched
-  off, the model UI is 19-LS.8, signals, notifications and the decay sweep are 19-LS.9, and those operations
+  record API either. Nothing converts yet: the module ships switched off, signals, notifications and the decay
+  sweep are 19-LS.9, and those operations
   refuse with the sub-phase that owes them (`LEADSCORE_PHASE_PENDING`). See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
