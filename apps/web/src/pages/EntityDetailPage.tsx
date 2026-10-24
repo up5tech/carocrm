@@ -15,9 +15,11 @@ import { ESignatureRecordActions } from '../components/ESignatureRecordActions.j
 import { FieldValue, linkLabelsOf } from '../components/fields.js';
 import { isJsonPayload } from '../components/JsonValue.js';
 import { LinkRecordModal } from '../components/LinkRecordModal.js';
+import { NextActionBand } from '../components/NextActionBand.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
 import { PortalCaseConversation } from '../components/PortalCaseConversation.js';
 import { ProcessPanel } from '../components/ProcessPanel.js';
+import { RecordHeader } from '../components/RecordHeader.js';
 import { type RelationAccess, RelationTabs } from '../components/RelationTabs.js';
 import { SalesDocumentLinesPanel } from '../components/SalesDocumentLinesPanel.js';
 import { StreamPanel } from '../components/StreamPanel.js';
@@ -408,14 +410,26 @@ export function EntityDetailPage() {
           wide child (the line-item table) grow the page instead of scrolling inside its card. See
           `.carocrm-card-stack` in carocrm.css. */}
       <div className="carocrm-card-stack">
+        {/* §5.4: the record's identity and primary action stay in view while the page scrolls. The
+            portal keeps its own header-less layout (§5.11 rule 9) and its own edit path below. */}
+        {base === '/portal' ? null : (
+          <>
+            <RecordHeader entity={entity} id={id} definition={definition.data} record={record} base={base} onChanged={load} />
+            <NextActionBand entity={entity} id={id} definition={definition.data} record={record} onChanged={load} />
+          </>
+        )}
         <Card
           className="carocrm-card"
-          title={
-            <Space>
-              <Typography.Text strong>{definition.data?.label ?? entity}</Typography.Text>
-              <Typography.Text type="secondary">{recordLabel(record, definition.data)}</Typography.Text>
-            </Space>
-          }
+          {...(base === '/portal'
+            ? {
+                title: (
+                  <Space>
+                    <Typography.Text strong>{definition.data?.label ?? entity}</Typography.Text>
+                    <Typography.Text type="secondary">{recordLabel(record, definition.data)}</Typography.Text>
+                  </Space>
+                ),
+              }
+            : {})}
           extra={
             <Space>
               {/* Phase 19: a Project opens its own views; the tabs are navigation, not permission —
@@ -433,27 +447,33 @@ export function EntityDetailPage() {
                     </Button>
                   ))
                 : null}
-              <Button icon={<EditOutlined />} type="primary" onClick={() => navigate(`${base}/${entity}/${id}/edit`)}>
-                {t('web.detail.edit')}
-              </Button>
-              {base === '/portal' && entity === 'Case' ? null : (
-                <Popconfirm
-                  title={t('web.detail.deleteThisRecord')}
-                  onConfirm={async () => {
-                    try {
-                      await api.remove(entity, id);
-                      void message.success(t('web.detail.deleted'));
-                      navigate(`${base}/${entity}`);
-                    } catch (error) {
-                      void message.error(error instanceof Error ? error.message : t('web.detail.deleteFailed'));
-                    }
-                  }}
-                >
-                  <Button danger icon={<DeleteOutlined />}>
-                    {t('web.detail.delete')}
+              {/* The internal record's Edit and Delete live in the sticky header (§5.4); the portal
+                  keeps them here because its header is fixed and portal-specific. */}
+              {base === '/portal' ? (
+                <>
+                  <Button icon={<EditOutlined />} type="primary" onClick={() => navigate(`${base}/${entity}/${id}/edit`)}>
+                    {t('web.detail.edit')}
                   </Button>
-                </Popconfirm>
-              )}
+                  {entity === 'Case' ? null : (
+                    <Popconfirm
+                      title={t('web.detail.deleteThisRecord')}
+                      onConfirm={async () => {
+                        try {
+                          await api.remove(entity, id);
+                          void message.success(t('web.detail.deleted'));
+                          navigate(`${base}/${entity}`);
+                        } catch (error) {
+                          void message.error(error instanceof Error ? error.message : t('web.detail.deleteFailed'));
+                        }
+                      }}
+                    >
+                      <Button danger icon={<DeleteOutlined />}>
+                        {t('web.detail.delete')}
+                      </Button>
+                    </Popconfirm>
+                  )}
+                </>
+              ) : null}
             </Space>
           }
         >

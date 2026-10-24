@@ -76,5 +76,7 @@ No interaction is drag-only. Every list that can be dragged also has move-up / m
   rather than the plan's 20.
 - **Contrast was not measured.** The palette follows the Ant Design token set; no contrast audit
   was run against the `carocrm-*` layer.
-- **`PermissionDenied.tsx` and `HelpTip.tsx` exist but are not used** by any page — the shared
-  permission-denied state of §5.7 is therefore not actually applied outside the settings shell.
+- **`PermissionDenied.tsx` and `HelpTip.tsx` were unused at the time of this pass; both are used
+  now** (a refused handbook page and the CRM chat workspace for the first, the Main Menu tab, the
+  docs cross-links and the two template designers for the second). The permission-denied state of
+  §5.7 is still not applied by the list, detail and dashboards pages.

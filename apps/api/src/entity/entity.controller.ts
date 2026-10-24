@@ -34,6 +34,16 @@ export class EntityController {
     return this.service.massDelete(entity, ids);
   }
 
+  /**
+   * Which row actions the caller may see on this entity's list (PLAN_Phase_20_Settings_UX.md §5.3).
+   * POST rather than GET because the wildcard `:entity/:id/:relation` GET would swallow the route.
+   */
+  @HttpCode(200)
+  @Post(':entity/action/rowActions')
+  rowActions(@Param('entity') entity: string) {
+    return this.service.rowActions(entity);
+  }
+
   @HttpCode(200)
   @Post(':entity/:id/restore')
   restore(@Param('entity') entity: string, @Param('id') id: string) {

@@ -24,7 +24,9 @@ export function usePreference<T>(name: string): {
   const writer = useMutation({
     mutationFn: (value: T) => api.savePreference(name, value),
     onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ['preferences'] });
+      // Only this preference is refetched. The recents list is written on every navigation, and
+      // invalidating the whole family would re-read density, columns and the page size each time.
+      void client.invalidateQueries({ queryKey: ['preferences', name] });
     },
   });
   return {

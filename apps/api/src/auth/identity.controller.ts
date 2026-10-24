@@ -23,6 +23,15 @@ export class IdentityController {
     return this.identity.listUsers(Number(offset ?? 0), Number(maxSize ?? 20), where, userFilters({ isActive, type, roleId, teamId }));
   }
 
+  /**
+   * The assignee picker (PLAN_Phase_20_Settings_UX.md §5.3). Declared before `User/:id` so the
+   * literal segment wins over the wildcard, and deliberately narrower than `GET /User`.
+   */
+  @Get('User/assignable')
+  listAssignableUsers(@Query('q') q?: string) {
+    return this.identity.listAssignableUsers(q);
+  }
+
   @Get('User/:id')
   getUser(@Param('id') id: string) {
     return this.identity.getUser(id);

@@ -1,4 +1,4 @@
-import { AppstoreOutlined, DatabaseOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SearchOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, DatabaseOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SearchOutlined, StarFilled } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
@@ -9,8 +9,10 @@ import { api } from '../api/client.js';
 import type { NavigationNode } from '../api/types.js';
 import { useNavigation } from '../state/admin.js';
 import { useDocsSettings } from '../state/docs.js';
+import { currentNavRoute, favoriteLeaves, useFavorites } from '../state/favorites.js';
 import { activateLocale, activeLocaleName, localesEnabled, t } from '../state/i18n.js';
 import { portalBase, usePortalContext } from '../state/portal.js';
+import { useRecordVisit } from '../state/recent.js';
 import { useSession } from '../state/session.js';
 import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 import { navAccent } from '../theme.js';
@@ -108,11 +110,32 @@ function InternalShell({ children }: { children: ReactNode }) {
   const [openKeys, setOpenKeys] = useState<string[] | undefined>(undefined);
   useEffect(() => {
     if (navigation.data === undefined) return;
-    setOpenKeys(ancestorKeys(navigation.data.items, selectedRoute(location.pathname)));
+    setOpenKeys(ancestorKeys(navigation.data.items, currentNavRoute(location.pathname)));
   }, [navigation.data, location.pathname]);
 
   const navItems = useMemo<MenuItems>(() => toMenuItems(tree), [tree, locale]);
-  const selectedKey = selectedRoute(location.pathname);
+  const selectedKey = currentNavRoute(location.pathname);
+  useRecordVisit(selectedKey);
+
+  // §5.1: the Favorites group leads the rail. It is resolved from the same filtered tree, so a route
+  // whose entry this caller may not open simply does not appear; the stored list is untouched.
+  const favorites = useFavorites();
+  const favoriteItems = useMemo<MenuItems>(() => {
+    const leaves = favoriteLeaves(tree, favorites.routes);
+    if (leaves.length === 0) return [];
+    return [
+      {
+        type: 'group',
+        key: 'group:favorites',
+        label: t('web.nav.favorites'),
+        children: leaves.map((leaf) => ({
+          key: `favorite:${leaf.key}`,
+          icon: <StarFilled />,
+          label: <Link to={leaf.route}>{leaf.label}</Link>,
+        })),
+      },
+    ];
+  }, [tree, favorites.routes, locale]);
 
   // A refresh always starts the rail at scrollTop 0. Once the tree and its open submenus have
   // settled, centre the selected entry so a deep page still shows where the user is.
@@ -284,7 +307,7 @@ function InternalShell({ children }: { children: ReactNode }) {
             <Menu
               mode="inline"
               inlineIndent={14}
-              items={navItems}
+              items={[...favoriteItems, ...navItems]}
               selectedKeys={[selectedKey]}
               openKeys={openKeys ?? []}
               onOpenChange={(keys) => setOpenKeys(keys.map(String))}
@@ -462,14 +485,6 @@ function entityNavLabel(node: NavigationNode): string {
   const prefix = 'Customer Success ';
   if (!node.key.startsWith('entity:CustomerSuccess') || !node.label.startsWith(prefix)) return node.label;
   return node.label.slice(prefix.length);
-}
-
-/** The route the current path selects: `/Contact/…` → `/Contact`, `/admin/jobs` → `/admin/jobs`. */
-function selectedRoute(pathname: string): string {
-  const segments = pathname.split('/').filter(Boolean);
-  if (segments.length === 0) return '/home';
-  if (segments[0] === 'admin') return `/${segments.slice(0, 2).join('/')}`;
-  return `/${segments[0]}`;
 }
 
 /** Group keys on the path to a route, so the submenu that owns the selection opens. */

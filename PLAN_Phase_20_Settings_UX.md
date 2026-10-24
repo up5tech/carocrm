@@ -24,11 +24,11 @@
 > sub-phases 20.11–20.17"): the ACL explain helper, storage-usage figures, 2FA, cross-page
 > "select all N matching records", bulk-action outcome counts, the row kebab menu, column
 > reorder/resize/freeze, list virtualization, the Favorites group, the record-page sticky header and
-> next-action band, "Save & new", the palette's `/` shortcut, and the unused `PermissionDenied` /
-> `HelpTip` components. The plan's 20.16 acceptance criterion ("axe passes on the four core
-> surfaces") is **not met**: this repository has no frontend test runner and no axe dependency, so
-> the accessibility pass is a manual keyboard walkthrough plus a responsive check — see
-> `docs/ux/accessibility.md`.
+> next-action band, "Save & new", the palette's `/` shortcut and server-persisted recents, the setup
+> banner's per-user dismissal, `nav.quickCreate` consumption, and KPI comparison/target/trend. The
+> plan's 20.16 acceptance criterion ("axe passes on the four core surfaces") is **not met**: this
+> repository has no frontend test runner and no axe dependency, so the accessibility pass is a manual
+> keyboard walkthrough plus a responsive check — see `docs/ux/accessibility.md`.
 >
 > This document remains the scope, architecture reference and implementation roadmap for Phase 20.
 > Implemented behaviour is documented in `docs/admin/settings.md`, `docs/admin/navigation.md`,
@@ -1786,10 +1786,10 @@ Phase 20 is complete when all applicable checks below pass:
 - [x] OpenAPI updated; documentation and compatibility notes written. (All Phase 20 endpoints use `@ApiTags` decorators; the OpenAPI spec is generated at runtime by the NestJS Swagger module, so no static `api-spec/` directory is needed for this phase — PLAN §58 is a separate, later piece of work. Compatibility notes in `docs/compatibility/settings-ux.md`, admin docs in `docs/admin/settings.md`, UX docs in `docs/ux/`, alpha status in `docs/reference/alpha-status.md`, matrix in `docs/reference/compatibility-matrix.md`.)
 - [x] No extra database was created; no reset, truncate or broad delete was performed.
 - [x] No upstream PHP source, unlicensed assets or third-party branding were copied.
-- [ ] Record pages let a user render related records as tabs they arrange, or as today's stacked
-      panels; no relation can be lost, the arrangement is per user, and `/Related` and ACL are
-      unchanged. (**20.18 — 📋 planned, not implemented; this item is not part of the completed
-      20.0–20.17 scope.**)
+- [x] Record pages render related records as tabs the administrator arranges in the entity's detail
+      layout, or as today's stacked panels; no relation can be lost, the arrangement is per entity
+      and `/Related` and ACL are unchanged. (20.18 — the arrangement is entity metadata, not a
+      per-user preference; the per-user draft in this checklist item was deliberately dropped)
 - [x] The home page is a role-aware workspace — greeting/search/create hero, focus strip, today's
       agenda, at most three curated KPI tiles and followed activity — with no per-entity count grid,
       no `api.list` fan-out, and a compact administrator setup banner that hides at 100 %. (20.19 —

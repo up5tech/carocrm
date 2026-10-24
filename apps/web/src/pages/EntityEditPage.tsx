@@ -98,6 +98,9 @@ export function EntityEditPage() {
   const formRef = useRef(form);
   formRef.current = form;
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // §5.5: which button submitted. "Save & new" writes and stays on the create screen with the form
+  // reset to its defaults so an operator can enter a batch without re-clicking Create.
+  const submitIntent = useRef<'view' | 'new'>('view');
 
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {
@@ -278,6 +281,15 @@ export function EntityEditPage() {
         layout="vertical"
         initialValues={initial ?? {}}
         onValuesChange={handleValuesChange}
+        // §5.5: a failed save must say where the problem is, not only that there is one — the first
+        // invalid field is scrolled into view and focused.
+        onFinishFailed={({ errorFields }) => {
+          const first = errorFields[0]?.name;
+          if (first === undefined) return;
+          form.scrollToField(first, { behavior: 'smooth', block: 'center' });
+          const instance = form.getFieldInstance(first) as { focus?: () => void } | null;
+          instance?.focus?.();
+        }}
         onFinish={async (values) => {
           if (!entity) return;
           // §20.13: duplicate warning on create — check if a record with the same name already exists
@@ -327,6 +339,16 @@ export function EntityEditPage() {
                     ).id
                   : (await api.salesCreateDocument(createKind, { data: payload, items: lines.map(linePayload) })).id
                 : (await api.create(entity, payload))['id'];
+            if (submitIntent.current === 'new' && id === undefined && createKind === undefined) {
+              submitIntent.current = 'view';
+              void message.success(t('web.edit.savedCreateAnother'));
+              // Back to the defaults the create screen opened with (owner = current user, pipeline
+              // entry stage), so the next record starts valid instead of empty.
+              form.resetFields();
+              if (initial !== undefined) form.setFieldsValue(initial);
+              setHasUnsavedChanges(false);
+              return;
+            }
             void message.success(t('web.edit.saved'));
             navigate(`${base}/${entity}/${String(savedId ?? '')}`);
           } catch (error) {
@@ -378,9 +400,23 @@ export function EntityEditPage() {
             loading={saving}
             disabled={blocked || linesBlocked}
             title={linesBlocked ? t('sales.document.linesRequired') : undefined}
+            onClick={() => {
+              submitIntent.current = 'view';
+            }}
           >
             {t('web.edit.save')}
           </Button>
+          {id === undefined && createKind === undefined ? (
+            <Button
+              disabled={blocked || linesBlocked || saving}
+              onClick={() => {
+                submitIntent.current = 'new';
+                form.submit();
+              }}
+            >
+              {t('web.edit.saveAndNew')}
+            </Button>
+          ) : null}
           <Button onClick={() => navigate(id ? `${base}/${entity}/${id}` : `${base}/${entity}`)}>{t('web.edit.cancel')}</Button>
         </Space>
       </Form>

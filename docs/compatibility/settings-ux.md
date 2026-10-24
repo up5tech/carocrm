@@ -24,7 +24,7 @@ the upstream file layout, and copies no upstream source, asset or translation.
 | An API key secret can be re-read by a super admin | Never returned after the creating response | The server stores only a hash (`auth.service.issueApiKey`), so "shown once" is a property of the data, not a UI rule. Rotation is issue-new + revoke-old, offered as one button. |
 | Layout manager is an `EntityLayoutManager` per entity panel | One shared `LayoutEditor` component hosted by both the Entity Manager and a settings `layout` tab | Copying the editor into the shell would let the two drift. The tab hosts it with the shell's save bar (`usesSaveBar` descriptor flag) and an entity picker; the Entity Manager keeps its inline actions. |
 | User list shows team membership | The list omits `teams`; the editor reads `GET /User/:id` | Keeping the page cheap matters more than one column, and the row the form writes is the row it read. `title` and `phone` are in both DTOs so a save cannot blank them. |
-| Relation panels are administrator-defined layout panels | A **per-user, per-entity** arrangement: today's stacked panels or tabs the user creates, renames, reorders and fills themselves | Upstream has no per-user relation-tab arrangement, and this is an intentional Phase B enhancement. The arrangement is a *preference*, not a settings document and not entity metadata, because two people opening the same Account legitimately want different arrangements. The panels themselves are untouched: the same `/Related` calls, the same ACL, the same link/unlink actions. See `docs/ux/record-tabs.md`. |
+| Relation panels are administrator-defined layout panels | A **per-entity, administrator-arranged** `detailTabs` section of the entity definition: today's stacked panels, or tabs the entity's detail layout defines | Arranging relations inside the entity's detail layout follows upstream's model (the layout describes the page) rather than deviating from it. The section is entity metadata written through `POST /Metadata/:entity` next to `layouts`, not a per-user preference: a record page is a shared surface, and a page whose sections move per viewer cannot be referenced in support, training or a link. The panels themselves are untouched: the same `/Related` calls, the same ACL, the same link/unlink actions. See `docs/ux/record-tabs.md` and `PLAN_Phase_20_Settings_UX.md` §5.11. |
 
 ## Behaviour that matches upstream intent
 
@@ -66,9 +66,9 @@ the upstream file layout, and copies no upstream source, asset or translation.
   path, not by deactivating the development instance's only administrator over HTTP.
 - Service Desk and Customer Success documents are hosted and editable as flat policy rows; Sales keeps
   its own purpose-built form. None of the three is a registry document (§8.3 keeps their endpoints).
-- `nav.quickCreate` is stored and validated but not yet consumed: the global create menu arrives with
-  the command palette (20.14). `nav.board.enabled` is derived from the board grouping field rather than
-  offered as an independent switch.
+- `nav.quickCreate` is stored and validated but not consumed: the home hero's **Create** menu lists
+  every navigable entity, so the flag still changes nothing on screen. `nav.board.enabled` is derived
+  from the board grouping field rather than offered as an independent switch.
 - The unsaved-changes guard covers the shell's own rail and browser unload. The app is mounted with a
   plain `BrowserRouter`, which exposes no navigation blocker, so an in-app link from outside the shell
   is not intercepted; moving to a data router is a separate change.
@@ -125,10 +125,12 @@ behaviour, so none of them is an EspoCRM compatibility question.
 
 ### Shared states and accessibility (§5.7, §5.8)
 
-- **`PermissionDenied.tsx` and `HelpTip.tsx` are not used by any page.** The shared components exist,
-  but the permission-denied state of §5.7 is applied only inside the settings shell; other pages
-  still render their own markup. `EmptyState`, `LoadingSkeleton` and `ErrorState` are used by the
-  settings shell, the list page and the dashboards page.
+- **`PermissionDenied.tsx` and `HelpTip.tsx` were unused when 20.11–20.17 shipped; both are used
+  now.** Phase 21 consumes `PermissionDenied` on a refused handbook page and in the CRM chat
+  workspace, and `HelpTip` carries a `docKey` in the Main Menu tab, the docs cross-links and the two
+  template designers. The permission-denied state of §5.7 is still not applied by the list, detail
+  and dashboards pages, which keep their own error markup. `EmptyState`, `LoadingSkeleton` and
+  `ErrorState` are used by the settings shell, the list page and the dashboards page.
 - **There is no automated axe audit** on the four core surfaces, and there is no frontend test
   runner in this repository at all (`vitest.config.ts` covers `apps/api/test` and `packages/*/src`
   only). The accessibility pass is a manual keyboard walkthrough plus a responsive check at 1440 px,
@@ -138,6 +140,15 @@ behaviour, so none of them is an EspoCRM compatibility question.
   earlier modules only.
 - **Contrast was not measured.** The palette uses the Ant Design token set; no contrast audit was
   run against the `carocrm-*` layer.
+
+### Setup checklist (§4.10)
+
+- **The checklist cannot be dismissed.** §4.10 asks for a per-user dismissal; the `dismissedSetupSteps`
+  preference is registered and validated but no screen writes it, so the banner on the home page stays
+  until every step is complete.
+- **The checklist is five checks, not the plan's eight.** `menu`, `email`, `roles`, `teams` and `users`
+  are evaluated (`apps/api/src/setup-checklist/setup-checklist.service.ts`); the logo, first custom
+  field and first workflow checks are not.
 
 ### Documentation
 

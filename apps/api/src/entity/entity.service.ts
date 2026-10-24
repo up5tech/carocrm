@@ -61,6 +61,22 @@ export interface RecordMutation {
   readonly id: string;
 }
 
+/**
+ * The row actions a list row may offer, decided on the server (PLAN_Phase_20_Settings_UX.md §5.3:
+ * "contents are permission-filtered server-side, so a user never sees an action that will fail").
+ *
+ * These are **entity**-level answers. A record scoped to someone else's team can still refuse an
+ * edit or delete that the entity allows, and that refusal arrives as the operation's own message
+ * rather than as an action the UI guessed at.
+ */
+export interface RowActionSet {
+  readonly open: boolean;
+  readonly edit: boolean;
+  readonly assign: boolean;
+  readonly follow: boolean;
+  readonly delete: boolean;
+}
+
 const LINK_SINGLE_TYPES: ReadonlySet<string> = new Set(['link', 'linkOne', 'foreign']);
 const LINK_MULTIPLE_TYPES: ReadonlySet<string> = new Set(['linkMultiple', 'attachmentMultiple']);
 /**
@@ -281,6 +297,25 @@ export class EntityCrudService {
       }
     }
     return { count: updated.length, ids: updated };
+  }
+
+  async rowActions(entity: string): Promise<RowActionSet> {
+    this.assertEntity(entity);
+    const definition = this.metadata.registry.getEntity(entity);
+    const [edit, remove, stream] = await Promise.all([
+      this.acl.canUser(entity, 'edit'),
+      this.acl.canUser(entity, 'delete'),
+      this.acl.canUser(entity, 'stream'),
+    ]);
+    // Only an entity that owns records through `assignedUserId` can be assigned.
+    const assignable = definition?.fields['assignedUserId'] !== undefined;
+    return {
+      open: true,
+      edit: edit !== 'no',
+      assign: assignable && edit !== 'no',
+      follow: (definition?.record.followable ?? true) && stream !== 'no',
+      delete: (definition?.record.removable ?? true) && remove !== 'no',
+    };
   }
 
   async massDelete(entity: string, ids: readonly string[]): Promise<{ count: number; ids: string[] }> {

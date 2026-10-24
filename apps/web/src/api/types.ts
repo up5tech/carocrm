@@ -364,6 +364,24 @@ export interface ListResult<T = Record<string, unknown>> {
   count: number;
 }
 
+/**
+ * What the server says a list row may offer this caller (PLAN_Phase_20_Settings_UX.md §5.3).
+ * Entity-level: a record outside the caller's own/team scope can still refuse the operation itself.
+ */
+export interface RowActions {
+  open: boolean;
+  edit: boolean;
+  assign: boolean;
+  follow: boolean;
+  delete: boolean;
+}
+
+/** The result of a bulk write: how many records changed, and which they were. */
+export interface MassResult {
+  count: number;
+  ids: string[];
+}
+
 /** The profile block `GET /AppUser/me` serves alongside the authority fields. */
 export interface ProfileInfo {
   id: string;

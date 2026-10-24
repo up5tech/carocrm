@@ -1,16 +1,19 @@
-import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Card, Col, Dropdown, Input, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { api, ApiError, type SavedFilterRow, type WhereClause } from '../api/client.js';
+import type { RowActions } from '../api/types.js';
+import { BulkEditModal } from '../components/BulkEditModal.js';
+import { ColumnManager } from '../components/ColumnManager.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { FieldValue, linkLabelsOf } from '../components/fields.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { t } from '../state/i18n.js';
-import { boardGroupFields, fieldLabel, filterEntries, layoutPanelsFor, listEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
+import { boardGroupFields, type FieldEntry, fieldLabel, filterEntries, layoutPanelsFor, listEntries, massUpdateEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
 import { portalBase } from '../state/portal.js';
 import { usePreference } from '../state/preferences.js';
 import { useSession } from '../state/session.js';
@@ -28,6 +31,21 @@ function operatorOptions(): { value: string; label: string }[] {
   ];
 }
 
+/** One reversible bulk write. `rows` are the records as they were before it, id included. */
+interface BulkUndo {
+  kind: 'delete' | 'update';
+  ids: string[];
+  rows: Record<string, unknown>[];
+  keys: string[];
+}
+
+/** The previous values an undo has to write back, in the shape `/massUpdate` takes. */
+function pickValues(row: Record<string, unknown>, keys: readonly string[]): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  for (const key of keys) values[key] = row[key] ?? null;
+  return values;
+}
+
 export function EntityListPage() {
   usePageDocs('user/lists-and-views');
   const { entity: entityName } = useParams<{ entity: string }>();
@@ -35,7 +53,7 @@ export function EntityListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { principal } = useSession();
   const base = portalBase(principal?.type);
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
   const metadata = useMetadata();
   const definition = useEntity(entityName);
 
@@ -61,9 +79,16 @@ export function EntityListPage() {
   }, [pageSizePreference.value]);
   const [orderBy, setOrderBy] = useState<string | undefined>(urlOrderBy);
   const [selected, setSelected] = useState<string[]>([]);
-  // §20.12: undo stack for reversible bulk actions
-  const [undoStack, setUndoStack] = useState<Array<{ action: string; ids: string[]; before: Record<string, unknown>[] }>>([]);
+  // §20.12/§5.3: one undo entry per bulk write. `rows` is the page's copy of the records *before*
+  // the write, which is all an undo needs because a selection is page-scoped.
+  const [undoStack, setUndoStack] = useState<BulkUndo[]>([]);
   const [showUndo, setShowUndo] = useState(false);
+  // The bulk editor: `update` writes one field, `assign` sets the owner. Both take the ids they act on,
+  // so the floating bar and a row's kebab menu open the same editor.
+  const [bulk, setBulk] = useState<{ mode: 'update' | 'assign'; ids: string[] } | null>(null);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [actions, setActions] = useState<RowActions | null>(null);
   const [drafts, setDrafts] = useState<FilterDraft[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [textQuery, setTextQuery] = useState(urlTextQuery);
@@ -109,13 +134,44 @@ export function EntityListPage() {
   // This hook must stay above the loading/error early returns below — a hook that only runs once
   // the metadata has arrived changes the hook order between renders and React tears the page down.
   const columnPref = usePreference<Record<string, string[]>>('columns');
+  // §5.3: the stored list is both the visible set and its order — the column manager writes it.
   const visibleColumns = useMemo(() => {
     if (!entityName) return columns;
     const saved = columnPref.value?.[entityName];
     if (!saved || saved.length === 0) return columns;
-    const savedSet = new Set(saved);
-    return columns.filter((entry) => savedSet.has(entry.name));
+    const byName = new Map(columns.map((entry) => [entry.name, entry]));
+    return saved
+      .map((name) => byName.get(name))
+      .filter((entry): entry is FieldEntry => entry !== undefined);
   }, [columns, columnPref.value, entityName]);
+
+  // §5.3: which row actions this caller may see. The server decides, because a role's ACL never
+  // travels to the browser. While it answers (or if it fails) only Open is offered — a menu entry
+  // that can only end in a 403 is worse than one that appears a moment later.
+  useEffect(() => {
+    if (!entityName) return;
+    let active = true;
+    setActions(null);
+    api
+      .rowActions(entityName)
+      .then((next) => {
+        if (active) setActions(next);
+      })
+      .catch(() => {
+        if (active) setActions(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [entityName]);
+
+  const bulkFields = useMemo(() => massUpdateEntries(definition.data), [definition.data]);
+  // Assign writes the entity's own owner field; an entity without one (`assignedUserId`) has no
+  // assignment to offer, and the server says so too.
+  const assignFields = useMemo(() => {
+    const owner = definition.data?.fields['assignedUserId'];
+    return owner === undefined ? [] : [{ name: 'assignedUserId', field: owner }];
+  }, [definition.data]);
 
   const caseInboxViews = useMemo(() => ([
     { key: 'all', label: t('web.serviceDesk.inbox.all'), drafts: [] as FilterDraft[] },
@@ -307,39 +363,126 @@ export function EntityListPage() {
     }
   }, [drafts, entityName, message]);
 
-  // §20.12: bulk delete with undo
-  const bulkDelete = useCallback(async () => {
-    if (!entityName || selected.length === 0) return;
-    const before = rows.filter((r) => selected.includes(String(r['id'])));
+  /**
+   * §5.3: a bulk write reports **outcomes**, not an intention — how many records changed and how many
+   * were left alone because the caller may not touch them (`massUpdate`/`massDelete` skip those and
+   * still return what they did write).
+   */
+  const reportOutcome = useCallback(
+    (changed: number, requested: number) => {
+      const skipped = Math.max(0, requested - changed);
+      const text = t('web.list.bulkOutcome', { changed, skipped });
+      if (skipped > 0) void message.warning(text);
+      else void message.success(text);
+    },
+    [message],
+  );
+
+  // §20.12/§5.3: bulk delete with undo. The rows themselves are kept because deleting can only be
+  // undone by recreating them.
+  const bulkDelete = useCallback(async (ids: string[]) => {
+    if (!entityName || ids.length === 0) return;
+    const before = rows.filter((row) => ids.includes(String(row['id'])));
     try {
-      await api.massDelete(entityName, selected);
-      setUndoStack((prev) => [...prev.slice(-4), { action: 'delete', ids: [...selected], before }]);
+      const result = await api.massDelete(entityName, ids);
+      setUndoStack((prev) => [...prev.slice(-4), { kind: 'delete', ids: result.ids, rows: before, keys: [] }]);
       setShowUndo(true);
-      setSelected([]);
+      setSelected((prev) => prev.filter((id) => !result.ids.includes(id)));
+      reportOutcome(result.count, ids.length);
       void load();
       setTimeout(() => setShowUndo(false), 8000);
     } catch (error) {
       void message.error(error instanceof Error ? error.message : t('web.list.deleteFailed'));
     }
-  }, [entityName, selected, rows, load, message]);
+  }, [entityName, rows, load, message, reportOutcome]);
+
+  /** Bulk field update / assign (§5.3). The previous values are snapshotted for the undo. */
+  const bulkWrite = useCallback(async (values: Record<string, unknown>) => {
+    if (!entityName || bulk === null) return;
+    const ids = bulk.ids;
+    const keys = Object.keys(values);
+    const before = rows.filter((row) => ids.includes(String(row['id'])));
+    setBulkBusy(true);
+    try {
+      const result = await api.massUpdate(entityName, ids, values);
+      setUndoStack((prev) => [...prev.slice(-4), { kind: 'update', ids: result.ids, rows: before, keys }]);
+      setShowUndo(true);
+      setBulk(null);
+      setSelected((prev) => prev.filter((id) => !result.ids.includes(id)));
+      reportOutcome(result.count, ids.length);
+      await load();
+      setTimeout(() => setShowUndo(false), 8000);
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('web.list.bulkFailed'));
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [bulk, entityName, rows, load, message, reportOutcome]);
 
   const undoLastAction = useCallback(async () => {
     if (undoStack.length === 0 || !entityName) return;
     const last = undoStack[undoStack.length - 1];
     if (!last) return;
-    if (last.action === 'delete') {
-      try {
-        for (const record of last.before) {
-          await api.create(entityName, record as Record<string, unknown>);
+    try {
+      if (last.kind === 'delete') {
+        for (const record of last.rows) {
+          await api.create(entityName, record);
         }
-        setUndoStack((prev) => prev.slice(0, -1));
-        setShowUndo(false);
-        void load();
-      } catch (error) {
-        void message.error(error instanceof Error ? error.message : t('web.list.undoFailed'));
+      } else {
+        // Group the records that shared a previous value, so undoing a fifty-record write is a few
+        // requests rather than fifty — and it goes back through the same audited `/massUpdate`.
+        const groups = new Map<string, { values: Record<string, unknown>; ids: string[] }>();
+        for (const row of last.rows) {
+          const id = String(row['id']);
+          if (!last.ids.includes(id)) continue;
+          const values = pickValues(row, last.keys);
+          const key = JSON.stringify(values);
+          const group = groups.get(key) ?? { values, ids: [] };
+          group.ids.push(id);
+          groups.set(key, group);
+        }
+        for (const group of groups.values()) {
+          await api.massUpdate(entityName, group.ids, group.values);
+        }
       }
+      setUndoStack((prev) => prev.slice(0, -1));
+      setShowUndo(false);
+      void load();
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('web.list.undoFailed'));
     }
   }, [undoStack, entityName, load, message]);
+
+  /** §5.3: the column manager writes the ordered visible set for this entity, or clears it. */
+  const saveColumns = useCallback((next: string[] | null) => {
+    if (!entityName) return;
+    const current = { ...(columnPref.value ?? {}) };
+    if (next === null || next.length === 0) delete current[entityName];
+    else current[entityName] = next;
+    columnPref.save(current);
+  }, [columnPref, entityName]);
+
+  /** §5.3 row action: follow a record from the list without opening it. */
+  const followRecord = useCallback(async (id: string) => {
+    if (!entityName) return;
+    try {
+      await api.follow(entityName, id);
+      void message.success(t('web.list.followed'));
+    } catch (error) {
+      void message.error(error instanceof Error ? error.message : t('web.list.followFailed'));
+    }
+  }, [entityName, message]);
+
+  /** §5.3 row action: delete through the same bulk path, so one record is just as undoable. */
+  const confirmDeleteRecord = useCallback((id: string) => {
+    if (!entityName) return;
+    modal.confirm({
+      title: t('web.list.deleteThisRecord'),
+      okText: t('web.list.confirmDelete'),
+      okButtonProps: { danger: true },
+      onOk: () => bulkDelete([id]),
+    });
+  }, [entityName, modal, bulkDelete]);
 
   if (metadata.isError || definition.isError) {
     return <ErrorState message={t('web.list.notAvailable', { entity: entityName ?? '' })} />;
@@ -374,42 +517,13 @@ export function EntityListPage() {
           <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
             {t('web.list.importCsv')}
           </Button>
-          <Dropdown
-            menu={{
-              items: columns.map((entry) => ({
-                key: entry.name,
-                label: fieldLabel(entry.name, entry.field, metadata.data),
-              })),
-              selectable: true,
-              selectedKeys: visibleColumns.map((c) => c.name),
-              onClick: ({ key }: { key: string }) => {
-                const added = columns.find((c) => c.name === key);
-                if (added === undefined) return;
-                const next = visibleColumns.some((c) => c.name === key)
-                  ? visibleColumns.filter((c) => c.name !== key)
-                  : [...visibleColumns, added];
-                if (entityName === undefined) return;
-                columnPref.save({ ...(columnPref.value ?? {}), [entityName]: next.map((c) => c.name) });
-              },
-            }}
-            trigger={['click']}
-          >
-            <Button icon={<AppstoreOutlined />}>{t('web.list.columns')}</Button>
-          </Dropdown>
+          <Button icon={<AppstoreOutlined />} onClick={() => setColumnsOpen(true)}>
+            {t('web.list.columns')}
+          </Button>
           <Popconfirm
             title={t('web.list.deleteConfirm', { count: selected.length })}
             disabled={selected.length === 0}
-            onConfirm={async () => {
-              if (!entityName) return;
-              try {
-                await api.massDelete(entityName, selected);
-                void message.success(t('web.list.deleted'));
-                setSelected([]);
-                await load();
-              } catch (error) {
-                void message.error(error instanceof Error ? error.message : t('web.list.deleteFailed'));
-              }
-            }}
+            onConfirm={() => void bulkDelete(selected)}
           >
             <Button danger icon={<DeleteOutlined />} disabled={selected.length === 0} aria-label={t('web.list.deleteSelected')}>
               {t('web.list.deleteSelected')}
@@ -525,6 +639,10 @@ export function EntityListPage() {
         rowKey={(row) => String(row['id'])}
         loading={loading}
         dataSource={rows}
+        // §5.3: the header stays put while the page scrolls; the identifier column stays put while the
+        // table scrolls sideways. Rows themselves are server-paginated, so there is nothing to
+        // virtualize below.
+        sticky
         scroll={{ x: 'max-content' }}
         {...(density.value === 'compact' ? { size: 'small' as const } : {})}
         pagination={{
@@ -543,6 +661,7 @@ export function EntityListPage() {
             title: fieldLabel(entry.name, entry.field, metadata.data),
             dataIndex: entry.name,
             sorter: entry.field.sortable !== false,
+            ...(entry.name === displayField ? { fixed: 'left' as const, width: 220 } : {}),
             render: (_: unknown, row: Record<string, unknown>) =>
               entry.name === displayField ? (
                 <Link className="carocrm-row-link" to={`${base}/${entityName}/${String(row['id'])}`}>
@@ -557,38 +676,46 @@ export function EntityListPage() {
                   linkLabels={linkLabelsOf(row)}
                 />
               ),
-          })),
-          {
+          })),          {
             title: t('core.common.action'),
             key: 'actions',
-            width: 100,
-            render: (_: unknown, row: Record<string, unknown>) => (
-              <Space size={4}>
-                <Button
-                  size="small"
-                  type="text"
-                  aria-label={t('web.list.editRecord')}
-                  icon={<EditOutlined />}
-                  onClick={() => navigate(`${base}/${entityName}/${String(row['id'])}/edit`)}
-                />
-                <Popconfirm
-                  title={t('web.list.deleteThisRecord')}
-                  okText={t('web.list.confirmDelete')}
-                  onConfirm={async () => {
-                    if (!entityName) return;
-                    try {
-                      await api.remove(entityName, String(row['id']));
-                      void message.success(t('web.list.deleted'));
-                      await load();
-                    } catch (error) {
-                      void message.error(error instanceof Error ? error.message : t('web.list.deleteFailed'));
-                    }
+            width: 64,
+            render: (_: unknown, row: Record<string, unknown>) => {
+              const id = String(row['id']);
+              // While the catalog is in flight (or if it failed) only Open is offered.
+              const can = actions ?? { open: true, edit: false, assign: false, follow: false, delete: false };
+              const items: { key: string; label: string; danger?: boolean }[] = [
+                { key: 'open', label: t('web.list.rowOpen') },
+              ];
+              if (can.edit) items.push({ key: 'edit', label: t('web.list.editRecord') });
+              if (can.assign) items.push({ key: 'assign', label: t('web.list.rowAssign') });
+              if (can.follow) items.push({ key: 'follow', label: t('web.list.rowFollow') });
+              if (can.delete) items.push({ key: 'delete', label: t('web.list.deleteRecord'), danger: true });
+              const route = `${base}/${entityName}/${id}`;
+              return (
+                <Dropdown
+                  trigger={['click']}
+                  menu={{
+                    items,
+                    onClick: ({ key, domEvent }) => {
+                      domEvent.stopPropagation();
+                      if (key === 'open') navigate(route);
+                      else if (key === 'edit') navigate(`${route}/edit`);
+                      else if (key === 'assign') setBulk({ mode: 'assign', ids: [id] });
+                      else if (key === 'follow') void followRecord(id);
+                      else if (key === 'delete') confirmDeleteRecord(id);
+                    },
                   }}
                 >
-                  <Button size="small" type="text" danger aria-label={t('web.list.deleteRecord')} icon={<DeleteOutlined />} />
-                </Popconfirm>
-              </Space>
-            ),
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<MoreOutlined />}
+                    aria-label={t('web.list.rowActionsAria', { name: String(row[displayField] ?? id) })}
+                  />
+                </Dropdown>
+              );
+            },
           },
         ]}
         rowSelection={{
@@ -608,13 +735,22 @@ export function EntityListPage() {
       />
       ) : null}
 
-      {/* §20.12: floating bulk action bar */}
+      {/* §20.12/§5.3: floating bulk action bar. Each action is shown only when the server says the
+          caller may perform it, so the bar never offers a write that can only be refused. */}
       {selected.length > 0 ? (
         <div className="carocrm-bulk-bar" role="toolbar" aria-label={t('web.list.bulkActionsAria')} style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, background: '#fff', border: '1px solid #e6e9ef', borderRadius: 8, padding: '10px 20px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Typography.Text strong aria-live="polite">{selected.length} selected</Typography.Text>
-          <Popconfirm title={t('web.list.deleteConfirm', { count: selected.length })} okText={t('web.common.delete')} okButtonProps={{ danger: true }} onConfirm={() => void bulkDelete()}>
-            <Button danger size="small">{t('web.list.deleteSelected')}</Button>
-          </Popconfirm>
+          <Typography.Text strong aria-live="polite">{t('web.list.selectedCount', { count: selected.length })}</Typography.Text>
+          {actions?.edit === true ? (
+            <Button size="small" onClick={() => setBulk({ mode: 'update', ids: [...selected] })}>{t('web.list.bulkEdit')}</Button>
+          ) : null}
+          {actions?.assign === true ? (
+            <Button size="small" onClick={() => setBulk({ mode: 'assign', ids: [...selected] })}>{t('web.list.bulkAssign')}</Button>
+          ) : null}
+          {actions?.delete === true ? (
+            <Popconfirm title={t('web.list.deleteConfirm', { count: selected.length })} okText={t('web.common.delete')} okButtonProps={{ danger: true }} onConfirm={() => void bulkDelete(selected)}>
+              <Button danger size="small">{t('web.list.deleteSelected')}</Button>
+            </Popconfirm>
+          ) : null}
           <Button size="small" onClick={() => setSelected([])}>{t('core.common.cancel')}</Button>
         </div>
       ) : null}
@@ -631,6 +767,21 @@ export function EntityListPage() {
         <Typography.Paragraph type="secondary">{t('web.list.importHint')}</Typography.Paragraph>
         <Input.TextArea rows={8} placeholder={'name,website\nAcme,https://acme.example'} value={importText} onChange={(event) => setImportText(event.target.value)} />
       </Modal>
+      <ColumnManager
+        open={columnsOpen}
+        columns={columns}
+        visible={visibleColumns.map((entry) => entry.name)}
+        onClose={() => setColumnsOpen(false)}
+        onChange={saveColumns}
+      />
+      <BulkEditModal
+        open={bulk !== null}
+        mode={bulk?.mode ?? 'update'}
+        fields={bulk?.mode === 'assign' ? assignFields : bulkFields}
+        busy={bulkBusy}
+        onClose={() => setBulk(null)}
+        onSubmit={(values) => void bulkWrite(values)}
+      />
       <Modal
         title={t('web.list.saveFiltersTitle')}
         open={filterNameOpen}

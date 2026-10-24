@@ -72,6 +72,30 @@ export function filterEntries(definition: EntityDefinition | undefined): FieldEn
 }
 
 /**
+ * Plain values a bulk write may set (PLAN_Phase_20_Settings_UX.md §5.3). The entity's `massUpdate`
+ * layout picks the set when it has one; without that layout the fields the edit form shows are the
+ * candidates. Computed fields are excluded because the server recalculates them, and a link is left
+ * out because a record id typed into a box is not a picker — the owner link has its own **Assign**.
+ */
+export function massUpdateEntries(definition: EntityDefinition | undefined): FieldEntry[] {
+  const arranged = layoutFieldEntries(definition, 'massUpdate');
+  const source = arranged.length > 0 ? arranged : editEntries(definition);
+  return source.filter((entry) => MASS_UPDATE_TYPES.has(entry.field.type));
+}
+
+const MASS_UPDATE_TYPES: ReadonlySet<string> = new Set([
+  'varchar',
+  'text',
+  'enum',
+  'bool',
+  'date',
+  'datetime',
+  'int',
+  'float',
+  'currency',
+]);
+
+/**
  * Enum fields a board view can build its columns from. The list comes from metadata — only a
  * field that declares its own `values` can produce columns, so a free-text field is never
  * offered and a new enum field needs no frontend change.
@@ -106,7 +130,7 @@ export function defaultBoardGroupField(definition: EntityDefinition | undefined)
 }
 
 /** Views the generated record screens can lay out (PLAN §8). */
-type LayoutView = 'list' | 'detail' | 'edit' | 'panel' | 'popup';
+type LayoutView = 'list' | 'detail' | 'edit' | 'massUpdate' | 'panel' | 'popup';
 
 /**
  * Panels of the first layout declared for a view, in position order (PLAN §8).

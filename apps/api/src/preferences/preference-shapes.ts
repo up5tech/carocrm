@@ -22,6 +22,8 @@ export const PREFERENCE_SCHEMAS = {
   favorites: z.array(z.string().min(3).max(200)).max(500),
   lastVisited: z.array(z.string().min(1).max(200)).max(50),
   dismissedSetupSteps: z.array(z.string().min(1).max(64)).max(50),
+  /** §4.10: the home setup banner can be dismissed per user; it is guidance, never a task list. */
+  setupChecklistDismissed: z.boolean(),
 } as const;
 
 export type PreferenceName = keyof typeof PREFERENCE_SCHEMAS;

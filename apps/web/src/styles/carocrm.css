@@ -2196,6 +2196,122 @@ body {
 .carocrm-card-stack > * {
   min-width: 0;
 }
+
+/* §5.4 record header: identity and the primary action stay in view while the page scrolls. It sits
+   under the 70px app header, on the same surface as a card so it reads as part of the record. */
+.carocrm-record-header {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e8edf5;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: space-between;
+  padding: 12px 18px;
+  position: sticky;
+  top: 70px;
+  z-index: 20;
+}
+
+.carocrm-record-header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.carocrm-record-header-title {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.carocrm-record-header-name {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.carocrm-record-header-name.is-editable {
+  border-bottom: 1px dashed #c9d3e3;
+  cursor: text;
+}
+
+.carocrm-record-header-name.is-editable:hover {
+  border-bottom-color: #438eff;
+}
+
+.carocrm-record-header-name.is-editable:focus-visible {
+  border-bottom-color: #438eff;
+  outline: 2px solid #438eff;
+  outline-offset: 3px;
+}
+
+.carocrm-record-header-entity {
+  color: #8b939d;
+  font-size: 11.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.carocrm-record-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.carocrm-record-header-chip {
+  align-items: baseline;
+  display: inline-flex;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.carocrm-record-header-chip-label {
+  color: #8b939d;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* §5.4 next action: one line between the header and the record, only when there is a step to take. */
+.carocrm-next-action {
+  align-items: center;
+  background: #f0f7ff;
+  border: 1px solid #d6e8ff;
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 9px 16px;
+}
+
+.carocrm-next-action-label {
+  color: #2f6ed9;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.carocrm-next-action-text {
+  color: #31373d;
+  font-size: 13px;
+}
+
+.carocrm-next-action .ant-btn {
+  margin-left: auto;
+}
+
+/* On a phone the app header is not sticky, so the record header must not float over the page. */
+@media (max-width: 767px) {
+  .carocrm-record-header {
+    position: static;
+  }
+}
 /* A card on a document screen holds a table wider than a phone, so its body is
    the scroll container rather than the page. */
 .carocrm-card-stack .ant-card-body {
@@ -7452,6 +7568,12 @@ body.carocrm-reordering * {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
+}
+
+/* §4.10: the checklist is guidance, so it can be dismissed; the control sits at the end of the row. */
+.carocrm-home-setup-main > .ant-btn {
+  align-self: center;
+  margin-left: auto;
 }
 
 .carocrm-home-setup-title {

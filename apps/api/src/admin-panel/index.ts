@@ -22,6 +22,8 @@ import { PlatformSettingsRegistrar } from './platform-settings.js';
 import { SettingsDocumentService } from './settings-document.service.js';
 import { SettingsDocumentsController } from './settings-documents.controller.js';
 import { SettingsRegistryService } from './settings-registry.service.js';
+import { StorageUsageController } from './storage-usage.controller.js';
+import { StorageUsageService } from './storage-usage.service.js';
 
 export { AdminPanelController, NavigationController } from './admin-panel.controller.js';
 export type { AdminPanelGroup, AdminPanelTab } from './admin-panel.service.js';
@@ -45,6 +47,8 @@ export {
   type NavigationSettings,
   NavigationSettingsSchema,
 } from './settings-shapes.js';
+export type { StorageUsageView } from './storage-usage.service.js';
+export { StorageUsageService } from './storage-usage.service.js';
 
 export const ADMIN_PANEL_PROVIDERS: Provider[] = [
   // Default feature gate: every module page is visible. `AppModule` overrides this with a resolver
@@ -56,6 +60,13 @@ export const ADMIN_PANEL_PROVIDERS: Provider[] = [
   AdminPanelService,
   PlatformSettingsRegistrar,
   InternalInfoService,
+  StorageUsageService,
 ];
 
-export const ADMIN_PANEL_CONTROLLERS: Type<unknown>[] = [AdminPanelController, NavigationController, SettingsDocumentsController, InternalInfoController];
+export const ADMIN_PANEL_CONTROLLERS: Type<unknown>[] = [
+  AdminPanelController,
+  NavigationController,
+  SettingsDocumentsController,
+  InternalInfoController,
+  StorageUsageController,
+];

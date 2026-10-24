@@ -1,7 +1,7 @@
 import { AclEvaluator } from '@carocrm/acl/evaluator/index.js';
 import type { AclAction, AclDecision, AclRoleLevel } from '@carocrm/acl/types/index.js';
 import { maxLevel } from '@carocrm/acl/types/index.js';
-import { AuthorizationDeniedError } from '@carocrm/core/errors/index.js';
+import { AuthorizationDeniedError, RecordNotFoundError } from '@carocrm/core/errors/index.js';
 import { toCamelCase } from '@carocrm/query-engine/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -20,6 +20,23 @@ export type { AclPredicate } from './predicate.js';
 export interface FieldAccess {
   readonly read: AclRoleLevel;
   readonly edit: AclRoleLevel;
+}
+
+/** One role's contribution to an explanation, so the administrator can see why the answer is what it is. */
+export interface AclExplanationRole {
+  readonly id: string;
+  readonly name: string;
+  readonly level: AclRoleLevel;
+}
+
+export interface AclExplanation {
+  readonly userId: string;
+  readonly userName: string;
+  readonly entity: string;
+  readonly action: AclAction;
+  readonly level: AclRoleLevel;
+  readonly administrator: boolean;
+  readonly roles: readonly AclExplanationRole[];
 }
 
 export interface AclRecordLike {
@@ -259,6 +276,54 @@ export class AclApiService {
       );
     }
     return true;
+  }
+
+  /**
+   * "Why can this user do this?" for the Permissions tab (PLAN_Phase_20_Settings_UX.md §4.8).
+   *
+   * The evaluation is the same `roleLevel`/`maxLevel` pair `canUser` uses, so the explanation cannot
+   * disagree with the decision. It answers for an **arbitrary** user, which the request-scoped
+   * snapshot cannot, so it loads that user's roles directly. Administrator accounts resolve to `all`
+   * without consulting a role, exactly like the runtime. Role names are returned because an
+   * explanation nobody can act on is not an explanation; nothing else about the user is exposed.
+   */
+  async explainFor(userId: string, entity: string, action: AclAction): Promise<AclExplanation> {
+    const user = await this.database.db
+      .selectFrom('users')
+      .select(['id', 'user_name', 'is_admin', 'type', 'assigned_role_ids'])
+      .where('id', '=', userId)
+      .where('is_deleted', '=', false)
+      .executeTakeFirst();
+    if (!user) throw new RecordNotFoundError('User', userId);
+
+    const rawRoleIds: unknown = user.assigned_role_ids;
+    const roleIds = Array.isArray(rawRoleIds) ? rawRoleIds.filter((id): id is string => typeof id === 'string') : [];
+    const administrator = user.is_admin || user.type === 'admin' || roleIds.includes(SYS_ADMIN_ROLE);
+
+    const rows = administrator || roleIds.length === 0
+      ? []
+      : await this.database.db
+          .selectFrom('roles')
+          .select(['id', 'name', 'permissions', 'field_permissions'])
+          .where('id', 'in', roleIds)
+          .where('is_deleted', '=', false)
+          .execute();
+
+    const roles: AclExplanationRole[] = rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      level: roleLevel(toDbRole(row.id, row.permissions, row.field_permissions), entity, action),
+    }));
+
+    return {
+      userId,
+      userName: user.user_name,
+      entity,
+      action,
+      level: administrator ? 'all' : maxLevel(roles.map((role) => role.level)),
+      administrator,
+      roles,
+    };
   }
 
   /** Drop any memoised role snapshot (call after modifying roles, teams or portal assignments). */

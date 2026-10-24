@@ -116,6 +116,7 @@ import type {
   MarketingPreferenceView,
   MarketingUnsubscribeResult,
   MarketingValidationReport,
+  MassResult,
   Metadata,
   ModuleSettingsView,
   NavigationTree,
@@ -149,6 +150,7 @@ import type {
   ReportRunResult,
   ReportScheduleRow,
   Role,
+  RowActions,
   SalesDocumentView,
   SalesHealthView,
   SalesNumberingSeries,
@@ -547,6 +549,20 @@ export const api = {
   // Phase 20: the administration panel, the resolved menu and the settings document registry
   // (PLAN_Phase_20_Settings_UX.md §8.1).
   adminPanel: () => request<AdminPanelView>('/AdminPanel'),
+  /** Storage figures for the Attachments tab (PLAN_Phase_20 §4.3 row 5); administrator-only. */
+  storageUsage: () =>
+    request<{ attachments: number; bytes: number; largest: { name: string; bytes: number } | null }>('/StorageUsage'),
+  /** Why a given account gets the access it gets — the Permissions tab's explain helper. */
+  explainAcl: (input: { userId: string; entity: string; action: 'create' | 'read' | 'edit' | 'delete' | 'stream' }) =>
+    request<{
+      userId: string;
+      userName: string;
+      entity: string;
+      action: string;
+      level: string;
+      administrator: boolean;
+      roles: { id: string; name: string; level: string }[];
+    }>('/AdminPanel/action/acl-explain', post(input)),
   navigation: () => request<NavigationTree>('/Navigation'),
   settingsDocument: <T>(name: string) => request<SettingsDocument<T>>(`/Settings/documents/${encodeURIComponent(name)}`),
   saveSettingsDocument: <T>(name: string, value: Record<string, unknown>, version?: number) =>
@@ -922,6 +938,12 @@ export const api = {
     } = {},
   ) => request<ListResult<UserRow>>(`/User${simpleQuery(params)}`),
   user: (id: string) => request<UserRow>(`/User/${encodeURIComponent(id)}`),
+  /**
+   * The assignee picker for a non-administrator (PLAN_Phase_20 §5.3). `/User` is admin-only; this
+   * answers with an id and a display name for active internal accounts, nothing else.
+   */
+  assignableUsers: (q?: string) =>
+    request<{ list: { id: string; name: string }[] }>(`/User/assignable${q === undefined || q === '' ? '' : `?q=${encodeURIComponent(q)}`}`),
   createUser: (input: UserInput) => request<UserRow>('/User', post(input)),
   updateUser: (id: string, input: UserInput) =>
     request<UserRow>(`/User/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) }),
@@ -1005,9 +1027,13 @@ export const api = {
     }),
   remove: (entity: string, id: string) => request<unknown>(`/${encodeURIComponent(entity)}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   massDelete: (entity: string, ids: string[]) =>
-    request<unknown>(`/${encodeURIComponent(entity)}/action/massDelete`, { method: 'POST', body: JSON.stringify({ ids }) }),
-  massUpdate: (entity: string, input: { ids: string[]; values: Record<string, unknown> }) =>
-    request<unknown>(`/${encodeURIComponent(entity)}/action/massUpdate`, { method: 'POST', body: JSON.stringify(input) }),
+    request<MassResult>(`/${encodeURIComponent(entity)}/action/massDelete`, { method: 'POST', body: JSON.stringify({ ids }) }),
+  /** The server reads `data` (see `massPayload`), not `values`. */
+  massUpdate: (entity: string, ids: string[], data: Record<string, unknown>) =>
+    request<MassResult>(`/${encodeURIComponent(entity)}/action/massUpdate`, { method: 'POST', body: JSON.stringify({ ids, data }) }),
+  /** Row actions for this entity, already filtered by the caller's ACL on the server. */
+  rowActions: (entity: string) =>
+    request<RowActions>(`/${encodeURIComponent(entity)}/action/rowActions`, { method: 'POST', body: JSON.stringify({}) }),
 
   related: (entity: string, id: string, relation: string, params: ListParams = {}) =>
     request<ListResult>(`/${encodeURIComponent(entity)}/${encodeURIComponent(id)}/${encodeURIComponent(relation)}${listQuery(params)}`),

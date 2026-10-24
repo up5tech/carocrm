@@ -100,6 +100,36 @@ export class IdentityService {
     }
   }
 
+  /**
+   * The assignee picker behind the list view's **Assign** action (PLAN_Phase_20_Settings_UX.md §5.3).
+   *
+   * This is not `GET /User`: that list is administrator-only and carries fields a rep must not see
+   * (roles, teams, flags, email). An assignee lookup answers one question — who may this work be
+   * given to — so it returns an id and a display name for active internal accounts only, and it
+   * refuses a portal principal outright: a customer never picks an internal owner.
+   */
+  async listAssignableUsers(term = ''): Promise<{ list: { id: string; name: string }[] }> {
+    const principal = this.scope.principal;
+    if (!principal || principal.userType === 'portal') {
+      throw new AuthorizationDeniedError('Only internal users can be assigned records.');
+    }
+    let query = this.db
+      .selectFrom('users')
+      .select(['id', 'first_name', 'last_name', 'user_name'])
+      .where('is_deleted', '=', false)
+      .where('is_active', '=', true)
+      .where('type', '!=', 'system');
+    const trimmed = term.trim();
+    if (trimmed !== '') query = query.where('user_name', 'like', `%${trimmed}%`);
+    const rows = await query.orderBy('user_name').limit(500).execute();
+    return {
+      list: rows.map((row) => ({
+        id: row.id,
+        name: [row.first_name, row.last_name].filter((part): part is string => !!part).join(' ') || row.user_name,
+      })),
+    };
+  }
+
   private get db() {
     return this.database.db;
   }
