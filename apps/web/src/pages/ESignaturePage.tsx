@@ -55,9 +55,14 @@ export function ESignaturePage() {
   const [reportDays, setReportDays] = useState(30);
   const sourceEntityType = searchParams.get('sourceEntityType');
   const sourceRecordId = searchParams.get('sourceRecordId');
+  const sourceRecordLabel = searchParams.get('sourceRecordLabel');
   const initialSource =
     sourceEntityType !== null && sourceRecordId !== null
-      ? { entityType: sourceEntityType, recordId: sourceRecordId }
+      ? {
+          entityType: sourceEntityType,
+          recordId: sourceRecordId,
+          ...(sourceRecordLabel === null ? {} : { recordLabel: sourceRecordLabel }),
+        }
       : null;
   const initialRequestId = searchParams.get('request');
   const health = useQuery({

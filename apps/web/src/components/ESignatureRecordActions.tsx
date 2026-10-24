@@ -1,10 +1,10 @@
 import { FileProtectOutlined, PlusOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, List, Space, Tag, Typography } from 'antd';
+import { Button, Card, Empty, List, Space, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime, t } from '../state/i18n.js';
 
 /**
  * Phase 19-ES.18 — the ESignature entry point on a CRM record page
@@ -20,7 +20,7 @@ import { t } from '../state/i18n.js';
  * record, so the card is useful without granting any extra read: the list is already filtered by the
  * caller's ESignature record scope.
  */
-export function ESignatureRecordActions(props: { entityType: string; entityId: string }) {
+export function ESignatureRecordActions(props: { entityType: string; entityId: string; recordLabel?: string | undefined }) {
   const navigate = useNavigate();
   const entry = useQuery({
     queryKey: ['eSignature', 'record-entry', props.entityType, props.entityId],
@@ -33,6 +33,9 @@ export function ESignatureRecordActions(props: { entityType: string; entityId: s
 
   const openCreate = () => {
     const params = new URLSearchParams({ sourceEntityType: view.entityType, sourceRecordId: view.recordId });
+    // The form shows the record's own name; the URL carries it so the drawer does not have to
+    // re-read the record just to label the source.
+    if (props.recordLabel !== undefined && props.recordLabel !== '') params.set('sourceRecordLabel', props.recordLabel);
     navigate(`/esignature?${params.toString()}`);
   };
   const openRequest = (id: string) => {
@@ -43,23 +46,23 @@ export function ESignatureRecordActions(props: { entityType: string; entityId: s
   return (
     <Card
       className="carocrm-card"
-      size="small"
       title={
-        <Space size={8}>
+        <Space>
           <FileProtectOutlined />
           <Typography.Text strong>{t('esignature.recordEntry.title')}</Typography.Text>
+          {view.requests.length > 0 ? <Tag>{view.requests.length}</Tag> : null}
         </Space>
       }
       extra={
         view.canPrepare ? (
-          <Button size="small" icon={<PlusOutlined />} onClick={openCreate}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             {t('esignature.recordEntry.create')}
           </Button>
         ) : null
       }
     >
       {view.requests.length === 0 ? (
-        <Typography.Text type="secondary">{t('esignature.recordEntry.empty')}</Typography.Text>
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('esignature.recordEntry.empty')} />
       ) : (
         <List
           size="small"
@@ -67,18 +70,27 @@ export function ESignatureRecordActions(props: { entityType: string; entityId: s
           renderItem={(request) => (
             <List.Item
               actions={[
-                <Button key="open" size="small" type="link" onClick={() => openRequest(request.id)}>
+                <Button key="open" size="small" onClick={() => openRequest(request.id)}>
                   {t('esignature.recordEntry.open')}
                 </Button>,
               ]}
             >
-              <Space size={8} wrap>
-                <Typography.Text>{request.name}</Typography.Text>
-                <Tag color={statusColor(request.status)}>{t(`esignature.requests.statuses.${request.status}`)}</Tag>
-                {request.approvalStatus === 'not_required' ? null : (
-                  <Tag color="orange">{t(`esignature.requests.approvalStatuses.${request.approvalStatus}`)}</Tag>
-                )}
-              </Space>
+              <List.Item.Meta
+                title={
+                  <Space wrap>
+                    <Typography.Text strong>{request.name}</Typography.Text>
+                    <Tag color={statusColor(request.status)}>{t(`esignature.requests.statuses.${request.status}`)}</Tag>
+                    {request.approvalStatus === 'not_required' ? null : (
+                      <Tag color="orange">{t(`esignature.requests.approvalStatuses.${request.approvalStatus}`)}</Tag>
+                    )}
+                  </Space>
+                }
+                description={
+                  <Typography.Text type="secondary">
+                    {t('esignature.recordEntry.updated', { date: formatDateTime(request.modifiedAt) })}
+                  </Typography.Text>
+                }
+              />
             </List.Item>
           )}
         />

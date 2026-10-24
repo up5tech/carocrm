@@ -290,6 +290,7 @@
     "fieldUpdated": "Cập nhật lần cuối",
     "fieldSourceEntity": "Thực thể nguồn",
     "fieldSourceRecord": "Id bản ghi nguồn",
+    "sourceRecordLabel": "Bản ghi nguồn",
     "sourceRecordHint": "Bản ghi mà yêu cầu này thuộc về",
     "noSource": "Không liên kết bản ghi",
     "sourceMissing": "Bản ghi {entity} đã liên kết không còn tồn tại",
@@ -608,6 +609,7 @@
     "title": "Chữ ký điện tử",
     "create": "Tạo yêu cầu ký",
     "empty": "Chưa có yêu cầu ký nào liên kết với bản ghi này.",
+    "updated": "Cập nhật {date}",
     "open": "Mở"
   },
   "approval": {

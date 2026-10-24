@@ -512,7 +512,13 @@ export function EntityDetailPage() {
             server for this record; it renders nothing when the record is unreadable or has no
             history, and it never loads bodies until a call is opened. Portal users get no panel:
             customer-facing surfaces stay out of scope (see the compatibility doc). */}
-        {base !== '/portal' ? <ESignatureRecordActions entityType={entity} entityId={id} /> : null}
+        {base !== '/portal' ? (
+          <ESignatureRecordActions
+            entityType={entity}
+            entityId={id}
+            recordLabel={record !== undefined ? recordLabel(record, definition.data) : undefined}
+          />
+        ) : null}
         {base !== '/portal' ? <CommunicationsPanel entityType={entity} entityId={id} /> : null}
 
         {/* Phase 19-SD.6 — a Case gets the visibility-aware conversation panel: an explicit public /

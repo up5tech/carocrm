@@ -84,7 +84,7 @@ export function ESignatureRequestsPanel(props: {
   readonly canDownload: boolean;
   readonly canCorrect: boolean;
   readonly canApprove: boolean;
-  readonly initialSource?: { readonly entityType: string; readonly recordId: string } | null | undefined;
+  readonly initialSource?: { readonly entityType: string; readonly recordId: string; readonly recordLabel?: string } | null | undefined;
   readonly initialRequestId?: string | null | undefined;
 }) {
   const { message } = AntApp.useApp();
@@ -450,7 +450,7 @@ function RequestEditor(props: {
   request?: ESignatureRequestView;
   canPrepare: boolean;
   /** The record a CRM detail page started from, pre-filled into the source fields. */
-  initialSource?: { readonly entityType: string; readonly recordId: string } | null;
+  initialSource?: { readonly entityType: string; readonly recordId: string; readonly recordLabel?: string } | null;
   onSaved: (saved: ESignatureRequestView) => void;
   onDocumentsChanged?: () => void;
 }) {
@@ -532,14 +532,40 @@ function RequestEditor(props: {
       <Form.Item name="message" label={t('esignature.requests.fieldMessage')}>
         <Input.TextArea rows={3} maxLength={5000} showCount />
       </Form.Item>
-      <Space size={8} style={{ display: 'flex' }}>
-        <Form.Item name="sourceEntityType" label={t('esignature.requests.fieldSourceEntity')} style={{ flex: 1 }}>
-          <AutoComplete options={SOURCE_ENTITIES.map((value) => ({ value }))} placeholder="Quote" />
-        </Form.Item>
-        <Form.Item name="sourceRecordId" label={t('esignature.requests.fieldSourceRecord')} style={{ flex: 2 }}>
-          <Input maxLength={64} placeholder={t('esignature.requests.sourceRecordHint')} />
-        </Form.Item>
-      </Space>
+      {props.mode === 'create' && props.initialSource !== null && props.initialSource !== undefined ? (
+        <>
+          {/* Started from a CRM record: the link is fixed, so show the record's name rather than a
+              raw id. The hidden fields still submit the id pair the API expects. */}
+          <Descriptions
+            size="small"
+            column={2}
+            style={{ marginBottom: 12 }}
+            items={[
+              { key: 'entity', label: t('esignature.requests.fieldSourceEntity'), children: props.initialSource.entityType },
+              {
+                key: 'record',
+                label: t('esignature.requests.sourceRecordLabel'),
+                children: props.initialSource.recordLabel ?? props.initialSource.recordId,
+              },
+            ]}
+          />
+          <Form.Item name="sourceEntityType" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="sourceRecordId" hidden>
+            <Input />
+          </Form.Item>
+        </>
+      ) : (
+        <Space size={8} style={{ display: 'flex' }}>
+          <Form.Item name="sourceEntityType" label={t('esignature.requests.fieldSourceEntity')} style={{ flex: 1 }}>
+            <AutoComplete options={SOURCE_ENTITIES.map((value) => ({ value }))} placeholder="Quote" />
+          </Form.Item>
+          <Form.Item name="sourceRecordId" label={t('esignature.requests.fieldSourceRecord')} style={{ flex: 2 }}>
+            <Input maxLength={64} placeholder={t('esignature.requests.sourceRecordHint')} />
+          </Form.Item>
+        </Space>
+      )}
 
       <Typography.Title level={5}>{t('esignature.requests.recipients')}</Typography.Title>
       <Form.List name="recipients">

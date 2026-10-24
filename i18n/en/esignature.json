@@ -290,6 +290,7 @@
     "fieldUpdated": "Last update",
     "fieldSourceEntity": "Source entity",
     "fieldSourceRecord": "Source record id",
+    "sourceRecordLabel": "Source record",
     "sourceRecordHint": "The record this request belongs to",
     "noSource": "No linked record",
     "sourceMissing": "The linked {entity} record no longer exists",
@@ -608,6 +609,7 @@
     "title": "E-Signature",
     "create": "Start a signature request",
     "empty": "No signature requests are linked to this record yet.",
+    "updated": "Updated {date}",
     "open": "Open"
   },
   "approval": {
