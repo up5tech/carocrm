@@ -5,7 +5,7 @@ audience: user
 order: 60
 tags: [dashboard, dashlet, report, schedule]
 related: [user/lists-and-views, user/import-export]
-updated: 2026-10-21
+updated: 2026-10-24
 ---
 
 Hai màn hình cho hai nhu cầu khác nhau. [Bảng điều khiển](/dashboards) là một bức tường ô số liệu sống để bạn
@@ -18,6 +18,9 @@ bạn muốn theo dõi cho tử tế thì nên nằm trên một bảng điều 
 
 **Tạo một bảng.** Mở Bảng điều khiển, chọn **Bảng điều khiển mới**, đặt tên cho nó. Bảng điều khiển là của riêng
 bạn; một bảng chia sẻ thì đồng nghiệp nhìn thấy được, còn người dùng portal chỉ thấy bảng của chính mình.
+
+**Chỉnh bảng.** Chủ sở hữu hoặc quản trị viên đổi tên bảng bằng **Đổi tên**, và sắp xếp lại các ô bằng cách kéo
+tay nắm ở đầu ô hoặc dùng mũi tên trái/phải tại đó. Thứ tự đã lưu là thứ tự mọi người xem bảng đều thấy.
 
 **Thêm dashlet.** Các loại đang có hôm nay là:
 

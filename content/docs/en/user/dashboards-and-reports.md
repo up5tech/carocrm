@@ -5,7 +5,7 @@ audience: user
 order: 60
 tags: [dashboard, dashlet, report, schedule]
 related: [user/lists-and-views, user/import-export]
-updated: 2026-10-21
+updated: 2026-10-24
 ---
 
 Two screens answer two different needs. A [dashboard](/dashboards) is a wall of live tiles you look at. A
@@ -19,6 +19,10 @@ to watch properly belongs on a dashboard.
 
 **Create one.** Open Dashboards, choose **New**, give it a name. A dashboard is yours; a shared dashboard is
 visible to colleagues, and a portal user can only see their own.
+
+**Adjust it.** The owner or an administrator can rename a board with **Rename**, and reorder its tiles by
+dragging the grip in a tile header or using the left/right arrows there. The saved order is what every viewer
+of the board sees.
 
 **Add a dashlet.** The kinds available today are:
 

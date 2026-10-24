@@ -1,9 +1,13 @@
 import {
   AppstoreOutlined,
+  ArrowLeftOutlined,
+  ArrowRightOutlined,
   BarChartOutlined,
   DashboardOutlined,
   DeleteOutlined,
+  EditOutlined,
   FileDoneOutlined,
+  HolderOutlined,
   PlayCircleOutlined,
   PlusOutlined,
   ProjectOutlined,
@@ -13,7 +17,7 @@ import {
   TableOutlined,
 } from '@ant-design/icons';
 import { App as AntApp, Button, Checkbox, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Tooltip } from 'antd';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { api, type DashboardRow } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
@@ -33,6 +37,127 @@ const DASHLET_ICONS: Record<string, React.ReactNode> = {
   projectTasks: <ProjectOutlined />,
   esignature: <FileDoneOutlined />,
 };
+
+const DASH_GAP = 16;
+const DASH_MIN_COLUMN = 420;
+/** Height used until the card has been measured; the observer corrects it before the next paint. */
+const DASH_FALLBACK_HEIGHT = 240;
+
+function dashColumnCount(width: number): number {
+  return Math.max(1, Math.floor((Math.max(width, DASH_MIN_COLUMN) + DASH_GAP) / (DASH_MIN_COLUMN + DASH_GAP)));
+}
+
+interface DashPlacement {
+  column: number;
+  top: number;
+}
+
+/**
+ * Masonry placement: each tile goes to the shortest column, then cards are traded between columns
+ * until the board cannot get shorter, so a short card never leaves a row-high hole under itself.
+ * Rendering and drag simulation both call this, so the previewed slot is the slot the tile lands in.
+ */
+function layoutDashlets(
+  order: string[],
+  heights: Record<string, number>,
+  columnCount: number,
+  dragged: { id: string; height: number } | null,
+): { placements: Map<string, DashPlacement>; height: number } {
+  const heightOf = (id: string): number =>
+    (dragged?.id === id ? dragged.height : (heights[id] ?? DASH_FALLBACK_HEIGHT)) + DASH_GAP;
+  const columns: string[][] = Array.from({ length: columnCount }, () => []);
+  const used = new Array<number>(columnCount).fill(0);
+  for (const id of order) {
+    let column = 0;
+    for (let candidate = 1; candidate < columnCount; candidate += 1) {
+      if ((used[candidate] ?? 0) < (used[column] ?? 0)) column = candidate;
+    }
+    columns[column]?.push(id);
+    used[column] = (used[column] ?? 0) + heightOf(id);
+  }
+  // Greedy placement can leave one column much taller; moving its cheapest card to the shortest
+  // column lowers the board height. Each move strictly reduces the maximum, so the loop ends.
+  for (let attempt = 0; attempt < order.length * columnCount; attempt += 1) {
+    let tallest = 0;
+    let shortest = 0;
+    for (let column = 1; column < columnCount; column += 1) {
+      if ((used[column] ?? 0) > (used[tallest] ?? 0)) tallest = column;
+      if ((used[column] ?? 0) < (used[shortest] ?? 0)) shortest = column;
+    }
+    if (tallest === shortest) break;
+    let moveId: string | null = null;
+    let nextTallest = used[tallest] ?? 0;
+    for (const id of columns[tallest] ?? []) {
+      const height = heightOf(id);
+      const max = Math.max((used[tallest] ?? 0) - height, (used[shortest] ?? 0) + height);
+      if (max < nextTallest - 0.5) {
+        nextTallest = max;
+        moveId = id;
+      }
+    }
+    if (moveId === null) break;
+    const height = heightOf(moveId);
+    columns[tallest] = (columns[tallest] ?? []).filter((id) => id !== moveId);
+    columns[shortest]?.push(moveId);
+    used[tallest] = (used[tallest] ?? 0) - height;
+    used[shortest] = (used[shortest] ?? 0) + height;
+  }
+
+  const placements = new Map<string, DashPlacement>();
+  let height = 0;
+  columns.forEach((column, index) => {
+    let top = 0;
+    for (const id of column) {
+      placements.set(id, { column: index, top });
+      top += heightOf(id);
+    }
+    height = Math.max(height, top - DASH_GAP);
+  });
+  return { placements, height: Math.max(0, height) };
+}
+
+/** Tries every insertion point and keeps the one whose landing slot sits closest to the pointer. */
+function chooseInsertionOrder(
+  order: string[],
+  draggedId: string,
+  draggedHeight: number,
+  point: { x: number; y: number },
+  grid: { left: number; top: number; width: number },
+  heights: Record<string, number>,
+  columnCount: number,
+): string[] {
+  const others = order.filter((id) => id !== draggedId);
+  const columnWidth = Math.max(0, (grid.width - DASH_GAP * (columnCount - 1)) / columnCount);
+  let bestOrder = order;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index <= others.length; index += 1) {
+    const candidate = [...others.slice(0, index), draggedId, ...others.slice(index)];
+    const placement = layoutDashlets(candidate, heights, columnCount, { id: draggedId, height: draggedHeight }).placements.get(
+      draggedId,
+    );
+    if (!placement) continue;
+    const left = grid.left + placement.column * (columnWidth + DASH_GAP);
+    const top = grid.top + placement.top;
+    const x = Math.min(Math.max(point.x, left), left + columnWidth);
+    const y = Math.min(Math.max(point.y, top), top + draggedHeight);
+    const distance = Math.hypot(point.x - x, point.y - y);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestOrder = candidate;
+    }
+  }
+  return bestOrder;
+}
+
+interface DashletDrag {
+  startX: number;
+  startY: number;
+  offsetX: number;
+  offsetY: number;
+  height: number;
+  ghost: HTMLElement | null;
+  started: boolean;
+}
 
 function dashletKindLabel(kind: string): string {
   switch (kind) {
@@ -61,13 +186,49 @@ export function DashboardsPage() {
   const [results, setResults] = useState<Record<string, Record<string, unknown>>>({});
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   const [dashletOpen, setDashletOpen] = useState(false);
+  const [drag, setDrag] = useState<{ id: string; height: number } | null>(null);
+  const [previewOrder, setPreviewOrder] = useState<string[] | null>(null);
+  const previewRef = useRef<string[] | null>(null);
+  const finishDragRef = useRef<(() => void) | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const [gridWidth, setGridWidth] = useState(0);
+  const [cardHeights, setCardHeights] = useState<Record<string, number>>({});
+  const heightsRef = useRef<Record<string, number>>({});
   const [form] = Form.useForm();
+  const [renameForm] = Form.useForm();
   const [dashletForm] = Form.useForm();
   const dashletKind = Form.useWatch('kind', dashletForm);
 
   const entities = navEntities(metadata.data, principal?.type).map((entity) => ({ value: entity.name, label: entity.label }));
   const active = dashboards.find((item) => item.id === activeId) ?? null;
+  // Only the owner (or an administrator) may change a board; the API enforces the same rule, this
+  // just keeps the controls from offering an action that would end in 403.
+  const canEdit = active !== null && (principal?.type === 'admin' || (active.userId !== null && active.userId === principal?.id));
+  // While a drag is in flight the grid renders the pending order, with the dragged card's slot
+  // turned into the empty drop zone rather than the card itself.
+  const shownDashlets = previewOrder
+    ? previewOrder.flatMap((id) => {
+        const dashlet = active?.dashlets.find((item) => item.id === id);
+        return dashlet ? [dashlet] : [];
+      })
+    : (active?.dashlets ?? []);
+  const columnCount = dashColumnCount(gridWidth);
+  const activeCardIds = active?.dashlets.map((dashlet) => dashlet.id).join('|') ?? '';
+  const orderIndex = new Map(shownDashlets.map((dashlet, index) => [dashlet.id, index]));
+  const layout = layoutDashlets(
+    shownDashlets.map((dashlet) => dashlet.id),
+    cardHeights,
+    columnCount,
+    drag,
+  );
+  const dashletStyle = (placement: DashPlacement): React.CSSProperties => ({
+    left: `calc(${placement.column} * (100% + ${DASH_GAP}px) / ${columnCount})`,
+    position: 'absolute',
+    top: placement.top,
+    width: `calc((100% - ${(columnCount - 1) * DASH_GAP}px) / ${columnCount})`,
+  });
   // §20.10: the dashboard the user starred opens first, on every device — until they pick another one
   // themselves, which this ref records so the preference never fights an explicit choice.
   const defaultDashboard = usePreference<string | null>('defaultDashboard');
@@ -101,6 +262,46 @@ export function DashboardsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // A drag in flight leaves a cloned card on <body>; drop it when the page goes away.
+  useEffect(() => () => finishDragRef.current?.(), []);
+
+  // Card height drives the masonry placement and the grid width drives the column count. Measuring
+  // synchronously in a layout effect (not only in ResizeObserver, which can be deferred in a hidden
+  // tab) means the first frame already uses real positions instead of the fallback.
+  const measureGrid = useCallback((grid: HTMLElement) => {
+    setGridWidth(grid.clientWidth);
+    let changed = false;
+    grid.querySelectorAll<HTMLElement>('[data-dashlet-id]').forEach((element) => {
+      const id = element.dataset['dashletId'];
+      if (!id) return;
+      const height = element.getBoundingClientRect().height;
+      if (Math.abs((heightsRef.current[id] ?? 0) - height) > 1) {
+        heightsRef.current[id] = height;
+        changed = true;
+      }
+    });
+    if (changed) setCardHeights({ ...heightsRef.current });
+  }, []);
+
+  useLayoutEffect(() => {
+    const grid = gridRef.current;
+    if (grid) measureGrid(grid);
+  });
+
+  useEffect(() => {
+    const grid = gridRef.current;
+    if (!grid) return;
+    const observer = new ResizeObserver(() => measureGrid(grid));
+    observer.observe(grid);
+    grid.querySelectorAll<HTMLElement>('[data-dashlet-id]').forEach((element) => observer.observe(element));
+    const onResize = (): void => measureGrid(grid);
+    window.addEventListener('resize', onResize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', onResize);
+    };
+  }, [activeCardIds, measureGrid]);
 
   // Takes the dashboard row to run: a caller that just reloaded the list must not run the stale
   // dashlet set captured in an earlier render.
@@ -154,6 +355,175 @@ export function DashboardsPage() {
     }
   }, [form, message]);
 
+  const openRename = useCallback(() => {
+    if (!active) return;
+    renameForm.setFieldsValue({ name: active.name });
+    setRenameOpen(true);
+  }, [active, renameForm]);
+
+  const submitRename = useCallback(async () => {
+    if (!active) return;
+    try {
+      const values = await renameForm.validateFields();
+      const updated = await api.updateDashboard(active.id, { name: String(values.name) });
+      setDashboards((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+      setRenameOpen(false);
+    } catch (error) {
+      if (error instanceof Error) void message.error(error.message);
+    }
+  }, [active, message, renameForm]);
+
+  // The cards are ordered by `position`; a move rewrites the whole sequence with contiguous indexes
+  // so boards whose dashlets all share position 0 (created before positions were sent) settle into
+  // a stable order after the first drag or arrow click.
+  const persistOrder = useCallback(
+    async (ordered: DashboardRow['dashlets']) => {
+      if (!active) return;
+      const before = new Map(active.dashlets.map((dashlet) => [dashlet.id, dashlet.position]));
+      const positioned = ordered.map((dashlet, index) => ({ ...dashlet, position: index }));
+      setDashboards((prev) => prev.map((item) => (item.id === active.id ? { ...item, dashlets: positioned } : item)));
+      const changed = positioned.filter((dashlet) => before.get(dashlet.id) !== dashlet.position);
+      if (changed.length === 0) return;
+      try {
+        await Promise.all(changed.map((dashlet) => api.updateDashlet(active.id, dashlet.id, { position: dashlet.position })));
+      } catch (error) {
+        await load();
+        void message.error(error instanceof Error ? error.message : t('web.dashboards.reorderFailed'));
+      }
+    },
+    [active, load, message],
+  );
+
+  const moveDashlet = useCallback(
+    (dashletId: string, delta: number) => {
+      if (!active) return;
+      const order = [...active.dashlets];
+      const from = order.findIndex((dashlet) => dashlet.id === dashletId);
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= order.length) return;
+      const [moved] = order.splice(from, 1);
+      if (!moved) return;
+      order.splice(to, 0, moved);
+      void persistOrder(order);
+    },
+    [active, persistOrder],
+  );
+
+  /**
+   * Pointer-driven drag: a clone of the card follows the cursor while its original slot is shown
+   * as an empty drop zone in the order the tile would land in. HTML5 drag is not used because the
+   * browser would drag only the small grip and give no control over the drop area.
+   */
+  const beginDashletDrag = useCallback(
+    (event: React.PointerEvent<HTMLElement>, dashletId: string) => {
+      if (!active || !canEdit || event.button !== 0) return;
+      const card = event.currentTarget.closest<HTMLElement>('.carocrm-dashlet');
+      if (!card) return;
+      const sourceCard = card;
+      const boardDashlets = active.dashlets;
+      const rect = sourceCard.getBoundingClientRect();
+      const baseOrder = boardDashlets.map((dashlet) => dashlet.id);
+      const heightsAtStart = { ...heightsRef.current };
+      const columnsAtStart = columnCount;
+      const session: DashletDrag = {
+        startX: event.clientX,
+        startY: event.clientY,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+        height: rect.height,
+        ghost: null,
+        started: false,
+      };
+      event.preventDefault();
+
+      const placeGhost = (x: number, y: number): void => {
+        if (!session.ghost) return;
+        session.ghost.style.transform = `translate3d(${x - session.offsetX}px, ${y - session.offsetY}px, 0)`;
+      };
+
+      function finish(commit: boolean): void {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
+        window.removeEventListener('keydown', onKey);
+        document.body.classList.remove('carocrm-reordering');
+        session.ghost?.remove();
+        const order = previewRef.current;
+        previewRef.current = null;
+        finishDragRef.current = null;
+        setDrag(null);
+        setPreviewOrder(null);
+        if (!commit || !order) return;
+        const byId = new Map(boardDashlets.map((dashlet) => [dashlet.id, dashlet]));
+        const ordered = order.flatMap((id) => {
+          const dashlet = byId.get(id);
+          return dashlet ? [dashlet] : [];
+        });
+        void persistOrder(ordered);
+      }
+
+      function onMove(moveEvent: PointerEvent): void {
+        if (!session.started) {
+          if (Math.hypot(moveEvent.clientX - session.startX, moveEvent.clientY - session.startY) < 4) return;
+          session.started = true;
+          document.body.classList.add('carocrm-reordering');
+          const ghost = sourceCard.cloneNode(true) as HTMLElement;
+          ghost.classList.add('carocrm-dash-drag-ghost');
+          ghost.removeAttribute('data-dashlet-id');
+          ghost.setAttribute('aria-hidden', 'true');
+          ghost.style.pointerEvents = 'none';
+          ghost.style.position = 'fixed';
+          ghost.style.left = '0';
+          ghost.style.top = '0';
+          ghost.style.width = `${rect.width}px`;
+          ghost.style.height = `${session.height}px`;
+          document.body.appendChild(ghost);
+          session.ghost = ghost;
+          previewRef.current = baseOrder;
+          setPreviewOrder(baseOrder);
+          setDrag({ id: dashletId, height: session.height });
+        }
+        moveEvent.preventDefault();
+        placeGhost(moveEvent.clientX, moveEvent.clientY);
+        const grid = gridRef.current?.getBoundingClientRect();
+        if (!grid) return;
+        const current = previewRef.current ?? baseOrder;
+        const next = chooseInsertionOrder(
+          baseOrder,
+          dashletId,
+          session.height,
+          { x: moveEvent.clientX, y: moveEvent.clientY },
+          { left: grid.left, top: grid.top, width: grid.width },
+          heightsAtStart,
+          columnsAtStart,
+        );
+        if (next.join('\u0000') !== current.join('\u0000')) {
+          previewRef.current = next;
+          setPreviewOrder(next);
+        }
+      }
+
+      function onUp(): void {
+        finish(session.started);
+      }
+
+      function onCancel(): void {
+        finish(false);
+      }
+
+      function onKey(keyEvent: KeyboardEvent): void {
+        if (keyEvent.key === 'Escape') finish(false);
+      }
+
+      finishDragRef.current = () => finish(false);
+      window.addEventListener('pointermove', onMove, { passive: false });
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
+      window.addEventListener('keydown', onKey);
+    },
+    [active, canEdit, columnCount, persistOrder],
+  );
+
   const submitDashlet = useCallback(async () => {
     if (!active) return;
     try {
@@ -181,7 +551,7 @@ export function DashboardsPage() {
                 ...(typeof values.groupBy === 'string' && values.groupBy !== '' ? { groupBy: values.groupBy } : {}),
                 ...(typeof values.measure === 'string' && values.measure !== '' ? { measure: values.measure } : {}),
               };
-      const created = await api.createDashlet(active.id, { name: String(values.name), kind, config });
+      const created = await api.createDashlet(active.id, { name: String(values.name), kind, position: active.dashlets.length, config });
       await load();
       setDashletOpen(false);
       dashletForm.resetFields();
@@ -256,6 +626,11 @@ export function DashboardsPage() {
           <Button size="small" icon={<PlusOutlined />} onClick={() => setDashletOpen(true)}>
             {t('web.dashboards.addDashlet')}
           </Button>
+          {canEdit ? (
+            <Button size="small" icon={<EditOutlined />} onClick={openRename}>
+              {t('web.dashboards.rename')}
+            </Button>
+          ) : null}
           <Tooltip title={defaultDashboard.value === active.id ? t('web.dashboards.isDefault') : t('web.dashboards.makeDefault')}>
             <Button
               size="small"
@@ -290,32 +665,96 @@ export function DashboardsPage() {
             </Button>
           </div>
         ) : (
-          <div className="carocrm-dash-grid">
-            {active.dashlets.map((dashlet) => (
-              <section key={dashlet.id} className="carocrm-dashlet" aria-label={dashlet.name}>
-                <header className="carocrm-dashlet-head">
-                  <span className="carocrm-dashlet-icon" aria-hidden="true">
-                    {DASHLET_ICONS[dashlet.kind] ?? <DashboardOutlined />}
-                  </span>
-                  <div className="carocrm-dashlet-heading">
-                    <span className="carocrm-dashlet-title">{dashlet.name}</span>
-                    <span className="carocrm-dashlet-kind">{dashletKindLabel(dashlet.kind)}</span>
+          <>
+            {drag ? (
+              <div className="carocrm-dash-drag-hint" role="status">
+                <HolderOutlined />
+                <span>{t('web.dashboards.dragging', { name: active.dashlets.find((dashlet) => dashlet.id === drag.id)?.name ?? '' })}</span>
+              </div>
+            ) : null}
+            <div className="carocrm-dash-grid" ref={gridRef} style={{ height: layout.height }}>
+              {shownDashlets.map((dashlet) => {
+                const placement = layout.placements.get(dashlet.id);
+                if (!placement) return null;
+                const index = orderIndex.get(dashlet.id) ?? 0;
+                const style = dashletStyle(placement);
+                return drag?.id === dashlet.id ? (
+                  <div
+                    key={dashlet.id}
+                    className="carocrm-dashlet-placeholder"
+                    style={{ ...style, height: drag.height }}
+                    aria-hidden="true"
+                  >
+                    <HolderOutlined />
+                    <span>{t('web.dashboards.dropHere')}</span>
                   </div>
-                  <div className="carocrm-dashlet-actions">
-                    <Tooltip title={t('web.common.run')}>
-                      <Button size="small" type="text" icon={<PlayCircleOutlined />} aria-label={t('web.common.run')} onClick={() => void runOne(dashlet.id)} />
-                    </Tooltip>
-                    <Popconfirm title={t('web.dashboards.deleteDashletConfirm')} onConfirm={() => void removeDashlet(dashlet.id)} okText={t('web.common.delete')}>
-                      <Button size="small" danger type="text" icon={<DeleteOutlined />} aria-label={t('web.dashboards.deleteDashlet')} />
-                    </Popconfirm>
-                  </div>
-                </header>
-                <div className="carocrm-dashlet-body">
-                  <DashletResult dashlet={dashlet} result={results[dashlet.id]} />
-                </div>
-              </section>
-            ))}
-          </div>
+                ) : (
+                  <section
+                    key={dashlet.id}
+                    className="carocrm-dashlet"
+                    style={style}
+                    aria-label={dashlet.name}
+                    data-dashlet-id={dashlet.id}
+                  >
+                    <header className="carocrm-dashlet-head">
+                      {canEdit ? (
+                        <span
+                          className="carocrm-dashlet-grip"
+                          title={t('web.dashboards.dragHint')}
+                          aria-hidden="true"
+                          onPointerDown={(event) => beginDashletDrag(event, dashlet.id)}
+                        >
+                          <HolderOutlined />
+                        </span>
+                      ) : null}
+                      <span className="carocrm-dashlet-icon" aria-hidden="true">
+                        {DASHLET_ICONS[dashlet.kind] ?? <DashboardOutlined />}
+                      </span>
+                      <div className="carocrm-dashlet-heading">
+                        <span className="carocrm-dashlet-title">{dashlet.name}</span>
+                        <span className="carocrm-dashlet-kind">{dashletKindLabel(dashlet.kind)}</span>
+                      </div>
+                      <div className="carocrm-dashlet-actions">
+                        {canEdit ? (
+                          <>
+                            <Tooltip title={t('web.dashboards.moveEarlier')}>
+                              <Button
+                                size="small"
+                                type="text"
+                                icon={<ArrowLeftOutlined />}
+                                aria-label={t('web.dashboards.moveEarlier')}
+                                disabled={index === 0}
+                                onClick={() => moveDashlet(dashlet.id, -1)}
+                              />
+                            </Tooltip>
+                            <Tooltip title={t('web.dashboards.moveLater')}>
+                              <Button
+                                size="small"
+                                type="text"
+                                icon={<ArrowRightOutlined />}
+                                aria-label={t('web.dashboards.moveLater')}
+                                disabled={index === shownDashlets.length - 1}
+                                onClick={() => moveDashlet(dashlet.id, 1)}
+                              />
+                            </Tooltip>
+                          </>
+                        ) : null}
+                        <Tooltip title={t('web.common.run')}>
+                          <Button size="small" type="text" icon={<PlayCircleOutlined />} aria-label={t('web.common.run')} onClick={() => void runOne(dashlet.id)} />
+                        </Tooltip>
+                        <Popconfirm title={t('web.dashboards.deleteDashletConfirm')} onConfirm={() => void removeDashlet(dashlet.id)} okText={t('web.common.delete')}>
+                          <Button size="small" danger type="text" icon={<DeleteOutlined />} aria-label={t('web.dashboards.deleteDashlet')} />
+                        </Popconfirm>
+                      </div>
+                    </header>
+                    <div className="carocrm-dashlet-body">
+                      <DashletResult dashlet={dashlet} result={results[dashlet.id]} />
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </>
         )
       ) : (
         <EmptyState title={t('web.dashboards.empty')} />
@@ -331,6 +770,21 @@ export function DashboardsPage() {
         <Form form={form} layout="vertical">
           <Form.Item name="name" label={t('web.common.name')} rules={[{ required: true }]}>
             <Input placeholder={t('web.dashboards.namePlaceholder')} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={t('web.dashboards.renameTitle')}
+        open={renameOpen}
+        onOk={() => void submitRename()}
+        onCancel={() => setRenameOpen(false)}
+        okText={t('web.common.save')}
+        forceRender
+      >
+        <Form form={renameForm} layout="vertical">
+          <Form.Item name="name" label={t('web.common.name')} rules={[{ required: true }]}>
+            <Input placeholder={t('web.dashboards.namePlaceholder')} autoFocus />
           </Form.Item>
         </Form>
       </Modal>

@@ -6458,11 +6458,10 @@ textarea.carocrm-etpl-source,
   margin-bottom: 12px;
 }
 
+/* Masonry: the page places every card absolutely in the shortest column, so a short card never
+   leaves a row-high hole under itself. The container only carries the resulting height. */
 .carocrm-dash-grid {
-  align-items: start;
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  position: relative;
 }
 
 .carocrm-dashlet {
@@ -6474,6 +6473,91 @@ textarea.carocrm-etpl-source,
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+/* The slot the tile will land in: it replaces the card in the pending order and keeps its size. */
+.carocrm-dashlet-placeholder {
+  align-items: center;
+  background: #f5f8ff;
+  border: 2px dashed #9db9e8;
+  border-radius: 14px;
+  color: #3d6fbf;
+  display: flex;
+  flex-direction: column;
+  font-size: 12.5px;
+  font-weight: 600;
+  gap: 6px;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.carocrm-dashlet-placeholder .anticon {
+  font-size: 18px;
+}
+
+/* A pixel copy of the card that follows the pointer for the whole drag. */
+.carocrm-dash-drag-ghost {
+  border-radius: 14px;
+  box-shadow: 0 18px 42px rgba(16, 24, 40, 0.22);
+  left: 0;
+  opacity: 0.94;
+  pointer-events: none;
+  position: fixed;
+  rotate: 1deg;
+  top: 0;
+  transform-origin: top left;
+  will-change: transform;
+  z-index: 1300;
+}
+
+body.carocrm-reordering,
+body.carocrm-reordering * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.carocrm-dashlet-grip {
+  align-items: center;
+  border-radius: 8px;
+  color: #98a1ad;
+  cursor: grab;
+  display: inline-flex;
+  flex: none;
+  font-size: 16px;
+  height: 30px;
+  justify-content: center;
+  margin-left: -6px;
+  touch-action: none;
+  width: 28px;
+}
+
+.carocrm-dashlet-grip:hover {
+  background: #f1f4f9;
+  color: #4b5563;
+}
+
+.carocrm-dashlet-grip:active {
+  cursor: grabbing;
+}
+
+.carocrm-dash-drag-hint {
+  align-items: center;
+  background: #2f3944;
+  border-radius: 999px;
+  bottom: 24px;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.22);
+  color: #fff;
+  display: flex;
+  font-size: 12.5px;
+  gap: 8px;
+  left: 50%;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 9px 16px;
+  pointer-events: none;
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 1100;
 }
 
 .carocrm-dashlet-head {
