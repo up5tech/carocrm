@@ -1,5 +1,5 @@
 import { DeleteOutlined, DisconnectOutlined, EditOutlined, LinkOutlined, PlusOutlined, ProjectOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Card, Descriptions, Popconfirm, Select, Space, Spin, Table, Typography } from 'antd';
+import { App as AntApp, Button, Card, Descriptions, Popconfirm, Space, Spin, Table, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -12,8 +12,9 @@ import { CaseQueueWorkload } from '../components/CaseQueueWorkload.js';
 import { CommunicationsPanel } from '../components/CommunicationsPanel.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { ESignatureRecordActions } from '../components/ESignatureRecordActions.js';
-import { FieldValue, linkLabelsOf, useLinkOptions } from '../components/fields.js';
+import { FieldValue, linkLabelsOf } from '../components/fields.js';
 import { isJsonPayload } from '../components/JsonValue.js';
+import { LinkRecordModal } from '../components/LinkRecordModal.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
 import { PortalCaseConversation } from '../components/PortalCaseConversation.js';
 import { ProcessPanel } from '../components/ProcessPanel.js';
@@ -71,8 +72,7 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
   const navigate = useNavigate();
   const targetName = targetDefinition?.name;
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
-  const [term, setTerm] = useState('');
-  const [selected, setSelected] = useState<string | undefined>(undefined);
+  const [linkOpen, setLinkOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [denied, setDenied] = useState(false);
   // The panel pages over the relation server-side: `total` is the relation's size, so the pager
@@ -80,7 +80,6 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(RELATED_PAGE_SIZE);
   const [total, setTotal] = useState(0);
-  const linkOptions = useLinkOptions(targetName, term);
   // The callback is read through a ref: it is a fresh arrow on every render of the parent, and the
   // load must not restart because of it.
   const onAccessRef = useRef(onAccess);
@@ -124,7 +123,6 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
   );
 
   const linkedIds = useMemo(() => new Set(rows.map((row) => String(row['id']))), [rows]);
-  const candidates = linkOptions.filter((option) => !linkedIds.has(option.value));
 
   useEffect(() => {
     void load(1, RELATED_PAGE_SIZE);
@@ -135,38 +133,17 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
   if (denied && hideWhenDenied === true) return null;
 
   return (
+    <>
     <Card
       className="carocrm-card"
       title={<Typography.Text strong>{label ?? fieldLabel(name)}</Typography.Text>}
       extra={
         <Space.Compact>
-          <Select
-            style={{ width: 220 }}
-            placeholder={t('web.detail.linkExisting')}
-            showSearch
-            filterOption={false}
-            onSearch={setTerm}
-            value={selected}
-            onChange={(value) => { setSelected(value); setTerm(''); }}
-            options={candidates}
-          />
-          <Button
-            icon={<LinkOutlined />}
-            disabled={!selected}
-            onClick={async () => {
-              if (!selected) return;
-              try {
-                await api.link(parent, parentId, name, selected);
-                setSelected(undefined);
-                void message.success(t('web.detail.linked'));
-                await load(page, pageSize);
-              } catch (error) {
-                void message.error(error instanceof Error ? error.message : t('web.detail.linkFailed'));
-              }
-            }}
-          >
-            {t('web.detail.link')}
-          </Button>
+          {targetName ? (
+            <Button icon={<LinkOutlined />} onClick={() => setLinkOpen(true)}>
+              {t('web.detail.link')}
+            </Button>
+          ) : null}
           {targetName ? (
             <Button icon={<PlusOutlined />} onClick={() => navigate(`${base}/${targetName}/create`)}>
               {t('web.detail.new')}
@@ -222,6 +199,20 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
         ]}
       />
     </Card>
+    {targetName ? (
+      <LinkRecordModal
+        open={linkOpen}
+        parent={parent}
+        parentId={parentId}
+        relation={name}
+        targetEntity={targetName}
+        targetDefinition={targetDefinition}
+        linkedIds={linkedIds}
+        onClose={() => setLinkOpen(false)}
+        onLinked={() => load(page, pageSize)}
+      />
+    ) : null}
+    </>
   );
 }
 

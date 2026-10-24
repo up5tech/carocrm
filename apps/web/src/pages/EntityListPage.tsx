@@ -8,7 +8,6 @@ import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { FieldValue, linkLabelsOf } from '../components/fields.js';
-import { isJsonPayload } from '../components/JsonValue.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { t } from '../state/i18n.js';
 import { boardGroupFields, fieldLabel, filterEntries, layoutPanelsFor, listEntries, orderByLayout, useEntity, useMetadata } from '../state/metadata.js';
@@ -75,10 +74,6 @@ export function EntityListPage() {
   const [importBusy, setImportBusy] = useState(false);
   const [filterNameOpen, setFilterNameOpen] = useState(false);
   const [filterNameDraft, setFilterNameDraft] = useState('');
-  // §20.12: inline editing — which cell is currently being edited { entityId, fieldName }
-  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
-  const [editValue, setEditValue] = useState<string>('');
-  const [editError, setEditError] = useState<string | null>(null);
 
   // Parse where from URL on mount
   useEffect(() => {
@@ -346,34 +341,6 @@ export function EntityListPage() {
     }
   }, [undoStack, entityName, load, message]);
 
-  // §20.12: inline edit save — uses massUpdate for a single record
-  const saveInlineEdit = useCallback(async () => {
-    if (!editingCell || !entityName) return;
-    const field = definition.data?.fields[editingCell.field];
-    if (!field) return;
-    // Basic type validation before sending
-    let value: unknown = editValue;
-    if (field.type === 'int' || field.type === 'float') {
-      const num = Number(editValue);
-      if (isNaN(num)) { setEditError(t('web.list.invalidNumber')); return; }
-      value = num;
-    }
-    try {
-      await api.massUpdate(entityName, { ids: [editingCell.id], values: { [editingCell.field]: value } });
-      setEditingCell(null);
-      setEditError(null);
-      void load();
-    } catch (error) {
-      setEditError(error instanceof Error ? error.message : t('web.list.saveFailed'));
-    }
-  }, [editingCell, editValue, entityName, definition.data, load, message]);
-
-  const cancelInlineEdit = useCallback(() => {
-    setEditingCell(null);
-    setEditValue('');
-    setEditError(null);
-  }, []);
-
   if (metadata.isError || definition.isError) {
     return <ErrorState message={t('web.list.notAvailable', { entity: entityName ?? '' })} />;
   }
@@ -576,53 +543,20 @@ export function EntityListPage() {
             title: fieldLabel(entry.name, entry.field, metadata.data),
             dataIndex: entry.name,
             sorter: entry.field.sortable !== false,
-            render: (_: unknown, row: Record<string, unknown>) => {
-              const isEditing = editingCell?.id === String(row['id']) && editingCell?.field === entry.name;
-              if (isEditing) {
-                return (
-                  <Space.Compact style={{ width: '100%' }}>
-                    <Input
-                      size="small"
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onPressEnter={() => void saveInlineEdit()}
-                      {...(editError ? { status: 'error' as const } : {})}
-                      autoFocus
-                    />
-                    <Button size="small" type="primary" onClick={() => void saveInlineEdit()}>{t('web.common.save')}</Button>
-                    <Button size="small" onClick={cancelInlineEdit}>{t('core.common.cancel')}</Button>
-                  </Space.Compact>
-                );
-              }
-              // Raw JSON in a one-line cell is unreadable and a single-line input would corrupt it,
-              // so a JSON payload is summarised here and edited on the record page instead.
-              const canEdit =
-                ['varchar', 'text', 'int', 'float', 'decimal'].includes(entry.field.type) && !isJsonPayload(entry.field.type, row[entry.name]);
-              return (
-                <div
-                  role={canEdit ? 'button' : undefined}
-                  tabIndex={canEdit ? 0 : undefined}
-                  onClick={() => { if (canEdit) { setEditingCell({ id: String(row['id']), field: entry.name }); setEditValue(String(row[entry.name] ?? '')); setEditError(null); }}}
-                  onKeyDown={(e) => { if (canEdit && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setEditingCell({ id: String(row['id']), field: entry.name }); setEditValue(String(row[entry.name] ?? '')); setEditError(null); }}}
-                  style={canEdit ? { cursor: 'pointer' } : undefined}
-                >
-                  {entry.name === displayField ? (
-                    <Link className="carocrm-row-link" to={`${base}/${entityName}/${String(row['id'])}`}>
-                      {String(row[entry.name] ?? '')}
-                    </Link>
-                  ) : (
-                    <FieldValue
-                      field={entry.field}
-                      value={row[entry.name]}
-                      variant="inline"
-                      fieldName={entry.name}
-                      linkLabels={linkLabelsOf(row)}
-                    />
-                  )}
-                  {editError && isEditing ? <Typography.Text type="danger" style={{ fontSize: 11 }}>{editError}</Typography.Text> : null}
-                </div>
-              );
-            },
+            render: (_: unknown, row: Record<string, unknown>) =>
+              entry.name === displayField ? (
+                <Link className="carocrm-row-link" to={`${base}/${entityName}/${String(row['id'])}`}>
+                  {String(row[entry.name] ?? '')}
+                </Link>
+              ) : (
+                <FieldValue
+                  field={entry.field}
+                  value={row[entry.name]}
+                  variant="inline"
+                  fieldName={entry.name}
+                  linkLabels={linkLabelsOf(row)}
+                />
+              ),
           })),
           {
             title: t('core.common.action'),
