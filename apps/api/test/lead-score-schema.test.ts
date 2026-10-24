@@ -632,9 +632,11 @@ describe('the database invariants behind retry safety (19-LS.2)', () => {
     const name = `${RUN} versioned model`;
     const first = await createRecord('LeadScoreModel', { name, status: 'draft', modelVersion: 3 });
     expect(first).not.toBe('');
-    const duplicate = await call('POST', '/api/v1/LeadScoreModel', { name, status: 'published', modelVersion: 3 });
-    // A published version is the provenance of a stored score; a second row with the same identity would
-    // make "which rules produced this 72" unanswerable (plan §5.1).
+    // Created as a draft, because 19-LS.3's guard refuses a client that claims `published` at all — so a
+    // 409 here can only come from the database, which is the point: a published version is the provenance
+    // of a stored score, and a second row with the same identity would make "which rules produced this 72"
+    // unanswerable (plan §5.1).
+    const duplicate = await call('POST', '/api/v1/LeadScoreModel', { name, modelVersion: 3 });
     expect(duplicate.status, errorText(duplicate)).toBe(409);
   });
 });

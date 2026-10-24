@@ -131,6 +131,13 @@ const LEADSCORE_GUARD_HOOKS = [
   'leadScore.leadFieldGuard',
   'leadScore.LeadScoreEvaluationGuard',
   'leadScore.LeadConversionOperationGuard',
+  // 19-LS.3: the lifecycle half of the guard, which is what makes a published version immutable in the
+  // storage path rather than in the editor. Each owns a write hook and a delete hook, because a delete
+  // never reaches `beforeValidate`.
+  'leadScore.LeadScoreModelGuard',
+  'leadScore.LeadScoreModelDeleteGuard',
+  'leadScore.LeadScoreRuleGuard',
+  'leadScore.LeadScoreRuleDeleteGuard',
 ] as const;
 
 type FieldMap = Record<string, { values?: readonly unknown[]; enum?: readonly unknown[]; inEdit?: boolean; type?: string }>;
@@ -378,7 +385,10 @@ function writeGuardRegistered(hookNames: Set<string>): HealthCheck {
   return {
     name: 'write-guard',
     ok: missing.length === 0,
-    detail: missing.length === 0 ? `${missing.length + LEADSCORE_GUARD_HOOKS.length} beforeValidate guards registered` : `not registered: ${missing.join(', ')}`,
+    detail:
+      missing.length === 0
+        ? `${LEADSCORE_GUARD_HOOKS.length} guards registered on the phases every write passes through`
+        : `not registered: ${missing.join(', ')}`,
   };
 }
 

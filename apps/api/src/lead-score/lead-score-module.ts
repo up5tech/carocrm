@@ -12,7 +12,9 @@
  * that implements each one. The health endpoint reports all of it from the running system, so an
  * operator sees what is *installed* rather than what a plan promised.
  *
- * **Every feature is declared pending at LS.1.** That is the honest state and it is what plan §15.2
+ * **A feature carries the sub-phase that implements it, and `pendingPhase: null` is the only claim of
+ * delivery.** At LS.1 everything was pending; LS.3 delivered `modelAdministration`. That is the honest
+ * state and it is what plan §15.2
  * asks for: "deploy schema/metadata with scoring disabled and conversion behavior unchanged". A flag
  * here is an administrator's switch, not a claim that code exists — `effective` in the settings view
  * is `false` for a pending feature even when the switch is on.
@@ -77,7 +79,12 @@ export interface LeadScorePlatformCapability {
  * duplicate review required, already converted, operation conflict — in the commit that raises them,
  * together with the catalog entries in `i18n/<locale>/errors.json` that localize them.
  */
-export type LeadScoreErrorCode = 'LEADSCORE_MODULE_DISABLED' | 'LEADSCORE_PHASE_PENDING';
+export type LeadScoreErrorCode =
+  | 'LEADSCORE_MODULE_DISABLED'
+  | 'LEADSCORE_PHASE_PENDING'
+  | 'LEADSCORE_INVALID_STATE'
+  | 'LEADSCORE_MODEL_IMMUTABLE'
+  | 'LEADSCORE_DRAFT_EXISTS';
 
 export interface LeadScoreCapabilityDefinition {
   readonly key: LeadScoreCapabilityKey;
@@ -223,7 +230,9 @@ export const LEADSCORE_CAPABILITIES: readonly LeadScoreCapabilityDefinition[] = 
  * with the phase in the response. A later phase flips it to `null` in its own commit.
  */
 export const LEADSCORE_FEATURES: readonly LeadScoreFeatureDescriptor[] = [
-  { key: 'modelAdministration', label: 'Score model administration', settingsPath: 'features.modelAdministration', requires: [], pendingPhase: '19-LS.3' },
+  // 19-LS.3 delivered the lifecycle and the validator. `previewModel` still points at `scoring`, because a
+  // preview is an evaluation run and the evaluator is 19-LS.4 (audit §5).
+  { key: 'modelAdministration', label: 'Score model administration', settingsPath: 'features.modelAdministration', requires: [], pendingPhase: null },
   { key: 'scoring', label: 'Rule-based scoring', settingsPath: 'features.scoring', requires: ['modelAdministration'], pendingPhase: '19-LS.4' },
   { key: 'scoreExplanation', label: 'Score explanation and history', settingsPath: 'features.scoreExplanation', requires: ['scoring'], pendingPhase: '19-LS.5' },
   { key: 'manualRecalculation', label: 'Manual recalculation', settingsPath: 'features.manualRecalculation', requires: ['scoring'], pendingPhase: '19-LS.6' },
@@ -352,7 +361,7 @@ export const LEADSCORE_MODULE = {
   apiPrefix: '/api/v1/LeadScore',
   settingsRow: LEADSCORE_SETTINGS_ROW,
   /** Sub-phases delivered by this module. */
-  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2'],
+  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3'],
   /**
    * The entity set this module owns, registered in `database/seed-metadata.ts` and indexed by
    * `database/migrations/073_phase19_lead_score.sql`. One list, shared with the write guard, so the

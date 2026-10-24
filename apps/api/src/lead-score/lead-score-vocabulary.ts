@@ -18,6 +18,11 @@
 export const SCORE_BANDS = ['Unknown', 'Cold', 'Warm', 'Hot', 'Sales Ready', 'Disqualified'] as const;
 export type ScoreBand = (typeof SCORE_BANDS)[number];
 
+/** Membership test for a value that arrived as a plain string (a stored attribute, a request body). */
+export function isScoreBand(value: string): value is ScoreBand {
+  return (SCORE_BANDS as readonly string[]).includes(value);
+}
+
 /** Whether the stored projection still describes the Lead (plan §3.1 `evaluationStatus`). */
 export const EVALUATION_STATUSES = ['current', 'stale', 'pending', 'failed', 'not_scored'] as const;
 export type EvaluationStatus = (typeof EVALUATION_STATUSES)[number];

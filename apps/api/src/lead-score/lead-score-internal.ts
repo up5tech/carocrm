@@ -70,13 +70,23 @@ export const SERVER_OWNED_LEAD_FIELDS = [
 ] as const;
 
 /**
- * The `LeadScoreModel` attributes the publication lifecycle owns.
+ * The `LeadScoreModel` attributes the publication lifecycle owns, delivered in 19-LS.3.
  *
- * Enforcement arrives with the lifecycle itself in 19-LS.3 (publish, archive, fork a draft); the list is
- * declared here so the guard, the metadata and the eventual validator name the same fields once instead
- * of three times.
+ * `status` is one of them: a draft becomes `published` only by passing the validator in the publish
+ * command, so a client that could write the field could publish an invalid model and freeze it as a
+ * version. The four stamps name who published or archived and when, and belong to the same command.
+ *
+ * `modelVersion` is deliberately **not** here. A draft has to declare the version it is going to be — the
+ * `(name, modelVersion)` unique index makes that identity hold — and once the row is published the whole
+ * row is frozen by `MODEL_FROZEN_STATUSES`, which covers the version too.
  */
-export const SERVER_OWNED_MODEL_FIELDS = ['version', 'publishedById', 'publishedAt', 'archivedById', 'archivedAt'] as const;
+export const SERVER_OWNED_MODEL_FIELDS = ['status', 'publishedById', 'publishedAt', 'archivedById', 'archivedAt'] as const;
+
+/** Model states a client may not write at all: the version is immutable once it exists (plan §5.1). */
+export const MODEL_FROZEN_STATUSES: readonly string[] = ['published', 'archived'];
+
+/** The state a draft is created in, and the only one a client-supplied `status` may name. */
+export const MODEL_DRAFT_STATUS = 'draft';
 
 /**
  * Keys the caller actually changed, not keys it resent.

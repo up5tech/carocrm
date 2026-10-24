@@ -27,3 +27,44 @@ export const OperationProbeSchema = z
     operation: z.enum(LEADSCORE_OPERATIONS),
   })
   .strict();
+
+// ---------------------------------------------------------------------------
+// Phase 19-LS.3 — the model lifecycle commands (plan §6.1, §8.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * A model version identifier. Shape only: the service asks the entity layer whether *this caller* may see
+ * that record, so an id that exists but is not theirs answers the same way as one that does not.
+ */
+const ModelIdSchema = z.string().trim().min(1).max(64);
+
+/**
+ * The stored record's concurrency token, sent back by an editor that loaded the model first.
+ *
+ * Publishing or archiving without it is allowed but risky in two hands at once, so the editor sends what
+ * it read (plan §5.1 immutability, §7.8 concurrency). A mismatch is refused with a concurrency conflict
+ * rather than overwriting the version someone else just froze.
+ */
+const ExpectedVersionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
+
+export const ModelValidateSchema = z
+  .object({
+    modelId: ModelIdSchema,
+  })
+  .strict();
+
+export const ModelPublishSchema = z
+  .object({
+    modelId: ModelIdSchema,
+    expectedVersion: ExpectedVersionSchema.optional(),
+  })
+  .strict();
+
+/** Archiving takes the same two fields: which version, and the revision the editor last read. */
+export const ModelArchiveSchema = ModelPublishSchema;
+
+export const ModelNewVersionSchema = z
+  .object({
+    modelId: ModelIdSchema,
+  })
+  .strict();

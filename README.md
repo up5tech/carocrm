@@ -84,19 +84,22 @@ _Phase 19_ —
   template mappings, signed-document artifacts, reports and an operations panel (Phases 19-ES.0–19-ES.22).
 - **Lead Score** — explainable, versioned lead scoring over the existing `Lead` entity plus a
   transactional, idempotent Lead→Contact/Account/Opportunity conversion. **Phases 19-LS.0–19-LS.2 are
-  delivered: the repository audit, the module registration and the schema/metadata foundation** — the
-  `LeadScore` descriptor with its 14 capability resources, the `leadScore` settings document, the gate in
-  front of all 11 planned operations, the health view at `/api/v1/LeadScore/action/health`, the four
-  records (`LeadScoreModel`, `LeadScoreRule`, `LeadScoreEvaluation`, `LeadConversionOperation`), the
-  current-score projection and `Converted To` attributes on the core `Lead` with their detail panels, and
-  the migration that indexes and constrains them. Nothing scores and nothing converts yet — the module
-  ships switched off and every operation refuses with the sub-phase that owes it
-  (`LEADSCORE_PHASE_PENDING`) — and a client, administrator included, cannot write a score or fake a
-  conversion through the record API. See
+  delivered: the repository audit, the module registration, the schema/metadata foundation and the model
+  and rule configuration** — the `LeadScore` descriptor with its 14 capability resources, the `leadScore`
+  settings document, the gate in front of all 12 planned operations, the health view at
+  `/api/v1/LeadScore/action/health`, the four records (`LeadScoreModel`, `LeadScoreRule`,
+  `LeadScoreEvaluation`, `LeadConversionOperation`), the current-score projection and `Converted To`
+  attributes on the core `Lead` with their detail panels, the migration that indexes and constrains them,
+  the bounded declarative rule DSL with its protected-field and scoring-output denylists, and the
+  validate → publish → archive → new-version lifecycle at `/api/v1/LeadScore/action/model/*`. An invalid
+  model cannot be published and a published version cannot be written — by an administrator through the
+  record API either. Nothing scores and nothing converts yet: the module ships switched off and those
+  operations refuse with the sub-phase that owes them (`LEADSCORE_PHASE_PENDING`). See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
   [docs/implementation/lead-score-ls1-completion-report.md](docs/implementation/lead-score-ls1-completion-report.md),
-  [docs/implementation/lead-score-ls2-completion-report.md](docs/implementation/lead-score-ls2-completion-report.md)
+  [docs/implementation/lead-score-ls2-completion-report.md](docs/implementation/lead-score-ls2-completion-report.md),
+  [docs/implementation/lead-score-ls3-completion-report.md](docs/implementation/lead-score-ls3-completion-report.md)
   and [docs/compatibility/lead-score.md](docs/compatibility/lead-score.md).
 
 _Phase 20_ — settings, administration and end-user UX: a settings-document registry with optimistic

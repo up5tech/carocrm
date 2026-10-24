@@ -30,5 +30,8 @@
   "NOT_SUPPORTED_BY_PROVIDER": "Nhà cung cấp chữ ký không hỗ trợ thao tác này trong phiên bản đầu tiên.",
   "ENCRYPTION_KEY_MISSING": "Chưa cấu hình ENCRYPTION_KEY nên không đọc được thông tin xác thực và không thao tác nhà cung cấp nào thực hiện được.",
   "LEADSCORE_MODULE_DISABLED": "Module Lead Score chưa được bật trên hệ thống này.",
-  "LEADSCORE_PHASE_PENDING": "Tính năng Lead Score này sẽ có ở sub-phase sau, hiện chưa khả dụng."
+  "LEADSCORE_PHASE_PENDING": "Tính năng Lead Score này sẽ có ở sub-phase sau, hiện chưa khả dụng.",
+  "LEADSCORE_MODEL_IMMUTABLE": "Phiên bản mô hình Lead Score đã phát hành không thể sửa. Hãy tạo phiên bản mới.",
+  "LEADSCORE_INVALID_STATE": "Hành động này không được phép với trạng thái hiện tại của mô hình Lead Score.",
+  "LEADSCORE_DRAFT_EXISTS": "Đã có một bản nháp cho mô hình Lead Score này."
 }

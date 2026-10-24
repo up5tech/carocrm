@@ -224,6 +224,15 @@ expensive way.
 
 ## 7. What 19-LS.3 must not forget
 
+Done in 19-LS.2's follow-up: the lifecycle commands publish/archive/fork under
+`runAsLeadScoreInternal`, `SERVER_OWNED_MODEL_FIELDS` is enforced (corrected to `status` + the four
+stamps — `version` turned out to be the store's own concurrency column, see
+[`lead-score-ls3-completion-report.md`](lead-score-ls3-completion-report.md) §1.4), a rule `condition` is
+accepted only as the declarative tree over `Lead` paths inside the model's grant, a duplicated
+`reasonCode` inside one model version is caught by the validator (`LS_RULE_REASON_CODE_DUPLICATE`) before
+the database is asked, so the unique index stays the backstop rather than the user-facing answer; and
+19-LS.3 added no index to `073`.
+
 * Publish/archive/validate belong to a **model service**, reached through `runAsLeadScoreInternal`, and
   must refuse a client write of `modelVersion`, `publishedById`, `publishedAt`, `archivedById`,
   `archivedAt` — the list is already `SERVER_OWNED_MODEL_FIELDS`; the guard does not check it yet.

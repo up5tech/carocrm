@@ -42,6 +42,49 @@ export function leadScoreModuleDisabledError(feature: string): LeadScoreError {
 }
 
 /**
+ * A published or archived model version is frozen (plan §5.1).
+ *
+ * 409: the record is in a state that forbids the write, which is neither a permission problem nor a
+ * shape problem. The message names the way forward, because "immutable" without it reads as a dead end —
+ * a new version is how a published model is changed.
+ */
+export function leadScoreModelImmutableError(entity: string, modelId: string, status: string): LeadScoreError {
+  return new LeadScoreError(
+    'LEADSCORE_MODEL_IMMUTABLE',
+    `A ${status} Lead Score model version cannot be created, edited or deleted. Create a new version to change it.`,
+    { entity, modelId, status },
+  );
+}
+
+/**
+ * A lifecycle action asked of a model that is not in the state that permits it — publishing a published
+ * version, archiving an archived one, or copying a draft that is already editable.
+ *
+ * 409 because the refusal is about the record's state, not the caller's rights and not the shape of the
+ * request (plan §8.4: stable codes for each of those separately).
+ */
+export function leadScoreInvalidStateError(action: string, state: string, hint: string): LeadScoreError {
+  return new LeadScoreError('LEADSCORE_INVALID_STATE', `Lead Score model cannot be ${action} while its state is "${state}". ${hint}`, {
+    action,
+    state,
+  });
+}
+
+/**
+ * Two drafts of one model name would make "the next version" ambiguous.
+ *
+ * The answer names the draft that already holds the slot, because the caller needs to edit that row
+ * rather than create a second one — a silent second draft would leave two candidate rule sets for the
+ * same name and version.
+ */
+export function leadScoreDraftExistsError(modelName: string, draftId: string): LeadScoreError {
+  return new LeadScoreError('LEADSCORE_DRAFT_EXISTS', `A draft of score model "${modelName}" already exists.`, {
+    modelName,
+    draftId,
+  });
+}
+
+/**
  * The feature is switched on, but its implementation lands in a later sub-phase.
  *
  * Distinct from `LEADSCORE_MODULE_DISABLED` on purpose: a deployment flag is an operator choice, while

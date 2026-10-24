@@ -3,8 +3,9 @@ import { Body, Controller, Get, HttpCode, Inject, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
 
-import { OperationProbeSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { ModelArchiveSchema, ModelNewVersionSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
+import { LeadScoreModelService } from './lead-score-model.service.js';
 import { LEADSCORE_CAPABILITIES, LEADSCORE_MODULE, LEADSCORE_PENDING_FEATURES } from './lead-score-module.js';
 import { LeadScoreModuleHealthService } from './lead-score-module-health.service.js';
 import { LeadScorePermissionService } from './lead-score-permission.service.js';
@@ -34,6 +35,7 @@ export class LeadScoreController {
     @Inject(LeadScorePermissionService) private readonly permissions: LeadScorePermissionService,
     @Inject(LeadScoreSettingsService) private readonly settings: LeadScoreSettingsService,
     @Inject(LeadScoreFeatureGate) private readonly gate: LeadScoreFeatureGate,
+    @Inject(LeadScoreModelService) private readonly models: LeadScoreModelService,
   ) {}
 
   /** Module health: the platform foundation, the registration invariants, the features and the gate. */
@@ -114,6 +116,59 @@ export class LeadScoreController {
   async operationGate(@Body() body: unknown) {
     const input = this.parse(OperationProbeSchema, body);
     return this.gate.assess(input.operation);
+  }
+
+  // ---------------------------------------------------------------------------
+  // model lifecycle (19-LS.3)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Validate a draft model with its rules.
+   *
+   * Read-only and side-effect free — it writes no score and touches no Lead — so an editor can call it on
+   * a half-finished draft as often as it likes. The answer is the whole list of problems, each with a
+   * stable code, not only the first one (plan §6.1).
+   */
+  @HttpCode(200)
+  @Post('action/model/validate')
+  async validateModel(@Body() body: unknown) {
+    const input = this.parse(ModelValidateSchema, body);
+    return this.models.validate(input.modelId);
+  }
+
+  /**
+   * Publish a draft as an immutable version.
+   *
+   * The command that decides what a stored score means from now on, so it asks for `modelPublish` — a
+   * separate right from editing a draft (plan §9.1) — and it re-validates rather than trusting an earlier
+   * `validate` answer.
+   */
+  @HttpCode(200)
+  @Post('action/model/publish')
+  async publishModel(@Body() body: unknown) {
+    const input = this.parse(ModelPublishSchema, body);
+    return this.models.publish(input.modelId, input.expectedVersion);
+  }
+
+  /** Archive a model version: the quick off switch that keeps every stored evaluation intact (plan §9.3). */
+  @HttpCode(200)
+  @Post('action/model/archive')
+  async archiveModel(@Body() body: unknown) {
+    const input = this.parse(ModelArchiveSchema, body);
+    return this.models.archive(input.modelId, input.expectedVersion);
+  }
+
+  /**
+   * Open a new draft version from a published or archived one.
+   *
+   * This is how a published model is "edited" without editing it: the old version stays exactly as the
+   * scores that name it were produced by, and the copy is what changes (plan §5.1, §6.1 rollback).
+   */
+  @HttpCode(200)
+  @Post('action/model/new-version')
+  async newModelVersion(@Body() body: unknown) {
+    const input = this.parse(ModelNewVersionSchema, body);
+    return this.models.newVersion(input.modelId);
   }
 
   private parse<T extends ZodTypeAny>(schema: T, value: unknown): T['_output'] {

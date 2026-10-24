@@ -2,6 +2,7 @@ import type { Provider, Type } from '@nestjs/common';
 
 import { LeadScoreController } from './lead-score.controller.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
+import { LeadScoreModelService } from './lead-score-model.service.js';
 import { LeadScoreModuleHealthService } from './lead-score-module-health.service.js';
 import { LeadScorePermissionService } from './lead-score-permission.service.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
@@ -30,29 +31,55 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   LeadScoreWriteGuardService,
   LeadScoreSettingsService,
   LeadScorePermissionService,
+  LeadScoreModelService,
   LeadScoreFeatureGate,
   LeadScoreModuleHealthService,
 ];
 
 export { LeadScoreController } from './lead-score.controller.js';
 export {
+  type ConditionFieldPolicy,
+  type ConditionIssue,
+  type ConditionIssueCode,
+  MAX_CONDITION_DEPTH,
+  MAX_CONDITION_NODES,
+  MAX_CONDITION_PREDICATES,
+  NEVER_SCORABLE_FIELD_TYPES,
+  type ParsedCondition,
+  parseScoreCondition,
+  PROTECTED_FIELD_NAMES,
+  type ScoreableField,
+  SCORING_OUTPUT_FIELD_NAMES,
+  validateScoreCondition,
+} from './lead-score-condition.js';
+export {
   LEADSCORE_CORE_ENTITY_TYPES,
   LEADSCORE_EVENT_NAMESPACE,
   LEADSCORE_MODULE_KEY,
   LEADSCORE_SETTINGS_ROW,
 } from './lead-score-domain.js';
-export { LeadScoreError, leadScoreModuleDisabledError, leadScorePhasePendingError } from './lead-score-errors.js';
+export {
+  leadScoreDraftExistsError,
+  LeadScoreError,
+  leadScoreInvalidStateError,
+  leadScoreModelImmutableError,
+  leadScoreModuleDisabledError,
+  leadScorePhasePendingError,
+} from './lead-score-errors.js';
 export { LEADSCORE_OPERATIONS, LeadScoreFeatureGate, type LeadScoreOperation, type LeadScoreOperationAssessment } from './lead-score-feature-gate.service.js';
 export {
   changedKeys,
   isLeadScoreInternalWrite,
   LEADSCORE_ENTITY_TYPES,
   type LeadScoreEntityType,
+  MODEL_DRAFT_STATUS,
+  MODEL_FROZEN_STATUSES,
   MODULE_WRITTEN_ENTITY_TYPES,
   runAsLeadScoreInternal,
   SERVER_OWNED_LEAD_FIELDS,
   SERVER_OWNED_MODEL_FIELDS,
 } from './lead-score-internal.js';
+export { LeadScoreModelService } from './lead-score-model.service.js';
 export {
   LEADSCORE_CAPABILITIES,
   LEADSCORE_FEATURES,
@@ -82,6 +109,16 @@ export {
   LeadScoreSettingsService,
   type LeadScoreSettingsView,
 } from './lead-score-settings.service.js';
+export {
+  MAX_RULE_POINTS,
+  type ModelAttributes,
+  REASON_CODE_PATTERN,
+  type RuleAttributes,
+  validateModel,
+  VALIDATION_CODES,
+  type ValidationIssue,
+  type ValidationReport,
+} from './lead-score-validator.js';
 export {
   CONVERSION_STATUSES,
   CONVERSION_TARGETS,

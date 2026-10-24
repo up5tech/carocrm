@@ -284,10 +284,14 @@ vocabulary, with these module-side constraints — the reason `LeadScore` must n
 2. Field paths validate against `Lead` metadata **and** against the model's `allowedFieldPaths`, at
    save time and again at evaluation time; relation traversal is limited to one hop declared by the
    model, never an arbitrary join (plan §6.2).
-3. Depth ≤ 2 nested groups and ≤ 20 predicates per rule; `points` bounded by the model; enforced in
-   the validator, mirroring the budgets already used by the formula engine
-   (`packages/formula/src/limits/index.ts:12-20`).
-4. Operators unsupported for the field's declared type are rejected (e.g. `contains` on `int`).
+3. Depth ≤ 2 nested groups, ≤ 20 predicates and ≤ 60 nodes per rule; `points` bounded to ±50 so one rule
+   cannot decide the scale; enforced in the validator and re-run at publish, mirroring the budgets the
+   formula engine already applies (`packages/formula/src/limits/index.ts:14-16`). Delivered in 19-LS.3.
+4. Operators unsupported for the field's declared type are rejected (e.g. `contains` on `int`) — the whole
+   matrix is `OPERATORS_BY_TYPE` in `lead-score-condition.ts`. Relationship traversal is **refused** at this
+   phase rather than half-supported: `multiEnum` and link fields are existence-only, and there is no
+   Lead→Activity relation to traverse (gap G2), so 19-LS.4 never has to invent semantics a stored score
+   already depends on.
 5. Missing/unknown follows `missingDataPolicy` and appears in the breakdown as `unknown`, never as 0
    (plan §1.2 "Missing is not negative by default").
 
@@ -541,7 +545,7 @@ database only when it touches data.
 | --- | --- | --- | --- |
 | LS.1 ✅ **delivered 2026-10-24** | `apps/api/src/lead-score/` module dir + barrel, `LEADSCORE_CONTROLLERS/PROVIDERS` spread before `app.module.ts:160/:212`, descriptor + `leadScore` settings row + 14 capability→ACL resources + 11-operation feature gate + health view. **Deviation from this plan row:** no nav entry and no `leadscore.json` catalog yet — the sidebar would point at an SPA route that only LS.7/LS.8 create, and the catalog's two real consumers at this phase are the module's error codes, which went into `i18n/*/errors.json` | `apps/api/src/lead-score/*`, `app.module.ts`, `i18n/{en,vi}/errors.json`, `docs/implementation/lead-score-ls1-completion-report.md` | 15 LS tests + 109 adjacent tests green, typecheck and lint clean, Lead CRUD proven unchanged |
 | LS.2 ✅ **delivered 2026-10-24** | 4 metadata entities + 16 Lead score/conversion attributes + the `score`/`converted` detail panels + declarative indexes; `073_phase19_lead_score.sql` (15 partial indexes, 3 unique, all enforced by test); `lead-score-write-guard.service.ts` + `lead-score-internal.ts` marker; `lead-score-vocabulary.ts` | `database/seed-metadata.ts`, `database/migrations/073_*`, `apps/api/src/lead-score/*` | migration reviewed pre-apply; schema read-back; existing Leads untouched; direct user write to `scoreValue`/`converted*` rejected |
-| LS.3 | Model/rule CRUD, draft→published→archived, immutability, criteria validator (paths, types, depth, bounds, sensitive-field denylist) | `lead-score-model.service.ts`, `lead-score-rule-validator.ts`, `dto/lead-score-shapes.ts` | unit + API: invalid model cannot publish; published version immutable; role gates |
+| LS.3 ✅ **delivered 2026-10-24** | `lead-score-condition.ts` (declarative tree only, platform `CRITERIA_OPERATORS`, per-type operator matrix, protected + scoring-output denylists, depth/predicate/node/value bounds) + `lead-score-validator.ts` (42 stable codes, errors vs warnings) + `lead-score-model.service.ts` (`validate`/`publish`/`archive`/`new-version`, all through the gate and `EntityCrudService`) + the lifecycle half of the write guard, including a **separate `beforeDelete` hook** because `EntityManager.delete` never reaches `beforeValidate` | `apps/api/src/lead-score/lead-score-{condition,validator,model.service,write-guard}.ts`, `dto/lead-score-shapes.ts`, `lead-score.controller.ts`, `i18n/{en,vi}/errors.json` | **51 LS.3 tests** (22 lifecycle + 29 pure), LS.1/LS.2 re-run green: invalid cannot publish, published cannot be written, role gates proven |
 | LS.4 | Evaluator: clamping, band resolution, rule results, coverage, deterministic hash/signature | `lead-score-evaluator.ts` (pure) | table-driven unit tests, reproducibility assertion |
 | LS.5 | Evaluation persistence + current projection update + `GET score`/`score/history` + staleness | `lead-score-calculation.service.ts`, `lead-score-explanation.service.ts`, controller | unit + API with `AGENT_TEST_` Lead, ACL/field-level checks, pagination |
 | LS.6 | `entity.updated` subscriber, debounced job, bounded batch, decay sweep, retry | `lead-score-events.ts`, `lead-score-recalculation.job.ts`, `apps/worker/src/handlers/lead-score-handlers.ts`, `seed.ts` scheduled row | duplicate delivery produces one history row; list reads stay flat (query count asserted) |

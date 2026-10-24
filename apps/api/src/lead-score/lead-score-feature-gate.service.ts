@@ -35,6 +35,7 @@ export const LEADSCORE_OPERATIONS = [
   'recalculateLead',
   'batchRecalculate',
   'validateModel',
+  'createModelVersion',
   'previewModel',
   'publishModel',
   'conversionPreview',
@@ -63,7 +64,10 @@ const OPERATION_RULES: Readonly<Record<LeadScoreOperation, OperationRule>> = {
   recalculateLead: { capability: 'recalculate', feature: 'manualRecalculation', writes: true },
   batchRecalculate: { capability: 'batchRecalculate', feature: 'batchRecalculation', writes: true },
   validateModel: { capability: 'modelManage', feature: 'modelAdministration', writes: false },
-  previewModel: { capability: 'modelManage', feature: 'modelAdministration', writes: false },
+  // A new draft version is a write, and it is the only way to change a published model (plan §5.1).
+  createModelVersion: { capability: 'modelManage', feature: 'modelAdministration', writes: true },
+  // A preview runs the evaluator over a sample, so it belongs to the phase that ships the engine.
+  previewModel: { capability: 'modelManage', feature: 'scoring', writes: false },
   publishModel: { capability: 'modelPublish', feature: 'modelAdministration', writes: true },
   conversionPreview: { capability: 'convertPreview', feature: 'conversionPreview', writes: false },
   conversionExecute: { capability: 'convertExecute', feature: 'leadConversion', writes: true },

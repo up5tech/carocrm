@@ -158,7 +158,7 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.module.id).toBe('LeadScore');
     expect(body.module.apiPrefix).toBe('/api/v1/LeadScore');
     expect(body.module.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2']);
+    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3']);
 
     // Every required capability is a fact the view verified against this database, not a claim.
     expect(body.dependencies.every((dependency) => dependency.present)).toBe(true);
@@ -175,8 +175,11 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.ready).toBe(false);
     expect(body.reason).toContain('module switch is off');
     expect(body.features.every((feature) => feature.enabled === false)).toBe(true);
-    expect(body.features.every((feature) => feature.implemented === false)).toBe(true);
-    expect(body.features.every((feature) => feature.pendingPhase !== null)).toBe(true);
+    // 19-LS.3 shipped the model lifecycle, so that one switch is no longer pending and every other one is
+    // still tied to a phase that has not arrived. The health view says which is which.
+    const implemented = body.features.filter((feature) => feature.implemented).map((feature) => feature.key);
+    expect(implemented).toEqual(['modelAdministration']);
+    expect(body.features.filter((feature) => !feature.implemented).every((feature) => feature.pendingPhase !== null)).toBe(true);
     expect(body.operations.every((operation) => operation.admitted === false)).toBe(true);
     expect(body.operations.every((operation) => operation.code === 'LEADSCORE_MODULE_DISABLED')).toBe(true);
 
@@ -352,7 +355,7 @@ describe('feature gate (19-LS.1)', () => {
     for (const [operation, phase] of [
       ['readScore', '19-LS.4'],
       ['conversionExecute', '19-LS.13'],
-      ['publishModel', '19-LS.3'],
+      ['previewModel', '19-LS.4'],
       ['aiInsight', '19-LS.17'],
     ] as const) {
       const result = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });
@@ -370,7 +373,7 @@ describe('feature gate (19-LS.1)', () => {
       expect(assessment.code).toBe('LEADSCORE_PHASE_PENDING');
       expect(assessment.pendingPhase).toBe(phase);
       expect(assessment.detail).toBe(phase);
-      expect(assessment.writes).toBe(operation !== 'readScore');
+      expect(assessment.writes).toBe(operation === 'conversionExecute' || operation === 'aiInsight');
     }
 
     // A caller without the right learns only that it is denied — never the deployment state behind it.
