@@ -42,12 +42,15 @@ export function ConditionBuilder({
   value,
   onChange = () => undefined,
   catalog,
+  fields: fieldsOverride,
   disabled = false,
 }: {
   // `value` and `onChange` are what an Ant Design `Form.Item` injects, which is how this builder is used.
   value?: string | null | undefined;
   onChange?: ((raw: string) => void) | undefined;
   catalog: LeadScoreEditorCatalog | undefined;
+  /** The fields to offer. A rule over an engagement source passes that source's metrics instead. */
+  fields?: LeadScoreEditorField[] | undefined;
   disabled?: boolean;
 }) {
   const [tree, setTree] = useState<RootEdit>(() => parseCondition(value));
@@ -60,14 +63,14 @@ export function ConditionBuilder({
 
   const counts = countNodes(tree);
   const limits = catalog?.condition;
-  const fields = selectableFields(catalog);
+  const fields = fieldsOverride ?? selectableFields(catalog);
 
   return (
     <Space direction="vertical" size={12} style={{ width: '100%' }}>
       {catalog === undefined ? (
         <Typography.Text type="secondary">{t('leadscore.admin.builder.loadingCatalog')}</Typography.Text>
       ) : fields.length === 0 ? (
-        <Typography.Text type="secondary">{t('leadscore.admin.builder.noFields')}</Typography.Text>
+        <Typography.Text type="secondary">{fieldsOverride === undefined ? t('leadscore.admin.builder.noFields') : t('leadscore.admin.builder.noMetrics')}</Typography.Text>
       ) : null}
 
       <Space wrap size={8} align="center">
@@ -103,6 +106,7 @@ export function ConditionBuilder({
           fields={fields}
           catalog={catalog}
           disabled={disabled}
+          metricMode={fieldsOverride !== undefined}
           nested={tree.mode === 'not' ? false : undefined}
           onChangeChildren={(children) => replace({ ...tree, children })}
         />
@@ -143,6 +147,7 @@ function ConditionList({
   fields,
   catalog,
   disabled,
+  metricMode = false,
   nested,
   onChangeChildren,
 }: {
@@ -150,6 +155,7 @@ function ConditionList({
   fields: LeadScoreEditorField[];
   catalog: LeadScoreEditorCatalog | undefined;
   disabled: boolean;
+  metricMode?: boolean;
   nested: boolean | undefined;
   onChangeChildren: (children: EditNode[]) => void;
 }) {
@@ -170,6 +176,7 @@ function ConditionList({
             fields={fields}
             catalog={catalog}
             disabled={disabled}
+            metricMode={metricMode}
             onChange={(next) => patch(index, next)}
             onRemove={() => onChangeChildren(items.filter((_, position) => position !== index))}
           />
@@ -198,6 +205,7 @@ function ConditionList({
               fields={fields}
               catalog={catalog}
               disabled={disabled}
+              metricMode={metricMode}
               nested={false}
               onChangeChildren={(inner) => patch(index, { ...child, children: inner })}
             />
@@ -241,6 +249,7 @@ function LeafRow({
   fields,
   catalog,
   disabled,
+  metricMode = false,
   onChange,
   onRemove,
 }: {
@@ -248,18 +257,21 @@ function LeafRow({
   fields: LeadScoreEditorField[];
   catalog: LeadScoreEditorCatalog | undefined;
   disabled: boolean;
+  metricMode?: boolean;
   onChange: (leaf: LeafEdit) => void;
   onRemove: () => void;
 }) {
-  const field = catalog === undefined ? undefined : catalog.fields.find((entry) => entry.name === leaf.field);
+  // The offered list *is* the vocabulary of this row: a Lead field for a `lead` rule, a metric for an
+  // engagement rule. Looking the name up anywhere else would answer "no operators" for a perfectly good rule.
+  const field = fields.find((entry) => entry.name === leaf.field) ?? catalog?.fields.find((entry) => entry.name === leaf.field);
   const operators = field?.operators ?? [];
   const needsValue = operators.length > 0 && !isValueless(catalog, leaf.operator);
   const isList = operators.length > 0 && (catalog?.condition.listOperators.includes(leaf.operator) ?? false);
 
   return (
     <Space wrap size={8} align="start" style={{ width: '100%' }} className="carocrm-condition-leaf">
-      <FieldSelect fields={fields} catalog={catalog} value={leaf.field} disabled={disabled} onChange={(name) => {
-        const next = fieldOf(catalog, name);
+      <FieldSelect fields={fields} catalog={catalog} value={leaf.field} disabled={disabled} metricMode={metricMode} onChange={(name) => {
+        const next = fields.find((entry) => entry.name === name) ?? fieldOf(catalog, name);
         const operator = next?.operators[0] ?? 'equals';
         onChange({ id: leaf.id, kind: 'leaf', field: name, operator });
       }} />
@@ -308,15 +320,18 @@ function FieldSelect({
   catalog,
   value,
   disabled,
+  metricMode = false,
   onChange,
 }: {
   fields: LeadScoreEditorField[];
   catalog: LeadScoreEditorCatalog | undefined;
   value: string;
   disabled: boolean;
+  metricMode?: boolean;
   onChange: (name: string) => void;
 }) {
-  const refused = (catalog?.fields ?? []).filter((entry) => !entry.scorable);
+  // A metric list is short, closed and already scoped to the rule's source, so there is nothing to refuse.
+  const refused = metricMode ? [] : (catalog?.fields ?? []).filter((entry) => !entry.scorable);
   const shown = fields.some((entry) => entry.name === value) || value === '' ? undefined : value;
   return (
     <Select

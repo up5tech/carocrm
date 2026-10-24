@@ -26,6 +26,7 @@ import {
 import { LeadScorePermissionService } from './lead-score-permission.service.js';
 import { LeadScoreRecords } from './lead-score-records.js';
 import { type LeadScoreSettings, LeadScoreSettingsService,type LeadScoreSettingsView } from './lead-score-settings.service.js';
+import { LeadScoreSignalsService } from './lead-score-signals.js';
 
 /**
  * Phase 19-LS.1 — module health, read from the running system
@@ -93,6 +94,18 @@ export interface LeadScoreHealthView {
   readonly features: readonly HealthFeature[];
   readonly capabilities: readonly { readonly key: string; readonly label: string; readonly granted: boolean }[];
   readonly operations: readonly LeadScoreOperationAssessment[];
+  /**
+   * Whether the engagement read has anything to read (19-LS.9).
+   *
+   * An operator whose engagement rule skipped needs to know which of the three reasons it was — the module
+   * is off, Marketing Automation is not installed, or the sweep is not switched on — and none of those is
+   * answerable from the feature list alone.
+   */
+  readonly signals: {
+    readonly eventTablePresent: boolean;
+    readonly moduleRegistered: boolean;
+    readonly decaySweep: { readonly enabled: boolean; readonly limit: number; readonly chunkSize: number };
+  };
   readonly settings: {
     readonly version: number;
     readonly enabled: boolean;
@@ -170,6 +183,7 @@ export class LeadScoreModuleHealthService {
     @Inject(LeadScorePermissionService) private readonly permissions: LeadScorePermissionService,
     @Inject(LeadScoreFeatureGate) private readonly gate: LeadScoreFeatureGate,
     @Inject(LeadScoreRecords) private readonly store: LeadScoreRecords,
+    @Inject(LeadScoreSignalsService) private readonly signals: LeadScoreSignalsService,
   ) {}
 
   async health(): Promise<LeadScoreHealthView> {
@@ -229,6 +243,11 @@ export class LeadScoreModuleHealthService {
         granted: capability.granted,
       })),
       operations,
+      signals: {
+        eventTablePresent: await this.signals.isSourcePresent(),
+        moduleRegistered: this.signals.isModuleRegistered(),
+        decaySweep: settingsView.settings.signals.decaySweep,
+      },
       settings: {
         version: settingsView.version,
         enabled: settingsView.settings.enabled === true,

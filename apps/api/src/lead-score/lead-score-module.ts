@@ -249,8 +249,13 @@ export const LEADSCORE_FEATURES: readonly LeadScoreFeatureDescriptor[] = [
   // debounced job for one Lead, and the chunked rebuild a caller starts from `action/recalculate-batch`.
   { key: 'eventRecalculation', label: 'Event-driven recalculation', settingsPath: 'features.eventRecalculation', requires: ['scoring'], pendingPhase: null },
   { key: 'batchRecalculation', label: 'Batch recalculation', settingsPath: 'features.batchRecalculation', requires: ['scoring'], pendingPhase: null },
-  { key: 'thresholdNotifications', label: 'Band-change notifications', settingsPath: 'features.thresholdNotifications', requires: ['scoring'], pendingPhase: '19-LS.9' },
-  { key: 'engagementSignals', label: 'Marketing engagement signals', settingsPath: 'features.engagementSignals', requires: ['scoring'], pendingPhase: '19-LS.9' },
+  // 19-LS.9 delivered both halves of the threshold story: the band crossing is published as a versioned
+  // domain event, and — only when an operator asks — it announces itself to the Lead's owner once per
+  // crossing. The action never converts a Lead or edits a field (plan §6.6).
+  { key: 'thresholdNotifications', label: 'Band-change notifications', settingsPath: 'features.thresholdNotifications', requires: ['scoring'], pendingPhase: null },
+  // 19-LS.9 reads Marketing Automation's delivery table for the engagement a rule names, bounded by the
+  // rule's own window. Absent or off, the rules skip and the score still computes (plan §16 `19-LS.9`).
+  { key: 'engagementSignals', label: 'Marketing engagement signals', settingsPath: 'features.engagementSignals', requires: ['scoring'], pendingPhase: null },
   { key: 'duplicateDetection', label: 'Duplicate candidate review', settingsPath: 'features.duplicateDetection', requires: [], pendingPhase: '19-LS.11' },
   { key: 'fieldMapping', label: 'Conversion field mapping', settingsPath: 'features.fieldMapping', requires: [], pendingPhase: '19-LS.12' },
   { key: 'conversionPreview', label: 'Conversion preview', settingsPath: 'features.conversionPreview', requires: ['fieldMapping'], pendingPhase: '19-LS.12' },

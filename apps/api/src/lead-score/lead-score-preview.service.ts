@@ -7,6 +7,8 @@ import type { ScoreEvaluation } from './lead-score-evaluator.js';
 import { requiredInputFields, scoreLead } from './lead-score-evaluator.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
 import { LeadScoreModelService } from './lead-score-model.service.js';
+import { LeadScoreSignalsService } from './lead-score-signals.js';
+import { signalPlans } from './lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.4 — preview a score model against a bounded, authorized sample of Leads
@@ -77,6 +79,11 @@ export interface LeadScorePreviewView {
     readonly average: number | null;
   };
   readonly results: readonly PreviewResultItem[];
+  /** Whether the engagement rules were read, and what they were read over (19-LS.9). */
+  readonly signals: {
+    readonly state: string;
+    readonly plans: readonly { readonly key: string; readonly source: string; readonly eventTypes: readonly string[]; readonly lookbackDays: number }[];
+  };
   /** Always false, and asserted by the test: a preview cannot move a stored score (plan §6.1, §8.3). */
   readonly writes: false;
 }
@@ -88,6 +95,7 @@ export class LeadScorePreviewService {
     @Inject(AclApiService) private readonly acl: AclApiService,
     @Inject(LeadScoreModelService) private readonly models: LeadScoreModelService,
     @Inject(LeadScoreFeatureGate) private readonly gate: LeadScoreFeatureGate,
+    @Inject(LeadScoreSignalsService) private readonly signals: LeadScoreSignalsService,
   ) {}
 
   async preview(modelId: string, leadIds?: readonly string[], maxSize?: number): Promise<LeadScorePreviewView> {
@@ -109,6 +117,16 @@ export class LeadScorePreviewService {
     // for an empty one (plan §6.5, §9.2).
     const visible = new Set(await this.acl.visibleFields(SCORED_ENTITY));
 
+    // The engagement plans are decided once for the whole sample, and read per Lead: a preview of 25 Leads
+    // costs at most 25 bounded index reads of another module's table, which is the same bound a stored score
+    // pays. The state is reported on the answer, so an administrator sees whether a draft was scored with
+    // engagement or without it — the difference between a preview that says "this rule does nothing" and one
+    // that says "this rule could not be read".
+    const plans = signalPlans(rules);
+    const engagement = plans.length === 0 ? null : await this.gate.assess('engagementSignals');
+    const evaluatedAt = new Date().toISOString();
+    let signalState = 'available';
+
     const results: PreviewResultItem[] = [];
     const bands: Record<string, number> = {};
     const scoredValues: number[] = [];
@@ -126,7 +144,11 @@ export class LeadScorePreviewService {
       // Provenance travels with the row: `modifiedAt` and `version` say *which* data the score describes,
       // and the evaluator never reads either — that is what makes a re-run produce the same signature.
       const inputsAsOf = typeof row['modifiedAt'] === 'string' ? row['modifiedAt'] : null;
-      const evaluation = scoreLead({ model, rules, fields, snapshot: { recordId: leadId, sourceRevision, inputsAsOf, values } });
+      const reading = plans.length === 0
+        ? undefined
+        : await this.signals.read({ leadId, plans, evaluatedAt, enabled: engagement?.admitted === true });
+      if (reading !== undefined) signalState = reading.state;
+      const evaluation = scoreLead({ model, rules, fields, snapshot: { recordId: leadId, sourceRevision, inputsAsOf, values, ...(reading === undefined ? {} : { signals: reading }) } });
       bands[evaluation.band] = (bands[evaluation.band] ?? 0) + 1;
       if (evaluation.scoreValue !== null) scoredValues.push(evaluation.scoreValue);
       results.push({ ...evaluation, leadId, sourceRevision, inputsAsOf });
@@ -158,6 +180,10 @@ export class LeadScorePreviewService {
         average: scoredValues.length > 0 ? Number((scoredValues.reduce((left, right) => left + right, 0) / scoredValues.length).toFixed(2)) : null,
       },
       results,
+      signals: {
+        state: plans.length === 0 ? 'not_used' : engagement?.admitted === false ? String(engagement.code ?? 'disabled') : signalState,
+        plans: plans.map((plan) => ({ key: plan.key, source: plan.source, eventTypes: plan.eventTypes, lookbackDays: plan.lookbackDays })),
+      },
       writes: false,
     };
   }

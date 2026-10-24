@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type AuthenticatedPrincipal, REQUEST_SCOPE_TOKEN, type RequestScope } from '../src/common/request-scope.js';
 import { EntityCrudService } from '../src/entity/entity.service.js';
 import { HookRegistry } from '../src/hooks/hook.registry.js';
-import { runAsLeadScoreInternal, SERVER_OWNED_LEAD_FIELDS } from '../src/lead-score/index.js';
+import { DEFAULT_LEADSCORE_SETTINGS, runAsLeadScoreInternal, SERVER_OWNED_LEAD_FIELDS } from '../src/lead-score/index.js';
 import { METADATA_STORE, type MetadataStoreService } from '../src/metadata/metadata-store.service.js';
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
@@ -177,6 +177,7 @@ describe('migration 073 is additive and present (19-LS.2)', () => {
       .selectFrom('pg_indexes')
       .select(['indexname', 'indexdef'])
       .where((eb) => eb.or([eb('indexname', 'like', '%lead_score%'), eb('indexname', 'like', '%lead_conversion%')]))
+      .where('tablename', '=', 'entity_records')
       .execute();
     const names = new Set(rows.map((row) => row.indexname));
     const definitions = new Map(rows.map((row) => [row.indexname, row.indexdef]));
@@ -208,6 +209,21 @@ describe('migration 073 is additive and present (19-LS.2)', () => {
       expect(row.indexdef).toContain('deleted_at');
     }
     expect(rows).toHaveLength(15);
+
+    // 19-LS.9's own index is on another module's table, so it is asserted separately: it is the bounded
+    // recipient-scoped engagement read, and it is partial for the same reason the ones above are — a row
+    // with no recipient is not a signal, and indexing those would index work Lead Score can never use.
+    const signalIndex = await ctx.database.db
+      .selectFrom('pg_indexes')
+      .select(['indexname', 'indexdef', 'tablename'])
+      .where('indexname', '=', 'idx_marketing_events_lead_score_recipient')
+      .execute();
+    expect(signalIndex).toHaveLength(1);
+    expect(signalIndex[0]?.tablename).toBe('marketing_events');
+    expect(signalIndex[0]?.indexdef).toContain('recipient_entity_id');
+    expect(signalIndex[0]?.indexdef).toContain('occurred_at');
+    expect(signalIndex[0]?.indexdef).toContain('DESC');
+    expect(signalIndex[0]?.indexdef).toContain('recipient_entity_id IS NOT NULL');
 
     // 0–100 is not text-orderable, so the score index is numeric while the rest are text.
     expect(definitions.get('idx_entity_records_lead_score_value')).toContain('::numeric');
@@ -676,7 +692,12 @@ describe('the database invariants behind retry safety (19-LS.2)', () => {
 
 describe('registered but inert (19-LS.2)', () => {
   it('still refuses an operation whose phase has not shipped, because schema is not behavior', async () => {
-    expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true })).status).toBe(200);
+    // Every switch off, explicitly. The settings row is one document shared by every suite against the
+    // configured database, so a patch of `{enabled:true}` alone would inherit whatever an earlier suite left
+    // on and this assertion would depend on the order tests ran in — which is exactly what "inert" has to
+    // survive. The suite's own teardown restores the row it found.
+    const switchesOff = Object.fromEntries(Object.keys(DEFAULT_LEADSCORE_SETTINGS.features).map((key) => [key, false]));
+    expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: switchesOff })).status).toBe(200);
     // What LS.2 registered is inert until its own phase arrives. Three phases on, the doors that still name a
     // pending phase are the conversion and insight ones — and each names the sub-phase that owes it.
     for (const [operation, phase] of [

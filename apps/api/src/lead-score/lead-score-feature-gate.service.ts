@@ -32,6 +32,11 @@ import { LeadScoreSettingsService } from './lead-score-settings.service.js';
  * The operations the module owns. The gate refuses one whose feature has not shipped, so a route cannot
  * forget the question; a later phase adds its own operation here rather than beside it.
  *
+ * 19-LS.9 added three more: `engagementSignals` (may a rule read another module's engagement table),
+ * `thresholdAction` (may a band crossing interrupt anybody) and `decaySweep` (may the calendar re-score
+ * Leads on a schedule). Each is a separate operation because each is a separate thing an operator may want
+ * switched off, and the module's promise is that turning one off breaks nothing that does not need it.
+ *
  * 19-LS.6 added `eventRecalculate`: the same write as `recalculateLead`, reached by nobody holding a session,
  * and therefore answering to a different switch. An operator who turns off event-driven recalculation has to
  * stop the jobs already in the queue, not only the ones that would be created next — a kill switch that only
@@ -44,6 +49,9 @@ export const LEADSCORE_OPERATIONS = [
   'eventRecalculate',
   'batchRecalculate',
   'validateModel',
+  'engagementSignals',
+  'thresholdAction',
+  'decaySweep',
   'createModelVersion',
   'previewModel',
   'publishModel',
@@ -75,6 +83,15 @@ const OPERATION_RULES: Readonly<Record<LeadScoreOperation, OperationRule>> = {
   eventRecalculate: { capability: 'recalculate', feature: 'eventRecalculation', writes: true },
   batchRecalculate: { capability: 'batchRecalculate', feature: 'batchRecalculation', writes: true },
   validateModel: { capability: 'modelManage', feature: 'modelAdministration', writes: false },
+  // 19-LS.9: whether an engagement read may happen at all. The capability is the one that *causes* the read
+  // — a recalculation, whoever asked for it — and the switch is the module's own, so turning Marketing
+  // engagement off leaves every other rule scoring exactly as before.
+  engagementSignals: { capability: 'recalculate', feature: 'engagementSignals', writes: false },
+  // A threshold action is the one write in this module that reaches a person: it interrupts the Lead's owner.
+  // It is therefore its own operation, so an installation can score without notifying anybody.
+  thresholdAction: { capability: 'recalculate', feature: 'thresholdNotifications', writes: true },
+  // The decay sweep is a bounded rebuild over Leads whose score depends on the calendar.
+  decaySweep: { capability: 'batchRecalculate', feature: 'engagementSignals', writes: true },
   // A new draft version is a write, and it is the only way to change a published model (plan §5.1).
   createModelVersion: { capability: 'modelManage', feature: 'modelAdministration', writes: true },
   // A preview runs the evaluator over a bounded authorized sample and writes nothing: 19-LS.4 delivered it,

@@ -342,19 +342,64 @@ describe('rule configuration', () => {
     expect(codes(disabled, 'warnings')).toContain('LS_MODEL_HAS_NO_ENABLED_RULES');
   });
 
-  it('refuses a signal source whose read path does not exist in this build', () => {
-    // Plan §0.1-4: no module contract is assumed. The audit found engagement lives in another module's
-    // tables and that Activities cannot reference a Lead at all (gap G2), so 19-LS.9 owns that.
-    for (const signalSource of ['marketingEvents', 'emailLinks']) {
-      const report = validateModel(model(), [rule({ signalSource, lookbackDays: 30 })], SOURCE);
-      expect(codes(report), signalSource).toContain('LS_RULE_SIGNAL_SOURCE_NOT_IMPLEMENTED');
-    }
+  it('bounds the engagement sources it can read and refuses the ones it cannot', () => {
+    // Plan §0.1-4 forbids assuming an integration exists, and 19-LS.9 delivered the one the audit found real:
+    // Marketing Automation's delivery table. An engagement rule is publishable now — and what makes it safe
+    // is the *window*, so the bounds are refused at configuration rather than discovered as a scan.
     expect(codes(validateModel(model(), [rule({ signalSource: 'crm' })], SOURCE))).toContain('LS_RULE_SIGNAL_SOURCE_UNKNOWN');
+
+    const opens = JSON.stringify({ field: 'eventCount', operator: 'gte', value: 2 });
+    const bounded = validateModel(
+      model(),
+      [rule({ signalSource: 'marketingEvents', eventType: 'opened', lookbackDays: 30, condition: opens, dimension: 'engagement' })],
+      SOURCE,
+    );
+    expect(codes(bounded)).toEqual([]);
+    // A decayed engagement rule is the reason 19-LS.9 also owns the sweep.
+    expect(codes(validateModel(model(), [rule({ signalSource: 'marketingEvents', eventType: 'opened', lookbackDays: 30, condition: opens, decayPolicy: 'halfLife', decayHalfLifeDays: 14, dimension: 'engagement' })], SOURCE))).toEqual([]);
+    expect(codes(validateModel(model(), [rule({ signalSource: 'marketingEvents', eventType: 'opened', lookbackDays: 30, condition: opens, decayPolicy: 'halfLife', dimension: 'engagement' })], SOURCE))).toContain('LS_RULE_DECAY_HALF_LIFE_INVALID');
+
+    // No window, an impossible window, and an event type nothing writes.
+    expect(codes(validateModel(model(), [rule({ signalSource: 'marketingEvents', eventType: 'opened', condition: opens })], SOURCE))).toContain('LS_RULE_SIGNAL_WINDOW_INVALID');
+    expect(codes(validateModel(model(), [rule({ signalSource: 'marketingEvents', eventType: 'opened', lookbackDays: 5_000, condition: opens })], SOURCE))).toContain('LS_RULE_SIGNAL_WINDOW_INVALID');
+    expect(codes(validateModel(model(), [rule({ signalSource: 'marketingEvents', eventType: 'ping', lookbackDays: 30, condition: opens })], SOURCE))).toContain('LS_RULE_EVENT_TYPE_UNKNOWN');
+    // `emailLinks` is the clicked slice, so naming another type is a contradiction, not a filter.
+    expect(codes(validateModel(model(), [rule({ signalSource: 'emailLinks', eventType: 'opened', lookbackDays: 30, condition: opens })], SOURCE))).toContain('LS_RULE_EVENT_TYPE_UNKNOWN');
+    // A rule over a source compares that source's metrics. A Lead field, or the other source's metric, is
+    // simply not a field that rule can name — the same refusal, from the same code, that a Lead rule gets for
+    // a field the metadata does not declare.
+    expect(codes(validateModel(model(), [rule({ signalSource: 'marketingEvents', lookbackDays: 30 })], SOURCE))).toContain('LS_CONDITION_FIELD_UNKNOWN');
+    expect(codes(validateModel(model(), [rule({ signalSource: 'marketingEvents', lookbackDays: 30, condition: JSON.stringify({ field: 'clickCount', operator: 'gte', value: 1 }) })], SOURCE))).toContain('LS_CONDITION_FIELD_UNKNOWN');
+
     // A `lead` rule reads the record as stored, so a window or a decay on it is a mistake, not a feature.
     expect(codes(validateModel(model(), [rule({ lookbackDays: 30 })], SOURCE))).toContain('LS_RULE_SIGNAL_WINDOW_INVALID');
     expect(codes(validateModel(model(), [rule({ eventType: 'opened' })], SOURCE))).toContain('LS_RULE_SIGNAL_WINDOW_INVALID');
     expect(codes(validateModel(model(), [rule({ decayPolicy: 'halfLife' })], SOURCE))).toContain('LS_RULE_DECAY_HALF_LIFE_INVALID');
     expect(codes(validateModel(model(), [rule({ decayPolicy: 'exponential' })], SOURCE))).toContain('LS_RULE_DECAY_POLICY_UNKNOWN');
+  });
+
+  it('refuses a model that asks more engagement questions than one score may cost', () => {
+    // Each distinct (source, event types, window) is one bounded read of `marketing_events` per Lead. The
+    // ceiling is a refusal rather than a silent drop, so an author is never told a model published when part
+    // of it was quietly never read (the same choice LS.6 made for the batch ceilings).
+    const opens = JSON.stringify({ field: 'eventCount', operator: 'gte', value: 2 });
+    const plans = (count: number) =>
+      Array.from({ length: count }, (_, index) =>
+        rule({
+          id: `rule-${String(index)}`,
+          reasonCode: `plan_${String(index)}`,
+          priority: (index + 1) * 10,
+          signalSource: 'marketingEvents',
+          eventType: 'opened',
+          // A different window is a different question: two rules with the same one share a single read.
+          lookbackDays: index + 1,
+          condition: opens,
+          dimension: 'engagement',
+        }),
+      );
+    expect(codes(validateModel(model(), plans(20), SOURCE))).toEqual([]);
+    expect(codes(validateModel(model(), [...plans(20), rule({ id: 'rule-extra', reasonCode: 'plan_shared', lookbackDays: 20, eventType: 'opened', signalSource: 'marketingEvents', condition: opens, dimension: 'engagement' })], SOURCE))).toEqual([]);
+    expect(codes(validateModel(model(), plans(21), SOURCE))).toContain('LS_MODEL_SIGNAL_PLANS_LIMIT');
   });
 
   it('refuses a rule that names a different model version than the one being published', () => {

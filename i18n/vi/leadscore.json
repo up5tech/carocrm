@@ -66,6 +66,11 @@
       "model_publish": "Một lần phát hành mô hình",
       "engagement_event": "Một tín hiệu tương tác",
       "decay_sweep": "Một lần quét suy giảm"
+    },
+    "signal": "Tín hiệu · {source} · {events} · {days} ngày qua · {metric} = {value}",
+    "signalState": {
+      "disabled": "Tín hiệu tương tác đang tắt, nên các luật đọc tín hiệu không được đánh giá.",
+      "absent": "Marketing Automation không có trong hệ thống này, nên các luật đọc tương tác không được đánh giá."
     }
   },
   "band": {
@@ -221,7 +226,13 @@
       "saveFailed": "Không lưu được quy tắc.",
       "toggleFailed": "Không đổi được quy tắc.",
       "pendingSignalWarning": "Tín hiệu {source} sẽ có trong 19-LS.9: mô hình dùng nó chưa thể xuất bản cho tới lúc đó.",
-      "grantHint": "Quy tắc đọc các trường {entity} mà mô hình cho phép; có {fields} trường được đưa ra."
+      "grantHint": "Quy tắc đọc các trường {entity} mà mô hình cho phép; có {fields} trường được đưa ra.",
+      "eventTypeHint": "Sự kiện nào được tính. Để trống nghĩa là mọi tương tác thực — riêng việc gửi đi thì không.",
+      "anyEvent": "Mọi tương tác",
+      "lookbackRequired": "Quy tắc tương tác cần cửa sổ nhìn lại.",
+      "halfLifeDays": "Nửa vòng đời (ngày)",
+      "halfLifeDaysHint": "Số ngày để tín hiệu mất một nửa giá trị.",
+      "engagementNote": "Bản đọc có giới hạn: tối đa {count} sự kiện cho mỗi Lead trong cửa sổ, và hồ sơ đồng ý không bao giờ là tín hiệu."
     },
     "builder": {
       "loadingCatalog": "Đang tải danh sách trường và phép so sánh từ server…",
@@ -241,7 +252,8 @@
       "blockedGroup": "Không chấm điểm được",
       "jsonLabel": "Điều kiện đã lưu (chỉ đọc)",
       "jsonEmpty": "Chưa có điều kiện.",
-      "tooManyConditions": "{count} điều kiện; một nhóm tối đa {max}."
+      "tooManyConditions": "{count} điều kiện; một nhóm tối đa {max}.",
+      "noMetrics": "Nguồn này không có chỉ số nào để so sánh."
     },
     "publish": {
       "confirm": "Xuất bản {name} v{version} thành phiên bản không sửa đổi?",
@@ -297,7 +309,15 @@
       "reasons": "Lý do",
       "signature": "Chữ ký",
       "signatureNote": "Hai lần chạy có cùng chữ ký cho cùng một điểm.",
-      "writesFalse": "writes: false"
+      "writesFalse": "writes: false",
+      "signals": "Chưa đọc tương tác ({state}) cho {plans} quy tắc.",
+      "planWindow": "cửa sổ {days} ngày",
+      "signalState": {
+        "available": "Đã đọc tương tác cho mẫu này.",
+        "no_events": "Đã đọc tương tác; không Lead nào trong mẫu có sự kiện phù hợp.",
+        "disabled": "Tín hiệu tương tác đang tắt nên các quy tắc đó bị bỏ qua.",
+        "absent": "Marketing Automation chưa được cài đặt nên các quy tắc đó bị bỏ qua."
+      }
     },
     "operations": {
       "rebuild": "Tính lại điểm",
@@ -357,7 +377,13 @@
       "warnings": "Cấu hình đang có cảnh báo:",
       "ready": "Module đã sẵn sàng.",
       "notReady": "Module chưa sẵn sàng.",
-      "lastChanged": "Sửa lần cuối bởi"
+      "lastChanged": "Sửa lần cuối bởi",
+      "sweep": "Quét phân rã",
+      "sweepHint": "Điểm có tín hiệu phân rã sẽ cũ đi dù không ai sửa Lead, nên lịch sẽ yêu cầu tính lại trong phạm vi giới hạn. Tắt cho tới khi bạn bật.",
+      "sweepTablePresent": "Bảng sự kiện của Marketing Automation có sẵn.",
+      "sweepTableAbsent": "Marketing Automation chưa được cài đặt nên quét cũng không ra điểm mới.",
+      "sweepLimit": "Lead",
+      "sweepChunk": "Mỗi lát"
     },
     "effect": {
       "add": "cộng điểm",
@@ -388,6 +414,26 @@
       "protected": "trường này được bảo vệ",
       "scoring_output": "trường này là đầu ra của chấm điểm",
       "unknown_type": "kiểu trường này không có phép so sánh"
+    },
+    "metric": {
+      "eventCount": "Số tương tác",
+      "lastEventAt": "Tương tác gần nhất",
+      "daysSinceLastEvent": "Số ngày từ tương tác gần nhất",
+      "clickCount": "Số lượt nhấn liên kết",
+      "lastClickedAt": "Lượt nhấn gần nhất",
+      "daysSinceLastClick": "Số ngày từ lượt nhấn gần nhất"
+    },
+    "event": {
+      "delivered": "đã gửi",
+      "opened": "đã mở",
+      "clicked": "đã nhấn",
+      "soft_bounce": "lỗi mềm",
+      "hard_bounce": "lỗi cứng",
+      "complaint": "khiếu nại",
+      "unsubscribed": "hủy đăng ký",
+      "rejected": "bị từ chối",
+      "deferred": "hoãn",
+      "provider_error": "lỗi nhà cung cấp"
     }
   },
   "operator": {

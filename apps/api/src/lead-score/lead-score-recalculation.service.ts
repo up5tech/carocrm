@@ -14,10 +14,11 @@ import { LeadScoreCalculationService } from './lead-score-calculation.service.js
 import { MAX_EVALUATED_RULES, requiredInputFields } from './lead-score-evaluator.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
 import { runAsLeadScoreInternal } from './lead-score-internal.js';
-import { LeadScoreModelService, toModelAttributes, toRuleAttributes } from './lead-score-model.service.js';
+import { LeadScoreModelService, MAX_RULES_PER_MODEL, toModelAttributes, toRuleAttributes } from './lead-score-model.service.js';
 import { LeadScoreRecords } from './lead-score-records.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 import type { ModelAttributes } from './lead-score-validator.js';
+import { isEngagementSource } from './lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.6 — deciding *when* to score, in the background
@@ -112,6 +113,37 @@ export interface BatchStartView {
   readonly runId: string;
   readonly limit: number;
   readonly chunkSize: number;
+}
+
+/**
+ * What a decay sweep did.
+ *
+ * `skipped` is an answer, not a failure: a sweep that found nothing time-dependent to re-score has done its
+ * job by *not* scanning the Lead table, and the schedule should say so rather than report a run of zero.
+ */
+export interface DecaySweepView {
+  readonly started: boolean;
+  readonly skipped: 'disabled' | 'noDecayingRules' | null;
+  readonly runId: string;
+  readonly limit: number;
+  readonly chunkSize: number;
+  readonly job: JobView | null;
+}
+
+/**
+ * Whether one stored rule's answer depends on the calendar.
+ *
+ * A decay policy makes the signal fade with time and a `daysSince…` metric makes it age, so either way the
+ * score is a function of *when* it was computed and a sweep can change it. A plain count inside a fixed
+ * window is not: it only moves when an event arrives, and an event arrival is its own trigger.
+ */
+function timeDependentRule(data: Record<string, unknown>): boolean {
+  if (data['enabled'] === false) return false;
+  const source = typeof data['signalSource'] === 'string' ? data['signalSource'] : 'lead';
+  if (!isEngagementSource(source)) return false;
+  const decay = typeof data['decayPolicy'] === 'string' ? data['decayPolicy'] : 'none';
+  if (decay !== 'none') return true;
+  return typeof data['condition'] === 'string' && data['condition'].includes('daysSince');
 }
 
 @Injectable()
@@ -222,22 +254,71 @@ export class LeadScoreRecalculationService {
 
     const limit = Math.max(1, Math.min(input.limit ?? MAX_BATCH_TOTAL, MAX_BATCH_TOTAL));
     const chunkSize = Math.max(1, Math.min(input.chunkSize ?? MAX_BATCH_CHUNK, MAX_BATCH_CHUNK, limit));
+    return this.enqueueBatch({ active, limit, chunkSize, where: input.where ?? [], source: 'manual_batch' });
+  }
+
+  /**
+   * The decay sweep (19-LS.9, plan §6.4, §10.2).
+   *
+   * A score that decays is a score that goes out of date with nobody editing the Lead, so either the calendar
+   * re-scores it or the number quietly stops meaning anything. This is that clock — and it is deliberately a
+   * **rebuild with a source**, not a second bulk engine: the chunking, the cursor, the per-record error codes,
+   * the ceiling and the cancel that LS.6 already proved are the same ones here, and a second implementation
+   * of bounded bulk work is a second set of bugs.
+   *
+   * Three things keep it honest:
+   *
+   *  - it does nothing unless an operator turned it on *and* the active model has a rule whose answer depends
+   *    on the calendar (a decay policy, or a `daysSince…` metric). Sweeping a static model would rewrite
+   *    nothing and cost a table scan;
+   *  - the sweep inherits the rebuild's capability and switch, because it *is* a rebuild — an installation
+   *    that cannot queue one cannot run this either, and that is the same safety argument;
+   *  - a Lead whose engagement has not moved produces the same evaluation key and is left alone, so a nightly
+   *    sweep does not fill the history with identical rows (LS.5's idempotency, doing the work here).
+   */
+  async decaySweep(): Promise<DecaySweepView> {
+    await this.gate.assertOperation('decaySweep');
+    const configured = (await this.settings.settings()).signals.decaySweep;
+    if (configured.enabled !== true) return { started: false, skipped: 'disabled', runId: '', limit: 0, chunkSize: 0, job: null };
+
+    const active = await this.activeModel();
+    if (active === undefined) throw new ValidationError('No published Lead Score model is active, so there is nothing to sweep.', { state: 'noActiveModel' });
+
+    const rules = await this.store.rulesOfModel(active.model.id, MAX_RULES_PER_MODEL + 1);
+    if (!rules.some((row) => timeDependentRule(row.data))) {
+      return { started: false, skipped: 'noDecayingRules', runId: '', limit: 0, chunkSize: 0, job: null };
+    }
+
+    const limit = Math.max(1, Math.min(configured.limit, MAX_BATCH_TOTAL));
+    const chunkSize = Math.max(1, Math.min(configured.chunkSize, MAX_BATCH_CHUNK, limit));
+    const started = await this.enqueueBatch({ active, limit, chunkSize, where: [], source: 'decay_sweep' });
+    return { started: true, skipped: null, ...started };
+  }
+
+  /** The one enqueue both a manual rebuild and the sweep go through, so a run has one shape. */
+  private async enqueueBatch(input: {
+    active: { model: { id: string; modelVersion: number } };
+    limit: number;
+    chunkSize: number;
+    where: readonly BatchFilterCondition[];
+    source: string;
+  }): Promise<BatchStartView> {
     const runId = randomUUID();
     const job = await this.jobs.enqueue({
       job: LEADSCORE_JOB_NAMES.batchRecalculate,
       data: {
         runId,
-        limit,
-        chunkSize,
+        limit: input.limit,
+        chunkSize: input.chunkSize,
         processed: 0,
         cursor: null,
-        where: input.where ?? [],
-        modelVersion: active.model.modelVersion,
+        where: input.where,
+        modelVersion: input.active.model.modelVersion,
         requestedBy: this.scope.userId ?? null,
-        source: 'manual_batch',
+        source: input.source,
       },
     });
-    return { job, runId, limit, chunkSize };
+    return { job, runId, limit: input.limit, chunkSize: input.chunkSize };
   }
 
   /**

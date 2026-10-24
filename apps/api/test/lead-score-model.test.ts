@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { type AuthenticatedPrincipal, REQUEST_SCOPE_TOKEN, type RequestScope } from '../src/common/request-scope.js';
 import { EntityCrudService } from '../src/entity/entity.service.js';
-import { runAsLeadScoreInternal } from '../src/lead-score/index.js';
+import { DEFAULT_LEADSCORE_SETTINGS, runAsLeadScoreInternal } from '../src/lead-score/index.js';
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
 
@@ -152,8 +152,13 @@ beforeAll(async () => {
   if (admin !== undefined) {
     adminPrincipal = { userId: admin.id, userName: admin.user_name, userType: 'admin', roles: [], teams: [] };
   }
-  // The lifecycle is a feature an administrator switches on (plan §15.2 stages 2–4).
-  expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { modelAdministration: true } })).status).toBe(200);
+  // The lifecycle is a feature an administrator switches on (plan §15.2 stages 2–4) — and every *other*
+  // switch is set explicitly off. The settings document is one row shared by every suite against the
+  // configured database, so a patch that names only what this suite needs would inherit whatever an earlier
+  // suite left armed, and the assertions below about "refused as a switch, not as a phase" would depend on
+  // the order tests ran in.
+  const switches = Object.fromEntries(Object.keys(DEFAULT_LEADSCORE_SETTINGS.features).map((key) => [key, false]));
+  expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { ...switches, modelAdministration: true } })).status).toBe(200);
 }, 240_000);
 
 afterAll(async () => {

@@ -1,7 +1,27 @@
 import type { ConditionFieldPolicy, ConditionIssue, ScoreableField } from './lead-score-condition.js';
 import { parseScoreCondition, PROTECTED_FIELD_NAMES, SCORING_OUTPUT_FIELD_NAMES, validateScoreCondition } from './lead-score-condition.js';
-import type { ModelStatus, RuleDimension, RuleEffect } from './lead-score-vocabulary.js';
-import { DEFAULT_SCORE_SCALE, isScoreBand,MISSING_DATA_POLICIES, MODEL_STATUSES, RULE_DIMENSIONS, RULE_EFFECTS, SCORE_BANDS, SIGNAL_SOURCES } from './lead-score-vocabulary.js';
+import {
+  DEFAULT_SCORE_SCALE,
+  eventTypesFor,
+  isEngagementSource,
+  isScoreBand,
+  MARKETING_EVENT_TYPES,
+  MAX_SIGNAL_LOOKBACK_DAYS,
+  MAX_SIGNAL_PLANS_PER_MODEL,
+  MIN_SIGNAL_LOOKBACK_DAYS,
+  MISSING_DATA_POLICIES,
+  MODEL_STATUSES,
+  type ModelStatus,
+  RULE_DIMENSIONS,
+  RULE_EFFECTS,
+  type RuleDimension,
+  type RuleEffect,
+  SCORE_BANDS,
+  SIGNAL_METRICS,
+  SIGNAL_SOURCES,
+  signalPlans,
+  type SignalSource,
+} from './lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.3 — the model and rule validator
@@ -24,6 +44,20 @@ import { DEFAULT_SCORE_SCALE, isScoreBand,MISSING_DATA_POLICIES, MODEL_STATUSES,
  *    `blockedFieldPaths` are refused at configuration time, before any Lead is evaluated, and the score's
  *    own outputs are refused as inputs so a score cannot feed itself (plan §0.1-6, §10.4).
  */
+
+/**
+ * The condition policy of one engagement source: its metrics, and nothing else.
+ *
+ * A metric carries a platform field type, so it answers exactly the operators that type answers on a Lead
+ * field — one vocabulary for both, which is what keeps the editor's offer and the validator's verdict from
+ * disagreeing about what `eventCount` may be asked. The model's field grant does not apply here: the grant
+ * bounds what a rule may read *of the Lead*, and the source plus its window bounds an engagement read.
+ */
+function metricPolicyFor(source: Exclude<SignalSource, 'lead'>): ConditionFieldPolicy {
+  const metrics = SIGNAL_METRICS[source];
+  const fields = new Map<string, ScoreableField>(metrics.map((metric) => [metric.name, { name: metric.name, type: metric.type }]));
+  return { fields, allowedPaths: metrics.map((metric) => metric.name), blockedPaths: [] };
+}
 
 /** A single rule may not swing more than this many points (plan §6.3 "keep negative rules bounded"). */
 export const MAX_RULE_POINTS = 50;
@@ -121,8 +155,8 @@ export const VALIDATION_CODES = {
   rulePriority: 'LS_RULE_PRIORITY_OUT_OF_BOUNDS',
   ruleMissingDataPolicy: 'LS_RULE_MISSING_DATA_POLICY_UNKNOWN',
   ruleSignalSource: 'LS_RULE_SIGNAL_SOURCE_UNKNOWN',
-  ruleSignalSourcePending: 'LS_RULE_SIGNAL_SOURCE_NOT_IMPLEMENTED',
   ruleSignalWindow: 'LS_RULE_SIGNAL_WINDOW_INVALID',
+  ruleSignalEventType: 'LS_RULE_EVENT_TYPE_UNKNOWN',
   ruleDecayPolicy: 'LS_RULE_DECAY_POLICY_UNKNOWN',
   ruleDecayHalfLife: 'LS_RULE_DECAY_HALF_LIFE_INVALID',
   ruleTargetBand: 'LS_RULE_TARGET_BAND_REQUIRED',
@@ -130,6 +164,7 @@ export const VALIDATION_CODES = {
   ruleModelMismatch: 'LS_RULE_MODEL_VERSION_MISMATCH',
   ruleDisabled: 'LS_RULE_DISABLED',
   modelNoEnabledRules: 'LS_MODEL_HAS_NO_ENABLED_RULES',
+  modelSignalPlansLimit: 'LS_MODEL_SIGNAL_PLANS_LIMIT',
 } as const;
 
 export interface ValidatorFieldSource {
@@ -251,14 +286,27 @@ export function validateModel(
     }
     if (!SIGNAL_SOURCES.includes(rule.signalSource as (typeof SIGNAL_SOURCES)[number])) {
       ruleAt(VALIDATION_CODES.ruleSignalSource, 'signalSource', `"${rule.signalSource}" is not a signal source this module knows.`);
-    } else if (rule.signalSource !== 'lead' && rule.enabled) {
-      // The audit found engagement lives in tables, not events, and there is no Lead→Activity relation,
-      // so a non-Lead source names a read path that does not exist yet (audit §7, gap G2).
-      ruleAt(
-        VALIDATION_CODES.ruleSignalSourcePending,
-        'signalSource',
-        `A \`${rule.signalSource}\` signal is read from another module's tables and is implemented in 19-LS.9. Until then a model that uses it cannot be published — the plan forbids assuming an integration exists (plan §0.1-4).`,
-      );
+    } else if (isEngagementSource(rule.signalSource)) {
+      // 19-LS.9 delivers the read, so the source is publishable — and the *window* is what makes it safe.
+      // An engagement rule without a bounded lookback is an unbounded scan of another module's event log
+      // (plan §6.3, §9.4), so the window is mandatory here rather than defaulted silently.
+      const window = rule.lookbackDays;
+      if (!Number.isInteger(window ?? 0) || (window ?? 0) < MIN_SIGNAL_LOOKBACK_DAYS || (window ?? 0) > MAX_SIGNAL_LOOKBACK_DAYS) {
+        ruleAt(
+          VALIDATION_CODES.ruleSignalWindow,
+          'lookbackDays',
+          `An engagement rule needs a whole-day lookback window between ${MIN_SIGNAL_LOOKBACK_DAYS} and ${MAX_SIGNAL_LOOKBACK_DAYS}; the read is bounded by it, and "all history" is not a window.`,
+        );
+      }
+      const named = (rule.eventType ?? '').trim();
+      if (rule.signalSource === 'emailLinks' && named !== '' && named !== 'clicked') {
+        ruleAt(VALIDATION_CODES.ruleSignalEventType, 'eventType', '`emailLinks` counts link clicks, so its event type is `clicked` or nothing at all.');
+      } else if (named !== '' && !(MARKETING_EVENT_TYPES as readonly string[]).includes(named)) {
+        ruleAt(VALIDATION_CODES.ruleSignalEventType, 'eventType', `"${named}" is not an engagement type this build reads. Expected one of ${MARKETING_EVENT_TYPES.join(', ')}.`);
+      }
+      if (eventTypesFor(rule.signalSource, rule.eventType).length === 0) {
+        ruleAt(VALIDATION_CODES.ruleSignalEventType, 'eventType', 'This rule names an event type that matches nothing, so it could never contribute.');
+      }
     } else if (rule.signalSource === 'lead') {
       if (rule.lookbackDays !== undefined && rule.lookbackDays !== null) {
         ruleAt(VALIDATION_CODES.ruleSignalWindow, 'lookbackDays', 'A lookback window describes an event stream; a `lead` signal reads the record as it stands.');
@@ -286,7 +334,11 @@ export function validateModel(
     const parsed = parseScoreCondition(rule.condition);
     for (const entry of parsed.issues) issues.push(toValidationIssue(entry, rule.id));
     if (parsed.node !== undefined) {
-      for (const entry of validateScoreCondition(parsed.node, policy)) issues.push(toValidationIssue(entry, rule.id));
+      // An engagement rule compares a **metric of its source**, never a Lead field, so it is checked against
+      // that metric set with the same operator matrix. The model's field grant does not apply to a metric —
+      // the grant is about the Lead's own attributes, and the source is what bounds an engagement read.
+      const conditionPolicy = isEngagementSource(rule.signalSource) ? metricPolicyFor(rule.signalSource) : policy;
+      for (const entry of validateScoreCondition(parsed.node, conditionPolicy)) issues.push(toValidationIssue(entry, rule.id));
     }
   }
 
@@ -304,6 +356,12 @@ export function validateModel(
 
   if (enabledRuleCount === 0) {
     at(VALIDATION_CODES.modelNoEnabledRules, 'rules', 'This model has no enabled rule, so every Lead would score the base value. Add a rule or enable one.', 'warning');
+  }
+  // Each distinct engagement question is one bounded read of another module's event log per score. Past the
+  // ceiling the answer is a refusal, not a silent drop of the extra rules — the same rule LS.6 set for the
+  // batch ceilings, so a model never scores under a subset of what its author wrote.
+  if (signalPlans(rules, MAX_SIGNAL_PLANS_PER_MODEL + 1).length > MAX_SIGNAL_PLANS_PER_MODEL) {
+    at(VALIDATION_CODES.modelSignalPlansLimit, 'rules', `A model may ask at most ${String(MAX_SIGNAL_PLANS_PER_MODEL)} distinct engagement questions per score; give the rules the same window and event types to share one read.`);
   }
   if (rules.some((rule) => !rule.enabled)) {
     at(VALIDATION_CODES.ruleDisabled, 'rules', `${rules.filter((rule) => !rule.enabled).length} rule(s) are disabled and will not be evaluated.`, 'warning');

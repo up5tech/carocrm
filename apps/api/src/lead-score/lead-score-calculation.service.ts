@@ -17,8 +17,11 @@ import { MODEL_DRAFT_STATUS, runAsLeadScoreInternal } from './lead-score-interna
 import { LeadScoreModelService, toModelAttributes, toRuleAttributes } from './lead-score-model.service.js';
 import { LeadScoreRecords } from './lead-score-records.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
+import { LeadScoreSignalsService } from './lead-score-signals.js';
+import { LeadScoreThresholdService } from './lead-score-threshold.service.js';
 import type { ModelAttributes, RuleAttributes } from './lead-score-validator.js';
 import type { EvaluationTrigger } from './lead-score-vocabulary.js';
+import { signalPlans } from './lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.5 — computing a score and *keeping* it
@@ -108,7 +111,21 @@ export interface ScoreWriteView {
     readonly unknownReasonCodes: readonly string[];
     readonly skippedReasonCodes: readonly string[];
     readonly errorCodes: readonly string[];
+    /** Why an engagement rule could not be read, or `null` when the model asks for none. */
+    readonly signalState: string | null;
   };
+  /**
+   * What the threshold story did for this score (19-LS.9). Absent when nothing was recorded, because a call
+   * that changed nothing must not claim to have announced something.
+   */
+  readonly threshold?: {
+    readonly bandChanged: boolean;
+    readonly previousBand: string | null;
+    readonly events: readonly string[];
+    readonly notificationId: string | null;
+    readonly auditId: string | null;
+    readonly suppressed: string | null;
+  } | undefined;
 }
 
 @Injectable()
@@ -120,6 +137,8 @@ export class LeadScoreCalculationService {
     @Inject(LeadScoreModelService) private readonly models: LeadScoreModelService,
     @Inject(LeadScoreSettingsService) private readonly settings: LeadScoreSettingsService,
     @Inject(LeadScoreFeatureGate) private readonly gate: LeadScoreFeatureGate,
+    @Inject(LeadScoreSignalsService) private readonly signals: LeadScoreSignalsService,
+    @Inject(LeadScoreThresholdService) private readonly thresholds: LeadScoreThresholdService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
@@ -155,12 +174,26 @@ export class LeadScoreCalculationService {
     const sourceRevision = numberOf(lead['version'], 0);
     const inputsAsOf = instantOf(lead['modifiedAt']);
 
-    const evaluation = scoreLead({ model, rules, fields, snapshot: { recordId: leadId, sourceRevision, inputsAsOf, values } });
+    // The engagement read, when the model asks for one. Two switches decide it, and neither of them can
+    // break the score: the gate answers whether this build may read the table at all, and the reader answers
+    // whether the table is here. Both are reported on the result so an operator sees why a rule skipped.
+    const plans = signalPlans(rules);
+    const engagement = plans.length === 0 ? null : await this.gate.assess('engagementSignals');
     const calculatedAt = new Date().toISOString();
-    const idempotencyKey = evaluationKey(leadId, model, evaluation);
+    const reading = plans.length === 0
+      ? undefined
+      : await this.signals.read({ leadId, plans, evaluatedAt: calculatedAt, enabled: engagement?.admitted === true });
+
+    const evaluation = scoreLead({ model, rules, fields, snapshot: { recordId: leadId, sourceRevision, inputsAsOf, values, ...(reading === undefined ? {} : { signals: reading }) } });
+    const idempotencyKey = evaluationKeyWithSignals(leadId, model, evaluation);
+
+    // Whether a band crossing may interrupt anybody. Assessed once, before any write, so a switch flipped
+    // mid-run cannot make half a batch noisy.
+    const notifyGate = await this.gate.assess('thresholdAction');
+    const notify = notifyGate.admitted;
 
     return runAsLeadScoreInternal(() =>
-      runInTransaction(this.database.db, async () => {
+      runInTransaction(this.database.db, async (tx) => {
         // The key spans the Lead, the model version and a hash of the inputs the engine read, so a row found by
         // it means *this score over this data* is already recorded. That fact decides both halves of the no-op:
         // nothing new is appended, and the projection's own history fields (`scorePreviousValue`,
@@ -174,20 +207,44 @@ export class LeadScoreCalculationService {
           inputsAsOf,
           calculatedAt,
           durationMs: Math.max(0, Date.now() - startedAt),
+          signalState: reading?.state ?? null,
         }));
 
-    const projection = projectionPatch(lead, evaluation, model.id, model.modelVersion, {
+        const projection = projectionPatch(lead, evaluation, model.id, model.modelVersion, {
           calculatedAt,
           inputsAsOf,
           preserveWatermark: prior !== undefined,
         });
 
         if (prior !== undefined && projectionMatches(lead, projection)) {
-          return view(leadId, evaluationId, false, false, model, evaluation, { trigger, idempotencyKey, sourceRevision, inputsAsOf, calculatedAt });
+          return view(leadId, evaluationId, false, false, model, evaluation, { trigger, idempotencyKey, sourceRevision, inputsAsOf, calculatedAt }, reading);
         }
 
         await this.records.update('Lead', leadId, projection);
-        return view(leadId, evaluationId, prior === undefined, true, model, evaluation, { trigger, idempotencyKey, sourceRevision, inputsAsOf, calculatedAt });
+
+        // The threshold story runs in this transaction, so a score that rolls back leaves no event, no
+        // notification and no audit row behind. It is reached only when something was actually recorded or
+        // the projection moved, which is what keeps a duplicate delivery quiet.
+        const threshold = await this.thresholds.afterScore({
+          tx,
+          leadId,
+          leadName: typeof lead['name'] === 'string' ? lead['name'] : '',
+          ownerUserId: typeof lead['assignedUserId'] === 'string' ? lead['assignedUserId'] : null,
+          model,
+          evaluation,
+          evaluationId,
+          previousBand: typeof lead['scoreBand'] === 'string' ? lead['scoreBand'] : null,
+          previousScore: typeof lead['scoreValue'] === 'number' ? lead['scoreValue'] : null,
+          trigger,
+          calculatedAt,
+          correlationId: this.scope.requestId ?? null,
+          notify: notify,
+        });
+
+        return {
+          ...view(leadId, evaluationId, prior === undefined, true, model, evaluation, { trigger, idempotencyKey, sourceRevision, inputsAsOf, calculatedAt }, reading),
+          threshold: { ...threshold, previousBand: typeof lead['scoreBand'] === 'string' ? lead['scoreBand'] : null },
+        };
       }),
     );
   }
@@ -246,7 +303,7 @@ export class LeadScoreCalculationService {
     leadId: string,
     model: ModelAttributes,
     evaluation: ScoreEvaluation,
-    provenance: { trigger: EvaluationTrigger; idempotencyKey: string; sourceRevision: number; inputsAsOf: string | null; calculatedAt: string; durationMs: number },
+    provenance: { trigger: EvaluationTrigger; idempotencyKey: string; sourceRevision: number; inputsAsOf: string | null; calculatedAt: string; durationMs: number; signalState: string | null },
   ): Promise<string> {
     const failed = evaluation.resultState === 'failed';
     const data: Record<string, unknown> = {
@@ -273,6 +330,10 @@ export class LeadScoreCalculationService {
       positiveReasonCodes: JSON.stringify(evaluation.positiveReasonCodes),
       negativeReasonCodes: JSON.stringify(evaluation.negativeReasonCodes),
       skippedReasonCodes: JSON.stringify(evaluation.skippedReasonCodes),
+      // Which engagement state produced this answer (19-LS.9), or null when the model asked for none. A skip
+      // code tells a reader that a rule could not be answered; only this says whether the switch was off, the
+      // table is not in this installation, or the Lead genuinely has no events.
+      signalState: provenance.signalState,
       errorSummary: evaluation.errorCodes.length > 0 ? evaluation.errorCodes.join(',') : null,
       signature: evaluation.signature,
       // Plan §5.3's input watermark, kept on the row rather than inferred from the Lead's `version`: storing a
@@ -377,6 +438,7 @@ function view(
   model: ModelAttributes,
   evaluation: ScoreEvaluation,
   provenance: { trigger: EvaluationTrigger; idempotencyKey: string; sourceRevision: number; inputsAsOf: string | null; calculatedAt: string },
+  reading?: { readonly state: string } | undefined,
 ): ScoreWriteView {
   return {
     leadId,
@@ -401,22 +463,33 @@ function view(
       unknownReasonCodes: evaluation.unknownReasonCodes,
       skippedReasonCodes: evaluation.skippedReasonCodes,
       errorCodes: evaluation.errorCodes,
+      signalState: reading?.state ?? null,
     },
   };
 }
 
 /**
- * A deterministic key over the **inputs**: the Lead, the model version, and the hash of exactly the fields the
- * engine read.
+ * The identity of one evaluation: this Lead, this model version, this data, and — since 19-LS.9 — this
+ * engagement reading.
  *
- * Deliberately not the engine's `signature` (which also covers the outcome) and deliberately not the Lead's
- * `version`: storing a score moves that version, so a key that included it would give the next re-run of
- * unchanged data a *new* key and let a history fill up with identical rows — the exact thing plan §5.4 and
- * §10.2 ask duplicate delivery not to do. A fixed-length digest also keeps the 128-character column honest.
+ * The signal half is appended only when a rule read a signal, so every key computed before this phase still
+ * means the same thing and a re-score of a Lead-field-only model stays the no-op it was. A decayed score is
+ * a *different* score, so it must not be swallowed as a duplicate of yesterday's; that is what the signal
+ * half is for, and why it is not folded into `inputsHash`, which answers a different question (freshness of
+ * the record, not of the calendar).
  */
-function evaluationKey(leadId: string, model: ModelAttributes, evaluation: ScoreEvaluation): string {
+function evaluationKeyWithSignals(leadId: string, model: ModelAttributes, evaluation: ScoreEvaluation): string {
   return createHash('sha256')
-    .update(JSON.stringify({ leadId, modelId: model.id, modelVersion: model.modelVersion, inputsHash: evaluation.inputsHash }))
+    .update(
+      JSON.stringify({
+        leadId,
+        modelId: model.id,
+        modelVersion: model.modelVersion,
+        inputsHash: evaluation.inputsHash,
+        // Absent, not empty, when no rule read a signal: the pre-19-LS.9 key stays byte-identical.
+        ...(evaluation.signalsHash === '' ? {} : { signalsHash: evaluation.signalsHash }),
+      }),
+    )
     .digest('hex');
 }
 

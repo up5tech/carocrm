@@ -1,7 +1,7 @@
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { LEADSCORE_MODEL_PERMISSION_ENTITY, MAX_RULES_PER_MODEL, MAX_VERSIONS_PER_MODEL } from '../src/lead-score/index.js';
+import { DEFAULT_LEADSCORE_SETTINGS, LEADSCORE_MODEL_PERMISSION_ENTITY, MAX_RULES_PER_MODEL, MAX_VERSIONS_PER_MODEL } from '../src/lead-score/index.js';
 import { LeadScoreEditorService } from '../src/lead-score/lead-score-editor.js';
 import { MAX_PREVIEW_SAMPLE } from '../src/lead-score/lead-score-preview.service.js';
 import { MAX_BATCH_CHUNK, MAX_BATCH_TOTAL } from '../src/lead-score/lead-score-recalculation.service.js';
@@ -118,7 +118,11 @@ describe('the editor catalog answers from the metadata the model reads', () => {
     ctx = await bootApi();
     const row = await ctx.database.db.selectFrom('app_settings').select('data').where('name', '=', SETTINGS_ROW).executeTakeFirst();
     previousSettings = row === undefined ? null : JSON.stringify(row.data);
-    expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { modelAdministration: true } })).status).toBe(200);
+    // The editor's own switch on, every other switch explicitly off: the settings document is one row shared
+    // by every suite against the configured database, and a patch that names only what this suite needs would
+    // inherit whatever an earlier suite left armed.
+    const switches = Object.fromEntries(Object.keys(DEFAULT_LEADSCORE_SETTINGS.features).map((key) => [key, false]));
+    expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { ...switches, modelAdministration: true } })).status).toBe(200);
   }, 240_000);
 
   afterAll(async () => {

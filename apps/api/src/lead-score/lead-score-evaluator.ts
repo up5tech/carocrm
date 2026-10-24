@@ -5,7 +5,14 @@ import type { ConditionNode } from '@carocrm/formula';
 import type { ParsedCondition , ScoreableField } from './lead-score-condition.js';
 import { parseScoreCondition,PROTECTED_FIELD_NAMES, SCORING_OUTPUT_FIELD_NAMES  } from './lead-score-condition.js';
 import type { ModelAttributes, RuleAttributes } from './lead-score-validator.js';
-import { isScoreBand, type RuleOutcome, type ScoreBand } from './lead-score-vocabulary.js';
+import {   eventTypesFor,
+  isEngagementSource,
+isScoreBand,   planKeyOf,
+type RuleOutcome, type ScoreBand ,
+  SIGNAL_METRICS,
+  signalLookbackDays,
+  type SignalSourceState,
+} from './lead-score-vocabulary.js';
 import { RULE_DIMENSIONS } from './lead-score-vocabulary.js';
 
 /**
@@ -78,6 +85,10 @@ export const SCORING_OPERATORS: readonly string[] = [
 export const EVALUATION_CODES = {
   ruleDisabled: 'LS_EVALUATION_RULE_DISABLED',
   signalSourceNotReadable: 'LS_EVALUATION_SIGNAL_SOURCE_NOT_READABLE',
+  /** 19-LS.9: the engagement source is switched off or not installed, so the rule answered nothing. */
+  signalSourceUnavailable: 'LS_EVALUATION_SIGNAL_SOURCE_UNAVAILABLE',
+  /** A condition named something that is not a metric of the rule's own source. */
+  signalMetricUnknown: 'LS_EVALUATION_SIGNAL_METRIC_UNKNOWN',
   fieldNotGranted: 'LS_EVALUATION_FIELD_NOT_GRANTED',
   fieldUnknown: 'LS_EVALUATION_FIELD_UNKNOWN',
   conditionUnreadable: 'LS_EVALUATION_CONDITION_UNREADABLE',
@@ -92,6 +103,19 @@ export const EVALUATION_CODES = {
 /** A comparison answer: matched, not matched, or no signal to compare against. */
 type TriState = 'matched' | 'not_matched' | 'unknown';
 
+/**
+ * The engagement reading a scoring run is allowed to use (plan §6.3, §10.1).
+ *
+ * `readings` holds timestamps, never ages or counts: the caller that read the table cannot also decide what
+ * a signal is worth, because that depends on the instant the score is computed for. `evaluatedAt` is that
+ * instant, supplied by the caller, and it is the only time any comparison here sees.
+ */
+export interface SignalEvaluationInput {
+  readonly evaluatedAt: string;
+  readonly state: SignalSourceState;
+  readonly readings: Readonly<Record<string, readonly string[]>>;
+}
+
 export interface ScoreInputSnapshot {
   /** The Lead being scored. Only used for provenance and for the caller's response. */
   readonly recordId: string;
@@ -104,6 +128,14 @@ export interface ScoreInputSnapshot {
    * only ever reads a field a rule names and the model grants.
    */
   readonly values: Readonly<Record<string, unknown>>;
+  /**
+   * The engagement signals, absent when the model asks for none or the source cannot be read.
+   *
+   * Absent is not zero: a rule over a signal it was not given **skips** and leaves coverage, which is what
+   * makes an uninstalled Marketing Automation a configuration fact rather than a scoring failure (plan §1.2,
+   * §16 `19-LS.9`).
+   */
+  readonly signals?: SignalEvaluationInput | undefined;
 }
 
 export interface EvaluationRequest {
@@ -130,6 +162,18 @@ export interface RuleEvaluation {
   readonly code?: string | undefined;
   /** Which field the code is about, so an editor can find it. Never a value. */
   readonly field?: string | undefined;
+  /**
+   * The engagement signal this rule read (19-LS.9): its source, the window it was bounded to and the metric
+   * it compared. Plan §6.5 asks an explanation to name the time window and source of an engagement event,
+   * and a stored breakdown that says only "matched" cannot be argued with.
+   */
+  readonly signal?: {
+    readonly source: string;
+    readonly eventTypes: readonly string[];
+    readonly windowDays: number;
+    readonly metric: string;
+    readonly value: number | string | null;
+  } | undefined;
 }
 
 export interface ScoreEvaluation {
@@ -160,6 +204,17 @@ export interface ScoreEvaluation {
   /** SHA-256 over the canonical configuration, inputs read and outcome (plan §1.2 reproducible results). */
   readonly signature: string;
   readonly inputsHash: string;
+  /**
+   * Hash over the engagement values this run derived, or `''` when no rule read a signal.
+   *
+   * It is deliberately **not** folded into `inputsHash`: that field answers "has this Lead's own data moved",
+   * which is what a stored score's freshness compares. A signal moves with the calendar, so it belongs in the
+   * evaluation's *identity* (a decayed score is a different score and must be recorded, not swallowed as a
+   * duplicate) and not in the record's staleness verdict.
+   */
+  readonly signalsHash: string;
+  /** The signal values actually read, keyed `ruleId:metric`, as provenance for the explanation. */
+  readonly signalValues: Readonly<Record<string, number | string | null>>;
 }
 
 export function scoreLead(request: EvaluationRequest): ScoreEvaluation {
@@ -175,6 +230,8 @@ export function scoreLead(request: EvaluationRequest): ScoreEvaluation {
   }
 
   const readFields = new Set<string>();
+  /** Signal metrics read, namespaced per rule: what `signalsHash` covers and the explanation names. */
+  const signalValues: Record<string, number | string | null> = {};
   const evaluations: RuleEvaluation[] = [];
   let assignedBand: string | undefined;
   /** Every rule the evaluation attempted, in order: the basis for the delta and for coverage. */
@@ -191,12 +248,18 @@ export function scoreLead(request: EvaluationRequest): ScoreEvaluation {
     // A published model cannot contain these (19-LS.3 refuses an unimplemented signal source at publish),
     // but the engine is also called on a draft preview and on a row an older build wrote. Reading the Lead
     // attributes as if the signal were there would invent a meaning for a stored score.
-    if (rule.signalSource !== 'lead') {
+    if (rule.signalSource !== 'lead' && !isEngagementSource(rule.signalSource)) {
       evaluations.push({ ...base, outcome: 'skipped', points: 0, code: EVALUATION_CODES.signalSourceNotReadable });
       continue;
     }
 
     const weight = ruleWeight(rule);
+
+    if (isEngagementSource(rule.signalSource)) {
+      const outcome = evaluateSignalRule(rule, snapshot.signals, evaluations, scored, attempted, codes, signalValues);
+      if (outcome.assignedBand !== undefined) assignedBand = outcome.assignedBand;
+      continue;
+    }
     const parsed = parseScoreCondition(rule.condition);
     if (parsed.node === undefined) {
       codes.push(EVALUATION_CODES.conditionUnreadable);
@@ -263,7 +326,7 @@ export function scoreLead(request: EvaluationRequest): ScoreEvaluation {
   }
 
   const coverage = coverageOf(attempted);
-  const signatureInput = canonicalSignature(model, rules, readFields, snapshot.values, evaluations, score, band, coverage);
+  const signatureInput = canonicalSignature(model, rules, readFields, snapshot.values, signalValues, evaluations, score, band, coverage);
 
   return {
     recordId: snapshot.recordId,
@@ -286,6 +349,8 @@ export function scoreLead(request: EvaluationRequest): ScoreEvaluation {
     readFields: [...readFields].sort(),
     signature: digest(signatureInput),
     inputsHash: scoringInputsHash(readFields, snapshot.values),
+    signalsHash: Object.keys(signalValues).length === 0 ? '' : digest(JSON.stringify(sortedEntries(signalValues))),
+    signalValues,
   };
 }
 
@@ -554,6 +619,146 @@ function storedValue(values: Readonly<Record<string, unknown>>, field: string): 
 }
 
 // ---------------------------------------------------------------------------
+// engagement signals (19-LS.9)
+// ---------------------------------------------------------------------------
+
+/**
+ * Score one rule over its source's metrics.
+ *
+ * Three answers, and the difference between them is the phase's exit criterion:
+ *
+ *  - **skipped** when the source is switched off or not installed. The rule contributes nothing and leaves
+ *    coverage, exactly like a disabled rule, so a Lead still gets a score from the rules that *can* answer —
+ *    "optional signal source failure does not break scoring" is this branch, not a try/catch;
+ *  - **error** when the condition names something that is not a metric of the rule's own source. That is a
+ *    configuration the validator should have refused, so it is reported rather than scored as false;
+ *  - **a three-valued comparison** otherwise, where `eventCount: 0` is a *definite* no-engagement answer and
+ *    `lastEventAt: null` is no answer at all. Absence of events and absence of data are different facts
+ *    (plan §1.2), and the engine already distinguishes them for Lead fields.
+ */
+function evaluateSignalRule(
+  rule: RuleAttributes,
+  reading: SignalEvaluationInput | undefined,
+  evaluations: RuleEvaluation[],
+  scored: RuleEvaluation[],
+  attempted: { outcome: TriState | 'error'; weight: number; counted: boolean }[],
+  codes: string[],
+  signalValues: Record<string, number | string | null>,
+): { assignedBand?: string | undefined } {
+  const base = { ruleId: rule.id, ruleName: rule.name, reasonCode: rule.reasonCode, dimension: rule.dimension, effect: rule.effect };
+  const weight = ruleWeight(rule);
+  const source = rule.signalSource;
+  if (!isEngagementSource(source)) return {};
+
+  if (reading === undefined || reading.state === 'disabled' || reading.state === 'absent') {
+    evaluations.push({ ...base, outcome: 'skipped', points: 0, code: EVALUATION_CODES.signalSourceUnavailable });
+    return {};
+  }
+
+  const parsed = parseScoreCondition(rule.condition);
+  if (parsed.node === undefined) {
+    codes.push(EVALUATION_CODES.conditionUnreadable);
+    const entry: RuleEvaluation = { ...base, outcome: 'error', points: 0, code: EVALUATION_CODES.conditionUnreadable };
+    evaluations.push(entry);
+    scored.push(entry);
+    attempted.push({ outcome: 'error', weight, counted: true });
+    return {};
+  }
+
+  const fields = metricFieldsOf(source);
+  const outside = leafFields(parsed.node).find((name) => !fields.has(name));
+  if (outside !== undefined) {
+    codes.push(EVALUATION_CODES.signalMetricUnknown);
+    const entry: RuleEvaluation = { ...base, outcome: 'error', points: 0, code: EVALUATION_CODES.signalMetricUnknown, field: outside };
+    evaluations.push(entry);
+    scored.push(entry);
+    attempted.push({ outcome: 'error', weight, counted: true });
+    return {};
+  }
+
+  const values = signalMetricValues(rule, source, reading);
+  const read = new Set<string>();
+  const answer = evaluateNode(parsed.node, fields, values, read, codes);
+  for (const name of read) signalValues[`${rule.id}:${name}`] = values[name] ?? null;
+  const compared = leafFields(parsed.node)[0];
+
+  const entry = {
+    ...applyEffect(rule, answer),
+    signal: {
+      source,
+      eventTypes: eventTypesFor(source, rule.eventType),
+      windowDays: signalLookbackDays(rule.lookbackDays),
+      metric: compared ?? '',
+      value: compared === undefined ? null : values[compared] ?? null,
+    },
+  };
+  evaluations.push(entry);
+  scored.push(entry);
+  attempted.push({ outcome: answer, weight, counted: rule.missingDataPolicy !== 'ignore' || answer !== 'unknown' });
+  return answer === 'matched' && rule.effect === 'setBand' ? { assignedBand: rule.targetBand } : {};
+}
+
+/** The metrics as scoring fields, so the same operator matrix and the same comparison code apply. */
+function metricFieldsOf(source: 'marketingEvents' | 'emailLinks'): ReadonlyMap<string, ScoreableField> {
+  return new Map(SIGNAL_METRICS[source].map((metric) => [metric.name, { name: metric.name, type: metric.type }]));
+}
+
+/**
+ * The metric values one rule sees, derived from timestamps and the instant being scored.
+ *
+ * Decay is applied **to the signal** and never to a stored row (plan §6.4): a linear rule fades an event to
+ * zero across its own window, a half-life rule halves it every `decayHalfLifeDays`. Summing the per-event
+ * weights rather than decaying the total is what makes "three opens, one of them long ago" answer
+ * differently from "three opens today", which is the whole reason decay exists.
+ */
+function signalMetricValues(
+  rule: RuleAttributes,
+  source: 'marketingEvents' | 'emailLinks',
+  reading: SignalEvaluationInput,
+): Record<string, number | string | null> {
+  const [countMetric, lastMetric, daysMetric] = SIGNAL_METRICS[source];
+  const windowDays = signalLookbackDays(rule.lookbackDays);
+  const key = planKeyOf(source, eventTypesFor(source, rule.eventType), windowDays);
+  const now = Date.parse(reading.evaluatedAt);
+  const windowMs = windowDays * 86_400_000;
+
+  let decayed = 0;
+  let newest: number | undefined;
+  for (const stamp of reading.readings[key] ?? []) {
+    const at = Date.parse(stamp);
+    if (!Number.isFinite(at) || !Number.isFinite(now)) continue;
+    const ageMs = now - at;
+    // A future-dated provider row is treated as just happened: its age cannot be negative, and dropping it
+    // would let a clock skew silently delete a signal the Lead really has.
+    if (ageMs > windowMs) continue;
+    const ageDays = Math.max(0, ageMs) / 86_400_000;
+    decayed += decayWeight(rule.decayPolicy, ageDays, windowDays, rule.decayHalfLifeDays);
+    if (newest === undefined || at > newest) newest = at;
+  }
+
+  return {
+    [countMetric?.name ?? 'eventCount']: round4(decayed),
+    [lastMetric?.name ?? 'lastEventAt']: newest === undefined ? null : new Date(newest).toISOString(),
+    [daysMetric?.name ?? 'daysSinceLastEvent']: newest === undefined ? null : Math.floor(Math.max(0, now - newest) / 86_400_000),
+  };
+}
+
+function decayWeight(policy: string | undefined, ageDays: number, windowDays: number, halfLifeDays: number | undefined): number {
+  if (policy === 'linear') return Math.max(0, 1 - ageDays / Math.max(1, windowDays));
+  if (policy === 'halfLife') return Math.pow(0.5, ageDays / Math.max(1, halfLifeDays ?? 30));
+  return 1;
+}
+
+/** Four decimals, like coverage: a decayed count is a real number and must not wobble with float noise. */
+function round4(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+
+function sortedEntries(values: Readonly<Record<string, number | string | null>>): Record<string, number | string | null> {
+  return Object.fromEntries(Object.entries(values).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+// ---------------------------------------------------------------------------
 // field grant (re-checked at evaluation time)
 // ---------------------------------------------------------------------------
 
@@ -781,6 +986,7 @@ function canonicalSignature(
   rules: readonly RuleAttributes[],
   readFields: ReadonlySet<string>,
   values: Readonly<Record<string, unknown>>,
+  signalValues: Readonly<Record<string, number | string | null>>,
   evaluations: readonly RuleEvaluation[],
   score: number,
   band: ScoreBand,
@@ -810,6 +1016,9 @@ function canonicalSignature(
       condition: canonicalCondition(parseScoreCondition(rule.condition).node),
     })),
     inputs: canonicalInputs(readFields, values),
+    // Present only when a rule actually read an engagement signal, so every score computed before this
+    // phase — and every score of a model that reads none — keeps the signature it has always had.
+    signals: Object.keys(signalValues).length === 0 ? null : sortedEntries(signalValues),
     outcome: { score, band, coverage, rules: evaluations.map((entry) => [entry.reasonCode, entry.outcome, entry.points, entry.code ?? null]) },
   });
 }
@@ -883,6 +1092,8 @@ function emptyEvaluation(
     positiveReasonCodes: [],
     negativeReasonCodes: [],
     unknownReasonCodes: codesFor(evaluations, 'unknown'),
+    signalsHash: '',
+    signalValues: {},
     skippedReasonCodes: codesFor(evaluations, 'skipped'),
     errorCodes: dedupe(codes),
     readFields: [...readFields].sort(),

@@ -126,6 +126,22 @@ export class LeadScoreController {
   }
 
   /**
+   * Worker entry: the decay sweep (19-LS.9).
+   *
+   * A scheduled job, so no user is in scope and the same two doors apply as to every other worker route:
+   * the shared `x-worker-secret` and the module's own service authority. The route decides nothing about
+   * scoring — it asks the recalculation service whether a sweep is switched on and worth running, and that
+   * service answers with a rebuild it already knows how to chunk, cap and cancel.
+   */
+  @Public()
+  @HttpCode(200)
+  @Post('action/work/decay-sweep')
+  async workDecaySweep(@Headers('x-worker-secret') secret?: string) {
+    this.assertWorkerSecret(secret);
+    return runAsLeadScoreSystem(this.scope, 'decay-sweep', () => this.recalculation.decaySweep());
+  }
+
+  /**
    * Ask whether an operation would be admitted, without performing it.
    *
    * This is the gate's contract made observable: a UI, an integration test and an operator get the

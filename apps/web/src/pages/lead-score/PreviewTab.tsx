@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client.js';
 import type { LeadScoreEditorCatalog, LeadScoreModelRecord, LeadScorePreviewResult, LeadScorePreviewView } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
-import { bandLabel, errorText, statusLabel } from './shared.js';
+import { bandLabel, errorText, named, sourceLabel, statusLabel } from './shared.js';
 
 /**
  * Phase 19-LS.8 — preview a model against a sample and change nothing
@@ -160,6 +160,15 @@ export function PreviewTab({
                 <Statistic label={t('leadscore.admin.preview.range')} value={view.distribution.min === null || view.distribution.max === null ? '—' : `${String(view.distribution.min)}–${String(view.distribution.max)}`} />
               </Col>
             </Row>
+
+            {view.signals !== undefined && view.signals.plans.length > 0 ? (
+              <Alert
+                type={view.signals.state === 'available' ? 'info' : 'warning'}
+                showIcon
+                message={named(`leadscore.admin.preview.signalState.${view.signals.state}`, t('leadscore.admin.preview.signals', { state: view.signals.state, plans: String(view.signals.plans.length) }))}
+                description={view.signals.plans.map((plan) => `${sourceLabel(plan.source)} · ${plan.eventTypes.map((eventType) => named(`leadscore.admin.event.${eventType}`, eventType)).join(', ')} · ${t('leadscore.admin.preview.planWindow', { days: String(plan.lookbackDays) })}`).join('  |  ')}
+              />
+            ) : null}
 
             {view.sample.notReadable > 0 ? (
               <Alert type="warning" showIcon message={t('leadscore.admin.preview.notReadable', { count: String(view.sample.notReadable) })} description={t('leadscore.admin.preview.notReadableHint')} />

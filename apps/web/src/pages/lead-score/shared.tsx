@@ -163,8 +163,7 @@ function summarizeNode(value: unknown, catalog: LeadScoreEditorCatalog | undefin
   if (typeof value !== 'object' || value === null) return '';
   const node = value as Record<string, unknown>;
   if (typeof node['field'] === 'string' && typeof node['operator'] === 'string') {
-    const field = catalog?.fields.find((entry) => entry.name === node['field']);
-    const label = field?.label ?? node['field'];
+    const label = fieldOf(catalog, node['field'])?.label ?? metricLabel(catalog, node['field']) ?? node['field'];
     const operator = operatorLabel(node['operator']);
     if ('value' in node) return `${label} ${operator} ${valueText(node['value'])}`;
     return `${label} ${operator}`;
@@ -189,6 +188,40 @@ function valueText(value: unknown): string {
   if (Array.isArray(value)) return value.map((entry) => String(entry)).join(', ');
   if (typeof value === 'boolean') return value ? t('leadscore.admin.true') : t('leadscore.admin.false');
   return String(value ?? '');
+}
+
+/**
+ * The metrics of one engagement source as editor fields (19-LS.9).
+ *
+ * A rule whose source is not the Lead compares a metric of that source — `eventCount`, `lastEventAt`,
+ * `daysSinceLastEvent` — and the server sends the metric with the type and the operator list it answers, so
+ * the same builder, the same operator matrix and the same value control serve both kinds of rule. Nothing is
+ * invented here: an operator the module does not offer for that type cannot be chosen.
+ */
+export function metricFields(catalog: LeadScoreEditorCatalog | undefined, source: string): LeadScoreEditorField[] {
+  const metrics = catalog?.signals.metrics[source] ?? [];
+  return metrics.map((metric) => ({
+    name: metric.name,
+    label: named(`leadscore.admin.metric.${metric.name}`, metric.name),
+    type: metric.type,
+    operators: metric.operators,
+    valueKind: metric.type === 'datetime' ? 'datetime' : 'number',
+    scorable: true,
+  }));
+}
+
+/**
+ * The label for a name that is not a Lead field but a metric an engagement rule reads (19-LS.9).
+ *
+ * Only a metric the server actually offers gets a friendly name — an unrecognised part of a stored condition
+ * is shown raw, so a reader can see what is there rather than being given a label for something the module
+ * never named.
+ */
+function metricLabel(catalog: LeadScoreEditorCatalog | undefined, name: string): string | undefined {
+  const metric = Object.values(catalog?.signals.metrics ?? {})
+    .flat()
+    .find((entry) => entry.name === name);
+  return metric === undefined ? undefined : named(`leadscore.admin.metric.${metric.name}`, metric.name);
 }
 
 /** The operators of one field, or an empty list when the field is not offered at all. */

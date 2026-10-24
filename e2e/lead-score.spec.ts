@@ -102,8 +102,10 @@ async function createScoredLead(request: APIRequestContext, token: string): Prom
 
 async function dropFixture(request: APIRequestContext, token: string, fixture: Fixture): Promise<void> {
   const headers = { authorization: `Bearer ${token}` };
-  // The module switch first: an e2e run must not leave Lead Score armed against the development database.
-  await request.fetch('/api/v1/LeadScore/action/settings', { method: 'POST', headers, data: { enabled: false, scoring: { activeModelId: null } } });
+  // The module document first, and the whole thing: an e2e run must not leave Lead Score armed against the
+  // development database, and a feature flag left behind is just as armed as the switch. `settingsBefore` is
+  // the row as this run found it (see `beforeAll`).
+  await request.fetch('/api/v1/LeadScore/action/settings', { method: 'POST', headers, data: settingsRestore });
   // Rules, then the model they belong to, then the Lead. The generic API soft-deletes, which is what every
   // other spec in this directory leaves behind; the run marker keeps them identifiable in the database.
   const rules = await request.fetch(`/api/v1/LeadScoreModel/${fixture.modelId}/rules`, { headers });
@@ -134,12 +136,21 @@ async function noHorizontalOverflow(page: Page) {
 let token = '';
 let previousLocale: string | null = null;
 let fixture: Fixture | undefined;
+/** The settings document as this run found it, replayed verbatim on teardown. */
+let settingsRestore: Record<string, unknown> = { enabled: false, features: {}, scoring: { activeModelId: null } };
 
 test.beforeAll(async ({ request }) => {
   token = await apiLogin(request);
   const me = await api(request, token, 'GET', '/AppUser/me');
   previousLocale = (me['locale'] as string | null | undefined) ?? null;
   await api(request, token, 'PATCH', '/AppUser/me', { locale: null });
+  const settings = await api(request, token, 'GET', '/LeadScore/action/settings');
+  const found = (settings['settings'] ?? {}) as Record<string, unknown>;
+  settingsRestore = {
+    enabled: found['enabled'] ?? false,
+    features: found['features'] ?? {},
+    scoring: found['scoring'] ?? { activeModelId: null },
+  };
   fixture = await createScoredLead(request, token);
 });
 

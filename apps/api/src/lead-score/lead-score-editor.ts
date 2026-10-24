@@ -23,15 +23,21 @@ import { MAX_BATCH_CHUNK, MAX_BATCH_TOTAL } from './lead-score-recalculation.ser
 import type { ModelAttributes } from './lead-score-validator.js';
 import {
   DECAY_POLICIES,
+  DEFAULT_SIGNAL_LOOKBACK_DAYS,
   EVALUATION_RESULT_STATES,
   EVALUATION_STATUSES,
   EVALUATION_TRIGGERS,
+  MARKETING_EVENT_TYPES,
+  MAX_SIGNAL_EVENTS_PER_PLAN,
+  MAX_SIGNAL_LOOKBACK_DAYS,
+  MIN_SIGNAL_LOOKBACK_DAYS,
   MISSING_DATA_POLICIES,
   MODEL_STATUSES,
   RULE_DIMENSIONS,
   RULE_EFFECTS,
   RULE_OUTCOMES,
   SCORE_BANDS,
+  SIGNAL_METRICS,
   SIGNAL_SOURCES,
 } from './lead-score-vocabulary.js';
 
@@ -117,6 +123,20 @@ export interface EditorCatalog {
     readonly evaluationTriggers: readonly string[];
     readonly decayPolicies: readonly string[];
   };
+  /**
+   * What an engagement rule can read (19-LS.9).
+   *
+   * A rule whose source is not `lead` compares a **metric of that source**, never a Lead field, so the editor
+   * needs the metric set with its type — and the same `OPERATORS_BY_TYPE` matrix then says what each metric
+   * can answer. The window bounds travel with it because the validator refuses a rule without one.
+   */
+  readonly signals: {
+    readonly sources: readonly string[];
+    readonly eventTypes: readonly string[];
+    readonly lookback: { readonly min: number; readonly max: number; readonly default: number };
+    readonly maxEventsPerPlan: number;
+    readonly metrics: Readonly<Record<string, readonly { readonly name: string; readonly type: string; readonly operators: readonly string[] }[]>>;
+  };
   readonly limits: { readonly maxRulesPerModel: number; readonly maxVersionsPerModel: number; readonly maxPreviewSample: number; readonly maxBatchChunk: number; readonly maxBatchTotal: number };
   /** The model the catalog was asked for, when it was asked for one. */
   readonly model?: {
@@ -174,6 +194,18 @@ export class LeadScoreEditorService {
         evaluationResultStates: [...EVALUATION_RESULT_STATES],
         evaluationTriggers: [...EVALUATION_TRIGGERS],
         decayPolicies: [...DECAY_POLICIES],
+      },
+      signals: {
+        sources: [...SIGNAL_SOURCES],
+        eventTypes: [...MARKETING_EVENT_TYPES],
+        lookback: { min: MIN_SIGNAL_LOOKBACK_DAYS, max: MAX_SIGNAL_LOOKBACK_DAYS, default: DEFAULT_SIGNAL_LOOKBACK_DAYS },
+        maxEventsPerPlan: MAX_SIGNAL_EVENTS_PER_PLAN,
+        metrics: Object.fromEntries(
+          (Object.keys(SIGNAL_METRICS) as (keyof typeof SIGNAL_METRICS)[]).map((source) => [
+            source,
+            SIGNAL_METRICS[source].map((metric) => ({ name: metric.name, type: metric.type, operators: [...(OPERATORS_BY_TYPE[metric.type] ?? [])] })),
+          ]),
+        ),
       },
       limits: {
         maxRulesPerModel: MAX_RULES_PER_MODEL,

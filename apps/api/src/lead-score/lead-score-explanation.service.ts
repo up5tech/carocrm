@@ -49,6 +49,14 @@ export interface ScoreBreakdownEntry {
   readonly assignedBand?: string | undefined;
   readonly code?: string | undefined;
   readonly field?: string | undefined;
+  /** The engagement signal a rule read, as stored by the engine (plan §6.5). No Lead value is in it. */
+  readonly signal?: {
+    readonly source: string;
+    readonly eventTypes: readonly string[];
+    readonly windowDays: number;
+    readonly metric: string;
+    readonly value: number | string | null;
+  } | undefined;
 }
 
 /** One affordance the server is willing to honour, and the stable code explaining a refusal. */
@@ -97,6 +105,8 @@ export interface ScoreReadView {
     };
     readonly breakdown: readonly ScoreBreakdownEntry[];
     readonly errorCodes: readonly string[];
+    /** Which engagement state produced this evaluation (19-LS.9), or null when the model asked for none. */
+    readonly signalState: string | null;
   };
   readonly actions: ScoreActions;
 }
@@ -125,6 +135,7 @@ export interface ScoreHistoryView {
     readonly correlationId: string | null;
     readonly jobId: string | null;
     readonly errorSummary: string | null;
+    readonly signalState: string | null;
     readonly breakdown: readonly ScoreBreakdownEntry[];
   }[];
 }
@@ -210,6 +221,7 @@ export class LeadScoreExplanationService {
         },
         breakdown,
         errorCodes: splitCodes(stringOf(row?.data['errorSummary'])),
+        signalState: stringOf(row?.data['signalState']),
       },
       actions,
     };
@@ -278,6 +290,7 @@ export class LeadScoreExplanationService {
         correlationId: stringOf(row.data['correlationId']),
         jobId: stringOf(row.data['jobId']),
         errorSummary: stringOf(row.data['errorSummary']),
+        signalState: stringOf(row.data['signalState']),
         breakdown: breakdownOf(row, this.i18n, locale),
       })),
     };
@@ -390,6 +403,7 @@ function breakdownOf(row: LeadScoreRow, i18n: I18nService, locale: string): Scor
     ...(entry.assignedBand !== undefined ? { assignedBand: entry.assignedBand } : {}),
     ...(entry.code !== undefined ? { code: entry.code } : {}),
     ...(entry.field !== undefined ? { field: entry.field } : {}),
+    ...(entry.signal !== undefined ? { signal: entry.signal } : {}),
   }));
 }
 
@@ -407,6 +421,7 @@ interface StoredRuleOutcome {
   readonly assignedBand?: string | undefined;
   readonly code?: string | undefined;
   readonly field?: string | undefined;
+  readonly signal?: ScoreBreakdownEntry['signal'];
 }
 
 function parseRuleResults(raw: unknown): StoredRuleOutcome[] {
@@ -423,6 +438,7 @@ function parseRuleResults(raw: unknown): StoredRuleOutcome[] {
     const record = entry as Record<string, unknown>;
     const reasonCode = typeof record.reasonCode === 'string' ? record.reasonCode : '';
     if (reasonCode === '') return [];
+    const signal = storedSignal(record.signal);
     return [
       {
         reasonCode,
@@ -433,9 +449,29 @@ function parseRuleResults(raw: unknown): StoredRuleOutcome[] {
         ...(typeof record.assignedBand === 'string' ? { assignedBand: record.assignedBand } : {}),
         ...(typeof record.code === 'string' ? { code: record.code } : {}),
         ...(typeof record.field === 'string' ? { field: record.field } : {}),
+        ...(signal === undefined ? {} : { signal }),
       },
     ];
   });
+}
+
+/**
+ * The engagement provenance the engine stored (19-LS.9), accepted only in the shape it writes it.
+ *
+ * Read as data, like the rest of the row: a block written by an older build, or a rule that never read a
+ * signal, simply has no provenance to show rather than a malformed one.
+ */
+function storedSignal(value: unknown): ScoreBreakdownEntry['signal'] | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw['source'] !== 'string' || typeof raw['metric'] !== 'string' || typeof raw['windowDays'] !== 'number') return undefined;
+  return {
+    source: raw['source'],
+    eventTypes: Array.isArray(raw['eventTypes']) ? raw['eventTypes'].map((entry) => String(entry)) : [],
+    windowDays: raw['windowDays'],
+    metric: raw['metric'],
+    value: typeof raw['value'] === 'number' && Number.isFinite(raw['value']) ? raw['value'] : null,
+  };
 }
 
 function codesFrom(raw: unknown): string[] {

@@ -5066,6 +5066,11 @@ function leadScoreEntities(): MetadataSeedEntry[] {
           positiveReasonCodes: { type: 'text', inDetail: true },
           negativeReasonCodes: { type: 'text', inDetail: true },
           skippedReasonCodes: { type: 'text', inDetail: true },
+          // Which of the four engagement states produced this evaluation (19-LS.9): `available`, `no_events`,
+          // `disabled` or `absent`, and null when the model asked for no signal at all. Stored because a skip
+          // code alone cannot tell an operator whether the switch was off or this installation simply has no
+          // Marketing Automation — two different fixes for the same-looking score.
+          signalState: { type: 'text', inDetail: true },
           errorSummary: { type: 'text', inDetail: true },
           // SHA-256 over the canonical evaluation input and result: the reproducibility check plan §1.2
           // asks for, and how a rebuild can prove it changed nothing.
@@ -5089,7 +5094,7 @@ function leadScoreEntities(): MetadataSeedEntry[] {
               type: 'detail',
               panels: [
                 { name: 'result', label: 'Result', position: 0, fields: ['leadId', 'modelId', 'modelVersion', 'scoreValue', 'qualificationBand', 'evaluationStatus', 'coverage', 'calculatedAt', 'inputsAsOf', 'sourceRevision', 'trigger', 'resultState'] },
-                { name: 'explanation', label: 'Explanation', position: 10, fields: ['ruleResults', 'positiveReasonCodes', 'negativeReasonCodes', 'skippedReasonCodes', 'errorSummary'] },
+                { name: 'explanation', label: 'Explanation', position: 10, fields: ['ruleResults', 'positiveReasonCodes', 'negativeReasonCodes', 'skippedReasonCodes', 'signalState', 'errorSummary'] },
                 { name: 'run', label: 'Run', position: 20, fields: ['signature', 'inputsHash', 'correlationId', 'jobId', 'idempotencyKey', 'durationMs'] },
               ],
             },

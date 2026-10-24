@@ -66,6 +66,11 @@
       "model_publish": "A model publication",
       "engagement_event": "An engagement signal",
       "decay_sweep": "A decay sweep"
+    },
+    "signal": "Signal · {source} · {events} · last {days} days · {metric} = {value}",
+    "signalState": {
+      "disabled": "Engagement signals are switched off, so the rules that read them were not evaluated.",
+      "absent": "Marketing Automation is not installed here, so the rules that read engagement were not evaluated."
     }
   },
   "band": {
@@ -221,7 +226,13 @@
       "saveFailed": "The rule could not be saved.",
       "toggleFailed": "The rule could not be changed.",
       "pendingSignalWarning": "A {source} signal is implemented in 19-LS.9: a model that uses one cannot be published until then.",
-      "grantHint": "The rule reads {entity} fields the model grants; {fields} field(s) are offered."
+      "grantHint": "The rule reads {entity} fields the model grants; {fields} field(s) are offered.",
+      "eventTypeHint": "Which delivery event counts. Left empty, any real engagement counts — a delivery alone never does.",
+      "anyEvent": "Any engagement",
+      "lookbackRequired": "An engagement rule needs a lookback window.",
+      "halfLifeDays": "Half-life (days)",
+      "halfLifeDaysHint": "How many days it takes a signal to lose half its weight.",
+      "engagementNote": "The read is bounded: at most {count} events per Lead per window, and no consent record is ever a signal."
     },
     "builder": {
       "loadingCatalog": "Loading the field and operator list from the server…",
@@ -241,7 +252,8 @@
       "blockedGroup": "Cannot be scored",
       "jsonLabel": "The stored condition (read only)",
       "jsonEmpty": "No condition yet.",
-      "tooManyConditions": "{count} conditions; a group holds at most {max}."
+      "tooManyConditions": "{count} conditions; a group holds at most {max}.",
+      "noMetrics": "This source exposes no metric the model may compare."
     },
     "publish": {
       "confirm": "Publish {name} v{version} as an immutable version?",
@@ -297,7 +309,15 @@
       "reasons": "Reasons",
       "signature": "Signature",
       "signatureNote": "Two runs with the same signature produced the same score.",
-      "writesFalse": "writes: false"
+      "writesFalse": "writes: false",
+      "signals": "Engagement was not read ({state}) for {plans} rule(s).",
+      "planWindow": "{days}-day window",
+      "signalState": {
+        "available": "Engagement was read for this sample.",
+        "no_events": "Engagement was read; none of these Leads has a matching event.",
+        "disabled": "Engagement signals are switched off, so those rules skipped.",
+        "absent": "Marketing Automation is not installed here, so those rules skipped."
+      }
     },
     "operations": {
       "rebuild": "Rebuild scores",
@@ -357,7 +377,13 @@
       "warnings": "The settings carry warnings:",
       "ready": "The module is ready.",
       "notReady": "The module is not ready yet.",
-      "lastChanged": "Last changed by"
+      "lastChanged": "Last changed by",
+      "sweep": "Decay sweep",
+      "sweepHint": "A score whose signal decays goes stale with nobody editing the Lead, so the calendar asks for a bounded rebuild. Off until you turn it on.",
+      "sweepTablePresent": "Marketing Automation's event table is present.",
+      "sweepTableAbsent": "Marketing Automation is not installed, so a sweep would score nothing new.",
+      "sweepLimit": "Leads",
+      "sweepChunk": "Per chunk"
     },
     "effect": {
       "add": "adds points",
@@ -388,6 +414,26 @@
       "protected": "this field is protected",
       "scoring_output": "this field is a scoring output",
       "unknown_type": "this field type has no scoring operator"
+    },
+    "metric": {
+      "eventCount": "Engagement count",
+      "lastEventAt": "Most recent engagement",
+      "daysSinceLastEvent": "Days since the last engagement",
+      "clickCount": "Link-click count",
+      "lastClickedAt": "Most recent click",
+      "daysSinceLastClick": "Days since the last click"
+    },
+    "event": {
+      "delivered": "delivered",
+      "opened": "opened",
+      "clicked": "clicked",
+      "soft_bounce": "soft bounce",
+      "hard_bounce": "hard bounce",
+      "complaint": "complaint",
+      "unsubscribed": "unsubscribed",
+      "rejected": "rejected",
+      "deferred": "deferred",
+      "provider_error": "provider error"
     }
   },
   "operator": {

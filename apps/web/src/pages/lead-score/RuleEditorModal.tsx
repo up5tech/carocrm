@@ -5,7 +5,7 @@ import { api } from '../../api/client.js';
 import type { LeadScoreEditorCatalog, LeadScoreRuleRecord } from '../../api/types.js';
 import { t } from '../../state/i18n.js';
 import { ConditionBuilder } from './ConditionBuilder.js';
-import { bandLabel, dimensionLabel, effectLabel, errorText, named, policyLabel, selectableFields, sourceLabel } from './shared.js';
+import { bandLabel, dimensionLabel, effectLabel, errorText, metricFields, named, policyLabel, selectableFields, sourceLabel } from './shared.js';
 
 /**
  * Phase 19-LS.8 — one rule, authored as a form
@@ -102,7 +102,10 @@ export function RuleEditorModal({
     }
   }
 
-  const isLeadSignal = signalSource === undefined || signalSource === 'lead';
+  const decayPolicy = Form.useWatch('decayPolicy', form);
+  const engagement = signalSource === 'marketingEvents' || signalSource === 'emailLinks';
+  const metrics = engagement ? metricFields(catalog, String(signalSource)) : [];
+  const lookback = catalog?.signals.lookback;
 
   return (
     <Modal
@@ -177,7 +180,9 @@ export function RuleEditorModal({
         {/* The condition is authored here and nowhere else: the JSON the field stores is produced by the
             builder, so the administrator never has to write a tree by hand (plan §16 `19-LS.8`). */}
         <Form.Item name="condition" rules={[{ required: true, message: t('leadscore.admin.rule.conditionRequired') }]}>
-          <ConditionBuilder catalog={catalog} />
+          {/* An engagement rule compares a metric of its own source, never a Lead field: the builder is
+              handed that source's metric list, and the operator list of each metric comes from the server. */}
+          <ConditionBuilder catalog={catalog} {...(engagement ? { fields: metrics } : {})} />
         </Form.Item>
 
         <Row gutter={12} style={{ marginTop: 8 }}>
@@ -198,23 +203,39 @@ export function RuleEditorModal({
           </Col>
         </Row>
 
-        {isLeadSignal ? null : (
+        {engagement ? (
           <Row gutter={12}>
             <Col xs={12} md={8}>
-              <Form.Item name="eventType" label={t('leadscore.admin.rule.eventType')}>
-                <Input maxLength={64} />
+              {/* The event type is a choice from the vocabulary Marketing Automation writes, not free text:
+                  a rule that named a type nothing emits would read as a signal that never arrives. */}
+              <Form.Item name="eventType" label={t('leadscore.admin.rule.eventType')} tooltip={t('leadscore.admin.rule.eventTypeHint')}>
+                <Select
+                  allowClear
+                  placeholder={t('leadscore.admin.rule.anyEvent')}
+                  options={(catalog?.signals.eventTypes ?? []).map((entry) => ({ value: entry, label: named(`leadscore.admin.event.${entry}`, entry) }))}
+                />
               </Form.Item>
             </Col>
             <Col xs={12} md={8}>
-              <Form.Item name="lookbackDays" label={t('leadscore.admin.rule.lookbackDays')} tooltip={t('leadscore.admin.rule.lookbackDaysHint')}>
-                <InputNumber style={{ width: '100%' }} min={1} max={365} precision={0} />
+              <Form.Item
+                name="lookbackDays"
+                label={t('leadscore.admin.rule.lookbackDays')}
+                tooltip={t('leadscore.admin.rule.lookbackDaysHint', { min: String(lookback?.min ?? 1), max: String(lookback?.max ?? 365) })}
+                rules={[{ required: true, message: t('leadscore.admin.rule.lookbackRequired') }]}
+              >
+                <InputNumber style={{ width: '100%' }} min={lookback?.min ?? 1} max={lookback?.max ?? 365} precision={0} />
+              </Form.Item>
+            </Col>
+            <Col xs={12} md={8}>
+              <Form.Item name="decayHalfLifeDays" label={t('leadscore.admin.rule.halfLifeDays')} tooltip={t('leadscore.admin.rule.halfLifeDaysHint')}>
+                <InputNumber style={{ width: '100%' }} min={1} max={3650} precision={0} disabled={decayPolicy !== 'halfLife'} />
               </Form.Item>
             </Col>
           </Row>
-        )}
+        ) : null}
 
-        {signalSource !== undefined && signalSource !== 'lead' ? (
-          <Alert type="warning" showIcon message={t('leadscore.admin.rule.pendingSignalWarning', { source: sourceLabel(String(signalSource)) })} />
+        {engagement ? (
+          <Alert type="info" showIcon message={t('leadscore.admin.rule.engagementNote', { count: String(catalog?.signals.maxEventsPerPlan ?? 200) })} />
         ) : null}
 
         {catalog === undefined ? null : (

@@ -39,10 +39,13 @@ import { type DomainEventBus, subscribeToMutation } from '../events/domain-event
 /** Job names, matching `LEADSCORE_JOB_NAMES` in `apps/api/src/lead-score/lead-score-recalculation.service.ts`. */
 export const RECALCULATE_LEAD_JOB = 'leadScore.recalculateLead';
 export const BATCH_RECALCULATE_JOB = 'leadScore.batchRecalculate';
+/** The decay sweep (19-LS.9): the calendar re-scoring Leads whose score depends on the calendar. */
+export const DECAY_SWEEP_JOB = 'leadScore.decaySweep';
 
 export const LEAD_CHANGED_PATH = '/api/v1/LeadScore/action/work/lead-changed';
 export const RECALCULATE_PATH = '/api/v1/LeadScore/action/work/recalculate';
 export const BATCH_CHUNK_PATH = '/api/v1/LeadScore/action/work/recalculate-batch-chunk';
+export const DECAY_SWEEP_PATH = '/api/v1/LeadScore/action/work/decay-sweep';
 
 /** One worker→API call is bounded by the chunk it belongs to, not by how many Leads the database holds. */
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -284,10 +287,47 @@ export function batchRecalculateJob(deps: LeadScoreJobDeps): JobHandler {
   };
 }
 
-/** Registers both Lead Score jobs in the worker's job registry. */
+/**
+ * The decay sweep job (19-LS.9, plan §6.4, §10.2).
+ *
+ * The job decides nothing: it asks the API whether a sweep is switched on and whether the active model has a
+ * rule whose answer moves with time, and the API answers either with a rebuild it queued or with a reason it
+ * skipped. That is deliberate — the switches, the ceilings and the model live in the API, so turning the
+ * sweep off needs no worker redeploy, exactly like the event path LS.6 chose for the same reason.
+ */
+export function decaySweepJob(deps: LeadScoreJobDeps): JobHandler {
+  return async (context: JobContext) => {
+    context.progress(10, 'asking the API whether a sweep is due');
+    const response = await call(deps, DECAY_SWEEP_PATH, {});
+    const outcome = classify(response);
+    if (outcome === 'retry') throw new Error(failureMessage('Lead Score decay sweep', response));
+    if (outcome === 'refused' || outcome === 'missing') {
+      deps.log.warn({ status: response.status, code: response.code }, 'lead score decay sweep refused');
+      return { status: 'completed', message: `Sweep refused: ${String(response.code ?? `HTTP ${String(response.status)}`)}` };
+    }
+
+    const view = response.payload as Record<string, unknown>;
+    context.progress(100, 'sweep decided');
+    if (view['started'] !== true) {
+      // A sweep that found nothing to do is a successful run, and the message says which of the two reasons
+      // it was — an operator reading /admin/jobs should not have to open the code to learn that.
+      return { status: 'completed', message: `Sweep skipped: ${String(view['skipped'] ?? 'nothing to do')}`, result: { skipped: view['skipped'] ?? null } };
+    }
+    const runId = typeof view['runId'] === 'string' ? view['runId'] : '';
+    deps.log.info({ runId, limit: view['limit'] }, 'lead score decay sweep queued a rebuild');
+    return {
+      status: 'completed',
+      message: `Sweep queued a rebuild of up to ${String(view['limit'] ?? 0)} Lead(s)`,
+      result: { runId, limit: view['limit'] ?? null, chunkSize: view['chunkSize'] ?? null },
+    };
+  };
+}
+
+/** Registers the Lead Score jobs in the worker's job registry. */
 export function registerLeadScoreJobs(registry: JobRegistry, deps: LeadScoreJobDeps): void {
   registry.register(RECALCULATE_LEAD_JOB, recalculateLeadJob(deps));
   registry.register(BATCH_RECALCULATE_JOB, batchRecalculateJob(deps));
+  registry.register(DECAY_SWEEP_JOB, decaySweepJob(deps));
 }
 
 /**

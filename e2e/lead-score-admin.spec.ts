@@ -41,8 +41,8 @@ async function api(request: APIRequestContext, method: 'GET' | 'POST' | 'PATCH' 
 }
 
 /** The model rows this run owns, newest last. */
-async function readModels(request: APIRequestContext): Promise<{ id: string; status: string; modelVersion: number }[]> {
-  const where = encodeURIComponent(JSON.stringify([{ name: MODEL_NAME }]));
+async function readModels(request: APIRequestContext, name: string = MODEL_NAME): Promise<{ id: string; status: string; modelVersion: number }[]> {
+  const where = encodeURIComponent(JSON.stringify([{ name }]));
   const list = (await api(request, 'GET', `/LeadScoreModel?where=${where}&orderBy=modelVersion&maxSize=20`)) as { list?: { id: string; status: string; modelVersion: number }[] };
   return list.list ?? [];
 }
@@ -67,6 +67,11 @@ async function pick(page: Page, control: Locator, text: string, type = true): Pr
     .filter({ hasText: text })
     .first()
     .click();
+}
+
+/** One labelled control of an antd form, so a picker can be found by the word above it. */
+function formItem(page: Page, label: string): Locator {
+  return page.locator('.ant-form-item').filter({ has: page.locator('label', { hasText: new RegExp(`^${label}$`) }) }).first();
 }
 
 /** One band row of the model form: its picker and its two range inputs. */
@@ -96,7 +101,7 @@ test.beforeAll(async ({ request }) => {
   // command whose switch is off, which is the point of the gate rather than an obstacle here.
   await api(request, 'POST', '/LeadScore/action/settings', {
     enabled: true,
-    features: { modelAdministration: true, scoringPreview: true, scoring: true, manualRecalculation: true, scoreExplanation: true },
+    features: { modelAdministration: true, scoringPreview: true, scoring: true, manualRecalculation: true, scoreExplanation: true, engagementSignals: true },
     scoring: { activeModelId: null },
   });
   // Labels are asserted in English, so the reader's own preference is pinned for the run and put back.
@@ -118,22 +123,36 @@ test.beforeAll(async ({ request }) => {
 test.afterAll(async ({ request }) => {
   const headers = { authorization: `Bearer ${token}` };
   await request.fetch('/api/v1/AppUser/me', { method: 'PATCH', headers, data: { locale: localeBefore } });
-  const debounce = ((settingsBefore['settings'] as Record<string, unknown> | undefined)?.['scoring'] as Record<string, unknown> | undefined)?.['debounceSeconds'];
+  // Put the whole document back, not just the switch. The settings row is one document shared by every suite
+  // and every developer's dev server against this database, and a spec that leaves its own feature flags
+  // armed makes an unrelated API suite's "fresh installation" assertion depend on the order things ran in.
+  const found = settingsBefore['settings'] as Record<string, unknown> | undefined;
+  const foundScoring = (found?.['scoring'] ?? {}) as Record<string, unknown>;
   await request.fetch('/api/v1/LeadScore/action/settings', {
     method: 'POST',
     headers,
-    data: { enabled: false, scoring: { activeModelId: null, debounceSeconds: typeof debounce === 'number' ? debounce : 60 } },
+    data: {
+      enabled: found?.['enabled'] ?? false,
+      features: found?.['features'] ?? {},
+      scoring: { activeModelId: foundScoring['activeModelId'] ?? null, debounceSeconds: foundScoring['debounceSeconds'] ?? 60 },
+      ...(found?.['signals'] === undefined ? {} : { signals: found['signals'] }),
+    },
   });
 
-  for (const model of await readModels(request)) {
-    // Rules first: the LS.2 guard refuses an edit or delete of a frozen version's rules through the record
-    // API, so this is also a check that a published version really is the thing the guard protects.
-    const rules = await request.fetch(`/api/v1/LeadScoreRule?where=${encodeURIComponent(JSON.stringify([{ modelId: model.id }]))}`, { headers });
-    if (rules.ok()) {
-      const list = ((await rules.json()) as { list?: { id: string }[] }).list ?? [];
-      for (const rule of list) await request.fetch(`/api/v1/LeadScoreRule/${rule.id}`, { method: 'DELETE', headers });
+  // A model row is `removable: false` in the LS.2 metadata — a published version is a fact history names, so
+  // the record API refuses even a draft. The deletes below therefore express the run's intent and are allowed
+  // to be refused; the operator sweeps this run's ids afterwards, which the completion report records.
+  for (const name of [MODEL_NAME, `${RUN} engagement`]) {
+    for (const model of await readModels(request, name)) {
+      // Rules first: the LS.2 guard refuses an edit or delete of a frozen version's rules through the record
+      // API, so this is also a check that a published version really is the thing the guard protects.
+      const rules = await request.fetch(`/api/v1/LeadScoreRule?where=${encodeURIComponent(JSON.stringify([{ modelId: model.id }]))}`, { headers });
+      if (rules.ok()) {
+        const list = ((await rules.json()) as { list?: { id: string }[] }).list ?? [];
+        for (const rule of list) await request.fetch(`/api/v1/LeadScoreRule/${rule.id}`, { method: 'DELETE', headers });
+      }
+      await request.fetch(`/api/v1/LeadScoreModel/${model.id}`, { method: 'DELETE', headers });
     }
-    await request.fetch(`/api/v1/LeadScoreModel/${model.id}`, { method: 'DELETE', headers });
   }
   for (const lead of leads) await request.fetch(`/api/v1/Lead/${lead.id}`, { method: 'DELETE', headers });
 });
@@ -269,6 +288,84 @@ test.describe('the scoring model workspace (19-LS.8)', () => {
     // The rule set came along unchanged, which is what makes the new draft worth publishing forward.
     await expect(diff.getByText('Every rule of this reason code is identical')).toBeVisible({ timeout: 20_000 });
     await diff.getByRole('button', { name: 'Close' }).click();
+  });
+
+  test('an engagement rule is authored from the same form (19-LS.9)', async ({ page }) => {
+    // 19-LS.9's half of the LS.8 criterion: a rule over another module's engagement is still a form, not a
+    // JSON tree typed by hand — and what it may compare is the metric list the server sent, not a Lead field.
+    const draft = await api(page.request, 'POST', '/LeadScoreModel', {
+      name: `${RUN} engagement`,
+      modelVersion: 1,
+      scaleMin: 0,
+      scaleMax: 100,
+      baseScore: 10,
+      scoreFloor: 0,
+      scoreCeiling: 100,
+      qualificationBands: JSON.stringify([{ band: 'Cold', min: 0, max: 49 }, { band: 'Hot', min: 50, max: 100 }]),
+    });
+    const draftId = String(draft['id']);
+
+    await login(page);
+    await page.goto('/lead-score');
+    await page.getByRole('row').filter({ hasText: `${RUN} engagement` }).click();
+    const card = page.locator('.carocrm-model-detail');
+    await card.getByRole('button', { name: 'Add rule' }).click();
+    const modal = page.getByRole('dialog').filter({ hasText: 'New rule' });
+    await modal.getByLabel('Name').fill(`${RUN} opened twice`);
+    await modal.getByLabel('Reason code').fill(`e2e_ls9_opened_${RUN.slice(-6).toLowerCase()}`);
+    await pick(page, formItem(page, 'Signal source').locator('.ant-select'), 'Marketing events', false);
+
+    // The window becomes mandatory, and the metric list replaces the Lead's fields in the builder.
+    await expect(modal.getByText('Lookback (days)')).toBeVisible();
+    await modal.getByRole('button', { name: 'Add condition' }).click();
+    const leaf = modal.locator('.carocrm-condition-leaf').first();
+    await pick(page, leaf.locator('.ant-select').first(), 'Engagement count');
+    await pick(page, leaf.locator('.ant-select').nth(1), 'at least');
+    await leaf.locator('.ant-input-number-input').fill('2');
+
+    // The window is not decoration: an engagement rule without a bounded lookback is an unbounded read of
+    // another module's event log, so the form refuses to save one — and the validator says the same thing
+    // about a rule that reached the database by another route.
+    await modal.getByRole('button', { name: 'Save' }).click();
+    await expect(modal.getByText('An engagement rule needs a lookback window.')).toBeVisible();
+    await modal.locator('.ant-form-item').filter({ hasText: 'Lookback (days)' }).first().locator('input').fill('30');
+    await modal.getByRole('button', { name: 'Save' }).click();
+    await expect(modal).toHaveCount(0);
+    await expect(card.getByText('Engagement count at least 2')).toBeVisible();
+
+    await card.getByRole('button', { name: 'Validate' }).click();
+    await expect(card.getByText('The model is valid.')).toBeVisible({ timeout: 20_000 });
+
+    // What the form produced is the module's own DSL: a metric of the signal, a bounded window, and no Lead
+    // field anywhere — which is exactly what the validator above then accepted.
+    const listed = await api(page.request, 'GET', `/LeadScoreRule?where=${encodeURIComponent(JSON.stringify([{ modelId: draftId }]))}`);
+    const rule = (listed['list'] as Record<string, unknown>[])[0];
+    expect(String(rule['signalSource'])).toBe('marketingEvents');
+    expect(Number(rule['lookbackDays'])).toBe(30);
+    expect(String(rule['condition'])).toContain('eventCount');
+
+    // The preview then says what it did with that signal. "Read the table, found nothing" and "could not read
+    // the table" have to be different sentences on the screen, or a cold Lead and an uninstalled module look
+    // identical to the person deciding whether to publish.
+    await page.goto('/lead-score?tab=preview');
+    const panel = page.locator('.ant-card').filter({ hasText: 'Preview a model' }).first();
+    await pick(page, panel.locator('.ant-select').first(), `${RUN} engagement`);
+    await panel.getByText('Choose Leads').click();
+    const picker = panel.locator('.ant-select').nth(1);
+    for (const lead of leads) await pick(page, picker, lead.name);
+    await panel.getByRole('button', { name: 'Run preview' }).click();
+    await expect(panel.getByText('Nothing was written.')).toBeVisible({ timeout: 20_000 });
+    await expect(panel.getByText('Engagement was read; none of these Leads has a matching event.')).toBeVisible();
+  });
+
+  test('the settings screen carries the decay sweep', async ({ page }) => {
+    await login(page);
+    await page.goto('/lead-score?tab=settings');
+    const panel = page.locator('.ant-card').filter({ hasText: 'Module settings' });
+    await expect(panel.getByText('Decay sweep')).toBeVisible();
+    await expect(panel.getByText(/bounded rebuild/i)).toBeVisible();
+    await expect(panel.getByRole('spinbutton', { name: 'Leads' })).toBeVisible();
+    await expect(panel.getByRole('spinbutton', { name: 'Per chunk' })).toBeVisible();
   });
 
   test('the workspace fits a phone and a keyboard', async ({ page }) => {

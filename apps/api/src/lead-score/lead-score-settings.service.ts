@@ -72,6 +72,39 @@ const ScoringSectionSchema = z
   })
   .strict();
 
+/**
+ * How the decay sweep runs (19-LS.9, plan §6.4, §10.2).
+ *
+ * A score that decays is a score that goes out of date without anybody editing the Lead, so the calendar has
+ * to re-score it or the number quietly stops meaning anything. The sweep is that clock — and, like every
+ * other bulk path in this module, it is off until an operator turns it on and bounded when they do.
+ *
+ * These bounds are a guardrail, not the enforcement: `lead-score-recalculation.service.ts` clamps and refuses
+ * against its own ceilings (`MAX_BATCH_CHUNK`, `MAX_BATCH_TOTAL`), which are the numbers that actually limit
+ * a chunk of work. Restating them here would only let the two drift.
+ */
+const DecaySweepSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /** Leads one sweep may re-score. The sweep is a rebuild, so the rebuild's ceiling applies on top. */
+    limit: z.number().int().min(1).max(2_000).default(200),
+    /** Leads per job, and therefore per worker→API call. */
+    chunkSize: z.number().int().min(1).max(50).default(25),
+  })
+  .strict()
+  .default({});
+
+/**
+ * The engagement-signal policy. Separate from `scoring` because it belongs to the source, not to the model:
+ * a Lead's own fields never need a sweep, and a decaying engagement signal always does.
+ */
+const SignalsSectionSchema = z
+  .object({
+    decaySweep: DecaySweepSchema,
+  })
+  .strict()
+  .default({});
+
 export const LeadScoreSettingsSchema = z
   .object({
     /**
@@ -82,6 +115,7 @@ export const LeadScoreSettingsSchema = z
     enabled: z.boolean().default(false),
     features: FeatureFlagsSchema.default({}),
     scoring: ScoringSectionSchema.default({}),
+    signals: SignalsSectionSchema.default({}),
   })
   .strict();
 

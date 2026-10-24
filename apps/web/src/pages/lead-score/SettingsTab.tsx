@@ -41,6 +41,7 @@ export function SettingsTab({
   const [features, setFeatures] = useState<Record<string, boolean>>({});
   const [activeModelId, setActiveModelId] = useState<string | null>(null);
   const [debounce, setDebounce] = useState(60);
+  const [sweep, setSweep] = useState({ enabled: false, limit: 200, chunkSize: 25 });
 
   useEffect(() => {
     if (settings === undefined) return;
@@ -48,6 +49,7 @@ export function SettingsTab({
     setFeatures({ ...settings.settings.features });
     setActiveModelId(settings.settings.scoring.activeModelId);
     setDebounce(settings.settings.scoring.debounceSeconds);
+    setSweep(settings.settings.signals?.decaySweep ?? sweep);
   }, [settings]);
 
   const save = useMutation({
@@ -57,6 +59,7 @@ export function SettingsTab({
         // Only what changed: the server deep-merges the patch, so an untouched key keeps its stored value.
         features: changedFeatures(),
         scoring: { activeModelId, debounceSeconds: debounce },
+        signals: { decaySweep: sweep },
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['leadScore'] }),
     onError: () => undefined,
@@ -71,7 +74,15 @@ export function SettingsTab({
     return out;
   }
 
-  const dirty = enabled !== (settings?.settings.enabled === true) || Object.keys(changedFeatures()).length > 0 || activeModelId !== (settings?.settings.scoring.activeModelId ?? null) || debounce !== (settings?.settings.scoring.debounceSeconds ?? 60);
+  const storedSweep = settings?.settings.signals?.decaySweep;
+  const dirty =
+    enabled !== (settings?.settings.enabled === true) ||
+    Object.keys(changedFeatures()).length > 0 ||
+    activeModelId !== (settings?.settings.scoring.activeModelId ?? null) ||
+    debounce !== (settings?.settings.scoring.debounceSeconds ?? 60) ||
+    sweep.enabled !== (storedSweep?.enabled ?? false) ||
+    sweep.limit !== (storedSweep?.limit ?? 200) ||
+    sweep.chunkSize !== (storedSweep?.chunkSize ?? 25);
 
   if (settings === undefined) return <Card title={t('leadscore.admin.settings.title')}><Alert type="warning" showIcon message={t('leadscore.admin.settings.notAvailable')} /></Card>;
 
@@ -185,6 +196,23 @@ export function SettingsTab({
           control={<InputNumber min={0} max={900} value={debounce} disabled={!canWrite} precision={0} style={{ width: 148 }} aria-label={t('leadscore.admin.settings.debounce')} onChange={(next) => setDebounce(Number(next ?? 0))} />}
         />
 
+        <Row2
+          label={t('leadscore.admin.settings.sweep')}
+          hint={t('leadscore.admin.settings.sweepHint')}
+          control={
+            <Space wrap size={12} align="center">
+              <Space size={6} align="center">
+                <Switch size="small" checked={sweep.enabled} disabled={!canWrite} aria-label={t('leadscore.admin.settings.sweep')} onChange={(next) => setSweep({ ...sweep, enabled: next })} />
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {health === undefined || health.signals.eventTablePresent ? t('leadscore.admin.settings.sweepTablePresent') : t('leadscore.admin.settings.sweepTableAbsent')}
+                </Typography.Text>
+              </Space>
+              <LabeledNumber label={t('leadscore.admin.settings.sweepLimit')} value={sweep.limit} min={1} max={2000} disabled={!canWrite} onChange={(limit) => setSweep({ ...sweep, limit })} />
+              <LabeledNumber label={t('leadscore.admin.settings.sweepChunk')} value={sweep.chunkSize} min={1} max={50} disabled={!canWrite} onChange={(chunkSize) => setSweep({ ...sweep, chunkSize })} />
+            </Space>
+          }
+        />
+
         <div>
           <Typography.Title level={5}>{t('leadscore.admin.settings.features')}</Typography.Title>
           <Table size="small" rowKey="key" dataSource={rows} columns={columns} pagination={false} />
@@ -209,6 +237,32 @@ export function SettingsTab({
         {canWrite ? null : <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('leadscore.admin.settings.needRight')}</Typography.Text>}
       </Space>
     </Card>
+  );
+}
+
+/** A bounded number with its range named, so an out-of-range value is not a surprise save error. */
+function LabeledNumber({
+  label,
+  value,
+  min,
+  max,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  disabled: boolean;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <Space direction="vertical" size={2}>
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        {`${label} (${String(min)}–${String(max)})`}
+      </Typography.Text>
+      <InputNumber size="small" min={min} max={max} value={value} disabled={disabled} precision={0} style={{ width: 132 }} aria-label={label} onChange={(next) => onChange(Number(next ?? min))} />
+    </Space>
   );
 }
 

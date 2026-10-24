@@ -95,6 +95,9 @@ interface RunOptions {
   readonly values?: Record<string, unknown>;
   readonly sourceRevision?: number;
   readonly inputsAsOf?: string;
+  /** The engagement reading, as 19-LS.9's reader supplies it. */
+  readonly signals?: { evaluatedAt: string; state: 'available' | 'disabled' | 'absent' | 'no_events'; readings: Record<string, readonly string[]> };
+  readonly now?: string;
 }
 
 function run(rules: readonly RuleAttributes[], options: RunOptions = {}, modelOverrides: Partial<ModelAttributes> = {}): ScoreEvaluation {
@@ -107,6 +110,7 @@ function run(rules: readonly RuleAttributes[], options: RunOptions = {}, modelOv
       sourceRevision: options.sourceRevision ?? 7,
       inputsAsOf: options.inputsAsOf ?? '2026-10-24T09:00:00.000Z',
       values: options.values ?? {},
+      ...(options.signals === undefined ? {} : { signals: options.signals }),
     },
   });
 }
@@ -117,6 +121,11 @@ function outcome(rules: readonly RuleAttributes[], values: Record<string, unknow
 
 function points(rules: readonly RuleAttributes[], values: Record<string, unknown>, modelOverrides: Partial<ModelAttributes> = {}): number {
   return run(rules, { values }, modelOverrides).ruleEvaluations[0]?.points ?? 0;
+}
+
+/** Rules run in priority order, so an assertion names the reason code it means. */
+function entryFor(result: ScoreEvaluation, reasonCode: string): ScoreEvaluation['ruleEvaluations'][number] | undefined {
+  return result.ruleEvaluations.find((entry) => entry.reasonCode === reasonCode);
 }
 
 function condition(node: unknown, overrides: Partial<RuleAttributes> = {}): RuleAttributes {
@@ -530,16 +539,28 @@ describe('a rule that cannot be evaluated is an outcome, not an exception (plan 
     expect(result.ruleEvaluations.map((entry) => entry.outcome)).toEqual(['matched', 'error']);
   });
 
-  it('skips a signal source this build cannot read instead of inventing it (audit §7, gap G2)', () => {
-    const result = run([condition({ field: 'company', operator: 'isNotEmpty' }, { signalSource: 'marketingEvents', lookbackDays: 30 })], { values: { company: 'Acme' } });
-    // Skipping is not failing: the model asked nothing it could answer, so the Lead rests at the base score
-    // with coverage 0 and the reason visible — a draft preview must not look like a server error.
-    expect(result.resultState).toBe('success');
-    expect(result.scoreValue).toBe(10);
-    expect(result.coverage).toBe(0);
-    expect(result.ruleEvaluations[0]?.outcome).toBe('skipped');
-    expect(result.ruleEvaluations[0]?.code).toBe(EVALUATION_CODES.signalSourceNotReadable);
-    expect(result.skippedReasonCodes).toEqual(['company_known']);
+  it('skips an engagement rule the reading could not serve, and still scores the rest (plan §16 `19-LS.9`)', () => {
+    // The exit criterion is one sentence, and this is its first half: an optional signal source that is
+    // switched off, absent or simply not supplied must not break the score. The rule leaves coverage rather
+    // than inventing a zero, and the Lead rests at the base with the reason visible.
+    const engagement = condition({ field: 'eventCount', operator: 'gte', value: 2 }, { signalSource: 'marketingEvents', eventType: 'opened', lookbackDays: 30, reasonCode: 'opened_twice' });
+    for (const state of ['disabled', 'absent'] as const) {
+      const result = run([engagement, rule()], { values: { company: 'Acme' }, signals: { evaluatedAt: NOW, state, readings: {} } });
+      const entry = entryFor(result, 'opened_twice');
+      expect(result.resultState, state).toBe('success');
+      expect(result.scoreValue, state).toBe(20);
+      expect(entry?.outcome, state).toBe('skipped');
+      expect(entry?.code, state).toBe(EVALUATION_CODES.signalSourceUnavailable);
+      // A skip leaves the denominator, so coverage says "the one rule that could answer, did".
+      expect(result.coverage, state).toBe(1);
+    }
+    // No reading at all — a caller that never asked the reader — answers the same way, not as an error.
+    const absent = run([engagement, rule()], { values: { company: 'Acme' } });
+    expect(entryFor(absent, 'opened_twice')?.code).toBe(EVALUATION_CODES.signalSourceUnavailable);
+    expect(absent.scoreValue).toBe(20);
+    // A source this module has no read for at all stays the older, different answer.
+    const unknown = run([condition({ field: 'company', operator: 'isNotEmpty' }, { signalSource: 'activities' })], { values: { company: 'Acme' } });
+    expect(unknown.ruleEvaluations[0]?.code).toBe(EVALUATION_CODES.signalSourceNotReadable);
   });
 
   it('records an unreadable stored value as unknown with a code', () => {
@@ -566,5 +587,94 @@ describe('the projection a recalculation must fetch', () => {
     const rules = [condition({ all: [{ field: 'industry', operator: 'equals', value: 'Software' }, { field: 'company', operator: 'isNotEmpty' }] })];
     const result = run(rules, { values: { industry: 'Software', company: 'Acme' } });
     expect(requiredInputFields(model(), rules, FIELDS)).toEqual(result.readFields);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 19-LS.9 — engagement signals, decay and the calendar
+// ---------------------------------------------------------------------------
+
+const NOW = '2026-10-24T09:00:00.000Z';
+const OPEN_PLAN_KEY = 'marketingEvents|opened|30';
+
+function engagementRule(overrides: Partial<RuleAttributes> = {}): RuleAttributes {
+  return rule({
+    name: 'Opened twice',
+    reasonCode: 'opened_twice',
+    dimension: 'engagement',
+    signalSource: 'marketingEvents',
+    eventType: 'opened',
+    lookbackDays: 30,
+    condition: JSON.stringify({ field: 'eventCount', operator: 'gte', value: 2 }),
+    points: 15,
+    ...overrides,
+  });
+}
+
+function reading(events: readonly string[], overrides: Partial<{ state: 'available' | 'no_events'; evaluatedAt: string }> = {}): RunOptions {
+  return { signals: { evaluatedAt: overrides.evaluatedAt ?? NOW, state: overrides.state ?? 'available', readings: { [OPEN_PLAN_KEY]: events } } };
+}
+
+describe('the engagement signal (19-LS.9)', () => {
+  it('counts events inside the rule window and answers the comparison', () => {
+    const two = run([engagementRule()], reading(['2026-10-20T09:00:00.000Z', '2026-10-21T09:00:00.000Z']));
+    expect(two.ruleEvaluations[0]?.outcome).toBe('matched');
+    expect(two.scoreValue).toBe(25);
+    const one = run([engagementRule()], reading(['2026-10-20T09:00:00.000Z']));
+    expect(one.ruleEvaluations[0]?.outcome).toBe('not_matched');
+    expect(one.scoreValue).toBe(10);
+  });
+
+  it('treats an empty window as a definite zero, and a missing metric as no answer', () => {
+    // "No opens in 30 days" is a fact about this Lead, so `eventCount gte 2` answers not_matched.
+    const none = run([engagementRule()], reading([]));
+    expect(none.ruleEvaluations[0]?.outcome).toBe('not_matched');
+    // `daysSinceLastEvent` with nothing to be since is not zero days — it is no answer (plan §1.2).
+    const days = run([engagementRule({ condition: JSON.stringify({ field: 'daysSinceLastEvent', operator: 'lte', value: 7 }) })], reading([]));
+    expect(days.ruleEvaluations[0]?.outcome).toBe('unknown');
+    expect(days.coverage).toBe(0);
+  });
+
+  it('applies decay to the signal, never to a stored row (plan §6.4)', () => {
+    const old = ['2026-09-25T09:00:00.000Z'];
+    const fresh = ['2026-10-23T09:00:00.000Z'];
+    const halfLife = engagementRule({ decayPolicy: 'halfLife', decayHalfLifeDays: 14, condition: JSON.stringify({ field: 'eventCount', operator: 'gte', value: 0.6 }) });
+    // One event two half-lives old is worth a quarter of one; the same event yesterday is worth almost one.
+    expect(run([halfLife], reading(old)).ruleEvaluations[0]?.outcome).toBe('not_matched');
+    expect(run([halfLife], reading(fresh)).ruleEvaluations[0]?.outcome).toBe('matched');
+    const linear = engagementRule({ decayPolicy: 'linear', condition: JSON.stringify({ field: 'eventCount', operator: 'gte', value: 0.5 }) });
+    // Linear fades across the rule's own window: 29 days into 30 is nearly nothing, 1 day in is nearly one.
+    expect(run([linear], reading(old)).ruleEvaluations[0]?.outcome).toBe('not_matched');
+    expect(run([linear], reading(fresh)).ruleEvaluations[0]?.outcome).toBe('matched');
+    // Undecayed, both events are simply one each.
+    expect(run([engagementRule({ condition: JSON.stringify({ field: 'eventCount', operator: 'gte', value: 1 }) })], reading(old)).scoreValue).toBe(25);
+  });
+
+  it('is reproducible, and the calendar is part of the identity of a decayed score', () => {
+    const events = ['2026-10-01T09:00:00.000Z', '2026-10-20T09:00:00.000Z'];
+    const decayed = engagementRule({ decayPolicy: 'halfLife', decayHalfLifeDays: 14 });
+    const first = run([decayed], reading(events));
+    expect(run([decayed], reading(events))).toEqual(first);
+    // A later sweep sees the same events as older, so it is a *different* evaluation — which is why the
+    // signal half belongs in the idempotency key and not in the record's freshness watermark.
+    const later = run([decayed], reading([...events], { evaluatedAt: '2026-12-20T09:00:00.000Z' }));
+    expect(later.signalsHash).not.toBe(first.signalsHash);
+    expect(later.inputsHash).toBe(first.inputsHash);
+    // A rule that reads no signal leaves the signal half empty, so a pre-19-LS.9 key is unchanged.
+    expect(run([rule()], { values: { company: 'Acme' } }).signalsHash).toBe('');
+  });
+
+  it('names the source, the window and the value it compared, for the explanation', () => {
+    const result = run([engagementRule()], reading(['2026-10-20T09:00:00.000Z', '2026-10-21T09:00:00.000Z']));
+    expect(result.ruleEvaluations[0]?.signal).toEqual({ source: 'marketingEvents', eventTypes: ['opened'], windowDays: 30, metric: 'eventCount', value: 2 });
+    // No Lead value is anywhere in it (plan §6.5, §9.2).
+    expect(JSON.stringify(result.ruleEvaluations)).not.toContain('Acme');
+  });
+
+  it('refuses to read a metric that belongs to another source', () => {
+    const result = run([engagementRule({ condition: JSON.stringify({ field: 'clickCount', operator: 'gte', value: 1 }) })], reading(['2026-10-20T09:00:00.000Z']));
+    expect(result.ruleEvaluations[0]?.outcome).toBe('error');
+    expect(result.ruleEvaluations[0]?.code).toBe(EVALUATION_CODES.signalMetricUnknown);
+    expect(result.resultState).toBe('failed');
   });
 });

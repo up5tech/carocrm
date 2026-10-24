@@ -5,7 +5,37 @@ import { useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { LeadScoreBreakdownEntry, LeadScoreHistoryItem, LeadScoreRead } from '../api/types.js';
+import { named } from '../pages/lead-score/shared.js';
 import { formatDateTime, formatNumber, t } from '../state/i18n.js';
+
+/**
+ * The words the card prints for an engagement signal (19-LS.9). The names come from the module's own
+ * vocabulary — a source, an event type, a metric — so they are looked up the same way the administration
+ * screen looks them up, and an identifier the catalogs have never named is shown as itself rather than as a
+ * blank.
+ */
+function signalSourceLabel(source: string): string {
+  return named(`leadscore.admin.source.${source}`, source);
+}
+
+function signalMetricLabel(metric: string): string {
+  return named(`leadscore.admin.metric.${metric}`, metric);
+}
+
+function eventLabel(eventType: string): string {
+  return named(`leadscore.admin.event.${eventType}`, eventType);
+}
+
+/**
+ * A metric value as a person reads it: a count is a number, a `lastEventAt` is a moment in their own timezone,
+ * and a signal with nothing behind it is a dash rather than a blank.
+ */
+function signalValueText(value: number | string | null): string {
+  if (value === null) return '—';
+  if (typeof value === 'number') return formatNumber(value);
+  const moment = new Date(value);
+  return Number.isNaN(moment.getTime()) ? value : formatDateTime(value);
+}
 
 /**
  * Phase 19-LS.7 — the score of one Lead, explained (PLAN_Phase_19_LeadScore.md §11.1, §12, §16 `19-LS.7`;
@@ -76,38 +106,63 @@ function triggerLabel(trigger: string): string {
   return translated === key ? trigger : translated;
 }
 
-function ExplanationList({ entries }: { entries: readonly LeadScoreBreakdownEntry[] }) {
+function ExplanationList({ entries, signalState }: { entries: readonly LeadScoreBreakdownEntry[]; signalState: string | null }) {
   if (entries.length === 0) {
     return <Typography.Text type="secondary">{t('leadscore.panel.noRules')}</Typography.Text>;
   }
   return (
-    <List
-      size="small"
-      split={false}
-      dataSource={[...entries]}
-      renderItem={(entry) => (
-        // `reasonCode` is unique per model version (LS.2's index), so it is the row's own identity.
-        <List.Item key={entry.reasonCode} className="carocrm-score-rule">
-          <Space direction="vertical" size={0} style={{ width: '100%' }}>
-            <Space wrap size={8} style={{ justifyContent: 'space-between', width: '100%' }}>
-              <Typography.Text>{entry.ruleName}</Typography.Text>
-              <Typography.Text strong={entry.outcome === 'matched'}>{signedPoints(entry.points)}</Typography.Text>
-            </Space>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {entry.dimensionLabel} · {entry.outcomeLabel}
-              {entry.assignedBand !== undefined && entry.assignedBand !== '' ? ` · ${t('leadscore.panel.assignedBand', { band: entry.assignedBand })}` : ''}
-            </Typography.Text>
-            {/* A rule that could not be evaluated names its stable code: that is the diagnostic, and the
-                field it would have read stays out of the response. */}
-            {entry.code !== undefined && entry.code !== '' ? (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t('leadscore.panel.code', { code: entry.code })}
-              </Typography.Text>
-            ) : null}
-          </Space>
-        </List.Item>
+    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+      {/* The two states where an engagement rule wanted a signal and this build did not read one. A skip code
+          says *that* a rule was not answered; only the stored state says whether the switch was off or
+          Marketing Automation is not installed here — two different fixes for the same-looking score. */}
+      {signalState !== 'disabled' && signalState !== 'absent' ? null : (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t(`leadscore.panel.signalState.${signalState}`)}
+        </Typography.Text>
       )}
-    />
+      <List
+        size="small"
+        split={false}
+        dataSource={[...entries]}
+        renderItem={(entry) => (
+          // `reasonCode` is unique per model version (LS.2's index), so it is the row's own identity.
+          <List.Item key={entry.reasonCode} className="carocrm-score-rule">
+            <Space direction="vertical" size={0} style={{ width: '100%' }}>
+              <Space wrap size={8} style={{ justifyContent: 'space-between', width: '100%' }}>
+                <Typography.Text>{entry.ruleName}</Typography.Text>
+                <Typography.Text strong={entry.outcome === 'matched'}>{signedPoints(entry.points)}</Typography.Text>
+              </Space>
+              {entry.signal === undefined ? null : (
+                // Plan §6.5 asks an explanation to name the window and the source of an engagement signal: a
+                // rule that says "you scored for engagement" without saying over what window is not explainable.
+                // Every word of it is the reader's own language — a raw `marketingEvents` in a sentence a
+                // salesperson reads is a developer's log line wearing a label.
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('leadscore.panel.signal', {
+                    source: signalSourceLabel(entry.signal.source),
+                    events: entry.signal.eventTypes.map(eventLabel).join(', '),
+                    days: String(entry.signal.windowDays),
+                    metric: signalMetricLabel(entry.signal.metric),
+                    value: signalValueText(entry.signal.value),
+                  })}
+                </Typography.Text>
+              )}
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {entry.dimensionLabel} · {entry.outcomeLabel}
+                {entry.assignedBand !== undefined && entry.assignedBand !== '' ? ` · ${t('leadscore.panel.assignedBand', { band: entry.assignedBand })}` : ''}
+              </Typography.Text>
+              {/* A rule that could not be evaluated names its stable code: that is the diagnostic, and the
+                  field it would have read stays out of the response. */}
+              {entry.code !== undefined && entry.code !== '' ? (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('leadscore.panel.code', { code: entry.code })}
+                </Typography.Text>
+              ) : null}
+            </Space>
+          </List.Item>
+        )}
+      />
+    </Space>
   );
 }
 
@@ -239,7 +294,7 @@ export function LeadScorePanel({ leadId, onChanged }: { leadId: string; onChange
           ]} />
 
           <Typography.Text strong>{t('leadscore.panel.rules')}</Typography.Text>
-          <ExplanationList entries={explanation.breakdown} />
+          <ExplanationList entries={explanation.breakdown} signalState={explanation.signalState} />
 
           {explanation.errorCodes.length > 0 ? (
             <Typography.Text type="danger" style={{ fontSize: 12 }}>
@@ -281,7 +336,7 @@ export function LeadScorePanel({ leadId, onChanged }: { leadId: string; onChange
           expandable={{
             // A past evaluation's own breakdown: what the score was made of *then*, which is the reason the
             // rows are immutable (plan §5.4).
-            expandedRowRender: (row) => <ExplanationList entries={row.breakdown} />,
+            expandedRowRender: (row) => <ExplanationList entries={row.breakdown} signalState={row.signalState} />,
             rowExpandable: (row) => row.breakdown.length > 0,
           }}
         />

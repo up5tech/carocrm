@@ -12,6 +12,8 @@ import { LeadScorePreviewService } from './lead-score-preview.service.js';
 import { LeadScoreRecalculationService } from './lead-score-recalculation.service.js';
 import { LeadScoreRecords } from './lead-score-records.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
+import { LeadScoreSignalsService } from './lead-score-signals.js';
+import { LeadScoreThresholdService } from './lead-score-threshold.service.js';
 import { LeadScoreWriteGuardService } from './lead-score-write-guard.service.js';
 
 /**
@@ -45,6 +47,10 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   LeadScoreFeatureGate,
   // Reads only the metadata registry, so it is registered with the reads rather than the writers.
   LeadScoreEditorService,
+  // 19-LS.9: the engagement read (another module's table, bounded) and the threshold action (events, one
+  // notification and one audit row inside the score transaction).
+  LeadScoreSignalsService,
+  LeadScoreThresholdService,
   // Needs the job row and the settings document, so it is registered with the services it reads.
   LeadScoreRecalculationService,
   LeadScoreModuleHealthService,
@@ -179,6 +185,17 @@ export {
   type LeadScoreSettingsView,
 } from './lead-score-settings.service.js';
 export {
+  LeadScoreSignalsService,
+  type SignalReading,
+} from './lead-score-signals.js';
+export {
+  LEADSCORE_EVENT_TYPES,
+  LeadScoreThresholdService,
+  THRESHOLD_AUDIT_ACTION,
+  type ThresholdInput,
+  type ThresholdOutcome,
+} from './lead-score-threshold.service.js';
+export {
   MAX_RULE_POINTS,
   type ModelAttributes,
   REASON_CODE_PATTERN,
@@ -188,6 +205,23 @@ export {
   type ValidationIssue,
   type ValidationReport,
 } from './lead-score-validator.js';
+export {
+  DEFAULT_SIGNAL_LOOKBACK_DAYS,
+  eventTypesFor,
+  isEngagementSource,
+  MARKETING_EVENT_TYPES,
+  MAX_SIGNAL_EVENTS_PER_PLAN,
+  MAX_SIGNAL_LOOKBACK_DAYS,
+  MAX_SIGNAL_PLANS_PER_MODEL,
+  metricsByPlan,
+  MIN_SIGNAL_LOOKBACK_DAYS,
+  planKeyOf,
+  SIGNAL_METRICS,
+  type SignalMetric,
+  type SignalPlan,
+  signalPlans,
+  type SignalSourceState,
+} from './lead-score-vocabulary.js';
 export {
   CONVERSION_STATUSES,
   CONVERSION_TARGETS,

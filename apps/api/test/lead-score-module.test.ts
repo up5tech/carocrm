@@ -83,6 +83,13 @@ beforeAll(async () => {
   ctx = await bootApi();
   const row = await ctx.database.db.selectFrom('app_settings').select('data').where('name', '=', SETTINGS_ROW).executeTakeFirst();
   previousSettings = row === undefined ? null : JSON.stringify(row.data);
+  // This suite is about a *fresh installation*: "before any row exists" is literally its first assertion, and
+  // the health and defaults assertions below only mean something on a document nobody has configured. The
+  // settings row is one document shared by every suite against the configured database, so the row is removed
+  // here and put back exactly as found in `afterAll` — the suite states its precondition instead of hoping
+  // the previous suite left the same state behind.
+  if (row !== undefined) await ctx.database.db.deleteFrom('app_settings').where('name', '=', SETTINGS_ROW).execute();
+  ctx.app.get(LeadScoreSettingsService, { strict: false }).invalidate();
 }, 180_000);
 
 afterAll(async () => {
@@ -176,8 +183,9 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.reason).toContain('module switch is off');
     expect(body.features.every((feature) => feature.enabled === false)).toBe(true);
     // 19-LS.3 shipped the model lifecycle, 19-LS.4 the deterministic engine with its side-effect-free preview,
-    // 19-LS.5 the score write and its two reads, and 19-LS.6 the two background recalculation paths. Everything
-    // that still waits names the phase that owes it, and the health view is what says which is which.
+    // 19-LS.5 the score write and its two reads, 19-LS.6 the two background recalculation paths, and 19-LS.9
+    // the engagement read with the threshold action built on it. Everything that still waits names the phase
+    // that owes it, and the health view is what says which is which.
     const implemented = body.features.filter((feature) => feature.implemented).map((feature) => feature.key);
     expect(implemented).toEqual([
       'modelAdministration',
@@ -187,6 +195,8 @@ describe('module registration and health (19-LS.1)', () => {
       'scoreExplanation',
       'eventRecalculation',
       'batchRecalculation',
+      'thresholdNotifications',
+      'engagementSignals',
     ]);
     expect(body.features.filter((feature) => !feature.implemented).every((feature) => feature.pendingPhase !== null)).toBe(true);
     expect(body.operations.every((operation) => operation.admitted === false)).toBe(true);
@@ -314,9 +324,15 @@ describe('settings document (19-LS.1)', () => {
     expect(Object.values(view.settings.features).every((value) => value === false)).toBe(true);
     expect(Object.values(view.effective).every((value) => value === false)).toBe(true);
     expect(view.warnings.map((warning) => warning.code)).toContain('moduleDisabled');
-    // 19-LS.6 delivered both background paths, so the still-pending list starts at the notifications phase.
-    expect(view.pendingFeatures.map((entry) => entry.key)).toEqual(expect.arrayContaining(['thresholdNotifications', 'leadConversion', 'aiInsight']));
-    expect(view.pendingFeatures.map((entry) => entry.key)).not.toContain('eventRecalculation');
+    // 19-LS.6 delivered both background paths and 19-LS.9 the engagement read and the threshold action, so
+    // the still-pending list starts at the conversion and insight phases. The list is derived from
+    // `pendingPhase`, so a feature that ships without its row being flipped fails here rather than lying in
+    // the settings screen.
+    const pending = view.pendingFeatures.map((entry) => entry.key);
+    expect(pending).toEqual(expect.arrayContaining(['duplicateDetection', 'leadConversion', 'aiInsight']));
+    for (const shipped of ['eventRecalculation', 'batchRecalculation', 'thresholdNotifications', 'engagementSignals', 'scoring', 'scoringPreview', 'modelAdministration']) {
+      expect(pending, shipped).not.toContain(shipped);
+    }
   });
 
   it('refuses an unknown switch instead of storing a typo', async () => {

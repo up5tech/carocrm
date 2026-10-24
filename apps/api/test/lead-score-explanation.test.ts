@@ -680,6 +680,36 @@ describe('the words 19-LS.7 renders exist in both catalogs', () => {
       'leadscore.panel.trigger.lead_change',
       'leadscore.panel.trigger.manual_recalculate',
       'leadscore.panel.trigger.batch_rebuild',
+      // 19-LS.9's words. The card prints the signal it read and the state that explains a skip, the preview
+      // names the window, and the rule form is the only way an engagement rule gets authored — every one of
+      // those strings must exist in *both* catalogs, because one bad key turns the whole instance's labels
+      // back into codes.
+      'leadscore.panel.signal',
+      'leadscore.panel.signalState.disabled',
+      'leadscore.panel.signalState.absent',
+      'leadscore.operator.gte',
+      'leadscore.admin.source.marketingEvents',
+      'leadscore.admin.source.emailLinks',
+      'leadscore.admin.metric.eventCount',
+      'leadscore.admin.metric.lastEventAt',
+      'leadscore.admin.metric.daysSinceLastEvent',
+      'leadscore.admin.metric.clickCount',
+      'leadscore.admin.event.opened',
+      'leadscore.admin.event.clicked',
+      'leadscore.admin.preview.planWindow',
+      'leadscore.admin.preview.signalState.available',
+      'leadscore.admin.preview.signalState.no_events',
+      'leadscore.admin.preview.signalState.disabled',
+      'leadscore.admin.preview.signalState.absent',
+      'leadscore.admin.rule.eventTypeHint',
+      'leadscore.admin.rule.anyEvent',
+      'leadscore.admin.rule.lookbackRequired',
+      'leadscore.admin.rule.halfLifeDays',
+      'leadscore.admin.rule.engagementNote',
+      'leadscore.admin.builder.noMetrics',
+      'leadscore.admin.settings.sweep',
+      'leadscore.admin.settings.sweepTablePresent',
+      'leadscore.admin.settings.sweepTableAbsent',
     ];
     for (const locale of ['en', 'vi']) {
       for (const key of keys) {

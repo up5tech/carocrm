@@ -121,8 +121,17 @@ _Phase 19_ —
   behind the server's own report, archives it, forks a new version, diffs two versions, previews a bounded sample
   that writes nothing, queues a bounded rebuild and cancels it, and switches the module's features. An invalid
   model cannot be published and a published version cannot be written — by an administrator through the
-  record API either. Nothing converts yet: the module ships switched off, signals, notifications and the decay
-  sweep are 19-LS.9, and those operations
+  record API either. Since 19-LS.9 a rule can also read **engagement** rather than only the Lead's own fields: a
+  bounded window of `marketing_events` addressed to that Lead (1–365 whole days, at most 200 rows per plan), one
+  of the metrics the server lists for that source, optionally decayed by a half-life or a linear ramp, and the
+  engine still has no clock — the caller supplies the instant. A source that is absent, switched off or has
+  nothing to say does not fail the score: those rules **skip**, and the stored evaluation carries the state, so
+  the card and the preview can say which of the four it was. Every recorded score now **announces itself** —
+  `leadScore.updated.v1`, plus `leadScore.bandChanged.v1` on a crossing, one notification for the Lead's owner
+  behind `thresholdNotifications`, and one `leadScore.thresholdAction` audit row — the last two keyed by a
+  digest of the crossing itself, so a redelivered job cannot interrupt anybody twice — and a `scheduled_jobs` row
+  can ask for a bounded **decay sweep** when the model has a rule that depends on time. Nothing converts yet:
+  the module ships switched off, conversion is 19-LS.10–LS.16, and those operations
   refuse with the sub-phase that owes them (`LEADSCORE_PHASE_PENDING`). See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
@@ -130,7 +139,9 @@ _Phase 19_ —
   [docs/implementation/lead-score-ls2-completion-report.md](docs/implementation/lead-score-ls2-completion-report.md),
   [docs/implementation/lead-score-ls3-completion-report.md](docs/implementation/lead-score-ls3-completion-report.md),
   [docs/implementation/lead-score-ls5-completion-report.md](docs/implementation/lead-score-ls5-completion-report.md),
-  [docs/implementation/lead-score-ls7-completion-report.md](docs/implementation/lead-score-ls7-completion-report.md)
+  [docs/implementation/lead-score-ls7-completion-report.md](docs/implementation/lead-score-ls7-completion-report.md),
+  [docs/implementation/lead-score-ls8-completion-report.md](docs/implementation/lead-score-ls8-completion-report.md) and
+  [docs/implementation/lead-score-ls9-completion-report.md](docs/implementation/lead-score-ls9-completion-report.md)
   and [docs/compatibility/lead-score.md](docs/compatibility/lead-score.md).
 
 _Phase 20_ — settings, administration and end-user UX: a settings-document registry with optimistic

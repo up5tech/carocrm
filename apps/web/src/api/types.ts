@@ -3704,6 +3704,8 @@ export interface LeadScoreBreakdownEntry {
   readonly assignedBand?: string | undefined;
   readonly code?: string | undefined;
   readonly field?: string | undefined;
+  /** The engagement signal this rule read, when it read one (19-LS.9). */
+  readonly signal?: LeadScoreSignalProvenance | undefined;
 }
 
 export interface LeadScoreRead {
@@ -3740,6 +3742,8 @@ export interface LeadScoreRead {
     };
     readonly breakdown: readonly LeadScoreBreakdownEntry[];
     readonly errorCodes: readonly string[];
+    /** Which engagement state produced this evaluation (19-LS.9): `available`/`no_events`/`disabled`/`absent`, or null. */
+    readonly signalState: string | null;
   };
   readonly actions: {
     readonly recalculate: LeadScoreActionAnswer;
@@ -3766,6 +3770,7 @@ export interface LeadScoreHistoryItem {
   readonly correlationId: string | null;
   readonly jobId: string | null;
   readonly errorSummary: string | null;
+  readonly signalState: string | null;
   readonly breakdown: readonly LeadScoreBreakdownEntry[];
 }
 
@@ -3859,6 +3864,14 @@ export interface LeadScoreEditorCatalog {
     readonly evaluationResultStates: readonly string[];
     readonly evaluationTriggers: readonly string[];
     readonly decayPolicies: readonly string[];
+  };
+  /** What an engagement rule may read: its source's metrics, event types and window bounds (19-LS.9). */
+  readonly signals: {
+    readonly sources: readonly string[];
+    readonly eventTypes: readonly string[];
+    readonly lookback: { readonly min: number; readonly max: number; readonly default: number };
+    readonly maxEventsPerPlan: number;
+    readonly metrics: Readonly<Record<string, readonly { readonly name: string; readonly type: string; readonly operators: readonly string[] }[]>>;
   };
   readonly limits: {
     readonly maxRulesPerModel: number;
@@ -3991,6 +4004,11 @@ export interface LeadScorePreviewView {
     readonly average: number | null;
   };
   readonly results: readonly LeadScorePreviewResult[];
+  /** Whether the engagement rules were read for this sample, and over what (19-LS.9). */
+  readonly signals?: {
+    readonly state: string;
+    readonly plans: readonly { readonly key: string; readonly source: string; readonly eventTypes: readonly string[]; readonly lookbackDays: number }[];
+  } | undefined;
   /** Always false: a preview evaluates and stores nothing (plan §6.1, §9.4). */
   readonly writes: false;
 }
@@ -4000,6 +4018,8 @@ export interface LeadScoreSettingsView {
     enabled: boolean;
     features: Readonly<Record<string, boolean>>;
     scoring: { readonly activeModelId: string | null; readonly debounceSeconds: number };
+    /** The decay sweep (19-LS.9): the calendar that re-scores a signal that fades. */
+    signals?: { readonly decaySweep: { readonly enabled: boolean; readonly limit: number; readonly chunkSize: number } } | undefined;
   };
   readonly version: number;
   readonly updatedAt: string | null;
@@ -4023,6 +4043,15 @@ export interface LeadScoreBatchStartView {
  * Only the parts a screen renders are typed here; the health payload stays the server's, and the SPA reads a
  * switch off it rather than keeping a list of what this build implements (plan §0.1-4).
  */
+/** The engagement signal a rule read, as the engine recorded it (plan §6.5). */
+export interface LeadScoreSignalProvenance {
+  readonly source: string;
+  readonly eventTypes: readonly string[];
+  readonly windowDays: number;
+  readonly metric: string;
+  readonly value: number | string | null;
+}
+
 export interface LeadScoreHealthView {
   readonly module: { readonly id: string; readonly label: string };
   readonly ok: boolean;
@@ -4048,6 +4077,12 @@ export interface LeadScoreHealthView {
     readonly code: string | null;
     readonly detail: string | null;
   }[];
+  /** Whether the engagement read has anything to read (19-LS.9). */
+  readonly signals: {
+    readonly eventTablePresent: boolean;
+    readonly moduleRegistered: boolean;
+    readonly decaySweep: { readonly enabled: boolean; readonly limit: number; readonly chunkSize: number };
+  };
   readonly settings: {
     readonly version: number;
     readonly enabled: boolean;

@@ -405,6 +405,15 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
        VALUES ('csEvaluateReviewReminders', 'customerSuccess.evaluateReviewReminders', '5 3 * * *', '{}'::jsonb, TRUE)
        ON CONFLICT (id) DO NOTHING`,
     );
+    // Lead Score decay sweep (PLAN_Phase_19_LeadScore.md §6.4, 19-LS.9): a score whose engagement signal
+    // decays goes out of date with nobody editing the Lead, so the calendar asks for a bounded rebuild. The
+    // schedule always exists; `settings.signals.decaySweep.enabled` decides whether the run does anything,
+    // and the API answers `skipped: disabled` when it does not — so an operator turns one thing on.
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('leadScoreDecaySweep', 'leadScore.decaySweep', '35 3 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
     await pool.query(
       `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
        VALUES ('csUpdateGoalOverdue', 'customerSuccess.updateGoalOverdueState', '15 3 * * *', '{}'::jsonb, TRUE)

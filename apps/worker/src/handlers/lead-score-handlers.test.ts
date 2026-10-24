@@ -8,6 +8,9 @@ import {
   BATCH_CHUNK_PATH,
   BATCH_RECALCULATE_JOB,
   batchRecalculateJob,
+  DECAY_SWEEP_JOB,
+  DECAY_SWEEP_PATH,
+  decaySweepJob,
   LEAD_CHANGED_PATH,
   RECALCULATE_LEAD_JOB,
   RECALCULATE_PATH,
@@ -60,9 +63,10 @@ describe('leadScore.recalculateLead', () => {
   it('registers both Lead Score jobs under the names the API enqueues', () => {
     const registry = new JobRegistry();
     registerLeadScoreJobs(registry, deps(vi.fn() as unknown as typeof fetch));
-    expect(registry.list()).toEqual([BATCH_RECALCULATE_JOB, RECALCULATE_LEAD_JOB]);
+    expect(registry.list().sort()).toEqual([BATCH_RECALCULATE_JOB, DECAY_SWEEP_JOB, RECALCULATE_LEAD_JOB].sort());
     expect(RECALCULATE_LEAD_JOB).toBe('leadScore.recalculateLead');
     expect(BATCH_RECALCULATE_JOB).toBe('leadScore.batchRecalculate');
+    expect(DECAY_SWEEP_JOB).toBe('leadScore.decaySweep');
   });
 
   it('is inert — not failed — when no worker capability is configured', async () => {
@@ -238,6 +242,47 @@ describe('leadScore.batchRecalculate', () => {
     const stopped = await batchRecalculateJob(deps(fetcher as unknown as typeof fetch))(context(chunkPayload, { cancelRequested: true }));
     expect(stopped.status).toBe('cancelled');
     expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe('leadScore.decaySweep (19-LS.9)', () => {
+  it('registers the sweep under the name the seeded schedule row carries', () => {
+    const registry = new JobRegistry();
+    registerLeadScoreJobs(registry, deps(vi.fn() as unknown as typeof fetch));
+    expect(registry.list()).toContain(DECAY_SWEEP_JOB);
+  });
+
+  it('asks the API for the sweep and reports what it decided', async () => {
+    const fetcher = vi.fn(async () => json({ started: true, skipped: null, runId: 'r9', limit: 5, chunkSize: 2 }));
+    const ctx = context({});
+    const result = await decaySweepJob(deps(fetcher as unknown as typeof fetch))(ctx);
+
+    expect(fetcher).toHaveBeenCalledWith(`${BASE}${DECAY_SWEEP_PATH}`, expect.objectContaining({ method: 'POST', body: '{}' }));
+    expect(result).toMatchObject({ status: 'completed', message: 'Sweep queued a rebuild of up to 5 Lead(s)', result: { runId: 'r9', limit: 5, chunkSize: 2 } });
+    expect(ctx.progressLines).toEqual([10, 100]);
+  });
+
+  it('completes quietly when the sweep found nothing to do', async () => {
+    for (const [skipped, message] of [['disabled', 'Sweep skipped: disabled'], ['noDecayingRules', 'Sweep skipped: noDecayingRules']] as const) {
+      const result = await decaySweepJob(deps(vi.fn(async () => json({ started: false, skipped })) as unknown as typeof fetch))(context({}));
+      expect(result, skipped).toMatchObject({ status: 'completed', message, result: { skipped } });
+    }
+  });
+
+  it('completes on a refusal and throws on a transport failure, like every other Lead Score job', async () => {
+    const refused = await decaySweepJob(deps(vi.fn(async () => refusal('LEADSCORE_MODULE_DISABLED')) as unknown as typeof fetch))(context({}));
+    expect(refused.status).toBe('completed');
+    expect(String(refused.message)).toContain('LEADSCORE_MODULE_DISABLED');
+
+    await expect(decaySweepJob(deps(vi.fn(async () => json({ error: { code: 'AUTHORIZATION_DENIED' } }, 403))) as unknown as typeof fetch)(context({}))).rejects.toThrow();
+    await expect(decaySweepJob(deps(vi.fn(async () => { throw new Error('socket hang up'); }) ) as unknown as typeof fetch)(context({}))).rejects.toThrow();
+  });
+
+  it('sends the capability header and nothing else', async () => {
+    const fetcher = vi.fn(async () => json({ started: false, skipped: 'disabled' }));
+    await decaySweepJob(deps(fetcher as unknown as typeof fetch))(context({}));
+    const headers = (fetcher.mock.calls[0]?.[1] as { headers: Record<string, string> }).headers;
+    expect(headers['x-worker-secret']).toBe(SECRET);
   });
 });
 
