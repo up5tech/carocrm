@@ -125,6 +125,7 @@
   },
   "docs": {
     "title": "Tài liệu",
+    "sidebarLabel": "Trợ giúp",
     "landingLede": "Hướng dẫn dành cho người vận hành CRM và người làm việc trong CRM mỗi ngày.",
     "sectionsNav": "Các mục tài liệu",
     "breadcrumb": "Đường dẫn tài liệu",
@@ -304,9 +305,55 @@
     "failed": "Đăng nhập thất bại."
   },
   "home": {
-    "title": "Bảng điều khiển",
-    "subtitle": "Các bản ghi có trong không gian làm việc này, hiển thị từ metadata của thực thể.",
-    "records": "bản ghi"
+    "greeting": {
+      "morning": "Chào buổi sáng, {name}",
+      "afternoon": "Chào buổi chiều, {name}",
+      "evening": "Chào buổi tối, {name}"
+    },
+    "searchPlaceholder": "Tìm bản ghi…",
+    "searchHint": "Nhập tên rồi nhấn Enter để tìm. Ctrl+K hoặc ⌘K mở bảng lệnh.",
+    "create": "Tạo mới",
+    "dashboards": "Bảng điều khiển",
+    "focus": {
+      "tasks_one": "{count} việc cần bạn xử lý",
+      "tasks_other": "{count} việc cần bạn xử lý",
+      "overdue_one": "{count} quá hạn",
+      "overdue_other": "{count} quá hạn",
+      "today_one": "{count} hoạt động hôm nay",
+      "today_other": "{count} hoạt động hôm nay",
+      "clear": "Hiện không có gì đang chờ bạn.",
+      "cardTasks": "Nhiệm vụ của tôi",
+      "cardToday": "Hôm nay",
+      "cardApprovals": "Phê duyệt",
+      "tasksClear": "Không có gì đến hạn",
+      "none": "Không có lịch",
+      "running_one": "{count} đang chạy",
+      "running_other": "{count} đang chạy"
+    },
+    "agenda": {
+      "title": "Hôm nay",
+      "empty": "Hôm nay không có hoạt động nào trên lịch.",
+      "more_one": "+{count} hoạt động nữa",
+      "more_other": "+{count} hoạt động nữa",
+      "open": "Xem lịch"
+    },
+    "pulse": {
+      "title": "Tổng quan",
+      "link": "Tất cả bảng điều khiển"
+    },
+    "activity": {
+      "title": "Hoạt động",
+      "empty": "Chưa có thay đổi nào trong các bản ghi bạn theo dõi.",
+      "follow": "Tìm bản ghi để theo dõi",
+      "link": "Xem dòng hoạt động"
+    },
+    "setup": {
+      "title": "Thiết lập",
+      "progress": "Đã xong {done}/{total} bước",
+      "next": "Tiếp theo"
+    },
+    "error": "Không tải được thẻ này.",
+    "retry": "Thử lại"
   },
   "search": {
     "title": "Tìm kiếm",

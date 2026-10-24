@@ -189,16 +189,39 @@ export function formatNumber(value: number): string {
 /**
  * The clock time of an instant, in the user's timezone (§41.6). Chat lists and message headers
  * show the time alone for today and fall back to `formatDateTime` for anything older, so this is
- * kept separate rather than adding another flag to that formatter.
+ * kept separate rather than adding another flag to that formatter. A caller that already works in
+ * one explicit zone (the day agenda, the calendar grid) passes it, so the time it prints belongs to
+ * the same day it filtered on.
  */
-export function formatClock(value: string | null | undefined): string {
+export function formatClock(value: string | null | undefined, timeZone: string = formatTz): string {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat(activeLocale, {
-    timeZone: formatTz,
+    timeZone,
     hour: '2-digit',
     minute: '2-digit',
+  }).format(date);
+}
+
+/**
+ * A long, localized date for a headline ("Wednesday, 24 October 2026"). One formatter for every
+ * page, so no screen builds its own `toLocaleDateString` (§5.10). The default zone is the user's;
+ * a caller that filtered a screen by one explicit zone passes the same zone here.
+ */
+export function formatLongDate(
+  value: string | Date | null | undefined,
+  options: { withWeekday?: boolean; timeZone?: string } = {},
+): string {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat(activeLocale, {
+    timeZone: options.timeZone ?? formatTz,
+    ...(options.withWeekday === false ? {} : { weekday: 'long' }),
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   }).format(date);
 }
 

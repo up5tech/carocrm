@@ -132,16 +132,20 @@ describe('navigation resolution', () => {
     expect(seen.has('entity:Contact')).toBe(true);
     expect(find(tree, 'admin:settings')?.route).toBe('/admin/settings');
 
-    // CRM is its own group above RECORDS, E-Signature sits below RECORDS, and the module pages that
-    // are really configuration live inside ADMINISTRATION instead of the top level.
+    // CRM is its own group above RECORDS, E-Signature sits below RECORDS, the handbook ("Help") is a
+    // working surface under Inbox, and the module pages that are really configuration live inside
+    // ADMINISTRATION instead of the top level.
     const topLevel = tree.items.map((item) => item.key);
     expect(topLevel.indexOf('group:crm')).toBeLessThan(topLevel.indexOf('group:records'));
     expect(topLevel.indexOf('esignature')).toBeGreaterThan(topLevel.indexOf('group:records'));
-    expect(topLevel).not.toContain('docs');
+    expect(topLevel).toContain('docs');
+    expect(topLevel.indexOf('docs')).toBeGreaterThan(topLevel.indexOf('voiceInbox'));
+    expect(topLevel).not.toContain('aiAgents');
     expect(topLevel).not.toContain('voiceCommunications');
     expect(topLevel).not.toContain('advancedIntegrations');
     const administration = (find(tree, 'group:administration')?.children ?? []).map((child) => child.key);
-    for (const key of ['voiceCommunications', 'advancedIntegrations', 'docs']) expect(administration).toContain(key);
+    for (const key of ['aiAgents', 'voiceCommunications', 'advancedIntegrations']) expect(administration).toContain(key);
+    expect(administration).not.toContain('docs');
   });
 
   it('orders the top level deterministically and honours a reordering', async () => {
@@ -182,15 +186,17 @@ describe('navigation resolution', () => {
     expect(keys(rep).has('group:crm')).toBe(true);
   });
 
-  it('gives a user with no roles no record groups, and only the handbook under administration', async () => {
+  it('gives a user with no roles no record groups, and only the handbook at the top level', async () => {
     const nobody = await navigation(nobodyToken);
     expect(keys(nobody).has('entity:Account')).toBe(false);
     expect(keys(nobody).has('group:records')).toBe(false);
     expect(keys(nobody).has('group:crm')).toBe(false);
     expect(keys(nobody).has('home')).toBe(true);
-    // The handbook is readable by every signed-in person, so it is the one entry an account without
-    // roles keeps in the administration group; the module pages behind it are permission-gated.
-    expect((find(nobody, 'group:administration')?.children ?? []).map((child) => child.key)).toEqual(['docs']);
+    // The handbook is readable by every signed-in person, so it is the one module page an account
+    // without roles keeps; the configured module pages are permission-gated and the administration
+    // container has nothing left, so it is not drawn at all.
+    expect(nobody.items.map((item) => item.key)).toContain('docs');
+    expect(find(nobody, 'group:administration')).toBeUndefined();
   });
 
   it('ignores an unknown key and warns about it instead of failing', async () => {

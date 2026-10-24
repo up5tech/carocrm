@@ -9,6 +9,12 @@
 > command palette, role-scoped default dashboards, setup checklist, accessibility hardening and
 > responsive design.
 >
+> **Added after completion — Phase 20.19 (✅ implemented 2026-10-24):** the home workspace (§5.6, §17).
+> `/home` is now a role-aware workspace — greeting/search/create hero, focus strip, today's agenda, at
+> most three KPI dashlets of the effective default dashboard, followed activity and a compact admin
+> setup banner — with no per-entity count grid and no per-module request fan-out. Frontend-only: no
+> endpoint, migration, table or database write.
+>
 > **Added after completion — Phase 20.18 (✅ implemented):** record-page relation tabs (§5.11, §17).
 > The 20.0–20.17 work above stands as shipped; 20.18 is an additive sub-phase with its own acceptance
 > criteria, delivered as **entity metadata edited in the detail layout settings** — not as a per-user
@@ -225,6 +231,10 @@ Confirmed gaps this phase must close:
 - No accessibility audit record; keyboard support is partial (Escape on the drawer, Enter on the
   collapse toggle).
 - No onboarding, setup checklist or first-run experience.
+- The home page (`/home`) is a **record inventory, not a workspace**: one stat tile per enabled
+  entity, each fed by its own `GET /{entity}?maxSize=1` request. The page grows with the module
+  list, spends one request per module, and says nothing about what needs the user today. It has no
+  greeting, no next action, no agenda, no curated KPI and no activity. (20.19)
 
 ### 3.3 Gap handling
 
@@ -532,6 +542,15 @@ surface the next action.
 - Every KPI shows value plus context (comparison period, target, trend) — a bare number is noise.
 - Dashlet-level empty and error states; "last updated" timestamp and a staleness warning when data
   exceeds its refresh expectation.
+- **The home page is a workspace, not an inventory.** It never renders one count per enabled entity;
+  per-module counts belong to dashboards, reports, lists and the sidebar. Home answers four
+  questions in this order: *what needs me now* (tasks, approvals), *what is on today* (agenda),
+  *what is the pulse* (at most three KPI dashlets from the user's effective default dashboard) and
+  *what changed* (followed activity). A user with nothing waiting sees a calm done state, not a
+  wall of zeros or dashes.
+- KPI curation is an administrator/role decision made in Dashboards, not a hard-coded list on the
+  home page. With no KPI dashlet the pulse rail is omitted; home never falls back to counting every
+  module.
 
 ### 5.7 States and feedback
 
@@ -1077,6 +1096,12 @@ configured primary database for integration tests — never a new database.
   through `Move to…` with the keyboard only; save and confirm the record page shows the tabs; reload
   and reopen a `?tab=` link; delete a tab and confirm its relations land in Other; confirm the record
   page itself offers no editor.
+- Home workspace (20.19) — `e2e/home.spec.ts` covers the render, the hero search, the Create menu, the
+  focus-card links, the absence of the old grid and of any per-entity `maxSize=1` fan-out, the bounded
+  per-card request count, no post-login console error or failed response, and 390 px overflow. Still
+  manual (no frontend test runner): empty/loading/error per card, independent failures, the KPI rail with
+  0/1/4 KPI dashlets (only three render), the admin setup banner at incomplete and 100 %, keyboard
+  order, and the 1440/1180/768 px layouts.
 
 ### 13.5 End-to-end acceptance scenarios
 
@@ -1096,6 +1121,10 @@ configured primary database for integration tests — never a new database.
 7. A user opens an Account with six relations, switches the relation area to tabs, creates a "People"
    tab, moves Contacts and Opportunities into it by drag and by keyboard, deletes the tab, and finds
    both relations back under Other; the next Account they open is unaffected.
+8. A regular user signs in and lands on a home workspace that greets them, offers search and create,
+   and shows their tasks, today's agenda, a small curated KPI rail and followed activity — **without
+   one count tile per module and without one list request per module**. An administrator with an
+   incomplete setup checklist sees the compact banner; once complete, it disappears.
 
 ### 13.6 Accessibility tests
 
@@ -1453,6 +1482,225 @@ dirty state; Save wrote the section through `POST /Metadata/:entity`; the record
 Not covered: drag-and-drop, tab rename/delete/reorder and the keyboard-only pass are exercised only
 by the pure-helper unit tests, because this repository has no frontend test runner (§13.4).
 
+### Phase 20.19 — Home workspace redesign  ✅ implemented 2026-10-24
+
+Added after 20.0–20.18. Scope and product rules: §5.6. It is **frontend-only**: no endpoint,
+migration, table or database write is involved, and no new dependency is added.
+
+**Problem.** `/home` (`apps/web/src/pages/HomePage.tsx`) renders one stat tile per enabled entity
+and fills each tile with its own `api.list(entity, { maxSize: 1 })`. That is an inventory of the
+module list, not a workspace: the page grows with every module, makes one request per module (30+
+on a configured instance), and tells the user nothing about what needs them now. The tile grid also
+cannot answer the first-run case — it shows a wall of "—" instead of guidance.
+
+**Product decision — what home is for.** Home answers four questions, in this order:
+
+1. **What needs me now?** — my answerable process tasks and the process instances I am part of.
+2. **What is on today?** — calls, meetings, tasks and project tasks for the user's local day.
+3. **What is the pulse?** — at most **three** KPI dashlets from the user's effective default
+   dashboard. Curation is an administrator/role decision made in Dashboards.
+4. **What changed?** — the latest items from the followed activity stream.
+
+Per-module counts stay on Dashboards, Reports, lists and the sidebar. Home **never** counts every
+module, and it never falls back to an entity grid when no KPI is configured.
+
+**Layout (desktop ≥ 1180 px).**
+
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  Good afternoon, Jacky                            [ Search records…    ⌘K ]  │
+│  Wednesday, 24 October · Sales manager                 [Create ▾] [Dashboards]│
+│  2 tasks need an answer · 1 meeting today                                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────┐ ┌────────────────────┐ ┌────────────────────┐
+│ MY TASKS        3  │ │ TODAY          2   │ │ APPROVALS      1   │
+│ 2 overdue          │ │ 14:00 Acme call    │ │ 1 running          │
+│ • Renewal · Fri    │ │ 16:30 Demo         │ │                    │
+└────────────────────┘ └────────────────────┘ └────────────────────┘
+┌──────────────────────────────────────────────┐ ┌─────────────────────────────┐
+│ TODAY                                        │ │ AT A GLANCE                 │
+│ 09:00  ● Kickoff — Acme                      │ │ Open pipeline   1,240,000   │
+│ 14:00  ● Call — Northwind                    │ │ Win rate              38 %  │
+│ 16:30  ● Demo — Contoso                      │ │ Open cases            12    │
+│ View calendar →                              │ │ All dashboards →            │
+│                                              │ ├─────────────────────────────┤
+│                                              │ │ ACTIVITY                    │
+│                                              │ │ JD posted on Acme · 2h      │
+│                                              │ │ View stream →               │
+└──────────────────────────────────────────────┘ └─────────────────────────────┘
+```
+
+The administrator setup checklist is a **slim banner under the hero**, not a permanent large card:
+it appears only for an administrator whose checklist is incomplete and disappears at 100 %.
+
+**Visual direction — "calm operating cockpit".** A quiet surface with one clear focal band, not a
+chart wall. Keep Inter and the existing tokens; introduce no new font, illustration or external
+image. The greeting is the only large type (28/34, 600, −0.02 em); card labels are 11 px uppercase
+with 0.08 em tracking; KPI values are 22–28 px, 600, tabular numerals; body is 13.5 px. The hero gets
+a very soft blue wash (white → `#eaf2ff` at the top-right) and no ornament; the three focus cards are
+the memorable element — the day stated in one sentence, with the work that needs the user directly
+under it. Accent chips use the product's existing blue plus status colours only for overdue/due-soon
+semantics, and colour is always paired with text. Surfaces are white, 14 px radius, 1 px `#e8edf5`,
+one 0–1 px shadow; motion is limited to a 120–180 ms value fade and is disabled by
+`prefers-reduced-motion`.
+
+**Tasks.**
+
+1. **Extract the default-dashboard decision.** Move the priority currently inlined in
+   `DashboardsPage.tsx` (user-starred `defaultDashboard` → role-scoped → first) into one shared,
+   pure helper used by both screens, so home and Dashboards can never pick different dashboards.
+   Behaviour must not change.
+2. **Home data model** — `apps/web/src/pages/home/home-model.ts`: greeting key from local hour;
+   local-day bounds for the agenda; the one-sentence focus line; KPI dashlet selection (first three
+   KPI dashlets in `position` order); agenda cap (+N more); overdue count; relative activity label.
+   Pure functions, no React.
+3. **Home data hooks** — `apps/web/src/pages/home/useHomeData.ts`, one React Query key per card:
+   - `['home','tasks']` → `api.processTasks({ limit: 50 })` (the default status set already includes
+     `overdue` and `escalated`); derive overdue from `dueAt` and keep `total` for the count.
+   - `['home','approvals']` → `api.processInstances({ status: 'running', limit: 1 })`.
+   - `['home','today']` → `api.calendar({ from, to, timeZone, entities: ['Task','Call','Meeting',
+     'ProjectTask'], maxSize: 50 })`, using the same day calculation as `CalendarPage`.
+   - `['home','pulse']` → `api.dashboards()` then the selected dashboard's KPI dashlets via
+     `api.runDashlet` (max three, in parallel).
+   - `['home','activity']` → `api.activityStream({ view: 'followed', maxSize: 5 })`.
+   - `['home','setup']` → `api.setupChecklist()` only for `principal.type === 'admin'`.
+   `staleTime` 60 s (tasks 30 s), `retry: 1`, `refetchOnWindowFocus: true`. Each card owns its own
+   loading/empty/error state; one failure must not blank the page.
+4. **Compose the page** — `apps/web/src/pages/HomePage.tsx` becomes a thin composition of the
+   components below. Delete the old `Count` type, the `TONES` list, the per-entity `api.list` effect
+   and the permanent `SetupChecklistPanel`; no dead code or unused imports remain.
+   - `HomeHero.tsx` — greeting, localized long date, role/title line, focus sentence, inline record
+     search (Enter → `/search?q=…`; the `⌘K` hint is text, the palette already owns the shortcut),
+     primary **Create** dropdown built from `navEntities` (alphabetical, scroll-capped, icon + label,
+     route `/{entity}/create`) and a secondary **Dashboards** link.
+   - `FocusStrip.tsx` — three cards: my tasks (total, overdue, two nearest due items), today (count,
+     next event), approvals (running count). Whole card is one link: `/tasks`, `/calendar`,
+     `/tasks?tab=approvals`. No nested interactive elements.
+   - `TodayAgenda.tsx` — up to six events with a time gutter and a type dot, "+N more" to
+     `/calendar`, done state when the day is empty.
+   - `PulseStrip.tsx` — at most three KPI tiles from the effective default dashboard, label + value
+     with tabular numerals, "All dashboards" link. Renders **nothing** when there is no dashboard or
+     no KPI dashlet, or when the request fails. No invented trend/comparison: the dashlet contract
+     has no comparison yet (§5.6 deferral).
+   - `ActivityFeed.tsx` — latest five followed-stream items, author initials, existing
+     `updateSummary`, record link, relative time, "View stream" link; empty state invites search.
+   - `SetupBanner.tsx` — compact progress + next two incomplete steps for administrators only;
+     hidden at 100 %.
+   - `HomeSkeleton.tsx` — card-shaped skeletons matching the final layout.
+5. **Styling** — add a `.carocrm-home-*` block in `apps/web/src/styles/carocrm.css` next to the
+   dashboards/reports blocks (one comment naming this phase). Reuse the current design language:
+   canvas `#f5f7fb`, white surface, 1 px `#e8edf5`, 14 px radius, `0 1px 2px rgba(16,24,40,.04)`,
+   blue `#438eff`, text `#31373d` / `#737b85` / `#8b939d`, existing status tokens. The hero may use a
+   very soft blue wash; no hero image, no external asset, no new font. Keep Inter.
+6. **Responsive rules** — ≥ 1180 px: hero split and `minmax(0,1.45fr) / minmax(320px,1fr)` body;
+   768–1179 px: one body column, focus strip stays three across while it fits; ≤ 767 px: everything
+   stacks, search full width, actions wrap, agenda keeps a 52 px time gutter. 44 px touch targets on
+   coarse pointers, no horizontal overflow at 390 px, `prefers-reduced-motion` respected.
+7. **Accessibility** — greeting is the page `h1`; each card has a real `h2`; link cards expose their
+   count in the accessible name; search input is labelled; async regions use `aria-busy` and
+   skeletons, not spinners only; errors are inline with Retry; status is never colour-only.
+8. **i18n** — rewrite `web.home.*` in `i18n/en/web.json` and `i18n/vi/web.json`; remove
+   `web.home.records` if unused. Add keys for greeting (morning/afternoon/evening), subtitle, search
+   placeholder/hint, create, dashboards, focus cards (tasks/today/approvals, none/overdue/next/running),
+   agenda (title/empty/more), pulse (title/link), activity (title/empty/follow/search), setup
+   (title/next/open), and the generic retry/error/loading labels. No literal user-visible English.
+   Add one shared long-date formatter beside `formatDateTime` in `state/i18n.ts` rather than a
+   per-page `toLocaleDateString`.
+9. **Docs** — replace the "home page lists record types with their counts" line in
+   `docs/ux/design-principles.md`; add `content/docs/en/getting-started/home.md` and its `vi`
+   counterpart; link it from `find-your-way.md` and the getting-started index; update the
+   `docs/reference/alpha-status.md` home/setup rows.
+10. **E2E** — new `e2e/home.spec.ts`: sign in, greeting `h1` visible, the old per-entity grid absent,
+    the Create menu opens a create route, hero search lands on `/search?q=`, the tasks card lands on
+    `/tasks`, and a network guard asserts **no** `?maxSize=1` entity-count fan-out. Also assert the
+    page produces no console errors and that 390 px has no horizontal overflow.
+
+**Acceptance.**
+
+- Home renders no tile per enabled entity and issues no `api.list` call; the first-paint request
+  budget is bounded (≤ 9 for an administrator, ≤ 8 for a regular user with all three KPI dashlets)
+  and independent of the module count.
+- The pulse rail renders 0–3 KPI tiles from the effective default dashboard and is absent when none
+  are configured; it never falls back to module counts.
+- Greeting, date and times are localized and use the user's time zone; the agenda matches the same
+  local day the Calendar page shows.
+- Tasks, today, approvals, activity and setup each show loading, empty/done and error states, and a
+  single failing card leaves the rest usable.
+- The admin setup banner appears only while incomplete and disappears at 100 %; regular users never
+  see it.
+- Keyboard-only walkthrough reaches search, Create, every card link and the palette hint with a
+  visible focus ring; heading order is valid; no meaning is carried by colour alone.
+- 1440 / 1180 / 768 / 390 px layouts have no horizontal overflow and no clipped labels in `en` or
+  `vi`.
+- `pnpm typecheck`, `pnpm lint`, `pnpm build` pass; `vitest run` is unchanged; `e2e/home.spec.ts`
+  passes against the configured dev stack; no extra database is created and no database write is
+  introduced.
+- No new dependency, endpoint, migration or table; no upstream assets.
+
+**Verification plan (read-only against the configured database).**
+
+1. `pnpm typecheck`, `pnpm lint`, `pnpm build`; `vitest run` to confirm nothing else regressed.
+2. Run the dev API and SPA against the existing configured database and sign in as the demo
+   administrator and a regular user. Inspect the Network panel: no request matches an entity list
+   with `maxSize=1`, and the request count is the bounded set above regardless of how many modules
+   are enabled.
+3. Pulse: with four KPI dashlets on the effective default dashboard, exactly three render in
+   position order; with no KPI dashlet the rail is absent; a role-scoped default is respected; a
+   failing dashlet does not remove the other two.
+4. Agenda: compare the rendered events with `/calendar` for the same day. Tasks/approvals links land
+   on the right surfaces. Activity matches `/stream?view=followed`.
+5. Admin: the setup banner shows the real progress and next steps while incomplete. Regular users
+   never see it. If the demo data has no complete checklist, verify the hide condition by code
+   inspection and record that in the phase report.
+6. Keyboard-only pass and screenshots at 1440 / 1180 / 768 / 390 px (store under `.data/`, not in
+   source control); confirm no horizontal overflow in `en` and `vi`.
+7. `e2e/home.spec.ts` against the same stack. No database write, migration or extra database is
+   introduced by this phase.
+
+**Out of scope / deferred.** User-arranged home widgets and per-user home layout (P2); a server-side
+`/Home` aggregate (only if measured latency justifies it); KPI comparison/target/trend (depends on
+the dashlet contract, §5.6); a client-side "recent records" store (the palette's recent *pages* stay
+as they are); AI next-best-action (P2); dark mode.
+
+**Suggested implementation order.** Helper extraction (`pickDefaultDashboard`) → `home-model.ts` →
+hooks → hero + focus strip → agenda + pulse + activity + setup banner → CSS/responsive → i18n/docs/e2e
+→ full verification. Build the page skeleton with mocked query data first so the visual direction is
+reviewed before the data wiring is complete.
+
+**Implemented.** `apps/web/src/state/dashboard-default.ts` (`pickDefaultDashboard`, now used by
+`DashboardsPage` and home), `apps/web/src/pages/home/{home-model,useHomeData,HomeHero,FocusStrip,
+TodayAgenda,PulseStrip,ActivityFeed,SetupBanner,HomeSkeleton}.tsx|ts`, the thin `HomePage.tsx`
+composition, the `.carocrm-home-*` block in `styles/carocrm.css`, `formatLongDate` plus an optional
+zone on `formatClock` in `state/i18n.ts`, `web.home.*` in `i18n/en|vi/web.json`, the handbook page
+`content/docs/{en,vi}/getting-started/home.md`, and `e2e/home.spec.ts`. The old `Count` type, the
+`TONES` list, the per-entity `api.list` effect and the permanent checklist card are gone.
+
+**Verification actually run** (against the configured database; no extra database, no new write):
+
+- `pnpm typecheck` clean; project sources lint clean (`npx eslint apps packages e2e database scripts
+  modules`); `pnpm build` clean.
+- `vitest run`: 182/185 files, 2636 tests pass. The five failures are the Phase 19 service-desk
+  business-hours tests (`service-desk.test.ts`, `service-desk-workflow.test.ts`,
+  `service-desk-sla.test.ts`), which fail outside working hours — this run was on a Saturday. No home,
+  docs or web test is among them; `packages/docs/src/corpus.test.ts` and
+  `apps/api/test/docs-content.test.ts` pass with the two new handbook pages (18 translated P0 pages).
+- `e2e/home.spec.ts` 3/3 on the configured stack: greeting `h1`, no old grid, **no** per-entity
+  `maxSize=1` request, one request per card (tasks, approvals, calendar, stream; dashboards + at most
+  three dashlet runs), hero search lands on `/search?q=`, Create opens a create route, the tasks card
+  lands on `/tasks`, no post-login console error or failed response, and no horizontal overflow at
+  390 px.
+- Browser (admin session): greeting, date (`Saturday, October 24, 2026`), the focus sentence and the
+  three cards render real counts; the agenda agrees with `/calendar` for the same day (3 entries); the
+  pulse rail is **absent** because the demo dashboard carries no KPI dashlet, and the activity panel
+  shows its empty state — both are the designed behaviour, not a failure.
+
+**Known deviation.** With three KPI dashlets an administrator's home load is **10** requests, not 9:
+`tasks`, `approvals`, `today`, `dashboards`, three dashlet runs, `activity`, `setup` and the per-user
+`defaultDashboard` preference the shared helper needs. Still bounded and still independent of the
+module count. The demo administrator's checklist reports no incomplete step, so the banner is absent
+on the demo data; its 100 % hide condition was therefore confirmed by code inspection, as §5 of the
+verification plan permits.
+
 ---
 
 ## 18. Priorities and Release Gates
@@ -1487,6 +1735,11 @@ by the pure-helper unit tests, because this repository has no frontend test runn
   administrator creates, renames, reorders, deletes and fills by drag or keyboard in the entity's
   detail layout settings. ✅ 20.18 — the section is metadata, the editor lives in the layout settings,
   and the record page only renders it.
+- Home workspace (§5.6): greeting/search/create hero, focus strip (tasks, today, approvals), today's
+  agenda, at most three KPI dashlets from the effective default dashboard, followed activity and a
+  compact admin setup banner — with no per-entity count grid and no per-module request fan-out.
+  ✅ 20.19 — `HomePage.tsx` composes `pages/home/*`; the default-dashboard priority is shared with
+  Dashboards in `state/dashboard-default.ts`.
 
 ### P2 — Post-first-release enhancements
 
@@ -1537,6 +1790,10 @@ Phase 20 is complete when all applicable checks below pass:
       panels; no relation can be lost, the arrangement is per user, and `/Related` and ACL are
       unchanged. (**20.18 — 📋 planned, not implemented; this item is not part of the completed
       20.0–20.17 scope.**)
+- [x] The home page is a role-aware workspace — greeting/search/create hero, focus strip, today's
+      agenda, at most three curated KPI tiles and followed activity — with no per-entity count grid,
+      no `api.list` fan-out, and a compact administrator setup banner that hides at 100 %. (20.19 —
+      frontend-only: no new endpoint, migration or database write; guarded by `e2e/home.spec.ts`.)
 
 ---
 
@@ -1566,6 +1823,17 @@ suite), then wire the preference, then the component, then the page refactor. Re
 `EntityDetailPage.tsx`, `preferences/preference-shapes.ts`, `state/preferences.ts` and
 `components/LayoutEditor.tsx` before writing anything — the last one already solves drag-and-drop
 with a keyboard sensor and is the pattern to copy, not reinvent.
+
+**Starting 20.19 on its own:** read `apps/web/src/pages/HomePage.tsx`,
+`apps/web/src/pages/DashboardsPage.tsx`, `apps/web/src/pages/CalendarPage.tsx`,
+`apps/web/src/state/processes.ts`, `apps/web/src/state/metadata.ts`,
+`apps/web/src/components/StreamPanel.tsx` (`updateSummary`), `apps/web/src/state/i18n.ts`
+(`formatDateTime`/`activeTimezone`) and the `.carocrm-dashlet` / `.carocrm-reports-*` CSS blocks.
+Confirm the four data sources return what the plan expects before styling anything: process tasks,
+process instances, today's calendar slice and followed stream. Build the shared default-dashboard
+helper first, then a static composition with fixture data for a visual review, then wire the queries.
+Do not add a backend aggregate or a new dependency to make the page work; if the measured request
+budget is unacceptable, record it and defer `/Home` to P2.
 
 ---
 

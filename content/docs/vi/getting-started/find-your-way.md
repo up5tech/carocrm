@@ -48,5 +48,6 @@ lệnh nào khác.
 
 ## Đi tiếp ở đâu
 
+- [Không gian làm việc trang chủ](getting-started/home) — màn hình đầu tiên trả lời gì và mỗi thẻ dẫn tới đâu.
 - [Tìm kiếm và bảng lệnh](user/search) — tìm trên mọi thứ.
 - [Làm việc với danh sách](user/lists-and-views) — một màn hình danh sách làm được gì khi bạn đã vào.

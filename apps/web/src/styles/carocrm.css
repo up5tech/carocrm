@@ -6553,3 +6553,687 @@ textarea.carocrm-etpl-source,
   font-size: 13px;
   font-weight: 600;
 }
+
+/* ---- Phase 20.19: the home workspace (PLAN_Phase_20_Settings_UX.md §5.6) ----
+   A calm operating cockpit: one soft hero band, three focus cards that state the day in one
+   sentence, then the agenda and the pulse. White surfaces, 14px radius, one hairline border and the
+   page's only large type in the greeting. No image, no new font, no chart wall. */
+.carocrm-home {
+  --home-surface: #fff;
+  --home-line: #e8edf5;
+  --home-ink: #31373d;
+  --home-muted: #737b85;
+  --home-faint: #8b939d;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.carocrm-home-hero {
+  align-items: flex-start;
+  background: linear-gradient(112deg, #ffffff 40%, #eaf2ff 100%);
+  border: 1px solid var(--home-line);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+  justify-content: space-between;
+  padding: 22px 24px 24px;
+}
+
+.carocrm-home-hero-main {
+  flex: 1 1 380px;
+  min-width: 0;
+}
+
+.carocrm-home-greeting {
+  color: #1f2a37;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.22;
+  margin: 0;
+}
+
+.carocrm-home-meta {
+  color: var(--home-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  gap: 0 10px;
+  margin: 6px 0 0;
+}
+
+.carocrm-home-meta-role {
+  color: var(--home-muted);
+}
+
+.carocrm-home-meta-role::before {
+  color: #c3cad6;
+  content: '·';
+  margin-inline-end: 10px;
+}
+
+.carocrm-home-focus-line {
+  color: #41474f;
+  font-size: 13.5px;
+  font-weight: 500;
+  margin: 14px 0 0;
+  /* Reserved even while the counts load, so the hero never jumps. */
+  min-height: 20px;
+}
+
+.carocrm-home-hero-actions {
+  display: flex;
+  flex: 0 1 420px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 260px;
+}
+
+.carocrm-home-search-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.carocrm-home-search {
+  width: 100%;
+}
+
+.carocrm-home-kbd {
+  background: #f3f6fb;
+  border: 1px solid var(--home-line);
+  border-radius: 5px;
+  color: var(--home-faint);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 1px 5px;
+}
+
+.carocrm-home-hero-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.carocrm-home-ghost-link {
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--home-line);
+  border-radius: 8px;
+  color: #41474f;
+  display: inline-flex;
+  font-size: 13.5px;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 13px;
+  text-decoration: none;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.carocrm-home-ghost-link:hover {
+  border-color: #cfe0ff;
+  color: #2f6ed9;
+}
+
+.carocrm-home-create-caret {
+  font-size: 9px;
+  margin-inline-start: 2px;
+}
+
+.carocrm-home-create-menu {
+  background: #fff;
+  border: 1px solid var(--home-line);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(16, 24, 40, 0.12);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+/* antd gives a vertical dropdown menu its own viewport-height scroller, which inside this 320px
+   frame produced a second scrollbar beside the wrapper's. The wrapper is the only scroller. */
+.carocrm-home-create-menu .ant-dropdown-menu-vertical {
+  max-height: none;
+  overflow: visible;
+}
+
+/* ---- focus strip ---- */
+.carocrm-home-focus-strip {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.carocrm-home-focus-card {
+  background: var(--home-surface);
+  border: 1px solid var(--home-line);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 15px 16px 16px;
+  text-decoration: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.carocrm-home-focus-card:hover {
+  border-color: #cfe0ff;
+  box-shadow: 0 4px 14px rgba(67, 142, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.carocrm-home-focus-card:focus-visible {
+  border-color: #438eff;
+  box-shadow: 0 0 0 3px rgba(67, 142, 255, 0.22);
+  outline: none;
+}
+
+.carocrm-home-focus-card.is-broken {
+  border-style: dashed;
+}
+
+.carocrm-home-focus-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.carocrm-home-focus-icon {
+  align-items: center;
+  background: #eef4ff;
+  border-radius: 8px;
+  color: #3d6fbf;
+  display: inline-flex;
+  flex: none;
+  font-size: 14px;
+  height: 26px;
+  justify-content: center;
+  width: 26px;
+}
+
+.carocrm-home-focus-label {
+  color: var(--home-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.carocrm-home-focus-count {
+  color: var(--home-ink);
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1;
+  margin-inline-start: auto;
+}
+
+.carocrm-home-focus-hint {
+  color: #41474f;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.carocrm-home-focus-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.carocrm-home-focus-line {
+  color: var(--home-faint);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- body: agenda + pulse + activity ---- */
+.carocrm-home-body {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 1fr);
+}
+
+.carocrm-home-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.carocrm-home-panel {
+  background: var(--home-surface);
+  border: 1px solid var(--home-line);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  min-width: 0;
+  padding: 16px 18px 18px;
+}
+
+.carocrm-home-panel-head {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.carocrm-home-panel-title {
+  color: var(--home-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.carocrm-home-panel-link {
+  color: #3d6fbf;
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.carocrm-home-panel-link:hover {
+  text-decoration: underline;
+}
+
+.carocrm-home-agenda-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.carocrm-home-agenda-item {
+  align-items: center;
+  border-radius: 9px;
+  color: inherit;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 52px 8px minmax(0, 1fr);
+  padding: 8px 8px 8px 4px;
+  text-decoration: none;
+}
+
+.carocrm-home-agenda-item:hover {
+  background: #f7faff;
+}
+
+.carocrm-home-agenda-time {
+  color: var(--home-faint);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.carocrm-home-dot {
+  background: #c3cad6;
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  height: 8px;
+  width: 8px;
+}
+
+.carocrm-home-dot--task { background: #438eff; }
+.carocrm-home-dot--call { background: #13c2c2; }
+.carocrm-home-dot--meeting { background: #722ed1; }
+.carocrm-home-dot--project { background: #2f54eb; }
+
+.carocrm-home-agenda-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.carocrm-home-agenda-name {
+  color: var(--home-ink);
+  font-size: 13.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carocrm-home-agenda-type {
+  color: var(--home-faint);
+  font-size: 11.5px;
+}
+
+.carocrm-home-agenda-more {
+  color: #3d6fbf;
+  display: inline-block;
+  font-size: 12.5px;
+  margin-top: 8px;
+  text-decoration: none;
+}
+
+.carocrm-home-agenda-empty,
+.carocrm-home-activity-empty {
+  align-items: center;
+  color: var(--home-faint);
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  gap: 8px;
+  padding: 26px 8px;
+  text-align: center;
+}
+
+.carocrm-home-agenda-empty .anticon {
+  color: #c3cad6;
+  font-size: 22px;
+}
+
+.carocrm-home-activity-empty a {
+  color: #3d6fbf;
+  font-size: 12.5px;
+  text-decoration: none;
+}
+
+.carocrm-home-panel-error {
+  align-items: center;
+  color: #8b4a4a;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.carocrm-home-kpis {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.carocrm-home-kpi {
+  border: 1px solid #eff2f7;
+  border-radius: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.carocrm-home-kpi-label {
+  color: var(--home-faint);
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.carocrm-home-kpi-value {
+  color: var(--home-ink);
+  display: block;
+  font-size: 24px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.carocrm-home-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.carocrm-home-activity-item {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.carocrm-home-activity-avatar {
+  align-items: center;
+  background: #eef4ff;
+  border-radius: 50%;
+  color: #3d6fbf;
+  display: flex;
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.carocrm-home-activity-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.carocrm-home-activity-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.carocrm-home-activity-author {
+  color: var(--home-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.carocrm-home-activity-time {
+  color: var(--home-faint);
+  font-size: 11.5px;
+}
+
+.carocrm-home-activity-body {
+  color: #41474f;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.carocrm-home-activity-record {
+  align-self: flex-start;
+  color: #3d6fbf;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.carocrm-home-activity-record:hover {
+  text-decoration: underline;
+}
+
+/* ---- administrator setup banner ---- */
+.carocrm-home-setup {
+  align-items: center;
+  background: #f7faff;
+  border: 1px solid #dbe7fb;
+  border-radius: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 10px 14px;
+}
+
+.carocrm-home-setup-main {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.carocrm-home-setup-title {
+  color: #2f6ed9;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.carocrm-home-setup-progress {
+  color: var(--home-muted);
+  font-size: 12.5px;
+}
+
+.carocrm-home-setup-bar {
+  background: #dbe7fb;
+  border-radius: 999px;
+  flex: 1 1 120px;
+  height: 6px;
+  max-width: 240px;
+  overflow: hidden;
+}
+
+.carocrm-home-setup-bar-fill {
+  background: linear-gradient(90deg, #438eff, #7cb0ff);
+  border-radius: 999px;
+  display: block;
+  height: 100%;
+  transition: width 180ms ease;
+}
+
+.carocrm-home-setup-next {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.carocrm-home-setup-next-label {
+  color: var(--home-faint);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.carocrm-home-setup-step {
+  background: #fff;
+  border: 1px solid #dbe7fb;
+  border-radius: 999px;
+  color: #2f6ed9;
+  font-size: 12.5px;
+  padding: 4px 11px;
+  text-decoration: none;
+}
+
+.carocrm-home-setup-step:hover {
+  border-color: #438eff;
+}
+
+/* ---- loading ---- */
+.carocrm-home-skeleton {
+  animation: carocrm-home-shimmer 1.4s ease-in-out infinite;
+  background: linear-gradient(90deg, #f1f4f9 25%, #e7ecf4 37%, #f1f4f9 63%);
+  background-size: 400% 100%;
+  border-radius: 8px;
+  display: block;
+}
+
+.carocrm-home-skeleton--row {
+  height: 16px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.carocrm-home-skeleton--value {
+  height: 24px;
+  margin-top: 8px;
+  width: 64px;
+}
+
+@keyframes carocrm-home-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* ---- responsive: one body column below 1180, everything stacked below 768 ---- */
+@media only screen and (max-width: 1180px) {
+  .carocrm-home-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media only screen and (max-width: 767px) {
+  .carocrm-home-hero {
+    padding: 18px;
+  }
+
+  .carocrm-home-greeting {
+    font-size: 24px;
+  }
+
+  .carocrm-home-hero-actions {
+    flex-basis: 100%;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .carocrm-home-focus-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .carocrm-home-panel {
+    padding: 14px 14px 16px;
+  }
+
+  .carocrm-home-setup-bar {
+    max-width: none;
+  }
+}
+
+/* Touch devices get real 44 px targets instead of the 36 px desktop control height. */
+@media (hover: none), (pointer: coarse) {
+  .carocrm-home-focus-card {
+    min-height: 44px;
+  }
+
+  .carocrm-home-ghost-link {
+    min-height: 44px;
+    padding-inline: 16px;
+  }
+
+  .carocrm-home-setup-step {
+    padding: 9px 13px;
+  }
+
+  .carocrm-home-panel-link {
+    padding-block: 10px;
+  }
+
+  .carocrm-home-agenda-item {
+    padding-block: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carocrm-home-skeleton {
+    animation: none;
+  }
+
+  .carocrm-home-focus-card,
+  .carocrm-home-ghost-link,
+  .carocrm-home-setup-bar-fill {
+    transition: none;
+  }
+
+  .carocrm-home-focus-card:hover {
+    transform: none;
+  }
+}

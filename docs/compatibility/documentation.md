@@ -34,7 +34,7 @@ it, and a Knowledge Base article is not a handbook page.
   required, orphans are reported) and the renderer already support them; what is missing is authored,
   reviewed imagery that will not rot on the next UI change. Phase 21.3's acceptance named this and the
   scope excluded it.
-- **`vi` covers the P0 set only** — 17 of 46 pages, 37% on the admin tab. The other 29 pages answer in
+- **`vi` covers the P0 set only** — 18 of 47 pages, 37% on the admin tab. The other 29 pages answer in
   English behind the fallback notice, which §4.7 prefers over a wrong translation.
 - **The Vietnamese prose has not been reviewed by a native speaker.** §4.7 requires a human pass before
   `vi` is treated as authoritative. The chrome (`web.docs.*`, `web.adminDocs.*`, `core.app.skipToContent`)
@@ -49,7 +49,7 @@ it, and a Knowledge Base article is not a handbook page.
   to a CRM user. That is deliberate, but it means an administrator-only troubleshooting page still needs
   its own `audience: admin`.
 - **Search is in-memory per process** and rebuilt when the content signature changes. There is no shared
-  index and no persistence; a large corpus would need one, and 46 pages do not.
+  index and no persistence; a large corpus would need one, and 47 pages do not.
 - **The app navigation chrome is not fully translated.** With the reader in Vietnamese the handbook is
   Vietnamese, but the sidebar labels (Home, Search, Dashboards) stay English because navigation labels are
   not re-resolved on a locale change. Outside Phase 21's surface; nobody owns it yet.

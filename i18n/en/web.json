@@ -125,6 +125,7 @@
   },
   "docs": {
     "title": "Documentation",
+    "sidebarLabel": "Help",
     "landingLede": "Guides for the people who run this CRM and the people who work in it every day.",
     "sectionsNav": "Documentation sections",
     "breadcrumb": "Documentation path",
@@ -304,9 +305,55 @@
     "failed": "Login failed."
   },
   "home": {
-    "title": "Dashboard",
-    "subtitle": "Records available in this workspace, rendered from entity metadata.",
-    "records": "records"
+    "greeting": {
+      "morning": "Good morning, {name}",
+      "afternoon": "Good afternoon, {name}",
+      "evening": "Good evening, {name}"
+    },
+    "searchPlaceholder": "Search records…",
+    "searchHint": "Type a name and press Enter to search. Ctrl+K or ⌘K opens the command palette.",
+    "create": "Create",
+    "dashboards": "Dashboards",
+    "focus": {
+      "tasks_one": "{count} task needs an answer",
+      "tasks_other": "{count} tasks need an answer",
+      "overdue_one": "{count} overdue",
+      "overdue_other": "{count} overdue",
+      "today_one": "{count} event today",
+      "today_other": "{count} events today",
+      "clear": "Nothing is waiting for you right now.",
+      "cardTasks": "My tasks",
+      "cardToday": "Today",
+      "cardApprovals": "Approvals",
+      "tasksClear": "Nothing due",
+      "none": "Nothing scheduled",
+      "running_one": "{count} running",
+      "running_other": "{count} running"
+    },
+    "agenda": {
+      "title": "Today",
+      "empty": "Nothing is on today's calendar.",
+      "more_one": "+{count} more event",
+      "more_other": "+{count} more events",
+      "open": "View calendar"
+    },
+    "pulse": {
+      "title": "At a glance",
+      "link": "All dashboards"
+    },
+    "activity": {
+      "title": "Activity",
+      "empty": "Nothing has changed in the records you follow yet.",
+      "follow": "Find a record to follow",
+      "link": "View stream"
+    },
+    "setup": {
+      "title": "Setup",
+      "progress": "{done} of {total} steps done",
+      "next": "Next"
+    },
+    "error": "This card could not load.",
+    "retry": "Retry"
   },
   "search": {
     "title": "Search",

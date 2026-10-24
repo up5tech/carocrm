@@ -48,5 +48,6 @@ not run any other command.
 
 ## Where to go next
 
+- [Your home workspace](getting-started/home) — what the first screen answers and what each card opens.
 - [Search and the command palette](user/search) — searching across everything.
 - [Working with lists](user/lists-and-views) — what a list screen can do once you are in it.

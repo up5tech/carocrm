@@ -90,7 +90,9 @@ it is per account, and it survives a new device.
 An empty list is a screen with a job: say what is missing, and offer the one action that fixes it.
 
 - The setup checklist tells a first-run administrator what is still missing, with deep links.
-- The home page lists the record types with their counts, so "nothing here" is explained.
+- The home page is a workspace, not an inventory: it states the day first (what needs an answer, what
+  is on today), then a couple of curated KPI numbers and the followed activity. It never lists every
+  module with a count, so "nothing here" is said once, in one sentence, instead of a wall of zeros.
 - The dashboard opens on the user's starred default, falling back to a role-scoped one, then to the
   first dashboard.
 

@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type DashboardRow } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
+import { pickDefaultDashboard } from '../state/dashboard-default.js';
 import { t } from '../state/i18n.js';
 import { navEntities, useMetadata } from '../state/metadata.js';
 import { usePreference } from '../state/preferences.js';
@@ -73,24 +74,13 @@ export function DashboardsPage() {
   const chosenManually = useRef(false);
   useEffect(() => {
     if (chosenManually.current) return;
-    const preferred = defaultDashboard.value;
-    // Priority: user-starred > role-scoped default > first dashboard
-    if (preferred !== null && preferred !== undefined && dashboards.some((item) => item.id === preferred)) {
-      setActiveId(preferred);
-      return;
-    }
-    // Role-scoped default: find a dashboard whose roleScoped matches one of the user's roles
-    const roles = principal?.roles;
-    if (roles && roles.length > 0 && dashboards.length > 0) {
-      const roleDefault = dashboards.find((d) => d.roleScoped !== null && d.roleScoped !== undefined && roles.includes(d.roleScoped));
-      if (roleDefault) {
-        setActiveId(roleDefault.id);
-        return;
-      }
-    }
-    // Fallback: first shared or personal dashboard
-    const first = dashboards[0];
-    if (!activeId && first !== undefined) setActiveId(first.id);
+    // §20.19: the priority is shared with the home page (user-starred > role-scoped > first), so the
+    // two screens cannot land on different boards.
+    const picked = pickDefaultDashboard(dashboards, defaultDashboard.value, principal?.roles ?? []);
+    if (!picked) return;
+    // The fallback picks the first board for a fresh screen; it never replaces the one already open.
+    if (picked.source === 'first' && activeId !== null) return;
+    setActiveId(picked.id);
   }, [defaultDashboard.value, dashboards, principal, activeId]);
 
   const load = useCallback(async (): Promise<DashboardRow[]> => {

@@ -53,9 +53,9 @@ describe('the shipped documentation corpus', () => {
     expect(report.errors).toEqual([]);
   });
 
-  it('carries the §4.8 inventory: 4 getting-started, 15 user, 24 admin, 5 reference', () => {
+  it('carries the §4.8 inventory: 5 getting-started, 15 user, 24 admin, 5 reference', () => {
     expect(english.sections.map((section) => `${section.key}:${String(section.pages.length)}`)).toEqual([
-      'getting-started:4',
+      'getting-started:5',
       'user:15',
       'admin:24',
       'reference:5',
@@ -75,14 +75,15 @@ describe('the shipped documentation corpus', () => {
     expect(withLink.length).toBeGreaterThanOrEqual(12);
   });
 
-  it('translates the 17 P0 pages into `vi` and falls back to English for the rest', () => {
+  it('translates the 18 P0 pages into `vi` and falls back to English for the rest', () => {
     const vietnamese = buildIndex(files, { locale: 'vi' });
-    // `en` still defines the tree, so a `vi` reader sees all four sections and all 40 pages.
-    expect(vietnamese.sections.map((section) => section.pages.length)).toEqual([4, 15, 24, 5]);
+    // `en` still defines the tree, so a `vi` reader sees all four sections and all 41 pages.
+    expect(vietnamese.sections.map((section) => section.pages.length)).toEqual([5, 15, 24, 5]);
 
     const p0 = [
       'getting-started/sign-in',
       'getting-started/find-your-way',
+      'getting-started/home',
       'getting-started/your-profile',
       'getting-started/keyboard-shortcuts',
       'user/lists-and-views',
@@ -99,13 +100,13 @@ describe('the shipped documentation corpus', () => {
       'admin/api-keys',
       'admin/entities-and-fields',
     ];
-    expect(p0).toHaveLength(17);
+    expect(p0).toHaveLength(18);
     for (const key of p0) {
       expect(vietnamese.pages.get(key)).toMatchObject({ fallback: false, locale: 'vi' });
     }
     // Nothing beyond the P0 set is translated yet, and each of those pages carries the flag that makes the
     // reader see it is reading English (§4.7).
-    expect([...vietnamese.pages.values()].filter((page) => !page.fallback)).toHaveLength(17);
+    expect([...vietnamese.pages.values()].filter((page) => !page.fallback)).toHaveLength(18);
     expect(vietnamese.pages.get('reference/glossary')).toMatchObject({ fallback: true, locale: 'en' });
   });
 

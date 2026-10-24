@@ -57,14 +57,16 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
   { key: 'calendar', kind: 'page', route: '/calendar', labelKey: 'core.app.calendar', icon: 'CalendarOutlined', order: PAGE_ORDER[5] ?? 60 },
   { key: 'myTasks', kind: 'page', route: '/tasks', labelKey: 'core.app.myTasks', icon: 'CarryOutOutlined', order: PAGE_ORDER[6] ?? 70 },
   // Phase 19-AI: the module page is not a metadata entity, so its visibility is checked against the
-  // synthetic `AIAgent:read` permission (the same capability the API asserts).
+  // synthetic `AIAgent:read` permission (the same capability the API asserts). It is configuration
+  // rather than a daily working surface, so it sits with the other module pages under Administration.
   {
     key: 'aiAgents',
     kind: 'page',
     route: '/ai-agents',
     labelKey: 'web.aiAgents.title',
     icon: 'RobotOutlined',
-    order: 75,
+    parent: 'administration',
+    order: 947,
     inQuickSearch: true,
     permission: { entity: 'AIAgent', action: 'read' },
   },
@@ -104,7 +106,7 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     // Module diagnostics are configuration, so the entry lives with the settings, not beside the
     // inbox. It keeps its own capability gate: `parent` only changes where the entry is drawn.
     parent: 'administration',
-    order: 947,
+    order: 948,
     inQuickSearch: true,
     permission: { entity: 'VoiceProviderAccount', action: 'read' },
   },
@@ -117,7 +119,7 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     labelKey: 'advancedintegrations.module.label',
     icon: 'ApiOutlined',
     parent: 'administration',
-    order: 948,
+    order: 949,
     inQuickSearch: true,
     permission: { entity: 'IntegrationConnection', action: 'read' },
   },
@@ -139,14 +141,15 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
   // Phase 21: the handbook is a static page like the others, and the only gate on it is the instance
   // document — every signed-in reader may open `/docs`, and an administrator can take the row away.
   // `feature` is consulted after the ACL, so this flag can remove an entry but never reveal one.
+  // The menu row is called "Help": the page is still the handbook, but the sidebar entry reads as an
+  // affordance next to Inbox rather than a module name.
   {
     key: 'docs',
     kind: 'page',
     route: '/docs',
-    labelKey: 'web.docs.title',
+    labelKey: 'web.docs.sidebarLabel',
     icon: 'BookOutlined',
-    parent: 'administration',
-    order: 949,
+    order: 78,
     inQuickSearch: true,
     feature: { module: 'docs', flag: 'showInSidebar' },
   },

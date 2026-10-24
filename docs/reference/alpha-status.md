@@ -889,7 +889,7 @@ checklist and the onboarding empty states), 20.16 (the accessibility and respons
 | Record page: layout-driven panels, relation link/new, duplicate warning | `apps/web/src/pages/EntityDetailPage.tsx` |
 | Edit form: unsaved guard, `⌘/Ctrl+Enter` save, inline validation | `apps/web/src/pages/EntityEditPage.tsx` |
 | Command palette (`⌘/Ctrl+K`, commands / records / recent) | `apps/web/src/components/CommandPalette.tsx` |
-| Setup checklist service + admin panel on the home page | `apps/api/src/setup-checklist/`, `apps/web/src/pages/HomePage.tsx` |
+| Setup checklist service + the compact administrator banner on the home workspace | `apps/api/src/setup-checklist/`, `apps/web/src/pages/home/SetupBanner.tsx` |
 | Role-scoped default dashboards | `apps/web/src/pages/DashboardsPage.tsx` |
 | Accessibility and responsive CSS (focus ring, 44 px targets, reduced motion, 768/390 px) | `apps/web/src/styles/carocrm.css` |
 | UX documentation | `docs/ux/design-principles.md`, `docs/ux/list-view.md`, `docs/ux/record-page.md`, `docs/ux/accessibility.md` |
@@ -927,8 +927,8 @@ criterion ("axe passes on the four core surfaces") is not met.
 ## Phase 21 — In-app documentation and product help (added 2026-10-21)
 
 Scope: `PLAN_Phase_21_Documentation.md`, sub-phases 21.0–21.10. The product now carries its own handbook:
-`/docs` renders 46 pages in `en` across four sections (`getting-started`, `user`, `admin`, `reference`),
-17 of which are translated into `vi`.
+`/docs` renders 47 pages in `en` across four sections (`getting-started`, `user`, `admin`, `reference`),
+18 of which are translated into `vi`.
 
 | Item | State | Evidence |
 |---|---|---|
@@ -959,3 +959,59 @@ defect, unrelated to Phase 21, and it passes again during business hours.
 Correction to the Phase 20 note above: `PermissionDenied` and `HelpTip` **are** now used by pages —
 `PermissionDenied` backs a refused administrator handbook page and `HelpTip` carries a `docKey` on the Main
 menu tab.
+
+## Phase 20.19 — The home workspace (added 2026-10-24)
+
+Implemented: the last planned sub-phase of `PLAN_Phase_20_Settings_UX.md` — `/home` is a workspace
+instead of an inventory. Frontend-only: **no endpoint, migration, table, dependency or database
+write**.
+
+| Deliverable | Where |
+|---|---|
+| The shared default-dashboard priority (starred → role-scoped → first) | `apps/web/src/state/dashboard-default.ts`, consumed by `DashboardsPage.tsx` and the home pulse rail |
+| Pure home derivations (greeting, local day, agenda cap, overdue, focus sentence, KPI selection, relative time) | `apps/web/src/pages/home/home-model.ts` |
+| One query per card, each with its own loading/empty/error state | `apps/web/src/pages/home/useHomeData.ts` |
+| Hero, focus strip, agenda, pulse, activity, setup banner, skeletons | `apps/web/src/pages/home/` |
+| Thin page composition | `apps/web/src/pages/HomePage.tsx` |
+| `.carocrm-home-*` design block (hero wash, 14 px surfaces, 1180/767 px bands, 44 px touch targets, reduced motion) | `apps/web/src/styles/carocrm.css` |
+| One shared long-date formatter, and an optional zone on `formatClock` | `apps/web/src/state/i18n.ts` |
+| `web.home.*` rewritten in `en` and `vi` | `i18n/en|vi/web.json` |
+| Handbook page | `content/docs/en/getting-started/home.md`, `content/docs/vi/getting-started/home.md` |
+| Browser coverage | `e2e/home.spec.ts` |
+
+What changed for a user:
+
+- Home answers four questions in order: what needs an answer (tasks, overdue, approvals), what is on
+  today, what the pulse is (at most three KPI dashlets of the dashboard they land on) and what changed
+  (the followed stream). It never renders a tile per enabled entity, so the page no longer grows — or
+  slows down — with the module list.
+- The greeting, the local long date and the focus sentence state the day in one line; a quiet day says
+  "Nothing is waiting for you right now." instead of showing zeros.
+- Each card is a single link with its number in the accessible name; a card whose source fails says so
+  and offers **Retry** without taking the rest of the page with it.
+- The administrator setup checklist is now a slim banner under the hero that disappears at 100 %.
+
+Verification actually run (configured database; no extra database, no new write):
+
+- `pnpm typecheck` clean; project sources lint clean (`npx eslint apps packages e2e database scripts
+  modules`); `pnpm build` clean.
+- `pnpm test`: **182/185 files, 2636 tests**. The five failures are the Phase 19 service-desk
+  business-hours tests, which fail outside working hours — the run was on a Saturday. Unrelated to this
+  phase. `packages/docs/src/corpus.test.ts` and `apps/api/test/docs-content.test.ts` pass with the two
+  new pages (the corpus inventory is now 5 / 15 / 24 / 5 pages, 18 translated P0 pages).
+- `e2e/home.spec.ts` **3/3**: no per-entity `maxSize=1` request, one request per card, hero search →
+  `/search?q=`, Create → a create route, tasks card → `/tasks`, no post-login console error or failed
+  response, no horizontal overflow at 390 px.
+- `pnpm lint` as a whole still fails, and it failed before this phase too: `eslint .` walks the local,
+  untracked `.agents/` skills directory (`no-undef` on `process`/`Buffer`/`console`). The project's own
+  sources are clean.
+
+Known limits:
+
+- An administrator with three KPI dashlets issues 10 requests on a home load rather than the plan's 9 —
+  the extra one is the `defaultDashboard` preference, which the shared helper needs so home and
+  Dashboards cannot pick different boards. Still independent of the module count.
+- The demo instance's default dashboard carries no KPI dashlet, so the pulse rail is correctly absent
+  there; the "three of four dashlets" case is covered by the pure selector, not by demo data.
+- Nothing on this page is per-user configurable yet (arranged widgets and a personal home layout are
+  P2), and the KPI dashlet contract still has no comparison/target/trend, so no tile invents one.
