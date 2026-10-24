@@ -29,6 +29,7 @@ import {
   detailEntries,
   type FieldEntry,
   fieldLabel,
+  layoutFieldEntries,
   layoutFieldNames,
   layoutPanelsFor,
   orderByLayout,
@@ -123,6 +124,9 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
   );
 
   const linkedIds = useMemo(() => new Set(rows.map((row) => String(row['id']))), [rows]);
+  // The related-panel layout picks the extra columns; the record name stays the first column.
+  const displayField = targetDefinition?.record?.displayField ?? 'name';
+  const extraColumns = layoutFieldEntries(targetDefinition, 'panel').filter((entry) => entry.name !== displayField);
 
   useEffect(() => {
     void load(1, RELATED_PAGE_SIZE);
@@ -177,6 +181,13 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
               <Link to={`${base}/${targetName ?? ''}/${String(row['id'])}`}>{recordLabel(row, targetDefinition)}</Link>
             ),
           },
+          ...extraColumns.map((entry) => ({
+            title: fieldLabel(entry.name, entry.field),
+            dataIndex: entry.name,
+            render: (_: unknown, row: Record<string, unknown>) => (
+              <FieldValue field={entry.field} value={row[entry.name]} variant="inline" fieldName={entry.name} linkLabels={linkLabelsOf(row)} />
+            ),
+          })),
           {
             title: '',
             key: 'actions',

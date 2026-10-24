@@ -240,7 +240,7 @@ export class MetadataController {
    * reserved bookkeeping column. A view with no panels is allowed (it just falls back to flat order).
    */
   private validateLayouts(definition: EntityDefinition, layouts: unknown): void {
-    const viewTypes = new Set(['list', 'detail', 'edit', 'filter', 'search', 'massUpdate']);
+    const viewTypes = new Set(['list', 'detail', 'edit', 'filter', 'search', 'massUpdate', 'panel', 'popup']);
     const allowed = new Set(Object.keys(definition.fields));
     for (const [view, groups] of Object.entries(layouts as Record<string, unknown>)) {
       if (!viewTypes.has(view)) {

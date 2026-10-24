@@ -52,7 +52,7 @@ export interface LayoutDefinition {
   panels: LayoutPanel[];
 }
 
-export type LayoutViewType = 'list' | 'detail' | 'edit' | 'filter' | 'search' | 'massUpdate';
+export type LayoutViewType = 'list' | 'detail' | 'edit' | 'filter' | 'search' | 'massUpdate' | 'panel' | 'popup';
 
 /** Optional per-entity ACL defaults stored on the entity definition (PLAN §8). */
 export interface AclDefinition {

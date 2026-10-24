@@ -5,7 +5,7 @@ audience: admin
 order: 60
 tags: [entity, field, layout, metadata]
 related: [admin/settings-overview, admin/main-menu]
-updated: 2026-10-21
+updated: 2026-10-24
 ---
 
 The CRM is driven by metadata: what a record type is, which fields it has, how its screens are arranged. All
@@ -54,13 +54,18 @@ Renaming a field's *label* is safe at any time — that is text, not data.
 
 ## Layouts
 
-Layouts decide the order of what a person reads. The editor covers three views:
+Layouts decide the order of what a person reads. The editor covers five views:
 
 | View | What it controls |
 | --- | --- |
 | List | Which fields are columns. A field left out is not a column; it is still on the record. |
 | Detail | The panels on a record screen, and the fields inside each one. |
 | Edit | The same shape for the create and edit form. |
+| Related panel | The extra columns a relation panel shows after the record name on a record screen. |
+| Link popup | The extra columns the “link existing record” popup shows after the record name. |
+
+The last two are a single ordered field list rather than named panels; the record name is always the first
+column, and only the fields you add follow it.
 
 Drag a field between a panel and the pool, rename or remove a panel, reorder them, and the preview on the
 right shows the result before you save. Fields that end up in no panel are grouped under **Other** at the

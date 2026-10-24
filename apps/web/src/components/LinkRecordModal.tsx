@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import { api, type WhereClause } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
 import { t } from '../state/i18n.js';
-import { recordLabel } from '../state/metadata.js';
+import { fieldLabel, layoutFieldEntries, recordLabel } from '../state/metadata.js';
+import { FieldValue, linkLabelsOf } from './fields.js';
 
 const LINK_PAGE_SIZE = 10;
 
@@ -47,6 +48,8 @@ export function LinkRecordModal({
   const [linking, setLinking] = useState(false);
   const displayField = targetDefinition?.record?.displayField ?? 'name';
   const label = targetDefinition?.label ?? targetEntity;
+  // The popup layout picks the extra columns; the record name stays the first column.
+  const extraColumns = layoutFieldEntries(targetDefinition, 'popup').filter((entry) => entry.name !== displayField);
 
   // Reopening starts a fresh search; the debounce below cancels any request from the old term.
   useEffect(() => {
@@ -110,7 +113,7 @@ export function LinkRecordModal({
       okText={t('web.detail.link')}
       okButtonProps={{ disabled: selectedId === null }}
       confirmLoading={linking}
-      width={640}
+      width={900}
       destroyOnHidden
     >
       <Input
@@ -130,6 +133,7 @@ export function LinkRecordModal({
         size="small"
         loading={loading}
         dataSource={rows}
+        scroll={{ x: 'max-content' }}
         columns={[
           {
             title: label,
@@ -143,6 +147,13 @@ export function LinkRecordModal({
               </span>
             ),
           },
+          ...extraColumns.map((entry) => ({
+            title: fieldLabel(entry.name, entry.field),
+            dataIndex: entry.name,
+            render: (_: unknown, row: Record<string, unknown>) => (
+              <FieldValue field={entry.field} value={row[entry.name]} variant="inline" fieldName={entry.name} linkLabels={linkLabelsOf(row)} />
+            ),
+          })),
         ]}
         rowSelection={{
           type: 'radio',

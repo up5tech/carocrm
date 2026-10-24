@@ -12,7 +12,17 @@ import { detailEntries, editEntries, fieldLabel, useMetadata } from '../state/me
 import { RelationTabsEditor } from './RelationTabsEditor.js';
 
 /** Views an admin can lay out by hand (PLAN §8). */
-const LAYOUT_VIEWS: LayoutViewType[] = ['list', 'detail', 'edit'];
+const LAYOUT_VIEWS: LayoutViewType[] = ['list', 'detail', 'edit', 'panel', 'popup'];
+
+/** Views whose layout is one ordered column list rather than named panels. */
+function isColumnView(view: LayoutViewType): boolean {
+  return view === 'list' || view === 'panel' || view === 'popup';
+}
+
+/** The related panel and the link popup each render one column list, so they keep one fixed group. */
+function isSingleColumnView(view: LayoutViewType): boolean {
+  return view === 'panel' || view === 'popup';
+}
 
 /** Prefix that keeps panel ids distinguishable from field ids inside one DndContext. */
 const PANEL_ID_PREFIX = 'panel:';
@@ -87,6 +97,9 @@ function layoutSection(entity: EntityDefinition, view: LayoutViewType, panels: L
 /** Editor draft for a view: panels in position order plus every renderable field not yet placed. */
 function layoutDraftOf(entity: EntityDefinition, view: LayoutViewType): LayoutDraft {
   const panels = [...panelsOf(entity, view)].sort((a, b) => a.position - b.position);
+  // These views are a single ordered column list; give a fresh layout its one group up front so the
+  // administrator only has to drag fields into place.
+  if (isSingleColumnView(view) && panels.length === 0) panels.push({ name: 'fields', position: 0, fields: [] });
   const assigned = new Set(panels.flatMap((panel) => panel.fields ?? []));
   return { panels, disabled: poolFieldNames(entity, view).filter((name) => !assigned.has(name)) };
 }
@@ -145,24 +158,43 @@ function SortableLayoutRow({ name, label }: { name: string; label: string }) {
 }
 
 /** A layout panel rendered as a named block of field rows with rename/remove actions. */
-function LayoutGroup({ panel, labelOf, onEdit, onRemove }: { panel: LayoutPanel; labelOf: (name: string) => string; onEdit: (name: string) => void; onRemove: (name: string) => void }) {
+function LayoutGroup({
+  panel,
+  labelOf,
+  onEdit,
+  onRemove,
+  locked = false,
+}: {
+  panel: LayoutPanel;
+  labelOf: (name: string) => string;
+  onEdit: (name: string) => void;
+  onRemove: (name: string) => void;
+  /** A column view has one fixed group: no rename, remove or reordering affordances. */
+  locked?: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: `${PANEL_ID_PREFIX}${panel.name}` });
   const fields = panel.fields ?? [];
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition, opacity: isDragging ? 0.35 : 1 }}>
       <div className="carocrm-layout-group">
         <div className="carocrm-layout-group-head">
-          <span className="carocrm-board-drag-handle" {...attributes} {...listeners}>
-            <HolderOutlined />
+          {locked ? null : (
+            <span className="carocrm-board-drag-handle" {...attributes} {...listeners}>
+              <HolderOutlined />
+            </span>
+          )}
+          <span className="carocrm-layout-group-name">
+            {locked ? t('web.entityAdmin.layoutColumnsTitle') : (panel.label ?? panel.name)}
           </span>
-          <span className="carocrm-layout-group-name">{panel.label ?? panel.name}</span>
           <span className="carocrm-layout-group-count">({fields.length})</span>
-          <span style={{ display: 'inline-flex', gap: 2, marginLeft: 'auto' }}>
-            <Button type="text" size="small" icon={<EditOutlined />} aria-label={t('web.entityAdmin.layoutEditGroupAria', { name: panel.name })} onClick={() => onEdit(panel.name)} />
-            <Popconfirm title={t('web.entityAdmin.removePanelConfirm', { name: panel.name })} okText={t('web.entityAdmin.remove')} onConfirm={() => onRemove(panel.name)}>
-              <Button danger type="text" size="small" icon={<DeleteOutlined />} aria-label={t('web.entityAdmin.removePanelAria', { name: panel.name })} />
-            </Popconfirm>
-          </span>
+          {locked ? null : (
+            <span style={{ display: 'inline-flex', gap: 2, marginLeft: 'auto' }}>
+              <Button type="text" size="small" icon={<EditOutlined />} aria-label={t('web.entityAdmin.layoutEditGroupAria', { name: panel.name })} onClick={() => onEdit(panel.name)} />
+              <Popconfirm title={t('web.entityAdmin.removePanelConfirm', { name: panel.name })} okText={t('web.entityAdmin.remove')} onConfirm={() => onRemove(panel.name)}>
+                <Button danger type="text" size="small" icon={<DeleteOutlined />} aria-label={t('web.entityAdmin.removePanelAria', { name: panel.name })} />
+              </Popconfirm>
+            </span>
+          )}
         </div>
         <div className="carocrm-layout-group-body">
           {fields.length === 0 ? (
@@ -201,10 +233,10 @@ function AppendZone({ empty }: { empty: boolean }) {
  */
 function LayoutPool({ draft, view, labelOf }: { draft: LayoutDraft; view: LayoutViewType; labelOf: (name: string) => string }) {
   const { setNodeRef, isOver } = useDroppable({ id: LAYOUT_POOL_ID });
-  // The list view has no fallback for a field no panel places; the detail and edit pages do. With
-  // groups, those fields land in the computed **Other** card; without any group the page shows one
-  // plain field list, which the pool names accordingly.
-  const computedOther = view !== 'list';
+  // The column views have no fallback for a field no panel places; the detail and edit pages do.
+  // With groups, those fields land in the computed **Other** card; without any group the page shows
+  // one plain field list, which the pool names accordingly.
+  const computedOther = view === 'detail' || view === 'edit';
   const hasGroups = draft.panels.length > 0;
   const title = !computedOther
     ? t('web.entityAdmin.layoutDisabled')
@@ -240,15 +272,21 @@ function LayoutPool({ draft, view, labelOf }: { draft: LayoutDraft; view: Layout
  * definition: a list layout orders the table columns, a detail or edit layout stacks its panels.
  */
 function LayoutPreview({ view, draft, labelOf }: { view: LayoutViewType; draft: LayoutDraft; labelOf: (name: string) => string }) {
-  if (view === 'list') {
+  if (isColumnView(view)) {
     const columns = draft.panels.flatMap((panel) => panel.fields ?? []);
+    const hint =
+      view === 'panel'
+        ? t('web.entityAdmin.layoutPreviewPanelHint')
+        : view === 'popup'
+          ? t('web.entityAdmin.layoutPreviewPopupHint')
+          : t('web.entityAdmin.layoutPreviewListHint');
     return (
       <Card size="small" className="carocrm-card" title={t('web.entityAdmin.layoutPreview')}>
         <div className="carocrm-layout-preview-table" role="img" aria-label={t('web.entityAdmin.layoutPreview')}>
           {columns.length === 0 ? <Typography.Text type="secondary">{t('web.entityAdmin.layoutPreviewEmpty')}</Typography.Text> : columns.map((field) => <span key={field} className="carocrm-layout-preview-col">{labelOf(field)}</span>)}
         </div>
         <Typography.Text type="secondary" className="carocrm-admin-note">
-          {t('web.entityAdmin.layoutPreviewListHint')}
+          {hint}
         </Typography.Text>
       </Card>
     );
@@ -489,11 +527,33 @@ export function LayoutEditor({ entity, save, showInlineActions = true, onState }
       <Row gutter={[12, 12]} align="middle">
         <Col xs={24} sm={8} md={6}>
           <label htmlFor="layout-view">{t('web.entityAdmin.view')}</label>
-          <Select id="layout-view" style={{ width: '100%' }} value={view} options={LAYOUT_VIEWS.map((value) => ({ value, label: value }))} onChange={(value: LayoutViewType) => setView(value)} />
+          <Select
+            id="layout-view"
+            style={{ width: '100%' }}
+            value={view}
+            options={LAYOUT_VIEWS.map((value) => ({
+              value,
+              label:
+                value === 'list'
+                  ? t('web.entityAdmin.viewList')
+                  : value === 'detail'
+                    ? t('web.entityAdmin.viewDetail')
+                    : value === 'edit'
+                      ? t('web.entityAdmin.viewEdit')
+                      : value === 'panel'
+                        ? t('web.entityAdmin.viewPanel')
+                        : t('web.entityAdmin.viewPopup'),
+            }))}
+            onChange={(value: LayoutViewType) => setView(value)}
+          />
         </Col>
         <Col xs={24} sm={16} md={18}>
           <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
-            <Typography.Text type="secondary">{t('web.entityAdmin.panelCount', { panels: String(draft.panels.length), view })}</Typography.Text>
+            <Typography.Text type="secondary">
+              {isSingleColumnView(view)
+                ? t('web.entityAdmin.fieldCount', { fields: String(draft.panels.flatMap((panel) => panel.fields ?? []).length) })
+                : t('web.entityAdmin.panelCount', { panels: String(draft.panels.length), view })}
+            </Typography.Text>
             {showInlineActions && dirty ? (
               <Space>
                 <Typography.Text type="warning">{t('web.entityAdmin.layoutUnsaved')}</Typography.Text>
@@ -521,15 +581,24 @@ export function LayoutEditor({ entity, save, showInlineActions = true, onState }
               className="carocrm-card"
               title={t('web.entityAdmin.layoutVisible')}
               extra={
-                <Button size="small" icon={<PlusOutlined />} onClick={() => openGroupModal('add')}>
-                  {t('web.entityAdmin.layoutAddGroup')}
-                </Button>
+                isSingleColumnView(view) ? null : (
+                  <Button size="small" icon={<PlusOutlined />} onClick={() => openGroupModal('add')}>
+                    {t('web.entityAdmin.layoutAddGroup')}
+                  </Button>
+                )
               }
             >
               <SortableContext items={draft.panels.map((panel) => `${PANEL_ID_PREFIX}${panel.name}`)} strategy={verticalListSortingStrategy}>
                 <Space direction="vertical" size={8} style={{ width: '100%' }}>
                   {draft.panels.map((panel) => (
-                    <LayoutGroup key={panel.name} panel={panel} labelOf={labelOf} onEdit={(name) => openGroupModal('edit', name)} onRemove={removePanel} />
+                    <LayoutGroup
+                      key={panel.name}
+                      panel={panel}
+                      labelOf={labelOf}
+                      onEdit={(name) => openGroupModal('edit', name)}
+                      onRemove={removePanel}
+                      locked={isSingleColumnView(view)}
+                    />
                   ))}
                 </Space>
               </SortableContext>

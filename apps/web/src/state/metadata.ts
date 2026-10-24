@@ -106,7 +106,7 @@ export function defaultBoardGroupField(definition: EntityDefinition | undefined)
 }
 
 /** Views the generated record screens can lay out (PLAN §8). */
-type LayoutView = 'list' | 'detail' | 'edit';
+type LayoutView = 'list' | 'detail' | 'edit' | 'panel' | 'popup';
 
 /**
  * Panels of the first layout declared for a view, in position order (PLAN §8).
@@ -119,6 +119,23 @@ export function layoutPanelsFor(definition: EntityDefinition | undefined, view: 
     if (panels) return [...panels].sort((a, b) => a.position - b.position);
   }
   return [];
+}
+
+/**
+ * Fields a column layout names, in order and with their definitions. Unknown or retired names are
+ * skipped, so a stale layout can never break a table.
+ */
+export function layoutFieldEntries(definition: EntityDefinition | undefined, view: LayoutView): FieldEntry[] {
+  if (!definition) return [];
+  const seen = new Set<string>();
+  const entries: FieldEntry[] = [];
+  for (const name of layoutPanelsFor(definition, view).flatMap((panel) => panel.fields ?? [])) {
+    const field = definition.fields[name];
+    if (!field || field.type === 'disabled' || seen.has(name)) continue;
+    seen.add(name);
+    entries.push({ name, field });
+  }
+  return entries;
 }
 
 /**

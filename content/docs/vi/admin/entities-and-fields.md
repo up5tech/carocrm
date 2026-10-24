@@ -5,7 +5,7 @@ audience: admin
 order: 60
 tags: [entity, field, layout, metadata]
 related: [admin/settings-overview, admin/main-menu]
-updated: 2026-10-21
+updated: 2026-10-24
 ---
 
 CRM này chạy bằng metadata: một kiểu bản ghi là gì, nó có những trường nào, các màn hình của nó được sắp ra
@@ -54,13 +54,18 @@ Hai giới hạn sau quan trọng hơn cả danh sách:
 
 ## Bố cục
 
-Bố cục quyết định thứ tự của những gì một người đọc. Trình chỉnh sửa phủ ba màn hình:
+Bố cục quyết định thứ tự của những gì một người đọc. Trình chỉnh sửa phủ năm màn hình:
 
 | Màn hình | Nó điều khiển gì |
 | --- | --- |
 | Danh sách | Trường nào trở thành cột. Trường bị bỏ ngoài thì không thành cột; nó vẫn có trên bản ghi. |
 | Chi tiết | Các nhóm trường trên màn hình bản ghi, và các trường trong từng nhóm. |
 | Chỉnh sửa | Cùng cấu trúc đó cho biểu mẫu tạo và sửa. |
+| Panel liên kết | Các cột phụ hiện trong danh sách quan hệ trên trang bản ghi, sau tên bản ghi. |
+| Popup liên kết | Các cột phụ hiện trong popup chọn bản ghi có sẵn, sau tên bản ghi. |
+
+Hai màn hình sau là một danh sách trường có thứ tự thay vì các nhóm có tên; tên bản ghi luôn là cột đầu
+tiên, chỉ các trường bạn thêm vào mới hiện tiếp theo.
 
 Kéo một trường giữa một nhóm và khu trường còn lại, đổi tên hay gỡ một nhóm, sắp lại thứ tự — và khung xem
 trước bên phải hiện kết quả trước khi bạn lưu. Những trường không rơi vào nhóm nào sẽ được gom dưới mục

@@ -108,7 +108,7 @@ export type LayoutPanel = z.infer<typeof LayoutPanelSchema>;
 
 export const LayoutDefinitionSchema = z.object({
   entity: z.string(),
-  type: z.enum(['list', 'detail', 'edit', 'filter', 'search', 'massUpdate']),
+  type: z.enum(['list', 'detail', 'edit', 'filter', 'search', 'massUpdate', 'panel', 'popup']),
   panels: z.array(LayoutPanelSchema),
 });
 
