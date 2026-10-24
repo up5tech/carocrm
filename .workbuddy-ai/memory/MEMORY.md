@@ -17,6 +17,13 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`. Per-module detail lives in
   rules go on `beforeValidate` so generic CRUD and domain commands validate alike.
 - Migrations `database/migrations/<NNN>_phase<NN>_<slug>.sql`, additive, filename order, tracked
   in `schema_migrations`. Money is a canonical decimal string (`sales/money/decimal.ts`).
+- Web conversation screens (`/crm-chat`, `/voice-inbox`) share one CSS kit in `carocrm.css`:
+  `carocrm-workspace-*` (page head, rail, toolbar, body, dock) + `carocrm-rail-*` (list rows) +
+  `carocrm-convo-*` (message rows and bubbles). Add a module prefix only for module-only pieces
+  (`carocrm-chat-*`, `carocrm-inbox-*`); do not clone the frame.
+- The workspace shell's height is `calc(100vh - 235px)` — the chrome is 70 header + 48 content
+  padding + 46 page head + 14 gap + 56 footer. Change the page head's height and you must change
+  this, or the page starts scrolling.
 
 ## SQL / platform gotchas
 

@@ -210,19 +210,19 @@ export function CRMChatPage() {
 
   if (!data.workspace.enabled) {
     return (
-      <div className="carocrm-chat-page">
-        <div className="carocrm-chat-head">
-          <div className="carocrm-chat-head-main">
-            <span className="carocrm-chat-mark" aria-hidden="true">
+      <div className="carocrm-workspace-page">
+        <div className="carocrm-workspace-page-head">
+          <div className="carocrm-workspace-page-head-main">
+            <span className="carocrm-workspace-mark" aria-hidden="true">
               <CustomerServiceOutlined />
             </span>
             <div>
-              <h1 className="carocrm-chat-head-title">{t('web.crmChat.title')}</h1>
-              <p className="carocrm-chat-head-sub">{t('web.crmChat.subtitle')}</p>
+              <h1 className="carocrm-workspace-title">{t('web.crmChat.title')}</h1>
+              <p className="carocrm-workspace-sub">{t('web.crmChat.subtitle')}</p>
             </div>
           </div>
         </div>
-        <div className="carocrm-chat-shell carocrm-chat-shell--plain">
+        <div className="carocrm-workspace carocrm-workspace--plain">
           <div className="carocrm-chat-hero">
             <span className="carocrm-chat-hero-mark" aria-hidden="true">
               <CustomerServiceOutlined />
@@ -280,17 +280,17 @@ export function CRMChatPage() {
           .join(' · ');
 
   return (
-    <div className="carocrm-chat-page">
-      <div className="carocrm-chat-head">
-        <div className="carocrm-chat-head-main">
-          <span className="carocrm-chat-mark" aria-hidden="true">
+    <div className="carocrm-workspace-page">
+      <div className="carocrm-workspace-page-head">
+        <div className="carocrm-workspace-page-head-main">
+          <span className="carocrm-workspace-mark" aria-hidden="true">
             <CustomerServiceOutlined />
           </span>
           <div>
-            <h1 className="carocrm-chat-head-title">{t('web.crmChat.title')}</h1>
-            <p className="carocrm-chat-head-sub">{t('web.crmChat.subtitle')}</p>
+            <h1 className="carocrm-workspace-title">{t('web.crmChat.title')}</h1>
+            <p className="carocrm-workspace-sub">{t('web.crmChat.subtitle')}</p>
           </div>
-          <span className={`carocrm-chat-status carocrm-chat-status--${assistantStateTone(data.assistant.state)}`}>
+          <span className={`carocrm-workspace-pill carocrm-workspace-pill--${assistantStateTone(data.assistant.state)}`}>
             {t(assistantStateKey(data.assistant.state))}
           </span>
         </div>
@@ -317,9 +317,9 @@ export function CRMChatPage() {
         </Space>
       </div>
 
-      <div className="carocrm-chat-shell">
-        <aside className="carocrm-chat-rail" aria-label={t('web.crmChat.conversationsTitle')}>
-          <div className="carocrm-chat-rail-head">
+      <div className="carocrm-workspace">
+        <aside className="carocrm-workspace-rail" aria-label={t('web.crmChat.conversationsTitle')}>
+          <div className="carocrm-workspace-rail-head">
             {searchEnabled ? (
               <Input
                 allowClear
@@ -338,7 +338,7 @@ export function CRMChatPage() {
             </Tooltip>
           </div>
 
-          <div className="carocrm-chat-rail-list">
+          <div className="carocrm-workspace-rail-list">
             {conversations.isLoading ? (
               <div style={{ padding: '10px 6px' }}>
                 <Skeleton active title={false} paragraph={{ rows: 4 }} />
@@ -351,7 +351,7 @@ export function CRMChatPage() {
               />
             ) : null}
             {conversations.data !== undefined && conversations.data.list.length === 0 ? (
-              <div className="carocrm-chat-rail-empty">
+              <div className="carocrm-workspace-rail-empty">
                 <CustomerServiceOutlined />
                 <strong>{t('web.crmChat.noConversations')}</strong>
                 <span>{t('web.crmChat.noConversationsHint')}</span>
@@ -363,46 +363,46 @@ export function CRMChatPage() {
                 <button
                   key={conversation.id}
                   type="button"
-                  className={`carocrm-chat-thread-item${active ? ' is-active' : ''}`}
+                  className={`carocrm-rail-item${active ? ' is-active' : ''}`}
                   aria-current={active ? 'true' : undefined}
                   onClick={() => setSelectedId(conversation.id)}
                 >
-                  <span className="carocrm-chat-thread-avatar" aria-hidden="true">
+                  <span className="carocrm-rail-avatar" aria-hidden="true">
                     {threadInitial(conversation.title)}
                   </span>
-                  <span className="carocrm-chat-thread-text">
-                    <span className="carocrm-chat-thread-name">
+                  <span className="carocrm-rail-text">
+                    <span className="carocrm-rail-name">
                       {conversation.title ?? t('web.crmChat.untitled')}
                     </span>
-                    <span className="carocrm-chat-thread-meta">
+                    <span className="carocrm-rail-meta">
                       {t('web.crmChat.messageCount', { count: conversation.messageCount })}
                       {conversation.status === 'archived' ? ` · ${t('web.crmChat.archivedTag')}` : ''}
                     </span>
                   </span>
-                  <span className="carocrm-chat-thread-time">{railStamp(conversation.lastMessageAt)}</span>
+                  <span className="carocrm-rail-time">{railStamp(conversation.lastMessageAt)}</span>
                 </button>
               );
             })}
           </div>
 
-          <div className="carocrm-chat-rail-foot">
+          <div className="carocrm-workspace-rail-foot">
             <span>{t('web.crmChat.limitConversations', { max: data.limits.maxConversationsPerUser })}</span>
             <span>{t('web.crmChat.privateByDefault')}</span>
           </div>
         </aside>
 
-        <section className="carocrm-chat-main">
-          <div className="carocrm-chat-main-head">
-            <span className="carocrm-chat-avatar carocrm-chat-avatar--assistant" aria-hidden="true">
+        <section className="carocrm-workspace-main">
+          <div className="carocrm-workspace-toolbar">
+            <span className="carocrm-convo-avatar carocrm-convo-avatar--assistant" aria-hidden="true">
               <RobotOutlined />
             </span>
             <div style={{ minWidth: 0 }}>
-              <div className="carocrm-chat-main-title">{threadTitle}</div>
-              {threadMeta === null ? null : <div className="carocrm-chat-main-sub">{threadMeta}</div>}
+              <div className="carocrm-workspace-toolbar-title">{threadTitle}</div>
+              {threadMeta === null ? null : <div className="carocrm-workspace-toolbar-sub">{threadMeta}</div>}
             </div>
           </div>
 
-          <div className="carocrm-chat-stage">
+          <div className="carocrm-workspace-body">
             {!data.actions.canStartTurn ? (
               <Alert
                 type="info"
@@ -442,7 +442,7 @@ export function CRMChatPage() {
             ) : null}
 
             {selectedId !== undefined && detail.isLoading ? (
-              <div className="carocrm-chat-thread" aria-busy="true">
+              <div className="carocrm-workspace-scroll" aria-busy="true">
                 <Skeleton active title={false} paragraph={{ rows: 6 }} />
               </div>
             ) : null}
@@ -466,7 +466,7 @@ export function CRMChatPage() {
             ) : null}
           </div>
 
-          <div className="carocrm-chat-dock">
+          <div className="carocrm-workspace-dock">
             <CRMChatComposer
               conversationId={selectedId}
               enabled={data.actions.canStartTurn}

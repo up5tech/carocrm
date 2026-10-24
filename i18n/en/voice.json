@@ -170,6 +170,8 @@
   },
   "inbox": {
     "title": "Inbox",
+    "subtitle": "Every SMS, MMS and WhatsApp thread you can see, with the calls that belong to it.",
+    "unread": "{count} unread",
     "tabInbox": "Conversations",
     "tabCalls": "Calls",
     "filterStatus": "Status",
@@ -180,6 +182,7 @@
     "callsHint": "Select a call to see its recordings and transcript.",
     "noMessages": "This conversation has no messages yet.",
     "noCalls": "No call has been recorded yet.",
+    "composerHint": "Up to {max} characters.",
     "messagePlaceholder": "Write a message…",
     "notePlaceholder": "Write an internal note (never sent to the customer)…",
     "internalNote": "Internal note",

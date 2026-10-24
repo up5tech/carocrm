@@ -170,6 +170,8 @@
   },
   "inbox": {
     "title": "Hộp thư",
+    "subtitle": "Mọi hội thoại SMS, MMS và WhatsApp bạn được xem, cùng các cuộc gọi liên quan.",
+    "unread": "{count} chưa đọc",
     "tabInbox": "Hội thoại",
     "tabCalls": "Cuộc gọi",
     "filterStatus": "Trạng thái",
@@ -180,6 +182,7 @@
     "callsHint": "Chọn một cuộc gọi để xem bản ghi và bản chép lời.",
     "noMessages": "Hội thoại này chưa có tin nhắn.",
     "noCalls": "Chưa ghi nhận cuộc gọi nào.",
+    "composerHint": "Tối đa {max} ký tự.",
     "messagePlaceholder": "Soạn tin nhắn…",
     "notePlaceholder": "Ghi chú nội bộ (không bao giờ gửi cho khách)…",
     "internalNote": "Ghi chú nội bộ",

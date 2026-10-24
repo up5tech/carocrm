@@ -80,14 +80,14 @@ export function CRMChatMessageList(props: CRMChatMessageListProps) {
 
   if (allMessages.length === 0) {
     return (
-      <div className="carocrm-chat-thread-empty" ref={scrollRef}>
+      <div className="carocrm-workspace-empty" ref={scrollRef}>
         {t('web.crmChat.historyEmpty')}
       </div>
     );
   }
 
   return (
-    <div className="carocrm-chat-thread" ref={scrollRef} onScroll={handleScroll}>
+    <div className="carocrm-workspace-scroll" ref={scrollRef} onScroll={handleScroll}>
       {hasMore ? (
         <div className="carocrm-chat-load-older">
           <Button size="small" loading={loadingOlder} onClick={onLoadOlder}>
@@ -119,14 +119,14 @@ function MessageItem({ message, feedbackEnabled }: MessageItemProps) {
       : formatDateTime(message.createdAt, true);
 
   return (
-    <div className={`carocrm-chat-msg carocrm-chat-msg--${tone}`}>
-      <span className={`carocrm-chat-avatar carocrm-chat-avatar--${tone}`} aria-hidden="true">
+    <div className={`carocrm-convo-msg carocrm-convo-msg--${tone}`}>
+      <span className={`carocrm-convo-avatar carocrm-convo-avatar--${tone}`} aria-hidden="true">
         {isUser ? <UserOutlined /> : <RobotOutlined />}
       </span>
 
-      <div className="carocrm-chat-msg-body">
-        <div className="carocrm-chat-msg-meta">
-          <span className="carocrm-chat-msg-role">{t(`web.crmChat.role.${message.role}`)}</span>
+      <div className="carocrm-convo-body">
+        <div className="carocrm-convo-meta">
+          <span className="carocrm-convo-role">{t(`web.crmChat.role.${message.role}`)}</span>
           <span>{stamp}</span>
           {message.redaction !== 'none' ? (
             <Tag color="orange" bordered={false} style={{ margin: 0 }}>
@@ -136,7 +136,7 @@ function MessageItem({ message, feedbackEnabled }: MessageItemProps) {
         </div>
 
         {/* Message content - plain text, never interpreted as markup. */}
-        <div className="carocrm-chat-bubble">{message.content}</div>
+        <div className="carocrm-convo-bubble">{message.content}</div>
 
         {message.citations && message.citations.length > 0 ? (
           <div className="carocrm-chat-cites">
@@ -149,7 +149,7 @@ function MessageItem({ message, feedbackEnabled }: MessageItemProps) {
 
         {/* 19-CHAT.14 — rate the answer. Only an assistant answer that came from a turn can be rated. */}
         {feedbackEnabled && isAssistant && message.turnId !== null ? (
-          <div className="carocrm-chat-msg-tools">
+          <div className="carocrm-convo-tools">
             <CRMChatFeedbackButtons turnId={message.turnId} enabled />
           </div>
         ) : null}

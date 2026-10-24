@@ -311,9 +311,9 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
         />
       )}
 
-      <div className="carocrm-chat-dock-frame">
+      <div className="carocrm-workspace-dock-frame">
         {/* 19-CHAT.14 — saved prompt templates. Inserting one puts its text in the composer. */}
-        <div className="carocrm-chat-dock-tools">
+        <div className="carocrm-workspace-dock-tools">
           <CRMChatPromptTemplates
             canManage={canManagePrompts}
             currentPrompt={prompt}
@@ -342,12 +342,12 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
           }}
         />
 
-        <div className="carocrm-chat-dock-foot">
-          <span className={`carocrm-chat-dock-hint${isOverLimit ? ' is-over' : ''}`}>
+        <div className="carocrm-workspace-dock-foot">
+          <span className={`carocrm-workspace-dock-hint${isOverLimit ? ' is-over' : ''}`}>
             {t('web.crmChat.composerHint', { max: maxMessageChars, seconds: turnTimeoutSeconds })}
           </span>
           <Space size={8}>
-            <span className={`carocrm-chat-counter${isOverLimit ? ' is-over' : ''}`}>
+            <span className={`carocrm-workspace-counter${isOverLimit ? ' is-over' : ''}`}>
               {charCount}/{maxMessageChars}
             </span>
             <Button

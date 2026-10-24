@@ -4710,17 +4710,19 @@ textarea.carocrm-etpl-source,
   }
 }
 
-/* ---- CRM Chat workspace (Phase 19-CHAT) ----
-   A two-pane conversation surface: a conversation rail, a scrolling transcript and a docked
-   composer. It replaces the stacked cards the page used while the module was still a status
-   report — the workspace is now the page, and the diagnostics moved into a drawer. */
-.carocrm-chat-page {
+/* ---- Conversation workspace ----
+   The shared frame for CRM Chat and the voice inbox: a page head, a conversation rail, a main pane
+   with a toolbar / scrolling body / docked composer. Both modules are a list of threads beside the
+   thread itself, so they share one frame and one message vocabulary (`carocrm-convo-*`) instead of
+   drifting apart. Module-specific pieces keep their own prefix (`carocrm-chat-*` for the assistant
+   extras, `carocrm-inbox-*` for the messaging inbox). */
+.carocrm-workspace-page {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.carocrm-chat-head {
+.carocrm-workspace-page-head {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -4728,14 +4730,14 @@ textarea.carocrm-etpl-source,
   justify-content: space-between;
 }
 
-.carocrm-chat-head-main {
+.carocrm-workspace-page-head-main {
   align-items: center;
   display: flex;
   gap: 12px;
   min-width: 0;
 }
 
-.carocrm-chat-mark {
+.carocrm-workspace-mark {
   align-items: center;
   background: linear-gradient(135deg, #438eff, #7cb0ff);
   border-radius: 12px;
@@ -4749,7 +4751,7 @@ textarea.carocrm-etpl-source,
   width: 42px;
 }
 
-.carocrm-chat-head-title {
+.carocrm-workspace-title {
   font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -4757,7 +4759,7 @@ textarea.carocrm-etpl-source,
   margin: 0;
 }
 
-.carocrm-chat-head-sub {
+.carocrm-workspace-sub {
   color: #737b85;
   font-size: 13px;
   margin: 0;
@@ -4765,7 +4767,7 @@ textarea.carocrm-etpl-source,
 }
 
 /* State pill: the dot and the label both carry the meaning, never the colour alone. */
-.carocrm-chat-status {
+.carocrm-workspace-pill {
   align-items: center;
   border: 1px solid transparent;
   border-radius: 999px;
@@ -4779,7 +4781,7 @@ textarea.carocrm-etpl-source,
   white-space: nowrap;
 }
 
-.carocrm-chat-status::before {
+.carocrm-workspace-pill::before {
   background: currentColor;
   border-radius: 50%;
   content: '';
@@ -4787,25 +4789,25 @@ textarea.carocrm-etpl-source,
   width: 6px;
 }
 
-.carocrm-chat-status--ready {
+.carocrm-workspace-pill--ready {
   background: #f2fbf6;
   border-color: #d6f0e2;
   color: #2f9e5f;
 }
 
-.carocrm-chat-status--warn {
+.carocrm-workspace-pill--warn {
   background: #fff8ef;
   border-color: #f7e3c4;
   color: #c98a1f;
 }
 
-.carocrm-chat-status--bad {
+.carocrm-workspace-pill--bad {
   background: #fff5f5;
   border-color: #f8d7d9;
   color: #d9484f;
 }
 
-.carocrm-chat-shell {
+.carocrm-workspace {
   background: #fff;
   border: 1px solid #eff2f7;
   border-radius: 14px;
@@ -4820,7 +4822,7 @@ textarea.carocrm-etpl-source,
 }
 
 /* ---- conversation rail ---- */
-.carocrm-chat-rail {
+.carocrm-workspace-rail {
   background: #fbfcfe;
   border-right: 1px solid #eff2f7;
   display: flex;
@@ -4829,14 +4831,14 @@ textarea.carocrm-etpl-source,
   min-width: 0;
 }
 
-.carocrm-chat-rail-head {
+.carocrm-workspace-rail-head {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 14px 14px 10px;
 }
 
-.carocrm-chat-rail-list {
+.carocrm-workspace-rail-list {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -4846,7 +4848,7 @@ textarea.carocrm-etpl-source,
   padding: 0 8px 10px;
 }
 
-.carocrm-chat-rail-foot {
+.carocrm-workspace-rail-foot {
   border-top: 1px solid #eff2f7;
   color: #8b939d;
   display: flex;
@@ -4857,7 +4859,7 @@ textarea.carocrm-etpl-source,
   padding: 10px 14px;
 }
 
-.carocrm-chat-thread-item {
+.carocrm-rail-item {
   align-items: center;
   appearance: none;
   background: transparent;
@@ -4875,21 +4877,21 @@ textarea.carocrm-etpl-source,
   width: 100%;
 }
 
-.carocrm-chat-thread-item:hover {
+.carocrm-rail-item:hover {
   background: #f2f6fd;
 }
 
-.carocrm-chat-thread-item:focus-visible {
+.carocrm-rail-item:focus-visible {
   outline: 2px solid #438eff;
   outline-offset: -2px;
 }
 
-.carocrm-chat-thread-item.is-active {
+.carocrm-rail-item.is-active {
   background: #fff;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), inset 0 0 0 1px #dce9ff;
 }
 
-.carocrm-chat-thread-avatar {
+.carocrm-rail-avatar {
   align-items: center;
   background: #e9f1ff;
   border-radius: 10px;
@@ -4904,19 +4906,19 @@ textarea.carocrm-etpl-source,
   width: 34px;
 }
 
-.carocrm-chat-thread-item.is-active .carocrm-chat-thread-avatar {
+.carocrm-rail-item.is-active .carocrm-rail-avatar {
   background: linear-gradient(135deg, #438eff, #7cb0ff);
   color: #fff;
 }
 
-.carocrm-chat-thread-text {
+.carocrm-rail-text {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
 
-.carocrm-chat-thread-name {
+.carocrm-rail-name {
   font-size: 13.5px;
   font-weight: 500;
   overflow: hidden;
@@ -4924,11 +4926,11 @@ textarea.carocrm-etpl-source,
   white-space: nowrap;
 }
 
-.carocrm-chat-thread-item.is-active .carocrm-chat-thread-name {
+.carocrm-rail-item.is-active .carocrm-rail-name {
   color: #1f6fe0;
 }
 
-.carocrm-chat-thread-meta {
+.carocrm-rail-meta {
   color: #8b939d;
   font-size: 11.5px;
   overflow: hidden;
@@ -4936,7 +4938,7 @@ textarea.carocrm-etpl-source,
   white-space: nowrap;
 }
 
-.carocrm-chat-thread-time {
+.carocrm-rail-time {
   align-self: start;
   color: #a1a8b3;
   font-size: 11px;
@@ -4944,7 +4946,7 @@ textarea.carocrm-etpl-source,
   white-space: nowrap;
 }
 
-.carocrm-chat-rail-empty {
+.carocrm-workspace-rail-empty {
   align-items: center;
   color: #8b939d;
   display: flex;
@@ -4956,19 +4958,19 @@ textarea.carocrm-etpl-source,
   text-align: center;
 }
 
-.carocrm-chat-rail-empty .anticon {
+.carocrm-workspace-rail-empty .anticon {
   color: #c3cad6;
   font-size: 26px;
 }
 
-.carocrm-chat-rail-empty strong {
+.carocrm-workspace-rail-empty strong {
   color: #41474f;
   font-size: 13px;
   font-weight: 600;
 }
 
 /* ---- transcript pane ---- */
-.carocrm-chat-main {
+.carocrm-workspace-main {
   background: #fff;
   display: flex;
   flex-direction: column;
@@ -4976,7 +4978,7 @@ textarea.carocrm-etpl-source,
   min-width: 0;
 }
 
-.carocrm-chat-main-head {
+.carocrm-workspace-toolbar {
   align-items: center;
   background: #fff;
   border-bottom: 1px solid #eff2f7;
@@ -4985,7 +4987,7 @@ textarea.carocrm-etpl-source,
   padding: 11px 18px;
 }
 
-.carocrm-chat-main-title {
+.carocrm-workspace-toolbar-title {
   color: #31373d;
   font-size: 14.5px;
   font-weight: 600;
@@ -4994,7 +4996,7 @@ textarea.carocrm-etpl-source,
   white-space: nowrap;
 }
 
-.carocrm-chat-main-sub {
+.carocrm-workspace-toolbar-sub {
   color: #8b939d;
   font-size: 11.5px;
   overflow: hidden;
@@ -5002,7 +5004,7 @@ textarea.carocrm-etpl-source,
   white-space: nowrap;
 }
 
-.carocrm-chat-stage {
+.carocrm-workspace-body {
   background: #fafbfd;
   display: flex;
   flex: 1;
@@ -5010,11 +5012,11 @@ textarea.carocrm-etpl-source,
   min-height: 0;
 }
 
-.carocrm-chat-stage > .ant-alert {
+.carocrm-workspace-body > .ant-alert {
   margin: 12px 18px 0;
 }
 
-.carocrm-chat-thread {
+.carocrm-workspace-scroll {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -5024,7 +5026,7 @@ textarea.carocrm-etpl-source,
   padding: 18px 20px 10px;
 }
 
-.carocrm-chat-thread-empty {
+.carocrm-workspace-empty {
   align-items: center;
   color: #8b939d;
   display: flex;
@@ -5040,17 +5042,17 @@ textarea.carocrm-etpl-source,
 }
 
 /* ---- messages ---- */
-.carocrm-chat-msg {
+.carocrm-convo-msg {
   align-items: flex-start;
   display: flex;
   gap: 10px;
 }
 
-.carocrm-chat-msg--user {
+.carocrm-convo-msg--user {
   flex-direction: row-reverse;
 }
 
-.carocrm-chat-avatar {
+.carocrm-convo-avatar {
   align-items: center;
   border-radius: 50%;
   display: inline-flex;
@@ -5061,22 +5063,22 @@ textarea.carocrm-etpl-source,
   width: 30px;
 }
 
-.carocrm-chat-avatar--assistant {
+.carocrm-convo-avatar--assistant {
   background: linear-gradient(135deg, #438eff, #7cb0ff);
   color: #fff;
 }
 
-.carocrm-chat-avatar--user {
+.carocrm-convo-avatar--user {
   background: #eef1f6;
   color: #5b636d;
 }
 
-.carocrm-chat-avatar--system {
+.carocrm-convo-avatar--system {
   background: #f4f5f7;
   color: #8b939d;
 }
 
-.carocrm-chat-msg-body {
+.carocrm-convo-body {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -5084,11 +5086,11 @@ textarea.carocrm-etpl-source,
   min-width: 0;
 }
 
-.carocrm-chat-msg--user .carocrm-chat-msg-body {
+.carocrm-convo-msg--user .carocrm-convo-body {
   align-items: flex-end;
 }
 
-.carocrm-chat-msg-meta {
+.carocrm-convo-meta {
   align-items: center;
   color: #8b939d;
   display: flex;
@@ -5097,12 +5099,12 @@ textarea.carocrm-etpl-source,
   gap: 6px;
 }
 
-.carocrm-chat-msg-role {
+.carocrm-convo-role {
   color: #5b636d;
   font-weight: 600;
 }
 
-.carocrm-chat-bubble {
+.carocrm-convo-bubble {
   background: #fff;
   border: 1px solid #eaeef4;
   border-radius: 14px;
@@ -5116,7 +5118,7 @@ textarea.carocrm-etpl-source,
   white-space: pre-wrap;
 }
 
-.carocrm-chat-msg--user .carocrm-chat-bubble {
+.carocrm-convo-msg--user .carocrm-convo-bubble {
   background: linear-gradient(135deg, #438eff, #5f9dff);
   border-color: transparent;
   border-radius: 14px;
@@ -5125,7 +5127,7 @@ textarea.carocrm-etpl-source,
   color: #fff;
 }
 
-.carocrm-chat-msg--system .carocrm-chat-bubble {
+.carocrm-convo-msg--system .carocrm-convo-bubble {
   background: #f6f7f9;
   border-color: #e3e7ee;
   border-style: dashed;
@@ -5150,7 +5152,7 @@ textarea.carocrm-etpl-source,
   margin: 0;
 }
 
-.carocrm-chat-msg-tools {
+.carocrm-convo-tools {
   align-items: center;
   display: flex;
   gap: 4px;
@@ -5259,13 +5261,13 @@ textarea.carocrm-etpl-source,
 }
 
 /* ---- composer dock ---- */
-.carocrm-chat-dock {
+.carocrm-workspace-dock {
   background: #fff;
   border-top: 1px solid #eff2f7;
   padding: 10px 18px 14px;
 }
 
-.carocrm-chat-dock-frame {
+.carocrm-workspace-dock-frame {
   background: #fff;
   border: 1px solid #e3e9f2;
   border-radius: 14px;
@@ -5273,18 +5275,18 @@ textarea.carocrm-etpl-source,
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.carocrm-chat-dock-frame:focus-within {
+.carocrm-workspace-dock-frame:focus-within {
   border-color: #9cc4ff;
   box-shadow: 0 0 0 3px rgba(67, 142, 255, 0.12);
 }
 
-.carocrm-chat-dock-tools {
+.carocrm-workspace-dock-tools {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.carocrm-chat-dock-frame .ant-input {
+.carocrm-workspace-dock-frame .ant-input {
   background: transparent;
   border: 0;
   box-shadow: none;
@@ -5294,11 +5296,11 @@ textarea.carocrm-etpl-source,
   resize: none;
 }
 
-.carocrm-chat-dock-frame .ant-input:focus {
+.carocrm-workspace-dock-frame .ant-input:focus {
   box-shadow: none;
 }
 
-.carocrm-chat-dock-foot {
+.carocrm-workspace-dock-foot {
   align-items: center;
   display: flex;
   gap: 10px;
@@ -5306,25 +5308,25 @@ textarea.carocrm-etpl-source,
   padding-top: 6px;
 }
 
-.carocrm-chat-dock-hint {
+.carocrm-workspace-dock-hint {
   color: #8b939d;
   font-size: 11px;
   line-height: 1.4;
   min-width: 0;
 }
 
-.carocrm-chat-dock-hint.is-over {
+.carocrm-workspace-dock-hint.is-over {
   color: #d9484f;
 }
 
-.carocrm-chat-counter {
+.carocrm-workspace-counter {
   color: #a1a8b3;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.carocrm-chat-counter.is-over {
+.carocrm-workspace-counter.is-over {
   color: #d9484f;
 }
 
@@ -5447,27 +5449,27 @@ textarea.carocrm-etpl-source,
   margin: 0;
 }
 
-.carocrm-chat-thread::-webkit-scrollbar,
-.carocrm-chat-rail-list::-webkit-scrollbar,
+.carocrm-workspace-scroll::-webkit-scrollbar,
+.carocrm-workspace-rail-list::-webkit-scrollbar,
 .carocrm-chat-hero::-webkit-scrollbar {
   width: 8px;
 }
 
-.carocrm-chat-thread::-webkit-scrollbar-thumb,
-.carocrm-chat-rail-list::-webkit-scrollbar-thumb,
+.carocrm-workspace-scroll::-webkit-scrollbar-thumb,
+.carocrm-workspace-rail-list::-webkit-scrollbar-thumb,
 .carocrm-chat-hero::-webkit-scrollbar-thumb {
   background: #dde3ec;
   border-radius: 4px;
 }
 
-.carocrm-chat-thread::-webkit-scrollbar-thumb:hover,
-.carocrm-chat-rail-list::-webkit-scrollbar-thumb:hover,
+.carocrm-workspace-scroll::-webkit-scrollbar-thumb:hover,
+.carocrm-workspace-rail-list::-webkit-scrollbar-thumb:hover,
 .carocrm-chat-hero::-webkit-scrollbar-thumb:hover {
   background: #c6cfdb;
 }
 
-.carocrm-chat-thread::-webkit-scrollbar-track,
-.carocrm-chat-rail-list::-webkit-scrollbar-track,
+.carocrm-workspace-scroll::-webkit-scrollbar-track,
+.carocrm-workspace-rail-list::-webkit-scrollbar-track,
 .carocrm-chat-hero::-webkit-scrollbar-track {
   background: transparent;
 }
@@ -5475,23 +5477,23 @@ textarea.carocrm-etpl-source,
 /* One column below the tablet breakpoint: the rail keeps a capped height and the transcript
    takes the rest. The shell still owns the height, so the composer never leaves the viewport. */
 @media (max-width: 991px) {
-  .carocrm-chat-shell {
+  .carocrm-workspace {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, auto) minmax(0, 1fr);
     height: calc(100vh - 235px);
     min-height: 480px;
   }
 
-  .carocrm-chat-rail {
+  .carocrm-workspace-rail {
     border-bottom: 1px solid #eff2f7;
     border-right: 0;
   }
 
-  .carocrm-chat-rail-list {
+  .carocrm-workspace-rail-list {
     max-height: 190px;
   }
 
-  .carocrm-chat-rail-foot {
+  .carocrm-workspace-rail-foot {
     display: none;
   }
 
@@ -5499,85 +5501,85 @@ textarea.carocrm-etpl-source,
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .carocrm-chat-msg-body {
+  .carocrm-convo-body {
     max-width: 88%;
   }
 }
 
 @media (max-width: 720px) {
-  .carocrm-chat-page {
+  .carocrm-workspace-page {
     gap: 10px;
   }
 
-  .carocrm-chat-head-sub {
+  .carocrm-workspace-sub {
     display: none;
   }
 
-  .carocrm-chat-mark {
+  .carocrm-workspace-mark {
     border-radius: 10px;
     font-size: 17px;
     height: 36px;
     width: 36px;
   }
 
-  .carocrm-chat-head-title {
+  .carocrm-workspace-title {
     font-size: 18px;
   }
 
-  .carocrm-chat-shell {
+  .carocrm-workspace {
     border-radius: 12px;
     height: calc(100vh - 200px);
   }
 
   /* A phone cannot afford a tall rail above the thread: one row of controls and a short list keep
      the transcript — the reason the screen exists — large enough to read. */
-  .carocrm-chat-rail-head {
+  .carocrm-workspace-rail-head {
     flex-direction: row;
     padding: 10px;
   }
 
-  .carocrm-chat-rail-head .ant-btn-primary {
+  .carocrm-workspace-rail-head .ant-btn-primary {
     flex: none;
     padding-inline: 12px;
     width: auto;
   }
 
-  .carocrm-chat-rail-list {
+  .carocrm-workspace-rail-list {
     max-height: 116px;
   }
 
-  .carocrm-chat-rail-empty {
+  .carocrm-workspace-rail-empty {
     padding: 12px;
   }
 
-  .carocrm-chat-thread {
+  .carocrm-workspace-scroll {
     padding: 14px 12px 8px;
   }
 
-  .carocrm-chat-dock {
+  .carocrm-workspace-dock {
     padding: 8px 12px 12px;
   }
 
-  .carocrm-chat-main-head {
+  .carocrm-workspace-toolbar {
     padding: 10px 12px;
   }
 }
 
 /* The workspace shell also frames the "turned off" result: it is a statement about the module,
    not a conversation, so it has no rail and no fixed height. */
-.carocrm-chat-shell--plain {
+.carocrm-workspace--plain {
   display: block;
   height: auto;
   min-height: 0;
 }
 
-.carocrm-chat-shell--plain .carocrm-chat-hero {
+.carocrm-workspace--plain .carocrm-chat-hero {
   min-height: 340px;
 }
 
 /* A short conversation reads from the bottom up, like every chat surface: the spacer collapses to
    nothing once the messages overflow, so it never hides history. */
-.carocrm-chat-thread::before {
+.carocrm-workspace-scroll::before {
   content: '';
   flex: 1 0 auto;
 }
@@ -5585,13 +5587,256 @@ textarea.carocrm-etpl-source,
 /* The subtitle is the first thing to go when the head would otherwise wrap onto a second row:
    a wrapped head makes the page scroll, and a chat workspace that scrolls is the wrong shape. */
 @media (max-width: 1280px) {
-  .carocrm-chat-head-sub {
+  .carocrm-workspace-sub {
     display: none;
   }
 }
 
 @media (max-width: 480px) {
-  .carocrm-chat-dock-hint {
+  .carocrm-workspace-dock-hint {
     display: none;
   }
+
+  /* With the hint gone, `space-between` has nothing to push against: keep the action at the end. */
+  .carocrm-workspace-dock-foot {
+    justify-content: flex-end;
+  }
+}
+
+/* ---- voice inbox (Phase 19-VC.12–19-VC.14) ----
+   The messaging inbox on the shared conversation frame: a channel-tinted rail, a timeline of
+   customer messages and internal notes, and the same docked composer. */
+.carocrm-workspace-scroll--tight {
+  gap: 10px;
+}
+
+/* A detail pane (one call, not a conversation) reads top-down: no bottom anchoring. */
+.carocrm-workspace-scroll--top::before {
+  content: none;
+}
+
+.carocrm-workspace-toolbar--stacked {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.carocrm-workspace-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.carocrm-workspace-toolbar-tags {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.carocrm-workspace-toolbar-tags .ant-tag {
+  margin: 0;
+}
+
+/* ---- rail items: channel, tags and unread count ---- */
+.carocrm-rail-avatar--sms {
+  background: #eef2ff;
+  color: #4c6ef5;
+}
+
+.carocrm-rail-avatar--whatsapp {
+  background: #e8f8ee;
+  color: #25a35a;
+}
+
+.carocrm-rail-avatar--mms {
+  background: #e9f7f8;
+  color: #1493a0;
+}
+
+.carocrm-rail-avatar--voice {
+  background: #eef1f6;
+  color: #5b636d;
+}
+
+.carocrm-rail-item.is-active .carocrm-rail-avatar--sms,
+.carocrm-rail-item.is-active .carocrm-rail-avatar--whatsapp,
+.carocrm-rail-item.is-active .carocrm-rail-avatar--mms,
+.carocrm-rail-item.is-active .carocrm-rail-avatar--voice {
+  background: linear-gradient(135deg, #438eff, #7cb0ff);
+  color: #fff;
+}
+
+.carocrm-rail-tags {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.carocrm-rail-tags .ant-tag {
+  font-size: 10.5px;
+  line-height: 16px;
+  margin: 0;
+  padding-inline: 6px;
+}
+
+.carocrm-rail-badge {
+  align-items: center;
+  background: #438eff;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  flex: none;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  height: 16px;
+  justify-content: center;
+  margin-inline-start: auto;
+  min-width: 16px;
+  padding-inline: 5px;
+}
+
+.carocrm-rail-item.is-active .carocrm-rail-badge {
+  background: #1f6fe0;
+}
+
+/* ---- timeline ---- */
+.carocrm-inbox-event {
+  align-items: center;
+  align-self: center;
+  color: #8b939d;
+  display: flex;
+  font-size: 11.5px;
+  gap: 6px;
+  max-width: 90%;
+  padding: 2px 10px;
+  text-align: center;
+}
+
+.carocrm-inbox-event::before,
+.carocrm-inbox-event::after {
+  background: #e6ebf2;
+  content: '';
+  flex: 1;
+  height: 1px;
+  min-width: 16px;
+}
+
+.carocrm-convo-msg--outbound,
+.carocrm-convo-msg--note {
+  flex-direction: row-reverse;
+}
+
+.carocrm-convo-msg--outbound .carocrm-convo-body,
+.carocrm-convo-msg--note .carocrm-convo-body {
+  align-items: flex-end;
+}
+
+.carocrm-convo-msg--outbound .carocrm-convo-bubble {
+  background: linear-gradient(135deg, #438eff, #5f9dff);
+  border-color: transparent;
+  border-radius: 14px;
+  border-top-right-radius: 5px;
+  box-shadow: 0 2px 8px rgba(67, 142, 255, 0.22);
+  color: #fff;
+}
+
+.carocrm-convo-msg--note .carocrm-convo-bubble {
+  background: #fffbe6;
+  border-color: #f0dfa8;
+  border-radius: 14px;
+  border-style: dashed;
+  border-top-right-radius: 5px;
+  color: #6b5b16;
+}
+
+.carocrm-convo-avatar--outbound {
+  background: linear-gradient(135deg, #438eff, #7cb0ff);
+  color: #fff;
+}
+
+.carocrm-convo-avatar--inbound {
+  background: #eef1f6;
+  color: #5b636d;
+}
+
+.carocrm-convo-avatar--note {
+  background: #fdf6d8;
+  color: #a8871a;
+}
+
+/* The channel of a customer message, shown next to the direction label. */
+.carocrm-convo-channel {
+  color: #a1a8b3;
+  font-size: 11px;
+}
+
+@media (max-width: 720px) {
+  .carocrm-workspace-toolbar-actions {
+    margin-inline-start: 0;
+    width: 100%;
+  }
+}
+
+/* The toolbar's left group takes the free space so the actions stay right-aligned. */
+.carocrm-workspace-toolbar-tags {
+  flex: 1 1 auto;
+}
+
+/* An internal note is not a message to the customer: the whole composer changes tone, so the
+   agent notices before typing rather than after sending. */
+.carocrm-workspace-dock-frame--note {
+  background: #fffdf5;
+  border-color: #f0dfa8;
+}
+
+.carocrm-inbox-note-toggle {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.carocrm-inbox-note-flag {
+  color: #8b939d;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.carocrm-inbox-note-flag.is-on {
+  color: #a8871a;
+  font-weight: 500;
+}
+
+/* A detail header carries two lines on the left (title, then the tags that classify it) and the
+   actions on the right; the actions keep their width and the title gives up space instead. */
+.carocrm-workspace-toolbar-lead {
+  display: flex;
+  /* A zero basis keeps the actions on the same row: a content-sized basis would exceed the line
+     and wrap them, which is what the title is supposed to give up space to avoid. */
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.carocrm-workspace-toolbar-lead .carocrm-workspace-toolbar-title {
+  min-width: 0;
+}
+
+.carocrm-workspace-rail-head .ant-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* A linked-record tag can carry a raw identifier; cap it so one long value cannot push the header
+   onto a third line. The full value stays available as the tag's title. */
+.carocrm-workspace-toolbar-tags .ant-tag {
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

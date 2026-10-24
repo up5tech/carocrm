@@ -101,9 +101,9 @@ A thread shows:
 - Message bubbles: inbound in grey, outbound in blue, and internal notes in yellow with a dashed
   border — a note is visibly never customer text.
 - Event rows in the middle of the timeline for status changes, assignment, unassignment and case links.
-- Header controls to assign the thread to a user, change its status, mark it read, and **Handoff to
-  Case**. Handing off creates a Service Desk case linked to the thread; pressing it twice on the same
-  thread returns the existing case rather than making a second one.
+- Header controls to assign the thread to a user, change its status, mark it read (the ✓ button),
+  and **Handoff to Case**. Handing off creates a Service Desk case linked to the thread; pressing it
+  twice on the same thread returns the existing case rather than making a second one.
 - A composer: up to 4,000 characters, a **snippet** picker whose placeholders you fill in yourself
   (the server does not resolve them from CRM data), a live segment and encoding hint for the channel,
   and an **Internal note** switch that saves the text instead of sending it. Each send carries a
