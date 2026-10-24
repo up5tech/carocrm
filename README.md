@@ -82,13 +82,17 @@ _Phase 19_ —
   with an approval policy, a deliberate send with double-submit protection, reconciliation and
   recovery for a lost send answer, provider webhooks with HMAC verification and a durable inbox,
   template mappings, signed-document artifacts, reports and an operations panel (Phases 19-ES.0–19-ES.22).
-- **Lead Score** — *planned*: explainable, versioned lead scoring over the existing `Lead` entity and a
-  transactional, idempotent Lead→Contact/Account/Opportunity conversion. Only the audit and feature
-  contract are delivered so far (Phase 19-LS.0): see
+- **Lead Score** — explainable, versioned lead scoring over the existing `Lead` entity plus a
+  transactional, idempotent Lead→Contact/Account/Opportunity conversion. **Phases 19-LS.0–19-LS.1 are
+  delivered: the repository audit and the module registration** — the `LeadScore` descriptor, its 14
+  capability resources, the `leadScore` settings document, the feature gate in front of all 11 planned
+  operations and the health view at `/api/v1/LeadScore/action/health`. Nothing scores and nothing
+  converts yet: every operation refuses with the sub-phase that owes it (`LEADSCORE_PHASE_PENDING`) and
+  the module ships switched off. See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
-  [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md) and
-  [docs/compatibility/lead-score.md](docs/compatibility/lead-score.md). No scoring or conversion
-  behavior runs in this build yet.
+  [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
+  [docs/implementation/lead-score-ls1-completion-report.md](docs/implementation/lead-score-ls1-completion-report.md)
+  and [docs/compatibility/lead-score.md](docs/compatibility/lead-score.md).
 
 _Phase 20_ — settings, administration and end-user UX: a settings-document registry with optimistic
 concurrency and audit, the tabbed administration shell with a server-resolved, ACL-filtered main menu

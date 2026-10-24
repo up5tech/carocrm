@@ -2,10 +2,13 @@
 
 > Phase 19-LS.0 onwards (`PLAN_Phase_19_LeadScore.md` §0.2, §16 `19-LS.0`).
 > Repository audit and feature contract: `docs/implementation/lead-score-audit.md`.
-> Status: **19-LS.0 delivered** (audit + feature contract + decisions D1–D13; documentation only,
-> no code and no migration). LS.1 and later are not implemented yet, so **nothing in §3–§7 below is
-> runtime behavior of this build** — they are the agreed contract that each later sub-phase must
-> prove with tests before it moves from *planned* to *supported* in this table.
+> Status: **19-LS.0 and 19-LS.1 delivered** (LS.0 = audit, feature contract and decisions D1–D13;
+> LS.1 = the `LeadScore` module registration: descriptor, capability matrix, `leadScore` settings
+> document, feature gate and health view — evidence in
+> `docs/implementation/lead-score-ls1-completion-report.md`). **LS.2 and later are not implemented**,
+> so scoring and conversion behavior in §3–§7 is still the agreed contract rather than runtime
+> behavior: every operation is refused with the sub-phase that owes it, and no `LeadScore` metadata
+> entity or Lead score field exists yet.
 > Canonical module name: `LeadScore` (no `Ua` prefix). API prefix: `/api/v1/lead-score` plus
 > `/api/v1/leads/:leadId/{score,conversion-preview,convert}` semantics.
 > Baseline reference re-checked against public EspoCRM documentation on **2026-10-24**
@@ -74,7 +77,7 @@ stage semantics and `SalesDocumentService.createFromOpportunity`
 
 | Aspect | Agreed behavior | Status |
 | --- | --- | --- |
-| Scale | 0–100 default (`scaleMin`/`scaleMax` per model); the UI always shows the scale | LS.3 |
+| Scale | 0–100 default (`scaleMin`/`scaleMax` per model); the UI always shows the scale | LS.3 (the module settings row deliberately stores no scale yet — see the LS.1 report §3.1) |
 | Formula | `baseScore` → matched rule deltas in `priority` order → optional dimension weights → clamp `[scoreFloor, scoreCeiling]` → stable rounding → band lookup | LS.4 |
 | Reproducibility | same model version + same input snapshot ⇒ identical score, identical reason codes, identical signature | LS.4 unit test |
 | Missing data | `missingDataPolicy: ignore` or `neutral`, recorded as `unknown` in the breakdown; never silently 0 | LS.4 |
@@ -237,4 +240,5 @@ Recorded here so no later phase silently invents behavior (plan §19's closing i
 | Sub-phase | Checks actually run | Outcome |
 | --- | --- | --- |
 | 19-LS.0 | Source reading and exhaustive greps over `apps/`, `packages/`, `modules/`, `database/`, `i18n/`, `content/`, `docs/`; `database/migrations` listing; script/seed/`boot-api` inspection for destructive setup; baseline re-checked against public EspoCRM docs on 2026-10-24 | Audit produced; no code, no migration, no database write, no new database. Nothing in §3–§6 is runtime behavior yet |
-| 19-LS.1 … LS.18 | *not started* | each completion report must list the exact commands run and their outcomes before this table may claim support |
+| 19-LS.1 | `npx vitest run apps/api/test/lead-score-module.test.ts` (15 tests); adjacent suites `entity-crud`, `entity-row-actions`, `entity-manager-metadata`, `navigation`, `i18n` (55 tests) and `sales-module`, `admin-internal`, `docs`, `crm-chat` (54 tests); `npm run typecheck`; `npx eslint` on the touched files | all green. The module is registered, discoverable (health + the five `/api/v1/OpenApi` paths) and refused-everything: 11 operations closed, `ready: false`. Lead/Contact/Account/Opportunity CRUD verified unchanged with the module switched on. Settings row and test records removed by exact id afterwards |
+| 19-LS.2 … LS.18 | *not started* | each completion report must list the exact commands run and their outcomes before this table may claim support |

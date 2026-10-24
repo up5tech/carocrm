@@ -28,5 +28,7 @@
   "SIGNATURE_RESEND_RATE_LIMITED": "Vừa gửi nhắc nhở. Hãy chờ trước khi gửi lần nữa.",
   "SIGNATURE_WEBHOOK_REJECTED": "Lần gửi sự kiện từ nhà cung cấp bị từ chối.",
   "NOT_SUPPORTED_BY_PROVIDER": "Nhà cung cấp chữ ký không hỗ trợ thao tác này trong phiên bản đầu tiên.",
-  "ENCRYPTION_KEY_MISSING": "Chưa cấu hình ENCRYPTION_KEY nên không đọc được thông tin xác thực và không thao tác nhà cung cấp nào thực hiện được."
+  "ENCRYPTION_KEY_MISSING": "Chưa cấu hình ENCRYPTION_KEY nên không đọc được thông tin xác thực và không thao tác nhà cung cấp nào thực hiện được.",
+  "LEADSCORE_MODULE_DISABLED": "Module Lead Score chưa được bật trên hệ thống này.",
+  "LEADSCORE_PHASE_PENDING": "Tính năng Lead Score này sẽ có ở sub-phase sau, hiện chưa khả dụng."
 }

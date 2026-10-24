@@ -28,5 +28,7 @@
   "SIGNATURE_RESEND_RATE_LIMITED": "A reminder was sent recently. Wait before sending another one.",
   "SIGNATURE_WEBHOOK_REJECTED": "The provider delivery was refused.",
   "NOT_SUPPORTED_BY_PROVIDER": "The signature provider does not support this operation in this release.",
-  "ENCRYPTION_KEY_MISSING": "ENCRYPTION_KEY is not configured, so provider credentials cannot be read and no provider operation is possible."
+  "ENCRYPTION_KEY_MISSING": "ENCRYPTION_KEY is not configured, so provider credentials cannot be read and no provider operation is possible.",
+  "LEADSCORE_MODULE_DISABLED": "Lead Score is not enabled on this instance.",
+  "LEADSCORE_PHASE_PENDING": "This Lead Score capability is implemented in a later sub-phase and is not available yet."
 }

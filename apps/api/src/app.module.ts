@@ -49,6 +49,7 @@ import { I18nController } from './i18n/i18n.controller.js';
 import { I18nService } from './i18n/i18n.service.js';
 import { JOB_CONTROLLERS, JOB_PROVIDERS } from './jobs/index.js';
 import { JobsService } from './jobs/jobs.service.js';
+import { LEADSCORE_CONTROLLERS, LEADSCORE_PROVIDERS } from './lead-score/index.js';
 import { FormulaService } from './logic/formula.service.js';
 import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
 import { MARKETING_AUTOMATION_CONTROLLERS, MARKETING_AUTOMATION_PROVIDERS } from './marketing-automation/index.js';
@@ -146,6 +147,10 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // the generic `:entity` wildcard. The DocuSign Connect prefix `/api/v1/integrations/esignature/...`
     // arrives with 19-ES.11 and joins the same spread.
     ...ESIGNATURE_CONTROLLERS,
+    // Phase 19-LS.1: `/api/v1/LeadScore/action/...` is a static prefix and must be matched before the
+    // generic `/api/v1/:entity` wildcard, or the control plane reads as "entity LeadScore, record
+    // action". Lead CRUD itself stays exactly where it is: the generic entity controller.
+    ...LEADSCORE_CONTROLLERS,
     // `/api/v1/DocumentTemplate` and `/api/v1/document/action/preview` are static prefixes too.
     ...DOCUMENT_CONTROLLERS,
     // Phase 21: `/api/v1/Docs/{tree,page,search}` is a static prefix and must be matched before the
@@ -197,6 +202,10 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // Phase 19-ES.1: the capability matrix, the settings document, the module health view, the
     // visibility report and the single gate that stands in front of every provider operation.
     ...ESIGNATURE_PROVIDERS,
+    // Phase 19-LS.1: the settings document, the capability matrix, the gate in front of every score and
+    // conversion operation, and the module health view. The module owns no table, queue, adapter or
+    // navigation entry yet — those arrive with the phases that use them.
+    ...LEADSCORE_PROVIDERS,
     ...DOCUMENT_PROVIDERS,
     // Phase 21: the in-app handbook — the content read path and the `docs` settings document's cache.
     ...DOCS_PROVIDERS,
