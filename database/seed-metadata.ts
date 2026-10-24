@@ -290,24 +290,32 @@ export const coreMetadata: MetadataSeedEntry[] = [
         // version, inputs and reason codes attached; the conversion fields below *are* audited because
         // they mark a one-off business event.
         //
-        // `inList` stays false at this phase: an empty Score column is noise, and 19-LS.7 turns the
-        // projection into list columns and filters when it builds the UI that explains them.
-        scoreValue: { type: 'int', sortable: true, inDetail: true },
-        scoreBand: { type: 'enum', values: LS_BANDS, defaultValue: 'Unknown', sortable: true, inDetail: true },
-        scoreStatus: { type: 'enum', values: LS_EVALUATION_STATUSES, defaultValue: 'not_scored', inDetail: true },
-        scoreModelId: { type: 'link', entityKey: 'LeadScoreModel', inDetail: true },
-        scoreModelVersion: { type: 'int', inDetail: true },
-        scoreCalculatedAt: { type: 'datetime', sortable: true, inDetail: true },
-        scoreInputsAsOf: { type: 'datetime', inDetail: true },
+        // 19-LS.7 turns the projection into list columns: a rep triaging a queue sorts by the number and
+        // filters by the band, which is the whole point of storing it on the record rather than computing it
+        // per read (plan §4.2). The three values a *decision* is made from are listed and filterable; the
+        // provenance fields (which model, which revision, when) stay detail-only, and `inFilter: false` says
+        // so explicitly rather than letting the type heuristic put a datetime in a filter panel.
+        //
+        // `scoreStatus` filters but is not a column: `not_scored` in every row of a queue is noise, and the
+        // card says the same thing in words a reader can act on.
+        scoreValue: { type: 'int', sortable: true, inDetail: false, inList: true, inFilter: true },
+        scoreBand: { type: 'enum', values: LS_BANDS, defaultValue: 'Unknown', sortable: true, inDetail: false, inList: true, inFilter: true },
+        scoreStatus: { type: 'enum', values: LS_EVALUATION_STATUSES, defaultValue: 'not_scored', inDetail: false, inFilter: true },
+        scoreModelId: { type: 'link', entityKey: 'LeadScoreModel', inDetail: false },
+        scoreModelVersion: { type: 'int', inDetail: false, inFilter: false },
+        scoreCalculatedAt: { type: 'datetime', sortable: true, inDetail: false, inFilter: false },
+        scoreInputsAsOf: { type: 'datetime', inDetail: false, inFilter: false },
         // The previous stored score, so the panel can show movement without paging the history (§11.1).
-        scorePreviousValue: { type: 'int', inDetail: true },
+        scorePreviousValue: { type: 'int', inDetail: false, inFilter: false },
         // Known-signal share of the model's weight, 0-1: a 70 out of 100 built on 20% coverage must not
         // read like a 70 built on everything (§3.1 `coverage`).
-        scoreCoverage: { type: 'float', inDetail: true },
+        scoreCoverage: { type: 'float', inDetail: false, inFilter: false },
         // Stable reason codes as a JSON array. A code is translated by the i18n catalog and never shows
         // raw, and it carries no field value, so a score reason cannot leak a Lead attribute the reader
         // may not see (§6.5).
-        scoreReasonCodes: { type: 'text' },
+        // The compact code list is what a badge or an export reads; the card spells the same reasons out in
+        // words, so a raw JSON array in the record's "Other" panel would be the least useful way to show it.
+        scoreReasonCodes: { type: 'text', inDetail: false },
 
         // --- Phase 19-LS.2: the conversion result (plan §5.6) ---
         //
@@ -332,11 +340,16 @@ export const coreMetadata: MetadataSeedEntry[] = [
         { name: 'idx_lead_score_calculated', fields: ['scoreCalculatedAt'] },
         { name: 'idx_lead_score_model', fields: ['scoreModelId'] },
       ],
-      // Added at LS.2, so the Lead detail view gains the two panels the projection and the conversion
-      // command fill — and the fields that were already there stay where they were: `main` lists them in
-      // the order the flat view showed, and any field a panel omits is still rendered (an "Other" card),
-      // never dropped. The list and edit views are deliberately left undeclared, so they keep the
-      // metadata-driven defaults until 19-LS.7 and 19-LS.14 give them their own layouts.
+      // Added at LS.2 as the panels the projection and the conversion command fill — and the fields that
+      // were already there stay where they were: `main` lists them in the order the flat view showed, and
+      // any field a panel omits is still rendered (an "Other" card), never dropped.
+      //
+      // 19-LS.7 removed the `score` panel: its nine fields are `inDetail: false` now and the Lead Score card
+      // (`apps/web/src/components/LeadScorePanel.tsx`) is their surface. The `converted` panel stays as
+      // declared, because the conversion command is 19-LS.13 and nothing else shows those references yet.
+      // The list and edit views stay metadata-driven defaults: LS.7 opened the projection to the list through
+      // `inList`/`inFilter` rather than freezing a column order an administrator cannot edit, and 19-LS.14
+      // owns the edit layout.
       layouts: {
         detail: [
           {
@@ -350,12 +363,6 @@ export const coreMetadata: MetadataSeedEntry[] = [
                 // `name` is first because the flat view showed it: it is `inDetail`, and a layout that
                 // omitted it would move it into the trailing "Other" card. `displayField` stays `lastName`.
                 fields: ['name', 'lastName', 'firstName', 'title', 'status', 'source', 'company', 'industry', 'emailAddress', 'phoneNumber', 'description', 'assignedUserId', 'createdAt', 'modifiedAt'],
-              },
-              {
-                name: 'score',
-                label: 'Score',
-                position: 10,
-                fields: ['scoreValue', 'scoreBand', 'scoreStatus', 'scoreModelId', 'scoreModelVersion', 'scoreCoverage', 'scoreCalculatedAt', 'scoreInputsAsOf', 'scorePreviousValue'],
               },
               {
                 name: 'converted',

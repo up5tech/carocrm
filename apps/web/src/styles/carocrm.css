@@ -7863,3 +7863,40 @@ body.carocrm-reordering * {
     transform: none;
   }
 }
+
+/* Phase 19-LS.7 — the Lead Score card. The headline number, the band and the freshness state read as one
+   line on a desktop and stack on a narrow screen; a rule row keeps its name and its points on the same
+   baseline so the list can be scanned in one pass. Colour never carries meaning alone: the band pill and the
+   signed movement both say it in words. */
+.carocrm-score-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+
+.carocrm-score-value {
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.carocrm-score-rule {
+  padding: 6px 0;
+}
+
+.carocrm-score-rule .ant-space-item {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .carocrm-score-headline {
+    gap: 12px;
+  }
+
+  .carocrm-score-value {
+    font-size: 24px;
+  }
+}

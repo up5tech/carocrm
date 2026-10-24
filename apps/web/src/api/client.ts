@@ -106,6 +106,9 @@ import type {
   IntegrationSyncRunListResult,
   InternalInfoView,
   LayoutDefinition,
+  LeadScoreHistory,
+  LeadScoreRead,
+  LeadScoreWrite,
   ListResult,
   LoginChallengeResult,
   LoginResult,
@@ -2048,4 +2051,18 @@ export const api = {
       `/ESignature/connections/${encodeURIComponent(id)}/disconnect`,
       post({}),
     ),
+
+  // Phase 19-LS.7 — the score of one Lead, its explanation, its history and the recalculation.
+  // `score` answers with `actions`, so the panel renders what the server will accept rather than guessing
+  // from a role name; the record-level scope of `Lead:edit` is still only known when the write is attempted.
+  leadScoreRead: (leadId: string) => request<LeadScoreRead>(`/LeadScore/action/score/${encodeURIComponent(leadId)}`),
+  leadScoreHistory: (leadId: string, query: { limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    if (query.offset !== undefined) params.set('offset', String(query.offset));
+    const suffix = params.toString() === '' ? '' : `?${params.toString()}`;
+    return request<LeadScoreHistory>(`/LeadScore/action/score/${encodeURIComponent(leadId)}/history${suffix}`);
+  },
+  leadScoreRecalculate: (leadId: string) =>
+    request<LeadScoreWrite>(`/LeadScore/action/score/recalculate`, post({ leadId })),
 };

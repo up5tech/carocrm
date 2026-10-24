@@ -30,5 +30,50 @@
       "recency": "Recency",
       "negative": "Negative signals"
     }
+  },
+  "panel": {
+    "title": "Lead Score",
+    "recalculate": "Recalculate",
+    "history": "History",
+    "historyTitle": "Score history",
+    "historyFailed": "The history of this score could not be read.",
+    "notScored": "This Lead has no stored score.",
+    "band": "Band",
+    "status": "State",
+    "scoreColumn": "Score",
+    "model": "Model",
+    "modelVersion": "Version {version}",
+    "calculatedAt": "Calculated",
+    "inputsAsOf": "Inputs as of",
+    "coverage": "Coverage",
+    "movement": "Change",
+    "movementAria": "From {from} to {to}",
+    "rules": "Why this score",
+    "noRules": "No rule of this model answered for this Lead.",
+    "assignedBand": "Sets the band to {band}",
+    "code": "Code: {code}",
+    "errorCodes": "Some rules could not be evaluated: {codes}",
+    "skipped": "Rules not evaluated: {codes}",
+    "loadMore": "Load more",
+    "showing": "Showing {shown} of {total}",
+    "recordsWritten": "The score was recorded.",
+    "unchanged": "Nothing changed, so no history was recorded.",
+    "triggerHeader": "Requested by",
+    "trigger": {
+      "lead_change": "A change to this Lead",
+      "manual_recalculate": "A manual recalculation",
+      "batch_rebuild": "A batch rebuild",
+      "model_publish": "A model publication",
+      "engagement_event": "An engagement signal",
+      "decay_sweep": "A decay sweep"
+    }
+  },
+  "band": {
+    "unknown": "Unknown",
+    "cold": "Cold",
+    "warm": "Warm",
+    "hot": "Hot",
+    "sales_ready": "Sales ready",
+    "disqualified": "Disqualified"
   }
 }

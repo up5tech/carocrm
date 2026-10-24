@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { I18nService } from '../src/i18n/i18n.service.js';
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
 
@@ -35,6 +36,8 @@ const RULE = 'LeadScoreRule';
 
 let ctx: ApiContext;
 let previousSettings: string | null = null;
+/** The administrator's own locale preference, which decides every label this suite asserts (plan §41.6). */
+let previousLocale: string | null = null;
 const createdRecordIds: string[] = [];
 
 type Body = Record<string, unknown>;
@@ -73,6 +76,11 @@ interface ScoreView {
     reasonCodes: { positive: string[]; negative: string[]; unknown: string[]; skipped: string[] };
     breakdown: { reasonCode: string; ruleName: string; dimension: string; dimensionLabel: string; outcome: string; outcomeLabel: string; points: number }[];
     errorCodes: string[];
+  };
+  /** 19-LS.7 — what this caller may do about the score, answered by the gate (plan §9.1). */
+  actions: {
+    recalculate: { allowed: boolean; reason: string | null };
+    history: { allowed: boolean; reason: string | null };
   };
 }
 
@@ -220,9 +228,21 @@ beforeAll(async () => {
   previousSettings = row === undefined ? null : JSON.stringify(row.data);
   const enabled = await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { modelAdministration: true } });
   expect(enabled.status, JSON.stringify(enabled.body)).toBe(200);
+
+  // The platform's rule is that a reader's own preference beats `Accept-Language`, and most assertions here
+  // read English labels through the shared administrator. That is only deterministic while the account has
+  // no preference set — and this is a development database somebody else may have used the UI on — so the
+  // suite pins it for its own run and puts it back afterwards.
+  const me = await call('GET', '/api/v1/AppUser/me');
+  previousLocale = (me.body['locale'] as string | null | undefined) ?? null;
+  const cleared = await call('PATCH', '/api/v1/AppUser/me', { locale: null });
+  expect(cleared.status, JSON.stringify(cleared.body)).toBe(200);
 }, 240_000);
 
 afterAll(async () => {
+  if (previousLocale !== null) {
+    await call('PATCH', '/api/v1/AppUser/me', { locale: previousLocale }).catch(() => undefined);
+  }
   const db = ctx.database.db;
   if (previousSettings === null) {
     await db.deleteFrom('app_settings').where('name', '=', SETTINGS_ROW).execute().catch(() => undefined);
@@ -550,6 +570,134 @@ describe('the history command pages one Lead’s evaluations', () => {
     expect(closed.status).toBe(403);
     expect(errorOf(closed).code).toBe('LEADSCORE_MODULE_DISABLED');
     await setActiveModel(model.id);
+  });
+});
+
+describe('the score read says what this caller may do (19-LS.7)', () => {
+  it('answers the affordance the button would meet, from the gate rather than from the SPA', async () => {
+    const model = await createPublishedModel('affordances');
+    await setActiveModel(model.id);
+    const leadId = await createLead('actionable', { company: 'Acme' });
+    await scoreLeadNow(leadId);
+
+    const view = score(await readScore(leadId));
+    // An administrator holds every right and the module is switched on: both doors open, no reason attached.
+    expect(view.actions).toEqual({
+      recalculate: { allowed: true, reason: null },
+      history: { allowed: true, reason: null },
+    });
+
+    // A reader with the badge right alone gets the number and is told, in stable codes, why there is no
+    // button — the panel renders this answer rather than guessing from a role name (AGENTS.md §5.3).
+    const badgeRole = `role_${RUN}_badge_affordance`;
+    await createTestRole(ctx, { id: badgeRole, name: `${RUN} badge affordance`, permissions: { Lead: { read: 'all' }, LeadScore: { read: 'yes' } } });
+    const badgeOnly = await createTestUser(ctx, { userName: `${RUN}_badge_affordance`, roleIds: [badgeRole] });
+    const viewer = score(await readScore(leadId, badgeOnly.token));
+    expect(viewer.actions.recalculate).toEqual({ allowed: false, reason: 'AUTHORIZATION_DENIED' });
+    expect(viewer.actions.history).toEqual({ allowed: false, reason: 'AUTHORIZATION_DENIED' });
+  });
+
+  it('does not offer a recalculation to a caller who cannot edit a Lead', async () => {
+    const model = await createPublishedModel('recalculate needs edit');
+    await setActiveModel(model.id);
+    const leadId = await createLead('read-only recalc', { company: 'Acme' });
+    await scoreLeadNow(leadId);
+
+    // `LeadScoreRecalculate` is the module's right; writing a score is also a write onto a Lead, and the
+    // panel must show the union of the two, not one of them.
+    const roleId = `role_${RUN}_score_write_no_lead_edit`;
+    await createTestRole(ctx, {
+      id: roleId,
+      name: `${RUN} recalculate without edit`,
+      permissions: { Lead: { read: 'all' }, LeadScore: { read: 'yes' }, LeadScoreExplain: { read: 'yes' }, LeadScoreRecalculate: { edit: 'yes' } },
+    });
+    const caller = await createTestUser(ctx, { userName: `${RUN}_no_lead_edit`, roleIds: [roleId] });
+
+    const view = score(await readScore(leadId, caller.token));
+    expect(view.actions.recalculate).toEqual({ allowed: false, reason: 'LEAD_NOT_EDITABLE' });
+    // The explanation door is unaffected by the record right.
+    expect(view.actions.history.allowed).toBe(true);
+
+    // The answer is not decoration. Asked to score a Lead it has never scored — so the projection really is
+    // a write — the same caller is refused by the core `Lead:edit` right, which is what the affordance answer
+    // predicted. (A Lead whose stored projection already says this answers as a no-op without writing, so the
+    // scored record above would prove nothing here.)
+    const unscored = await createLead('recalc attempt', { company: 'Beta' });
+    const attempted = await call('POST', '/api/v1/LeadScore/action/score/recalculate', { leadId: unscored }, caller.token);
+    expect(attempted.status, JSON.stringify(attempted.body)).toBe(403);
+    expect(errorOf(attempted).code).toBe('AUTHORIZATION_DENIED');
+    // Nothing was stored: the refusal left no projection and no history row behind.
+    expect(history(await readHistory(unscored, '', caller.token)).items).toEqual([]);
+  });
+
+  it('reports a switch as the reason while manual recalculation is off', async () => {
+    const model = await createPublishedModel('switched affordance');
+    await setActiveModel(model.id);
+    const leadId = await createLead('switched action', { company: 'Acme' });
+    await scoreLeadNow(leadId);
+
+    await call('POST', '/api/v1/LeadScore/action/settings', {
+      enabled: true,
+      features: { modelAdministration: true, scoring: true, scoreExplanation: true, manualRecalculation: false },
+      scoring: { activeModelId: model.id },
+    });
+    const view = score(await readScore(leadId));
+    expect(view.actions.recalculate).toEqual({ allowed: false, reason: 'LEADSCORE_MODULE_DISABLED' });
+    expect(view.actions.history.allowed).toBe(true);
+
+    await setActiveModel(model.id);
+    expect(score(await readScore(leadId)).actions.recalculate.allowed).toBe(true);
+  });
+});
+
+describe('the words 19-LS.7 renders exist in both catalogs', () => {
+  it('resolves every label the Lead Score card asks the server or the SPA for', async () => {
+    const i18n = ctx.app.get(I18nService, { strict: false }) as I18nService;
+    // A catalog key that breaks the platform's naming convention does not fail one label: the loader aborts
+    // and *every* translation in the instance falls back to its code. This suite would not notice — the card
+    // would silently render `not_scored` and `sales_ready` to a user — so the keys are asserted here.
+    const keys = [
+      'leadscore.panel.title',
+      'leadscore.panel.recalculate',
+      'leadscore.panel.history',
+      'leadscore.panel.notScored',
+      'leadscore.panel.rules',
+      'leadscore.panel.coverage',
+      'leadscore.panel.movement',
+      'leadscore.panel.loadMore',
+      'leadscore.panel.triggerHeader',
+      'leadscore.panel.showing',
+      'leadscore.panel.unchanged',
+      'leadscore.panel.recordsWritten',
+      'leadscore.panel.historyFailed',
+      'leadscore.panel.noRules',
+      'leadscore.band.unknown',
+      'leadscore.band.cold',
+      'leadscore.band.warm',
+      'leadscore.band.hot',
+      'leadscore.band.sales_ready',
+      'leadscore.band.disqualified',
+      'leadscore.panel.trigger.lead_change',
+      'leadscore.panel.trigger.manual_recalculate',
+      'leadscore.panel.trigger.batch_rebuild',
+    ];
+    for (const locale of ['en', 'vi']) {
+      for (const key of keys) {
+        const value = i18n.translate(locale, key);
+        expect(value, `${locale} ${key}`).toBeTruthy();
+        expect(value, `${locale} ${key}`).not.toBe(key);
+      }
+    }
+    // The freshness, outcome and dimension labels the read already served come from the same catalog, so a
+    // load failure would show up as a code in the response the card prints.
+    const model = await createPublishedModel('labels survive');
+    await setActiveModel(model.id);
+    const leadId = await createLead('labelled', { company: 'Acme' });
+    await scoreLeadNow(leadId);
+    const view = score(await readScore(leadId));
+    expect(view.freshness.label).not.toBe('current');
+    expect(view.explanation.breakdown[0]?.outcomeLabel).toBeTruthy();
+    expect(view.explanation.breakdown[0]?.outcomeLabel).not.toBe('matched');
   });
 });
 

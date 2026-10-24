@@ -80,7 +80,9 @@
     "rowFollow": "Theo dõi",
     "rowActionsAria": "Hành động cho {name}",
     "followed": "Đang theo dõi bản ghi này.",
-    "followFailed": "Không thể theo dõi bản ghi này."
+    "followFailed": "Không thể theo dõi bản ghi này.",
+    "moreFilters": "{count} bộ lọc khác",
+    "fewerFilters": "Ít bộ lọc hơn"
   },
   "board": {
     "groupBy": "Nhóm theo",

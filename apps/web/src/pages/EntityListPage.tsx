@@ -1,4 +1,4 @@
-import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, DownOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined,UpOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Card, Col, Dropdown, Input, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Typography } from 'antd';
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -19,6 +19,9 @@ import { portalBase } from '../state/portal.js';
 import { usePreference } from '../state/preferences.js';
 import { useSession } from '../state/session.js';
 import type { FilterDraft } from '../types/views.js';
+
+/** How many filter controls the panel shows before the disclosure (19-LS.7). */
+const DEFAULT_FILTER_SLOTS = 5;
 
 function operatorOptions(): { value: string; label: string }[] {
   return [
@@ -98,6 +101,10 @@ export function EntityListPage() {
   // §5.3: live per-column pixel widths while a header drag is in flight.
   const [widths, setWidths] = useState<Record<string, number>>({});
   const [selectingAll, setSelectingAll] = useState(false);
+  // 19-LS.7: an entity with more filterable fields than the five the panel shows keeps the rest behind a
+  // disclosure, so a module's projection (Lead Score, for instance) is reachable without pushing core
+  // fields out of the panel. A field that already carries a condition is always shown.
+  const [moreFilters, setMoreFilters] = useState(false);
   const [textQuery, setTextQuery] = useState(urlTextQuery);
   const [savedFilters, setSavedFilters] = useState<SavedFilterRow[]>([]);
   const [activeFilterId, setActiveFilterId] = useState<string | null>(null);
@@ -137,6 +144,17 @@ export function EntityListPage() {
   const panels = useMemo(() => layoutPanelsFor(definition.data, 'list'), [definition.data]);
   const columns = useMemo(() => orderByLayout(listEntries(definition.data), panels), [definition.data, panels]);
   const filterable = useMemo(() => filterEntries(definition.data), [definition.data]);
+  const visibleFilters = useMemo(() => {
+    const shown = filterable.slice(0, DEFAULT_FILTER_SLOTS);
+    if (moreFilters) return filterable;
+    // A condition the user already set must stay on screen after a reload, or it keeps filtering rows
+    // behind a panel that appears to have no filter in it.
+    const drafted = new Set(drafts.map((draft) => draft.field));
+    for (const entry of filterable.slice(DEFAULT_FILTER_SLOTS)) {
+      if (drafted.has(entry.name) && !shown.includes(entry)) shown.push(entry);
+    }
+    return shown;
+  }, [filterable, moreFilters, drafts]);
   // §20.12: user-chosen columns per entity, persisted server-side via /Preferences/columns.
   // This hook must stay above the loading/error early returns below — a hook that only runs once
   // the metadata has arrived changes the hook order between renders and React tears the page down.
@@ -655,7 +673,7 @@ export function EntityListPage() {
       {filterable.length > 0 ? (
         <div className="carocrm-filter" aria-label={t('web.list.filtersAria')}>
           <Row gutter={[12, 12]}>
-            {filterable.slice(0, 5).map((entry) => (
+            {visibleFilters.map((entry) => (
               <Col key={entry.name} xs={24} sm={12} lg={8} xl={6}>
                 <Typography.Text className="carocrm-filter-label">
                   {fieldLabel(entry.name, entry.field, metadata.data)}
@@ -695,6 +713,18 @@ export function EntityListPage() {
               {t('web.list.apply')}
             </Button>
             <Button onClick={() => { setDrafts([]); setOffset(0); }}>{t('web.list.clear')}</Button>
+            {filterable.length > DEFAULT_FILTER_SLOTS ? (
+              <Button
+                type="text"
+                icon={moreFilters ? <UpOutlined /> : <DownOutlined />}
+                aria-expanded={moreFilters}
+                onClick={() => setMoreFilters((open) => !open)}
+              >
+                {moreFilters
+                  ? t('web.list.fewerFilters')
+                  : t('web.list.moreFilters', { count: filterable.length - DEFAULT_FILTER_SLOTS })}
+              </Button>
+            ) : null}
           </div>
         </div>
       ) : null}

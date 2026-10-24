@@ -30,5 +30,50 @@
       "recency": "Tính mới đây",
       "negative": "Tín hiệu tiêu cực"
     }
+  },
+  "panel": {
+    "title": "Điểm Lead",
+    "recalculate": "Tính lại điểm",
+    "history": "Lịch sử",
+    "historyTitle": "Lịch sử điểm",
+    "historyFailed": "Không đọc được lịch sử điểm này.",
+    "notScored": "Lead này chưa có điểm được lưu.",
+    "band": "Nhóm",
+    "status": "Trạng thái",
+    "scoreColumn": "Điểm",
+    "model": "Mô hình",
+    "modelVersion": "Phiên bản {version}",
+    "calculatedAt": "Tính lúc",
+    "inputsAsOf": "Dữ liệu đến thời điểm",
+    "coverage": "Độ phủ",
+    "movement": "Thay đổi",
+    "movementAria": "Từ {from} lên {to}",
+    "rules": "Vì sao có điểm này",
+    "noRules": "Không quy tắc nào của mô hình trả lời cho Lead này.",
+    "assignedBand": "Đặt nhóm thành {band}",
+    "code": "Mã: {code}",
+    "errorCodes": "Một số quy tắc không đánh giá được: {codes}",
+    "skipped": "Quy tắc không được đánh giá: {codes}",
+    "loadMore": "Tải thêm",
+    "showing": "Đang hiển thị {shown}/{total}",
+    "recordsWritten": "Điểm đã được lưu.",
+    "unchanged": "Không có gì thay đổi nên không lưu thêm lịch sử.",
+    "triggerHeader": "Được yêu cầu bởi",
+    "trigger": {
+      "lead_change": "Một thay đổi của Lead này",
+      "manual_recalculate": "Một lần tính lại thủ công",
+      "batch_rebuild": "Một lần tính lại hàng loạt",
+      "model_publish": "Một lần phát hành mô hình",
+      "engagement_event": "Một tín hiệu tương tác",
+      "decay_sweep": "Một lần quét suy giảm"
+    }
+  },
+  "band": {
+    "unknown": "Chưa rõ",
+    "cold": "Lạnh",
+    "warm": "Ấm",
+    "hot": "Nóng",
+    "sales_ready": "Sẵn sàng bán",
+    "disqualified": "Loại bỏ"
   }
 }

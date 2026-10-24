@@ -83,15 +83,15 @@ _Phase 19_ —
   recovery for a lost send answer, provider webhooks with HMAC verification and a durable inbox,
   template mappings, signed-document artifacts, reports and an operations panel (Phases 19-ES.0–19-ES.22).
 - **Lead Score** — explainable, versioned lead scoring over the existing `Lead` entity plus a
-  transactional, idempotent Lead→Contact/Account/Opportunity conversion. **Phases 19-LS.0–19-LS.6 are
+  transactional, idempotent Lead→Contact/Account/Opportunity conversion. **Phases 19-LS.0–19-LS.7 are
   delivered: the repository audit, the module registration, the schema/metadata foundation, the model
-  and rule configuration, the deterministic scoring engine, the score that is computed *and kept*, and what
-  decides *when* to score** —
+  and rule configuration, the deterministic scoring engine, the score that is computed *and kept*, what
+  decides *when* to score, and the salesperson's surface for it** —
   the `LeadScore` descriptor with its 14 capability resources, the `leadScore` settings document, the gate
   in front of all 13 planned operations, the health view at `/api/v1/LeadScore/action/health`, the four
   records (`LeadScoreModel`, `LeadScoreRule`,
   `LeadScoreEvaluation`, `LeadConversionOperation`), the current-score projection and `Converted To`
-  attributes on the core `Lead` with their detail panels, the migration that indexes and constrains them,
+  attributes on the core `Lead`, the migration that indexes and constrains them,
   the bounded declarative rule DSL with its protected-field and scoring-output denylists, the
   validate → publish → archive → new-version lifecycle at `/api/v1/LeadScore/action/model/*`, the
   pure, clock-free evaluator (three-valued conditions, weights, clamping, bands, coverage, reason codes and
@@ -105,17 +105,24 @@ _Phase 19_ —
   projection write from re-triggering itself) plus `action/recalculate-batch`, a bounded, chunked (50 Leads),
   capped (2 000 per run), cancellable rebuild whose rows an operator can watch and stop in `/admin/jobs`. Both
   background paths run in the worker against the API under the documented service authority and the shared
-  `x-worker-secret`, so a job writes through exactly the guards an administrator's button goes through. An invalid
+  `x-worker-secret`, so a job writes through exactly the guards an administrator's button goes through, and
+  the **Lead Score card on a Lead** (`apps/web/src/components/LeadScorePanel.tsx`): the stored number, band,
+  freshness verdict with its reason, coverage, movement from the previous score, model version, the rule-by-rule
+  reason list and the paged history with each evaluation's own breakdown, plus the Recalculate and History
+  actions — rendered from the server's `actions` answer, never from a role name, and nothing about a score is
+  computed in the browser. The projection is also a Lead list column and filter (`Score Value`, `Score Band`,
+  `Score Status`), so a queue can be sorted by the number without running the engine. An invalid
   model cannot be published and a published version cannot be written — by an administrator through the
-  record API either. Nothing converts yet and nothing is shown in the SPA: the module ships switched
-  off, the score UI is 19-LS.7, signals, notifications and the decay sweep are 19-LS.9, and those operations
+  record API either. Nothing converts yet and there is no model-administration screen: the module ships switched
+  off, the model UI is 19-LS.8, signals, notifications and the decay sweep are 19-LS.9, and those operations
   refuse with the sub-phase that owes them (`LEADSCORE_PHASE_PENDING`). See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
   [docs/implementation/lead-score-ls1-completion-report.md](docs/implementation/lead-score-ls1-completion-report.md),
   [docs/implementation/lead-score-ls2-completion-report.md](docs/implementation/lead-score-ls2-completion-report.md),
   [docs/implementation/lead-score-ls3-completion-report.md](docs/implementation/lead-score-ls3-completion-report.md),
-  [docs/implementation/lead-score-ls5-completion-report.md](docs/implementation/lead-score-ls5-completion-report.md)
+  [docs/implementation/lead-score-ls5-completion-report.md](docs/implementation/lead-score-ls5-completion-report.md),
+  [docs/implementation/lead-score-ls7-completion-report.md](docs/implementation/lead-score-ls7-completion-report.md)
   and [docs/compatibility/lead-score.md](docs/compatibility/lead-score.md).
 
 _Phase 20_ — settings, administration and end-user UX: a settings-document registry with optimistic

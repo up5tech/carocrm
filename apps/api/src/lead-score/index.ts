@@ -97,6 +97,8 @@ export {
 export {
   LeadScoreExplanationService,
   MAX_HISTORY_PAGE,
+  type ScoreActionAnswer,
+  type ScoreActions,
   type ScoreBreakdownEntry,
   type ScoreHistoryView,
   type ScoreReadView,

@@ -57,18 +57,36 @@ export function editEntries(definition: EntityDefinition | undefined): FieldEntr
 }
 
 
+/**
+ * The filter panel's candidates, in metadata order.
+ *
+ * Two rules 19-LS.7 added, because a projection like Lead Score has to be filterable without a per-entity
+ * hack anywhere in the SPA:
+ *
+ * - an explicit `inFilter: false` **means it**. Inclusion used to be a type heuristic, so a provenance
+ *   datetime a module deliberately kept out of the panel came back as `datetime` anyway;
+ * - the twelve-field ceiling is a scanability guard, not a way to lose a field an administrator asked for,
+ *   so explicitly-marked fields are kept and the *automatic* ones are what the cap trims.
+ */
+const MAX_AUTOMATIC_FILTERS = 12;
+
+const FILTERABLE_TYPES = ['varchar', 'enum', 'bool', 'date', 'datetime', 'int', 'currency'];
+
 export function filterEntries(definition: EntityDefinition | undefined): FieldEntry[] {
-  return definition
-    ? Object.entries(definition.fields)
-        .filter(
-          ([name, field]) =>
-            !ALWAYS_HIDDEN.has(name) &&
-            field.type !== 'disabled' &&
-            (field.inFilter === true || ['varchar', 'enum', 'bool', 'date', 'datetime', 'int', 'currency'].includes(field.type)),
-        )
-        .slice(0, 12)
-        .map(([name, field]) => ({ name, field }))
-    : [];
+  if (!definition) return [];
+  const entries: FieldEntry[] = [];
+  let automatic = 0;
+  for (const [name, field] of Object.entries(definition.fields)) {
+    if (ALWAYS_HIDDEN.has(name) || field.type === 'disabled' || field.inFilter === false) continue;
+    if (field.inFilter === true) {
+      entries.push({ name, field });
+      continue;
+    }
+    if (!FILTERABLE_TYPES.includes(field.type) || automatic >= MAX_AUTOMATIC_FILTERS) continue;
+    automatic += 1;
+    entries.push({ name, field });
+  }
+  return entries;
 }
 
 /**

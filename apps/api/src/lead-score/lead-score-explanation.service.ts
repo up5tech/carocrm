@@ -51,6 +51,17 @@ export interface ScoreBreakdownEntry {
   readonly field?: string | undefined;
 }
 
+/** One affordance the server is willing to honour, and the stable code explaining a refusal. */
+export interface ScoreActionAnswer {
+  readonly allowed: boolean;
+  readonly reason: string | null;
+}
+
+export interface ScoreActions {
+  readonly recalculate: ScoreActionAnswer;
+  readonly history: ScoreActionAnswer;
+}
+
 export interface ScoreReadView {
   readonly leadId: string;
   readonly scored: boolean;
@@ -87,6 +98,7 @@ export interface ScoreReadView {
     readonly breakdown: readonly ScoreBreakdownEntry[];
     readonly errorCodes: readonly string[];
   };
+  readonly actions: ScoreActions;
 }
 
 export interface ScoreHistoryView {
@@ -131,10 +143,17 @@ export class LeadScoreExplanationService {
   ) {}
 
   /**
-   * The current score of one Lead, with its explanation and its freshness.
+   * The current score of one Lead, with its explanation, its freshness and what this caller may do about it.
    *
    * `viewScore` is the right; the history and the per-rule breakdown are a wider right and stay in
    * `history()` (plan §9.1 separates "view badge" from "read explanation").
+   *
+   * The `actions` block is the same gate answer the button would meet, computed here instead of guessed by
+   * the SPA (19-LS.7, AGENTS.md §5.3): a client that re-derived "can I recalculate" from a role name would
+   * drift the moment a switch moved, and a button that can only end in a 403 is worse than one that is not
+   * there. `reason` is the stable code, so the interface can say *why* rather than hiding the affordance in
+   * silence. Note what it is not: the record-level scope of `Lead:edit` for this one Lead is only known when
+   * the write is attempted, which is why the recalculate command still refuses on its own.
    */
   async score(leadId: string): Promise<ScoreReadView> {
     await this.gate.assertOperation('readScore');
@@ -153,6 +172,7 @@ export class LeadScoreExplanationService {
 
     const locale = await this.locale();
     const breakdown = row === undefined ? [] : breakdownOf(row, this.i18n, locale);
+    const actions = await this.actions();
 
     return {
       leadId,
@@ -191,6 +211,30 @@ export class LeadScoreExplanationService {
         breakdown,
         errorCodes: splitCodes(stringOf(row?.data['errorSummary'])),
       },
+      actions,
+    };
+  }
+
+  /**
+   * What this caller may do with a score, straight from the gate.
+   *
+   * Recalculating is a *write onto a Lead*, so the score right is not enough by itself: the caller also needs
+   * the core `Lead:edit` right, which is exactly what `recalculate()` requires before it stores anything
+   * (plan §9.1). Reporting one without the other would put a button on the screen that the server refuses.
+   */
+  private async actions(): Promise<ScoreActions> {
+    const [recalculate, history, canEditLead] = await Promise.all([
+      this.gate.assess('recalculateLead'),
+      this.gate.assess('readScoreHistory'),
+      this.acl.canUser('Lead', 'edit'),
+    ]);
+    const leadNotEditable = canEditLead === 'no' ? 'LEAD_NOT_EDITABLE' : null;
+    return {
+      recalculate: {
+        allowed: recalculate.admitted && leadNotEditable === null,
+        reason: recalculate.admitted ? leadNotEditable : recalculate.code,
+      },
+      history: { allowed: history.admitted, reason: history.admitted ? null : history.code },
     };
   }
 

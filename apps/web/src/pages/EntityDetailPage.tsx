@@ -14,6 +14,7 @@ import { usePageDocs } from '../components/docs/PageDocs.js';
 import { ESignatureRecordActions } from '../components/ESignatureRecordActions.js';
 import { FieldValue, linkLabelsOf } from '../components/fields.js';
 import { isJsonPayload } from '../components/JsonValue.js';
+import { LeadScorePanel } from '../components/LeadScorePanel.js';
 import { LinkRecordModal } from '../components/LinkRecordModal.js';
 import { NextActionBand } from '../components/NextActionBand.js';
 import { OpportunityDocumentActions } from '../components/OpportunityDocumentActions.js';
@@ -519,6 +520,14 @@ export function EntityDetailPage() {
             the buttons are exactly the commands the server says this actor may run in this status, and the
             blockers are the server's findings, never a client-side re-derivation (§8.2, AGENTS.md §5.3). */}
         {entity === 'Campaign' && base !== '/portal' ? <CampaignLifecycleActions campaignId={id} onChanged={load} /> : null}
+
+        {/* Phase 19-LS.7 — the score of this Lead, its explanation, its history and the recalculation. The
+            card renders what `GET /LeadScore/action/score/:leadId` answered: every label, the freshness
+            verdict and the two `actions` flags come from the server, so the number is never recomputed here
+            and a button appears only where the gate would accept it. It renders nothing when that read
+            refuses, and the portal gets no card at all. `onChanged` reloads the record because a stored
+            score is a write onto this Lead. */}
+        {entity === 'Lead' && base !== '/portal' ? <LeadScorePanel leadId={id} onChanged={load} /> : null}
 
         {panels.map((panel, index) => {
           // §5.5 progressive disclosure: the first panel carries the record's identity; the rest

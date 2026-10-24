@@ -80,7 +80,9 @@
     "rowFollow": "Follow",
     "rowActionsAria": "Actions for {name}",
     "followed": "Following this record.",
-    "followFailed": "Could not follow this record."
+    "followFailed": "Could not follow this record.",
+    "moreFilters": "{count} more filters",
+    "fewerFilters": "Fewer filters"
   },
   "board": {
     "groupBy": "Group by",

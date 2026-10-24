@@ -3678,3 +3678,118 @@ export interface ESignatureSendPreview {
   readonly storedDigest: string | null;
   readonly staleStoredPreview: boolean;
 }
+
+/**
+ * Phase 19-LS.7 — the score of one Lead, as the Lead Score module answers it.
+ *
+ * Mirrors `ScoreReadView` in `apps/api/src/lead-score/lead-score-explanation.service.ts`. Every label the
+ * panel shows is the server's, in the reader's own language (`I18nService`), and the breakdown carries rule
+ * names and outcomes and **no Lead value** — an explanation that quoted `industry = Software` would read a
+ * field past its ACL, which is the boundary plan §6.5 and §9.2 put in front of the engine (19-LS.4).
+ */
+export interface LeadScoreActionAnswer {
+  readonly allowed: boolean;
+  /** The stable code of the refusal — a switch, a missing right, or a record the caller may not edit. */
+  readonly reason: string | null;
+}
+
+export interface LeadScoreBreakdownEntry {
+  readonly reasonCode: string;
+  readonly ruleName: string;
+  readonly dimension: string;
+  readonly dimensionLabel: string;
+  readonly outcome: string;
+  readonly outcomeLabel: string;
+  readonly points: number;
+  readonly assignedBand?: string | undefined;
+  readonly code?: string | undefined;
+  readonly field?: string | undefined;
+}
+
+export interface LeadScoreRead {
+  readonly leadId: string;
+  readonly scored: boolean;
+  readonly score: {
+    readonly value: number | null;
+    readonly band: string;
+    readonly previousValue: number | null;
+    readonly coverage: number | null;
+    readonly reasonCodes: readonly string[];
+    readonly modelId: string | null;
+    readonly modelVersion: number | null;
+    readonly calculatedAt: string | null;
+    readonly inputsAsOf: string | null;
+    readonly signature: string | null;
+    readonly evaluationId: string | null;
+  };
+  readonly freshness: {
+    readonly status: string;
+    readonly label: string;
+    readonly reasons: readonly string[];
+    readonly reasonLabels: readonly string[];
+    readonly currentRevision: number;
+    readonly scoredRevision: number | null;
+    readonly activeModelId: string | null;
+  };
+  readonly explanation: {
+    readonly reasonCodes: {
+      readonly positive: readonly string[];
+      readonly negative: readonly string[];
+      readonly unknown: readonly string[];
+      readonly skipped: readonly string[];
+    };
+    readonly breakdown: readonly LeadScoreBreakdownEntry[];
+    readonly errorCodes: readonly string[];
+  };
+  readonly actions: {
+    readonly recalculate: LeadScoreActionAnswer;
+    readonly history: LeadScoreActionAnswer;
+  };
+}
+
+export interface LeadScoreHistoryItem {
+  readonly evaluationId: string;
+  readonly modelId: string;
+  readonly modelVersion: number;
+  readonly scoreValue: number | null;
+  readonly band: string;
+  readonly evaluationStatus: string;
+  readonly evaluationStatusLabel: string;
+  readonly resultState: string;
+  readonly coverage: number | null;
+  readonly trigger: string;
+  readonly calculatedAt: string | null;
+  readonly inputsAsOf: string | null;
+  readonly sourceRevision: number | null;
+  readonly signature: string;
+  readonly durationMs: number | null;
+  readonly correlationId: string | null;
+  readonly jobId: string | null;
+  readonly errorSummary: string | null;
+  readonly breakdown: readonly LeadScoreBreakdownEntry[];
+}
+
+export interface LeadScoreHistory {
+  readonly leadId: string;
+  readonly total: number;
+  readonly limit: number;
+  readonly offset: number;
+  readonly items: readonly LeadScoreHistoryItem[];
+}
+
+/** The write answer of `action/score/recalculate` (19-LS.5), which the panel refetches the record after. */
+export interface LeadScoreWrite {
+  readonly leadId: string;
+  readonly evaluationId: string;
+  readonly recorded: boolean;
+  readonly projectionWritten: boolean;
+  readonly model: { readonly id: string; readonly name: string; readonly modelVersion: number };
+  readonly evaluation: {
+    readonly trigger: string;
+    readonly scoreValue: number | null;
+    readonly band: string;
+    readonly coverage: number;
+    readonly resultState: string;
+    readonly calculatedAt: string;
+  };
+}

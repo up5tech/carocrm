@@ -415,16 +415,49 @@ describe('metadata foundation (19-LS.2)', () => {
       expect(placed.has(field), `Lead detail omits ${field}`).toBe(true);
     }
     const byName = new Map(panels.map((panel) => [panel.name, panel.fields ?? []]));
-    expect([...byName.keys()]).toEqual(['main', 'score', 'converted']);
-    expect(byName.get('score')).toContain('scoreValue');
-    expect(byName.get('score')).toContain('scoreCalculatedAt');
+    // 19-LS.7 removed the generic `score` panel: its fields are `inDetail: false` now, and the Lead Score
+    // card is their surface. `converted` stays, because nothing shows those references until 19-LS.13.
+    expect([...byName.keys()]).toEqual(['main', 'converted']);
+    expect(byName.get('score')).toBeUndefined();
     expect(byName.get('converted')).toEqual(['convertedAccountId', 'convertedContactId', 'convertedOpportunityId', 'convertedAt', 'convertedById', 'conversionOperationId']);
     for (const field of ['status', 'company', 'emailAddress', 'phoneNumber', 'assignedUserId', 'title', 'source', 'industry']) {
       expect(byName.get('main'), field).toContain(field);
     }
-    // The list and edit views stay metadata-driven defaults until their own phases build them (LS.7, LS.14).
+    // The list and edit views stay metadata-driven defaults: LS.7 opened the projection to the list through
+    // `inList`/`inFilter` instead of freezing a column order, and 19-LS.14 owns the edit layout.
     expect(definition('Lead')?.layouts?.list ?? []).toEqual([]);
     expect(definition('Lead')?.layouts?.edit ?? []).toEqual([]);
+  });
+
+  it('places the projection where 19-LS.7 shows it: listed, filterable, and never a raw detail dump', () => {
+    const fields = definition('Lead')?.fields ?? {};
+    const flag = (name: string, key: 'inList' | 'inFilter' | 'inDetail'): unknown => fields[name]?.[key];
+
+    // A rep triaging a queue sorts by the number and filters by the band, so those two are list columns.
+    for (const name of ['scoreValue', 'scoreBand']) {
+      expect(flag(name, 'inList'), `${name} in the list`).toBe(true);
+      expect(flag(name, 'inFilter'), `${name} filterable`).toBe(true);
+      expect(flag(name, 'sortable') ?? true, `${name} sortable`).toBeTruthy();
+    }
+    // The freshness state is worth filtering ("show me the stale ones") and is not worth a column.
+    expect(flag('scoreStatus', 'inFilter')).toBe(true);
+    expect(flag('scoreStatus', 'inList')).toBeFalsy();
+
+    // None of them is a detail field: the Lead Score card renders the stored projection with its explanation,
+    // and a second surface showing the same number on the same page is the duplication LS.7 removed.
+    for (const name of ['scoreValue', 'scoreBand', 'scoreStatus', 'scoreModelId', 'scoreModelVersion', 'scoreCoverage', 'scoreCalculatedAt', 'scoreInputsAsOf', 'scorePreviousValue']) {
+      expect(flag(name, 'inDetail'), `${name} is not a raw detail field`).toBe(false);
+    }
+    // The provenance fields are also out of the filter panel, by explicit metadata rather than by the
+    // twelve-field cap the SPA applies to type-derived candidates.
+    for (const name of ['scoreModelVersion', 'scoreCalculatedAt', 'scoreInputsAsOf', 'scorePreviousValue', 'scoreCoverage']) {
+      expect(flag(name, 'inFilter'), name).toBe(false);
+    }
+    // Nothing about a score is editable from a form: the write guard already refuses it, and a field the
+    // editor would reject must not be rendered (plan §5.3, §7.6).
+    for (const name of SERVER_OWNED_LEAD_FIELDS) {
+      expect(fields[name]?.inEdit, `${name} is not an editable field`).toBeFalsy();
+    }
   });
 
   it('reports the whole foundation from the running system', async () => {
