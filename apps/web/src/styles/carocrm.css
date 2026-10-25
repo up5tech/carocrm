@@ -2160,6 +2160,19 @@ body {
 }
 
 /* §5.7 KPI context: the target bar and the previous-window delta under the big number. */
+/* 19-LS.18 — the Lead Score dashlet's metric row: a label over its number, wrapping like the other grids. */
+.carocrm-dashlet-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.carocrm-dashlet-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 96px;
+}
+
 .carocrm-kpi-context {
   display: flex;
   flex-direction: column;

@@ -28,6 +28,21 @@ async function call(request: APIRequestContext, token: string, method: string, p
   });
 }
 
+interface DashboardRow {
+  id: string;
+  name: string;
+  dashlets: { id: string; name: string }[];
+}
+
+/** The dashboards with their dashlets, which is what the sweep needs to remove a fixture in place. */
+async function dashboardRows(request: APIRequestContext, token: string): Promise<DashboardRow[]> {
+  const res = await call(request, token, 'GET', '/Dashboard');
+  if (!res.ok()) return [];
+  const body = (await res.json()) as { list?: DashboardRow[] } | DashboardRow[];
+  const list = Array.isArray(body) ? body : (body.list ?? []);
+  return list.map((row) => ({ id: row.id, name: row.name, dashlets: row.dashlets ?? [] }));
+}
+
 async function namedRows(request: APIRequestContext, token: string, listPath: string): Promise<{ id: string; name: string }[]> {
   const res = await call(request, token, 'GET', listPath);
   if (!res.ok()) return [];
@@ -47,8 +62,14 @@ async function sweep(request: APIRequestContext, token: string): Promise<void> {
   for (const row of await namedRows(request, token, '/SavedFilter')) {
     if (row.name.includes(runId)) await call(request, token, 'DELETE', `/SavedFilter/${row.id}`);
   }
-  for (const row of await namedRows(request, token, '/Dashboard')) {
-    if (row.name.includes(runId)) await call(request, token, 'DELETE', `/Dashboard/${row.id}`);
+  // A dashlet this run added to a dashboard it did not create (the session's default one) outlives the
+  // dashboard sweep, so the fixtures are removed by their own marker as well.
+  const dashboards = await dashboardRows(request, token);
+  for (const dashboard of dashboards) {
+    for (const dashlet of dashboard.dashlets) {
+      if (dashlet.name.includes(runId)) await call(request, token, 'DELETE', `/Dashboard/${dashboard.id}/dashlets/${dashlet.id}`);
+    }
+    if (dashboard.name.includes(runId)) await call(request, token, 'DELETE', `/Dashboard/${dashboard.id}`);
   }
 }
 
@@ -61,6 +82,22 @@ async function pickOption(page: Page, label: string, option: string): Promise<vo
   await page.locator('.ant-select-dropdown').last().waitFor({ state: 'visible' });
   await page.keyboard.press('Enter');
   await expect(item.locator('.ant-select').first()).toContainText(option);
+}
+
+/**
+ * Selects a dashboard in the page's picker.
+ *
+ * The page shows one dashboard at a time, and which one is active depends on what the session already had, so
+ * a test that created a dashboard has to say so. antd's virtual list is driven from the keyboard for the same
+ * reason the form pickers are.
+ */
+async function pickDashboard(page: Page, name: string): Promise<void> {
+  const select = page.locator('.carocrm-dash-select').first();
+  await select.click();
+  await page.keyboard.type(name);
+  await page.locator('.ant-select-dropdown').last().waitFor({ state: 'visible' });
+  await page.keyboard.press('Enter');
+  await expect(select).toContainText(name);
 }
 
 function modalField(page: Page, label: string) {
@@ -132,13 +169,15 @@ test.describe('phase 12 — search, saved filters, csv and dashboards', () => {
     await page.getByRole('button', { name: 'New dashboard' }).click();
     await modalField(page, 'Name').fill(`PW Dashboard ${runId}`);
     await modalButton(page, 'Create').click();
-    await expect(page.getByRole('button', { name: 'Add dashlet' })).toBeVisible();
+    // The header's button is the one this test means; an empty dashboard also offers one of its own.
+    await expect(page.getByRole('button', { name: 'Add dashlet' }).first()).toBeVisible();
 
-    await page.getByRole('button', { name: 'Add dashlet' }).click();
+    await page.getByRole('button', { name: 'Add dashlet' }).first().click();
     await modalField(page, 'Name').fill(`PW Accounts ${runId}`);
     await pickOption(page, 'Entity', 'Account');
     await modalButton(page, 'Add').click();
-    await expect(page.locator('.ant-card').filter({ hasText: 'PW Accounts' }).locator('table')).toBeVisible();
+    // Scoped to this run's dashlet: a shared database may still hold an older fixture with the same prefix.
+    await expect(page.getByRole('region', { name: `PW Accounts ${runId}` }).locator('table')).toBeVisible();
 
     // A KPI dashlet added through the API must render its number after a refresh.
     const dashboards = await namedRows(request, token, '/Dashboard');
@@ -155,5 +194,55 @@ test.describe('phase 12 — search, saved filters, csv and dashboards', () => {
     await page.locator('.ant-popconfirm:visible, .ant-popover:visible').getByRole('button', { name: 'Delete' }).click();
     // The picker is a Select now, so check both its current label and any rendered option.
     await expect(page.locator('.carocrm-dashboard-picker, .ant-select-item-option', { hasText: `PW Dashboard ${runId}` })).toHaveCount(0);
+  });
+
+  /**
+   * The Lead Score dashlet (19-LS.18): one of the module's curated views, computed when the dashlet runs and
+   * rendered with its labels. The module has to be on for its report to answer, so the test turns it on and
+   * puts the settings back afterwards — the shared settings row is one document for every suite.
+   */
+  test('a Lead Score dashlet renders the module\'s own score report', async ({ page, request }) => {
+    const token = await adminToken(request);
+    const settingsBefore = await (await call(request, token, 'GET', '/LeadScore/action/settings')).json();
+    try {
+      const enabled = await call(request, token, 'POST', '/LeadScore/action/settings', { enabled: true });
+      expect(enabled.status()).toBe(200);
+
+      await login(page);
+      await page.goto('/dashboards');
+
+      const created = await call(request, token, 'POST', '/Dashboard', { name: `PW Score ${runId}` });
+      expect(created.status()).toBe(201);
+      const dashboardId = String(((await created.json()) as { id: string }).id);
+      const added = await call(request, token, 'POST', `/Dashboard/${dashboardId}/dashlets`, {
+        name: `PW Score ${runId}`,
+        kind: 'leadScore',
+        position: 0,
+        config: { view: 'scores' },
+      });
+      expect(added.status()).toBe(201);
+
+      // The dashboard was created through the API, so the page has to load it before it can show it.
+      await page.reload();
+      await pickDashboard(page, `PW Score ${runId}`);
+      await page.getByRole('button', { name: 'Refresh' }).click();
+      const dashlet = page.getByRole('region', { name: `PW Score ${runId}` });
+      await expect(dashlet).toBeVisible({ timeout: 20_000 });
+      // The module's own metric labels — not raw keys — and the kind mark in the dashlet header.
+      await expect(dashlet.getByText('Scored', { exact: true })).toBeVisible();
+      await expect(dashlet.getByText('Not scored', { exact: true })).toBeVisible();
+      await expect(dashlet.getByText('Leads', { exact: true })).toBeVisible();
+      await expect(page.getByText('Lead score operations (Phase 19)')).toBeVisible();
+    } finally {
+      const found = (settingsBefore as { settings?: Record<string, unknown> }).settings ?? {};
+      await call(request, token, 'POST', '/LeadScore/action/settings', {
+        enabled: found['enabled'] ?? false,
+        features: found['features'] ?? {},
+        scoring: found['scoring'] ?? { activeModelId: null, debounceSeconds: 60 },
+        ...(found['signals'] === undefined ? {} : { signals: found['signals'] }),
+        ...(found['conversion'] === undefined ? {} : { conversion: found['conversion'] }),
+        ...(found['insight'] === undefined ? {} : { insight: found['insight'] }),
+      });
+    }
   });
 });

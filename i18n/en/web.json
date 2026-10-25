@@ -668,7 +668,33 @@
     "deleteDashletFailed": "Failed to delete dashlet.",
     "makeDefault": "Set as default",
     "isDefault": "Default dashboard",
-    "defaultAria": "Set {name} as the default dashboard"
+    "defaultAria": "Set {name} as the default dashboard",
+    "kindLeadScore": "Lead score operations (Phase 19)",
+    "leadScoreView": "Score report",
+    "leadScoreViews": {
+      "scores": "Scored Leads",
+      "bands": "Leads by band",
+      "freshness": "Score freshness",
+      "conversions": "Conversions"
+    },
+    "leadScoreMetricLabels": {
+      "totalLeads": "Leads",
+      "scoredLeads": "Scored",
+      "unscoredLeads": "Not scored",
+      "averageScore": "Average score",
+      "lowestScore": "Lowest score",
+      "highestScore": "Highest score",
+      "averageCoverage": "Average coverage",
+      "convertedLeads": "Converted",
+      "withAccount": "With an Account",
+      "withContact": "With a Contact",
+      "withOpportunity": "With an Opportunity",
+      "convertedInWindow": "Converted in the last 30 days"
+    },
+    "leadScoreBandColumn": "Band",
+    "leadScoreStatusColumn": "Status",
+    "leadScoreCountColumn": "Leads",
+    "leadScoreAverageColumn": "Average"
   },
   "reports": {
     "title": "Reports",

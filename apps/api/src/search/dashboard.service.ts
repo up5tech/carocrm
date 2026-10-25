@@ -11,6 +11,7 @@ import type { ListQuery } from '../entity/entity.service.js';
 import { EntityCrudService } from '../entity/entity.service.js';
 import { ESignatureDashletConfigSchema } from '../esignature/dto/esignature-shapes.js';
 import { ESignatureReportService } from '../esignature/esignature-report.service.js';
+import { LeadScoreDashletConfigSchema, LeadScoreReportService } from '../lead-score/lead-score-report.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import { ProjectTaskDashletSchema } from '../projects/dto/project-shapes.js';
@@ -34,7 +35,8 @@ export class DashboardService {
     @Inject(SavedFilterService) private readonly filters: SavedFilterService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(ProjectDashletService) private readonly projectTasks: ProjectDashletService,
-    @Inject(ESignatureReportService) private readonly eSignatureReports: ESignatureReportService) {}
+    @Inject(ESignatureReportService) private readonly eSignatureReports: ESignatureReportService,
+    @Inject(LeadScoreReportService) private readonly leadScoreReports: LeadScoreReportService) {}
   assertEntity(entity: string): void {
     this.metadata.ensureLoaded();
     if (!ENTITY_NAME.test(entity) || !this.metadata.registry.hasEntity(entity)) throw new NotFoundError(`Entity "${entity}" does not exist.`);
@@ -118,6 +120,13 @@ export class DashboardService {
       if (!scoped.success) throw new ValidationError('Invalid ESignature dashlet options.', { issues: scoped.error.issues.map((i) => i.message) });
       return;
     }
+    // A Lead Score dashlet names one of the module's curated views (19-LS.18). The aggregate runs under the
+    // reader's own scope, so a shared dashboard never counts Leads the reader could not open.
+    if (kind === 'leadScore') {
+      const scoped = LeadScoreDashletConfigSchema.safeParse(raw);
+      if (!scoped.success) throw new ValidationError('Invalid Lead Score dashlet options.', { issues: scoped.error.issues.map((i) => i.message) });
+      return;
+    }
     const p = DashletConfigSchema.safeParse(raw);
     if (!p.success) throw new ValidationError('Invalid dashlet config.', { issues: p.error.issues.map((i) => i.message) });
     this.assertEntity(p.data.entity);
@@ -191,6 +200,13 @@ export class DashboardService {
       if (!scoped.success) throw new ValidationError('ESignature dashlet options are invalid.', { issues: scoped.error.issues.map((i) => i.message) });
       const section = await this.eSignatureReports.section(scoped.data.view, { days: scoped.data.days });
       return { dashletId, kind: 'esignature', ...section };
+    }
+    if (dashlet.kind === 'leadScore') {
+      // The same rule as the ESignature dashlet: the numbers are the reader's, not the dashboard owner's.
+      const scoped = LeadScoreDashletConfigSchema.safeParse(raw);
+      if (!scoped.success) throw new ValidationError('Lead Score dashlet options are invalid.', { issues: scoped.error.issues.map((i) => i.message) });
+      const section = await this.leadScoreReports.section(scoped.data.view);
+      return { dashletId, kind: 'leadScore', ...section };
     }
     const p = DashletConfigSchema.safeParse(raw);
     if (!p.success) throw new ValidationError('Dashlet config is invalid.', { issues: p.error.issues.map((i) => i.message) });

@@ -1,4 +1,4 @@
-import { Table, Tag, Typography } from 'antd';
+import { Space, Table, Tag, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 
 import type { DashletRow } from '../api/client.js';
@@ -60,6 +60,9 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
   }
   if (dashlet.kind === 'esignature') {
     return <ESignatureDashletBody keyName={String(result['key'] ?? '')} data={(result['data'] ?? {}) as Record<string, unknown>} />;
+  }
+  if (dashlet.kind === 'leadScore') {
+    return <LeadScoreDashletBody data={(result['data'] ?? {}) as Record<string, unknown>} />;
   }
   // A grouped dashlet aggregates over a bounded scan; say so instead of showing a silent cap.
   const hint =
@@ -219,4 +222,65 @@ function ESignatureDashletBody({ keyName, data }: { readonly keyName: string; re
     default:
       return <Typography.Text type="secondary">{t('web.dashboards.unknownReport')}</Typography.Text>;
   }
+}
+
+/**
+ * The Lead Score dashlet (19-LS.18): the module's own curated view, rendered from the numbers the server
+ * computed under the reader's record scope. The labels come from the catalog, so a number never shows as a
+ * raw key, and the one list each view may carry (the bands, the score statuses) is a small table.
+ */
+function LeadScoreDashletBody({ data }: { data: Record<string, unknown> }) {
+  const metrics: { key: string; value: string }[] = [];
+  for (const [key, value] of Object.entries(data)) {
+    if (Array.isArray(value) || key === 'windowDays') continue;
+    if (typeof value !== 'number') continue;
+    metrics.push({ key, value: value.toLocaleString() });
+  }
+  const bands = Array.isArray(data['bands']) ? (data['bands'] as { band: string; count: number; averageScore: number | null }[]) : null;
+  const statuses = Array.isArray(data['statuses']) ? (data['statuses'] as { status: string; count: number }[]) : null;
+  return (
+    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      {metrics.length === 0 ? null : (
+        <div className="carocrm-dashlet-metrics">
+          {metrics.map((metric) => (
+            <div key={metric.key} className="carocrm-dashlet-metric">
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t(`web.dashboards.leadScoreMetricLabels.${metric.key}`)}
+              </Typography.Text>
+              <Typography.Text strong>{metric.value}</Typography.Text>
+            </div>
+          ))}
+        </div>
+      )}
+      {bands === null ? null : (
+        <Table
+          size="small"
+          rowKey="band"
+          pagination={false}
+          dataSource={bands}
+          columns={[
+            { title: t('web.dashboards.leadScoreBandColumn'), dataIndex: 'band' },
+            { title: t('web.dashboards.leadScoreCountColumn'), dataIndex: 'count' },
+            {
+              title: t('web.dashboards.leadScoreAverageColumn'),
+              dataIndex: 'averageScore',
+              render: (value: number | null) => (value === null ? '—' : value.toFixed(1)),
+            },
+          ]}
+        />
+      )}
+      {statuses === null ? null : (
+        <Table
+          size="small"
+          rowKey="status"
+          pagination={false}
+          dataSource={statuses}
+          columns={[
+            { title: t('web.dashboards.leadScoreStatusColumn'), dataIndex: 'status' },
+            { title: t('web.dashboards.leadScoreCountColumn'), dataIndex: 'count' },
+          ]}
+        />
+      )}
+    </Space>
+  );
 }

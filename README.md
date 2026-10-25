@@ -83,16 +83,17 @@ _Phase 19_ —
   recovery for a lost send answer, provider webhooks with HMAC verification and a durable inbox,
   template mappings, signed-document artifacts, reports and an operations panel (Phases 19-ES.0–19-ES.22).
 - **Lead Score** — explainable, versioned lead scoring over the existing `Lead` entity plus a
-  transactional, idempotent Lead→Contact/Account/Opportunity conversion. **Phases 19-LS.0–19-LS.8 are
+  transactional, idempotent Lead→Contact/Account/Opportunity conversion. **Phases 19-LS.0–19-LS.18 are
   delivered: the repository audit, the module registration, the schema/metadata foundation, the model
   and rule configuration, the deterministic scoring engine, the score that is computed *and kept*, what
-  decides *when* to score, the salesperson's surface for it, and the administrator's screen for the model
-  itself** —
-  the `LeadScore` descriptor with its 14 capability resources, the `leadScore` settings document, the gate
-  in front of all 13 planned operations, the health view at `/api/v1/LeadScore/action/health`, the four
+  decides *when* to score, the salesperson's surface for it, the administrator's screen for the model
+  itself, the conversion contract and the conversion itself, the optional AI explanation and the release
+  sweep with its operational report** —
+  the `LeadScore` descriptor with its 15 capability resources, the `leadScore` settings document, the gate
+  in front of all 17 planned operations, the health view at `/api/v1/LeadScore/action/health`, the five
   records (`LeadScoreModel`, `LeadScoreRule`,
-  `LeadScoreEvaluation`, `LeadConversionOperation`), the current-score projection and `Converted To`
-  attributes on the core `Lead`, the migration that indexes and constrains them,
+  `LeadScoreEvaluation`, `LeadConversionOperation`, `LeadScoreInsight`), the current-score projection and
+  `Converted To` attributes on the core `Lead`, the migrations that index and constrain them,
   the bounded declarative rule DSL with its protected-field and scoring-output denylists, the
   validate → publish → archive → new-version lifecycle at `/api/v1/LeadScore/action/model/*`, the
   pure, clock-free evaluator (three-valued conditions, weights, clamping, bands, coverage, reason codes and
@@ -178,7 +179,10 @@ _Phase 19_ —
   `targets` answer rather than assuming all three exist. 19-LS.17 then added the **optional** AI explanation:
   one operator-clicked AIAgents run, grounded in the stored score and five business fields (never an e-mail, a
   phone number, a name or a note), stored as its own **AI-generated** record beside the score — off by default,
-  and never able to change a score. That leaves 19-LS.18 (rollout and verification) unshipped. See
+  and never able to change a score. 19-LS.18 closed the module: `GET action/report` publishes the score
+  and conversion metrics — the scored population, the bands, the freshness and the conversions — computed under
+  the reader's own record scope, and a `leadScore` dashlet puts one of those views on a dashboard. The
+  operations runbook is [docs/runbooks/lead-score-operations.md](docs/runbooks/lead-score-operations.md). See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
   [docs/implementation/lead-score-ls1-completion-report.md](docs/implementation/lead-score-ls1-completion-report.md),
@@ -195,8 +199,10 @@ _Phase 19_ —
   [docs/implementation/lead-score-ls14-completion-report.md](docs/implementation/lead-score-ls14-completion-report.md),
   [docs/implementation/lead-score-ls15-completion-report.md](docs/implementation/lead-score-ls15-completion-report.md) and
   [docs/implementation/lead-score-ls16-completion-report.md](docs/implementation/lead-score-ls16-completion-report.md),
-  [docs/implementation/lead-score-ls17-completion-report.md](docs/implementation/lead-score-ls17-completion-report.md)
-  and [docs/compatibility/lead-score.md](docs/compatibility/lead-score.md).
+  [docs/implementation/lead-score-ls17-completion-report.md](docs/implementation/lead-score-ls17-completion-report.md),
+  [docs/implementation/lead-score-ls18-completion-report.md](docs/implementation/lead-score-ls18-completion-report.md),
+  [docs/runbooks/lead-score-operations.md](docs/runbooks/lead-score-operations.md) and
+  [docs/compatibility/lead-score.md](docs/compatibility/lead-score.md).
 
 _Phase 20_ — settings, administration and end-user UX: a settings-document registry with optimistic
 concurrency and audit, the tabbed administration shell with a server-resolved, ACL-filtered main menu

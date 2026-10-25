@@ -60,7 +60,9 @@ export const DashletInputSchema = z.object({
   // three generic kinds cannot express "due in the next N days, owned or shared with me".
   // `esignature` is the Phase 19-ES.19 operational dashlet, whose aggregate is computed by the
   // ESignature module under the reader's own record scope.
-  kind: z.enum(['list', 'chart', 'kpi', 'projectTasks', 'esignature']),
+  // `leadScore` is the Phase 19-LS.18 operational dashlet: one of the Lead Score report's curated views,
+  // computed by that module under the reader's own record scope.
+  kind: z.enum(['list', 'chart', 'kpi', 'projectTasks', 'esignature', 'leadScore']),
   position: z.number().int().min(0).max(10_000).default(0),
   config: z.record(z.string(), z.unknown()).default({}),
 });

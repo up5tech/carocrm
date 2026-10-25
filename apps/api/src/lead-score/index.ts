@@ -17,6 +17,7 @@ import { LeadScorePermissionService } from './lead-score-permission.service.js';
 import { LeadScorePreviewService } from './lead-score-preview.service.js';
 import { LeadScoreRecalculationService } from './lead-score-recalculation.service.js';
 import { LeadScoreRecords } from './lead-score-records.js';
+import { LeadScoreReportService } from './lead-score-report.service.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 import { LeadScoreSignalsService } from './lead-score-signals.js';
 import { LeadScoreThresholdService } from './lead-score-threshold.service.js';
@@ -68,6 +69,8 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   // 19-LS.13: the command that executes a confirmed plan, and the audit/recovery half of its record.
   LeadConversionService,
   LeadConversionAuditService,
+  // 19-LS.18: the operational report of the score and the conversion, read through the entity aggregate.
+  LeadScoreReportService,
   // Needs the job row and the settings document, so it is registered with the services it reads.
   LeadScoreRecalculationService,
   LeadScoreModuleHealthService,
@@ -247,6 +250,17 @@ export {
   type RecalculationEnqueueView,
 } from './lead-score-recalculation.service.js';
 export { type LeadScoreEvaluationPage, LeadScoreRecords,type LeadScoreRow } from './lead-score-records.js';
+export {
+  LEADSCORE_REPORT_DEFINITIONS,
+  LEADSCORE_REPORT_MAX_GROUPS,
+  LEADSCORE_REPORT_VIEWS,
+  LEADSCORE_REPORT_WINDOW_DAYS,
+  type LeadScoreReportDefinition,
+  type LeadScoreReportOverview,
+  type LeadScoreReportSection,
+  LeadScoreReportService,
+  type LeadScoreReportView,
+} from './lead-score-report.service.js';
 export {
   DEFAULT_LEADSCORE_SETTINGS,
   type LeadScoreSettings,

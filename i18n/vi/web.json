@@ -668,7 +668,33 @@
     "deleteDashletFailed": "Xóa dashlet thất bại.",
     "makeDefault": "Đặt làm mặc định",
     "isDefault": "Bảng điều khiển mặc định",
-    "defaultAria": "Đặt {name} làm bảng điều khiển mặc định"
+    "defaultAria": "Đặt {name} làm bảng điều khiển mặc định",
+    "kindLeadScore": "Vận hành điểm Lead (Phase 19)",
+    "leadScoreView": "Báo cáo điểm",
+    "leadScoreViews": {
+      "scores": "Lead đã có điểm",
+      "bands": "Lead theo nhóm",
+      "freshness": "Độ mới của điểm",
+      "conversions": "Chuyển đổi"
+    },
+    "leadScoreMetricLabels": {
+      "totalLeads": "Lead",
+      "scoredLeads": "Đã có điểm",
+      "unscoredLeads": "Chưa có điểm",
+      "averageScore": "Điểm trung bình",
+      "lowestScore": "Điểm thấp nhất",
+      "highestScore": "Điểm cao nhất",
+      "averageCoverage": "Độ phủ trung bình",
+      "convertedLeads": "Đã chuyển đổi",
+      "withAccount": "Có Tài khoản",
+      "withContact": "Có Liên hệ",
+      "withOpportunity": "Có Cơ hội",
+      "convertedInWindow": "Chuyển đổi trong 30 ngày qua"
+    },
+    "leadScoreBandColumn": "Nhóm",
+    "leadScoreStatusColumn": "Trạng thái",
+    "leadScoreCountColumn": "Lead",
+    "leadScoreAverageColumn": "Trung bình"
   },
   "reports": {
     "title": "Báo cáo",

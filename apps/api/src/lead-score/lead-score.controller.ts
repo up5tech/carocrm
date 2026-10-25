@@ -25,6 +25,7 @@ import { LeadScoreModuleHealthService } from './lead-score-module-health.service
 import { LeadScorePermissionService } from './lead-score-permission.service.js';
 import { LeadScorePreviewService } from './lead-score-preview.service.js';
 import { LeadScoreRecalculationService } from './lead-score-recalculation.service.js';
+import { LeadScoreReportService } from './lead-score-report.service.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 
 /**
@@ -60,6 +61,7 @@ export class LeadScoreController {
     @Inject(LeadScoreExplanationService) private readonly explanation: LeadScoreExplanationService,
     @Inject(LeadScoreInsightService) private readonly insight: LeadScoreInsightService,
     @Inject(LeadScoreRecalculationService) private readonly recalculation: LeadScoreRecalculationService,
+    @Inject(LeadScoreReportService) private readonly reports: LeadScoreReportService,
     @Inject(LeadScoreEditorService) private readonly editor: LeadScoreEditorService,
     @Inject(LeadDuplicateResolver) private readonly duplicates: LeadDuplicateResolver,
     @Inject(LeadConversionPreviewService) private readonly conversionPreview: LeadConversionPreviewService,
@@ -251,6 +253,23 @@ export class LeadScoreController {
   async previewModel(@Body() body: unknown) {
     const input = this.parse(ModelPreviewSchema, body);
     return this.preview.preview(input.modelId, input.leadIds, input.maxSize);
+  }
+
+  // ---------------------------------------------------------------------------
+  // the operational report (19-LS.18)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The score and conversion metrics of this instance, under the reader's own record scope.
+   *
+   * Four curated views — the scored population, the bands, the freshness and the conversions — computed with
+   * the platform's aggregate, so a reader with `own` scope sees their own numbers and an administrator's are
+   * the whole instance's. The definitions travel with the answer, because a metric whose population is
+   * ambiguous is not a metric (plan §16 `19-LS.18`).
+   */
+  @Get('action/report')
+  async scoreReport() {
+    return this.reports.overview();
   }
 
   // ---------------------------------------------------------------------------

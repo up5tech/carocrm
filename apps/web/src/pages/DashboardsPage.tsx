@@ -15,6 +15,7 @@ import {
   StarFilled,
   StarOutlined,
   TableOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import { App as AntApp, Button, Checkbox, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Tooltip } from 'antd';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -37,6 +38,7 @@ const DASHLET_ICONS: Record<string, React.ReactNode> = {
   kpi: <DashboardOutlined />,
   projectTasks: <ProjectOutlined />,
   esignature: <FileDoneOutlined />,
+  leadScore: <ThunderboltOutlined />,
 };
 
 const DASH_GAP = 16;
@@ -172,6 +174,8 @@ function dashletKindLabel(kind: string): string {
       return t('web.dashboards.kindProjectTasks');
     case 'esignature':
       return t('web.dashboards.kindESignature');
+    case 'leadScore':
+      return t('web.dashboards.kindLeadScore');
     default:
       return kind;
   }
@@ -561,6 +565,8 @@ export function DashboardsPage() {
             }
           : kind === 'esignature'
             ? { view: String(values.esignatureView ?? 'status'), days: Number(values.reportDays ?? 30) }
+            : kind === 'leadScore'
+              ? { view: String(values.leadScoreView ?? 'scores') }
             : {
                 entity: String(values.entity),
                 maxSize: 25,
@@ -835,19 +841,20 @@ export function DashboardsPage() {
                 { value: 'kpi', label: t('web.reports.kindKpi') },
                 { value: 'projectTasks', label: t('web.dashboards.kindProjectTasks') },
                 { value: 'esignature', label: t('web.dashboards.kindESignature') },
+                { value: 'leadScore', label: t('web.dashboards.kindLeadScore') },
               ]}
             />
           </Form.Item>
           <Form.Item
             name="entity"
             label={t('web.reports.entityLabel')}
-            rules={[{ required: dashletKind !== 'projectTasks' && dashletKind !== 'esignature' }]}
+            rules={[{ required: dashletKind !== 'projectTasks' && dashletKind !== 'esignature' && dashletKind !== 'leadScore' }]}
           >
             <Select
               options={entities}
               showSearch
               optionFilterProp="label"
-              disabled={dashletKind === 'projectTasks' || dashletKind === 'esignature'}
+              disabled={dashletKind === 'projectTasks' || dashletKind === 'esignature' || dashletKind === 'leadScore'}
             />
           </Form.Item>
           {dashletKind === 'projectTasks' ? (
@@ -876,6 +883,16 @@ export function DashboardsPage() {
                 </Form.Item>
               </Space>
             </>
+          ) : null}
+          {dashletKind === 'leadScore' ? (
+            <Form.Item name="leadScoreView" label={t('web.dashboards.leadScoreView')} initialValue="scores">
+              <Select
+                options={['scores', 'bands', 'freshness', 'conversions'].map((value) => ({
+                  value,
+                  label: t(`web.dashboards.leadScoreViews.${value}`),
+                }))}
+              />
+            </Form.Item>
           ) : null}
           {dashletKind === 'esignature' ? (
             <>
