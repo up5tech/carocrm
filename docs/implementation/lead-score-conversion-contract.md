@@ -883,6 +883,23 @@ per-action limiter inside this module (§1.4 verified), so:
 4. No new migration for the fields (attributes are JSONB); one *if* LS.11's bounded search needs an index for
    normalized email/phone — and §9.4 already says LS.18 decides that, not LS.11 in passing.
 
+> **Delivered in 19-LS.13**, with three corrections this section could not see until the code existed:
+>
+> 1. **The profile needs `create` *and* `edit`.** The command creates its row and then moves it through its
+>    states, so `edit: 'yes'` is as necessary as `create: 'yes'` — and, since ACL is the *actor's*, a converter
+>    role needs both grants explicitly. That is the LS.5 rule restated (writing history is a grant, not a bypass),
+>    and a suite asserts it by converting as a non-admin and refusing a role that lacks the create grant.
+> 2. **`conversionAuditRead` now points at `LeadConversionAudit`**, a synthetic resource, and the entity profile
+>    keeps `read: 'no'`. Granting the capability therefore cannot open `/api/v1/LeadConversionOperation`, and the
+>    operations screen is the only reader — which a test checks by listing as a caller who may not read the Lead:
+>    the row is visible, its Lead label is not.
+> 3. **A refusal before T1 writes no row.** §4.2's table said the already-converted case records a
+>    `failed_final` row; §3.2's T1 guard says a row is evidence an attempt *started*. Both are true in the code
+>    because they are different points: a stale or unacknowledged request never claims (no row), while an
+>    already-converted Lead is caught **inside** T2 (a row, settled `failed_final` / `already_converted`, and the
+>    error carries that attempt's id so the client can find it). The only §4.2 detail not implemented is the
+>    `Retry-After` header on `IN_FLIGHT`: the code carries the answer, and the controller has no response object.
+
 ### 13.3 Test obligations this contract creates (so "documented" means "decidable")
 
 Plan §13.4-5…13 map onto: a replay returns the stored ids with zero new rows; two concurrent converts produce

@@ -218,8 +218,8 @@ export type EvaluationResultState = (typeof EVALUATION_RESULT_STATES)[number];
 export const DECAY_POLICIES = ['none', 'linear', 'halfLife'] as const;
 export type DecayPolicy = (typeof DECAY_POLICIES)[number];
 
-/** Conversion operation lifecycle (plan §5.5). */
-export const CONVERSION_STATUSES = ['previewed', 'processing', 'succeeded', 'failed_retryable', 'failed_final', 'needs_review'] as const;
+/** Conversion operation lifecycle (plan §5.5; `previewed` retired in 19-LS.13, contract §3.1). */
+export const CONVERSION_STATUSES = ['processing', 'succeeded', 'failed_retryable', 'failed_final', 'needs_review'] as const;
 export type ConversionStatus = (typeof CONVERSION_STATUSES)[number];
 
 /** The canonical target types a conversion may create or link (plan §7.2). */

@@ -41,11 +41,14 @@ export const RECALCULATE_LEAD_JOB = 'leadScore.recalculateLead';
 export const BATCH_RECALCULATE_JOB = 'leadScore.batchRecalculate';
 /** The decay sweep (19-LS.9): the calendar re-scoring Leads whose score depends on the calendar. */
 export const DECAY_SWEEP_JOB = 'leadScore.decaySweep';
+/** Conversion recovery (19-LS.13): settle operation rows a crash left in `processing`. */
+export const RECOVER_CONVERSION_JOB = 'leadScore.recoverConversionOperations';
 
 export const LEAD_CHANGED_PATH = '/api/v1/LeadScore/action/work/lead-changed';
 export const RECALCULATE_PATH = '/api/v1/LeadScore/action/work/recalculate';
 export const BATCH_CHUNK_PATH = '/api/v1/LeadScore/action/work/recalculate-batch-chunk';
 export const DECAY_SWEEP_PATH = '/api/v1/LeadScore/action/work/decay-sweep';
+export const RECOVER_CONVERSION_PATH = '/api/v1/LeadScore/action/work/recover-conversion-operations';
 
 /** One worker→API call is bounded by the chunk it belongs to, not by how many Leads the database holds. */
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -323,11 +326,45 @@ export function decaySweepJob(deps: LeadScoreJobDeps): JobHandler {
   };
 }
 
+/**
+ * The conversion-recovery job (19-LS.13, contract §11.2).
+ *
+ * The job decides nothing: it asks the API whether recovery is switched on, and the API settles the stuck rows
+ * it finds — `failed_retryable` when it can prove nothing was written, `needs_review` when it cannot. It never
+ * re-runs a conversion, because a retry is an administrator's explicit act.
+ */
+export function recoverConversionJob(deps: LeadScoreJobDeps): JobHandler {
+  return async (context: JobContext) => {
+    context.progress(10, 'asking the API whether conversion recovery is due');
+    const response = await call(deps, RECOVER_CONVERSION_PATH, {});
+    const outcome = classify(response);
+    if (outcome === 'retry') throw new Error(failureMessage('Lead Score conversion recovery', response));
+    if (outcome === 'refused' || outcome === 'missing') {
+      deps.log.warn({ status: response.status, code: response.code }, 'lead score conversion recovery refused');
+      return { status: 'completed', message: `Recovery refused: ${String(response.code ?? `HTTP ${String(response.status)}`)}` };
+    }
+    const view = response.payload as Record<string, unknown>;
+    context.progress(100, 'recovery decided');
+    if (view['started'] !== true || view['skipped'] !== null) {
+      return { status: 'completed', message: `Recovery skipped: ${String(view['skipped'] ?? 'nothing to do')}`, result: { skipped: view['skipped'] ?? null } };
+    }
+    const retryable = Array.isArray(view['retryable']) ? view['retryable'].length : 0;
+    const review = Array.isArray(view['review']) ? view['review'].length : 0;
+    deps.log.info({ scanned: view['scanned'], retryable, review }, 'lead score conversion recovery settled rows');
+    return {
+      status: 'completed',
+      message: `Recovery settled ${String(retryable)} retryable and ${String(review)} review row(s)`,
+      result: { scanned: view['scanned'] ?? null, retryable, review },
+    };
+  };
+}
+
 /** Registers the Lead Score jobs in the worker's job registry. */
 export function registerLeadScoreJobs(registry: JobRegistry, deps: LeadScoreJobDeps): void {
   registry.register(RECALCULATE_LEAD_JOB, recalculateLeadJob(deps));
   registry.register(BATCH_RECALCULATE_JOB, batchRecalculateJob(deps));
   registry.register(DECAY_SWEEP_JOB, decaySweepJob(deps));
+  registry.register(RECOVER_CONVERSION_JOB, recoverConversionJob(deps));
 }
 
 /**

@@ -1,5 +1,7 @@
 import type { Provider, Type } from '@nestjs/common';
 
+import { LeadConversionService } from './lead-conversion.service.js';
+import { LeadConversionAuditService } from './lead-conversion-audit.service.js';
 import { LeadConversionPreviewService } from './lead-conversion-preview.service.js';
 import { LeadDuplicateResolver } from './lead-duplicate-resolver.js';
 import { LeadFieldMappingService } from './lead-field-mapping.service.js';
@@ -60,6 +62,9 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   LeadDuplicateResolver,
   // 19-LS.12: the side-effect-free conversion preview, built on the map and the resolver.
   LeadConversionPreviewService,
+  // 19-LS.13: the command that executes a confirmed plan, and the audit/recovery half of its record.
+  LeadConversionService,
+  LeadConversionAuditService,
   // Needs the job row and the settings document, so it is registered with the services it reads.
   LeadScoreRecalculationService,
   LeadScoreModuleHealthService,

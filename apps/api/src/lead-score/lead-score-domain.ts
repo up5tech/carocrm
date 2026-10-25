@@ -36,6 +36,14 @@ export const LEADSCORE_MODEL_PUBLISH_PERMISSION_ENTITY = 'LeadScoreModelPublish'
 export const LEADSCORE_BATCH_PERMISSION_ENTITY = 'LeadScoreBatch';
 export const LEADSCORE_SETTINGS_PERMISSION_ENTITY = 'LeadScoreSettings';
 export const LEADCONVERSION_PREVIEW_PERMISSION_ENTITY = 'LeadConversionPreview';
+/**
+ * 19-LS.13: the right to read conversion operations, as its own resource.
+ *
+ * The capability used to point at the `LeadConversionOperation` entity's own `read`, which is `no` for the
+ * same reason the evaluation rows are: operation rows are readable only through a Lead-scoped command. A
+ * synthetic resource keeps that property while letting a role hold the capability (contract §13.2).
+ */
+export const LEADCONVERSION_AUDIT_PERMISSION_ENTITY = 'LeadConversionAudit';
 export const LEADCONVERSION_EXECUTE_PERMISSION_ENTITY = 'LeadConversion';
 export const LEADCONVERSION_OVERRIDE_PERMISSION_ENTITY = 'LeadConversionOverride';
 export const LEADCONVERSION_FIELD_MERGE_PERMISSION_ENTITY = 'LeadConversionFieldMerge';

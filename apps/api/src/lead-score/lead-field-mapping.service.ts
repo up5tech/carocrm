@@ -49,10 +49,22 @@ export interface TargetMapping {
   readonly createDefaults: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * The recovery scan (19-LS.13, contract §11.2): a stuck `processing` row is not something the request that
+ * created it can resolve, so a bounded, off-by-default job looks for them.
+ */
+export interface ConversionRecoverySection {
+  readonly enabled: boolean;
+  readonly limit: number;
+  readonly chunkSize: number;
+  readonly staleAfterMinutes: number;
+}
+
 export interface ConversionSection {
   readonly targets: readonly MappingTarget[];
   readonly fieldMergeAllowed: boolean;
   readonly mapping: ConversionMapping;
+  readonly recovery: ConversionRecoverySection;
 }
 
 const MappingFieldSchema = z
@@ -118,6 +130,19 @@ export const DEFAULT_CONVERSION_MAPPING: ConversionMapping = {
   },
 };
 
+const ConversionRecoverySchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /** Rows one scan may settle. The scan never touches a record, only the operation rows. */
+    limit: z.number().int().min(1).max(500).default(100),
+    /** Rows per transaction, so a slow scan does not hold one lock over the whole table. */
+    chunkSize: z.number().int().min(1).max(50).default(25),
+    /** How long a `processing` row may be silent before the scan treats it as interrupted. */
+    staleAfterMinutes: z.number().int().min(5).max(1_440).default(60),
+  })
+  .strict()
+  .default({});
+
 export const ConversionSectionSchema = z
   .object({
     targets: z
@@ -128,6 +153,7 @@ export const ConversionSectionSchema = z
       .default([...CONVERSION_TARGETS]),
     fieldMergeAllowed: z.boolean().default(false),
     mapping: MappingRecordSchema.default(DEFAULT_CONVERSION_MAPPING),
+    recovery: ConversionRecoverySchema,
   })
   .strict()
   .default({});

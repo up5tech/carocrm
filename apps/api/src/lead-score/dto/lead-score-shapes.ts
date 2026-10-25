@@ -262,3 +262,59 @@ export const ConversionPreviewSchema = z
     mappingVersion: z.number().int().min(1).max(1_000_000).optional(),
   })
   .strict();
+
+// ---------------------------------------------------------------------------
+// Phase 19-LS.13 — the convert command and its operation record (contract §3, §4, §11.3)
+// ---------------------------------------------------------------------------
+
+const ConfirmationTypeSchema = z.enum(['simple', 'duplicates_present', 'values_will_be_skipped', 'field_merge', 'contact_reparent', 'opportunity_created']);
+
+/**
+ * Confirm and run a conversion.
+ *
+ * `previewHash` is required, not optional: the command re-runs the preview and refuses when the fingerprint it
+ * is handed no longer matches, so a caller cannot confirm a plan the server would not produce today. The
+ * acknowledgements must be exactly the set the current preview asks for — more is a lie about what was shown,
+ * fewer is a warning nobody read (contract §8.4).
+ */
+export const ConvertSchema = z
+  .object({
+    leadId: LeadIdSchema,
+    /** 8–128 characters, caller-generated, never derived from the Lead (contract §4.1). */
+    operationKey: z.string().trim().min(8).max(128),
+    targets: z
+      .array(
+        z
+          .object({
+            type: z.enum(CONVERSION_TARGETS),
+            action: z.enum(['create', 'link']),
+            existingId: z.string().trim().min(1).max(64).optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(CONVERSION_TARGETS.length),
+    fieldMerge: z
+      .array(z.object({ target: z.enum(CONVERSION_TARGETS), field: z.string().trim().min(1).max(64), value: z.unknown() }).strict())
+      .max(20)
+      .optional(),
+    previewHash: z.string().trim().regex(/^[0-9a-f]{64}$/),
+    acknowledged: z.array(ConfirmationTypeSchema).max(6),
+    /** Types the caller explicitly chose to create despite a duplicate warning (needs `duplicateOverride`). */
+    overrideDuplicateFor: z.array(z.enum(CONVERSION_TARGETS)).max(3).optional(),
+    /** The explicit decision that lets a link move a Contact to another Account (contract §6.3). */
+    allowReparent: z.boolean().optional(),
+  })
+  .strict();
+
+export const ConversionOperationsQuerySchema = z
+  .object({
+    status: z.enum(['processing', 'succeeded', 'failed_retryable', 'failed_final', 'needs_review']).optional(),
+    staleAfterMinutes: z.coerce.number().int().min(1).max(10_080).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .strict();
+
+export const ConversionOperationIdSchema = z.object({ operationId: z.string().trim().min(1).max(64) }).strict();
+
+export const ConversionCloseSchema = z.object({ reason: z.string().trim().max(500).optional() }).strict();

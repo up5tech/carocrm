@@ -36,5 +36,12 @@
   "LEADSCORE_DRAFT_EXISTS": "Đã có một bản nháp cho mô hình Lead Score này.",
   "LEADSCORE_NO_ACTIVE_MODEL": "Chưa có mô hình Lead Score đã phát hành nào đang hoạt động, nên không thể tính điểm Lead. Hãy phát hành một mô hình và chọn nó trong cấu hình Lead Score.",
   "LEADSCORE_PREVIEW_STALE": "Bản xem trước chuyển đổi này không còn mô tả đúng Lead. Hãy xem trước lại trước khi chuyển đổi.",
-  "LEADSCORE_TARGET_DISABLED": "Đích chuyển đổi này chưa được bật trên hệ thống, hoặc phần triển khai của nó chưa có."
+  "LEADSCORE_TARGET_DISABLED": "Đích chuyển đổi này chưa được bật trên hệ thống, hoặc phần triển khai của nó chưa có.",
+  "LEADSCORE_ALREADY_CONVERTED": "Lead này đã được chuyển đổi rồi.",
+  "LEADSCORE_CONVERSION_CONFLICT": "Mã thao tác chuyển đổi này đã được dùng.",
+  "LEADSCORE_CONVERSION_IN_FLIGHT": "Thao tác chuyển đổi này vẫn đang chạy.",
+  "LEADSCORE_CONVERSION_RETRYABLE": "Chuyển đổi thất bại tạm thời và chưa ghi gì. Có thể thử lại an toàn.",
+  "LEADSCORE_CONVERSION_NEEDS_RECOVERY": "Lần chuyển đổi này cần được xử lý (recovery) trước khi tiếp tục.",
+  "LEADSCORE_DUPLICATE_REVIEW_REQUIRED": "Có bản ghi có thể trùng với Lead này; cần quyết định trước khi chuyển đổi.",
+  "LEADSCORE_CONVERSION_REPARENT_REQUIRED": "Liên hệ này đang thuộc một tài khoản khác; việc chuyển sang cần quyết định rõ ràng."
 }

@@ -152,8 +152,17 @@ _Phase 19_ —
   merges, the merge policy and **the fields this actor can see and write** — so a permission change between
   preview and confirm invalidates a preview instead of letting anything be written blind. The map itself is
   configuration that writes records, so it is refused when written unless every line names a real field on both
-  sides, a compatible type, and a version above the one it replaces. The rest of the code is owed by
-  19-LS.13–LS.16, and those operations
+  sides, a compatible type, and a version above the one it replaces. 19-LS.13 then made it run: `action/conversion/convert`
+  re-runs the preview, refuses a stale fingerprint or an unacknowledged warning set, claims the caller's
+  operation key (the unique index is the double-click guard), and does the work in **one transaction** — the Lead
+  locked and re-read under the lock, every target created or linked through the canonical entity service, the
+  Lead's `Converted` status and references, the operation row and the `lead.conversionSucceeded.v1` event all
+  together. Nothing is written before the lock, so the loser of two concurrent attempts answers "already
+  converted" truthfully and leaves no second Contact; a failure settles the row in its own transaction
+  (`failed_retryable` for a transient cause, `failed_final` for a refusal), and an administrator can list the
+  operations, retry one the accounting proves safe to re-run, close one a human decides not to, or let the
+  off-by-default recovery scan settle rows a crash left behind. The rest of the code is owed by
+  19-LS.14–LS.16, and those operations
   refuse with the sub-phase that owes them (`LEADSCORE_PHASE_PENDING`). See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),

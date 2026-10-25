@@ -15,6 +15,7 @@ import {
   RECALCULATE_LEAD_JOB,
   RECALCULATE_PATH,
   recalculateLeadJob,
+  RECOVER_CONVERSION_JOB,
   registerLeadScoreDomainEvents,
   registerLeadScoreJobs,
 } from './lead-score-handlers.js';
@@ -63,10 +64,11 @@ describe('leadScore.recalculateLead', () => {
   it('registers both Lead Score jobs under the names the API enqueues', () => {
     const registry = new JobRegistry();
     registerLeadScoreJobs(registry, deps(vi.fn() as unknown as typeof fetch));
-    expect(registry.list().sort()).toEqual([BATCH_RECALCULATE_JOB, DECAY_SWEEP_JOB, RECALCULATE_LEAD_JOB].sort());
+    expect(registry.list().sort()).toEqual([BATCH_RECALCULATE_JOB, DECAY_SWEEP_JOB, RECALCULATE_LEAD_JOB, RECOVER_CONVERSION_JOB].sort());
     expect(RECALCULATE_LEAD_JOB).toBe('leadScore.recalculateLead');
     expect(BATCH_RECALCULATE_JOB).toBe('leadScore.batchRecalculate');
     expect(DECAY_SWEEP_JOB).toBe('leadScore.decaySweep');
+    expect(RECOVER_CONVERSION_JOB).toBe('leadScore.recoverConversionOperations');
   });
 
   it('is inert — not failed — when no worker capability is configured', async () => {

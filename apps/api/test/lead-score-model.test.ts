@@ -666,7 +666,7 @@ describe('the lifecycle is a documented surface (19-LS.3)', () => {
     for (const operation of ['validateModel', 'publishModel', 'createModelVersion']) {
       expect(operations.get(operation)?.admitted, operation).toBe(true);
     }
-    for (const [operation, phase] of [['conversionExecute', '19-LS.13']] as const) {
+    for (const [operation, phase] of [['aiInsight', '19-LS.17']] as const) {
       expect(operations.get(operation)?.admitted, operation).toBe(false);
       expect(operations.get(operation)?.pendingPhase, operation).toBe(phase);
     }

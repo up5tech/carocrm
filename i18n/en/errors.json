@@ -36,5 +36,12 @@
   "LEADSCORE_DRAFT_EXISTS": "A draft of this Lead Score model already exists.",
   "LEADSCORE_NO_ACTIVE_MODEL": "No published Lead Score model is active, so a Lead cannot be scored. Publish a model and choose it in the Lead Score settings.",
   "LEADSCORE_PREVIEW_STALE": "This conversion preview no longer describes the Lead. Take the preview again before converting.",
-  "LEADSCORE_TARGET_DISABLED": "That conversion target is not enabled on this instance, or its implementation has not shipped yet."
+  "LEADSCORE_TARGET_DISABLED": "That conversion target is not enabled on this instance, or its implementation has not shipped yet.",
+  "LEADSCORE_ALREADY_CONVERTED": "This Lead has already been converted.",
+  "LEADSCORE_CONVERSION_CONFLICT": "That conversion operation key is already in use.",
+  "LEADSCORE_CONVERSION_IN_FLIGHT": "That conversion is still running.",
+  "LEADSCORE_CONVERSION_RETRYABLE": "The conversion failed temporarily and nothing was written. Retrying is safe.",
+  "LEADSCORE_CONVERSION_NEEDS_RECOVERY": "This conversion attempt needs to be recovered before it can continue.",
+  "LEADSCORE_DUPLICATE_REVIEW_REQUIRED": "Possible duplicates exist for this Lead; decide before converting.",
+  "LEADSCORE_CONVERSION_REPARENT_REQUIRED": "This Contact already belongs to another Account, and moving it needs an explicit decision."
 }

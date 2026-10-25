@@ -8,7 +8,9 @@ import type { ZodTypeAny } from 'zod';
 import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
-import { BatchRecalculateSchema, ConversionCandidatesSchema, ConversionPreviewSchema, EditorCatalogQuerySchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { BatchRecalculateSchema, ConversionCandidatesSchema, ConversionCloseSchema, ConversionOperationIdSchema, ConversionOperationsQuerySchema, ConversionPreviewSchema, ConvertSchema, EditorCatalogQuerySchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { LeadConversionService } from './lead-conversion.service.js';
+import { LeadConversionAuditService } from './lead-conversion-audit.service.js';
 import { LeadConversionPreviewService } from './lead-conversion-preview.service.js';
 import { LeadDuplicateResolver } from './lead-duplicate-resolver.js';
 import { runAsLeadScoreSystem } from './lead-score-authority.js';
@@ -59,6 +61,8 @@ export class LeadScoreController {
     @Inject(LeadScoreEditorService) private readonly editor: LeadScoreEditorService,
     @Inject(LeadDuplicateResolver) private readonly duplicates: LeadDuplicateResolver,
     @Inject(LeadConversionPreviewService) private readonly conversionPreview: LeadConversionPreviewService,
+    @Inject(LeadConversionService) private readonly conversion: LeadConversionService,
+    @Inject(LeadConversionAuditService) private readonly conversionAudit: LeadConversionAuditService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
@@ -281,6 +285,78 @@ export class LeadScoreController {
   async previewConversion(@Body() body: unknown) {
     const input = this.parse(ConversionPreviewSchema, body);
     return this.conversionPreview.preview(input);
+  }
+
+  /**
+   * Confirm and run a conversion (19-LS.13).
+   *
+   * The server re-runs the preview, compares the fingerprint, checks the acknowledgements and the duplicate and
+   * re-parent decisions, then claims the operation key and does the work in one transaction. Everything the
+   * answer says about the outcome is read back from the operation row, so the caller and the audit trail cannot
+   * disagree (contract §3.3).
+   */
+  @HttpCode(200)
+  @Post('action/conversion/convert')
+  async convertLead(@Body() body: unknown) {
+    const input = this.parse(ConvertSchema, body);
+    return this.conversion.convert({
+      leadId: input.leadId,
+      operationKey: input.operationKey,
+      targets: input.targets,
+      ...(input.fieldMerge === undefined ? {} : { fieldMerge: input.fieldMerge }),
+      previewHash: input.previewHash,
+      acknowledged: input.acknowledged,
+      ...(input.overrideDuplicateFor === undefined ? {} : { overrideDuplicateFor: input.overrideDuplicateFor }),
+      ...(input.allowReparent === undefined ? {} : { allowReparent: input.allowReparent }),
+    });
+  }
+
+  /**
+   * The operations an administrator can inspect, bounded and filterable (contract §11.3).
+   *
+   * Reading needs `conversionAuditRead` and the module on; the Lead's label appears only when the caller may
+   * read that Lead, so the row is an audit subject rather than a back door to the record.
+   */
+  @Get('action/conversion/operations')
+  async conversionOperations(@Query() query: unknown) {
+    const input = this.parse(ConversionOperationsQuerySchema, query ?? {});
+    return this.conversionAudit.operations({
+      ...(input.status === undefined ? {} : { status: input.status }),
+      ...(input.staleAfterMinutes === undefined ? {} : { staleAfterMinutes: input.staleAfterMinutes }),
+      limit: input.limit ?? 25,
+    });
+  }
+
+  @Get('action/conversion/operations/:operationId')
+  async conversionOperation(@Param('operationId') operationId: string) {
+    const input = this.parse(ConversionOperationIdSchema, { operationId });
+    return this.conversionAudit.operation(input.operationId);
+  }
+
+  /** Retry an attempt the accounting proves is safe to re-run, keeping its key (contract §10.2). */
+  @HttpCode(200)
+  @Post('action/conversion/operations/:operationId/retry')
+  async retryConversion(@Param('operationId') operationId: string) {
+    const input = this.parse(ConversionOperationIdSchema, { operationId });
+    return this.conversionAudit.retry(input.operationId);
+  }
+
+  /** Close an operation that a human decided not to retry (contract §11.3). */
+  @HttpCode(200)
+  @Post('action/conversion/operations/:operationId/close')
+  async closeConversion(@Param('operationId') operationId: string, @Body() body: unknown) {
+    const input = this.parse(ConversionOperationIdSchema, { operationId });
+    const close = this.parse(ConversionCloseSchema, body ?? {});
+    return this.conversionAudit.close(input.operationId, close.reason ?? null);
+  }
+
+  /** Worker entry: settle conversion rows a crash left in `processing` (contract §11.2). */
+  @Public()
+  @HttpCode(200)
+  @Post('action/work/recover-conversion-operations')
+  async workRecoverConversions(@Headers('x-worker-secret') secret?: string) {
+    this.assertWorkerSecret(secret);
+    return runAsLeadScoreSystem(this.scope, 'conversion-recovery', () => this.conversionAudit.recoverStuck());
   }
 
   /**

@@ -180,7 +180,8 @@ const LS_SIGNAL_SOURCES = ['lead', 'marketingEvents', 'emailLinks'];
 const LS_TRIGGERS = ['lead_change', 'engagement_event', 'manual_recalculate', 'model_publish', 'batch_rebuild', 'decay_sweep'];
 const LS_RESULT_STATES = ['success', 'partial', 'failed'];
 const LS_DECAY_POLICIES = ['none', 'linear', 'halfLife'];
-const CONVERSION_STATUSES = ['previewed', 'processing', 'succeeded', 'failed_retryable', 'failed_final', 'needs_review'];
+// 19-LS.13 retired `previewed`: a preview must write nothing, so no command may create a row in it.
+const CONVERSION_STATUSES = ['processing', 'succeeded', 'failed_retryable', 'failed_final', 'needs_review'];
 const CONVERSION_TARGETS = ['Contact', 'Account', 'Opportunity'];
 
 export const coreMetadata: MetadataSeedEntry[] = [
@@ -5123,7 +5124,7 @@ function leadScoreEntities(): MetadataSeedEntry[] {
           operationKey: { type: 'varchar', maxLength: 128, required: true, inList: true, inDetail: true },
           sourceLeadId: { type: 'link', entityKey: 'Lead', required: true, inList: true, inDetail: true },
           sourceLeadRevision: { type: 'int', inDetail: true },
-          status: { type: 'enum', values: CONVERSION_STATUSES, defaultValue: 'previewed', inList: true, inDetail: true, audited: true, sortable: true },
+          status: { type: 'enum', values: CONVERSION_STATUSES, defaultValue: 'processing', inList: true, inDetail: true, audited: true, sortable: true },
           requestedTargets: { type: 'multiEnum', values: CONVERSION_TARGETS, inList: true, inDetail: true },
           // The fingerprint of the preview the caller confirmed: a stale preview must be re-confirmed
           // rather than executed (plan §4.3 step 5, §8.3).
@@ -5172,7 +5173,10 @@ function leadScoreEntities(): MetadataSeedEntry[] {
         // The durable operation record is written by the conversion command and inspected through the
         // recovery view; nobody edits a conversion outcome by hand (plan §5.5, §7.8).
         client: { web: false },
-        acl: { permissions: { LeadConversionOperation: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+        // 19-LS.13: `create: 'yes'` so the conversion command can record its own row under the caller's right
+        // (the LS.5 rule: writing history is a grant). Clients stay out because the LS.2 guard refuses every
+        // client create/update/delete, and the entity profile keeps read 'no' so the generic API cannot list it.
+        acl: { permissions: { LeadConversionOperation: { create: 'yes', read: 'no', edit: 'yes', delete: 'no', stream: 'no' } } },
       },
     },
   ];

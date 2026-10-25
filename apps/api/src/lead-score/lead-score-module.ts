@@ -24,6 +24,7 @@
 import type { AclAction } from '@carocrm/acl/types/index.js';
 
 import {
+  LEADCONVERSION_AUDIT_PERMISSION_ENTITY,
   LEADCONVERSION_EXECUTE_PERMISSION_ENTITY,
   LEADCONVERSION_FIELD_MERGE_PERMISSION_ENTITY,
   LEADCONVERSION_OVERRIDE_PERMISSION_ENTITY,
@@ -88,7 +89,14 @@ export type LeadScoreErrorCode =
   | 'LEADSCORE_DRAFT_EXISTS'
   | 'LEADSCORE_NO_ACTIVE_MODEL'
   | 'LEADSCORE_PREVIEW_STALE'
-  | 'LEADSCORE_TARGET_DISABLED';
+  | 'LEADSCORE_TARGET_DISABLED'
+  | 'LEADSCORE_ALREADY_CONVERTED'
+  | 'LEADSCORE_CONVERSION_CONFLICT'
+  | 'LEADSCORE_CONVERSION_IN_FLIGHT'
+  | 'LEADSCORE_CONVERSION_RETRYABLE'
+  | 'LEADSCORE_CONVERSION_NEEDS_RECOVERY'
+  | 'LEADSCORE_DUPLICATE_REVIEW_REQUIRED'
+  | 'LEADSCORE_CONVERSION_REPARENT_REQUIRED';
 
 export interface LeadScoreCapabilityDefinition {
   readonly key: LeadScoreCapabilityKey;
@@ -214,7 +222,7 @@ export const LEADSCORE_CAPABILITIES: readonly LeadScoreCapabilityDefinition[] = 
     key: 'conversionAuditRead',
     label: 'Read conversion operations',
     description: 'See who converted what, which targets were created versus linked, and the mapping version used.',
-    resource: 'LeadConversionOperation',
+    resource: LEADCONVERSION_AUDIT_PERMISSION_ENTITY,
     action: 'read',
   },
   {
@@ -267,8 +275,10 @@ export const LEADSCORE_FEATURES: readonly LeadScoreFeatureDescriptor[] = [
   // written, and the preview resolves it, names what it would not copy, and hashes the answer.
   { key: 'fieldMapping', label: 'Conversion field mapping', settingsPath: 'features.fieldMapping', requires: [], pendingPhase: null },
   { key: 'conversionPreview', label: 'Conversion preview', settingsPath: 'features.conversionPreview', requires: ['fieldMapping'], pendingPhase: null },
-  { key: 'leadConversion', label: 'Lead conversion', settingsPath: 'features.leadConversion', requires: ['conversionPreview'], pendingPhase: '19-LS.13' },
-  { key: 'conversionRecovery', label: 'Conversion operation recovery', settingsPath: 'features.conversionRecovery', requires: ['leadConversion'], pendingPhase: '19-LS.13' },
+  // 19-LS.13 delivered the command and its recovery: the row is claimed, the work is one transaction, and a
+  // retry or a stuck-row scan resolves what a crash left behind.
+  { key: 'leadConversion', label: 'Lead conversion', settingsPath: 'features.leadConversion', requires: ['conversionPreview'], pendingPhase: null },
+  { key: 'conversionRecovery', label: 'Conversion operation recovery', settingsPath: 'features.conversionRecovery', requires: ['leadConversion'], pendingPhase: null },
   { key: 'opportunityConversion', label: 'Opportunity conversion', settingsPath: 'features.opportunityConversion', requires: ['leadConversion'], pendingPhase: '19-LS.16' },
   { key: 'aiInsight', label: 'AI-assisted fit insight', settingsPath: 'features.aiInsight', requires: ['scoring'], pendingPhase: '19-LS.17' },
 ];
@@ -391,7 +401,7 @@ export const LEADSCORE_MODULE = {
    * reader that the card, the model workspace, the engagement read and the conversion contract did not exist.
    * The module-health view renders it, which makes it a claim rather than a changelog.
    */
-  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11'],
+  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13'],
   /**
    * The entity set this module owns, registered in `database/seed-metadata.ts` and indexed by
    * `database/migrations/073_phase19_lead_score.sql`. One list, shared with the write guard, so the

@@ -414,6 +414,14 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
        VALUES ('leadScoreDecaySweep', 'leadScore.decaySweep', '35 3 * * *', '{}'::jsonb, TRUE)
        ON CONFLICT (id) DO NOTHING`,
     );
+    // Conversion recovery (PLAN_Phase_19_LeadScore.md §7.8, 19-LS.13): a conversion whose process died between
+    // its claim and its work leaves a `processing` row nobody can answer. The schedule exists; the module's
+    // `conversion.recovery.enabled` decides whether the run does anything, so an operator turns one thing on.
+    await pool.query(
+      `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
+       VALUES ('leadScoreConvertRecovery', 'leadScore.recoverConversionOperations', '50 3 * * *', '{}'::jsonb, TRUE)
+       ON CONFLICT (id) DO NOTHING`,
+    );
     await pool.query(
       `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
        VALUES ('csUpdateGoalOverdue', 'customerSuccess.updateGoalOverdueState', '15 3 * * *', '{}'::jsonb, TRUE)

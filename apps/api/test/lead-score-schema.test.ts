@@ -374,7 +374,8 @@ describe('metadata foundation (19-LS.2)', () => {
     const fields = definition('LeadConversionOperation')?.fields ?? {};
     expect(fields['operationKey']?.required).toBe(true);
     expect(fields['sourceLeadId']?.required).toBe(true);
-    expect(fields['status']?.values).toEqual(['previewed', 'processing', 'succeeded', 'failed_retryable', 'failed_final', 'needs_review']);
+    // 19-LS.13 retired `previewed`: a preview writes nothing, so no command may create a row in that state.
+    expect(fields['status']?.values).toEqual(['processing', 'succeeded', 'failed_retryable', 'failed_final', 'needs_review']);
     expect(fields['requestedTargets']?.values).toEqual(['Contact', 'Account', 'Opportunity']);
     for (const field of ['sourceLeadRevision', 'previewHash', 'mappingVersion', 'selectedMatchIds', 'requestedById', 'requestedAt', 'confirmedAt', 'completedAt', 'resultSummary', 'failureCode', 'correlationId']) {
       expect(fields[field], field).toBeDefined();
@@ -386,6 +387,9 @@ describe('metadata foundation (19-LS.2)', () => {
     }
     expect(definition('LeadConversionOperation')?.client?.web).toBe(false);
     expect(definition('LeadConversionOperation')?.record?.removable).toBe(false);
+    // 19-LS.13: the command writes its own row under the caller's right, so the profile grants `create` and
+    // `edit` (the status transitions) — and keeps `read: 'no'`, because the generic API may not list it.
+    expect(definition('LeadConversionOperation')?.acl?.permissions?.['LeadConversionOperation']).toMatchObject({ create: 'yes', edit: 'yes', read: 'no', delete: 'no' });
   });
 
   it('puts the projection and the conversion result on the core Lead record, out of the edit surface', () => {
@@ -558,7 +562,7 @@ describe('the write guard owns the module’s fields and records (19-LS.2)', () 
 
     // An edit and a delete are refused the same way: the row is not anyone's to hand-edit.
     const forgedId = await writeAsModule(() =>
-      crud().create('LeadConversionOperation', { name: `${RUN} module operation`, operationKey: `${RUN}-guard-target`, sourceLeadId: leadId, status: 'previewed', requestedAt: new Date() }),
+      crud().create('LeadConversionOperation', { name: `${RUN} module operation`, operationKey: `${RUN}-guard-target`, sourceLeadId: leadId, status: 'processing', requestedAt: new Date() }),
     );
     createdRecordIds.push(String(forgedId['id']));
     const edited = await call('PATCH', `/api/v1/LeadConversionOperation/${String(forgedId['id'])}`, { status: 'succeeded' });
@@ -625,7 +629,7 @@ describe('the database invariants behind retry safety (19-LS.2)', () => {
     const operationKey = `${RUN}-op-1`;
 
     const first = await writeAsModule(() =>
-      crud().create('LeadConversionOperation', { name: `${RUN} operation`, operationKey, sourceLeadId: leadId, status: 'previewed', requestedAt: new Date() }),
+      crud().create('LeadConversionOperation', { name: `${RUN} operation`, operationKey, sourceLeadId: leadId, status: 'processing', requestedAt: new Date() }),
     );
     createdRecordIds.push(String(first['id']));
 
@@ -633,14 +637,14 @@ describe('the database invariants behind retry safety (19-LS.2)', () => {
     // is what lets 19-LS.13 return the original result instead of creating a second Contact and Account.
     await expect(
       writeAsModule(() =>
-        crud().create('LeadConversionOperation', { name: `${RUN} replay`, operationKey, sourceLeadId: leadId, status: 'previewed', requestedAt: new Date() }),
+        crud().create('LeadConversionOperation', { name: `${RUN} replay`, operationKey, sourceLeadId: leadId, status: 'processing', requestedAt: new Date() }),
       ),
     ).rejects.toThrow();
 
     // A different key on the same Lead is a different intent and stays legal — one Lead may be converted
     // through two separate retry attempts, but never through one key twice.
     const second = await writeAsModule(() =>
-      crud().create('LeadConversionOperation', { name: `${RUN} second operation`, operationKey: `${RUN}-op-2`, sourceLeadId: leadId, status: 'previewed', requestedAt: new Date() }),
+      crud().create('LeadConversionOperation', { name: `${RUN} second operation`, operationKey: `${RUN}-op-2`, sourceLeadId: leadId, status: 'processing', requestedAt: new Date() }),
     );
     createdRecordIds.push(String(second['id']));
 
@@ -698,13 +702,9 @@ describe('registered but inert (19-LS.2)', () => {
     // survive. The suite's own teardown restores the row it found.
     const switchesOff = Object.fromEntries(Object.keys(DEFAULT_LEADSCORE_SETTINGS.features).map((key) => [key, false]));
     expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: switchesOff })).status).toBe(200);
-    // What LS.2 registered is inert until its own phase arrives. Four phases on, the doors that still name a
-    // pending phase are the execution, recovery and insight ones — and each names the sub-phase that owes it.
-    for (const [operation, phase] of [
-      ['conversionExecute', '19-LS.13'],
-      ['conversionRetry', '19-LS.13'],
-      ['aiInsight', '19-LS.17'],
-    ] as const) {
+    // What LS.2 registered is inert until its own phase arrives. Five phases on, the only door that still names
+    // a pending phase is the insight one.
+    for (const [operation, phase] of [['aiInsight', '19-LS.17']] as const) {
       const result = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });
       expect((result.body as { code: string }).code, operation).toBe('LEADSCORE_PHASE_PENDING');
       expect((result.body as { pendingPhase: string }).pendingPhase, operation).toBe(phase);

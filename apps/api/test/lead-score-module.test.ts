@@ -167,7 +167,7 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.module.version).toMatch(/^\d+\.\d+\.\d+$/);
     // 19-LS.7–19-LS.11 added themselves here when they shipped; the list is the descriptor's claim about
     // what exists, so a phase that forgets it is a lie the health view repeats.
-    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11']);
+    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13']);
 
     // Every required capability is a fact the view verified against this database, not a claim.
     expect(body.dependencies.every((dependency) => dependency.present)).toBe(true);
@@ -202,9 +202,11 @@ describe('module registration and health (19-LS.1)', () => {
       // 19-LS.11 delivered duplicate review, so its switch is live and its operation admitted once the
       // module is on.
       'duplicateDetection',
-      // 19-LS.12 delivered the field map and the preview together.
+      // 19-LS.12 delivered the field map and the preview together, and 19-LS.13 the command built on them.
       'fieldMapping',
       'conversionPreview',
+      'leadConversion',
+      'conversionRecovery',
     ]);
     expect(body.features.filter((feature) => !feature.implemented).every((feature) => feature.pendingPhase !== null)).toBe(true);
     expect(body.operations.every((operation) => operation.admitted === false)).toBe(true);
@@ -340,8 +342,8 @@ describe('settings document (19-LS.1)', () => {
     // `pendingPhase`, so a feature that ships without its row being flipped fails here rather than lying in
     // the settings screen.
     const pending = view.pendingFeatures.map((entry) => entry.key);
-    expect(pending).toEqual(expect.arrayContaining(['leadConversion', 'conversionRecovery', 'opportunityConversion', 'aiInsight']));
-    for (const shipped of ['eventRecalculation', 'batchRecalculation', 'thresholdNotifications', 'engagementSignals', 'scoring', 'scoringPreview', 'modelAdministration', 'duplicateDetection', 'fieldMapping', 'conversionPreview']) {
+    expect(pending).toEqual(expect.arrayContaining(['opportunityConversion', 'aiInsight']));
+    for (const shipped of ['eventRecalculation', 'batchRecalculation', 'thresholdNotifications', 'engagementSignals', 'scoring', 'scoringPreview', 'modelAdministration', 'duplicateDetection', 'fieldMapping', 'conversionPreview', 'leadConversion', 'conversionRecovery']) {
       expect(pending, shipped).not.toContain(shipped);
     }
   });
@@ -364,7 +366,7 @@ describe('settings document (19-LS.1)', () => {
     const before = await call('GET', '/api/v1/LeadScore/action/settings');
     const beforeVersion = before.body['version'] as number;
 
-    const updated = await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { leadConversion: true } });
+    const updated = await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { scoring: true, aiInsight: true } });
     expect(updated.status).toBe(200);
     const view = updated.body as unknown as {
       version: number;
@@ -376,14 +378,14 @@ describe('settings document (19-LS.1)', () => {
     };
     expect(view.version).toBe(beforeVersion + 1);
     expect(view.settings.enabled).toBe(true);
-    expect(view.settings.features.leadConversion).toBe(true);
+    expect(view.settings.features.aiInsight).toBe(true);
     // The switch is on, the phase is not delivered, so the effective answer stays false — and the document
     // says so out loud instead of letting an administrator believe duplicate review is live.
     // (`eventRecalculation` no longer earns this warning: 19-LS.6 shipped it, and a stored switch that now
     // really does mean something is tested in `lead-score-recalculation.test.ts`.)
-    expect(view.effective.leadConversion).toBe(false);
+    expect(view.effective.aiInsight).toBe(false);
     expect(view.warnings.map((warning) => warning.code)).toContain('phasePending');
-    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('19-LS.13');
+    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('19-LS.17');
     expect(view.updatedAt).not.toBeNull();
     expect(view.updatedBy).not.toBeNull();
 
@@ -397,12 +399,9 @@ describe('feature gate (19-LS.1)', () => {
   it('refuses an operation whose sub-phase has not shipped, naming the phase', async () => {
     expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true })).status).toBe(200);
 
-    // 19-LS.12 shipped the preview, so the pending example moved to the two operations 19-LS.13 owes.
-    for (const [operation, phase] of [
-      ['conversionExecute', '19-LS.13'],
-      ['conversionRetry', '19-LS.13'],
-      ['aiInsight', '19-LS.17'],
-    ] as const) {
+    // 19-LS.13 shipped the command and its recovery, so the one operation still waiting on a phase is the
+    // insight one.
+    for (const [operation, phase] of [['aiInsight', '19-LS.17']] as const) {
       const result = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });
       expect(result.status).toBe(200);
       const assessment = result.body as unknown as {
@@ -418,7 +417,7 @@ describe('feature gate (19-LS.1)', () => {
       expect(assessment.code).toBe('LEADSCORE_PHASE_PENDING');
       expect(assessment.pendingPhase).toBe(phase);
       expect(assessment.detail).toBe(phase);
-      expect(assessment.writes).toBe(operation === 'conversionExecute' || operation === 'conversionRetry' || operation === 'aiInsight');
+      expect(assessment.writes).toBe(true);
     }
 
     // A caller without the right learns only that it is denied — never the deployment state behind it.
@@ -453,7 +452,7 @@ describe('feature gate (19-LS.1)', () => {
 
 describe('disabling the module leaves the core CRM alone (19-LS.1)', () => {
   it('keeps Lead, Contact, Account and Opportunity generic CRUD working with the module loaded', async () => {
-    expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { leadConversion: true } })).status).toBe(200);
+    expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { scoring: true, aiInsight: true } })).status).toBe(200);
 
     const accountId = await createRecord('Account', { name: `${RUN} account` });
     const contactId = await createRecord('Contact', { name: `${RUN} contact`, lastName: `${RUN} contact`, accountId });

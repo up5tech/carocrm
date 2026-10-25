@@ -160,3 +160,68 @@ export function leadScorePreviewStaleError(leadId: string, component: PreviewSta
     },
   );
 }
+
+/**
+ * The Lead is already converted (19-LS.13; contract §4.2).
+ *
+ * The operation id is echoed only when this caller may read operations — the Lead's own `convertedAt` is
+ * already theirs to see, but another operation's id is not.
+ */
+export function leadScoreAlreadyConvertedError(leadId: string, convertedAt: string | null, operationId: string | null): LeadScoreError {
+  return new LeadScoreError(
+    'LEADSCORE_ALREADY_CONVERTED',
+    'This Lead has already been converted. A second conversion of the same Lead is refused; review or correct the existing one instead.',
+    { leadId, ...(convertedAt === null ? {} : { convertedAt }), ...(operationId === null ? {} : { operationId }) },
+  );
+}
+
+/** The key is taken by an operation this caller may not read. A conflict, never a disclosure (contract §4.1). */
+export function leadScoreConversionConflictError(leadId: string): LeadScoreError {
+  return new LeadScoreError(
+    'LEADSCORE_CONVERSION_CONFLICT',
+    'That operation key is already in use. Pick a new key for a new conversion.',
+    { leadId },
+  );
+}
+
+/** Same key, still running: the caller polls rather than starting a second attempt (contract §4.2). */
+export function leadScoreConversionInFlightError(operationId: string): LeadScoreError {
+  return new LeadScoreError('LEADSCORE_CONVERSION_IN_FLIGHT', 'That conversion is still running.', { operationId });
+}
+
+/** A transient failure that left nothing behind: retrying the same operation is safe (contract §10.1). */
+export function leadScoreConversionRetryableError(operationId: string, failureCode: string): LeadScoreError {
+  return new LeadScoreError(
+    'LEADSCORE_CONVERSION_RETRYABLE',
+    'The conversion could not be completed because of a temporary failure, and nothing was written. Retry the operation.',
+    { operationId, failureCode },
+    503,
+  );
+}
+
+/** This attempt needs a human before anything else happens — a retry or a close, not a new conversion. */
+export function leadScoreConversionNeedsRecoveryError(operationId: string, failureCode: string): LeadScoreError {
+  return new LeadScoreError(
+    'LEADSCORE_CONVERSION_NEEDS_RECOVERY',
+    'This conversion attempt cannot be re-issued as it stands. Recover it: retry it from the operations view, or close it.',
+    { operationId, failureCode },
+  );
+}
+
+/** Exact matches exist and nobody said what to do about them (plan §7.3, contract §9.5). */
+export function leadScoreDuplicateReviewRequiredError(leadId: string, visibleCandidates: number, hiddenMatches: number): LeadScoreError {
+  return new LeadScoreError(
+    'LEADSCORE_DUPLICATE_REVIEW_REQUIRED',
+    'Possible duplicates exist for this Lead. Decide before converting: link an existing record, or create anyway with the override right.',
+    { leadId, visibleCandidates, hiddenMatches },
+  );
+}
+
+/** Linking would move a Contact to another Account, which is a decision, not a side effect (contract §6.3). */
+export function leadScoreReparentRequiredError(contactId: string, accountId: string, currentAccountId: string | null): LeadScoreError {
+  return new LeadScoreError(
+    'LEADSCORE_CONVERSION_REPARENT_REQUIRED',
+    'This Contact already belongs to another Account. Moving it is an explicit decision and needs the field-change right.',
+    { contactId, accountId, ...(currentAccountId === null ? {} : { currentAccountId }) },
+  );
+}
