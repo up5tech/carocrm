@@ -1,6 +1,8 @@
 import type { Provider, Type } from '@nestjs/common';
 
+import { LeadConversionPreviewService } from './lead-conversion-preview.service.js';
 import { LeadDuplicateResolver } from './lead-duplicate-resolver.js';
+import { LeadFieldMappingService } from './lead-field-mapping.service.js';
 import { LeadScoreController } from './lead-score.controller.js';
 import { LeadScoreCalculationService } from './lead-score-calculation.service.js';
 import { LeadScoreEditorService } from './lead-score-editor.js';
@@ -38,6 +40,8 @@ export const LEADSCORE_CONTROLLERS: Type<unknown>[] = [LeadScoreController];
 export const LEADSCORE_PROVIDERS: Provider[] = [
   // Registered first so its `onApplicationBootstrap` hook lands before any record write can be served.
   LeadScoreWriteGuardService,
+  // 19-LS.12: the map (validated against metadata) is a dependency of the settings document itself.
+  LeadFieldMappingService,
   LeadScoreSettingsService,
   LeadScorePermissionService,
   LeadScoreModelService,
@@ -54,11 +58,20 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   LeadScoreThresholdService,
   // 19-LS.11: the duplicate read (contacts and accounts under the caller's own ACL, counted not named).
   LeadDuplicateResolver,
+  // 19-LS.12: the side-effect-free conversion preview, built on the map and the resolver.
+  LeadConversionPreviewService,
   // Needs the job row and the settings document, so it is registered with the services it reads.
   LeadScoreRecalculationService,
   LeadScoreModuleHealthService,
 ];
 
+export {
+  type ConfirmationType,
+  type ConversionPreviewInput,
+  type ConversionPreviewView,
+  LeadConversionPreviewService,
+  type TargetPreview,
+} from './lead-conversion-preview.service.js';
 export {
   type DuplicateCandidate,
   type DuplicateCandidatesView,
@@ -66,6 +79,30 @@ export {
   type DuplicateStageReason,
   LeadDuplicateResolver,
 } from './lead-duplicate-resolver.js';
+export {
+  composeTemplate,
+  type ConversionMapping,
+  type ConversionSection,
+  ConversionSectionSchema,
+  DEFAULT_CONVERSION_MAPPING,
+  type FieldConflict,
+  isMappableSource,
+  isMappableTarget,
+  LeadFieldMappingService,
+  type MappingIssue,
+  type MappingIssueCode,
+  type MappingTarget,
+  previewHash,
+  type PreviewHashInput,
+  type ProposedField,
+  type SkippedField,
+  type SkipReason,
+  type TargetMapping,
+  type TargetResolution,
+  templateTokens,
+  typeCompatible,
+  valueIssue,
+} from './lead-field-mapping.service.js';
 export { LeadScoreController } from './lead-score.controller.js';
 export { LEADSCORE_SYSTEM_PRINCIPAL, runAsLeadScoreSystem } from './lead-score-authority.js';
 export {

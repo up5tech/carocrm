@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
+import { ConversionSectionSchema,LeadFieldMappingService } from './lead-field-mapping.service.js';
 import { LEADSCORE_SETTINGS_ROW } from './lead-score-domain.js';
 import { LEADSCORE_FEATURES, LEADSCORE_PENDING_FEATURES, type LeadScoreFeatureDescriptor } from './lead-score-module.js';
 
@@ -16,10 +17,11 @@ import { LEADSCORE_FEATURES, LEADSCORE_PENDING_FEATURES, type LeadScoreFeatureDe
  * `MarketingAutomation` and `ESignature` do.
  *
  * **The document holds only what this build reads.** The module switch and the feature switches are
- * consumed by `LeadScoreFeatureGate`, the health view and the capability answer; nothing else has a
- * reader yet. A scoring scale, a batch size or a conversion target list stored now would be
- * configuration that lies — it would look administered while no code consulted it — so each later
- * phase adds the section it actually reads, in its own commit.
+ * consumed by `LeadScoreFeatureGate`, the health view and the capability answer; `scoring` by the
+ * calculation service and the queue, `signals` by the decay sweep, and `conversion` by the duplicate
+ * resolver's target list, the field map and the preview (19-LS.12). A scoring scale or a batch size
+ * stored here would be configuration that lies — it would look administered while no code consulted it —
+ * so each section arrives with the phase that reads it.
  *
  * Every accepted change bumps `version`, so a stored evaluation or a conversion operation can name the
  * policy it was produced under (the pattern plan §5.1 requires of a model version).
@@ -105,6 +107,14 @@ const SignalsSectionSchema = z
   .strict()
   .default({});
 
+/**
+ * The conversion policy (19-LS.12, contract §5.2/§7): which targets an installation may build, whether a
+ * field merge is allowed at all, and the versioned map per target. Semantic validation — do these fields
+ * exist, do their types agree, did the version move — happens in `update` below, because it needs metadata
+ * that a zod shape cannot see.
+ */
+const conversion = ConversionSectionSchema;
+
 export const LeadScoreSettingsSchema = z
   .object({
     /**
@@ -116,6 +126,7 @@ export const LeadScoreSettingsSchema = z
     features: FeatureFlagsSchema.default({}),
     scoring: ScoringSectionSchema.default({}),
     signals: SignalsSectionSchema.default({}),
+    conversion,
   })
   .strict();
 
@@ -156,6 +167,7 @@ export class LeadScoreSettingsService {
 
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(LeadFieldMappingService) private readonly mapping: LeadFieldMappingService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
@@ -203,6 +215,18 @@ export class LeadScoreSettingsService {
     if (!parsed.success) {
       throw new ValidationError('Invalid Lead Score settings.', {
         issues: parsed.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
+      });
+    }
+    // Shape first, meaning second: a field map that names a field this entity does not have, or a type it
+    // cannot hold, is refused before it is stored — otherwise it would be a policy that fails at the first
+    // conversion rather than at the moment somebody wrote it (contract §7.1).
+    const mappingIssues = [
+      ...this.mapping.validateSection(parsed.data.conversion),
+      ...this.mapping.validateVersionBump(current.settings.conversion, parsed.data.conversion),
+    ];
+    if (mappingIssues.length > 0) {
+      throw new ValidationError('Invalid Lead Score conversion mapping.', {
+        issues: mappingIssues.map((issue) => ({ path: issue.path, message: issue.message, code: issue.code })),
       });
     }
     const version = current.version + 1;

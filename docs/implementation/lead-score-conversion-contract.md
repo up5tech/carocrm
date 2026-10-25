@@ -555,6 +555,22 @@ Zero side effects, asserted the way LS.4 and LS.8 assert it: record counts befor
 metadata, the mapping, and a **bounded** duplicate scan (§9). It may not enqueue, dispatch, notify, or call any
 provider.
 
+> **Delivered in 19-LS.12** (`lead-field-mapping.service.ts` + `lead-conversion-preview.service.ts`), with three
+> refinements this section's text did not spell out:
+>
+> 1. **The fingerprint also covers `fieldMergeAllowed`** (the policy switch *and* the actor's
+>    `applyFieldChanges`). A test caught that the same plan produced one hash whether or not the merge could
+>    run — two different operations sharing one fingerprint, which is the one thing a fingerprint must never
+>    do. §8.3's component list is otherwise implemented verbatim, plus `leadScope`: the **mapped Lead fields**
+>    the reader can see, because a hidden source changes what the operation copies just as a hidden target
+>    field does.
+> 2. **`acknowledged` is not a preview input.** §8.1 listed it there; a preview acknowledges nothing, so the
+>    exact-set requirement of §8.4 belongs to LS.13's command, and putting it on the preview would have been a
+>    check with no effect.
+> 3. **A linked target the caller cannot read is `target_unreadable`, not a 404.** The response says the
+>    operation cannot run and stops there — the alternative would confirm, by distinguishing "missing" from
+>    "forbidden", that an id the caller guessed is real (§9.2's invisibility rule, applied to links).
+
 ---
 
 ## 9. Duplicate policy (what LS.11 must implement, and what it must not)

@@ -8,7 +8,8 @@ import type { ZodTypeAny } from 'zod';
 import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
-import { BatchRecalculateSchema, ConversionCandidatesSchema, EditorCatalogQuerySchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { BatchRecalculateSchema, ConversionCandidatesSchema, ConversionPreviewSchema, EditorCatalogQuerySchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { LeadConversionPreviewService } from './lead-conversion-preview.service.js';
 import { LeadDuplicateResolver } from './lead-duplicate-resolver.js';
 import { runAsLeadScoreSystem } from './lead-score-authority.js';
 import { LeadScoreCalculationService } from './lead-score-calculation.service.js';
@@ -57,6 +58,7 @@ export class LeadScoreController {
     @Inject(LeadScoreRecalculationService) private readonly recalculation: LeadScoreRecalculationService,
     @Inject(LeadScoreEditorService) private readonly editor: LeadScoreEditorService,
     @Inject(LeadDuplicateResolver) private readonly duplicates: LeadDuplicateResolver,
+    @Inject(LeadConversionPreviewService) private readonly conversionPreview: LeadConversionPreviewService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
@@ -263,6 +265,22 @@ export class LeadScoreController {
   async conversionCandidates(@Body() body: unknown) {
     const input = this.parse(ConversionCandidatesSchema, body);
     return this.duplicates.candidates(input.leadId);
+  }
+
+  /**
+   * What a conversion would do, without doing any of it (19-LS.12).
+   *
+   * The answer is the operation: the values each target would receive, the fields that would not be copied
+   * and why, the required values still missing, the before/after of every conflict on a linked record, the
+   * duplicate candidates (when that switch is on), what the caller must be shown before confirming, and a
+   * fingerprint over all of it. Nothing here writes — the service has no writer — and the fingerprint is what
+   * makes an old preview refusable instead of merely inadvisable (contract §8.3).
+   */
+  @HttpCode(200)
+  @Post('action/conversion/preview')
+  async previewConversion(@Body() body: unknown) {
+    const input = this.parse(ConversionPreviewSchema, body);
+    return this.conversionPreview.preview(input);
   }
 
   /**

@@ -34,5 +34,7 @@
   "LEADSCORE_MODEL_IMMUTABLE": "A published Lead Score model version cannot be changed. Create a new version instead.",
   "LEADSCORE_INVALID_STATE": "This Lead Score model action is not allowed in the model's current state.",
   "LEADSCORE_DRAFT_EXISTS": "A draft of this Lead Score model already exists.",
-  "LEADSCORE_NO_ACTIVE_MODEL": "No published Lead Score model is active, so a Lead cannot be scored. Publish a model and choose it in the Lead Score settings."
+  "LEADSCORE_NO_ACTIVE_MODEL": "No published Lead Score model is active, so a Lead cannot be scored. Publish a model and choose it in the Lead Score settings.",
+  "LEADSCORE_PREVIEW_STALE": "This conversion preview no longer describes the Lead. Take the preview again before converting.",
+  "LEADSCORE_TARGET_DISABLED": "That conversion target is not enabled on this instance, or its implementation has not shipped yet."
 }

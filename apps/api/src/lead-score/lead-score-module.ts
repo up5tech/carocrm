@@ -86,7 +86,9 @@ export type LeadScoreErrorCode =
   | 'LEADSCORE_INVALID_STATE'
   | 'LEADSCORE_MODEL_IMMUTABLE'
   | 'LEADSCORE_DRAFT_EXISTS'
-  | 'LEADSCORE_NO_ACTIVE_MODEL';
+  | 'LEADSCORE_NO_ACTIVE_MODEL'
+  | 'LEADSCORE_PREVIEW_STALE'
+  | 'LEADSCORE_TARGET_DISABLED';
 
 export interface LeadScoreCapabilityDefinition {
   readonly key: LeadScoreCapabilityKey;
@@ -261,8 +263,10 @@ export const LEADSCORE_FEATURES: readonly LeadScoreFeatureDescriptor[] = [
   // bounded suggestion needs an indexed path this schema does not have (contract §9.4); LS.18's query check
   // owns that decision.
   { key: 'duplicateDetection', label: 'Duplicate candidate review', settingsPath: 'features.duplicateDetection', requires: [], pendingPhase: null },
-  { key: 'fieldMapping', label: 'Conversion field mapping', settingsPath: 'features.fieldMapping', requires: [], pendingPhase: '19-LS.12' },
-  { key: 'conversionPreview', label: 'Conversion preview', settingsPath: 'features.conversionPreview', requires: ['fieldMapping'], pendingPhase: '19-LS.12' },
+  // 19-LS.12 delivered the map and the preview together: the map is validated against metadata when it is
+  // written, and the preview resolves it, names what it would not copy, and hashes the answer.
+  { key: 'fieldMapping', label: 'Conversion field mapping', settingsPath: 'features.fieldMapping', requires: [], pendingPhase: null },
+  { key: 'conversionPreview', label: 'Conversion preview', settingsPath: 'features.conversionPreview', requires: ['fieldMapping'], pendingPhase: null },
   { key: 'leadConversion', label: 'Lead conversion', settingsPath: 'features.leadConversion', requires: ['conversionPreview'], pendingPhase: '19-LS.13' },
   { key: 'conversionRecovery', label: 'Conversion operation recovery', settingsPath: 'features.conversionRecovery', requires: ['leadConversion'], pendingPhase: '19-LS.13' },
   { key: 'opportunityConversion', label: 'Opportunity conversion', settingsPath: 'features.opportunityConversion', requires: ['leadConversion'], pendingPhase: '19-LS.16' },

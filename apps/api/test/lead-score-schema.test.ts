@@ -698,11 +698,11 @@ describe('registered but inert (19-LS.2)', () => {
     // survive. The suite's own teardown restores the row it found.
     const switchesOff = Object.fromEntries(Object.keys(DEFAULT_LEADSCORE_SETTINGS.features).map((key) => [key, false]));
     expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: switchesOff })).status).toBe(200);
-    // What LS.2 registered is inert until its own phase arrives. Three phases on, the doors that still name a
-    // pending phase are the conversion and insight ones — and each names the sub-phase that owes it.
+    // What LS.2 registered is inert until its own phase arrives. Four phases on, the doors that still name a
+    // pending phase are the execution, recovery and insight ones — and each names the sub-phase that owes it.
     for (const [operation, phase] of [
-      ['conversionPreview', '19-LS.12'],
       ['conversionExecute', '19-LS.13'],
+      ['conversionRetry', '19-LS.13'],
       ['aiInsight', '19-LS.17'],
     ] as const) {
       const result = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });

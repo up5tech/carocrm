@@ -145,8 +145,15 @@ _Phase 19_ —
   field ACL, with `hiddenMatches` as a **count** of the records they may not read and `requiresChoice` plus
   `allowedDecisions` as the question the preview and the convert command will insist on. It writes nothing,
   suggests nothing it cannot show, and ships no fuzzy stage: the trigram indexes this schema has key on field
-  names that do not exist, so a similarity pass would be a full scan, which LS.18's query check owns. The rest
-  of the code is owed by 19-LS.12–LS.16, and those operations
+  names that do not exist, so a similarity pass would be a full scan, which LS.18's query check owns. 19-LS.12
+  then made the contract's map and preview real: `POST action/conversion/preview` answers what each target would
+  receive, what it would not and why, the required values still missing, the before/after of every differing
+  value on a linked record, and a `previewHash` over the Lead revision, each mapping version, the explicit
+  merges, the merge policy and **the fields this actor can see and write** — so a permission change between
+  preview and confirm invalidates a preview instead of letting anything be written blind. The map itself is
+  configuration that writes records, so it is refused when written unless every line names a real field on both
+  sides, a compatible type, and a version above the one it replaces. The rest of the code is owed by
+  19-LS.13–LS.16, and those operations
   refuse with the sub-phase that owes them (`LEADSCORE_PHASE_PENDING`). See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),

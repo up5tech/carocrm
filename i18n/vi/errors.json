@@ -34,5 +34,7 @@
   "LEADSCORE_MODEL_IMMUTABLE": "Phiên bản mô hình Lead Score đã phát hành không thể sửa. Hãy tạo phiên bản mới.",
   "LEADSCORE_INVALID_STATE": "Hành động này không được phép với trạng thái hiện tại của mô hình Lead Score.",
   "LEADSCORE_DRAFT_EXISTS": "Đã có một bản nháp cho mô hình Lead Score này.",
-  "LEADSCORE_NO_ACTIVE_MODEL": "Chưa có mô hình Lead Score đã phát hành nào đang hoạt động, nên không thể tính điểm Lead. Hãy phát hành một mô hình và chọn nó trong cấu hình Lead Score."
+  "LEADSCORE_NO_ACTIVE_MODEL": "Chưa có mô hình Lead Score đã phát hành nào đang hoạt động, nên không thể tính điểm Lead. Hãy phát hành một mô hình và chọn nó trong cấu hình Lead Score.",
+  "LEADSCORE_PREVIEW_STALE": "Bản xem trước chuyển đổi này không còn mô tả đúng Lead. Hãy xem trước lại trước khi chuyển đổi.",
+  "LEADSCORE_TARGET_DISABLED": "Đích chuyển đổi này chưa được bật trên hệ thống, hoặc phần triển khai của nó chưa có."
 }

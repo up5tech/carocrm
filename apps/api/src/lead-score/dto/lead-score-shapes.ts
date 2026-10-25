@@ -4,6 +4,7 @@ import { MAX_HISTORY_PAGE } from '../lead-score-explanation.service.js';
 import { LEADSCORE_OPERATIONS } from '../lead-score-feature-gate.service.js';
 import { MAX_PREVIEW_SAMPLE } from '../lead-score-preview.service.js';
 import { MAX_BATCH_CHUNK, MAX_BATCH_TOTAL } from '../lead-score-recalculation.service.js';
+import { CONVERSION_TARGETS } from '../lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.1 — request shapes (`PLAN_Phase_19_LeadScore.md` §8.4, §16 `19-LS.1`; AGENTS.md §5.4).
@@ -12,8 +13,9 @@ import { MAX_BATCH_CHUNK, MAX_BATCH_TOTAL } from '../lead-score-recalculation.se
  * name cannot be stored and quietly do nothing. The controller parses shape only; policy lives in the
  * settings service and the gate.
  *
- * No shape here carries a Lead id, a record body or a credential — a score model may not become an
- * export path around Lead ACL (plan §9.2), and this module holds no secret to leak.
+ * No shape here carries a record body or a credential — a score model may not become an export path
+ * around Lead ACL (plan §9.2), and this module holds no secret to leak. A shape that names a Lead names
+ * its **id** and nothing more.
  */
 
 /**
@@ -227,3 +229,36 @@ export const LeadChangedSchema = z
  * cannot be turned into one.
  */
 export const ConversionCandidatesSchema = z.object({ leadId: LeadIdSchema }).strict();
+
+/**
+ * Ask what a conversion would do (19-LS.12, contract §8.1).
+ *
+ * Every choice is a *type plus a create-or-link decision*, and the shapes are strict for the same reason the
+ * settings patch is: a misspelled `existingId` must be a refusal, not a link that silently created a record.
+ * The target list is bounded by the vocabulary, the merge list is bounded by a constant, and the two
+ * revision pins are optional — omitting them means "the current state", while sending one is how a client
+ * asks the server to confirm the preview it is holding is still true.
+ */
+export const ConversionPreviewSchema = z
+  .object({
+    leadId: LeadIdSchema,
+    targets: z
+      .array(
+        z
+          .object({
+            type: z.enum(CONVERSION_TARGETS),
+            action: z.enum(['create', 'link']),
+            existingId: z.string().trim().min(1).max(64).optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(CONVERSION_TARGETS.length),
+    fieldMerge: z
+      .array(z.object({ target: z.enum(CONVERSION_TARGETS), field: z.string().trim().min(1).max(64), value: z.unknown() }).strict())
+      .max(20)
+      .optional(),
+    expectedLeadRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+    mappingVersion: z.number().int().min(1).max(1_000_000).optional(),
+  })
+  .strict();

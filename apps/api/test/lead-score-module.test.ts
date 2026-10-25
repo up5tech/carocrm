@@ -202,6 +202,9 @@ describe('module registration and health (19-LS.1)', () => {
       // 19-LS.11 delivered duplicate review, so its switch is live and its operation admitted once the
       // module is on.
       'duplicateDetection',
+      // 19-LS.12 delivered the field map and the preview together.
+      'fieldMapping',
+      'conversionPreview',
     ]);
     expect(body.features.filter((feature) => !feature.implemented).every((feature) => feature.pendingPhase !== null)).toBe(true);
     expect(body.operations.every((operation) => operation.admitted === false)).toBe(true);
@@ -253,6 +256,7 @@ describe('module registration and health (19-LS.1)', () => {
     expect(Object.keys(paths['/api/v1/LeadScore/action/operation-gate'] ?? {})).toContain('post');
     // 19-LS.11's door, in the spec like every other command.
     expect(Object.keys(paths['/api/v1/LeadScore/action/conversion/candidates'] ?? {})).toContain('post');
+    expect(Object.keys(paths['/api/v1/LeadScore/action/conversion/preview'] ?? {})).toContain('post');
   });
 
   it('serves its routes under a static prefix instead of being read as an entity', async () => {
@@ -336,8 +340,8 @@ describe('settings document (19-LS.1)', () => {
     // `pendingPhase`, so a feature that ships without its row being flipped fails here rather than lying in
     // the settings screen.
     const pending = view.pendingFeatures.map((entry) => entry.key);
-    expect(pending).toEqual(expect.arrayContaining(['fieldMapping', 'leadConversion', 'aiInsight']));
-    for (const shipped of ['eventRecalculation', 'batchRecalculation', 'thresholdNotifications', 'engagementSignals', 'scoring', 'scoringPreview', 'modelAdministration', 'duplicateDetection']) {
+    expect(pending).toEqual(expect.arrayContaining(['leadConversion', 'conversionRecovery', 'opportunityConversion', 'aiInsight']));
+    for (const shipped of ['eventRecalculation', 'batchRecalculation', 'thresholdNotifications', 'engagementSignals', 'scoring', 'scoringPreview', 'modelAdministration', 'duplicateDetection', 'fieldMapping', 'conversionPreview']) {
       expect(pending, shipped).not.toContain(shipped);
     }
   });
@@ -360,7 +364,7 @@ describe('settings document (19-LS.1)', () => {
     const before = await call('GET', '/api/v1/LeadScore/action/settings');
     const beforeVersion = before.body['version'] as number;
 
-    const updated = await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { fieldMapping: true } });
+    const updated = await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { leadConversion: true } });
     expect(updated.status).toBe(200);
     const view = updated.body as unknown as {
       version: number;
@@ -372,14 +376,14 @@ describe('settings document (19-LS.1)', () => {
     };
     expect(view.version).toBe(beforeVersion + 1);
     expect(view.settings.enabled).toBe(true);
-    expect(view.settings.features.fieldMapping).toBe(true);
+    expect(view.settings.features.leadConversion).toBe(true);
     // The switch is on, the phase is not delivered, so the effective answer stays false — and the document
     // says so out loud instead of letting an administrator believe duplicate review is live.
     // (`eventRecalculation` no longer earns this warning: 19-LS.6 shipped it, and a stored switch that now
     // really does mean something is tested in `lead-score-recalculation.test.ts`.)
-    expect(view.effective.fieldMapping).toBe(false);
+    expect(view.effective.leadConversion).toBe(false);
     expect(view.warnings.map((warning) => warning.code)).toContain('phasePending');
-    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('19-LS.12');
+    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('19-LS.13');
     expect(view.updatedAt).not.toBeNull();
     expect(view.updatedBy).not.toBeNull();
 
@@ -393,9 +397,10 @@ describe('feature gate (19-LS.1)', () => {
   it('refuses an operation whose sub-phase has not shipped, naming the phase', async () => {
     expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true })).status).toBe(200);
 
+    // 19-LS.12 shipped the preview, so the pending example moved to the two operations 19-LS.13 owes.
     for (const [operation, phase] of [
-      ['conversionPreview', '19-LS.12'],
       ['conversionExecute', '19-LS.13'],
+      ['conversionRetry', '19-LS.13'],
       ['aiInsight', '19-LS.17'],
     ] as const) {
       const result = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });
@@ -413,7 +418,7 @@ describe('feature gate (19-LS.1)', () => {
       expect(assessment.code).toBe('LEADSCORE_PHASE_PENDING');
       expect(assessment.pendingPhase).toBe(phase);
       expect(assessment.detail).toBe(phase);
-      expect(assessment.writes).toBe(operation === 'conversionExecute' || operation === 'aiInsight');
+      expect(assessment.writes).toBe(operation === 'conversionExecute' || operation === 'conversionRetry' || operation === 'aiInsight');
     }
 
     // A caller without the right learns only that it is denied — never the deployment state behind it.

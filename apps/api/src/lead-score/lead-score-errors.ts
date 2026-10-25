@@ -123,3 +123,40 @@ export function leadScoreNoActiveModelError(state: 'unset' | 'missing' | 'notPub
     { state, ...(modelId !== undefined ? { modelId } : {}), ...(modelStatus !== undefined ? { modelStatus } : {}) },
   );
 }
+
+/**
+ * A conversion target this installation will not build (19-LS.12, contract §5.2).
+ *
+ * 422, not 403: the caller may be perfectly entitled — the *configuration* says this target does not exist
+ * here, or its phase has not shipped. The two are separated in `state` because one has a fix an operator can
+ * apply on this screen and the other has only time.
+ */
+export function leadScoreTargetDisabledError(target: string, state: 'notEnabled' | 'pending', pendingPhase?: string): LeadScoreError {
+  const message =
+    state === 'pending'
+      ? `Converting a Lead to "${target}" is implemented in ${String(pendingPhase ?? 'a later sub-phase')}, so it cannot be built yet.`
+      : `"${target}" is not an enabled conversion target on this instance.`;
+  return new LeadScoreError('LEADSCORE_TARGET_DISABLED', message, { target, state, ...(pendingPhase === undefined ? {} : { pendingPhase }) }, 422);
+}
+
+/** Which part of a preview fingerprint no longer matches the server's answer (contract §8.3). */
+export type PreviewStaleComponent = 'revision' | 'mapping' | 'targets' | 'readerScope' | 'confirmation' | 'hash';
+
+/**
+ * A preview the caller is holding is out of date, and the fix is to take it again.
+ *
+ * The answer names *which* component moved so the wizard can say "the Lead changed" rather than "try again",
+ * and it never carries a value: a stale preview is a statement about the operation, not about the record.
+ */
+export function leadScorePreviewStaleError(leadId: string, component: PreviewStaleComponent, numbers: { expected?: number; current?: number } = {}): LeadScoreError {
+  return new LeadScoreError(
+    'LEADSCORE_PREVIEW_STALE',
+    'This conversion preview no longer describes the Lead, so it has to be taken again before anything is written.',
+    {
+      leadId,
+      component,
+      ...(numbers.expected === undefined ? {} : { expected: numbers.expected }),
+      ...(numbers.current === undefined ? {} : { current: numbers.current }),
+    },
+  );
+}
