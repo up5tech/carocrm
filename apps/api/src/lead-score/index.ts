@@ -1,5 +1,6 @@
 import type { Provider, Type } from '@nestjs/common';
 
+import { LeadDuplicateResolver } from './lead-duplicate-resolver.js';
 import { LeadScoreController } from './lead-score.controller.js';
 import { LeadScoreCalculationService } from './lead-score-calculation.service.js';
 import { LeadScoreEditorService } from './lead-score-editor.js';
@@ -51,11 +52,20 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   // notification and one audit row inside the score transaction).
   LeadScoreSignalsService,
   LeadScoreThresholdService,
+  // 19-LS.11: the duplicate read (contacts and accounts under the caller's own ACL, counted not named).
+  LeadDuplicateResolver,
   // Needs the job row and the settings document, so it is registered with the services it reads.
   LeadScoreRecalculationService,
   LeadScoreModuleHealthService,
 ];
 
+export {
+  type DuplicateCandidate,
+  type DuplicateCandidatesView,
+  type DuplicateReason,
+  type DuplicateStageReason,
+  LeadDuplicateResolver,
+} from './lead-duplicate-resolver.js';
 export { LeadScoreController } from './lead-score.controller.js';
 export { LEADSCORE_SYSTEM_PRINCIPAL, runAsLeadScoreSystem } from './lead-score-authority.js';
 export {
@@ -227,11 +237,21 @@ export {
   CONVERSION_TARGETS,
   DECAY_POLICIES,
   DEFAULT_SCORE_SCALE,
+  domainOf,
   EVALUATION_RESULT_STATES,
   EVALUATION_STATUSES,
   EVALUATION_TRIGGERS,
+  FREE_MAIL_DOMAINS,
+  isFreeMailDomain,
+  MAX_DUPLICATE_CANDIDATES,
+  MAX_PHONE_DIGITS,
+  MIN_PHONE_DIGITS,
   MISSING_DATA_POLICIES,
   MODEL_STATUSES,
+  normalizedEmail,
+  normalizedName,
+  PHONE_MATCH_TAIL_DIGITS,
+  phoneMatchTail,
   RULE_DIMENSIONS,
   RULE_EFFECTS,
   RULE_OUTCOMES,

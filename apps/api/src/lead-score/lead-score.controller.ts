@@ -8,7 +8,8 @@ import type { ZodTypeAny } from 'zod';
 import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
-import { BatchRecalculateSchema, EditorCatalogQuerySchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { BatchRecalculateSchema, ConversionCandidatesSchema, EditorCatalogQuerySchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { LeadDuplicateResolver } from './lead-duplicate-resolver.js';
 import { runAsLeadScoreSystem } from './lead-score-authority.js';
 import { LeadScoreCalculationService } from './lead-score-calculation.service.js';
 import { LeadScoreEditorService } from './lead-score-editor.js';
@@ -55,6 +56,7 @@ export class LeadScoreController {
     @Inject(LeadScoreExplanationService) private readonly explanation: LeadScoreExplanationService,
     @Inject(LeadScoreRecalculationService) private readonly recalculation: LeadScoreRecalculationService,
     @Inject(LeadScoreEditorService) private readonly editor: LeadScoreEditorService,
+    @Inject(LeadDuplicateResolver) private readonly duplicates: LeadDuplicateResolver,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
   ) {}
@@ -241,6 +243,26 @@ export class LeadScoreController {
   async previewModel(@Body() body: unknown) {
     const input = this.parse(ModelPreviewSchema, body);
     return this.preview.preview(input.modelId, input.leadIds, input.maxSize);
+  }
+
+  // ---------------------------------------------------------------------------
+  // conversion candidates (19-LS.11)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Who this Lead may already be: exact e-mail, phone, Account domain and Account company matches, under
+   * the caller's own ACL, plus a count of the matches they may not see.
+   *
+   * The answer is a *question*, never an action: nothing here links, merges or writes, and
+   * `requiresChoice` with `allowedDecisions` is what LS.12's preview and LS.13's command demand an answer
+   * to. `hiddenMatches` exists so a caller knows their view is incomplete without learning what is
+   * missing — the Voice contact resolver's precedent, for the same reason (plan §7.1, §7.3, §9.2).
+   */
+  @HttpCode(200)
+  @Post('action/conversion/candidates')
+  async conversionCandidates(@Body() body: unknown) {
+    const input = this.parse(ConversionCandidatesSchema, body);
+    return this.duplicates.candidates(input.leadId);
   }
 
   /**

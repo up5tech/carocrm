@@ -213,3 +213,17 @@ export const LeadChangedSchema = z
     changed: z.array(z.string().trim().min(1).max(64)).max(512),
   })
   .strict();
+
+// ---------------------------------------------------------------------------
+// Phase 19-LS.11 — duplicate candidate review (plan §7.3, §9.2; contract §9)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ask who this Lead may already be.
+ *
+ * One Lead per call, and the Lead is the only input: a caller cannot name a stage, a limit or a wider
+ * search, because the bounds belong to the answer (contract §9.4, §12.3). A candidate list for a *set* of
+ * Leads would be a searchable map of who-knows-whom across the database, and this endpoint deliberately
+ * cannot be turned into one.
+ */
+export const ConversionCandidatesSchema = z.object({ leadId: LeadIdSchema }).strict();

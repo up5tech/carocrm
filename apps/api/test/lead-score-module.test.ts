@@ -165,7 +165,9 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.module.id).toBe('LeadScore');
     expect(body.module.apiPrefix).toBe('/api/v1/LeadScore');
     expect(body.module.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6']);
+    // 19-LS.7–19-LS.11 added themselves here when they shipped; the list is the descriptor's claim about
+    // what exists, so a phase that forgets it is a lie the health view repeats.
+    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11']);
 
     // Every required capability is a fact the view verified against this database, not a claim.
     expect(body.dependencies.every((dependency) => dependency.present)).toBe(true);
@@ -197,6 +199,9 @@ describe('module registration and health (19-LS.1)', () => {
       'batchRecalculation',
       'thresholdNotifications',
       'engagementSignals',
+      // 19-LS.11 delivered duplicate review, so its switch is live and its operation admitted once the
+      // module is on.
+      'duplicateDetection',
     ]);
     expect(body.features.filter((feature) => !feature.implemented).every((feature) => feature.pendingPhase !== null)).toBe(true);
     expect(body.operations.every((operation) => operation.admitted === false)).toBe(true);
@@ -246,6 +251,8 @@ describe('module registration and health (19-LS.1)', () => {
     expect(Object.keys(paths['/api/v1/LeadScore/action/permissions'] ?? {})).toContain('get');
     expect(Object.keys(paths['/api/v1/LeadScore/action/settings'] ?? {}).sort()).toEqual(['get', 'post']);
     expect(Object.keys(paths['/api/v1/LeadScore/action/operation-gate'] ?? {})).toContain('post');
+    // 19-LS.11's door, in the spec like every other command.
+    expect(Object.keys(paths['/api/v1/LeadScore/action/conversion/candidates'] ?? {})).toContain('post');
   });
 
   it('serves its routes under a static prefix instead of being read as an entity', async () => {
@@ -329,8 +336,8 @@ describe('settings document (19-LS.1)', () => {
     // `pendingPhase`, so a feature that ships without its row being flipped fails here rather than lying in
     // the settings screen.
     const pending = view.pendingFeatures.map((entry) => entry.key);
-    expect(pending).toEqual(expect.arrayContaining(['duplicateDetection', 'leadConversion', 'aiInsight']));
-    for (const shipped of ['eventRecalculation', 'batchRecalculation', 'thresholdNotifications', 'engagementSignals', 'scoring', 'scoringPreview', 'modelAdministration']) {
+    expect(pending).toEqual(expect.arrayContaining(['fieldMapping', 'leadConversion', 'aiInsight']));
+    for (const shipped of ['eventRecalculation', 'batchRecalculation', 'thresholdNotifications', 'engagementSignals', 'scoring', 'scoringPreview', 'modelAdministration', 'duplicateDetection']) {
       expect(pending, shipped).not.toContain(shipped);
     }
   });
@@ -353,7 +360,7 @@ describe('settings document (19-LS.1)', () => {
     const before = await call('GET', '/api/v1/LeadScore/action/settings');
     const beforeVersion = before.body['version'] as number;
 
-    const updated = await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { duplicateDetection: true } });
+    const updated = await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { fieldMapping: true } });
     expect(updated.status).toBe(200);
     const view = updated.body as unknown as {
       version: number;
@@ -365,14 +372,14 @@ describe('settings document (19-LS.1)', () => {
     };
     expect(view.version).toBe(beforeVersion + 1);
     expect(view.settings.enabled).toBe(true);
-    expect(view.settings.features.duplicateDetection).toBe(true);
+    expect(view.settings.features.fieldMapping).toBe(true);
     // The switch is on, the phase is not delivered, so the effective answer stays false — and the document
     // says so out loud instead of letting an administrator believe duplicate review is live.
     // (`eventRecalculation` no longer earns this warning: 19-LS.6 shipped it, and a stored switch that now
     // really does mean something is tested in `lead-score-recalculation.test.ts`.)
-    expect(view.effective.duplicateDetection).toBe(false);
+    expect(view.effective.fieldMapping).toBe(false);
     expect(view.warnings.map((warning) => warning.code)).toContain('phasePending');
-    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('19-LS.11');
+    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('19-LS.12');
     expect(view.updatedAt).not.toBeNull();
     expect(view.updatedBy).not.toBeNull();
 

@@ -256,7 +256,11 @@ export const LEADSCORE_FEATURES: readonly LeadScoreFeatureDescriptor[] = [
   // 19-LS.9 reads Marketing Automation's delivery table for the engagement a rule names, bounded by the
   // rule's own window. Absent or off, the rules skip and the score still computes (plan §16 `19-LS.9`).
   { key: 'engagementSignals', label: 'Marketing engagement signals', settingsPath: 'features.engagementSignals', requires: ['scoring'], pendingPhase: null },
-  { key: 'duplicateDetection', label: 'Duplicate candidate review', settingsPath: 'features.duplicateDetection', requires: [], pendingPhase: '19-LS.11' },
+  // 19-LS.11 delivered the resolver: exact e-mail/phone/domain/company stages under the caller's own ACL,
+  // with a count — never a name — of the matches they may not see. No similarity stage shipped, because a
+  // bounded suggestion needs an indexed path this schema does not have (contract §9.4); LS.18's query check
+  // owns that decision.
+  { key: 'duplicateDetection', label: 'Duplicate candidate review', settingsPath: 'features.duplicateDetection', requires: [], pendingPhase: null },
   { key: 'fieldMapping', label: 'Conversion field mapping', settingsPath: 'features.fieldMapping', requires: [], pendingPhase: '19-LS.12' },
   { key: 'conversionPreview', label: 'Conversion preview', settingsPath: 'features.conversionPreview', requires: ['fieldMapping'], pendingPhase: '19-LS.12' },
   { key: 'leadConversion', label: 'Lead conversion', settingsPath: 'features.leadConversion', requires: ['conversionPreview'], pendingPhase: '19-LS.13' },
@@ -376,8 +380,14 @@ export const LEADSCORE_MODULE = {
   loadOrder: 395,
   apiPrefix: '/api/v1/LeadScore',
   settingsRow: LEADSCORE_SETTINGS_ROW,
-  /** Sub-phases delivered by this module. */
-  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6'],
+  /**
+   * Sub-phases delivered by this module.
+   *
+   * Corrected in 19-LS.11: this field stopped at LS.6 while LS.7–LS.10 had shipped, so the descriptor told a
+   * reader that the card, the model workspace, the engagement read and the conversion contract did not exist.
+   * The module-health view renders it, which makes it a claim rather than a changelog.
+   */
+  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11'],
   /**
    * The entity set this module owns, registered in `database/seed-metadata.ts` and indexed by
    * `database/migrations/073_phase19_lead_score.sql`. One list, shared with the write guard, so the

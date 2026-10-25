@@ -627,6 +627,26 @@ No unique constraint is added on email or phone at any point in LS.11–LS.16 (d
 legitimately shared (households, `info@`, one company's staff), and the current data has no such index
 (§1.4 verified).
 
+> **Delivered in 19-LS.11** (`apps/api/src/lead-score/lead-duplicate-resolver.ts`), with three refinements
+> this contract's §9.1–§9.4 anticipated but had not sharpened:
+>
+> 1. **Stage 2's key is the last nine significant digits**, not `phoneMatchKeys`'s exact international/national
+>    forms. §1.4 already recorded *why* (a Lead carries no region), and the tail is the form that survives
+>    `+84 912 345 678`, `0912 345 678` and `(091) 234-5678` at once; the documented collision cost — two
+>    numbers in different countries sharing a tail — is unchanged and still only produces a candidate.
+> 2. **Stage 4 compares the `name` column, not `attrs->>'name'`.** `name` is physical (LS.2), so the attribute
+>    form matched nothing; the SQL folds the column with `'[[:space:]]+'` to mirror `normalizedName` exactly.
+>    (The same class of mistake in the `label` — a display value read from `attrs` — silently dropped every
+>    candidate until the organization test caught it.)
+> 3. **§9.4's "bounded or absent" resolved to absent.** No similarity stage ships: the only trigram indexes in
+>    this schema key on field names that do not exist (`008_phase12.sql:8-22`), so a suggestion pass would be a
+>    full scan; LS.18's query check owns whether an index is worth adding. The contract's own wording allowed
+>    this, and it is recorded rather than left implicit.
+>
+> The request surface is a plan addition, not a deviation: `POST /api/v1/LeadScore/action/conversion/candidates`
+> with `{leadId}` (§2's route family, one Lead per call), because a candidate list for a *set* of Leads would be
+> a searchable map of who-knows-whom across the database.
+
 ---
 
 ## 10. Failure, recovery and what never happens

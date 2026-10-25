@@ -55,6 +55,9 @@ export const LEADSCORE_OPERATIONS = [
   'createModelVersion',
   'previewModel',
   'publishModel',
+  // 19-LS.11: the first conversion door — who might this Lead already be. Its own operation, because an
+  // installation may want duplicate review off while the rest of the module is on.
+  'duplicateCheck',
   'conversionPreview',
   'conversionExecute',
   'conversionRetry',
@@ -98,6 +101,10 @@ const OPERATION_RULES: Readonly<Record<LeadScoreOperation, OperationRule>> = {
   // and it is the only door the engine opens until 19-LS.5 keeps a score.
   previewModel: { capability: 'modelManage', feature: 'scoringPreview', writes: false },
   publishModel: { capability: 'modelPublish', feature: 'modelAdministration', writes: true },
+  // 19-LS.11: a read of other records under the caller's own ACL. It shares `convertPreview`'s capability —
+  // looking at candidates is part of deciding to convert — but its own switch, so review can be turned off
+  // without turning off the preview, and vice versa.
+  duplicateCheck: { capability: 'convertPreview', feature: 'duplicateDetection', writes: false },
   conversionPreview: { capability: 'convertPreview', feature: 'conversionPreview', writes: false },
   conversionExecute: { capability: 'convertExecute', feature: 'leadConversion', writes: true },
   conversionRetry: { capability: 'conversionRecover', feature: 'conversionRecovery', writes: true },

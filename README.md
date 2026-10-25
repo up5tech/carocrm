@@ -139,7 +139,14 @@ _Phase 19_ —
   includes the actor's own field visibility, duplicate stages built on seams that already exist rather than a
   new normalizer, and the accounting rule a retry may not skip — in
   [docs/implementation/lead-score-conversion-contract.md](docs/implementation/lead-score-conversion-contract.md).
-  The code is owed by 19-LS.11–LS.16, and those operations
+  19-LS.11 then built the first piece of it: `POST action/conversion/candidates` answers *who this Lead may
+  already be* — exact e-mail, phone (the same number written `+84 912 345 678`, `0912 345 678` or
+  `(091) 234-5678` is one number), Account domain and Account company name — under the caller's own record and
+  field ACL, with `hiddenMatches` as a **count** of the records they may not read and `requiresChoice` plus
+  `allowedDecisions` as the question the preview and the convert command will insist on. It writes nothing,
+  suggests nothing it cannot show, and ships no fuzzy stage: the trigram indexes this schema has key on field
+  names that do not exist, so a similarity pass would be a full scan, which LS.18's query check owns. The rest
+  of the code is owed by 19-LS.12–LS.16, and those operations
   refuse with the sub-phase that owes them (`LEADSCORE_PHASE_PENDING`). See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),

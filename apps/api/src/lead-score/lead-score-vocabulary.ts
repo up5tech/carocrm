@@ -232,3 +232,116 @@ export type RuleOutcome = (typeof RULE_OUTCOMES)[number];
 
 /** The score scale's default bounds; a model may configure others but the UI always shows them (§3.1). */
 export const DEFAULT_SCORE_SCALE = { min: 0, max: 100 } as const;
+
+// ---------------------------------------------------------------------------
+// conversion duplicates (19-LS.11) — contract §9
+// ---------------------------------------------------------------------------
+
+/**
+ * How many candidates the answer carries, and how many rows one stage may read.
+ *
+ * Both are module constants rather than request parameters: a caller cannot widen a scan of records it
+ * may not see beyond the point where the count stops being a candidate list and starts being an export
+ * (plan §9.4's "bound duplicate candidate limits", §14.2's "bound candidate search result sets").
+ */
+export const MAX_DUPLICATE_CANDIDATES = 10;
+export const MAX_DUPLICATE_SCAN = 25;
+
+/** Phone digits accepted before a value is searchable at all (`normalizePhone`'s own 7–15 rule). */
+export const MIN_PHONE_DIGITS = 7;
+export const MAX_PHONE_DIGITS = 15;
+/**
+ * How many trailing digits two numbers must share to be the same number for *candidate* purposes.
+ *
+ * A Lead carries no country, so an exact E.164 comparison is not available (contract §1.4): the tail is
+ * what survives a trunk prefix, a `+84`/`0` spelling and a formatting difference. Nine digits can collide
+ * across countries, and that is accepted, because a collision can only produce a candidate a person must
+ * accept — never a link (contract §9.1, plan §7.3).
+ */
+export const PHONE_MATCH_TAIL_DIGITS = 9;
+
+/**
+ * Mailbox providers whose domain is a *person's*, never an organization's.
+ *
+ * A free-mail domain must not make two records "same organization" (contract §9.3). The list is data, not
+ * a heuristic, so an operator review (LS.18) can see exactly what is excluded.
+ */
+export const FREE_MAIL_DOMAINS: readonly string[] = [
+  'aol.com',
+  'gmail.com',
+  'googlemail.com',
+  'gmx.com',
+  'gmx.net',
+  'hotmail.co.uk',
+  'hotmail.com',
+  'icloud.com',
+  'live.com',
+  'mail.com',
+  'mail.ru',
+  'me.com',
+  'msn.com',
+  'outlook.com',
+  'proton.me',
+  'protonmail.com',
+  'qq.com',
+  'yahoo.co.uk',
+  'yahoo.com',
+  'yandex.com',
+  'yandex.ru',
+  'zoho.com',
+  '163.com',
+  '126.com',
+];
+
+/** An e-mail as a comparison key: trimmed and case-folded, or `null` when it is not shaped like one. */
+export function normalizedEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) ? trimmed : null;
+}
+
+/** A name as a comparison key: trimmed, case-folded, inner whitespace collapsed. */
+export function normalizedName(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const collapsed = value.trim().replace(/\s+/g, ' ').toLowerCase();
+  return collapsed === '' ? null : collapsed;
+}
+
+/** The last {@link PHONE_MATCH_TAIL_DIGITS} significant digits of a phone value, or `null`. */
+export function phoneMatchTail(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const digits = value.replace(/[^0-9]/g, '');
+  if (digits.length < MIN_PHONE_DIGITS || digits.length > MAX_PHONE_DIGITS) return null;
+  // A leading `0` is trunk-prefix notation, the same rule `normalizePhone` applies (voice-number §7.1).
+  const significant = digits.replace(/^0+/, '');
+  return significant === '' ? null : significant.slice(-PHONE_MATCH_TAIL_DIGITS);
+}
+
+const DOMAIN_SHAPE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+const IPV4_SHAPE = /^[0-9]{1,3}(?:\.[0-9]{1,3}){3}$/;
+
+/**
+ * The host of a URL or the domain of an e-mail address, in one shape, or `null`.
+ *
+ * Nothing else in this repository derives a domain (contract §1.4), so this is the module's own rule and
+ * it is deliberately strict: a scheme is stripped, a leading `www.` is stripped, the path/query/port are
+ * cut, the result is case-folded, and an IP literal or a bare word is refused rather than matched. The
+ * SQL side in `lead-duplicate-resolver.ts` mirrors this expression exactly — a divergence here would
+ * turn "same domain" into "same string", which is a different claim.
+ */
+export function domainOf(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  let text = value.trim().toLowerCase();
+  if (text === '') return null;
+  const at = text.lastIndexOf('@');
+  if (at >= 0) text = text.slice(at + 1);
+  else text = text.replace(/^[a-z][a-z0-9+.-]*:\/\//, '').replace(/^www\./, '');
+  text = text.split('/')[0]?.split('?')[0]?.split('#')[0]?.split(':')[0] ?? '';
+  if (text === '' || IPV4_SHAPE.test(text) || !DOMAIN_SHAPE.test(text)) return null;
+  return text;
+}
+
+/** Whether a domain belongs to a personal mailbox rather than an organization (contract §9.3). */
+export function isFreeMailDomain(domain: string | null): boolean {
+  return domain !== null && FREE_MAIL_DOMAINS.includes(domain);
+}
