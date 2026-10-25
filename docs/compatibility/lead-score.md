@@ -14,8 +14,9 @@
 > 19-LS.7 put it on the Lead, 19-LS.8 put the model behind an administrator's form and 19-LS.9 gave the score a
 > second input and a voice, 19-LS.10 wrote the **conversion contract** without writing conversion behavior,
 > 19-LS.11 answered *who this Lead may already be*, 19-LS.12 turned the contract's map and preview into code,
-> 19-LS.13 made the conversion run, 19-LS.14 put it on the Lead as a wizard and 19-LS.15 verified what it does
-> to the record's history; LS.16 and later are not implemented.** A model can be configured, validated,
+> 19-LS.13 made the conversion run, 19-LS.14 put it on the Lead as a wizard, 19-LS.15 verified what it does
+> to the record's history and 19-LS.16 completed the target set with the optional Opportunity; LS.17–LS.18 are
+> not implemented.** A model can be configured, validated,
 > published, frozen and previewed
 > without writing anything; **recalculated per Lead** (evaluation row and the Lead's current-score projection
 > stored together, both readable with an explanation and a freshness verdict); and now **scored without
@@ -27,18 +28,21 @@
 > `leadScore.updated.v1` always, `leadScore.bandChanged.v1` on a crossing, one notification for the Lead's
 > owner and one `leadScore.thresholdAction` audit row — the last two keyed by a digest of the crossing itself, so
 > a duplicate delivery cannot double-notify. An engagement source that is absent or switched off does not fail a
-> score: those rules skip, and the evaluation says which of the four states produced the answer. What is still
-> absent is conversion *itself* — 19-LS.10 decided its contract (state machine, combination matrix, mapping
-> policy, recovery semantics) in `docs/implementation/lead-score-conversion-contract.md`, 19-LS.11 built the
-> duplicate resolver, 19-LS.12 the field map and the side-effect-free preview (values, skipped fields, required
-> gaps, before/after conflicts, a `previewHash` over the Lead revision, the versions, the merges and the reader's
-> own field visibility), 19-LS.13 the command that runs it — one transaction, one operation row, one answer a
-> retry can replay — and 19-LS.14 the screen: a Targets/Review/Result wizard that only offers what the server's
-> preview says, and a `Converted To` panel that shows what was made. 19-LS.15–LS.16 owe
-> the code, each refused with the sub-phase that owes it.
+> score: those rules skip, and the evaluation says which of the four states produced the answer. Conversion
+> exists end to end: 19-LS.10 decided its contract (state machine, combination matrix, mapping policy, recovery
+> semantics) in `docs/implementation/lead-score-conversion-contract.md`, 19-LS.11 built the duplicate resolver,
+> 19-LS.12 the field map and the side-effect-free preview (values, skipped fields, required gaps, before/after
+> conflicts, a `previewHash` over the Lead revision, the versions, the merges and the reader's own field
+> visibility), 19-LS.13 the command that runs it — one transaction, one operation row, one answer a retry can
+> replay — and 19-LS.14 the screen: a Targets/Review/Result wizard that only offers what the server's preview
+> says, and a `Converted To` panel that shows what was made. 19-LS.16 added the third target to that same
+> command: an Opportunity created or linked with the operation's `accountId`, its `contactIds` **appended** to
+> rather than replaced, its name composed from the Lead, and Sales' stage/document semantics untouched. Only
+> 19-LS.17's AI fit insight and 19-LS.18's rollout verification remain; their switches refuse with the
+> sub-phase that owes them.
 > Canonical module name: `LeadScore` (no `Ua` prefix). API prefix: `/api/v1/lead-score` plus
 > `/api/v1/leads/:leadId/{score,conversion-preview,convert}` semantics — realized, per §2.5, as
-> `LeadScore/action/score/*` (delivered) and `LeadScore/action/conversion/*` (contracted for LS.12/LS.13).
+> `LeadScore/action/score/*` and `LeadScore/action/conversion/*` (both delivered).
 > Baseline reference re-checked against public EspoCRM documentation on **2026-10-24**
 > (Sales Management / Leads and converting). Re-verify and update the date whenever a later
 > sub-phase changes a documented behavior.
@@ -54,8 +58,8 @@ the compatibility baseline.
 | Item | Documented baseline | This repository |
 | --- | --- | --- |
 | Lead lifecycle | Lead has a `Converted` status among its status options | **Matches.** `Lead.status` enum is `New, Assigned, In Process, Converted, Dead` with default `New` — `database/seed-metadata.ts:250-257`. No status value is added, renamed or repurposed by `LeadScore` |
-| Convert action | A conversion form lets the user pick target record types — Account, Contact and/or Opportunity | **Contract (LS.12–LS.14).** The wizard offers exactly the combinations in §4; nothing hidden client-side, the backend re-validates every choice |
-| Converted Lead | The Lead stays in the system with `Converted` status and references to the records created/linked, shown in a "Converted To" panel | **Contract (LS.13).** The Lead row is never mutated into another entity type and never deleted; references are `convertedAccountId` / `convertedContactId` / `convertedOpportunityId` / `conversionOperationId` / `convertedAt` / `convertedById` (§5.3) |
+| Convert action | A conversion form lets the user pick target record types — Account, Contact and/or Opportunity | **Delivered (LS.14, extended in LS.16).** The wizard offers exactly the combinations in §4 — its rows come from the server's `targets` answer — and the backend re-validates every choice |
+| Converted Lead | The Lead stays in the system with `Converted` status and references to the records created/linked, shown in a "Converted To" panel | **Delivered (LS.13).** The Lead row is never mutated into another entity type and never deleted; references are `convertedAccountId` / `convertedContactId` / `convertedOpportunityId` / `conversionOperationId` / `convertedAt` / `convertedById` (§5.3) |
 | B2C mode | When the installation runs in B2C ("no company") mode, conversion **to Account** is not available | **Intentional deviation — see §2.1.** No B2B/B2C mode exists in this build, so the equivalent control is the module setting `conversion.targets` |
 | Lead scoring | **No lead scoring is documented** in the reference baseline product's user guide | **Extension, not compatibility surface.** Everything in §3 is `LeadScore`-owned new behavior; it must never be described as upstream-compatible |
 | Web-to-Lead | Documented as an inbound lead-capture form producing a Lead | **Out of scope for LS.0–LS.18.** No web-to-lead endpoint exists in this build (verified negative finding). A captured Lead is scored/converted by the same rules as any other Lead once such capture exists |
@@ -103,6 +107,17 @@ core entity (`database/seed-metadata.ts:267-301`, only `name` required) and the 
 own it, so LS.16 implements it through the same conversion command rather than deferring it. Sales
 stage semantics and `SalesDocumentService.createFromOpportunity`
 (`apps/api/src/sales/document/document.service.ts:1257-1312`) are left entirely to Sales.
+
+**Delivered in 19-LS.16.** `Opportunity` is one more target on the same request: create needs
+`Opportunity:create` and the map's `createDefaults.name` template (`{{lastName}} — {{company}}`), link needs
+`Opportunity:read`, and either way the command sets `accountId` to the operation's Account and **appends** the
+Contact to `contactIds` (never replaces: another person on the deal may not even be readable to the converter).
+A linked deal whose Account would change shows the before/after in the preview (a read-only conflict — the opt-out
+is choosing the deal's own Account); a created deal is announced by `opportunity_created`. Its `stage` is the
+kernel default and its amount/close date/probability are not touched, and no Quote or other Sales document is
+rewritten. The affordance's `targets` list is what removes the row from the wizard when
+`features.opportunityConversion` is off; the preview refuses such a request with
+`LEADSCORE_TARGET_DISABLED {state:'notEnabled'}`.
 
 ### 2.5 Commands are module routes, not per-record paths
 
@@ -152,10 +167,10 @@ destructive Lead deletion after conversion, and any use of the score outside sal
 
 ### 4.1 Valid target combinations (backend-validated)
 
-> **Decided in 19-LS.10**, with the ACL / data / settings gate made explicit per row and two rules this table
-> did not carry (Opportunity's `accountId` is always set and its `contactIds` are **appended**, never replaced;
-> and one create-or-link decision per type, because `LeadConversionOperation` has one created/linked pair per
-> type): see `docs/implementation/lead-score-conversion-contract.md` §5.1, §6.
+> **Decided in 19-LS.10, implemented in 19-LS.13–LS.16**, with the ACL / data / settings gate made explicit per
+> row and two rules this table did not carry (Opportunity's `accountId` is always set and its `contactIds` are
+> **appended**, never replaced; and one create-or-link decision per type, because `LeadConversionOperation` has
+> one created/linked pair per type): see `docs/implementation/lead-score-conversion-contract.md` §5.1, §6.
 
 | Combination | Available when | Notes |
 | --- | --- | --- |
@@ -166,7 +181,7 @@ destructive Lead deletion after conversion, and any use of the score outside sal
 | Account + Contact | both enabled | Contact receives `accountId` (`database/seed-metadata.ts:238`) |
 | Contact + existing Account | both | user-confirmed relationship |
 | existing Contact + existing Account | both read/link | explicit confirmation required |
-| ± Opportunity | `Opportunity` enabled + its ACL | available for every combination above |
+| ± Opportunity | `Opportunity` enabled + its ACL | for every combination above (19-LS.16); create fills the required `name` from the map's template, either mode sets `accountId` and appends the Contact to `contactIds` |
 
 No invalid partial combination can reach the write layer: an unselected or hidden target is rejected
 server-side, not merely filtered in the UI.
@@ -287,8 +302,9 @@ target (`acl-api.service.ts:172`).
 > because they lose data silently, `enum → enum` because this build has no value map, `link` only into the same
 > entity). A changed map **must raise its `version`**, which is what the preview fingerprint and a stored
 > conversion name. `createDefaults` holds the one value no Lead field supplies — `Opportunity.name`, from the
-> template `{{lastName}} — {{company}}` — and the preview never proposes an Opportunity until 19-LS.16 makes
-> that target reachable. `Account.emailAddress`/`phoneNumber` are not in the map on purpose: they are added by
+> template `{{lastName}} — {{company}}` — and since 19-LS.16 the preview proposes an Opportunity whenever that
+> target is requested and its switch is effective, with `opportunity_created` among the confirmations for a
+> create. `Account.emailAddress`/`phoneNumber` are not in the map on purpose: they are added by
 > the preview as `contextual` entries only when the request creates **no** Contact (compat §4.1, contract §7.2).
 > The map has **no administration screen** yet; the settings document is the configuration surface.
 
@@ -372,4 +388,5 @@ Recorded here so no later phase silently invents behavior (plan §19's closing i
 | 19-LS.13 | `apps/api/test/lead-score-conversion.test.ts` (**17**, new); all fourteen LeadScore API files together (**302 passed / 0 failed**); full `npx vitest run` (**2,937 passed / 34 failed**, 205 files — the +17 is this suite, the 34 in the same seven pre-existing shared-state files, zero `lead-score` failures); worker suite (**210 / 0**, the recovery job registered); `npx playwright test e2e/lead-score-admin.spec.ts e2e/lead-score.spec.ts` — **9/9 on a clean run** (the settings screen renders the two newly-delivered switches), but the same pair run immediately after a fresh API build failed the **LS.8 version-diff** test in two consecutive attempts (8/9, 1.5 min for a suite that normally takes 30 s) and passed again when run alone; that test is not in this phase's code path and the same one flaked once in 19-LS.12, so it is recorded as an intermittent, load-sensitive failure that still needs a real diagnosis rather than a green tick; `npm run typecheck`; `npx eslint` on every touched path; `pnpm --filter @carocrm/api build`; no migration | green, and **both halves of the exit criterion are assertions over the public routes**: the same key replays the stored result with zero new targets and zero new events; a second key against a converted Lead is refused inside the work transaction and leaves the target counts unchanged; and **two keys fired at once produce exactly one 200, one Contact and one converted Lead**. The failure half: a stale fingerprint (`component: 'hash'`) and an unacknowledged set (`component: 'confirmation'`) are refused **with no operation row created**, while a refusal inside the work transaction is recorded (`failed_final` / `already_converted`) with the attempt's id. Recovery is asserted as a decision — a stale retry becomes `needs_review` / `stale` with the Lead untouched, the off-by-default scan settles a stuck row to `failed_retryable` / `interrupted` without touching the Lead, and close works exactly once. The permission change is asserted from both sides: a non-admin with `LeadConversionOperation` create+edit converts and is recorded as requester and as `convertedById`, and a role without the create grant is refused with nothing written. Four suites were retargeted rather than weakened (`lead-score-{module,schema,model}` for the delivered features/phases, and the worker job-registration test). No migration: the columns, the unique key and the schedule are LS.2's and the seed's |
 | 19-LS.14 | `e2e/lead-conversion.spec.ts` (**6** new Playwright tests: create, link, duplicate-override, stale-preview refresh, lost-response resume, phone/keyboard) and `apps/api/test/lead-score-conversion.test.ts` (**+3** affordance tests); all fourteen LeadScore API files together (**305 passed / 0 failed**); full `npx vitest run` (**2,941 passed / 33 failed**, 205 files — zero `lead-score` failures, the failures in the same seven pre-existing shared-state files); worker suite (**210 / 0**); the **three** LS Playwright specs together (**15 passed**, 46 s); `npm run typecheck`; `npx eslint` on every touched path; both builds; no migration | green, with the criterion checked on the screen rather than described: the review renders the server's preview (values, required gaps, skipped reasons, before/after conflicts with per-field merge opt-ins, duplicate candidates with the hidden-match count, the confirmations); confirming re-runs the preview and **re-shows it** when the fingerprint moved instead of converting a plan nobody saw; the result separates **Created** from **Linked** with links whose hrefs are the records the API made (asserted by reading them back); the metadata **`Converted To`** panel appears after a conversion; a duplicate refuses until the override box is ticked; and a lost response is resumed with the **same operation key**, still producing exactly one Contact. Residue: the operation rows a conversion writes are append-only, so the run's rows (and the targets the conversions created) were swept at the database level by run marker — 10 rows, 10 events and 21 records, with a final marker query empty |
 | 19-LS.15 | `apps/api/test/lead-score-conversion-history.test.ts` (**6** new API tests); the inventory and the deferral in `docs/implementation/lead-score-conversion-history.md`; **no production code changed**; all fifteen LeadScore files together (**311 passed / 0 failed**); full `npx vitest run` (**2,946 passed / 34 failed**, 206 files — zero `lead-score` failures, the 34 in the same seven pre-existing shared-state files); worker suite (**210 / 0**); `npm run typecheck`; `npx eslint` on the touched paths; no migration and no settings change | green, and the exit criterion is checked as a **count**, not a claim: e-mail links to the Lead unchanged and none to the new Contact; `Case.leadId` unchanged; the target-list entry still `Lead`/the Lead id; the consent row count, its `leadId` and its null `contactId` unchanged and no consent row naming the Contact; the attachment count, `parent_type`/`parent_id`/`storage_key` unchanged and nothing attached to the Contact; the Lead's `description`, e-mail and audit trail intact; and ownership/teams absent from the created records with a **404** for a reader who may read the Lead but not what it became. Two honest notes: the target-list fixture is written to the entity store rather than through MA's API because the MA `audience` switch is off here, and "notes" have no entity in this build (`activityRelations` has no `leads`), so there is nothing to preserve — stated, not faked |
-| 19-LS.16 … LS.18 | *not started* | each completion report must list the exact commands run and their outcomes before this table may claim support |
+| 19-LS.16 | `apps/api/test/lead-score-conversion.test.ts` (**+3**: Opportunity create, Opportunity link + Account disclosure, affordance `targets`) and one retargeted preview test; `e2e/lead-conversion.spec.ts` (**+1** browser test); all **15 LeadScore files together (314 passed / 0 failed)**; full `npx vitest run` (**2,949 passed / 34 failed**, 206 files — the 34 in the same seven pre-existing shared-state files and zero `lead-score` failures); worker suite (**210 / 0**); the **three** LS Playwright specs together (**16 passed**, 49 s); `npm run typecheck`; `npx eslint` on every touched path; both builds; no migration | green, and both halves of the exit criterion are read back from the API: a conversion that names all three targets creates the deal with the operation's `accountId` and the new Contact in `contactIds`, stores `convertedOpportunityId`, names `createdOpportunityId` in the operation **and** its audit view, leaves the stage at the kernel's `Qualification` and writes no amount/probability; a **linked** deal keeps its stage, amount and existing Contact (the new Contact is appended), moves to the chosen Account after the preview showed that as a **read-only before/after**, and a Quote that already named it keeps its `opportunityId`, `accountId` and `draft` state — Sales' document path was not touched. `opportunity_created` is an acknowledgement, and the wizard's rows come from the affordance's `targets` (`['Contact','Account']` while the switch is off, and the preview refuses the type as `notEnabled`). Residue: operation rows are append-only, so every run of the session was swept at the database level by the `E2E_LS14_` marker — 33 records, 18 operations and 18 events removed, final marker queries empty |
+| 19-LS.17 … LS.18 | *not started* | each completion report must list the exact commands run and their outcomes before this table may claim support |

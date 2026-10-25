@@ -165,9 +165,9 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.module.id).toBe('LeadScore');
     expect(body.module.apiPrefix).toBe('/api/v1/LeadScore');
     expect(body.module.version).toMatch(/^\d+\.\d+\.\d+$/);
-    // 19-LS.7–19-LS.11 added themselves here when they shipped; the list is the descriptor's claim about
+    // 19-LS.7–19-LS.16 added themselves here when they shipped; the list is the descriptor's claim about
     // what exists, so a phase that forgets it is a lie the health view repeats.
-    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13']);
+    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13', '19-LS.16']);
 
     // Every required capability is a fact the view verified against this database, not a claim.
     expect(body.dependencies.every((dependency) => dependency.present)).toBe(true);
@@ -202,11 +202,13 @@ describe('module registration and health (19-LS.1)', () => {
       // 19-LS.11 delivered duplicate review, so its switch is live and its operation admitted once the
       // module is on.
       'duplicateDetection',
-      // 19-LS.12 delivered the field map and the preview together, and 19-LS.13 the command built on them.
+      // 19-LS.12 delivered the field map and the preview together, 19-LS.13 the command built on them, and
+      // 19-LS.16 the optional Opportunity target inside the same command.
       'fieldMapping',
       'conversionPreview',
       'leadConversion',
       'conversionRecovery',
+      'opportunityConversion',
     ]);
     expect(body.features.filter((feature) => !feature.implemented).every((feature) => feature.pendingPhase !== null)).toBe(true);
     expect(body.operations.every((operation) => operation.admitted === false)).toBe(true);
@@ -337,13 +339,13 @@ describe('settings document (19-LS.1)', () => {
     expect(Object.values(view.settings.features).every((value) => value === false)).toBe(true);
     expect(Object.values(view.effective).every((value) => value === false)).toBe(true);
     expect(view.warnings.map((warning) => warning.code)).toContain('moduleDisabled');
-    // 19-LS.6 delivered both background paths and 19-LS.9 the engagement read and the threshold action, so
-    // the still-pending list starts at the conversion and insight phases. The list is derived from
-    // `pendingPhase`, so a feature that ships without its row being flipped fails here rather than lying in
-    // the settings screen.
+    // 19-LS.6 delivered both background paths, 19-LS.9 the engagement read and the threshold action and
+    // 19-LS.16 the third conversion target, so the still-pending list is the insight phase alone. The list is
+    // derived from `pendingPhase`, so a feature that ships without its row being flipped fails here rather
+    // than lying in the settings screen.
     const pending = view.pendingFeatures.map((entry) => entry.key);
-    expect(pending).toEqual(expect.arrayContaining(['opportunityConversion', 'aiInsight']));
-    for (const shipped of ['eventRecalculation', 'batchRecalculation', 'thresholdNotifications', 'engagementSignals', 'scoring', 'scoringPreview', 'modelAdministration', 'duplicateDetection', 'fieldMapping', 'conversionPreview', 'leadConversion', 'conversionRecovery']) {
+    expect(pending).toEqual(expect.arrayContaining(['aiInsight']));
+    for (const shipped of ['eventRecalculation', 'batchRecalculation', 'thresholdNotifications', 'engagementSignals', 'scoring', 'scoringPreview', 'modelAdministration', 'duplicateDetection', 'fieldMapping', 'conversionPreview', 'leadConversion', 'conversionRecovery', 'opportunityConversion']) {
       expect(pending, shipped).not.toContain(shipped);
     }
   });

@@ -61,7 +61,13 @@ interface PreviewBody {
   previewHash: string;
   confirmationTypes: string[];
   permission: { canExecute: boolean; reasons: string[] };
-  targets: { type: string; action: string; existingId: string | null; proposed: { field: string; value: unknown; origin: string }[] }[];
+  targets: {
+    type: string;
+    action: string;
+    existingId: string | null;
+    proposed: { field: string; value: unknown; origin: string }[];
+    conflicts: { field: string; current: unknown; proposed: unknown; readOnly?: boolean }[];
+  }[];
 }
 
 async function call(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: unknown, token?: string, headers: Record<string, string> = {}): Promise<CallResult> {
@@ -206,7 +212,7 @@ beforeAll(async () => {
 
   await setSettings({
     enabled: true,
-    features: { fieldMapping: true, conversionPreview: true, leadConversion: true, conversionRecovery: true, duplicateDetection: false },
+    features: { fieldMapping: true, conversionPreview: true, leadConversion: true, conversionRecovery: true, duplicateDetection: false, opportunityConversion: true },
   });
   settingsAfterSetup = JSON.stringify(await storedSettings());
 }, 240_000);
@@ -458,6 +464,102 @@ describe('what a caller must prove before anything is claimed', () => {
     expect(converted['convertedAccountId']).toBe(accountId);
     expect(converted['convertedContactId']).toBe(contactId);
   });
+
+  it('creates an Opportunity inside the same conversion, carrying the Account and the Contact', async () => {
+    const leadId = await lead('with deal');
+    const result = await convert(leadId, [
+      { type: 'Contact', action: 'create' },
+      { type: 'Account', action: 'create' },
+      { type: 'Opportunity', action: 'create' },
+    ]);
+    expect(result.status, JSON.stringify(result.body)).toBe(200);
+    const body = result.body as unknown as { operationId: string; createdAccountId: string; createdContactId: string; createdOpportunityId: string; linkedOpportunityId: string | null };
+    expect(body.createdOpportunityId).toBeTruthy();
+    expect(body.linkedOpportunityId).toBeNull();
+
+    // The Lead names the deal it produced, and the deal carries the two relationships the command assigns.
+    const converted = (await call('GET', `/api/v1/Lead/${leadId}`)).body;
+    expect(converted['convertedOpportunityId']).toBe(body.createdOpportunityId);
+    const deal = (await call('GET', `/api/v1/Opportunity/${body.createdOpportunityId}`)).body;
+    expect(deal['accountId']).toBe(body.createdAccountId);
+    expect(deal['contactIds']).toEqual(expect.arrayContaining([body.createdContactId]));
+    // The name came from the map's template; the stage is the kernel's default, and nothing else moved.
+    expect(deal['name']).toBe(`${RUN} with deal — ${RUN} Acme`);
+    expect(deal['stage']).toBe('Qualification');
+    expect(deal['amount']).toBeUndefined();
+    expect(deal['probability']).toBeUndefined();
+
+    // The operation row and its audit view name it, so "Created versus Linked" is a stored fact.
+    expect((await operationRow(body.operationId))['createdOpportunityId']).toBe(body.createdOpportunityId);
+    expect((await call('GET', `${OPERATIONS_PATH}/${body.operationId}`)).body['createdOpportunityId']).toBe(body.createdOpportunityId);
+  });
+
+  it('links a deal without replacing its people, and shows the Account move before it runs', async () => {
+    const leadId = await lead('linked deal');
+    const previousAccount = await createRecord('Account', { name: `${RUN} previous account` });
+    const operationAccount = await createRecord('Account', { name: `${RUN} chosen account` });
+    const previousContact = await createRecord('Contact', { name: `${RUN} previous contact`, lastName: `${RUN} previous contact` });
+    const dealId = await createRecord('Opportunity', {
+      name: `${RUN} existing deal`,
+      accountId: previousAccount,
+      contactIds: [previousContact],
+      stage: 'Proposal',
+      amount: '4200',
+    });
+    // A Sales document already names the deal: the conversion must not rewrite it (queue/quote semantics are
+    // Sales', and re-pointing an issued document would be a second write nobody asked for).
+    const quoteId = await createRecord('Quote', {
+      name: `${RUN} existing quote`,
+      opportunityId: dealId,
+      accountId: previousAccount,
+      quoteDate: new Date().toISOString().slice(0, 10),
+    });
+    const targets: TargetChoice[] = [
+      { type: 'Account', action: 'link', existingId: operationAccount },
+      { type: 'Contact', action: 'create' },
+      { type: 'Opportunity', action: 'link', existingId: dealId },
+    ];
+
+    const prepared = await preview(leadId, targets);
+    expect(prepared.status, JSON.stringify(prepared.body)).toBe(200);
+    const preparedBody = prepared.body as unknown as PreviewBody;
+    const dealPreview = preparedBody.targets.find((target) => target.type === 'Opportunity');
+    // The Account changes by policy, so the preview says so — as a before/after with nothing to tick.
+    expect(dealPreview?.conflicts).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: 'accountId', current: previousAccount, readOnly: true })]),
+    );
+    expect(preparedBody.confirmationTypes).toContain('field_merge');
+    expect(preparedBody.confirmationTypes).not.toContain('opportunity_created');
+
+    const result = await call('POST', CONVERT_PATH, {
+      leadId,
+      operationKey: `${RUN}_linked_deal_key`,
+      targets,
+      previewHash: preparedBody.previewHash,
+      acknowledged: preparedBody.confirmationTypes,
+    });
+    expect(result.status, JSON.stringify(result.body)).toBe(200);
+    const body = result.body as unknown as { operationId: string; linkedAccountId: string; createdContactId: string; linkedOpportunityId: string; createdOpportunityId: string | null };
+    created.operations.push(body.operationId);
+    expect(body.linkedOpportunityId).toBe(dealId);
+    expect(body.createdOpportunityId).toBeNull();
+    expect(body.linkedAccountId).toBe(operationAccount);
+
+    const deal = (await call('GET', `/api/v1/Opportunity/${dealId}`)).body;
+    expect(deal['accountId']).toBe(operationAccount);
+    // Appended, never replaced: the colleague who was already on the deal is still on it.
+    expect(deal['contactIds']).toEqual(expect.arrayContaining([previousContact, body.createdContactId]));
+    // Sales' own semantics are untouched — the stage and the amount are the deal's, not the conversion's.
+    expect(deal['stage']).toBe('Proposal');
+    expect(deal['amount']).toBe('4200');
+    // The document that already names the deal is untouched — same deal, same party, same state.
+    const quote = (await call('GET', `/api/v1/Quote/${quoteId}`)).body;
+    expect(quote['opportunityId']).toBe(dealId);
+    expect(quote['accountId']).toBe(previousAccount);
+    expect(quote['status']).toBe('draft');
+    expect((await call('GET', `/api/v1/Lead/${leadId}`)).body['convertedOpportunityId']).toBe(dealId);
+    expect((await operationRow(body.operationId))['linkedOpportunityId']).toBe(dealId);
+  });
 });
 
 describe('recovery: settle, retry, close, scan (contract §10, §11)', () => {
@@ -667,6 +769,18 @@ describe('the affordance a screen asks before showing a button (19-LS.14, contra
       convertedContactId: (converted.body as unknown as { createdContactId: string }).createdContactId,
     });
     expect((after.body['reasons'] as string[])).toContain('already_converted');
+  });
+
+  it('offers only the target types this installation may build (19-LS.16)', async () => {
+    const leadId = await lead('affordance targets');
+    const on = await call('GET', `${AFFORDANCE_PATH}?leadId=${encodeURIComponent(leadId)}`);
+    expect(on.body['targets']).toEqual(['Contact', 'Account', 'Opportunity']);
+
+    // The switch is what removes the row from the wizard; the rest of the conversion is unaffected.
+    await setSettings({ features: { opportunityConversion: false } });
+    const off = await call('GET', `${AFFORDANCE_PATH}?leadId=${encodeURIComponent(leadId)}`);
+    expect(off.body['targets']).toEqual(['Contact', 'Account']);
+    expect(off.body['canConvert']).toBe(true);
   });
 
   it('answers no with reasons instead of an error when the caller holds no conversion right', async () => {

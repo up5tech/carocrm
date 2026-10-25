@@ -2,7 +2,7 @@ import { type APIRequestContext, expect, type Locator, type Page, test } from '@
 
 /**
  * Phase 19-LS.14 — the conversion wizard (`PLAN_Phase_19_LeadScore.md` §7.1–§7.4, §11.4, §16 `19-LS.14`;
- * contract §8; compat §4.1).
+ * contract §8; compat §4.1), extended in 19-LS.16 with the optional Opportunity target.
  *
  * The exit criterion is *"a user can complete valid Contact/Account conversion end-to-end with clear
  * feedback"*, so this spec drives the whole thing through the screen and asserts the two claims that make the
@@ -15,7 +15,8 @@ import { type APIRequestContext, expect, type Locator, type Page, test } from '@
  *
  * It also covers the two failure modes a wizard has to survive: a duplicate that needs an explicit override,
  * and a lost response, which is recovered with the **same operation key** so no second set of records can
- * appear.
+ * appear. 19-LS.16's test adds the third target: the review names the deal it will create, the result links it,
+ * and the stored Opportunity carries the Account and the Contact the conversion made.
  *
  * Fixtures are created through the API with a run marker and removed afterwards; the `leadScore` settings row
  * is read before the run and put back. Operation rows are append-only by design (no delete route), so this
@@ -54,7 +55,7 @@ async function login(page: Page): Promise<void> {
 }
 
 /** The conversion block for one target type, which is what scopes the identical radio labels. */
-function targetBlock(page: Page, type: 'Contact' | 'Account'): Locator {
+function targetBlock(page: Page, type: 'Contact' | 'Account' | 'Opportunity'): Locator {
   return page.locator('.carocrm-conversion-target').filter({ has: page.locator('strong', { hasText: new RegExp(`^${type}$`) }) });
 }
 
@@ -72,7 +73,7 @@ async function openWizard(page: Page, leadId: string): Promise<Locator> {
  * `has:` re-roots the inner locator under each candidate, so the inner one must be page-rooted — a locator
  * already anchored at the modal can never match inside its own descendant.
  */
-async function chooseCreate(page: Page, type: 'Contact' | 'Account'): Promise<void> {
+async function chooseCreate(page: Page, type: 'Contact' | 'Account' | 'Opportunity'): Promise<void> {
   await targetBlock(page, type).getByText('Create new', { exact: true }).click();
 }
 
@@ -88,7 +89,7 @@ test.beforeAll(async ({ request }) => {
   localeBefore = (((await api(request, 'GET', '/AppUser/me'))['locale'] as string | null | undefined) ?? null);
   await api(request, 'POST', '/LeadScore/action/settings', {
     enabled: true,
-    features: { fieldMapping: true, conversionPreview: true, leadConversion: true, conversionRecovery: true, duplicateDetection: true },
+    features: { fieldMapping: true, conversionPreview: true, leadConversion: true, conversionRecovery: true, duplicateDetection: true, opportunityConversion: true },
     scoring: { activeModelId: null },
   });
   await api(request, 'PATCH', '/AppUser/me', { locale: null });
@@ -172,6 +173,43 @@ test.describe('the conversion wizard (19-LS.14)', () => {
     expect(typeof stored['convertedAccountId']).toBe('string');
     const contacts = (await api(request, 'GET', `/Contact?where=${encodeURIComponent(JSON.stringify([{ emailAddress: lead.email }]))}&maxSize=10`)) as { list?: unknown[] };
     expect(contacts.list ?? []).toHaveLength(1);
+  });
+
+  test('builds an Opportunity in the same conversion, naming and linking it (19-LS.16)', async ({ page, request }) => {
+    // A company of its own: this suite leaves an Account named `<run> Acme` behind from the first test, and a
+    // shared company is a real duplicate signal the wizard is right to stop on.
+    const company = `${RUN} Opportunity Corp`;
+    const lead = await createLead(request, 'with opportunity', { company });
+    const modal = await openWizard(page, lead.id);
+
+    await chooseCreate(page, 'Contact');
+    await chooseCreate(page, 'Account');
+    await chooseCreate(page, 'Opportunity');
+    await modal.getByRole('button', { name: 'Review' }).click();
+
+    // The preview says the deal will be created, shows the name it composed from the Lead, and that it will
+    // carry the Account the same conversion is building.
+    await expect(modal.getByText('An Opportunity will be created.')).toBeVisible({ timeout: 20_000 });
+    await expect(modal.getByText(`${RUN} with opportunity — ${company}`).first()).toBeVisible();
+    await expect(modal.getByText('Also links').first()).toBeVisible();
+
+    await modal.getByRole('button', { name: 'Convert', exact: true }).click();
+    await expect(modal.getByText('This Lead is converted')).toBeVisible({ timeout: 30_000 });
+    const opportunityLink = modal.locator('li').filter({ hasText: 'Created Opportunity' }).getByRole('link');
+    expect(await opportunityLink.getAttribute('href')).toContain('/Opportunity/');
+    await modal.getByRole('button', { name: 'Done' }).click();
+
+    // The record card names what it became, and the API agrees: one deal, both relationships, Sales' stage.
+    const card = page.locator('.ant-card').filter({ hasText: 'Conversion' }).first();
+    await expect(card.getByText('Open the Opportunity')).toBeVisible();
+    const stored = (await api(request, 'GET', `/Lead/${lead.id}`)) as Record<string, unknown>;
+    const opportunityId = String(stored['convertedOpportunityId'] ?? '');
+    expect(opportunityId).not.toBe('');
+    created.push({ id: opportunityId, entity: 'Opportunity' });
+    const deal = (await api(request, 'GET', `/Opportunity/${opportunityId}`)) as Record<string, unknown>;
+    expect(deal['accountId']).toBe(String(stored['convertedAccountId']));
+    expect(deal['contactIds']).toEqual(expect.arrayContaining([String(stored['convertedContactId'])]));
+    expect(deal['stage']).toBe('Qualification');
   });
 
   test('links an existing Contact and Account instead of creating them', async ({ page, request }) => {

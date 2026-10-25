@@ -45,8 +45,10 @@ export interface OperationView {
   readonly failureCode: string | null;
   readonly createdAccountId: string | null;
   readonly createdContactId: string | null;
+  readonly createdOpportunityId: string | null;
   readonly linkedAccountId: string | null;
   readonly linkedContactId: string | null;
+  readonly linkedOpportunityId: string | null;
   readonly stale: boolean;
   readonly canRetry: boolean;
   readonly canClose: boolean;
@@ -212,7 +214,7 @@ export class LeadConversionAuditService {
    * happen — this is the check that would catch it if that ever changed).
    */
   private async account(row: OperationRecord): Promise<{ safeToRetry: boolean; code: string | null }> {
-    const ids = ['createdAccountId', 'createdContactId', 'linkedAccountId', 'linkedContactId']
+    const ids = ['createdAccountId', 'createdContactId', 'createdOpportunityId', 'linkedAccountId', 'linkedContactId', 'linkedOpportunityId']
       .map((field) => stringOf(row.data[field]))
       .filter((id): id is string => id !== null);
     if (ids.length > 0) {
@@ -280,8 +282,10 @@ function viewOf(row: OperationRecord, leadLabel: string | null, now: number): Op
     failureCode: stringOf(row.data['failureCode']),
     createdAccountId: stringOf(row.data['createdAccountId']),
     createdContactId: stringOf(row.data['createdContactId']),
+    createdOpportunityId: stringOf(row.data['createdOpportunityId']),
     linkedAccountId: stringOf(row.data['linkedAccountId']),
     linkedContactId: stringOf(row.data['linkedContactId']),
+    linkedOpportunityId: stringOf(row.data['linkedOpportunityId']),
     stale,
     canRetry: status === 'failed_retryable' || status === 'needs_review',
     canClose: status === 'needs_review',

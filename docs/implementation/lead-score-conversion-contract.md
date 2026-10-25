@@ -547,6 +547,11 @@ The convert request must acknowledge **exactly** the set the current preview com
 "the preview faithfully describes the operation that would run" (LS.12's exit criterion) enforceable rather than
 aspirational.
 
+> **`opportunity_created` delivered in 19-LS.16.** It is raised whenever the request creates an Opportunity (not
+> when it links one), and the review already renders the composed `name` and the kernel's `Qualification`
+> default beside it, so the acknowledgement is about a plan the person can read. A linked deal whose Account
+> moves adds `field_merge` instead, because the before/after is a conflict entry (§13.1 note 2).
+
 ### 8.5 The preview writes nothing
 
 Zero side effects, asserted the way LS.4 and LS.8 assert it: record counts before and after for
@@ -868,6 +873,27 @@ per-action limiter inside this module (§1.4 verified), so:
 | LS.14 | the wizard, `Converted To` panel wiring, timeout recovery by key lookup | `apps/web/src/components/LeadConversionWizard.tsx` (new), Lead detail | treat a lost response as a failure; issue a second conversion after a timeout |
 | LS.15 | the explicit "what stays / what is linked" list | docs + relation work only | move a consent record, copy a file, broaden team access |
 | LS.16 | Opportunity conversion through the same command | `lead-conversion.service.ts` extension | duplicate Sales' opportunity semantics (`createFromOpportunity` stays Sales', `document.service.ts:1257-1321`) |
+
+> **Delivered in 19-LS.16**, entirely inside the two existing services — no `OpportunityService`, no stage or
+> amount logic, no new route:
+>
+> 1. **The command's third `applyTarget` call** receives the ids of the Account and Contact it just wrote: a
+>    created Opportunity gets `accountId`/`contactIds` in the create values, a linked one gets the Account as a
+>    patch and the Contact **appended** to its current list. The Lead write now stores
+>    `convertedOpportunityId`, and the operation row/result/audit view carry `createdOpportunityId` /
+>    `linkedOpportunityId`, so "Created versus Linked" stays a stored fact.
+> 2. **A linked deal's Account move is disclosed, not acknowledged twice.** §6.3's re-parent lock is a
+>    Contact rule (it broadens who can reach a person); an Opportunity's Account is set by policy. When the
+>    chosen Account is an existing record different from the deal's, the preview adds a `conflicts` entry for
+>    `accountId` marked `readOnly: true` — a before/after with no merge checkbox. The opt-out is choosing the
+>    deal's own Account.
+> 3. **Duplicate overrides do not reach the deal.** The resolver has no Opportunity stage, and one hidden
+>    Contact/Account match must not demand an `overrideDuplicateFor: ['Opportunity']` that means nothing; the
+>    decision loop skips the type.
+> 4. **The affordance answers `targets`** — `conversion.targets` minus any whose feature is not effective —
+>    and the wizard renders its rows from that list instead of assuming Account/Contact always exist. With
+>    `features.opportunityConversion` off, the preview refuses the type as `notEnabled` (the phase is still read
+>    from the descriptor, so a future re-pending build would say `pending` with its phase).
 
 ### 13.2 Metadata/permission changes LS.13 must make (decided here, applied there)
 

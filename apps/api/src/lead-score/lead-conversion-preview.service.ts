@@ -156,6 +156,13 @@ export class LeadConversionPreviewService {
         ...(existing === undefined ? {} : { existing: existing.data }),
         personTargetPresent,
       });
+      // A linked Opportunity is attached to the operation's Account by policy (§5.1), so a deal that already
+      // belongs to another Account would move. The preview shows that as a before/after nobody may opt out of
+      // — the way to avoid it is choosing the Opportunity's own Account (19-LS.16).
+      const relationshipConflicts =
+        choice.type === 'Opportunity' && choice.action === 'link' && existing !== undefined && chosenAccount !== undefined && chosenAccount.action === 'link' && chosenAccount.existingId !== undefined
+          ? accountDisclosure(existing.data, chosenAccount.existingId)
+          : [];
       base.push({
         type: choice.type,
         action: choice.action,
@@ -163,6 +170,7 @@ export class LeadConversionPreviewService {
         existing: existing === undefined ? null : { id: choice.existingId ?? '', label: labelOf(existing.data) },
         mappingVersion: section.mapping[choice.type].version,
         ...resolution,
+        ...(relationshipConflicts.length === 0 ? {} : { conflicts: [...resolution.conflicts, ...relationshipConflicts] }),
       });
 
       // A linked Contact that already belongs to a different Account is a re-parent: the relationship will
@@ -225,8 +233,10 @@ export class LeadConversionPreviewService {
    * Which combinations this request may ask for, before any record is read.
    *
    * The settings decide what exists (contract §5.2), the request cannot name a type twice, a link must name
-   * its target and a create must not — and Opportunity is refused while its phase has not shipped, with the
-   * phase in the answer rather than a generic "no".
+   * its target and a create must not — and Opportunity also needs its own delivered switch, so an
+   * installation that offers Contact/Account only answers `notEnabled` rather than building a deal. The
+   * phase is still read from the descriptor: if a future build marks it pending again, the answer names the
+   * phase instead of pretending the feature is merely off.
    */
   private async assertTargets(targets: ConversionPreviewInput['targets'], section: ConversionSection): Promise<void> {
     const seen = new Set<string>();
@@ -301,8 +311,9 @@ export class LeadConversionPreviewService {
  *
  * `simple` is always there so the list is never empty, and the rest are added only when they are true: a
  * candidate (visible or not), a mapped value that will not be copied for a reason, a before/after merge, a
- * re-parent. `opportunity_created` is declared for the contract's shape but cannot be produced until
- * 19-LS.16 makes an Opportunity target reachable.
+ * re-parent, an Opportunity the operation builds. `opportunity_created` is 19-LS.16's: the deal's name is
+ * composed from the Lead and its stage is the kernel's default, so the person has to see both before the
+ * command runs.
  */
 function confirmationTypesOf(
   targets: readonly TargetPreview[],
@@ -314,7 +325,15 @@ function confirmationTypesOf(
   if (targets.some((target) => target.skipped.some((entry) => PROBLEM_SKIPS.has(entry.reason)))) types.push('values_will_be_skipped');
   if (targets.some((target) => target.conflicts.length > 0 || target.proposed.some((entry) => entry.origin === 'merge'))) types.push('field_merge');
   if (reparent !== null) types.push('contact_reparent');
+  if (targets.some((target) => target.type === 'Opportunity' && target.action === 'create')) types.push('opportunity_created');
   return types;
+}
+
+/** A linked Opportunity's Account would change: the before/after the review shows, with no merge to tick. */
+function accountDisclosure(existing: Readonly<Record<string, unknown>>, chosenAccountId: string): FieldConflict[] {
+  const current = existing['accountId'];
+  if (typeof current !== 'string' || current === '' || current === chosenAccountId) return [];
+  return [{ field: 'accountId', current, proposed: chosenAccountId, readOnly: true }];
 }
 
 /** The links a target carries, from the choices made in this same request (contract §6). */

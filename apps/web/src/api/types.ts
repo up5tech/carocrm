@@ -4110,11 +4110,14 @@ export interface LeadConversionAffordance {
   readonly canPreview: boolean;
   readonly canConvert: boolean;
   readonly canOverride: boolean;
+  /** Target types this installation may build right now — the wizard's rows come from here (19-LS.16). */
+  readonly targets: readonly string[];
   readonly alreadyConverted: boolean;
   readonly status: string | null;
   readonly convertedAt: string | null;
   readonly convertedContactId: string | null;
   readonly convertedAccountId: string | null;
+  readonly convertedOpportunityId: string | null;
   readonly operationId: string | null;
   readonly reasons: readonly string[];
 }
@@ -4135,6 +4138,8 @@ export interface LeadConversionConflict {
   readonly field: string;
   readonly current: unknown;
   readonly proposed: unknown;
+  /** A relationship the command sets by policy (19-LS.16): shown, with no per-field opt-in. */
+  readonly readOnly?: boolean;
 }
 
 export interface LeadConversionTargetPreview {
@@ -4189,8 +4194,10 @@ export interface LeadConversionResult {
   readonly leadStatus: string | null;
   readonly createdAccountId: string | null;
   readonly createdContactId: string | null;
+  readonly createdOpportunityId: string | null;
   readonly linkedAccountId: string | null;
   readonly linkedContactId: string | null;
+  readonly linkedOpportunityId: string | null;
   readonly convertedAt: string | null;
   readonly failureCode: string | null;
   readonly completedAt: string | null;

@@ -31,15 +31,55 @@ import { useMetadata } from '../state/metadata.js';
  * Recovery is the operation key, not a fresh attempt. The request body — key included — is written to
  * `sessionStorage` *before* the call, so a timeout, a dropped response or a reload leaves something to resume;
  * resuming re-sends that exact body, and the key makes a second set of records impossible (plan §11.4).
+ *
+ * 19-LS.16 added the third target without adding a second form: the rows come from the affordance's `targets`,
+ * the Opportunity choice reuses the same create/link controls and the same preview, and a relationship the
+ * command sets by policy (`accountId` on a linked deal) arrives as a read-only before/after rather than a
+ * checkbox. Sales' own fields are not on this screen; they are edited on the record, after conversion.
  */
 
 const PENDING_PREFIX = 'leadConversion:pending:';
 
+type TargetAction = 'none' | 'create' | 'link';
+
 interface ChoiceState {
-  readonly account: 'none' | 'create' | 'link';
-  readonly contact: 'none' | 'create' | 'link';
+  readonly account: TargetAction;
+  readonly contact: TargetAction;
+  readonly opportunity: TargetAction;
   readonly accountId?: string | undefined;
   readonly contactId?: string | undefined;
+  readonly opportunityId?: string | undefined;
+}
+
+/** The target types this component knows how to render; the server's `targets` is the allowlist. */
+const KNOWN_TARGETS = ['Contact', 'Account', 'Opportunity'] as const;
+
+function choiceOf(choices: ChoiceState, type: string): TargetAction {
+  if (type === 'Account') return choices.account;
+  if (type === 'Contact') return choices.contact;
+  if (type === 'Opportunity') return choices.opportunity;
+  return 'none';
+}
+
+function chosenId(choices: ChoiceState, type: string): string | undefined {
+  if (type === 'Account') return choices.accountId;
+  if (type === 'Contact') return choices.contactId;
+  if (type === 'Opportunity') return choices.opportunityId;
+  return undefined;
+}
+
+function withChoice(choices: ChoiceState, type: string, action: TargetAction): ChoiceState {
+  if (type === 'Account') return { ...choices, account: action, ...(action === 'link' ? {} : { accountId: undefined }) };
+  if (type === 'Contact') return { ...choices, contact: action, ...(action === 'link' ? {} : { contactId: undefined }) };
+  if (type === 'Opportunity') return { ...choices, opportunity: action, ...(action === 'link' ? {} : { opportunityId: undefined }) };
+  return choices;
+}
+
+function withId(choices: ChoiceState, type: string, id: string): ChoiceState {
+  if (type === 'Account') return { ...choices, accountId: id };
+  if (type === 'Contact') return { ...choices, contactId: id };
+  if (type === 'Opportunity') return { ...choices, opportunityId: id };
+  return choices;
 }
 
 interface ConvertBody {
@@ -52,8 +92,6 @@ interface ConvertBody {
   readonly overrideDuplicateFor?: string[];
   readonly allowReparent?: boolean;
 }
-
-const TARGETS = ['Contact', 'Account'] as const;
 
 /** The card on the record: status, links once converted, and the button that opens the wizard. */
 export function LeadConversionSection({ leadId, leadName, onChanged }: { leadId: string; leadName: string; onChanged?: () => void }) {
@@ -81,6 +119,9 @@ export function LeadConversionSection({ leadId, leadName, onChanged }: { leadId:
               {data.convertedAccountId === null ? null : (
                 <Link to={`/Account/${encodeURIComponent(data.convertedAccountId)}`}>{t('leadscore.conversion.convertedAccount')}</Link>
               )}
+              {data.convertedOpportunityId === null ? null : (
+                <Link to={`/Opportunity/${encodeURIComponent(data.convertedOpportunityId)}`}>{t('leadscore.conversion.convertedOpportunity')}</Link>
+              )}
             </Space>
           </>
         ) : (
@@ -99,6 +140,7 @@ export function LeadConversionSection({ leadId, leadName, onChanged }: { leadId:
           leadId={leadId}
           leadName={leadName}
           canOverride={data.canOverride}
+          availableTargets={data.targets}
           open={open}
           onClose={() => setOpen(false)}
           onConverted={() => {
@@ -123,6 +165,7 @@ export function LeadConversionWizard({
   leadId,
   leadName,
   canOverride,
+  availableTargets,
   open,
   onClose,
   onConverted,
@@ -131,13 +174,16 @@ export function LeadConversionWizard({
   leadName: string;
   /** Whether the duplicate-override box may be offered at all (contract §9.5). */
   canOverride: boolean;
+  /** What the affordance says this installation may build — Account/Contact/Opportunity, filtered server-side. */
+  availableTargets: readonly string[];
   open: boolean;
   onClose: () => void;
   onConverted: () => void;
 }) {
   const metadata = useMetadata();
+  const types = useMemo(() => KNOWN_TARGETS.filter((type) => availableTargets.includes(type)), [availableTargets]);
   const [step, setStep] = useState(0);
-  const [choices, setChoices] = useState<ChoiceState>({ account: 'none', contact: 'none' });
+  const [choices, setChoices] = useState<ChoiceState>({ account: 'none', contact: 'none', opportunity: 'none' });
   const [preview, setPreview] = useState<LeadConversionPreviewView | undefined>(undefined);
   const [operationKey, setOperationKey] = useState('');
   const [result, setResult] = useState<LeadConversionResult | undefined>(undefined);
@@ -161,7 +207,7 @@ export function LeadConversionWizard({
     }
   }, [leadId, open]);
 
-  const linkable = (type: 'Contact' | 'Account') => choices[type === 'Contact' ? 'contact' : 'account'] === 'link';
+  const linkable = (type: string) => choiceOf(choices, type) === 'link';
   const contacts = useQuery({
     queryKey: ['leadConversion', 'pick', 'Contact'],
     queryFn: async () => (await api.list('Contact', { maxSize: 50, orderBy: 'modifiedAt,desc' })).list,
@@ -174,21 +220,32 @@ export function LeadConversionWizard({
     enabled: open && linkable('Account'),
     staleTime: 30_000,
   });
+  const opportunities = useQuery({
+    queryKey: ['leadConversion', 'pick', 'Opportunity'],
+    queryFn: async () => (await api.list('Opportunity', { maxSize: 50, orderBy: 'modifiedAt,desc' })).list,
+    enabled: open && linkable('Opportunity'),
+    staleTime: 30_000,
+  });
+  const records = useMemo<Record<string, { id: string; label: string }[]>>(() => {
+    const toOptions = (rows: readonly Record<string, unknown>[] | undefined) =>
+      (rows ?? []).map((record) => ({ id: String(record['id'] ?? ''), label: String(record['name'] ?? record['id'] ?? '') }));
+    return { Contact: toOptions(contacts.data), Account: toOptions(accounts.data), Opportunity: toOptions(opportunities.data) };
+  }, [accounts.data, contacts.data, opportunities.data]);
 
   const targets = useMemo<{ type: string; action: 'create' | 'link'; existingId?: string }[]>(() => {
     const chosen: { type: string; action: 'create' | 'link'; existingId?: string }[] = [];
-    for (const type of TARGETS) {
-      const action = type === 'Account' ? choices.account : choices.contact;
+    for (const type of types) {
+      const action = choiceOf(choices, type);
       if (action === 'none') continue;
       if (action === 'link') {
-        const existingId = type === 'Account' ? choices.accountId : choices.contactId;
+        const existingId = chosenId(choices, type);
         if (existingId !== undefined) chosen.push({ type, action, existingId });
         continue;
       }
       chosen.push({ type, action });
     }
     return chosen;
-  }, [choices]);
+  }, [choices, types]);
   const mergeList = useMemo(
     () =>
       (preview?.targets ?? []).flatMap((target) =>
@@ -275,7 +332,7 @@ export function LeadConversionWizard({
       setPreview(fresh);
       return;
     }
-    const overrideTypes = TARGETS.filter((type) => overrides[type] === true);
+    const overrideTypes = fresh.targets.map((target) => target.type).filter((type) => overrides[type] === true);
     await send({
       leadId,
       operationKey: operationKey === '' ? newOperationKey() : operationKey,
@@ -355,10 +412,10 @@ export function LeadConversionWizard({
 
       {step === 0 ? (
         <TargetsStep
+          types={types}
           choices={choices}
           onChange={setChoices}
-          contacts={(contacts.data ?? []).map((record) => ({ id: String(record['id'] ?? ''), label: String(record['name'] ?? record['id'] ?? '') }))}
-          accounts={(accounts.data ?? []).map((record) => ({ id: String(record['id'] ?? ''), label: String(record['name'] ?? record['id'] ?? '') }))}
+          records={records}
         />
       ) : null}
 
@@ -387,23 +444,22 @@ export function LeadConversionWizard({
 }
 
 function TargetsStep({
+  types,
   choices,
   onChange,
-  contacts,
-  accounts,
+  records,
 }: {
+  types: readonly string[];
   choices: ChoiceState;
   onChange: (next: ChoiceState) => void;
-  contacts: { id: string; label: string }[];
-  accounts: { id: string; label: string }[];
+  records: Record<string, { id: string; label: string }[]>;
 }) {
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Typography.Text type="secondary">{t('leadscore.conversion.wizard.pickHint')}</Typography.Text>
-      {(['Account', 'Contact'] as const).map((type) => {
-        const key = type === 'Account' ? 'account' : 'contact';
-        const options = type === 'Account' ? accounts : contacts;
-        const value = choices[key];
+      {types.map((type) => {
+        const options = records[type] ?? [];
+        const value = choiceOf(choices, type);
         return (
           <div key={type} className="carocrm-conversion-target">
             <Typography.Text strong>{t(`leadscore.conversion.wizard.target.${type}`)}</Typography.Text>
@@ -412,14 +468,7 @@ function TargetsStep({
               buttonStyle="solid"
               size="small"
               value={value}
-              onChange={(event) => {
-                const next = event.target.value as 'none' | 'create' | 'link';
-                onChange(
-                  key === 'account'
-                    ? { ...choices, account: next, ...(next === 'link' ? {} : { accountId: undefined }) }
-                    : { ...choices, contact: next, ...(next === 'link' ? {} : { contactId: undefined }) },
-                );
-              }}
+              onChange={(event) => onChange(withChoice(choices, type, event.target.value as TargetAction))}
               options={[
                 { value: 'none', label: t('leadscore.conversion.wizard.action.none') },
                 { value: 'create', label: t('leadscore.conversion.wizard.action.create') },
@@ -432,8 +481,8 @@ function TargetsStep({
                 optionFilterProp="label"
                 style={{ minWidth: 320 }}
                 placeholder={t('leadscore.conversion.wizard.pick')}
-                value={(key === 'account' ? choices.accountId : choices.contactId) ?? null}
-                onChange={(id: string) => onChange(key === 'account' ? { ...choices, accountId: id } : { ...choices, contactId: id })}
+                value={chosenId(choices, type) ?? null}
+                onChange={(id: string) => onChange(withId(choices, type, id))}
                 options={options.map((option) => ({ value: option.id, label: option.label }))}
               />
             ) : null}
@@ -495,16 +544,18 @@ function ReviewStep({
             </Typography.Paragraph>
           ) : null}
           {duplicating
-            ? TARGETS.filter((type) => preview.targets.some((target) => target.type === type && target.action === 'create')).map((type) => (
-                <Checkbox
-                  key={type}
-                  disabled={!canOverride}
-                  checked={overrides[type] === true}
-                  onChange={(event) => onOverride(type, event.target.checked)}
-                >
-                  {t('leadscore.conversion.wizard.duplicateOverride')} · {t(`leadscore.conversion.wizard.target.${type}`)}
-                </Checkbox>
-              ))
+            ? preview.targets
+                .filter((target) => target.action === 'create' && target.type !== 'Opportunity')
+                .map((target) => (
+                  <Checkbox
+                    key={target.type}
+                    disabled={!canOverride}
+                    checked={overrides[target.type] === true}
+                    onChange={(event) => onOverride(target.type, event.target.checked)}
+                  >
+                    {t('leadscore.conversion.wizard.duplicateOverride')} · {t(`leadscore.conversion.wizard.target.${target.type}`)}
+                  </Checkbox>
+                ))
             : null}
         </section>
       )}
@@ -529,7 +580,7 @@ function ReviewStep({
       </section>
 
       {preview.permission.canExecute ? null : (
-        <Alert type="warning" showIcon message={blockedText(preview.permission.reasons)} />
+        <Alert type="warning" showIcon message={blockedText(preview.permission.reasons, preview.targets.map((target) => target.type))} />
       )}
     </Space>
   );
@@ -586,7 +637,11 @@ function TargetReview({
             {target.conflicts.map((conflict) => (
               <li key={conflict.field}>
                 <Typography.Text code>{label(entity, conflict.field)}</Typography.Text> {valueText(conflict.current)} → {valueText(conflict.proposed)}
-                {target.action === 'link' ? (
+                {conflict.readOnly === true ? (
+                  <Typography.Text type="secondary" style={{ marginInlineStart: 8, fontSize: 12 }}>
+                    {t('leadscore.conversion.wizard.relationshipChange')}
+                  </Typography.Text>
+                ) : target.action === 'link' ? (
                   <Checkbox
                     style={{ marginInlineStart: 8 }}
                     checked={merges[`${entity}:${conflict.field}`] === true}
@@ -626,8 +681,10 @@ function ResultStep({ result }: { result: LeadConversionResult }) {
   const rows: { key: string; label: string; id: string | null; entity: string }[] = [
     { key: 'createdContactId', label: t('leadscore.conversion.wizard.createdContact'), id: result.createdContactId, entity: 'Contact' },
     { key: 'createdAccountId', label: t('leadscore.conversion.wizard.createdAccount'), id: result.createdAccountId, entity: 'Account' },
+    { key: 'createdOpportunityId', label: t('leadscore.conversion.wizard.createdOpportunity'), id: result.createdOpportunityId, entity: 'Opportunity' },
     { key: 'linkedContactId', label: t('leadscore.conversion.wizard.linkedContact'), id: result.linkedContactId, entity: 'Contact' },
     { key: 'linkedAccountId', label: t('leadscore.conversion.wizard.linkedAccount'), id: result.linkedAccountId, entity: 'Account' },
+    { key: 'linkedOpportunityId', label: t('leadscore.conversion.wizard.linkedOpportunity'), id: result.linkedOpportunityId, entity: 'Opportunity' },
   ].filter((row) => row.id !== null);
   return (
     <Space direction="vertical" size={12} style={{ width: '100%' }}>
@@ -647,10 +704,11 @@ function ResultStep({ result }: { result: LeadConversionResult }) {
   );
 }
 
-function blockedText(reasons: readonly string[]): string {
+function blockedText(reasons: readonly string[], types: readonly string[]): string {
   return reasons
     .map((reason) => {
-      const target = TARGETS.find((type) => reason.endsWith(`_${type}`));
+      // Longest first, so a reason ending in `_Account` is never read as a `Contact` one.
+      const target = [...types].sort((left, right) => right.length - left.length).find((type) => reason.endsWith(`_${type}`));
       if (reason.startsWith('required_missing_')) return named('leadscore.conversion.wizard.blocked.required', 'Required') + ` · ${target ?? ''}`;
       if (reason.startsWith('cannot_create_')) return named('leadscore.conversion.wizard.blocked.cannotCreate', 'Cannot create') + ` · ${target ?? ''}`;
       if (reason.startsWith('cannot_read_')) return named('leadscore.conversion.wizard.blocked.cannotRead', 'Cannot read') + ` · ${target ?? ''}`;

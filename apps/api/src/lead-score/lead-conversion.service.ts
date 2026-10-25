@@ -84,11 +84,17 @@ export interface ConversionAffordanceView {
   readonly canConvert: boolean;
   /** Whether this caller may answer "create anyway" to a duplicate warning (the wizard's override box). */
   readonly canOverride: boolean;
+  /**
+   * The target types this installation may build right now: `conversion.targets`, minus anything whose feature
+   * is off. A wizard renders its rows from this list rather than assuming Account/Contact always exist.
+   */
+  readonly targets: readonly string[];
   readonly alreadyConverted: boolean;
   readonly status: string | null;
   readonly convertedAt: string | null;
   readonly convertedContactId: string | null;
   readonly convertedAccountId: string | null;
+  readonly convertedOpportunityId: string | null;
   readonly operationId: string | null;
   /** Stable reasons the button is off; empty when `canConvert` is true (contract §12.2). */
   readonly reasons: readonly string[];
@@ -102,8 +108,10 @@ export interface ConversionResultView {
   readonly leadStatus: string | null;
   readonly createdAccountId: string | null;
   readonly createdContactId: string | null;
+  readonly createdOpportunityId: string | null;
   readonly linkedAccountId: string | null;
   readonly linkedContactId: string | null;
+  readonly linkedOpportunityId: string | null;
   readonly convertedAt: string | null;
   readonly failureCode: string | null;
   readonly completedAt: string | null;
@@ -204,13 +212,15 @@ export class LeadConversionService {
   async affordance(leadId: string): Promise<ConversionAffordanceView> {
     if ((await this.settings.enabled()) !== true) throw leadScoreModuleDisabledError('enabled');
     const lead = await this.entities.get('Lead', leadId);
-    const [canPreview, canExecute, canOverride, leadEdit, effective] = await Promise.all([
+    const [canPreview, canExecute, canOverride, leadEdit, view] = await Promise.all([
       this.permissions.can('convertPreview'),
       this.permissions.can('convertExecute'),
       this.permissions.can('duplicateOverride'),
       this.acl.canUser('Lead', 'edit'),
-      this.settings.read().then((view) => view.effective),
+      this.settings.read(),
     ]);
+    const effective = view.effective;
+    const targets = view.settings.conversion.targets.filter((type) => type !== 'Opportunity' || effective['opportunityConversion'] === true);
     const alreadyConverted = lead['status'] === 'Converted' || stringOf(lead['conversionOperationId']) !== null;
     const reasons: string[] = [];
     if (!canPreview) reasons.push('cannot_preview');
@@ -225,11 +235,13 @@ export class LeadConversionService {
       canPreview: previewable,
       canConvert: previewable && canExecute && leadEdit !== 'no' && effective['leadConversion'] === true && !alreadyConverted,
       canOverride,
+      targets,
       alreadyConverted,
       status: stringOf(lead['status']),
       convertedAt: instantOf(lead['convertedAt']),
       convertedContactId: stringOf(lead['convertedContactId']),
       convertedAccountId: stringOf(lead['convertedAccountId']),
+      convertedOpportunityId: stringOf(lead['convertedOpportunityId']),
       operationId: stringOf(lead['conversionOperationId']),
       reasons,
     };
@@ -267,7 +279,7 @@ export class LeadConversionService {
       throw leadScoreConversionNeedsRecoveryError(operation.id, 'stale');
     }
     const alreadyCreated: Partial<Record<MappingTarget, string>> = {};
-    for (const type of ['Account', 'Contact'] as const) {
+    for (const type of ['Account', 'Contact', 'Opportunity'] as const) {
       const id = stringOf(operation.data[`created${type}Id`]);
       if (id !== null) alreadyCreated[type] = id;
     }
@@ -465,8 +477,10 @@ export class LeadConversionService {
 
     const account = preview.targets.find((entry) => entry.type === 'Account');
     const contact = preview.targets.find((entry) => entry.type === 'Contact');
+    const opportunity = preview.targets.find((entry) => entry.type === 'Opportunity');
     const accountId = await this.applyTarget(account, 'Account', plan);
-    const contactId = await this.applyTarget(contact, 'Contact', plan, accountId);
+    const contactId = await this.applyTarget(contact, 'Contact', plan, { accountId });
+    const opportunityId = await this.applyTarget(opportunity, 'Opportunity', plan, { accountId, contactId });
 
     const now = new Date().toISOString();
     const actorId = this.scope.principal?.userId ?? null;
@@ -476,17 +490,19 @@ export class LeadConversionService {
       conversionOperationId: operationId,
       convertedAccountId: accountId,
       convertedContactId: contactId,
-      convertedOpportunityId: null,
+      convertedOpportunityId: opportunityId,
       ...(actorId === null ? {} : { convertedById: actorId }),
     });
 
     const created = {
       ...(account?.action === 'create' && accountId !== null ? { createdAccountId: accountId } : {}),
       ...(contact?.action === 'create' && contactId !== null ? { createdContactId: contactId } : {}),
+      ...(opportunity?.action === 'create' && opportunityId !== null ? { createdOpportunityId: opportunityId } : {}),
     };
     const linked = {
       ...(account?.action === 'link' && accountId !== null ? { linkedAccountId: accountId } : {}),
       ...(contact?.action === 'link' && contactId !== null ? { linkedContactId: contactId } : {}),
+      ...(opportunity?.action === 'link' && opportunityId !== null ? { linkedOpportunityId: opportunityId } : {}),
     };
     const merged = preview.targets.flatMap((target) => target.proposed.filter((entry) => entry.origin === 'merge').map((entry) => `${target.type}.${entry.field}`));
     const outcome = { ...created, ...linked, merged, convertedAt: now };
@@ -509,19 +525,30 @@ export class LeadConversionService {
    * A create runs through `EntityCrudService` with the proposal the preview described, so field ACL, required
    * fields, hooks, audit and the outbox are the ordinary ones. A link writes nothing except the relationship and
    * any merge the caller asked for — and, for a Contact, a re-parent the command already validated.
+   *
+   * `links` are the relationship carries contract §5.1/§6.2 assigns, never mapped values: a Contact points at
+   * the operation's Account, and an Opportunity points at that Account and *appends* the operation's Contact to
+   * `contactIds`. Appending is the difference between adding the person who was converted and silently removing
+   * colleagues from a deal the actor may not even be able to read. The Opportunity's stage, amount and close
+   * date stay Sales' — this method writes no selling semantics (19-LS.16).
    */
   private async applyTarget(
     target: TargetPreview | undefined,
-    type: 'Account' | 'Contact',
+    type: MappingTarget,
     plan: ExecutablePlan,
-    accountIdForContact?: string | null,
+    links: { readonly accountId?: string | null; readonly contactId?: string | null } = {},
   ): Promise<string | null> {
     if (target === undefined) return null;
     const preCreated = plan.alreadyCreated[type];
     if (preCreated !== undefined) return preCreated;
     if (target.action === 'create') {
       const values = proposedValues(target);
-      if (type === 'Contact' && accountIdForContact !== undefined && accountIdForContact !== null) values['accountId'] = accountIdForContact;
+      if (links.accountId !== undefined && links.accountId !== null && (type === 'Contact' || type === 'Opportunity')) {
+        values['accountId'] = links.accountId;
+      }
+      if (type === 'Opportunity' && links.contactId !== undefined && links.contactId !== null) {
+        values['contactIds'] = [links.contactId];
+      }
       const created = await this.entities.create(type, values);
       return String(created['id'] ?? '') || null;
     }
@@ -529,12 +556,21 @@ export class LeadConversionService {
     if (id === null) throw new ValidationError('A link needs the record it links to.', { target: type, state: 'missingTarget' });
     const current = await this.entities.get(type, id);
     const patch: Record<string, unknown> = { ...mergedValues(target) };
-    if (type === 'Contact' && accountIdForContact !== undefined && accountIdForContact !== null) {
+    if (links.accountId !== undefined && links.accountId !== null && (type === 'Contact' || type === 'Opportunity')) {
       const existingAccount = stringOf(current['accountId']);
-      if (existingAccount !== accountIdForContact) {
-        if (existingAccount !== null && plan.allowReparent !== true) throw leadScoreReparentRequiredError(id, accountIdForContact, existingAccount);
-        patch['accountId'] = accountIdForContact;
+      if (existingAccount !== links.accountId) {
+        // A Contact moving between Accounts broadens who can reach it, so it needs the explicit decision
+        // (contract §6.3). An Opportunity's Account is the operation's by policy (§5.1) and the move was shown
+        // as a before/after in the preview, so it does not need a second acknowledgement.
+        if (type === 'Contact' && existingAccount !== null && plan.allowReparent !== true) throw leadScoreReparentRequiredError(id, links.accountId, existingAccount);
+        patch['accountId'] = links.accountId;
       }
+    }
+    if (type === 'Opportunity' && links.contactId !== undefined && links.contactId !== null) {
+      const currentContacts = Array.isArray(current['contactIds'])
+        ? current['contactIds'].filter((entry): entry is string => typeof entry === 'string')
+        : [];
+      if (!currentContacts.includes(links.contactId)) patch['contactIds'] = [...currentContacts, links.contactId];
     }
     if (Object.keys(patch).length === 0) return id;
     await this.entities.update(type, id, { ...patch, version: current['version'] });
@@ -556,6 +592,9 @@ export class LeadConversionService {
     if (duplicates !== null && duplicates.requiresChoice) {
       for (const target of input.targets) {
         if (target.action !== 'create') continue;
+        // Only a Contact/Account create can duplicate a candidate; a deal named after the Lead is not the
+        // same question, and the resolver produces no Opportunity stage (contract §9, 19-LS.16).
+        if (target.type === 'Opportunity') continue;
         const matching = duplicates.candidates.some((candidate) => candidate.entity === target.type);
         if (!matching && duplicates.hiddenMatches === 0) continue;
         if (overrides.includes(target.type)) continue;
@@ -598,8 +637,10 @@ export class LeadConversionService {
       leadStatus: status === 'succeeded' ? 'Converted' : null,
       createdAccountId: stringOf(row.data['createdAccountId']),
       createdContactId: stringOf(row.data['createdContactId']),
+      createdOpportunityId: stringOf(row.data['createdOpportunityId']),
       linkedAccountId: stringOf(row.data['linkedAccountId']),
       linkedContactId: stringOf(row.data['linkedContactId']),
+      linkedOpportunityId: stringOf(row.data['linkedOpportunityId']),
       convertedAt: instantOf(row.data['completedAt']),
       failureCode: stringOf(row.data['failureCode']),
       completedAt: instantOf(row.data['completedAt']),

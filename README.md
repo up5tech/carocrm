@@ -130,8 +130,8 @@ _Phase 19_ —
   `leadScore.updated.v1`, plus `leadScore.bandChanged.v1` on a crossing, one notification for the Lead's owner
   behind `thresholdNotifications`, and one `leadScore.thresholdAction` audit row — the last two keyed by a
   digest of the crossing itself, so a redelivered job cannot interrupt anybody twice — and a `scheduled_jobs` row
-  can ask for a bounded **decay sweep** when the model has a rule that depends on time. Nothing converts yet,
-  and that is now a decided statement rather than a missing one: 19-LS.10 wrote the conversion **contract** —
+  can ask for a bounded **decay sweep** when the model has a rule that depends on time. Conversion began as a
+  decided statement rather than a missing one: 19-LS.10 wrote the conversion **contract** —
   the five-state operation machine and its transitions, the claim/work/settle transaction boundary with the
   evidence that this kernel's entity service joins the caller's transaction, the target-combination matrix with
   an ACL, a data and a settings gate per row, `conversion.targets` as the whole B2B/B2C surface, the mapping
@@ -171,9 +171,13 @@ _Phase 19_ —
   a conversion leaves alone — the Lead's e-mails stay linked to the Lead, a case keeps its `leadId`, a target-list
   entry keeps its membership, consent is neither copied nor moved (it is address-level in MA), an attachment keeps
   its parent, the new record inherits no ownership, and a reader who may see the Lead cannot open what it became —
-  in `docs/implementation/lead-score-conversion-history.md`. The rest of the code is owed
-  by 19-LS.16, and that operation
-  refuse with the sub-phase that owes them (`LEADSCORE_PHASE_PENDING`). See
+  in `docs/implementation/lead-score-conversion-history.md`. 19-LS.16 completed the target set: an Opportunity
+  can be created or linked **inside the same command** — always attached to the operation's Account, *appended*
+  to the deal's `contactIds` rather than replacing them, named from the Lead by the map's template, with the
+  kernel's default stage and Sales' documents untouched — and the wizard's rows come from the server's
+  `targets` answer rather than assuming all three exist. That leaves 19-LS.17 (the optional AI fit insight) and
+  19-LS.18 (rollout and verification) unshipped; their switches still refuse with the sub-phase that owes them
+  (`LEADSCORE_PHASE_PENDING`). See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
   [docs/implementation/lead-score-ls1-completion-report.md](docs/implementation/lead-score-ls1-completion-report.md),
@@ -181,8 +185,15 @@ _Phase 19_ —
   [docs/implementation/lead-score-ls3-completion-report.md](docs/implementation/lead-score-ls3-completion-report.md),
   [docs/implementation/lead-score-ls5-completion-report.md](docs/implementation/lead-score-ls5-completion-report.md),
   [docs/implementation/lead-score-ls7-completion-report.md](docs/implementation/lead-score-ls7-completion-report.md),
-  [docs/implementation/lead-score-ls8-completion-report.md](docs/implementation/lead-score-ls8-completion-report.md) and
-  [docs/implementation/lead-score-ls9-completion-report.md](docs/implementation/lead-score-ls9-completion-report.md)
+  [docs/implementation/lead-score-ls8-completion-report.md](docs/implementation/lead-score-ls8-completion-report.md),
+  [docs/implementation/lead-score-ls9-completion-report.md](docs/implementation/lead-score-ls9-completion-report.md),
+  [docs/implementation/lead-score-ls10-completion-report.md](docs/implementation/lead-score-ls10-completion-report.md),
+  [docs/implementation/lead-score-ls11-completion-report.md](docs/implementation/lead-score-ls11-completion-report.md),
+  [docs/implementation/lead-score-ls12-completion-report.md](docs/implementation/lead-score-ls12-completion-report.md),
+  [docs/implementation/lead-score-ls13-completion-report.md](docs/implementation/lead-score-ls13-completion-report.md),
+  [docs/implementation/lead-score-ls14-completion-report.md](docs/implementation/lead-score-ls14-completion-report.md),
+  [docs/implementation/lead-score-ls15-completion-report.md](docs/implementation/lead-score-ls15-completion-report.md) and
+  [docs/implementation/lead-score-ls16-completion-report.md](docs/implementation/lead-score-ls16-completion-report.md)
   and [docs/compatibility/lead-score.md](docs/compatibility/lead-score.md).
 
 _Phase 20_ — settings, administration and end-user UX: a settings-document registry with optimistic

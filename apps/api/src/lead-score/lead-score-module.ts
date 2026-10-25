@@ -279,7 +279,9 @@ export const LEADSCORE_FEATURES: readonly LeadScoreFeatureDescriptor[] = [
   // retry or a stuck-row scan resolves what a crash left behind.
   { key: 'leadConversion', label: 'Lead conversion', settingsPath: 'features.leadConversion', requires: ['conversionPreview'], pendingPhase: null },
   { key: 'conversionRecovery', label: 'Conversion operation recovery', settingsPath: 'features.conversionRecovery', requires: ['leadConversion'], pendingPhase: null },
-  { key: 'opportunityConversion', label: 'Opportunity conversion', settingsPath: 'features.opportunityConversion', requires: ['leadConversion'], pendingPhase: '19-LS.16' },
+  // 19-LS.16 delivered the third target: an Opportunity created or linked inside the same command, with no
+  // opportunity logic of its own — Sales still owns stage semantics and its document conversion.
+  { key: 'opportunityConversion', label: 'Opportunity conversion', settingsPath: 'features.opportunityConversion', requires: ['leadConversion'], pendingPhase: null },
   { key: 'aiInsight', label: 'AI-assisted fit insight', settingsPath: 'features.aiInsight', requires: ['scoring'], pendingPhase: '19-LS.17' },
 ];
 
@@ -401,7 +403,7 @@ export const LEADSCORE_MODULE = {
    * reader that the card, the model workspace, the engagement read and the conversion contract did not exist.
    * The module-health view renders it, which makes it a claim rather than a changelog.
    */
-  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13'],
+  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13', '19-LS.16'],
   /**
    * The entity set this module owns, registered in `database/seed-metadata.ts` and indexed by
    * `database/migrations/073_phase19_lead_score.sql`. One list, shared with the write guard, so the

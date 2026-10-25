@@ -207,6 +207,11 @@ export interface FieldConflict {
   /** What the linked record holds now — the "before" of the before/after the wizard must show. */
   readonly current: unknown;
   readonly proposed: unknown;
+  /**
+   * A relationship write the command makes by policy (§6.2), not a value anybody may opt into: shown as a
+   * before/after so the person sees the deal move, with nothing per-field to tick (19-LS.16).
+   */
+  readonly readOnly?: boolean;
 }
 
 export interface TargetResolution {

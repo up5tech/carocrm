@@ -501,7 +501,7 @@ describe('the map is validated against metadata before it is stored (contract §
 });
 
 describe('what a caller may ask for (contract §5.2, §7.6)', () => {
-  it('refuses a disabled target, the pending Opportunity, a repeated type and a malformed choice', async () => {
+  it('refuses a disabled target, a switched-off Opportunity, a repeated type and a malformed choice', async () => {
     const leadId = await createLead('targets', fullLead());
 
     await setSettings({ conversion: { targets: ['Contact'] } });
@@ -511,9 +511,24 @@ describe('what a caller may ask for (contract §5.2, §7.6)', () => {
     expect(errorOf(disabled).details).toMatchObject({ target: 'Account', state: 'notEnabled' });
     await setSettings({ conversion: { targets: ['Contact', 'Account', 'Opportunity'] } });
 
-    const pending = await preview(leadId, [{ type: 'Opportunity', action: 'create' }]);
-    expect(pending.status).toBe(422);
-    expect(errorOf(pending).details).toMatchObject({ target: 'Opportunity', state: 'pending', pendingPhase: '19-LS.16' });
+    // 19-LS.16 delivered the phase, so `Opportunity` is now refused by its own switch — a `notEnabled`
+    // answer with no phase to wait for — and accepted once the switch is on.
+    const off = await preview(leadId, [{ type: 'Opportunity', action: 'create' }]);
+    expect(off.status).toBe(422);
+    expect(errorOf(off).code).toBe('LEADSCORE_TARGET_DISABLED');
+    expect(errorOf(off).details).toMatchObject({ target: 'Opportunity', state: 'notEnabled' });
+    expect(errorOf(off).details['pendingPhase']).toBeUndefined();
+
+    // `opportunityConversion` requires `leadConversion`, so the switch alone would not be effective.
+    await setSettings({ features: { leadConversion: true, opportunityConversion: true } });
+    const enabled = await preview(leadId, [{ type: 'Opportunity', action: 'create' }]);
+    expect(enabled.status, JSON.stringify(enabled.body)).toBe(200);
+    const opportunity = view(enabled).targets[0];
+    // The required name is composed from the Lead, and the person is told the deal will be created.
+    expect(opportunity?.proposed.find((entry) => entry.field === 'name')?.value).toBe(`${RUN}last — ${RUN} Acme Industries`);
+    expect(opportunity?.required).toEqual([]);
+    expect(view(enabled).confirmationTypes).toContain('opportunity_created');
+    expect(opportunity?.relationship).toEqual([]);
 
     expect((await preview(leadId, [{ type: 'Contact', action: 'create' }, { type: 'Contact', action: 'create' }])).status).toBe(422);
     expect((await preview(leadId, [{ type: 'Contact', action: 'link' }])).status).toBe(422);
