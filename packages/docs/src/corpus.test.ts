@@ -20,7 +20,7 @@ import type { ContentFile } from './types.js';
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const CONTENT_DIR = `${ROOT}content/docs`;
 const ASSET_DIR = `${ROOT}apps/web/public/docs-assets`;
-const LINKED_ENTITIES = ['Account', 'Contact', 'Case', 'Call', 'Meeting', 'Task', 'Project', 'Email', 'EmailTemplate'];
+const LINKED_ENTITIES = ['Account', 'Contact', 'Lead', 'Case', 'Call', 'Meeting', 'Task', 'Project', 'Email', 'EmailTemplate'];
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -53,11 +53,11 @@ describe('the shipped documentation corpus', () => {
     expect(report.errors).toEqual([]);
   });
 
-  it('carries the §4.8 inventory: 5 getting-started, 15 user, 24 admin, 5 reference', () => {
+  it('carries the §4.8 inventory: 5 getting-started, 16 user, 25 admin, 5 reference', () => {
     expect(english.sections.map((section) => `${section.key}:${String(section.pages.length)}`)).toEqual([
       'getting-started:5',
-      'user:15',
-      'admin:24',
+      'user:16',
+      'admin:25',
       'reference:5',
     ]);
   });
@@ -77,8 +77,8 @@ describe('the shipped documentation corpus', () => {
 
   it('translates the 18 P0 pages into `vi` and falls back to English for the rest', () => {
     const vietnamese = buildIndex(files, { locale: 'vi' });
-    // `en` still defines the tree, so a `vi` reader sees all four sections and all 41 pages.
-    expect(vietnamese.sections.map((section) => section.pages.length)).toEqual([5, 15, 24, 5]);
+    // `en` still defines the tree, so a `vi` reader sees all four sections and all 51 pages.
+    expect(vietnamese.sections.map((section) => section.pages.length)).toEqual([5, 16, 25, 5]);
 
     const p0 = [
       'getting-started/sign-in',

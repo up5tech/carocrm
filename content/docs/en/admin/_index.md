@@ -18,7 +18,8 @@ The rest cover one area each: [email and notifications](email-and-notifications)
 [extensions](extensions), [integrations](integrations), [module settings](module-settings),
 [portals](portals), the [audit log, jobs and operations](audit-jobs-and-operations), and a configuration
 guide for each module: [Sales](sales), [Service Desk](service-desk), [Customer Success](customer-success),
-[Marketing](marketing), [Voice and messaging](voice), [CRM Chat](crm-chat) and [AI agents](ai-agents).
+[Lead Score](lead-score), [Marketing](marketing), [Voice and messaging](voice), [CRM Chat](crm-chat) and
+[AI agents](ai-agents).
 
 Two things are true across all of them. Every change is enforced by the server, not by what the screen
 shows you. And every setting belongs to a document that is saved as a whole, with one **Save** button —

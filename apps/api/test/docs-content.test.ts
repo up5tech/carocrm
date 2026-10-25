@@ -22,7 +22,7 @@ const CONTENT_DIR = `${ROOT}content/docs`;
 const ASSET_DIR = `${ROOT}apps/web/public/docs-assets`;
 
 /** The record types the handbook links to. A page may only link to a type it actually documents. */
-const LINKED_ENTITIES = ['Account', 'Contact', 'Case', 'Call', 'Meeting', 'Task', 'Project', 'Email', 'EmailTemplate'];
+const LINKED_ENTITIES = ['Account', 'Contact', 'Lead', 'Case', 'Call', 'Meeting', 'Task', 'Project', 'Email', 'EmailTemplate'];
 
 function walk(dir: string): string[] {
   try {

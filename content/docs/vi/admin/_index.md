@@ -16,7 +16,8 @@ mà quản trị viên mở nhiều nhất: [thương hiệu, ngôn ngữ và th
 Phần còn lại mỗi trang nói về một mảng: [email và thông báo](email-and-notifications),
 [tệp và lưu trữ](files-and-storage), [workflow và process](workflows-and-processes),
 [mở rộng](extensions), [tích hợp](integrations), [cấu hình module](module-settings),
-[cổng thông tin](portals) và [nhật ký kiểm toán, job và vận hành](audit-jobs-and-operations).
+[cổng thông tin](portals) và [nhật ký kiểm toán, job và vận hành](audit-jobs-and-operations), cùng
+[hướng dẫn cấu hình Lead Score](lead-score).
 
 Hai điều đúng với tất cả các trang. Mỗi thay đổi đều do server kiểm tra, không phải do màn hình cho bạn thấy.
 Và mỗi cấu hình thuộc về một document được lưu nguyên khối bằng một nút **Lưu** — không có chế độ tự lưu.

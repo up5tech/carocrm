@@ -85,7 +85,7 @@ const TAB_CATALOG: readonly (AdminPanelTab & { group: string })[] = [
   // Phase 19-LS.8: the scoring model workspace is a full page, not a settings document, so the tab is
   // `kind: 'page'` — an administrator reaches it (and the module's own kill switch) even while the
   // module is still switched off, which the navigation entry cannot do because it is feature-gated.
-  { group: 'integrations', key: 'leadScore', labelKey: 'leadscore.admin.page.title', icon: 'ThunderboltOutlined', order: 536, level: 'admin', kind: 'page', route: '/lead-score', docKey: 'admin/integrations' },
+  { group: 'integrations', key: 'leadScore', labelKey: 'leadscore.admin.page.title', icon: 'ThunderboltOutlined', order: 536, level: 'admin', kind: 'page', route: '/lead-score', docKey: 'admin/lead-score' },
   { group: 'integrations', key: 'extensions', labelKey: 'web.adminExtensions.title', descriptionKey: 'web.adminPanel.descriptions.extensions', icon: 'ApiOutlined', order: 540, level: 'admin', kind: 'page', route: '/admin/extensions' },
   { group: 'integrations', key: 'webhooks', labelKey: 'web.adminPanel.tabs.webhooks', descriptionKey: 'web.adminPanel.descriptions.webhooks', icon: 'CloudOutlined', order: 545, level: 'admin', kind: 'tab', route: '/admin/settings/webhooks', docKey: 'admin/integrations' },
   { group: 'integrations', key: 'workflows', labelKey: 'web.workflows.title', descriptionKey: 'web.adminPanel.descriptions.workflows', icon: 'ApartmentOutlined', order: 550, level: 'admin', kind: 'page', route: '/admin/workflows' },

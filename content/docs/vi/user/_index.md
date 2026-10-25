@@ -15,7 +15,8 @@ Bảy trang mô tả công việc mà hầu hết mọi người làm ở đây:
 
 Phần còn lại mỗi trang nói về một module, cho những ngày bạn phải làm đúng việc đó:
 [báo giá và đơn hàng](sales-quotes), [case, hàng đợi và SLA](service-desk-cases), [dự án](projects),
-[chăm sóc khách hàng](customer-success), [chiến dịch và tập khách hàng](marketing), và
+[chăm sóc khách hàng](customer-success), [chấm điểm và chuyển đổi lead](lead-score),
+[chiến dịch và tập khách hàng](marketing), và
 [chat và hộp thoại voice](chat-and-voice).
 
 Mỗi trang mô tả màn hình đúng như nó đang hành xử hôm nay, kể cả những giới hạn hay làm người dùng bất ngờ.
