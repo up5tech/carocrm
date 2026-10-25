@@ -471,5 +471,112 @@
     "conversionRecovery": "khôi phục chuyển đổi",
     "opportunityConversion": "chuyển đổi Opportunity",
     "aiInsight": "AI insight"
+  },
+  "conversion": {
+    "title": "Chuyển đổi",
+    "hint": "Chuyển Lead này thành Liên hệ và/hoặc Tài khoản. Chưa ghi gì cho tới khi bạn xác nhận.",
+    "open": "Chuyển đổi Lead này",
+    "done": "Đã chuyển đổi lúc {date}",
+    "convertedContact": "Mở Liên hệ",
+    "convertedAccount": "Mở Tài khoản",
+    "reason": {
+      "cannot_preview": "Bạn không được xem trước chuyển đổi.",
+      "cannot_execute": "Bạn không được thực hiện chuyển đổi.",
+      "lead_not_editable": "Bạn không được sửa Lead này, mà chuyển đổi có ghi vào Lead.",
+      "preview_disabled": "Chức năng xem trước chuyển đổi đang tắt.",
+      "conversion_disabled": "Chức năng chuyển đổi đang tắt.",
+      "already_converted": "Lead này đã được chuyển đổi rồi.",
+      "match": {
+        "email_exact": "trùng e-mail",
+        "phone_exact": "trùng số điện thoại",
+        "domain_exact": "cùng tên miền",
+        "company_exact": "cùng tên công ty"
+      }
+    },
+    "wizard": {
+      "title": "Chuyển đổi {name}",
+      "stepTargets": "Đích",
+      "stepReview": "Xem lại",
+      "stepResult": "Kết quả",
+      "target": {
+        "Contact": "Liên hệ",
+        "Account": "Tài khoản",
+        "Opportunity": "Cơ hội"
+      },
+      "action": {
+        "none": "Không tạo",
+        "create": "Tạo mới",
+        "link": "Liên kết bản ghi có sẵn"
+      },
+      "pick": "Chọn bản ghi để liên kết",
+      "pickHint": "Chỉ hiện bản ghi bạn được đọc, và các bản ghi gợi ý đứng trước.",
+      "review": "Xem lại",
+      "back": "Quay lại",
+      "previewFailed": "Không tạo được bản xem trước.",
+      "duplicates": "Có thể trùng",
+      "duplicate": "{label} · {matchClass} · {reasons}",
+      "duplicateHidden": "{count} bản ghi có thể trùng mà bạn không được xem.",
+      "duplicateOverride": "Vẫn tạo mới (cần quyền bỏ qua cảnh báo trùng)",
+      "proposed": "Sẽ được ghi",
+      "skipped": "Không được sao chép",
+      "required": "Bắt buộc nhưng còn trống",
+      "conflicts": "Khác với bản ghi được liên kết",
+      "conflictApply": "Áp dụng giá trị này",
+      "notCopied": "Không bao giờ sao chép",
+      "relationship": "Đồng thời liên kết",
+      "confirmation": "Trước khi xác nhận",
+      "confirm": {
+        "simple": "Các bản ghi đã chọn sẽ được tạo hoặc liên kết.",
+        "duplicates_present": "Có bản ghi có thể trùng với Lead này.",
+        "values_will_be_skipped": "Một số giá trị của Lead sẽ không được sao chép.",
+        "field_merge": "Một số giá trị khác với bản ghi được liên kết.",
+        "contact_reparent": "Một Liên hệ sẽ chuyển sang Tài khoản khác.",
+        "opportunity_created": "Một Cơ hội sẽ được tạo."
+      },
+      "reparent": "Cho phép Liên hệ chuyển sang Tài khoản này",
+      "mergeLocked": "Hệ thống này không cho phép ghi đè giá trị lên bản ghi có sẵn.",
+      "convert": "Chuyển đổi",
+      "converting": "Đang chuyển đổi…",
+      "stale": "Lead đã thay đổi trong lúc bạn xem, nên bản xem trước đã được tạo lại. Hãy xem lại và xác nhận.",
+      "retry": "Thử lại với cùng mã thao tác",
+      "resumeTitle": "Một lần chuyển đổi trong tab này chưa có phản hồi",
+      "resumeHint": "Tiếp tục sẽ gửi lại đúng mã thao tác đó, nên không thể tạo thêm bộ bản ghi thứ hai.",
+      "resume": "Tiếp tục",
+      "discard": "Bỏ qua",
+      "resultTitle": "Lead này đã được chuyển đổi",
+      "createdContact": "Liên hệ đã tạo",
+      "createdAccount": "Tài khoản đã tạo",
+      "linkedContact": "Liên hệ đã liên kết",
+      "linkedAccount": "Tài khoản đã liên kết",
+      "openRecord": "Mở",
+      "done": "Xong",
+      "failed": "Chuyển đổi không chạy được.",
+      "skip": {
+        "source_hidden": "bạn không được đọc giá trị này của Lead",
+        "empty_value": "Lead không có giá trị",
+        "target_no_such_field": "bản ghi đích không có trường này",
+        "field_type_incompatible": "kiểu dữ liệu không khớp",
+        "never_mappable": "trường này không bao giờ được sao chép",
+        "relationship_field": "quan hệ hệ thống tự đặt",
+        "value_invalid": "giá trị sẽ bị từ chối",
+        "target_has_value": "bản ghi đích đã có giá trị",
+        "link_keeps_values": "liên kết không sửa bản ghi",
+        "person_target_present": "đang tạo Liên hệ thay thế",
+        "merge_not_allowed": "không được phép ghi đè giá trị"
+      },
+      "blocked": {
+        "required": "Còn thiếu một giá trị bắt buộc",
+        "cannotCreate": "Bạn không được tạo",
+        "cannotRead": "Bạn không được đọc",
+        "targetUnreadable": "Không đọc được bản ghi đó",
+        "mergeNotAllowed": "Không được phép ghi đè giá trị",
+        "leadNotEditable": "Không sửa được Lead"
+      }
+    },
+    "match": {
+      "same_person": "cùng một người",
+      "same_organization": "cùng một tổ chức",
+      "possible_duplicate": "có thể trùng"
+    }
   }
 }

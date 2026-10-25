@@ -7933,3 +7933,27 @@ body.carocrm-reordering * {
   border-radius: 8px;
   padding: 10px 12px;
 }
+
+/* Phase 19-LS.14 — the conversion wizard's compact review blocks. */
+.carocrm-conversion-target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.carocrm-conversion-list {
+  margin: 4px 0 0;
+  padding-inline-start: 18px;
+  font-size: 13px;
+}
+.carocrm-conversion-list li + li {
+  margin-top: 2px;
+}
+.carocrm-conversion-target-review {
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

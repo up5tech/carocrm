@@ -471,5 +471,112 @@
     "conversionRecovery": "conversion recovery",
     "opportunityConversion": "opportunity conversion",
     "aiInsight": "AI insight"
+  },
+  "conversion": {
+    "title": "Conversion",
+    "hint": "Turn this Lead into a Contact and/or an Account. Nothing is written until you confirm.",
+    "open": "Convert this Lead",
+    "done": "Converted on {date}",
+    "convertedContact": "Open the Contact",
+    "convertedAccount": "Open the Account",
+    "reason": {
+      "cannot_preview": "You may not preview a conversion.",
+      "cannot_execute": "You may not run a conversion.",
+      "lead_not_editable": "You may not edit this Lead, and a conversion writes to it.",
+      "preview_disabled": "Conversion preview is switched off.",
+      "conversion_disabled": "Conversion is switched off.",
+      "already_converted": "This Lead has already been converted.",
+      "match": {
+        "email_exact": "e-mail matches",
+        "phone_exact": "phone matches",
+        "domain_exact": "same domain",
+        "company_exact": "same company name"
+      }
+    },
+    "wizard": {
+      "title": "Convert {name}",
+      "stepTargets": "Targets",
+      "stepReview": "Review",
+      "stepResult": "Result",
+      "target": {
+        "Contact": "Contact",
+        "Account": "Account",
+        "Opportunity": "Opportunity"
+      },
+      "action": {
+        "none": "Do not build",
+        "create": "Create new",
+        "link": "Link existing"
+      },
+      "pick": "Choose the record to link",
+      "pickHint": "Only records you may read are listed, and the suggested matches come first.",
+      "review": "Review",
+      "back": "Back",
+      "previewFailed": "The preview could not be built.",
+      "duplicates": "Possible duplicates",
+      "duplicate": "{label} · {matchClass} · {reasons}",
+      "duplicateHidden": "{count} possible match(s) are not visible to you.",
+      "duplicateOverride": "Create anyway (needs the duplicate-override right)",
+      "proposed": "Will be written",
+      "skipped": "Will not be copied",
+      "required": "Required and still empty",
+      "conflicts": "Differs from the linked record",
+      "conflictApply": "Apply this value instead",
+      "notCopied": "Never copied",
+      "relationship": "Also links",
+      "confirmation": "Before you confirm",
+      "confirm": {
+        "simple": "The selected records will be created or linked.",
+        "duplicates_present": "There are possible duplicates for this Lead.",
+        "values_will_be_skipped": "Some Lead values will not be copied.",
+        "field_merge": "Some values differ from the linked record.",
+        "contact_reparent": "A Contact will move to a different Account.",
+        "opportunity_created": "An Opportunity will be created."
+      },
+      "reparent": "Allow the Contact to move to this Account",
+      "mergeLocked": "This installation does not allow applying values to an existing record.",
+      "convert": "Convert",
+      "converting": "Converting…",
+      "stale": "The Lead changed while you were reviewing, so the preview was taken again. Review it and confirm.",
+      "retry": "Try again with the same operation key",
+      "resumeTitle": "A conversion started in this tab was not answered",
+      "resumeHint": "Resuming re-sends the same operation key, so it cannot create a second set of records.",
+      "resume": "Resume it",
+      "discard": "Discard",
+      "resultTitle": "This Lead is converted",
+      "createdContact": "Created Contact",
+      "createdAccount": "Created Account",
+      "linkedContact": "Linked Contact",
+      "linkedAccount": "Linked Account",
+      "openRecord": "Open",
+      "done": "Done",
+      "failed": "The conversion did not run.",
+      "skip": {
+        "source_hidden": "you may not read this Lead value",
+        "empty_value": "the Lead has no value",
+        "target_no_such_field": "the target has no such field",
+        "field_type_incompatible": "the types do not match",
+        "never_mappable": "this field is never copied",
+        "relationship_field": "the relationship sets this field",
+        "value_invalid": "the value would be refused",
+        "target_has_value": "the target already has a value",
+        "link_keeps_values": "a link does not change the record",
+        "person_target_present": "a Contact is being built instead",
+        "merge_not_allowed": "applying values is not allowed"
+      },
+      "blocked": {
+        "required": "A required value is still empty",
+        "cannotCreate": "You may not create",
+        "cannotRead": "You may not read",
+        "targetUnreadable": "That record cannot be read",
+        "mergeNotAllowed": "Applying values is not allowed",
+        "leadNotEditable": "The Lead cannot be edited"
+      }
+    },
+    "match": {
+      "same_person": "same person",
+      "same_organization": "same organization",
+      "possible_duplicate": "possible duplicate"
+    }
   }
 }

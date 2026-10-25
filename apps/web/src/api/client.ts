@@ -106,6 +106,9 @@ import type {
   IntegrationSyncRunListResult,
   InternalInfoView,
   LayoutDefinition,
+  LeadConversionAffordance,
+  LeadConversionPreviewView,
+  LeadConversionResult,
   LeadScoreBatchStartView,
   LeadScoreCapabilitiesView,
   LeadScoreEditorCatalog,
@@ -2077,6 +2080,27 @@ export const api = {
   // side-effect-free preview, the module settings and the rebuild. Models and rules themselves stay on the
   // generic record API (`/LeadScoreModel`, `/LeadScoreRule`): the LS.2 write guard is what makes a published
   // version immutable, and a second write path would be a second guard to forget.
+  /**
+   * 19-LS.14: may this caller convert this Lead, and is it converted? Its own read because the score read
+   * needs `viewScore`, and the answer is a 200 with reasons rather than an error.
+   */
+  leadScoreConversionAffordance: (leadId: string) =>
+    request<LeadConversionAffordance>(`/LeadScore/action/conversion/affordance?leadId=${encodeURIComponent(leadId)}`),
+  leadScoreConversionPreview: (input: {
+    leadId: string;
+    targets: readonly { type: string; action: 'create' | 'link'; existingId?: string }[];
+    fieldMerge?: readonly { target: string; field: string; value: unknown }[];
+  }) => request<LeadConversionPreviewView>('/LeadScore/action/conversion/preview', post(input)),
+  leadScoreConversionConvert: (input: {
+    leadId: string;
+    operationKey: string;
+    targets: readonly { type: string; action: 'create' | 'link'; existingId?: string }[];
+    fieldMerge?: readonly { target: string; field: string; value: unknown }[];
+    previewHash: string;
+    acknowledged: readonly string[];
+    overrideDuplicateFor?: readonly string[];
+    allowReparent?: boolean;
+  }) => request<LeadConversionResult>('/LeadScore/action/conversion/convert', post(input)),
   leadScoreHealth: () => request<LeadScoreHealthView>('/LeadScore/action/health'),
   leadScoreCapabilities: () => request<LeadScoreCapabilitiesView>('/LeadScore/action/capabilities'),
   leadScoreSettings: () => request<LeadScoreSettingsView>('/LeadScore/action/settings'),

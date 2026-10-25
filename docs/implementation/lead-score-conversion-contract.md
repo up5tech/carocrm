@@ -824,6 +824,20 @@ The Lead read view gains a `conversion` affordance block computed by the server 
 reasons[]}` — exactly like LS.7's `ScoreReadView.actions` (`docs/implementation/lead-score-ls7-completion-report.md`),
 so the Convert button is rendered from an answer rather than from a role name. `reasons` uses §12.1's tokens.
 
+> **Delivered in 19-LS.14 as its own read**, `GET action/conversion/affordance?leadId=`, not a block on the score
+> read. The reason is the one this section's analogy hides: `ScoreReadView` needs `viewScore`, and a converter may
+> legitimately hold only the conversion rights — hanging the button off the score read would hide conversion from
+> exactly the people who can do it. The answer is a **200 with `canConvert: false` and reasons** (a refusal would
+> be a toast where a missing button belongs), the module switch and the Lead's record ACL still apply, and it also
+> carries `alreadyConverted` + the converted references + `canOverride`, which is what turns the Lead's card into
+> either a button or a set of links.
+>
+> §11.4's "recover from a timeout by looking up the operation key" is implemented as **resume, not auto-lookup**:
+> the wizard writes the request body (key included) before the call and offers to re-send *that body* after a lost
+> response or a reload. Re-sending the same key **is** the lookup the plan asks for — the server answers with the
+> committed result if it committed, and with "in flight" if it is still running — and it is the only form of
+> recovery that cannot create a second set of records.
+
 ### 12.3 Abuse bounds
 
 Plan §9.4 asks for bounded candidate limits, bounded conversion retries and protection against tight loops.

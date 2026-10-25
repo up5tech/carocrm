@@ -37,6 +37,7 @@ const PREVIEW_PATH = '/api/v1/LeadScore/action/conversion/preview';
 const CONVERT_PATH = '/api/v1/LeadScore/action/conversion/convert';
 const OPERATIONS_PATH = '/api/v1/LeadScore/action/conversion/operations';
 const RECOVER_PATH = '/api/v1/LeadScore/action/work/recover-conversion-operations';
+const AFFORDANCE_PATH = '/api/v1/LeadScore/action/conversion/affordance';
 
 const WORKER_SECRET = `${RUN}_worker`;
 process.env.REPORT_WORKER_SECRET = WORKER_SECRET;
@@ -644,5 +645,58 @@ describe('the command runs as the caller (plan §9.2, contract §13.2)', () => {
     expect(result.status).toBe(403);
     expect(errorOf(result).code).toBe('LEADSCORE_MODULE_DISABLED');
     expect(JSON.stringify(result.body)).toContain('leadConversion');
+  });
+});
+
+describe('the affordance a screen asks before showing a button (19-LS.14, contract §12.2)', () => {
+  it('answers yes for a convertible Lead, and names the references once it is converted', async () => {
+    const leadId = await lead('affordance');
+    const before = await call('GET', `${AFFORDANCE_PATH}?leadId=${encodeURIComponent(leadId)}`);
+    expect(before.status, JSON.stringify(before.body)).toBe(200);
+    expect(before.body).toMatchObject({ canPreview: true, canConvert: true, canOverride: true, alreadyConverted: false, reasons: [] });
+
+    const converted = await convert(leadId, [{ type: 'Contact', action: 'create' }]);
+    expect(converted.status).toBe(200);
+
+    const after = await call('GET', `${AFFORDANCE_PATH}?leadId=${encodeURIComponent(leadId)}`);
+    expect(after.body).toMatchObject({
+      canConvert: false,
+      alreadyConverted: true,
+      status: 'Converted',
+      operationId: (converted.body as unknown as { operationId: string }).operationId,
+      convertedContactId: (converted.body as unknown as { createdContactId: string }).createdContactId,
+    });
+    expect((after.body['reasons'] as string[])).toContain('already_converted');
+  });
+
+  it('answers no with reasons instead of an error when the caller holds no conversion right', async () => {
+    const leadId = await lead('affordance no rights');
+    const roleId = `${RUN}_no_conversion`;
+    await createTestRole(ctx, { id: roleId, name: `${RUN} no conversion`, permissions: { Lead: { read: 'all' } } });
+    created.roles.push(roleId);
+    const caller = await createTestUser(ctx, { userName: `${RUN}_noconv`, roleIds: [roleId] });
+    created.users.push(caller.id);
+
+    const answer = await call('GET', `${AFFORDANCE_PATH}?leadId=${encodeURIComponent(leadId)}`, undefined, caller.token);
+    expect(answer.status).toBe(200);
+    expect(answer.body['canConvert']).toBe(false);
+    expect((answer.body['reasons'] as string[])).toEqual(expect.arrayContaining(['cannot_preview', 'cannot_execute']));
+  });
+
+  it('refuses when the module is off, and answers a Lead it may not read as missing', async () => {
+    const leadId = await lead('affordance doors');
+    await setSettings({ enabled: false });
+    const off = await call('GET', `${AFFORDANCE_PATH}?leadId=${encodeURIComponent(leadId)}`);
+    expect(off.status).toBe(403);
+    expect(errorOf(off).code).toBe('LEADSCORE_MODULE_DISABLED');
+    await setSettings({ enabled: true });
+
+    const roleId = `${RUN}_own_affordance`;
+    await createTestRole(ctx, { id: roleId, name: `${RUN} own affordance`, permissions: { Lead: { read: 'own' } } });
+    created.roles.push(roleId);
+    const caller = await createTestUser(ctx, { userName: `${RUN}_ownaff`, roleIds: [roleId] });
+    created.users.push(caller.id);
+    const missing = await call('GET', `${AFFORDANCE_PATH}?leadId=${encodeURIComponent(leadId)}`, undefined, caller.token);
+    expect(missing.status).toBe(404);
   });
 });

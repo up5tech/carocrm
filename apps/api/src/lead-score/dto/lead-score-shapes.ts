@@ -318,3 +318,6 @@ export const ConversionOperationsQuerySchema = z
 export const ConversionOperationIdSchema = z.object({ operationId: z.string().trim().min(1).max(64) }).strict();
 
 export const ConversionCloseSchema = z.object({ reason: z.string().trim().max(500).optional() }).strict();
+
+/** The conversion affordance for one Lead: may this caller convert it, and is it already converted? */
+export const ConversionAffordanceQuerySchema = z.object({ leadId: LeadIdSchema }).strict();

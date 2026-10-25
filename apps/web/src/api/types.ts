@@ -4099,3 +4099,100 @@ export interface LeadScoreHealthView {
   };
   readonly checks: readonly { readonly name: string; readonly ok: boolean; readonly detail: string }[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 19-LS.14 — the conversion wizard (contract §12.2, plan §11.4)
+// ---------------------------------------------------------------------------
+
+/** What the server says about converting one Lead: the two answers a button needs, and the references after. */
+export interface LeadConversionAffordance {
+  readonly leadId: string;
+  readonly canPreview: boolean;
+  readonly canConvert: boolean;
+  readonly canOverride: boolean;
+  readonly alreadyConverted: boolean;
+  readonly status: string | null;
+  readonly convertedAt: string | null;
+  readonly convertedContactId: string | null;
+  readonly convertedAccountId: string | null;
+  readonly operationId: string | null;
+  readonly reasons: readonly string[];
+}
+
+export interface LeadConversionProposedField {
+  readonly field: string;
+  readonly value: unknown;
+  readonly origin: string;
+}
+
+export interface LeadConversionSkippedField {
+  readonly from?: string | undefined;
+  readonly to?: string | undefined;
+  readonly reason: string;
+}
+
+export interface LeadConversionConflict {
+  readonly field: string;
+  readonly current: unknown;
+  readonly proposed: unknown;
+}
+
+export interface LeadConversionTargetPreview {
+  readonly type: string;
+  readonly action: string;
+  readonly existingId: string | null;
+  readonly existing: { readonly id: string; readonly label: string | null } | null;
+  readonly mappingVersion: number;
+  readonly proposed: readonly LeadConversionProposedField[];
+  readonly skipped: readonly LeadConversionSkippedField[];
+  readonly required: readonly string[];
+  readonly conflicts: readonly LeadConversionConflict[];
+  readonly notCopied: readonly string[];
+  readonly relationship: readonly { readonly type: string; readonly action: string; readonly id: string | null }[];
+}
+
+export interface LeadConversionCandidate {
+  readonly entity: string;
+  readonly id: string;
+  readonly label: string | null;
+  readonly matchClass: string;
+  readonly reasons: readonly string[];
+  readonly details: { readonly email?: string | undefined; readonly phone?: string | undefined; readonly website?: string | undefined };
+}
+
+export interface LeadConversionPreviewView {
+  readonly leadId: string;
+  readonly leadRevision: number;
+  readonly targets: readonly LeadConversionTargetPreview[];
+  readonly duplicates: {
+    readonly candidates: readonly LeadConversionCandidate[];
+    readonly hiddenMatches: number;
+    readonly requiresChoice: boolean;
+    readonly bounded: boolean;
+    readonly limits: { readonly candidates: number; readonly scan: number };
+  } | null;
+  readonly permission: { readonly canExecute: boolean; readonly reasons: readonly string[] };
+  readonly confirmationTypes: readonly string[];
+  readonly previewHash: string;
+  readonly fingerprint: {
+    readonly mappingVersions: Readonly<Record<string, number>>;
+    readonly leadScope: readonly string[];
+    readonly readerScope: Readonly<Record<string, readonly string[]>>;
+  };
+}
+
+export interface LeadConversionResult {
+  readonly operationId: string;
+  readonly operationKey: string;
+  readonly status: string;
+  readonly leadId: string;
+  readonly leadStatus: string | null;
+  readonly createdAccountId: string | null;
+  readonly createdContactId: string | null;
+  readonly linkedAccountId: string | null;
+  readonly linkedContactId: string | null;
+  readonly convertedAt: string | null;
+  readonly failureCode: string | null;
+  readonly completedAt: string | null;
+  readonly resultSummary: Readonly<Record<string, unknown>> | null;
+}

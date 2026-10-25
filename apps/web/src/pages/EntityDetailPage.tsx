@@ -14,6 +14,7 @@ import { usePageDocs } from '../components/docs/PageDocs.js';
 import { ESignatureRecordActions } from '../components/ESignatureRecordActions.js';
 import { FieldValue, linkLabelsOf } from '../components/fields.js';
 import { isJsonPayload } from '../components/JsonValue.js';
+import { LeadConversionSection } from '../components/LeadConversionWizard.js';
 import { LeadScorePanel } from '../components/LeadScorePanel.js';
 import { LinkRecordModal } from '../components/LinkRecordModal.js';
 import { NextActionBand } from '../components/NextActionBand.js';
@@ -528,6 +529,13 @@ export function EntityDetailPage() {
             refuses, and the portal gets no card at all. `onChanged` reloads the record because a stored
             score is a write onto this Lead. */}
         {entity === 'Lead' && base !== '/portal' ? <LeadScorePanel leadId={id} onChanged={load} /> : null}
+
+        {/* Phase 19-LS.14 — the conversion card: shown because the server answered `canConvert` (a 200 with
+            reasons, not an error), and it is the only entry point to the wizard. A converted Lead shows its
+            target links here as well as in the metadata `Converted To` panel. */}
+        {entity === 'Lead' && base !== '/portal' ? (
+          <LeadConversionSection leadId={id} leadName={String(record?.['name'] ?? '')} onChanged={load} />
+        ) : null}
 
         {panels.map((panel, index) => {
           // §5.5 progressive disclosure: the first panel carries the record's identity; the rest

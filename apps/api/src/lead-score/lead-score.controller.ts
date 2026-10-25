@@ -8,7 +8,7 @@ import type { ZodTypeAny } from 'zod';
 import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
-import { BatchRecalculateSchema, ConversionCandidatesSchema, ConversionCloseSchema, ConversionOperationIdSchema, ConversionOperationsQuerySchema, ConversionPreviewSchema, ConvertSchema, EditorCatalogQuerySchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { BatchRecalculateSchema, ConversionAffordanceQuerySchema, ConversionCandidatesSchema, ConversionCloseSchema, ConversionOperationIdSchema, ConversionOperationsQuerySchema, ConversionPreviewSchema, ConvertSchema, EditorCatalogQuerySchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
 import { LeadConversionService } from './lead-conversion.service.js';
 import { LeadConversionAuditService } from './lead-conversion-audit.service.js';
 import { LeadConversionPreviewService } from './lead-conversion-preview.service.js';
@@ -269,6 +269,19 @@ export class LeadScoreController {
   async conversionCandidates(@Body() body: unknown) {
     const input = this.parse(ConversionCandidatesSchema, body);
     return this.duplicates.candidates(input.leadId);
+  }
+
+  /**
+   * May this caller convert this Lead, and has it already been converted? (19-LS.14)
+   *
+   * A read with no capability gate of its own: the button must be able to ask and get "no" (with reasons)
+   * instead of an error. The module switch and the Lead's own record ACL still apply, and the Lead is not
+   * echoed beyond the references the caller can already read on the record.
+   */
+  @Get('action/conversion/affordance')
+  async conversionAffordance(@Query() query: unknown) {
+    const input = this.parse(ConversionAffordanceQuerySchema, query ?? {});
+    return this.conversion.affordance(input.leadId);
   }
 
   /**

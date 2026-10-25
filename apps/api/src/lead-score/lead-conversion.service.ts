@@ -2,6 +2,7 @@ import { AppError, AuthorizationDeniedError, ValidationError } from '@carocrm/co
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import { AclApiService } from '../acl/acl-api.service.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { DatabaseService,type DbTx } from '../database/database.service.js';
 import { EntityCrudService } from '../entity/entity.service.js';
@@ -16,6 +17,7 @@ import {
   leadScoreConversionNeedsRecoveryError,
   leadScoreConversionRetryableError,
   leadScoreDuplicateReviewRequiredError,
+  leadScoreModuleDisabledError,
   leadScorePreviewStaleError,
   leadScoreReparentRequiredError,
 } from './lead-score-errors.js';
@@ -76,6 +78,22 @@ export interface ConversionPlanRecord {
   readonly allowReparent: boolean;
 }
 
+export interface ConversionAffordanceView {
+  readonly leadId: string;
+  readonly canPreview: boolean;
+  readonly canConvert: boolean;
+  /** Whether this caller may answer "create anyway" to a duplicate warning (the wizard's override box). */
+  readonly canOverride: boolean;
+  readonly alreadyConverted: boolean;
+  readonly status: string | null;
+  readonly convertedAt: string | null;
+  readonly convertedContactId: string | null;
+  readonly convertedAccountId: string | null;
+  readonly operationId: string | null;
+  /** Stable reasons the button is off; empty when `canConvert` is true (contract §12.2). */
+  readonly reasons: readonly string[];
+}
+
 export interface ConversionResultView {
   readonly operationId: string;
   readonly operationKey: string;
@@ -119,6 +137,7 @@ export class LeadConversionService {
     @Inject(LeadScorePermissionService) private readonly permissions: LeadScorePermissionService,
     @Inject(LeadConversionPreviewService) private readonly preview: LeadConversionPreviewService,
     @Inject(EntityCrudService) private readonly entities: EntityCrudService,
+    @Inject(AclApiService) private readonly acl: AclApiService,
     @Inject(EventBus) private readonly events: EventBus,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
@@ -172,6 +191,48 @@ export class LeadConversionService {
       allowReparent: input.allowReparent === true,
       alreadyCreated: {},
     });
+  }
+
+  /**
+   * May this caller convert this Lead, and has it already been converted? (19-LS.14, contract §12.2.)
+   *
+   * Its own read rather than a block on the score read, because the score read needs `viewScore` and a
+   * converter may legitimately hold only the conversion rights. The answer is never a refusal for a missing
+   * right — it is a 200 with `canConvert: false` and the reasons, which is what a button needs to disappear
+   * without an error toast (the same shape LS.7 chose for the score card's `actions`).
+   */
+  async affordance(leadId: string): Promise<ConversionAffordanceView> {
+    if ((await this.settings.enabled()) !== true) throw leadScoreModuleDisabledError('enabled');
+    const lead = await this.entities.get('Lead', leadId);
+    const [canPreview, canExecute, canOverride, leadEdit, effective] = await Promise.all([
+      this.permissions.can('convertPreview'),
+      this.permissions.can('convertExecute'),
+      this.permissions.can('duplicateOverride'),
+      this.acl.canUser('Lead', 'edit'),
+      this.settings.read().then((view) => view.effective),
+    ]);
+    const alreadyConverted = lead['status'] === 'Converted' || stringOf(lead['conversionOperationId']) !== null;
+    const reasons: string[] = [];
+    if (!canPreview) reasons.push('cannot_preview');
+    if (!canExecute) reasons.push('cannot_execute');
+    if (leadEdit === 'no') reasons.push('lead_not_editable');
+    if (effective['conversionPreview'] !== true) reasons.push('preview_disabled');
+    if (effective['leadConversion'] !== true) reasons.push('conversion_disabled');
+    if (alreadyConverted) reasons.push('already_converted');
+    const previewable = canPreview && effective['conversionPreview'] === true;
+    return {
+      leadId,
+      canPreview: previewable,
+      canConvert: previewable && canExecute && leadEdit !== 'no' && effective['leadConversion'] === true && !alreadyConverted,
+      canOverride,
+      alreadyConverted,
+      status: stringOf(lead['status']),
+      convertedAt: instantOf(lead['convertedAt']),
+      convertedContactId: stringOf(lead['convertedContactId']),
+      convertedAccountId: stringOf(lead['convertedAccountId']),
+      operationId: stringOf(lead['conversionOperationId']),
+      reasons,
+    };
   }
 
   /**
