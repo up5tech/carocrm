@@ -443,6 +443,7 @@ export function EntityDetailPage() {
             <NextActionBand entity={entity} id={id} definition={definition.data} record={record} onChanged={load} />
           </>
         )}
+        {panels.length === 0 || base === '/portal' ? (
         <Card
           className="carocrm-card"
           {...(base === '/portal'
@@ -504,6 +505,7 @@ export function EntityDetailPage() {
         >
           {panels.length === 0 ? fieldGroups(ordered) : null}
         </Card>
+        ) : null}
 
         {/* Phase 19-S.7/19-S.17 — the commercial hand-off from a deal. The panel only navigates: the
             document needs priced lines, which the create screen's line editor collects, and the save
@@ -521,21 +523,6 @@ export function EntityDetailPage() {
             the buttons are exactly the commands the server says this actor may run in this status, and the
             blockers are the server's findings, never a client-side re-derivation (§8.2, AGENTS.md §5.3). */}
         {entity === 'Campaign' && base !== '/portal' ? <CampaignLifecycleActions campaignId={id} onChanged={load} /> : null}
-
-        {/* Phase 19-LS.7 — the score of this Lead, its explanation, its history and the recalculation. The
-            card renders what `GET /LeadScore/action/score/:leadId` answered: every label, the freshness
-            verdict and the two `actions` flags come from the server, so the number is never recomputed here
-            and a button appears only where the gate would accept it. It renders nothing when that read
-            refuses, and the portal gets no card at all. `onChanged` reloads the record because a stored
-            score is a write onto this Lead. */}
-        {entity === 'Lead' && base !== '/portal' ? <LeadScorePanel leadId={id} onChanged={load} /> : null}
-
-        {/* Phase 19-LS.14 — the conversion card: shown because the server answered `canConvert` (a 200 with
-            reasons, not an error), and it is the only entry point to the wizard. A converted Lead shows its
-            target links here as well as in the metadata `Converted To` panel. */}
-        {entity === 'Lead' && base !== '/portal' ? (
-          <LeadConversionSection leadId={id} leadName={String(record?.['name'] ?? '')} onChanged={load} />
-        ) : null}
 
         {panels.map((panel, index) => {
           // §5.5 progressive disclosure: the first panel carries the record's identity; the rest
@@ -560,6 +547,21 @@ export function EntityDetailPage() {
             </Card>
           );
         })}
+
+        {/* Phase 19-LS.7 — the score of this Lead, its explanation, its history and the recalculation. The
+            card renders what `GET /LeadScore/action/score/:leadId` answered: every label, the freshness
+            verdict and the two `actions` flags come from the server, so the number is never recomputed here
+            and a button appears only where the gate would accept it. It renders nothing when that read
+            refuses, and the portal gets no card at all. `onChanged` reloads the record because a stored
+            score is a write onto this Lead. */}
+        {entity === 'Lead' && base !== '/portal' ? <LeadScorePanel leadId={id} onChanged={load} /> : null}
+
+        {/* Phase 19-LS.14 — the conversion card: shown because the server answered `canConvert` (a 200 with
+            reasons, not an error), and it is the only entry point to the wizard. A converted Lead shows its
+            target links here as well as in the metadata `Converted To` panel. */}
+        {entity === 'Lead' && base !== '/portal' ? (
+          <LeadConversionSection leadId={id} leadName={String(record?.['name'] ?? '')} onChanged={load} />
+        ) : null}
 
         {/* Fields no panel places stay visible under **Other** — the layout editor shows the same
             computed group, so the page and the settings never disagree (§5.5). An entity with no

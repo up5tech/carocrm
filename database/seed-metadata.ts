@@ -4969,7 +4969,7 @@ function leadScoreEntities(): MetadataSeedEntry[] {
           edit: [{ entity: 'LeadScoreModel', type: 'edit', panels: [{ name: 'main', position: 0, fields: ['name', 'description', 'status', 'modelVersion', 'scaleMin', 'scaleMax', 'baseScore', 'scoreFloor', 'scoreCeiling', 'qualificationBands', 'dimensionWeights', 'allowedFieldPaths', 'blockedFieldPaths', 'settingsJson', 'effectiveFrom', 'effectiveTo'] }] }],
         },
         record: { displayField: 'name', removable: false, streamable: false },
-        client: {},
+        client: { web: false },
         // Administration, not daily work. No role holds these rights yet, so an installation that has not
         // configured a model sees nothing new: the default is refusal and 19-LS.3 grants deliberately.
         acl: { permissions: { LeadScoreModel: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
@@ -5030,7 +5030,7 @@ function leadScoreEntities(): MetadataSeedEntry[] {
           edit: [{ entity: 'LeadScoreRule', type: 'edit', panels: [{ name: 'main', position: 0, fields: ['name', 'description', 'modelId', 'modelVersion', 'enabled', 'priority', 'dimension', 'reasonCode', 'condition', 'effect', 'points', 'targetBand', 'missingDataPolicy', 'signalSource', 'eventType', 'lookbackDays', 'decayPolicy', 'decayHalfLifeDays'] }] }],
         },
         record: { displayField: 'name', removable: true, streamable: false },
-        client: {},
+        client: { web: false },
         acl: { permissions: { LeadScoreRule: { create: 'no', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
       },
     },

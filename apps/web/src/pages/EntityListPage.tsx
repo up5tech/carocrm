@@ -1,4 +1,4 @@
-import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, DownOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined,UpOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, DownOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, ThunderboltOutlined, UploadOutlined, UpOutlined } from '@ant-design/icons';
 import { App as AntApp, Button, Card, Col, Dropdown, Input, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Typography } from 'antd';
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -606,23 +606,45 @@ export function EntityListPage() {
           {definition.data?.label ?? entityName}
         </Typography.Title>
         <Space wrap>
+          <Button icon={<ReloadOutlined />} onClick={() => void load()}>
+            {t('web.list.refresh')}
+          </Button>
           {canBoard ? (
             <Button icon={<AppstoreOutlined />} onClick={() => navigate(`${base}/${entityName}/board`)}>
               {t('web.board.viewBoard')}
             </Button>
           ) : null}
-          <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-            {t('web.list.refresh')}
-          </Button>
-          <Button icon={<DownloadOutlined />} onClick={() => void runExport()}>
-            {t('web.list.exportCsv')}
-          </Button>
-          <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
-            {t('web.list.importCsv')}
-          </Button>
           <Button icon={<AppstoreOutlined />} onClick={() => setColumnsOpen(true)}>
             {t('web.list.columns')}
           </Button>
+          <Dropdown
+            trigger={['click']}
+            menu={{
+              items: [
+                { key: 'export', label: t('web.list.exportCsv'), icon: <DownloadOutlined /> },
+                { key: 'import', label: t('web.list.importCsv'), icon: <UploadOutlined /> },
+                ...(entityName === 'Lead' || entityName === 'LeadScoreModel' || entityName === 'LeadScoreRule'
+                  ? [
+                      { type: 'divider' as const },
+                      ...(entityName !== 'LeadScoreModel'
+                        ? [{ key: 'leadScoreModel', label: 'Lead Score Model', icon: <ThunderboltOutlined /> }]
+                        : []),
+                      ...(entityName !== 'LeadScoreRule'
+                        ? [{ key: 'leadScoreRule', label: 'Lead Score Rule', icon: <ThunderboltOutlined /> }]
+                        : []),
+                    ]
+                  : []),
+              ],
+              onClick: ({ key }) => {
+                if (key === 'export') void runExport();
+                else if (key === 'import') setImportOpen(true);
+                else if (key === 'leadScoreModel') navigate('/LeadScoreModel');
+                else if (key === 'leadScoreRule') navigate('/LeadScoreRule');
+              },
+            }}
+          >
+            <Button icon={<MoreOutlined />} aria-label="More" />
+          </Dropdown>
           <Popconfirm
             title={t('web.list.deleteConfirm', { count: selected.length })}
             disabled={selected.length === 0}

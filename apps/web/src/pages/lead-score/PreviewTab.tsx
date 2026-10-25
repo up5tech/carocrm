@@ -48,6 +48,12 @@ export function PreviewTab({
     if (initialModelId !== undefined) setModelId(initialModelId);
   }, [initialModelId]);
 
+  // The models list arrives after the first render, so the first model has to be picked once it shows up —
+  // otherwise the form opens empty with the run button disabled.
+  useEffect(() => {
+    if (initialModelId === undefined && modelId === '' && models[0] !== undefined) setModelId(models[0].id);
+  }, [initialModelId, modelId, models]);
+
   const leads = useLeads(mode === 'picked');
   const preview = useMutation({ mutationFn: run });
 
@@ -67,7 +73,7 @@ export function PreviewTab({
 
         <Row gutter={12}>
           <Col xs={24} md={10}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
               {t('leadscore.admin.preview.model')}
             </Typography.Text>
             <Select
@@ -81,10 +87,10 @@ export function PreviewTab({
             />
           </Col>
           <Col xs={24} md={14}>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
               {t('leadscore.admin.preview.sample')}
             </Typography.Text>
-            <Space wrap size={8} align="end">
+            <Space wrap size={8} align="center">
               <Radio.Group
                 value={mode}
                 onChange={(event) => setMode(event.target.value as SampleMode)}
@@ -96,7 +102,7 @@ export function PreviewTab({
                 ]}
               />
               {mode === 'auto' ? (
-                <>
+                <Space size={6} align="center">
                   <InputNumber
                     size="small"
                     min={1}
@@ -105,10 +111,10 @@ export function PreviewTab({
                     onChange={(next) => setSize(Number(next ?? 1))}
                     aria-label={t('leadscore.admin.preview.leads')}
                   />
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: '24px' }}>
                     {t('leadscore.admin.preview.leads')}
                   </Typography.Text>
-                </>
+                </Space>
               ) : (
                 <Select
                   size="small"
