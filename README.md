@@ -167,8 +167,12 @@ _Phase 19_ —
   be copied and why, before/after for every conflicted field with an opt-in merge, the duplicate candidates with a
   count of the ones you cannot see, and the confirmations — with Created versus Linked on the result, each linking
   to the record it made. Confirming re-runs the preview and re-shows it if the plan moved; a lost response is
-  resumed with the same operation key, so recovery cannot become a second conversion. The rest of the code is owed
-  by 19-LS.15–LS.16, and those operations
+  resumed with the same operation key, so recovery cannot become a second conversion. 19-LS.15 then pinned what
+  a conversion leaves alone — the Lead's e-mails stay linked to the Lead, a case keeps its `leadId`, a target-list
+  entry keeps its membership, consent is neither copied nor moved (it is address-level in MA), an attachment keeps
+  its parent, the new record inherits no ownership, and a reader who may see the Lead cannot open what it became —
+  in `docs/implementation/lead-score-conversion-history.md`. The rest of the code is owed
+  by 19-LS.16, and that operation
   refuse with the sub-phase that owes them (`LEADSCORE_PHASE_PENDING`). See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
