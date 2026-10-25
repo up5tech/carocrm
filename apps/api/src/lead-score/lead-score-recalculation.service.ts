@@ -254,7 +254,41 @@ export class LeadScoreRecalculationService {
 
     const limit = Math.max(1, Math.min(input.limit ?? MAX_BATCH_TOTAL, MAX_BATCH_TOTAL));
     const chunkSize = Math.max(1, Math.min(input.chunkSize ?? MAX_BATCH_CHUNK, MAX_BATCH_CHUNK, limit));
-    return this.enqueueBatch({ active, limit, chunkSize, where: input.where ?? [], source: 'manual_batch' });
+    return this.enqueueBatch({ active, limit, chunkSize, where: input.where ?? [], source: 'manual_batch', trigger: 'batch_rebuild' });
+  }
+
+  /**
+   * Rebuild the Leads the **active** model scores, naming the model as the reason (plan §8.1, §5.4, §10.2).
+   *
+   * This is the lifecycle action §6.1 lists after publish: a version becoming what future scores are read
+   * from does not move the projections that are already on Leads, so an administrator points
+   * `scoring.activeModelId` at it (the settings document owns that decision, deliberately explicit) and then
+   * asks for the rebuild here. The work is the same bounded, chunked rebuild LS.6 proved — the one difference
+   * is provenance: the run's source is `model_publish` and every evaluation it writes names the trigger
+   * `model_publish`, so history says "this score was produced by the model-publication rebuild" and not by a
+   * manual sweep nobody can place (plan §5.4's trigger list, which reserved the code for exactly this).
+   *
+   * The id must be the active model's: scoring always runs under the active published model, so accepting
+   * another id would queue a run that silently recomputes under a different version than the one named —
+   * a provenance lie. The refusal is an answer, not a crash: point scoring at the version, then come back.
+   */
+  async startModelBatch(input: { modelId: string; limit?: number; chunkSize?: number }): Promise<BatchStartView> {
+    await this.gate.assertOperation('batchRecalculate');
+    const active = await this.activeModel();
+    if (active === undefined) {
+      throw new ValidationError('No published Lead Score model is active, so there is nothing to rebuild.', { state: 'noActiveModel' });
+    }
+    if (active.model.id !== input.modelId) {
+      throw new ValidationError('Only the active published model can be rebuilt from here. Point scoring.activeModelId at this version first.', {
+        state: 'notActiveModel',
+        modelId: input.modelId,
+        activeModelId: active.model.id,
+      });
+    }
+
+    const limit = Math.max(1, Math.min(input.limit ?? MAX_BATCH_TOTAL, MAX_BATCH_TOTAL));
+    const chunkSize = Math.max(1, Math.min(input.chunkSize ?? MAX_BATCH_CHUNK, MAX_BATCH_CHUNK, limit));
+    return this.enqueueBatch({ active, limit, chunkSize, where: [], source: 'model_publish', trigger: 'model_publish' });
   }
 
   /**
@@ -291,17 +325,18 @@ export class LeadScoreRecalculationService {
 
     const limit = Math.max(1, Math.min(configured.limit, MAX_BATCH_TOTAL));
     const chunkSize = Math.max(1, Math.min(configured.chunkSize, MAX_BATCH_CHUNK, limit));
-    const started = await this.enqueueBatch({ active, limit, chunkSize, where: [], source: 'decay_sweep' });
+    const started = await this.enqueueBatch({ active, limit, chunkSize, where: [], source: 'decay_sweep', trigger: 'batch_rebuild' });
     return { started: true, skipped: null, ...started };
   }
 
-  /** The one enqueue both a manual rebuild and the sweep go through, so a run has one shape. */
+  /** The one enqueue a manual rebuild, the sweep and the model-publication rebuild go through, so a run has one shape. */
   private async enqueueBatch(input: {
     active: { model: { id: string; modelVersion: number } };
     limit: number;
     chunkSize: number;
     where: readonly BatchFilterCondition[];
     source: string;
+    trigger: 'batch_rebuild' | 'model_publish';
   }): Promise<BatchStartView> {
     const runId = randomUUID();
     const job = await this.jobs.enqueue({
@@ -316,6 +351,7 @@ export class LeadScoreRecalculationService {
         modelVersion: input.active.model.modelVersion,
         requestedBy: this.scope.userId ?? null,
         source: input.source,
+        trigger: input.trigger,
       },
     });
     return { job, runId, limit: input.limit, chunkSize: input.chunkSize };
@@ -348,6 +384,10 @@ export class LeadScoreRecalculationService {
     processed: number;
     cursor: string | null;
     where: readonly BatchFilterCondition[];
+    /** Why the run exists — the provenance every evaluation this chunk writes names (plan §5.4). */
+    trigger: 'batch_rebuild' | 'model_publish';
+    /** Who asked for the run, carried unchanged so a continuation does not rewrite the story. */
+    source: string;
   }): Promise<BatchChunkView> {
     if (await this.runCancelled(input.runId)) {
       return this.chunkView(input, { cancelled: true, done: true });
@@ -377,7 +417,7 @@ export class LeadScoreRecalculationService {
       const leadId = String(row['id'] ?? '');
       if (leadId === '') continue;
       try {
-        const result = await this.calculation.recalculate(leadId, { operation: 'batchRecalculate', trigger: 'batch_rebuild' });
+        const result = await this.calculation.recalculate(leadId, { operation: 'batchRecalculate', trigger: input.trigger });
         if (result.recorded) scored += 1;
         else unchanged += 1;
       } catch (error) {
@@ -402,6 +442,8 @@ export class LeadScoreRecalculationService {
         processed,
         cursor: lastId,
         where: input.where,
+        trigger: input.trigger,
+        source: input.source,
       });
     }
 
@@ -534,7 +576,7 @@ export class LeadScoreRecalculationService {
    * The next chunk's job row, with an id that makes a repeated hand-off collapse: two workers finishing the
    * same chunk cannot fork the run into two chains.
    */
-  private async enqueueContinuation(input: { runId: string; limit: number; chunkSize: number; processed: number; cursor: string | null; where: readonly BatchFilterCondition[] }): Promise<string> {
+  private async enqueueContinuation(input: { runId: string; limit: number; chunkSize: number; processed: number; cursor: string | null; where: readonly BatchFilterCondition[]; trigger: 'batch_rebuild' | 'model_publish'; source: string }): Promise<string> {
     const id = digest(`${LEADSCORE_JOB_NAMES.batchRecalculate}|${input.runId}|${input.cursor ?? 'start'}`);
     try {
       const job = await this.jobs.enqueue({
@@ -547,7 +589,8 @@ export class LeadScoreRecalculationService {
           processed: input.processed,
           cursor: input.cursor,
           where: input.where,
-          source: 'manual_batch',
+          source: input.source,
+          trigger: input.trigger,
         },
       });
       return job.id;

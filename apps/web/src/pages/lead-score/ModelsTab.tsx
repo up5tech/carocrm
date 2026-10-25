@@ -97,6 +97,32 @@ export function ModelsTab({
   });
 
   /**
+   * The rebuild that follows a publish (plan §8.1, §6.1): the frozen version does not move the projections
+   * already on Leads, so the administrator points scoring at it and then asks for this run. The server owns
+   * both halves — it refuses any model that is not the active one, so the button only offers what the
+   * settings choice has made true.
+   */
+  const recalculate = useMutation({
+    mutationFn: (model: LeadScoreModelRecord) => api.leadScoreRecalculateModel({ modelId: model.id }),
+    onSuccess: () =>
+      Modal.success({
+        title: t('leadscore.admin.model.recalculateQueued'),
+        content: t('leadscore.admin.model.recalculateQueuedHint'),
+      }),
+    onError: (error) => Modal.error({ title: t('leadscore.admin.model.recalculateFailed'), content: errorText(error) }),
+  });
+
+  function askToRecalculate(model: LeadScoreModelRecord): void {
+    Modal.confirm({
+      title: t('leadscore.admin.model.recalculateConfirm', { name: model.name, version: String(model.modelVersion) }),
+      content: t('leadscore.admin.model.recalculateHint'),
+      okText: t('leadscore.admin.model.recalculate'),
+      cancelText: t('core.common.cancel'),
+      onOk: () => recalculate.mutateAsync(model),
+    });
+  }
+
+  /**
    * Publish, but only after the server has said the draft is publishable.
    *
    * The confirmation carries the counts because that is the decision being made: the command re-validates
@@ -194,7 +220,8 @@ export function ModelsTab({
           granted={granted}
           canManage={canManage}
           canPublish={canPublish}
-          busy={validate.isPending || publish.isPending || archive.isPending || newVersion.isPending}
+          isActiveModel={activeModelId === selected.id}
+          busy={validate.isPending || publish.isPending || archive.isPending || newVersion.isPending || recalculate.isPending}
           report={report}
           siblings={(models.data ?? []).filter((entry) => entry.name === selected.name)}
           onChanged={reload}
@@ -204,6 +231,7 @@ export function ModelsTab({
           onPublish={() => askToPublish(selected)}
           onArchive={() => archive.mutate(selected)}
           onNewVersion={() => newVersion.mutate(selected.id)}
+          onRecalculate={() => askToRecalculate(selected)}
         />
       )}
 
@@ -240,6 +268,7 @@ function SelectedModel({
   granted,
   canManage,
   canPublish,
+  isActiveModel,
   busy,
   report,
   siblings,
@@ -250,12 +279,14 @@ function SelectedModel({
   onPublish,
   onArchive,
   onNewVersion,
+  onRecalculate,
 }: {
   model: LeadScoreModelRecord;
   catalog: LeadScoreEditorCatalog | undefined;
   granted: ReadonlySet<string>;
   canManage: boolean;
   canPublish: boolean;
+  isActiveModel: boolean;
   busy: boolean;
   report: LeadScoreValidationReport | undefined;
   siblings: readonly LeadScoreModelRecord[];
@@ -266,6 +297,7 @@ function SelectedModel({
   onPublish: () => void;
   onArchive: () => void;
   onNewVersion: () => void;
+  onRecalculate: () => void;
 }) {
   const [ruleForm, setRuleForm] = useState<{ open: boolean; rule: LeadScoreRuleRecord | undefined }>({ open: false, rule: undefined });
   const [diff, setDiff] = useState(false);
@@ -381,6 +413,11 @@ function SelectedModel({
           {granted.has('viewScore') ? (
             <Button size="small" icon={<ExperimentOutlined />} onClick={onPreview}>
               {t('leadscore.admin.model.preview')}
+            </Button>
+          ) : null}
+          {model.status === 'published' && isActiveModel && granted.has('batchRecalculate') ? (
+            <Button size="small" loading={busy} onClick={onRecalculate}>
+              {t('leadscore.admin.model.recalculate')}
             </Button>
           ) : null}
           {siblings.length >= 2 ? (

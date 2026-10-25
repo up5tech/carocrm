@@ -199,7 +199,13 @@
       "preview": "Preview",
       "frozen": "This version is immutable.",
       "frozenHint": "A published or archived version cannot be edited. Open a new version to change it.",
-      "saveFailed": "The model could not be saved."
+      "saveFailed": "The model could not be saved.",
+      "recalculate": "Recalculate Leads",
+      "recalculateConfirm": "Rebuild scores under {name} v{version}?",
+      "recalculateHint": "Queues a bounded rebuild that re-scores Leads under this published version (up to 2,000). Publishing froze the version but did not move the scores already on Leads; this run does. Progress and failures appear in the Operations tab.",
+      "recalculateQueued": "Rebuild queued.",
+      "recalculateQueuedHint": "The run re-scores Leads under this version, and its evaluations record this model as the reason. Follow it in the Operations tab.",
+      "recalculateFailed": "The rebuild could not be queued."
     },
     "rules": {
       "title": "Rules ({count})",

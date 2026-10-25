@@ -199,7 +199,13 @@
       "preview": "Xem trước",
       "frozen": "Phiên bản này không sửa được.",
       "frozenHint": "Phiên bản đã xuất bản hoặc đã lưu trữ không sửa được. Hãy mở phiên bản mới để thay đổi.",
-      "saveFailed": "Không lưu được mô hình."
+      "saveFailed": "Không lưu được mô hình.",
+      "recalculate": "Tính lại điểm Lead",
+      "recalculateConfirm": "Tính lại điểm theo {name} v{version}?",
+      "recalculateHint": "Hàng đợi một đợt tính lại có giới hạn, chấm lại điểm Lead theo phiên bản đã xuất bản này (tối đa 2.000). Xuất bản chỉ đóng băng phiên bản, không làm dịch chuyển điểm đã có trên Lead; đợt chạy này mới làm. Tiến độ và lỗi xem ở tab Operations.",
+      "recalculateQueued": "Đã xếp hàng đợt tính lại.",
+      "recalculateQueuedHint": "Đợt chạy sẽ chấm lại điểm Lead theo phiên bản này, và các lần đánh giá ghi nhận mô hình này là nguyên nhân. Theo dõi ở tab Operations.",
+      "recalculateFailed": "Không xếp hàng được đợt tính lại."
     },
     "rules": {
       "title": "Quy tắc ({count})",

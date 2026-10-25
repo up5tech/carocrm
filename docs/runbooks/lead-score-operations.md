@@ -19,6 +19,7 @@ for the person who wrote the module.
 | `GET /api/v1/LeadScore/action/settings` · `POST /api/v1/LeadScore/action/settings` | `LeadScoreSettings:edit` | The switches and the policy: which model is active, the recalculation debounce, the conversion targets and map, the AI agent, the recovery bounds. |
 | `GET /api/v1/LeadScore/action/score/:leadId` | `LeadScore:read` | One Lead's score, its freshness verdict and the actions this caller may take. The place to start: it names the reason a score is stale. |
 | `POST /api/v1/LeadScore/action/score/recalculate` | `LeadScoreRecalculate:edit` (`recalculate`) | Score one Lead now. Idempotent: an unchanged Lead records nothing. |
+| `POST /api/v1/LeadScore/action/model/recalculate` | `LeadScoreBatchRecalculate:edit` (`batchRecalculate`) | Queue a bounded rebuild under the **active published model**; its evaluations record the trigger `model_publish`. Refused (422, `notActiveModel`) for any other model id. |
 | `GET /api/v1/LeadScore/action/conversion/operations?status=…` | `LeadConversionAudit:read` | The conversion operation history: who converted what, which targets were created versus linked, and which rows are stuck. |
 | `POST /api/v1/LeadScore/action/conversion/operations/:id/retry` · `…/close` | `LeadConversionRecover:edit` | Retry an operation whose accounting proves nothing was written, or close one a human decides not to retry. |
 | `POST /api/v1/LeadScore/action/work/recover-conversion-operations` | `LeadConversionRecover:edit` (worker secret) | The off-by-default sweep that settles `processing` rows a crash left behind. It **never** creates a record. |
@@ -38,7 +39,11 @@ The order matters, because each step depends on the previous one being in place.
    them.
 2. **Choose the active model** (`scoring.activeModelId`). Until one is chosen, nothing is scored: the
    calculation service refuses with `LEADSCORE_NO_ACTIVE_MODEL` and names whether the model is missing,
-   unpublished or archived.
+   unpublished or archived. Publishing a new version does **not** move this choice and does **not** move
+   the scores already on Leads — after pointing scoring at the new version, queue the model-publication
+   rebuild (`POST action/model/recalculate`, or the *Recalculate Leads* button on the active model in
+   `/lead-score` → *Models*) so existing Leads are re-scored under it; its history rows name
+   `model_publish`, which is how they differ from an ad-hoc rebuild.
 3. **Turn on `features.scoring`.** Scores start being computed for the Leads you can read; the
    projection and the evaluation history appear together, in one transaction.
 4. **Turn on `features.manualRecalculation` and `features.eventRecalculation`** as you need them. The

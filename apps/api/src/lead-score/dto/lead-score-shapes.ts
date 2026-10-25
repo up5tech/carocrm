@@ -183,6 +183,21 @@ export const BatchRecalculateSchema = z
   .strict();
 
 /**
+ * The model-scoped rebuild (plan §8.1 `POST /models/:modelId/recalculate`).
+ *
+ * The same bounds as a manual rebuild apply, because it *is* one: the only difference is the provenance —
+ * the run and the evaluations it writes name `model_publish` as the trigger, so history can tell "the
+ * administrator rebuilt because this version became what scores are read from" apart from an ad-hoc sweep.
+ */
+export const ModelRecalculateSchema = z
+  .object({
+    modelId: ModelIdSchema,
+    limit: z.number().int().min(1).max(MAX_BATCH_TOTAL).optional(),
+    chunkSize: z.number().int().min(1).max(MAX_BATCH_CHUNK).optional(),
+  })
+  .strict();
+
+/**
  * The payload a batch job carries, checked again on the way in.
  *
  * A worker builds this from a stored job row, so a malformed or hand-edited row must not be able to ask for
@@ -197,6 +212,10 @@ export const RecalculateBatchChunkSchema = z
     processed: z.number().int().min(0).max(MAX_BATCH_TOTAL),
     cursor: z.string().trim().min(1).max(64).nullable(),
     where: z.array(BatchFilterConditionSchema).max(MAX_BATCH_FILTERS),
+    /** Why the run exists; the evaluation rows a chunk writes name it (plan §5.4). Job rows without one predate it. */
+    trigger: z.enum(['batch_rebuild', 'model_publish']).default('batch_rebuild'),
+    /** Who asked for the run, as the job row stated it — carried on so `/admin/jobs` stays truthful mid-run. */
+    source: z.string().trim().min(1).max(32).default('manual_batch'),
   })
   .strict();
 

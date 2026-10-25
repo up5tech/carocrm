@@ -2,13 +2,13 @@ import { timingSafeEqual } from 'node:crypto';
 
 import { AuthenticationFailedError, InvalidQueryError } from '@carocrm/core/errors/index.js';
 import { Body, Controller, Get, Headers, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { ZodTypeAny } from 'zod';
 
 import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
-import { BatchRecalculateSchema, ConversionAffordanceQuerySchema, ConversionCandidatesSchema, ConversionCloseSchema, ConversionOperationIdSchema, ConversionOperationsQuerySchema, ConversionPreviewSchema, ConvertSchema, EditorCatalogQuerySchema, InsightRequestSchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { BatchRecalculateSchema, ConversionAffordanceQuerySchema, ConversionCandidatesSchema, ConversionCloseSchema, ConversionOperationIdSchema, ConversionOperationsQuerySchema, ConversionPreviewSchema, ConvertSchema, EditorCatalogQuerySchema, InsightRequestSchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelRecalculateSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
 import { LeadConversionService } from './lead-conversion.service.js';
 import { LeadConversionAuditService } from './lead-conversion-audit.service.js';
 import { LeadConversionPreviewService } from './lead-conversion-preview.service.js';
@@ -73,6 +73,9 @@ export class LeadScoreController {
 
   /** Module health: the platform foundation, the registration invariants, the features and the gate. */
   @Get('action/health')
+  @ApiOperation({ summary: 'Module health: foundation, registration invariants, features, gate' })
+  @ApiResponse({ status: 200, description: 'Health view under the caller’s scope' })
+  @ApiResponse({ status: 403, description: 'Caller cannot view scores' })
   async moduleHealth() {
     await this.permissions.assert('viewScore');
     return this.health.health();
@@ -86,6 +89,9 @@ export class LeadScoreController {
    * it so a screen can say "not implemented yet" instead of presenting a control that errors.
    */
   @Get('action/capabilities')
+  @ApiOperation({ summary: 'What this caller may do, and what this build can actually do' })
+  @ApiResponse({ status: 200, description: 'Capabilities, effective features and pending phases' })
+  @ApiResponse({ status: 403, description: 'Caller cannot view scores' })
   async capabilities() {
     await this.permissions.assert('viewScore');
     const view = await this.settings.read();
@@ -104,6 +110,9 @@ export class LeadScoreController {
    * answer's business (plan §9.2).
    */
   @Get('action/permissions')
+  @ApiOperation({ summary: 'The declared permission matrix: the synthetic resources a role must grant' })
+  @ApiResponse({ status: 200, description: 'Capability descriptors with resource/action pairs' })
+  @ApiResponse({ status: 403, description: 'Caller cannot view scores' })
   async permissionMatrix() {
     await this.permissions.assert('viewScore');
     return {
@@ -125,6 +134,9 @@ export class LeadScoreController {
    * learns the effective answer from `action/capabilities`, and no field here can ever be a secret.
    */
   @Get('action/settings')
+  @ApiOperation({ summary: 'The leadScore settings document with its warnings, pending phases and defaults' })
+  @ApiResponse({ status: 200, description: 'Settings view; version bumps on every accepted change' })
+  @ApiResponse({ status: 403, description: 'Caller lacks settingsManage' })
   async readSettings() {
     await this.permissions.assert('settingsManage');
     return this.settings.read();
@@ -132,6 +144,10 @@ export class LeadScoreController {
 
   @HttpCode(200)
   @Post('action/settings')
+  @ApiOperation({ summary: 'Patch the settings document; unknown keys are refused' })
+  @ApiResponse({ status: 200, description: 'The updated settings view' })
+  @ApiResponse({ status: 403, description: 'Caller lacks settingsManage' })
+  @ApiResponse({ status: 422, description: 'Invalid patch or invalid conversion mapping' })
   async updateSettings(@Body() body: unknown) {
     await this.permissions.assert('settingsManage');
     return this.settings.update(this.parse(SettingsPatchSchema, body));
@@ -148,6 +164,9 @@ export class LeadScoreController {
   @Public()
   @HttpCode(200)
   @Post('action/work/decay-sweep')
+  @ApiOperation({ summary: 'Worker entry: the decay sweep' })
+  @ApiResponse({ status: 200, description: 'Sweep decision: started, or which reason it skipped' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid worker capability' })
   async workDecaySweep(@Headers('x-worker-secret') secret?: string) {
     this.assertWorkerSecret(secret);
     return runAsLeadScoreSystem(this.scope, 'decay-sweep', () => this.recalculation.decaySweep());
@@ -162,6 +181,8 @@ export class LeadScoreController {
    */
   @HttpCode(200)
   @Post('action/operation-gate')
+  @ApiOperation({ summary: 'Ask whether an operation would be admitted, without performing it' })
+  @ApiResponse({ status: 200, description: 'The gate’s assessment for the named operation' })
   async operationGate(@Body() body: unknown) {
     const input = this.parse(OperationProbeSchema, body);
     return this.gate.assess(input.operation);
@@ -189,6 +210,9 @@ export class LeadScoreController {
    * should answer with the module's own code.
    */
   @Get('action/editor')
+  @ApiOperation({ summary: 'The vocabulary a model editor may offer: fields, operators, limits' })
+  @ApiResponse({ status: 200, description: 'Editor catalog derived from metadata and module constants' })
+  @ApiResponse({ status: 403, description: 'Caller cannot read models' })
   async editorCatalog(@Query() query: unknown) {
     await this.permissions.assert('modelRead');
     const input = this.parse(EditorCatalogQuerySchema, query ?? {});
@@ -199,6 +223,10 @@ export class LeadScoreController {
 
   @HttpCode(200)
   @Post('action/model/validate')
+  @ApiOperation({ summary: 'Validate a draft model with its rules; side-effect free' })
+  @ApiResponse({ status: 200, description: 'The full problem list, each with a stable code' })
+  @ApiResponse({ status: 403, description: 'Caller lacks validateModel' })
+  @ApiResponse({ status: 422, description: 'Malformed request' })
   async validateModel(@Body() body: unknown) {
     const input = this.parse(ModelValidateSchema, body);
     return this.models.validate(input.modelId);
@@ -213,6 +241,11 @@ export class LeadScoreController {
    */
   @HttpCode(200)
   @Post('action/model/publish')
+  @ApiOperation({ summary: 'Publish a draft as an immutable version' })
+  @ApiResponse({ status: 200, description: 'The published model row' })
+  @ApiResponse({ status: 403, description: 'Caller lacks modelPublish, or the module switch is off' })
+  @ApiResponse({ status: 409, description: 'The model is not a draft' })
+  @ApiResponse({ status: 422, description: 'Validation failed; the model cannot be published' })
   async publishModel(@Body() body: unknown) {
     const input = this.parse(ModelPublishSchema, body);
     return this.models.publish(input.modelId, input.expectedVersion);
@@ -221,6 +254,10 @@ export class LeadScoreController {
   /** Archive a model version: the quick off switch that keeps every stored evaluation intact (plan §9.3). */
   @HttpCode(200)
   @Post('action/model/archive')
+  @ApiOperation({ summary: 'Archive a model version; stored evaluations stay intact' })
+  @ApiResponse({ status: 200, description: 'The archived model row' })
+  @ApiResponse({ status: 403, description: 'Caller lacks modelPublish' })
+  @ApiResponse({ status: 409, description: 'The model is already archived' })
   async archiveModel(@Body() body: unknown) {
     const input = this.parse(ModelArchiveSchema, body);
     return this.models.archive(input.modelId, input.expectedVersion);
@@ -234,6 +271,10 @@ export class LeadScoreController {
    */
   @HttpCode(200)
   @Post('action/model/new-version')
+  @ApiOperation({ summary: 'Open a new draft version from a published or archived model' })
+  @ApiResponse({ status: 200, description: 'The new draft, with its rules copied' })
+  @ApiResponse({ status: 403, description: 'Caller lacks createModelVersion' })
+  @ApiResponse({ status: 409, description: 'The source is a draft, or a draft of this name already exists' })
   async newModelVersion(@Body() body: unknown) {
     const input = this.parse(ModelNewVersionSchema, body);
     return this.models.newVersion(input.modelId);
@@ -250,9 +291,40 @@ export class LeadScoreController {
    */
   @HttpCode(200)
   @Post('action/model/preview')
+  @ApiOperation({ summary: 'Score a bounded, authorized sample with a model; writes nothing' })
+  @ApiResponse({ status: 200, description: 'Sample evaluations; no projection, history or event was written' })
+  @ApiResponse({ status: 403, description: 'Caller lacks the capability, or the module switch is off' })
+  @ApiResponse({ status: 422, description: 'Malformed request' })
   async previewModel(@Body() body: unknown) {
     const input = this.parse(ModelPreviewSchema, body);
     return this.preview.preview(input.modelId, input.leadIds, input.maxSize);
+  }
+
+  /**
+   * Queue a bounded rebuild under the active published model, naming it as the reason (plan §8.1).
+   *
+   * Publishing freezes a version but does not move the projections already on Leads, and scoring always
+   * runs under the **active** model — so the step that makes a new version the installed truth is this
+   * command: the administrator points `scoring.activeModelId` at the version (an explicit settings choice,
+   * not a side effect of publishing) and then asks for the rebuild here. The id must be the active model's,
+   * or the run would name a version it does not actually score under; the answer to anything else is a 422
+   * that says which version *is* active. The run is the same bounded, chunked rebuild as
+   * `action/recalculate-batch` — the difference is provenance: its evaluations record the trigger
+   * `model_publish` (plan §5.4 reserved the code for exactly this).
+   */
+  @HttpCode(200)
+  @Post('action/model/recalculate')
+  @ApiOperation({ summary: 'Queue a bounded rebuild under the active published model; evaluations name the trigger model_publish' })
+  @ApiResponse({ status: 200, description: 'The rebuild job row, its runId and the applied bounds' })
+  @ApiResponse({ status: 403, description: 'Caller lacks batchRecalculate, or the module switch is off' })
+  @ApiResponse({ status: 422, description: 'Malformed request, no active model, or modelId is not the active model' })
+  async recalculateModelBatch(@Body() body: unknown) {
+    const input = this.parse(ModelRecalculateSchema, body);
+    return this.recalculation.startModelBatch({
+      modelId: input.modelId,
+      ...(input.limit === undefined ? {} : { limit: input.limit }),
+      ...(input.chunkSize === undefined ? {} : { chunkSize: input.chunkSize }),
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -268,6 +340,8 @@ export class LeadScoreController {
    * ambiguous is not a metric (plan §16 `19-LS.18`).
    */
   @Get('action/report')
+  @ApiOperation({ summary: 'Score and conversion metrics, computed under the reader’s own record scope' })
+  @ApiResponse({ status: 200, description: 'The four curated views with their populations' })
   async scoreReport() {
     return this.reports.overview();
   }
@@ -286,6 +360,11 @@ export class LeadScoreController {
    */
   @HttpCode(200)
   @Post('action/insight')
+  @ApiOperation({ summary: 'Ask the configured AI agent for an evidence-grounded explanation of this Lead’s fit' })
+  @ApiResponse({ status: 200, description: 'The stored insight with its model/provider identity and input digest' })
+  @ApiResponse({ status: 403, description: 'Caller lacks the insight right' })
+  @ApiResponse({ status: 409, description: 'No agent configured, agent unsuitable, or the Lead has no current score' })
+  @ApiResponse({ status: 502, description: 'The AI run finished without a usable explanation' })
   async requestInsight(@Body() body: unknown) {
     const input = this.parse(InsightRequestSchema, body);
     return this.insight.generate({ leadId: input.leadId, ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }) });
@@ -306,6 +385,10 @@ export class LeadScoreController {
    */
   @HttpCode(200)
   @Post('action/conversion/candidates')
+  @ApiOperation({ summary: 'Possible existing Contact/Account matches for this Lead, under the caller’s ACL' })
+  @ApiResponse({ status: 200, description: 'Candidates with match classes and reasons, plus the hidden-match count' })
+  @ApiResponse({ status: 403, description: 'Caller cannot read the Lead or lacks duplicateDetection' })
+  @ApiResponse({ status: 422, description: 'Malformed request' })
   async conversionCandidates(@Body() body: unknown) {
     const input = this.parse(ConversionCandidatesSchema, body);
     return this.duplicates.candidates(input.leadId);
@@ -319,6 +402,8 @@ export class LeadScoreController {
    * echoed beyond the references the caller can already read on the record.
    */
   @Get('action/conversion/affordance')
+  @ApiOperation({ summary: 'May this caller convert this Lead, and has it already been converted' })
+  @ApiResponse({ status: 200, description: 'The affordance answer with reasons; never an error for "no"' })
   async conversionAffordance(@Query() query: unknown) {
     const input = this.parse(ConversionAffordanceQuerySchema, query ?? {});
     return this.conversion.affordance(input.leadId);
@@ -335,6 +420,10 @@ export class LeadScoreController {
    */
   @HttpCode(200)
   @Post('action/conversion/preview')
+  @ApiOperation({ summary: 'What a conversion would do, without doing any of it' })
+  @ApiResponse({ status: 200, description: 'Proposed values, skips, conflicts, candidates, confirmations and the fingerprint' })
+  @ApiResponse({ status: 403, description: 'Caller cannot read the Lead or lacks conversionPreview' })
+  @ApiResponse({ status: 422, description: 'Malformed request or a disabled target' })
   async previewConversion(@Body() body: unknown) {
     const input = this.parse(ConversionPreviewSchema, body);
     return this.conversionPreview.preview(input);
@@ -350,6 +439,12 @@ export class LeadScoreController {
    */
   @HttpCode(200)
   @Post('action/conversion/convert')
+  @ApiOperation({ summary: 'Confirm and run a conversion; idempotent by operation key' })
+  @ApiResponse({ status: 200, description: 'The operation row read back after the work, or the replayed prior result' })
+  @ApiResponse({ status: 403, description: 'Caller lacks the conversion or target rights' })
+  @ApiResponse({ status: 409, description: 'Already converted, key conflict, duplicate review required, or stale preview' })
+  @ApiResponse({ status: 422, description: 'Malformed request or a disabled target' })
+  @ApiResponse({ status: 503, description: 'A transient failure left nothing behind; retry the same operation' })
   async convertLead(@Body() body: unknown) {
     const input = this.parse(ConvertSchema, body);
     return this.conversion.convert({
@@ -371,6 +466,9 @@ export class LeadScoreController {
    * read that Lead, so the row is an audit subject rather than a back door to the record.
    */
   @Get('action/conversion/operations')
+  @ApiOperation({ summary: 'Conversion operations an administrator can inspect, bounded and filterable' })
+  @ApiResponse({ status: 200, description: 'The page of operation rows the caller may read' })
+  @ApiResponse({ status: 403, description: 'Caller lacks conversionAuditRead' })
   async conversionOperations(@Query() query: unknown) {
     const input = this.parse(ConversionOperationsQuerySchema, query ?? {});
     return this.conversionAudit.operations({
@@ -381,6 +479,10 @@ export class LeadScoreController {
   }
 
   @Get('action/conversion/operations/:operationId')
+  @ApiOperation({ summary: 'One conversion operation’s status and result' })
+  @ApiResponse({ status: 200, description: 'The operation view' })
+  @ApiResponse({ status: 403, description: 'Caller lacks conversionAuditRead' })
+  @ApiResponse({ status: 404, description: 'Unknown or invisible operation' })
   async conversionOperation(@Param('operationId') operationId: string) {
     const input = this.parse(ConversionOperationIdSchema, { operationId });
     return this.conversionAudit.operation(input.operationId);
@@ -389,6 +491,10 @@ export class LeadScoreController {
   /** Retry an attempt the accounting proves is safe to re-run, keeping its key (contract §10.2). */
   @HttpCode(200)
   @Post('action/conversion/operations/:operationId/retry')
+  @ApiOperation({ summary: 'Retry an operation the accounting proves is safe to re-run, keeping its key' })
+  @ApiResponse({ status: 200, description: 'The retried operation' })
+  @ApiResponse({ status: 403, description: 'Caller lacks conversionRecover' })
+  @ApiResponse({ status: 409, description: 'The operation is not in a retryable state' })
   async retryConversion(@Param('operationId') operationId: string) {
     const input = this.parse(ConversionOperationIdSchema, { operationId });
     return this.conversionAudit.retry(input.operationId);
@@ -397,6 +503,10 @@ export class LeadScoreController {
   /** Close an operation that a human decided not to retry (contract §11.3). */
   @HttpCode(200)
   @Post('action/conversion/operations/:operationId/close')
+  @ApiOperation({ summary: 'Close an operation a human decided not to retry' })
+  @ApiResponse({ status: 200, description: 'The closed operation' })
+  @ApiResponse({ status: 403, description: 'Caller lacks conversionRecover' })
+  @ApiResponse({ status: 409, description: 'The operation is not in a closable state' })
   async closeConversion(@Param('operationId') operationId: string, @Body() body: unknown) {
     const input = this.parse(ConversionOperationIdSchema, { operationId });
     const close = this.parse(ConversionCloseSchema, body ?? {});
@@ -407,6 +517,9 @@ export class LeadScoreController {
   @Public()
   @HttpCode(200)
   @Post('action/work/recover-conversion-operations')
+  @ApiOperation({ summary: 'Worker entry: settle conversion rows a crash left in processing' })
+  @ApiResponse({ status: 200, description: 'What the recovery settled, and what it left for a human' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid worker capability' })
   async workRecoverConversions(@Headers('x-worker-secret') secret?: string) {
     this.assertWorkerSecret(secret);
     return runAsLeadScoreSystem(this.scope, 'conversion-recovery', () => this.conversionAudit.recoverStuck());
@@ -424,6 +537,11 @@ export class LeadScoreController {
    */
   @HttpCode(200)
   @Post('action/score/recalculate')
+  @ApiOperation({ summary: 'Score one Lead under the active published model and keep the result' })
+  @ApiResponse({ status: 200, description: 'The written (or unchanged) score' })
+  @ApiResponse({ status: 403, description: 'Caller lacks recalculate or Lead edit, or the module switch is off' })
+  @ApiResponse({ status: 409, description: 'No active published model' })
+  @ApiResponse({ status: 422, description: 'Malformed request' })
   async recalculateScore(@Body() body: unknown) {
     const input = this.parse(ScoreRecalculateSchema, body);
     return this.calculation.recalculate(input.leadId);
@@ -439,6 +557,9 @@ export class LeadScoreController {
    * explanation into a way to read past field ACL (§6.5, §9.2).
    */
   @Get('action/score/:leadId')
+  @ApiOperation({ summary: 'The current score of one Lead, with its breakdown and freshness' })
+  @ApiResponse({ status: 200, description: 'Score, band, reasons and the freshness block; no Lead values' })
+  @ApiResponse({ status: 403, description: 'Caller cannot read the Lead or lacks explainScore' })
   async readScore(@Param('leadId') leadId: string) {
     const input = this.parse(ScoreReadSchema, { leadId });
     return this.explanation.score(input.leadId);
@@ -452,6 +573,9 @@ export class LeadScoreController {
    * "history is append-only and never browsable" a real property rather than a comment (§5.4, §8.2).
    */
   @Get('action/score/:leadId/history')
+  @ApiOperation({ summary: 'Paged evaluation history of one Lead, newest first' })
+  @ApiResponse({ status: 200, description: 'The page of evaluations; history is never browsable outside a Lead' })
+  @ApiResponse({ status: 403, description: 'Caller cannot read the Lead or lacks explainScore' })
   async readScoreHistory(@Param('leadId') leadId: string, @Query() query: unknown) {
     const input = this.parse(ScoreReadSchema, { leadId });
     const page = this.parse(ScoreHistoryQuerySchema, query ?? {});
@@ -472,6 +596,10 @@ export class LeadScoreController {
    */
   @HttpCode(200)
   @Post('action/recalculate-batch')
+  @ApiOperation({ summary: 'Queue a bounded rebuild over the Leads a validated filter names' })
+  @ApiResponse({ status: 200, description: 'The first job row, the runId and the applied bounds' })
+  @ApiResponse({ status: 403, description: 'Caller lacks batchRecalculate, or the module switch is off' })
+  @ApiResponse({ status: 422, description: 'Malformed filter, or no active published model' })
   async recalculateBatch(@Body() body: unknown) {
     const input = this.parse(BatchRecalculateSchema, body);
     return this.recalculation.startBatch({
@@ -490,6 +618,9 @@ export class LeadScoreController {
   @Public()
   @HttpCode(200)
   @Post('action/work/lead-changed')
+  @ApiOperation({ summary: 'Worker entry: a committed Lead change; decide whether it is worth a job' })
+  @ApiResponse({ status: 200, description: 'The enqueue decision — one of six answers, always 200' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid worker capability' })
   async workLeadChanged(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
     this.assertWorkerSecret(secret);
     const input = this.parse(LeadChangedSchema, body);
@@ -502,6 +633,9 @@ export class LeadScoreController {
   @Public()
   @HttpCode(200)
   @Post('action/work/recalculate')
+  @ApiOperation({ summary: 'Worker entry: run the recalculation a job promised' })
+  @ApiResponse({ status: 200, description: 'The written (or unchanged) score' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid worker capability' })
   async workRecalculate(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
     this.assertWorkerSecret(secret);
     const input = this.parse(ScoreRecalculateSchema, body);
@@ -512,6 +646,9 @@ export class LeadScoreController {
   @Public()
   @HttpCode(200)
   @Post('action/work/recalculate-batch-chunk')
+  @ApiOperation({ summary: 'Worker entry: evaluate one chunk of a rebuild and queue the next' })
+  @ApiResponse({ status: 200, description: 'Chunk counts, cursor and the next job id' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid worker capability' })
   async workBatchChunk(@Body() body: unknown, @Headers('x-worker-secret') secret?: string) {
     this.assertWorkerSecret(secret);
     const input = this.parse(RecalculateBatchChunkSchema, body);
@@ -523,6 +660,8 @@ export class LeadScoreController {
         processed: input.processed,
         cursor: input.cursor,
         where: input.where,
+        trigger: input.trigger,
+        source: input.source,
       }),
     );
   }

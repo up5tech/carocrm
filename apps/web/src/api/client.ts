@@ -2127,4 +2127,7 @@ export const api = {
   /** Queues a bounded rebuild; the returned job row is what `/admin/jobs` shows. */
   leadScoreRecalculateBatch: (input: { limit?: number; chunkSize?: number; where?: Record<string, unknown>[] }) =>
     request<LeadScoreBatchStartView>('/LeadScore/action/recalculate-batch', post(input)),
+  /** Rebuilds under the active published model, naming `model_publish` as the trigger; refused for any other id. */
+  leadScoreRecalculateModel: (input: { modelId: string; limit?: number; chunkSize?: number }) =>
+    request<LeadScoreBatchStartView>('/LeadScore/action/model/recalculate', post(input)),
 };

@@ -209,6 +209,9 @@ interface ChunkPayload {
   readonly processed: number;
   readonly cursor: string | null;
   readonly where: readonly Record<string, unknown>[];
+  /** Why the run exists; absent on rows written before the model-publication rebuild existed. */
+  readonly trigger?: string;
+  readonly source?: string;
 }
 
 function chunkPayloadOf(context: JobContext): ChunkPayload | null {
@@ -221,6 +224,8 @@ function chunkPayloadOf(context: JobContext): ChunkPayload | null {
   if (typeof limit !== 'number' || typeof chunkSize !== 'number' || typeof processed !== 'number') return null;
   const cursor = data?.['cursor'];
   const where = data?.['where'];
+  const trigger = data?.['trigger'];
+  const source = data?.['source'];
   return {
     runId,
     limit,
@@ -228,6 +233,8 @@ function chunkPayloadOf(context: JobContext): ChunkPayload | null {
     processed,
     cursor: typeof cursor === 'string' ? cursor : null,
     where: Array.isArray(where) ? (where as Record<string, unknown>[]) : [],
+    ...(typeof trigger === 'string' && trigger !== '' ? { trigger } : {}),
+    ...(typeof source === 'string' && source !== '' ? { source } : {}),
   };
 }
 

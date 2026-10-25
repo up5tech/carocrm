@@ -887,11 +887,70 @@ describe('a rebuild is bounded, chunked and stoppable (19-LS.6)', () => {
   });
 });
 
+describe('the model-publication rebuild (plan §8.1, §5.4)', () => {
+  const MODEL_RECALCULATE_PATH = '/api/v1/LeadScore/action/model/recalculate';
+
+  it('refuses a model that is not the active one, naming the active model instead', async () => {
+    const active = await createPublishedModel('mpr-active');
+    const other = await createPublishedModel('mpr-other');
+    await enableScoring(active.id);
+
+    const refused = await call('POST', MODEL_RECALCULATE_PATH, { modelId: other.id });
+    expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+    expect(errorOf(refused).details['state']).toBe('notActiveModel');
+    // The answer says which version *is* active, so the fix is on the same screen that set it.
+    expect(errorOf(refused).details['activeModelId']).toBe(active.id);
+  });
+
+  it('refuses when no model is active rather than rebuilding nothing', async () => {
+    await enableScoring(null);
+    const refused = await call('POST', MODEL_RECALCULATE_PATH, { modelId: `${RUN}-nowhere` });
+    expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+    expect(errorOf(refused).details['state']).toBe('noActiveModel');
+  });
+
+  it('queues a run whose job and evaluations both name model_publish', async () => {
+    const model = await createPublishedModel('mpr-rebuild');
+    await enableScoring(model.id);
+    const leadA = await createLead('MPR A', { company: 'Rebuild Co', industry: 'Software' });
+    const leadB = await createLead('MPR B', { company: 'Rebuild Co', industry: 'Software' });
+
+    const started = await call('POST', MODEL_RECALCULATE_PATH, { modelId: model.id });
+    expect(started.status, JSON.stringify(started.body)).toBe(200);
+    const view = started.body as unknown as { runId: string; limit: number; chunkSize: number };
+    expect(view.runId).not.toBe('');
+    createdRunIds.push(view.runId);
+
+    const rows = await jobRows({ runId: view.runId });
+    expect(rows.length).toBe(1);
+    expect(rows[0].target['source']).toBe('model_publish');
+    expect(rows[0].target['trigger']).toBe('model_publish');
+
+    const chunk = await workerCall(WORK_CHUNK_PATH, {
+      runId: view.runId,
+      limit: view.limit,
+      chunkSize: view.chunkSize,
+      processed: 0,
+      cursor: null,
+      where: [{ field: 'id', operator: 'in', value: [leadA, leadB] }],
+      trigger: 'model_publish',
+      source: 'model_publish',
+    });
+    expect(chunk.status, JSON.stringify(chunk.body)).toBe(200);
+    expect((chunk.body as unknown as ChunkView).scored).toBe(2);
+
+    // The provenance is the point: history says this score was produced by the model-publication rebuild.
+    const evaluations = await evaluationRows(leadA);
+    expect(evaluations).toContainEqual(expect.objectContaining({ trigger: 'model_publish' }));
+  });
+});
+
 describe('the surface LS.6 added is a documented one', () => {
   it('publishes the rebuild command and reports both background features as delivered', async () => {
     const openapi = await call('GET', '/api/v1/OpenApi');
     const paths = (openapi.body as { paths: Record<string, Record<string, unknown>> }).paths;
     expect(Object.keys(paths['/api/v1/LeadScore/action/recalculate-batch'] ?? {})).toContain('post');
+    expect(Object.keys(paths['/api/v1/LeadScore/action/model/recalculate'] ?? {})).toContain('post');
 
     const health = await call('GET', '/api/v1/LeadScore/action/health');
     const body = health.body as unknown as {

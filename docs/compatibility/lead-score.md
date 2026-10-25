@@ -44,7 +44,9 @@
 > never able to change a score. Only 19-LS.18's rollout and verification remains.
 > Canonical module name: `LeadScore` (no `Ua` prefix). API prefix: `/api/v1/lead-score` plus
 > `/api/v1/leads/:leadId/{score,conversion-preview,convert}` semantics — realized, per §2.5, as
-> `LeadScore/action/score/*` and `LeadScore/action/conversion/*` (both delivered).
+> `LeadScore/action/score/*` and `LeadScore/action/conversion/*` (both delivered), with the plan §8.1
+> model-level rebuild realized as `LeadScore/action/model/recalculate` (bounded, active-model only, and
+> the run's evaluations name the trigger `model_publish`).
 > Baseline reference re-checked against public EspoCRM documentation on **2026-10-24**
 > (Sales Management / Leads and converting). Re-verify and update the date whenever a later
 > sub-phase changes a documented behavior.
