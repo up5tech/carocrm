@@ -35,6 +35,15 @@ export const LEADSCORE_MODEL_PERMISSION_ENTITY = 'LeadScoreModel';
 export const LEADSCORE_MODEL_PUBLISH_PERMISSION_ENTITY = 'LeadScoreModelPublish';
 export const LEADSCORE_BATCH_PERMISSION_ENTITY = 'LeadScoreBatch';
 export const LEADSCORE_SETTINGS_PERMISSION_ENTITY = 'LeadScoreSettings';
+/**
+ * 19-LS.17: the right to request an AI fit insight, evaluated on the module's insight entity.
+ *
+ * It is the entity's own `create` grant rather than a second synthetic resource: the command writes one
+ * `LeadScoreInsight` row per request through the canonical entity service, and `generateInsight` must mean
+ * exactly "may append that row". Reading the stored text is part of the score surface (`viewScore`); the
+ * grant is about spending a provider call.
+ */
+export const LEADSCORE_INSIGHT_PERMISSION_ENTITY = 'LeadScoreInsight';
 export const LEADCONVERSION_PREVIEW_PERMISSION_ENTITY = 'LeadConversionPreview';
 /**
  * 19-LS.13: the right to read conversion operations, as its own resource.

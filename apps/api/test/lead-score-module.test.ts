@@ -165,9 +165,9 @@ describe('module registration and health (19-LS.1)', () => {
     expect(body.module.id).toBe('LeadScore');
     expect(body.module.apiPrefix).toBe('/api/v1/LeadScore');
     expect(body.module.version).toMatch(/^\d+\.\d+\.\d+$/);
-    // 19-LS.7–19-LS.16 added themselves here when they shipped; the list is the descriptor's claim about
+    // 19-LS.7–19-LS.17 added themselves here when they shipped; the list is the descriptor's claim about
     // what exists, so a phase that forgets it is a lie the health view repeats.
-    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13', '19-LS.16']);
+    expect(body.module.implementedPhases).toEqual(['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13', '19-LS.16', '19-LS.17']);
 
     // Every required capability is a fact the view verified against this database, not a claim.
     expect(body.dependencies.every((dependency) => dependency.present)).toBe(true);
@@ -176,7 +176,7 @@ describe('module registration and health (19-LS.1)', () => {
     );
 
     // 19-LS.2 registered the four records Lead Score owns.
-    expect(body.module.entityTypes).toEqual(['LeadScoreModel', 'LeadScoreRule', 'LeadScoreEvaluation', 'LeadConversionOperation']);
+    expect(body.module.entityTypes).toEqual(['LeadScoreModel', 'LeadScoreRule', 'LeadScoreEvaluation', 'LeadConversionOperation', 'LeadScoreInsight']);
 
     // The whole control plane is switched off at boot: plan §15.2 stage 1.
     expect(body.settings.enabled).toBe(false);
@@ -209,6 +209,8 @@ describe('module registration and health (19-LS.1)', () => {
       'leadConversion',
       'conversionRecovery',
       'opportunityConversion',
+      // 19-LS.17 delivered the optional AI explanation; it is implemented and still off by default.
+      'aiInsight',
     ]);
     expect(body.features.filter((feature) => !feature.implemented).every((feature) => feature.pendingPhase !== null)).toBe(true);
     expect(body.operations.every((operation) => operation.admitted === false)).toBe(true);
@@ -339,13 +341,13 @@ describe('settings document (19-LS.1)', () => {
     expect(Object.values(view.settings.features).every((value) => value === false)).toBe(true);
     expect(Object.values(view.effective).every((value) => value === false)).toBe(true);
     expect(view.warnings.map((warning) => warning.code)).toContain('moduleDisabled');
-    // 19-LS.6 delivered both background paths, 19-LS.9 the engagement read and the threshold action and
-    // 19-LS.16 the third conversion target, so the still-pending list is the insight phase alone. The list is
-    // derived from `pendingPhase`, so a feature that ships without its row being flipped fails here rather
-    // than lying in the settings screen.
+    // 19-LS.6 delivered both background paths, 19-LS.9 the engagement read and the threshold action, 19-LS.16
+    // the third conversion target and 19-LS.17 the optional AI explanation, so nothing is pending any more.
+    // The list is derived from `pendingPhase`, so a feature that ships without its row being flipped fails
+    // here rather than lying in the settings screen.
     const pending = view.pendingFeatures.map((entry) => entry.key);
-    expect(pending).toEqual(expect.arrayContaining(['aiInsight']));
-    for (const shipped of ['eventRecalculation', 'batchRecalculation', 'thresholdNotifications', 'engagementSignals', 'scoring', 'scoringPreview', 'modelAdministration', 'duplicateDetection', 'fieldMapping', 'conversionPreview', 'leadConversion', 'conversionRecovery', 'opportunityConversion']) {
+    expect(pending).toEqual([]);
+    for (const shipped of ['eventRecalculation', 'batchRecalculation', 'thresholdNotifications', 'engagementSignals', 'scoring', 'scoringPreview', 'modelAdministration', 'duplicateDetection', 'fieldMapping', 'conversionPreview', 'leadConversion', 'conversionRecovery', 'opportunityConversion', 'aiInsight']) {
       expect(pending, shipped).not.toContain(shipped);
     }
   });
@@ -364,11 +366,13 @@ describe('settings document (19-LS.1)', () => {
     expect(result.status).toBe(422);
   });
 
-  it('bumps the version on an accepted change and warns about a switch whose phase has not shipped', async () => {
+  it('bumps the version on an accepted change and warns about a switch whose requirement is off', async () => {
     const before = await call('GET', '/api/v1/LeadScore/action/settings');
     const beforeVersion = before.body['version'] as number;
 
-    const updated = await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { scoring: true, aiInsight: true } });
+    // 19-LS.17 delivered the last switch, so the warning an administrator can still meet is a requirement:
+    // `aiInsight` needs `scoring`, and turning it on without one is stored but not effective.
+    const updated = await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { scoring: false, aiInsight: true } });
     expect(updated.status).toBe(200);
     const view = updated.body as unknown as {
       version: number;
@@ -381,13 +385,10 @@ describe('settings document (19-LS.1)', () => {
     expect(view.version).toBe(beforeVersion + 1);
     expect(view.settings.enabled).toBe(true);
     expect(view.settings.features.aiInsight).toBe(true);
-    // The switch is on, the phase is not delivered, so the effective answer stays false — and the document
-    // says so out loud instead of letting an administrator believe duplicate review is live.
-    // (`eventRecalculation` no longer earns this warning: 19-LS.6 shipped it, and a stored switch that now
-    // really does mean something is tested in `lead-score-recalculation.test.ts`.)
     expect(view.effective.aiInsight).toBe(false);
-    expect(view.warnings.map((warning) => warning.code)).toContain('phasePending');
-    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('19-LS.17');
+    expect(view.warnings.map((warning) => warning.code)).toContain('requirementUnmet');
+    expect(view.warnings.map((warning) => warning.message).join(' ')).toContain('scoring');
+    expect(view.warnings.map((warning) => warning.code)).not.toContain('phasePending');
     expect(view.updatedAt).not.toBeNull();
     expect(view.updatedBy).not.toBeNull();
 
@@ -398,12 +399,12 @@ describe('settings document (19-LS.1)', () => {
 });
 
 describe('feature gate (19-LS.1)', () => {
-  it('refuses an operation whose sub-phase has not shipped, naming the phase', async () => {
-    expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true })).status).toBe(200);
+  it('refuses an operation whose feature is off, with no phase left to name', async () => {
+    expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: { scoring: false, aiInsight: true } })).status).toBe(200);
 
-    // 19-LS.13 shipped the command and its recovery, so the one operation still waiting on a phase is the
-    // insight one.
-    for (const [operation, phase] of [['aiInsight', '19-LS.17']] as const) {
+    // Every phase has shipped: `aiInsight` is now refused for its unmet requirement, not for missing code —
+    // and the answer names the switch rather than a phase.
+    for (const operation of ['aiInsight'] as const) {
       const result = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });
       expect(result.status).toBe(200);
       const assessment = result.body as unknown as {
@@ -416,9 +417,9 @@ describe('feature gate (19-LS.1)', () => {
         writes: boolean;
       };
       expect(assessment.admitted).toBe(false);
-      expect(assessment.code).toBe('LEADSCORE_PHASE_PENDING');
-      expect(assessment.pendingPhase).toBe(phase);
-      expect(assessment.detail).toBe(phase);
+      expect(assessment.code).toBe('LEADSCORE_MODULE_DISABLED');
+      expect(assessment.pendingPhase).toBeNull();
+      expect(assessment.detail).toBe('leadScore.aiInsight');
       expect(assessment.writes).toBe(true);
     }
 

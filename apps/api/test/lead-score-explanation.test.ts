@@ -81,6 +81,8 @@ interface ScoreView {
   actions: {
     recalculate: { allowed: boolean; reason: string | null };
     history: { allowed: boolean; reason: string | null };
+    /** 19-LS.17 — whether this caller may spend one AI run to explain the score. */
+    insight: { allowed: boolean; reason: string | null };
   };
 }
 
@@ -582,9 +584,11 @@ describe('the score read says what this caller may do (19-LS.7)', () => {
 
     const view = score(await readScore(leadId));
     // An administrator holds every right and the module is switched on: both doors open, no reason attached.
+    // The AI insight is its own door and stays closed while its feature is off (19-LS.17).
     expect(view.actions).toEqual({
       recalculate: { allowed: true, reason: null },
       history: { allowed: true, reason: null },
+      insight: { allowed: false, reason: 'LEADSCORE_MODULE_DISABLED' },
     });
 
     // A reader with the badge right alone gets the number and is told, in stable codes, why there is no
@@ -595,6 +599,7 @@ describe('the score read says what this caller may do (19-LS.7)', () => {
     const viewer = score(await readScore(leadId, badgeOnly.token));
     expect(viewer.actions.recalculate).toEqual({ allowed: false, reason: 'AUTHORIZATION_DENIED' });
     expect(viewer.actions.history).toEqual({ allowed: false, reason: 'AUTHORIZATION_DENIED' });
+    expect(viewer.actions.insight).toEqual({ allowed: false, reason: 'AUTHORIZATION_DENIED' });
   });
 
   it('does not offer a recalculation to a caller who cannot edit a Lead', async () => {

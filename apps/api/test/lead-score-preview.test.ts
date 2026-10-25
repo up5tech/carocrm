@@ -386,7 +386,7 @@ describe('the sample is the caller’s own (plan §6.5, §9.1–§9.2)', () => {
 });
 
 describe('the preview is the door 19-LS.4 opened, and only that door', () => {
-  it('reports every recalculation path as delivered and names what still waits', async () => {
+  it('reports every path as delivered and leaves nothing waiting', async () => {
     const health = await call('GET', '/api/v1/LeadScore/action/health');
     const body = health.body as unknown as {
       module: { implementedPhases: string[] };
@@ -408,9 +408,11 @@ describe('the preview is the door 19-LS.4 opened, and only that door', () => {
     for (const operation of ['recalculateLead', 'eventRecalculate', 'batchRecalculate']) {
       expect(body.operations.find((entry) => entry.operation === operation)?.pendingPhase, operation).toBeNull();
     }
-    // What still waits, waits loudly: a band-change notification is 19-LS.9's, and health says so.
-    const waiting = body.operations.find((operation) => operation.operation === 'aiInsight');
-    expect(waiting?.pendingPhase).toBe('19-LS.17');
+    // 19-LS.17 delivered the last operation, so nothing waits on a phase any more; the AI door is implemented
+    // and answers for its own switch.
+    expect(body.operations.find((operation) => operation.operation === 'aiInsight')?.pendingPhase).toBeNull();
+    expect(body.features.every((feature) => feature.pendingPhase === null)).toBe(true);
+    expect(body.features.every((feature) => feature.implemented)).toBe(true);
     // The engine-health check is computed from the two operator lists, so it can fail on a real drift.
     const engine = body.checks.find((check) => check.name === 'scoring-engine');
     expect(engine?.ok).toBe(true);

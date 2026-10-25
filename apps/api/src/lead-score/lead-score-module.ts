@@ -32,6 +32,7 @@ import {
   LEADCONVERSION_RECOVER_PERMISSION_ENTITY,
   LEADSCORE_BATCH_PERMISSION_ENTITY,
   LEADSCORE_EXPLAIN_PERMISSION_ENTITY,
+  LEADSCORE_INSIGHT_PERMISSION_ENTITY,
   LEADSCORE_MODEL_PERMISSION_ENTITY,
   LEADSCORE_MODEL_PUBLISH_PERMISSION_ENTITY,
   LEADSCORE_RECALCULATE_PERMISSION_ENTITY,
@@ -96,7 +97,12 @@ export type LeadScoreErrorCode =
   | 'LEADSCORE_CONVERSION_RETRYABLE'
   | 'LEADSCORE_CONVERSION_NEEDS_RECOVERY'
   | 'LEADSCORE_DUPLICATE_REVIEW_REQUIRED'
-  | 'LEADSCORE_CONVERSION_REPARENT_REQUIRED';
+  | 'LEADSCORE_CONVERSION_REPARENT_REQUIRED'
+  | 'LEADSCORE_INSIGHT_NOT_CONFIGURED'
+  | 'LEADSCORE_INSIGHT_UNAVAILABLE'
+  | 'LEADSCORE_INSIGHT_AGENT_UNSUITABLE'
+  | 'LEADSCORE_INSIGHT_NOT_SCORED'
+  | 'LEADSCORE_INSIGHT_UNUSABLE';
 
 export interface LeadScoreCapabilityDefinition {
   readonly key: LeadScoreCapabilityKey;
@@ -121,7 +127,8 @@ export type LeadScoreCapabilityKey =
   | 'duplicateOverride'
   | 'applyFieldChanges'
   | 'conversionAuditRead'
-  | 'conversionRecover';
+  | 'conversionRecover'
+  | 'generateInsight';
 
 /**
  * The rights this module gates on.
@@ -232,6 +239,14 @@ export const LEADSCORE_CAPABILITIES: readonly LeadScoreCapabilityDefinition[] = 
     resource: LEADCONVERSION_RECOVER_PERMISSION_ENTITY,
     action: 'edit',
   },
+  {
+    key: 'generateInsight',
+    label: 'Request an AI fit insight',
+    description:
+      'Spend one AIAgents run to explain a Lead\'s fit from its deterministic score and a bounded set of business fields. Off by default; generation never changes the score.',
+    resource: LEADSCORE_INSIGHT_PERMISSION_ENTITY,
+    action: 'create',
+  },
 ];
 
 /**
@@ -282,7 +297,9 @@ export const LEADSCORE_FEATURES: readonly LeadScoreFeatureDescriptor[] = [
   // 19-LS.16 delivered the third target: an Opportunity created or linked inside the same command, with no
   // opportunity logic of its own — Sales still owns stage semantics and its document conversion.
   { key: 'opportunityConversion', label: 'Opportunity conversion', settingsPath: 'features.opportunityConversion', requires: ['leadConversion'], pendingPhase: null },
-  { key: 'aiInsight', label: 'AI-assisted fit insight', settingsPath: 'features.aiInsight', requires: ['scoring'], pendingPhase: '19-LS.17' },
+  // 19-LS.17 delivered the optional AI explanation: one operator-clicked AIAgents run grounded in the stored
+  // score and a bounded business-field allowlist, stored as its own record so it can never read as a score.
+  { key: 'aiInsight', label: 'AI-assisted fit insight', settingsPath: 'features.aiInsight', requires: ['scoring'], pendingPhase: null },
 ];
 
 /** Everything still ahead of this build, derived from the table above so the two cannot disagree. */
@@ -403,7 +420,7 @@ export const LEADSCORE_MODULE = {
    * reader that the card, the model workspace, the engagement read and the conversion contract did not exist.
    * The module-health view renders it, which makes it a claim rather than a changelog.
    */
-  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13', '19-LS.16'],
+  implementedPhases: ['19-LS.0', '19-LS.1', '19-LS.2', '19-LS.3', '19-LS.4', '19-LS.5', '19-LS.6', '19-LS.7', '19-LS.8', '19-LS.9', '19-LS.10', '19-LS.11', '19-LS.12', '19-LS.13', '19-LS.16', '19-LS.17'],
   /**
    * The entity set this module owns, registered in `database/seed-metadata.ts` and indexed by
    * `database/migrations/073_phase19_lead_score.sql`. One list, shared with the write guard, so the

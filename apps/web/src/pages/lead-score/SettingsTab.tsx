@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, InputNumber, Select, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { type ReactNode, useEffect, useState } from 'react';
@@ -42,6 +42,16 @@ export function SettingsTab({
   const [activeModelId, setActiveModelId] = useState<string | null>(null);
   const [debounce, setDebounce] = useState(60);
   const [sweep, setSweep] = useState({ enabled: false, limit: 200, chunkSize: 25 });
+  const [insightAgentId, setInsightAgentId] = useState<string | null>(null);
+
+  // Published agents are the only ones AIAgents will run. The list is fetched as the caller, so a settings
+  // administrator who cannot read AIAgents sees a hint rather than an empty picker that looks like "none".
+  const agents = useQuery({
+    queryKey: ['aiAgents', 'published'],
+    queryFn: () => api.aiAgentsList('published'),
+    retry: false,
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
     if (settings === undefined) return;
@@ -50,6 +60,7 @@ export function SettingsTab({
     setActiveModelId(settings.settings.scoring.activeModelId);
     setDebounce(settings.settings.scoring.debounceSeconds);
     setSweep(settings.settings.signals?.decaySweep ?? sweep);
+    setInsightAgentId(settings.settings.insight?.agentId ?? null);
   }, [settings]);
 
   const save = useMutation({
@@ -60,6 +71,7 @@ export function SettingsTab({
         features: changedFeatures(),
         scoring: { activeModelId, debounceSeconds: debounce },
         signals: { decaySweep: sweep },
+        insight: { agentId: insightAgentId },
       }),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['leadScore'] }),
     onError: () => undefined,
@@ -82,7 +94,8 @@ export function SettingsTab({
     debounce !== (settings?.settings.scoring.debounceSeconds ?? 60) ||
     sweep.enabled !== (storedSweep?.enabled ?? false) ||
     sweep.limit !== (storedSweep?.limit ?? 200) ||
-    sweep.chunkSize !== (storedSweep?.chunkSize ?? 25);
+    sweep.chunkSize !== (storedSweep?.chunkSize ?? 25) ||
+    insightAgentId !== (settings?.settings.insight?.agentId ?? null);
 
   if (settings === undefined) return <Card title={t('leadscore.admin.settings.title')}><Alert type="warning" showIcon message={t('leadscore.admin.settings.notAvailable')} /></Card>;
 
@@ -209,6 +222,34 @@ export function SettingsTab({
               </Space>
               <LabeledNumber label={t('leadscore.admin.settings.sweepLimit')} value={sweep.limit} min={1} max={2000} disabled={!canWrite} onChange={(limit) => setSweep({ ...sweep, limit })} />
               <LabeledNumber label={t('leadscore.admin.settings.sweepChunk')} value={sweep.chunkSize} min={1} max={50} disabled={!canWrite} onChange={(chunkSize) => setSweep({ ...sweep, chunkSize })} />
+            </Space>
+          }
+        />
+
+        <Row2
+          label={t('leadscore.admin.settings.insightAgent')}
+          hint={t('leadscore.admin.settings.insightAgentHint')}
+          control={
+            <Space direction="vertical" size={4} style={{ width: '100%' }}>
+              <Select
+                style={{ minWidth: 320, maxWidth: 520 }}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                value={insightAgentId ?? undefined}
+                placeholder={t('leadscore.admin.settings.insightAgentNone')}
+                disabled={!canWrite}
+                onChange={(next) => setInsightAgentId(next === undefined ? null : next)}
+                options={(agents.data?.list ?? []).map((agent) => ({
+                  value: agent.id,
+                  label: `${agent.name} · ${agent.key} · v${String(agent.currentVersion ?? '—')}`,
+                }))}
+              />
+              {agents.isError ? (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('leadscore.admin.settings.insightAgentUnavailable')}
+                </Typography.Text>
+              ) : null}
             </Space>
           }
         />

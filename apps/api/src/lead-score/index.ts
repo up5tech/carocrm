@@ -10,6 +10,7 @@ import { LeadScoreCalculationService } from './lead-score-calculation.service.js
 import { LeadScoreEditorService } from './lead-score-editor.js';
 import { LeadScoreExplanationService } from './lead-score-explanation.service.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
+import { LeadScoreInsightService } from './lead-score-insight.service.js';
 import { LeadScoreModelService } from './lead-score-model.service.js';
 import { LeadScoreModuleHealthService } from './lead-score-module-health.service.js';
 import { LeadScorePermissionService } from './lead-score-permission.service.js';
@@ -51,6 +52,8 @@ export const LEADSCORE_PROVIDERS: Provider[] = [
   LeadScorePreviewService,
   LeadScoreCalculationService,
   LeadScoreExplanationService,
+  // 19-LS.17: the optional AI explanation (an AIAgents manual run, stored separately from the score).
+  LeadScoreInsightService,
   LeadScoreFeatureGate,
   // Reads only the metadata registry, so it is registered with the reads rather than the writers.
   LeadScoreEditorService,
@@ -134,6 +137,7 @@ export {
   LEADSCORE_CORE_ENTITY_TYPES,
   LEADSCORE_EVENT_NAMESPACE,
   LEADSCORE_EXPLAIN_PERMISSION_ENTITY,
+  LEADSCORE_INSIGHT_PERMISSION_ENTITY,
   LEADSCORE_MODEL_PERMISSION_ENTITY,
   LEADSCORE_MODEL_PUBLISH_PERMISSION_ENTITY,
   LEADSCORE_MODULE_KEY,
@@ -177,6 +181,20 @@ export {
   type ScoreReadView,
 } from './lead-score-explanation.service.js';
 export { LEADSCORE_OPERATIONS, LeadScoreFeatureGate, type LeadScoreOperation, type LeadScoreOperationAssessment } from './lead-score-feature-gate.service.js';
+export {
+  buildInsightEvidence,
+  extractInsight,
+  INSIGHT_FACT_FIELDS,
+  type InsightAffordance,
+  type InsightEvidence,
+  insightIdempotencyKey,
+  type InsightRequestInput,
+  type InsightScoreFacts,
+  type InsightView,
+  LeadScoreInsightService,
+  MAX_INSIGHT_EVIDENCE_CHARS,
+  MAX_INSIGHT_TEXT_CHARS,
+} from './lead-score-insight.service.js';
 export {
   changedKeys,
   isLeadScoreInternalWrite,

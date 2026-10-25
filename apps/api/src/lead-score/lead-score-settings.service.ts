@@ -115,6 +115,23 @@ const SignalsSectionSchema = z
  */
 const conversion = ConversionSectionSchema;
 
+/**
+ * The optional AI explanation (19-LS.17, plan §6.7).
+ *
+ * The only configuration is **which published AIAgents agent may be asked**. The module sends that agent a
+ * bounded evidence block built from the Lead's stored score and an allowlist of business fields; it never
+ * sends contact details, notes, consent or another record. Everything else about the agent — provider,
+ * model, prompt, budgets, output schema — stays in AIAgents, where it is already versioned and audited, so
+ * there is no second copy here to drift. `null` means the feature is configured but unused; the capability
+ * answer then says `NOT_CONFIGURED` rather than failing at the click.
+ */
+const InsightSectionSchema = z
+  .object({
+    agentId: z.string().trim().min(1).max(64).nullable().default(null),
+  })
+  .strict()
+  .default({});
+
 export const LeadScoreSettingsSchema = z
   .object({
     /**
@@ -127,6 +144,7 @@ export const LeadScoreSettingsSchema = z
     scoring: ScoringSectionSchema.default({}),
     signals: SignalsSectionSchema.default({}),
     conversion,
+    insight: InsightSectionSchema,
   })
   .strict();
 
@@ -310,6 +328,12 @@ function settingsWarnings(
         message: `"${feature.key}" is enabled while "${required}" is off or unimplemented; the dependent behavior stays inactive.`,
       });
     }
+  }
+  if (effective['aiInsight'] === true && settings.insight.agentId === null) {
+    warnings.push({
+      code: 'insightAgentMissing',
+      message: 'AI insight is on but no published AI agent is chosen, so the action is refused as NOT_CONFIGURED.',
+    });
   }
   return warnings;
 }

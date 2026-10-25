@@ -1,10 +1,10 @@
 import { HistoryOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, App as AntApp, Button, Card, Descriptions, Drawer, Empty, List, Space, Table, Typography } from 'antd';
-import { useState } from 'react';
+import { Alert, App as AntApp, Button, Card, Descriptions, Divider, Drawer, Empty, List, Space, Table, Tag, Typography } from 'antd';
+import { useRef, useState } from 'react';
 
 import { api } from '../api/client.js';
-import type { LeadScoreBreakdownEntry, LeadScoreHistoryItem, LeadScoreRead } from '../api/types.js';
+import type { LeadScoreBreakdownEntry, LeadScoreHistoryItem, LeadScoreInsight, LeadScoreRead } from '../api/types.js';
 import { named } from '../pages/lead-score/shared.js';
 import { formatDateTime, formatNumber, t } from '../state/i18n.js';
 
@@ -61,6 +61,12 @@ function signalValueText(value: number | string | null): string {
  * empty card that only exists to fail is worse than no card, and the record's own Score panel from the
  * metadata layout still carries the projection fields. The portal gets no panel either — it is mounted only
  * for the internal surface.
+ *
+ * 19-LS.17 adds the optional AI explanation at the bottom, visually and structurally apart from the score:
+ * its own heading, an **AI-generated** label, its agent/model and the moment it was produced, and a button
+ * that only appears when the server's `actions.insight` says this caller may spend one run. Nothing here
+ * requests an answer on mount (a cost, not a read), and an answer grounded on a field the reader may no
+ * longer see is shown as withheld rather than quoted.
  */
 
 /** How many history rows one page shows; the server caps a page at 50 (`MAX_HISTORY_PAGE`). */
@@ -166,11 +172,106 @@ function ExplanationList({ entries, signalState }: { entries: readonly LeadScore
   );
 }
 
+/**
+ * The optional AI explanation (19-LS.17), rendered apart from the deterministic score on purpose.
+ *
+ * It shows only what the server stored: the answer, the agent/version and provider/model that wrote it, when
+ * it was produced, its self-reported confidence when one exists, and how many fields grounded it. A text
+ * grounded on a field this reader may not see arrives as `withheld` and is never echoed. The button appears
+ * only when `actions.insight` allows it — the same gate the command meets — and nothing is requested on mount.
+ */
+function InsightSection({ view, busy, onAsk }: { view: LeadScoreRead; busy: boolean; onAsk: () => void }) {
+  const action = view.actions.insight;
+  const answer: LeadScoreInsight | null = view.insight;
+  // A caller without the module right sees nothing; a configuration problem is shown only to somebody who
+  // could otherwise ask, so a regular score reader is not told about a deployment they cannot change.
+  const explains = action.reason === 'NOT_CONFIGURED' || action.reason === 'AI_UNAVAILABLE' || action.reason === 'AI_AGENTS_UNAUTHORIZED';
+  if (!action.allowed && answer === null && !explains) return null;
+
+  const stale =
+    answer !== null &&
+    (answer.score.calculatedAt !== view.score.calculatedAt || answer.score.modelVersion !== view.score.modelVersion);
+  const hint =
+    answer === null && !action.allowed
+      ? action.reason === 'NOT_CONFIGURED'
+        ? t('leadscore.panel.insightNotConfigured')
+        : action.reason === 'AI_UNAVAILABLE'
+          ? t('leadscore.panel.insightUnavailable')
+          : t('leadscore.panel.insightNoAccess')
+      : null;
+  const provenance = [
+    answer === null || answer.agent.providerKey === null || answer.agent.model === null
+      ? null
+      : `${t('leadscore.panel.insightModel')}: ${answer.agent.providerKey} · ${answer.agent.model}`,
+    answer?.confidence === null || answer === null
+      ? null
+      : `${t('leadscore.panel.insightConfidence')}: ${String(Math.round(answer.confidence * 100))}%`,
+    answer === null ? null : t('leadscore.panel.insightGroundedOn', { count: String(answer.input.fields.length) }),
+  ].filter((entry): entry is string => entry !== null);
+
+  return (
+    <div>
+      <Divider style={{ margin: '16px 0 12px' }} />
+      <Space wrap size={8} align="center" style={{ marginBottom: 8 }}>
+        <Typography.Text strong>{t('leadscore.panel.insightTitle')}</Typography.Text>
+        <Tag color="purple">{t('leadscore.panel.insightLabel')}</Tag>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {t('leadscore.panel.insightOptional')}
+        </Typography.Text>
+        {action.allowed ? (
+          <Button size="small" loading={busy} onClick={onAsk}>
+            {busy ? t('leadscore.panel.insightAsking') : t('leadscore.panel.insightAsk')}
+          </Button>
+        ) : null}
+      </Space>
+
+      {hint === null ? null : (
+        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+          {hint}
+        </Typography.Paragraph>
+      )}
+
+      {answer === null ? (
+        action.allowed ? (
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t('leadscore.panel.insightEmpty')}
+          </Typography.Text>
+        ) : null
+      ) : (
+        <Space direction="vertical" size={6} style={{ width: '100%' }}>
+          {answer.withheld === null ? (
+            <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>{answer.text ?? ''}</Typography.Paragraph>
+          ) : (
+            <Alert type="info" showIcon message={t('leadscore.panel.insightWithheld')} />
+          )}
+          {stale ? <Alert type="warning" showIcon message={t('leadscore.panel.insightStale')} /> : null}
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {`${t('leadscore.panel.insightGeneratedAt')}: ${formatDateTime(answer.generatedAt)} · ${t('leadscore.panel.insightAgent')}: ${answer.agent.name}${answer.agent.version === null ? '' : ` v${String(answer.agent.version)}`}`}
+          </Typography.Text>
+          {provenance.length === 0 ? null : (
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {provenance.join(' · ')}
+            </Typography.Text>
+          )}
+        </Space>
+      )}
+    </div>
+  );
+}
+
+function newInsightKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return `li_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+}
+
 export function LeadScorePanel({ leadId, onChanged }: { leadId: string; onChanged?: () => void }) {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyOffset, setHistoryOffset] = useState(0);
+  // Kept across a failure: a retry re-sends the same request key, so a response lost after the provider ran
+  // returns the stored answer instead of paying for a second run.
+  const insightKey = useRef<string | undefined>(undefined);
 
   const read = useQuery({
     queryKey: ['leadScore', 'score', leadId],
@@ -197,6 +298,19 @@ export function LeadScorePanel({ leadId, onChanged }: { leadId: string; onChange
       onChanged?.();
     },
     onError: (error: Error) => void message.error(error.message),
+  });
+
+  const insight = useMutation({
+    mutationFn: () => {
+      insightKey.current = insightKey.current ?? newInsightKey();
+      return api.leadScoreInsight(leadId, insightKey.current);
+    },
+    onSuccess: () => {
+      insightKey.current = undefined;
+      void queryClient.invalidateQueries({ queryKey: ['leadScore'] });
+      onChanged?.();
+    },
+    onError: (error: Error) => void message.error(`${t('leadscore.panel.insightFailed')} ${error.message}`),
   });
 
   if (read.isError || view === undefined) return null;
@@ -306,6 +420,8 @@ export function LeadScorePanel({ leadId, onChanged }: { leadId: string; onChange
               {t('leadscore.panel.skipped', { codes: explanation.reasonCodes.skipped.join(', ') })}
             </Typography.Text>
           ) : null}
+
+          <InsightSection view={view} busy={insight.isPending} onAsk={() => insight.mutate()} />
         </>
       )}
 

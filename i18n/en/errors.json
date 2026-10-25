@@ -43,5 +43,10 @@
   "LEADSCORE_CONVERSION_RETRYABLE": "The conversion failed temporarily and nothing was written. Retrying is safe.",
   "LEADSCORE_CONVERSION_NEEDS_RECOVERY": "This conversion attempt needs to be recovered before it can continue.",
   "LEADSCORE_DUPLICATE_REVIEW_REQUIRED": "Possible duplicates exist for this Lead; decide before converting.",
-  "LEADSCORE_CONVERSION_REPARENT_REQUIRED": "This Contact already belongs to another Account, and moving it needs an explicit decision."
+  "LEADSCORE_CONVERSION_REPARENT_REQUIRED": "This Contact already belongs to another Account, and moving it needs an explicit decision.",
+  "LEADSCORE_INSIGHT_NOT_CONFIGURED": "AI insight is switched on, but no AI agent is configured for it. Choose one in the Lead Score settings.",
+  "LEADSCORE_INSIGHT_UNAVAILABLE": "The AI agent cannot answer right now, so no insight was generated.",
+  "LEADSCORE_INSIGHT_AGENT_UNSUITABLE": "The configured AI agent may only read, and it must accept a text task. Choose a suitable agent.",
+  "LEADSCORE_INSIGHT_NOT_SCORED": "This Lead has no current score, so there is nothing for an AI explanation to describe.",
+  "LEADSCORE_INSIGHT_UNUSABLE": "The AI run finished without a usable explanation."
 }

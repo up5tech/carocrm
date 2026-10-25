@@ -27,7 +27,8 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 const RUN = `AGENT_TEST_LS2_${Date.now().toString(36)}`;
 const SETTINGS_ROW = 'leadScore';
 const MODULE_MIGRATION = '073_phase19_lead_score.sql';
-const OWNED_ENTITIES = ['LeadScoreModel', 'LeadScoreRule', 'LeadScoreEvaluation', 'LeadConversionOperation'] as const;
+const INSIGHT_MIGRATION = '075_phase19_lead_score_insights.sql';
+const OWNED_ENTITIES = ['LeadScoreModel', 'LeadScoreRule', 'LeadScoreEvaluation', 'LeadConversionOperation', 'LeadScoreInsight'] as const;
 
 let ctx: ApiContext;
 let previousSettings: string | null = null;
@@ -154,6 +155,9 @@ describe('migration 073 is additive and present (19-LS.2)', () => {
     const db = ctx.database.db;
     const applied = await db.selectFrom('schema_migrations').select(['name', 'applied_at']).where('name', '=', MODULE_MIGRATION).execute();
     expect(applied).toHaveLength(1);
+    // 19-LS.17's indexes are additive too: two partial indexes over `attrs`, no new relation.
+    const insight = await db.selectFrom('schema_migrations').select(['name']).where('name', '=', INSIGHT_MIGRATION).execute();
+    expect(insight).toHaveLength(1);
 
     const relations = await db
       .selectFrom('information_schema.tables')
@@ -202,13 +206,20 @@ describe('migration 073 is additive and present (19-LS.2)', () => {
       expect(names.has(expected), expected).toBe(true);
     }
 
+    // 19-LS.17's two indexes come from migration 075 and are asserted below; the partial-over-live-rows rule
+    // here is 073's, which is why they are separated rather than weakening the assertion.
+    const INSIGHT_INDEXES = ['idx_entity_records_lead_score_insight_lead', 'uq_entity_records_lead_score_insight_key'];
+    const baseRows = rows.filter((row) => !INSIGHT_INDEXES.includes(row.indexname));
+    expect(baseRows).toHaveLength(15);
     // Scoped to their entity type and to live rows: an index over the shared store that was not partial
     // would index the whole CRM for one module.
-    for (const row of rows) {
+    for (const row of baseRows) {
       expect(row.indexdef).toContain('entity_type');
       expect(row.indexdef).toContain('deleted_at');
     }
-    expect(rows).toHaveLength(15);
+    for (const name of INSIGHT_INDEXES) expect(names.has(name), name).toBe(true);
+    expect(definitions.get('idx_entity_records_lead_score_insight_lead')).toContain('deleted_at');
+    expect(definitions.get('uq_entity_records_lead_score_insight_key')).toContain("entity_type = 'LeadScoreInsight'");
 
     // 19-LS.9's own index is on another module's table, so it is asserted separately: it is the bounded
     // recipient-scoped engagement read, and it is partial for the same reason the ones above are — a row
@@ -282,7 +293,7 @@ describe('existing data is preserved (19-LS.2 acceptance)', () => {
 });
 
 describe('metadata foundation (19-LS.2)', () => {
-  it('registers the four Lead Score entities as ordinary metadata records', () => {
+  it('registers the five Lead Score entities as ordinary metadata records', () => {
     for (const name of OWNED_ENTITIES) {
       const entity = definition(name);
       expect(entity, name).toBeDefined();
@@ -368,6 +379,23 @@ describe('metadata foundation (19-LS.2)', () => {
     expect(evaluation?.acl?.permissions?.LeadScoreEvaluation).toMatchObject({ create: 'yes', read: 'no', edit: 'no', delete: 'no' });
     expect(evaluation?.record?.removable).toBe(false);
     expect(evaluation?.layouts?.edit ?? []).toEqual([]);
+  });
+
+  it('records an AI insight separately from the score it explains (19-LS.17)', () => {
+    const insight = definition('LeadScoreInsight');
+    const fields = insight?.fields ?? {};
+    for (const required of ['leadId', 'runId', 'agentId', 'text', 'generatedAt', 'idempotencyKey']) {
+      expect(fields[required]?.required, required).toBe(true);
+    }
+    for (const field of ['agentName', 'agentKey', 'agentVersion', 'agentVersionId', 'providerKey', 'model', 'settingsVersion', 'inputDigest', 'inputFields', 'inputChars', 'confidence', 'label', 'scoreValue', 'scoreBand', 'scoreModelVersion', 'scoreCalculatedAt', 'requestedById', 'durationMs', 'inputTokens', 'outputTokens', 'estimatedCostUsd']) {
+      expect(fields[field], field).toBeDefined();
+    }
+    // The label is stored, so a screen cannot render the text as if it were deterministic.
+    expect(fields['label']?.defaultValue).toBe('ai_generated');
+    expect(insight?.client?.web).toBe(false);
+    expect(insight?.acl?.permissions?.LeadScoreInsight).toMatchObject({ create: 'yes', read: 'no', edit: 'no', delete: 'no' });
+    expect(insight?.record?.removable).toBe(false);
+    expect(insight?.layouts?.edit ?? []).toEqual([]);
   });
 
   it('records a conversion operation with idempotency, confirmation and created-versus-linked results', () => {
@@ -489,7 +517,7 @@ describe('metadata foundation (19-LS.2)', () => {
       expect(byName.get(name)?.ok, `${name}: ${byName.get(name)?.detail ?? 'absent'}`).toBe(true);
     }
     expect(body.ok).toBe(true);
-    expect(byName.get('schema-indexes')?.detail).toContain('15 indexes');
+    expect(byName.get('schema-indexes')?.detail).toContain('17 indexes');
     expect(byName.get('entity-registration')?.detail).toContain('LeadScoreEvaluation');
     expect(byName.get('write-guard')?.detail).toContain('guards registered');
   });
@@ -695,24 +723,16 @@ describe('the database invariants behind retry safety (19-LS.2)', () => {
 });
 
 describe('registered but inert (19-LS.2)', () => {
-  it('still refuses an operation whose phase has not shipped, because schema is not behavior', async () => {
+  it('still refuses an operation whose switch is off, because schema is not behavior', async () => {
     // Every switch off, explicitly. The settings row is one document shared by every suite against the
     // configured database, so a patch of `{enabled:true}` alone would inherit whatever an earlier suite left
     // on and this assertion would depend on the order tests ran in — which is exactly what "inert" has to
     // survive. The suite's own teardown restores the row it found.
     const switchesOff = Object.fromEntries(Object.keys(DEFAULT_LEADSCORE_SETTINGS.features).map((key) => [key, false]));
     expect((await call('POST', '/api/v1/LeadScore/action/settings', { enabled: true, features: switchesOff })).status).toBe(200);
-    // What LS.2 registered is inert until its own phase arrives. Five phases on, the only door that still names
-    // a pending phase is the insight one.
-    for (const [operation, phase] of [['aiInsight', '19-LS.17']] as const) {
-      const result = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });
-      expect((result.body as { code: string }).code, operation).toBe('LEADSCORE_PHASE_PENDING');
-      expect((result.body as { pendingPhase: string }).pendingPhase, operation).toBe(phase);
-    }
-    // 19-LS.6 delivered the two background recalculation paths, so they no longer name a phase — and with the
-    // module switched on and their switches off they still refuse, which is the same rule this suite has
-    // always asserted: a registered capability answers for its switch, never for itself.
-    for (const operation of ['eventRecalculate', 'batchRecalculate']) {
+    // 19-LS.17 delivered the last phase, so no operation names one any more: `aiInsight` and the two
+    // background recalculation paths refuse for their switches, not for missing code.
+    for (const operation of ['aiInsight', 'eventRecalculate', 'batchRecalculate']) {
       const result = await call('POST', '/api/v1/LeadScore/action/operation-gate', { operation });
       expect((result.body as { pendingPhase: string | null }).pendingPhase, operation).toBeNull();
       expect((result.body as { code: string }).code, operation).toBe('LEADSCORE_MODULE_DISABLED');
@@ -736,5 +756,6 @@ describe('registered but inert (19-LS.2)', () => {
     expect(names.has('beforeValidate:leadScore.leadFieldGuard')).toBe(true);
     expect(names.has('beforeValidate:leadScore.LeadScoreEvaluationGuard')).toBe(true);
     expect(names.has('beforeValidate:leadScore.LeadConversionOperationGuard')).toBe(true);
+    expect(names.has('beforeValidate:leadScore.LeadScoreInsightGuard')).toBe(true);
   });
 });

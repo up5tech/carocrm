@@ -6,6 +6,7 @@ import { EntityCrudService } from '../entity/entity.service.js';
 import { I18nService } from '../i18n/i18n.service.js';
 import { MAX_EVALUATED_RULES, requiredInputFields, scoringInputsHash } from './lead-score-evaluator.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
+import { type InsightView,LeadScoreInsightService } from './lead-score-insight.service.js';
 import { LeadScoreModelService, toModelAttributes, toRuleAttributes } from './lead-score-model.service.js';
 import type { LeadScoreRow } from './lead-score-records.js';
 import { LeadScoreRecords } from './lead-score-records.js';
@@ -68,6 +69,8 @@ export interface ScoreActionAnswer {
 export interface ScoreActions {
   readonly recalculate: ScoreActionAnswer;
   readonly history: ScoreActionAnswer;
+  /** 19-LS.17: may this caller spend one AIAgents run to explain this score? */
+  readonly insight: ScoreActionAnswer;
 }
 
 export interface ScoreReadView {
@@ -109,6 +112,11 @@ export interface ScoreReadView {
     readonly signalState: string | null;
   };
   readonly actions: ScoreActions;
+  /**
+   * The newest stored AI explanation, or `null` (19-LS.17). It is a separate field on purpose: the
+   * deterministic score and the AI text are never merged into one number or one label.
+   */
+  readonly insight: InsightView | null;
 }
 
 export interface ScoreHistoryView {
@@ -148,6 +156,7 @@ export class LeadScoreExplanationService {
     @Inject(LeadScoreRecords) private readonly store: LeadScoreRecords,
     @Inject(LeadScoreModelService) private readonly models: LeadScoreModelService,
     @Inject(LeadScoreFeatureGate) private readonly gate: LeadScoreFeatureGate,
+    @Inject(LeadScoreInsightService) private readonly insights: LeadScoreInsightService,
     @Inject(LeadScoreSettingsService) private readonly settings: LeadScoreSettingsService,
     @Inject(I18nService) private readonly i18n: I18nService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
@@ -183,7 +192,7 @@ export class LeadScoreExplanationService {
 
     const locale = await this.locale();
     const breakdown = row === undefined ? [] : breakdownOf(row, this.i18n, locale);
-    const actions = await this.actions();
+    const [actions, insight] = await Promise.all([this.actions(), this.insights.latest(leadId)]);
 
     return {
       leadId,
@@ -224,6 +233,7 @@ export class LeadScoreExplanationService {
         signalState: stringOf(row?.data['signalState']),
       },
       actions,
+      insight,
     };
   }
 
@@ -235,9 +245,10 @@ export class LeadScoreExplanationService {
    * (plan §9.1). Reporting one without the other would put a button on the screen that the server refuses.
    */
   private async actions(): Promise<ScoreActions> {
-    const [recalculate, history, canEditLead] = await Promise.all([
+    const [recalculate, history, insight, canEditLead] = await Promise.all([
       this.gate.assess('recalculateLead'),
       this.gate.assess('readScoreHistory'),
+      this.insights.affordance(),
       this.acl.canUser('Lead', 'edit'),
     ]);
     const leadNotEditable = canEditLead === 'no' ? 'LEAD_NOT_EDITABLE' : null;
@@ -247,6 +258,7 @@ export class LeadScoreExplanationService {
         reason: recalculate.admitted ? leadNotEditable : recalculate.code,
       },
       history: { allowed: history.admitted, reason: history.admitted ? null : history.code },
+      insight: { allowed: insight.allowed, reason: insight.reason },
     };
   }
 

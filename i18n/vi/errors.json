@@ -43,5 +43,10 @@
   "LEADSCORE_CONVERSION_RETRYABLE": "Chuyển đổi thất bại tạm thời và chưa ghi gì. Có thể thử lại an toàn.",
   "LEADSCORE_CONVERSION_NEEDS_RECOVERY": "Lần chuyển đổi này cần được xử lý (recovery) trước khi tiếp tục.",
   "LEADSCORE_DUPLICATE_REVIEW_REQUIRED": "Có bản ghi có thể trùng với Lead này; cần quyết định trước khi chuyển đổi.",
-  "LEADSCORE_CONVERSION_REPARENT_REQUIRED": "Liên hệ này đang thuộc một tài khoản khác; việc chuyển sang cần quyết định rõ ràng."
+  "LEADSCORE_CONVERSION_REPARENT_REQUIRED": "Liên hệ này đang thuộc một tài khoản khác; việc chuyển sang cần quyết định rõ ràng.",
+  "LEADSCORE_INSIGHT_NOT_CONFIGURED": "Tính năng gợi ý AI đang bật nhưng chưa chọn AI agent. Hãy chọn trong cài đặt Lead Score.",
+  "LEADSCORE_INSIGHT_UNAVAILABLE": "AI agent hiện không thể trả lời nên chưa tạo được gợi ý.",
+  "LEADSCORE_INSIGHT_AGENT_UNSUITABLE": "AI agent đã chọn phải chỉ đọc và nhận tác vụ văn bản. Hãy chọn agent phù hợp.",
+  "LEADSCORE_INSIGHT_NOT_SCORED": "Lead này chưa có điểm hiện tại nên chưa có gì để AI giải thích.",
+  "LEADSCORE_INSIGHT_UNUSABLE": "Lần chạy AI kết thúc nhưng không có nội dung giải thích dùng được."
 }

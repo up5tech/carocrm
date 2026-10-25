@@ -666,13 +666,9 @@ describe('the lifecycle is a documented surface (19-LS.3)', () => {
     for (const operation of ['validateModel', 'publishModel', 'createModelVersion']) {
       expect(operations.get(operation)?.admitted, operation).toBe(true);
     }
-    for (const [operation, phase] of [['aiInsight', '19-LS.17']] as const) {
-      expect(operations.get(operation)?.admitted, operation).toBe(false);
-      expect(operations.get(operation)?.pendingPhase, operation).toBe(phase);
-    }
-    // Operations 19-LS.4, 19-LS.5 and 19-LS.6 delivered refuse this suite for want of a switch, not for want
-    // of code, so the answer carries no phase at all.
-    for (const operation of ['previewModel', 'readScore', 'readScoreHistory', 'recalculateLead', 'eventRecalculate', 'batchRecalculate']) {
+    // 19-LS.17 delivered the last pending operation: every operation now answers for its switch rather than
+    // for a missing phase, so `aiInsight` is refused here for the same reason as the others.
+    for (const operation of ['aiInsight', 'previewModel', 'readScore', 'readScoreHistory', 'recalculateLead', 'eventRecalculate', 'batchRecalculate']) {
       const entry = operations.get(operation);
       expect(entry?.admitted, operation).toBe(false);
       expect(entry?.pendingPhase, operation).toBeNull();

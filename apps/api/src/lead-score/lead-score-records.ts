@@ -12,6 +12,7 @@ import type { LeadScoreEntityType } from './lead-score-internal.js';
 const MODEL_ENTITY: LeadScoreEntityType = 'LeadScoreModel';
 const RULE_ENTITY: LeadScoreEntityType = 'LeadScoreRule';
 const EVALUATION_ENTITY: LeadScoreEntityType = 'LeadScoreEvaluation';
+const INSIGHT_ENTITY: LeadScoreEntityType = 'LeadScoreInsight';
 
 /**
  * Phase 19-LS.5 — the module's own structural reads
@@ -137,6 +138,33 @@ export class LeadScoreRecords {
     const rows = await sql<RowShape>`
       select id, entity_type, version, name, attrs from entity_records
       where entity_type = ${EVALUATION_ENTITY} and deleted_at is null and (attrs ->> 'idempotencyKey') = ${idempotencyKey}
+      limit 1
+    `.execute(this.db);
+    return rows.rows[0] === undefined ? undefined : toRow(rows.rows[0]);
+  }
+
+  /**
+   * The newest AI insight stored for one Lead (19-LS.17).
+   *
+   * Text order is time order because `generatedAt` is stored as an ISO-8601 string by this module; `id`
+   * breaks a tie so two calls during one millisecond return the same row. The partial index in migration
+   * 075 is exactly this predicate.
+   */
+  async latestInsight(leadId: string): Promise<LeadScoreRow | undefined> {
+    const rows = await sql<RowShape>`
+      select id, entity_type, version, name, attrs from entity_records
+      where entity_type = ${INSIGHT_ENTITY} and deleted_at is null and (attrs ->> 'leadId') = ${leadId}
+      order by (attrs ->> 'generatedAt') desc, id desc
+      limit 1
+    `.execute(this.db);
+    return rows.rows[0] === undefined ? undefined : toRow(rows.rows[0]);
+  }
+
+  /** The insight a request key already produced: a replay answers with it instead of spending a run. */
+  async insightByKey(idempotencyKey: string): Promise<LeadScoreRow | undefined> {
+    const rows = await sql<RowShape>`
+      select id, entity_type, version, name, attrs from entity_records
+      where entity_type = ${INSIGHT_ENTITY} and deleted_at is null and (attrs ->> 'idempotencyKey') = ${idempotencyKey}
       limit 1
     `.execute(this.db);
     return rows.rows[0] === undefined ? undefined : toRow(rows.rows[0]);

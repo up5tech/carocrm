@@ -29,18 +29,18 @@ export function isLeadScoreInternalWrite(): boolean {
 
 /**
  * The metadata entities this module owns, registered in `database/seed-metadata.ts` and indexed by
- * `database/migrations/073_phase19_lead_score.sql`.
+ * `database/migrations/073_phase19_lead_score.sql` (the insight table's indexes are in `075`).
  *
- * `LeadScoreEvaluation` is append-only and `LeadConversionOperation` is command-written: neither is a
- * record anybody edits through the generic API. `LeadScoreModel` and `LeadScoreRule` are ordinary draft
- * records whose *publication* fields the 19-LS.3 service owns.
+ * `LeadScoreEvaluation` and `LeadScoreInsight` are append-only and `LeadConversionOperation` is
+ * command-written: none of them is a record anybody edits through the generic API. `LeadScoreModel` and
+ * `LeadScoreRule` are ordinary draft records whose *publication* fields the 19-LS.3 service owns.
  */
-export const LEADSCORE_ENTITY_TYPES = ['LeadScoreModel', 'LeadScoreRule', 'LeadScoreEvaluation', 'LeadConversionOperation'] as const;
+export const LEADSCORE_ENTITY_TYPES = ['LeadScoreModel', 'LeadScoreRule', 'LeadScoreEvaluation', 'LeadConversionOperation', 'LeadScoreInsight'] as const;
 
 export type LeadScoreEntityType = (typeof LEADSCORE_ENTITY_TYPES)[number];
 
 /** Records the generic API may not write at all; they exist because a Lead Score command created them. */
-export const MODULE_WRITTEN_ENTITY_TYPES: readonly LeadScoreEntityType[] = ['LeadScoreEvaluation', 'LeadConversionOperation'];
+export const MODULE_WRITTEN_ENTITY_TYPES: readonly LeadScoreEntityType[] = ['LeadScoreEvaluation', 'LeadConversionOperation', 'LeadScoreInsight'];
 
 /**
  * The `Lead` attributes Lead Score computes.

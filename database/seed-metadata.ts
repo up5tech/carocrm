@@ -5179,5 +5179,85 @@ function leadScoreEntities(): MetadataSeedEntry[] {
         acl: { permissions: { LeadConversionOperation: { create: 'yes', read: 'no', edit: 'yes', delete: 'no', stream: 'no' } } },
       },
     },
+    {
+      scope: 'entity',
+      name: 'LeadScoreInsight',
+      data: {
+        name: 'LeadScoreInsight',
+        label: 'Lead Score Insight',
+        isEntity: true,
+        fields: leadScoreFields({
+          // The Lead the explanation is about. Read only through the Lead-scoped score surface; the entity
+          // itself is `read: 'no'`, so the generic API is never a second door (19-LS.17).
+          leadId: { type: 'link', entityKey: 'Lead', required: true, inList: true, inDetail: true, sortable: true },
+          // The AIAgents run that produced the text. The run is the provider/audit record; this row is the
+          // LeadScore read model of it and never re-implements execution.
+          runId: { type: 'varchar', maxLength: 64, required: true, inList: true, inDetail: true },
+          agentId: { type: 'varchar', maxLength: 64, required: true, inDetail: true },
+          agentName: { type: 'varchar', maxLength: 128, inDetail: true },
+          agentKey: { type: 'varchar', maxLength: 64, inDetail: true },
+          agentVersion: { type: 'int', inDetail: true },
+          agentVersionId: { type: 'varchar', maxLength: 64, inDetail: true },
+          // Model/provider identity belongs to the agent version AIAgents published; copied here so a
+          // reader of the insight does not need AIAgents rights to know what wrote it (plan §6.7).
+          providerKey: { type: 'varchar', maxLength: 64, inDetail: true },
+          model: { type: 'varchar', maxLength: 128, inDetail: true },
+          // The leadScore settings document version in force when the request was made, and the agent
+          // version is the prompt/config version (AI.2 freezes a published version).
+          settingsVersion: { type: 'int', inDetail: true },
+          // Provenance without storing a copy of the prompt: a digest of the exact evidence text and the
+          // Lead fields it was built from. The full text stays in the AIAgents run's own audit record.
+          inputDigest: { type: 'varchar', maxLength: 64, inDetail: true },
+          inputFields: { type: 'text', inDetail: true },
+          inputChars: { type: 'int', inDetail: true },
+          text: { type: 'text', required: true, inDetail: true },
+          confidence: { type: 'float', inDetail: true },
+          // Always `ai_generated`: the label is stored, not left to a screen to remember (plan §11.1).
+          label: { type: 'varchar', maxLength: 32, defaultValue: 'ai_generated', inDetail: true },
+          // The deterministic score this explanation was requested against, so a later read can say
+          // "this text describes an earlier evaluation" without joining anything (plan §6.7).
+          scoreValue: { type: 'int', inDetail: true },
+          scoreBand: { type: 'enum', values: LS_BANDS, inDetail: true },
+          scoreModelVersion: { type: 'int', inDetail: true },
+          scoreCalculatedAt: { type: 'datetime', inDetail: true },
+          generatedAt: { type: 'datetime', required: true, inList: true, inDetail: true, sortable: true },
+          requestedById: { type: 'link', entityKey: 'User', inDetail: true },
+          // Unique per request: a replay returns the stored row instead of spending a second run.
+          idempotencyKey: { type: 'varchar', maxLength: 128, required: true, inDetail: true },
+          durationMs: { type: 'int', inDetail: true },
+          // What the run cost, recorded with the answer so cost can be reviewed per request without
+          // reading AIAgents' tables (plan §6.7 "latency and cost limits").
+          inputTokens: { type: 'int', inDetail: true },
+          outputTokens: { type: 'int', inDetail: true },
+          estimatedCostUsd: { type: 'float', inDetail: true },
+        }),
+        relations: {},
+        indexes: [
+          { name: 'idx_lead_score_insight_lead', fields: ['leadId', 'generatedAt'] },
+          { name: 'uq_lead_score_insight_key', fields: ['idempotencyKey'] },
+        ],
+        layouts: {
+          list: [{ entity: 'LeadScoreInsight', type: 'list', panels: [{ name: 'list', position: 0, fields: ['leadId', 'agentName', 'agentVersion', 'generatedAt', 'scoreBand'] }] }],
+          detail: [
+            {
+              entity: 'LeadScoreInsight',
+              type: 'detail',
+              panels: [
+                { name: 'answer', label: 'AI answer', position: 0, fields: ['leadId', 'text', 'label', 'confidence', 'generatedAt', 'requestedById'] },
+                { name: 'model', label: 'Model', position: 10, fields: ['agentId', 'agentName', 'agentKey', 'agentVersion', 'agentVersionId', 'providerKey', 'model'] },
+                { name: 'provenance', label: 'Provenance', position: 20, fields: ['runId', 'settingsVersion', 'inputDigest', 'inputFields', 'inputChars', 'durationMs', 'inputTokens', 'outputTokens', 'estimatedCostUsd', 'idempotencyKey'] },
+                { name: 'score', label: 'Score it describes', position: 30, fields: ['scoreValue', 'scoreBand', 'scoreModelVersion', 'scoreCalculatedAt'] },
+              ],
+            },
+          ],
+          edit: [],
+        },
+        record: { displayField: 'name', removable: false, streamable: false },
+        // AI text is never a score: this row is append-only, module-written and reachable only through the
+        // Lead's score view, which is what makes the separation structural (plan §6.7, §11.1).
+        client: { web: false },
+        acl: { permissions: { LeadScoreInsight: { create: 'yes', read: 'no', edit: 'no', delete: 'no', stream: 'no' } } },
+      },
+    },
   ];
 }

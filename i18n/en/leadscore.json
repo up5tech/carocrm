@@ -71,7 +71,24 @@
     "signalState": {
       "disabled": "Engagement signals are switched off, so the rules that read them were not evaluated.",
       "absent": "Marketing Automation is not installed here, so the rules that read engagement were not evaluated."
-    }
+    },
+    "insightTitle": "AI insight",
+    "insightLabel": "AI-generated",
+    "insightAsk": "Explain fit with AI",
+    "insightAsking": "Asking the AI agent…",
+    "insightEmpty": "No AI explanation yet. It is optional, and the score above does not depend on it.",
+    "insightNotConfigured": "AI insight is switched on, but no agent is configured.",
+    "insightUnavailable": "The AI agent is unavailable right now.",
+    "insightNoAccess": "You may not request an AI explanation.",
+    "insightWithheld": "This summary was built from a field you cannot see, so its text is hidden. Ask again for a fresh answer.",
+    "insightStale": "This explanation describes an earlier score.",
+    "insightAgent": "Agent",
+    "insightModel": "Model",
+    "insightConfidence": "Confidence",
+    "insightGroundedOn": "Grounded on {count} field(s)",
+    "insightGeneratedAt": "Generated",
+    "insightFailed": "The AI explanation could not be generated.",
+    "insightOptional": "AI text is not part of the score and never changes it."
   },
   "band": {
     "unknown": "Unknown",
@@ -383,7 +400,11 @@
       "sweepTablePresent": "Marketing Automation's event table is present.",
       "sweepTableAbsent": "Marketing Automation is not installed, so a sweep would score nothing new.",
       "sweepLimit": "Leads",
-      "sweepChunk": "Per chunk"
+      "sweepChunk": "Per chunk",
+      "insightAgent": "AI agent for fit insight",
+      "insightAgentHint": "A published agent that reads a text task and uses read-only tools.",
+      "insightAgentNone": "No agent chosen",
+      "insightAgentUnavailable": "You cannot list AI agents; ask an AIAgents administrator to grant use, or enter the id through the settings API."
     },
     "effect": {
       "add": "adds points",

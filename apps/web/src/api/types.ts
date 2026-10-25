@@ -3748,6 +3748,49 @@ export interface LeadScoreRead {
   readonly actions: {
     readonly recalculate: LeadScoreActionAnswer;
     readonly history: LeadScoreActionAnswer;
+    /** 19-LS.17: may this caller ask the configured AI agent for an explanation? */
+    readonly insight: LeadScoreActionAnswer;
+  };
+  /** The newest stored AI explanation, separate from the deterministic score (19-LS.17). */
+  readonly insight: LeadScoreInsight | null;
+}
+
+/** One stored AI fit explanation: its answer, who wrote it and what it was grounded on (19-LS.17). */
+export interface LeadScoreInsight {
+  readonly id: string;
+  readonly leadId: string;
+  readonly runId: string;
+  readonly label: string;
+  readonly agent: {
+    readonly id: string;
+    readonly name: string;
+    readonly key: string;
+    readonly version: number | null;
+    readonly versionId: string | null;
+    readonly providerKey: string | null;
+    readonly model: string | null;
+    readonly settingsVersion: number | null;
+  };
+  readonly text: string | null;
+  readonly withheld: string | null;
+  readonly confidence: number | null;
+  readonly generatedAt: string | null;
+  readonly input: {
+    readonly digest: string | null;
+    readonly fields: readonly string[];
+    readonly chars: number | null;
+  };
+  readonly counters: {
+    readonly durationMs: number | null;
+    readonly inputTokens: number | null;
+    readonly outputTokens: number | null;
+    readonly estimatedCostUsd: number | null;
+  };
+  readonly score: {
+    readonly value: number | null;
+    readonly band: string;
+    readonly modelVersion: number | null;
+    readonly calculatedAt: string | null;
   };
 }
 
@@ -4020,6 +4063,8 @@ export interface LeadScoreSettingsView {
     scoring: { readonly activeModelId: string | null; readonly debounceSeconds: number };
     /** The decay sweep (19-LS.9): the calendar that re-scores a signal that fades. */
     signals?: { readonly decaySweep: { readonly enabled: boolean; readonly limit: number; readonly chunkSize: number } } | undefined;
+    /** The optional AI explanation (19-LS.17): which published AIAgents agent may be asked. */
+    insight?: { readonly agentId: string | null } | undefined;
   };
   readonly version: number;
   readonly updatedAt: string | null;

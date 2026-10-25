@@ -155,6 +155,9 @@ const LEADSCORE_SCHEMA_INDEXES = [
   'uq_entity_records_lead_conversion_operation_key',
   'idx_entity_records_lead_conversion_operation_lead',
   'idx_entity_records_lead_conversion_operation_status',
+  // 19-LS.17 (migration 075): the latest insight for one Lead and one request key.
+  'idx_entity_records_lead_score_insight_lead',
+  'uq_entity_records_lead_score_insight_key',
 ] as const;
 
 /** The hook names the write guard registers; their presence is what makes the guard verifiable. */
@@ -162,6 +165,8 @@ const LEADSCORE_GUARD_HOOKS = [
   'leadScore.leadFieldGuard',
   'leadScore.LeadScoreEvaluationGuard',
   'leadScore.LeadConversionOperationGuard',
+  // 19-LS.17: an AI answer is append-only and module-written, like the evaluation history it explains.
+  'leadScore.LeadScoreInsightGuard',
   // 19-LS.3: the lifecycle half of the guard, which is what makes a published version immutable in the
   // storage path rather than in the editor. Each owns a write hook and a delete hook, because a delete
   // never reaches `beforeValidate`.
@@ -441,7 +446,7 @@ function schemaStructures(indexes: Set<string>): HealthCheck {
     ok: missing.length === 0,
     detail:
       missing.length === 0
-        ? `${LEADSCORE_SCHEMA_INDEXES.length} indexes from 073_phase19_lead_score.sql present, including the operation-key and reason-code uniques`
+        ? `${LEADSCORE_SCHEMA_INDEXES.length} indexes from 073_phase19_lead_score.sql and 075_phase19_lead_score_insights.sql present, including the operation-key and reason-code uniques`
         : `missing: ${missing.join(', ')}`,
   };
 }

@@ -108,7 +108,8 @@ const OPERATION_RULES: Readonly<Record<LeadScoreOperation, OperationRule>> = {
   conversionPreview: { capability: 'convertPreview', feature: 'conversionPreview', writes: false },
   conversionExecute: { capability: 'convertExecute', feature: 'leadConversion', writes: true },
   conversionRetry: { capability: 'conversionRecover', feature: 'conversionRecovery', writes: true },
-  aiInsight: { capability: 'explainScore', feature: 'aiInsight', writes: true },
+  // 19-LS.17: spending a provider call is its own right, not a side effect of reading an explanation.
+  aiInsight: { capability: 'generateInsight', feature: 'aiInsight', writes: true },
 };
 
 export interface LeadScoreOperationAssessment {

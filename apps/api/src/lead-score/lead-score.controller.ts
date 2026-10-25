@@ -8,7 +8,7 @@ import type { ZodTypeAny } from 'zod';
 import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
-import { BatchRecalculateSchema, ConversionAffordanceQuerySchema, ConversionCandidatesSchema, ConversionCloseSchema, ConversionOperationIdSchema, ConversionOperationsQuerySchema, ConversionPreviewSchema, ConvertSchema, EditorCatalogQuerySchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
+import { BatchRecalculateSchema, ConversionAffordanceQuerySchema, ConversionCandidatesSchema, ConversionCloseSchema, ConversionOperationIdSchema, ConversionOperationsQuerySchema, ConversionPreviewSchema, ConvertSchema, EditorCatalogQuerySchema, InsightRequestSchema, LeadChangedSchema, ModelArchiveSchema, ModelNewVersionSchema, ModelPreviewSchema, ModelPublishSchema, ModelValidateSchema, OperationProbeSchema, RecalculateBatchChunkSchema, ScoreHistoryQuerySchema, ScoreReadSchema, ScoreRecalculateSchema, SettingsPatchSchema } from './dto/lead-score-shapes.js';
 import { LeadConversionService } from './lead-conversion.service.js';
 import { LeadConversionAuditService } from './lead-conversion-audit.service.js';
 import { LeadConversionPreviewService } from './lead-conversion-preview.service.js';
@@ -18,6 +18,7 @@ import { LeadScoreCalculationService } from './lead-score-calculation.service.js
 import { LeadScoreEditorService } from './lead-score-editor.js';
 import { LeadScoreExplanationService } from './lead-score-explanation.service.js';
 import { LeadScoreFeatureGate } from './lead-score-feature-gate.service.js';
+import { LeadScoreInsightService } from './lead-score-insight.service.js';
 import { LeadScoreModelService } from './lead-score-model.service.js';
 import { LEADSCORE_CAPABILITIES, LEADSCORE_MODULE, LEADSCORE_PENDING_FEATURES } from './lead-score-module.js';
 import { LeadScoreModuleHealthService } from './lead-score-module-health.service.js';
@@ -35,8 +36,8 @@ import { LeadScoreSettingsService } from './lead-score-settings.service.js';
  * `preview`, the one engine-backed operation that writes nothing; LS.5 added the score write and its two
  * reads (`score/recalculate`, `score/:leadId`, `score/:leadId/history`); LS.6 added the background half —
  * `recalculate-batch` for an administrator, and the three `@Public()` worker routes the queue calls, which are
- * authorized by the shared `x-worker-secret` and run under the module's documented service authority. The
- * conversion command still arrives with its own sub-phase (§16).
+ * authorized by the shared `x-worker-secret` and run under the module's documented service authority; LS.11–LS.16
+ * added the conversion doors, and LS.17 added `action/insight`, the optional AI explanation.
  *
  * Every route asserts a capability server-side; hiding a badge in the SPA is never authorization
  * (AGENTS.md §5.3). The controller owns no business rule.
@@ -57,6 +58,7 @@ export class LeadScoreController {
     @Inject(LeadScorePreviewService) private readonly preview: LeadScorePreviewService,
     @Inject(LeadScoreCalculationService) private readonly calculation: LeadScoreCalculationService,
     @Inject(LeadScoreExplanationService) private readonly explanation: LeadScoreExplanationService,
+    @Inject(LeadScoreInsightService) private readonly insight: LeadScoreInsightService,
     @Inject(LeadScoreRecalculationService) private readonly recalculation: LeadScoreRecalculationService,
     @Inject(LeadScoreEditorService) private readonly editor: LeadScoreEditorService,
     @Inject(LeadDuplicateResolver) private readonly duplicates: LeadDuplicateResolver,
@@ -249,6 +251,25 @@ export class LeadScoreController {
   async previewModel(@Body() body: unknown) {
     const input = this.parse(ModelPreviewSchema, body);
     return this.preview.preview(input.modelId, input.leadIds, input.maxSize);
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI fit insight (19-LS.17)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Ask the configured AIAgents agent for an evidence-grounded explanation of this Lead's fit.
+   *
+   * The request carries the Lead and an optional replay key; the evidence, the agent, the provider budgets
+   * and the output shape are all the server's (plan §6.7). The answer is stored as its own append-only
+   * record and returned with its model/provider identity, input digest and run counters — it is never a
+   * score and never writes one.
+   */
+  @HttpCode(200)
+  @Post('action/insight')
+  async requestInsight(@Body() body: unknown) {
+    const input = this.parse(InsightRequestSchema, body);
+    return this.insight.generate({ leadId: input.leadId, ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }) });
   }
 
   // ---------------------------------------------------------------------------

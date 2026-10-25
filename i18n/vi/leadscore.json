@@ -71,7 +71,24 @@
     "signalState": {
       "disabled": "Tín hiệu tương tác đang tắt, nên các luật đọc tín hiệu không được đánh giá.",
       "absent": "Marketing Automation không có trong hệ thống này, nên các luật đọc tương tác không được đánh giá."
-    }
+    },
+    "insightTitle": "Gợi ý AI",
+    "insightLabel": "Do AI tạo",
+    "insightAsk": "Giải thích độ phù hợp bằng AI",
+    "insightAsking": "Đang hỏi AI agent…",
+    "insightEmpty": "Chưa có gợi ý AI. Đây là phần tùy chọn, điểm phía trên không phụ thuộc vào nó.",
+    "insightNotConfigured": "Tính năng gợi ý AI đang bật nhưng chưa chọn agent.",
+    "insightUnavailable": "AI agent hiện không khả dụng.",
+    "insightNoAccess": "Bạn không được yêu cầu gợi ý AI.",
+    "insightWithheld": "Nội dung này dựa trên một trường bạn không được xem nên phần văn bản bị ẩn. Hãy yêu cầu lại để có câu trả lời mới.",
+    "insightStale": "Gợi ý này mô tả một điểm số trước đó.",
+    "insightAgent": "Agent",
+    "insightModel": "Model",
+    "insightConfidence": "Độ tin cậy",
+    "insightGroundedOn": "Dựa trên {count} trường",
+    "insightGeneratedAt": "Tạo lúc",
+    "insightFailed": "Không tạo được gợi ý AI.",
+    "insightOptional": "Văn bản AI không thuộc điểm số và không bao giờ làm thay đổi điểm."
   },
   "band": {
     "unknown": "Chưa rõ",
@@ -383,7 +400,11 @@
       "sweepTablePresent": "Bảng sự kiện của Marketing Automation có sẵn.",
       "sweepTableAbsent": "Marketing Automation chưa được cài đặt nên quét cũng không ra điểm mới.",
       "sweepLimit": "Lead",
-      "sweepChunk": "Mỗi lát"
+      "sweepChunk": "Mỗi lát",
+      "insightAgent": "AI agent cho gợi ý độ phù hợp",
+      "insightAgentHint": "Agent đã publish, nhận tác vụ văn bản và chỉ dùng công cụ đọc.",
+      "insightAgentNone": "Chưa chọn agent",
+      "insightAgentUnavailable": "Bạn không xem được danh sách AI agent; hãy nhờ quản trị AIAgents cấp quyền use, hoặc nhập id qua API cài đặt."
     },
     "effect": {
       "add": "cộng điểm",

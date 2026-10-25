@@ -114,6 +114,7 @@ import type {
   LeadScoreEditorCatalog,
   LeadScoreHealthView,
   LeadScoreHistory,
+  LeadScoreInsight,
   LeadScorePreviewView,
   LeadScoreRead,
   LeadScoreSettingsView,
@@ -751,6 +752,9 @@ export const api = {
   aiAgentsTools: () => request<AIAgentToolCatalogue>('/AIAgents/action/tools'),
   aiAgentsProviders: () => request<{ list: AIAgentsProviderConnection[] }>('/AIAgents/action/providers'),
   aiAgentsTemplates: () => request<{ list: AIAgentTemplate[] }>('/AIAgents/action/templates'),
+  /** Published agents, for a picker that names them instead of asking for an id (19-LS.17). */
+  aiAgentsList: (status?: string) =>
+    request<AIAgentListResult>(`/AIAgents/action/agents${status === undefined ? '' : `?status=${encodeURIComponent(status)}`}`),
   aiAgentsAgents: (params: { offset?: number; maxSize?: number; status?: string; q?: string; scope?: 'mine' | 'all' } = {}) => {
     const query = new URLSearchParams();
     if (params.offset !== undefined) query.set('offset', String(params.offset));
@@ -2066,6 +2070,9 @@ export const api = {
   // `score` answers with `actions`, so the panel renders what the server will accept rather than guessing
   // from a role name; the record-level scope of `Lead:edit` is still only known when the write is attempted.
   leadScoreRead: (leadId: string) => request<LeadScoreRead>(`/LeadScore/action/score/${encodeURIComponent(leadId)}`),
+  /** 19-LS.17: one operator-clicked AI explanation, separate from the score; the key makes a retry a replay. */
+  leadScoreInsight: (leadId: string, idempotencyKey?: string) =>
+    request<LeadScoreInsight>('/LeadScore/action/insight', post({ leadId, ...(idempotencyKey === undefined ? {} : { idempotencyKey }) })),
   leadScoreHistory: (leadId: string, query: { limit?: number; offset?: number } = {}) => {
     const params = new URLSearchParams();
     if (query.limit !== undefined) params.set('limit', String(query.limit));

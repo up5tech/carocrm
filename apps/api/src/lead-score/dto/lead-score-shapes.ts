@@ -321,3 +321,22 @@ export const ConversionCloseSchema = z.object({ reason: z.string().trim().max(50
 
 /** The conversion affordance for one Lead: may this caller convert it, and is it already converted? */
 export const ConversionAffordanceQuerySchema = z.object({ leadId: LeadIdSchema }).strict();
+
+// ---------------------------------------------------------------------------
+// Phase 19-LS.17 — the optional AI fit insight (plan §6.7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ask for one AI explanation of a Lead's fit.
+ *
+ * The only inputs are the Lead and an optional caller-generated key. The evidence, the agent, the budgets
+ * and the output shape are the server's — a caller cannot widen what the model sees, choose a provider or
+ * ask for a second explanation of the same key. The key's bounds match the conversion command's, because
+ * it is the same replay promise: 8–128 characters, never derived from the record.
+ */
+export const InsightRequestSchema = z
+  .object({
+    leadId: LeadIdSchema,
+    idempotencyKey: z.string().trim().min(8).max(128).optional(),
+  })
+  .strict();

@@ -175,9 +175,10 @@ _Phase 19_ —
   can be created or linked **inside the same command** — always attached to the operation's Account, *appended*
   to the deal's `contactIds` rather than replacing them, named from the Lead by the map's template, with the
   kernel's default stage and Sales' documents untouched — and the wizard's rows come from the server's
-  `targets` answer rather than assuming all three exist. That leaves 19-LS.17 (the optional AI fit insight) and
-  19-LS.18 (rollout and verification) unshipped; their switches still refuse with the sub-phase that owes them
-  (`LEADSCORE_PHASE_PENDING`). See
+  `targets` answer rather than assuming all three exist. 19-LS.17 then added the **optional** AI explanation:
+  one operator-clicked AIAgents run, grounded in the stored score and five business fields (never an e-mail, a
+  phone number, a name or a note), stored as its own **AI-generated** record beside the score — off by default,
+  and never able to change a score. That leaves 19-LS.18 (rollout and verification) unshipped. See
   [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
   [docs/implementation/lead-score-ls1-completion-report.md](docs/implementation/lead-score-ls1-completion-report.md),
@@ -193,7 +194,8 @@ _Phase 19_ —
   [docs/implementation/lead-score-ls13-completion-report.md](docs/implementation/lead-score-ls13-completion-report.md),
   [docs/implementation/lead-score-ls14-completion-report.md](docs/implementation/lead-score-ls14-completion-report.md),
   [docs/implementation/lead-score-ls15-completion-report.md](docs/implementation/lead-score-ls15-completion-report.md) and
-  [docs/implementation/lead-score-ls16-completion-report.md](docs/implementation/lead-score-ls16-completion-report.md)
+  [docs/implementation/lead-score-ls16-completion-report.md](docs/implementation/lead-score-ls16-completion-report.md),
+  [docs/implementation/lead-score-ls17-completion-report.md](docs/implementation/lead-score-ls17-completion-report.md)
   and [docs/compatibility/lead-score.md](docs/compatibility/lead-score.md).
 
 _Phase 20_ — settings, administration and end-user UX: a settings-document registry with optimistic

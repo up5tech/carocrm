@@ -225,3 +225,87 @@ export function leadScoreReparentRequiredError(contactId: string, accountId: str
     { contactId, accountId, ...(currentAccountId === null ? {} : { currentAccountId }) },
   );
 }
+
+// ---------------------------------------------------------------------------
+// 19-LS.17 — the optional AI fit insight
+// ---------------------------------------------------------------------------
+
+/**
+ * The AI insight switch is on, but no published agent has been chosen.
+ *
+ * 409: the request is well formed and the caller may ask, and the deployment is not configured for it.
+ * The id of a missing agent is never echoed, because the question is "what do I configure", not "does this
+ * agent exist".
+ */
+export function leadScoreInsightNotConfiguredError(): LeadScoreError {
+  return new LeadScoreError(
+    'LEADSCORE_INSIGHT_NOT_CONFIGURED',
+    'AI insight is switched on, but no AI agent is configured for it. An administrator chooses one in the Lead Score settings.',
+    { section: 'insight.agentId' },
+  );
+}
+
+/**
+ * AIAgents cannot run right now, or the run it produced did not finish with an answer.
+ *
+ * `state` names which fact it is — `executionDisabled`, `runNotFinished`, `runFailed` — because the fix
+ * differs, and a failed run's id is included so an AIAgents operator can inspect it. No failure message
+ * from the provider is echoed here: it may contain prompt content (AGENTS.md §5.3).
+ */
+export function leadScoreInsightUnavailableError(
+  state: 'executionDisabled' | 'runNotFinished' | 'runFailed' | 'agentUnavailable',
+  details: { readonly runId?: string; readonly status?: string; readonly failureCategory?: string | null } = {},
+): LeadScoreError {
+  const messages: Record<typeof state, string> = {
+    executionDisabled: 'AI agent execution is disabled or paused on this instance, so no insight can be generated.',
+    runNotFinished: 'The AI run has not finished, so there is no answer yet. Try again when it completes.',
+    runFailed: 'The AI run did not produce an answer.',
+    agentUnavailable: 'The configured AI agent is not available to you, or is no longer published.',
+  };
+  return new LeadScoreError('LEADSCORE_INSIGHT_UNAVAILABLE', messages[state], { state, ...details });
+}
+
+/**
+ * The configured agent is not the kind of agent this action may use (plan §6.7).
+ *
+ * 19-LS.17 sends evidence text and nothing else, so the agent must read text rather than a record, and it
+ * may not hold a tool that writes: an explanation must not become a second way to act. `issue` is a stable
+ * token; the agent's configuration is not repeated in the response.
+ */
+export function leadScoreInsightAgentUnsuitableError(agentId: string, issue: 'recordInput' | 'writeTool' | 'version'): LeadScoreError {
+  const messages: Record<typeof issue, string> = {
+    recordInput: 'The configured AI agent reads a record rather than a text task, so it cannot be used for an evidence-bounded insight.',
+    writeTool: 'The configured AI agent has a tool that writes, and an insight may only read. Remove the tool or choose another agent.',
+    version: 'The configured AI agent has no usable published version.',
+  };
+  return new LeadScoreError('LEADSCORE_INSIGHT_AGENT_UNSUITABLE', messages[issue], { agentId, issue }, 409);
+}
+
+/**
+ * An AI explanation is only meaningful about a deterministic score (plan §6.7 "only after scoring").
+ *
+ * 409: the Lead exists and is readable; it simply has not been scored yet (or its score failed). The answer
+ * names the state rather than a null score so the screen can say "score it first".
+ */
+export function leadScoreInsightNotScoredError(leadId: string, state: string): LeadScoreError {
+  return new LeadScoreError(
+    'LEADSCORE_INSIGHT_NOT_SCORED',
+    'This Lead has no current score, so there is no deterministic judgement for an AI explanation to describe.',
+    { leadId, state },
+  );
+}
+
+/**
+ * The run succeeded in AIAgents' sense but its result is not an explanation this module can show.
+ *
+ * 502, not 422: the caller's request was valid and the failure is the provider's output shape. The run id
+ * is included so the AIAgents side can be inspected; the raw result is not echoed.
+ */
+export function leadScoreInsightUnusableError(runId: string): LeadScoreError {
+  return new LeadScoreError(
+    'LEADSCORE_INSIGHT_UNUSABLE',
+    'The AI run finished without a usable explanation. The agent should answer with text or a JSON object carrying "summary".',
+    { runId },
+    502,
+  );
+}
