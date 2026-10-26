@@ -14,7 +14,8 @@
 | OM.4 — Adapter & capability registry | ✅ COMPLETE | Voice barrel exports (E1), `unsupported` category (E3), `inbox.read`/`message.send` contracts (E14), `OmnichannelCapabilityService` + `action/channels`, page catalog card, `omnichannel-adapter.test.ts` |
 | OM.5 — Inbound webhook/event receipt pipeline | ✅ COMPLETE | `omnichannel-webhook.controller.ts` (delegates to the shared Voice ingress), E2 raw-body hook, `omnichannel-ingress.test.ts` |
 | OM.6 — Canonical conversation/thread/message services | ✅ COMPLETE | thread attach + continuity + reconcile in Voice; `OmnichannelConversationService` facade + conversation endpoints; `omnichannel-conversation.test.ts` |
-| OM.7+ | ⏸ Not started | — |
+| OM.7 — Identity resolution & record linking | ✅ COMPLETE | `OmnichannelIdentityService` + identity endpoints, migration 078 phone index, `omnichannel-identity.test.ts` |
+| OM.8+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -27,6 +28,23 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.7 (Identity resolution and record linking)
+
+- Migration 078: expression index `idx_entity_records_phone_digits` mirroring the resolver's exact
+  predicate (`regexp_replace(coalesce(attrs->>'phoneNumber',''), '[^0-9]', '', 'g')`, live
+  Contact/Lead/Account). Verified by EXPLAIN: Bitmap Index Scan instead of a table scan.
+- `OmnichannelIdentityService`: review persists evidence on the customer participant (exact/verified
+  for one readable match; disputed/heuristic + auto-link dropped for ambiguity; counts-only for
+  hidden matches), manual link/unlink through the ACL-aware entity service with an `audit_log` row
+  carrying the reason, and a conflict list for staff review. Manual decisions are never overwritten
+  by re-resolution. Endpoints: `GET …/:id/identity`, `POST …/:id/identity/link`,
+  `POST …/:id/identity/unlink`, `GET action/identities/conflicts` (capabilities inboxView /
+  identityLink).
+- Checks: `omnichannel-identity.test.ts` 6/6 (unique link evidence, ambiguity not guessed, audit rows,
+  review-vs-mutate separation, index presence); regression 11 files / 109 tests green; typecheck +
+  eslint clean. Data: `AGENT_TEST_OM7_*` contacts, one consent + recipient, settings restored.
+
 
 ### 2026-10-26 — Phase 19-OM.6 (Canonical conversation, thread and message services)
 

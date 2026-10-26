@@ -1309,6 +1309,33 @@ Acceptance:
 
 ### Phase 19-OM.7 — CRM Identity Resolution and Record Linking
 
+**Status: COMPLETE.** The matching stays with `VoiceContactResolverService` (baseline extended, not
+replaced); Omnichannel adds the policy the contract §6 fixes around it in
+`OmnichannelIdentityService` (migration 078 adds the normalized-phone expression index the resolver
+needed — proven by an EXPLAIN that now uses `idx_entity_records_phone_digits`):
+- **Evidence, not guesses.** A unique readable match is stored on the participant as
+  `exact/verified`, reason `unique_address_match`, provenance `contact_resolver`; two or more readable
+  matches are `disputed/heuristic` with the auto-link dropped, listed by
+  `GET action/identities/conflicts` for review; unreadable matches are counted (hidden) and never
+  linked.
+- **Staff decisions.** `POST …/identity/link` and `…/unlink` require `identityLink`, validate the
+  target through the ACL-aware entity service (Contact/Lead only), store the decision as
+  `manual/verified` with the given reason and `source_provenance = staff_link`, and write an
+  `audit_log` row (`CommunicationIdentityLink`/`…Unlink`) with who/why. Re-resolution never
+  overwrites a manual link; only an explicit unlink clears it.
+- **Minimal disclosure.** The review returns only type/id/display-name of readable candidates and the
+  participant's own evidence — no CRM fields are copied; hidden matches are counts, never names.
+- Anonymous web-chat identity is contract §7 (session model, wired at OM.9); Portal identity is
+  untouched.
+
+Verification: `omnichannel-identity.test.ts` 6/6 — unique match linked with evidence; a second
+readable record with the same number → `ambiguous_match:2`, unlinked, in the conflict list; manual
+link stored + audited + not overwritten by re-resolution; unlink requires a reason, is audited;
+a review-only role may read but gets 403 on link/conflicts; the index exists. Full regression 11
+files / 109 tests plus typecheck + eslint clean.
+
+**Goal:** Match channel participants to CRM entities safely.
+
 **Goal:** Match channel participants to CRM entities safely.
 
 **Existing baseline to extend, not replace:** `VoiceContactResolverService` already normalizes with

@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
+import { OmnichannelIdentityService } from './omnichannel-identity.service.js';
 import { OmnichannelModuleHealthService } from './omnichannel-module-health.service.js';
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
@@ -37,6 +38,21 @@ const SettingsPatchSchema = z
   .partial()
   .strict();
 
+const IdentityLinkSchema = z
+  .object({
+    participantId: z.string().trim().min(1).max(120).optional(),
+    entityType: z.enum(['Contact', 'Lead']),
+    entityId: z.string().trim().min(1).max(120),
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+const IdentityUnlinkSchema = z
+  .object({
+    participantId: z.string().trim().min(1).max(120).optional(),
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
 const StatusInputSchema = z.object({ status: z.string().trim().min(1).max(40) }).strict();
 const AssignInputSchema = z
   .object({
@@ -65,6 +81,7 @@ export class OmnichannelController {
     @Inject(OmnichannelNavigationService) private readonly navigation: OmnichannelNavigationService,
     @Inject(OmnichannelCapabilityService) private readonly channelCapabilities: OmnichannelCapabilityService,
     @Inject(OmnichannelConversationService) private readonly conversations: OmnichannelConversationService,
+    @Inject(OmnichannelIdentityService) private readonly identities: OmnichannelIdentityService,
   ) {}
 
   /**
@@ -143,6 +160,45 @@ export class OmnichannelController {
     const parsed = AssignInputSchema.safeParse(body ?? {});
     if (!parsed.success) throw new ValidationError('Invalid assignment input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
     return this.conversations.assign(id, parsed.data);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Identity review and linking (19-OM.7) — policy on the Voice records, never a second store
+  // ---------------------------------------------------------------------------
+
+  /** Resolve the customer participants, persist the evidence, and name only readable candidates. */
+  @Get('action/conversations/:id/identity')
+  async conversationIdentity(@Param('id') id: string) {
+    await this.permissions.assert('inboxView');
+    return this.identities.review(id);
+  }
+
+  /** Staff link to a Contact/Lead; the target must be readable and the reason is audited. */
+  @HttpCode(200)
+  @Post('action/conversations/:id/identity/link')
+  async linkIdentity(@Param('id') id: string, @Body() body: unknown) {
+    await this.permissions.assert('identityLink');
+    const parsed = IdentityLinkSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid identity link input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
+    return this.identities.link(id, parsed.data);
+  }
+
+  /** Remove a manual link (the auto evidence is recomputed on the next review). */
+  @HttpCode(200)
+  @Post('action/conversations/:id/identity/unlink')
+  async unlinkIdentity(@Param('id') id: string, @Body() body: unknown) {
+    await this.permissions.assert('identityLink');
+    const parsed = IdentityUnlinkSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid identity unlink input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
+    return this.identities.unlink(id, parsed.data);
+  }
+
+  /** The ambiguous/uncertain links staff must review (contract §6 "visible uncertainty"). */
+  @Get('action/identities/conflicts')
+  async identityConflicts(@Query('limit') limit: unknown) {
+    await this.permissions.assert('identityLink');
+    const parsed = Number(limit ?? 50);
+    return this.identities.conflicts(Number.isFinite(parsed) ? Math.min(Math.max(Math.trunc(parsed), 1), 200) : 50);
   }
 
   /**

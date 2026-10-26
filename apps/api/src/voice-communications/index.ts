@@ -80,6 +80,7 @@ export { VOICE_COMMUNICATIONS_MODULE } from "./voice-communications-module.js";
 export { VOICE_FEATURES } from "./voice-communications-module.js";
 export { VoiceCommunicationsSettingsService } from "./voice-communications-settings.service.js";
 export { VoiceConsentService } from "./voice-consent.service.js";
+export type { ContactResolution, ResolutionEntity,ResolvedCandidate } from "./voice-contact-resolver.service.js";
 export { VoiceContactResolverService } from "./voice-contact-resolver.service.js";
 export { VoiceEventProcessorService } from "./voice-event-processor.service.js";
 export { VoicePolicyService } from "./voice-policy.service.js";
