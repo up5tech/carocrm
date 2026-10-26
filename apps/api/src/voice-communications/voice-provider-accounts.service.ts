@@ -174,6 +174,29 @@ export class VoiceProviderAccountsService {
     return rows.rows.map((row) => this.toView(row));
   }
 
+  /**
+   * Non-secret capability metadata for a channel-availability catalog (19-OM.23): account key,
+   * label, enabled state and the granted ∩ declared capabilities. Deliberately not admin-gated —
+   * an agent composing a reply must be able to learn what the transport can do — and deliberately
+   * narrow: no credential presence, hint, config or health is selected.
+   */
+  async listChannelBindings(): Promise<
+    readonly { readonly key: string; readonly label: string; readonly enabled: boolean; readonly effectiveCapabilities: readonly ProviderCapability[] }[]
+  > {
+    const rows = (await sql<{ key: string; label: string; enabled: boolean; provider_key: string; capabilities: unknown }>`
+      select key, label, enabled, provider_key, capabilities from voice_provider_accounts order by label
+    `.execute(this.database.db)).rows;
+    return rows.map((row) => {
+      const declared = new Set(this.registry.resolve(row.provider_key).info.capabilities);
+      return {
+        key: row.key,
+        label: row.label,
+        enabled: row.enabled,
+        effectiveCapabilities: parseCapabilities(row.capabilities).filter((capability) => declared.has(capability)),
+      };
+    });
+  }
+
   async get(key: string): Promise<ProviderAccountView> {
     await this.acl.assertAccess(ADMIN_PERMISSION_ENTITY, "read");
     return this.toView(await this.requireRow(key));

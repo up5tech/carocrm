@@ -30,7 +30,8 @@
 | OM.20 — Conversation analytics | ✅ COMPLETE | `analytics.md` definitions, dedicated analytics endpoint, Reports tab, `omnichannel-analytics.test.ts` |
 | OM.21 — Administration, diagnostics, recovery | ✅ COMPLETE | `OmnichannelOperationsService` + `action/operations*` (overview, probe, inspect, replay, kill switch), `runbook.md`, Operations tab, ingress records callbacks while disabled, `omnichannel-operations.test.ts` |
 | OM.22 — Security, privacy, resilience | ✅ COMPLETE | `security-hardening.md` threat model, web-chat fail-closed origin/budgets, receipt poisoning fix + payload split (migration 082), customer-safe timeline, attachment/media ACL, AI run binding, dependency overrides, `omnichannel-security.test.ts` |
-| OM.23 | ⏸ Not started | — |
+| OM.23 — E2E QA & release readiness | ✅ COMPLETE | `release-readiness.md` support/verification/performance/upgrade/release notes, `admin-setup.md`, full-chain `omnichannel-e2e.test.ts`, OpenAPI/nav/i18n/migration checks, measured inbox/timeline budgets |
+| OM.24+ | — | Phase 19-OM roadmap complete; future work tracked in `release-readiness.md` §7 |
 
 ## Decisions index (locked)
 
@@ -43,6 +44,23 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.23 (End-to-end QA and release readiness)
+
+- `omnichannel-e2e.test.ts` (4/4): full SMS-simulator chain inbound → identity → routing → agent
+  reply → delivery callback → CRM context → Case hand-off; kill switch/MMS/web-chat degradation;
+  OpenAPI + module/nav + vi catalog + migration ledger; bounded performance (150 conversations /
+  400 messages seeded; inbox 25 = 12 ms, timeline 50 = 10 ms).
+- `docs/omnichannel/release-readiness.md`: support matrix (web chat supported; Twilio SMS/WhatsApp
+  release candidates pending live form callbacks; Meta/email/Telegram/MMS disabled), verification
+  table, customer checklist, provider prerequisites/costs/quotas, measured quality gates, upgrade
+  steps, release notes, residual risks.
+- `docs/omnichannel/admin-setup.md`: flags, provider account + webhook registration, web chat,
+  queues/routing, identity, roles, AI, operations and go-live checklist.
+- `VoiceProviderAccountsService.listChannelBindings()`: non-secret capability metadata for the
+  channel catalog, so an ordinary agent can compose without `VoiceProviderAccount` administration.
+- Re-ran `pnpm db:migrate`: up to date (077–082), no reset/second database. Regression: 30 files /
+  278 OM+Voice+AI tests, i18n+navigation 16, security 8; typecheck/lint/UI/build clean.
 
 ### 2026-10-26 — Phase 19-OM.22 (Security, privacy and resilience hardening)
 

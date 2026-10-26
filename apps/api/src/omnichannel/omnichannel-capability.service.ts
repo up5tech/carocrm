@@ -70,7 +70,9 @@ export class OmnichannelCapabilityService {
 
   async catalog(): Promise<OmnichannelCapabilityCatalog> {
     const [views, voiceSettings, omnichannelSettings] = await Promise.all([
-      this.accounts.list(),
+      // Non-secret capability bindings: an agent with the inbox capability can compose a reply
+      // without holding the provider-account administration right (19-OM.23).
+      this.accounts.listChannelBindings(),
       this.voiceSettings.settings(),
       this.settings.settings(),
     ]);

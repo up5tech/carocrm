@@ -2137,6 +2137,28 @@ Acceptance:
 
 ### Phase 19-OM.23 — End-to-End QA, Documentation, and Release Readiness
 
+**Status: COMPLETE.** The phase report, support matrix, performance numbers, upgrade steps, open risks
+and release notes are in `docs/omnichannel/release-readiness.md`; customer configuration is in
+`admin-setup.md`; incidents remain in `runbook.md`.
+- **Full-chain acceptance** (`omnichannel-e2e.test.ts`, 4/4, simulator): signed inbound → receipt →
+  normalized event → conversation → exact identity match with CRM context → ServiceDesk routing to
+  queue/agent → ordinary-agent reply → signed delivery callback → delivered → optional Case
+  hand-off with notes excluded.
+- **Graceful degradation**: kill switch blocks outbound (`account_disabled`) while inbound is still
+  recorded; MMS answers `unsupported`; web chat can be disabled independently of the inbox.
+- **Release surfaces**: OpenAPI carries the Omnichannel paths, health/nav expose the module and
+  implemented phases, the vi catalog contains the module keys, and the migration ledger holds
+  077–082; a second `pnpm db:migrate` reports “up to date”.
+- **Performance**: 150 conversations / 400 messages seeded through the owner path; inbox page 25
+  measured 12 ms and a 100-message timeline page 50 measured 10 ms (ceilings 2 s / 1.5 s asserted);
+  indexes and all module caps are documented.
+- **Honest scope**: web chat is the first fully supported channel; Twilio SMS/WhatsApp remain
+  release candidates until a live form callback is validated (no form-urlencoded parser yet). Meta,
+  Instagram, email, Telegram and MMS stay disabled. Dependency/license residual risks are recorded.
+
+Regression: 30 OM/Voice/AI files / 278 tests, i18n+navigation 16, security suite 8; typecheck, lint,
+UI conventions and workspace build clean.
+
 **Goal:** Ship a reliable first release with explicit scope and operational expectations.
 
 Tasks:
