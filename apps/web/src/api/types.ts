@@ -4461,3 +4461,20 @@ export interface OmnichannelDraftView {
   readonly isInternalNote: boolean;
   readonly updatedAt: string;
 }
+
+/** Phase 19-OM.13 — a call as the workspace shows it (context, not a conversation). */
+export interface OmnichannelCallView {
+  readonly id: string;
+  readonly direction: 'inbound' | 'outbound';
+  readonly state: string;
+  readonly fromNumber: string | null;
+  readonly toNumber: string | null;
+  readonly startedAt: string | null;
+  readonly endedAt: string | null;
+  readonly durationSeconds: number | null;
+  readonly result: string | null;
+  readonly failureCategory: string | null;
+  readonly relatedEntityType: string | null;
+  readonly relatedEntityId: string | null;
+  readonly conversationId: string | null;
+}

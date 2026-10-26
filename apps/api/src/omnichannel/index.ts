@@ -15,6 +15,7 @@
 import type { Provider, Type } from '@nestjs/common';
 
 import { OmnichannelController } from './omnichannel.controller.js';
+import { OmnichannelCallService } from './omnichannel-call.service.js';
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelChatController } from './omnichannel-chat.controller.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
@@ -44,6 +45,7 @@ export const OMNICHANNEL_PROVIDERS: Provider[] = [
   OmnichannelConversationService,
   OmnichannelIdentityService,
   OmnichannelRoutingService,
+  OmnichannelCallService,
   OmnichannelSnippetService,
   OmnichannelDraftService,
   OmnichannelWebChatService,
@@ -51,6 +53,7 @@ export const OMNICHANNEL_PROVIDERS: Provider[] = [
   OmnichannelModuleHealthService,
 ];
 
+export type { OmnichannelCallView } from './omnichannel-call.service.js';
 export type { OmnichannelCapabilityCatalog, OmnichannelChannelCapabilityView, OmnichannelChannelKey } from './omnichannel-capability.service.js';
 export { OMNICHANNEL_CAPABILITY_CATALOG_VERSION } from './omnichannel-capability.service.js';
 export type { OmnichannelConversationView, OmnichannelThreadView } from './omnichannel-conversation.service.js';

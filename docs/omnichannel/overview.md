@@ -20,7 +20,8 @@
 | OM.10 — Agent inbox workspace | ✅ COMPLETE | two-tab module page, server-side workspace filters, timeline/composer/identity panels, `omnichannel-inbox.test.ts` |
 | OM.11 — Queues, assignment, routing (E8) | ✅ COMPLETE | ServiceDesk queue/rule extension (object type, operators, business hours), `decideFor` reuse, concurrency-guarded assign, route endpoint + UI, `omnichannel-routing.test.ts` |
 | OM.12 — Canned replies & drafts | ✅ COMPLETE | snippet store extension (team/language/usage, plain-text), `OmnichannelSnippetService` + drafts (`omnichannel_drafts`), composer picker + autosave, `omnichannel-snippets.test.ts` |
-| OM.13+ | ⏸ Not started | — |
+| OM.13 — VoiceCommunications integration | ✅ COMPLETE | call context endpoints + voice catalog row + recent-calls panel, `omnichannel-calls.test.ts` |
+| OM.14+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -33,6 +34,18 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.13 (VoiceCommunications integration)
+
+- Contracts already existed (OM.4); this phase added the call-facing surface: `OmnichannelCallService`
+  over the ACL-scoped `VoiceCallService.list`, digit-equal conversation resolution, explicit
+  open-conversation action; `voice` row in the channel catalog (effective capabilities, disabled
+  accounts excluded, messaging rows independent); "Recent calls" panel in the inbox.
+- Calls are never converted into messages/threads; no provider API, credential or status source is
+  duplicated (barrel-only rule still enforced by the OM.4 scan).
+- Checks: `omnichannel-calls.test.ts` 5/5 incl. double-processing reconciliation; 82-test regression;
+  typecheck/lint/ui-conventions/build clean.
+
 
 ### 2026-10-26 — Phase 19-OM.12 (Canned replies, drafts, message tools)
 

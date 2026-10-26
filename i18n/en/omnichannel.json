@@ -118,6 +118,9 @@
     "route": "Route",
     "routedBy": "Routed by rule \"{rule}\".",
     "routedFallback": "Routed with fallback: {reason}.",
-    "snippet": "Insert a snippet…"
+    "snippet": "Insert a snippet…",
+    "calls": "Recent calls",
+    "openConversation": "Open conversation",
+    "noConversation": "No conversation exists for this number yet."
   }
 }

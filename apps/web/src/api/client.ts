@@ -135,6 +135,7 @@ import type {
   Metadata,
   ModuleSettingsView,
   NavigationTree,
+  OmnichannelCallView,
   OmnichannelCapabilitiesView,
   OmnichannelCapabilityCatalog,
   OmnichannelConversationPage,
@@ -2176,6 +2177,10 @@ export const api = {
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/status`, post({ status })),
   omnichannelAssign: (conversationId: string, input: { userId?: string | null; teamId?: string | null; reason?: string; expectedVersion?: number }) =>
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/assign`, post(input)),
+  omnichannelCalls: (limit = 10) =>
+    request<{ readonly list: readonly OmnichannelCallView[] }>(`/Omnichannel/action/calls?limit=${String(limit)}`),
+  omnichannelOpenCallConversation: (callId: string) =>
+    request<{ readonly callId: string; readonly conversationId: string | null }>(`/Omnichannel/action/calls/${encodeURIComponent(callId)}/conversation`, post({})),
   omnichannelSnippets: (channel?: string) =>
     request<{ readonly list: readonly OmnichannelSnippetView[] }>(
       `/Omnichannel/action/snippets${channel === undefined || channel === '' ? '' : `?channel=${encodeURIComponent(channel)}`}`,

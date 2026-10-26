@@ -3,6 +3,7 @@ import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put, Quer
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
+import { OmnichannelCallService } from './omnichannel-call.service.js';
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
 import { OmnichannelDraftService } from './omnichannel-draft.service.js';
@@ -96,6 +97,7 @@ export class OmnichannelController {
     @Inject(OmnichannelRoutingService) private readonly routing: OmnichannelRoutingService,
     @Inject(OmnichannelSnippetService) private readonly snippets: OmnichannelSnippetService,
     @Inject(OmnichannelDraftService) private readonly drafts: OmnichannelDraftService,
+    @Inject(OmnichannelCallService) private readonly calls: OmnichannelCallService,
   ) {}
 
   /**
@@ -240,6 +242,25 @@ export class OmnichannelController {
     await this.permissions.assert('identityLink');
     const parsed = Number(limit ?? 50);
     return this.identities.conflicts(Number.isFinite(parsed) ? Math.min(Math.max(Math.trunc(parsed), 1), 200) : 50);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Call context (19-OM.13) — calls are context, never converted into messages
+  // ---------------------------------------------------------------------------
+
+  /** Recent calls the caller may see, each with the customer's existing conversation (or null). */
+  @Get('action/calls')
+  async recentCalls(@Query('limit') limit: unknown, @Query('offset') offset: unknown) {
+    await this.permissions.assert('inboxView');
+    return this.calls.recent(pageOf(limit, offset));
+  }
+
+  /** The explicit "open conversation" action for one call. */
+  @HttpCode(200)
+  @Post('action/calls/:id/conversation')
+  async openCallConversation(@Param('id') id: string) {
+    await this.permissions.assert('inboxView');
+    return this.calls.openConversation(id);
   }
 
   // ---------------------------------------------------------------------------

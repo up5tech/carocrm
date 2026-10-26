@@ -1633,6 +1633,35 @@ Acceptance:
 
 ### Phase 19-OM.13 — VoiceCommunications Integration
 
+**Status: COMPLETE.** The prerequisites this phase names were already delivered in OM.4
+(`voiceCommunications.inbox.read` + `message.send` contracts beside `consent.suppress`) and OM.6
+(authoritative IDs, conversation↔thread link); this phase adds the remaining Voice-facing surface:
+- **Call context, never conversion.** `GET /api/v1/Omnichannel/action/calls` reads the owner's
+  **ACL-scoped** call list (`VoiceCallService.list`) and resolves, per call, the customer's existing
+  conversation by digit-equal participant address; `POST …/calls/:id/conversation` is the explicit
+  "open conversation" action (a call the caller cannot see is a 404, not a probe). No message, thread
+  or provider API is created or called — a call stays a `voice_call_session` (contract §4).
+- **Honest connector state.** The channel catalog gained a `voice` row (transport `voice`) computed
+  from the voice feature flag and the bound accounts' **effective** capabilities; a disabled account
+  is excluded and messaging rows are unaffected, so a broken/disabled voice connector is visible
+  without breaking other channels.
+- **No duplicate transport/credentials/status.** Everything is read through exported symbols and the
+  published contracts; the workspace holds no credential, webhook handler or send-status source of
+  truth of its own (the OM.4 source-scan test still enforces the barrel-only rule).
+- **Reconciliation.** A provider event processed twice yields `duplicate`, one message row and one
+  normalized event (asserted on the Omnichannel webhook prefix in the new suite, on top of the Voice
+  suite's coverage).
+- Workspace UI: a "Recent calls" panel in the inbox with caller, direction, state, duration and the
+  Open-conversation action (disabled when no conversation exists).
+
+Verification: `omnichannel-calls.test.ts` 5/5 — context resolution with no message created; explicit
+open action + 404 for an invisible call; catalog voice row independent of messaging and excluding a
+disabled account; double processing → one message + one event; a caller without the inbox capability
+is refused. Regression 10 files / 82 tests green; api+web typecheck, eslint, ui-conventions, web
+build clean.
+
+**Goal:** Project supported communications activity into Omnichannel without duplicating transport.
+
 **Goal:** Project supported communications activity into Omnichannel without duplicating transport.
 
 Tasks:

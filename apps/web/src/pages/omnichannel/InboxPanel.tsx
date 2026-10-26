@@ -113,6 +113,8 @@ export function InboxPanel() {
     enabled: selectedId !== undefined,
     staleTime: 60_000,
   });
+  // 19-OM.13 — recent calls as context (never converted into messages), with an explicit open action.
+  const calls = useQuery({ queryKey: ['omnichannel', 'calls'], queryFn: () => api.omnichannelCalls(10), refetchInterval: 20_000 });
   const identity = useQuery({
     queryKey: ['omnichannel', 'identity', selectedId],
     queryFn: () => (selectedId === undefined ? Promise.resolve(undefined) : api.omnichannelIdentity(selectedId)),
@@ -264,6 +266,45 @@ export function InboxPanel() {
           {t('omnichannel.inbox.refresh')}
         </Button>
       </Space>
+
+      {(calls.data?.list ?? []).length > 0 ? (
+        <Collapse
+          size="small"
+          items={[
+            {
+              key: 'calls',
+              label: `${t('omnichannel.inbox.calls')} (${calls.data?.list.length ?? 0})`,
+              children: (
+                <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                  {(calls.data?.list ?? []).map((call) => (
+                    <Space key={call.id} size={8} wrap>
+                      <Tag color={call.direction === 'inbound' ? 'blue' : 'default'}>
+                        {call.direction === 'inbound' ? t('omnichannel.inbox.received') : t('omnichannel.inbox.sent')}
+                      </Tag>
+                      <Typography.Text>{call.fromNumber ?? call.toNumber ?? call.id.slice(0, 8)}</Typography.Text>
+                      <Tag>{call.state}</Tag>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        {call.startedAt === null ? '—' : new Date(call.startedAt).toLocaleString()}
+                        {call.durationSeconds === null ? '' : ` · ${String(call.durationSeconds)}s`}
+                      </Typography.Text>
+                      <Button
+                        size="small"
+                        disabled={call.conversationId === null}
+                        onClick={() => {
+                          if (call.conversationId !== null) setSelectedId(call.conversationId);
+                          else void message.info(t('omnichannel.inbox.noConversation'));
+                        }}
+                      >
+                        {t('omnichannel.inbox.openConversation')}
+                      </Button>
+                    </Space>
+                  ))}
+                </Space>
+              ),
+            },
+          ]}
+        />
+      ) : null}
 
       <Row gutter={[12, 12]}>
         <Col xs={24} lg={9}>

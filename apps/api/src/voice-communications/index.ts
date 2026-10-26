@@ -75,6 +75,7 @@ export const VOICE_COMMUNICATIONS_PROVIDERS: Provider[] = [
   VoiceCommunicationsNavigationService,
 ];
 
+export type { CallSessionView, IncomingCallView } from "./voice-call.service.js";
 export { VoiceCallService } from "./voice-call.service.js";
 export { VOICE_COMMUNICATIONS_MODULE } from "./voice-communications-module.js";
 export { VOICE_FEATURES } from "./voice-communications-module.js";

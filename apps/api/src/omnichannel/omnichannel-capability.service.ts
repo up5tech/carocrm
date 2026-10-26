@@ -27,7 +27,7 @@ import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
 
 export const OMNICHANNEL_CAPABILITY_CATALOG_VERSION = 1;
 
-export type OmnichannelChannelKey = 'sms' | 'whatsapp' | 'web_chat';
+export type OmnichannelChannelKey = 'sms' | 'whatsapp' | 'web_chat' | 'voice';
 
 export interface OmnichannelChannelCapabilityView {
   readonly channel: OmnichannelChannelKey;
@@ -75,6 +75,9 @@ export class OmnichannelCapabilityService {
       this.voiceChannel('sms', usable, voiceSettings.features.sms, 'messaging.sms.send', 'messaging.sms.receive'),
       this.voiceChannel('whatsapp', usable, voiceSettings.features.whatsapp, 'messaging.whatsapp.send', 'messaging.whatsapp.receive'),
       this.webChatChannel(workspace, omnichannelSettings.webChat),
+      // 19-OM.13 — calls are context, not conversations: reported so a disabled/broken voice
+      // connector is visible honestly, without affecting any messaging row.
+      this.callsChannel(usable, voiceSettings.features.voice),
     ];
     return { catalogVersion: OMNICHANNEL_CAPABILITY_CATALOG_VERSION, channels };
   }
@@ -108,6 +111,33 @@ export class OmnichannelCapabilityService {
       readReceipts: false,
       templates: channel === 'whatsapp' && granted.has('messaging.templates'),
       media: granted.has('messaging.media'),
+      accounts: bound.map((account) => ({ key: account.key, label: account.label })),
+      notes,
+    };
+  }
+
+  private callsChannel(
+    usable: readonly { key: string; label: string; effectiveCapabilities: readonly ProviderCapability[] }[],
+    featureEnabled: boolean,
+  ): OmnichannelChannelCapabilityView {
+    const bound = usable.filter(
+      (account) => account.effectiveCapabilities.includes('voice.inboundEvents') || account.effectiveCapabilities.includes('voice.outboundCall'),
+    );
+    const granted = new Set<ProviderCapability>(bound.flatMap((account) => [...account.effectiveCapabilities]));
+    const notes: string[] = ['Calls are shown as context; they are not conversations (contract §4).'];
+    if (!featureEnabled) notes.push('The owning Voice module has the voice channel switched off.');
+    if (bound.length === 0) notes.push('No enabled account grants voice; call context is unavailable.');
+    return {
+      channel: 'voice',
+      transport: 'voice',
+      enabled: featureEnabled,
+      configured: bound.length > 0,
+      inbound: granted.has('voice.inboundEvents'),
+      outbound: granted.has('voice.outboundCall'),
+      deliveryStatuses: granted.has('voice.callStatusCallbacks'),
+      readReceipts: false,
+      templates: false,
+      media: granted.has('voice.recordingDownload'),
       accounts: bound.map((account) => ({ key: account.key, label: account.label })),
       notes,
     };

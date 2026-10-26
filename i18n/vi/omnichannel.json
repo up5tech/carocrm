@@ -118,6 +118,9 @@
     "route": "Định tuyến",
     "routedBy": "Đã định tuyến theo quy tắc \"{rule}\".",
     "routedFallback": "Đã định tuyến với dự phòng: {reason}.",
-    "snippet": "Chèn mẫu tin…"
+    "snippet": "Chèn mẫu tin…",
+    "calls": "Cuộc gọi gần đây",
+    "openConversation": "Mở hội thoại",
+    "noConversation": "Chưa có hội thoại cho số này."
   }
 }
