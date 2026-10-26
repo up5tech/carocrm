@@ -1,55 +1,56 @@
 import { Spin } from 'antd';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { AdminSettingsShell } from './admin/AdminSettingsShell.js';
 import { AppShell } from './components/AppShell.js';
-import { AdminAuditPage } from './pages/AdminAuditPage.js';
-import { AdminExtensionsPage } from './pages/AdminExtensionsPage.js';
-import { AdminJobsPage } from './pages/AdminJobsPage.js';
-import { AdminPortalsPage } from './pages/AdminPortalsPage.js';
-import { AdvancedIntegrationsPage } from './pages/AdvancedIntegrationsPage.js';
-import { AIAgentsPage } from './pages/AIAgentsPage.js';
-import { CalendarPage } from './pages/CalendarPage.js';
-import { CRMChatPage } from './pages/CRMChatPage.js';
-import { DashboardsPage } from './pages/DashboardsPage.js';
-import { DocsLandingPage } from './pages/docs/DocsLandingPage.js';
-import { DocsPage } from './pages/docs/DocsPage.js';
-import { DocsSearchPage } from './pages/docs/DocsSearchPage.js';
-import { DocsSectionPage } from './pages/docs/DocsSectionPage.js';
-import { DocumentTemplateDesignerPage } from './pages/DocumentTemplateDesignerPage.js';
-import { DocumentTemplateDetailPage } from './pages/DocumentTemplateDetailPage.js';
-import { EmailTemplateDesignerPage } from './pages/EmailTemplateDesignerPage.js';
-import { EntityAdminPage } from './pages/EntityAdminPage.js';
-import { EntityBoardPage } from './pages/EntityBoardPage.js';
-import { EntityDetailPage } from './pages/EntityDetailPage.js';
-import { EntityEditPage } from './pages/EntityEditPage.js';
-import { EntityListPage } from './pages/EntityListPage.js';
-import { EntityManagerPage } from './pages/EntityManagerPage.js';
-import { ESignaturePage } from './pages/ESignaturePage.js';
-import { HomePage } from './pages/HomePage.js';
-import { LeadScorePage } from './pages/LeadScorePage.js';
-import { LoginPage } from './pages/LoginPage.js';
-import { MarketingPreferencesPage } from './pages/MarketingPreferencesPage.js';
-import { MyProfilePage } from './pages/MyProfilePage.js';
-import { PortalCsatPage } from './pages/PortalCsatPage.js';
-import { PortalHomePage } from './pages/PortalHomePage.js';
-import { ProcessEditorPage } from './pages/ProcessEditorPage.js';
-import { ProcessesPage } from './pages/ProcessesPage.js';
-import { ProjectBoardPage } from './pages/projects/ProjectBoardPage.js';
-import { ProjectGanttPage } from './pages/projects/ProjectGanttPage.js';
-import { ProjectMembersPage } from './pages/projects/ProjectMembersPage.js';
-import { ProjectPlanPage } from './pages/projects/ProjectPlanPage.js';
-import { ProjectSettingsPage } from './pages/projects/ProjectSettingsPage.js';
-import { ReportsPage } from './pages/ReportsPage.js';
-import { SearchPage } from './pages/SearchPage.js';
-import { ServiceDeskDashboardPage } from './pages/ServiceDeskDashboardPage.js';
-import { StreamPage } from './pages/StreamPage.js';
-import { TasksPage } from './pages/TasksPage.js';
-import { VoiceCommunicationsPage } from './pages/VoiceCommunicationsPage.js';
-import { VoiceInboxPage } from './pages/VoiceInboxPage.js';
-import { WorkflowEditorPage } from './pages/WorkflowEditorPage.js';
-import { WorkflowsPage } from './pages/WorkflowsPage.js';
+import { LoadingSkeleton } from './components/LoadingSkeleton.js';
+const AdminAuditPage = lazy(() => import('./pages/AdminAuditPage.js').then((m) => ({ default: m.AdminAuditPage })));
+const AdminExtensionsPage = lazy(() => import('./pages/AdminExtensionsPage.js').then((m) => ({ default: m.AdminExtensionsPage })));
+const AdminJobsPage = lazy(() => import('./pages/AdminJobsPage.js').then((m) => ({ default: m.AdminJobsPage })));
+const AdminPortalsPage = lazy(() => import('./pages/AdminPortalsPage.js').then((m) => ({ default: m.AdminPortalsPage })));
+const AdvancedIntegrationsPage = lazy(() => import('./pages/AdvancedIntegrationsPage.js').then((m) => ({ default: m.AdvancedIntegrationsPage })));
+const AIAgentsPage = lazy(() => import('./pages/AIAgentsPage.js').then((m) => ({ default: m.AIAgentsPage })));
+const CalendarPage = lazy(() => import('./pages/CalendarPage.js').then((m) => ({ default: m.CalendarPage })));
+const CRMChatPage = lazy(() => import('./pages/CRMChatPage.js').then((m) => ({ default: m.CRMChatPage })));
+const DashboardsPage = lazy(() => import('./pages/DashboardsPage.js').then((m) => ({ default: m.DashboardsPage })));
+const DocsLandingPage = lazy(() => import('./pages/docs/DocsLandingPage.js').then((m) => ({ default: m.DocsLandingPage })));
+const DocsPage = lazy(() => import('./pages/docs/DocsPage.js').then((m) => ({ default: m.DocsPage })));
+const DocsSearchPage = lazy(() => import('./pages/docs/DocsSearchPage.js').then((m) => ({ default: m.DocsSearchPage })));
+const DocsSectionPage = lazy(() => import('./pages/docs/DocsSectionPage.js').then((m) => ({ default: m.DocsSectionPage })));
+const DocumentTemplateDesignerPage = lazy(() => import('./pages/DocumentTemplateDesignerPage.js').then((m) => ({ default: m.DocumentTemplateDesignerPage })));
+const DocumentTemplateDetailPage = lazy(() => import('./pages/DocumentTemplateDetailPage.js').then((m) => ({ default: m.DocumentTemplateDetailPage })));
+const EmailTemplateDesignerPage = lazy(() => import('./pages/EmailTemplateDesignerPage.js').then((m) => ({ default: m.EmailTemplateDesignerPage })));
+const EntityAdminPage = lazy(() => import('./pages/EntityAdminPage.js').then((m) => ({ default: m.EntityAdminPage })));
+const EntityBoardPage = lazy(() => import('./pages/EntityBoardPage.js').then((m) => ({ default: m.EntityBoardPage })));
+const EntityDetailPage = lazy(() => import('./pages/EntityDetailPage.js').then((m) => ({ default: m.EntityDetailPage })));
+const EntityEditPage = lazy(() => import('./pages/EntityEditPage.js').then((m) => ({ default: m.EntityEditPage })));
+const EntityListPage = lazy(() => import('./pages/EntityListPage.js').then((m) => ({ default: m.EntityListPage })));
+const EntityManagerPage = lazy(() => import('./pages/EntityManagerPage.js').then((m) => ({ default: m.EntityManagerPage })));
+const ESignaturePage = lazy(() => import('./pages/ESignaturePage.js').then((m) => ({ default: m.ESignaturePage })));
+const HomePage = lazy(() => import('./pages/HomePage.js').then((m) => ({ default: m.HomePage })));
+const LeadScorePage = lazy(() => import('./pages/LeadScorePage.js').then((m) => ({ default: m.LeadScorePage })));
+const LoginPage = lazy(() => import('./pages/LoginPage.js').then((m) => ({ default: m.LoginPage })));
+const MarketingPreferencesPage = lazy(() => import('./pages/MarketingPreferencesPage.js').then((m) => ({ default: m.MarketingPreferencesPage })));
+const MyProfilePage = lazy(() => import('./pages/MyProfilePage.js').then((m) => ({ default: m.MyProfilePage })));
+const PortalCsatPage = lazy(() => import('./pages/PortalCsatPage.js').then((m) => ({ default: m.PortalCsatPage })));
+const PortalHomePage = lazy(() => import('./pages/PortalHomePage.js').then((m) => ({ default: m.PortalHomePage })));
+const ProcessEditorPage = lazy(() => import('./pages/ProcessEditorPage.js').then((m) => ({ default: m.ProcessEditorPage })));
+const ProcessesPage = lazy(() => import('./pages/ProcessesPage.js').then((m) => ({ default: m.ProcessesPage })));
+const ProjectBoardPage = lazy(() => import('./pages/projects/ProjectBoardPage.js').then((m) => ({ default: m.ProjectBoardPage })));
+const ProjectGanttPage = lazy(() => import('./pages/projects/ProjectGanttPage.js').then((m) => ({ default: m.ProjectGanttPage })));
+const ProjectMembersPage = lazy(() => import('./pages/projects/ProjectMembersPage.js').then((m) => ({ default: m.ProjectMembersPage })));
+const ProjectPlanPage = lazy(() => import('./pages/projects/ProjectPlanPage.js').then((m) => ({ default: m.ProjectPlanPage })));
+const ProjectSettingsPage = lazy(() => import('./pages/projects/ProjectSettingsPage.js').then((m) => ({ default: m.ProjectSettingsPage })));
+const ReportsPage = lazy(() => import('./pages/ReportsPage.js').then((m) => ({ default: m.ReportsPage })));
+const SearchPage = lazy(() => import('./pages/SearchPage.js').then((m) => ({ default: m.SearchPage })));
+const ServiceDeskDashboardPage = lazy(() => import('./pages/ServiceDeskDashboardPage.js').then((m) => ({ default: m.ServiceDeskDashboardPage })));
+const StreamPage = lazy(() => import('./pages/StreamPage.js').then((m) => ({ default: m.StreamPage })));
+const TasksPage = lazy(() => import('./pages/TasksPage.js').then((m) => ({ default: m.TasksPage })));
+const VoiceCommunicationsPage = lazy(() => import('./pages/VoiceCommunicationsPage.js').then((m) => ({ default: m.VoiceCommunicationsPage })));
+const VoiceInboxPage = lazy(() => import('./pages/VoiceInboxPage.js').then((m) => ({ default: m.VoiceInboxPage })));
+const WorkflowEditorPage = lazy(() => import('./pages/WorkflowEditorPage.js').then((m) => ({ default: m.WorkflowEditorPage })));
+const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage.js').then((m) => ({ default: m.WorkflowsPage })));
 import { useSession } from './state/session.js';
 
 export function AppRoutes() {
@@ -69,7 +70,8 @@ export function AppRoutes() {
 
   if (!token || !principal) {
     return (
-      <Routes>
+      <Suspense fallback={<LoadingSkeleton rows={8} />}>
+        <Routes>
         {/* SD.14 — the CSAT link is token-based and must work without a CRM session. */}
         <Route path="/csat" element={<PortalCsatPage />} />
         {/* Phase 19-MA.5 — the public preference page: no session, token only (§5.3.1). */}
@@ -77,6 +79,7 @@ export function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      </Suspense>
     );
   }
 
@@ -85,6 +88,7 @@ export function AppRoutes() {
   if (principal.type === 'portal') {
     return (
       <AppShell>
+        <Suspense fallback={<LoadingSkeleton rows={8} />}>
         <Routes>
           <Route path="/" element={<Navigate to="/portal" replace />} />
           <Route path="/portal" element={<PortalHomePage />} />
@@ -100,13 +104,15 @@ export function AppRoutes() {
           <Route path="/login" element={<Navigate to="/portal" replace />} />
           <Route path="*" element={<Navigate to="/portal" replace />} />
         </Routes>
+      </Suspense>
       </AppShell>
     );
   }
 
   return (
     <AppShell>
-      <Routes>
+      <Suspense fallback={<LoadingSkeleton rows={8} />}>
+        <Routes>
         <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="/home" element={<HomePage />} />
         {/* SD.14 — the same token survey page is reachable for signed-in staff testing a link. */}
@@ -192,6 +198,7 @@ export function AppRoutes() {
         <Route path="/admin/settings/:tabKey" element={<AdminSettingsShell />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
+      </Suspense>
     </AppShell>
   );
 }

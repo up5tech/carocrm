@@ -202,13 +202,41 @@ export function EntityBoardPage() {
     const currentValue = current === null || current === undefined ? '' : String(current);
     if (currentValue === (target.value ?? '')) return;
 
+    const previousData = data;
+    // Optimistic move: relocate the card immediately; roll back on refusal.
+    setData((current) => {
+      const next: Record<string, ColumnData> = {};
+      for (const key of Object.keys(current)) {
+        next[key] = { rows: (current[key]?.rows ?? []).filter((row) => String(row['id']) !== recordId), total: current[key]?.total ?? 0 };
+      }
+      const targetColumn = current[targetKey];
+      const moved = { ...record, [groupBy]: target.value } as Record<string, unknown>;
+      const rows = targetColumn === undefined ? [moved] : [moved, ...targetColumn.rows];
+      next[targetKey] = { rows, total: (targetColumn?.total ?? 0) + 1 };
+      // fix totals for source
+      for (const key of Object.keys(current)) {
+        if (key !== targetKey && (current[key]?.rows ?? []).some((row) => String(row['id']) === recordId)) {
+          if (next[key] !== undefined) next[key].total = Math.max(0, ((current[key]?.total) ?? 1) - 1);
+        }
+      }
+      return next;
+    });
     try {
-      await api.update(entityName, recordId, { [groupBy]: target.value, version: record['version'] });
+      const updated = await api.update(entityName, recordId, { [groupBy]: target.value, version: record['version'] });
+      if (updated && typeof updated === 'object') {
+        setData((current) => {
+          const next = { ...current };
+          for (const key of Object.keys(next)) {
+            const prev = next[key];
+            if (prev !== undefined) next[key] = { ...prev, rows: (prev.rows ?? []).map((row) => (String(row['id']) === recordId ? { ...row, ...updated } : row)) };
+          }
+          return next;
+        });
+      }
       void message.success(t('web.board.moved', { value: target.value ?? t('web.board.noValue') }));
     } catch (error) {
+      setData(previousData);
       void message.error(error instanceof Error ? error.message : t('web.board.moveFailed'));
-    } finally {
-      await load();
     }
   };
 

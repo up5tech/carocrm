@@ -26,10 +26,15 @@ export function WebhooksTab() {
   const notInstalled = endpoints.isError && endpoints.error instanceof Error && endpoints.error.message.toLowerCase().includes('404');
 
   const toggle = async (row: WebhookEndpointRow, next: boolean) => {
+    const previous = endpoints.data;
+    client.setQueryData(['webhookEndpoints'], (old: { list?: WebhookEndpointRow[] } | undefined) => {
+      if (!old?.list) return old;
+      return { ...old, list: old.list.map((r) => (r.id === row.id ? { ...r, enabled: next } : r)) };
+    });
     try {
       await api.updateWebhookEndpoint(row.id, { enabled: next });
-      reload();
     } catch (error) {
+      client.setQueryData(['webhookEndpoints'], previous);
       void message.error(errorMessage(error, t('web.adminWebhooks.updateFailed')));
     }
   };

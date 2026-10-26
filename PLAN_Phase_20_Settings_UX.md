@@ -2086,7 +2086,7 @@ e2e login/seed plumbing that already exists. The jsdom scope of the spec is unch
   AA over their soft background), the rule tags are WCAG 2.0 A/AA rather than 2.1/2.2, and
   keyboard/focus paths remain a manual walkthrough.
 
-### Phase 20.27 — A bounded first load, and writes that answer immediately  ⬜ proposed
+### Phase 20.27 — A bounded first load, and writes that answer immediately  ✅ implemented 2026-10-26
 
 Source: `docs/ux/ui-review.md` F4, F10, F13.
 

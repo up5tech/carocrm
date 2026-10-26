@@ -91,13 +91,28 @@ export function TasksPage() {
   const complete = useMutation({
     mutationFn: ({ task, outcome }: { task: ProcessTaskView; outcome: string }) =>
       api.completeProcessTask(task.id, { outcome, ...(comment.trim() === '' ? {} : { comment: comment.trim() }) }),
+    onMutate: async ({ task }) => {
+      await queryClient.cancelQueries({ queryKey: ['processes'] });
+      const snapshots = queryClient.getQueriesData({ queryKey: ['processes'] });
+      queryClient.setQueriesData({ queryKey: ['processes'] }, (old: unknown) => {
+        if (old === null || typeof old !== 'object') return old;
+        const record = old as { list?: Array<Record<string, unknown>> };
+        if (!Array.isArray(record.list)) return old;
+        return { ...record, list: record.list.map((row) => (row['id'] === task.id ? { ...row, status: 'completed' } : row)) };
+      });
+      return { snapshots };
+    },
+    onError: (error: Error, _vars, context) => {
+      const ctx = context as { snapshots?: Array<[unknown, unknown]> } | undefined;
+      ctx?.snapshots?.forEach(([key, data]) => queryClient.setQueryData(key as readonly unknown[], data));
+      void message.error(error.message);
+    },
     onSuccess: (instance) => {
       void message.success(t('web.tasks.answered', { status: instance.status }));
       setAnswering(null);
       setComment('');
       refresh();
     },
-    onError: (error: Error) => void message.error(error.message),
   });
 
   const rows = tasks.data?.list ?? [];

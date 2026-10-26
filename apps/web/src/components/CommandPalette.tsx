@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import type { EntityDefinition, NavigationNode } from '../api/types.js';
+import { prefetchRoute } from '../lib/prefetchRoute.js';
 import { useAdminPanel, useNavigation } from '../state/admin.js';
 import { useDocPaletteItems } from '../state/docs.js';
 import { currentNavRoute, useFavorites } from '../state/favorites.js';
@@ -220,7 +221,7 @@ export function CommandPalette() {
             <CommandSeparator />
             <CommandGroup heading={t('web.docs.title')}>
               {docsItems.items.map((item) => (
-                <CommandItem key={item.key} onSelect={() => select(item.path)}>
+                <CommandItem key={item.key} onSelect={() => select(item.path)} onMouseEnter={() => prefetchRoute(item.path)}>
                   {item.title}
                   <span className="carocrm-palette-detail">{item.detail}</span>
                 </CommandItem>
@@ -229,7 +230,7 @@ export function CommandPalette() {
             <CommandSeparator />
             <CommandGroup heading={t('web.commandPalette.settings')}>
               {settingsItems.map((item) => (
-                <CommandItem key={item.key} onSelect={() => select(item.route)}>
+                <CommandItem key={item.key} onSelect={() => select(item.route)} onMouseEnter={() => item.route && prefetchRoute(item.route)}>
                   {item.label}
                 </CommandItem>
               ))}
@@ -242,7 +243,7 @@ export function CommandPalette() {
             <CommandSeparator />
             <CommandGroup heading={t('web.commandPalette.records')}>
               {filteredEntities.map((entity: EntityDefinition) => (
-                <CommandItem key={entity.name} onSelect={() => select(`/${entity.name}`)}>
+                <CommandItem key={entity.name} onSelect={() => select(`/${entity.name}`)} onMouseEnter={() => prefetchRoute(`/${entity.name}`)}>
                   {entity.label}
                 </CommandItem>
               ))}
@@ -260,7 +261,7 @@ export function CommandPalette() {
             <CommandSeparator />
             <CommandGroup heading={t('web.commandPalette.recent')}>
               {filteredRecents.map((item) => (
-                <CommandItem key={item.key} onSelect={() => select(item.route)}>
+                <CommandItem key={item.key} onSelect={() => select(item.route)} onMouseEnter={() => item.route && prefetchRoute(item.route)}>
                   {item.label}
                   <span className="carocrm-palette-detail">{item.route}</span>
                 </CommandItem>

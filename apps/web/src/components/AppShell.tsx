@@ -7,19 +7,20 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { NavigationNode } from '../api/types.js';
+import { prefetchRoute } from '../lib/prefetchRoute.js';
 import { useNavigation } from '../state/admin.js';
 import { useDocsSettings } from '../state/docs.js';
 import { currentNavRoute, favoriteLeaves, useFavorites } from '../state/favorites.js';
 import { activateLocale, activeLocaleName, localesEnabled, t } from '../state/i18n.js';
 import { setLiveRegionTranslator } from '../state/page-title.js';
 import { portalBase, usePortalContext } from '../state/portal.js';
+import { usePreference } from '../state/preferences.js';
 import { useRecordVisit } from '../state/recent.js';
 import { useSession } from '../state/session.js';
 import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 import { navAccent } from '../theme.js';
 import { AppErrorBoundary } from './AppErrorBoundary.js';
 import { CommandPalette } from './CommandPalette.js';
-import { useRouteFocus } from './PageHeader.js';
 import { CRMChatQuickAccess } from './CRMChatQuickAccess.js';
 import { DocsLink } from './docs/DocsLink.js';
 import { PageDocsProvider, usePageDocsKey } from './docs/PageDocs.js';
@@ -27,6 +28,7 @@ import { entityIcon, navGroupIcon, navIcon } from './entityIcons.js';
 import { IncomingCallBanner } from './IncomingCallBanner.js';
 import { NotificationsMenu } from './NotificationsMenu.js';
 import { OfflineBanner } from './OfflineBanner.js';
+import { useRouteFocus } from './PageHeader.js';
 
 const { Sider, Content, Footer } = Layout;
 
@@ -111,6 +113,17 @@ function InternalShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
   const { collapsed, setCollapsed, drawerOpen, setDrawerOpen, narrow } = useSidebar();
+  const lastVisited = usePreference<string[]>('lastVisited');
+  useEffect(() => {
+    const routes = (lastVisited.value ?? []).slice(0, 3);
+    const run = () => routes.forEach((route) => prefetchRoute(route));
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const id = (window as Window & { requestIdleCallback: (cb: () => void) => number }).requestIdleCallback(run);
+      return () => (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback?.(id);
+    }
+    const timer = setTimeout(run, 1200);
+    return () => window.clearTimeout(timer);
+  }, [lastVisited.value]);
   // Phase 20.24 (F7): a route change lands the keyboard in the content and announces the page; a
   // query-string-only change (filtering a list) moves nothing.
   useRouteFocus();
@@ -484,7 +497,7 @@ function toMenuItems(nodes: readonly NavigationNode[], depth = 0): MenuItems {
         node.kind === 'entity'
           ? entityIcon(node.icon, node.key.startsWith('entity:') ? node.key.slice('entity:'.length) : undefined)
           : navIcon(node.icon),
-      label: <Link to={node.route}>{text}</Link>,
+      label: <Link to={node.route} onMouseEnter={() => prefetchRoute(node.route)} onFocus={() => prefetchRoute(node.route)}>{text}</Link>,
     });
   }
   return items;

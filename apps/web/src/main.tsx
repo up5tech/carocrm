@@ -15,7 +15,7 @@ import { useSettings } from './state/settings.js';
 import { accentTone, themeForBrand } from './theme.js';
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: 'always' } },
 });
 
 // §20.13: a data router, because the unsaved-changes guard needs `useBlocker` — the plain
