@@ -63,17 +63,18 @@ export class OmnichannelCapabilityService {
   ) {}
 
   async catalog(): Promise<OmnichannelCapabilityCatalog> {
-    const [views, settings, workspace] = await Promise.all([
+    const [views, voiceSettings, omnichannelSettings] = await Promise.all([
       this.accounts.list(),
       this.voiceSettings.settings(),
-      this.settings.workspaceEnabled(),
+      this.settings.settings(),
     ]);
     const usable = views.filter((account) => account.enabled);
+    const workspace = omnichannelSettings.features.workspace;
 
     const channels: OmnichannelChannelCapabilityView[] = [
-      this.voiceChannel('sms', usable, settings.features.sms, 'messaging.sms.send', 'messaging.sms.receive'),
-      this.voiceChannel('whatsapp', usable, settings.features.whatsapp, 'messaging.whatsapp.send', 'messaging.whatsapp.receive'),
-      this.webChatChannel(workspace),
+      this.voiceChannel('sms', usable, voiceSettings.features.sms, 'messaging.sms.send', 'messaging.sms.receive'),
+      this.voiceChannel('whatsapp', usable, voiceSettings.features.whatsapp, 'messaging.whatsapp.send', 'messaging.whatsapp.receive'),
+      this.webChatChannel(workspace, omnichannelSettings.webChat),
     ];
     return { catalogVersion: OMNICHANNEL_CAPABILITY_CATALOG_VERSION, channels };
   }
@@ -112,22 +113,31 @@ export class OmnichannelCapabilityService {
     };
   }
 
-  private webChatChannel(workspaceEnabled: boolean): OmnichannelChannelCapabilityView {
+  private webChatChannel(
+    workspaceEnabled: boolean,
+    webChat: { readonly enabled: boolean; readonly allowedOrigins: readonly string[] },
+  ): OmnichannelChannelCapabilityView {
+    // 19-OM.9: the self-hosted widget. "Configured" is stricter than "enabled": a browser client is
+    // refused until the operator names at least one allowed origin (fail closed, contract §7).
+    const enabled = workspaceEnabled && webChat.enabled;
+    const configured = enabled && webChat.allowedOrigins.length > 0;
+    const notes: string[] = [];
+    if (!webChat.enabled) notes.push('Website chat is switched off in the Omnichannel settings.');
+    else if (webChat.allowedOrigins.length === 0) notes.push('No allowed origin is configured; browser widgets are refused.');
+    if (!workspaceEnabled) notes.push('The Omnichannel workspace is switched off.');
     return {
       channel: 'web_chat',
       transport: 'self',
-      enabled: workspaceEnabled,
-      // The widget and its visitor-session store are delivered by 19-OM.9 (contract §7); until then
-      // the honest answer is "not configured", not a half-true capability grid.
-      configured: false,
-      inbound: false,
-      outbound: false,
+      enabled,
+      configured,
+      inbound: enabled,
+      outbound: enabled,
       deliveryStatuses: false,
       readReceipts: false,
       templates: false,
       media: false,
       accounts: [],
-      notes: ['Website chat arrives with 19-OM.9 (visitor session + widget).'],
+      notes,
     };
   }
 }

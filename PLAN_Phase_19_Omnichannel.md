@@ -1405,6 +1405,37 @@ Acceptance:
 
 ### Phase 19-OM.9 — Website/Portal Chat Channel
 
+**Status: COMPLETE.** Delivered as the contract §7 model, with **no Portal changes**: the visitor is
+the module's own session principal (`omnichannel_visitor_sessions`, migration 079) — a 128-bit random
+key in an httpOnly/SameSite=Lax cookie scoped to the chat path, only its hash stored, explicit
+expiry, keyed IP hash, and versioned consent evidence. `PortalPolicyService.recordVisible()` and
+Portal auth are untouched.
+- **Channel transport (D1 + E15)**: `web_chat` joined the message-channel vocabulary and capability
+  keys; the `omnichannel-web-chat` adapter (Omnichannel-owned, registered into Voice's registry at
+  boot) backs one seeded account, so visitor messages enter through `VoiceMessagingService.ingestInbound`
+  and agent replies through the normal send path (state `sent`; delivery is the visitor reading it).
+  Voice's provider-policy evaluation is skipped for exactly this channel (no provider window/quiet
+  hours); the widget's consent is enforced and stored by the session service before ingestion.
+- **Public API** (`/api/v1/Omnichannel/chat`, `@Public`): session create/resume, one-message send
+  (client-id idempotent), and the visitor's own customer-visible messages with an id cursor. Guards:
+  module switch + workspace, origin allowlist **fail-closed** (empty allowlist refuses every browser
+  request; Origin-less server calls allowed), session existence/expiry (401, never a silent new
+  identity), consent, per-minute rate window (429), body caps and a honeypot. The widget query filters
+  `is_internal_note = false` and `channel = 'web_chat'`, so staff notes and internal fields have no
+  path to a visitor; visitors cannot reference another conversation by id (no id is accepted).
+- **Widget**: public `/chat` page (outside the CRM session) with the consent notice, polling, optimistic
+  send reconciled by client id, and closed/unavailable states; en/vi labels. The capability catalog's
+  `web_chat` row now reports the real configured state (needs both the switch and an origin).
+
+Verification: `omnichannel-webchat.test.ts` 9/9 — cookie-only session, disallowed origin 403, consent
+required, canonical `web_chat` conversation via the normal ingest, duplicate client id reconciled,
+agent reply visible while the internal note is not (the note exists in the record), forged/expired
+sessions 401, rate abuse 429, visitor isolation, fail-closed empty allowlist, closed channel 403,
+seeded connection present and no `omnichannel_conversation` table. Regression 16 files / 197 tests
+green (Voice suites unchanged); api+web typecheck, eslint, ui-conventions and the web build clean.
+
+**Goal:** Add a safe web chat entry point if an appropriate component does not already exist.
+
 **Goal:** Add a safe web chat entry point if an appropriate component does not already exist.
 
 **Existing baseline to reuse, not replace:** `WebToCaseService` already provides a `@Public()`

@@ -189,18 +189,24 @@ export class VoiceMessagingService {
       return { message: toMessageView(note), duplicate: false };
     }
 
-    const evaluation = await this.policy.evaluate({
-      channel: input.channel,
-      address: to,
-      accountKey,
-      ...(input.purpose !== undefined ? { purpose: input.purpose } : {}),
-      messageLength: body.length,
-      ...(input.templateKey !== undefined ? { templateKey: input.templateKey } : {}),
-      ...(input.templateLanguage !== undefined ? { templateLanguage: input.templateLanguage } : {}),
-      ...(input.templateVariables !== undefined ? { templateVariables: input.templateVariables } : {}),
-    });
-    if (!evaluation.allowed) {
-      throw new ValidationError('This message is not permitted.', { refusals: evaluation.refusals.map((r) => r.code) });
+    // 19-OM.9: the web-chat transport is this CRM, not a provider — there is no service window,
+    // quiet-hour policy or template rule to evaluate. Consent for the widget is enforced and stored
+    // by the Omnichannel visitor-session service before a message reaches this path, so the policy
+    // step is skipped for exactly this channel and nothing else.
+    if (input.channel !== 'web_chat') {
+      const evaluation = await this.policy.evaluate({
+        channel: input.channel,
+        address: to,
+        accountKey,
+        ...(input.purpose !== undefined ? { purpose: input.purpose } : {}),
+        messageLength: body.length,
+        ...(input.templateKey !== undefined ? { templateKey: input.templateKey } : {}),
+        ...(input.templateLanguage !== undefined ? { templateLanguage: input.templateLanguage } : {}),
+        ...(input.templateVariables !== undefined ? { templateVariables: input.templateVariables } : {}),
+      });
+      if (!evaluation.allowed) {
+        throw new ValidationError('This message is not permitted.', { refusals: evaluation.refusals.map((r) => r.code) });
+      }
     }
 
     const account = await this.accounts.resolve(accountKey);
@@ -230,23 +236,25 @@ export class VoiceMessagingService {
     const media = await this.recordMedia(message.id, input.mediaAttachmentIds ?? []);
 
     // Recheck immediately before dispatch; a revoked consent must cancel a queued message.
-    const dispatchCheck = await this.policy.evaluate({
-      channel: input.channel,
-      address: to,
-      accountKey,
-      ...(input.purpose !== undefined ? { purpose: input.purpose } : {}),
-      messageLength: body.length,
-      ...(input.templateKey !== undefined ? { templateKey: input.templateKey } : {}),
-      ...(input.templateLanguage !== undefined ? { templateLanguage: input.templateLanguage } : {}),
-      ...(input.templateVariables !== undefined ? { templateVariables: input.templateVariables } : {}),
-    });
-    if (!dispatchCheck.allowed) {
-      const failed = await this.patchMessage(message.id, {
-        state: 'failed',
-        failureCategory: 'consent_required',
-        failedAt: new Date(),
+    if (input.channel !== 'web_chat') {
+      const dispatchCheck = await this.policy.evaluate({
+        channel: input.channel,
+        address: to,
+        accountKey,
+        ...(input.purpose !== undefined ? { purpose: input.purpose } : {}),
+        messageLength: body.length,
+        ...(input.templateKey !== undefined ? { templateKey: input.templateKey } : {}),
+        ...(input.templateLanguage !== undefined ? { templateLanguage: input.templateLanguage } : {}),
+        ...(input.templateVariables !== undefined ? { templateVariables: input.templateVariables } : {}),
       });
-      return { message: toMessageView(failed), duplicate: false };
+      if (!dispatchCheck.allowed) {
+        const failed = await this.patchMessage(message.id, {
+          state: 'failed',
+          failureCategory: 'consent_required',
+          failedAt: new Date(),
+        });
+        return { message: toMessageView(failed), duplicate: false };
+      }
     }
 
     try {

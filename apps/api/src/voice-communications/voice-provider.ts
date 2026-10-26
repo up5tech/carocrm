@@ -11,8 +11,8 @@ import {
   type MessageChannel,
   type MessageState,
   type ProviderCapability,
+  type ProviderChannel,
   type ProviderEventKind,
-  type VoiceChannel,
 } from "./voice-communications-domain.js";
 import { constantTimeEqual, signCanonicalWebhook } from "./voice-provider-crypto.js";
 
@@ -44,7 +44,7 @@ export interface VoiceProviderInfo {
   /** Exactly the capabilities this adapter implements (§6.1). Missing means not-implemented. */
   readonly capabilities: readonly ProviderCapability[];
   /** Channels this adapter can carry at all; the capability list is the finer-grained truth. */
-  readonly channels: readonly VoiceChannel[];
+  readonly channels: readonly ProviderChannel[];
   /** Messages per minute the provider accepts; `0` means it publishes no limit. */
   readonly ratePerMinute: number;
   /** Simultaneous requests this adapter tolerates; `0` means the caller imposes no local ceiling. */

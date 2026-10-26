@@ -132,12 +132,9 @@ export class OmnichannelConversationService {
       select id, account_key, channel from voice_conversations where id = ${conversationId}
     `.execute(this.database.db)).rows[0];
     if (conversation === undefined) throw new ValidationError(`Conversation "${conversationId}" does not exist.`);
+    // 19-OM.9: `web_chat` is a first-class channel now — its transport is the local adapter the
+    // Omnichannel module registers, so the same catalog check and the same owner send path apply.
     const channel = conversation.channel as 'sms' | 'mms' | 'whatsapp' | 'web_chat';
-    // Website chat has no Voice transport; its widget lands in 19-OM.9 and answers with its own
-    // channel adapter. Until then a send is an explicit channel refusal, never a silent success.
-    if (channel === 'web_chat') {
-      throw new ValidationError('This channel cannot send right now.', { refusals: ['channel_unavailable'], channel });
-    }
 
     // An internal note is a conversation artefact, never a channel send: it is allowed even while the
     // channel is unavailable, and it never reaches an adapter (the owner guarantees that structurally).

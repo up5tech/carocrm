@@ -159,6 +159,7 @@ export const OMNICHANNEL_DEPENDENCIES: readonly OmnichannelDependency[] = [
   { id: 'settings', label: 'Instance settings store', kind: 'table', value: 'app_settings', required: true },
   { id: 'audit-stream', label: 'Audit log and stream', kind: 'table', value: 'audit_log', required: true },
   { id: 'realtime', label: 'Realtime notification transport (D3 seam)', kind: 'table', value: 'notifications', required: false },
+  { id: 'visitor-store', label: 'Website chat visitor sessions (OM.9)', kind: 'table', value: 'omnichannel_visitor_sessions', required: false },
 ];
 
 /** Optional integrations the workspace enriches itself with when present (markers, never imports). */
@@ -197,18 +198,18 @@ export const OMNICHANNEL_MODULE = {
   /** Frontend route of the agent workspace. */
   frontendRoute: '/omnichannel',
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ['19-OM.0', '19-OM.1', '19-OM.2', '19-OM.3', '19-OM.4', '19-OM.5', '19-OM.6', '19-OM.7', '19-OM.8'],
+  implementedPhases: ['19-OM.0', '19-OM.1', '19-OM.2', '19-OM.3', '19-OM.4', '19-OM.5', '19-OM.6', '19-OM.7', '19-OM.8', '19-OM.9'],
   /**
    * Metadata entities this module owns — deliberately empty (D1): the records live in their
    * owning modules and the workspace consumes facades. No entity is invented to populate menus.
    */
   entityTypes: [] as const,
   /**
-   * Physical tables this module owns. Empty at OM.2 by the same reasoning; the only table
-   * Omnichannel is contracted to own is the visitor-session store of the web-chat channel
-   * (contract §7), which arrives with OM.9.
+   * Physical tables this module owns. Since 19-OM.9 exactly one: the website-chat visitor-session
+   * store (contract §7) — the anonymous principal and its consent evidence. Conversation and message
+   * records still live in `VoiceCommunications` (D1).
    */
-  ownedTables: [] as const,
+  ownedTables: ['omnichannel_visitor_sessions'] as const,
 } as const;
 
 export type OmnichannelModuleDescriptor = typeof OMNICHANNEL_MODULE;

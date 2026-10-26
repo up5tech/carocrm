@@ -38,9 +38,34 @@ const OmnichannelFeaturesSchema = z
   })
   .strict();
 
+/**
+ * 19-OM.9 — the website chat channel (contract §7). Defaults are closed: the widget serves nothing
+ * until an operator switches it on **and** names the origins allowed to embed it. `allowedOrigins`
+ * empty means every browser request carrying an `Origin` header is refused (fail closed); a
+ * server-to-server call without an Origin header is still allowed so tests and uptime checks work.
+ */
+const WebChatSettingsSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    requireConsent: z.boolean().default(true),
+    consentText: z
+      .string()
+      .trim()
+      .max(2000)
+      .default('I agree that this chat is stored so the team can reply.'),
+    consentVersion: z.string().trim().min(1).max(20).default('1'),
+    allowedOrigins: z.array(z.string().trim().url().max(300)).max(20).default([]),
+    sessionHours: z.number().int().min(1).max(168).default(24),
+    maxMessagesPerMinute: z.number().int().min(1).max(120).default(20),
+    maxBodyChars: z.number().int().min(100).max(20_000).default(2_000),
+  })
+  .strict()
+  .default({});
+
 export const OmnichannelSettingsSchema = z
   .object({
     features: OmnichannelFeaturesSchema.default({}),
+    webChat: WebChatSettingsSchema,
   })
   .strict();
 
@@ -78,6 +103,18 @@ export function omnichannelSettingsWarnings(settings: OmnichannelSettings): Omni
     warnings.push({
       code: 'workspaceDisabled',
       message: 'The Omnichannel workspace is disabled: the menu entry is hidden and the module endpoints answer 403.',
+    });
+  }
+  if (settings.webChat.enabled && settings.webChat.allowedOrigins.length === 0) {
+    warnings.push({
+      code: 'webChatNoOrigins',
+      message: 'Website chat is enabled but no allowed origin is configured: browser widgets will be refused until an origin is named.',
+    });
+  }
+  if (settings.webChat.enabled && !settings.features.workspace) {
+    warnings.push({
+      code: 'webChatWithoutWorkspace',
+      message: 'Website chat is enabled while the workspace is switched off: nobody could answer the visitors.',
     });
   }
   return warnings;

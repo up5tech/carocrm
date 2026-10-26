@@ -54,6 +54,7 @@ const VoiceCommunicationsPage = lazy(() => import('./pages/VoiceCommunicationsPa
 const VoiceInboxPage = lazy(() => import('./pages/VoiceInboxPage.js').then((m) => ({ default: m.VoiceInboxPage })));
 const WorkflowEditorPage = lazy(() => import('./pages/WorkflowEditorPage.js').then((m) => ({ default: m.WorkflowEditorPage })));
 const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage.js').then((m) => ({ default: m.WorkflowsPage })));
+const WebChatPage = lazy(() => import('./pages/WebChatPage.js').then((m) => ({ default: m.WebChatPage })));
 export function AppRoutes() {
   const { token, principal, restored, loadPrincipal } = useSession();
 
@@ -77,6 +78,8 @@ export function AppRoutes() {
         <Route path="/csat" element={<PortalCsatPage />} />
         {/* Phase 19-MA.5 — the public preference page: no session, token only (§5.3.1). */}
         <Route path="/marketing/preferences" element={<MarketingPreferencesPage />} />
+        {/* Phase 19-OM.9 — the public website chat widget: a visitor session cookie, no CRM login. */}
+        <Route path="/chat" element={<WebChatPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
@@ -120,6 +123,8 @@ export function AppRoutes() {
         <Route path="/csat" element={<PortalCsatPage />} />
         {/* Phase 19-MA.5 — the public preference page: no session, token only (§5.3.1). */}
         <Route path="/marketing/preferences" element={<MarketingPreferencesPage />} />
+        {/* Phase 19-OM.9 — the public website chat widget: a visitor session cookie, no CRM login. */}
+        <Route path="/chat" element={<WebChatPage />} />
         {/* signed-in users must never hit the entity route with "login" as the entity name */}
         <Route path="/login" element={<Navigate to="/home" replace />} />
         {/* declared before the entity wildcard so "stream" is never read as an entity name */}

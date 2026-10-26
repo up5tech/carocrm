@@ -45,5 +45,16 @@
       "status": "Trạng thái",
       "right": "Quyền"
     }
+  },
+  "chat": {
+    "title": "Trò chuyện với chúng tôi",
+    "connecting": "Đang kết nối…",
+    "empty": "Tin nhắn của bạn sẽ hiển thị ở đây.",
+    "placeholder": "Nhập tin nhắn…",
+    "send": "Gửi",
+    "sendFailed": "Không gửi được tin nhắn. Vui lòng thử lại.",
+    "closed": "Kênh chat hiện đang đóng.",
+    "unavailable": "Không thể bắt đầu trò chuyện. Vui lòng thử lại sau.",
+    "consentAccept": "Tôi đồng ý"
   }
 }

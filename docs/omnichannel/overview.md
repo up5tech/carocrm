@@ -16,7 +16,8 @@
 | OM.6 — Canonical conversation/thread/message services | ✅ COMPLETE | thread attach + continuity + reconcile in Voice; `OmnichannelConversationService` facade + conversation endpoints; `omnichannel-conversation.test.ts` |
 | OM.7 — Identity resolution & record linking | ✅ COMPLETE | `OmnichannelIdentityService` + identity endpoints, migration 078 phone index, `omnichannel-identity.test.ts` |
 | OM.8 — Outbound command & send state | ✅ COMPLETE | workspace send endpoint (facade pre-checks), timeout → `unknown` in Voice, `omnichannel-send.test.ts` |
-| OM.9+ | ⏸ Not started | — |
+| OM.9 — Website chat channel | ✅ COMPLETE | migration 079 visitor sessions + web-chat connection, local adapter, public `/chat` API + widget page, `omnichannel-webchat.test.ts` |
+| OM.10+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -29,6 +30,23 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.9 (Website chat channel)
+
+- Migration 079: `omnichannel_visitor_sessions` (hashed key, consent evidence, expiry, rate window,
+  conversation link) + the single seeded `omnichannel-web-chat` connection row. No second
+  conversation store.
+- Voice: `web_chat` added to the message channel/capability vocabulary; the Omnichannel-owned local
+  adapter is registered into `VoiceProviderRegistry` at boot, so both directions use the canonical
+  services; policy evaluation is skipped for exactly this channel (documented; consent is enforced
+  by the session service before ingest).
+- Public `/api/v1/Omnichannel/chat/{session,messages}` (cookie session, fail-closed origin allowlist,
+  consent, rate window, honeypot, idempotent client ids) + widget page `/chat` (en/vi) outside the
+  CRM session. Widget reads only `is_internal_note = false` rows of its own conversation.
+- Checks: `omnichannel-webchat.test.ts` 9/9; regression 16 files / 197 tests; typecheck/lint/build/
+  ui-conventions clean. Sessions/conversations created by the suite are removed by its own marker;
+  the shared `omnichannel` settings row is restored byte-for-byte.
+
 
 ### 2026-10-26 — Phase 19-OM.8 (Outbound command, send state, reconciliation)
 

@@ -45,5 +45,16 @@
       "status": "Status",
       "right": "Capability"
     }
+  },
+  "chat": {
+    "title": "Chat with us",
+    "connecting": "Connecting…",
+    "empty": "Your messages will appear here.",
+    "placeholder": "Write a message…",
+    "send": "Send",
+    "sendFailed": "The message could not be sent. Please try again.",
+    "closed": "The chat is currently closed.",
+    "unavailable": "The chat could not be started. Please try again later.",
+    "consentAccept": "I agree"
   }
 }

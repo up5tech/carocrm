@@ -16,15 +16,18 @@ import type { Provider, Type } from '@nestjs/common';
 
 import { OmnichannelController } from './omnichannel.controller.js';
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
+import { OmnichannelChatController } from './omnichannel-chat.controller.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
 import { OmnichannelIdentityService } from './omnichannel-identity.service.js';
 import { OmnichannelModuleHealthService } from './omnichannel-module-health.service.js';
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
 import { noopMenuInvalidator, OMNICHANNEL_MENU_INVALIDATOR, OmnichannelSettingsService } from './omnichannel-settings.service.js';
+import { OmnichannelWebChatTransport } from './omnichannel-webchat.adapter.js';
+import { OmnichannelWebChatService } from './omnichannel-webchat.service.js';
 import { OmnichannelWebhookController } from './omnichannel-webhook.controller.js';
 
-export const OMNICHANNEL_CONTROLLERS: Type<unknown>[] = [OmnichannelController, OmnichannelWebhookController];
+export const OMNICHANNEL_CONTROLLERS: Type<unknown>[] = [OmnichannelController, OmnichannelChatController, OmnichannelWebhookController];
 
 export const OMNICHANNEL_PROVIDERS: Provider[] = [
   // Default menu-invalidator binding so an isolated boot works; `AppModule` overrides the token
@@ -37,6 +40,8 @@ export const OMNICHANNEL_PROVIDERS: Provider[] = [
   OmnichannelCapabilityService,
   OmnichannelConversationService,
   OmnichannelIdentityService,
+  OmnichannelWebChatService,
+  OmnichannelWebChatTransport,
   OmnichannelModuleHealthService,
 ];
 
@@ -49,3 +54,5 @@ export { OMNICHANNEL_CAPABILITIES, OMNICHANNEL_FEATURES, OMNICHANNEL_MODULE } fr
 export type { OmnichannelHealthView } from './omnichannel-module-health.service.js';
 export type { MenuInvalidator, OmnichannelSettings, OmnichannelSettingsView } from './omnichannel-settings.service.js';
 export { noopMenuInvalidator, OMNICHANNEL_MENU_INVALIDATOR, OmnichannelSettingsService } from './omnichannel-settings.service.js';
+export { OMNICHANNEL_WEB_CHAT_ACCOUNT_KEY, OMNICHANNEL_WEB_CHAT_PROVIDER_KEY } from './omnichannel-webchat.adapter.js';
+export type { WebChatMessageView, WebChatSessionView } from './omnichannel-webchat.service.js';

@@ -26,18 +26,6 @@ import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
  * prefix can never be swallowed by the generic `/api/v1/:entity` wildcard.
  */
 
-const SettingsPatchSchema = z
-  .object({
-    features: z
-      .object({
-        workspace: z.boolean(),
-      })
-      .partial()
-      .strict(),
-  })
-  .partial()
-  .strict();
-
 const SendMessageSchema = z
   .object({
     body: z.string().max(20_000).default(''),
@@ -283,12 +271,8 @@ export class OmnichannelController {
   @Post('action/settings')
   async updateSettings(@Body() body: unknown) {
     await this.permissions.assert('settingsManage');
-    const parsed = SettingsPatchSchema.safeParse(body ?? {});
-    if (!parsed.success) {
-      throw new ValidationError('Invalid Omnichannel settings patch.', {
-        issues: parsed.error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
-      });
-    }
-    return this.settings.update(parsed.data);
+    // The service deep-merges and validates with the strict schema (unknown keys are refused there),
+    // so a new settings section (like `webChat` in 19-OM.9) does not need a second hand-kept copy.
+    return this.settings.update(body ?? {});
   }
 }

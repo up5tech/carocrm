@@ -27,9 +27,22 @@ import { createHash } from "node:crypto";
 export const VOICE_CHANNELS = ["voice", "sms", "mms", "whatsapp"] as const;
 export type VoiceChannel = (typeof VOICE_CHANNELS)[number];
 
-/** Channels that carry a message body. `voice` is a call, never a message. */
-export const MESSAGE_CHANNELS = ["sms", "mms", "whatsapp"] as const;
+/** Channels that carry a message body. `voice` is a call, never a message.
+ *
+ * 19-OM.9 adds `web_chat` — the self-hosted website channel whose transport is the CRM itself
+ * (contract §7). It is a message channel in the canonical records, carried by the
+ * `omnichannel-web-chat` provider account the migration seeds.
+ */
+export const MESSAGE_CHANNELS = ["sms", "mms", "whatsapp", "web_chat"] as const;
 export type MessageChannel = (typeof MESSAGE_CHANNELS)[number];
+
+/**
+ * Channels an adapter can carry at all. The call channel plus every message channel — `web_chat`
+ * included (19-OM.9), so a self-hosted website adapter is expressible without treating it as a
+ * call channel.
+ */
+export const PROVIDER_CHANNELS = [...VOICE_CHANNELS, ...MESSAGE_CHANNELS] as const;
+export type ProviderChannel = (typeof PROVIDER_CHANNELS)[number];
 
 export function isVoiceChannel(value: string): value is VoiceChannel {
   return (VOICE_CHANNELS as readonly string[]).includes(value);
@@ -58,6 +71,8 @@ export const PROVIDER_CAPABILITIES = [
   "messaging.mms.receive",
   "messaging.whatsapp.send",
   "messaging.whatsapp.receive",
+  "messaging.web_chat.send",
+  "messaging.web_chat.receive",
   "messaging.deliveryStatus",
   "messaging.templates",
   "messaging.media",
@@ -75,7 +90,7 @@ export const CAPABILITY_STATUSES = ["not-implemented", "experimental", "supporte
 export type CapabilityStatus = (typeof CAPABILITY_STATUSES)[number];
 
 /** Capabilities a channel needs before the server will accept a send for it. */
-export function sendCapabilityFor(channel: VoiceChannel): ProviderCapability | null {
+export function sendCapabilityFor(channel: MessageChannel | VoiceChannel): ProviderCapability | null {
   switch (channel) {
     case "voice":
       return "voice.outboundCall";
@@ -85,6 +100,8 @@ export function sendCapabilityFor(channel: VoiceChannel): ProviderCapability | n
       return "messaging.mms.send";
     case "whatsapp":
       return "messaging.whatsapp.send";
+    case "web_chat":
+      return "messaging.web_chat.send";
   }
 }
 
