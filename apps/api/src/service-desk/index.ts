@@ -21,6 +21,7 @@ import { WebToCaseService } from "./web-to-case.service.js";
 export { CaseMergeService } from "./case-merge.service.js";
 export { CsatService } from "./csat.service.js";
 export { KnowledgeBaseService } from "./knowledge-base.service.js";
+export { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 export { SlaService } from "./sla.service.js";
 export { WebToCaseService } from "./web-to-case.service.js";
 
@@ -48,7 +49,7 @@ export const SERVICE_DESK_PROVIDERS: Provider[] = [
   CsatService,
 ];
 
-export { type CaseAssignInput, type CaseAssignmentResult, CaseAssignmentService, type CaseRouteResult, type QueueWorkload } from "./case-assignment.service.js";
+export { type CaseAssignInput, type CaseAssignmentDecision, type CaseAssignmentResult, CaseAssignmentService, type CaseRouteResult, type QueueWorkload } from "./case-assignment.service.js";
 export {
   type CaseConversationCapabilities,
   CaseConversationService,

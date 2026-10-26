@@ -228,6 +228,15 @@ export class SlaService implements OnApplicationBootstrap {
    * The calendar is evaluated in its own IANA time zone, so weekly intervals and holidays follow
    * local wall time and daylight-saving transitions instead of server UTC (PLAN §5.6).
    */
+  /**
+   * 19-OM.11 — is the calendar open at `at`? Routing uses the same wall-clock rules as the SLA clock
+   * (weekly intervals + holidays in the calendar's own timezone), so "after hours" means one thing.
+   */
+  isOpenAt(at: Date, calendar: BusinessCalendar | null): boolean {
+    if (calendar === null) return true;
+    return this.isBusinessMinute(at, calendar);
+  }
+
   private isBusinessMinute(d: Date, calendar: BusinessCalendar): boolean {
     const local = zonedParts(d, calendar.timezone);
     if (calendar.holidays.has(local.dateKey)) return false;

@@ -18,7 +18,8 @@
 | OM.8 — Outbound command & send state | ✅ COMPLETE | workspace send endpoint (facade pre-checks), timeout → `unknown` in Voice, `omnichannel-send.test.ts` |
 | OM.9 — Website chat channel | ✅ COMPLETE | migration 079 visitor sessions + web-chat connection, local adapter, public `/chat` API + widget page, `omnichannel-webchat.test.ts` |
 | OM.10 — Agent inbox workspace | ✅ COMPLETE | two-tab module page, server-side workspace filters, timeline/composer/identity panels, `omnichannel-inbox.test.ts` |
-| OM.11+ | ⏸ Not started | — |
+| OM.11 — Queues, assignment, routing (E8) | ✅ COMPLETE | ServiceDesk queue/rule extension (object type, operators, business hours), `decideFor` reuse, concurrency-guarded assign, route endpoint + UI, `omnichannel-routing.test.ts` |
+| OM.12+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -31,6 +32,25 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.11 (Queues, assignment, transfers, routing)
+
+- ServiceDesk delta (D2/E8): `CaseQueue.acceptsConversations` + `businessCalendarId`,
+  `RoutingRule.routedObjectType` (`case` default → Case routing unchanged), operators
+  `notIn|contains|startsWith`, conversation subject fields (`channel|language|category`),
+  `CaseAssignmentService.decideFor()` reusing rules/strategies/eligibility/fallback, and a
+  business-hours gate (`SlaService.isOpenAt`) that withholds automatic assignment outside the
+  calendar while keeping the object in its queue.
+- Voice delta: `assign` accepts `queueId`, routing metadata and `expectedVersion`; the update is a
+  guarded `where version = expected` (losing claim → 409) and bumps `version`; the append-only event
+  carries the routing decision. Workspace: `route` endpoint + Route button; assign/unassign send the
+  version the agent saw.
+- E9 (Case hand-off contract) explicitly re-scoped to OM.17 with its consumer; recorded in plan + contract.
+- Checks: `omnichannel-routing.test.ts` 5/5 (rule → queue/agent, case-only queue skipped, business
+  hours, 409 on concurrent claim, 403 without capability); voice/omnichannel regression green;
+  typecheck/lint/ui-conventions/build clean. ServiceDesk suites' 5 failures are pre-existing demo-data
+  / shared-settings / clock issues, not this phase (Case rule path unchanged).
+
 
 ### 2026-10-26 — Phase 19-OM.10 (Agent inbox workspace)
 

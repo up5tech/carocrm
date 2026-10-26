@@ -1519,6 +1519,42 @@ Acceptance:
 
 ### Phase 19-OM.11 — Queues, Assignment, Transfers, and Routing
 
+**Status: COMPLETE (E8; E9 re-scoped to OM.17 with the decision recorded below).** All conversation
+routing is the ServiceDesk engine (D2) — no second queue or evaluator:
+- **Queue model extended additively**: `CaseQueue.acceptsConversations` (default false — existing
+  queues stay Case-only until opted in) and `CaseQueue.businessCalendarId`; `RoutingRule.routedObjectType`
+  (`case` default / `conversation` / `any`). Existing Case rules/queues behave exactly as before.
+- **Operator widening**: `notIn`, `contains`, `startsWith` join `equals|notEquals|in`; conversation
+  subject fields (`channel`, `language`, `category`) join the allowlist (a Case has none of them, so
+  Case matching is unchanged).
+- **Engine reuse**: `CaseAssignmentService.decideFor({subject, objectType})` runs the same rule
+  order, queue strategies (manual/roundRobin/leastBusy), membership eligibility, fallbacks and
+  round-robin cursor; a conversation is never sent to a queue that has not opted in. **Business
+  hours**: outside the queue's calendar no agent is picked (nor the fallback owner) — the
+  conversation lands in the queue with `outside-working-hours` so the next working period or an agent
+  takes it.
+- **Commands/transfers**: `VoiceInboxService.assign` now accepts `queueId`, `routing` metadata and an
+  **`expectedVersion`** — concurrent claims with the same expectation resolve to one (the loser gets a
+  409 `CONCURRENCY_CONFLICT`); the assignment event (append-only `voice_conversation_events`) records
+  the reason plus the routing decision. Release/unassign goes through the same guarded update.
+  `POST /api/v1/Omnichannel/action/conversations/:id/route` composes decision → apply and returns the
+  decision (rule, queue, strategy, fallback reason); the workspace gained a **Route** action and sends
+  the version with assign/unassign.
+- **Recorded scope decision**: the plan's *Case hand-off contract* bullet (E9: `Case.externalId`,
+  `Case.conversations`, create-or-link + `source`) is moved to **OM.17**, where its consumer (Case
+  hand-off) is delivered; nothing in OM.11 depends on it. E8's acceptance is fully met with it.
+
+Verification: `omnichannel-routing.test.ts` 5/5 — conversation rule → queue + agent with the decision
+recorded; a Case-only queue is never chosen (deterministic `no-rule-matched` fallback); closed
+business hours leave the conversation in the queue with `outside-working-hours`; two same-version
+claims → one 200 + one 409; a caller without `assign` is refused. Regression: Voice + Omnichannel +
+navigation + i18n green (127+); api+web typecheck, eslint, ui-conventions, web build clean. The three
+ServiceDesk suites show **pre-existing environment failures** (demo-seeded routing rules preempt the
+tests' own rules, the shared `serviceDesk` settings row, and a time-dependent SLA clock) — not caused
+by this phase, whose Case rule path is unchanged.
+
+**Goal:** Organize ownership and route conversations safely.
+
 **Goal:** Organize ownership and route conversations safely.
 
 **Decision D2 applies: this work is delivered in `ServiceDesk`, extending `CaseQueue`,

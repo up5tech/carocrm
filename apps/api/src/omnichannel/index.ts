@@ -22,6 +22,7 @@ import { OmnichannelIdentityService } from './omnichannel-identity.service.js';
 import { OmnichannelModuleHealthService } from './omnichannel-module-health.service.js';
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
+import { OmnichannelRoutingService } from './omnichannel-routing.service.js';
 import { noopMenuInvalidator, OMNICHANNEL_MENU_INVALIDATOR, OmnichannelSettingsService } from './omnichannel-settings.service.js';
 import { OmnichannelWebChatTransport } from './omnichannel-webchat.adapter.js';
 import { OmnichannelWebChatService } from './omnichannel-webchat.service.js';
@@ -40,6 +41,7 @@ export const OMNICHANNEL_PROVIDERS: Provider[] = [
   OmnichannelCapabilityService,
   OmnichannelConversationService,
   OmnichannelIdentityService,
+  OmnichannelRoutingService,
   OmnichannelWebChatService,
   OmnichannelWebChatTransport,
   OmnichannelModuleHealthService,

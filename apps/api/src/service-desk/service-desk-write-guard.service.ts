@@ -12,6 +12,7 @@ import {
   hasRequesterReference,
   isCaseAssignmentStrategy,
   isCaseFallbackBehavior,
+  isRoutedObjectType,
 } from "./service-desk-domain.js";
 import {
   changedKeys,
@@ -159,6 +160,11 @@ export class ServiceDeskWriteGuardService implements OnApplicationBootstrap {
       }
       if (data["fallbackBehavior"] !== undefined && !isCaseFallbackBehavior(data["fallbackBehavior"])) {
         throw new ValidationError('Routing rule fallbackBehavior must be "unassigned" or "fallbackOwner".', {
+          entity: "RoutingRule",
+        });
+      }
+      if (data["routedObjectType"] !== undefined && !isRoutedObjectType(data["routedObjectType"])) {
+        throw new ValidationError('Routing rule routedObjectType must be "case", "conversation" or "any".', {
           entity: "RoutingRule",
         });
       }

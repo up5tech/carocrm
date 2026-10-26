@@ -29,6 +29,7 @@ import { runAsServiceDeskInternal } from "./service-desk-internal.js";
 import { ServiceDeskNotificationService } from "./service-desk-notification.service.js";
 import { ServiceDeskRecords, type ServiceDeskRow } from "./service-desk-records.js";
 import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
+import { SlaService } from "./sla.service.js";
 
 /**
  * Phase 19-SD.5 — assignment, queues, routing and workload
@@ -157,6 +158,7 @@ export class CaseAssignmentService {
     @Inject(EventBus) private readonly events: EventBus,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
+    @Inject(SlaService) private readonly sla: SlaService,
   ) {}
 
   /** Whether the current actor may (re)assign this case at all — a hint for the SPA, never the check. */
@@ -250,7 +252,7 @@ export class CaseAssignmentService {
     if (!settings.features.queues) throw new FeatureDisabledError("queues");
 
     const row = await this.requireCase(caseId);
-    const decision = await this.decideRoute(row, settings.assignment.defaultQueueId);
+    const decision = await this.decideRoute(row.data, settings.assignment.defaultQueueId, "case");
 
     const result = await this.apply(caseId, row, decision.target, {
       strategy: decision.strategy,
@@ -305,12 +307,42 @@ export class CaseAssignmentService {
   // routing
   // -------------------------------------------------------------------------
 
-  private async decideRoute(row: ServiceDeskRow, defaultQueueId: string | null): Promise<RouteDecision> {
+  /**
+   * 19-OM.11 — the same decision engine for a conversation (D2). ServiceDesk owns the queue model and
+   * the engine; the caller (Omnichannel) applies the returned decision through the record owner.
+   * Only rules whose `routedObjectType` serves this object are considered; a conversation is never
+   * sent to a queue that has not opted in (`acceptsConversations`).
+   */
+  async decideFor(input: {
+    readonly subject: Readonly<Record<string, unknown>>;
+    readonly objectType: "case" | "conversation";
+  }): Promise<CaseAssignmentDecision> {
+    const settings = await this.settings.settings();
+    if (input.objectType === "case" && !settings.features.caseManagement) throw new FeatureDisabledError("caseManagement");
+    if (!settings.features.queues) throw new FeatureDisabledError("queues");
+    const decision = await this.decideRoute(input.subject, settings.assignment.defaultQueueId, input.objectType);
+    return decision.summary;
+  }
+
+  private async decideRoute(
+    subject: Readonly<Record<string, unknown>>,
+    defaultQueueId: string | null,
+    objectType: "case" | "conversation",
+  ): Promise<RouteDecision> {
     const rules = await this.records.findOrdered("RoutingRule", { isActive: "true" }, "sortOrder");
     for (const rule of rules) {
+      const ruleType = text(rule.data["routedObjectType"]) ?? "case";
+      if (ruleType !== "any" && ruleType !== objectType) continue;
       const conditions = parseConditions(rule.data["conditions"]);
       if (conditions === undefined) continue; // An unparseable rule is skipped, never executed.
-      if (!routingConditionsMatch(conditions, row.data)) continue;
+      if (!routingConditionsMatch(conditions, subject as Record<string, unknown>)) continue;
+      if (objectType === "conversation") {
+        const ruleQueueId = text(rule.data["queueId"]) ?? defaultQueueId;
+        if (ruleQueueId !== null) {
+          const queue = await this.records.byId("CaseQueue", ruleQueueId);
+          if (queue !== undefined && queue.data["acceptsConversations"] !== true) continue; // case-only queue
+        }
+      }
       return this.decisionForRule(rule, defaultQueueId);
     }
     // No rule matched: fall back to the configured default queue, or retain the case unowned.
@@ -326,8 +358,8 @@ export class CaseAssignmentService {
     }
     const target: Target = {
       assignedUserId: null,
-      teamId: text(row.data["teamId"]) ?? null,
-      queueId: text(row.data["queueId"]) ?? null,
+      teamId: text(subject["teamId"]) ?? null,
+      queueId: text(subject["queueId"]) ?? null,
     };
     return {
       target,
@@ -382,16 +414,28 @@ export class CaseAssignmentService {
   ): Promise<RouteDecision> {
     const view = toQueue(queue);
     const eligibility = await this.eligibleAgents(view);
-    let assignedUserId = await this.pickByStrategy(view, eligibility, view.strategy);
+    // 19-OM.11 — working-hours gate: outside the queue's calendar no agent is picked automatically
+    // (neither by strategy nor by the fallback owner); the object still lands in the queue so the
+    // next working period — or an agent — can take it. Deterministic: closed hours always mean this
+    // reason, whatever the eligibility would have been.
+    const calendarId = text(queue.data["businessCalendarId"]) ?? null;
+    const calendar = calendarId === null ? null : await this.sla.loadCalendar(calendarId);
+    const open = calendar === null || this.sla.isOpenAt(new Date(), calendar);
+    let assignedUserId: string | null = null;
     let fallbackReason = meta.fallbackReason;
-    if (assignedUserId === null && view.strategy !== "manual") {
-      // Never drop the case: use the configured fallback owner, else retain it in the queue (§5.3).
-      if (view.fallbackBehavior === "fallbackOwner" && view.defaultAssignedUserId !== null) {
-        if ((await this.records.activeUserIds([view.defaultAssignedUserId])).has(view.defaultAssignedUserId)) {
-          assignedUserId = view.defaultAssignedUserId;
+    if (!open) {
+      fallbackReason = "outside-working-hours";
+    } else {
+      assignedUserId = await this.pickByStrategy(view, eligibility, view.strategy);
+      if (assignedUserId === null && view.strategy !== "manual") {
+        // Never drop the case: use the configured fallback owner, else retain it in the queue (§5.3).
+        if (view.fallbackBehavior === "fallbackOwner" && view.defaultAssignedUserId !== null) {
+          if ((await this.records.activeUserIds([view.defaultAssignedUserId])).has(view.defaultAssignedUserId)) {
+            assignedUserId = view.defaultAssignedUserId;
+          }
         }
+        fallbackReason = "queue-has-no-eligible-agent";
       }
-      fallbackReason = "queue-has-no-eligible-agent";
     }
     const target: Target = { assignedUserId, teamId: view.defaultTeamId, queueId: view.id };
     return {

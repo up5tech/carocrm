@@ -111,7 +111,13 @@ export class OmnichannelConversationService {
 
   async assign(
     conversationId: string,
-    input: { readonly userId?: string | null | undefined; readonly teamId?: string | null | undefined; readonly reason?: string | undefined },
+    input: {
+      readonly userId?: string | null | undefined;
+      readonly teamId?: string | null | undefined;
+      readonly reason?: string | undefined;
+      readonly queueId?: string | null | undefined;
+      readonly expectedVersion?: number | undefined;
+    },
   ): Promise<OmnichannelConversationView> {
     const updated = await this.inbox.assign(conversationId, input);
     return (await this.enrich([updated]))[0] ?? { ...updated, customerAddress: null, customerName: null, ...emptyWorkspaceFields(), threads: [] };

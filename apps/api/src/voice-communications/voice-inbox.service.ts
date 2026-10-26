@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
+import { ConcurrencyConflictError, NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
@@ -297,12 +297,48 @@ export class VoiceInboxService {
    */
   async assign(
     conversationId: string,
-    input: { readonly userId?: string | null | undefined; readonly teamId?: string | null | undefined; readonly reason?: string | undefined },
+    input: {
+      readonly userId?: string | null | undefined;
+      readonly teamId?: string | null | undefined;
+      readonly reason?: string | undefined;
+      /** 19-OM.11 — the queue the routing decision placed the conversation in (optional). */
+      readonly queueId?: string | null | undefined;
+      /**
+       * 19-OM.11 — optimistic concurrency: pass the version the caller saw. Two concurrent claims
+       * with the same expectation resolve to one authoritative assignment; the loser gets a 409.
+       */
+      readonly expectedVersion?: number | undefined;
+      /** 19-OM.11 — the routing decision, recorded in the append-only history for explainability. */
+      readonly routing?: {
+        readonly strategy?: string | undefined;
+        readonly routingRuleId?: string | null | undefined;
+        readonly routingRuleName?: string | null | undefined;
+        readonly fallbackReason?: string | null | undefined;
+      } | undefined;
+    },
   ): Promise<InboxConversationView> {
     await this.acl.assertAccess(CONVERSATION_PERMISSION_ENTITY, 'edit');
     const conversation = await this.requireConversation(conversationId);
     const userId = input.userId ?? null;
     const teamId = input.teamId ?? null;
+    const expected = input.expectedVersion ?? null;
+    const queueId = input.queueId ?? null;
+    if (queueId !== null) {
+      const queue = (await sql<{ id: string }>`
+        select id from entity_records where id = ${queueId} and entity_type = 'CaseQueue' and deleted_at is null
+      `.execute(this.database.db)).rows[0];
+      if (queue === undefined) throw new ValidationError(`Queue "${queueId}" does not exist.`);
+    }
+    const routingDetail =
+      input.routing === undefined
+        ? undefined
+        : JSON.stringify({
+            strategy: input.routing.strategy ?? null,
+            routingRuleId: input.routing.routingRuleId ?? null,
+            routingRuleName: input.routing.routingRuleName ?? null,
+            fallbackReason: input.routing.fallbackReason ?? null,
+          });
+    const detail = [input.reason?.trim(), routingDetail].filter((value): value is string => value !== undefined && value !== '').join(' | ') || undefined;
 
     if (userId !== null) {
       const user = (await sql<{ id: string }>`select id from users where id = ${userId}`.execute(this.database.db)).rows[0];
@@ -313,34 +349,46 @@ export class VoiceInboxService {
       if (team === undefined) throw new ValidationError(`Team "${teamId}" does not exist.`);
     }
     if (userId === null && teamId === null) {
-      // Unassignment: both cleared, recorded as its own history kind.
-      await sql`
+      // Unassignment (release): both cleared, recorded as its own history kind.
+      const released = await sql<{ id: string }>`
         update voice_conversations
-        set assigned_user_id = null, assigned_team_id = null, modified_at = now()
+        set assigned_user_id = null, assigned_team_id = null,
+            current_queue_id = coalesce(${queueId}, current_queue_id),
+            version = version + 1, modified_at = now()
         where id = ${conversation.id}
+          and (${expected}::int is null or version = ${expected})
+        returning id
       `.execute(this.database.db);
+      if (released.rows.length === 0) throw new ConcurrencyConflictError('CommunicationConversation', conversationId);
       await this.recordEvent({
         conversationId: conversation.id,
         kind: 'unassigned',
         actorType: 'user',
         fromValue: conversation.assigned_user_id ?? conversation.assigned_team_id,
         toValue: null,
+        ...(detail === undefined ? {} : { detail }),
       });
       return toInboxView(await this.requireConversation(conversationId));
     }
 
-    await sql`
+    const assigned = await sql<{ id: string }>`
       update voice_conversations
-      set assigned_user_id = ${userId}, assigned_team_id = ${teamId}, modified_at = now()
+      set assigned_user_id = ${userId}, assigned_team_id = ${teamId},
+          current_queue_id = coalesce(${queueId}, current_queue_id),
+          version = version + 1, modified_at = now()
       where id = ${conversation.id}
+        and (${expected}::int is null or version = ${expected})
+      returning id
     `.execute(this.database.db);
+    // Zero rows means the version moved between the caller's read and this write: one claim wins.
+    if (assigned.rows.length === 0) throw new ConcurrencyConflictError('CommunicationConversation', conversationId);
     await this.recordEvent({
       conversationId: conversation.id,
       kind: 'assigned',
       actorType: 'user',
       fromValue: conversation.assigned_user_id ?? conversation.assigned_team_id,
       toValue: userId ?? teamId,
-      ...(input.reason !== undefined && input.reason.trim() !== '' ? { detail: input.reason.trim() } : {}),
+      ...(detail === undefined ? {} : { detail }),
     });
     await this.dispatch('voiceCommunications.conversation.assigned', conversation.id, {
       userId,

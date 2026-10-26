@@ -9,6 +9,7 @@ import { OmnichannelIdentityService } from './omnichannel-identity.service.js';
 import { OmnichannelModuleHealthService } from './omnichannel-module-health.service.js';
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
+import { OmnichannelRoutingService } from './omnichannel-routing.service.js';
 import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
 
 /**
@@ -58,8 +59,10 @@ const AssignInputSchema = z
     userId: z.string().trim().min(1).max(120).nullable().optional(),
     teamId: z.string().trim().min(1).max(120).nullable().optional(),
     reason: z.string().trim().max(500).optional(),
+    expectedVersion: z.number().int().min(0).optional(),
   })
   .strict();
+const RouteInputSchema = z.object({ expectedVersion: z.number().int().min(0).optional() }).strict();
 
 function pageOf(limit: unknown, offset: unknown): { limit: number; offset: number } {
   const parsedLimit = Number(limit ?? 25);
@@ -81,6 +84,7 @@ export class OmnichannelController {
     @Inject(OmnichannelCapabilityService) private readonly channelCapabilities: OmnichannelCapabilityService,
     @Inject(OmnichannelConversationService) private readonly conversations: OmnichannelConversationService,
     @Inject(OmnichannelIdentityService) private readonly identities: OmnichannelIdentityService,
+    @Inject(OmnichannelRoutingService) private readonly routing: OmnichannelRoutingService,
   ) {}
 
   /**
@@ -163,6 +167,19 @@ export class OmnichannelController {
     const parsed = StatusInputSchema.safeParse(body ?? {});
     if (!parsed.success) throw new ValidationError('Invalid status input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
     return this.conversations.setStatus(id, parsed.data.status);
+  }
+
+  /**
+   * Run the deterministic routing decision for a conversation (ServiceDesk engine, D2) and apply it
+   * through the record owner. Returns the decision so the workspace can explain it.
+   */
+  @HttpCode(200)
+  @Post('action/conversations/:id/route')
+  async routeConversation(@Param('id') id: string, @Body() body: unknown) {
+    await this.permissions.assert('assign');
+    const parsed = RouteInputSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid routing input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
+    return this.routing.route(id, parsed.data);
   }
 
   /** Assign to a user or a team, with an optional reason recorded in the conversation history. */

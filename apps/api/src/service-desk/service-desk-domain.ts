@@ -303,14 +303,36 @@ export function isCaseFallbackBehavior(value: unknown): value is CaseFallbackBeh
 }
 
 /** Comparison operators a routing rule condition may declare — declarative, never executable (§5.3). */
-export const ROUTING_OPERATORS = ["equals", "notEquals", "in"] as const;
+/**
+ * 19-OM.11 — which routed object a queue or rule serves. `case` keeps every existing rule and queue
+ * exactly as they were; `conversation` opts into the Omnichannel workspace; `any` serves both.
+ */
+export const ROUTED_OBJECT_TYPES = ["case", "conversation", "any"] as const;
+export type RoutedObjectType = (typeof ROUTED_OBJECT_TYPES)[number];
+
+export function isRoutedObjectType(value: unknown): value is RoutedObjectType {
+  return typeof value === "string" && (ROUTED_OBJECT_TYPES as readonly string[]).includes(value);
+}
+
+export const ROUTING_OPERATORS = ["equals", "notEquals", "in", "notIn", "contains", "startsWith"] as const;
 export type RoutingOperator = (typeof ROUTING_OPERATORS)[number];
 
 /**
  * Case attributes a routing rule may match on. An allowlist, so no stored condition can name an
  * arbitrary column or expression (§5.3 "never evaluate arbitrary JavaScript or SQL").
  */
-export const ROUTING_FIELDS = ["source", "priority", "type", "severity", "status"] as const;
+export const ROUTING_FIELDS = [
+  "source",
+  "priority",
+  "type",
+  "severity",
+  "status",
+  // 19-OM.11 — conversation subject fields (D2: the same rule engine routes conversations). A Case
+  // has none of these, so its rules and behaviour are unchanged.
+  "channel",
+  "language",
+  "category",
+] as const;
 
 export interface RoutingCondition {
   readonly field: (typeof ROUTING_FIELDS)[number];
@@ -338,9 +360,9 @@ export function checkRoutingCondition(condition: unknown): RoutingConditionCheck
     return { ok: false, message: `Unsupported routing operator "${String(operator)}".` };
   }
   const value = record["value"];
-  if (operator === "in") {
+  if (operator === "in" || operator === "notIn") {
     if (!Array.isArray(value) || value.length === 0 || value.some((item) => typeof item !== "string")) {
-      return { ok: false, message: "An \"in\" condition needs a non-empty list of string values." };
+      return { ok: false, message: `An "${operator}" condition needs a non-empty list of string values.` };
     }
   } else if (typeof value !== "string") {
     return { ok: false, message: "A routing condition value must be a string." };
@@ -365,7 +387,10 @@ export function routingConditionsMatch(
     const actual = typeof data[condition.field] === "string" ? (data[condition.field] as string) : "";
     if (condition.operator === "equals") return actual === condition.value;
     if (condition.operator === "notEquals") return actual !== condition.value;
+    if (condition.operator === "contains") return actual.includes(String(condition.value));
+    if (condition.operator === "startsWith") return actual.startsWith(String(condition.value));
     const list = Array.isArray(condition.value) ? condition.value : [condition.value];
+    if (condition.operator === "notIn") return !list.includes(actual);
     return list.includes(actual);
   });
 }

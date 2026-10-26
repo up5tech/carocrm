@@ -1,6 +1,6 @@
-import { ReloadOutlined, SendOutlined, UserAddOutlined } from '@ant-design/icons';
+import { PartitionOutlined, ReloadOutlined, SendOutlined, UserAddOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Badge, Button, Card, Col, Collapse, Input, List, Row, Select, Space, Switch, Tag, Typography } from 'antd';
+import { Alert, Badge, Button, Card, Col, Collapse, Input, List, message, Row, Select, Space, Switch, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import { api } from '../../api/client.js';
@@ -145,9 +145,28 @@ export function InboxPanel() {
   });
 
   const assign = useMutation({
-    mutationFn: (input: { id: string; userId: string | null }) =>
-      api.omnichannelAssign(input.id, { userId: input.userId, reason: input.userId === null ? t('omnichannel.inbox.unassignReason') : t('omnichannel.inbox.assignReason') }),
+    mutationFn: (input: { id: string; userId: string | null; expectedVersion?: number }) =>
+      api.omnichannelAssign(input.id, {
+        userId: input.userId,
+        reason: input.userId === null ? t('omnichannel.inbox.unassignReason') : t('omnichannel.inbox.assignReason'),
+        ...(input.expectedVersion === undefined ? {} : { expectedVersion: input.expectedVersion }),
+      }),
     onSuccess: () => refresh(),
+    onError: (error: unknown) => setActionError(errorText(error)),
+  });
+
+  // Deterministic routing through the ServiceDesk engine (D2); the decision is shown on success.
+  const route = useMutation({
+    mutationFn: (input: { id: string; expectedVersion?: number }) => api.omnichannelRoute(input.id, { ...(input.expectedVersion === undefined ? {} : { expectedVersion: input.expectedVersion }) }),
+    onSuccess: (result) => {
+      setActionError(undefined);
+      void message.info(
+        result.decision.routingRuleName === null
+          ? t('omnichannel.inbox.routedFallback').replace('{reason}', result.decision.fallbackReason ?? '—')
+          : t('omnichannel.inbox.routedBy').replace('{rule}', result.decision.routingRuleName),
+      );
+      refresh();
+    },
     onError: (error: unknown) => setActionError(errorText(error)),
   });
 
@@ -271,8 +290,10 @@ export function InboxPanel() {
             }}
             sending={send.isPending}
             onStatus={(status) => selected !== undefined && setStatus.mutate({ id: selected.id, status })}
-            onAssign={() => selected !== undefined && principal !== null && principal !== undefined && assign.mutate({ id: selected.id, userId: principal.id })}
-            onUnassign={() => selected !== undefined && assign.mutate({ id: selected.id, userId: null })}
+            onAssign={() => selected !== undefined && principal !== null && principal !== undefined && assign.mutate({ id: selected.id, userId: principal.id, expectedVersion: selected.version })}
+            onUnassign={() => selected !== undefined && assign.mutate({ id: selected.id, userId: null, expectedVersion: selected.version })}
+            onRoute={() => selected !== undefined && route.mutate({ id: selected.id, expectedVersion: selected.version })}
+            routing={route.isPending}
             onLink={(participant: OmnichannelIdentityParticipant, entityType: 'Contact' | 'Lead', entityId: string) =>
               selected !== undefined && linkIdentity.mutate({ id: selected.id, participantId: participant.participantId, entityType, entityId })
             }
@@ -300,6 +321,8 @@ interface ConversationPaneProps {
   readonly onStatus: (status: string) => void;
   readonly onAssign: () => void;
   readonly onUnassign: () => void;
+  readonly onRoute: () => void;
+  readonly routing: boolean;
   readonly onLink: (participant: OmnichannelIdentityParticipant, entityType: 'Contact' | 'Lead', entityId: string) => void;
 }
 
@@ -338,6 +361,9 @@ function ConversationPane(props: ConversationPaneProps) {
           />
           <Button size="small" icon={<UserAddOutlined />} onClick={props.onAssign} disabled={!props.canAssign}>
             {t('omnichannel.inbox.assignToMe')}
+          </Button>
+          <Button size="small" icon={<PartitionOutlined />} onClick={props.onRoute} disabled={!props.canAssign} loading={props.routing}>
+            {t('omnichannel.inbox.route')}
           </Button>
           <Button size="small" onClick={props.onUnassign} disabled={!props.canAssign}>
             {t('omnichannel.inbox.unassign')}

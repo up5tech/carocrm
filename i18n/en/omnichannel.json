@@ -114,6 +114,9 @@
     "hiddenMatches": "Unreadable matches",
     "linkTo": "Link",
     "linkReason": "Linked from the Omnichannel inbox",
-    "actionFailed": "The action failed."
+    "actionFailed": "The action failed.",
+    "route": "Route",
+    "routedBy": "Routed by rule \"{rule}\".",
+    "routedFallback": "Routed with fallback: {reason}."
   }
 }

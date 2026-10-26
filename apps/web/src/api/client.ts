@@ -2172,8 +2172,13 @@ export const api = {
   ) => request<{ message: { id: string; state: string }; duplicate: boolean }>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/messages`, post(input)),
   omnichannelSetStatus: (conversationId: string, status: string) =>
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/status`, post({ status })),
-  omnichannelAssign: (conversationId: string, input: { userId: string | null; reason?: string }) =>
+  omnichannelAssign: (conversationId: string, input: { userId?: string | null; teamId?: string | null; reason?: string; expectedVersion?: number }) =>
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/assign`, post(input)),
+  omnichannelRoute: (conversationId: string, input: { expectedVersion?: number } = {}) =>
+    request<{ decision: { routingRuleId: string | null; routingRuleName: string | null; queueId: string | null; teamId: string | null; assignedUserId: string | null; strategy: string; fallbackReason: string | null }; conversation: OmnichannelConversationView }>(
+      `/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/route`,
+      post(input),
+    ),
   omnichannelMarkRead: (conversationId: string) =>
     request<{ unreadCount: number }>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/read`, post({})),
   omnichannelNav: () => request<OmnichannelNavView>('/Omnichannel/action/nav'),

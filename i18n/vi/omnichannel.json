@@ -114,6 +114,9 @@
     "hiddenMatches": "Kết quả không đọc được",
     "linkTo": "Liên kết",
     "linkReason": "Liên kết từ hộp thư Đa kênh",
-    "actionFailed": "Thao tác thất bại."
+    "actionFailed": "Thao tác thất bại.",
+    "route": "Định tuyến",
+    "routedBy": "Đã định tuyến theo quy tắc \"{rule}\".",
+    "routedFallback": "Đã định tuyến với dự phòng: {reason}."
   }
 }

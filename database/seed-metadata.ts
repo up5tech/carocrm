@@ -3688,6 +3688,13 @@ function serviceDeskQueueEntities(): MetadataSeedEntry[] {
           defaultTeamId: { type: 'link', entityKey: 'Team', inDetail: true, inEdit: true },
           defaultAssignedUserId: { type: 'link', entityKey: 'User', inDetail: true, inEdit: true },
           sortOrder: { type: 'int', defaultValue: 0, inList: true, inDetail: true, inEdit: true },
+          // 19-OM.11 — a queue can hold conversations as well as Cases (D2). The existing queues stay
+          // Case-only until an administrator opts in; the routing decision never sends a conversation
+          // to a queue that has not accepted them.
+          acceptsConversations: { type: 'bool', defaultValue: false, inList: true, inDetail: true, inEdit: true },
+          // 19-OM.11 — routing consults this calendar: outside its business hours no agent is picked
+          // automatically (the conversation stays in the queue for the next working period).
+          businessCalendarId: { type: 'link', entityKey: 'BusinessCalendar', inDetail: true, inEdit: true },
           // Server-owned round-robin cursor, advanced under a row lock (never client-writable).
           lastAssignedUserId: { type: 'link', entityKey: 'User', inDetail: true },
           lastAssignedAt: { type: 'datetime', inDetail: true },
@@ -3698,17 +3705,17 @@ function serviceDeskQueueEntities(): MetadataSeedEntry[] {
           { name: 'idx_entity_records_case_queue_active', fields: ['isActive', 'sortOrder'] },
         ],
         layouts: {
-          list: [{ entity: 'CaseQueue', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'code', 'strategy', 'fallbackBehavior', 'defaultTeamId', 'isActive', 'sortOrder'] }] }],
+          list: [{ entity: 'CaseQueue', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'code', 'strategy', 'fallbackBehavior', 'acceptsConversations', 'defaultTeamId', 'isActive', 'sortOrder'] }] }],
           detail: [
             { entity: 'CaseQueue', type: 'detail', panels: [
               { name: 'main', label: 'Queue', position: 0, fields: ['name', 'code', 'description', 'isActive', 'sortOrder'] },
-              { name: 'assignment', label: 'Assignment', position: 10, fields: ['strategy', 'fallbackBehavior', 'defaultTeamId', 'defaultAssignedUserId', 'lastAssignedUserId', 'lastAssignedAt'] },
+              { name: 'assignment', label: 'Assignment', position: 10, fields: ['strategy', 'fallbackBehavior', 'acceptsConversations', 'businessCalendarId', 'defaultTeamId', 'defaultAssignedUserId', 'lastAssignedUserId', 'lastAssignedAt'] },
             ] },
           ],
           edit: [
             { entity: 'CaseQueue', type: 'edit', panels: [
               { name: 'main', label: 'Queue', position: 0, fields: ['name', 'code', 'description', 'isActive', 'sortOrder'] },
-              { name: 'assignment', label: 'Assignment', position: 10, fields: ['strategy', 'fallbackBehavior', 'defaultTeamId', 'defaultAssignedUserId'] },
+              { name: 'assignment', label: 'Assignment', position: 10, fields: ['strategy', 'fallbackBehavior', 'acceptsConversations', 'businessCalendarId', 'defaultTeamId', 'defaultAssignedUserId'] },
             ] },
           ],
         },
@@ -3761,6 +3768,9 @@ function serviceDeskQueueEntities(): MetadataSeedEntry[] {
           sortOrder: { type: 'int', defaultValue: 0, inList: true, inDetail: true, inEdit: true },
           // A JSON array of { field, operator, value } — validated at save time; never executable.
           conditions: { type: 'text', required: true, inDetail: true, inEdit: true },
+          // 19-OM.11 — which routed object this rule serves (default `case`, so existing rules and
+          // Case routing are unchanged).
+          routedObjectType: { type: 'enum', values: ['case', 'conversation', 'any'], defaultValue: 'case', inList: true, inDetail: true, inEdit: true },
           queueId: { type: 'link', entityKey: 'CaseQueue', inList: true, inDetail: true, inEdit: true },
           teamId: { type: 'link', entityKey: 'Team', inDetail: true, inEdit: true },
           userId: { type: 'link', entityKey: 'User', inDetail: true, inEdit: true },
@@ -3772,9 +3782,9 @@ function serviceDeskQueueEntities(): MetadataSeedEntry[] {
           { name: 'idx_entity_records_routing_rule_active', fields: ['isActive', 'sortOrder'] },
         ],
         layouts: {
-          list: [{ entity: 'RoutingRule', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'isActive', 'sortOrder', 'queueId', 'teamId', 'userId', 'strategy'] }] }],
-          detail: [{ entity: 'RoutingRule', type: 'detail', panels: [{ name: 'main', label: 'Rule', position: 0, fields: ['name', 'description', 'isActive', 'sortOrder', 'conditions', 'queueId', 'teamId', 'userId', 'strategy', 'fallbackBehavior'] }] }],
-          edit: [{ entity: 'RoutingRule', type: 'edit', panels: [{ name: 'main', label: 'Rule', position: 0, fields: ['name', 'description', 'isActive', 'sortOrder', 'conditions', 'queueId', 'teamId', 'userId', 'strategy', 'fallbackBehavior'] }] }],
+          list: [{ entity: 'RoutingRule', type: 'list', panels: [{ name: 'list', position: 0, fields: ['name', 'isActive', 'routedObjectType', 'sortOrder', 'queueId', 'teamId', 'userId', 'strategy'] }] }],
+          detail: [{ entity: 'RoutingRule', type: 'detail', panels: [{ name: 'main', label: 'Rule', position: 0, fields: ['name', 'description', 'isActive', 'routedObjectType', 'sortOrder', 'conditions', 'queueId', 'teamId', 'userId', 'strategy', 'fallbackBehavior'] }] }],
+          edit: [{ entity: 'RoutingRule', type: 'edit', panels: [{ name: 'main', label: 'Rule', position: 0, fields: ['name', 'description', 'isActive', 'routedObjectType', 'sortOrder', 'conditions', 'queueId', 'teamId', 'userId', 'strategy', 'fallbackBehavior'] }] }],
         },
         record: { displayField: 'name', removable: true, followable: false, streamable: false },
         client: {},
