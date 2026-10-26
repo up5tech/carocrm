@@ -4329,6 +4329,7 @@ export interface OmnichannelNavView {
 export interface OmnichannelChannelCapabilityView {
   readonly channel: string;
   readonly transport: 'voice' | 'self';
+  readonly supported: boolean;
   readonly enabled: boolean;
   readonly configured: boolean;
   readonly inbound: boolean;

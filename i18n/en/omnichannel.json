@@ -46,7 +46,8 @@
     "tabDiagnostics": "Diagnostics",
     "pendingQueues": "Queues and routing extend Service Desk (19-OM.11).",
     "pendingRealtime": "Live updates replace polling with the shared realtime seam (19-OM.12).",
-    "pendingHandoff": "Service Desk hand-off creates or links a Case (19-OM.17)."
+    "pendingHandoff": "Service Desk hand-off creates or links a Case (19-OM.17).",
+    "channelUnsupported": "unsupported"
   },
   "chat": {
     "title": "Chat with us",
@@ -122,5 +123,27 @@
     "calls": "Recent calls",
     "openConversation": "Open conversation",
     "noConversation": "No conversation exists for this number yet."
+  },
+  "refusal": {
+    "channel_disabled": "This channel is switched off in the Voice & Communications settings.",
+    "account_missing": "No provider account is configured for this channel.",
+    "account_disabled": "The provider account for this channel is disabled.",
+    "account_unhealthy": "The provider account is failing its health check.",
+    "capability_missing": "The provider account does not grant this capability.",
+    "invalid_address": "The recipient address is not valid for this channel.",
+    "consent_required": "The customer has not given consent for this channel.",
+    "suppressed": "The customer has opted out of this channel.",
+    "quiet_hours": "Quiet hours are active; the message would be held.",
+    "template_required": "This channel needs an approved template for this message.",
+    "window_closed": "The customer-service window is closed; use an approved template.",
+    "quota_exceeded": "The channel quota is exhausted for now.",
+    "payload_invalid": "The message payload is not valid for this channel.",
+    "unsupported": "This channel does not support the request.",
+    "channel_unavailable": "This channel cannot send right now.",
+    "rate_limit": "The provider rate-limited the request; retry shortly.",
+    "auth": "The provider rejected the credential; an administrator must rotate it.",
+    "timeout": "The provider timed out; the outcome is unknown and must be reconciled.",
+    "provider_unavailable": "The provider is unavailable; retry later.",
+    "unknown": "The provider failed for an unknown reason."
   }
 }

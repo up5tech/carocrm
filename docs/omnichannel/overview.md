@@ -21,7 +21,8 @@
 | OM.11 — Queues, assignment, routing (E8) | ✅ COMPLETE | ServiceDesk queue/rule extension (object type, operators, business hours), `decideFor` reuse, concurrency-guarded assign, route endpoint + UI, `omnichannel-routing.test.ts` |
 | OM.12 — Canned replies & drafts | ✅ COMPLETE | snippet store extension (team/language/usage, plain-text), `OmnichannelSnippetService` + drafts (`omnichannel_drafts`), composer picker + autosave, `omnichannel-snippets.test.ts` |
 | OM.13 — VoiceCommunications integration | ✅ COMPLETE | call context endpoints + voice catalog row + recent-calls panel, `omnichannel-calls.test.ts` |
-| OM.14+ | ⏸ Not started | — |
+| OM.14 — WhatsApp/SMS integration | ✅ COMPLETE | `supported` flag + MMS unsupported row, localized refusal reasons, policy suite `omnichannel-whatsapp.test.ts`, CF-2 doc re-check |
+| OM.15+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -34,6 +35,18 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.14 (WhatsApp/SMS conversation integration)
+
+- Catalog `supported` flag + an MMS row (`supported:false`, explicit note); facade send refuses MMS
+  with `unsupported` (vs `channel_unavailable` for disabled real channels); diagnostics show the tag.
+- Refusal codes mapped to localized actionable sentences in the workspace (unknown codes fall back).
+- Twilio docs re-checked 2026-10-26 (24h window from last inbound; templates outside it) — matches the
+  owner's policy; recorded in `channel-feasibility.md` CF-2. WhatsApp calling documented upstream but
+  not implemented/claimed here.
+- Checks: `omnichannel-whatsapp.test.ts` 4/4 (window, template, consent, MMS); 57-test regression;
+  typecheck/lint/ui-conventions/build clean.
+
 
 ### 2026-10-26 — Phase 19-OM.13 (VoiceCommunications integration)
 

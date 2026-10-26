@@ -591,5 +591,12 @@ function errorText(error: unknown): string {
   const body = (error as { body?: { error?: { message?: string; details?: { refusals?: string[] } } } }).body;
   const message = body?.error?.message ?? (error instanceof Error ? error.message : t('omnichannel.inbox.actionFailed'));
   const refusals = body?.error?.details?.refusals;
-  return refusals === undefined || refusals.length === 0 ? message : `${message} (${refusals.join(', ')})`;
+  if (refusals === undefined || refusals.length === 0) return message;
+  // 19-OM.14 — an agent needs the *reason*, not the code: each refusal has an actionable sentence
+  // (window closed vs opted out vs unsupported lead to different next steps).
+  const reasons = refusals.map((code) => {
+    const translated = t(`omnichannel.refusal.${code}`);
+    return translated.startsWith('omnichannel.refusal.') ? code : translated;
+  });
+  return `${message} — ${reasons.join(' ')}`;
 }

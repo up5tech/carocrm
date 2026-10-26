@@ -1681,6 +1681,34 @@ Acceptance:
 
 ### Phase 19-OM.14 — WhatsApp Business and SMS/MMS Conversation Integration
 
+**Status: COMPLETE.** The transport itself was already integrated by OM.4–OM.8 (contracts, Twilio
+adapter, template registry, windows, opt-outs, status callbacks); this phase closes the remaining
+honesty and usability deltas and asserts the policy end-to-end:
+- **MMS is reported, never offered.** The channel catalog gained a `supported` flag and an `mms` row
+  with `supported:false` and an explicit note; the workspace send path refuses an MMS conversation
+  with the `unsupported` code (E3), distinct from a temporarily disabled channel
+  (`channel_unavailable`). Diagnostics render an "unsupported" tag.
+- **Operator-friendly blocked-send reasons.** Refusal codes from the owner's ordered policy
+  (`template_required`, `window_closed`, `suppressed`, `consent_required`, `quiet_hours`,
+  `capability_missing`, `rate_limit`, `auth`, `timeout`, `unsupported`, …) are mapped to actionable
+  localized sentences in the composer/banner instead of a raw code list; unknown codes fall back to
+  the code.
+- **Official documentation re-checked at implementation time (2026-10-26)**: Twilio's docs confirm the
+  24-hour customer-service window (from the most recent inbound message) and that free-form sends
+  outside it require an approved template — exactly the rule the owner enforces (window derived from
+  inbound communication events, `template_required` outside it). WhatsApp *calling* is documented by
+  Twilio but not implemented here and is not claimed. Recorded in `channel-feasibility.md` CF-2.
+- Everything continues through the owning adapters/contracts: no duplicated credentials, webhook
+  handlers or status source (barrel-only rule still enforced); tests use the simulator and its
+  sandbox recipients only.
+
+Verification: `omnichannel-whatsapp.test.ts` 4/4 — in-window reply accepted via the workspace;
+outside the window a free-form reply is refused with `template_required`; revoked consent blocks with
+`consent_required`; MMS is `supported:false` in the catalog and an MMS send answers `unsupported`.
+Regression 7 files / 57 tests green; api+web typecheck, eslint, ui-conventions, web build clean.
+
+**Goal:** Make existing VoiceCommunications messaging available in the shared inbox where the adapter supports it.
+
 **Goal:** Make existing VoiceCommunications messaging available in the shared inbox where the adapter supports it.
 
 **Channel reality to respect:** **WhatsApp ships through Twilio's WhatsApp API** — Meta Cloud API is

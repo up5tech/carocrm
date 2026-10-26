@@ -156,6 +156,14 @@ export class OmnichannelConversationService {
     if (input.isInternalNote !== true) {
       const catalog = await this.capabilities.catalog();
       const row = catalog.channels.find((entry) => entry.channel === channel);
+      // 19-OM.14 — a channel no adapter implements (MMS) is `unsupported`, not "temporarily
+      // unavailable": the two lead the agent to different actions and only one is ever retryable.
+      if (row !== undefined && row.supported === false) {
+        throw new ValidationError('This channel is not supported by any adapter.', {
+          refusals: ['unsupported'],
+          channel,
+        });
+      }
       if (row === undefined || !row.enabled || !row.configured || !row.outbound) {
         throw new ValidationError('This channel cannot send right now.', {
           refusals: ['channel_unavailable'],

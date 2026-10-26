@@ -46,7 +46,8 @@
     "tabDiagnostics": "Chẩn đoán",
     "pendingQueues": "Hàng đợi và định tuyến mở rộng từ Bàn phục vụ (19-OM.11).",
     "pendingRealtime": "Cập nhật trực tiếp thay thế polling bằng realtime dùng chung (19-OM.12).",
-    "pendingHandoff": "Bàn giao Bàn phục vụ tạo hoặc liên kết Case (19-OM.17)."
+    "pendingHandoff": "Bàn giao Bàn phục vụ tạo hoặc liên kết Case (19-OM.17).",
+    "channelUnsupported": "không hỗ trợ"
   },
   "chat": {
     "title": "Trò chuyện với chúng tôi",
@@ -122,5 +123,27 @@
     "calls": "Cuộc gọi gần đây",
     "openConversation": "Mở hội thoại",
     "noConversation": "Chưa có hội thoại cho số này."
+  },
+  "refusal": {
+    "channel_disabled": "Kênh này đang tắt trong cài đặt Thoại & Liên lạc.",
+    "account_missing": "Chưa cấu hình tài khoản nhà cung cấp cho kênh này.",
+    "account_disabled": "Tài khoản nhà cung cấp của kênh đang bị tắt.",
+    "account_unhealthy": "Tài khoản nhà cung cấp đang lỗi kiểm tra sức khỏe.",
+    "capability_missing": "Tài khoản nhà cung cấp không cấp quyền năng lực này.",
+    "invalid_address": "Địa chỉ người nhận không hợp lệ cho kênh này.",
+    "consent_required": "Khách hàng chưa đồng ý cho kênh này.",
+    "suppressed": "Khách hàng đã từ chối nhận trên kênh này.",
+    "quiet_hours": "Đang trong giờ yên tĩnh; tin nhắn sẽ bị giữ lại.",
+    "template_required": "Kênh này cần mẫu tin đã được duyệt cho nội dung này.",
+    "window_closed": "Cửa sổ chăm sóc khách hàng đã đóng; cần dùng mẫu tin đã duyệt.",
+    "quota_exceeded": "Hạn mức kênh đã hết trong lúc này.",
+    "payload_invalid": "Nội dung tin nhắn không hợp lệ cho kênh này.",
+    "unsupported": "Kênh này không hỗ trợ yêu cầu.",
+    "channel_unavailable": "Kênh này hiện không gửi được.",
+    "rate_limit": "Nhà cung cấp giới hạn tần suất; hãy thử lại sau ít phút.",
+    "auth": "Nhà cung cấp từ chối thông tin xác thực; quản trị viên cần đổi mới.",
+    "timeout": "Nhà cung cấp hết thời gian chờ; kết quả chưa xác định và cần đối soát.",
+    "provider_unavailable": "Nhà cung cấp đang không khả dụng; thử lại sau.",
+    "unknown": "Nhà cung cấp lỗi không rõ nguyên nhân."
   }
 }

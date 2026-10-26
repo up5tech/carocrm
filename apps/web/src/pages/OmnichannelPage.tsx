@@ -202,6 +202,7 @@ function DiagnosticsPanel() {
                     <div key={channel.channel}>
                       <Space size={4} wrap>
                         <Typography.Text strong>{channel.channel}</Typography.Text>
+                        {channel.supported === false ? <Tag color="default">{t('omnichannel.page.channelUnsupported')}</Tag> : null}
                         <Tag color={channel.outbound ? 'success' : 'default'}>{t('omnichannel.page.channelOutbound')}</Tag>
                         <Tag color={channel.inbound ? 'success' : 'default'}>{t('omnichannel.page.channelInbound')}</Tag>
                         <Tag color={channel.templates ? 'success' : 'default'}>{t('omnichannel.page.channelTemplates')}</Tag>

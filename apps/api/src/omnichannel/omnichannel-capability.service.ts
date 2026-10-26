@@ -27,12 +27,18 @@ import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
 
 export const OMNICHANNEL_CAPABILITY_CATALOG_VERSION = 1;
 
-export type OmnichannelChannelKey = 'sms' | 'whatsapp' | 'web_chat' | 'voice';
+export type OmnichannelChannelKey = 'sms' | 'whatsapp' | 'mms' | 'web_chat' | 'voice';
 
 export interface OmnichannelChannelCapabilityView {
   readonly channel: OmnichannelChannelKey;
   /** Which module carries the transport: VoiceCommunications (D1) or the module's own widget (OM.9). */
   readonly transport: 'voice' | 'self';
+  /**
+   * 19-OM.14 — whether an adapter actually implements this channel. MMS is vocabulary, not a
+   * capability: no adapter declares it (CF-5), so it is reported unsupported and every MMS request
+   * answers `unsupported` — never a silent success and never a hidden failure.
+   */
+  readonly supported: boolean;
   /** The owning module's feature flag for this channel. */
   readonly enabled: boolean;
   /** Whether a usable transport actually exists right now (bound account, or shipped widget). */
@@ -74,6 +80,7 @@ export class OmnichannelCapabilityService {
     const channels: OmnichannelChannelCapabilityView[] = [
       this.voiceChannel('sms', usable, voiceSettings.features.sms, 'messaging.sms.send', 'messaging.sms.receive'),
       this.voiceChannel('whatsapp', usable, voiceSettings.features.whatsapp, 'messaging.whatsapp.send', 'messaging.whatsapp.receive'),
+      this.unsupportedChannel('mms', 'MMS is named in the vocabulary but no adapter declares send/receive (CF-5); requests answer `unsupported`.'),
       this.webChatChannel(workspace, omnichannelSettings.webChat),
       // 19-OM.13 — calls are context, not conversations: reported so a disabled/broken voice
       // connector is visible honestly, without affecting any messaging row.
@@ -103,6 +110,7 @@ export class OmnichannelCapabilityService {
     return {
       channel,
       transport: 'voice',
+      supported: true,
       enabled: featureEnabled,
       configured: bound.length > 0,
       inbound: granted.has(receiveKey),
@@ -130,6 +138,7 @@ export class OmnichannelCapabilityService {
     return {
       channel: 'voice',
       transport: 'voice',
+      supported: true,
       enabled: featureEnabled,
       configured: bound.length > 0,
       inbound: granted.has('voice.inboundEvents'),
@@ -140,6 +149,25 @@ export class OmnichannelCapabilityService {
       media: granted.has('voice.recordingDownload'),
       accounts: bound.map((account) => ({ key: account.key, label: account.label })),
       notes,
+    };
+  }
+
+  /** A channel this build names but no adapter implements: reported, never offered. */
+  private unsupportedChannel(channel: OmnichannelChannelKey, note: string): OmnichannelChannelCapabilityView {
+    return {
+      channel,
+      transport: 'voice',
+      supported: false,
+      enabled: false,
+      configured: false,
+      inbound: false,
+      outbound: false,
+      deliveryStatuses: false,
+      readReceipts: false,
+      templates: false,
+      media: false,
+      accounts: [],
+      notes: [note],
     };
   }
 
@@ -158,6 +186,7 @@ export class OmnichannelCapabilityService {
     return {
       channel: 'web_chat',
       transport: 'self',
+      supported: true,
       enabled,
       configured,
       inbound: enabled,

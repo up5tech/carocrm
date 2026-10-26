@@ -41,7 +41,7 @@
 
 | Field | Value |
 | --- | --- |
-| Checked | 2026-10-26 (as CF-1) |
+| Checked | 2026-10-26 (as CF-1) — **re-verified 2026-10-26 at 19-OM.14** against Twilio's official docs: the 24-hour customer-service window starts at the most recent inbound message and free-form sends outside it require an approved template (docs/whatsapp/key-concepts, /docs/whatsapp/api, /docs/whatsapp/quickstart). The implementation derives the window from inbound communication events and refuses `template_required` — matching the documented rule. WhatsApp *calling* is documented by Twilio but is not implemented by our adapter; it is not claimed anywhere. |
 | Official docs | https://www.twilio.com/docs/whatsapp · Meta policy surface: plan §16 WhatsApp Business Platform links |
 | Account type | Twilio WhatsApp sender (sandbox or approved sender backed by a WhatsApp Business account). **Note: this is Twilio's WhatsApp API — the Meta Cloud API direct connector is a different channel (CF-7)** (matrix §B, audit §7.2) |
 | Review/approval prerequisites | Sender approval, HSM/template approval per category, opt-in requirements, message category rules. Operator-side; template state already owned by `voice_whatsapp_templates` (audit §6 — read-only for us) |
@@ -61,7 +61,7 @@
 
 | Field | Value |
 | --- | --- |
-| Checked | 2026-10-26 (as CF-1) |
+| Checked | 2026-10-26 (as CF-1) — **re-verified 2026-10-26 at 19-OM.14** against Twilio's official docs: the 24-hour customer-service window starts at the most recent inbound message and free-form sends outside it require an approved template (docs/whatsapp/key-concepts, /docs/whatsapp/api, /docs/whatsapp/quickstart). The implementation derives the window from inbound communication events and refuses `template_required` — matching the documented rule. WhatsApp *calling* is documented by Twilio but is not implemented by our adapter; it is not claimed anywhere. |
 | Official docs | https://www.twilio.com/docs/voice · Asterisk ARI docs (adapter: `voice-provider-asterisk.ts`, 428 lines, live) |
 | Account type | Twilio voice-capable number / Asterisk server credentials (operator infra) |
 | Inbound / outbound | ✅ events + `initiateCall`/`controlCall` already implemented |
