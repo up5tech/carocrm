@@ -32,6 +32,8 @@ export interface AdminPanelTab {
    * its own help affordance — and the content lint fails a release where the key stops resolving.
    */
   readonly docKey?: string;
+  /** Words an administrator would type to find this tab (§20.25). Validated as a plain string array. */
+  readonly keywords?: readonly string[];
   /** Module settings tabs read their own endpoint instead of the document registry (§8.3). */
   readonly moduleEndpoint?: string;
   /**
@@ -50,7 +52,7 @@ export interface AdminPanelGroup {
 
 const TAB_CATALOG: readonly (AdminPanelTab & { group: string })[] = [
   { group: 'system', key: 'general', labelKey: 'web.adminPanel.tabs.general', descriptionKey: 'web.adminPanel.descriptions.general', icon: 'GlobalOutlined', order: 110, level: 'admin', kind: 'tab', route: '/admin/settings/general', document: 'brand', docKey: 'admin/branding-and-localization' },
-  { group: 'system', key: 'localization', labelKey: 'web.adminPanel.tabs.localization', descriptionKey: 'web.adminPanel.descriptions.localization', icon: 'ScheduleOutlined', order: 120, level: 'admin', kind: 'tab', route: '/admin/settings/localization', document: 'i18n', docKey: 'admin/branding-and-localization' },
+  { group: 'system', key: 'localization', labelKey: 'web.adminPanel.tabs.localization', descriptionKey: 'web.adminPanel.descriptions.localization', icon: 'ScheduleOutlined', order: 120, level: 'admin', kind: 'tab', route: '/admin/settings/localization', document: 'i18n', docKey: 'admin/branding-and-localization', keywords: ['timezone', 'locale', 'language', 'date format', 'number format', 'currency'] },
   { group: 'system', key: 'menu', labelKey: 'web.adminPanel.tabs.menu', descriptionKey: 'web.adminPanel.descriptions.menu', icon: 'AppstoreOutlined', order: 130, level: 'admin', kind: 'tab', route: '/admin/settings/menu', document: 'navigation', docKey: 'admin/main-menu' },
   { group: 'system', key: 'layout', labelKey: 'web.adminPanel.tabs.layout', descriptionKey: 'web.adminPanel.descriptions.layout', icon: 'ToolOutlined', order: 135, level: 'admin', kind: 'tab', route: '/admin/settings/layout', usesSaveBar: true, docKey: 'admin/entities-and-fields' },
   { group: 'system', key: 'entity-manager', labelKey: 'web.entityManager.title', descriptionKey: 'web.adminPanel.descriptions.entityManager', icon: 'KeyOutlined', order: 140, level: 'admin', kind: 'page', route: '/admin/entity-manager', docKey: 'admin/entities-and-fields' },
@@ -63,7 +65,7 @@ const TAB_CATALOG: readonly (AdminPanelTab & { group: string })[] = [
   { group: 'system', key: 'docs', labelKey: 'web.adminPanel.tabs.docs', descriptionKey: 'web.adminPanel.descriptions.docs', icon: 'BookOutlined', order: 175, level: 'admin', kind: 'tab', route: '/admin/settings/docs', document: 'docs', docKey: 'admin/settings-overview' },
   { group: 'security', key: 'authentication', labelKey: 'web.adminPanel.tabs.authentication', descriptionKey: 'web.adminPanel.descriptions.authentication', icon: 'KeyOutlined', order: 310, level: 'sysAdmin', kind: 'tab', route: '/admin/settings/authentication', document: 'security', docKey: 'admin/authentication-and-security' },
   { group: 'security', key: 'permissions', labelKey: 'web.adminPanel.tabs.permissions', descriptionKey: 'web.adminPanel.descriptions.permissions', icon: 'ProfileOutlined', order: 320, level: 'admin', kind: 'tab', route: '/admin/settings/permissions', docKey: 'admin/users-teams-roles' },
-  { group: 'messaging', key: 'email', labelKey: 'web.adminPanel.tabs.email', descriptionKey: 'web.adminPanel.descriptions.email', icon: 'MailOutlined', order: 410, level: 'admin', kind: 'tab', route: '/admin/settings/email', docKey: 'admin/email-and-notifications' },
+  { group: 'messaging', key: 'email', labelKey: 'web.adminPanel.tabs.email', descriptionKey: 'web.adminPanel.descriptions.email', icon: 'MailOutlined', order: 410, level: 'admin', kind: 'tab', route: '/admin/settings/email', docKey: 'admin/email-and-notifications', keywords: ['smtp', 'mail', 'email', 'server'] },
   { group: 'messaging', key: 'notifications', labelKey: 'web.adminPanel.tabs.notifications', descriptionKey: 'web.adminPanel.descriptions.notifications', icon: 'NotificationOutlined', order: 420, level: 'admin', kind: 'tab', route: '/admin/settings/notifications', document: 'notifications', docKey: 'admin/email-and-notifications' },
   { group: 'users', key: 'portals', labelKey: 'web.adminPortals.title', descriptionKey: 'web.adminPanel.descriptions.portals', icon: 'ProjectOutlined', order: 210, level: 'admin', kind: 'page', route: '/admin/portals' },
   { group: 'users', key: 'users', labelKey: 'web.adminPanel.tabs.users', descriptionKey: 'web.adminPanel.descriptions.users', icon: 'UserOutlined', order: 220, level: 'admin', kind: 'tab', route: '/admin/settings/users', docKey: 'admin/users-teams-roles' },

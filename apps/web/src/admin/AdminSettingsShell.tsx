@@ -1,5 +1,5 @@
-import { App as AntApp, Button, Skeleton, Typography } from 'antd';
-import { Suspense, useEffect, useMemo } from 'react';
+import { App as AntApp, Button, Input, Skeleton, Typography } from 'antd';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import type { AdminPanelTab } from '../api/types.js';
@@ -27,9 +27,41 @@ export function AdminSettingsShell() {
   const navigate = useNavigate();
   const { modal } = AntApp.useApp();
   const shell = useSettingsShellState();
+  const [railQuery, setRailQuery] = useState('');
 
   const tabs = useMemo(() => panel.data?.groups.flatMap((group) => [...group.tabs]) ?? [], [panel.data]);
+  const filteredRailTabs = useMemo(() => {
+    const all = panel.data?.groups.flatMap((group) => [...group.tabs]) ?? [];
+    const q = railQuery.trim().toLowerCase();
+    if (q === '') return null;
+    return all.filter((tab) => {
+      const label = t(tab.labelKey).toLowerCase();
+      const description = tab.descriptionKey !== undefined ? t(tab.descriptionKey).toLowerCase() : '';
+      const keywords = (tab.keywords ?? []).join(' ').toLowerCase();
+      return label.includes(q) || description.includes(q) || keywords.includes(q);
+    });
+  }, [panel.data, railQuery]);
   const active = tabs.find((tab) => tab.key === tabKey);
+
+  // §20.25 (3): ?highlight=<field> lands on the matching control and briefly marks it.
+  useEffect(() => {
+    if (active === undefined) return;
+    const params = new URLSearchParams(window.location.search);
+    const field = params.get('highlight');
+    if (field === null || field === '') return;
+    const timer = window.setTimeout(() => {
+      const target =
+        document.getElementById(field) ??
+        document.querySelector<HTMLElement>(`[name="${field}"]`) ??
+        document.querySelector<HTMLElement>(`[aria-label="${field}"]`);
+      if (target === null) return;
+      target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      target.focus?.({ preventScroll: true });
+      target.classList.add('carocrm-highlight');
+      window.setTimeout(() => target.classList.remove('carocrm-highlight'), 2000);
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [active, tabKey]);
   // The tab descriptor's handbook key is what the shell header links to while that tab is open.
   usePageDocs(active?.docKey);
   // The bar belongs to a form over one draft: a settings document, a hosted module document, or a tab
@@ -109,8 +141,44 @@ export function AdminSettingsShell() {
     <SettingsShellProvider value={shell}>
       <div className="carocrm-admin">
         <nav className="carocrm-admin-rail" aria-label={t('web.adminShell.railLabel')}>
+        <div style={{ padding: '0 8px 8px' }}>
+          <Input
+            size="small"
+            allowClear
+            placeholder={t('web.adminShell.searchPlaceholder')}
+            aria-label={t('web.adminShell.searchPlaceholder')}
+            value={railQuery}
+            onChange={(event) => setRailQuery(event.target.value)}
+          />
+        </div>
         {panel.data === undefined ? (
           <Skeleton active title={false} paragraph={{ rows: 8 }} />
+        ) : filteredRailTabs !== null ? (
+          filteredRailTabs.length === 0 ? (
+            <EmptyState title={t('web.adminShell.noSettingMatches')} />
+          ) : (
+            <ul className="carocrm-admin-tabs" role="list">
+              {filteredRailTabs.map((tab) => {
+                const selected = tab.key === active?.key;
+                return (
+                  <li key={tab.key}>
+                    <button
+                      type="button"
+                      className={`carocrm-admin-tab${selected ? ' is-selected' : ''}`}
+                      aria-current={selected ? 'page' : undefined}
+                      onClick={() => open(tab)}
+                    >
+                      <span className="carocrm-admin-tab-icon" aria-hidden="true">
+                        {navIcon(tab.icon)}
+                      </span>
+                      <span className="carocrm-admin-tab-label">{t(tab.labelKey)}</span>
+                      {selected && shell.meta.dirty ? <span className="carocrm-admin-tab-dot" title={t('web.adminShell.dirty')} aria-hidden="true" /> : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )
         ) : (
           panel.data.groups.map((group) => (
             <div className="carocrm-admin-group" key={group.key}>

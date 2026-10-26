@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import type { EntityDefinition, NavigationNode } from '../api/types.js';
-import { useNavigation } from '../state/admin.js';
+import { useAdminPanel, useNavigation } from '../state/admin.js';
 import { useDocPaletteItems } from '../state/docs.js';
 import { currentNavRoute, useFavorites } from '../state/favorites.js';
 import { t } from '../state/i18n.js';
@@ -63,6 +63,7 @@ export function CommandPalette() {
   const metadata = useMetadata();
   const session = useSession();
   const navigation = useNavigation();
+  const adminPanel = useAdminPanel();
   const favorites = useFavorites();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<PaletteMode>('commands');
@@ -159,6 +160,20 @@ export function CommandPalette() {
     return entries.filter((r) => r.label.toLowerCase().includes(q) || r.route.toLowerCase().includes(q)).slice(0, RESULT_CAP);
   }, [recentRoutes, labels, query]);
 
+  const settingsItems = useMemo(() => {
+    const all = adminPanel.data?.groups.flatMap((group) => [...group.tabs]) ?? [];
+    const q = query.trim().toLowerCase();
+    const matched = q === ''
+      ? all
+      : all.filter((tab) => {
+          const label = t(tab.labelKey).toLowerCase();
+          const description = tab.descriptionKey !== undefined ? t(tab.descriptionKey).toLowerCase() : '';
+          const keywords = (tab.keywords ?? []).join(' ').toLowerCase();
+          return label.includes(q) || description.includes(q) || keywords.includes(q);
+        });
+    return matched.slice(0, RESULT_CAP).map((tab) => ({ key: `setting:${tab.key}`, label: t(tab.labelKey), route: tab.route }));
+  }, [adminPanel.data, query]);
+
   return (
     <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false} aria-label={t('web.commandPalette.ariaLabel')}>
       <CommandInput placeholder={t('web.commandPalette.placeholder')} value={query} onValueChange={setQuery} aria-label={t('web.commandPalette.inputAria')} />
@@ -208,6 +223,14 @@ export function CommandPalette() {
                 <CommandItem key={item.key} onSelect={() => select(item.path)}>
                   {item.title}
                   <span className="carocrm-palette-detail">{item.detail}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandSeparator />
+            <CommandGroup heading={t('web.commandPalette.settings')}>
+              {settingsItems.map((item) => (
+                <CommandItem key={item.key} onSelect={() => select(item.route)}>
+                  {item.label}
                 </CommandItem>
               ))}
             </CommandGroup>

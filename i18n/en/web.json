@@ -1673,7 +1673,9 @@
     "loading": "Loading…",
     "moduleDocumentHint": "Owned and validated by its module.",
     "policyValue": "value",
-    "restored": "The registered defaults are back in place."
+    "restored": "The registered defaults are back in place.",
+    "searchPlaceholder": "Search settings…",
+    "noSettingMatches": "No setting matches"
   },
   "adminMenu": {
     "title": "Menu entries",
@@ -2451,7 +2453,8 @@
     "inputAria": "Search commands, records or recent pages",
     "pin": "Pin this page to favorites",
     "unpin": "Remove this page from favorites",
-    "seeAll": "See all results"
+    "seeAll": "See all results",
+    "settings": "Settings"
   },
   "nav": {
     "favorites": "Favorites"

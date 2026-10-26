@@ -8054,3 +8054,5 @@ body.carocrm-reordering * {
     gap: 2px;
   }
 }
+
+.carocrm-highlight { box-shadow: 0 0 0 2px var(--carocrm-accent); transition: box-shadow 200ms; }

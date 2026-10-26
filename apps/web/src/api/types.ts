@@ -1466,6 +1466,7 @@ export interface AdminPanelTab {
   readonly usesSaveBar?: boolean | undefined;
   /** The handbook page that documents this screen (§21.7); the shell renders a book link for it. */
   readonly docKey?: string | undefined;
+  readonly keywords?: readonly string[] | undefined;
 }
 
 export interface AdminPanelGroup {

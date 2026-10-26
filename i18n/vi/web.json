@@ -1673,7 +1673,9 @@
     "loading": "Đang tải…",
     "moduleDocumentHint": "Do module sở hữu và kiểm tra tính hợp lệ.",
     "policyValue": "giá trị",
-    "restored": "Đã khôi phục giá trị mặc định."
+    "restored": "Đã khôi phục giá trị mặc định.",
+    "searchPlaceholder": "Tìm cài đặt…",
+    "noSettingMatches": "Không có cài đặt khớp"
   },
   "adminMenu": {
     "title": "Các mục menu",
@@ -2451,7 +2453,8 @@
     "inputAria": "Tìm lệnh, bản ghi hoặc trang gần đây",
     "pin": "Ghim trang này vào mục yêu thích",
     "unpin": "Bỏ ghim trang này khỏi mục yêu thích",
-    "seeAll": "Xem tất cả kết quả"
+    "seeAll": "Xem tất cả kết quả",
+    "settings": "Cài đặt"
   },
   "nav": {
     "favorites": "Yêu thích"

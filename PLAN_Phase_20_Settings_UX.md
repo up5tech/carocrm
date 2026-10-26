@@ -1990,7 +1990,7 @@ Acceptance: every internal route exposes exactly one `h1` and a valid outline; t
 content and the page announced; filtering a list does not move focus; no page re-implements the
 `carocrm-page-head` markup.
 
-### Phase 20.25 — Find a setting  ⬜ proposed
+### Phase 20.25 — Find a setting  ✅ implemented 2026-10-26
 
 Source: `docs/ux/ui-review.md` F9.
 
