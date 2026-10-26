@@ -41,7 +41,7 @@ channel's owner — consent never carries across channels or across an address c
 | --- | --- | --- |
 | Media / recordings (`voice_media`) | VoiceCommunications | `retention_at` + the module's sweep; provider-hosted links are fetched into private storage and never rendered as public URLs |
 | Conversation metadata, message bodies (`voice_*`) | VoiceCommunications | follow the conversation lifecycle; **no message-body sweep exists yet** — open owner task (R6) |
-| Webhook payloads (`voice_webhook_events.payload_redacted`) | VoiceCommunications | retained for diagnostics/replay; owner-level purge is an open task |
+| Webhook payloads (`voice_webhook_events.payload_redacted`, `payload_internal`) | VoiceCommunications | `payload_redacted` is the diagnostic copy (bodies/addresses/URLs masked); `payload_internal` is the processing copy and is never returned by an API. Both live on the receipt row, so the owner-level receipt purge removes them together. Owner-level purge is still an open task |
 | Per-agent drafts (`omnichannel_drafts`) | **Omnichannel** | `retention.staleDraftDays` (default 7) + `POST action/retention/purge` |
 | Visitor sessions (`omnichannel_visitor_sessions`) | **Omnichannel** | session expiry (`webChat.sessionHours`) + `retention.expiredSessionDays` (default 30) purge |
 | Audit rows | platform | preserved; exports/deletions are audited with **counts, never content** |

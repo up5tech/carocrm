@@ -51,7 +51,6 @@ export interface MediaView {
   readonly kind: string;
   readonly messageId: string | null;
   readonly callSessionId: string | null;
-  readonly providerRef: string | null;
   readonly mimeType: string | null;
   readonly sizeBytes: number | null;
   readonly durationSeconds: number | null;
@@ -205,6 +204,13 @@ export class VoiceMediaService {
   }
 
   async listForCall(callSessionId: string): Promise<{ readonly list: readonly MediaView[] }> {
+    // The list is a read of the parent call's artefacts, so it applies the same access rule as
+    // playback. Provider URLs are not part of the view: bytes come through authorized playback.
+    const session = (await sql<{ assigned_user_id: string | null }>`
+      select assigned_user_id from voice_call_sessions where id = ${callSessionId}
+    `.execute(this.database.db)).rows[0];
+    if (session === undefined) throw new NotFoundError('No media access.');
+    await this.assertCallAccess(session.assigned_user_id);
     const rows = await sql<VoiceMediaRow>`
       select * from voice_media where call_session_id = ${callSessionId} order by created_at asc
     `.execute(this.database.db);
@@ -253,18 +259,22 @@ export class VoiceMediaService {
       `.execute(this.database.db)
     ).rows[0];
     if (session === undefined) throw new NotFoundError('No media access.');
+    await this.assertCallAccess(session.assigned_user_id);
+  }
+
+  private async assertCallAccess(assignedUserId: string | null): Promise<void> {
     const userId = this.scope.userId;
-    if (userId !== undefined && session.assigned_user_id === userId) return;
+    if (userId !== undefined && assignedUserId === userId) return;
     const principal = this.scope.principal;
     if (principal !== undefined && Array.isArray(principal.roles) && principal.roles.includes('sysAdmin')) return;
-    if (userId !== undefined && session.assigned_user_id !== null) {
+    if (userId !== undefined && assignedUserId !== null) {
       const shared = (
         await sql<{ team_id: string }>`
           select a.team_id from users_teams a
           where a.user_id = ${userId}
             and exists (
               select 1 from users_teams b
-              where b.team_id = a.team_id and b.user_id = ${session.assigned_user_id}
+              where b.team_id = a.team_id and b.user_id = ${assignedUserId}
             )
           limit 1
         `.execute(this.database.db)
@@ -287,7 +297,6 @@ function toView(row: VoiceMediaRow): MediaView {
     kind: row.kind,
     messageId: row.message_id,
     callSessionId: row.call_session_id,
-    providerRef: row.provider_ref,
     mimeType: row.mime_type,
     sizeBytes: row.size_bytes,
     durationSeconds: row.duration_seconds,

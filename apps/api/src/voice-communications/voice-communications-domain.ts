@@ -574,10 +574,22 @@ export function payloadDigest(body: unknown): string {
 }
 
 /** Redact credential-like keys before a payload is persisted for troubleshooting (§13.2). */
+const REDACTED_VALUE = "[redacted]";
+
+/**
+ * Diagnostic copy of a provider payload: credential-like keys are dropped entirely, and the fields
+ * that carry customer content, addresses or media URLs are masked. Processing reads
+ * `payload_internal`, so the diagnostic copy can be safe to inspect without breaking normalization
+ * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.22`).
+ */
 export function redactPayload(body: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(body)) {
     if (/secret|token|password|signature|authorization|api[_-]?key/i.test(key)) continue;
+    if (isPersonalField(key)) {
+      out[key] = REDACTED_VALUE;
+      continue;
+    }
     if (typeof value === "object" && value !== null && !Array.isArray(value)) {
       out[key] = redactPayload(value as Record<string, unknown>);
       continue;
@@ -585,6 +597,13 @@ export function redactPayload(body: Record<string, unknown>): Record<string, unk
     out[key] = value;
   }
   return out;
+}
+
+/** Customer content and handles never belong in a diagnostic payload an operator can open. */
+function isPersonalField(key: string): boolean {
+  return /^(body|text|message|content|subject|from|to|email|emailaddress|phone|phonenumber|msisdn|address|recordingurl|mediaurl)$/i.test(
+    key,
+  ) || /(url|uri)$/i.test(key);
 }
 
 /** Stable JSON (sorted keys) so a digest and a fake-adapter signature do not depend on key order. */

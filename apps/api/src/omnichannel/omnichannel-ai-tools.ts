@@ -1,7 +1,10 @@
+import { ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 import { z } from 'zod';
 
 import { type AIToolContext, type AIToolDefinition,AIToolRegistry } from '../ai-agents/index.js';
+import { DatabaseService } from '../database/database.service.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
 
 /**
@@ -34,6 +37,7 @@ export class OmnichannelAiTools {
   constructor(
     @Inject(AIToolRegistry) private readonly registry: AIToolRegistry,
     @Inject(OmnichannelConversationService) private readonly conversations: OmnichannelConversationService,
+    @Inject(DatabaseService) private readonly database: DatabaseService,
   ) {
     const definition: AIToolDefinition = {
       key: OMNICHANNEL_SEND_TOOL,
@@ -66,8 +70,11 @@ export class OmnichannelAiTools {
           detail: { body: parsed.body.slice(0, 500) },
         };
       },
-      execute: async (args, _context: AIToolContext) => {
+      execute: async (args, context: AIToolContext) => {
         const parsed = SendArgumentsSchema.parse(args);
+        // The model may only send into the conversation its run was started from, under the same
+        // human's scope. A hallucinated or injected conversation id is refused before any policy work.
+        await this.assertRunScope(context, parsed.conversationId);
         const result = await this.conversations.send(parsed.conversationId, {
           body: parsed.body,
           idempotencyKey: parsed.idempotencyKey,
@@ -83,5 +90,24 @@ export class OmnichannelAiTools {
       },
     };
     this.registry.register(definition);
+  }
+
+  private async assertRunScope(context: AIToolContext, conversationId: string): Promise<void> {
+    const row = (await sql<{ input: unknown; initiated_by_user_id: string | null }>`
+      select input, initiated_by_user_id from ai_agent_runs where id = ${context.runId}
+    `.execute(this.database.db)).rows[0];
+    const input = typeof row?.input === 'object' && row.input !== null ? (row.input as Record<string, unknown>) : {};
+    const record = typeof input['record'] === 'object' && input['record'] !== null ? (input['record'] as Record<string, unknown>) : {};
+    const boundConversation = typeof record['id'] === 'string' ? record['id'] : null;
+    if (
+      row === undefined ||
+      row.initiated_by_user_id !== context.actorUserId ||
+      record['entity'] !== 'CommunicationConversation' ||
+      boundConversation !== conversationId
+    ) {
+      throw new ValidationError('This AI run may only send in the conversation it was started from.', {
+        refusals: ['run_scope_mismatch'],
+      });
+    }
   }
 }

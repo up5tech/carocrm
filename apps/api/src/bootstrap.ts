@@ -105,11 +105,15 @@ function asPlugin(mod: unknown): FastifyPluginLike {
  * Kept out of `config.ts` because the schema only validates that the value is a string; the meaning
  * of `"2"` versus `"10.0.0.0/8"` is Fastify's, not the config's.
  */
-function trustProxySetting(raw: string): boolean | number | string[] {
+function trustProxySetting(raw: string): boolean | string[] {
   const value = raw.trim();
   if (value === '' || value.toLowerCase() === 'false') return false;
   if (value.toLowerCase() === 'true') return true;
-  if (/^\d+$/.test(value)) return Number(value);
+  if (/^\d+$/.test(value)) {
+    // Fastify 5.12 disables hop-count trust: it cannot validate the immediate peer, so a directly
+    // reachable API would let a client spoof X-Forwarded-*. Name the proxy addresses instead.
+    throw new Error('TRUST_PROXY must be false, true, or an IP/CIDR list; a hop count is not accepted.');
+  }
   return value.split(',').map((entry) => entry.trim()).filter((entry) => entry !== '');
 }
 

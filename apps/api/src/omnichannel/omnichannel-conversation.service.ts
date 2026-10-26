@@ -91,7 +91,8 @@ export class OmnichannelConversationService {
   }
 
   async timeline(conversationId: string, query: { readonly limit: number; readonly offset: number }) {
-    return this.inbox.timeline(conversationId, query);
+    // The workspace is an agent surface: internal notes are shown here by explicit opt-in.
+    return this.inbox.timeline(conversationId, { ...query, includeInternalNotes: true });
   }
 
   /** Threads of one conversation, under the conversation's own read ACL (same as the timeline). */

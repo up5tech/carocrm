@@ -104,9 +104,6 @@ export class VoiceWebhookIngressService {
     const settings = await this.settings.settings();
     const eventType = stringOf(input.body["type"]) ?? "unknown";
     const providerEventId = stringOf(input.body["eventId"]);
-    const externalId = stringOf(input.body["callId"]) ?? stringOf(input.body["messageId"]);
-    const occurredAt = stringOf(input.body["occurredAt"]);
-    const dedupKey = webhookDedupKey({ providerEventId, eventType, externalId, occurredAt });
 
     // Replay window (§13.2). A provider that does not send a timestamp is refused by its adapter, not
     // here; a timestamp that is present but stale is refused before any signature work.
@@ -118,7 +115,10 @@ export class VoiceWebhookIngressService {
           accountKey: account.key,
           providerKey: account.providerKey,
           providerEventId,
-          dedupKey,
+          // A rejected callback must never occupy the dedup key a later genuine callback needs:
+          // otherwise a forged `eventId` would turn the real event into a "duplicate" that is never
+          // applied (`19-OM.22` receipt-poisoning fix).
+          dedupKey: rejectedDedupKey(input.body),
           eventType,
           signatureValid: false,
           status: "rejected",
@@ -148,7 +148,7 @@ export class VoiceWebhookIngressService {
         accountKey: account.key,
         providerKey: account.providerKey,
         providerEventId,
-        dedupKey,
+        dedupKey: rejectedDedupKey(input.body),
         eventType,
         signatureValid: false,
         status: "rejected",
@@ -180,6 +180,7 @@ export class VoiceWebhookIngressService {
       failureCode: null,
       failureDetail: null,
       body: validated.payload,
+      internalPayload: validated.payload,
     });
     if (eventId === null) {
       // The unique constraint answered: this callback was already recorded. No second job, no second
@@ -287,23 +288,34 @@ export class VoiceWebhookIngressService {
     readonly failureCode: string | null;
     readonly failureDetail: string | null;
     readonly body: Record<string, unknown>;
+    /** The authenticated payload the worker normalizes; never stored for a rejected callback. */
+    readonly internalPayload?: Record<string, unknown> | undefined;
   }): Promise<string | null> {
     const id = randomUUID();
     const inserted = (await sql<{ id: string }>`
       insert into voice_webhook_events
         (id, account_key, provider_key, vendor_event_id, dedup_key, event_type,
          signature_valid, processing_status, failure_code, failure_detail, payload_digest,
-         payload_redacted, received_at)
+         payload_redacted, payload_internal, received_at)
       values
         (${id}, ${input.accountKey}, ${input.providerKey}, ${input.providerEventId},
          ${input.dedupKey}, ${input.eventType}, ${input.signatureValid}, ${input.status},
          ${input.failureCode}, ${input.failureDetail}, ${payloadDigest(input.body)},
-         ${JSON.stringify(redactPayload(input.body))}::jsonb, now())
+         ${JSON.stringify(redactPayload(input.body))}::jsonb,
+         ${input.internalPayload === undefined ? null : JSON.stringify(input.internalPayload)}::jsonb, now())
       on conflict (account_key, dedup_key) do nothing
       returning id
     `.execute(this.database.db)).rows[0];
     return inserted?.id ?? null;
   }
+}
+
+/**
+ * A rejected callback's key is derived from its own body and namespaced: it can deduplicate retries
+ * of the same forged request, but it can never collide with a genuine event's key.
+ */
+function rejectedDedupKey(body: Record<string, unknown>): string {
+  return `rejected:${payloadDigest(body)}`;
 }
 
 export interface ReceiptSummary {

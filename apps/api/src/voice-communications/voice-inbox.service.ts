@@ -186,7 +186,16 @@ export class VoiceInboxService {
    */
   async timeline(
     conversationId: string,
-    query: { readonly limit: number; readonly offset: number },
+    query: {
+      readonly limit: number;
+      readonly offset: number;
+      /**
+       * Defaults to `false`: a generic consumer gets the customer-visible projection. The agent
+       * inbox and the Omnichannel workspace opt in explicitly, because an internal note is an
+       * agent-only artefact (`19-OM.22`).
+       */
+      readonly includeInternalNotes?: boolean | undefined;
+    },
   ): Promise<{ readonly entries: readonly TimelineEntryView[] }> {
     await this.acl.assertAccess(CONVERSATION_PERMISSION_ENTITY, 'read');
     const conversation = await this.requireConversation(conversationId);
@@ -204,6 +213,7 @@ export class VoiceInboxService {
       select id, direction, body, state, is_internal_note, author_user_id, channel, occurred_at, created_at
       from voice_messages
       where conversation_id = ${conversation.id}
+        and (${query.includeInternalNotes === true}::boolean or is_internal_note = false)
       order by coalesce(occurred_at, created_at) asc
       limit ${query.limit} offset ${query.offset}
     `.execute(this.database.db);

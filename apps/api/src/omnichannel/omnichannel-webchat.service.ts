@@ -102,7 +102,7 @@ export class OmnichannelWebChatService {
     visitorKey: string | undefined,
     meta: WebChatRequestMeta,
   ): Promise<{ readonly key: string; readonly view: WebChatSessionView }> {
-    const config = await this.requireChannel(meta);
+    const config = await this.requireChannel(meta, { requireOrigin: true });
     const existing = visitorKey === undefined ? undefined : await this.findSession(visitorKey);
     if (existing !== undefined) {
       await this.touch(existing.id);
@@ -121,6 +121,7 @@ export class OmnichannelWebChatService {
       // a new one, so the widget's explicit "start" path is the only way to begin a conversation.
       throw new AuthenticationFailedError('The chat session is unknown or has expired. Start a new chat.');
     }
+    await this.assertSessionBudget(meta, config.maxSessionsPerHour);
     const key = randomBytes(32).toString('base64url');
     const id = randomUUID();
     const now = new Date();
@@ -155,7 +156,7 @@ export class OmnichannelWebChatService {
     },
     meta: WebChatRequestMeta,
   ): Promise<{ readonly messageId: string | null; readonly duplicate: boolean }> {
-    const config = await this.requireChannel(meta);
+    const config = await this.requireChannel(meta, { requireOrigin: true });
     const session = await this.requireSession(visitorKey);
     if ((input.website ?? '') !== '') return { messageId: null, duplicate: false };
 
@@ -186,7 +187,9 @@ export class OmnichannelWebChatService {
       accountKey: OMNICHANNEL_WEB_CHAT_ACCOUNT_KEY,
       event: {
         kind: 'message',
-        providerMessageId: clientMessageId,
+        // The provider id is unique per account, so it is namespaced by session: two visitors may
+        // legitimately pick the same client id, and one must never consume the other's idempotency.
+        providerMessageId: `${session.id}:${clientMessageId}`,
         state: 'delivered',
         direction: 'inbound',
         channel: 'web_chat',
@@ -252,33 +255,40 @@ export class OmnichannelWebChatService {
         body: row.body ?? '',
         createdAt: new Date(row.created_at).toISOString(),
         ...(row.direction === 'outbound' ? { state: row.state } : {}),
-        ...(row.direction === 'inbound' ? { clientMessageId: row.provider_message_id } : {}),
+        ...(row.direction === 'inbound' ? { clientMessageId: clientIdOf(session.id, row.provider_message_id) } : {}),
       })),
     };
   }
 
   /** Messages after a cursor for the cookie's session. */
   async list(visitorKey: string | undefined, after: string | undefined, meta: WebChatRequestMeta): Promise<{ readonly messages: readonly WebChatMessageView[] }> {
-    await this.requireChannel(meta);
+    await this.requireChannel(meta, { requireOrigin: false });
     const session = await this.requireSession(visitorKey);
     await this.touch(session.id);
     return this.visibleMessages(session, after);
   }
 
-  private async requireChannel(meta: WebChatRequestMeta): Promise<OmnichannelSettings['webChat']> {
+  private async requireChannel(
+    meta: WebChatRequestMeta,
+    options: { readonly requireOrigin: boolean },
+  ): Promise<OmnichannelSettings['webChat']> {
     const settings = await this.settings.settings();
     const config = settings.webChat;
     if (!config.enabled || !settings.features.workspace) {
       throw new AuthorizationDeniedError('The website chat is not open.');
     }
     const origin = (meta.origin ?? '').trim();
-    if (origin !== '' && !config.allowedOrigins.includes(origin)) {
-      // Fail closed: the operator must name every origin allowed to embed the widget.
-      throw new AuthorizationDeniedError('This website is not allowed to use the chat.');
-    }
-    if (origin === '' && config.allowedOrigins.length > 0) {
-      // Non-browser callers (tests, uptime checks) are allowed when the channel is open.
+    if (options.requireOrigin) {
+      // A mutation must name an allowlisted origin. A browser always sends Origin on a POST, so an
+      // absent header is a scripted caller; an empty allowlist refuses every mutation (fail closed).
+      if (origin === '' || !config.allowedOrigins.includes(origin)) {
+        throw new AuthorizationDeniedError('This website is not allowed to use the chat.');
+      }
       return config;
+    }
+    if (origin !== '' && !config.allowedOrigins.includes(origin)) {
+      // Reads stay origin-optional (a same-origin GET carries none), but a named origin must match.
+      throw new AuthorizationDeniedError('This website is not allowed to use the chat.');
     }
     return config;
   }
@@ -311,18 +321,40 @@ export class OmnichannelWebChatService {
   }
 
   private async enforceRate(session: SessionRow, maxPerMinute: number): Promise<void> {
-    const now = new Date();
-    const windowStart = session.window_started_at === null ? null : new Date(session.window_started_at);
-    const freshWindow = windowStart === null || now.getTime() - windowStart.getTime() >= 60_000;
-    const used = freshWindow ? 0 : session.window_messages;
-    if (used >= maxPerMinute) {
+    // One conditional UPDATE: the window check and the increment are the same statement, so
+    // concurrent sends cannot both read "under the limit" and overshoot it.
+    const updated = (await sql<{ window_messages: number }>`
+      update omnichannel_visitor_sessions
+      set window_started_at = case
+            when window_started_at is null or now() - window_started_at >= interval '1 minute' then now()
+            else window_started_at
+          end,
+          window_messages = case
+            when window_started_at is null or now() - window_started_at >= interval '1 minute' then 1
+            else window_messages + 1
+          end,
+          modified_at = now()
+      where id = ${session.id}
+        and (window_started_at is null
+             or now() - window_started_at >= interval '1 minute'
+             or window_messages < ${maxPerMinute})
+      returning window_messages
+    `.execute(this.database.db)).rows[0];
+    if (updated === undefined) {
       throw new RateLimitError('Too many chat messages in a minute. Please wait a moment.');
     }
-    await sql`
-      update omnichannel_visitor_sessions
-      set window_started_at = ${freshWindow ? now : windowStart}, window_messages = ${used + 1}, modified_at = now()
-      where id = ${session.id}
-    `.execute(this.database.db);
+  }
+
+  /** A per-address cap on *new* sessions, so discarding the cookie does not reset the budget. */
+  private async assertSessionBudget(meta: WebChatRequestMeta, maxPerHour: number): Promise<void> {
+    if (meta.ip === undefined || meta.ip.trim() === '') return;
+    const row = (await sql<{ n: number }>`
+      select count(*)::int as n from omnichannel_visitor_sessions
+      where ip_hash = ${this.hashIp(meta.ip)} and first_seen_at >= now() - interval '1 hour'
+    `.execute(this.database.db)).rows[0];
+    if (Number(row?.n ?? 0) >= maxPerHour) {
+      throw new RateLimitError('Too many chat sessions from this network. Please try again later.');
+    }
   }
 
   private consentView(config: OmnichannelSettings['webChat'], session: SessionRow): WebChatSessionView['consent'] {
@@ -348,4 +380,11 @@ function hashKey(key: string): string {
 /** The visitor's channel address: stable per session, never the raw key. */
 export function visitorAddress(visitorKeyHash: string): string {
   return `visitor:${visitorKeyHash.slice(0, 32)}`;
+}
+
+/** Undo the session namespace, so the widget still reconciles its optimistic bubble by client id. */
+function clientIdOf(sessionId: string, providerMessageId: string | null): string | null {
+  if (providerMessageId === null) return null;
+  const prefix = `${sessionId}:`;
+  return providerMessageId.startsWith(prefix) ? providerMessageId.slice(prefix.length) : providerMessageId;
 }

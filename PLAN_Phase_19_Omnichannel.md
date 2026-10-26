@@ -2092,6 +2092,30 @@ Acceptance:
 
 ### Phase 19-OM.22 — Security, Privacy, and Resilience Hardening
 
+**Status: COMPLETE.** Threat model, fixes and residual risks live in
+`docs/omnichannel/security-hardening.md`; executable proof in `omnichannel-security.test.ts` (8).
+- **Web chat**: mutations fail closed without an allowlisted `Origin` (empty allowlist refuses all),
+  session body validated, the per-minute window is one atomic UPDATE, a per-address session budget
+  replaces "discard the cookie", and client message ids are namespaced per session.
+- **Webhooks**: rejected callbacks get a `rejected:<digest>` dedup key so a forgery cannot poison
+  the genuine event; diagnostic payloads mask bodies/addresses/URLs while a new `payload_internal`
+  column (migration 082, additive) keeps processing exact. The worker falls back to the redacted
+  column for older rows.
+- **Notes/export**: the owner timeline is customer-safe by default (`includeInternalNotes` opt-in for
+  agent surfaces); export filters notes in SQL and reports only `hasInternalNotes`.
+- **Attachments/media**: outbound attachments must be readable and `visibility = 'public'`; the media
+  list applies the call's access rule and no longer serializes provider URLs.
+- **AI**: runs are bound to their originating conversation (record stamp) and verified on read and in
+  the send tool; transcript delimiters/role prefixes are neutralized; integration runs now start
+  through the AIAgents trigger path.
+- **Dependencies**: `pnpm` overrides patch nested `fastify` to 5.12.5 and `fast-uri` to 3.1.9/4.1.4;
+  production advisories fall 44 → 28 (high 14 → 6). Remaining highs (nodemailer 6, zod 3) and the
+  missing repository LICENSE are documented with owners.
+
+Verification: security suite 8/8; OM+Voice+AI regression 29 files / 274 tests; AI run suite 25/25
+with temporary concurrency headroom (two pre-existing queued demo runs); typecheck/lint/UI/build
+clean; no destructive SQL and no second database.
+
 **Goal:** Resolve high-risk paths before broader rollout.
 
 Tasks:

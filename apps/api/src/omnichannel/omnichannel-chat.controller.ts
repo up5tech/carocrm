@@ -68,7 +68,8 @@ export class OmnichannelChatController {
     @Req() request: { readonly ip?: string | undefined; readonly headers?: Record<string, unknown>; readonly cookies?: Record<string, string | undefined> },
     @Res({ passthrough: true }) reply: CookieCapableReply,
   ) {
-    SessionBody.safeParse(body ?? {});
+    const parsed = SessionBody.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid chat session input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
     const started = await this.chat.startOrResume(visitorKeyOf(request), metaOf(origin, request));
     reply.setCookie(WEBCHAT_COOKIE_NAME, started.key, {
       httpOnly: true,

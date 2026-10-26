@@ -384,7 +384,8 @@ describe("recordings and secure media (19-VC.15)", () => {
     const list = media.body["list"] as Record<string, unknown>[];
     expect(list.length).toBe(1);
     expect(list[0]?.["kind"]).toBe("recording");
-    expect(list[0]?.["providerRef"]).toBe("https://example.com/recordings/one.wav");
+    // Provider URLs stay server-side; bytes are served only through authorized playback (19-OM.22).
+    expect(list[0]?.["providerRef"]).toBeUndefined();
     mediaId = String(list[0]?.["id"]);
 
     // SSRF: a metadata URL is refused before any reference is stored.
@@ -433,6 +434,13 @@ describe("recordings and secure media (19-VC.15)", () => {
       headers: authHeader(outsider.token),
     });
     expect(res.statusCode).toBe(404);
+    // The media list applies the same parent-call access rule as playback (19-OM.22).
+    const list = await ctx.app.inject({
+      method: "GET",
+      url: `/api/v1/VoiceCommunications/action/calls/${callSessionId}/media`,
+      headers: authHeader(outsider.token),
+    });
+    expect(list.statusCode).toBe(404);
     await ctx.database.db.deleteFrom("users").where("id", "=", outsider.id).execute();
   });
 });

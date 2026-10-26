@@ -29,7 +29,8 @@
 | OM.19 — AI-assisted workflow | ✅ COMPLETE | typed AI tasks over AIAgents, `omnichannel.send_message` material-write tool (E16), drafts-only composer button, `omnichannel-ai.test.ts` |
 | OM.20 — Conversation analytics | ✅ COMPLETE | `analytics.md` definitions, dedicated analytics endpoint, Reports tab, `omnichannel-analytics.test.ts` |
 | OM.21 — Administration, diagnostics, recovery | ✅ COMPLETE | `OmnichannelOperationsService` + `action/operations*` (overview, probe, inspect, replay, kill switch), `runbook.md`, Operations tab, ingress records callbacks while disabled, `omnichannel-operations.test.ts` |
-| OM.22+ | ⏸ Not started | — |
+| OM.22 — Security, privacy, resilience | ✅ COMPLETE | `security-hardening.md` threat model, web-chat fail-closed origin/budgets, receipt poisoning fix + payload split (migration 082), customer-safe timeline, attachment/media ACL, AI run binding, dependency overrides, `omnichannel-security.test.ts` |
+| OM.23 | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -42,6 +43,28 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.22 (Security, privacy and resilience hardening)
+
+- `docs/omnichannel/security-hardening.md`: 14-threat model, fix table, ACL position (including the
+  dedicated-table G7 limitation), redaction/retention matrix, resilience scenarios, dependency and
+  license report, residual risks.
+- Web chat: mutations require an allowlisted Origin (fail closed), `maxSessionsPerHour` per address,
+  one-statement atomic rate window, session-namespaced client ids, validated session body.
+- Webhooks: rejected receipts use `rejected:<digest>` (no dedup poisoning); diagnostic payload masks
+  PII/URLs and a new `payload_internal` column carries processing data (migration 082); worker
+  fallback keeps older receipts working.
+- Notes: owner timeline defaults to customer-visible; agent workspace/inbox opt in. Export filters in
+  SQL and reports only `hasInternalNotes`.
+- Attachments/media: send requires readable + public visibility; media list uses the call access
+  rule and no longer returns provider URLs.
+- AI: run↔conversation binding on read and in `omnichannel.send_message`; transcript delimiter
+  neutralization; integration trigger path fixed in AIAgents.
+- Dependencies: pnpm overrides for fastify/fast-uri; production advisories 44 → 28 (high 14 → 6),
+  remaining highs documented with owners.
+- Checks: `omnichannel-security.test.ts` 8/8; OM+Voice+AI 29 files / 274 tests; AI run suite 25/25
+  with temporary concurrency headroom (two pre-existing queued demo runs); typecheck/lint/UI/build
+  clean; migration 082 applied additively.
 
 ### 2026-10-26 — Phase 19-OM.21 (Administration, diagnostics and recovery)
 

@@ -148,7 +148,7 @@ describe('Website chat channel (19-OM.9)', () => {
     expect(again.status).toBe(200);
     expect(again.body['duplicate']).toBe(true);
     const rows = (await sql<{ n: string }>`
-      select count(*)::text as n from voice_messages where provider_message_id = ${`c_${RUN}_1`} and channel = 'web_chat'
+      select count(*)::text as n from voice_messages where provider_message_id like ${`%:c_${RUN}_1`} and channel = 'web_chat'
     `.execute(ctx.database.db)).rows[0];
     expect(rows?.n).toBe('1');
   });
@@ -209,9 +209,10 @@ describe('Website chat channel (19-OM.9)', () => {
     await restoreChatSettings({ allowedOrigins: [] });
     const refused = await call('POST', '/api/v1/Omnichannel/chat/session', {}, { origin: ORIGIN });
     expect(refused.status).toBe(403);
-    // A server-to-server call without an Origin header is still allowed (tests/uptime checks).
+    // A mutation without an Origin header is refused too: browsers always send it, so this is a
+    // scripted caller rather than the embedded widget (19-OM.22 fail-closed).
     const noOrigin = await call('POST', '/api/v1/Omnichannel/chat/session', {}, { 'user-agent': `AGENT_TEST noorigin ${RUN}` });
-    expect(noOrigin.status).toBe(200);
+    expect(noOrigin.status).toBe(403);
     await restoreChatSettings({ allowedOrigins: [ORIGIN] });
   });
 

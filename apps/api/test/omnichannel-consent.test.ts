@@ -187,7 +187,7 @@ describe('Consent enforcement and data rights (19-OM.18)', () => {
     const exported = await call('GET', `/api/v1/Omnichannel/action/conversations/${conversationA}/export`);
     expect(exported.status, JSON.stringify(exported.body)).toBe(200);
     expect(JSON.stringify(exported.body)).not.toContain('INTERNAL ONLY');
-    expect((exported.body['excluded'] as Record<string, unknown>)['internalNotes']).toBe(1);
+    expect((exported.body['excluded'] as Record<string, unknown>)['internalNotes']).toBe(true);
     expect((exported.body['messages'] as unknown[]).length).toBeGreaterThan(0);
 
     const audit = (await sql<{ n: string }>`

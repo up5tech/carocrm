@@ -79,22 +79,31 @@ export class OmnichannelAiService {
       throw new ValidationError('AI assistance is not configured. Set the Omnichannel AI agent in the settings.', { refusals: ['ai_not_configured'] });
     }
     const text = await this.buildInput(input.task, input.conversationId, config.maxContextMessages, input.language);
-    const run = await this.runs.create(config.agentId, {
-      input: { text },
+    // `triggerRun` is the AIAgents door for a module-originated run: it enforces the feature flag,
+    // the agent's own trigger allowlist and recursion depth, then stamps the record binding.
+    const run = await this.runs.triggerRun({
+      agentId: config.agentId,
       trigger: 'integration',
+      // The record stamps the run with its originating conversation, so a later read (and the send
+      // tool) can prove the run belongs there instead of trusting the caller's id.
+      runInput: { text, record: { entity: 'CommunicationConversation', id: input.conversationId } },
       idempotencyKey: input.requestKey?.trim() !== undefined && input.requestKey?.trim() !== '' ? input.requestKey.trim() : `omnichannel:${input.task}:${randomUUID()}`,
     });
     return { runId: run.id, agentId: config.agentId, task: input.task };
   }
 
-  /** Poll one run. The conversation id gates the read: an agent sees AI output for conversations they may read. */
+  /**
+   * Poll one run. The run must name the same conversation the caller presented: the conversation id
+   * is not decoration — it is the authorization binding (`19-OM.22` AI-run IDOR fix).
+   */
   async run(runId: string, conversationId: string): Promise<OmnichannelAiRunView> {
     await this.permissions.assert('reply');
     await this.acl.assertAccess('CommunicationConversation', 'read');
     const view = await this.runs.get(runId);
-    if (view === undefined) throw new NotFoundError(`AI run "${runId}" does not exist.`);
+    if (view.input.recordEntity !== 'CommunicationConversation' || view.input.recordId !== conversationId) {
+      throw new NotFoundError(`AI run "${runId}" does not exist.`);
+    }
     const result = typeof view.result === 'string' ? view.result : view.result === null || view.result === undefined ? null : JSON.stringify(view.result);
-    void conversationId;
     return {
       runId: view.id,
       status: view.status,
@@ -117,7 +126,7 @@ export class OmnichannelAiService {
       order by created_at desc limit ${maxMessages}
     `.execute(this.database.db)).rows.reverse();
     const transcript = messages
-      .map((row) => `${row.direction === 'inbound' ? 'customer' : 'agent'}: ${(row.body ?? '').replace(/\s+/g, ' ').slice(0, 1_000)}`)
+      .map((row) => `${row.direction === 'inbound' ? 'customer' : 'agent'}: ${neutralizeCustomerText(row.body ?? '')}`)
       .join('\n');
     return [
       TASK_INSTRUCTIONS[task],
@@ -129,4 +138,16 @@ export class OmnichannelAiService {
       '</conversation>',
     ].join('\n');
   }
+}
+
+/**
+ * Collapse whitespace, cap the length and neutralize the two ways customer text can imitate the
+ * wrapper: a closing `</conversation>` tag and a line that looks like a new role turn.
+ */
+function neutralizeCustomerText(body: string): string {
+  return body
+    .replace(/\s+/g, ' ')
+    .slice(0, 1_000)
+    .replace(/<\/?conversation[^>]*>/gi, '[text]')
+    .replace(/^(customer|agent|assistant|system)\s*:/gi, '$1 -');
 }

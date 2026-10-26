@@ -380,7 +380,7 @@ export class VoiceCommunicationsController {
 
   @Get("action/conversations/:id/timeline")
   async conversationTimeline(@Param("id") id: string, @Query() query: unknown) {
-    return this.inbox.timeline(id, parse(TimelineQuerySchema, coerceQuery(query)));
+    return this.inbox.timeline(id, { ...parse(TimelineQuerySchema, coerceQuery(query)), includeInternalNotes: true });
   }
 
   /** History: assignment/status/case events with actor and time (§9.1 acceptance). */

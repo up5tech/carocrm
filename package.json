@@ -8,6 +8,13 @@
     "node": ">=22.0.0",
     "pnpm": ">=9.0.0"
   },
+  "pnpm": {
+    "overrides": {
+      "fastify": "5.12.5",
+      "fast-uri@>=3.0.0 <4.0.0": "3.1.9",
+      "fast-uri@>=4.0.0 <5.0.0": "4.1.4"
+    }
+  },
   "scripts": {
     "lint": "node scripts/check-ui-conventions.mjs && eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",

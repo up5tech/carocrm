@@ -372,6 +372,14 @@ export class AIAgentRunService {
   // -----------------------------------------------------------------------
 
   async create(agentId: string, input: RunCreateInput): Promise<AIAgentRunView> {
+    return this.createInternal(agentId, input, false);
+  }
+
+  /**
+   * `allowTrigger` is set only by an internal caller that already enforced its own trigger policy
+   * (triggerRun). A direct caller through the public/manual path keeps the refusal below.
+   */
+  private async createInternal(agentId: string, input: RunCreateInput, allowTrigger: boolean): Promise<AIAgentRunView> {
     await this.policy.assertCanStartRun();
     const settings = await this.settings.settings();
     const principal = this.scope.requirePrincipal();
@@ -413,7 +421,7 @@ export class AIAgentRunService {
     if (agentConfigChecksum(version.config) !== version.checksum) {
       throw new ValidationError('The published version checksum does not match its configuration; republish the agent.');
     }
-    if (input.trigger !== undefined && input.trigger !== 'manual') {
+    if (!allowTrigger && input.trigger !== undefined && input.trigger !== 'manual') {
       // Non-interactive triggers arrive with their own service identity in AI.15–AI.17. Refusing is
       // safer than accepting a trigger no principal model enforces.
       throw new ValidationError('Only manual runs are implemented in this release.');
@@ -614,11 +622,11 @@ export class AIAgentRunService {
       (input.trigger === 'record' && parsed.config.triggers.record) ||
       (input.trigger === 'integration' && parsed.config.triggers.integration);
     if (!allowed) throw new ValidationError('This trigger is not enabled on the agent.');
-    const view = await this.create(input.agentId, {
+    const view = await this.createInternal(input.agentId, {
       input: input.runInput,
       idempotencyKey: input.idempotencyKey,
       trigger: input.trigger,
-    });
+    }, true);
     // stamp causation for loop detection
     if (input.causationId !== undefined) {
       await this.database.db
@@ -2274,7 +2282,9 @@ export class AIAgentRunService {
     const text = raw?.text?.trim() ?? '';
     if (text === '') throw new ValidationError('A run needs a task.');
     if (text.length > 4_000) throw new ValidationError('A run task may contain at most 4000 characters.');
-    return { input: { text } };
+    // A text-mode run may still name the record it was started from. It is metadata (the model does
+    // not read the record), and it lets the owning module bind a run to its subject.
+    return { input: { text, ...(raw?.record === undefined ? {} : { record: raw.record }) } };
   }
 
   private async runPrincipal(row: AIAgentRunsTable): Promise<AuthenticatedPrincipal | undefined> {

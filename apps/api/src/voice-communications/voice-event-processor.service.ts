@@ -62,6 +62,7 @@ interface ReceiptRow {
   processing_status: string;
   attempts: number;
   payload_redacted: unknown;
+  payload_internal?: unknown;
 }
 
 @Injectable()
@@ -94,7 +95,8 @@ export class VoiceEventProcessorService {
       return await runAsVoiceSystem<ProcessResult>(this.scope, eventId, async () => {
         const account = await this.accounts.resolveForProcessing(row.account_key);
         const adapter = this.registry.resolve(account.providerKey);
-        const payload = parseObject(row.payload_redacted);
+        // Processing reads the internal copy; rows written before OM.22 only have the diagnostic one.
+        const payload = parseObject(row.payload_internal ?? row.payload_redacted);
         const validated: ValidatedProviderEvent = {
           providerEventId: row.vendor_event_id,
           eventType: row.event_type,

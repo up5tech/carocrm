@@ -5,6 +5,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
 import { AclApiService } from '../acl/acl-api.service.js';
+import { AttachmentService } from '../attachment/index.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
 import { PHONE_NORMALIZER, type PhoneNormalizer } from './phone-number.js';
@@ -137,6 +138,7 @@ export class VoiceMessagingService {
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(AclApiService) private readonly acl: AclApiService,
+    @Inject(AttachmentService) private readonly attachments: AttachmentService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(VoiceCommunicationsSettingsService) private readonly settings: VoiceCommunicationsSettingsService,
     @Inject(VoiceProviderAccountsService) private readonly accounts: VoiceProviderAccountsService,
@@ -188,6 +190,11 @@ export class VoiceMessagingService {
       });
       return { message: toMessageView(note), duplicate: false };
     }
+
+    // 19-OM.22: an attachment must be readable by the sender *and* customer-visible. Without the
+    // first check a caller could dispatch bytes they cannot download; without the second an internal
+    // file would cross the customer boundary through the provider.
+    await this.assertAttachmentsSendable(input.mediaAttachmentIds);
 
     // 19-OM.9: the web-chat transport is this CRM, not a provider — there is no service window,
     // quiet-hour policy or template rule to evaluate. Consent for the widget is enforced and stored
@@ -624,6 +631,16 @@ export class VoiceMessagingService {
     const row = (await sql<MessageRow>`select * from voice_messages where id = ${id}`.execute(this.database.db)).rows[0];
     if (row === undefined) throw new NotFoundError('The message could not be read back.');
     return row;
+  }
+
+  /** Each referenced file must be readable by this actor and marked customer-visible. */
+  private async assertAttachmentsSendable(attachmentIds: readonly string[] | undefined): Promise<void> {
+    for (const attachmentId of (attachmentIds ?? []).slice(0, 10)) {
+      const attachment = await this.attachments.getById(attachmentId);
+      if (attachment.visibility !== 'public') {
+        throw new ValidationError('Only customer-visible attachments can be sent.', { attachmentId });
+      }
+    }
   }
 
   /** Media references are recorded, never fetched: the attachment id is the storage reference. */

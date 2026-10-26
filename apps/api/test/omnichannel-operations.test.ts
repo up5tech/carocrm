@@ -93,7 +93,7 @@ async function createReceipt(eventId: string, signed: boolean): Promise<string> 
   await call('POST', `${OMNI}/message-events`, body, undefined, signedHeaders(body, signed ? WEBHOOK_SECRET : 'whsec_wrong_om21'));
   const row = (await sql<{ id: string }>`
     select id from voice_webhook_events
-    where account_key = ${ACCOUNT_KEY} and dedup_key like ${`%${eventId}%`}
+    where account_key = ${ACCOUNT_KEY} and vendor_event_id = ${eventId}
     order by received_at desc limit 1
   `.execute(ctx.database.db)).rows[0];
   return row?.id ?? '';

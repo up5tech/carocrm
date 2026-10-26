@@ -56,6 +56,8 @@ const WebChatSettingsSchema = z
     consentVersion: z.string().trim().min(1).max(20).default('1'),
     allowedOrigins: z.array(z.string().trim().url().max(300)).max(20).default([]),
     sessionHours: z.number().int().min(1).max(168).default(24),
+    /** New sessions one client address may create per hour (abuse control; resumed sessions excluded). */
+    maxSessionsPerHour: z.number().int().min(1).max(1_000).default(30),
     maxMessagesPerMinute: z.number().int().min(1).max(120).default(20),
     maxBodyChars: z.number().int().min(100).max(20_000).default(2_000),
   })

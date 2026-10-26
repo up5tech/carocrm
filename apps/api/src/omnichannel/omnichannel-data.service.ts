@@ -60,7 +60,8 @@ export interface ConversationExport {
     readonly state: string;
     readonly createdAt: string;
   }[];
-  readonly excluded: { readonly internalNotes: number };
+  /** Whether the record holds internal notes; their count is not disclosed. */
+  readonly excluded: { readonly internalNotes: boolean };
 }
 
 @Injectable()
@@ -112,14 +113,18 @@ export class OmnichannelDataService {
       body: string | null;
       state: string;
       created_at: Date;
-      is_internal_note: boolean;
     }>`
-      select id, direction, body, state, created_at, is_internal_note
-      from voice_messages where conversation_id = ${conversationId}
+      select id, direction, body, state, created_at
+      from voice_messages
+      where conversation_id = ${conversationId} and is_internal_note = false
       order by created_at asc limit 5000
     `.execute(this.database.db)).rows;
 
-    const visible = messages.filter((row) => !row.is_internal_note);
+    const hasInternalNotes = (await sql<{ present: boolean }>`
+      select exists(
+        select 1 from voice_messages where conversation_id = ${conversationId} and is_internal_note = true
+      ) as present
+    `.execute(this.database.db)).rows[0]?.present === true;
     const exportView: ConversationExport = {
       generatedAt: new Date().toISOString(),
       conversation: {
@@ -141,14 +146,14 @@ export class OmnichannelDataService {
         verificationState: row.verification_state,
         linkConfidence: row.link_confidence,
       })),
-      messages: visible.map((row) => ({
+      messages: messages.map((row) => ({
         id: row.id,
         direction: row.direction === 'outbound' ? 'outbound' : 'inbound',
         body: row.body,
         state: row.state,
         createdAt: new Date(row.created_at).toISOString(),
       })),
-      excluded: { internalNotes: messages.length - visible.length },
+      excluded: { internalNotes: hasInternalNotes },
     };
     await this.audit(conversationId, 'CommunicationConversationExport', {
       messages: exportView.messages.length,
