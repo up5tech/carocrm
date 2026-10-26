@@ -1,3 +1,4 @@
+import { ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
@@ -10,6 +11,7 @@ import {
   VoiceInboxService,
   VoiceMessagingService,
 } from '../voice-communications/index.js';
+import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 
 /**
  * Phase 19-OM.6 — the workspace conversation facade
@@ -67,6 +69,7 @@ export class OmnichannelConversationService {
   constructor(
     @Inject(VoiceInboxService) private readonly inbox: VoiceInboxService,
     @Inject(VoiceMessagingService) private readonly messaging: VoiceMessagingService,
+    @Inject(OmnichannelCapabilityService) private readonly capabilities: OmnichannelCapabilityService,
     @Inject(AclApiService) private readonly acl: AclApiService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
   ) {}
@@ -103,6 +106,71 @@ export class OmnichannelConversationService {
   ): Promise<OmnichannelConversationView> {
     const updated = await this.inbox.assign(conversationId, input);
     return (await this.enrich([updated]))[0] ?? { ...updated, ...emptyWorkspaceFields(), threads: [] };
+  }
+
+  /**
+   * 19-OM.8 — the outbound reply command. The facade verifies what the workspace can know *before* the
+   * owner runs its own pipeline (which still re-checks policy/consent/window/idempotency and owns the
+   * final state): the conversation exists, the channel is actually sendable right now (per the
+   * computed capability catalog), and the payload type is declared. A refusal names its reason codes
+   * so the composer can explain it instead of showing a generic failure.
+   */
+  async send(
+    conversationId: string,
+    input: {
+      readonly body: string;
+      readonly idempotencyKey: string;
+      readonly templateKey?: string | undefined;
+      readonly templateLanguage?: string | undefined;
+      readonly templateVariables?: Readonly<Record<string, string>> | undefined;
+      readonly mediaAttachmentIds?: readonly string[] | undefined;
+      readonly isInternalNote?: boolean | undefined;
+    },
+  ): Promise<{ readonly message: MessageView; readonly duplicate: boolean }> {
+    await this.acl.assertAccess('CommunicationConversation', 'read');
+    const conversation = (await sql<{ id: string; account_key: string; channel: string }>`
+      select id, account_key, channel from voice_conversations where id = ${conversationId}
+    `.execute(this.database.db)).rows[0];
+    if (conversation === undefined) throw new ValidationError(`Conversation "${conversationId}" does not exist.`);
+    const channel = conversation.channel as 'sms' | 'mms' | 'whatsapp' | 'web_chat';
+    // Website chat has no Voice transport; its widget lands in 19-OM.9 and answers with its own
+    // channel adapter. Until then a send is an explicit channel refusal, never a silent success.
+    if (channel === 'web_chat') {
+      throw new ValidationError('This channel cannot send right now.', { refusals: ['channel_unavailable'], channel });
+    }
+
+    // An internal note is a conversation artefact, never a channel send: it is allowed even while the
+    // channel is unavailable, and it never reaches an adapter (the owner guarantees that structurally).
+    if (input.isInternalNote !== true) {
+      const catalog = await this.capabilities.catalog();
+      const row = catalog.channels.find((entry) => entry.channel === channel);
+      if (row === undefined || !row.enabled || !row.configured || !row.outbound) {
+        throw new ValidationError('This channel cannot send right now.', {
+          refusals: ['channel_unavailable'],
+          channel,
+        });
+      }
+      if ((input.mediaAttachmentIds ?? []).length > 0 && !row.media) {
+        // Contract §9/E3: an undeclared capability is an explicit refusal, never a silent drop.
+        throw new ValidationError('This channel does not support attachments.', {
+          refusals: ['unsupported'],
+          channel,
+        });
+      }
+    }
+
+    return this.messaging.send({
+      channel,
+      conversationId: conversation.id,
+      accountKey: conversation.account_key,
+      body: input.body,
+      idempotencyKey: input.idempotencyKey,
+      ...(input.templateKey === undefined ? {} : { templateKey: input.templateKey }),
+      ...(input.templateLanguage === undefined ? {} : { templateLanguage: input.templateLanguage }),
+      ...(input.templateVariables === undefined ? {} : { templateVariables: input.templateVariables }),
+      ...(input.mediaAttachmentIds === undefined ? {} : { mediaAttachmentIds: input.mediaAttachmentIds }),
+      ...(input.isInternalNote === undefined ? {} : { isInternalNote: input.isInternalNote }),
+    });
   }
 
   /** E7 — reconcile via the owner's provider lookup; the facade adds no behaviour of its own. */

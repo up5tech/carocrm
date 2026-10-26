@@ -1364,6 +1364,28 @@ Acceptance:
 
 ### Phase 19-OM.8 — Outbound Command, Send State, and Reconciliation
 
+**Status: COMPLETE.** The reply command runs through the workspace facade onto the owner's existing
+pipeline (D1) — `POST /api/v1/Omnichannel/action/conversations/:id/messages` (capability `reply`)
+pre-checks the conversation, the computed channel capability (enabled/configured/outbound), and the
+payload type (attachments refused as `unsupported` while no adapter declares media), then delegates
+to `VoiceMessagingService.send`, which re-checks policy/consent/window/template/idempotency, records
+the content, actor and thread **before** dispatch, and never stores a secret. Refusals return named
+codes (`channel_unavailable`, `unsupported`, `consent_required`, …) — actionable in the composer.
+Send-state honesty was fixed in Voice: a **timeout** now records `unknown` (not `failed`) with
+`failureCategory: timeout` and no `failed_at`, so the outcome is reconciled via the provider lookup
+(E7) or refused explicitly for operator review — never retried blindly under a new key. A repeated
+idempotency key answers `duplicate` without a second dispatch. Delivery callbacks keep the canonical
+state on `voice_messages` while the provider's own token is preserved per event in
+`voice_communication_events.payload.vendorStatus` (separate stores, no competing status column).
+
+Verification: `omnichannel-send.test.ts` 6/6 — reply has an explicit state + author + thread; duplicate
+key → one row and one dispatch; media → `unsupported`; revoked consent → `consent_required`; disabled
+channel → `channel_unavailable`; a scripted timeout adapter → state `unknown`, reconcile refused (no
+provider id) for operator review, and a same-key retry leaves one row and one adapter call. Regression
+14 files / 150 tests green; typecheck + eslint clean.
+
+**Goal:** Make reply sending safe and truthful.
+
 **Goal:** Make reply sending safe and truthful.
 
 Tasks:

@@ -15,7 +15,8 @@
 | OM.5 — Inbound webhook/event receipt pipeline | ✅ COMPLETE | `omnichannel-webhook.controller.ts` (delegates to the shared Voice ingress), E2 raw-body hook, `omnichannel-ingress.test.ts` |
 | OM.6 — Canonical conversation/thread/message services | ✅ COMPLETE | thread attach + continuity + reconcile in Voice; `OmnichannelConversationService` facade + conversation endpoints; `omnichannel-conversation.test.ts` |
 | OM.7 — Identity resolution & record linking | ✅ COMPLETE | `OmnichannelIdentityService` + identity endpoints, migration 078 phone index, `omnichannel-identity.test.ts` |
-| OM.8+ | ⏸ Not started | — |
+| OM.8 — Outbound command & send state | ✅ COMPLETE | workspace send endpoint (facade pre-checks), timeout → `unknown` in Voice, `omnichannel-send.test.ts` |
+| OM.9+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -28,6 +29,21 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.8 (Outbound command, send state, reconciliation)
+
+- Workspace reply command `POST action/conversations/:id/messages` (capability `reply`): the facade
+  pre-checks the conversation, the computed channel capability and the payload type, then delegates to
+  `VoiceMessagingService.send`. Attachments are refused as `unsupported` until an adapter declares
+  media; a disabled/unconfigured channel is `channel_unavailable`; policy/consent refusals pass
+  through as named codes.
+- Voice send honesty: timeout outcomes are recorded `unknown` (no `failed_at`), not `failed` — the
+  reconcile path (E7) or an explicit operator review resolves them; a same-key retry returns
+  `duplicate` and dispatches nothing. Provider status stays separate per event
+  (`voice_communication_events.payload.vendorStatus`) from the canonical message state.
+- Checks: `omnichannel-send.test.ts` 6/6 incl. a scripted timeout adapter registered through the DI
+  seam (one row, one call, no blind retry); regression 14 files / 150 tests; typecheck + eslint clean.
+
 
 ### 2026-10-26 — Phase 19-OM.7 (Identity resolution and record linking)
 

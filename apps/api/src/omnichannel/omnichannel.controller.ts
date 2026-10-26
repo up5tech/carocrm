@@ -38,6 +38,17 @@ const SettingsPatchSchema = z
   .partial()
   .strict();
 
+const SendMessageSchema = z
+  .object({
+    body: z.string().max(20_000).default(''),
+    idempotencyKey: z.string().trim().min(8).max(200),
+    templateKey: z.string().trim().max(120).optional(),
+    templateLanguage: z.string().trim().max(20).optional(),
+    templateVariables: z.record(z.string().max(2_000)).optional(),
+    mediaAttachmentIds: z.array(z.string().trim().min(1).max(120)).max(10).optional(),
+    isInternalNote: z.boolean().optional(),
+  })
+  .strict();
 const IdentityLinkSchema = z
   .object({
     participantId: z.string().trim().min(1).max(120).optional(),
@@ -199,6 +210,20 @@ export class OmnichannelController {
     await this.permissions.assert('identityLink');
     const parsed = Number(limit ?? 50);
     return this.identities.conflicts(Number.isFinite(parsed) ? Math.min(Math.max(Math.trunc(parsed), 1), 200) : 50);
+  }
+
+  /**
+   * 19-OM.8 — the reply command. The workspace facade pre-checks the channel/payload, then the owner
+   * runs its full pipeline (policy, consent, window, capability, idempotency) and records the state;
+   * a policy/consent refusal comes back as named codes the composer can explain.
+   */
+  @HttpCode(201)
+  @Post('action/conversations/:id/messages')
+  async sendMessage(@Param('id') id: string, @Body() body: unknown) {
+    await this.permissions.assert('reply');
+    const parsed = SendMessageSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid message input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
+    return this.conversations.send(id, parsed.data);
   }
 
   /**

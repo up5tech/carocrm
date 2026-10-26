@@ -264,21 +264,28 @@ export class VoiceMessagingService {
         ...(input.templateVariables !== undefined ? { templateVariables: input.templateVariables } : {}),
         ...(media.length > 0 ? { media } : {}),
       });
+      // A rejected *uncertain* outcome is not a failure: a timeout may have delivered. `unknown`
+      // makes the ambiguity explicit and routes it to reconciliation instead of a blind retry.
+      const uncertain = !result.accepted && result.errorCategory === 'timeout';
       const stored = await this.patchMessage(message.id, {
-        state: result.accepted ? result.state : 'failed',
+        state: result.accepted ? result.state : uncertain ? 'unknown' : 'failed',
         providerMessageId: result.providerMessageId,
         sentAt: result.accepted ? new Date() : null,
         failureCategory: result.accepted ? null : (result.errorCategory ?? 'unknown'),
-        failedAt: result.accepted ? null : new Date(),
+        failedAt: result.accepted || uncertain ? null : new Date(),
       });
       await this.touchConversation(conversation.id);
       return { message: toMessageView(stored), duplicate: false };
     } catch (error) {
       const category = error instanceof VoiceProviderError ? error.category : 'unknown';
+      // A timeout leaves the outcome unknown — the provider may have accepted the message. Marking it
+      // `failed` would invite a duplicate resend; `unknown` is reconciled via the provider lookup (E7)
+      // or resolved by an operator (plan §3.5, OM.8 acceptance "timeout cannot trigger a blind retry").
+      const uncertain = category === 'timeout';
       const failed = await this.patchMessage(message.id, {
-        state: 'failed',
+        state: uncertain ? 'unknown' : 'failed',
         failureCategory: category,
-        failedAt: new Date(),
+        failedAt: uncertain ? null : new Date(),
       });
       return { message: toMessageView(failed), duplicate: false };
     }
