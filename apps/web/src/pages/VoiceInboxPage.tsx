@@ -23,8 +23,8 @@ import type {
   VoiceSnippetView,
   VoiceTimelineEntry,
 } from '../api/types.js';
-import { VoiceCallDetail } from '../components/VoiceCallDetail.js';
 import { usePageTitle } from '../components/PageHeader.js';
+import { VoiceCallDetail } from '../components/VoiceCallDetail.js';
 import { formatClock, formatDateTime, isSameCalendarDay, t } from '../state/i18n.js';
 
 /**

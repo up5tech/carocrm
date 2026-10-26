@@ -1016,3 +1016,23 @@ Known limits:
 - Nothing on this page is per-user configurable yet (arranged widgets and a personal home layout are
   P2). The KPI dashlet contract now carries an optional target and an equivalent previous-period
   window, shown on dashboards and consumed by home's pulse rail.
+
+## Phase 20.20 — Design token layer and brand colour (added 2026-10-26)
+
+Implemented: the design token layer of `PLAN_Phase_20_Settings_UX.md` §17 (20.20) — `apps/web/src/theme/tokens.ts`
+as the single source of colour, the generated `apps/web/src/styles/tokens.css`, the Ant Design theme
+built from it, and the literal sweep; `brand.primaryColor` (a named accent) recolours the shell. Deferred
+inside 20.20: consolidating the 16 breakpoints to 390 / 768 / 1180 / 1440 (task 6, polish).
+
+## Phase 20.21 — Dark mode (added 2026-10-26)
+
+Implemented: the per-user `theme` preference (`light` / `dark` / `system`) stored and validated via the
+Phase 20 preference resource, the shell writing `data-theme` before first paint, and dark values for
+every token; print and document surfaces stay light.
+
+## Phase 20.22–20.27 — State contract, formatter, page frame, settings search, quality gate, bounded first load (added 2026-10-25 / 2026-10-26)
+
+Implemented: error boundary + one state contract (20.22); one formatter (20.23); one page frame (20.24);
+settings search in the rail and the command palette (20.25); frontend quality gate + axe audit with zero
+WCAG 2.0 A/AA violations on home/list/record/settings (20.26); bounded first load (route-level lazy +
+prefetch) and optimistic writes (20.27). Phase 20 is complete.

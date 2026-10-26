@@ -9,10 +9,11 @@ expressed in the existing `carocrm-*` design language and the existing kernel (m
 Every number in this document was measured on the working tree at commit time; the command that
 produces it is listed in §7 so the review can be re-run instead of trusted.
 
-**Status (2026-10-26):** F1, F2, F8, F14, F15 and F16 are fixed, F3 is partly fixed — sub-phases
-20.22 and 20.23 shipped. F11 (no token layer) is addressed by **20.20** (tokens + brand colour, shipped
-2026-10-26); F12 (breakpoints) is deferred within 20.20. F4–F7, F9–F10, F13 remain open and are
-scheduled as 20.24, 20.25, 20.26, 20.27 (and 20.21, dark mode, a decision).
+**Status (2026-10-26, updated at Phase 20 completion):** F1, F2, F8, F14, F15 and F16 are fixed, F3 is
+partly fixed — sub-phases 20.22 and 20.23 shipped. F11 (no token layer) is addressed by **20.20**
+(tokens + brand colour, shipped 2026-10-26); F12 (breakpoints) is deferred within 20.20. F4–F7, F9–F10
+and F13 are addressed by the shipped sub-phases **20.24, 20.25, 20.26 and 20.27**, and the dark-mode
+decision **20.21** shipped 2026-10-26 — Phase 20 is complete as of 2026-10-26.
 
 ---
 

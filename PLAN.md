@@ -2790,8 +2790,8 @@ bulk-action outcome counts (shipped), the row kebab menu (shipped), column reord
 (shipped), the record-page sticky header and next-action band (shipped), "Save & new" (shipped) —
 are reconciled against the working tree in `docs/compatibility/settings-ux.md` §"Status
 reconciliation". Review sub-phase 20.24 (one page frame), 20.25 (find a setting), 20.27 (bounded
-first load) and the dark-mode decision 20.21 remain open; see `PLAN_Phase_20_Settings_UX.md`
-§"Review-driven sub-phases".
+first load) and the dark-mode decision 20.21 shipped 2026-10-26; Phase 20 is complete as of
+2026-10-26; see `PLAN_Phase_20_Settings_UX.md` §"Review-driven sub-phases".
 
 See `docs/admin/settings.md`, `docs/admin/navigation.md`, `docs/ux/`,
 `docs/compatibility/settings-ux.md` and `docs/reference/alpha-status.md`.

@@ -97,10 +97,4 @@ test.describe('axe audit (Phase 20 §20.16, §20.26)', () => {
     violations = await scanSurfaces(page);
     expect(violations).toEqual([]);
   });
-
-  test.afterEach(async ({}, testInfo) => {
-    if (violations.length > 0 && testInfo.status !== 'passed') {
-      console.log(`[axe] ${testInfo.title} violations:\n${violations.join('\n')}`);
-    }
-  });
 });

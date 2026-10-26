@@ -32,8 +32,8 @@ import type { EmailVisualEditorHandle } from '../components/email/EmailVisualEdi
 import { FieldEditor } from '../components/fields.js';
 import { HelpTip } from '../components/HelpTip.js';
 import { t } from '../state/i18n.js';
-import { COLOR } from '../theme/tokens.js';
 import { editEntries, fieldLabel, recordLabel, useEntity, useMetadata } from '../state/metadata.js';
+import { COLOR } from '../theme/tokens.js';
 
 /**
  * GrapesJS is a heavy dependency only the visual mode of this screen needs, so it loads on

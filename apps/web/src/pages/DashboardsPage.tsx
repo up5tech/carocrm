@@ -22,8 +22,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 
 import { api, ApiError, type DashboardRow } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
-import { PageHeader } from '../components/PageHeader.js';
 import { EmptyState } from '../components/EmptyState.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
 import { pickDefaultDashboard } from '../state/dashboard-default.js';
 import { t } from '../state/i18n.js';

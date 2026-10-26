@@ -44,8 +44,8 @@ import {
   DOCUMENT_TOKEN_GROUPS,
 } from '../document/template-catalog.js';
 import { t } from '../state/i18n.js';
-import { COLOR } from '../theme/tokens.js';
 import { fieldLabel, useEntity, useMetadata } from '../state/metadata.js';
+import { COLOR } from '../theme/tokens.js';
 
 const EmailVisualEditor = lazy(() => import('../components/email/EmailVisualEditor.js').then((module) => ({ default: module.EmailVisualEditor })));
 

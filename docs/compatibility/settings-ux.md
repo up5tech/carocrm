@@ -226,3 +226,17 @@ and manual walkthroughs. What does exist is a **convention gate**: `pnpm lint:ui
 `scripts/check-ui-conventions.mjs` and fails on a missing i18n key, an ISO-sliced timestamp, a raw
 `<Empty>` and an internal `<a href="/…">`. Those four rules were chosen because each one was a real
 shipped defect, not a style preference — six raw-key renders and fourteen UTC timestamps among them.
+
+## Status reconciliation — 2026-10-26 (Phase 20 completion update)
+
+The 2026-10-25 reconciliation above was re-checked against the working tree on 2026-10-26, after the
+review-driven sub-phases landed. As of 2026-10-26 the following are **shipped**, so the "still open"
+claims about them are withdrawn:
+
+- **20.20** — design token layer + brand colour (token sweep incl. the TSX inline literals, brand
+  `primaryColor`) shipped; only the breakpoint consolidation (task 6) is deferred as polish.
+- **20.21** — dark mode shipped (preference `light` / `dark` / `system`, `data-theme`, dark tokens).
+- **20.22, 20.23, 20.24, 20.25, 20.26, 20.27** — state contract/error boundary, one formatter, page frame,
+  settings search, frontend quality gate + axe audit, bounded first load + optimistic writes — shipped.
+
+Phase 20 is therefore **complete** as of 2026-10-26.

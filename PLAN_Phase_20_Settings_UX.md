@@ -1,6 +1,6 @@
 # Phase 20 — Settings, Administration and End-User UX/UI
 
-> **Status:** ✅ **Phase 20 COMPLETE** (2026-10-20): All 17 sub-phases implemented and verified.
+> **Status:** ✅ **Phase 20 COMPLETE** (2026-10-26): All sub-phases 20.0–20.27 implemented and verified.
 > Settings document registry, admin panel descriptors and tabbed shell, General/Localization/Main
 > Menu/Layouts tabs, hosted module documents, `GET /Navigation` with ACL-filtered resolution,
 > per-entity `nav` metadata, Users/Teams/Roles/API keys tabs, Security/Messaging/Integrations/
@@ -20,18 +20,26 @@
 > criteria, delivered as **entity metadata edited in the detail layout settings** — not as a per-user
 > preference on the record page.
 >
-> **Proposed after a UI/UX review — Phases 20.20–20.27.** `docs/ux/ui-review.md` audits the shipped
-> SPA and proposes eight additive sub-phases, specified in §17 and prioritised in §18: the design
-> token layer and a real brand colour (20.20), dark mode (20.21, P2, needs an explicit decision), one
-> state contract plus an error boundary (20.22), one timestamp formatter (20.23), one page frame
-> (20.24), settings search (20.25), the frontend quality gate that finally makes 20.16's axe criterion
-> verifiable (20.26), and a bounded first load with optimistic writes (20.27).
+> **Added after completion — Phase 20.20 (✅ implemented 2026-10-26):** the design token layer and a
+> real brand colour (§17, 20.20). `apps/web/src/theme/tokens.ts` is the single source of colour,
+> `styles/tokens.css` is generated from it, `theme.ts` builds the Ant Design theme from it, and the
+> literal sweep is done; `brand.primaryColor` (a named accent) recolours the shell. Deferred inside
+> 20.20: consolidating the 16 breakpoints to 390 / 768 / 1180 / 1440 (task 6 — polish, tracked as 20.20.x).
 >
-> **20.22 and 20.23 are implemented (2026-10-25).** The SPA now has an error boundary at the root and
-> per route, a four-variant empty state used by all 41 former raw `<Empty>` call sites, an offline
-> banner wired to React Query's `onlineManager`, every admin/ops timestamp through `formatDateTime`,
-> and `pnpm lint:ui` enforcing the four rules those fixes established. The remaining six (20.20,
-> 20.21, 20.24–20.27) are **not** implemented; nothing below is a claim about current behaviour.
+> **Added after completion — Phase 20.21 (✅ implemented 2026-10-26):** dark mode. The `theme`
+> preference (`light` / `dark` / `system`) is stored and validated server-side via `/Preferences`, the
+> shell writes `data-theme` before first paint, and dark values exist for every token; print and
+> document surfaces stay light.
+>
+> **Added after completion — Phases 20.22–20.27 (✅ implemented 2026-10-25 / 2026-10-26):** one state
+> contract plus error boundary (20.22), one formatter (20.23), one page frame (20.24), settings search
+> (20.25), the frontend quality gate with the axe audit (20.26) — the plan's 20.16 acceptance ("axe
+> passes on the four core surfaces") is met with zero WCAG 2.0 A/AA violations — and a bounded first
+> load with optimistic writes (20.27).
+>
+> **Phase 20 is COMPLETE as of 2026-10-26** — every sub-phase 20.0–20.27 is implemented and verified;
+> the only remaining item is the polish deferred inside 20.20 (breakpoint consolidation, tracked as
+> 20.20.x).
 >
 > **Open deferrals** (documented in `docs/compatibility/settings-ux.md`, "Known limitations after
 > sub-phases 20.11–20.17"): the ACL explain helper, storage-usage figures, cross-page

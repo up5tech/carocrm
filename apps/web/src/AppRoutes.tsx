@@ -5,6 +5,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AdminSettingsShell } from './admin/AdminSettingsShell.js';
 import { AppShell } from './components/AppShell.js';
 import { LoadingSkeleton } from './components/LoadingSkeleton.js';
+import { useSession } from './state/session.js';
+
 const AdminAuditPage = lazy(() => import('./pages/AdminAuditPage.js').then((m) => ({ default: m.AdminAuditPage })));
 const AdminExtensionsPage = lazy(() => import('./pages/AdminExtensionsPage.js').then((m) => ({ default: m.AdminExtensionsPage })));
 const AdminJobsPage = lazy(() => import('./pages/AdminJobsPage.js').then((m) => ({ default: m.AdminJobsPage })));
@@ -51,8 +53,6 @@ const VoiceCommunicationsPage = lazy(() => import('./pages/VoiceCommunicationsPa
 const VoiceInboxPage = lazy(() => import('./pages/VoiceInboxPage.js').then((m) => ({ default: m.VoiceInboxPage })));
 const WorkflowEditorPage = lazy(() => import('./pages/WorkflowEditorPage.js').then((m) => ({ default: m.WorkflowEditorPage })));
 const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage.js').then((m) => ({ default: m.WorkflowsPage })));
-import { useSession } from './state/session.js';
-
 export function AppRoutes() {
   const { token, principal, restored, loadPrincipal } = useSession();
 

@@ -7,8 +7,8 @@ import { api } from '../api/client.js';
 import type { EntityDefinition, RowActions } from '../api/types.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, recordLabel } from '../state/metadata.js';
-import { usePageTitle } from './PageHeader.js';
 import { FieldValue, linkLabelsOf } from './fields.js';
+import { usePageTitle } from './PageHeader.js';
 
 export interface RecordHeaderProps {
   entity: string;
