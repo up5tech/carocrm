@@ -1027,6 +1027,19 @@ Acceptance:
 
 ### Phase 19-OM.1 — Feature Contract and Channel Feasibility
 
+**Status: COMPLETE.** Documentation only — no code, migration or metadata changed. Deliverables:
+`docs/omnichannel/feature-contract.md` (first-release contract, decisions OM1.1–OM1.7, risk log
+R20–R26) and `docs/omnichannel/channel-feasibility.md` (12 per-channel records, verdicts
+CF-1…CF-12). Key outcomes: **first channel set = Twilio SMS + WhatsApp + website chat**; **first
+end-to-end path = Twilio SMS/WhatsApp through `VoiceCommunications`** (testable with
+`FakeVoiceProvider` only — no real customer message); website chat is the second path with the
+**anonymous-visitor identity model fixed now** (contract §7); email is deferred with the
+**Email↔Email-to-Case non-competition contract pre-decided** (contract §15); conversation↔thread
+cardinality becomes an additive `voice_conversation_threads` table owned by VoiceCommunications
+(contract §4); E15 is closed — channel transport goes through Voice's own adapter, not
+`ConnectorAdapter`. D1–D3 are carried unchanged (contract §2). See
+`docs/omnichannel/overview.md` for the log.
+
 **Goal:** Define the first release precisely and prevent assumed provider support.
 
 **Inputs already settled by 19-OM.0 (§0.2):** the canonical conversation record is
@@ -1058,6 +1071,9 @@ Acceptance:
 - No unsupported social messaging capability is represented as a committed feature.
 - The first connector path can be tested without sending a real customer message.
 - The three OM.0 decisions are carried into the contract unchanged, or a replacement is recorded with an explicit rationale.
+
+All four criteria are **Met**; the evidence table is `feature-contract.md` §14. Stop at the end of
+this phase; **Phase 19-OM.2 has not been started.**
 
 ### Phase 19-OM.2 — Module Registration and Navigation
 
