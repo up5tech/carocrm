@@ -3,6 +3,7 @@ import { Body, Controller, Get, HttpCode, Inject, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
+import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelModuleHealthService } from './omnichannel-module-health.service.js';
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
@@ -43,7 +44,19 @@ export class OmnichannelController {
     @Inject(OmnichannelPermissionService) private readonly permissions: OmnichannelPermissionService,
     @Inject(OmnichannelSettingsService) private readonly settings: OmnichannelSettingsService,
     @Inject(OmnichannelNavigationService) private readonly navigation: OmnichannelNavigationService,
+    @Inject(OmnichannelCapabilityService) private readonly channelCapabilities: OmnichannelCapabilityService,
   ) {}
+
+  /**
+   * The channel capability catalog (OM.4): per channel, what the bound transports actually declare,
+   * gated by the owning module's flags. The composer enables or refuses from this answer — an
+   * undeclared capability is refused as `unsupported`, never attempted or faked (contract §9).
+   */
+  @Get('action/channels')
+  async channels() {
+    await this.permissions.assert('inboxView');
+    return this.channelCapabilities.catalog();
+  }
 
   /**
    * Module health: the platform foundation, the module switch, and the caller's rights.

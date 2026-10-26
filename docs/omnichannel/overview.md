@@ -11,7 +11,8 @@
 | OM.1 — Feature contract & channel feasibility | ✅ COMPLETE (documentation only) | `feature-contract.md`, `channel-feasibility.md`, risk log update (contract §12) |
 | OM.2 — Module registration & navigation | ✅ COMPLETE | `apps/api/src/omnichannel/` (descriptor, permission matrix, settings document, health, nav, control plane), nav seed, `/omnichannel` SPA shell, i18n en/vi, `omnichannel-module.test.ts` |
 | OM.3 — Persistence model & additive migrations | ✅ COMPLETE | `database/migrations/077_phase19_omnichannel_persistence.sql`, `omnichannel-persistence.test.ts`, voice architecture §4.1 |
-| OM.4+ | ⏸ Not started | — |
+| OM.4 — Adapter & capability registry | ✅ COMPLETE | Voice barrel exports (E1), `unsupported` category (E3), `inbox.read`/`message.send` contracts (E14), `OmnichannelCapabilityService` + `action/channels`, page catalog card, `omnichannel-adapter.test.ts` |
+| OM.5+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -24,6 +25,33 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.4 (Adapter and capability registry)
+
+- **E1**: the Voice barrel now exports the consumed surface — `VoiceInboxService` + query/view types,
+  `VoiceMessagingService` + `SendMessageInput`/`MessageView`, the `VoiceProviderAdapter` interface,
+  provider event/health/account types, and the normalized vocabulary (channels, states, capability and
+  error-category constants, `isRetryableError`).
+- **E3**: `unsupported` added to `COMMUNICATION_ERROR_CATEGORIES` — permanent, non-retryable, with an
+  operator message; exhaustive switch updated (`errorMessageFor`).
+- **E14**: `voice-contracts.ts` publishes `voiceCommunications.inbox.read` (runs through the owner's
+  ACL; conversation list or timeline) and `voiceCommunications.message.send` (runs the owner's full
+  policy/consent/idempotency pipeline; records the owner's state, never a competing one), v1 each,
+  beside the existing suppress contract.
+- Omnichannel: `OmnichannelCapabilityService` + `GET /api/v1/Omnichannel/action/channels`
+  (catalogVersion 1) — computed per-channel capabilities from bound accounts' declared ∩ granted
+  sets + both modules' flags; no assumed support (readReceipts has no capability key → reported absent;
+  web_chat reports "arrives with 19-OM.9"). Workspace page gained a "Channel capabilities" card;
+  i18n en/vi extended.
+- E15 stays closed: transport remains Voice's adapter; nothing was routed through `ConnectorAdapter`.
+- Checks: `omnichannel-adapter.test.ts` 6/6 — including a source scan asserting the Omnichannel
+  directory imports `../voice-communications/` **only** via `index.js`; regression across the 5 Voice
+  suites + both earlier Omnichannel suites + AI contracts + i18n + navigation = 147+ green;
+  api+web typecheck, eslint, ui-conventions, web build clean; live browser pass rendered the catalog
+  (sms/whatsapp/web_chat rows with honest notes, no secrets in payload).
+- Dev-server observation: the dev `voiceCommunications` settings has sms/whatsapp features off and
+  `demo-voice` grants no messaging capability, so the catalog honestly reports outbound/inbound false
+  until an operator binds an account — OM.5 will use the fake provider in tests, never live sends.
 
 ### 2026-10-26 — Phase 19-OM.3 (Persistence model and additive migrations)
 

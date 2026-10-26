@@ -88,3 +88,17 @@ export { VoiceProviderAccountsService } from "./voice-provider-accounts.service.
 export { AsteriskProviderAdapter } from "./voice-provider-asterisk.js";
 export { TwilioProviderAdapter } from "./voice-provider-twilio.js";
 export { VoiceWebhookIngressService } from "./voice-webhook-ingress.service.js";
+
+// Phase 19-OM.4 (extension E1) — the consumed surface of this module. Omnichannel and any other
+// kernel consumer reaches VoiceCommunications ONLY through these exported symbols; deep imports of
+// the files below are the coupling plan §2.4 forbids. The types are provider-neutral: none of them
+// names a vendor.
+export type { CommunicationErrorCategory, MessageChannel, MessageState,ProviderCapability, VoiceChannel } from "./voice-communications-domain.js";
+export { COMMUNICATION_ERROR_CATEGORIES, errorMessageFor,isMessageChannel, isRetryableError, isVoiceChannel, MESSAGE_CHANNELS, PROVIDER_CAPABILITIES, VOICE_CHANNELS } from "./voice-communications-domain.js";
+export type { InboxConversationView, InboxQuery, TimelineEntryView } from "./voice-inbox.service.js";
+export { VoiceInboxService } from "./voice-inbox.service.js";
+export type { ConversationView, MessageView, SendMessageInput } from "./voice-messaging.service.js";
+export { VoiceMessagingService } from "./voice-messaging.service.js";
+export type { NormalizedMessageEvent, NormalizedProviderEvent, ProviderHealthResult, ProviderWebhookRequest, ResolvedProviderAccount, ValidatedProviderEvent, VoiceProviderAdapter, VoiceProviderInfo, VoiceProviderMode, WebhookSignatureScheme } from "./voice-provider.js";
+export { VoiceProviderError } from "./voice-provider.js";
+export type { ProviderAccountView } from "./voice-provider-accounts.service.js";

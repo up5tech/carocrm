@@ -4324,3 +4324,24 @@ export interface OmnichannelNavView {
   readonly enabled: boolean;
   readonly resource: string;
 }
+
+/** Phase 19-OM.4 — the channel capability catalog (mirrors omnichannel-capability.service.ts). */
+export interface OmnichannelChannelCapabilityView {
+  readonly channel: string;
+  readonly transport: 'voice' | 'self';
+  readonly enabled: boolean;
+  readonly configured: boolean;
+  readonly inbound: boolean;
+  readonly outbound: boolean;
+  readonly deliveryStatuses: boolean;
+  readonly readReceipts: boolean;
+  readonly templates: boolean;
+  readonly media: boolean;
+  readonly accounts: readonly { readonly key: string; readonly label: string }[];
+  readonly notes: readonly string[];
+}
+
+export interface OmnichannelCapabilityCatalog {
+  readonly catalogVersion: number;
+  readonly channels: readonly OmnichannelChannelCapabilityView[];
+}

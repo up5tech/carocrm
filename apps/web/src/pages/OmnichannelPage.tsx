@@ -4,7 +4,7 @@ import { Alert, Button, Card, Col, Row, Space, Switch, Table, Tag, Typography } 
 import type { ColumnsType } from 'antd/es/table';
 
 import { api } from '../api/client.js';
-import type { OmnichannelHealthView } from '../api/types.js';
+import type { OmnichannelCapabilityCatalog, OmnichannelHealthView } from '../api/types.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { PageHeader } from '../components/PageHeader.js';
@@ -42,6 +42,13 @@ export function OmnichannelPage() {
   const health = useQuery({
     queryKey: ['omnichannel', 'health'],
     queryFn: () => api.omnichannelHealth(),
+    staleTime: 30_000,
+    retry: false,
+  });
+  // The channel capability catalog (OM.4): the composer will enable or refuse from this answer.
+  const channels = useQuery({
+    queryKey: ['omnichannel', 'channels'],
+    queryFn: () => api.omnichannelChannels(),
     staleTime: 30_000,
     retry: false,
   });
@@ -190,6 +197,30 @@ export function OmnichannelPage() {
                   </Typography.Text>
                 ))}
               </Space>
+            </Card>
+            <Card title={t('omnichannel.page.channels')} size="small">
+              {channels.data === undefined ? (
+                <Typography.Text type="secondary">{t('omnichannel.page.channelsPending')}</Typography.Text>
+              ) : (
+                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                  {(channels.data as OmnichannelCapabilityCatalog).channels.map((channel) => (
+                    <div key={channel.channel}>
+                      <Space size={4} wrap>
+                        <Typography.Text strong>{channel.channel}</Typography.Text>
+                        <Tag color={channel.outbound ? 'success' : 'default'}>{t('omnichannel.page.channelOutbound')}</Tag>
+                        <Tag color={channel.inbound ? 'success' : 'default'}>{t('omnichannel.page.channelInbound')}</Tag>
+                        <Tag color={channel.templates ? 'success' : 'default'}>{t('omnichannel.page.channelTemplates')}</Tag>
+                        <Tag color={channel.media ? 'success' : 'default'}>{t('omnichannel.page.channelMedia')}</Tag>
+                      </Space>
+                      {channel.notes.length > 0 ? (
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0, fontSize: 12 }}>
+                          {channel.notes.join(' ')}
+                        </Typography.Paragraph>
+                      ) : null}
+                    </div>
+                  ))}
+                </Space>
+              )}
             </Card>
             <Card title={t('omnichannel.page.myRights')} size="small">
               <Table rowKey="key" size="small" pagination={false} columns={rightColumns} dataSource={[...view.callerRights]} />

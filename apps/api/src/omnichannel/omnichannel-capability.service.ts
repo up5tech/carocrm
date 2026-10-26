@@ -1,0 +1,133 @@
+import { Inject, Injectable } from '@nestjs/common';
+
+import type { ProviderCapability } from '../voice-communications/index.js';
+import {
+  VoiceCommunicationsSettingsService,
+  VoiceProviderAccountsService,
+} from '../voice-communications/index.js';
+import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
+
+/**
+ * Phase 19-OM.4 — the adapter/capability registry the workspace reads
+ * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2` capability lookup; feature contract §2.1, §11;
+ * feasibility records CF-1/CF-2/CF-4).
+ *
+ * Channel availability is a computed answer, never a hard-coded assumption (plan §4.1): it reads
+ * the Voice registry's declared capabilities, the bound accounts' *granted ∩ declared* effective
+ * capabilities, the owning module's feature flags and this module's own switch. A capability that
+ * is not declared is reported absent — the composer must then refuse it as `unsupported` (E3),
+ * not silently succeed (contract §9). Only the exported barrel surface of `VoiceCommunications` is
+ * used (E1) — no deep import and no provider SDK type crosses into Omnichannel (acceptance: "core
+ * conversation services do not import provider SDK types").
+ *
+ * Versioning: the view carries `catalogVersion`. Additive changes (a new channel row, a new
+ * capability field) bump the minor; removing a row or re-typing a field is a breaking change the
+ * contract forbids without a recorded decision.
+ */
+
+export const OMNICHANNEL_CAPABILITY_CATALOG_VERSION = 1;
+
+export type OmnichannelChannelKey = 'sms' | 'whatsapp' | 'web_chat';
+
+export interface OmnichannelChannelCapabilityView {
+  readonly channel: OmnichannelChannelKey;
+  /** Which module carries the transport: VoiceCommunications (D1) or the module's own widget (OM.9). */
+  readonly transport: 'voice' | 'self';
+  /** The owning module's feature flag for this channel. */
+  readonly enabled: boolean;
+  /** Whether a usable transport actually exists right now (bound account, or shipped widget). */
+  readonly configured: boolean;
+  readonly inbound: boolean;
+  readonly outbound: boolean;
+  readonly deliveryStatuses: boolean;
+  readonly readReceipts: boolean;
+  readonly templates: boolean;
+  readonly media: boolean;
+  /** The non-secret account identity behind the answer, so the UI can explain itself. */
+  readonly accounts: readonly { readonly key: string; readonly label: string }[];
+  /** Stable, human-readable limits — why a capability is off, not a silent boolean. */
+  readonly notes: readonly string[];
+}
+
+export interface OmnichannelCapabilityCatalog {
+  readonly catalogVersion: number;
+  readonly channels: readonly OmnichannelChannelCapabilityView[];
+}
+
+@Injectable()
+export class OmnichannelCapabilityService {
+  constructor(
+    @Inject(VoiceProviderAccountsService) private readonly accounts: VoiceProviderAccountsService,
+    @Inject(VoiceCommunicationsSettingsService) private readonly voiceSettings: VoiceCommunicationsSettingsService,
+    @Inject(OmnichannelSettingsService) private readonly settings: OmnichannelSettingsService,
+  ) {}
+
+  async catalog(): Promise<OmnichannelCapabilityCatalog> {
+    const [views, settings, workspace] = await Promise.all([
+      this.accounts.list(),
+      this.voiceSettings.settings(),
+      this.settings.workspaceEnabled(),
+    ]);
+    const usable = views.filter((account) => account.enabled);
+
+    const channels: OmnichannelChannelCapabilityView[] = [
+      this.voiceChannel('sms', usable, settings.features.sms, 'messaging.sms.send', 'messaging.sms.receive'),
+      this.voiceChannel('whatsapp', usable, settings.features.whatsapp, 'messaging.whatsapp.send', 'messaging.whatsapp.receive'),
+      this.webChatChannel(workspace),
+    ];
+    return { catalogVersion: OMNICHANNEL_CAPABILITY_CATALOG_VERSION, channels };
+  }
+
+  private voiceChannel(
+    channel: Extract<OmnichannelChannelKey, 'sms' | 'whatsapp'>,
+    usable: readonly { key: string; label: string; effectiveCapabilities: readonly ProviderCapability[] }[],
+    featureEnabled: boolean,
+    sendKey: ProviderCapability,
+    receiveKey: ProviderCapability,
+  ): OmnichannelChannelCapabilityView {
+    const bound = usable.filter(
+      (account) => account.effectiveCapabilities.includes(sendKey) || account.effectiveCapabilities.includes(receiveKey),
+    );
+    const granted = new Set<ProviderCapability>(bound.flatMap((account) => [...account.effectiveCapabilities]));
+    const notes: string[] = [];
+    if (!featureEnabled) notes.push('The owning Voice module has this channel switched off.');
+    if (bound.length === 0) notes.push('No enabled account grants this channel; sends are refused until one exists.');
+    if (!granted.has('messaging.media')) notes.push('Media is not declared by any bound adapter — requests answer `unsupported` (CF-2).');
+    if (channel === 'whatsapp') notes.push('Outside the customer-service window only approved templates are sendable (CF-2).');
+    // The transport vocabulary has no read-receipt capability key; reporting it as supported without
+    // a declaration is exactly the "assumed provider support" OM.1 exists to prevent.
+    return {
+      channel,
+      transport: 'voice',
+      enabled: featureEnabled,
+      configured: bound.length > 0,
+      inbound: granted.has(receiveKey),
+      outbound: granted.has(sendKey),
+      deliveryStatuses: granted.has('messaging.deliveryStatus'),
+      readReceipts: false,
+      templates: channel === 'whatsapp' && granted.has('messaging.templates'),
+      media: granted.has('messaging.media'),
+      accounts: bound.map((account) => ({ key: account.key, label: account.label })),
+      notes,
+    };
+  }
+
+  private webChatChannel(workspaceEnabled: boolean): OmnichannelChannelCapabilityView {
+    return {
+      channel: 'web_chat',
+      transport: 'self',
+      enabled: workspaceEnabled,
+      // The widget and its visitor-session store are delivered by 19-OM.9 (contract §7); until then
+      // the honest answer is "not configured", not a half-true capability grid.
+      configured: false,
+      inbound: false,
+      outbound: false,
+      deliveryStatuses: false,
+      readReceipts: false,
+      templates: false,
+      media: false,
+      accounts: [],
+      notes: ['Website chat arrives with 19-OM.9 (visitor session + widget).'],
+    };
+  }
+}

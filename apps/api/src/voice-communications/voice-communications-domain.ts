@@ -472,6 +472,9 @@ export const COMMUNICATION_ERROR_CATEGORIES = [
   "provider_unavailable",
   "invalid_response",
   "media_rejected",
+  // Phase 19-OM.3/E3 (feature contract §9): the channel does not offer the capability at all — a
+  // permanent refusal, never a silent success and never retried (a capability must ship first).
+  "unsupported",
   "unknown",
 ] as const;
 export type CommunicationErrorCategory = (typeof COMMUNICATION_ERROR_CATEGORIES)[number];
@@ -514,6 +517,8 @@ export function errorMessageFor(category: CommunicationErrorCategory): string {
       return "The provider returned a response this module could not interpret.";
     case "media_rejected":
       return "The media was rejected by size, type or scanning policy.";
+    case "unsupported":
+      return "This channel does not offer the requested capability; it must not be retried or faked.";
     case "unknown":
       return "The provider request failed for an unknown reason.";
   }

@@ -1169,6 +1169,28 @@ Acceptance:
 
 ### Phase 19-OM.4 — Adapter and Capability Registry
 
+**Status: COMPLETE.** E1/E3/E14 delivered. The Voice barrel now exports `VoiceInboxService`,
+`VoiceMessagingService`, the `VoiceProviderAdapter` interface, the provider event/account types and the
+normalized vocabulary (`PROVIDER_CAPABILITIES`, `COMMUNICATION_ERROR_CATEGORIES`, channels, states) —
+the consumed surface other kernel modules may use without a deep import. `unsupported` was added to the
+13-category taxonomy as a permanent, non-retryable refusal with an operator message (E3). The contract
+registry now publishes `voiceCommunications.inbox.read` and `voiceCommunications.message.send` (v1)
+beside the existing suppression contract, each running entirely through the owner's pipeline
+(caller ACL; policy/consent/suppression/quiet-hours/template/idempotency). Omnichannel gained
+`OmnichannelCapabilityService` + `GET /api/v1/Omnichannel/action/channels` (catalogVersion 1): per
+channel (`sms`, `whatsapp`, `web_chat`) the computed answer of enabled/configured/inbound/outbound/
+templates/media/delivery/read-receipts from declared ∩ granted capabilities — nothing is assumed,
+`readReceipts` has no capability key and is therefore reported absent, and `web_chat` says "arrives
+with 19-OM.9" instead of faking a grid. E15 remains closed (transport stays on Voice's adapter; no
+`ConnectorAdapter.send` was added). The workspace page renders the catalog.
+
+Verification: `omnichannel-adapter.test.ts` 6/6 (taxonomy + non-retryable, catalog shape without
+secrets, plain role 403, both contracts published with v1 + ownership text, fake simulator refuses
+`messaging.mms.send` and unknown keys resolve fail-closed, and a **source scan proving the Omnichannel
+directory imports Voice only through `index.js`**); Voice suites + persistence + module + contracts +
+i18n regression 147 tests green; api+web typecheck, eslint, ui-conventions and the web build clean;
+browser check on the dev servers.
+
 **Goal:** Provide a provider-neutral connection/capability model while reusing shared integration infrastructure.
 
 **Decision D1 applies: the provider-neutral adapter contract already exists** — `VoiceProviderAdapter`
@@ -1191,10 +1213,10 @@ Tasks:
 
 Acceptance:
 
-- Core conversation services do not import provider SDK types.
-- Missing provider capability results in a safe unsupported-operation response, not silent success.
-- Tests can register a fake adapter without secrets or real outbound calls.
-- **Omnichannel reaches the voice transport only through exported symbols and published contracts — no deep import into another module's internals.**
+- Core conversation services do not import provider SDK types. — **Met** (there are no provider SDK types outside Voice's adapters; the Omnichannel directory imports only the barrel — enforced by a source-scan test).
+- Missing provider capability results in a safe unsupported-operation response, not silent success. — **Met** (`unsupported` added to the taxonomy, permanent and non-retryable; the catalog reports undeclared capabilities as absent, e.g. MMS on the simulator).
+- Tests can register a fake adapter without secrets or real outbound calls. — **Met** (`VoiceProviderRegistry` + `FakeVoiceProvider` exported; the adapter test asserts the simulator's honest capability declarations and fail-closed resolution).
+- **Omnichannel reaches the voice transport only through exported symbols and published contracts — no deep import into another module's internals.** — **Met** (`omnichannel-adapter.test.ts` scans the module directory for any `../voice-communications/<internal>` import; contracts published at v1 in the registry).
 
 ### Phase 19-OM.5 — Inbound Webhook/Event Receipt Pipeline
 

@@ -136,6 +136,7 @@ import type {
   ModuleSettingsView,
   NavigationTree,
   OmnichannelCapabilitiesView,
+  OmnichannelCapabilityCatalog,
   OmnichannelHealthView,
   OmnichannelNavView,
   OmnichannelSettingsView,
@@ -2119,6 +2120,7 @@ export const api = {
   /** Phase 19-OM.2: the Omnichannel control plane — health, rights, nav signal, settings document. */
   omnichannelHealth: () => request<OmnichannelHealthView>('/Omnichannel/action/health'),
   omnichannelCapabilities: () => request<OmnichannelCapabilitiesView>('/Omnichannel/action/capabilities'),
+  omnichannelChannels: () => request<OmnichannelCapabilityCatalog>('/Omnichannel/action/channels'),
   omnichannelNav: () => request<OmnichannelNavView>('/Omnichannel/action/nav'),
   omnichannelSettings: () => request<OmnichannelSettingsView>('/Omnichannel/action/settings'),
   omnichannelSaveSettings: (patch: Record<string, unknown>) => request<OmnichannelSettingsView>('/Omnichannel/action/settings', post(patch)),

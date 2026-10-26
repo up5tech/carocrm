@@ -188,7 +188,7 @@ export const OMNICHANNEL_MODULE = {
   /** Frontend route of the agent workspace. */
   frontendRoute: '/omnichannel',
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ['19-OM.0', '19-OM.1', '19-OM.2', '19-OM.3'],
+  implementedPhases: ['19-OM.0', '19-OM.1', '19-OM.2', '19-OM.3', '19-OM.4'],
   /**
    * Metadata entities this module owns — deliberately empty (D1): the records live in their
    * owning modules and the workspace consumes facades. No entity is invented to populate menus.
