@@ -1,8 +1,9 @@
-import { Alert, Card, Col, Descriptions, Empty, Row, Skeleton, Space, Typography } from 'antd';
+import { Alert, Card, Col, Descriptions, Row, Skeleton, Space, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { t } from '../state/i18n.js';
 import { portalBase, usePortalContext } from '../state/portal.js';
 import { DashletResult } from './DashletResult.js';
@@ -88,7 +89,7 @@ export function PortalHomePage() {
             ))}
           </Row>
         ) : (
-          <Empty description={t('web.portal.noDashboard')} />
+          <EmptyState description={t('web.portal.noDashboard')} />
         )}
       </Card>
       <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>

@@ -115,6 +115,9 @@ export const BRAND_DOCUMENT_SCHEMA = z.object({
   pageTitle: z.string().trim().min(1).max(80).nullable().optional(),
   footerText: z.string().trim().max(200).nullable().optional(),
   logoAttachmentId: z.string().max(36).nullable().optional(),
+  // A brand colour is an accent *name* from NAVIGATION_ACCENTS — never a free hex — so it always maps
+  // to a token the design system owns (PLAN §20.20). An unknown name is refused with 422.
+  primaryColor: z.enum(NAVIGATION_ACCENTS).nullable().optional(),
 });
 
 export type BrandDocument = z.infer<typeof BRAND_DOCUMENT_SCHEMA>;

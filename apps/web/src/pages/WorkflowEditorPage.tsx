@@ -1,13 +1,14 @@
 import { ArrowLeftOutlined, DeleteOutlined, DownOutlined, SaveOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, App as AntApp, Button, Card, Col, Empty, Input, InputNumber, Row, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Col, Input, InputNumber, Row, Select, Space, Table, Tag, Tooltip, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { WorkflowDefinitionShape, WorkflowNode, WorkflowRunView, WorkflowView } from '../api/types.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { defaultParamsOf,ParamsEditor } from '../components/ParamsEditor.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime, t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
 import { editableDefinition, useWorkflow, useWorkflowCatalog, useWorkflowRuns } from '../state/workflows.js';
@@ -242,7 +243,7 @@ export function WorkflowEditorPage() {
 
       <Card title={t('web.workflowEditor.flow')}>
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          {nodes.length === 0 ? <Empty description={t('web.workflowEditor.noSteps')} /> : null}
+          {nodes.length === 0 ? <EmptyState description={t('web.workflowEditor.noSteps')} /> : null}
           {nodes.map((node, index) => (
             <NodeEditor
               key={node.id}
@@ -438,7 +439,7 @@ function RunTable({ runs }: { runs: WorkflowRunView[] }) {
           { title: t('web.adminAudit.record'), render: (_v: unknown, run) => `${run.entityType}/${run.entityId}` },
           { title: t('web.common.status'), dataIndex: 'status' },
           { title: t('web.workflowEditor.attempt'), dataIndex: 'attempt' },
-          { title: t('web.workflows.started'), render: (_v: unknown, run) => run.startedAt.slice(0, 19).replace('T', ' ') },
+          { title: t('web.workflows.started'), render: (_v: unknown, run) => formatDateTime(run.startedAt) },
           { title: t('web.workflows.error'), dataIndex: 'error', render: (error: string | null) => error ?? '—' },
         ]}
       />

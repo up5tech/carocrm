@@ -16,6 +16,7 @@ import { useRecordVisit } from '../state/recent.js';
 import { useSession } from '../state/session.js';
 import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 import { navAccent } from '../theme.js';
+import { AppErrorBoundary } from './AppErrorBoundary.js';
 import { CommandPalette } from './CommandPalette.js';
 import { CRMChatQuickAccess } from './CRMChatQuickAccess.js';
 import { DocsLink } from './docs/DocsLink.js';
@@ -23,6 +24,7 @@ import { PageDocsProvider, usePageDocsKey } from './docs/PageDocs.js';
 import { entityIcon, navGroupIcon, navIcon } from './entityIcons.js';
 import { IncomingCallBanner } from './IncomingCallBanner.js';
 import { NotificationsMenu } from './NotificationsMenu.js';
+import { OfflineBanner } from './OfflineBanner.js';
 
 const { Sider, Content, Footer } = Layout;
 
@@ -49,12 +51,25 @@ type MenuItems = Required<MenuProps>['items'];
  * Shell selector (PLAN §37): portal users get the portal chrome, everyone else the internal
  * one. The user type resolves asynchronously (`/AppUser/me`), so the branch lives in its own
  * component instead of an early return inside a hook-using render.
+ *
+ * Both shells receive the same guarded content: the offline banner and the route-level error
+ * boundary are properties of "a page inside the chrome", not of one shell (PLAN_Phase_20 §20.22).
+ * The boundary is keyed by path, so navigating away from a crashed screen resets it.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const { principal } = useSession();
+  const location = useLocation();
+  const content = (
+    <>
+      <OfflineBanner />
+      <AppErrorBoundary scope="route" key={location.pathname}>
+        {children}
+      </AppErrorBoundary>
+    </>
+  );
   return (
     <PageDocsProvider>
-      {principal?.type === 'portal' ? <PortalShell>{children}</PortalShell> : <InternalShell>{children}</InternalShell>}
+      {principal?.type === 'portal' ? <PortalShell>{content}</PortalShell> : <InternalShell>{content}</InternalShell>}
     </PageDocsProvider>
   );
 }

@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Empty, Row, Select, Skeleton, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Col, Row, Select, Skeleton, Space, Table, Tag, Typography } from 'antd';
 import { useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { AIAgentView } from '../../api/types.js';
+import { EmptyState } from '../../components/EmptyState.js';
 import { t } from '../../state/i18n.js';
 
 export function AIAgentsEvaluationsTab({ capabilities }: { readonly capabilities: Record<string, boolean> }) {
@@ -79,7 +80,7 @@ export function AIAgentsEvaluationsTab({ capabilities }: { readonly capabilities
             ]}
           />
         ) : (
-          <Empty description={t('web.aiAgents.noSuites')} />
+          <EmptyState description={t('web.aiAgents.noSuites')} />
         )}
       </Card>
 
@@ -115,7 +116,7 @@ export function AIAgentsEvaluationsTab({ capabilities }: { readonly capabilities
       </Card>
 
       <Card title={t('web.aiAgents.evalRuns')} size="small">
-        {!selectedAgent ? <Empty description={t('web.aiAgents.selectAgentFirst')} /> : null}
+        {!selectedAgent ? <EmptyState description={t('web.aiAgents.selectAgentFirst')} /> : null}
         {selectedAgent && runs.isLoading ? <Skeleton active /> : null}
         {selectedAgent && runs.data?.list?.length ? (
           <Table
@@ -145,7 +146,7 @@ export function AIAgentsEvaluationsTab({ capabilities }: { readonly capabilities
             }}
           />
         ) : null}
-        {selectedAgent && !runs.isLoading && !runs.data?.list?.length ? <Empty description={t('web.aiAgents.noRuns')} /> : null}
+        {selectedAgent && !runs.isLoading && !runs.data?.list?.length ? <EmptyState description={t('web.aiAgents.noRuns')} /> : null}
       </Card>
     </Space>
   );

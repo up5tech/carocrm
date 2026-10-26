@@ -1,6 +1,6 @@
 import { ArrowLeftOutlined, DeleteOutlined, PlusOutlined, SaveOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, App as AntApp, Button, Card, Col, Empty, Input, InputNumber, Row, Select, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Col, Input, InputNumber, Row, Select, Space, Switch, Table, Tag, Tooltip, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -14,8 +14,9 @@ import type {
   ProcessOutcomeSpec,
   ProcessView,
 } from '../api/types.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { defaultParamsOf,ParamsEditor } from '../components/ParamsEditor.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime, t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { editableProcessDefinition, useProcess, useProcessCatalog, useProcessInstances } from '../state/processes.js';
 import { useSession } from '../state/session.js';
@@ -345,7 +346,7 @@ export function ProcessEditorPage() {
 
       <Card title={t('web.workflowEditor.flow')}>
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          {nodes.length === 0 ? <Empty description={t('web.processEditor.noSteps')} /> : null}
+          {nodes.length === 0 ? <EmptyState description={t('web.processEditor.noSteps')} /> : null}
           {nodes.map((node, index) => (
             <NodeEditor
               key={node.id}
@@ -821,7 +822,7 @@ function InstanceMiniTable({ instances, loading }: { instances: ProcessInstanceV
             </Space>
           ),
         },
-        { title: t('web.workflows.started'), render: (_value: unknown, row) => row.startedAt.slice(0, 19).replace('T', ' ') },
+        { title: t('web.workflows.started'), render: (_value: unknown, row) => formatDateTime(row.startedAt) },
         { title: t('web.workflows.error'), dataIndex: 'error', render: (error: string | null) => error ?? '—' },
       ]}
     />

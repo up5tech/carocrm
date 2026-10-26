@@ -155,7 +155,8 @@
     "mappingBuilderHint": "Bạn có thể chỉnh ánh xạ trường sau bước này, trong trình xây ánh xạ.",
     "previewHint": "Chạy thử cho biết ánh xạ sẽ ghi gì. Không ghi gì cả.",
     "previewPending": "Xem trước ánh xạ trong trình xây ánh xạ để biết các giá trị sẽ được ghi.",
-    "publishHint": "Công bố làm cho ánh xạ hoạt động. Job đồng bộ chỉ chạy với ánh xạ đã công bố."
+    "publishHint": "Công bố làm cho ánh xạ hoạt động. Job đồng bộ chỉ chạy với ánh xạ đã công bố.",
+    "grantedScope": "Phạm vi đã cấp"
   },
   "mapping": {
     "title": "Ánh xạ",

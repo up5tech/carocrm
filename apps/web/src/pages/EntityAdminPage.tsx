@@ -1,11 +1,12 @@
 import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, App as AntApp, Button, Card, Col, Empty, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Switch, Table, Tabs, Tag, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Switch, Table, Tabs, Tag, Typography } from 'antd';
 import { useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition, IndexDefinition, Role } from '../api/types.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { defaultIconName,ENTITY_ICONS } from '../components/entityIcons.js';
 import { LayoutEditor, memberFieldNames } from '../components/LayoutEditor.js';
 import { useNavigationGroupKeys } from '../state/admin.js';
@@ -931,7 +932,7 @@ export function EntityAdminPage() {
   if (!entity) {
     return (
       <Card className="carocrm-card" title={entityName ?? t('web.entityAdmin.entityFallback')}>
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.entityAdmin.notFound', { name: entityName ?? '' })} />
+        <EmptyState size="compact" description={t('web.entityAdmin.notFound', { name: entityName ?? '' })} />
         <div style={{ textAlign: 'center' }}>
           <Link to="/admin/entity-manager">
             <Button icon={<ArrowLeftOutlined />}>{t('web.entityAdmin.backToEntities')}</Button>

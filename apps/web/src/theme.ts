@@ -1,20 +1,25 @@
 import type { ThemeConfig } from 'antd';
 
+import { ACCENT_NAMES, ACCENT_TONES, type AccentName,accentTone, COLOR, FONT_FAMILY } from './theme/tokens.js';
+
+export { ACCENT_NAMES, ACCENT_TONES, accentTone, COLOR, FONT_FAMILY } from './theme/tokens.js';
+
 /**
- * CaroCRM design tokens: primary #438eff, Inter, layout #f5f5f5, white 260px sider /
- * 70px header with #eff2f7 separators, 8px cards with a #f0f0f0 border and no shadow.
+ * CaroCRM design tokens (PLAN_Phase_20_Settings_UX.md §20.20). Every value below is read from
+ * `tokens.ts` — there is no literal colour in this file, so an Ant Design token and the matching CSS
+ * custom property (`styles/tokens.css`) can never drift apart.
  */
 export const carocrmTheme: ThemeConfig = {
   token: {
-    colorPrimary: '#438eff',
-    colorInfo: '#438eff',
-    colorLink: '#438eff',
-    colorSuccess: '#55c27f',
-    colorWarning: '#f8ac59',
-    colorError: '#fa626b',
-    colorTextBase: '#31373d',
-    colorTextSecondary: '#737b85',
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+    colorPrimary: COLOR.accent,
+    colorInfo: COLOR.stateInfo,
+    colorLink: COLOR.accent,
+    colorSuccess: COLOR.stateSuccess,
+    colorWarning: COLOR.stateWarning,
+    colorError: COLOR.stateError,
+    colorTextBase: COLOR.inkPrimary,
+    colorTextSecondary: COLOR.inkSecondary,
+    fontFamily: FONT_FAMILY,
     fontSize: 14,
     controlHeight: 36,
     controlHeightSM: 24,
@@ -27,12 +32,12 @@ export const carocrmTheme: ThemeConfig = {
   },
   components: {
     Layout: {
-      bodyBg: '#f5f5f5',
-      headerBg: '#ffffff',
+      bodyBg: COLOR.surfacePage,
+      headerBg: COLOR.surfaceRaised,
       headerHeight: 70,
       headerPadding: '0 24px',
-      siderBg: '#ffffff',
-      footerBg: '#ffffff',
+      siderBg: COLOR.surfaceRaised,
+      footerBg: COLOR.surfaceRaised,
       footerPadding: '24px',
     },
     Menu: {
@@ -40,9 +45,9 @@ export const carocrmTheme: ThemeConfig = {
       itemMarginInline: 8,
       itemBorderRadius: 8,
       itemBg: 'transparent',
-      itemSelectedBg: '#f0f8ff',
-      itemSelectedColor: '#438eff',
-      itemColor: '#5b636d',
+      itemSelectedBg: COLOR.menuSelectedBg,
+      itemSelectedColor: COLOR.accent,
+      itemColor: COLOR.inkMenu,
       subMenuItemBg: 'transparent',
       iconMarginInlineEnd: 10,
     },
@@ -52,20 +57,20 @@ export const carocrmTheme: ThemeConfig = {
       headerBg: 'transparent',
       headerHeight: 55,
       headerFontSize: 15,
-      colorBorderSecondary: '#f0f0f0',
+      colorBorderSecondary: COLOR.lineStrong,
     },
     Pagination: {
       itemSize: 32,
       borderRadius: 6,
     },
     Table: {
-      headerBg: '#fafafa',
-      headerColor: '#31373d',
+      headerBg: COLOR.tableHeaderBg,
+      headerColor: COLOR.inkPrimary,
       headerSplitColor: 'transparent',
-      borderColor: '#f0f0f0',
+      borderColor: COLOR.lineStrong,
       cellPaddingBlock: 12,
       cellPaddingInline: 16,
-      rowHoverBg: '#f8fbff',
+      rowHoverBg: COLOR.tableRowHover,
     },
     Button: {
       borderRadius: 6,
@@ -84,25 +89,46 @@ export const carocrmTheme: ThemeConfig = {
 };
 
 /**
+ * Build a theme for a brand accent name (General settings → `primaryColor`). Defaults to blue when
+ * the name is unknown or absent. This recolours Ant Design's primary/info/link tokens and the menu's
+ * selected row; the shell's own accent usages follow because `BrandTheme` also sets the
+ * `--carocrm-accent*` CSS variables from the same tone set.
+ */
+export function themeForBrand(primaryColor: string | undefined | null): ThemeConfig {
+  const tone = accentTone(primaryColor);
+  return {
+    ...carocrmTheme,
+    token: {
+      ...carocrmTheme.token,
+      colorPrimary: tone.fg,
+      colorInfo: tone.fg,
+      colorLink: tone.fg,
+    },
+    components: {
+      ...carocrmTheme.components,
+      Menu: {
+        ...carocrmTheme.components?.Menu,
+        itemSelectedBg: tone.soft,
+        itemSelectedColor: tone.fg,
+      },
+    },
+  };
+}
+
+/**
  * Menu accent tokens (PLAN_Phase_20_Settings_UX.md §4.4). An accent is one of eight named tokens,
  * never a free colour: the server validates the name against the same list, so a settings document
  * can only choose a treatment the design system already owns. Colour marks a group, it is never the
  * only signal — the label and icon carry the meaning too (§5.8).
  */
-export const NAV_ACCENTS: Record<string, { fg: string; soft: string }> = {
-  blue: { fg: '#438eff', soft: '#f0f8ff' },
-  green: { fg: '#55c27f', soft: '#f2fbf6' },
-  orange: { fg: '#f8ac59', soft: '#fff8f0' },
-  red: { fg: '#fa626b', soft: '#fff5f5' },
-  purple: { fg: '#722ed1', soft: '#f7f3ff' },
-  cyan: { fg: '#13c2c2', soft: '#f0fbfb' },
-  magenta: { fg: '#eb2f96', soft: '#fff0f8' },
-  gold: { fg: '#d4b106', soft: '#fdfbe8' },
-};
+export const NAV_ACCENTS: Record<string, { fg: string; soft: string }> = Object.fromEntries(
+  ACCENT_NAMES.map((name) => [name, { fg: ACCENT_TONES[name as AccentName].fg, soft: ACCENT_TONES[name as AccentName].soft }]),
+);
 
-export const NAV_ACCENT_NAMES: readonly string[] = Object.keys(NAV_ACCENTS);
+export const NAV_ACCENT_NAMES: readonly string[] = ACCENT_NAMES;
 
 /** The accent pair for a name, or the neutral pair when the entry carries none. */
 export function navAccent(name: string | undefined): { fg: string; soft: string } {
-  return (name === undefined ? undefined : NAV_ACCENTS[name]) ?? { fg: '#a1a8b3', soft: '#ffffff' };
+  if (name === undefined) return { fg: COLOR.inkFaint, soft: COLOR.surfaceRaised };
+  return NAV_ACCENTS[name] ?? { fg: COLOR.inkFaint, soft: COLOR.surfaceRaised };
 }

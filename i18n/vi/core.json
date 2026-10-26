@@ -37,5 +37,18 @@
   "retryHint": "Thử lại — lỗi có thể chỉ là tạm thời.",
   "accessDenied": "Không có quyền truy cập",
   "accessDeniedHint": "Bạn không có quyền xem trang này.",
-  "help": "Trợ giúp"
+  "help": "Trợ giúp",
+  "loading": "Đang tải…",
+  "renderFailedTitle": "Không hiển thị được trang này",
+  "renderFailedHint": "Có lỗi khi hiển thị màn hình này. Không có dữ liệu nào được lưu.",
+  "tryAgain": "Thử lại",
+  "goHome": "Về trang chủ",
+  "reloadPage": "Tải lại trang",
+  "offlineTitle": "Mất kết nối mạng",
+  "offlineHint": "Không thể lưu cho tới khi có mạng lại. Dữ liệu trên màn hình có thể đã cũ.",
+  "backOnline": "Đã có kết nối lại",
+  "emptyNoResults": "Không có kết quả phù hợp",
+  "emptyNoResultsHint": "Thử từ khoá khác, hoặc bỏ bớt bộ lọc.",
+  "emptyFiltered": "Bộ lọc hiện tại đang ẩn tất cả bản ghi",
+  "emptyFilteredHint": "Bỏ bộ lọc để xem các bản ghi đang có."
 }

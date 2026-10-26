@@ -316,7 +316,7 @@ export function MenuTab() {
           options={previewUsers.map((user) => ({ value: user.id, label: user.userName }))}
           style={{ width: '100%', marginBottom: 12 }}
         />
-        {previewLoading ? <Typography.Text type="secondary">{t('web.common.loading')}</Typography.Text> : null}
+        {previewLoading ? <Typography.Text type="secondary">{t('core.loading')}</Typography.Text> : null}
         {previewTree !== null ? (
           <nav className="carocrm-menu-preview" aria-label={t('web.adminMenu.previewAsTitle')}>
             <MenuPreviewTree nodes={previewTree.items} />

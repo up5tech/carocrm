@@ -2,12 +2,13 @@ import { closestCorners, DndContext, type DragEndEvent,DragOverlay, KeyboardSens
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
-import { App as AntApp, Button, Card, Dropdown, Empty, Input, Modal, Select, Space, Tag, Typography } from 'antd';
+import { App as AntApp, Button, Card, Dropdown, Input, Modal, Select, Space, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { api } from '../../api/client.js';
 import type { ProjectMemberRow, ProjectStageRow, ProjectTaskRow } from '../../api/types.js';
+import { EmptyState } from '../../components/EmptyState.js';
 import { t } from '../../state/i18n.js';
 import {
   childrenOf,
@@ -129,11 +130,11 @@ export function ProjectPlanPage() {
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           {groups.length === 0 ? (
             <Card className="carocrm-card">
-              <Empty description={t('web.projects.noGroups')}>
+              <EmptyState description={t('web.projects.noGroups')}>
                 {canManageGroups ? (
                   <CreateGroupButton projectId={id} onChanged={() => { refresh(); void message.success(t('web.projects.groupSaved')); }} />
                 ) : null}
-              </Empty>
+              </EmptyState>
             </Card>
           ) : null}
 

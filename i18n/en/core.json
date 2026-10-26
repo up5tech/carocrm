@@ -37,5 +37,18 @@
   "retryHint": "Try again — the error may be temporary.",
   "accessDenied": "Access denied",
   "accessDeniedHint": "You do not have permission to view this page.",
-  "help": "Help"
+  "help": "Help",
+  "loading": "Loading…",
+  "renderFailedTitle": "This page could not be displayed",
+  "renderFailedHint": "Something on this screen failed while drawing it. Nothing was saved.",
+  "tryAgain": "Try again",
+  "goHome": "Back to home",
+  "reloadPage": "Reload the page",
+  "offlineTitle": "You are offline",
+  "offlineHint": "Nothing can be saved until the connection is back. What is on screen may be out of date.",
+  "backOnline": "Back online",
+  "emptyNoResults": "Nothing matched",
+  "emptyNoResultsHint": "Try a different search, or clear the filters.",
+  "emptyFiltered": "The current filters hide every record",
+  "emptyFilteredHint": "Clear the filters to see the records that exist."
 }

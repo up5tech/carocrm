@@ -1,23 +1,11 @@
 import { ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  App as AntApp,
-  Button,
-  Descriptions,
-  Empty,
-  Input,
-  Modal,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-} from 'antd';
+import { Alert, App as AntApp, Button, Descriptions, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import { useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { AIAgentApprovalView } from '../../api/types.js';
+import { EmptyState } from '../../components/EmptyState.js';
 import { t } from '../../state/i18n.js';
 import { formatTimestamp, RiskTag } from './shared.js';
 
@@ -114,7 +102,7 @@ export function AIAgentsApprovalsTab({ capabilities }: ApprovalsTabProps) {
         dataSource={[...(approvals.data?.list ?? [])]}
         scroll={{ x: 760 }}
         pagination={{ pageSize: 20, showSizeChanger: false }}
-        locale={{ emptyText: <Empty description={status === 'pending' ? t('web.aiAgents.inboxEmpty') : t('web.aiAgents.noApprovals')} /> }}
+        locale={{ emptyText: <EmptyState description={status === 'pending' ? t('web.aiAgents.inboxEmpty') : t('web.aiAgents.noApprovals')} /> }}
         onRow={(approval) => ({ onClick: () => setSelected(approval), style: { cursor: 'pointer' } })}
         columns={[
           {

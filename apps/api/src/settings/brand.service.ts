@@ -15,6 +15,12 @@ export interface BrandSettings {
   pageTitle: string | null;
   footerText: string | null;
   logoAttachmentId: string | null;
+  /**
+   * The instance's brand accent, as a name from `NAVIGATION_ACCENTS` (validated by
+   * `BRAND_DOCUMENT_SCHEMA`), or null for the shipped blue default. Never a free hex — the SPA maps
+   * the name to its token pair (PLAN §20.20).
+   */
+  primaryColor: string | null;
 }
 
 export interface BrandLogo {
@@ -65,6 +71,7 @@ export class BrandService {
       pageTitle: patch.pageTitle !== undefined ? patch.pageTitle : current.pageTitle,
       footerText: patch.footerText !== undefined ? patch.footerText : current.footerText,
       logoAttachmentId: patch.logoAttachmentId !== undefined ? patch.logoAttachmentId : current.logoAttachmentId,
+      primaryColor: patch.primaryColor !== undefined ? patch.primaryColor : current.primaryColor,
     };
     await db
       .insertInto('app_settings')
@@ -98,5 +105,12 @@ function normalizeBrand(data: unknown): BrandSettings {
     const value = source[key];
     return typeof value === 'string' && value !== '' ? value : null;
   };
-  return { pageTitle: text('pageTitle'), footerText: text('footerText'), logoAttachmentId: text('logoAttachmentId') };
+  return {
+    pageTitle: text('pageTitle'),
+    footerText: text('footerText'),
+    logoAttachmentId: text('logoAttachmentId'),
+    // `primaryColor` is already constrained to a known accent name by `BRAND_DOCUMENT_SCHEMA`; any
+    // other value falls back to null (the blue default) rather than being stored.
+    primaryColor: text('primaryColor'),
+  };
 }

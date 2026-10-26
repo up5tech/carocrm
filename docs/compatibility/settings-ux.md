@@ -192,3 +192,34 @@ These are the gaps in the shipped arrangement.
   (`packages/metadata/src/relation-tabs.test.ts`), the API tests of the metadata section
   (`apps/api/test/entity-manager-metadata.test.ts`) and a browser walkthrough.
 - **The editor is not covered by an axe audit**, for the same reason the 20.16 audit is missing.
+
+## Status reconciliation — 2026-10-25 (UI/UX review)
+
+The deferral lists above were written as each sub-phase closed and were never reconciled afterwards,
+so several entries now describe a product that no longer exists. `docs/ux/ui-review.md` re-checked
+the list against the working tree. Verified **shipped** since the entry was written:
+
+| Entry that says "not built" | Actually shipped | Where |
+|---|---|---|
+| The row kebab menu (§5.3 "Row actions") | A per-row dropdown with Open / Edit / Assign / Follow / Delete, each offered only when `POST /:entity/action/rowActions` allows it | `pages/EntityListPage.tsx` (actions column) |
+| Column reorder | "Move up" / "Move down" buttons per column, keyboard reachable, persisted in the `columns` preference | `components/ColumnManager.tsx` |
+| Column resize | A header separator per column, width persisted per user per entity in `columnWidths`; the display field is frozen left | `pages/EntityListPage.tsx` |
+| The Favorites group | The rail leads with a Favorites group resolved from the same ACL-filtered tree, written by the palette's "pin this page" | `state/favorites.ts`, `components/AppShell.tsx`, `components/CommandPalette.tsx` |
+| The palette's `/` shortcut | Implemented, suppressed while the caret is in a field or a dialog is open | `components/CommandPalette.tsx` |
+| The record-page sticky header and next-action band | Both: `RecordHeader` keeps name/status/owner in view, `NextActionBand` computes the next pipeline value | `components/RecordHeader.tsx`, `components/NextActionBand.tsx` |
+| Bulk update and assign | One editor for both, opened from the floating bar and from the row menu | `components/BulkEditModal.tsx`, `pages/EntityListPage.tsx` |
+
+Still open, confirmed absent at the same date: the sticky table header, table virtualization,
+cross-page "select all N matching records", per-action outcome counts in the bulk result, "Save &
+new", focus moved to the first invalid field after a failed save, and the whole of 20.20–20.27
+(`docs/ux/ui-review.md` §5). The remaining entries were not re-verified and should be checked before
+a plan revision relies on them.
+
+### Coverage after 20.22/20.23 (2026-10-25)
+
+The "UI half has no automated coverage" limitation above is now narrower but not closed. There is
+still no frontend test runner (that is 20.26), so components remain covered by pure-helper unit tests
+and manual walkthroughs. What does exist is a **convention gate**: `pnpm lint:ui` runs
+`scripts/check-ui-conventions.mjs` and fails on a missing i18n key, an ISO-sliced timestamp, a raw
+`<Empty>` and an internal `<a href="/…">`. Those four rules were chosen because each one was a real
+shipped defect, not a style preference — six raw-key renders and fourteen UTC timestamps among them.

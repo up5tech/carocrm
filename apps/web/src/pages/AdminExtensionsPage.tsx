@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { ExtensionRow } from '../api/types.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime, t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
 
 /**
@@ -88,7 +88,7 @@ export function AdminExtensionsPage() {
             expandedRowRender: (row) => (
               <Descriptions size="small" column={1} bordered>
                 <Descriptions.Item label={t('web.adminExtensions.packagePath')}>{row.path ?? '—'}</Descriptions.Item>
-                <Descriptions.Item label={t('web.adminExtensions.installedAt')}>{row.installedAt ? row.installedAt.slice(0, 19).replace('T', ' ') : '—'}</Descriptions.Item>
+                <Descriptions.Item label={t('web.adminExtensions.installedAt')}>{row.installedAt ? formatDateTime(row.installedAt) : '—'}</Descriptions.Item>
                 <Descriptions.Item label={t('web.adminExtensions.order')}>{row.order}</Descriptions.Item>
                 <Descriptions.Item label={t('web.adminExtensions.dependencies')}>
                   {row.dependencies.length === 0

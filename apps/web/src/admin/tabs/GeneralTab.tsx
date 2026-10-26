@@ -1,9 +1,10 @@
 import { DeleteOutlined, UploadOutlined } from '@ant-design/icons';
-import { Alert, App as AntApp, Button, Card, Form, Input, Space, Typography, Upload } from 'antd';
+import { Alert, App as AntApp, Button, Card, Form, Input, Select, Space, Typography, Upload } from 'antd';
 import { useState } from 'react';
 
 import { api } from '../../api/client.js';
 import { t } from '../../state/i18n.js';
+import { accentTone, NAV_ACCENT_NAMES } from '../../theme.js';
 import { useDocumentForm } from '../document-form.js';
 import { usePublishTabActions } from '../shell.js';
 
@@ -11,6 +12,8 @@ interface BrandDocument {
   pageTitle: string | null;
   footerText: string | null;
   logoAttachmentId: string | null;
+  /** Brand accent name from `NAV_ACCENT_NAMES`, or null for the shipped blue default (§20.20). */
+  primaryColor: string | null;
 }
 
 /**
@@ -96,6 +99,24 @@ export function GeneralTab() {
                 </Button>
               ) : null}
             </Space>
+          </Form.Item>
+          <Form.Item label={t('web.adminSettings.brandColorLabel')} extra={t('web.adminSettings.brandColorHint')}>
+            <Select
+              value={value?.primaryColor ?? ''}
+              onChange={(next) => document.edit({ primaryColor: next === '' ? null : next })}
+              options={[
+                { value: '', label: t('web.adminSettings.brandColorDefault') },
+                ...NAV_ACCENT_NAMES.map((name) => ({
+                  value: name,
+                  label: (
+                    <span className="carocrm-menu-select-option">
+                      <span className="carocrm-menu-select-swatch" style={{ background: accentTone(name).fg }} />
+                      {name}
+                    </span>
+                  ),
+                })),
+              ]}
+            />
           </Form.Item>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {t('web.adminShell.documentName', { name: 'brand' })} · {t('web.adminShell.versionLabel')} {document.version}

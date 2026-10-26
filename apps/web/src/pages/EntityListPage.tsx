@@ -105,7 +105,24 @@ export function EntityListPage() {
   // disclosure, so a module's projection (Lead Score, for instance) is reachable without pushing core
   // fields out of the panel. A field that already carries a condition is always shown.
   const [moreFilters, setMoreFilters] = useState(false);
-  const [textQuery, setTextQuery] = useState(urlTextQuery);
+  // §20.12 + §20.22: the free-text query lives in the URL and **only** there. It used to be a
+  // `useState` seeded from `urlTextQuery`, with a second effect writing it back — and a remount could
+  // seed that state from a stale `useSearchParams()` read, after which the sync effect deleted `q`
+  // from the address bar. Reloading a shared `?q=…` link then showed the unfiltered list, which is
+  // the one thing URL-held list state exists to prevent.
+  const textQuery = urlTextQuery;
+  const setTextQuery = useCallback(
+    (next: string): void => {
+      const params = new URLSearchParams(searchParams);
+      if (next.trim() === '') params.delete('q');
+      else params.set('q', next);
+      // A new query is a new result set: page 4 of the old one is not where the reader wants to land.
+      params.delete('offset');
+      setOffset(0);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
   const [savedFilters, setSavedFilters] = useState<SavedFilterRow[]>([]);
   const [activeFilterId, setActiveFilterId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -128,17 +145,17 @@ export function EntityListPage() {
     }
   }, [urlWhereRaw]);
 
-  // Sync URL when list state changes (debounced to avoid thrashing)
+  // Sync URL when list state changes (debounced to avoid thrashing). `q` is not handled here: it is
+  // written by `setTextQuery` alone, so this effect can never delete a query it did not create.
   useEffect(() => {
     if (!entityName) return;
     const params = new URLSearchParams(searchParams);
     if (offset > 0) params.set('offset', String(offset)); else params.delete('offset');
     if (orderBy) params.set('orderBy', orderBy); else params.delete('orderBy');
     if (pageSize !== 20) params.set('pageSize', String(pageSize)); else params.delete('pageSize');
-    if (textQuery.trim()) params.set('q', textQuery.trim()); else params.delete('q');
     if (drafts.length > 0) params.set('where', JSON.stringify(drafts)); else params.delete('where');
     setSearchParams(params, { replace: true });
-  }, [offset, orderBy, pageSize, textQuery, drafts, entityName, searchParams, setSearchParams]);
+  }, [offset, orderBy, pageSize, drafts, entityName, searchParams, setSearchParams]);
 
   // PLAN §8: a 'list' layout only reorders the columns; without one the field order is unchanged.
   const panels = useMemo(() => layoutPanelsFor(definition.data, 'list'), [definition.data]);
@@ -598,6 +615,14 @@ export function EntityListPage() {
   const displayField = definition.data?.record?.displayField ?? 'name';
   // The board groups by an enum field, so an entity without one has no board to switch to.
   const canBoard = boardGroupFields(definition.data).length > 0;
+  // §20.22: a query or a filter turned an empty page into a *different* state — records may exist,
+  // the current view just hides them, and the fix is to clear the view rather than create a record.
+  const filtered = drafts.length > 0 || textQuery.trim() !== '';
+  const clearFilters = (): void => {
+    setDrafts([]);
+    setTextQuery('');
+    setOffset(0);
+  };
 
   return (
     <Card className="carocrm-card carocrm-list-card">
@@ -771,7 +796,13 @@ export function EntityListPage() {
 
       {rows.length === 0 && !loading && !denied ? (
         <div style={{ marginBottom: 16 }}>
-          <EmptyState title={t('web.list.emptyTitle')} description={t('web.list.emptyHint')} />
+          {/* §20.22: an empty page caused by a filter must not read as "this list has no records" —
+              the two need different actions, so they are different states. */}
+          {filtered ? (
+            <EmptyState variant="filtered" action={<Button onClick={clearFilters}>{t('web.list.clear')}</Button>} />
+          ) : (
+            <EmptyState title={t('web.list.emptyTitle')} description={t('web.list.emptyHint')} />
+          )}
         </div>
       ) : null}
 

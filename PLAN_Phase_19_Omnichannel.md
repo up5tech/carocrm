@@ -51,6 +51,73 @@ This plan expresses intended behavior. It does not prove that every dependency o
 - Automated tests must not send real customer messages, launch live marketing campaigns, initiate calls, create real tickets for customers, or trigger external side effects. Use fake adapters or provider sandboxes and assert that outbound side effects are intercepted.
 - Do not claim any sub-phase is complete until its acceptance criteria and actual verification results have been recorded.
 
+### 0.2 Decisions locked at Phase 19-OM.0
+
+The repository audit (`docs/omnichannel/repository-audit.md`, `docs/omnichannel/capability-matrix.md`)
+established that most of the model this plan describes already exists in `VoiceCommunications`,
+`ServiceDesk`, `AdvancedIntegrations`, `AIAgents` and the shared platform. The following three
+decisions are **binding on every later sub-phase**. A later phase may refine their details, but it
+must not reverse them without an explicit, recorded decision.
+
+**D1 — The canonical conversation record is `voice_conversations` (reused, not rebuilt).**
+
+- `OmnichannelConversation` is a **logical name for the existing `voice_conversations` record**, not
+  a new table and not a new entity. Omnichannel must not create a second conversation store.
+- `OmnichannelMessage` is the existing `voice_messages`; `OmnichannelChannelThread` is
+  `voice_conversations.external_thread_id`; `OmnichannelIdentity` is
+  `voice_conversation_participants`; `OmnichannelConversationEvent` is `voice_conversation_events`;
+  `OmnichannelConnection` is `voice_provider_accounts` + `voice_endpoints`.
+- The gaps that remain are **additive** and must be applied as an additive migration to the
+  existing tables, owned by `VoiceCommunications`: `priority`, `category`, `language`, `tags`,
+  `currentQueueId`, `assignmentVersion`, `lastOutboundAt`/`lastMessageAt`, `snoozedUntil`,
+  `closedAt`, `version`; and on participants a provider-identity id distinct from the address,
+  `verificationState`, `linkConfidence`/`linkReason`, `lastSeenAt`, `sourceProvenance`, plus a
+  uniqueness rule over connection + channel + provider identity.
+- `voice_conversations.channel` is currently CHECK-constrained to `('sms','mms','whatsapp')` and
+  **voice calls are not conversations** (`voice_call_sessions` is a separate store). Widening the
+  channel scope, and representing more than one provider thread per conversation, are explicit OM.1
+  and OM.3 design tasks.
+- Omnichannel owns the **workspace, multi-channel policy and projection**; `VoiceCommunications`
+  owns the **record**. Its contract must be consumed through an exported facade, never by deep
+  import.
+
+**D2 — Queues and routing are owned by `ServiceDesk` and extended there.**
+
+- `OmnichannelQueue` is the existing `CaseQueue` (+ `QueueMember`); `OmnichannelRoutingRule` is the
+  existing `RoutingRule`. Omnichannel must not build a second queue or routing engine.
+- The extension belongs to `ServiceDesk`, as an additive change: `CaseQueue`/`RoutingRule` must
+  accept conversations (not only Cases), and the rule model must be able to express the conditions
+  §3.4 requires — currently the operator allowlist is limited to `equals`/`notEquals`/`in`, routing
+  does not consult `BusinessCalendar`, and there is no skills/language/tier model.
+- Routing reuse is a **reference**, not a Case dependency: a conversation may occupy a queue
+  without a Case existing.
+- `ServiceDesk` also owns the Case hand-off contract that OM.17 needs — `Case` currently has no
+  `externalId`, no `conversations` relation, and no create-or-link command.
+
+**D3 — Realtime: extend `NotificationEventsService` with a generic publish seam, and give
+Omnichannel its own SSE endpoint.**
+
+- The existing single gateway (`GET /api/v1/Notification/stream`) is bound to the `notifications`
+  table by a DB trigger and carries only `(userId, id, type)`. It is **not** a general
+  conversation-event transport, so §6.3's "do not implement a second realtime gateway" is satisfied
+  by *extending* the shared service rather than by reusing it as-is.
+- `NotificationEventsService` gains a **generic per-user publish seam** (an explicit, minimal
+  payload contract) that Omnichannel and any other module can use. This is a **shared-platform**
+  change owned with the platform, not an Omnichannel-local one.
+- Omnichannel additionally exposes **its own module-scoped SSE endpoint** for conversation events,
+  following the precedent `CRMChat` already sets (`crm-chat-streaming.service.ts`). The endpoint
+  is not a second generic gateway: it is a module-scoped stream over the shared publish seam.
+- The constraint still holds: **one** platform-level gateway implementation is not duplicated. The
+  Omnichannel endpoint is a consumer of the shared seam, and no second `LISTEN/NOTIFY` channel, no
+  second connection pool and no second auth path are created.
+- Events carry identifiers and minimal safe payloads; the client re-reads permitted data through
+  normal APIs. Message content is never broadcast to every connected user.
+
+**Consequence for §2.3 and §5.** The names in §5 are logical domain names, not new tables. Where
+§5 says "add", read "extend the existing record additively, in its owning module, with a migration
+that preserves existing rows". Where §2.4 says Omnichannel may maintain a conversation projection,
+that projection is a **read model over `voice_conversations`**, not a second authoritative store.
+
 ---
 
 ## 1. Purpose and Product Outcome
@@ -130,14 +197,17 @@ At completion, authorized users should be able to:
 
 | Capability | Owning module | Omnichannel responsibility |
 |---|---|---|
-| Shared conversation inbox, canonical conversation, transfer and cross-channel context | `Omnichannel` | Primary owner |
+| Shared conversation inbox and cross-channel context | `Omnichannel` | Primary owner of the **workspace and multi-channel policy** |
+| Canonical conversation, message, participant, conversation-event and connection **records** | `VoiceCommunications` (`voice_conversations`, `voice_messages`, `voice_conversation_participants`, `voice_conversation_events`, `voice_provider_accounts`) | **Consume** through an exported facade (decision D1). Omnichannel owns the read/projection model and the workspace |
 | Voice call, SMS/MMS, WhatsApp provider connection and delivery mechanics | `VoiceCommunications` | Consume and normalize supported events; request sends through its contract |
+| Queues, routing rules, assignment strategies and workload | `ServiceDesk` (`CaseQueue`, `QueueMember`, `RoutingRule`) | **Consume and extend in ServiceDesk** (decision D2). Omnichannel owns conversation-facing policy, not the engine |
 | Case, ticket lifecycle, support SLA, resolution and case-specific public/internal updates | `ServiceDesk` | Link/hand off conversation; do not duplicate case business rules |
 | Campaigns, target audiences, marketing journeys, mass email and marketing consent | `MarketingAutomation` | Show campaign source metadata; never start bulk marketing from agent reply controls |
 | Customer-facing portal login and account/contact authorization | `Portal` | Add conversation UI within existing authentication and scope |
 | AI planning, tools, execution runtime, approvals and run trace | `AIAgents` | Submit typed tasks; render run progress; enforce user policy and explicit send approval |
 | Internal AI-assisted CRM chat | `CRMChat` | Separate product experience; not the customer-facing web chat |
 | Shared OAuth/connector/secret/HTTP integration infrastructure, if implemented | `AdvancedIntegrations` | Reuse connector lifecycle primitives without duplicating credentials or sync engine |
+| Realtime publish seam | CRM Kernel (`NotificationEventsService`) | Extend the shared seam; Omnichannel adds a module-scoped SSE endpoint over it (decision D3) |
 | CRM Contact, Account, Lead, User, Team, Activities, Files, Audit, Notifications, Jobs | CRM Kernel / existing owners | Reference and reuse |
 | Business-hours and agent queue SLA related to support cases | `ServiceDesk` if already modeled | Reuse its policy for linked cases; do not invent a competing Case SLA |
 | Conversation response analytics | `Omnichannel` | Own conversation-level metrics; do not replace ServiceDesk's case metrics |
@@ -199,17 +269,26 @@ Rules:
 
 ### 3.4 Assignment, teams, queues, and routing
 
+**Decision D2 applies: queues and routing live in `ServiceDesk` (`CaseQueue`, `QueueMember`,
+`RoutingRule`) and are extended there.** Omnichannel owns the conversation-facing policy and the
+workspace, not a second routing engine. The rules below describe the **target capability of the
+extended ServiceDesk model**, and every one of them that the current implementation does not
+satisfy must be delivered as an additive ServiceDesk change, not as an Omnichannel copy.
+
 - Queues have a name, enabled channels, owning Team, eligible agents, fallback behavior, working-hours policy reference, and optional skill/language tags.
 - Assignments support team/queue ownership and individual ownership according to repository authorization conventions.
 - Routing rules have a documented order/priority, conditions, destination, fallback, enabled flag, and audit history.
-- Supported first-release rules may include channel, business hours, language, customer tier, conversation topic/category, linked Case, and explicit team ownership.
-- Round-robin and least-active/least-busy distribution are optional strategies only if agent availability and workload data can be computed reliably.
+- Supported first-release rules may include channel, business hours, language, customer tier, conversation topic/category, linked Case, and explicit team ownership. **Today the operator allowlist is only `equals`/`notEquals`/`in` and routing does not consult `BusinessCalendar`, so language/tier/skill/capacity conditions and business-hours routing require an additive ServiceDesk change.**
+- Round-robin and least-active/least-busy distribution are optional strategies only if agent availability and workload data can be computed reliably. `CaseQueue.lastAssignedUserId`/`lastAssignedAt` already provide the round-robin cursor under a row lock; `leastBusy` already exists.
 - Routing must not leak customer content to teams that lack record access.
 - Assignment is transactionally guarded against two agents claiming the same unassigned conversation.
 - Transfers require permission and should record from/to queues, old/new assignees, timestamp, actor, and optional reason.
 - Agent presence indicators are advisory unless the platform already has a dependable presence model; stale browser presence must not imply that an agent can receive unlimited work.
 - If no suitable agent is available, leave the conversation visibly queued and notify the appropriate team according to configured rules.
 - Agent capacity, concurrent conversation caps, and overload policies must be configurable and fail safely.
+
+**A conversation may occupy a queue without a Case existing.** Queue membership is a reference from
+the conversation to the ServiceDesk queue, not a dependency on the Case lifecycle.
 
 ### 3.5 Outbound messaging and response composition
 
@@ -357,6 +436,11 @@ The following entities/tables are logical requirements, not a mandate to create 
 
 ### 5.1 `OmnichannelConnection` (or equivalent)
 
+**Decision D1 applies: this is the existing `voice_provider_accounts` (+`voice_endpoints`), extended
+additively.** It already carries provider key, account key, channel, status, enabled, credential
+reference, health status and last-validated time; `voice_endpoints` carries the address-level
+identity with its own unique constraints.
+
 Fields may include:
 
 - `id`, `name`, `providerKey`, `channelType`, `status`, `enabled`.
@@ -369,7 +453,13 @@ Secrets and access/refresh tokens must use the existing secrets facility or a re
 
 ### 5.2 `OmnichannelConversation`
 
-Suggested fields:
+**Decision D1 applies: this is the existing `voice_conversations` record, extended additively — not a
+new table and not a new entity.** The field list below is the *target* state of the existing table;
+the audit found it currently carries `account_key`, `channel`, `external_thread_id`, `status`,
+`subject`, `assigned_user_id`, `assigned_team_id`, `unread_count`, `last_activity_at`,
+`last_inbound_at`, `related_entity_type`, `related_entity_id`, `case_id` and `archived`.
+
+Fields to add (additive migration, existing rows preserved):
 
 - `id`, human-readable conversation number if the platform supports sequence IDs, `status`, `priority`, `category`, `language`, `tags`.
 - `primaryContactId` / `primaryLeadId` references or the repository's link table pattern; do not duplicate Contact identity data.
@@ -378,9 +468,25 @@ Suggested fields:
 - `source`/origin, optional campaign/touchpoint reference, `linkedCaseId`, and other related-entity links through safe generic relationship conventions.
 - `version`, `createdAt`, `updatedAt`, and audit fields.
 
+Notes that constrain the design:
+
+- The existing `status` enum (`open | pending_customer | pending_internal | resolved | closed |
+  spam`) is deliberately **separate** from Case status, and `voice_conversations.case_id` is a
+  reference: conversation status never mutates Case status.
+- `channel` is currently CHECK-constrained to `('sms','mms','whatsapp')`. Widening it (for example
+  with an email or web-chat value) is an explicit migration task, and it must not widen
+  `voice_call_sessions` semantics — **voice calls are not conversations**.
+- `version` is required for the optimistic-concurrency guard on assignment and status changes.
+
 Conversation state is separate from Case state. A conversation may be closed while a Case remains open or vice versa; the UI must display and explain this explicitly.
 
 ### 5.3 `OmnichannelChannelThread`
+
+**Decision D1 applies: today the thread is `voice_conversations.external_thread_id` — one provider
+thread per conversation.** The target state below (N provider threads → 1 canonical conversation)
+is the explicit design gap identified by the audit; representing it requires a dedicated thread
+record or an additive thread reference on `voice_conversations`, owned by `VoiceCommunications`.
+Do not create a second conversation store to hold it.
 
 Represents one provider-side thread or customer session linked to a canonical conversation:
 
@@ -390,6 +496,12 @@ Represents one provider-side thread or customer session linked to a canonical co
 
 ### 5.4 `OmnichannelIdentity`
 
+**Decision D1 applies: this is the existing `voice_conversation_participants`, extended
+additively.** It already carries `address`, `role`, `entity_type`, `entity_id`, `display_name` and
+`consent_status`, unique per `(conversation_id, address, role)`. The audit found the **provider
+identity is currently the address itself** — the fields below are what must be added so that
+cross-channel identity matching has an evidence model.
+
 Stores a channel-scoped identity, not a full CRM person record:
 
 - `id`, `channelType`, `connectionId`, `providerIdentityId`, optional display name/avatar reference, normalized contact hints, verification state, linked CRM entity type/ID, link confidence/reason, last seen timestamp, and source provenance.
@@ -397,6 +509,12 @@ Stores a channel-scoped identity, not a full CRM person record:
 - Values must be access-controlled and retained only as needed; avoid using contact hints to infer identity beyond established policy.
 
 ### 5.5 `OmnichannelMessage`
+
+**Decision D1 applies: this is the existing `voice_messages`, extended additively.** It already
+carries the plan's state enum (`draft|queued|submitted|sent|delivered|read|failed|undelivered|
+unknown`), direction, `is_internal_note`, provider message ID, idempotency key, and attachment
+references. Note that the schema already enforces that an internal note **cannot** carry a
+provider message ID — keep that guarantee.
 
 Normalized message index/content record may include:
 
@@ -409,6 +527,10 @@ Normalized message index/content record may include:
 
 ### 5.6 `OmnichannelAssignmentHistory` and `OmnichannelConversationEvent`
 
+**Decision D1 applies: this is the existing `voice_conversation_events`, extended additively.** It
+is already an append-only conversation-event log (assignment, status change, case link) with actor
+type, from/to values and detail.
+
 Keep an append-oriented history of:
 
 - Queue and agent assignment changes.
@@ -420,7 +542,32 @@ Do not use the event log as a way to bypass the normal audit service. Integrate 
 
 ### 5.7 `OmnichannelQueue` and `OmnichannelRoutingRule`
 
-Queue fields may include owner Team, enabled connections/channels, allowed users, skills, business-hours policy reference, max concurrency, priority defaults, fallback queue, and enabled flag.
+**Decision D2 applies: these are the existing `ServiceDesk` records — `CaseQueue` (+`QueueMember`)
+and `RoutingRule` — extended additively in ServiceDesk. Omnichannel must not create
+`OmnichannelQueue` or `OmnichannelRoutingRule` as new entities.**
+
+What already exists and is reused: `CaseQueue` carries `code`, `strategy`
+(`manual|roundRobin|leastBusy`), `fallbackBehavior` (`unassigned|fallbackOwner`), `defaultTeamId`,
+`defaultAssignedUserId`, `sortOrder` and the server-owned round-robin cursor
+`lastAssignedUserId`/`lastAssignedAt`; `QueueMember` carries `queueId`, `userId`, `isActive`,
+`priority` with a unique `(queueId, userId)`; `RoutingRule` carries validated `conditions`,
+`queueId`/`teamId`/`userId`, `strategy`, `fallbackBehavior`, `sortOrder`, `isActive`; and
+`CaseAssignment` is the durable audit row with a unique `idempotencyKey`.
+
+The extension, owned by ServiceDesk:
+
+- `CaseQueue`/`RoutingRule` must accept a **conversation** as the routed object, not only a Case.
+  A conversation occupying a queue is a reference — it does not require a Case to exist.
+- The rule model must be able to express the conditions §3.4 lists. Today the operator allowlist is
+  limited to `equals`/`notEquals`/`in`, so **language, customer tier, skill and capacity conditions
+  cannot be expressed**, and routing **does not consult `BusinessCalendar`** — business-hours
+  routing needs an additive change, not an Omnichannel copy.
+- There is **no skills entity**; teams are the only skill unit today. If §3.4's "explicit skills"
+  is in the first release, ServiceDesk must model it.
+- Queue configuration entities are ACL-locked (`create:'no', edit:'no'`) — configuration only.
+
+Additional queue fields the target state may need (owner Team, enabled connections/channels, max
+concurrency, priority defaults, fallback queue) are added to `CaseQueue` additively.
 
 Routing rule fields may include order, predicate schema, destination type/ID, strategy, fallback, enabled state, validation diagnostics, effective dates, and audit metadata.
 
@@ -428,12 +575,32 @@ Do not execute arbitrary JavaScript or SQL in routing expressions. Use a bounded
 
 ### 5.8 Webhook and send operation records
 
+**Decision D1 applies: these already exist and are reused — `voice_webhook_events` (durable
+inbound receipt, with dedup on `(account_key, dedup_key)`, a signature-verdict column, a redacted
+payload, and an authorized admin replay path) and `voice_communication_events` (one normalized
+event per receipt, unique on `webhook_event_id`).** The outbound send record is `voice_messages`
+itself, with a unique idempotency key and a unique `(account_key, provider_message_id)`.
+
+**Do not create a fifth inbound-webhook inbox.** The repository already has four module-scoped
+implementations (`integration_webhook_deliveries`, `signature_webhook_inbox`,
+`marketing_provider_webhook_inbox`, `voice_webhook_events`) and no shared abstraction. Omnichannel
+reuses the Voice receipt table if it shares the voice transport; if a separate receipt table is
+needed, it must be module-scoped and copy the **ESignature** column shape — which is the strongest
+in the repo (`dedup_key` unique, `payload_hash`, `content_length`, an explicit
+`signature_status ∈ (verified|invalid|not_required)` verdict decided before any payload field is
+trusted, an attempt count, and a purge deadline).
+
 If the existing platform lacks suitable shared infrastructure, add minimal durable records for:
 
 - Inbound webhook/event receipt: provider, connection, external event ID, signature verification result, received timestamp, processing status, attempts, and minimal redacted diagnostics.
 - Outbound send command: local ID, actor, conversation/thread ID, idempotency key, command status, provider message ID, retry/reconciliation state, and failure category.
 
 Prefer the shared webhook/job/outbox service if already present. The normalized event queue must not store secrets or unredacted payloads by default. Apply retention, access controls, and redaction to provider diagnostics.
+
+**One prerequisite is a one-line change in shared code:** the raw-body `preParsing` hook currently
+covers only the ESignature and AdvancedIntegrations webhook prefixes. The Omnichannel (and the
+existing voice) webhook prefix must be added before any provider that signs exact bytes can be
+verified — a canonical-JSON fallback cannot verify a byte-exact signature.
 
 ### 5.9 Indexing and migrations
 
@@ -477,11 +644,34 @@ If a provider retries a webhook, processing must not duplicate messages. If even
 
 ### 6.3 Realtime updates
 
-- Reuse existing WebSocket, SSE, or event-stream infrastructure. Do not implement a second realtime gateway if one exists.
-- Apply per-user or per-team authorization before publishing conversation events.
+**Decision D3 applies.** The platform's only realtime gateway is
+`GET /api/v1/Notification/stream`, and it is bound to the `notifications` table by a DB trigger
+(`pg_notify` on insert) carrying only `(userId, id, type)`. It is a **notification** transport, not a
+conversation-event transport, and the SPA re-reads permitted rows rather than trusting the event
+body. So the architecture is:
+
+1. **Extend `NotificationEventsService` with a generic per-user publish seam** — an explicit,
+   minimal payload contract that any module can publish to a subscribed user. This is a
+   **shared-platform** change; it is not an Omnichannel-local copy, and it is the piece that keeps
+   §6.3's "do not implement a second realtime gateway" intact.
+2. **Omnichannel adds its own module-scoped SSE endpoint** for conversation events, over that
+   shared seam. The precedent exists: `CRMChat` already ships a module-scoped SSE stream
+   (`crm-chat-streaming.service.ts`). This endpoint is a *consumer* of the shared seam — it must
+   not open a second `LISTEN/NOTIFY` channel, a second database connection pool, or a second
+   authentication path.
+
+Rules that still bind:
+
+- Apply per-user or per-team authorization before publishing conversation events. A conversation
+  event must not reach a user who may not read that conversation.
 - Events should carry identifiers and minimal safe payloads; client fetches current permitted data through normal APIs when needed.
 - Resume after reconnect with a cursor/sequence where the architecture supports it; otherwise refresh the current inbox and show missed-event state.
 - Avoid broadcasting message content to every connected CRM user.
+- The module-scoped endpoint follows the same response discipline the notification stream uses
+  (hijacked reply, `text/event-stream`, no buffering, reconnect handling) and must fail closed for
+  an unauthenticated or under-scoped subscriber.
+- Until the shared seam exists, the agent inbox may continue polling the existing conversation
+  list, as `VoiceInboxPage` does today — polling is an acceptable interim, not a permanent design.
 
 ### 6.4 Event and job reliability
 
@@ -780,7 +970,36 @@ Execute the phases in order. Do not implement the full module in a single coding
 
 ### Phase 19-OM.0 — Repository Audit and Capability Inventory
 
-**Goal:** Establish what the repository already implements before making architectural decisions.
+**Status: COMPLETE.** The audit was performed on `master` at commit `7701d8e` and produced the two
+deliverables below. It changed **no code, no migration and no metadata** — documentation only.
+
+**Outcome:** the audit found that most of the model this plan describes already exists. The
+canonical conversation, message, participant, event and connection records exist as
+`voice_conversations`, `voice_messages`, `voice_conversation_participants`,
+`voice_conversation_events` and `voice_provider_accounts` (+`voice_endpoints`); the shared inbox,
+composer, assignment, hand-off, WhatsApp template registry, per-channel consent/suppression,
+provider health and webhook replay exist under `VoiceCommunications` with **two live provider
+adapters** (Twilio for voice/SMS/WhatsApp, Asterisk ARI) plus a simulator; queues and routing exist
+as `CaseQueue`/`QueueMember`/`RoutingRule` under `ServiceDesk`; the inbound-email seam exists as
+`packages/mail`'s `InboundMailProvider` port; and `AIAgents` provides the run/approval contract.
+
+Three architectural decisions were locked as a result (see §0.2): **D1** reuse `voice_conversations`
+as the canonical conversation record; **D2** extend `ServiceDesk`'s `CaseQueue` for queues and
+routing; **D3** extend `NotificationEventsService` with a generic publish seam and give
+Omnichannel its own module-scoped SSE endpoint over it.
+
+The audit also identified the extensions that later sub-phases depend on, all of which must be
+delivered **in their owning module**: export `VoiceInboxService`/`VoiceMessagingService`/the
+`VoiceProviderAdapter` interface from the Voice barrel; add the Omnichannel webhook prefix to the
+raw-body `preParsing` hook; publish the voice transport as cross-module contracts; add the
+`unsupported` error category; add `Case.externalId` + a Case create-or-link command; register a
+channel-send tool with `effectClass: 'material_write'`; and extend `ConnectorAdapter` only if
+channel transport is routed through `AdvancedIntegrations` rather than through Voice's own adapter.
+
+**Note:** `docs/implementation/voice-communications-audit.md` is **stale** — it states that only a
+simulator ships. `docs/modules/voice-communications/providers.md` is the current source of truth.
+
+Goal: Establish what the repository already implements before making architectural decisions.
 
 Tasks:
 
@@ -795,34 +1014,42 @@ Tasks:
 
 Deliverables:
 
-- `docs/omnichannel/repository-audit.md`.
-- `docs/omnichannel/capability-matrix.md`.
-- No broad refactor and no destructive migration.
+- `docs/omnichannel/repository-audit.md` — written.
+- `docs/omnichannel/capability-matrix.md` — written.
+- No broad refactor and no destructive migration — honoured; this phase produced documentation only.
 
 Acceptance:
 
-- The audit identifies current authoritative records/services for every channel that already exists.
-- The agent explains what can be reused directly and what small extension is required.
-- No duplicate transport, inbox, Case, campaign engine, Portal auth, or AI runtime is proposed without a documented gap.
-- Stop at the end of this phase and report findings before starting Phase 19-OM.1.
+- The audit identifies current authoritative records/services for every channel that already exists. — **Met** (audit §6).
+- The agent explains what can be reused directly and what small extension is required. — **Met** (audit §4, §8 — 18 extensions, each owned by its current module).
+- No duplicate transport, inbox, Case, campaign engine, Portal auth, or AI runtime is proposed without a documented gap. — **Met** (audit §5, §7 — 22 gaps recorded; §0.2 D1–D3).
+- Stop at the end of this phase and report findings before starting Phase 19-OM.1. — **Met.** OM.1 has not been started.
 
 ### Phase 19-OM.1 — Feature Contract and Channel Feasibility
 
 **Goal:** Define the first release precisely and prevent assumed provider support.
 
+**Inputs already settled by 19-OM.0 (§0.2):** the canonical conversation record is
+`voice_conversations` (D1); queues and routing are `ServiceDesk`'s, extended there (D2); realtime
+is the extended `NotificationEventsService` seam plus a module-scoped SSE endpoint (D3). OM.1
+**refines** these; it does not re-open them.
+
 Tasks:
 
 - Choose the first channel set based on code audit, credentials, official API access, and realistic test facilities.
 - Complete the channel feasibility template for every candidate provider.
-- Select the first end-to-end path. Recommended: a basic website/Portal chat plus a reusable normalized conversation model; connect the existing VoiceCommunications messaging adapter next where its contract supports it.
-- Define canonical conversation boundaries versus channel-side thread boundaries.
-- Define lifecycle state machine, visibility model, assignment rules, identity confidence requirements, and error taxonomy.
-- Specify how inbound email interacts with any existing ServiceDesk Email-to-Case pipeline to avoid double processing.
+- Select the first end-to-end path. The audit narrows this to two credible paths: (a) website/Portal chat into the existing conversation model, reusing `WebToCaseService`'s abuse controls — which requires the anonymous-visitor identity decision; or (b) email-thread ingestion through the existing `packages/mail` seam — which requires the double-processing decision against ServiceDesk's Email-to-Case. Both are decided here, not deferred.
+- Define canonical conversation boundaries versus channel-side thread boundaries. **Design task:** today the conversation *is* the thread (`voice_conversations.external_thread_id`, one per conversation) and voice calls are not conversations at all; the target must represent multiple provider threads per canonical conversation.
+- Define lifecycle state machine, visibility model, assignment rules, identity confidence requirements, and error taxonomy. The existing `voice_messages` state enum and the 13-category `COMMUNICATION_ERROR_CATEGORIES` are the baseline; only `unsupported` is missing.
+- Specify how inbound email interacts with any existing ServiceDesk Email-to-Case pipeline to avoid double processing. **Constraint:** `EmailToCaseService` is manually triggered only, and its marker fields (`caseId`, `streamItemId`, `emailToCaseStatus`) are undeclared raw attrs — Omnichannel must read and honour them, never write a competing marker, and never poll a second mailbox.
 - Define explicit non-goals for the first release and list connector features that require provider approval.
+- Specify the **anonymous visitor identity** and consent basis for website chat, if that path is chosen. Portal has no anonymous principal today; the plan may not weaken `PortalPolicyService.recordVisible()`.
+- Specify the **ServiceDesk hand-off contract** OM.17 depends on: `Case.externalId` (or equivalent), a `Case.conversations` relation, and a create-or-link command — all additive in ServiceDesk.
 
 Deliverables:
 
 - `docs/omnichannel/feature-contract.md`.
+- `docs/omnichannel/channel-feasibility.md` — one record per candidate channel.
 - Updated channel feasibility and risk log.
 
 Acceptance:
@@ -830,6 +1057,7 @@ Acceptance:
 - Every first-release feature has a clear owner and acceptance test.
 - No unsupported social messaging capability is represented as a committed feature.
 - The first connector path can be tested without sending a real customer message.
+- The three OM.0 decisions are carried into the contract unchanged, or a replacement is recorded with an explicit rationale.
 
 ### Phase 19-OM.2 — Module Registration and Navigation
 
@@ -853,15 +1081,24 @@ Acceptance:
 
 **Goal:** Implement the minimum durable domain model needed for conversation and channel-thread linkage.
 
+**Decision D1 applies: there is no new domain model to create.** The logical entities in §5 map onto
+existing dedicated tables. This phase is an **additive extension of those tables, owned by
+`VoiceCommunications`** (and, for the Case hand-off, by `ServiceDesk`), not a new set of
+`omnichannel_*` tables.
+
 Tasks:
 
 - Map the logical entities in Section 5 to existing entity conventions; reuse generic Entity Engine where appropriate and use purpose-built tables only for high-volume/transactional data that warrants them.
-- Create reviewed additive migrations for required missing structures only.
+- **Extend `voice_conversations` additively** with the §5.2 fields the audit found missing: `priority`, `category`, `language`, `tags`, `currentQueueId`, `assignmentVersion`, `lastMessageAt`/`lastOutboundAt`, `snoozedUntil`, `closedAt`, `version`.
+- **Extend `voice_conversation_participants` additively** with a provider identity id distinct from the address, `verificationState`, `linkConfidence`/`linkReason`, `lastSeenAt`, `sourceProvenance`, and a unique index over connection + channel + provider identity.
+- **Extend `voice_conversations.channel`** to admit the channels the first release actually ships, and decide the representation of more than one provider thread per canonical conversation.
+- Create reviewed additive migrations for required missing structures only. Existing rows must be preserved and backfilled conservatively; no table is dropped, renamed or recreated.
 - Add unique/idempotency constraints for provider event/message identity where semantics support them.
 - Add indexes for assignment, queue, state, timestamps, external thread/message IDs, and unread counts/projections.
 - Define appropriate foreign keys or relationship metadata for CRM entities, while allowing optional modules to be absent.
 - Define deletion/retention semantics before storing high-volume message content or media metadata.
 - Ensure JSON metadata is validated and not used as a substitute for indexed core fields.
+- If a separate `omnichannel_*` receipt table is needed for a channel that does not use the voice transport, copy the **ESignature** inbox column shape (`payload_hash`, `content_length`, `signature_status`, `attempt_count`, `purge_after`) and keep it module-scoped.
 
 Acceptance:
 
@@ -869,25 +1106,36 @@ Acceptance:
 - Existing VoiceCommunications and ServiceDesk data remain untouched.
 - Constraints prevent duplicate external message/event records under concurrent delivery.
 - All new tables/metadata have documented retention and access-control expectations.
+- **No second conversation, message or queue table exists** — the audit's reuse decisions are visibly honoured in the schema.
 
 ### Phase 19-OM.4 — Adapter and Capability Registry
 
 **Goal:** Provide a provider-neutral connection/capability model while reusing shared integration infrastructure.
 
+**Decision D1 applies: the provider-neutral adapter contract already exists** — `VoiceProviderAdapter`
+is symmetric (inbound `validateWebhook`/`normalizeEvent`, outbound `initiateCall`/`sendMessage`/
+`controlCall`/`fetchTranscript`) with `VoiceProviderRegistry`, `FakeVoiceProvider`,
+`DisabledVoiceProvider`, and live Twilio and Asterisk adapters. This phase **exports and wraps**
+that contract; it does not design a parallel one.
+
 Tasks:
 
 - Reuse AdvancedIntegrations and VoiceCommunications contracts where suitable.
+- **Export `VoiceInboxService`, `VoiceMessagingService` and the `VoiceProviderAdapter` interface (plus the input/result types) from the Voice barrel.** Without this, Omnichannel would have to deep-import another module's internals — the coupling §2.4 warns against. This is the smallest change that makes every reuse decision possible.
+- **Publish the voice transport as cross-module contracts** in the existing contracts registry (today only `voiceCommunications.consent.suppress` is published) — a send contract and an inbox/read contract.
 - Define normalized types for connection, channel, thread, inbound event, outgoing command, provider result, media reference, and delivery status.
 - Provide adapter capability lookup so the UI can enable/disable controls based on real support.
-- Normalize provider error categories into transient, permanent, policy-blocked, authentication, rate-limited, unsupported, and unknown.
+- Normalize provider error categories into transient, permanent, policy-blocked, authentication, rate-limited, unsupported, and unknown. **Baseline:** the existing 13-category taxonomy already covers transient/permanent/auth/rate-limit/unknown and splits policy-blocked into `consent_required`, `suppressed`, `template_required` and `window_closed`. Only `unsupported` is missing, and it must be added — a capability the adapter does not implement has to be an explicit refusal.
 - Ensure adapter implementations are dependency-injected and can be replaced with fake adapters in tests.
 - Define versioning/backward compatibility of adapter contracts.
+- **Do not route channel transport through `AdvancedIntegrations`' `ConnectorAdapter` unless its owner agrees to add a `send` operation.** `CONNECTOR_OPERATIONS` has no `send`, and `upsertObject` must not be used to send — the port promises that `validateConnection` "never creates, updates, charges, sends or deletes a provider object". Reuse AdvancedIntegrations' HMAC kit, HTTP client and resilience helpers freely; they are designed for exactly this.
 
 Acceptance:
 
 - Core conversation services do not import provider SDK types.
 - Missing provider capability results in a safe unsupported-operation response, not silent success.
 - Tests can register a fake adapter without secrets or real outbound calls.
+- **Omnichannel reaches the voice transport only through exported symbols and published contracts — no deep import into another module's internals.**
 
 ### Phase 19-OM.5 — Inbound Webhook/Event Receipt Pipeline
 
@@ -912,14 +1160,20 @@ Acceptance:
 
 **Goal:** Implement the canonical interaction model and state transitions.
 
+**Decision D1 applies: the service layer already exists** — `VoiceMessagingService`
+(`send`, `ingestInbound`, `applyStatus`) and `VoiceInboxService` (`list`, `timeline`, `markRead`,
+`setStatus`, `assign`, `history`, `linkCase`, `handoffToCase`). This phase **exports and composes**
+them behind a provider-neutral Omnichannel facade, and closes the gaps the audit found.
+
 Tasks:
 
-- Create application/domain services for conversation creation, thread attachment, inbound message upsert, message retrieval, read-state updates, and conversation state transitions.
-- Separate provider thread IDs from canonical conversation IDs.
-- Separate internal notes from customer-visible message records or enforce a strong visibility boundary in storage and every serializer.
-- Record conversation events and assignment/state history in the existing audit/event conventions.
+- Create application/domain services for conversation creation, thread attachment, inbound message upsert, message retrieval, read-state updates, and conversation state transitions — **as a facade over the existing Voice services**, not as a parallel implementation.
+- Separate provider thread IDs from canonical conversation IDs. **Design gap:** today one conversation carries exactly one `external_thread_id`, and voice calls are not conversations at all. The target representation must support N provider threads per canonical conversation.
+- Separate internal notes from customer-visible message records or enforce a strong visibility boundary in storage and every serializer. **Keep the existing guarantee:** the `voice_messages` schema already refuses a provider message ID on an internal note, and `stream_items.visibility` already separates public from internal on a Case.
+- Record conversation events and assignment/state history in the existing audit/event conventions — `voice_conversation_events` is already the append-only log.
 - Validate timestamp handling, message ordering, attachment references, content type, and channel-specific fields.
 - Do not blindly merge all conversations from one Contact. Use explicit continuity policy.
+- **Add a reconcile-unknown path.** The audit found there is currently no status-polling job and no "reconcile an unknown send" command, so §3.5's "query provider status before repeating the send" cannot be satisfied today.
 
 Acceptance:
 
@@ -927,25 +1181,35 @@ Acceptance:
 - Reprocessing the same event cannot duplicate the message.
 - Conversation state and ServiceDesk Case state remain independent.
 - Internal note content is absent from customer-facing serializers and send adapter commands.
+- **No second send/ingest/status implementation exists** — Omnichannel composes the exported Voice facade.
 
 ### Phase 19-OM.7 — CRM Identity Resolution and Record Linking
 
 **Goal:** Match channel participants to CRM entities safely.
+
+**Existing baseline to extend, not replace:** `VoiceContactResolverService` already normalizes with
+libphonenumber, derives match keys, searches `Contact`/`Lead`/`Account` in order, applies
+entity-level then record-level ACL (an unreadable match is counted but **not named**), and bounds
+its candidates. Two gaps the audit found: the match is a `regexp_replace` scan over
+`entity_records` because **no normalized phone index exists**, and the identity has **no confidence
+or provenance model**.
 
 Tasks:
 
 - Implement exact matchers for stable channel-scoped provider IDs and authorized verified contact hints.
 - Add an ambiguous-match state and staff review UI/API.
 - Allow permitted staff to link/unlink identity to Contact or Lead, with audit reason.
-- Add bounded lookup indexes and caching only where invalidation is understood.
+- Add bounded lookup indexes and caching only where invalidation is understood. **A normalized phone index is required** — today the resolver scans.
 - Provide contextual CRM record references without leaking inaccessible fields.
-- Support anonymous web chat, authenticated Portal identity, and safe promotion/linking workflows.
+- Support anonymous web chat, authenticated Portal identity, and safe promotion/linking workflows. **Note:** Portal has no anonymous principal today, so the anonymous-visitor identity model is defined in OM.1.
+- Record link confidence, link reason, and source provenance on the participant, so an automatic link is always explainable and reversible.
 
 Acceptance:
 
 - Unique exact matches link predictably; ambiguous matches are not guessed.
 - Identity link changes are authorized and auditable.
 - ACL is applied independently to all fields in the customer context panel.
+- **Every automatic identity link carries a confidence value and a provenance reason** — the plan's "visible uncertainty" rule is enforced in the data model, not only in the UI.
 
 ### Phase 19-OM.8 — Outbound Command, Send State, and Reconciliation
 
@@ -970,12 +1234,20 @@ Acceptance:
 
 **Goal:** Add a safe web chat entry point if an appropriate component does not already exist.
 
+**Existing baseline to reuse, not replace:** `WebToCaseService` already provides a `@Public()`
+intake with a honeypot, length caps, a per-IP rate limit, idempotency by client key or content
+hash, and an allowlist of customer-facing fields only. Those **abuse controls are the reusable
+part**. Two constraints the audit found: **Portal has no anonymous principal** (every portal route
+requires an authenticated `users.type='portal'` user with a `contact_id`), and Portal's
+`recordVisible()` is entity-generic via `linkFieldsFor(entity)` — so a new conversation entity with
+`contactId`/`accountId` link fields would be covered automatically *once it exists*.
+
 Tasks:
 
 - Reuse Portal routes, identity, session/token patterns, and front-end components where suitable.
-- If a public anonymous widget is needed, implement a narrow scope token, session expiry, allowed-origin checks, abuse protection, and no privileged credentials in the browser.
+- If a public anonymous widget is needed, implement a narrow scope token, session expiry, allowed-origin checks, abuse protection, and no privileged credentials in the browser. **Define the anonymous-visitor identity and its consent basis in OM.1** — this does not exist today and it must not weaken `PortalPolicyService.recordVisible()`.
 - Support visitor initialization, message send/receive, reconnect, offline fallback, attachment restrictions, and consent/notice settings where required.
-- Create or resume the matching canonical conversation under explicit continuity rules.
+- Create or resume the matching canonical conversation under explicit continuity rules — **under decision D1, that is a `voice_conversations` row**, so this phase widens the channel CHECK and defines the continuity rule rather than creating a new store.
 - Ensure customers cannot enumerate conversation IDs or access another visitor's history.
 - Provide internal test mode that uses fake channels and does not send customer messages externally.
 
@@ -984,45 +1256,63 @@ Acceptance:
 - An anonymous/Portal user can send and receive a message in the correct conversation under configured policy.
 - Forged IDs, expired sessions, disallowed origins, and rate abuse are rejected.
 - Staff notes and internal CRM fields are never exposed to widget clients.
+- **The widget reads customer-visible messages only** — it has no path to `is_internal_note` rows or `visibility='internal'` stream items.
 
 ### Phase 19-OM.10 — Agent Inbox Workspace MVP
 
 **Goal:** Deliver the first usable agent interface.
 
+**Existing baseline to extend, not replace:** `apps/web/src/pages/VoiceInboxPage.tsx` (852 lines)
+already implements the conversation list, timeline, composer, canned snippets and handoff, polling
+on 15–20 s intervals. This phase adds the **multi-channel workspace** around it and hardens it
+against the plan's requirements.
+
 Tasks:
 
-- Build inbox navigation, filters, list, thread pane, status/assignment labels, unread markers, and loading/offline/error states.
+- Build inbox navigation, filters, list, thread pane, status/assignment labels, unread markers, and loading/offline/error states — **on top of the existing Voice inbox**, adding the channel/queue/priority/language/tag filters the audit found missing on the conversation record.
 - Integrate with existing design system, metadata layouts and router.
 - Render messages safely according to content type; display attachment/download permissions and send statuses.
 - Implement cursor pagination for inbox and message history.
 - Keep UI state consistent after reconnect and server-side assignment changes.
 - Add responsive layout and keyboard/accessibility support.
+- **Replace the polling fallback with the decision D3 realtime path** once the shared publish seam exists, while keeping the current polling as an acceptable interim.
 
 Acceptance:
 
 - Authorized agents can process a conversation end-to-end through the first enabled channel.
 - Inbox filters use server-side ACL-constrained data, not client filtering of a globally fetched record set.
 - Message content is safe against script/HTML injection.
+- **No internal note is ever rendered to a customer-facing surface** — the customer widget and the staff workspace share the record but not the visibility.
 
 ### Phase 19-OM.11 — Queues, Assignment, Transfers, and Routing
 
 **Goal:** Organize ownership and route conversations safely.
 
+**Decision D2 applies: this work is delivered in `ServiceDesk`, extending `CaseQueue`,
+`QueueMember` and `RoutingRule`.** Omnichannel contributes the conversation-facing policy and the
+workspace view; it does not own the queue model. The audit found ServiceDesk already provides
+`manual|roundRobin|leastBusy` strategies, a row-locked round-robin cursor, a workload endpoint,
+`unassigned|fallbackOwner` fallbacks, a `CaseAssignment` audit row, and validated routing-rule
+conditions — the work below is the **delta**.
+
 Tasks:
 
-- Implement queue CRUD/configuration using admin ACL.
-- Add claim, assign, release, transfer, and validated state-change commands.
-- Implement simple deterministic routing first: fixed queue/team, channel, priority, working hours, and fallback.
-- Add optimistic concurrency/version checks to avoid conflicting claims.
-- Add round-robin/least-busy only if a reliable agent availability/workload source exists.
-- Record all routing decision metadata and assignment changes.
-- Provide a safe “unassigned queue” fallback if no eligible agent is found.
+- Extend the existing queue model (do **not** create `OmnichannelQueue`) so a queue can hold **conversations** as well as Cases. Queue CRUD/configuration stays admin-ACL-controlled; the queue config entities are already `create:'no', edit:'no'`.
+- Add claim, assign, release, transfer, and validated state-change commands. `VoiceInboxService.assign` already exists for the conversation side.
+- Implement simple deterministic routing first: fixed queue/team, channel, priority, working hours, and fallback. **Working-hours routing requires an additive ServiceDesk change** — `BusinessCalendar` is currently consumed only by `sla.service.ts`, and routing never consults it.
+- **Extend the routing-rule operator allowlist** beyond `equals|notEquals|in` if language, customer tier, skill or capacity conditions are in the first release. The current allowlist cannot express them.
+- Add optimistic concurrency/version checks to avoid conflicting claims. **Requires the `version` column on `voice_conversations`** added in OM.3.
+- Add round-robin/least-busy only if a reliable agent availability/workload source exists — the `CaseQueue.lastAssignedUserId`/`lastAssignedAt` cursor and the workload endpoint already satisfy this.
+- Record all routing decision metadata and assignment changes — `CaseAssignment` is the durable row; it must accept a conversation as the routed object.
+- Provide a safe "unassigned queue" fallback if no eligible agent is found — `fallbackBehavior` already models `unassigned|fallbackOwner`.
+- **Also extend `ServiceDesk` with the Case hand-off contract OM.17 needs**: a nullable `Case.externalId` (or equivalent) with a partial unique index, a `Case.conversations` relation, and a create-or-link command that sets `source` and writes the audit row. Note that `VoiceInboxService.handoffToCase` currently calls the generic entity API, so it produces no `CaseTransition` row and sets no `source`.
 
 Acceptance:
 
 - Assignment commands cannot be used to view or take ownership of unauthorized conversations.
 - Concurrent claim attempts resolve to one authoritative assignment.
 - Routing decisions are explainable and have a deterministic fallback.
+- **No second queue or routing engine exists**, and the ServiceDesk extension is additive — existing Case routing keeps working unchanged.
 
 ### Phase 19-OM.12 — Canned Replies, Drafts, and Message Tools
 
@@ -1048,10 +1338,10 @@ Acceptance:
 
 Tasks:
 
-- Define a stable subscription/event contract with VoiceCommunications for supported inbound/outbound SMS/MMS, WhatsApp messages, call events, and delivery updates.
+- Define a stable subscription/event contract with VoiceCommunications for supported inbound/outbound SMS/MMS, WhatsApp messages, call events, and delivery updates. **The audit found only `voiceCommunications.consent.suppress` is published today — publishing a send contract and an inbox/read contract is a prerequisite, not an optional part of this phase.**
 - Reuse existing provider connections and credentials; do not ask the administrator to configure the same provider twice unless the provider contract explicitly requires separate accounts.
 - Reference authoritative call/message IDs and maintain a canonical conversation/thread link.
-- When a call arrives, show the caller context and provide an explicit action to open or link a conversation; do not convert all calls into text messages.
+- When a call arrives, show the caller context and provide an explicit action to open or link a conversation; do not convert all calls into text messages. **Note:** a call is a `voice_call_session`, not a conversation — there is no call↔conversation grouping today, and `voice_conversations.channel` excludes `voice`.
 - Preserve channel-specific restrictions, opt-out state and transport ownership in VoiceCommunications.
 - Add reconciliation tests that ensure a single provider event does not create duplicate authoritative messages.
 
@@ -1059,10 +1349,16 @@ Acceptance:
 
 - Omnichannel can show supported VoiceCommunications conversations/events without direct duplicate provider API calls.
 - A failed or disabled VoiceCommunications connector is displayed honestly and does not break other channels.
+- **Omnichannel reaches VoiceCommunications only through exported symbols and published contracts** — no deep import, and no duplicate provider credential, webhook handler, or send-status source of truth.
 
 ### Phase 19-OM.14 — WhatsApp Business and SMS/MMS Conversation Integration
 
 **Goal:** Make existing VoiceCommunications messaging available in the shared inbox where the adapter supports it.
+
+**Channel reality to respect:** **WhatsApp ships through Twilio's WhatsApp API** — Meta Cloud API is
+not present and would be a separate connector with separate credentials and app review. **MMS has
+no adapter** — it is named in the vocabulary, tables and DTOs, but no adapter declares
+`messaging.mms.send`/`.receive`. WhatsApp template approval is owned by `voice_whatsapp_templates`.
 
 Tasks:
 
@@ -1070,7 +1366,7 @@ Tasks:
 - Support message templates, session/customer-service windows, opt-in, opt-out and relevant channel policies through the owning module.
 - Support text and permitted media first; expose advanced payloads only based on advertised adapter capabilities.
 - Preserve provider-scoped identifiers and reply routing information securely.
-- Add operator-friendly blocked-send reasons for policy windows, missing approved templates, opt-out, rate limits, expired credentials, and unsupported content.
+- Add operator-friendly blocked-send reasons for policy windows, missing approved templates, opt-out, rate limits, expired credentials, and unsupported content — the existing ordered refusal codes and the 13-category error taxonomy are the baseline.
 - Verify current official documentation and provider account eligibility at implementation time.
 
 Acceptance:
@@ -1078,6 +1374,7 @@ Acceptance:
 - Agents can reply through an enabled, policy-compliant connection using the owning adapter.
 - Omnichannel does not duplicate WhatsApp or SMS credentials, webhook handlers, or send-status source of truth.
 - Automated tests use fake adapters or sandbox numbers only.
+- **MMS is not presented as supported** until an adapter implements it; a missing capability produces an explicit `unsupported` refusal, never a silent success.
 
 ### Phase 19-OM.15 — Meta Messenger/Instagram Adapters (Conditional)
 
@@ -1118,58 +1415,90 @@ Acceptance:
 
 **Goal:** Make a conversation a reliable entry point for service operations.
 
+**The contract this phase needs does not exist yet, and the audit found the gap precisely.** `Case`
+has **no** `externalId`/`sourceRef`, **no** `conversations` relation, and **no** create-or-link
+command. `VoiceInboxService.handoffToCase` currently calls the **generic entity API**
+(`this.entities.create('Case', …)`), which produces no `CaseTransition` history row, sets no
+`source`, and links back only through `voice_conversations.case_id` — the Case has no pointer to
+the conversation. The extension below belongs to `ServiceDesk`, additively.
+
 Tasks:
 
 - Link to an existing Case with clear relationship and permission checks.
-- Create a Case only through a ServiceDesk domain command and only when the staff/automation actor has permission.
+- Create a Case only through a ServiceDesk domain command and only when the staff/automation actor has permission. **Extend `ServiceDesk` with a `createCaseForConversation`/`linkConversation` command** that creates or links the Case, sets `source` (adding a channel value to `CASE_SOURCES`), and writes the `CaseTransition`/`CaseAssignment` audit row so the trail is complete.
+- **Add a nullable `Case.externalId` (or `sourceRef` + `sourceType`) with a partial unique index, and a `Case.conversations` relation**, so the conversation is linkable without a second table and without Omnichannel writing `entity_links` directly.
 - Pass a safe summary, channel origin and authorized conversation references; do not copy private internal notes or unrelated messages to customer-visible Case content.
 - Reflect Case status as contextual information while keeping conversation state independent.
 - Display the handoff result and provide retry/recovery for temporary target-module errors.
 - Reuse ServiceDesk's SLA and case response policies for the linked Case; do not compute a duplicate Case SLA inside Omnichannel.
+- **Also record the ServiceDesk ownership bypass the audit found:** `assignedUserId` is not in `SERVER_OWNED_CASE_FIELDS`, so a regular user with Case edit rights can set the owner via the generic API, bypassing `CaseAssignment` and leaving no history row. Add it to the server-owned list.
 
 Acceptance:
 
 - Handoff is idempotent or protected by a unique command key, preventing repeated Case creation on retries.
 - Case ACL remains authoritative after linking.
 - Internal and external message visibility stays correct across both modules.
+- **A hand-off produces a complete ServiceDesk audit trail** — a `CaseTransition`/`CaseAssignment` row, not a silent generic-API insert.
 
 ### Phase 19-OM.18 — Consent, Preferences, Retention, and Data Rights
 
 **Goal:** Centralize enforcement without creating a conflicting source of consent truth.
 
+**Ownership is already split, and the split must not move:** MarketingAutomation owns **email**
+consent and suppression (`MarketingConsent`/`MarketingSuppression`, identity = an `emailHash`
+digest, channel `["Email"]`); VoiceCommunications owns **voice/SMS/MMS/WhatsApp**
+(`voice_consent_events`/`voice_suppressions`, identity = the normalized address). ServiceDesk and
+Portal contain **no** consent code at all. **The unit of ownership is the channel, not the module** —
+so Omnichannel resolves consent **per channel** through the owning module and adds **no** third
+store.
+
 Tasks:
 
 - Document the source-of-truth for each channel and message purpose.
-- Query the owning service at send time and fail closed if the consent decision cannot be obtained for a channel that requires it.
+- Query the owning service at send time and fail closed if the consent decision cannot be obtained for a channel that requires it. The governing invariants are: *missing evidence is never consent* (no record ⇒ unknown, and unknown blocks) and *an address change does not carry consent over*.
 - Ensure marketing campaign eligibility is still governed by MarketingAutomation, and operational replies obey the relevant channel restrictions/opt-outs.
 - Add admin retention settings for normalized messages, provider metadata, media, identity hints, and redacted event payloads where those settings are not already provided centrally.
 - Support authorized data export/deletion workflows through platform policy while preserving legally required audit information as applicable.
 - Make media and attachment expiration/deletion safe; remove provider-hosted links when no longer valid and avoid permanent public URLs.
+- **Note:** there is no inbound STOP/UNSUBSCRIBE keyword scanner today — `stop_keyword` is only a suppression *reason*. If keyword-driven opt-out is in the first release, it belongs to the Voice ingress, which owns the suppression list.
 
 Acceptance:
 
 - No Omnichannel send route bypasses the owning consent/policy service.
 - Retention is explicit, testable, and does not silently conflict with existing platform policies.
+- **Consent is never copied into an Omnichannel-owned table** — a channel's consent is read from its owner, and the two vocabularies are never merged into one flag.
 
 ### Phase 19-OM.19 — AI-Assisted Agent Workflow through AIAgents
 
 **Goal:** Add optional assistance while preserving human control and an auditable tool boundary.
 
+**Existing contract to build on:** `AIAgentRunService.create(agentId, RunCreateInput)` and
+`triggerRun({trigger: 'integration', …})` — `trigger: 'integration'` already exists and is the
+intended door for an external module. The approval matrix defaults to
+`requireFor: ['material_write','high_impact']`, and `approvalRequired()` pauses the run until a
+human approves. **There is no typed-task API** (the only facade is chat-shaped and must not be
+promoted), and **there is no messaging tool** in the registry — so today the approval matrix
+cannot gate a channel send.
+
 Tasks:
 
 - Add controlled actions to summarize a conversation, classify it, translate/normalize text where permitted, suggest a reply, suggest a queue, and draft a ServiceDesk Case summary.
 - Use AIAgents provider and runtime contracts; avoid duplicate LLM clients, tool registries, agent memory, prompt management, or approval systems.
+- **Define Omnichannel's own typed request/response DTOs over `AIAgentRunService.create`/`triggerRun`** — do not reuse `CRMChatAIAgentsClientService`, whose types are chat-shaped and would drag chat turn identity into Omnichannel.
+- **Register a channel-send tool with `effectClass: 'material_write'`** so the existing approval matrix enforces explicit send approval. Without a registered tool, `approvalRequired()` never fires for a send.
 - Pass only the minimal conversation content and CRM context needed for the task under current ACL.
 - Present evidence and uncertainty where possible; label content as AI-generated.
-- Keep suggested replies as editable drafts. Sending a suggestion requires an authorized human action by default.
+- Keep suggested replies as editable drafts. Sending a suggestion requires an authorized human action by default. **Mirror the existing draft-only pattern** — `voice_transcripts.ai_review_status` starts at `pending` and nothing external happens until an authorized user approves it.
 - If later supporting autonomous replies, require a separate feature flag and explicit policy, limited intents/channels, confidence thresholds, allowlisted tools, per-hour limits, cost caps, escalation fallback, and audit logs.
 - Prevent AI-supplied text, URLs, or inferred identity from bypassing normal send validation.
+- **Do not expose internal CRMChat as the customer chat widget.** CRMChat's internal-only boundary is data-driven, not code-enforced — there is no `userType !== 'portal'` check in that module — so it must stay out of every portal and widget surface.
 
 Acceptance:
 
 - AI suggestions do not send, create Cases, or change ownership merely by being generated.
 - Prompt injection in a customer message cannot grant tools or permissions.
 - AI failure does not block ordinary human replies.
+- **A send through an AI suggestion passes the same approval matrix as any other material write**, and an interrupted tool call is recorded as `outcome_unknown` rather than auto-retried.
 
 ### Phase 19-OM.20 — Conversation Analytics and Operational Reports
 
@@ -1181,7 +1510,7 @@ Tasks:
 - Define exactly which timestamps and statuses contribute to each metric.
 - Exclude internal notes from customer-message counts unless a metric specifically calls for internal activity.
 - Apply ACL and report-level data permissions consistently.
-- Reuse generic Reports/Dashboard infrastructure if already available.
+- Reuse generic Reports/Dashboard infrastructure if already available. **Constraint the audit found:** the report engine resolves field paths against **metadata entities**, and the generic search path is likewise metadata-driven (`SEARCH_INDEXED_ATTRS` + trigram indexes must stay in sync). Because the conversation records are **dedicated tables** (decision D1), they are **neither reportable nor searchable through the generic path today**. This phase must add a projection — a metadata-entity-backed read model or a dedicated analytics path — rather than assume the generic engine covers it.
 - Keep ServiceDesk Case SLA metrics sourced from ServiceDesk; Omnichannel metrics should describe conversation handling unless the owner provides a canonical metric.
 - Handle missing provider events and timestamps explicitly; do not infer a successful delivery from a local submission timestamp.
 
@@ -1190,15 +1519,21 @@ Acceptance:
 - A documented metric can be recomputed from authoritative data.
 - Reports cannot leak message content or counts from inaccessible teams/conversations.
 - Empty, missing, and provider-unsupported metrics show honest unavailable/partial states.
+- **Conversation search and analytics work over the reused records** — either through a projection that is itself ACL-constrained, or through a documented dedicated path that applies the same record and field permissions.
 
 ### Phase 19-OM.21 — Administration, Diagnostics, and Recovery
 
 **Goal:** Operate channels reliably without requiring database-level intervention.
 
+**Existing baseline to extend:** `VoiceCommunications` already ships connection health, provider
+accounts and endpoints, the WhatsApp template registry, the webhook-event list with its
+**authorized admin replay path**, and a module health service. Omnichannel adds the
+cross-channel view over it.
+
 Tasks:
 
 - Provide connection health, enabled channel capabilities, last event time, authentication state, webhook backlog and failure categories.
-- Add safe tools for testing credentials, replaying a failed normalized event, reconciling an unknown send outcome, and disabling a compromised connection.
+- Add safe tools for testing credentials, replaying a failed normalized event, reconciling an unknown send outcome, and disabling a compromised connection. **The reconcile-unknown command must be added in VoiceCommunications** — it does not exist today, and without it a timed-out send cannot be resolved before it is retried.
 - Redact diagnostic payloads and require elevated ACL for event inspection and replay.
 - Provide a runbook for provider outages, expired tokens, certificate/signature failures, rate limits, stuck jobs, duplicate events, and channel-policy changes.
 - Never expose secrets or allow arbitrary endpoint overrides that could enable SSRF.
@@ -1209,6 +1544,7 @@ Acceptance:
 - A typical transient error can be investigated and recovered from through documented administrative steps.
 - Replay uses idempotency controls and reports which side effects will or will not reoccur.
 - Disabling a provider stops new outbound traffic without deleting conversation history.
+- **Diagnostics read the reused records** — the same webhook receipt, message state and provider health — rather than a parallel operational store.
 
 ### Phase 19-OM.22 — Security, Privacy, and Resilience Hardening
 
@@ -1259,18 +1595,21 @@ Acceptance:
 
 To keep the work tractable and avoid rebuilding capabilities already completed elsewhere, the recommended first release is:
 
-1. Repository audit and a signed-off capability/ownership matrix.
-2. Canonical conversation, channel-thread and normalized message projection.
-3. Inbound event ingestion with signature verification/deduplication for one actual supported channel.
-4. Agent inbox with message history, customer context, assignment, internal notes and safe reply composer.
-5. Reuse the existing Portal for the web chat entry point if no equivalent component exists.
-6. Reuse VoiceCommunications to expose its existing WhatsApp/SMS/MMS capabilities in the inbox.
-7. Queue routing with deterministic rules and a safe unassigned fallback.
-8. ServiceDesk handoff with idempotent Case creation/linking.
+1. Repository audit and a signed-off capability/ownership matrix. — **Done in 19-OM.0**; see `docs/omnichannel/repository-audit.md` and `docs/omnichannel/capability-matrix.md`.
+2. **Reused** canonical conversation, channel-thread and message records — the existing `voice_conversations` / `voice_messages` family, extended additively (decision D1), **not** a new store.
+3. Inbound event ingestion with signature verification/deduplication for one actual supported channel, over the existing `voice_webhook_events` receipt pipeline.
+4. Agent inbox with message history, customer context, assignment, internal notes and safe reply composer — building on the existing `VoiceInboxPage` and `VoiceInboxService` rather than replacing them.
+5. Reuse the existing Portal for the web chat entry point if no equivalent component exists — noting that Portal has **no anonymous principal**, so the visitor-identity model must be defined first.
+6. Reuse VoiceCommunications to expose its existing WhatsApp/SMS/MMS capabilities in the inbox — through an exported facade, not a deep import. MMS has **no adapter** today and Meta Cloud API is not present; WhatsApp ships through Twilio.
+7. Queue routing with deterministic rules and a safe unassigned fallback — **extending `ServiceDesk`'s `CaseQueue`/`RoutingRule`** (decision D2), including the operator-allowlist and business-hours gaps the audit found.
+8. ServiceDesk handoff with idempotent Case creation/linking — requiring the additive `Case.externalId` + create-or-link command in ServiceDesk.
 9. Consent/policy checks, audit, provider health, retry/reconciliation, and tests.
-10. Optional AIAgents-based reply suggestions as drafts only.
+10. Optional AIAgents-based reply suggestions as drafts only — requiring a registered `material_write` channel-send tool so the existing approval matrix can enforce explicit send approval.
+11. Realtime conversation events over the extended `NotificationEventsService` seam, via an Omnichannel module-scoped SSE endpoint (decision D3).
 
 Defer additional social connectors, elaborate workforce optimization, auto-merge identity logic, autonomous AI replies, extensive social listening, and sophisticated sentiment analytics until the first release has proven correct and reliable.
+
+Also defer, explicitly: **MMS** (no adapter implements it), **Meta Messenger/Instagram** (no adapter, no app review), **Telegram** (no adapter), and **real inbound email** (the port exists but no provider is installed — an operator must configure one).
 
 ---
 

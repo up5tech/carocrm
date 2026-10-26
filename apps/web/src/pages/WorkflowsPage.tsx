@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { Metadata, WorkflowRunStatus, WorkflowRunView, WorkflowView } from '../api/types.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime, t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
 import { useWorkflowCatalog, useWorkflowRuns, useWorkflows } from '../state/workflows.js';
@@ -239,7 +239,7 @@ export function WorkflowsPage() {
                 </Space>
               ),
             },
-            { title: t('web.workflows.started'), render: (_v: unknown, row) => row.startedAt.slice(0, 19).replace('T', ' ') },
+            { title: t('web.workflows.started'), render: (_v: unknown, row) => formatDateTime(row.startedAt) },
             { title: t('web.workflows.error'), dataIndex: 'error', render: (error: string | null) => error ?? '—' },
           ]}
         />

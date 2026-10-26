@@ -1,12 +1,13 @@
 import { HistoryOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, App as AntApp, Button, Card, Descriptions, Divider, Drawer, Empty, List, Space, Table, Tag, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Descriptions, Divider, Drawer, List, Space, Table, Tag, Typography } from 'antd';
 import { useRef, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { LeadScoreBreakdownEntry, LeadScoreHistoryItem, LeadScoreInsight, LeadScoreRead } from '../api/types.js';
 import { named } from '../pages/lead-score/shared.js';
 import { formatDateTime, formatNumber, t } from '../state/i18n.js';
+import { EmptyState } from './EmptyState.js';
 
 /**
  * The words the card prints for an engagement signal (19-LS.9). The names come from the module's own
@@ -356,8 +357,8 @@ export function LeadScorePanel({ leadId, onChanged }: { leadId: string; onChange
       }
     >
       {!view.scored ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        <EmptyState
+          size="compact"
           description={
             <Space direction="vertical" size={2}>
               <Typography.Text>{t('leadscore.panel.notScored')}</Typography.Text>

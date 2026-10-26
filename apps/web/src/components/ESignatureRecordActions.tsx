@@ -1,10 +1,11 @@
 import { FileProtectOutlined, PlusOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, Empty, List, Space, Tag, Typography } from 'antd';
+import { Button, Card, List, Space, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import { formatDateTime, t } from '../state/i18n.js';
+import { EmptyState } from './EmptyState.js';
 
 /**
  * Phase 19-ES.18 — the ESignature entry point on a CRM record page
@@ -62,7 +63,7 @@ export function ESignatureRecordActions(props: { entityType: string; entityId: s
       }
     >
       {view.requests.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('esignature.recordEntry.empty')} />
+        <EmptyState size="compact" description={t('esignature.recordEntry.empty')} />
       ) : (
         <List
           size="small"

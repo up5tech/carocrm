@@ -20,6 +20,19 @@
 > criteria, delivered as **entity metadata edited in the detail layout settings** — not as a per-user
 > preference on the record page.
 >
+> **Proposed after a UI/UX review — Phases 20.20–20.27.** `docs/ux/ui-review.md` audits the shipped
+> SPA and proposes eight additive sub-phases, specified in §17 and prioritised in §18: the design
+> token layer and a real brand colour (20.20), dark mode (20.21, P2, needs an explicit decision), one
+> state contract plus an error boundary (20.22), one timestamp formatter (20.23), one page frame
+> (20.24), settings search (20.25), the frontend quality gate that finally makes 20.16's axe criterion
+> verifiable (20.26), and a bounded first load with optimistic writes (20.27).
+>
+> **20.22 and 20.23 are implemented (2026-10-25).** The SPA now has an error boundary at the root and
+> per route, a four-variant empty state used by all 41 former raw `<Empty>` call sites, an offline
+> banner wired to React Query's `onlineManager`, every admin/ops timestamp through `formatDateTime`,
+> and `pnpm lint:ui` enforcing the four rules those fixes established. The remaining six (20.20,
+> 20.21, 20.24–20.27) are **not** implemented; nothing below is a claim about current behaviour.
+>
 > **Open deferrals** (documented in `docs/compatibility/settings-ux.md`, "Known limitations after
 > sub-phases 20.11–20.17"): the ACL explain helper, storage-usage figures, cross-page
 > "select all N matching records", bulk-action outcome counts, the row kebab menu, column
@@ -1704,6 +1717,365 @@ verification plan permits.
 
 ---
 
+**Review-driven sub-phases (20.20–20.27).** These were written after 20.19 shipped, from the audit in
+`docs/ux/ui-review.md`; they are additive and none of them changes a kernel capability. The numeric
+order is the order they are specified in, **not** the order to build them: the recommended sequence is
+20.22 → 20.23 → 20.20 → 20.26 → 20.24 → 20.25 → 20.27 → 20.21, with the reasoning in §18 and in the
+review's §6.
+
+### Phase 20.20 — Design token layer and a real brand colour  🟡 implemented 2026-10-26 (token layer + brand; TSX inline tokens + breakpoint consolidation deferred)
+
+Source: `docs/ux/ui-review.md` F11, F12. Enables 20.21. Frontend-only apart from one additive key in
+an existing JSONB settings document — no migration, no new table.
+
+The design language is sound; what it lacks is a foundation. `styles/carocrm.css` carries 733 hex
+literals and 27 `var(--…)` uses, the only custom properties in the file are five `--home-*` values
+scoped to one page, and `theme.ts` repeats the same colours in TypeScript. Five off-palette blues
+already exist in the CSS but not in the theme — that is drift, and it will keep happening while two
+sources of truth exist.
+
+Tasks:
+
+1. `apps/web/src/theme/tokens.ts`: the single source — `surface` (page/raised/sunken/overlay),
+   `ink` (primary/secondary/muted/faint/inverse), `line` (subtle/strong/focus), `accent` (the eight
+   `NAV_ACCENTS` plus their `soft` pairs), `state` (success/warning/error/info and their soft pairs),
+   `radius`, `space`, `shadow`, `z`. Named tokens only; no free colours.
+2. `apps/web/src/styles/tokens.css`: `:root` declares every token as `--carocrm-*`; the file is the
+   only place a literal colour may appear. Import it before `carocrm.css`.
+3. `theme.ts` builds `carocrmTheme` **from** `tokens.ts` — no literal in the file afterwards — so an
+   Ant Design token and a CSS property can never disagree.
+4. Sweep `carocrm.css` in descending frequency (`#438eff` ×85, `#eff2f7` ×62, `#737b85` ×50,
+   `#31373d` ×49, `#f0f0f0` ×32, …): each literal becomes `var(--carocrm-…)`. The `--home-*` block
+   becomes aliases of the global tokens (or is deleted and the home block rewritten), so the home
+   page stops being a private theme.
+5. Replace the 17 hardcoded `#438eff` and 7 `#737b85` in TSX with the token where the value is a
+   design decision; inline styles that only carry layout may stay.
+6. Consolidate the 16 breakpoints to four — 390 / 768 / 1180 / 1440 — merging the near-duplicate
+   pairs (767/768/769, 899/900, 991/992, 1179/1180) and folding the one-offs (480, 520, 640, 720,
+   1024, 1280) into the nearest step. Every merged query is verified at both of its old widths.
+7. Brand colour: add `primaryColor` to the `brand` document — a name from `NAV_ACCENT_NAMES`, never a
+   free hex — validated in `apps/api/src/settings/brand.service.ts`, written through the existing
+   `POST /Settings` path, audited like every other settings write. The shell sets
+   `--carocrm-accent` and feeds the same value into `ConfigProvider`'s `colorPrimary`.
+8. `docs/ux/design-principles.md`: replace "no dark mode, no theme switcher" with the token rule —
+   a colour is named in `tokens.ts` or it does not exist.
+
+Acceptance:
+
+- `grep -cE '#[0-9a-fA-F]{3,8}' apps/web/src/styles/carocrm.css` is 0, and the only hex in the
+  repository's web styles lives in `tokens.css`; `theme.ts` contains no literal colour.
+- A screenshot comparison at 1440 / 1180 / 768 / 390 px before and after shows no unintended
+  difference; the merged breakpoints render identically at each old width.
+- Choosing a brand colour in General settings recolours primary buttons, links and the selected menu
+  row on the next load, in both the shell and the generated list/detail pages; status colours,
+  severity colours and chart series are **not** affected, and an unknown name is refused with 422.
+- No new dependency; no migration; the brand document gains one optional key and an existing row
+  without it keeps the shipped accent.
+
+**Implemented 2026-10-26 (tasks 1–4, 7, 8).**
+
+- `apps/web/src/theme/tokens.ts` — single source: `COLOR`, `ACCENT_TONES` (eight named accents, each a
+  full `fg/hover/strong/soft` set), `accentTone()`, `SP`, `RADIUS`, `SHADOW`, `Z`, `FONT_FAMILY`.
+- `apps/web/src/styles/tokens.css` — **generated** by `scripts/gen-tokens.mjs`; declares every colour as
+  `--carocrm-*` (19 curated semantic tokens + 152 generated `--carocrm-c-*` tints for one-off shades).
+  Imported before `carocrm.css` in `main.tsx`.
+- `apps/web/src/theme.ts` — `carocrmTheme` and new `themeForBrand()` built **from** `tokens.ts`; zero
+  literal colours. `NAV_ACCENTS`/`navAccent` preserved for existing callers.
+- `carocrm.css` — **all 769 hex literals swept** (exact-string, length-ordered, identifier-safe) to
+  `var(--carocrm-*)`. `grep` for hex in the file is now 0; `--home-*` became token aliases.
+- Brand colour (task 7): `primaryColor` added to the `brand` document — validated as a name from
+  `NAVIGATION_ACCENTS` in `BRAND_DOCUMENT_SCHEMA` (422 on unknown), persisted by `BrandService`,
+  surfaced on `SettingsView`, edited via a Select in `GeneralTab`, and applied by a new `BrandTheme`
+  in `main.tsx` (sets `--carocrm-accent*` on `:root` **and** feeds `ConfigProvider` `colorPrimary`).
+- `scripts/check-ui-conventions.mjs` — added rule 5: a hex literal outside `tokens.css` (and
+  `theme.ts` must stay literal-free) fails the gate, so the single source of truth cannot drift.
+- `docs/ux/design-principles.md` §7 — token rule replaces "no dark mode, no theme switcher".
+
+**Deferred (tracked as 20.20.x):** task 5 — promote the 17 `#438eff` / 7 `#737b85` still inline in TSX to
+tokens (the lint gate intentionally does not yet flag TSX so the build stays green; layout-only inline
+colours may stay); task 6 — consolidate the 16 breakpoints to 390 / 768 / 1180 / 1440. Both are polish,
+not regressions, and unblocked by the token layer.
+
+### Phase 20.21 — Dark mode  ⬜ proposed (P2, needs an explicit decision)
+
+Source: `docs/ux/ui-review.md` §5. This is the one item §1.2 currently calls out of scope; it is
+listed here because 20.20 makes it cheap and retrofitting it after more surfaces ship does not.
+
+Tasks:
+
+1. `theme: 'light' | 'dark' | 'system'` as a per-user preference (the existing `/Preferences`
+   resource, no new store), default `system`.
+2. `data-theme` on `<html>`, written by the shell before first paint from the cached preference (the
+   same no-flash arrangement `initI18nFromCache` already uses), following `prefers-color-scheme`
+   while the preference is `system`.
+3. A dark value set for every token in `tokens.css`, and `theme.darkAlgorithm` in `ConfigProvider`.
+4. Print stays light; the email and document designers keep a light canvas, because their output is a
+   document, not a screen.
+5. Audit contrast at AA on the four core surfaces (list, record, settings, home) in both themes.
+
+Acceptance: switching the preference repaints without a reload and without a flash; every token has a
+dark value (a missing one fails the build check); no surface keeps a white panel in dark mode; print
+output is unchanged; a user who never touches the setting sees today's product.
+
+Out of scope: per-brand theming, user-authored themes, high-contrast mode.
+
+### Phase 20.22 — One way to render a state, and a boundary that catches the rest  ✅ implemented 2026-10-25
+
+Source: `docs/ux/ui-review.md` F1, F3, F8, F14. Independent of 20.20; touches different files.
+
+The shared components are right; adoption is partial and one class of failure has no component at
+all. A thrown render unmounts the SPA (no `ErrorBoundary` anywhere), a failed fetch on several admin
+screens is indistinguishable from an empty one (`AdminAuditPage` has no `catch`), and 54 raw `<Empty>`
+remain beside the 9 files that use `EmptyState`.
+
+Tasks:
+
+1. `components/AppErrorBoundary.tsx`: a class boundary that keeps the shell, renders a `Result` with
+   Reload / Back / Home, logs the error with the route, and shows the stack only in dev. One instance
+   wraps the router; a second wraps each route element (a `withBoundary(element)` helper in
+   `AppRoutes.tsx`) so a failing page cannot take the navigation down.
+2. `components/EmptyState.tsx`: title becomes the primary line (a real heading), description the
+   secondary one, and an `action` slot is added — the current version puts the title in antd `Empty`'s
+   action area, i.e. below the description. Add `variant: 'no-records' | 'no-results' | 'filtered' |
+   'denied'` with the four default copy pairs, so "you have none", "nothing matched", "your filter
+   hides everything" and "you may not see this" stop reading the same.
+3. `components/OfflineBanner.tsx`: `navigator.onLine` plus the `online`/`offline` events, wired into
+   React Query's `onlineManager` so requests pause and resume instead of failing one by one. Shown
+   under the header, dismissible only by going back online.
+4. Replace the 54 raw `<Empty>` and the remaining bare `Spin` loading states with the shared
+   components; `AdminAuditPage` and every other screen that fetches without a `catch` gets an
+   `ErrorState` with retry.
+5. `scripts/check-ui-conventions.mjs` (the gate 20.26 will extend): fails on `<Empty` outside
+   `EmptyState.tsx`, on `slice(0, 19)`, on a hex literal outside `tokens.css`, and on `<a href="/…">`.
+   Wire it into `pnpm lint`.
+6. i18n keys for the four empty variants and the offline banner, `en` + `vi`; note the convention in
+   `docs/ux/design-principles.md` §8.
+
+Acceptance: stopping the API leaves the shell, the menu and the current record readable, with an
+explanatory card and a working retry — never a blank page; a component that throws during render
+falls back to the route boundary and the rest of the app stays usable; going offline shows the banner
+and coming back re-runs the paused queries; the four empty variants are visually distinct and say
+what to do next; `node scripts/check-ui-conventions.mjs` exits 0 on a clean tree and non-zero on each
+seeded violation.
+
+**Implemented.**
+
+- `apps/web/src/components/AppErrorBoundary.tsx` — class boundary, `scope: 'app' | 'route'`; logs
+  route + error + component stack; dev-only message; reload for `app`, retry/home for `route`.
+  Mounted twice: around `RouterProvider` in `main.tsx`, and around the routed page in `AppShell`
+  (keyed by pathname, so navigating away resets it) for both the internal and the portal shell.
+- `apps/web/src/components/EmptyState.tsx` — title is the primary line, description the hint,
+  `action`/`children` the action slot; `variant` = `no-records | no-results | filtered | denied`;
+  `size="compact"` keeps antd's small illustration for panels. `title`/`description` widened to
+  `ReactNode` (one call site passes a composed block).
+- `apps/web/src/components/OfflineBanner.tsx` — subscribes to React Query's `onlineManager` through
+  `useSyncExternalStore`, so the banner and the paused queries share one source of truth; announces
+  recovery once, never on first paint.
+- 41 raw `<Empty>` call sites across 26 files migrated; `Empty` is gone from their antd imports.
+- `AdminAuditPage` gained a real error path (`catch` → `ErrorState` + retry, and the empty state is
+  suppressed while an error is shown) and its record link became a router `Link`.
+- `EntityListPage` distinguishes "no records" from "the filters hide everything", the latter with a
+  **Clear** action that also resets the text query.
+- **Bug found while verifying, and fixed:** reloading a list URL that carried `?q=…` silently dropped
+  the query and showed the unfiltered list. The free-text query was held twice — in component state
+  seeded from the URL, and in the URL written back by the sync effect — so a remount that read a stale
+  `useSearchParams()` initialised the state to `''` and the next sync **deleted** `q`. The query is now
+  derived from the URL only and written by one helper (`setTextQuery`), which also clears `offset`.
+  A shared list link now lands on the list the sender saw.
+- `scripts/check-ui-conventions.mjs` + `pnpm lint:ui` — four rules: missing i18n key (plural-aware),
+  `slice(0, 19)`, raw `<Empty>`, raw `<a href="/…">` (downloads under `/api/` exempt).
+
+**Verification actually run.**
+
+- `node scripts/check-ui-conventions.mjs` — clean, 4 687 keys checked. Before the fix it reported 46
+  violations, including **six live raw-key renders** (`core.common.empty`, `.error`, `.retry`,
+  `.retryHint`, `.accessDenied`, `.accessDeniedHint`) — the three shared state components pointed at
+  keys that do not exist, so a 403 page printed `core.common.accessDenied` as its heading.
+- `tsc --noEmit -p apps/web/tsconfig.json` clean; `eslint apps/web/src --max-warnings=0` clean;
+  `vite build` succeeds (index chunk 2.75 MB / 787 kB gzip).
+- `vitest run apps/api/test/i18n.test.ts` 6/6 — the catalog still validates every key against the
+  naming rule, including the 19 added.
+- Browser smoke run against the configured database (admin session, `no_proxy='*'`): sign-in, home
+  with no raw keys, audit log with no ISO-sliced timestamp, a `?q=` list link that survives a reload
+  and renders the **filtered** empty state (title "The current filters hide every record", hint,
+  **Clear** button — checked in a screenshot, not only in the DOM), offline banner appears and
+  disappears with `online`/`offline`, record page renders. 10/11 assertions pass; the eleventh ("no
+  console errors") fails on **pre-existing** output: two `422` from `POST /Refresh` when a stale token
+  is restored at boot, and an antd `Table` `pagination.total` warning. Neither is introduced by this
+  sub-phase.
+- An earlier version of this run reported the filtered empty state as verified when the list was in
+  fact showing 58 unfiltered rows: the assertion matched the word "filter" elsewhere on the page. The
+  check now reads `.carocrm-empty-title`, and the underlying `?q=` bug it exposed is the one fixed
+  above.
+- Not covered: the crash path itself has no automated trigger (no test hook to force a render error);
+  it was verified by code inspection only.
+
+### Phase 20.23 — One formatter for time, and a check that keeps it that way  ✅ implemented 2026-10-25
+
+Source: `docs/ux/ui-review.md` F2. Small, high-value, independent.
+
+`formatDateTime` is correct and timezone-aware. Fourteen call sites in ten files bypass it with
+`value.slice(0, 19).replace('T', ' ')`, so the audit log, the job history, the workflow runs, the
+process instances, the task list and the process trail all print UTC while the same instant reads
+correctly on the record page.
+
+Tasks:
+
+1. Replace all 14 call sites with `formatDateTime` / `formatClock` (`AdminAuditPage`, `AdminJobsPage`,
+   `AdminExtensionsPage`, `WorkflowsPage`, `WorkflowEditorPage`, `ProcessesPage`, `ProcessEditorPage`,
+   `TasksPage`, `ProcessPanel`, `ProcessTrailModal`). A log line keeps its raw ISO string only inside
+   a copied/downloaded artifact, never on screen.
+2. Add `formatRelative(value)` beside `formatDateTime` (`Intl.RelativeTimeFormat`, user timezone) for
+   "3 minutes ago", and use it where a recent timestamp is scanned rather than read: job runs,
+   workflow runs, stream entries, notifications.
+3. The convention check from 20.22 gains the `.slice(0, 19)` and `replace('T'` rules; the rule is
+   documented in `docs/ux/design-principles.md` §7.
+4. A row-level unit test for the formatter pair (fixed instant, two zones, two locales) so the
+   behaviour is pinned rather than assumed.
+
+Acceptance: the audit log, the job history and a workflow run show the same wall-clock time as the
+record that produced them, in the instance's configured timezone; changing the default timezone in
+Localization changes all of them without a code change; no `.slice(0, 19)` remains; the check fails
+if one is reintroduced.
+
+**Implemented.**
+
+- All 14 call sites in 10 files now use `formatDateTime`: `AdminAuditPage`, `AdminJobsPage` (the
+  `timeText` helper and the log drawer), `AdminExtensionsPage`, `WorkflowsPage`,
+  `WorkflowEditorPage`, `ProcessesPage`, `ProcessEditorPage`, `TasksPage` (due + started),
+  `ProcessPanel`, `ProcessTrailModal` (started + due + when).
+- `formatRelative(value, now?)` added to `state/i18n.ts` (`Intl.RelativeTimeFormat`, active locale),
+  used by the notification inbox — the one surface where recency, not the instant, is what the
+  reader judges — with the exact time in a tooltip. It replaces
+  `new Date(x).toLocaleString()`, which formatted in the **host** locale and timezone.
+- The `.slice(0, 19)` rule is part of `scripts/check-ui-conventions.mjs` (`pnpm lint:ui`), so a
+  reintroduction fails the gate rather than waiting for a review.
+
+**Verification actually run.** `pnpm lint:ui` clean (the rule reports 0 after the sweep and would
+report any new one); `tsc`/`eslint`/`vite build` clean; browser smoke run confirms the audit log
+renders no `YYYY-MM-DD HH:MM:SS` string. **Not** run: the timezone-change assertion — flipping the
+instance default timezone and re-reading three screens is a manual check that would write to the
+settings document, so it is left to the operator.
+
+**Deferred from the task list.** Item 4 (a unit test for the formatter pair) has no home: there is
+still no frontend test runner (§20.26). The formatter is exercised indirectly by the smoke run.
+
+### Phase 20.24 — One page frame: header, document title, heading outline, focus  ⬜ proposed
+
+Source: `docs/ux/ui-review.md` F5, F6, F7.
+
+The page title has three implementations (a real `<h1>` in 18 files, `Typography.Title level={4|5}`
+in 14 places, nothing at all on the rest), the heading distribution is h1 ×19 / h2 ×9 / h3 ×4 /
+**h5 ×33**, `document.title` never changes from the brand, and a route change neither moves focus nor
+announces the new page.
+
+Tasks:
+
+1. `components/PageHeader.tsx`: `title` (rendered as the page's only `h1`), `subtitle`, `breadcrumb`,
+   `actions`, `back`, `tabs`, `docKey`. Owns the `carocrm-page-head` markup so the class stops being
+   re-typed per page, and owns `usePageTitle(title)` → `document.title = "<title> · <brand>"`.
+2. A `useRouteFocus()` hook in the shell: on a pathname change, focus `#carocrm-content` (already
+   `tabIndex={-1}`) and announce the new title in the existing `#carocrm-live-region`. No focus move
+   on a query-string-only change, so filtering a list does not steal focus.
+3. Migrate the pages that render their own title to `PageHeader`; the workspace screens that
+   legitimately own their head (`/crm-chat`, `/voice-inbox`, `/home`) keep it but adopt `usePageTitle`
+   and expose one `h1`.
+4. Heading levels become a rule: page = `h1`, section = `h2`, card/panel = `h3`. The 33 `level={5}`
+   uses are re-levelled where they are section titles; a card title inside a section becomes `h3`.
+5. `docs/ux/design-principles.md` §3 gains the frame and heading rules.
+
+Acceptance: every internal route exposes exactly one `h1` and a valid outline; the browser tab reads
+"Contacts · CaroCRM" (localized); a keyboard user activating a sidebar link lands with focus in the
+content and the page announced; filtering a list does not move focus; no page re-implements the
+`carocrm-page-head` markup.
+
+### Phase 20.25 — Find a setting  ⬜ proposed
+
+Source: `docs/ux/ui-review.md` F9.
+
+Twenty-one administration tabs behind a rail with no filter. The tab descriptors already carry a
+label, a description and a doc key; the palette already knows how to search and to respect what the
+caller may open. Neither is used for settings.
+
+Tasks:
+
+1. `AdminPanelTab` gains a `keywords: string[]` field in `apps/api/src/admin/admin-panel.service.ts`
+   (metadata, not a migration): the words an administrator would type — "timezone", "smtp", "logo",
+   "password policy", "api key" — validated against a plain string array.
+2. The settings rail gains a search box filtering tabs by label, description and keyword, with the
+   matched tabs listed flat (group headings hidden while filtering) and a "no setting matches" state.
+3. `?highlight=<field>` on a tab focuses and briefly marks the matching field, so a search result
+   lands on the control, not just the tab.
+4. The command palette gains a **Settings** group built from the same descriptors, filtered by the
+   tabs the caller may open, capped like every other group; a forbidden tab never appears.
+5. i18n for the search placeholder, the empty result and the group label; `docs/admin/settings.md`
+   documents the keyword field so a module's tab can declare its own.
+
+Acceptance: typing "timezone" from any screen reaches the Localization tab's timezone control in two
+keystrokes plus Enter; a tab the caller cannot open never appears in either surface; a module that
+adds a tab with keywords is searchable without a shell change; keyboard-only throughout.
+
+### Phase 20.26 — Frontend quality gate  ⬜ proposed
+
+Source: `docs/ux/ui-review.md` §5 and §8; `PLAN_Phase_20` 20.16's unmet acceptance criterion.
+
+The plan's accessibility acceptance ("axe passes on the four core surfaces") is recorded as **not
+met** because this repository has no frontend test runner and no axe dependency. Everything in
+20.20–20.25 is a regression waiting to happen without one, and 20.22 already introduces a convention
+script that needs a home in CI.
+
+Tasks:
+
+1. `apps/web` test setup: `vitest` + `jsdom` + `@testing-library/react` + `vitest-axe`, a `test:web`
+   script, and a config that does not collide with the API's `vitest` project.
+2. Six smoke tests, one per surface: shell (menu renders, skip link works, drawer opens under 768),
+   list (URL state round-trips, empty/error/denied render), record (header, next action, relation
+   tabs), settings shell (save bar dirty state, refusal state), palette (⌘K, filter, Enter navigates),
+   states (the four empty variants + offline banner).
+3. `axe` assertions on the four core surfaces, in light and (after 20.21) dark; the four surfaces are
+   the ones 20.16 named.
+4. `scripts/check-ui-conventions.mjs` from 20.22 wired into `pnpm lint`, extended with a docs-truth
+   check: the "Known limitations" list in `docs/compatibility/settings-ux.md` names only items the
+   code does not have.
+5. `docs/ux/accessibility.md` rewritten from "manual walkthrough" to "what the gate checks and what
+   it does not".
+
+Acceptance: `pnpm test:web` runs green on a clean tree; axe reports zero violations on the four
+surfaces; deleting an `aria-label` from an icon-only control, or adding a raw `<Empty>`, or
+reintroducing `.slice(0, 19)`, makes the gate fail; the deferral list matches the code; 20.16's
+acceptance criterion can be marked met with a command instead of a walkthrough.
+
+### Phase 20.27 — A bounded first load, and writes that answer immediately  ⬜ proposed
+
+Source: `docs/ux/ui-review.md` F4, F10, F13.
+
+The initial chunk is 2.62 MB because `AppRoutes.tsx` imports all 46 page modules statically; only the
+admin tabs and the email editor are split. And no mutation anywhere is optimistic (0 `onMutate`
+against 171 success toasts), so a board drag re-fetches the board and an inline edit re-fetches the
+page.
+
+Tasks:
+
+1. Route-level `React.lazy` for every page module in `AppRoutes.tsx`, with a `Suspense` fallback that
+   renders the page's own skeleton (not a centred spinner), so a route change never flashes a blank
+   content area. Keep the entity wildcard's chunk shared between list/detail/edit where the modules
+   already share code.
+2. Prefetch on intent: `onMouseEnter`/`onFocus` of a sidebar or palette entry warms that route's
+   chunk; idle prefetch of the three most-visited routes from the `lastVisited` preference.
+3. Optimistic writes for the three interactions where the round trip is felt: board card move
+   (rollback + message on refusal), inline list cell edit, and task/approval completion. Each uses
+   `onMutate` + `onError` rollback, and the server's refusal message is what the user sees.
+4. `refetchOnWindowFocus: 'always'` for list, detail and dashboards, so a tab left open overnight
+   refreshes when the user returns instead of showing yesterday's pipeline.
+5. Record the before/after numbers in this document and in the phase report.
+
+Acceptance: the initial JS for a signed-in shell is at most half of today's 2.62 MB, measured on the
+built output, and no module page's chunk is in it; a route change shows a skeleton within one frame;
+a dragged card stays where it was dropped without a board reload, and a refused drop returns it with
+the server's reason; returning to a stale tab shows fresh data.
+
+---
+
 ## 18. Priorities and Release Gates
 
 ### P0 — Required for the first usable release
@@ -1720,6 +2092,13 @@ verification plan permits.
 - Record page unsaved-changes guard. (The sticky header is a P1 refinement — see §19.)
 - Security tests for the settings and navigation endpoints.
 - Migrations, docs, translations, OpenAPI.
+- **Post-20.19 review gate (⬜ proposed).** `docs/ux/ui-review.md` found P0 defects the phase's own
+  bar does not tolerate: a thrown render white-screens the SPA, and a failed fetch is
+  indistinguishable from an empty screen on several screens (both 20.22 — ✅ fixed 2026-10-25);
+  admin and ops screens print UTC as if it were local time (20.23 — ✅ fixed 2026-10-25); the design
+  system has no token layer, so the brand setting cannot set a colour and two sources of truth
+  already disagree (20.20); and 20.16's "axe passes" criterion is unmet because there is no frontend
+  test runner (20.26).
 
 ### P1 — Required for comfortable daily use
 
@@ -1741,11 +2120,19 @@ verification plan permits.
   compact admin setup banner — with no per-entity count grid and no per-module request fan-out.
   ✅ 20.19 — `HomePage.tsx` composes `pages/home/*`; the default-dashboard priority is shared with
   Dashboards in `state/dashboard-default.ts`.
+- One page frame (⬜ 20.24): a single `PageHeader`, a per-page `document.title`, a valid heading
+  outline and focus moved to the content on a route change.
+- Settings search (⬜ 20.25): the rail and the command palette both find a setting by label,
+  description or keyword, filtered by the tabs the caller may open.
+- A bounded first load and optimistic writes (⬜ 20.27): route-level code splitting takes the initial
+  chunk below half of today's 2.62 MB, and the three interactions where the round trip is felt —
+  board move, inline edit, task completion — answer immediately and roll back on refusal.
 
 ### P2 — Post-first-release enhancements
 
 - Role-scoped default menus and dashboards.
-- Dark mode and density themes.
+- Dark mode and density themes. (⬜ 20.21 — now cheap once the token layer of 20.20 exists; needs an
+  explicit decision because it is the one item §1.2 calls out of scope.)
 - 2FA management UI.
 - Saved view sharing beyond team visibility, and view templates.
 - Personalized "next best action" scoring.
@@ -1835,6 +2222,15 @@ process instances, today's calendar slice and followed stream. Build the shared 
 helper first, then a static composition with fixture data for a visual review, then wire the queries.
 Do not add a backend aggregate or a new dependency to make the page work; if the measured request
 budget is unacceptable, record it and defer `/Home` to P2.
+
+**Starting the review-driven batch (20.20–20.27):** read `docs/ux/ui-review.md` first — it names the
+file and the line behind every claim, so the finding can be re-checked instead of re-discovered.
+Start with 20.22 and 20.23: they are small, they fix defects users hit today, and they touch files
+nothing else is moving. Then 20.20 (the token sweep is mechanical but wide), then 20.26 so the sweep
+is locked in by a check. Read `apps/web/src/styles/carocrm.css` (7 972 lines), `theme.ts`,
+`AppRoutes.tsx`, `components/AppShell.tsx` and `state/i18n.ts` before writing anything — in
+particular, do not invent a new state component (20.22 fixes the four that exist) and do not invent a
+new date formatter (20.23 uses the one that exists).
 
 ---
 

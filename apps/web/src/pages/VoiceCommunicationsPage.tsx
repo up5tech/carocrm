@@ -1,10 +1,11 @@
 import { MessageOutlined, PhoneOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Empty, Row, Skeleton, Space, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Col, Row, Skeleton, Space, Table, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { VoiceProviderAccountView } from '../api/types.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { t } from '../state/i18n.js';
 
 /**
@@ -230,7 +231,7 @@ export function VoiceCommunicationsPage() {
 
       <Card size="small" title={t('voice.page.accounts')}>
         {accounts.data === undefined || accounts.data.list.length === 0 ? (
-          <Empty description={t('voice.page.noAccounts')} />
+          <EmptyState description={t('voice.page.noAccounts')} />
         ) : (
           <Table
             size="small"
@@ -244,7 +245,7 @@ export function VoiceCommunicationsPage() {
 
       <Card size="small" title={t('voice.page.webhookInbox')}>
         {events.data === undefined || events.data.list.length === 0 ? (
-          <Empty description={t('voice.page.noEvents')} />
+          <EmptyState description={t('voice.page.noEvents')} />
         ) : (
           <Table
             size="small"

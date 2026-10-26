@@ -82,7 +82,9 @@
     "followed": "Đang theo dõi bản ghi này.",
     "followFailed": "Không thể theo dõi bản ghi này.",
     "moreFilters": "{count} bộ lọc khác",
-    "fewerFilters": "Ít bộ lọc hơn"
+    "fewerFilters": "Ít bộ lọc hơn",
+    "emptyTitle": "Chưa có bản ghi nào",
+    "emptyHint": "Tạo bản ghi đầu tiên để bắt đầu."
   },
   "board": {
     "groupBy": "Nhóm theo",
@@ -569,7 +571,8 @@
     "totpDisableFailed": "Không tắt được xác thực hai yếu tố.",
     "recoveryRegenerated": "Đã tạo lại mã khôi phục.",
     "recoveryCodesTitle": "Mã khôi phục",
-    "recoveryCodesHint": "Lưu các mã này ở nơi an toàn. Mỗi mã dùng một lần."
+    "recoveryCodesHint": "Lưu các mã này ở nơi an toàn. Mỗi mã dùng một lần.",
+    "avatarRemoved": "Đã xoá ảnh đại diện."
   },
   "stream": {
     "title": "Dòng hoạt động",
@@ -815,7 +818,8 @@
     "field": "Trường",
     "old": "Cũ",
     "new": "Mới",
-    "by": "Người thực hiện"
+    "by": "Người thực hiện",
+    "loadFailed": "Không tải được nhật ký kiểm toán."
   },
   "adminExtensions": {
     "title": "Tiện ích mở rộng",
@@ -917,6 +921,9 @@
     "logoUploaded": "Đã tải logo. Hãy lưu cài đặt để áp dụng.",
     "logoUploadFailed": "Không tải được logo.",
     "logoNotImage": "Hãy chọn một tệp ảnh.",
+    "brandColorLabel": "Màu thương hiệu",
+    "brandColorHint": "Màu nhấn cho nút, liên kết và dòng menu được chọn. Màu trạng thái và biểu đồ không đổi.",
+    "brandColorDefault": "Mặc định (xanh)",
     "localeTitle": "Ngôn ngữ và múi giờ",
     "enabledLocalesLabel": "Ngôn ngữ bật",
     "enabledLocalesPlaceholder": "Chọn các ngôn ngữ người dùng được phép chọn",
@@ -2251,7 +2258,8 @@
     "providerPresetHint": "Chọn nhà cung cấp sẽ điền endpoint, model gợi ý và header của khóa bí mật. Mọi giá trị vẫn sửa được.",
     "providerGroupHosted": "Nhà cung cấp lưu trữ",
     "providerGroupSelfHosted": "Runtime tự host và cục bộ",
-    "providerGroupOther": "Khác"
+    "providerGroupOther": "Khác",
+    "noAccess": "Bạn không có quyền xem phần đánh giá."
   },
   "adminLayout": {
     "entityTitle": "Bản ghi",
@@ -2655,7 +2663,9 @@
     "badge": "JSON",
     "open": "Mở trong cửa sổ",
     "expand": "Mở rộng",
-    "collapse": "Thu gọn"
+    "collapse": "Thu gọn",
+    "fields_one": "{count} trường",
+    "items_one": "{count} mục"
   },
   "email": {
     "inbox": {

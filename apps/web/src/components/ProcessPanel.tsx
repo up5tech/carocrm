@@ -1,13 +1,14 @@
 import { ApartmentOutlined, PlusOutlined } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { App as AntApp, Button, Card, Dropdown, Empty, List, Space, Tag, Typography } from 'antd';
+import { App as AntApp, Button, Card, Dropdown, List, Space, Tag, Typography } from 'antd';
 import { useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { ProcessInstanceView } from '../api/types.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime, t } from '../state/i18n.js';
 import { useAvailableProcesses, useProcessInstances } from '../state/processes.js';
 import { useSession } from '../state/session.js';
+import { EmptyState } from './EmptyState.js';
 import { INSTANCE_STATUS_COLORS, ProcessTrailModal } from './ProcessTrailModal.js';
 
 /**
@@ -98,7 +99,7 @@ export function ProcessPanel({ entityType, entityId }: { entityType: string; ent
       }
     >
       {list.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.recordProcess.empty')} />
+        <EmptyState size="compact" description={t('web.recordProcess.empty')} />
       ) : (
         <List
           size="small"
@@ -126,7 +127,7 @@ export function ProcessPanel({ entityType, entityId }: { entityType: string; ent
                   description={
                     <Space direction="vertical" size={0}>
                       <Typography.Text type="secondary">
-                        {t('web.recordProcess.startedAt', { date: instance.startedAt.slice(0, 19).replace('T', ' ') })}
+                        {t('web.recordProcess.startedAt', { date: formatDateTime(instance.startedAt) })}
                       </Typography.Text>
                       <Typography.Text type="secondary">
                         {waiting.length === 0

@@ -1,10 +1,11 @@
 import { ReloadOutlined } from '@ant-design/icons';
-import { App as AntApp, Avatar, Button, Card, Empty, Segmented, Space, Spin, Typography } from 'antd';
+import { App as AntApp, Avatar, Button, Card, Segmented, Space, Spin, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { api, type StreamItem } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { updateSummary } from '../components/StreamPanel.js';
 import { t } from '../state/i18n.js';
 import { useEntity, useMetadata } from '../state/metadata.js';
@@ -80,7 +81,7 @@ export function StreamPage() {
       {loading && items.length === 0 ? (
         <Spin />
       ) : items.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.stream.empty')} />
+        <EmptyState size="compact" description={t('web.stream.empty')} />
       ) : (
         <div className="carocrm-stream-list">
           {items.map((item) => (

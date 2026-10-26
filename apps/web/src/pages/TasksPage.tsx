@@ -22,7 +22,7 @@ import { api } from '../api/client.js';
 import type { ProcessInstanceView, ProcessTaskView } from '../api/types.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { INSTANCE_STATUS_COLORS, ProcessTrailModal } from '../components/ProcessTrailModal.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime, t } from '../state/i18n.js';
 import { useProcessInstances, useProcessTasks } from '../state/processes.js';
 import { useSession } from '../state/session.js';
 
@@ -215,7 +215,7 @@ export function TasksPage() {
                     const isLate = due.getTime() < Date.now() && (row.status === 'open' || row.status === 'overdue');
                     return (
                       <Typography.Text type={isLate ? 'danger' : 'secondary'}>
-                        {row.dueAt.slice(0, 19).replace('T', ' ')}
+                        {formatDateTime(row.dueAt)}
                       </Typography.Text>
                     );
                   },
@@ -332,7 +332,7 @@ export function TasksPage() {
                 {
                   title: t('web.workflows.started'),
                   width: 170,
-                  render: (_value: unknown, row) => row.startedAt.slice(0, 19).replace('T', ' '),
+                  render: (_value: unknown, row) => formatDateTime(row.startedAt),
                 },
                 {
                   title: '',

@@ -25,6 +25,21 @@ Curated long-term notes. Daily logs: `YYYY-MM-DD.md`. Per-module detail lives in
   padding + 46 page head + 14 gap + 56 footer. Change the page head's height and you must change
   this, or the page starts scrolling.
 
+## Web UI conventions (enforced)
+
+- `pnpm lint:ui` (`scripts/check-ui-conventions.mjs`) fails on: a `t('…')` key missing from `i18n/en`
+  (plural-aware — `key_one`/`key_other` counts), `.slice(0, 19)` timestamps, raw `<Empty>`, and an
+  internal `<a href="/…">` (downloads under `/api/` are exempt). Each rule was a shipped defect first.
+- `EmptyState` is the only empty state: title above hint, `variant` = `no-records | no-results |
+  filtered | denied`, `action`/`children` for the fixing control, `size="compact"` for record panels.
+  The key is `core.empty*` — **not** `core.common.empty*` (that namespace never existed).
+- Time goes through `formatDateTime`/`formatClock`/`formatRelative`; never `new Date(x).toLocaleString()`
+  (host locale, wrong timezone).
+- `AppErrorBoundary` is mounted twice — root in `main.tsx`, per-route in `AppShell` keyed by pathname.
+  `OfflineBanner` reads React Query's `onlineManager`; do not add a second `navigator.onLine` listener.
+- Repo-wide `pnpm lint` is red on `.agents/**` (vendored). The sanctioned scope is
+  `npx eslint apps packages e2e database scripts modules`.
+
 ## SQL / platform gotchas
 
 - `entity_records` has `created_at` + `modified_at`, never `updated_at`.

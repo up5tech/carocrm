@@ -8,11 +8,12 @@
  */
 
 import { SendOutlined } from '@ant-design/icons';
-import { Alert, App as AntApp, Button, Card, Empty, Input, List, Space, Spin, Tag, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Input, List, Space, Spin, Tag, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { api, type StreamItem } from '../api/client.js';
 import { t } from '../state/i18n.js';
+import { EmptyState } from './EmptyState.js';
 
 const { TextArea } = Input;
 
@@ -78,9 +79,9 @@ export function PortalCaseConversation({ caseId }: { readonly caseId: string }) 
         {loading && items.length === 0 ? (
           <Spin />
         ) : denied ? (
-          <Empty description={t('web.portalCase.denied')} />
+          <EmptyState description={t('web.portalCase.denied')} />
         ) : items.length === 0 ? (
-          <Empty description={t('web.portalCase.empty')} />
+          <EmptyState description={t('web.portalCase.empty')} />
         ) : (
           <List
             dataSource={items}

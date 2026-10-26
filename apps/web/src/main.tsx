@@ -1,14 +1,18 @@
+import './styles/tokens.css';
 import './styles/carocrm.css';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp, ConfigProvider } from 'antd';
-import { StrictMode } from 'react';
+import type { ReactNode } from 'react';
+import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 
 import { AppRoutes } from './AppRoutes.js';
+import { AppErrorBoundary } from './components/AppErrorBoundary.js';
 import { i18n, initI18n, initI18nFromCache } from './state/i18n.js';
-import { carocrmTheme } from './theme.js';
+import { useSettings } from './state/settings.js';
+import { accentTone, themeForBrand } from './theme.js';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -26,16 +30,41 @@ if (!container) throw new Error('root element missing');
 // the user can switch language later), so the tree is re-rendered in place — never re-rooted.
 const root = createRoot(container);
 
+/**
+ * Applies the instance brand accent to the whole SPA: the shell's own CSS reads `--carocrm-accent*`
+ * (set here on :root), and Ant Design's primary/info/link tokens come from `themeForBrand`. A null
+ * brand keeps the shipped blue (§20.20). ConfigProvider lives inside the query provider because it
+ * reads the public settings view.
+ */
+function BrandTheme({ children }: { children: ReactNode }): ReactNode {
+  const settings = useSettings();
+  const primaryColor = settings.data?.primaryColor ?? null;
+  useEffect(() => {
+    const tone = accentTone(primaryColor);
+    const el = document.documentElement;
+    el.style.setProperty('--carocrm-accent', tone.fg);
+    el.style.setProperty('--carocrm-accent-hover', tone.hover);
+    el.style.setProperty('--carocrm-accent-strong', tone.strong);
+    el.style.setProperty('--carocrm-accent-soft', tone.soft);
+  }, [primaryColor]);
+  return (
+    <ConfigProvider theme={themeForBrand(primaryColor)}>
+      <AntApp>{children}</AntApp>
+    </ConfigProvider>
+  );
+}
+
 const render = (): void => {
   root.render(
     <StrictMode>
-      <ConfigProvider theme={carocrmTheme}>
-        <AntApp>
-          <QueryClientProvider client={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <BrandTheme>
+          {/* §20.22: the outermost boundary. A failure in the shell itself has no other net. */}
+          <AppErrorBoundary scope="app">
             <RouterProvider router={router} />
-          </QueryClientProvider>
-        </AntApp>
-      </ConfigProvider>
+          </AppErrorBoundary>
+        </BrandTheme>
+      </QueryClientProvider>
     </StrictMode>,
   );
 };

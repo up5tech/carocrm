@@ -335,6 +335,8 @@ export interface SettingsView {
   pageTitle: string | null;
   footerText: string | null;
   logoAttachmentId: string | null;
+  /** Brand accent name from the SPA's accent set, or null for the shipped blue default (§20.20). */
+  primaryColor: string | null;
   logoUrl: string | null;
   availableLocales: string[];
   defaultLocale: string;
@@ -347,6 +349,7 @@ export interface SettingsPatch {
   pageTitle?: string | null;
   footerText?: string | null;
   logoAttachmentId?: string | null;
+  primaryColor?: string | null;
   defaultLocale?: string;
   enabledLocales?: string[];
   defaultTimezone?: string;

@@ -92,6 +92,21 @@ export default [
     },
   },
   {
+    // Plain-Node tooling (`scripts/*.mjs`): no TypeScript parser, so it needs the node globals the
+    // ts block provides, and it reports through the console by design.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+      },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  {
     ignores: ['**/dist/**', '**/*.d.ts', 'node_modules', '.next', 'coverage', '**/*.config.ts', '.data/**', '.claude/**', '.trail/**', 'graft/**'],
   },
 ];

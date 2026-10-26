@@ -1,24 +1,11 @@
 import { DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  App as AntApp,
-  Button,
-  Card,
-  Descriptions,
-  Drawer,
-  Empty,
-  List,
-  Popconfirm,
-  Space,
-  Table,
-  Tag,
-  Typography,
-} from 'antd';
+import { Alert, App as AntApp, Button, Card, Descriptions, Drawer, List, Popconfirm, Space, Table, Tag, Typography } from 'antd';
 import { useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { AIAgentConversationView } from '../../api/types.js';
+import { EmptyState } from '../../components/EmptyState.js';
 import { t } from '../../state/i18n.js';
 import { formatTimestamp } from './shared.js';
 
@@ -119,7 +106,7 @@ export function AIAgentsConversationsTab({ capabilities }: { readonly capabiliti
         dataSource={[...(conversations.data?.list ?? [])]}
         scroll={{ x: 780 }}
         pagination={{ pageSize: 20, showSizeChanger: false }}
-        locale={{ emptyText: <Empty description={t('web.aiAgents.noConversations')} /> }}
+        locale={{ emptyText: <EmptyState description={t('web.aiAgents.noConversations')} /> }}
         onRow={(conversation) => ({ onClick: () => setOpenId(conversation.id), style: { cursor: 'pointer' } })}
         columns={[
           {
@@ -189,7 +176,7 @@ export function AIAgentsConversationsTab({ capabilities }: { readonly capabiliti
 
       <Card className="carocrm-card" size="small" title={t('web.aiAgents.memorySummaries')}>
         {memory.data === undefined || memory.data.list.length === 0 ? (
-          <Empty description={t('web.aiAgents.noMemory')} />
+          <EmptyState description={t('web.aiAgents.noMemory')} />
         ) : (
           <List
             size="small"
@@ -288,7 +275,7 @@ export function AIAgentsConversationsTab({ capabilities }: { readonly capabiliti
         }
       >
         {detail.data === undefined ? (
-          <Empty description={t('web.aiAgents.loadingConversation')} />
+          <EmptyState description={t('web.aiAgents.loadingConversation')} />
         ) : (
           <Space direction="vertical" size={14} style={{ width: '100%' }}>
             <Descriptions size="small" column={1} bordered>
@@ -305,7 +292,7 @@ export function AIAgentsConversationsTab({ capabilities }: { readonly capabiliti
               <Alert type="warning" showIcon message={t('web.aiAgents.memorySummary')} description={detail.data.conversation.summary} />
             )}
             {detail.data.messages.length === 0 ? (
-              <Empty description={t('web.aiAgents.noMessages')} />
+              <EmptyState description={t('web.aiAgents.noMessages')} />
             ) : (
               <List
                 size="small"

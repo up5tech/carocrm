@@ -14,13 +14,13 @@ export function ErrorState({ message, onRetry }: { message?: string | undefined;
     <Alert
       type="error"
       showIcon
-      message={message ?? t('core.common.error')}
+      message={message ?? t('core.error')}
       description={
         onRetry !== undefined ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Typography.Text>{t('core.common.retryHint')}</Typography.Text>
+            <Typography.Text>{t('core.retryHint')}</Typography.Text>
             <Button size="small" onClick={onRetry}>
-              {t('core.common.retry')}
+              {t('core.retry')}
             </Button>
           </div>
         ) : undefined

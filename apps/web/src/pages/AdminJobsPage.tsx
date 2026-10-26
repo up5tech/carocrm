@@ -3,7 +3,7 @@ import { App as AntApp, Button, Card, Descriptions, Drawer, Form, Input, Modal, 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api, type JobLogLine, type JobRow, type ScheduleRow } from '../api/client.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime, t } from '../state/i18n.js';
 
 const JOB_STATUSES = ['pending', 'running', 'completed', 'failed', 'cancelled'];
 const STATUS_COLORS: Record<string, string> = {
@@ -16,7 +16,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 function timeText(value: string | null): string {
   if (!value) return '—';
-  return value.slice(0, 19).replace('T', ' ');
+  return formatDateTime(value);
 }
 
 function secondsBetween(from: string | null, to: string | null): string {
@@ -384,7 +384,7 @@ export function AdminJobsPage() {
         <pre className="carocrm-job-log">
           {logs.length === 0
             ? t('web.adminJobs.noLogs')
-            : logs.map((line) => `${line.createdAt.slice(0, 19).replace('T', ' ')} [${line.level}] ${line.message}`).join('\n')}
+            : logs.map((line) => `${formatDateTime(line.createdAt)} [${line.level}] ${line.message}`).join('\n')}
         </pre>
       </Drawer>
     </Space>

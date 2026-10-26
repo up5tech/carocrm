@@ -1,12 +1,13 @@
 import { CustomerServiceOutlined, PhoneOutlined, RightOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Badge, Button, Card, Empty, List, Space, Tag, Typography } from 'antd';
+import { Badge, Button, Card, List, Space, Tag, Typography } from 'antd';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { VoiceCallSessionView } from '../api/types.js';
 import { formatDateTime, t } from '../state/i18n.js';
+import { EmptyState } from './EmptyState.js';
 import { VoiceCallDetail } from './VoiceCallDetail.js';
 
 /**
@@ -133,7 +134,7 @@ export function CommunicationsPanel({ entityType, entityId }: { entityType: stri
         ) : null}
 
         {selected !== undefined ? <VoiceCallDetail call={selected} /> : null}
-        {view.total.conversations === 0 && view.total.calls === 0 ? <Empty /> : null}
+        {view.total.conversations === 0 && view.total.calls === 0 ? <EmptyState /> : null}
       </Space>
     </Card>
   );

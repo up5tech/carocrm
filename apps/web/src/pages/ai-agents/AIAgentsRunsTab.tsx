@@ -1,25 +1,11 @@
 import { ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  App as AntApp,
-  Button,
-  Descriptions,
-  Drawer,
-  Empty,
-  List,
-  Popconfirm,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Timeline,
-  Typography,
-} from 'antd';
+import { Alert, App as AntApp, Button, Descriptions, Drawer, List, Popconfirm, Select, Space, Table, Tag, Timeline, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { AIAgentRunEventView,AIAgentRunStatus, AIAgentRunToolCallView, AIAgentRunView } from '../../api/types.js';
+import { EmptyState } from '../../components/EmptyState.js';
 import { t } from '../../state/i18n.js';
 import { formatTimestamp, ResultText, RunStatusTag } from './shared.js';
 
@@ -189,7 +175,7 @@ export function AIAgentsRunsTab({ capabilities, focusRunId, onFocusConsumed, onO
         dataSource={runs.data?.list ?? []}
         scroll={{ x: 820 }}
         pagination={{ pageSize: 20, showSizeChanger: false }}
-        locale={{ emptyText: <Empty description={t('web.aiAgents.noRuns')} /> }}
+        locale={{ emptyText: <EmptyState description={t('web.aiAgents.noRuns')} /> }}
         onRow={(run) => ({ onClick: () => setOpenRunId(run.id), style: { cursor: 'pointer' } })}
         columns={[
           {
@@ -300,7 +286,7 @@ export function AIAgentsRunsTab({ capabilities, focusRunId, onFocusConsumed, onO
         }
       >
         {active === undefined ? (
-          <Empty description={t('web.aiAgents.loadingRun')} />
+          <EmptyState description={t('web.aiAgents.loadingRun')} />
         ) : (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             {active.status === 'failed' || active.status === 'blocked_by_policy' || active.status === 'outcome_unknown' ? (

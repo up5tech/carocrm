@@ -1,11 +1,12 @@
 import { AudioOutlined, FileTextOutlined, PlayCircleOutlined, RobotOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, App as AntApp, Button, Card, Descriptions, Empty, List, Space, Tag, Typography } from 'antd';
+import { Alert, App as AntApp, Button, Card, Descriptions, List, Space, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { VoiceCallSessionView, VoiceMediaView, VoiceTranscriptView } from '../api/types.js';
 import { formatDateTime, t } from '../state/i18n.js';
+import { EmptyState } from './EmptyState.js';
 
 /**
  * Phase 19-VC.15–19-VC.16 — one call's media and transcript
@@ -117,9 +118,9 @@ function TranscriptBlock({ callId }: { callId: string }) {
       }
     >
       {transcript.isLoading ? (
-        <Typography.Text type="secondary">{t('core.common.loading')}</Typography.Text>
+        <Typography.Text type="secondary">{t('core.loading')}</Typography.Text>
       ) : view === null ? (
-        <Empty description={t('voice.inbox.noTranscript')} />
+        <EmptyState description={t('voice.inbox.noTranscript')} />
       ) : (
         <Space direction="vertical" style={{ width: '100%' }}>
           {view.error !== null ? <Alert type="warning" showIcon message={view.error} /> : null}
@@ -217,7 +218,7 @@ export function VoiceCallDetail({ call }: { call: VoiceCallSessionView }) {
       />
       <Card size="small" title={<Space><AudioOutlined />{t('voice.inbox.recordings')}</Space>}>
         {recordings.length === 0 ? (
-          <Empty description={t('voice.inbox.noRecordings')} />
+          <EmptyState description={t('voice.inbox.noRecordings')} />
         ) : (
           <Space direction="vertical" style={{ width: '100%' }}>
             {recordings.map((media) => <RecordingPlayer key={media.id} media={media} />)}

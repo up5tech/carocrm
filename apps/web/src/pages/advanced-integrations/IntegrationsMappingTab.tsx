@@ -1,9 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { App as AntApp, Button, Empty, Skeleton, Space, Table, Tag, Typography } from 'antd';
+import { App as AntApp, Button, Skeleton, Space, Table, Tag, Typography } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { IntegrationMappingView } from '../../api/types.js';
+import { EmptyState } from '../../components/EmptyState.js';
 import { t } from '../../state/i18n.js';
 import { formatTimestamp, PanelEmpty, SectionToolbar, WarningList } from './shared.js';
 
@@ -164,7 +165,7 @@ function MappingDetail({
             <span className="carocrm-quiet">{fields.providerFields.length}</span>
           </div>
           {fields.providerFields.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('advancedintegrations.mapping.noProviderFields')} />
+            <EmptyState size="compact" description={t('advancedintegrations.mapping.noProviderFields')} />
           ) : (
             <Table
               rowKey="name"

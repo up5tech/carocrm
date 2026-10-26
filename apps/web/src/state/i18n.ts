@@ -187,6 +187,36 @@ export function formatNumber(value: number): string {
 }
 
 /**
+ * A scanned timestamp: "3 minutes ago", "yesterday" (PLAN_Phase_20 §20.23).
+ *
+ * Use this where the reader is judging *recency* — a notification inbox, a run list — and keep
+ * `formatDateTime` where the reader needs the exact instant. Nothing here replaces a precise
+ * timestamp on a screen that is audited; it replaces `new Date(x).toLocaleString()`, which formats in
+ * the **host** locale and timezone and therefore disagrees with every other date on the page.
+ */
+export function formatRelative(value: string | null | undefined, now: Date = new Date()): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const format = new Intl.RelativeTimeFormat(activeLocale, { numeric: 'auto' });
+  const divisions: { amount: number; unit: Intl.RelativeTimeFormatUnit }[] = [
+    { amount: 60, unit: 'second' },
+    { amount: 60, unit: 'minute' },
+    { amount: 24, unit: 'hour' },
+    { amount: 7, unit: 'day' },
+    { amount: 4.34524, unit: 'week' },
+    { amount: 12, unit: 'month' },
+    { amount: Number.POSITIVE_INFINITY, unit: 'year' },
+  ];
+  let duration = (date.getTime() - now.getTime()) / 1_000;
+  for (const division of divisions) {
+    if (Math.abs(duration) < division.amount) return format.format(Math.round(duration), division.unit);
+    duration /= division.amount;
+  }
+  return format.format(Math.round(duration), 'year');
+}
+
+/**
  * The clock time of an instant, in the user's timezone (§41.6). Chat lists and message headers
  * show the time alone for today and fall back to `formatDateTime` for anything older, so this is
  * kept separate rather than adding another flag to that formatter. A caller that already works in

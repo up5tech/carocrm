@@ -7,12 +7,13 @@
  * gets a permission answer and this panel shows that state instead of numbers.
  */
 
-import { App as AntApp, Card, Empty, Statistic, Table, Typography } from 'antd';
+import { App as AntApp, Card, Statistic, Table, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { ServiceDeskQueueWorkload } from '../api/types.js';
 import { t } from '../state/i18n.js';
+import { EmptyState } from './EmptyState.js';
 import { linkLabelsOf,LinkValue } from './fields.js';
 
 interface CaseQueueWorkloadProps {
@@ -61,7 +62,7 @@ export function CaseQueueWorkload({ queueId }: CaseQueueWorkloadProps) {
       title={<Typography.Text strong>{t('web.serviceDesk.workload')}</Typography.Text>}
     >
       {workload === undefined ? (
-        <Empty description={t('web.serviceDesk.workloadEmpty')} />
+        <EmptyState description={t('web.serviceDesk.workloadEmpty')} />
       ) : (
         <>
           <Statistic title={t('web.serviceDesk.unassigned')} value={workload.unassigned} style={{ marginBottom: 16 }} />

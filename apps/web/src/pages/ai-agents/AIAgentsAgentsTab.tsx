@@ -1,33 +1,11 @@
 import { EditOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, RobotOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  App as AntApp,
-  Button,
-  Checkbox,
-  Col,
-  Descriptions,
-  Divider,
-  Drawer,
-  Empty,
-  Form,
-  Input,
-  InputNumber,
-  List,
-  Modal,
-  Popconfirm,
-  Row,
-  Select,
-  Space,
-  Table,
-  Tabs,
-  Tag,
-  Typography,
-} from 'antd';
+import { Alert, App as AntApp, Button, Checkbox, Col, Descriptions, Divider, Drawer, Form, Input, InputNumber, List, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { AIAgentConfigShape, AIAgentTemplate, AIAgentValidationReport, AIAgentVersionView,AIAgentView } from '../../api/types.js';
+import { EmptyState } from '../../components/EmptyState.js';
 import { t } from '../../state/i18n.js';
 import { AgentStatusTag, EffectTag, formatTimestamp, shortChecksum } from './shared.js';
 
@@ -295,7 +273,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
         dataSource={agents.data?.list ?? []}
         scroll={{ x: 760 }}
         pagination={{ pageSize: 20, showSizeChanger: false }}
-        locale={{ emptyText: <Empty description={t('web.aiAgents.noAgents')} /> }}
+        locale={{ emptyText: <EmptyState description={t('web.aiAgents.noAgents')} /> }}
         onRow={(agent) => ({ onClick: () => setDetailId(agent.id), style: { cursor: 'pointer' } })}
         columns={[
           {
@@ -524,7 +502,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
         }
       >
         {detail.isLoading || active === undefined ? (
-          <Empty description={t('web.aiAgents.loadingAgent')} />
+          <EmptyState description={t('web.aiAgents.loadingAgent')} />
         ) : (
           <Tabs
             items={[
@@ -628,7 +606,7 @@ export function AIAgentsAgentsTab({ capabilities, executionAvailable, onOpenRun 
                 label: `${t('web.aiAgents.versions')} (${String(versions.data?.list.length ?? 0)})`,
                 children:
                   versions.data?.list.length === 0 ? (
-                    <Empty description={t('web.aiAgents.noVersions')} />
+                    <EmptyState description={t('web.aiAgents.noVersions')} />
                   ) : (
                     <List
                       dataSource={[...(versions.data?.list ?? [])]}

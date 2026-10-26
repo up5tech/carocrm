@@ -1,10 +1,10 @@
 import { BellOutlined, CheckOutlined } from '@ant-design/icons';
-import { App as AntApp, Badge, Button, Empty, Popover, Spin, Tooltip, Typography } from 'antd';
+import { App as AntApp, Badge, Button, Popover, Spin, Tooltip, Typography } from 'antd';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import type { NotificationItem } from '../api/client.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime, formatRelative, t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import {
   useMarkAllNotificationsRead,
@@ -13,6 +13,7 @@ import {
   useNotificationStream,
   useUnreadNotificationCount,
 } from '../state/notifications.js';
+import { EmptyState } from './EmptyState.js';
 
 function textField(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() !== '' ? value : undefined;
@@ -112,9 +113,9 @@ export function NotificationsMenu() {
       ) : inbox.isError ? (
         <div className="carocrm-notification-state">{t('web.notifications.loadFailed')}</div>
       ) : items.length === 0 ? (
-        <Empty
+        <EmptyState
           className="carocrm-notification-state"
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          size="compact"
           description={t('web.notifications.empty')}
         />
       ) : (
@@ -129,7 +130,8 @@ export function NotificationsMenu() {
                   <div className="carocrm-notification-text">{bodyOf(item)}</div>
                 )}
                 <Typography.Text type="secondary" className="carocrm-notification-time">
-                  {new Date(item.createdAt).toLocaleString()}
+                  {/* Recency is what the reader judges here; the exact instant stays one hover away. */}
+                  <Tooltip title={formatDateTime(item.createdAt)}>{formatRelative(item.createdAt)}</Tooltip>
                 </Typography.Text>
               </div>
               {item.isRead ? null : (

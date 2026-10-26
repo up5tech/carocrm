@@ -1,8 +1,9 @@
 import { ExclamationCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
-import { Alert, Empty, Space, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Space, Tag, Tooltip, Typography } from 'antd';
 import type { ReactNode } from 'react';
 
 import type { IntegrationConnectionStatus, IntegrationWarning } from '../../api/types.js';
+import { EmptyState } from '../../components/EmptyState.js';
 
 /**
  * Phase 19-INT.14 / 19-INT.15 — the module's presentation vocabulary.
@@ -252,7 +253,7 @@ export function SectionToolbar({
 export function PanelEmpty({ text, action }: { readonly text: string; readonly action?: ReactNode }) {
   return (
     <div className="carocrm-panel-empty">
-      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={text} />
+      <EmptyState size="compact" description={text} />
       {action === undefined ? null : <div style={{ marginTop: 12 }}>{action}</div>}
     </div>
   );

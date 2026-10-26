@@ -1,11 +1,12 @@
 import { DeleteOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
-import { App as AntApp, Avatar, Button, Card, Empty, Input, Space, Spin, Typography } from 'antd';
+import { App as AntApp, Avatar, Button, Card, Input, Space, Spin, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 
 import { api, type StreamItem } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel } from '../state/metadata.js';
+import { EmptyState } from './EmptyState.js';
 
 const { TextArea } = Input;
 
@@ -164,7 +165,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
       {loading && items.length === 0 ? (
         <Spin />
       ) : items.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.stream.noActivity')} />
+        <EmptyState size="compact" description={t('web.stream.noActivity')} />
       ) : (
         <div className="carocrm-stream-list">
           {items.map((item) => (

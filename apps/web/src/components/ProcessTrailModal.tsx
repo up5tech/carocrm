@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { ProcessInstanceView } from '../api/types.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime, t } from '../state/i18n.js';
 
 /** Instance/task status colours, shared by every process surface (admin tables, panels, trail). */
 export const INSTANCE_STATUS_COLORS: Record<string, string> = {
@@ -94,7 +94,7 @@ export function ProcessTrailModal({
             <Descriptions.Item label={t('web.processes.version')}>
               {t('web.processes.versionValue', { version: String(view.version ?? '—') })}
             </Descriptions.Item>
-            <Descriptions.Item label={t('web.workflows.started')}>{view.startedAt.slice(0, 19).replace('T', ' ')}</Descriptions.Item>
+            <Descriptions.Item label={t('web.workflows.started')}>{formatDateTime(view.startedAt)}</Descriptions.Item>
             {view.error !== null ? (
               <Descriptions.Item label={t('web.workflows.error')} span={2}>
                 <Typography.Text type="danger">{view.error}</Typography.Text>
@@ -129,7 +129,7 @@ export function ProcessTrailModal({
                     </Space>
                   ),
               },
-              { title: t('web.common.due'), render: (_value: unknown, row) => (row.dueAt === null ? '—' : row.dueAt.slice(0, 19).replace('T', ' ')) },
+              { title: t('web.common.due'), render: (_value: unknown, row) => (row.dueAt === null ? '—' : formatDateTime(row.dueAt)) },
             ]}
           />
 
@@ -141,7 +141,7 @@ export function ProcessTrailModal({
             dataSource={view.events}
             locale={{ emptyText: t('web.processes.noEvents') }}
             columns={[
-              { title: t('web.adminAudit.when'), width: 160, render: (_value: unknown, row) => row.createdAt.slice(0, 19).replace('T', ' ') },
+              { title: t('web.adminAudit.when'), width: 160, render: (_value: unknown, row) => formatDateTime(row.createdAt) },
               { title: t('web.processes.event'), dataIndex: 'type', width: 160, render: (type: string) => <Tag>{type}</Tag> },
               { title: t('web.processes.whatHappened'), dataIndex: 'message' },
             ]}

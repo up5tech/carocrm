@@ -1,28 +1,6 @@
 import { DeleteOutlined, DownloadOutlined, EditOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, StopOutlined, UploadOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  App as AntApp,
-  AutoComplete,
-  Button,
-  Card,
-  Checkbox,
-  Descriptions,
-  Drawer,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Popconfirm,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Timeline,
-  Tooltip,
-  Typography,
-  Upload,
-} from 'antd';
+import { Alert, App as AntApp, AutoComplete, Button, Card, Checkbox, Descriptions, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Timeline, Tooltip, Typography, Upload } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useRef, useState } from 'react';
 

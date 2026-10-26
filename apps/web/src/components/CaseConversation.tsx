@@ -20,27 +20,13 @@ import {
   UploadOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import {
-  App as AntApp,
-  Avatar,
-  Button,
-  Card,
-  Empty,
-  Input,
-  Popconfirm,
-  Segmented,
-  Space,
-  Spin,
-  Tag,
-  Tooltip,
-  Typography,
-  Upload,
-} from 'antd';
+import { App as AntApp, Avatar, Button, Card, Input, Popconfirm, Segmented, Space, Spin, Tag, Tooltip, Typography, Upload } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api, type StreamItem } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
 import { t } from '../state/i18n.js';
+import { EmptyState } from './EmptyState.js';
 import { updateSummary } from './StreamPanel.js';
 
 const { TextArea } = Input;
@@ -195,9 +181,9 @@ export function CaseConversation({ caseId, definition, onChanged }: CaseConversa
       {loading && items.length === 0 ? (
         <Spin />
       ) : denied ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.serviceDesk.conversation.denied')} />
+        <EmptyState size="compact" description={t('web.serviceDesk.conversation.denied')} />
       ) : items.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('web.serviceDesk.conversation.empty')} />
+        <EmptyState size="compact" description={t('web.serviceDesk.conversation.empty')} />
       ) : (
         <div className="carocrm-stream-list">
           {items.map((item) => (

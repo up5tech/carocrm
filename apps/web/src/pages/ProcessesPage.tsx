@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { Metadata, ProcessInstanceView, ProcessView } from '../api/types.js';
 import { INSTANCE_STATUS_COLORS, ProcessTrailModal, TASK_STATUS_COLORS } from '../components/ProcessTrailModal.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime, t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { useProcesses, useProcessInstances } from '../state/processes.js';
 import { useSession } from '../state/session.js';
@@ -334,7 +334,7 @@ function InstanceTable({ instances, loading, onChanged }: { instances: ProcessIn
               );
             },
           },
-          { title: t('web.workflows.started'), width: 160, render: (_value: unknown, row) => row.startedAt.slice(0, 19).replace('T', ' ') },
+          { title: t('web.workflows.started'), width: 160, render: (_value: unknown, row) => formatDateTime(row.startedAt) },
           { title: t('web.workflows.error'), dataIndex: 'error', render: (error: string | null) => error ?? '—' },
           {
             title: '',

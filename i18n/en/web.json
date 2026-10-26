@@ -82,7 +82,9 @@
     "followed": "Following this record.",
     "followFailed": "Could not follow this record.",
     "moreFilters": "{count} more filters",
-    "fewerFilters": "Fewer filters"
+    "fewerFilters": "Fewer filters",
+    "emptyTitle": "No records yet",
+    "emptyHint": "Create the first one to get started."
   },
   "board": {
     "groupBy": "Group by",
@@ -569,7 +571,8 @@
     "totpDisableFailed": "Could not disable two-factor authentication.",
     "recoveryRegenerated": "Recovery codes regenerated.",
     "recoveryCodesTitle": "Recovery codes",
-    "recoveryCodesHint": "Store these somewhere safe. Each can be used once."
+    "recoveryCodesHint": "Store these somewhere safe. Each can be used once.",
+    "avatarRemoved": "Avatar removed."
   },
   "stream": {
     "title": "Stream",
@@ -815,7 +818,8 @@
     "field": "Field",
     "old": "Old",
     "new": "New",
-    "by": "By"
+    "by": "By",
+    "loadFailed": "Could not load the audit log."
   },
   "adminExtensions": {
     "title": "Extensions",
@@ -917,6 +921,9 @@
     "logoUploaded": "Logo uploaded. Save the settings to apply it.",
     "logoUploadFailed": "Could not upload the logo.",
     "logoNotImage": "Choose an image file.",
+    "brandColorLabel": "Brand colour",
+    "brandColorHint": "The accent for buttons, links and the selected menu row. Status and chart colours stay as they are.",
+    "brandColorDefault": "Default (blue)",
     "localeTitle": "Languages and time zone",
     "enabledLocalesLabel": "Enabled languages",
     "enabledLocalesPlaceholder": "Pick the languages users may select",
@@ -2251,7 +2258,8 @@
     "providerPresetHint": "Picking a provider fills the endpoint, the suggested models and the credential header. Every value stays editable.",
     "providerGroupHosted": "Hosted providers",
     "providerGroupSelfHosted": "Self-hosted and local runtimes",
-    "providerGroupOther": "Other"
+    "providerGroupOther": "Other",
+    "noAccess": "You do not have permission to view evaluations."
   },
   "adminLayout": {
     "entityTitle": "Entity",

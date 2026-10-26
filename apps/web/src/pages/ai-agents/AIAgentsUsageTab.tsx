@@ -1,28 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Empty,
-  Form,
-  Input,
-  InputNumber,
-  Modal,
-  Popconfirm,
-  Row,
-  Select,
-  Skeleton,
-  Space,
-  Statistic,
-  Table,
-  Tag,
-  Typography,
-} from 'antd';
+import { Alert, Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Skeleton, Space, Statistic, Table, Tag, Typography } from 'antd';
 import { useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { AIAgentBudgetPolicyStatus, AIAgentPricingSnapshot, AIAgentUsageView } from '../../api/types.js';
+import { EmptyState } from '../../components/EmptyState.js';
 import { t } from '../../state/i18n.js';
 
 /**
@@ -179,7 +161,7 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
         ) : quotas.isError ? (
           <Alert type="warning" showIcon message={t('web.aiAgents.quotasFailed')} />
         ) : (quotas.data?.list.length ?? 0) === 0 ? (
-          <Empty description={t('web.aiAgents.noQuotas')} />
+          <EmptyState description={t('web.aiAgents.noQuotas')} />
         ) : (
           <Table
             rowKey="id"
@@ -276,7 +258,7 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
             {t('web.aiAgents.pricingHint')}
           </Typography.Paragraph>
           {(pricing.data?.list.length ?? 0) === 0 ? (
-            <Empty description={t('web.aiAgents.noPricing')} />
+            <EmptyState description={t('web.aiAgents.noPricing')} />
           ) : (
             <Table
               rowKey="id"
@@ -324,7 +306,7 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
 
       <Card className="carocrm-card" size="small" title={t('web.aiAgents.usageByAgent')}>
         {view.byAgent.length === 0 ? (
-          <Empty description={t('web.aiAgents.noUsage')} />
+          <EmptyState description={t('web.aiAgents.noUsage')} />
         ) : (
           <Table
             rowKey="agentId"
@@ -345,7 +327,7 @@ export function AIAgentsUsageTab({ capabilities }: { readonly capabilities: Reco
 
       <Card className="carocrm-card" size="small" title={t('web.aiAgents.usageByProvider')}>
         {view.byProvider.length === 0 ? (
-          <Empty description={t('web.aiAgents.noUsage')} />
+          <EmptyState description={t('web.aiAgents.noUsage')} />
         ) : (
           <Table
             rowKey={(row) => `${row.providerKey}:${row.model}`}

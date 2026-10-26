@@ -1,11 +1,12 @@
 import { BarChartOutlined, DeleteOutlined, DownloadOutlined, PlayCircleOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
-import { Alert, App as AntApp, Button, Card, Empty, Input, Popconfirm, Select, Space, Table, Tag } from 'antd';
+import { Alert, App as AntApp, Button, Card, Input, Popconfirm, Select, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { ReportDefinitionShape, ReportKind, ReportRow, ReportRunResult, ReportScheduleRow } from '../api/types.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
+import { EmptyState } from '../components/EmptyState.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, navEntities, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
@@ -512,7 +513,7 @@ export function ReportsPage() {
 
           <Card className="carocrm-card" style={{ marginTop: 16 }} title={<Space size={8}><BarChartOutlined />{t('web.reports.resultsTitle')}</Space>}>
             {!result ? (
-              <Empty description={t('web.reports.resultsEmpty')} />
+              <EmptyState description={t('web.reports.resultsEmpty')} />
             ) : (
               <>
                 {result.truncated ? (

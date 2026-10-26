@@ -155,7 +155,8 @@
     "mappingBuilderHint": "You can adjust the field mapping after this step, in the mapping builder.",
     "previewHint": "A dry run shows what the mapping would write. It writes nothing.",
     "previewPending": "Preview the mapping in the mapping builder to see the values it would write.",
-    "publishHint": "Publishing makes the mapping active. Sync jobs only run against an active mapping."
+    "publishHint": "Publishing makes the mapping active. Sync jobs only run against an active mapping.",
+    "grantedScope": "Granted scopes"
   },
   "mapping": {
     "title": "Mapping",

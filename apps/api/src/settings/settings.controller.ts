@@ -5,6 +5,7 @@ import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { SettingsDocumentService } from '../admin-panel/settings-document.service.js';
+import { NAVIGATION_ACCENTS } from '../admin-panel/settings-shapes.js';
 import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN,type RequestScope } from '../common/request-scope.js';
 import { I18nService } from '../i18n/i18n.service.js';
@@ -68,11 +69,12 @@ export class SettingsController {
         issues: parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
       });
     }
-    const { pageTitle, footerText, logoAttachmentId, ...locales } = parsed.data;
+    const { pageTitle, footerText, logoAttachmentId, primaryColor, ...locales } = parsed.data;
     const brandPatch: Partial<BrandSettings> = {
       ...(pageTitle !== undefined ? { pageTitle } : {}),
       ...(footerText !== undefined ? { footerText } : {}),
       ...(logoAttachmentId !== undefined ? { logoAttachmentId } : {}),
+      ...(primaryColor !== undefined ? { primaryColor } : {}),
     };
     if (Object.keys(brandPatch).length > 0) await this.documents.write('brand', brandPatch);
     if (Object.keys(locales).length > 0) await this.documents.write('i18n', locales);
@@ -84,6 +86,7 @@ const SettingsPatchSchema = z.object({
   pageTitle: z.string().trim().min(1).max(80).nullable().optional(),
   footerText: z.string().trim().max(200).nullable().optional(),
   logoAttachmentId: z.string().max(36).nullable().optional(),
+  primaryColor: z.enum(NAVIGATION_ACCENTS).nullable().optional(),
   defaultLocale: z.string().min(2).max(20).optional(),
   enabledLocales: z.array(z.string().min(2).max(20)).min(1).max(20).optional(),
   defaultTimezone: z.string().min(1).max(64).optional(),
