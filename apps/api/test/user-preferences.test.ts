@@ -104,11 +104,11 @@ describe('preference ownership', () => {
   });
 
   it('refuses names and values it does not know', async () => {
-    const unknownName = await call('PUT', '/api/v1/Preferences/theme', aliceToken, { value: 'dark' });
+    const unknownName = await call('PUT', '/api/v1/Preferences/nope', aliceToken, { value: 'dark' });
     expect(unknownName.status).toBe(422);
     expect(detailsOf(unknownName.body)['allowed']).toBeDefined();
 
-    const unknownRead = await call('GET', '/api/v1/Preferences/theme', aliceToken);
+    const unknownRead = await call('GET', '/api/v1/Preferences/nope', aliceToken);
     expect(unknownRead.status).toBe(422);
 
     const badValue = await call('PUT', '/api/v1/Preferences/density', aliceToken, { value: 'huge' });

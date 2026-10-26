@@ -2,7 +2,7 @@ import './styles/tokens.css';
 import './styles/carocrm.css';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { App as AntApp, ConfigProvider } from 'antd';
+import { App as AntApp, ConfigProvider, theme as antdTheme } from 'antd';
 import type { ReactNode } from 'react';
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -11,7 +11,9 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { AppRoutes } from './AppRoutes.js';
 import { AppErrorBoundary } from './components/AppErrorBoundary.js';
 import { i18n, initI18n, initI18nFromCache } from './state/i18n.js';
+import { usePreference } from './state/preferences.js';
 import { useSettings } from './state/settings.js';
+import { applyThemePreference, isDarkPreference, readCachedThemePreference, type ThemePreference } from './state/theme.js';
 import { accentTone, themeForBrand } from './theme.js';
 
 const queryClient = new QueryClient({
@@ -22,6 +24,9 @@ const queryClient = new QueryClient({
 // BrowserRouter offers no navigation lifecycle to intercept. One catch-all route keeps
 // AppRoutes' own <Routes> tree exactly as it was.
 const router = createBrowserRouter([{ path: '*', element: <AppRoutes /> }]);
+
+// Apply the cached theme preference before first paint to avoid a flash.
+applyThemePreference(readCachedThemePreference());
 
 const container = document.getElementById('root');
 if (!container) throw new Error('root element missing');
@@ -38,7 +43,12 @@ const root = createRoot(container);
  */
 function BrandTheme({ children }: { children: ReactNode }): ReactNode {
   const settings = useSettings();
+  const themePref = usePreference<ThemePreference>('theme');
   const primaryColor = settings.data?.primaryColor ?? null;
+  const resolvedPref: ThemePreference =
+    themePref.value === 'light' || themePref.value === 'dark' || themePref.value === 'system'
+      ? themePref.value
+      : readCachedThemePreference();
   useEffect(() => {
     const tone = accentTone(primaryColor);
     const el = document.documentElement;
@@ -47,8 +57,12 @@ function BrandTheme({ children }: { children: ReactNode }): ReactNode {
     el.style.setProperty('--carocrm-accent-strong', tone.strong);
     el.style.setProperty('--carocrm-accent-soft', tone.soft);
   }, [primaryColor]);
+  useEffect(() => {
+    applyThemePreference(resolvedPref);
+  }, [resolvedPref]);
+  const isDark = isDarkPreference(resolvedPref);
   return (
-    <ConfigProvider theme={themeForBrand(primaryColor)}>
+    <ConfigProvider theme={{ ...themeForBrand(primaryColor), algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }}>
       <AntApp>{children}</AntApp>
     </ConfigProvider>
   );

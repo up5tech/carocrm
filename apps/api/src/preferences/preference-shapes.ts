@@ -11,6 +11,7 @@ import { z } from 'zod';
  */
 export const PREFERENCE_SCHEMAS = {
   density: z.enum(['comfortable', 'compact']),
+  theme: z.enum(['light', 'dark', 'system']),
   listPageSize: z.number().int().min(10).max(100),
   defaultDashboard: z.string().min(1).max(36).nullable(),
   /** Entity name → the columns its list shows, in order; 20.12 consumes this. */
