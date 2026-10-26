@@ -19,6 +19,7 @@ import { OmnichannelCallService } from './omnichannel-call.service.js';
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelChatController } from './omnichannel-chat.controller.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
+import { OmnichannelDataService } from './omnichannel-data.service.js';
 import { OmnichannelDraftService } from './omnichannel-draft.service.js';
 import { OmnichannelHandoffService } from './omnichannel-handoff.service.js';
 import { OmnichannelIdentityService } from './omnichannel-identity.service.js';
@@ -48,6 +49,7 @@ export const OMNICHANNEL_PROVIDERS: Provider[] = [
   OmnichannelRoutingService,
   OmnichannelCallService,
   OmnichannelHandoffService,
+  OmnichannelDataService,
   OmnichannelSnippetService,
   OmnichannelDraftService,
   OmnichannelWebChatService,
@@ -59,6 +61,7 @@ export type { OmnichannelCallView } from './omnichannel-call.service.js';
 export type { OmnichannelCapabilityCatalog, OmnichannelChannelCapabilityView, OmnichannelChannelKey } from './omnichannel-capability.service.js';
 export { OMNICHANNEL_CAPABILITY_CATALOG_VERSION } from './omnichannel-capability.service.js';
 export type { OmnichannelConversationView, OmnichannelThreadView } from './omnichannel-conversation.service.js';
+export type { ConversationExport } from './omnichannel-data.service.js';
 export type { DraftView } from './omnichannel-draft.service.js';
 export type { OmnichannelHandoffResult } from './omnichannel-handoff.service.js';
 export type { OmnichannelIdentityCandidateView, OmnichannelIdentityConflict, OmnichannelIdentityReview, OmnichannelParticipantIdentityView } from './omnichannel-identity.service.js';

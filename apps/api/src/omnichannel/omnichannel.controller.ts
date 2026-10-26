@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { OmnichannelCallService } from './omnichannel-call.service.js';
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
+import { OmnichannelDataService } from './omnichannel-data.service.js';
 import { OmnichannelDraftService } from './omnichannel-draft.service.js';
 import { OmnichannelHandoffService } from './omnichannel-handoff.service.js';
 import { OmnichannelIdentityService } from './omnichannel-identity.service.js';
@@ -101,6 +102,7 @@ export class OmnichannelController {
     @Inject(OmnichannelDraftService) private readonly drafts: OmnichannelDraftService,
     @Inject(OmnichannelCallService) private readonly calls: OmnichannelCallService,
     @Inject(OmnichannelHandoffService) private readonly handoff: OmnichannelHandoffService,
+    @Inject(OmnichannelDataService) private readonly data: OmnichannelDataService,
   ) {}
 
   /**
@@ -392,6 +394,23 @@ export class OmnichannelController {
   async nav() {
     await this.permissions.assert('inboxView');
     return this.navigation.visibility();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Data rights and retention (19-OM.18)
+  // ---------------------------------------------------------------------------
+
+  /** Administrator export for a data-subject access request (customer-visible messages only). */
+  @Get('action/conversations/:id/export')
+  async exportConversation(@Param('id') id: string) {
+    return this.data.exportConversation(id);
+  }
+
+  /** Purge module-owned artefacts past their configured retention (drafts, expired sessions). */
+  @HttpCode(200)
+  @Post('action/retention/purge')
+  async purgeRetention() {
+    return this.data.purge();
   }
 
   /**

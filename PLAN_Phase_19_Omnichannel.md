@@ -1879,6 +1879,32 @@ Acceptance:
 
 ### Phase 19-OM.18 — Consent, Preferences, Retention, and Data Rights
 
+**Status: COMPLETE.** No consent store was added — the ownership split is documented and enforced
+(`docs/omnichannel/consent-and-retention.md`):
+- **Source of truth per channel**: SMS/MMS/WhatsApp/voice → VoiceCommunications
+  (`voice_consent_events`/`voice_suppressions`, normalized address); email campaigns →
+  MarketingAutomation (`emailHash`); website chat → the **visitor-session** consent artefact (contract
+  §7, not a messaging-consent store). Omnichannel routes never bypass the owner.
+- **Invariants asserted**: missing evidence is never consent (`consent_required`); an address change
+  does not carry consent over; an opt-out refuses with `suppressed` regardless of consent events; the
+  voice and marketing vocabularies are structurally separate (the `voice_suppressions` CHECK admits no
+  `Email` channel) and **no `omnichannel_*consent*`/`*suppression*` table exists**.
+- **Retention (module-owned artefacts only)**: `retention.staleDraftDays` (default 7) and
+  `retention.expiredSessionDays` (default 30) in the settings document, applied by
+  `POST action/retention/purge` (administrator) with counts returned; message/media/webhook retention
+  stays with its owner (`voice_media.retention_at` sweep exists; body/webhook purge recorded as open
+  owner tasks — no silent conflict).
+- **Data rights**: `GET action/conversations/:id/export` (administrator) exports metadata, participants
+  and **customer-visible messages only** (internal notes excluded in SQL and counted), and writes an
+  `audit_log` row with counts, never content. Erasure of the canonical records is explicitly **not**
+  implemented here (owner + platform retention workflow; recorded as open, not claimed).
+
+Verification: `omnichannel-consent.test.ts` 5/5 (missing evidence, address change, revocation,
+suppression, vocabulary separation, no third store, export privacy + audit + 403, retention purge with a
+surviving fresh draft). Regression 9 files / 73 tests green; typecheck + eslint clean.
+
+**Goal:** Centralize enforcement without creating a conflicting source of consent truth.
+
 **Goal:** Centralize enforcement without creating a conflicting source of consent truth.
 
 **Ownership is already split, and the split must not move:** MarketingAutomation owns **email**

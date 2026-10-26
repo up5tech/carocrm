@@ -25,7 +25,8 @@
 | OM.15 — Messenger/Instagram (conditional) | ✅ COMPLETE — verdict **NO-GO** (nothing implemented) | fresh Meta doc review 2026-10-26, CF-8/CF-9 flip conditions, `omnichannel-meta-gate.test.ts` fail-closed enforcement |
 | OM.16 — Email/Telegram (optional) | ✅ COMPLETE — verdict **gated** (nothing implemented) | null inbound provider verified, Telegram `secret_token` re-checked, CF-6/CF-10 flip conditions, `omnichannel-connectors-gate.test.ts` |
 | OM.17 — ServiceDesk hand-off (E9) | ✅ COMPLETE | `Case.externalId`/`externalSource` + partial unique index (migration 081), `CaseHandoffService` create-or-link + trail, hand-off endpoints + inbox Case panel, `omnichannel-handoff.test.ts` |
-| OM.18+ | ⏸ Not started | — |
+| OM.18 — Consent, retention, data rights | ✅ COMPLETE | `consent-and-retention.md`, module retention settings + purge, admin conversation export (audited, notes excluded), `omnichannel-consent.test.ts` |
+| OM.19+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -38,6 +39,19 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.18 (Consent, retention and data rights)
+
+- Wrote `docs/omnichannel/consent-and-retention.md`: per-channel source of truth, the six invariants,
+  the retention map (owner vs module), and the data-rights position (export implemented; erasure is an
+  owner/platform task, recorded as open).
+- Module-owned retention: `retention.staleDraftDays`/`expiredSessionDays` + `POST action/retention/purge`.
+- Data rights: admin-only conversation export excluding internal notes in SQL, with an audit row carrying
+  counts only.
+- Checks: `omnichannel-consent.test.ts` 5/5 (missing consent, no address carry-over, revocation,
+  suppression, vocabulary separation, no third store, export privacy/audit/403, purge). No consent table
+  was added anywhere.
+
 
 ### 2026-10-26 — Phase 19-OM.17 (ServiceDesk hand-off, E9)
 

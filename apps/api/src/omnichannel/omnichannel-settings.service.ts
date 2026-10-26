@@ -62,10 +62,27 @@ const WebChatSettingsSchema = z
   .strict()
   .default({});
 
+/**
+ * 19-OM.18 — retention for the artefacts this module owns (drafts, visitor sessions). Message,
+ * media and webhook-payload retention belong to their owners (`voice_media.retention_at` sweep in
+ * VoiceCommunications; the message-body/webhook classes are documented in
+ * `docs/omnichannel/consent-and-retention.md`) — Omnichannel does not duplicate those settings.
+ */
+const RetentionSettingsSchema = z
+  .object({
+    /** Stale per-agent drafts are removed after this many days (default 7). */
+    staleDraftDays: z.number().int().min(1).max(3_650).default(7),
+    /** Expired visitor sessions are removed after this many days past expiry (default 30). */
+    expiredSessionDays: z.number().int().min(1).max(3_650).default(30),
+  })
+  .strict()
+  .default({});
+
 export const OmnichannelSettingsSchema = z
   .object({
     features: OmnichannelFeaturesSchema.default({}),
     webChat: WebChatSettingsSchema,
+    retention: RetentionSettingsSchema,
   })
   .strict();
 
