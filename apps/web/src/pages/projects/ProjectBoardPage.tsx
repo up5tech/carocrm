@@ -29,7 +29,7 @@ import { ProjectTaskModal } from './ProjectTaskModal.js';
  *
  * The card being dragged is rendered through `DragOverlay`, not inside its own column. Without the
  * overlay the card stays a child of its source column, so the following columns — each with an
- * opaque `#f7f9fb` background — paint over it the moment it crosses their edge, and the card looks
+ * opaque `var(--carocrm-c-f7f9fb)` background — paint over it the moment it crosses their edge, and the card looks
  * like it vanished until the drop puts it in the target column.
  */
 
@@ -301,7 +301,7 @@ function BoardCardContent({
         {assigneeName === null || assigneeName === undefined || assigneeName === '' ? null : (
           // The tint is inline: antd injects its Avatar styles after carocrm.css, so a class of equal
           // specificity would lose the background/colour.
-          <Avatar size={24} className="carocrm-project-card-avatar" style={{ background: '#e8f1ff', color: '#2f7ff0', fontSize: 11, fontWeight: 600 }} alt={assigneeName}>
+          <Avatar size={24} className="carocrm-project-card-avatar" style={{ background: 'var(--carocrm-c-e8f1ff)', color: 'var(--carocrm-c-2f7ff0)', fontSize: 11, fontWeight: 600 }} alt={assigneeName}>
             {initials(assigneeName)}
           </Avatar>
         )}

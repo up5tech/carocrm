@@ -220,7 +220,7 @@ function LayoutGroup({
 function AppendZone({ empty }: { empty: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: LAYOUT_APPEND_ID });
   return (
-    <div ref={setNodeRef} className="carocrm-layout-append" style={{ background: isOver ? '#f0f7ff' : undefined }}>
+    <div ref={setNodeRef} className="carocrm-layout-append" style={{ background: isOver ? 'var(--carocrm-c-f0f7ff)' : undefined }}>
       {empty ? t('web.entityAdmin.noPanels') : t('web.entityAdmin.layoutDropToEnd')}
     </div>
   );
@@ -245,7 +245,7 @@ function LayoutPool({ draft, view, labelOf }: { draft: LayoutDraft; view: Layout
       : t('web.entityAdmin.layoutFieldsTitle');
   return (
     <Card size="small" className="carocrm-card" title={title}>
-      <div ref={setNodeRef} className="carocrm-layout-pool" style={{ background: isOver ? '#f0f7ff' : '#fafafa' }}>
+      <div ref={setNodeRef} className="carocrm-layout-pool" style={{ background: isOver ? 'var(--carocrm-c-f0f7ff)' : 'var(--carocrm-c-fafafa)' }}>
         {draft.disabled.length === 0 ? (
           <Typography.Text type="secondary">{t('web.entityAdmin.layoutPoolEmpty')}</Typography.Text>
         ) : (

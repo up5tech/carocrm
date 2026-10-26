@@ -67,7 +67,7 @@ function IncomingCallCard({
   const [note, setNote] = useState('');
   const [associatedId, setAssociatedId] = useState<string | null>(null);
   const inCall = call.state === 'in_progress';
-  const accent = inCall ? '#55c27f' : '#438eff';
+  const accent = inCall ? 'var(--carocrm-c-55c27f)' : 'var(--carocrm-c-438eff)';
 
   const context = useQuery({
     queryKey: ['voice', 'call-context', call.id],

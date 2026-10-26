@@ -102,7 +102,7 @@ export function DocumentTemplateDetailPage() {
 
   const frameSrcDoc = useMemo(() => {
     const reset =
-      "margin:0;padding:40px 48px;color:#31373d;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;line-height:1.6;background:#fff";
+      "margin:0;padding:40px 48px;color:var(--carocrm-c-31373d);font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;line-height:1.6;background:var(--carocrm-c-ffffff)";
     const head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">';
     if (preview === null) return `<!doctype html><html><head>${head}</head><body style="${reset}"></body></html>`;
     if (format === 'html') {

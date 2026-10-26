@@ -50,7 +50,7 @@ export function StreamItemRow({ item, definition, onDelete }: {
   const body = item.type === 'Update' ? updateSummary(item, definition) : mentionText(item.post ?? String(item.data['notes'] ?? ''));
   return (
     <div className="carocrm-stream-item">
-      <Avatar size={32} style={{ flex: '0 0 auto', background: item.type === 'Update' ? '#f8ac59' : '#438eff' }}>
+      <Avatar size={32} style={{ flex: '0 0 auto', background: item.type === 'Update' ? 'var(--carocrm-c-f8ac59)' : 'var(--carocrm-c-438eff)' }}>
         {item.type === 'Update' ? '∆' : initialsOf(item)}
       </Avatar>
       <div style={{ minWidth: 0, flex: 1 }}>
@@ -157,7 +157,7 @@ export function StreamPanel({ entity, id, definition, canPost }: {
       className="carocrm-card"
       title={<Typography.Text strong>{t('web.stream.title')}</Typography.Text>}
       extra={
-        <Button type="text" icon={followed ? <StarFilled style={{ color: '#f8ac59' }} /> : <StarOutlined />} onClick={() => void toggleFollow()}>
+        <Button type="text" icon={followed ? <StarFilled style={{ color: 'var(--carocrm-c-f8ac59)' }} /> : <StarOutlined />} onClick={() => void toggleFollow()}>
           {followed ? t('web.stream.following') : t('web.stream.follow')}
         </Button>
       }

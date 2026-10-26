@@ -143,7 +143,7 @@ export function ESignaturePage() {
           <StatTile
             label={t('esignature.page.stats.gate')}
             value={view.gate.ready ? t('esignature.page.stats.ready') : t('esignature.page.stats.notReady')}
-            valueColor={view.gate.ready ? '#2f9e6b' : '#d98a1f'}
+            valueColor={view.gate.ready ? 'var(--carocrm-c-2f9e6b)' : 'var(--carocrm-c-d98a1f)'}
             hint={gateReason(view.gate.reason)}
             hintTitle={gateReason(view.gate.reason)}
             tone={view.gate.ready ? 'green' : 'yellow'}
@@ -173,7 +173,7 @@ export function ESignaturePage() {
           <StatTile
             label={t('esignature.page.stats.checks')}
             value={`${passedChecks}/${view.checks.length}`}
-            valueColor={passedChecks === view.checks.length ? '#2f9e6b' : '#d98a1f'}
+            valueColor={passedChecks === view.checks.length ? 'var(--carocrm-c-2f9e6b)' : 'var(--carocrm-c-d98a1f)'}
             hint={t('esignature.page.stats.checksHint')}
             tone={passedChecks === view.checks.length ? 'cyan' : 'yellow'}
             icon={<ExperimentOutlined />}

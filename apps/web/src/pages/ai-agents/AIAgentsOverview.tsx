@@ -66,7 +66,7 @@ export function AIAgentsOverview() {
             <Statistic
               title={t('web.aiAgents.healthTitle')}
               value={view.ok ? t('web.aiAgents.healthy') : t('web.aiAgents.attention')}
-              valueStyle={{ fontSize: 16, color: view.ok ? '#389e0d' : '#d46b08' }}
+              valueStyle={{ fontSize: 16, color: view.ok ? 'var(--carocrm-c-389e0d)' : 'var(--carocrm-c-d46b08)' }}
             />
           </Card>
         </Col>

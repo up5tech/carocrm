@@ -339,7 +339,7 @@ function IntegrationInfoModal({
       footer={<Button onClick={onClose}>{t('advancedintegrations.providers.infoClose')}</Button>}
       title={
         <Space size={8}>
-          <InfoCircleOutlined style={{ color: '#438eff' }} />
+          <InfoCircleOutlined style={{ color: 'var(--carocrm-c-438eff)' }} />
           <span>{t('advancedintegrations.providers.infoTitle', { provider: provider.displayName })}</span>
         </Space>
       }

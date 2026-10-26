@@ -317,7 +317,7 @@ function ConversationEntry({
   if (item.type === 'Update') {
     return (
       <div className="carocrm-stream-item carocrm-conversation-system">
-        <Avatar size={32} style={{ flex: '0 0 auto', background: '#f8ac59' }}>
+        <Avatar size={32} style={{ flex: '0 0 auto', background: 'var(--carocrm-c-f8ac59)' }}>
           ∆
         </Avatar>
         <div style={{ minWidth: 0, flex: 1 }}>
@@ -339,7 +339,7 @@ function ConversationEntry({
   const body = mentionText(item.post ?? String(item.data['notes'] ?? ''));
   return (
     <div className={`carocrm-stream-item ${internal ? 'carocrm-conversation-internal' : 'carocrm-conversation-public'}`}>
-      <Avatar size={32} style={{ flex: '0 0 auto', background: internal ? '#fa8c16' : '#438eff' }}>
+      <Avatar size={32} style={{ flex: '0 0 auto', background: internal ? 'var(--carocrm-c-fa8c16)' : 'var(--carocrm-c-438eff)' }}>
         {initialsOf(item)}
       </Avatar>
       <div style={{ minWidth: 0, flex: 1 }}>

@@ -105,7 +105,7 @@ function StreamRow({ item, label }: { item: StreamItem; label: string }) {
   const body = item.type === 'Update' ? updateSummary(item, definition.data) : item.post ?? String(item.data['notes'] ?? '');
   return (
     <div className="carocrm-stream-item">
-      <Avatar size={32} style={{ flex: '0 0 auto', background: item.type === 'Update' ? '#f8ac59' : '#438eff' }}>
+      <Avatar size={32} style={{ flex: '0 0 auto', background: item.type === 'Update' ? 'var(--carocrm-c-f8ac59)' : 'var(--carocrm-c-438eff)' }}>
         {item.type === 'Update' ? '∆' : authorLabel(item).slice(0, 2).toUpperCase()}
       </Avatar>
       <div style={{ minWidth: 0, flex: 1 }}>

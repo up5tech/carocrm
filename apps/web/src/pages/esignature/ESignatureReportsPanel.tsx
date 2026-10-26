@@ -157,7 +157,7 @@ export function ESignatureReportsPanel({ days, onDaysChange }: { readonly days: 
           <Statistic
             title={t('esignature.reports.exceptions')}
             value={exceptions?.total ?? 0}
-            {...(exceptions !== undefined && exceptions.total > 0 ? { valueStyle: { color: '#cf1322' } } : {})}
+            {...(exceptions !== undefined && exceptions.total > 0 ? { valueStyle: { color: 'var(--carocrm-c-cf1322)' } } : {})}
           />
         </Col>
       </Row>

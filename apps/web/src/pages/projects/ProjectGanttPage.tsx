@@ -167,8 +167,8 @@ export function ProjectGanttPage() {
               {Array.from({ length: days + 1 }).map((_unused, day) =>
                 day % 7 === 0 ? (
                   <g key={`tick-${String(day)}`}>
-                    <line x1={LABEL_WIDTH + day * dayWidth} y1={HEAD_HEIGHT - 6} x2={LABEL_WIDTH + day * dayWidth} y2={height} stroke="#eceff3" />
-                    <text x={LABEL_WIDTH + day * dayWidth + 3} y={14} fontSize="10" fill="#8c94a0">
+                    <line x1={LABEL_WIDTH + day * dayWidth} y1={HEAD_HEIGHT - 6} x2={LABEL_WIDTH + day * dayWidth} y2={height} stroke="var(--carocrm-c-eceff3)" />
+                    <text x={LABEL_WIDTH + day * dayWidth + 3} y={14} fontSize="10" fill="var(--carocrm-c-8c94a0)">
                       {dayAt(day).slice(5)}
                     </text>
                   </g>
@@ -185,14 +185,14 @@ export function ProjectGanttPage() {
               const barWidth = Math.max(dayWidth, right - left + dayWidth);
               return (
                 <g key={task.id}>
-                  <text x={6} y={y + 20} fontSize="12" fill="#4a4f57">
+                  <text x={6} y={y + 20} fontSize="12" fill="var(--carocrm-c-4a4f57)">
                     {`${String(group?.['name'] ?? '—').slice(0, 14)} · ${(task.name ?? '').slice(0, 24)}`}
                   </text>
                   {isMilestone ? (
                     <polygon
                       id={`gantt-bar-${task.id}`}
                       points={`${LABEL_WIDTH + left},${y + 8} ${LABEL_WIDTH + left + 8},${y + 17} ${LABEL_WIDTH + left},${y + 26} ${LABEL_WIDTH + left - 8},${y + 17}`}
-                      fill="#722ed1"
+                      fill="var(--carocrm-c-722ed1)"
                       onClick={() => setSelected(task)}
                     />
                   ) : (
@@ -214,7 +214,7 @@ export function ProjectGanttPage() {
                         width={6}
                         y={y + 8}
                         height={16}
-                        fill="#c9ced6"
+                        fill="var(--carocrm-c-c9ced6)"
                         onPointerDown={(event) => {
                           setDrag({ taskId: task.id, edge: 'start', originX: event.clientX, dateStart: task.dateStart ?? '', dateEnd: task.dateEnd ?? '' });
                         }}
@@ -224,7 +224,7 @@ export function ProjectGanttPage() {
                         width={6}
                         y={y + 8}
                         height={16}
-                        fill="#c9ced6"
+                        fill="var(--carocrm-c-c9ced6)"
                         onPointerDown={(event) => {
                           setDrag({ taskId: task.id, edge: 'end', originX: event.clientX, dateStart: task.dateStart ?? '', dateEnd: task.dateEnd ?? task.dateStart ?? '' });
                         }}
@@ -251,7 +251,7 @@ export function ProjectGanttPage() {
                   key={edge.id}
                   points={`${String(x1)},${String(y1)} ${String(mid)},${String(y1)} ${String(mid)},${String(y2)} ${String(x2)},${String(y2)}`}
                   fill="none"
-                  stroke={edge.dependencyType === null ? '#c9ced6' : '#438eff'}
+                  stroke={edge.dependencyType === null ? 'var(--carocrm-c-c9ced6)' : 'var(--carocrm-c-438eff)'}
                   strokeWidth={1.5}
                   strokeDasharray={edge.dependencyType === null ? '4 3' : undefined}
                   onClick={() =>
@@ -332,10 +332,10 @@ export function ProjectGanttPage() {
 }
 
 function barColor(status: string | null): string {
-  if (status === 'Completed') return '#55c27f';
-  if (status === 'Canceled') return '#b6bcc4';
-  if (status === 'Started') return '#438eff';
-  return '#9aa4b0';
+  if (status === 'Completed') return 'var(--carocrm-c-55c27f)';
+  if (status === 'Canceled') return 'var(--carocrm-c-b6bcc4)';
+  if (status === 'Started') return 'var(--carocrm-c-438eff)';
+  return 'var(--carocrm-c-9aa4b0)';
 }
 
 function DependencyModal({ dependency, projectId, onClose, onChanged }: { dependency: { id: string; dependencyType: string | null; label: string } | null; projectId: string; onClose: () => void; onChanged: () => void }) {

@@ -26,26 +26,26 @@ function variantCopy(variant: EmptyVariant): VariantCopy {
       return {
         title: t('core.emptyNoResults'),
         hint: t('core.emptyNoResultsHint'),
-        icon: <SearchOutlined style={{ fontSize: 48, color: '#bfc6d3' }} />,
+        icon: <SearchOutlined style={{ fontSize: 48, color: 'var(--carocrm-c-bfc6d3)' }} />,
       };
     case 'filtered':
       return {
         title: t('core.emptyFiltered'),
         hint: t('core.emptyFilteredHint'),
-        icon: <FilterOutlined style={{ fontSize: 48, color: '#bfc6d3' }} />,
+        icon: <FilterOutlined style={{ fontSize: 48, color: 'var(--carocrm-c-bfc6d3)' }} />,
       };
     case 'denied':
       return {
         title: t('core.accessDenied'),
         hint: t('core.accessDeniedHint'),
-        icon: <LockOutlined style={{ fontSize: 48, color: '#bfc6d3' }} />,
+        icon: <LockOutlined style={{ fontSize: 48, color: 'var(--carocrm-c-bfc6d3)' }} />,
       };
     case 'no-records':
     default:
       return {
         title: t('core.empty'),
         hint: undefined,
-        icon: <InboxOutlined style={{ fontSize: 48, color: '#bfc6d3' }} />,
+        icon: <InboxOutlined style={{ fontSize: 48, color: 'var(--carocrm-c-bfc6d3)' }} />,
       };
   }
 }

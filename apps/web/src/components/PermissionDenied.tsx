@@ -14,7 +14,7 @@ export function PermissionDenied({ hint }: { hint?: string | undefined }) {
   return (
     <Card className="carocrm-card">
       <div style={{ textAlign: 'center', padding: '40px 0' }}>
-        <LockOutlined style={{ fontSize: 48, color: '#bfc6d3', marginBottom: 16 }} />
+        <LockOutlined style={{ fontSize: 48, color: 'var(--carocrm-c-bfc6d3)', marginBottom: 16 }} />
         <Typography.Title level={4}>{t('core.accessDenied')}</Typography.Title>
         <Typography.Text type="secondary">{hint ?? t('core.accessDeniedHint')}</Typography.Text>
       </div>

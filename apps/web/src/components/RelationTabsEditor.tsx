@@ -276,7 +276,7 @@ function RelationGroup({
       <div
         ref={droppable.setNodeRef}
         className="carocrm-relation-group-body"
-        style={{ background: droppable.isOver ? '#f0f7ff' : undefined }}
+        style={{ background: droppable.isOver ? 'var(--carocrm-c-f0f7ff)' : undefined }}
       >
         {group.relations.length === 0 ? (
           <Typography.Text type="secondary">{t('web.detail.tabs.emptyGroup')}</Typography.Text>

@@ -116,9 +116,9 @@ export function WarningList({
 function WarningRow({ warning }: { readonly warning: IntegrationWarning }) {
   const icon =
     warning.severity === 'info' ? (
-      <InfoCircleOutlined style={{ color: '#438eff' }} />
+      <InfoCircleOutlined style={{ color: 'var(--carocrm-c-438eff)' }} />
     ) : (
-      <ExclamationCircleOutlined style={{ color: warning.severity === 'error' ? '#fa626b' : '#e8a33d' }} />
+      <ExclamationCircleOutlined style={{ color: warning.severity === 'error' ? 'var(--carocrm-c-fa626b)' : 'var(--carocrm-c-e8a33d)' }} />
     );
   return (
     <div className={`carocrm-warning carocrm-warning--${warning.severity}`}>

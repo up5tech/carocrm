@@ -182,20 +182,20 @@ export function CommandPalette() {
         <CommandEmpty>{t('web.commandPalette.empty')}</CommandEmpty>
 
         {/* Mode switcher */}
-        <div style={{ display: 'flex', gap: 4, padding: '4px 8px', borderBottom: '1px solid #f0f0f0' }}>
+        <div style={{ display: 'flex', gap: 4, padding: '4px 8px', borderBottom: '1px solid var(--carocrm-c-f0f0f0)' }}>
           {(['commands', 'records', 'recent'] as PaletteMode[]).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setMode(m)}
               style={{
-                background: mode === m ? '#e6f7ff' : 'transparent',
+                background: mode === m ? 'var(--carocrm-c-e6f7ff)' : 'transparent',
                 border: 'none',
                 borderRadius: 4,
                 padding: '2px 8px',
                 fontSize: 12,
                 cursor: 'pointer',
-                color: mode === m ? '#1890ff' : '#666',
+                color: mode === m ? 'var(--carocrm-c-1890ff)' : 'var(--carocrm-c-666666)',
               }}
             >
               {m === 'commands' ? t('web.commandPalette.commands') : m === 'records' ? t('web.commandPalette.records') : t('web.commandPalette.recent')}

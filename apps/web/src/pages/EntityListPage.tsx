@@ -939,7 +939,7 @@ export function EntityListPage() {
       {/* §20.12/§5.3: floating bulk action bar. Each action is shown only when the server says the
           caller may perform it, so the bar never offers a write that can only be refused. */}
       {selected.length > 0 ? (
-        <div className="carocrm-bulk-bar" role="toolbar" aria-label={t('web.list.bulkActionsAria')} style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, background: '#fff', border: '1px solid #e6e9ef', borderRadius: 8, padding: '10px 20px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="carocrm-bulk-bar" role="toolbar" aria-label={t('web.list.bulkActionsAria')} style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, background: 'var(--carocrm-c-ffffff)', border: '1px solid var(--carocrm-c-e6e9ef)', borderRadius: 8, padding: '10px 20px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <Typography.Text strong aria-live="polite">{t('web.list.selectedCount', { count: selected.length })}</Typography.Text>
           {rows.length > 0 && total > rows.length && selected.length === rows.length ? (
             <Button size="small" loading={selectingAll} onClick={() => void selectAllMatching()}>
@@ -963,7 +963,7 @@ export function EntityListPage() {
 
       {/* §20.12: undo toast */}
       {showUndo && undoStack.length > 0 ? (
-        <div style={{ position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)', zIndex: 101, background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 8, padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)', zIndex: 101, background: 'var(--carocrm-c-fffbe6)', border: '1px solid var(--carocrm-c-ffe58f)', borderRadius: 8, padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <Typography.Text>{t('web.list.undoAvailable')}</Typography.Text>
           <Button size="small" onClick={() => void undoLastAction()}>{t('web.list.undo')}</Button>
         </div>

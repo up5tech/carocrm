@@ -23,7 +23,7 @@ export function HelpTip({ children, docKey }: { children: React.ReactNode; docKe
         </>
       }
     >
-      <InfoCircleOutlined style={{ color: '#8c96a5', marginLeft: 4, cursor: 'help' }} aria-label={t('core.help')} />
+      <InfoCircleOutlined style={{ color: 'var(--carocrm-c-8c96a5)', marginLeft: 4, cursor: 'help' }} aria-label={t('core.help')} />
     </Tooltip>
   );
 }

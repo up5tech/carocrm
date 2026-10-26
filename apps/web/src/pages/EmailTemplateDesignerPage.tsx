@@ -32,6 +32,7 @@ import type { EmailVisualEditorHandle } from '../components/email/EmailVisualEdi
 import { FieldEditor } from '../components/fields.js';
 import { HelpTip } from '../components/HelpTip.js';
 import { t } from '../state/i18n.js';
+import { COLOR } from '../theme/tokens.js';
 import { editEntries, fieldLabel, recordLabel, useEntity, useMetadata } from '../state/metadata.js';
 
 /**
@@ -263,7 +264,7 @@ export function EmailTemplateDesignerPage() {
   const label = (name: DraftKey | 'name' | 'category') => fieldLabel(name, definition.data?.fields?.[name], metadata);
 
   const frameSrcDoc = useMemo(() => {
-    const reset = "margin:0;padding:16px;color:#31373d;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.6";
+    const reset = `margin:0;padding:16px;color:${COLOR.inkPrimary};font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:1.6`;
     const head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">';
     if (preview === null) return `<!doctype html><html><head>${head}</head><body style="${reset}"></body></html>`;
     if (preview.bodyHtml !== null && preview.bodyHtml !== '') {

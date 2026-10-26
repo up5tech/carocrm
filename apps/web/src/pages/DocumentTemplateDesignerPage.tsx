@@ -44,6 +44,7 @@ import {
   DOCUMENT_TOKEN_GROUPS,
 } from '../document/template-catalog.js';
 import { t } from '../state/i18n.js';
+import { COLOR } from '../theme/tokens.js';
 import { fieldLabel, useEntity, useMetadata } from '../state/metadata.js';
 
 const EmailVisualEditor = lazy(() => import('../components/email/EmailVisualEditor.js').then((module) => ({ default: module.EmailVisualEditor })));
@@ -214,7 +215,7 @@ export function DocumentTemplateDesignerPage() {
 
   const frameSrcDoc = useMemo(() => {
     const reset =
-      "margin:0;padding:40px 48px;color:#31373d;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;line-height:1.6;background:#fff";
+      `margin:0;padding:40px 48px;color:${COLOR.inkPrimary};font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:13px;line-height:1.6;background:${COLOR.surfaceRaised}`;
     const head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">';
     if (preview === null) return `<!doctype html><html><head>${head}</head><body style="${reset}"></body></html>`;
     if (format === 'html') {

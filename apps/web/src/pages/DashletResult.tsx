@@ -125,8 +125,8 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
             <Typography.Text style={{ width: 140 }} ellipsis>
               {group.key}
             </Typography.Text>
-            <div style={{ flex: 1, background: '#f0f0f0', borderRadius: 4 }}>
-              <div style={{ width: `${String(Math.round((group.count / max) * 100))}%`, height: 10, background: '#438eff', borderRadius: 4 }} />
+            <div style={{ flex: 1, background: 'var(--carocrm-c-f0f0f0)', borderRadius: 4 }}>
+              <div style={{ width: `${String(Math.round((group.count / max) * 100))}%`, height: 10, background: 'var(--carocrm-c-438eff)', borderRadius: 4 }} />
             </div>
             <Typography.Text>{group.count.toLocaleString()}</Typography.Text>
           </div>
