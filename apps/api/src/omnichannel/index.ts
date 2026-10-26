@@ -18,12 +18,14 @@ import { OmnichannelController } from './omnichannel.controller.js';
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelChatController } from './omnichannel-chat.controller.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
+import { OmnichannelDraftService } from './omnichannel-draft.service.js';
 import { OmnichannelIdentityService } from './omnichannel-identity.service.js';
 import { OmnichannelModuleHealthService } from './omnichannel-module-health.service.js';
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
 import { OmnichannelRoutingService } from './omnichannel-routing.service.js';
 import { noopMenuInvalidator, OMNICHANNEL_MENU_INVALIDATOR, OmnichannelSettingsService } from './omnichannel-settings.service.js';
+import { OmnichannelSnippetService } from './omnichannel-snippet.service.js';
 import { OmnichannelWebChatTransport } from './omnichannel-webchat.adapter.js';
 import { OmnichannelWebChatService } from './omnichannel-webchat.service.js';
 import { OmnichannelWebhookController } from './omnichannel-webhook.controller.js';
@@ -42,6 +44,8 @@ export const OMNICHANNEL_PROVIDERS: Provider[] = [
   OmnichannelConversationService,
   OmnichannelIdentityService,
   OmnichannelRoutingService,
+  OmnichannelSnippetService,
+  OmnichannelDraftService,
   OmnichannelWebChatService,
   OmnichannelWebChatTransport,
   OmnichannelModuleHealthService,
@@ -50,6 +54,7 @@ export const OMNICHANNEL_PROVIDERS: Provider[] = [
 export type { OmnichannelCapabilityCatalog, OmnichannelChannelCapabilityView, OmnichannelChannelKey } from './omnichannel-capability.service.js';
 export { OMNICHANNEL_CAPABILITY_CATALOG_VERSION } from './omnichannel-capability.service.js';
 export type { OmnichannelConversationView, OmnichannelThreadView } from './omnichannel-conversation.service.js';
+export type { DraftView } from './omnichannel-draft.service.js';
 export type { OmnichannelIdentityCandidateView, OmnichannelIdentityConflict, OmnichannelIdentityReview, OmnichannelParticipantIdentityView } from './omnichannel-identity.service.js';
 export type { OmnichannelCapabilityDefinition,OmnichannelCapabilityKey } from './omnichannel-module.js';
 export { OMNICHANNEL_CAPABILITIES, OMNICHANNEL_FEATURES, OMNICHANNEL_MODULE } from './omnichannel-module.js';

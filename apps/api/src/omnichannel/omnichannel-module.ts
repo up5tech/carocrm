@@ -198,7 +198,7 @@ export const OMNICHANNEL_MODULE = {
   /** Frontend route of the agent workspace. */
   frontendRoute: '/omnichannel',
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ['19-OM.0', '19-OM.1', '19-OM.2', '19-OM.3', '19-OM.4', '19-OM.5', '19-OM.6', '19-OM.7', '19-OM.8', '19-OM.9', '19-OM.10', '19-OM.11'],
+  implementedPhases: ['19-OM.0', '19-OM.1', '19-OM.2', '19-OM.3', '19-OM.4', '19-OM.5', '19-OM.6', '19-OM.7', '19-OM.8', '19-OM.9', '19-OM.10', '19-OM.11', '19-OM.12'],
   /**
    * Metadata entities this module owns — deliberately empty (D1): the records live in their
    * owning modules and the workspace consumes facades. No entity is invented to populate menus.
@@ -209,7 +209,7 @@ export const OMNICHANNEL_MODULE = {
    * store (contract §7) — the anonymous principal and its consent evidence. Conversation and message
    * records still live in `VoiceCommunications` (D1).
    */
-  ownedTables: ['omnichannel_visitor_sessions'] as const,
+  ownedTables: ['omnichannel_visitor_sessions', 'omnichannel_drafts'] as const,
 } as const;
 
 export type OmnichannelModuleDescriptor = typeof OMNICHANNEL_MODULE;

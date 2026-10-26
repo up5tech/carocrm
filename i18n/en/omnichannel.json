@@ -117,6 +117,7 @@
     "actionFailed": "The action failed.",
     "route": "Route",
     "routedBy": "Routed by rule \"{rule}\".",
-    "routedFallback": "Routed with fallback: {reason}."
+    "routedFallback": "Routed with fallback: {reason}.",
+    "snippet": "Insert a snippet…"
   }
 }

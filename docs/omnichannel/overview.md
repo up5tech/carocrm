@@ -19,7 +19,8 @@
 | OM.9 — Website chat channel | ✅ COMPLETE | migration 079 visitor sessions + web-chat connection, local adapter, public `/chat` API + widget page, `omnichannel-webchat.test.ts` |
 | OM.10 — Agent inbox workspace | ✅ COMPLETE | two-tab module page, server-side workspace filters, timeline/composer/identity panels, `omnichannel-inbox.test.ts` |
 | OM.11 — Queues, assignment, routing (E8) | ✅ COMPLETE | ServiceDesk queue/rule extension (object type, operators, business hours), `decideFor` reuse, concurrency-guarded assign, route endpoint + UI, `omnichannel-routing.test.ts` |
-| OM.12+ | ⏸ Not started | — |
+| OM.12 — Canned replies & drafts | ✅ COMPLETE | snippet store extension (team/language/usage, plain-text), `OmnichannelSnippetService` + drafts (`omnichannel_drafts`), composer picker + autosave, `omnichannel-snippets.test.ts` |
+| OM.13+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -32,6 +33,20 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.12 (Canned replies, drafts, message tools)
+
+- Migration 080: `voice_message_templates` gains `team_id`/`language`/`usage_count`/`last_used_at`
+  (additive, existing snippets unchanged); new `omnichannel_drafts` (one per conversation per agent,
+  cascade with the conversation). No second template or draft store.
+- Owner-side: markup refused at save; team/language-aware list; use counter without content; admin-only
+  editing (existing).
+- Workspace: snippet list/preview/use (approved variables only, customer name from the record) and
+  per-agent draft get/save/delete; composer snippet picker + draft restore/autosave; send deletes the
+  draft.
+- Checks: `omnichannel-snippets.test.ts` 5/5; 96-test regression; typecheck/lint/ui-conventions/build
+  clean.
+
 
 ### 2026-10-26 — Phase 19-OM.11 (Queues, assignment, transfers, routing)
 

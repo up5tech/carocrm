@@ -98,6 +98,8 @@ export type { CommunicationErrorCategory, MessageChannel, MessageState,ProviderC
 export { COMMUNICATION_ERROR_CATEGORIES, errorMessageFor,isMessageChannel, isRetryableError, isVoiceChannel, MESSAGE_CHANNELS, PROVIDER_CAPABILITIES, PROVIDER_CHANNELS, VOICE_CHANNELS } from "./voice-communications-domain.js";
 export type { InboxConversationView, InboxQuery, TimelineEntryView } from "./voice-inbox.service.js";
 export { VoiceInboxService } from "./voice-inbox.service.js";
+export type { MessageTemplateView, SegmentInfo, TemplateChannel } from "./voice-message-template.service.js";
+export { VoiceMessageTemplateService } from "./voice-message-template.service.js";
 export type { ConversationView, MessageView, SendMessageInput } from "./voice-messaging.service.js";
 export { VoiceMessagingService } from "./voice-messaging.service.js";
 export type { NormalizedMessageEvent, NormalizedProviderEvent, ProviderHealthResult, ProviderWebhookRequest, ResolvedProviderAccount, ValidatedProviderEvent, VoiceProviderAdapter, VoiceProviderInfo, VoiceProviderMode, WebhookSignatureScheme } from "./voice-provider.js";

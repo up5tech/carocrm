@@ -139,10 +139,12 @@ import type {
   OmnichannelCapabilityCatalog,
   OmnichannelConversationPage,
   OmnichannelConversationView,
+  OmnichannelDraftView,
   OmnichannelHealthView,
   OmnichannelIdentityReview,
   OmnichannelNavView,
   OmnichannelSettingsView,
+  OmnichannelSnippetView,
   OmnichannelThreadView,
   OmnichannelTimelinePage,
   PortalContext,
@@ -2174,6 +2176,27 @@ export const api = {
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/status`, post({ status })),
   omnichannelAssign: (conversationId: string, input: { userId?: string | null; teamId?: string | null; reason?: string; expectedVersion?: number }) =>
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/assign`, post(input)),
+  omnichannelSnippets: (channel?: string) =>
+    request<{ readonly list: readonly OmnichannelSnippetView[] }>(
+      `/Omnichannel/action/snippets${channel === undefined || channel === '' ? '' : `?channel=${encodeURIComponent(channel)}`}`,
+    ),
+  omnichannelPreviewSnippet: (key: string, input: { conversationId?: string; variables?: Record<string, string> } = {}) =>
+    request<{ readonly body: string; readonly segments: { readonly encoding: string; readonly segments: number } }>(
+      `/Omnichannel/action/snippets/${encodeURIComponent(key)}/preview`,
+      post(input),
+    ),
+  omnichannelUseSnippet: (key: string) =>
+    request<OmnichannelSnippetView>(`/Omnichannel/action/snippets/${encodeURIComponent(key)}/used`, post({})),
+  omnichannelDraft: (conversationId: string) =>
+    request<{ readonly draft: OmnichannelDraftView | null }>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/draft`),
+  omnichannelSaveDraft: (conversationId: string, input: { body: string; isInternalNote?: boolean }) =>
+    request<{ readonly draft: OmnichannelDraftView | null }>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/draft`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+  omnichannelDeleteDraft: (conversationId: string) =>
+    request<{ readonly removed: boolean }>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/draft`, { method: 'DELETE' }),
   omnichannelRoute: (conversationId: string, input: { expectedVersion?: number } = {}) =>
     request<{ decision: { routingRuleId: string | null; routingRuleName: string | null; queueId: string | null; teamId: string | null; assignedUserId: string | null; strategy: string; fallbackReason: string | null }; conversation: OmnichannelConversationView }>(
       `/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/route`,

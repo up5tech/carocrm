@@ -117,6 +117,7 @@
     "actionFailed": "Thao tác thất bại.",
     "route": "Định tuyến",
     "routedBy": "Đã định tuyến theo quy tắc \"{rule}\".",
-    "routedFallback": "Đã định tuyến với dự phòng: {reason}."
+    "routedFallback": "Đã định tuyến với dự phòng: {reason}.",
+    "snippet": "Chèn mẫu tin…"
   }
 }

@@ -1585,6 +1585,36 @@ Acceptance:
 
 ### Phase 19-OM.12 — Canned Replies, Drafts, and Message Tools
 
+**Status: COMPLETE.** The shared snippet store already existed (VC.14 `voice_message_templates`), so
+this phase **extended it additively** (migration 080) instead of adding a second template model:
+`team_id` (NULL = all teams), `language`, `usage_count`/`last_used_at`. Owner-side:
+- snippets are **plain text** — markup is refused at save time (not sanitized), placeholders follow the
+  strict `{{name}}` grammar, and the renderer substitutes caller-provided literals only;
+- the list is channel-appropriate, language-aware and **team-aware** (a team snippet is visible to its
+  members and instance administrators, never to other teams);
+- `recordUse` increments a counter and timestamp only — the analytics question is which replies save
+  time, never what the agent wrote;
+- editing stays administrator-only (`requireAdmin`); WhatsApp's provider-approved templates remain in
+  `voice_whatsapp_templates`, and **Marketing Automation campaign templates are unreachable from this
+  endpoint** (different store, different owner) — the second acceptance line.
+
+Workspace: `OmnichannelSnippetService` (list/preview/use) with approved variables
+(`customerName` from the record, `agentName` from the session, `companyName`) and ignored unknown keys;
+`OmnichannelDraftService` + `omnichannel_drafts` (migration 080) keep a **per-agent draft** distinct
+from a public send: one per conversation per agent, never in the timeline, never sent to an adapter,
+deleted by the send that uses it and by an empty body. The composer gained a snippet picker (preview
+inserted as text), draft restore on selection, and a 1.2 s autosave; both mutations require `reply`
+and conversation read ACL.
+
+Verification: `omnichannel-snippets.test.ts` 5/5 — channel/team visibility (another team's snippet is
+absent), markup refused (422), preview substitutes approved variables only (customer name from the
+record, injection string not interpolated), use count increments with no content stored, drafts are
+per-agent/restorable/invisible to another agent/never in the timeline, and a caller without `reply`
+gets 403. Regression 10 files / 96 tests green; api+web typecheck, eslint, ui-conventions, web build
+clean.
+
+**Goal:** Speed up service replies without creating a campaign engine.
+
 **Goal:** Speed up service replies without creating a campaign engine.
 
 Tasks:

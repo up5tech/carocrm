@@ -130,7 +130,7 @@ describe('Omnichannel module registration (19-OM.2)', () => {
     expect(body.module.implementedPhases).toContain('19-OM.2');
     // D1: the module owns no *record* store; its only owned table is the web-chat visitor session
     // (OM.9) — reported from the descriptor, not implied.
-    expect(body.module.ownedTables).toEqual(['omnichannel_visitor_sessions']);
+    expect(body.module.ownedTables).toEqual(['omnichannel_visitor_sessions', 'omnichannel_drafts']);
     expect(body.ok).toBe(true);
     const conversationStore = body.dependencies.find((dependency) => dependency.id === 'conversation-store');
     expect(conversationStore?.present).toBe(true);

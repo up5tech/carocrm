@@ -1,7 +1,7 @@
 import { PartitionOutlined, ReloadOutlined, SendOutlined, UserAddOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Badge, Button, Card, Col, Collapse, Input, List, message, Row, Select, Space, Switch, Tag, Typography } from 'antd';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { OmnichannelConversationView, OmnichannelIdentityParticipant, OmnichannelThreadView, OmnichannelTimelineEntry } from '../../api/types.js';
@@ -58,6 +58,7 @@ export function InboxPanel() {
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [draft, setDraft] = useState('');
   const [internalNote, setInternalNote] = useState(false);
+  const loadedDraftFor = useRef<string | undefined>(undefined);
   const [actionError, setActionError] = useState<string | undefined>(undefined);
 
   const filters = useMemo(
@@ -105,12 +106,43 @@ export function InboxPanel() {
     queryFn: () => (selectedId === undefined ? Promise.resolve({ list: [] }) : api.omnichannelThreads(selectedId)),
     enabled: selectedId !== undefined,
   });
+  // 19-OM.12 — snippets for this conversation's channel; the body is plain text.
+  const snippets = useQuery({
+    queryKey: ['omnichannel', 'snippets', selected?.channel],
+    queryFn: () => api.omnichannelSnippets(selected?.channel),
+    enabled: selectedId !== undefined,
+    staleTime: 60_000,
+  });
   const identity = useQuery({
     queryKey: ['omnichannel', 'identity', selectedId],
     queryFn: () => (selectedId === undefined ? Promise.resolve(undefined) : api.omnichannelIdentity(selectedId)),
     enabled: selectedId !== undefined && granted.has('identityLink'),
     staleTime: 30_000,
   });
+
+  // Restore this agent's own draft when the conversation changes, and autosave while typing.
+  useEffect(() => {
+    if (selectedId === undefined) return;
+    if (loadedDraftFor.current === selectedId) return;
+    loadedDraftFor.current = selectedId;
+    setDraft('');
+    setInternalNote(false);
+    void api
+      .omnichannelDraft(selectedId)
+      .then(({ draft: stored }) => {
+        if (stored === null || loadedDraftFor.current !== selectedId) return;
+        setDraft(stored.body);
+        setInternalNote(stored.isInternalNote);
+      })
+      .catch(() => undefined);
+  }, [selectedId]);
+  useEffect(() => {
+    if (selectedId === undefined || draft.trim() === '') return undefined;
+    const timer = window.setTimeout(() => {
+      void api.omnichannelSaveDraft(selectedId, { body: draft, isInternalNote: internalNote }).catch(() => undefined);
+    }, 1_200);
+    return () => window.clearTimeout(timer);
+  }, [draft, internalNote, selectedId]);
 
   const markRead = useMutation({
     mutationFn: (id: string) => api.omnichannelMarkRead(id),
@@ -131,7 +163,10 @@ export function InboxPanel() {
   const send = useMutation({
     mutationFn: (input: { id: string; body: string; isInternalNote: boolean }) =>
       api.omnichannelSendMessage(input.id, { body: input.body, idempotencyKey: crypto.randomUUID(), isInternalNote: input.isInternalNote }),
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
+      // The draft's purpose is fulfilled by the send: remove it so nothing stale is restored later.
+      void api.omnichannelDeleteDraft(variables.id).catch(() => undefined);
+      loadedDraftFor.current = variables.id;
       setDraft('');
       refresh();
     },
@@ -281,6 +316,14 @@ export function InboxPanel() {
             canAssign={granted.has('assign')}
             canReply={granted.has('reply')}
             draft={draft}
+            snippets={snippets.data?.list ?? []}
+            onInsertSnippet={(key) => {
+              void api
+                .omnichannelPreviewSnippet(key, { ...(selectedId === undefined ? {} : { conversationId: selectedId }) })
+                .then((preview) => setDraft((current) => (current.trim() === '' ? preview.body : `${current} ${preview.body}`)))
+                .catch((error: unknown) => setActionError(errorText(error)));
+              void api.omnichannelUseSnippet(key).catch(() => undefined);
+            }}
             internalNote={internalNote}
             onDraft={setDraft}
             onInternalNote={setInternalNote}
@@ -313,6 +356,8 @@ interface ConversationPaneProps {
   readonly canAssign: boolean;
   readonly canReply: boolean;
   readonly draft: string;
+  readonly snippets: readonly { readonly key: string; readonly name: string; readonly channel: string }[];
+  readonly onInsertSnippet: (key: string) => void;
   readonly internalNote: boolean;
   readonly sending: boolean;
   readonly onDraft: (value: string) => void;
@@ -427,11 +472,24 @@ function ConversationPane(props: ConversationPaneProps) {
             {props.internalNote ? t('omnichannel.inbox.addNote') : t('omnichannel.inbox.send')}
           </Button>
         </Space.Compact>
-        <Space size={6}>
-          <Switch size="small" checked={props.internalNote} onChange={props.onInternalNote} aria-label={t('omnichannel.inbox.internalNote')} />
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {t('omnichannel.inbox.internalNote')}
-          </Typography.Text>
+        <Space size={10} wrap>
+          <Space size={6}>
+            <Switch size="small" checked={props.internalNote} onChange={props.onInternalNote} aria-label={t('omnichannel.inbox.internalNote')} />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {t('omnichannel.inbox.internalNote')}
+            </Typography.Text>
+          </Space>
+          <Select
+            size="small"
+            showSearch
+            optionFilterProp="label"
+            value={null}
+            placeholder={t('omnichannel.inbox.snippet')}
+            style={{ minWidth: 220 }}
+            onChange={(key: string) => props.onInsertSnippet(key)}
+            aria-label={t('omnichannel.inbox.snippet')}
+            options={props.snippets.map((snippet) => ({ value: snippet.key, label: `${snippet.name} (${snippet.channel})` }))}
+          />
         </Space>
       </Space>
       <Collapse

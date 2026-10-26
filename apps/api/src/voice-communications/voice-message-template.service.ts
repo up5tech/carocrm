@@ -37,6 +37,10 @@ export interface MessageTemplateRow {
   placeholders: unknown;
   active: boolean;
   created_by_id: string | null;
+  team_id: string | null;
+  language: string | null;
+  usage_count: number;
+  last_used_at: Date | null;
   created_at: Date;
   modified_at: Date;
 }
@@ -49,6 +53,13 @@ export interface MessageTemplateView {
   readonly body: string;
   readonly placeholders: readonly string[];
   readonly active: boolean;
+  /** NULL = visible to every team (19-OM.12). */
+  readonly teamId: string | null;
+  /** NULL = language-neutral (19-OM.12). */
+  readonly language: string | null;
+  /** Operational use count only — never message content (19-OM.12). */
+  readonly usageCount: number;
+  readonly lastUsedAt: string | null;
   readonly createdAt: string;
   readonly modifiedAt: string;
 }
@@ -87,13 +98,23 @@ export class VoiceMessageTemplateService {
     readonly channel: TemplateChannel;
     readonly body: string;
     readonly active?: boolean | undefined;
+    /** 19-OM.12 — per-team visibility; omitted/null = all teams. */
+    readonly teamId?: string | null | undefined;
+    /** 19-OM.12 — BCP-47-ish language tag; omitted/null = language-neutral. */
+    readonly language?: string | null | undefined;
   }): Promise<MessageTemplateView> {
     const key = input.key.trim().toLowerCase();
     if (!KEY_PATTERN.test(key)) {
       throw new ValidationError('A template key must be 2–64 lowercase letters, digits, "_" or "-".');
     }
-    const body = normalizeBody(input.body);
+    const body = normalizeSnippet(input.body);
     const placeholders = [...extractPlaceholders(body)];
+    const language = input.language === undefined || input.language === null || input.language.trim() === ''
+      ? null
+      : input.language.trim().slice(0, 20);
+    const teamId = input.teamId === undefined || input.teamId === null || input.teamId.trim() === ''
+      ? null
+      : input.teamId.trim();
     const existing = (
       await sql<MessageTemplateRow>`select * from voice_message_templates where key = ${key}`.execute(this.database.db)
     ).rows[0];
@@ -101,16 +122,19 @@ export class VoiceMessageTemplateService {
     if (existing === undefined) {
       await sql`
         insert into voice_message_templates
-          (id, key, name, channel, body, placeholders, active, created_by_id, created_at, modified_at)
+          (id, key, name, channel, body, placeholders, active, created_by_id, team_id, language, created_at, modified_at)
         values
           (${randomUUID()}, ${key}, ${input.name.trim()}, ${input.channel}, ${body},
-           ${JSON.stringify(placeholders)}::jsonb, ${input.active ?? true}, ${this.scope.userId ?? null}, ${now}, ${now})
+           ${JSON.stringify(placeholders)}::jsonb, ${input.active ?? true}, ${this.scope.userId ?? null},
+           ${teamId}, ${language}, ${now}, ${now})
       `.execute(this.database.db);
     } else {
       await sql`
         update voice_message_templates
         set name = ${input.name.trim()}, channel = ${input.channel}, body = ${body},
             placeholders = ${JSON.stringify(placeholders)}::jsonb, active = ${input.active ?? existing.active},
+            team_id = ${input.teamId === undefined ? existing.team_id : teamId},
+            language = ${input.language === undefined ? existing.language : language},
             modified_at = ${now}
         where key = ${key}
       `.execute(this.database.db);
@@ -118,16 +142,45 @@ export class VoiceMessageTemplateService {
     return this.require(key);
   }
 
-  async list(query: { readonly channel?: string | undefined } = {}): Promise<{ readonly list: readonly MessageTemplateView[] }> {
+  /**
+   * 19-OM.12 — the workspace list: channel-appropriate, language-appropriate, and only what the
+   * caller's teams may see. A snippet with `team_id = NULL` is shared with everyone; a team snippet
+   * is visible to that team's members (an instance administrator sees all).
+   */
+  async list(query: {
+    readonly channel?: string | undefined;
+    readonly language?: string | undefined;
+  } = {}): Promise<{ readonly list: readonly MessageTemplateView[] }> {
     const channel = query.channel ?? null;
+    const language = query.language ?? null;
+    const principal = this.scope.principal;
+    const teams = principal?.teams ?? [];
+    const admin = (principal?.roles ?? []).includes('sysAdmin');
     const rows = await sql<MessageTemplateRow>`
       select * from voice_message_templates
       where (${channel}::text is null or channel = ${channel} or channel = 'any')
+        and (${language}::text is null or language is null or language = ${language})
+        and (${admin} = true or team_id is null or team_id = any(${sql.val(teams)}::text[]))
         and active = true
       order by key asc
       limit 200
     `.execute(this.database.db);
     return { list: rows.rows.map(toView) };
+  }
+
+  /**
+   * 19-OM.12 — record that an agent inserted this snippet. A counter and a timestamp only; the
+   * analytics question is "which replies save time", never "what did the agent write".
+   */
+  async recordUse(key: string): Promise<MessageTemplateView> {
+    const updated = (await sql<MessageTemplateRow>`
+      update voice_message_templates
+      set usage_count = usage_count + 1, last_used_at = now()
+      where key = ${key.trim().toLowerCase()}
+      returning *
+    `.execute(this.database.db)).rows[0];
+    if (updated === undefined) throw new NotFoundError(`Template "${key}" does not exist.`);
+    return toView(updated);
   }
 
   async get(key: string): Promise<MessageTemplateView> {
@@ -224,6 +277,18 @@ function normalizeBody(body: string): string {
   return body.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trim();
 }
 
+/**
+ * 19-OM.12 — a snippet is plain text. Markup is refused outright rather than sanitized: a "cleaned"
+ * snippet can still change meaning, and every channel renders text, so there is nothing to preserve.
+ */
+function normalizeSnippet(body: string): string {
+  const text = normalizeBody(body);
+  if (/<\s*\/?\s*[a-zA-Z!][^>]*>/.test(text) || text.includes('<!--')) {
+    throw new ValidationError('A service snippet is plain text; HTML or markup is not allowed.');
+  }
+  return text;
+}
+
 function toView(row: MessageTemplateRow): MessageTemplateView {
   return {
     id: row.id,
@@ -233,6 +298,10 @@ function toView(row: MessageTemplateRow): MessageTemplateView {
     body: row.body,
     placeholders: Array.isArray(row.placeholders) ? (row.placeholders as string[]) : [],
     active: row.active,
+    teamId: row.team_id ?? null,
+    language: row.language ?? null,
+    usageCount: Number(row.usage_count ?? 0),
+    lastUsedAt: row.last_used_at === null || row.last_used_at === undefined ? null : new Date(row.last_used_at).toISOString(),
     createdAt: new Date(row.created_at).toISOString(),
     modifiedAt: new Date(row.modified_at).toISOString(),
   };

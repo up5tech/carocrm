@@ -4440,3 +4440,24 @@ export interface OmnichannelIdentityReview {
   readonly channel: string;
   readonly participants: readonly OmnichannelIdentityParticipant[];
 }
+
+/** Phase 19-OM.12 — service snippets and per-agent drafts. */
+export interface OmnichannelSnippetView {
+  readonly key: string;
+  readonly name: string;
+  readonly channel: string;
+  readonly body: string;
+  readonly placeholders: readonly string[];
+  readonly language: string | null;
+  readonly teamId: string | null;
+  readonly usageCount: number;
+  readonly lastUsedAt: string | null;
+}
+
+export interface OmnichannelDraftView {
+  readonly id: string;
+  readonly conversationId: string;
+  readonly body: string;
+  readonly isInternalNote: boolean;
+  readonly updatedAt: string;
+}

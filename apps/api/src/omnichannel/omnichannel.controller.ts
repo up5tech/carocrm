@@ -1,16 +1,18 @@
 import { ValidationError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
+import { OmnichannelDraftService } from './omnichannel-draft.service.js';
 import { OmnichannelIdentityService } from './omnichannel-identity.service.js';
 import { OmnichannelModuleHealthService } from './omnichannel-module-health.service.js';
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
 import { OmnichannelRoutingService } from './omnichannel-routing.service.js';
 import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
+import { OmnichannelSnippetService } from './omnichannel-snippet.service.js';
 
 /**
  * Phase 19-OM.2 — the `Omnichannel` control plane
@@ -63,6 +65,13 @@ const AssignInputSchema = z
   })
   .strict();
 const RouteInputSchema = z.object({ expectedVersion: z.number().int().min(0).optional() }).strict();
+const SnippetPreviewSchema = z
+  .object({
+    conversationId: z.string().trim().min(1).max(120).optional(),
+    variables: z.record(z.string().max(200)).optional(),
+  })
+  .strict();
+const DraftSchema = z.object({ body: z.string().max(20_000), isInternalNote: z.boolean().optional() }).strict();
 
 function pageOf(limit: unknown, offset: unknown): { limit: number; offset: number } {
   const parsedLimit = Number(limit ?? 25);
@@ -85,6 +94,8 @@ export class OmnichannelController {
     @Inject(OmnichannelConversationService) private readonly conversations: OmnichannelConversationService,
     @Inject(OmnichannelIdentityService) private readonly identities: OmnichannelIdentityService,
     @Inject(OmnichannelRoutingService) private readonly routing: OmnichannelRoutingService,
+    @Inject(OmnichannelSnippetService) private readonly snippets: OmnichannelSnippetService,
+    @Inject(OmnichannelDraftService) private readonly drafts: OmnichannelDraftService,
   ) {}
 
   /**
@@ -229,6 +240,53 @@ export class OmnichannelController {
     await this.permissions.assert('identityLink');
     const parsed = Number(limit ?? 50);
     return this.identities.conflicts(Number.isFinite(parsed) ? Math.min(Math.max(Math.trunc(parsed), 1), 200) : 50);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Canned replies and drafts (19-OM.12)
+  // ---------------------------------------------------------------------------
+
+  /** Service snippets for this channel (owner store, team/language-filtered, plain text only). */
+  @Get('action/snippets')
+  async listSnippets(@Query('channel') channel: string | undefined) {
+    await this.permissions.assert('inboxView');
+    return this.snippets.list(typeof channel === 'string' && channel !== '' ? channel : undefined);
+  }
+
+  /** Preview with approved variables only; the rendered body is plain text. */
+  @HttpCode(200)
+  @Post('action/snippets/:key/preview')
+  async previewSnippet(@Param('key') key: string, @Body() body: unknown) {
+    const parsed = SnippetPreviewSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid snippet preview input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
+    return this.snippets.preview(key, parsed.data);
+  }
+
+  /** Operational use count — a counter and a timestamp, never the composed message. */
+  @HttpCode(200)
+  @Post('action/snippets/:key/used')
+  async usedSnippet(@Param('key') key: string) {
+    return this.snippets.recordUse(key);
+  }
+
+  /** The caller's own draft for this conversation (never another agent's). */
+  @Get('action/conversations/:id/draft')
+  async readDraft(@Param('id') id: string) {
+    return this.drafts.get(id);
+  }
+
+  @HttpCode(200)
+  @Put('action/conversations/:id/draft')
+  async saveDraft(@Param('id') id: string, @Body() body: unknown) {
+    const parsed = DraftSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid draft input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
+    return this.drafts.save(id, parsed.data);
+  }
+
+  @HttpCode(200)
+  @Delete('action/conversations/:id/draft')
+  async deleteDraft(@Param('id') id: string) {
+    return this.drafts.remove(id);
   }
 
   /**

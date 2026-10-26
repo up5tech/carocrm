@@ -279,6 +279,9 @@ export const TemplateUpsertSchema = z
     channel: z.enum(["sms", "mms", "whatsapp", "any"]),
     body: z.string().min(1).max(10_000),
     active: z.boolean().optional(),
+    // 19-OM.12 — per-team visibility and language tag; omitted means shared/language-neutral.
+    teamId: z.string().trim().min(1).max(120).nullable().optional(),
+    language: z.string().trim().max(20).nullable().optional(),
   })
   .strict();
 
