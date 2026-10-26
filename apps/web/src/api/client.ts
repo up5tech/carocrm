@@ -146,6 +146,10 @@ import type {
   OmnichannelHealthView,
   OmnichannelIdentityReview,
   OmnichannelNavView,
+  OmnichannelOperationEvent,
+  OmnichannelOperationEventDetail,
+  OmnichannelOperationImpact,
+  OmnichannelOperationsOverview,
   OmnichannelSettingsView,
   OmnichannelSnippetView,
   OmnichannelThreadView,
@@ -2180,6 +2184,30 @@ export const api = {
   omnichannelAssign: (conversationId: string, input: { userId?: string | null; teamId?: string | null; reason?: string; expectedVersion?: number }) =>
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/assign`, post(input)),
   omnichannelAnalytics: (days = 30) => request<OmnichannelAnalytics>(`/Omnichannel/action/analytics?days=${String(days)}`),
+  omnichannelOperations: (days = 7) => request<OmnichannelOperationsOverview>(`/Omnichannel/action/operations?days=${String(days)}`),
+  omnichannelTestAccount: (key: string) =>
+    request<{ readonly ok: boolean; readonly checkedAt: string; readonly detail: string }>(
+      `/Omnichannel/action/operations/accounts/${encodeURIComponent(key)}/test`,
+      post({}),
+    ),
+  omnichannelOperationEvents: (query: { status?: string; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (query.status !== undefined && query.status !== '') params.set('status', query.status);
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    const suffix = params.toString();
+    return request<{ readonly list: readonly OmnichannelOperationEvent[]; readonly total: number }>(
+      `/Omnichannel/action/operations/events${suffix === '' ? '' : `?${suffix}`}`,
+    );
+  },
+  omnichannelOperationEvent: (id: string) =>
+    request<OmnichannelOperationEventDetail>(`/Omnichannel/action/operations/events/${encodeURIComponent(id)}`),
+  omnichannelReplayEvent: (id: string) =>
+    request<{ readonly eventId: string; readonly queued: boolean; readonly effects: { readonly idempotent: readonly string[]; readonly refused: readonly string[] } }>(
+      `/Omnichannel/action/operations/events/${encodeURIComponent(id)}/replay`,
+      post({}),
+    ),
+  omnichannelSetAccountEnabled: (key: string, enabled: boolean) =>
+    request<OmnichannelOperationImpact>(`/Omnichannel/action/operations/accounts/${encodeURIComponent(key)}/enabled`, post({ enabled })),
   omnichannelAiSuggest: (task: 'summarize' | 'classify' | 'suggest_reply' | 'suggest_queue' | 'case_summary', conversationId: string) =>
     request<{ readonly runId: string; readonly agentId: string; readonly task: string }>('/Omnichannel/action/ai/suggest', post({ task, conversationId })),
   omnichannelAiRun: (runId: string, conversationId: string) =>

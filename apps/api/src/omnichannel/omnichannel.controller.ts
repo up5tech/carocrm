@@ -14,6 +14,7 @@ import { OmnichannelHandoffService } from './omnichannel-handoff.service.js';
 import { OmnichannelIdentityService } from './omnichannel-identity.service.js';
 import { OmnichannelModuleHealthService } from './omnichannel-module-health.service.js';
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
+import { OmnichannelOperationsService } from './omnichannel-operations.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
 import { OmnichannelRoutingService } from './omnichannel-routing.service.js';
 import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
@@ -86,6 +87,7 @@ const SnippetPreviewSchema = z
   })
   .strict();
 const DraftSchema = z.object({ body: z.string().max(20_000), isInternalNote: z.boolean().optional() }).strict();
+const AccountEnabledSchema = z.object({ enabled: z.boolean() }).strict();
 
 function pageOf(limit: unknown, offset: unknown): { limit: number; offset: number } {
   const parsedLimit = Number(limit ?? 25);
@@ -115,6 +117,7 @@ export class OmnichannelController {
     @Inject(OmnichannelDataService) private readonly data: OmnichannelDataService,
     @Inject(OmnichannelAiService) private readonly ai: OmnichannelAiService,
     @Inject(OmnichannelAnalyticsService) private readonly analytics: OmnichannelAnalyticsService,
+    @Inject(OmnichannelOperationsService) private readonly operations: OmnichannelOperationsService,
   ) {}
 
   /**
@@ -417,6 +420,56 @@ export class OmnichannelController {
   async analyticsOverview(@Query('days') days: unknown) {
     const parsed = Number(days ?? 30);
     return this.analytics.overview(Number.isFinite(parsed) ? Math.trunc(parsed) : 30);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Operations, diagnostics and recovery (19-OM.21) — reads and documented commands only
+  // ---------------------------------------------------------------------------
+
+  /** Account health, credential presence (booleans), last event time, receipt backlog/failures. */
+  @Get('action/operations')
+  async operationsOverview(@Query('days') days: unknown) {
+    const parsed = Number(days ?? 7);
+    return this.operations.overview(Number.isFinite(parsed) ? Math.trunc(parsed) : 7);
+  }
+
+  /** Adapter health probe; the result is persisted by the owner (owner records, no second store). */
+  @HttpCode(200)
+  @Post('action/operations/accounts/:key/test')
+  async testAccount(@Param('key') key: string) {
+    return this.operations.testAccount(key);
+  }
+
+  /** Receipt backlog, newest first. Payloads are not included here; inspect one event for that. */
+  @Get('action/operations/events')
+  async listOperationEvents(@Query('status') status: string | undefined, @Query('limit') limit: unknown) {
+    const parsed = Number(limit ?? 25);
+    return this.operations.listEvents({
+      limit: Number.isFinite(parsed) ? Math.trunc(parsed) : 25,
+      ...(typeof status === 'string' && status.trim() !== '' ? { status: status.trim() } : {}),
+    });
+  }
+
+  /** One receipt with the redacted payload the ingress stored (never a secret or raw header). */
+  @Get('action/operations/events/:id')
+  async inspectOperationEvent(@Param('id') id: string) {
+    return this.operations.inspectEvent(id);
+  }
+
+  /** Authorized replay; the answer states which effects are idempotent and which are refused. */
+  @HttpCode(200)
+  @Post('action/operations/events/:id/replay')
+  async replayOperationEvent(@Param('id') id: string) {
+    return this.operations.replayEvent(id);
+  }
+
+  /** The connection kill switch, with its outbound/inbound/history impact reported. */
+  @HttpCode(200)
+  @Post('action/operations/accounts/:key/enabled')
+  async setAccountEnabled(@Param('key') key: string, @Body() body: unknown) {
+    const parsed = AccountEnabledSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid account state input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
+    return this.operations.setAccountEnabled(key, parsed.data.enabled);
   }
 
   // ---------------------------------------------------------------------------

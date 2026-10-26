@@ -28,6 +28,7 @@ import { OmnichannelHandoffService } from './omnichannel-handoff.service.js';
 import { OmnichannelIdentityService } from './omnichannel-identity.service.js';
 import { OmnichannelModuleHealthService } from './omnichannel-module-health.service.js';
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
+import { OmnichannelOperationsService } from './omnichannel-operations.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
 import { OmnichannelRoutingService } from './omnichannel-routing.service.js';
 import { noopMenuInvalidator, OMNICHANNEL_MENU_INVALIDATOR, OmnichannelSettingsService } from './omnichannel-settings.service.js';
@@ -54,6 +55,7 @@ export const OMNICHANNEL_PROVIDERS: Provider[] = [
   OmnichannelAiService,
   OmnichannelAiTools,
   OmnichannelAnalyticsService,
+  OmnichannelOperationsService,
   OmnichannelHandoffService,
   OmnichannelDataService,
   OmnichannelSnippetService,
@@ -77,6 +79,8 @@ export type { OmnichannelIdentityCandidateView, OmnichannelIdentityConflict, Omn
 export type { OmnichannelCapabilityDefinition,OmnichannelCapabilityKey } from './omnichannel-module.js';
 export { OMNICHANNEL_CAPABILITIES, OMNICHANNEL_FEATURES, OMNICHANNEL_MODULE } from './omnichannel-module.js';
 export type { OmnichannelHealthView } from './omnichannel-module-health.service.js';
+export type { OperationsAccountView, OperationsOverview } from './omnichannel-operations.service.js';
+export { OmnichannelOperationsService } from './omnichannel-operations.service.js';
 export type { MenuInvalidator, OmnichannelSettings, OmnichannelSettingsView } from './omnichannel-settings.service.js';
 export { noopMenuInvalidator, OMNICHANNEL_MENU_INVALIDATOR, OmnichannelSettingsService } from './omnichannel-settings.service.js';
 export { OMNICHANNEL_WEB_CHAT_ACCOUNT_KEY, OMNICHANNEL_WEB_CHAT_PROVIDER_KEY } from './omnichannel-webchat.adapter.js';

@@ -82,7 +82,10 @@ export class VoiceWebhookIngressService {
   ) {}
 
   async ingest(input: WebhookIngestInput): Promise<WebhookIngestResult> {
-    const account = await this.accounts.resolve(input.accountKey);
+    // A disabled account still records its callbacks: the processor is what refuses to apply them,
+    // so an operator can see the traffic that arrives while the connection is switched off
+    // (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.21` kill-switch impact).
+    const account = await this.accounts.resolveForProcessing(input.accountKey);
     if (account.providerKey !== input.providerKey) {
       // The routing pair must agree; a mismatched pair is a configuration error, not a provider event.
       throw new NotFoundError(`No provider "${input.providerKey}" is configured for account "${input.accountKey}".`);

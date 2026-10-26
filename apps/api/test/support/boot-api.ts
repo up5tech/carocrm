@@ -134,6 +134,7 @@ export async function createTestUser(
       type: 'regular',
       auth_method: 'password',
       password: null,
+      totp_enabled: false,
       assigned_role_ids: JSON.stringify(input.roleIds ?? []),
       portal_types: JSON.stringify([]),
       is_deleted: false,

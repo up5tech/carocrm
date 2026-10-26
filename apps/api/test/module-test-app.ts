@@ -106,6 +106,7 @@ export async function bootModuleTestApp(overrides: ModuleTestOverrides = {}): Pr
       type: 'regular',
       auth_method: 'password',
       password: passwordHash,
+      totp_enabled: false,
       assigned_role_ids: JSON.stringify(['noAccess']),
       title: null,
       phone: null,

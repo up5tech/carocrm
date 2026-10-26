@@ -2042,6 +2042,31 @@ Acceptance:
 
 ### Phase 19-OM.21 — Administration, Diagnostics, and Recovery
 
+**Status: COMPLETE.** One cross-channel operations view over the owner's records (no parallel
+operational store):
+- **Overview** `GET action/operations?days=1..90` (`opsRead`): per account health/presence booleans,
+  enabled state, effective capability count, last event time, outbound messages still awaiting a
+  provider confirmation, receipt backlog by status and top failure codes.
+- **Safe tools**: adapter health probe (`connectionManage`), receipt list/inspection (`opsRead`),
+  authorized replay (`opsReplay`) that reports its idempotent and refused effects, the existing
+  reconcile-unknown command (`opsReplay`, E7), and a connection kill switch (`settingsManage`).
+- **Secrets/SSRF**: presence is a boolean, inspection returns the ingress's **redacted** payload, and
+  no endpoint override exists (the owner's `assertHttpUrl` still validates stored endpoints).
+- **Kill switch semantics**: new outbound is refused with `account_disabled`; history is untouched;
+  inbound callbacks are still recorded. `VoiceWebhookIngressService` now resolves the account with
+  `resolveForProcessing` (the documented variant) instead of refusing a disabled account at the
+  door — the processor already skips effects while disabled.
+- **Runbook**: `docs/omnichannel/runbook.md` covers outages, expired tokens, signature/certificate
+  failures, rate limits, stuck jobs, duplicates, unknown sends, policy changes and escalation.
+- **UI**: Operations tab (connections table with probe + kill switch, backlog/failures, receipts with
+  inspect/replay).
+
+Verification: `omnichannel-operations.test.ts` 5/5 — overview reads the owner's rows and never a
+secret; inspection redaction; replay effect statement with no duplicate receipt/message and a refused
+unsigned replay (422); probe capability split (`opsRead` can read but not replay/probe); kill switch
+refuses outbound with `account_disabled`, keeps history, records inbound while disabled, and resumes
+after re-enable. Full OM regression 152/152 (22 files); api typecheck/lint clean.
+
 **Goal:** Operate channels reliably without requiring database-level intervention.
 
 **Existing baseline to extend:** `VoiceCommunications` already ships connection health, provider

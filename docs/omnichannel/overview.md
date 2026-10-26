@@ -28,7 +28,8 @@
 | OM.18 — Consent, retention, data rights | ✅ COMPLETE | `consent-and-retention.md`, module retention settings + purge, admin conversation export (audited, notes excluded), `omnichannel-consent.test.ts` |
 | OM.19 — AI-assisted workflow | ✅ COMPLETE | typed AI tasks over AIAgents, `omnichannel.send_message` material-write tool (E16), drafts-only composer button, `omnichannel-ai.test.ts` |
 | OM.20 — Conversation analytics | ✅ COMPLETE | `analytics.md` definitions, dedicated analytics endpoint, Reports tab, `omnichannel-analytics.test.ts` |
-| OM.21+ | ⏸ Not started | — |
+| OM.21 — Administration, diagnostics, recovery | ✅ COMPLETE | `OmnichannelOperationsService` + `action/operations*` (overview, probe, inspect, replay, kill switch), `runbook.md`, Operations tab, ingress records callbacks while disabled, `omnichannel-operations.test.ts` |
+| OM.22+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -41,6 +42,26 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.21 (Administration, diagnostics and recovery)
+
+- `OmnichannelOperationsService` (`opsRead`): account health/presence booleans, enabled state,
+  capability count, last event time and awaiting-confirmation count, plus receipt backlog and top
+  failure codes — all read from the owner's `voice_provider_accounts`/`voice_webhook_events`/
+  `voice_messages` records with a narrow projection (no secret, no parallel store).
+- Endpoints: `GET action/operations`, `POST action/operations/accounts/:key/test` (health probe,
+  `connectionManage`), `GET action/operations/events[?status=]`, `GET …/events/:id` (redacted stored
+  payload), `POST …/events/:id/replay` (`opsReplay`, returns idempotent/refused effects),
+  `POST action/operations/accounts/:key/enabled` (`settingsManage` kill switch with reported impact).
+- Implemented a real kill switch: `VoiceWebhookIngressService` now resolves via
+  `resolveForProcessing`, so a disabled account still records inbound receipts while the processor
+  applies nothing; outbound is refused with `account_disabled` and history is untouched.
+- `docs/omnichannel/runbook.md`: outages, expired tokens, signature/certificate failures, rate limits,
+  stuck jobs, duplicates, unknown sends/reconcile, policy changes, kill-switch impact, escalation.
+- UI: Operations tab (window selector, connections table with probe + switch, backlog/failure tags,
+  receipts with inspect modal and replay button); i18n en/vi.
+- Checks: `omnichannel-operations.test.ts` 5/5; OM regression 22 files / 152 tests green; api+web
+  typecheck, lint clean.
 
 ### 2026-10-26 — Phase 19-OM.20 (Conversation analytics)
 

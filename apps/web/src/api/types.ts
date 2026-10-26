@@ -4513,3 +4513,47 @@ export interface OmnichannelAnalytics {
     readonly webhookBacklog: readonly { readonly status: string; readonly count: number }[];
   };
 }
+
+/** Phase 19-OM.21 — operations overview (mirrors omnichannel-operations.service.ts). */
+export interface OmnichannelOperationsOverview {
+  readonly window: { readonly days: number };
+  readonly accounts: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly providerKey: string;
+    readonly enabled: boolean;
+    readonly hasCredential: boolean;
+    readonly hasWebhookSecret: boolean;
+    readonly health: { readonly status: string | null; readonly detail: string | null; readonly at: string | null };
+    readonly capabilities: number;
+    readonly lastEventAt: string | null;
+    readonly awaitingConfirmation: number;
+  }[];
+  readonly receipts: readonly { readonly status: string; readonly count: number }[];
+  readonly failures: readonly { readonly code: string; readonly count: number }[];
+}
+
+/** One webhook receipt as the ingress stored it (payload redacted). */
+export interface OmnichannelOperationEvent {
+  readonly id: string;
+  readonly accountKey: string;
+  readonly providerKey: string;
+  readonly vendorEventId: string | null;
+  readonly eventType: string;
+  readonly signatureValid: boolean;
+  readonly processingStatus: string;
+  readonly attempts: number;
+  readonly failureCode: string | null;
+  readonly failureDetail: string | null;
+  readonly receivedAt: string;
+  readonly processedAt: string | null;
+}
+
+export interface OmnichannelOperationEventDetail extends OmnichannelOperationEvent {
+  readonly payload: unknown;
+}
+
+export interface OmnichannelOperationImpact {
+  readonly account: { readonly key: string; readonly enabled: boolean };
+  readonly impact: { readonly outbound: string; readonly inbound: string; readonly history: string; readonly awaitingConfirmation: number };
+}

@@ -89,6 +89,7 @@ export { FakeVoiceProvider, signFakeWebhook, VoiceProviderRegistry } from "./voi
 export { VoiceProviderAccountsService } from "./voice-provider-accounts.service.js";
 export { AsteriskProviderAdapter } from "./voice-provider-asterisk.js";
 export { TwilioProviderAdapter } from "./voice-provider-twilio.js";
+export type { ReceiptSummary } from "./voice-webhook-ingress.service.js";
 export { VoiceWebhookIngressService } from "./voice-webhook-ingress.service.js";
 
 // Phase 19-OM.4 (extension E1) — the consumed surface of this module. Omnichannel and any other
