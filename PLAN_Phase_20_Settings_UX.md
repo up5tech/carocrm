@@ -1961,7 +1961,7 @@ settings document, so it is left to the operator.
 **Deferred from the task list.** Item 4 (a unit test for the formatter pair) has no home: there is
 still no frontend test runner (§20.26). The formatter is exercised indirectly by the smoke run.
 
-### Phase 20.24 — One page frame: header, document title, heading outline, focus  ⬜ proposed
+### Phase 20.24 — One page frame: header, document title, heading outline, focus  ✅ implemented 2026-10-26
 
 Source: `docs/ux/ui-review.md` F5, F6, F7.
 
@@ -2161,7 +2161,7 @@ the server's reason; returning to a stale tab shows fresh data.
   compact admin setup banner — with no per-entity count grid and no per-module request fan-out.
   ✅ 20.19 — `HomePage.tsx` composes `pages/home/*`; the default-dashboard priority is shared with
   Dashboards in `state/dashboard-default.ts`.
-- One page frame (⬜ 20.24): a single `PageHeader`, a per-page `document.title`, a valid heading
+- One page frame (✅ 20.24): a single `PageHeader`, a per-page `document.title`, a valid heading
   outline and focus moved to the content on a route change.
 - Settings search (⬜ 20.25): the rail and the command palette both find a setting by label,
   description or keyword, filtered by the tabs the caller may open.

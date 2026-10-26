@@ -2382,17 +2382,24 @@ body {
 }
 
 .carocrm-record-header-name {
+  display: flex;
   font-size: 16px;
+  margin: 0;
   overflow-wrap: anywhere;
 }
 
-.carocrm-record-header-name.is-editable {
-  border-bottom: 1px dashed var(--carocrm-c-c9d3e3);
-  cursor: text;
+.carocrm-record-header-name .carocrm-record-header-rename {
+  align-self: center;
+  flex: none;
+  margin-left: 2px;
+  opacity: 0;
+  /* Keyboard focus must reveal the affordance too, not only the mouse hover. */
+  padding-block: 0;
 }
 
-.carocrm-record-header-name.is-editable:hover {
-  border-bottom-color: var(--carocrm-accent);
+.carocrm-record-header-name:hover .carocrm-record-header-rename,
+.carocrm-record-header-rename:focus-visible {
+  opacity: 1;
 }
 
 .carocrm-record-header-name.is-editable:focus-visible {

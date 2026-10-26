@@ -11,6 +11,7 @@ import { useNavigation } from '../state/admin.js';
 import { useDocsSettings } from '../state/docs.js';
 import { currentNavRoute, favoriteLeaves, useFavorites } from '../state/favorites.js';
 import { activateLocale, activeLocaleName, localesEnabled, t } from '../state/i18n.js';
+import { setLiveRegionTranslator } from '../state/page-title.js';
 import { portalBase, usePortalContext } from '../state/portal.js';
 import { useRecordVisit } from '../state/recent.js';
 import { useSession } from '../state/session.js';
@@ -18,6 +19,7 @@ import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
 import { navAccent } from '../theme.js';
 import { AppErrorBoundary } from './AppErrorBoundary.js';
 import { CommandPalette } from './CommandPalette.js';
+import { useRouteFocus } from './PageHeader.js';
 import { CRMChatQuickAccess } from './CRMChatQuickAccess.js';
 import { DocsLink } from './docs/DocsLink.js';
 import { PageDocsProvider, usePageDocsKey } from './docs/PageDocs.js';
@@ -109,6 +111,10 @@ function InternalShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
   const { collapsed, setCollapsed, drawerOpen, setDrawerOpen, narrow } = useSidebar();
+  // Phase 20.24 (F7): a route change lands the keyboard in the content and announces the page; a
+  // query-string-only change (filtering a list) moves nothing.
+  useRouteFocus();
+  setLiveRegionTranslator(t as never);
   // Phase 20 (PLAN_Phase_20_Settings_UX.md §4.4): the menu is the tree the server resolved for this
   // caller — ACL-filtered, ordered and renamed by the Main Menu tab. The shell used to build it from
   // hard-coded name sets plus two per-module visibility probes; both are gone.
@@ -368,6 +374,9 @@ function PortalShell({ children }: { children: ReactNode }) {
   const { message } = AntApp.useApp();
   const [collapsed, setCollapsed] = useState(false);
   const base = portalBase(principal?.type);
+  // Phase 20.24: the portal shell gets the same route focus + announcement as the internal one.
+  useRouteFocus();
+  setLiveRegionTranslator(t as never);
   // Same as the internal shell: the "Home" entry is translated, so the memo follows the locale.
   const locale = activeLocaleName();
 
@@ -435,7 +444,7 @@ function PortalShell({ children }: { children: ReactNode }) {
           </div>
         </Sider>
         <Layout>
-          <Content className="carocrm-content">
+          <Content id="carocrm-content" tabIndex={-1} className="carocrm-content">
             {/* Screen-reader announcements for moves that happen by keyboard in the settings tabs. */}
             <span id="carocrm-live-region" className="carocrm-live-region" role="status" aria-live="polite" />
             {children}

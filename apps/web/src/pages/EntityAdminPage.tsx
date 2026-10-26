@@ -7,6 +7,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { EntityDefinition, FieldDefinition, IndexDefinition, Role } from '../api/types.js';
 import { EmptyState } from '../components/EmptyState.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { defaultIconName,ENTITY_ICONS } from '../components/entityIcons.js';
 import { LayoutEditor, memberFieldNames } from '../components/LayoutEditor.js';
 import { useNavigationGroupKeys } from '../state/admin.js';
@@ -948,27 +949,27 @@ export function EntityAdminPage() {
 
   return (
     <>
-      <div className="carocrm-page-head">
-        <div>
-          <Space size={8} wrap>
-            <Link to="/admin/entity-manager" aria-label={t('web.entityAdmin.backToEntities')}>
-              <Button size="small" icon={<ArrowLeftOutlined />} />
-            </Link>
-            <h1 className="carocrm-page-title">{entity.label}</h1>
+      <PageHeader
+        title={entity.label}
+        subtitle={t('web.entityAdmin.summary', { fields: String(fieldCount), relations: String(relationCount), rules: String(rules.length) })}
+        back={
+          <Link to="/admin/entity-manager" aria-label={t('web.entityAdmin.backToEntities')}>
+            <Button size="small" icon={<ArrowLeftOutlined />} />
+          </Link>
+        }
+        actions={
+          <Space wrap>
             <Tag>{entity.name}</Tag>
             {entity.isEntity ? <Tag color="green">{t('web.entityAdmin.enabled')}</Tag> : <Tag color="red">{t('web.entityAdmin.disabled')}</Tag>}
+            <Button icon={<ReloadOutlined />} loading={metadata.isFetching} onClick={() => void metadata.refetch()}>
+              {t('core.common.refresh')}
+            </Button>
+            <Link to={`/${entity.name}`}>
+              <Button>{t('web.entityAdmin.viewRecords')}</Button>
+            </Link>
           </Space>
-          <p className="carocrm-page-sub">{t('web.entityAdmin.summary', { fields: String(fieldCount), relations: String(relationCount), rules: String(rules.length) })}</p>
-        </div>
-        <Space wrap>
-          <Button icon={<ReloadOutlined />} loading={metadata.isFetching} onClick={() => void metadata.refetch()}>
-            {t('core.common.refresh')}
-          </Button>
-          <Link to={`/${entity.name}`}>
-            <Button>{t('web.entityAdmin.viewRecords')}</Button>
-          </Link>
-        </Space>
-      </div>
+        }
+      />
 
       <Card className="carocrm-card">
         <Tabs

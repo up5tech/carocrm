@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import type { Principal } from '../../api/types.js';
 import { entityIcon } from '../../components/entityIcons.js';
+import { usePageTitle } from '../../components/PageHeader.js';
 import { formatLongDate, t } from '../../state/i18n.js';
 import { navEntities, useMetadata } from '../../state/metadata.js';
 import { dayEvents, focusSentence, greetingKey, overdueCount } from './home-model.js';
@@ -24,6 +25,7 @@ export function HomeHero({ principal }: { readonly principal: Principal | null }
   const agenda = useHomeAgenda();
   const [query, setQuery] = useState('');
   const [now] = useState(() => new Date());
+  usePageTitle(t(greetingKey(now.getHours()), { name: principal?.firstName ?? principal?.name ?? principal?.userName ?? '' }));
 
   // Same entities the sidebar offers, alphabetically: the menu is a shortcut, not a second schema.
   const entities = useMemo(() => navEntities(metadata.data, principal?.type), [metadata.data, principal?.type]);

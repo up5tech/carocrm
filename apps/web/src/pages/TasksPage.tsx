@@ -21,6 +21,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { ProcessInstanceView, ProcessTaskView } from '../api/types.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { INSTANCE_STATUS_COLORS, ProcessTrailModal } from '../components/ProcessTrailModal.js';
 import { formatDateTime, t } from '../state/i18n.js';
 import { useProcessInstances, useProcessTasks } from '../state/processes.js';
@@ -106,45 +107,43 @@ export function TasksPage() {
 
   return (
     <div className="carocrm-page">
-      <div className="carocrm-page-head">
-        <div>
-          <h1 className="carocrm-page-title">{t('web.tasks.title')}</h1>
-          <p className="carocrm-page-sub">
-            {surface === 'tasks' ? t('web.tasks.subtitle') : t('web.myProcesses.subtitle')}
-          </p>
-        </div>
-        <Space size={8} wrap>
-          <div className="carocrm-surface-switch">
-            <Segmented
-              value={surface}
-              onChange={(value) => changeSurface(value as Surface)}
-              options={[
-                {
-                  value: 'tasks',
-                  label: (
-                    <span className="carocrm-surface-switch-label">
-                      <CarryOutOutlined />
-                      {t('web.tasks.tabTasks')}
-                    </span>
-                  ),
-                },
-                {
-                  value: 'approvals',
-                  label: (
-                    <span className="carocrm-surface-switch-label">
-                      <AuditOutlined />
-                      {t('web.tasks.tabApprovals')}
-                    </span>
-                  ),
-                },
-              ]}
-            />
-          </div>
-          <Tooltip title={t('core.common.refresh')}>
-            <Button icon={<ReloadOutlined />} aria-label={t('core.common.refresh')} loading={refreshing} onClick={refresh} />
-          </Tooltip>
-        </Space>
-      </div>
+      <PageHeader
+        title={t('web.tasks.title')}
+        subtitle={surface === 'tasks' ? t('web.tasks.subtitle') : t('web.myProcesses.subtitle')}
+        actions={
+          <Space size={8} wrap>
+            <div className="carocrm-surface-switch">
+              <Segmented
+                value={surface}
+                onChange={(value) => changeSurface(value as Surface)}
+                options={[
+                  {
+                    value: 'tasks',
+                    label: (
+                      <span className="carocrm-surface-switch-label">
+                        <CarryOutOutlined />
+                        {t('web.tasks.tabTasks')}
+                      </span>
+                    ),
+                  },
+                  {
+                    value: 'approvals',
+                    label: (
+                      <span className="carocrm-surface-switch-label">
+                        <AuditOutlined />
+                        {t('web.tasks.tabApprovals')}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+            <Tooltip title={t('core.common.refresh')}>
+              <Button icon={<ReloadOutlined />} aria-label={t('core.common.refresh')} loading={refreshing} onClick={refresh} />
+            </Tooltip>
+          </Space>
+        }
+      />
 
       <Card className="carocrm-card">
         {surface === 'tasks' ? (

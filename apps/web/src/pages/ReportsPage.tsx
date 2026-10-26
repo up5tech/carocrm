@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/client.js';
 import type { ReportDefinitionShape, ReportKind, ReportRow, ReportRunResult, ReportScheduleRow } from '../api/types.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, navEntities, useMetadata } from '../state/metadata.js';
@@ -331,36 +332,36 @@ export function ReportsPage() {
 
   return (
     <div className="carocrm-page">
-      <div className="carocrm-page-head">
-        <div>
-          <h1 className="carocrm-page-title">{t('web.reports.title')}</h1>
-          <p className="carocrm-page-sub">{t('web.reports.subtitle')}</p>
-        </div>
-        <Space wrap size={8}>
-          <Button icon={<PlusOutlined />} onClick={resetBuilder}>
-            {t('web.reports.new')}
-          </Button>
-          <Button icon={<PlayCircleOutlined />} loading={loading} onClick={() => void runSaved()}>
-            {t('web.reports.runPreview')}
-          </Button>
-          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => void save()}>
-            {t('web.common.save')}
-          </Button>
-          <Button
-            icon={<DownloadOutlined />}
-            aria-label={t('web.reports.exportCsv')}
-            disabled={reportId === null}
-            onClick={() => void exportCsv()}
-          >
-            {t('web.reports.csv')}
-          </Button>
-          {reportId !== null ? (
-            <Popconfirm title={t('web.reports.deleteConfirm')} onConfirm={() => void remove()} okText={t('web.common.delete')}>
-              <Button danger icon={<DeleteOutlined />} aria-label={t('web.reports.deleteReport')} />
-            </Popconfirm>
-          ) : null}
-        </Space>
-      </div>
+      <PageHeader
+        title={t('web.reports.title')}
+        subtitle={t('web.reports.subtitle')}
+        actions={
+          <Space wrap size={8}>
+            <Button icon={<PlusOutlined />} onClick={resetBuilder}>
+              {t('web.reports.new')}
+            </Button>
+            <Button icon={<PlayCircleOutlined />} loading={loading} onClick={() => void runSaved()}>
+              {t('web.reports.runPreview')}
+            </Button>
+            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => void save()}>
+              {t('web.common.save')}
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              aria-label={t('web.reports.exportCsv')}
+              disabled={reportId === null}
+              onClick={() => void exportCsv()}
+            >
+              {t('web.reports.csv')}
+            </Button>
+            {reportId !== null ? (
+              <Popconfirm title={t('web.reports.deleteConfirm')} onConfirm={() => void remove()} okText={t('web.common.delete')}>
+                <Button danger icon={<DeleteOutlined />} aria-label={t('web.reports.deleteReport')} />
+              </Popconfirm>
+            ) : null}
+          </Space>
+        }
+      />
 
       <div className="carocrm-reports-shell">
         {/* The saved reports are the rail: a row per report with what it runs on, not a column of

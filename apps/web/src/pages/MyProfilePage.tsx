@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { api, ApiError } from '../api/client.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { timezoneOptions } from '../components/timezones.js';
 import { activeLocaleName, localesEnabled, t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
@@ -187,12 +188,10 @@ export function MyProfilePage() {
 
   return (
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <div className="carocrm-page-head">
-        <div>
-          <h1 className="carocrm-page-title">{t('web.profile.title')}</h1>
-          <p className="carocrm-page-sub">{t('web.profile.subtitle')}</p>
-        </div>
-      </div>
+      <PageHeader
+        title={t('web.profile.title')}
+        subtitle={t('web.profile.subtitle')}
+      />
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={14}>

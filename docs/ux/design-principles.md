@@ -138,3 +138,12 @@ A user who cannot see what happened cannot tell a bug from an empty record (adde
 `pnpm lint:ui` (`scripts/check-ui-conventions.mjs`) fails on a missing i18n key, an ISO-sliced
 timestamp, a raw `<Empty>`, and an internal `<a href="/…">`. A rule that only lives in this document
 is a rule that will be broken by the next screen; the four above were each a real defect first.
+
+## 8. One page frame
+
+Every internal route renders exactly one `h1`, owned by `PageHeader` (`apps/web/src/components/PageHeader.tsx`). The page head markup (`carocrm-page-head`) is typed once there; pages pass `title`, `subtitle`, `actions`, `back`, `tabs` and `docKey` instead of re-typing it.
+
+- `usePageTitle(title)` sets `document.title` to `"<title> · <brand>"` for as long as the screen is mounted.
+- `useRouteFocus()` moves focus into `#carocrm-content` and announces the landing page on a pathname change; a query-string-only change moves nothing.
+- Workspace screens (`/home`, `/crm-chat`, `/voice-inbox`) keep their own head but adopt `usePageTitle` and expose one `h1`.
+- Heading levels: page `h1`, section `h2`, card/panel `h3`.

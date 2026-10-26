@@ -2,7 +2,6 @@ import {
   ApiOutlined,
   CheckCircleOutlined,
   ExperimentOutlined,
-  FileSearchOutlined,
   ReloadOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
@@ -15,6 +14,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { ESignatureCapabilityEntry, ESignatureHealthView } from '../api/types.js';
 import { EmptyState } from '../components/EmptyState.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { t } from '../state/i18n.js';
@@ -99,31 +99,26 @@ export function ESignaturePage() {
 
   return (
     <div className="carocrm-page">
-      <div className="carocrm-page-head">
-        <div>
-          <h1 className="carocrm-page-title">
-            <Space size={10}>
-              <FileSearchOutlined style={{ color: '#438eff' }} />
-              {t('esignature.page.title')}
-            </Space>
-          </h1>
-          <p className="carocrm-page-sub">{t('esignature.page.subtitle')}</p>
-        </div>
-        <Space size={8} wrap>
-          <Tag color={view.gate.moduleEnabled ? 'green' : 'default'}>
-            {view.gate.moduleEnabled ? t('esignature.page.moduleOn') : t('esignature.page.moduleOff')}
-          </Tag>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              void health.refetch();
-              void capabilities.refetch();
-            }}
-          >
-            {t('core.common.reload')}
-          </Button>
-        </Space>
-      </div>
+      <PageHeader
+        title={t('esignature.page.title')}
+        subtitle={t('esignature.page.subtitle')}
+        actions={
+          <Space size={8} wrap>
+            <Tag color={view.gate.moduleEnabled ? 'green' : 'default'}>
+              {view.gate.moduleEnabled ? t('esignature.page.moduleOn') : t('esignature.page.moduleOff')}
+            </Tag>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => {
+                void health.refetch();
+                void capabilities.refetch();
+              }}
+            >
+              {t('core.common.reload')}
+            </Button>
+          </Space>
+        }
+      />
 
       {view.gate.ready ? null : (
         <Alert

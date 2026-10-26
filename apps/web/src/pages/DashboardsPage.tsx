@@ -22,6 +22,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 
 import { api, ApiError, type DashboardRow } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
 import { pickDefaultDashboard } from '../state/dashboard-default.js';
@@ -623,36 +624,36 @@ export function DashboardsPage() {
 
   return (
     <div className="carocrm-page">
-      <div className="carocrm-page-head">
-        <div>
-          <h1 className="carocrm-page-title">{t('web.dashboards.title')}</h1>
-          <p className="carocrm-page-sub">{t('web.dashboards.subtitle')}</p>
-        </div>
-        <Space size={8} wrap>
-          {dashboards.length > 0 ? (
-            <Select
-              className="carocrm-dash-select"
-              value={activeId ?? null}
-              onChange={(value: string) => {
-                chosenManually.current = true;
-                setActiveId(value);
-              }}
-              options={dashboards.map((item) => ({ value: item.id, label: `${item.name} (${item.dashlets.length})` }))}
-              placeholder={t('web.dashboards.pick')}
-              aria-label={t('web.dashboards.pick')}
-              showSearch
-              optionFilterProp="label"
-              suffixIcon={<AppstoreOutlined />}
-            />
-          ) : null}
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void refresh()}>
-            {t('core.common.refresh')}
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-            {t('web.dashboards.new')}
-          </Button>
-        </Space>
-      </div>
+      <PageHeader
+        title={t('web.dashboards.title')}
+        subtitle={t('web.dashboards.subtitle')}
+        actions={
+          <Space size={8} wrap>
+            {dashboards.length > 0 ? (
+              <Select
+                className="carocrm-dash-select"
+                value={activeId ?? null}
+                onChange={(value: string) => {
+                  chosenManually.current = true;
+                  setActiveId(value);
+                }}
+                options={dashboards.map((item) => ({ value: item.id, label: `${item.name} (${item.dashlets.length})` }))}
+                placeholder={t('web.dashboards.pick')}
+                aria-label={t('web.dashboards.pick')}
+                showSearch
+                optionFilterProp="label"
+                suffixIcon={<AppstoreOutlined />}
+              />
+            ) : null}
+            <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void refresh()}>
+              {t('core.common.refresh')}
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+              {t('web.dashboards.new')}
+            </Button>
+          </Space>
+        }
+      />
 
       {active ? (
         <div className="carocrm-dash-actions">

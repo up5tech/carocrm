@@ -1,9 +1,9 @@
-import { ApiOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Button, Skeleton, Space, Tabs, Typography } from 'antd';
+import { Alert, Button, Skeleton, Tabs } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { api } from '../api/client.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { t } from '../state/i18n.js';
 import { IntegrationsCatalogTab } from './advanced-integrations/IntegrationsCatalogTab.js';
 import { IntegrationsConflictsTab } from './advanced-integrations/IntegrationsConflictsTab.js';
@@ -105,17 +105,10 @@ export function AdvancedIntegrationsPage() {
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-      <header className="carocrm-page-head" style={{ display: 'block' }}>
-        {/* A real heading, so the page has an accessible name and the browser's heading
-            navigation works. */}
-        <Typography.Title level={4} className="carocrm-page-title" style={{ margin: 0 }}>
-          <Space size={8}>
-            <ApiOutlined />
-            {t('advancedintegrations.page.title')}
-          </Space>
-        </Typography.Title>
-        <p className="carocrm-page-sub">{t('advancedintegrations.page.subtitle')}</p>
-      </header>
+      <PageHeader
+        title={t('advancedintegrations.page.title')}
+        subtitle={t('advancedintegrations.page.subtitle')}
+      />
       <Tabs className="carocrm-int-workspace" activeKey={tab} onChange={setTab} items={items} />
     </div>
   );

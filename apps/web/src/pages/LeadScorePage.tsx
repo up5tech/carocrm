@@ -1,4 +1,4 @@
-import { ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { ReloadOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Space, Tabs, Tag, Typography } from 'antd';
 import { useState } from 'react';
@@ -7,6 +7,7 @@ import { useSearchParams } from 'react-router-dom';
 import { api } from '../api/client.js';
 import type { LeadScoreHealthView, LeadScoreModelRecord } from '../api/types.js';
 import { ErrorState } from '../components/ErrorState.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
 import { t } from '../state/i18n.js';
@@ -119,34 +120,29 @@ export function LeadScorePage() {
 
   return (
     <div className="carocrm-page">
-      <div className="carocrm-page-head">
-        <div>
-          <h1 className="carocrm-page-title">
-            <Space size={10}>
-              <ThunderboltOutlined style={{ color: '#438eff' }} />
-              {t('leadscore.admin.page.title')}
-            </Space>
-          </h1>
-          <p className="carocrm-page-sub">{t('leadscore.admin.page.subtitle')}</p>
-        </div>
-        <Space size={8} wrap>
-          <Tag color={view.settings.enabled ? 'green' : 'default'}>
-            {view.settings.enabled ? t('leadscore.admin.page.moduleOn') : t('leadscore.admin.page.moduleOff')}
-          </Tag>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {activeModelText(view)}
-          </Typography.Text>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              void queryClient.invalidateQueries({ queryKey: ['leadScore'] });
-              void catalog.refetch();
-            }}
-          >
-            {t('core.common.reload')}
-          </Button>
-        </Space>
-      </div>
+      <PageHeader
+        title={t('leadscore.admin.page.title')}
+        subtitle={t('leadscore.admin.page.subtitle')}
+        actions={
+          <Space size={8} wrap>
+            <Tag color={view.settings.enabled ? 'green' : 'default'}>
+              {view.settings.enabled ? t('leadscore.admin.page.moduleOn') : t('leadscore.admin.page.moduleOff')}
+            </Tag>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {activeModelText(view)}
+            </Typography.Text>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => {
+                void queryClient.invalidateQueries({ queryKey: ['leadScore'] });
+                void catalog.refetch();
+              }}
+            >
+              {t('core.common.reload')}
+            </Button>
+          </Space>
+        }
+      />
 
       {!view.ready ? (
         <Alert

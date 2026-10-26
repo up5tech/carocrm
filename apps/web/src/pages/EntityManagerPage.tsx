@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 
@@ -41,20 +42,20 @@ export function EntityManagerPage() {
 
   return (
     <>
-      <div className="carocrm-page-head">
-        <div>
-          <h1 className="carocrm-page-title">{t('web.entityManager.title')}</h1>
-          <p className="carocrm-page-sub">{t('web.entityManager.subtitle')}</p>
-        </div>
-        <Space wrap>
-          <Button icon={<ReloadOutlined />} loading={metadata.isFetching} onClick={() => void metadata.refetch()}>
-            {t('core.common.refresh')}
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-            {t('web.entityManager.new')}
-          </Button>
-        </Space>
-      </div>
+      <PageHeader
+        title={t('web.entityManager.title')}
+        subtitle={t('web.entityManager.subtitle')}
+        actions={
+          <Space wrap>
+            <Button icon={<ReloadOutlined />} loading={metadata.isFetching} onClick={() => void metadata.refetch()}>
+              {t('core.common.refresh')}
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+              {t('web.entityManager.new')}
+            </Button>
+          </Space>
+        }
+      />
 
       <Card className="carocrm-card" title={t('web.entityManager.cardTitle')} extra={<Typography.Text type="secondary">{t('web.entityManager.count', { shown: String(rows.length), total: String(entities.length) })}</Typography.Text>}>
         <Input

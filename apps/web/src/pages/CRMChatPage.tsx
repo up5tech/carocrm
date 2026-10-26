@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api/client.js';
 import type { CRMChatMessageView } from '../api/types.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
+import { usePageTitle } from '../components/PageHeader.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
@@ -67,6 +68,7 @@ function threadInitial(title: string | null): string {
  * the capability but a disabled workspace gets `FEATURE_DISABLED`.
  */
 export function CRMChatPage() {
+  usePageTitle(t('web.crmChat.title'));
   usePageDocs('user/chat-and-voice');
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);

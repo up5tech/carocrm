@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom';
 
 import { api, type CalendarEvent } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { activeLocaleName, t } from '../state/i18n.js';
 import { useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
@@ -370,28 +371,28 @@ export function CalendarPage() {
 
   return (
     <div className="carocrm-page">
-      <div className="carocrm-page-head">
-        <div>
-          <h1 className="carocrm-page-title">{t('web.calendar.title')}</h1>
-          <p className="carocrm-page-sub">{t('web.calendar.hint', { zone })}</p>
-        </div>
-        <Space size={8} wrap>
-          <Segmented
-            value={onlyMine ? 'mine' : 'all'}
-            onChange={(value) => setOnlyMine(value === 'mine')}
-            options={[
-              { value: 'all', label: t('web.calendar.everyone') },
-              { value: 'mine', label: t('web.calendar.onlyMine') },
-            ]}
-          />
-          <Tooltip title={t('core.common.refresh')}>
-            <Button icon={<ReloadOutlined />} aria-label={t('core.common.refresh')} loading={loading} onClick={() => void load()} />
-          </Tooltip>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
-            {t('web.calendar.createTask')}
-          </Button>
-        </Space>
-      </div>
+      <PageHeader
+        title={t('web.calendar.title')}
+        subtitle={t('web.calendar.hint', { zone })}
+        actions={
+          <Space size={8} wrap>
+            <Segmented
+              value={onlyMine ? 'mine' : 'all'}
+              onChange={(value) => setOnlyMine(value === 'mine')}
+              options={[
+                { value: 'all', label: t('web.calendar.everyone') },
+                { value: 'mine', label: t('web.calendar.onlyMine') },
+              ]}
+            />
+            <Tooltip title={t('core.common.refresh')}>
+              <Button icon={<ReloadOutlined />} aria-label={t('core.common.refresh')} loading={loading} onClick={() => void load()} />
+            </Tooltip>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+              {t('web.calendar.createTask')}
+            </Button>
+          </Space>
+        }
+      />
 
       <div className="carocrm-cal-panel">
         <CalendarToolbar

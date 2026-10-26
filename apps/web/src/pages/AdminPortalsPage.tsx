@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '../api/client.js';
 import type { PortalDashboardRow, PortalNavItemRow, PortalRoleRow, PortalRow } from '../api/types.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { t } from '../state/i18n.js';
 import { useSession } from '../state/session.js';
 /** Portal administration (PLAN 37, Phase 18). Admin-only; record visibility is server-enforced. */
@@ -29,10 +30,20 @@ export function AdminPortalsPage() {
   if (principal?.type !== 'admin') return <Alert type="error" message={t('web.admin.accessRequiredPortals')} />;
   return (
     <>
-      <div className="carocrm-page-head"><div><h1 className="carocrm-page-title">{t('web.adminPortals.title')}</h1>
-      <p className="carocrm-page-sub">{t('web.adminPortals.subtitle')}</p></div>
-      <Space wrap><Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>{t('core.common.refresh')}</Button>
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>{t('web.adminPortals.new')}</Button></Space></div>
+      <PageHeader
+        title={t('web.adminPortals.title')}
+        subtitle={t('web.adminPortals.subtitle')}
+        actions={
+          <Space wrap>
+            <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
+              {t('core.common.refresh')}
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+              {t('web.adminPortals.new')}
+            </Button>
+          </Space>
+        }
+      />
       <Card className="carocrm-card" title={t('web.adminPortals.cardTitle')}>
         <Table<PortalRow> rowKey="id" size="small" loading={loading} dataSource={portals} pagination={false}
           onRow={(r) => ({ onClick: () => setActiveId(r.id), style: { cursor: 'pointer' } })}

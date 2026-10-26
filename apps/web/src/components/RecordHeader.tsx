@@ -1,5 +1,5 @@
 import { EditOutlined, MoreOutlined } from '@ant-design/icons';
-import { App as AntApp, Button, Dropdown, Input, Space, Typography } from 'antd';
+import { App as AntApp, Button, Dropdown, Input, Space } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -7,6 +7,7 @@ import { api } from '../api/client.js';
 import type { EntityDefinition, RowActions } from '../api/types.js';
 import { t } from '../state/i18n.js';
 import { fieldLabel, recordLabel } from '../state/metadata.js';
+import { usePageTitle } from './PageHeader.js';
 import { FieldValue, linkLabelsOf } from './fields.js';
 
 export interface RecordHeaderProps {
@@ -56,6 +57,9 @@ export function RecordHeader({ entity, id, definition, record, base, onChanged }
   const displayField = definition?.record?.displayField ?? 'name';
   const name = recordLabel(record, definition);
   const nameField = definition?.fields[displayField];
+  // Phase 20.24 (F5/F6): the record's name is the record page's `h1` — and the browser-tab title,
+  // so five open records are five distinguishable tabs.
+  usePageTitle(name);
   // A computed or non-text display field is not editable in place; the form still edits it.
   const nameEditable =
     actions?.edit === true &&
@@ -126,38 +130,41 @@ export function RecordHeader({ entity, id, definition, record, base, onChanged }
       <div className="carocrm-record-header-main">
         <div className="carocrm-record-header-title">
           {editing ? (
-            <Input
-              autoFocus
-              size="small"
-              value={draft}
-              disabled={savingName}
-              aria-label={t('web.detail.nameAria')}
-              onChange={(event) => setDraft(event.target.value)}
-              onPressEnter={() => void saveName()}
-              onBlur={() => void saveName()}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') setEditing(false);
-              }}
-            />
+            <h1 className="carocrm-record-header-name">
+              <Input
+                autoFocus
+                size="small"
+                value={draft}
+                disabled={savingName}
+                aria-label={t('web.detail.nameAria')}
+                onChange={(event) => setDraft(event.target.value)}
+                onPressEnter={() => void saveName()}
+                onBlur={() => void saveName()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setEditing(false);
+                }}
+              />
+            </h1>
           ) : (
-            <Typography.Text
-              strong
-              className={`carocrm-record-header-name${nameEditable ? ' is-editable' : ''}`}
-              {...(nameEditable ? { tabIndex: 0, role: 'button', title: t('web.detail.renameHint') } : {})}
-              onClick={() => {
-                if (!nameEditable) return;
-                setDraft(name);
-                setEditing(true);
-              }}
-              onKeyDown={(event) => {
-                if (!nameEditable || (event.key !== 'Enter' && event.key !== ' ')) return;
-                event.preventDefault();
-                setDraft(name);
-                setEditing(true);
-              }}
-            >
+            // The record's name is the page's one `<h1>`. When the name is editable, the affordance
+            // is the pencil button next to it (was: the whole text acted as a button — an h1 cannot
+            // also be a button without its heading role being lost to assistive technology).
+            <h1 className="carocrm-record-header-name">
               {name}
-            </Typography.Text>
+              {nameEditable ? (
+                <Button
+                  className="carocrm-record-header-rename"
+                  type="text"
+                  size="small"
+                  aria-label={t('web.detail.renameHint')}
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setDraft(name);
+                    setEditing(true);
+                  }}
+                />
+              ) : null}
+            </h1>
           )}
           <span className="carocrm-record-header-entity">{definition?.label ?? entity}</span>
         </div>

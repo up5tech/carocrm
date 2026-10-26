@@ -24,6 +24,7 @@ import type {
   VoiceTimelineEntry,
 } from '../api/types.js';
 import { VoiceCallDetail } from '../components/VoiceCallDetail.js';
+import { usePageTitle } from '../components/PageHeader.js';
 import { formatClock, formatDateTime, isSameCalendarDay, t } from '../state/i18n.js';
 
 /**
@@ -707,6 +708,7 @@ function CallPane({ call }: { call: VoiceCallSessionView | undefined }) {
 }
 
 export function VoiceInboxPage() {
+  usePageTitle(t('voice.inbox.title'));
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
   const [surface, setSurface] = useState<'inbox' | 'calls'>('inbox');
