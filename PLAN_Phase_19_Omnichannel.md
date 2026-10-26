@@ -1259,6 +1259,29 @@ Acceptance:
 
 ### Phase 19-OM.6 — Canonical Conversation, Thread, and Message Services
 
+**Status: COMPLETE.** The services were composed, not re-implemented (D1). In `VoiceCommunications`
+(the record owner) the messaging service now attaches every message to a **channel thread** (E6,
+contract §4): inbound and outbound paths resolve/create the thread, store `voice_messages.thread_id`,
+write participants with their account/channel, and validate the inbound timestamp. The continuity
+rule is explicit and address-based: the same normalized address on another open channel attaches a
+new thread to the existing conversation; closed/spam conversations are never reopened implicitly and
+nothing is merged by Contact. E7 added `getMessageStatus` to the adapter contract (Twilio reads the
+Message resource; the simulator scripts it), with `VoiceMessagingService.reconcileMessage` advancing
+only non-terminal messages through the rank guard and refusing `unsupported` when the provider has no
+lookup. In `Omnichannel`, `OmnichannelConversationService` is a **read-model facade** over the exported
+services — list/timeline/threads/mark-read/status/assign/reconcile — with no SQL write to
+`voice_conversations`/`voice_messages` (a source-scan test enforces it), exposed at
+`/api/v1/Omnichannel/action/conversations…` and `…/messages/:id/reconcile`.
+
+Verification: `omnichannel-conversation.test.ts` 6/6 — inbound → one conversation + one message with a
+thread; second channel → second *thread* on the same conversation; replayed receipt → no duplicate
+message; workspace projection/delegation (priority/tags/threads, read-state, status, assignment, Case
+untouched); reconcile `unknown → delivered` from provider evidence and an internal note refused;
+source scan proves no second send/ingest/status implementation. Full regression 13 files / 176 tests
+green (Voice suites unchanged); api typecheck + eslint clean.
+
+**Goal:** Implement the canonical interaction model and state transitions.
+
 **Goal:** Implement the canonical interaction model and state transitions.
 
 **Decision D1 applies: the service layer already exists** — `VoiceMessagingService`

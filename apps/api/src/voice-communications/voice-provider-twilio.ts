@@ -216,6 +216,31 @@ export class TwilioProviderAdapter implements VoiceProviderAdapter {
     return { ok: true, checkedAt: new Date().toISOString(), detail: "Twilio account is reachable and active." };
   }
 
+  /**
+   * 19-OM.6 (E7) — reconcile an unknown delivery outcome by reading the message resource, instead of
+   * repeating the send (§3.5). Read-only: the state advances through the service's rank guard, and a
+   * status Twilio does not report in a form this module understands is returned as `null` rather
+   * than invented.
+   */
+  async getMessageStatus(input: {
+    readonly account: ResolvedProviderAccount;
+    readonly providerMessageId: string;
+  }): Promise<{ readonly state: MessageState | null; readonly vendorStatus: string | null }> {
+    const accountSid = requireConfig(input.account, "accountSid", "Twilio");
+    const credential = requireCredential(input.account, "Twilio");
+    const result = await requestVoiceProviderJson({
+      method: "GET",
+      url: `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages/${encodeURIComponent(input.providerMessageId)}.json`,
+      service: "Twilio",
+      headers: { authorization: basicAuth(accountSid, credential), accept: "application/json" },
+      ...(this.fetchImpl === undefined ? {} : { fetchImpl: this.fetchImpl }),
+    });
+    const rawStatus = stringOf(result.data?.["status"]);
+    if (rawStatus === null) return { state: null, vendorStatus: null };
+    const state = mapMessageStatus(rawStatus);
+    return { state: state === "unknown" ? null : state, vendorStatus: rawStatus };
+  }
+
   async initiateCall(input: InitiateCallInput): Promise<InitiateCallResult> {
     const accountSid = requireConfig(input.account, "accountSid", "Twilio");
     const credential = requireCredential(input.account, "Twilio");

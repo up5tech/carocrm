@@ -1,9 +1,10 @@
 import { ValidationError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Get, HttpCode, Inject, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
+import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
 import { OmnichannelModuleHealthService } from './omnichannel-module-health.service.js';
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
@@ -36,6 +37,24 @@ const SettingsPatchSchema = z
   .partial()
   .strict();
 
+const StatusInputSchema = z.object({ status: z.string().trim().min(1).max(40) }).strict();
+const AssignInputSchema = z
+  .object({
+    userId: z.string().trim().min(1).max(120).nullable().optional(),
+    teamId: z.string().trim().min(1).max(120).nullable().optional(),
+    reason: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
+function pageOf(limit: unknown, offset: unknown): { limit: number; offset: number } {
+  const parsedLimit = Number(limit ?? 25);
+  const parsedOffset = Number(offset ?? 0);
+  return {
+    limit: Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 100) : 25,
+    offset: Number.isFinite(parsedOffset) && parsedOffset > 0 ? Math.trunc(parsedOffset) : 0,
+  };
+}
+
 @ApiTags('omnichannel')
 @Controller('api/v1/Omnichannel')
 export class OmnichannelController {
@@ -45,6 +64,7 @@ export class OmnichannelController {
     @Inject(OmnichannelSettingsService) private readonly settings: OmnichannelSettingsService,
     @Inject(OmnichannelNavigationService) private readonly navigation: OmnichannelNavigationService,
     @Inject(OmnichannelCapabilityService) private readonly channelCapabilities: OmnichannelCapabilityService,
+    @Inject(OmnichannelConversationService) private readonly conversations: OmnichannelConversationService,
   ) {}
 
   /**
@@ -56,6 +76,84 @@ export class OmnichannelController {
   async channels() {
     await this.permissions.assert('inboxView');
     return this.channelCapabilities.catalog();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Conversation workspace (19-OM.6) — composed over the exported Voice facade (D1)
+  // ---------------------------------------------------------------------------
+
+  /** The inbox page with the workspace projection (priority/tags/queue/snooze/threads). */
+  @Get('action/conversations')
+  async listConversations(
+    @Query('limit') limit: unknown,
+    @Query('offset') offset: unknown,
+    @Query('status') status: string | undefined,
+    @Query('channel') channel: string | undefined,
+  ) {
+    await this.permissions.assert('inboxView');
+    const page = pageOf(limit, offset);
+    return this.conversations.list({
+      ...page,
+      ...(typeof status === 'string' && status !== '' ? { status } : {}),
+      ...(typeof channel === 'string' && channel !== '' ? { channel } : {}),
+    });
+  }
+
+  /** The merged, ordered timeline (messages + events) of one conversation. */
+  @Get('action/conversations/:id/timeline')
+  async conversationTimeline(
+    @Param('id') id: string,
+    @Query('limit') limit: unknown,
+    @Query('offset') offset: unknown,
+  ) {
+    await this.permissions.assert('inboxView');
+    return this.conversations.timeline(id, pageOf(limit, offset));
+  }
+
+  /** The channel threads attached to the canonical conversation (contract §4). */
+  @Get('action/conversations/:id/threads')
+  async conversationThreads(@Param('id') id: string) {
+    await this.permissions.assert('inboxView');
+    return this.conversations.threads(id);
+  }
+
+  /** Mark the conversation read for this agent (read-state lives on the canonical record). */
+  @HttpCode(200)
+  @Post('action/conversations/:id/read')
+  async markConversationRead(@Param('id') id: string) {
+    await this.permissions.assert('inboxView');
+    return this.conversations.markRead(id);
+  }
+
+  /** Transition the conversation status — the owner records the event; a Case is never touched. */
+  @HttpCode(200)
+  @Post('action/conversations/:id/status')
+  async setConversationStatus(@Param('id') id: string, @Body() body: unknown) {
+    await this.permissions.assert('assign');
+    const parsed = StatusInputSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid status input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
+    return this.conversations.setStatus(id, parsed.data.status);
+  }
+
+  /** Assign to a user or a team, with an optional reason recorded in the conversation history. */
+  @HttpCode(200)
+  @Post('action/conversations/:id/assign')
+  async assignConversation(@Param('id') id: string, @Body() body: unknown) {
+    await this.permissions.assert('assign');
+    const parsed = AssignInputSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid assignment input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
+    return this.conversations.assign(id, parsed.data);
+  }
+
+  /**
+   * E7 — reconcile an unknown delivery outcome by asking the provider, never by repeating a send.
+   * Operational, so it asks the replay capability rather than the ordinary reply right.
+   */
+  @HttpCode(200)
+  @Post('action/messages/:id/reconcile')
+  async reconcileMessage(@Param('id') id: string) {
+    await this.permissions.assert('opsReplay');
+    return this.conversations.reconcile(id);
   }
 
   /**

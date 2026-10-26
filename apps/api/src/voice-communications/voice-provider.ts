@@ -488,6 +488,22 @@ export class FakeVoiceProvider implements VoiceProviderAdapter {
   }
 
   /**
+   * 19-OM.6 (E7) — the simulator's status lookup. It reports `delivered` by default so a reconcile
+   * test can observe the state advance, and a test may script another value (`setScriptedStatus`)
+   * to prove an unknown outcome is resolved by provider evidence rather than by assumption.
+   */
+  async getMessageStatus(): Promise<{ readonly state: MessageState | null; readonly vendorStatus: string | null }> {
+    return { state: this.scriptedStatus, vendorStatus: this.scriptedStatus };
+  }
+
+  /** Test seam: what the simulator reports for a status lookup. */
+  private scriptedStatus: MessageState = "delivered";
+
+  setScriptedStatus(state: MessageState): void {
+    this.scriptedStatus = state;
+  }
+
+  /**
    * 19-VC.16 — the simulator returns a small canned transcript, so the transcription path can be
    * exercised end to end without a network or a speech vendor. An outage is honoured like every
    * other simulator operation.
@@ -582,6 +598,15 @@ export interface VoiceProviderAdapter {
   controlCall?(input: CallControlInput): Promise<CallControlResult>;
   /** Absent when the adapter cannot send on this channel (`messaging.*.send` not declared). */
   sendMessage?(input: SendMessageInput): Promise<SendMessageResult>;
+  /**
+   * 19-OM.6 (extension E7) — the provider's current delivery status for a message this module sent,
+   * when the provider offers a status lookup. Absent means the module cannot reconcile an unknown
+   * outcome: the service must then refuse with `unsupported`, never guess or repeat the send (§3.5).
+   */
+  getMessageStatus?(input: {
+    readonly account: ResolvedProviderAccount;
+    readonly providerMessageId: string;
+  }): Promise<{ readonly state: MessageState | null; readonly vendorStatus: string | null }>;
   /**
    * 19-VC.16 — retrieve an existing transcript from the provider. Absent when the adapter has no
    * transcript source; the module then reports the transcript as unavailable rather than inventing one.

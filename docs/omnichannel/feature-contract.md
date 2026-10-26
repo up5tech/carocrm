@@ -334,7 +334,8 @@ key gaps).
 | E2 | `bootstrap.ts` raw-body `preParsing` allowlist gains the Omnichannel webhook prefix | shared platform | OM.5, any real-signature channel | **DONE — OM.5** (bytes preserved for the prefix; the parsed body still flows normally) |
 | E3 | `unsupported` error category | VoiceCommunications/domain | OM.4 | **DONE — OM.4** (permanent, non-retryable, operator message present) |
 | E14 | `voiceCommunications.inbox.read` + `voiceCommunications.message.send` cross-module contracts | VoiceCommunications + contracts registry | OM.4/OM.6/OM.8 | **DONE — OM.4** (v1, beside the existing suppress contract) |
-| E4/E5/E6 | Additive migrations (conversation fields, participant identity, threads) | VoiceCommunications | OM.3 | **DONE — OM.3** (migration 077) |
+| E4/E5/E6 | Additive migrations (conversation fields, participant identity, threads) | VoiceCommunications | OM.3 | **DONE — OM.3** (migration 077) + **OM.6** (services write threads: attach + continuity) |
+| E7 | `reconcileMessage` / provider status lookup | VoiceCommunications | OM.6 | **DONE — OM.6** (`getMessageStatus` on the adapter; Twilio + simulator; `unsupported` when absent) |
 | E8 | Queue/routing accepts conversations + operators + business hours | ServiceDesk | OM.11 | open |
 | E9 | Case `external_id` + create-or-link commands | ServiceDesk | OM.17 | open |
 | E11 | Generic per-user publish seam | shared platform | OM.12/realtime | open |

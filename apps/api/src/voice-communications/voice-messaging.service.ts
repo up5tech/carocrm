@@ -24,6 +24,9 @@ import {
 } from './voice-provider.js';
 import { VoiceProviderAccountsService } from './voice-provider-accounts.service.js';
 
+/** 19-OM.6 (E7) — states a provider lookup can no longer advance; only non-terminal ones are polled. */
+const TERMINAL_MESSAGE_STATES: ReadonlySet<string> = new Set(['read', 'failed', 'undelivered']);
+
 /**
  * Phase 19-VC.10 — SMS/MMS (and WhatsApp through the same gateway)
  * (`PLAN_Phase_19_Voice_Communications.md` §8.1–§8.3, §15 `19-VC.10`).
@@ -156,6 +159,8 @@ export class VoiceMessagingService {
     const conversation = await this.resolveConversation(input, accountKey);
     const to = conversation.external_thread_id ?? '';
     if (to === '') throw new ValidationError('The conversation has no destination address.');
+    // E6: an outbound customer message belongs to the thread its destination address identifies.
+    const threadId = await this.attachThread(conversation.id, accountKey, input.channel, to);
 
     const body = input.body.trim();
     if (body === '' && (input.templateKey ?? '').trim() === '' && (input.mediaAttachmentIds ?? []).length === 0) {
@@ -179,6 +184,7 @@ export class VoiceMessagingService {
         idempotencyKey: input.idempotencyKey,
         isInternalNote: true,
         templateKey: null,
+        threadId: null,
       });
       return { message: toMessageView(note), duplicate: false };
     }
@@ -219,6 +225,7 @@ export class VoiceMessagingService {
       idempotencyKey: input.idempotencyKey,
       isInternalNote: false,
       templateKey: input.templateKey ?? null,
+      threadId,
     });
     const media = await this.recordMedia(message.id, input.mediaAttachmentIds ?? []);
 
@@ -280,22 +287,28 @@ export class VoiceMessagingService {
   /**
    * Inbound message (§8.1). One provider message id yields one row: the unique index on
    * `(account_key, provider_message_id)` is what refuses a replayed callback, not a check-then-insert.
+   *
+   * 19-OM.6 (E6): the message is attached to its **channel thread** (contract §4), and the
+   * conversation is found through the thread or the continuity rule — never by merging everything a
+   * Contact ever said.
    */
   async ingestInbound(input: { readonly accountKey: string; readonly event: NormalizedMessageEvent }): Promise<{ readonly messageId: string; readonly duplicate: boolean }> {
     const event = input.event;
     const from = event.from ?? '';
     if (from === '') throw new ValidationError('An inbound message has no sender address.');
+    const occurredAt = event.occurredAt === null ? new Date() : new Date(event.occurredAt);
+    if (Number.isNaN(occurredAt.getTime())) throw new ValidationError('The inbound message has an invalid timestamp.');
     const conversation = await this.findOrCreateConversation(input.accountKey, event.channel, from);
+    const threadId = await this.attachThread(conversation.id, input.accountKey, event.channel, from);
     const now = new Date();
-    const occurredAt = event.occurredAt === null ? now : new Date(event.occurredAt);
     const id = randomUUID();
 
     const inserted = (await sql<{ id: string }>`
       insert into voice_messages
-        (id, conversation_id, account_key, channel, direction, body, provider_message_id, state,
+        (id, conversation_id, thread_id, account_key, channel, direction, body, provider_message_id, state,
          is_internal_note, occurred_at, created_at, modified_at)
       values
-        (${id}, ${conversation.id}, ${input.accountKey}, ${event.channel}, 'inbound', ${event.body},
+        (${id}, ${conversation.id}, ${threadId}, ${input.accountKey}, ${event.channel}, 'inbound', ${event.body},
          ${event.providerMessageId}, 'delivered', false, ${occurredAt}, ${now}, ${now})
       on conflict (account_key, provider_message_id) where provider_message_id is not null do nothing
       returning id
@@ -308,11 +321,12 @@ export class VoiceMessagingService {
       return { messageId: existing?.id ?? '', duplicate: true };
     }
 
-    await this.upsertParticipant(conversation.id, from, 'customer');
+    await this.upsertParticipant(conversation.id, from, 'customer', input.accountKey, event.channel);
     await sql`
       update voice_conversations
       set unread_count = unread_count + 1,
           last_activity_at = ${occurredAt},
+          last_message_at = ${occurredAt},
           last_inbound_at = ${occurredAt},
           status = case when status = 'resolved' then 'open' else status end,
           modified_at = now()
@@ -350,6 +364,57 @@ export class VoiceMessagingService {
       where id = ${row.id}
     `.execute(this.database.db);
     return { changed: true, messageId: row.id };
+  }
+
+  /**
+   * 19-OM.6 (extension E7) — reconcile a message whose delivery outcome is unknown, by asking the
+   * provider for the message resource instead of repeating the send (§3.5).
+   *
+   * Only a message the provider actually accepted can be reconciled; an adapter without a status
+   * lookup is an explicit `unsupported` refusal (never a guess), and the state advances through the
+   * same rank guard as a webhook, so reconciliation cannot move a message backwards.
+   */
+  async reconcileMessage(messageId: string): Promise<{
+    readonly message: MessageView;
+    readonly changed: boolean;
+    readonly providerStatus: string | null;
+  }> {
+    await this.acl.assertAccess(MESSAGE_PERMISSION_ENTITY, 'edit');
+    const row = (await sql<MessageRow>`select * from voice_messages where id = ${messageId}`.execute(this.database.db)).rows[0];
+    if (row === undefined) throw new NotFoundError(`Message "${messageId}" does not exist.`);
+    if (row.direction !== 'outbound' || row.is_internal_note) {
+      throw new ValidationError('Only an outbound customer message can be reconciled.');
+    }
+    if (row.provider_message_id === null) {
+      throw new ValidationError('The message has no provider id; the provider never accepted it.');
+    }
+    if (TERMINAL_MESSAGE_STATES.has(row.state)) {
+      return { message: toMessageView(row), changed: false, providerStatus: null };
+    }
+    const account = await this.accounts.resolve(row.account_key);
+    const adapter = this.registry.resolve(account.providerKey);
+    if (
+      adapter.getMessageStatus === undefined ||
+      !effectiveCapabilities(adapter.info, account.capabilities).includes('messaging.deliveryStatus')
+    ) {
+      throw new VoiceProviderError(
+        'unsupported',
+        `Provider "${account.providerKey}" offers no message-status lookup, so this outcome cannot be reconciled.`,
+      );
+    }
+    const lookup = await adapter.getMessageStatus({ account, providerMessageId: row.provider_message_id });
+    if (lookup.state === null) {
+      return { message: toMessageView(row), changed: false, providerStatus: lookup.vendorStatus };
+    }
+    const applied = await this.applyStatus({
+      accountKey: row.account_key,
+      providerMessageId: row.provider_message_id,
+      state: lookup.state,
+      occurredAt: new Date().toISOString(),
+      failureCategory: null,
+    });
+    const fresh = (await sql<MessageRow>`select * from voice_messages where id = ${messageId}`.execute(this.database.db)).rows[0];
+    return { message: toMessageView(fresh ?? row), changed: applied.changed, providerStatus: lookup.vendorStatus };
   }
 
   async listConversations(query: { readonly limit: number; readonly offset: number }): Promise<readonly ConversationView[]> {
@@ -402,12 +467,44 @@ export class VoiceMessagingService {
   }
 
   private async findOrCreateConversation(accountKey: string, channel: MessageChannel, address: string): Promise<ConversationRow> {
+    // E6: a channel thread is resolved first — the thread knows its canonical conversation, so a
+    // provider thread can never spawn a second conversation once attached.
+    const thread = await this.findThread(accountKey, channel, address);
+    if (thread !== null) {
+      const byThread = (await sql<ConversationRow>`
+        select * from voice_conversations where id = ${thread.conversation_id} limit 1
+      `.execute(this.database.db)).rows[0];
+      if (byThread !== undefined) return byThread;
+    }
+
     const existing = (await sql<ConversationRow>`
       select * from voice_conversations
       where account_key = ${accountKey} and channel = ${channel} and external_thread_id = ${address}
       limit 1
     `.execute(this.database.db)).rows[0];
-    if (existing !== undefined) return existing;
+    if (existing !== undefined) {
+      await this.attachThread(existing.id, accountKey, channel, address);
+      return existing;
+    }
+
+    // Contract §4 continuity — the same normalized customer address on another channel attaches a
+    // new thread to the open conversation instead of opening a second one. Closed/spam conversations
+    // are not reopened implicitly, and nothing is merged by Contact — the rule is address equality.
+    const continuous = (await sql<ConversationRow>`
+      select c.* from voice_conversations c
+      join voice_conversation_participants p on p.conversation_id = c.id
+      where c.account_key = ${accountKey}
+        and c.channel <> ${channel}
+        and c.status not in ('closed', 'spam')
+        and p.role = 'customer'
+        and p.address = ${address}
+      order by c.last_activity_at desc nulls last
+      limit 1
+    `.execute(this.database.db)).rows[0];
+    if (continuous !== undefined) {
+      await this.attachThread(continuous.id, accountKey, channel, address);
+      return continuous;
+    }
 
     const id = randomUUID();
     const now = new Date();
@@ -417,20 +514,60 @@ export class VoiceMessagingService {
       values (${id}, ${accountKey}, ${channel}, ${address}, 'open', 0, ${now}, ${now}, ${now})
       on conflict (account_key, channel, external_thread_id) where external_thread_id is not null do nothing
     `.execute(this.database.db);
-    await this.upsertParticipant(id, address, 'customer');
     const row = (await sql<ConversationRow>`
       select * from voice_conversations
       where account_key = ${accountKey} and channel = ${channel} and external_thread_id = ${address}
       limit 1
     `.execute(this.database.db)).rows[0];
     if (row === undefined) throw new NotFoundError('The conversation could not be created.');
+    await this.upsertParticipant(row.id, address, 'customer', accountKey, channel);
+    await this.attachThread(row.id, accountKey, channel, address);
     return row;
   }
 
-  private async upsertParticipant(conversationId: string, address: string, role: 'customer' | 'agent'): Promise<void> {
+  /** The thread for this address on this channel, if one was already attached (E6). */
+  private async findThread(accountKey: string, channel: MessageChannel, address: string): Promise<{ readonly id: string; readonly conversation_id: string } | null> {
+    const row = (await sql<{ id: string; conversation_id: string }>`
+      select id, conversation_id from voice_conversation_threads
+      where account_key = ${accountKey} and channel = ${channel} and address = ${address}
+      limit 1
+    `.execute(this.database.db)).rows[0];
+    return row ?? null;
+  }
+
+  /**
+   * Attach a provider thread to a conversation (E6/contract §4). The partial unique indexes are the
+   * concurrency guard: a racing callback selects the row the other transaction inserted instead of
+   * creating a second thread.
+   */
+  private async attachThread(conversationId: string, accountKey: string, channel: MessageChannel, address: string): Promise<string> {
+    const inserted = (await sql<{ id: string }>`
+      insert into voice_conversation_threads (id, conversation_id, account_key, channel, address, created_at, modified_at)
+      values (${`vct_${randomUUID()}`}, ${conversationId}, ${accountKey}, ${channel}, ${address}, now(), now())
+      on conflict do nothing
+      returning id
+    `.execute(this.database.db)).rows[0];
+    if (inserted !== undefined) return inserted.id;
+    const existing = (await sql<{ id: string }>`
+      select id from voice_conversation_threads
+      where conversation_id = ${conversationId} and account_key = ${accountKey}
+        and channel = ${channel} and address = ${address}
+      limit 1
+    `.execute(this.database.db)).rows[0];
+    if (existing === undefined) throw new NotFoundError('The channel thread could not be attached.');
+    return existing.id;
+  }
+
+  private async upsertParticipant(
+    conversationId: string,
+    address: string,
+    role: 'customer' | 'agent',
+    accountKey: string,
+    channel: MessageChannel,
+  ): Promise<void> {
     await sql`
-      insert into voice_conversation_participants (id, conversation_id, address, role, created_at)
-      values (${randomUUID()}, ${conversationId}, ${address}, ${role}, now())
+      insert into voice_conversation_participants (id, conversation_id, address, role, account_key, channel, created_at)
+      values (${randomUUID()}, ${conversationId}, ${address}, ${role}, ${accountKey}, ${channel}, now())
       on conflict (conversation_id, address, role) do nothing
     `.execute(this.database.db);
   }
@@ -446,15 +583,16 @@ export class VoiceMessagingService {
     readonly idempotencyKey: string;
     readonly isInternalNote: boolean;
     readonly templateKey: string | null;
+    readonly threadId: string | null;
   }): Promise<MessageRow> {
     const id = randomUUID();
     const now = new Date();
     const inserted = (await sql<{ id: string }>`
       insert into voice_messages
-        (id, conversation_id, account_key, channel, direction, body, provider_message_id, state,
+        (id, conversation_id, thread_id, account_key, channel, direction, body, provider_message_id, state,
          is_internal_note, template_key, author_user_id, idempotency_key, occurred_at, created_at, modified_at)
       values
-        (${id}, ${input.conversationId}, ${input.accountKey}, ${input.channel}, ${input.direction},
+        (${id}, ${input.conversationId}, ${input.threadId}, ${input.accountKey}, ${input.channel}, ${input.direction},
          ${input.body}, ${input.providerMessageId}, ${input.state}, ${input.isInternalNote},
          ${input.templateKey}, ${this.scope.userId ?? null}, ${input.idempotencyKey}, ${now}, ${now}, ${now})
       on conflict (idempotency_key) where idempotency_key is not null do nothing

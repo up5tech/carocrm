@@ -1,0 +1,196 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
+
+import { AclApiService } from '../acl/acl-api.service.js';
+import { DatabaseService } from '../database/database.service.js';
+import {
+  type InboxConversationView,
+  type InboxQuery,
+  type MessageView,
+  VoiceInboxService,
+  VoiceMessagingService,
+} from '../voice-communications/index.js';
+
+/**
+ * Phase 19-OM.6 — the workspace conversation facade
+ * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.6`; feature contract §2.1; decision D1).
+ *
+ * Every operation composes the exported Voice services — `VoiceInboxService` for reads, mark-read,
+ * status and assignment; `VoiceMessagingService` for reconcile — so there is **no second
+ * send/ingest/status implementation** and no second conversation store. What this file adds is the
+ * workspace projection: the read model is computed from the canonical rows (the columns migration
+ * 077 added: priority, category, language, tags, queue, snooze, version) plus the channel threads,
+ * and it is read-only. Nothing here writes `voice_conversations` or `voice_messages`; the owner's
+ * services do, under their own ACL and event records.
+ */
+
+export interface OmnichannelConversationView extends InboxConversationView {
+  readonly priority: string;
+  readonly category: string | null;
+  readonly language: string | null;
+  readonly tags: readonly string[];
+  readonly currentQueueId: string | null;
+  readonly assignmentVersion: number;
+  readonly snoozedUntil: string | null;
+  readonly closedAt: string | null;
+  readonly lastMessageAt: string | null;
+  readonly version: number;
+  /** Channel threads attached to the canonical conversation (contract §4). */
+  readonly threads: readonly OmnichannelThreadView[];
+}
+
+export interface OmnichannelThreadView {
+  readonly id: string;
+  readonly channel: string;
+  readonly externalThreadId: string | null;
+  readonly address: string | null;
+  readonly providerIdentity: string | null;
+  readonly createdAt: string;
+}
+
+interface WorkspaceRow {
+  id: string;
+  priority: string;
+  category: string | null;
+  language: string | null;
+  tags: unknown;
+  current_queue_id: string | null;
+  assignment_version: number;
+  snoozed_until: Date | null;
+  closed_at: Date | null;
+  last_message_at: Date | null;
+  version: number;
+}
+
+@Injectable()
+export class OmnichannelConversationService {
+  constructor(
+    @Inject(VoiceInboxService) private readonly inbox: VoiceInboxService,
+    @Inject(VoiceMessagingService) private readonly messaging: VoiceMessagingService,
+    @Inject(AclApiService) private readonly acl: AclApiService,
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+  ) {}
+
+  /** The inbox list: the owner's ACL-filtered page, enriched with the workspace projection. */
+  async list(query: InboxQuery): Promise<{ readonly list: readonly OmnichannelConversationView[]; readonly total: number }> {
+    const page = await this.inbox.list(query);
+    const enriched = await this.enrich(page.list);
+    return { list: enriched, total: page.total };
+  }
+
+  async timeline(conversationId: string, query: { readonly limit: number; readonly offset: number }) {
+    return this.inbox.timeline(conversationId, query);
+  }
+
+  /** Threads of one conversation, under the conversation's own read ACL (same as the timeline). */
+  async threads(conversationId: string): Promise<{ readonly list: readonly OmnichannelThreadView[] }> {
+    await this.acl.assertAccess('CommunicationConversation', 'read');
+    return { list: await this.threadsFor([conversationId]).then((map) => map.get(conversationId) ?? []) };
+  }
+
+  async markRead(conversationId: string): Promise<{ readonly unreadCount: number }> {
+    return this.inbox.markRead(conversationId);
+  }
+
+  async setStatus(conversationId: string, status: string): Promise<OmnichannelConversationView> {
+    const updated = await this.inbox.setStatus(conversationId, status);
+    return (await this.enrich([updated]))[0] ?? { ...updated, ...emptyWorkspaceFields(), threads: [] };
+  }
+
+  async assign(
+    conversationId: string,
+    input: { readonly userId?: string | null | undefined; readonly teamId?: string | null | undefined; readonly reason?: string | undefined },
+  ): Promise<OmnichannelConversationView> {
+    const updated = await this.inbox.assign(conversationId, input);
+    return (await this.enrich([updated]))[0] ?? { ...updated, ...emptyWorkspaceFields(), threads: [] };
+  }
+
+  /** E7 — reconcile via the owner's provider lookup; the facade adds no behaviour of its own. */
+  async reconcile(messageId: string): Promise<{ readonly message: MessageView; readonly changed: boolean; readonly providerStatus: string | null }> {
+    return this.messaging.reconcileMessage(messageId);
+  }
+
+  private async enrich(rows: readonly InboxConversationView[]): Promise<readonly OmnichannelConversationView[]> {
+    if (rows.length === 0) return [];
+    const ids = rows.map((row) => row.id);
+    const workspace = new Map<string, WorkspaceRow>();
+    for (const row of (await sql<WorkspaceRow>`
+      select id, priority, category, language, tags, current_queue_id, assignment_version,
+             snoozed_until, closed_at, last_message_at, version
+      from voice_conversations where id in (${sql.join(ids.map((id) => sql.val(id)))})
+    `.execute(this.database.db)).rows) {
+      workspace.set(row.id, row);
+    }
+    const threads = await this.threadsFor(ids);
+    return rows.map((row) => {
+      const extra = workspace.get(row.id);
+      return {
+        ...row,
+        ...(extra === undefined ? emptyWorkspaceFields() : toWorkspaceFields(extra)),
+        threads: threads.get(row.id) ?? [],
+      };
+    });
+  }
+
+  private async threadsFor(ids: readonly string[]): Promise<Map<string, OmnichannelThreadView[]>> {
+    const map = new Map<string, OmnichannelThreadView[]>();
+    if (ids.length === 0) return map;
+    const rows = (await sql<{
+      id: string;
+      conversation_id: string;
+      channel: string;
+      external_thread_id: string | null;
+      address: string | null;
+      provider_identity: string | null;
+      created_at: Date;
+    }>`
+      select id, conversation_id, channel, external_thread_id, address, provider_identity, created_at
+      from voice_conversation_threads
+      where conversation_id in (${sql.join(ids.map((id) => sql.val(id)))})
+      order by created_at asc
+    `.execute(this.database.db)).rows;
+    for (const row of rows) {
+      const list = map.get(row.conversation_id) ?? [];
+      list.push({
+        id: row.id,
+        channel: row.channel,
+        externalThreadId: row.external_thread_id,
+        address: row.address,
+        providerIdentity: row.provider_identity,
+        createdAt: new Date(row.created_at).toISOString(),
+      });
+      map.set(row.conversation_id, list);
+    }
+    return map;
+  }
+}
+
+function toWorkspaceFields(row: WorkspaceRow): Omit<OmnichannelConversationView, keyof InboxConversationView | 'threads'> {
+  return {
+    priority: row.priority,
+    category: row.category,
+    language: row.language,
+    tags: Array.isArray(row.tags) ? row.tags.filter((tag): tag is string => typeof tag === 'string') : [],
+    currentQueueId: row.current_queue_id,
+    assignmentVersion: row.assignment_version,
+    snoozedUntil: row.snoozed_until === null ? null : new Date(row.snoozed_until).toISOString(),
+    closedAt: row.closed_at === null ? null : new Date(row.closed_at).toISOString(),
+    lastMessageAt: row.last_message_at === null ? null : new Date(row.last_message_at).toISOString(),
+    version: row.version,
+  };
+}
+
+function emptyWorkspaceFields(): Omit<OmnichannelConversationView, keyof InboxConversationView | 'threads'> {
+  return {
+    priority: 'normal',
+    category: null,
+    language: null,
+    tags: [],
+    currentQueueId: null,
+    assignmentVersion: 1,
+    snoozedUntil: null,
+    closedAt: null,
+    lastMessageAt: null,
+    version: 1,
+  };
+}

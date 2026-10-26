@@ -13,7 +13,8 @@
 | OM.3 — Persistence model & additive migrations | ✅ COMPLETE | `database/migrations/077_phase19_omnichannel_persistence.sql`, `omnichannel-persistence.test.ts`, voice architecture §4.1 |
 | OM.4 — Adapter & capability registry | ✅ COMPLETE | Voice barrel exports (E1), `unsupported` category (E3), `inbox.read`/`message.send` contracts (E14), `OmnichannelCapabilityService` + `action/channels`, page catalog card, `omnichannel-adapter.test.ts` |
 | OM.5 — Inbound webhook/event receipt pipeline | ✅ COMPLETE | `omnichannel-webhook.controller.ts` (delegates to the shared Voice ingress), E2 raw-body hook, `omnichannel-ingress.test.ts` |
-| OM.6+ | ⏸ Not started | — |
+| OM.6 — Canonical conversation/thread/message services | ✅ COMPLETE | thread attach + continuity + reconcile in Voice; `OmnichannelConversationService` facade + conversation endpoints; `omnichannel-conversation.test.ts` |
+| OM.7+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -26,6 +27,29 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.6 (Canonical conversation, thread and message services)
+
+- Owner-side (VoiceCommunications): `VoiceMessagingService` attaches inbound/outbound messages to a
+  channel thread (E6) — `findThread` → existing conversation, else the conversation's own thread,
+  else the address-based continuity rule (same normalized address on another open channel attaches a
+  thread; closed/spam never reopened; no merging by Contact), then `attachThread` with the partial
+  unique indexes as the race guard. Thread id is stored on `voice_messages.thread_id`; participants
+  carry account/channel; inbound timestamps are validated; `last_message_at` is maintained.
+- E7: `getMessageStatus` added to `VoiceProviderAdapter` (Twilio reads the Message resource; the
+  simulator scripts its answer), and `VoiceMessagingService.reconcileMessage` polls only non-terminal
+  messages (rank guard) and refuses `unsupported` when the provider offers no lookup — the send is
+  never repeated to "find out".
+- Omnichannel: `OmnichannelConversationService` composes the exported services (list/timeline/
+  threads/mark-read/status/assign/reconcile) and adds the read-only workspace projection
+  (priority/tags/queue/snooze/version + threads). Endpoints:
+  `GET action/conversations`, `…/:id/timeline`, `…/:id/threads`, `POST …/:id/read`,
+  `…/:id/status`, `…/:id/assign`, `POST action/messages/:id/reconcile`. No SQL write to the records
+  lives in the module (source-scan test).
+- Checks: `omnichannel-conversation.test.ts` 6/6 through the real webhook→worker pipeline; full
+  regression 13 files / 176 tests green; typecheck + eslint clean. Test data: `agent_test_om6_*`
+  account, consent rows for one phone, Voice settings row snapshotted and restored byte-for-byte.
+
 
 ### 2026-10-26 — Phase 19-OM.5 (Inbound webhook/event receipt pipeline)
 
