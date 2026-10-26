@@ -32,11 +32,6 @@ export const noopMenuInvalidator: MenuInvalidator = () => {
   /* no menu to drop outside the full application */
 };
 
-/** Default binding shipped in the barrel; `AppModule` overrides it with the real menu invalidator. */
-export const noopOmnichannelMenuInvalidator: MenuInvalidator = () => {
-  /* no menu to drop in an isolated module boot */
-};
-
 const OmnichannelFeaturesSchema = z
   .object({
     workspace: z.boolean().default(true),

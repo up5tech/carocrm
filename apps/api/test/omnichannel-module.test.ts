@@ -82,6 +82,12 @@ beforeAll(async () => {
     .where('name', '=', SETTINGS_ROW)
     .executeTakeFirst();
   previousSettings = row === undefined ? null : JSON.stringify(row.data);
+  // The suite starts from a *fresh installation*: no stored row, validated defaults, workspace on.
+  // The assertions below only mean something against that precondition, and leaving a stored
+  // `workspace=false` behind would poison every later run through its own restore. The row is put
+  // back exactly as found in `afterAll` (AGENTS.md §3.3).
+  if (row !== undefined) await ctx.database.db.deleteFrom('app_settings').where('name', '=', SETTINGS_ROW).execute();
+  settingsService().invalidate();
   await createTestRole(ctx, { id: ROLE_NONE, name: `AGENT_TEST OM2 none ${RUN}`, permissions: {} });
   await createTestRole(ctx, {
     id: ROLE_INBOX,
