@@ -22,7 +22,8 @@
 | OM.12 — Canned replies & drafts | ✅ COMPLETE | snippet store extension (team/language/usage, plain-text), `OmnichannelSnippetService` + drafts (`omnichannel_drafts`), composer picker + autosave, `omnichannel-snippets.test.ts` |
 | OM.13 — VoiceCommunications integration | ✅ COMPLETE | call context endpoints + voice catalog row + recent-calls panel, `omnichannel-calls.test.ts` |
 | OM.14 — WhatsApp/SMS integration | ✅ COMPLETE | `supported` flag + MMS unsupported row, localized refusal reasons, policy suite `omnichannel-whatsapp.test.ts`, CF-2 doc re-check |
-| OM.15+ | ⏸ Not started | — |
+| OM.15 — Messenger/Instagram (conditional) | ✅ COMPLETE — verdict **NO-GO** (nothing implemented) | fresh Meta doc review 2026-10-26, CF-8/CF-9 flip conditions, `omnichannel-meta-gate.test.ts` fail-closed enforcement |
+| OM.16+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -35,6 +36,18 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.15 (Meta Messenger/Instagram — conditional)
+
+- Official docs re-checked: Messenger needs a reviewed Meta app + published Page + a webhook acking
+  within 20 s; Instagram needs a professional account + `instagram_business_basic`/
+  `instagram_business_manage_messages` (app review) + the 24 h reply window. No app/Page/account/review
+  exists here → **NO-GO**, no adapter written (plan §4.3).
+- Enforcement instead of pretence: no registry keys, no catalog rows, DB CHECK refuses forged
+  `messenger`/`instagram` conversations; the shared webhook/signature/dedup groundwork would be reused
+  unchanged if the gate ever opens. Flip conditions recorded in `channel-feasibility.md` CF-8/CF-9.
+- Checks: `omnichannel-meta-gate.test.ts` 3/3; no fixtures created.
+
 
 ### 2026-10-26 — Phase 19-OM.14 (WhatsApp/SMS conversation integration)
 

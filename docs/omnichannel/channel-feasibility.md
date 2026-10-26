@@ -120,9 +120,16 @@
 
 ## CF-8 — Meta Messenger
 
+> **19-OM.15 verdict (2026-10-26): NO-GO / BLOCKED — unchanged.** Flip conditions (all operator-side):
+> a Meta app owned by the business, business verification, a **published Facebook Page**, app review
+> approval for the messaging scopes, a webhook endpoint reachable within the 20-second acknowledgement
+> rule, and a test Page/user for the reviewer. Until every item exists, the channel stays
+> "not implemented": no adapter key exists (a forged `messenger` conversation is refused by the
+> database channel constraint) and no UI surface offers it.
+
 | Field | Value |
 | --- | --- |
-| Checked | 2026-10-26 (plan §16 Send API reference; no code exists) |
+| Checked | **Re-verified 2026-10-26 at 19-OM.15** against Meta's official Messenger Platform app-review docs: a Messenger app must pass **Meta app review before it can be made publicly available**; the associated **Facebook Page must be published**; the webhook must answer `200 OK` within **20 seconds**; Platform Policies and Community Standards apply; gated features need reviewer test credentials/trigger phrases. No Meta app, Page, business verification or review exists for this deployment. |
 | Official docs | https://developers.facebook.com/docs/messenger-platform (Send API, Webhooks, Handover, rate limits) |
 | Account type | Facebook **Page** (professional), Meta app, Page access token |
 | Review/approval | App review with `pages_messaging` permission, business verification, 24h messaging window + tagged-message rules; no assumption that consumer DMs imply business API access (plan §0.1) |
@@ -131,9 +138,15 @@
 
 ## CF-9 — Instagram (professional messaging)
 
+> **19-OM.15 verdict (2026-10-26): NO-GO / EXCLUDED — unchanged.** Flip conditions (all
+> operator-side): an Instagram **professional account** linked to the app, `instagram_business_basic`
+> + `instagram_business_manage_messages` granted through app review, business verification, and
+> acceptance of the 24-hour window/message-type rules. No adapter key or UI surface exists today; a
+> forged `instagram` conversation is refused by the database channel constraint.
+
 | Field | Value |
 | --- | --- |
-| Checked | 2026-10-26 (no code, no live-docs re-check performed this pass) |
+| Checked | **Re-verified 2026-10-26 at 19-OM.15** against Meta's official Instagram messaging docs: the channel requires an **Instagram professional account** and the permissions **`instagram_business_basic` + `instagram_business_manage_messages`** (app review), with a **24-hour reply window** after the user's last contact (ads: up to 7 days) and supported types text/images/audio/video/files/stickers/reactions/posts. No professional account, app or review exists for this deployment. |
 | Official docs | Instagram messaging is exposed through the Messenger Platform surface (plan §16 Messenger link); Instagram API with Facebook Login messaging docs |
 | Account type | Instagram **professional** account linked to a Facebook Page/app; advanced permissions |
 | Review/approval | App review + advanced permission grant per audience; policies tighten frequently |

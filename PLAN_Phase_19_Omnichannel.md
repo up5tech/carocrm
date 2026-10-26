@@ -1734,6 +1734,31 @@ Acceptance:
 
 ### Phase 19-OM.15 — Meta Messenger/Instagram Adapters (Conditional)
 
+**Status: COMPLETE — conditional review performed, verdict NO-GO (no adapter implemented, as the
+gate requires).** The official Meta documentation was re-checked on **2026-10-26**:
+- **Messenger** requires a Meta app that has passed **app review before public availability**, a
+  **published Facebook Page**, a webhook answering `200` within 20 seconds, and Platform
+  Policy/Community Standards compliance (gated features also need reviewer test credentials).
+- **Instagram** requires an **Instagram professional account** and the permissions
+  `instagram_business_basic` + `instagram_business_manage_messages` (app review), a **24-hour reply
+  window** after the user's last contact (ads up to 7 days), and its supported message types.
+
+None of these operator-side prerequisites exists for this deployment (no app, no Page/professional
+account, no review), so implementing an adapter now would be an unsupported connector presented as
+usable — exactly what plan §4.3 forbids. The recorded flip conditions (all operator-side) are in
+`channel-feasibility.md` CF-8/CF-9. **Nothing was implemented**; instead the decision is enforced:
+no adapter key resolves (`registry.has('messenger'|'instagram') === false`, unknown keys fail closed
+to `disabled`), the channel catalog offers no such channel, and the database's channel CHECK refuses
+a conversation on either channel. The webhook/signature/dedup groundwork the task list describes is
+already shared (E2 raw-body, `voice_webhook_events` dedup, adapter-verified signatures) and would be
+used unchanged if a connector ever passes the gate.
+
+Verification: `omnichannel-meta-gate.test.ts` 3/3 — fail-closed registry, absent catalog rows, and a
+refused forged conversation at the storage boundary (with a zero-row aftermath assertion). No
+fixtures are created by this phase.
+
+**Goal:** Add official Meta messaging channels only if current account eligibility and app permissions allow the intended use case.
+
 **Goal:** Add official Meta messaging channels only if current account eligibility and app permissions allow the intended use case.
 
 Tasks:
