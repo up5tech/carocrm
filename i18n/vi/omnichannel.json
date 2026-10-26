@@ -8,7 +8,7 @@
   },
   "page": {
     "title": "Đa kênh",
-    "subtitle": "Không gian làm việc đa kênh của nhân viên. Giai đoạn 19-OM.2 đã đăng ký module; các màn hình hội thoại sẽ đến ở những giai đoạn tiếp theo.",
+    "subtitle": "Hộp thư chung cho hội thoại từ các kênh đang bật, kèm bằng chứng định danh, phân công và luồng kênh.",
     "loadFailed": "Không tải được không gian làm việc Đa kênh.",
     "denied": "Bạn không có quyền hộp thư Đa kênh, nên không gian làm việc đóng với tài khoản này.",
     "ready": "Nền tảng đã sẵn sàng",
@@ -20,9 +20,6 @@
     "missingDependencies": "Thiếu thành phần nền tảng bắt buộc.",
     "warnings": "Cảnh báo cấu hình",
     "comingSoon": "Không gian làm việc còn chờ những gì",
-    "comingIngress": "Kênh đầu tiên: inbound và trả lời Twilio SMS/WhatsApp qua facade của Thoại & Liên lạc (19-OM.4–19-OM.8).",
-    "comingInbox": "Hộp thư nhân viên: danh sách hội thoại, dòng thời gian, ô soạn tin, phân công và bàn giao (19-OM.10–19-OM.17).",
-    "comingWidget": "Chat website: widget khách hàng và mô hình phiên ẩn danh (19-OM.9).",
     "dependencies": "Nền tảng hệ thống",
     "integrations": "Các module workspace xây dựng trên",
     "myRights": "Quyền của tôi",
@@ -44,7 +41,12 @@
       "evidence": "Bằng chứng",
       "status": "Trạng thái",
       "right": "Quyền"
-    }
+    },
+    "tabInbox": "Hộp thư",
+    "tabDiagnostics": "Chẩn đoán",
+    "pendingQueues": "Hàng đợi và định tuyến mở rộng từ Bàn phục vụ (19-OM.11).",
+    "pendingRealtime": "Cập nhật trực tiếp thay thế polling bằng realtime dùng chung (19-OM.12).",
+    "pendingHandoff": "Bàn giao Bàn phục vụ tạo hoặc liên kết Case (19-OM.17)."
   },
   "chat": {
     "title": "Trò chuyện với chúng tôi",
@@ -56,5 +58,62 @@
     "closed": "Kênh chat hiện đang đóng.",
     "unavailable": "Không thể bắt đầu trò chuyện. Vui lòng thử lại sau.",
     "consentAccept": "Tôi đồng ý"
+  },
+  "inbox": {
+    "view": "Chế độ xem",
+    "views": {
+      "all": "Tất cả hội thoại",
+      "mine": "Của tôi",
+      "unassigned": "Chưa phân công",
+      "waiting_customer": "Chờ khách hàng",
+      "waiting_agent": "Chờ nhân viên",
+      "snoozed": "Tạm hoãn",
+      "closed": "Đã đóng"
+    },
+    "channel": "Kênh",
+    "priority": "Ưu tiên",
+    "priorities": {
+      "low": "Thấp",
+      "normal": "Bình thường",
+      "high": "Cao",
+      "urgent": "Khẩn"
+    },
+    "tag": "Thẻ",
+    "unreadOnly": "Chỉ chưa đọc",
+    "refresh": "Tải lại",
+    "listTitle": "Hội thoại",
+    "empty": "Không có hội thoại khớp bộ lọc.",
+    "loadFailed": "Không tải được danh sách hội thoại.",
+    "selectPrompt": "Chọn một hội thoại để xem dòng thời gian.",
+    "snoozed": "Tạm hoãn",
+    "statuses": {
+      "open": "Mở",
+      "pending_customer": "Chờ khách hàng",
+      "pending_internal": "Chờ nhân viên",
+      "resolved": "Đã giải quyết",
+      "closed": "Đã đóng",
+      "spam": "Spam"
+    },
+    "status": "Trạng thái",
+    "assignToMe": "Giao cho tôi",
+    "unassign": "Bỏ phân công",
+    "unassignedTag": "Chưa phân công",
+    "assignedTag": "Đã phân công",
+    "assignReason": "Phân công từ hộp thư Đa kênh",
+    "unassignReason": "Bỏ phân công từ hộp thư Đa kênh",
+    "noMessages": "Chưa có tin nhắn.",
+    "internalNote": "Ghi chú nội bộ",
+    "sent": "Đã gửi",
+    "received": "Đã nhận",
+    "placeholder": "Nhập trả lời…",
+    "send": "Gửi",
+    "addNote": "Thêm ghi chú",
+    "threads": "Luồng kênh",
+    "identity": "Định danh khách hàng",
+    "identityUnavailable": "Chưa thể rà soát định danh cho tài khoản này.",
+    "hiddenMatches": "Kết quả không đọc được",
+    "linkTo": "Liên kết",
+    "linkReason": "Liên kết từ hộp thư Đa kênh",
+    "actionFailed": "Thao tác thất bại."
   }
 }

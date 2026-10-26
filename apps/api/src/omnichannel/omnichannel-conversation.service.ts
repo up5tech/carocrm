@@ -27,6 +27,9 @@ import { OmnichannelCapabilityService } from './omnichannel-capability.service.j
  */
 
 export interface OmnichannelConversationView extends InboxConversationView {
+  /** The customer participant the agent is speaking with (address is the channel identity). */
+  readonly customerAddress: string | null;
+  readonly customerName: string | null;
   readonly priority: string;
   readonly category: string | null;
   readonly language: string | null;
@@ -48,6 +51,12 @@ export interface OmnichannelThreadView {
   readonly address: string | null;
   readonly providerIdentity: string | null;
   readonly createdAt: string;
+}
+
+interface CustomerRow {
+  conversation_id: string;
+  address: string;
+  display_name: string | null;
 }
 
 interface WorkspaceRow {
@@ -97,7 +106,7 @@ export class OmnichannelConversationService {
 
   async setStatus(conversationId: string, status: string): Promise<OmnichannelConversationView> {
     const updated = await this.inbox.setStatus(conversationId, status);
-    return (await this.enrich([updated]))[0] ?? { ...updated, ...emptyWorkspaceFields(), threads: [] };
+    return (await this.enrich([updated]))[0] ?? { ...updated, customerAddress: null, customerName: null, ...emptyWorkspaceFields(), threads: [] };
   }
 
   async assign(
@@ -105,7 +114,7 @@ export class OmnichannelConversationService {
     input: { readonly userId?: string | null | undefined; readonly teamId?: string | null | undefined; readonly reason?: string | undefined },
   ): Promise<OmnichannelConversationView> {
     const updated = await this.inbox.assign(conversationId, input);
-    return (await this.enrich([updated]))[0] ?? { ...updated, ...emptyWorkspaceFields(), threads: [] };
+    return (await this.enrich([updated]))[0] ?? { ...updated, customerAddress: null, customerName: null, ...emptyWorkspaceFields(), threads: [] };
   }
 
   /**
@@ -187,10 +196,22 @@ export class OmnichannelConversationService {
       workspace.set(row.id, row);
     }
     const threads = await this.threadsFor(ids);
+    const customers = new Map<string, CustomerRow>();
+    for (const row of (await sql<CustomerRow>`
+      select conversation_id, address, display_name from voice_conversation_participants
+      where conversation_id in (${sql.join(ids.map((id) => sql.val(id)))})
+        and role = 'customer'
+      order by created_at asc
+    `.execute(this.database.db)).rows) {
+      if (!customers.has(row.conversation_id)) customers.set(row.conversation_id, row);
+    }
     return rows.map((row) => {
       const extra = workspace.get(row.id);
+      const customer = customers.get(row.id);
       return {
         ...row,
+        customerAddress: customer?.address ?? null,
+        customerName: customer?.display_name ?? null,
         ...(extra === undefined ? emptyWorkspaceFields() : toWorkspaceFields(extra)),
         threads: threads.get(row.id) ?? [],
       };
@@ -230,7 +251,9 @@ export class OmnichannelConversationService {
   }
 }
 
-function toWorkspaceFields(row: WorkspaceRow): Omit<OmnichannelConversationView, keyof InboxConversationView | 'threads'> {
+type WorkspaceOnly = Omit<OmnichannelConversationView, keyof InboxConversationView | 'threads' | 'customerAddress' | 'customerName'>;
+
+function toWorkspaceFields(row: WorkspaceRow): WorkspaceOnly {
   return {
     priority: row.priority,
     category: row.category,
@@ -245,7 +268,7 @@ function toWorkspaceFields(row: WorkspaceRow): Omit<OmnichannelConversationView,
   };
 }
 
-function emptyWorkspaceFields(): Omit<OmnichannelConversationView, keyof InboxConversationView | 'threads'> {
+function emptyWorkspaceFields(): WorkspaceOnly {
   return {
     priority: 'normal',
     category: null,

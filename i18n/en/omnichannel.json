@@ -8,7 +8,7 @@
   },
   "page": {
     "title": "Omnichannel",
-    "subtitle": "The cross-channel agent workspace. Phase 19-OM.2 registered the module; the conversation surfaces arrive with the following sub-phases.",
+    "subtitle": "The shared agent inbox for conversations from the enabled channels, with identity evidence, assignment and channel threads.",
     "loadFailed": "The Omnichannel workspace could not be loaded.",
     "denied": "You do not hold the Omnichannel inbox capability, so the workspace is closed for this account.",
     "ready": "Foundation in place",
@@ -20,9 +20,6 @@
     "missingDependencies": "Required platform pieces are missing.",
     "warnings": "Configuration warnings",
     "comingSoon": "What the workspace is still waiting for",
-    "comingIngress": "The first channel: Twilio SMS and WhatsApp inbound and reply, over the Voice & Communications facade (19-OM.4–19-OM.8).",
-    "comingInbox": "The agent inbox: conversation list, timeline, composer, assignment and hand-off (19-OM.10–19-OM.17).",
-    "comingWidget": "Website chat: the visitor widget and its anonymous session model (19-OM.9).",
     "dependencies": "Platform foundation",
     "integrations": "Modules the workspace builds on",
     "myRights": "My capabilities",
@@ -44,7 +41,12 @@
       "evidence": "Evidence",
       "status": "Status",
       "right": "Capability"
-    }
+    },
+    "tabInbox": "Inbox",
+    "tabDiagnostics": "Diagnostics",
+    "pendingQueues": "Queues and routing extend Service Desk (19-OM.11).",
+    "pendingRealtime": "Live updates replace polling with the shared realtime seam (19-OM.12).",
+    "pendingHandoff": "Service Desk hand-off creates or links a Case (19-OM.17)."
   },
   "chat": {
     "title": "Chat with us",
@@ -56,5 +58,62 @@
     "closed": "The chat is currently closed.",
     "unavailable": "The chat could not be started. Please try again later.",
     "consentAccept": "I agree"
+  },
+  "inbox": {
+    "view": "View",
+    "views": {
+      "all": "All conversations",
+      "mine": "My conversations",
+      "unassigned": "Unassigned",
+      "waiting_customer": "Waiting on customer",
+      "waiting_agent": "Waiting on agent",
+      "snoozed": "Snoozed",
+      "closed": "Closed"
+    },
+    "channel": "Channel",
+    "priority": "Priority",
+    "priorities": {
+      "low": "Low",
+      "normal": "Normal",
+      "high": "High",
+      "urgent": "Urgent"
+    },
+    "tag": "Tag",
+    "unreadOnly": "Unread only",
+    "refresh": "Refresh",
+    "listTitle": "Conversations",
+    "empty": "No conversation matches these filters.",
+    "loadFailed": "The conversation list could not be loaded.",
+    "selectPrompt": "Select a conversation to open its timeline.",
+    "snoozed": "Snoozed",
+    "statuses": {
+      "open": "Open",
+      "pending_customer": "Waiting on customer",
+      "pending_internal": "Waiting on agent",
+      "resolved": "Resolved",
+      "closed": "Closed",
+      "spam": "Spam"
+    },
+    "status": "Status",
+    "assignToMe": "Assign to me",
+    "unassign": "Unassign",
+    "unassignedTag": "Unassigned",
+    "assignedTag": "Assigned",
+    "assignReason": "Assigned from the Omnichannel inbox",
+    "unassignReason": "Unassigned from the Omnichannel inbox",
+    "noMessages": "No messages yet.",
+    "internalNote": "Internal note",
+    "sent": "Sent",
+    "received": "Received",
+    "placeholder": "Write a reply…",
+    "send": "Send",
+    "addNote": "Add note",
+    "threads": "Channel threads",
+    "identity": "Customer identity",
+    "identityUnavailable": "Identity review is not available for this account.",
+    "hiddenMatches": "Unreadable matches",
+    "linkTo": "Link",
+    "linkReason": "Linked from the Omnichannel inbox",
+    "actionFailed": "The action failed."
   }
 }

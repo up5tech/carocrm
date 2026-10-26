@@ -1,6 +1,6 @@
 import { ReloadOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Row, Space, Switch, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Col, Row, Space, Switch, Table, Tabs, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import { api } from '../api/client.js';
@@ -10,6 +10,7 @@ import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { PageHeader } from '../components/PageHeader.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
 import { t } from '../state/i18n.js';
+import { InboxPanel } from './omnichannel/InboxPanel.js';
 
 /**
  * Phase 19-OM.2 — the Omnichannel workspace shell
@@ -30,7 +31,7 @@ import { t } from '../state/i18n.js';
 type DependencyRow = OmnichannelHealthView['dependencies'][number];
 type RightRow = OmnichannelHealthView['callerRights'][number];
 
-export function OmnichannelPage() {
+function DiagnosticsPanel() {
   const queryClient = useQueryClient();
 
   const capabilities = useQuery({
@@ -122,31 +123,25 @@ export function OmnichannelPage() {
 
   return (
     <>
-      <PageHeader
-        title={t('omnichannel.page.title')}
-        subtitle={t('omnichannel.page.subtitle')}
-        actions={
-          <Space>
-            <Tag color={view.workspaceReady ? 'success' : 'warning'}>
-              {view.workspaceReady ? t('omnichannel.page.ready') : t('omnichannel.page.notReady')}
-            </Tag>
-            {canAdmin ? (
-              <Space size={6}>
-                <Typography.Text type="secondary">{t('omnichannel.page.workspaceSwitch')}</Typography.Text>
-                <Switch
-                  checked={workspace}
-                  loading={setWorkspace.isPending}
-                  onChange={(enabled) => setWorkspace.mutate(enabled)}
-                  aria-label={t('omnichannel.page.workspaceSwitch')}
-                />
-              </Space>
-            ) : null}
-            <Button icon={<ReloadOutlined />} onClick={() => void health.refetch()}>
-              {t('omnichannel.page.reload')}
-            </Button>
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Tag color={view.workspaceReady ? 'success' : 'warning'}>
+          {view.workspaceReady ? t('omnichannel.page.ready') : t('omnichannel.page.notReady')}
+        </Tag>
+        {canAdmin ? (
+          <Space size={6}>
+            <Typography.Text type="secondary">{t('omnichannel.page.workspaceSwitch')}</Typography.Text>
+            <Switch
+              checked={workspace}
+              loading={setWorkspace.isPending}
+              onChange={(enabled) => setWorkspace.mutate(enabled)}
+              aria-label={t('omnichannel.page.workspaceSwitch')}
+            />
           </Space>
-        }
-      />
+        ) : null}
+        <Button icon={<ReloadOutlined />} onClick={() => void health.refetch()}>
+          {t('omnichannel.page.reload')}
+        </Button>
+      </Space>
 
       {!workspace ? (
         <Alert type="warning" showIcon message={t('omnichannel.page.disabled')} description={t('omnichannel.page.disabledHint')} style={{ marginBottom: 16 }} />
@@ -170,9 +165,9 @@ export function OmnichannelPage() {
         message={t('omnichannel.page.comingSoon')}
         description={
           <ul style={{ margin: 0, paddingLeft: 18 }}>
-            <li>{t('omnichannel.page.comingIngress')}</li>
-            <li>{t('omnichannel.page.comingInbox')}</li>
-            <li>{t('omnichannel.page.comingWidget')}</li>
+            <li>{t('omnichannel.page.pendingQueues')}</li>
+            <li>{t('omnichannel.page.pendingRealtime')}</li>
+            <li>{t('omnichannel.page.pendingHandoff')}</li>
           </ul>
         }
         style={{ marginBottom: 16 }}
@@ -233,6 +228,25 @@ export function OmnichannelPage() {
           </Space>
         </Col>
       </Row>
+    </>
+  );
+}
+
+/**
+ * Phase 19-OM.10 — the module page: the inbox is the daily surface, diagnostics stay one tab away
+ * (an administrator can still see readiness, the channel catalog, dependencies and the settings).
+ */
+export function OmnichannelPage() {
+  return (
+    <>
+      <PageHeader title={t('omnichannel.page.title')} subtitle={t('omnichannel.page.subtitle')} />
+      <Tabs
+        defaultActiveKey="inbox"
+        items={[
+          { key: 'inbox', label: t('omnichannel.page.tabInbox'), children: <InboxPanel /> },
+          { key: 'diagnostics', label: t('omnichannel.page.tabDiagnostics'), children: <DiagnosticsPanel /> },
+        ]}
+      />
     </>
   );
 }

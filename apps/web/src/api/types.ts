@@ -4345,3 +4345,98 @@ export interface OmnichannelCapabilityCatalog {
   readonly catalogVersion: number;
   readonly channels: readonly OmnichannelChannelCapabilityView[];
 }
+
+/** Phase 19-OM.10 — the agent inbox projection (mirrors omnichannel-conversation.service.ts). */
+export interface OmnichannelThreadView {
+  readonly id: string;
+  readonly channel: string;
+  readonly externalThreadId: string | null;
+  readonly address: string | null;
+  readonly providerIdentity: string | null;
+  readonly createdAt: string;
+}
+
+export interface OmnichannelConversationView {
+  readonly id: string;
+  readonly accountKey: string;
+  readonly channel: string;
+  readonly status: string;
+  readonly subject: string | null;
+  readonly externalThreadId: string | null;
+  readonly unreadCount: number;
+  readonly assignedUserId: string | null;
+  readonly assignedTeamId: string | null;
+  readonly lastActivityAt: string | null;
+  readonly lastInboundAt: string | null;
+  readonly relatedEntityType: string | null;
+  readonly relatedEntityId: string | null;
+  readonly caseId: string | null;
+  readonly archived: boolean;
+  readonly customerAddress: string | null;
+  readonly customerName: string | null;
+  readonly priority: string;
+  readonly category: string | null;
+  readonly language: string | null;
+  readonly tags: readonly string[];
+  readonly currentQueueId: string | null;
+  readonly assignmentVersion: number;
+  readonly snoozedUntil: string | null;
+  readonly closedAt: string | null;
+  readonly lastMessageAt: string | null;
+  readonly version: number;
+  readonly threads: readonly OmnichannelThreadView[];
+}
+
+export interface OmnichannelConversationPage {
+  readonly list: readonly OmnichannelConversationView[];
+  readonly total: number;
+}
+
+export interface OmnichannelTimelineEntry {
+  readonly kind: 'message' | 'event';
+  readonly id: string;
+  readonly at: string;
+  readonly message?: {
+    readonly direction: 'inbound' | 'outbound';
+    readonly body: string | null;
+    readonly state: string;
+    readonly isInternalNote: boolean;
+    readonly authorUserId: string | null;
+    readonly channel: string;
+  } | undefined;
+  readonly event?: {
+    readonly kind: string;
+    readonly actorUserId: string | null;
+    readonly actorType: string;
+    readonly fromValue: string | null;
+    readonly toValue: string | null;
+    readonly detail: string | null;
+  } | undefined;
+}
+
+export interface OmnichannelTimelinePage {
+  readonly entries: readonly OmnichannelTimelineEntry[];
+}
+
+export interface OmnichannelIdentityParticipant {
+  readonly participantId: string;
+  readonly address: string;
+  readonly entityType: string | null;
+  readonly entityId: string | null;
+  readonly displayName: string | null;
+  readonly verificationState: string;
+  readonly linkConfidence: string;
+  readonly linkReason: string | null;
+  readonly sourceProvenance: string | null;
+  readonly lastSeenAt: string | null;
+  readonly resolution: string;
+  readonly candidates: readonly { readonly entityType: string; readonly id: string; readonly name: string }[];
+  readonly hiddenMatches: number;
+  readonly truncated: boolean;
+}
+
+export interface OmnichannelIdentityReview {
+  readonly conversationId: string;
+  readonly channel: string;
+  readonly participants: readonly OmnichannelIdentityParticipant[];
+}

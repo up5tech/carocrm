@@ -17,7 +17,8 @@
 | OM.7 — Identity resolution & record linking | ✅ COMPLETE | `OmnichannelIdentityService` + identity endpoints, migration 078 phone index, `omnichannel-identity.test.ts` |
 | OM.8 — Outbound command & send state | ✅ COMPLETE | workspace send endpoint (facade pre-checks), timeout → `unknown` in Voice, `omnichannel-send.test.ts` |
 | OM.9 — Website chat channel | ✅ COMPLETE | migration 079 visitor sessions + web-chat connection, local adapter, public `/chat` API + widget page, `omnichannel-webchat.test.ts` |
-| OM.10+ | ⏸ Not started | — |
+| OM.10 — Agent inbox workspace | ✅ COMPLETE | two-tab module page, server-side workspace filters, timeline/composer/identity panels, `omnichannel-inbox.test.ts` |
+| OM.11+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -30,6 +31,22 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.10 (Agent inbox workspace)
+
+- Owner-side: `VoiceInboxService.list` gained the workspace filters (priority, language, tag,
+  unread-only, snooze state, queue) plus an `unassigned` scope — all SQL, ACL-scoped, mapped to the
+  migration-077 indexes; totals remain server-computed.
+- Facade projection: each conversation now carries the customer participant (name/address) beside the
+  OM.6 workspace fields and threads.
+- UI: `/omnichannel` became Tabs (Inbox default, Diagnostics unchanged); `InboxPanel` implements the
+  filter bar, list with unread/priority/snooze markers, escaped-plain-text timeline with internal-note
+  distinction, reply/note composer, status and assign/unassign actions, channel threads and identity
+  review with linking. Polling (10 s list / 8 s timeline) is the documented interim until E11.
+- Checks: `omnichannel-inbox.test.ts` 3/3; regression 14 files / 127 tests; typecheck/lint/ui-
+  conventions/build clean; live browser pass (list + timeline + channel filter empty state, no
+  console errors). Cursor pagination and the D3 realtime swap are recorded as deferred roadmap items.
+
 
 ### 2026-10-26 — Phase 19-OM.9 (Website chat channel)
 

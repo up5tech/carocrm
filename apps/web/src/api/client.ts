@@ -137,9 +137,14 @@ import type {
   NavigationTree,
   OmnichannelCapabilitiesView,
   OmnichannelCapabilityCatalog,
+  OmnichannelConversationPage,
+  OmnichannelConversationView,
   OmnichannelHealthView,
+  OmnichannelIdentityReview,
   OmnichannelNavView,
   OmnichannelSettingsView,
+  OmnichannelThreadView,
+  OmnichannelTimelinePage,
   PortalContext,
   PortalDashboardRow,
   PortalNavItemRow,
@@ -2121,6 +2126,56 @@ export const api = {
   omnichannelHealth: () => request<OmnichannelHealthView>('/Omnichannel/action/health'),
   omnichannelCapabilities: () => request<OmnichannelCapabilitiesView>('/Omnichannel/action/capabilities'),
   omnichannelChannels: () => request<OmnichannelCapabilityCatalog>('/Omnichannel/action/channels'),
+  omnichannelConversations: (query: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    channel?: string;
+    assignee?: string;
+    priority?: string;
+    language?: string;
+    tag?: string;
+    unreadOnly?: boolean;
+    snoozed?: 'only' | 'exclude';
+    queueId?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    if (query.offset !== undefined) params.set('offset', String(query.offset));
+    for (const key of ['status', 'channel', 'assignee', 'priority', 'language', 'tag', 'queueId'] as const) {
+      const value = query[key];
+      if (value !== undefined && value !== '') params.set(key, value);
+    }
+    if (query.unreadOnly === true) params.set('unread', 'true');
+    if (query.snoozed !== undefined) params.set('snoozed', query.snoozed);
+    const suffix = params.toString();
+    return request<OmnichannelConversationPage>(`/Omnichannel/action/conversations${suffix === '' ? '' : `?${suffix}`}`);
+  },
+  omnichannelTimeline: (conversationId: string, query: { limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (query.limit !== undefined) params.set('limit', String(query.limit));
+    if (query.offset !== undefined) params.set('offset', String(query.offset));
+    const suffix = params.toString();
+    return request<OmnichannelTimelinePage>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/timeline${suffix === '' ? '' : `?${suffix}`}`);
+  },
+  omnichannelThreads: (conversationId: string) =>
+    request<{ readonly list: readonly OmnichannelThreadView[] }>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/threads`),
+  omnichannelIdentity: (conversationId: string) =>
+    request<OmnichannelIdentityReview>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/identity`),
+  omnichannelLinkIdentity: (conversationId: string, input: { entityType: 'Contact' | 'Lead'; entityId: string; reason: string; participantId?: string }) =>
+    request<OmnichannelIdentityReview>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/identity/link`, post(input)),
+  omnichannelUnlinkIdentity: (conversationId: string, input: { reason: string; participantId?: string }) =>
+    request<OmnichannelIdentityReview>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/identity/unlink`, post(input)),
+  omnichannelSendMessage: (
+    conversationId: string,
+    input: { body: string; idempotencyKey: string; isInternalNote?: boolean },
+  ) => request<{ message: { id: string; state: string }; duplicate: boolean }>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/messages`, post(input)),
+  omnichannelSetStatus: (conversationId: string, status: string) =>
+    request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/status`, post({ status })),
+  omnichannelAssign: (conversationId: string, input: { userId: string | null; reason?: string }) =>
+    request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/assign`, post(input)),
+  omnichannelMarkRead: (conversationId: string) =>
+    request<{ unreadCount: number }>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/read`, post({})),
   omnichannelNav: () => request<OmnichannelNavView>('/Omnichannel/action/nav'),
   omnichannelSettings: () => request<OmnichannelSettingsView>('/Omnichannel/action/settings'),
   omnichannelSaveSettings: (patch: Record<string, unknown>) => request<OmnichannelSettingsView>('/Omnichannel/action/settings', post(patch)),

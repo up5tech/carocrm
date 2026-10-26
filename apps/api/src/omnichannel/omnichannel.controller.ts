@@ -105,6 +105,13 @@ export class OmnichannelController {
     @Query('offset') offset: unknown,
     @Query('status') status: string | undefined,
     @Query('channel') channel: string | undefined,
+    @Query('assignee') assignee: string | undefined,
+    @Query('priority') priority: string | undefined,
+    @Query('language') language: string | undefined,
+    @Query('tag') tag: string | undefined,
+    @Query('unread') unread: string | undefined,
+    @Query('snoozed') snoozed: string | undefined,
+    @Query('queueId') queueId: string | undefined,
   ) {
     await this.permissions.assert('inboxView');
     const page = pageOf(limit, offset);
@@ -112,6 +119,13 @@ export class OmnichannelController {
       ...page,
       ...(typeof status === 'string' && status !== '' ? { status } : {}),
       ...(typeof channel === 'string' && channel !== '' ? { channel } : {}),
+      ...(typeof assignee === 'string' && assignee !== '' ? { assignee } : {}),
+      ...(typeof priority === 'string' && priority !== '' ? { priority } : {}),
+      ...(typeof language === 'string' && language !== '' ? { language } : {}),
+      ...(typeof tag === 'string' && tag !== '' ? { tag } : {}),
+      ...(typeof queueId === 'string' && queueId !== '' ? { queueId } : {}),
+      ...(unread === 'true' || unread === '1' ? { unreadOnly: true } : {}),
+      ...(snoozed === 'only' || snoozed === 'exclude' ? { snoozed } : {}),
     });
   }
 

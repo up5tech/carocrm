@@ -48,6 +48,19 @@ export interface InboxQuery {
   /** `me` scopes to the caller's own assignments; a team id scopes to that queue. */
   readonly assignee?: string | undefined;
   readonly includeArchived?: boolean | undefined;
+  /**
+   * 19-OM.10 — the workspace filters the audit found missing on the conversation record. Each maps
+   * to a column/index added by migration 077 (queue, snooze, unread) or a plain column
+   * (priority, language, tag), so filtering happens in SQL under the caller's ACL and pagination
+   * totals stay correct — never by filtering a fetched page on the client.
+   */
+  readonly priority?: string | undefined;
+  readonly language?: string | undefined;
+  readonly tag?: string | undefined;
+  readonly unreadOnly?: boolean | undefined;
+  /** `only` = currently snoozed; `exclude` = not snoozed; omitted = both. */
+  readonly snoozed?: 'only' | 'exclude' | undefined;
+  readonly queueId?: string | undefined;
 }
 
 export interface InboxConversationView {
@@ -117,6 +130,8 @@ export class VoiceInboxService {
   async list(query: InboxQuery): Promise<{ readonly list: readonly InboxConversationView[]; readonly total: number }> {
     await this.acl.assertAccess(CONVERSATION_PERMISSION_ENTITY, 'read');
     const userId = this.scope.userId ?? null;
+    // `me` scopes to the caller; `unassigned` scopes to conversations nobody (user or team) owns.
+    const unassignedOnly = query.assignee === 'unassigned';
     const assignee = query.assignee === 'me' ? userId : (query.assignee ?? null);
     const rows = await sql<{
       id: string;
@@ -140,10 +155,24 @@ export class VoiceInboxService {
       from voice_conversations c
       where (${query.status ?? null}::text is null or c.status = ${query.status ?? null})
         and (${query.channel ?? null}::text is null or c.channel = ${query.channel ?? null})
-        and (${assignee}::text is null
+        and (${unassignedOnly} = false
+             or (c.assigned_user_id is null and c.assigned_team_id is null))
+        and (${unassignedOnly} = true
+             or ${assignee}::text is null
              or c.assigned_user_id = ${assignee}
              or c.assigned_team_id = ${assignee})
         and (${query.includeArchived === true} or c.archived = false)
+        and (${query.priority ?? null}::text is null or c.priority = ${query.priority ?? null})
+        and (${query.language ?? null}::text is null or c.language = ${query.language ?? null})
+        and (${query.tag ?? null}::text is null
+             or c.tags @> to_jsonb(array[${query.tag ?? null}]::text[]))
+        and (${query.unreadOnly === true} = false or c.unread_count > 0)
+        and (
+          ${query.snoozed ?? null}::text is null
+          or (${query.snoozed ?? null} = 'only' and c.snoozed_until is not null and c.snoozed_until > now())
+          or (${query.snoozed ?? null} = 'exclude' and (c.snoozed_until is null or c.snoozed_until <= now()))
+        )
+        and (${query.queueId ?? null}::text is null or c.current_queue_id = ${query.queueId ?? null})
       order by c.last_activity_at desc nulls last, c.created_at desc
       limit ${query.limit} offset ${query.offset}
     `.execute(this.database.db);

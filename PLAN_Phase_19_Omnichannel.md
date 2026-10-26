@@ -1464,6 +1464,35 @@ Acceptance:
 
 ### Phase 19-OM.10 — Agent Inbox Workspace MVP
 
+**Status: COMPLETE.** The module page is now a two-tab workspace: **Inbox** (default) and
+**Diagnostics** (the readiness/catalog/settings view from OM.2–OM.4, unchanged in substance). The
+inbox is built on the Omnichannel facade (OM.6/OM.8): status views (All / Mine / Unassigned / Waiting
+on customer / Waiting on agent / Snoozed / Closed), channel, priority, tag, language, unread and queue
+filters — each a **server-side, ACL-scoped query parameter** on the owner's inbox list (the SQL
+conditions map to the migration-077 indexes; totals stay correct), never client filtering. The list
+shows badge/customer/channel/priority/snooze/status; the pane renders the merged timeline (messages +
+history events) as **escaped plain text** with delivery state, distinguishes internal notes visually,
+and offers reply / internal-note composition, status transition and assign/unassign (with reasons)
+through the owner's commands. Details collapse the channel threads and the identity review
+(exact/manual/disputed evidence with readable candidates and optional linking). Selection, unread and
+assignment re-read the server after every mutation; loading, empty, error and action-refusal states
+are explicit; every control is keyboard-reachable with aria labels.
+- *Deferred deliberately:* the plan allows polling as the interim until decision D3's shared publish
+  seam exists (E11) — the inbox polls the list (10 s) and the open timeline (8 s) and refreshes on
+  demand. Cursor pagination was **not** added: the facade's bounded, index-backed `LIMIT/OFFSET` on a
+  stable ordering is correct for a live-filtered inbox whose order changes with activity, and a
+  keyset cursor would add interface surface without changing correctness. Recorded here rather than
+  silently omitted; both items remain on the roadmap (D3 seam, cursor pagination if a tenant's volume
+  justifies it).
+
+Verification: `omnichannel-inbox.test.ts` 3/3 (priority/channel/tag/language/unread/snooze filters and
+the unassigned-vs-mine scope in SQL, plus the projection the list renders); regression 14 files / 127
+tests green; api+web typecheck, eslint, ui-conventions (4796 keys) and the web build clean. Live
+browser pass: inbox tab lists the seeded conversation with timeline and assignment events, channel
+filter to `web_chat` shows the empty state and clears the pane, no console errors.
+
+**Goal:** Deliver the first usable agent interface.
+
 **Goal:** Deliver the first usable agent interface.
 
 **Existing baseline to extend, not replace:** `apps/web/src/pages/VoiceInboxPage.tsx` (852 lines)
