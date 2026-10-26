@@ -138,6 +138,7 @@ import type {
   OmnichannelCallView,
   OmnichannelCapabilitiesView,
   OmnichannelCapabilityCatalog,
+  OmnichannelCaseContext,
   OmnichannelConversationPage,
   OmnichannelConversationView,
   OmnichannelDraftView,
@@ -2177,6 +2178,13 @@ export const api = {
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/status`, post({ status })),
   omnichannelAssign: (conversationId: string, input: { userId?: string | null; teamId?: string | null; reason?: string; expectedVersion?: number }) =>
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/assign`, post(input)),
+  omnichannelConversationCase: (conversationId: string) =>
+    request<{ readonly case: OmnichannelCaseContext | null }>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/case`),
+  omnichannelHandoff: (conversationId: string, input: { linkCaseId?: string } = {}) =>
+    request<{ readonly case: OmnichannelCaseContext; readonly created: boolean; readonly linked: boolean }>(
+      `/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/case/handoff`,
+      post(input),
+    ),
   omnichannelCalls: (limit = 10) =>
     request<{ readonly list: readonly OmnichannelCallView[] }>(`/Omnichannel/action/calls?limit=${String(limit)}`),
   omnichannelOpenCallConversation: (callId: string) =>

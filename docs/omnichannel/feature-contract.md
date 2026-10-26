@@ -337,7 +337,7 @@ key gaps).
 | E4/E5/E6 | Additive migrations (conversation fields, participant identity, threads) | VoiceCommunications | OM.3 | **DONE — OM.3** (migration 077) + **OM.6** (services write threads: attach + continuity) |
 | E7 | `reconcileMessage` / provider status lookup | VoiceCommunications | OM.6 | **DONE — OM.6** (`getMessageStatus` on the adapter; Twilio + simulator; `unsupported` when absent) |
 | E8 | Queue/routing accepts conversations + operators + business hours | ServiceDesk | OM.11 | **DONE — OM.11** (queue opt-in, rule object type, operators, business hours, decision reuse) |
-| E9 | Case `external_id` + create-or-link commands | ServiceDesk | OM.17 | open — **re-scoped**: delivered with its consumer in OM.17 (recorded in plan §14 OM.11) |
+| E9 | Case `external_id` + create-or-link commands | ServiceDesk | OM.17 | **DONE — OM.17** (`Case.externalId`/`externalSource` server-owned + partial unique index, `CaseHandoffService.createOrGet`/`recordLink` with `CaseTransition` trail; link read contract on the conversation side) |
 | E11 | Generic per-user publish seam | shared platform | OM.12/realtime | open |
 | E16 | `material_write` channel-send tool registration | AIAgents | OM.19 only | open |
 

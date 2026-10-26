@@ -2,6 +2,7 @@ import type { Provider, Type } from "@nestjs/common";
 
 import { CaseAssignmentService } from "./case-assignment.service.js";
 import { CaseConversationService } from "./case-conversation.service.js";
+import { CaseHandoffService } from "./case-handoff.service.js";
 import { CaseLifecycleService } from "./case-lifecycle.service.js";
 import { CaseMergeService } from "./case-merge.service.js";
 import { CaseNumberingService } from "./case-numbering.service.js";
@@ -18,6 +19,8 @@ import { ServiceDeskWriteGuardService } from "./service-desk-write-guard.service
 import { SlaService } from "./sla.service.js";
 import { WebToCaseService } from "./web-to-case.service.js";
 
+export type { CaseContextView, CaseHandoffInput, CaseHandoffResult } from "./case-handoff.service.js";
+export { CaseHandoffService } from "./case-handoff.service.js";
 export { CaseMergeService } from "./case-merge.service.js";
 export { CsatService } from "./csat.service.js";
 export { KnowledgeBaseService } from "./knowledge-base.service.js";
@@ -38,6 +41,7 @@ export const SERVICE_DESK_PROVIDERS: Provider[] = [
   ServiceDeskWriteGuardService,
   CaseLifecycleService,
   CaseAssignmentService,
+  CaseHandoffService,
   CaseConversationService,
   EmailToCaseService,
   ServiceDeskModuleHealthService,

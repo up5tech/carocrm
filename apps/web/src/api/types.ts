@@ -4479,3 +4479,14 @@ export interface OmnichannelCallView {
   readonly relatedEntityId: string | null;
   readonly conversationId: string | null;
 }
+
+/** Phase 19-OM.17 — the Case context beside a conversation. */
+export interface OmnichannelCaseContext {
+  readonly id: string;
+  readonly caseNumber: string | null;
+  readonly status: string;
+  readonly priority: string | null;
+  readonly type: string | null;
+  readonly source: string | null;
+  readonly externalId: string | null;
+}

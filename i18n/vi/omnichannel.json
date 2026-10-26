@@ -122,7 +122,13 @@
     "snippet": "Chèn mẫu tin…",
     "calls": "Cuộc gọi gần đây",
     "openConversation": "Mở hội thoại",
-    "noConversation": "Chưa có hội thoại cho số này."
+    "noConversation": "Chưa có hội thoại cho số này.",
+    "case": "Case",
+    "noCase": "Chưa liên kết Case.",
+    "createCase": "Tạo Case",
+    "linkCase": "Liên kết Case",
+    "caseIdPlaceholder": "Id Case cần liên kết",
+    "openCase": "Mở Case"
   },
   "refusal": {
     "channel_disabled": "Kênh này đang tắt trong cài đặt Thoại & Liên lạc.",

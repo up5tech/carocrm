@@ -33,7 +33,7 @@ export const CASE_SEVERITIES = ["Low", "Normal", "High", "Critical"] as const;
 export const CASE_TYPES = ["Question", "Incident", "Problem", "Service Request"] as const;
 
 /** Intake channel (§5.1 `source`). */
-export const CASE_SOURCES = ["Web", "Email", "Portal", "API", "Web Form", "Workflow", "Phone"] as const;
+export const CASE_SOURCES = ["Web", "Email", "Portal", "API", "Web Form", "Workflow", "Phone", "Omnichannel"] as const;
 
 /** Summary SLA state (§5.6). Per-target clock detail lives in the SLA records delivered in SD.8. */
 export const CASE_SLA_STATES = ["NotApplicable", "OnTrack", "Warning", "Breached", "Paused", "Met"] as const;

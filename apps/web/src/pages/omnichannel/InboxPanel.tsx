@@ -4,7 +4,7 @@ import { Alert, Badge, Button, Card, Col, Collapse, Input, List, message, Row, S
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../../api/client.js';
-import type { OmnichannelConversationView, OmnichannelIdentityParticipant, OmnichannelThreadView, OmnichannelTimelineEntry } from '../../api/types.js';
+import type { OmnichannelCaseContext, OmnichannelConversationView, OmnichannelIdentityParticipant, OmnichannelThreadView, OmnichannelTimelineEntry } from '../../api/types.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
@@ -115,6 +115,21 @@ export function InboxPanel() {
   });
   // 19-OM.13 — recent calls as context (never converted into messages), with an explicit open action.
   const calls = useQuery({ queryKey: ['omnichannel', 'calls'], queryFn: () => api.omnichannelCalls(10), refetchInterval: 20_000 });
+  // 19-OM.17 — the Case linked to this conversation (created by the ServiceDesk command only).
+  const caseContext = useQuery({
+    queryKey: ['omnichannel', 'case', selectedId],
+    queryFn: () => (selectedId === undefined ? Promise.resolve({ case: null }) : api.omnichannelConversationCase(selectedId)),
+    enabled: selectedId !== undefined,
+    staleTime: 15_000,
+  });
+  const handoff = useMutation({
+    mutationFn: (input: { id: string; linkCaseId?: string }) => api.omnichannelHandoff(input.id, input.linkCaseId === undefined ? {} : { linkCaseId: input.linkCaseId }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['omnichannel', 'case', selectedId] });
+      refresh();
+    },
+    onError: (error: unknown) => setActionError(errorText(error)),
+  });
   const identity = useQuery({
     queryKey: ['omnichannel', 'identity', selectedId],
     queryFn: () => (selectedId === undefined ? Promise.resolve(undefined) : api.omnichannelIdentity(selectedId)),
@@ -353,6 +368,9 @@ export function InboxPanel() {
             entries={timeline.data?.entries ?? []}
             threads={threads.data?.list ?? []}
             identity={identity.data?.participants ?? []}
+            caseView={caseContext.data?.case ?? null}
+            handoffPending={handoff.isPending}
+            onHandoff={(linkCaseId) => selected !== undefined && handoff.mutate({ id: selected.id, ...(linkCaseId === undefined ? {} : { linkCaseId }) })}
             canLink={granted.has('identityLink')}
             canAssign={granted.has('assign')}
             canReply={granted.has('reply')}
@@ -393,6 +411,9 @@ interface ConversationPaneProps {
   readonly entries: readonly OmnichannelTimelineEntry[];
   readonly threads: readonly OmnichannelThreadView[];
   readonly identity: readonly OmnichannelIdentityParticipant[];
+  readonly caseView: OmnichannelCaseContext | null;
+  readonly handoffPending: boolean;
+  readonly onHandoff: (linkCaseId?: string) => void;
   readonly canLink: boolean;
   readonly canAssign: boolean;
   readonly canReply: boolean;
@@ -414,6 +435,7 @@ interface ConversationPaneProps {
 
 function ConversationPane(props: ConversationPaneProps) {
   const { conversation } = props;
+  const [linkCaseId, setLinkCaseId] = useState('');
   if (conversation === undefined) {
     return (
       <Card className="carocrm-card">
@@ -537,6 +559,36 @@ function ConversationPane(props: ConversationPaneProps) {
         size="small"
         style={{ marginTop: 12 }}
         items={[
+          {
+            key: 'case',
+            label: t('omnichannel.inbox.case'),
+            children: props.caseView === null ? (
+              <Space size={6} wrap>
+                <Typography.Text type="secondary">{t('omnichannel.inbox.noCase')}</Typography.Text>
+                <Button size="small" onClick={() => props.onHandoff()} loading={props.handoffPending} disabled={!props.canAssign}>
+                  {t('omnichannel.inbox.createCase')}
+                </Button>
+                <Input
+                  size="small"
+                  style={{ width: 260 }}
+                  placeholder={t('omnichannel.inbox.caseIdPlaceholder')}
+                  value={linkCaseId}
+                  onChange={(event) => setLinkCaseId(event.target.value)}
+                  aria-label={t('omnichannel.inbox.caseIdPlaceholder')}
+                />
+                <Button size="small" disabled={!props.canAssign || linkCaseId.trim() === ''} onClick={() => props.onHandoff(linkCaseId.trim())} loading={props.handoffPending}>
+                  {t('omnichannel.inbox.linkCase')}
+                </Button>
+              </Space>
+            ) : (
+              <Space size={6} wrap>
+                <Tag color="geekblue">{props.caseView.caseNumber ?? props.caseView.id.slice(0, 8)}</Tag>
+                <Tag>{props.caseView.status}</Tag>
+                {props.caseView.priority !== null ? <Tag>{props.caseView.priority}</Tag> : null}
+                <Typography.Link href={`/Case/${encodeURIComponent(props.caseView.id)}`}>{t('omnichannel.inbox.openCase')}</Typography.Link>
+              </Space>
+            ),
+          },
           {
             key: 'threads',
             label: t('omnichannel.inbox.threads'),

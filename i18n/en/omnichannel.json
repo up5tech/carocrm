@@ -122,7 +122,13 @@
     "snippet": "Insert a snippet…",
     "calls": "Recent calls",
     "openConversation": "Open conversation",
-    "noConversation": "No conversation exists for this number yet."
+    "noConversation": "No conversation exists for this number yet.",
+    "case": "Case",
+    "noCase": "No Case linked.",
+    "createCase": "Create case",
+    "linkCase": "Link case",
+    "caseIdPlaceholder": "Case id to link",
+    "openCase": "Open case"
   },
   "refusal": {
     "channel_disabled": "This channel is switched off in the Voice & Communications settings.",

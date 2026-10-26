@@ -53,6 +53,10 @@ export type ServiceDeskEntityType = (typeof SERVICE_DESK_ENTITY_TYPES)[number];
  */
 export const SERVER_OWNED_CASE_FIELDS: readonly string[] = [
   "caseNumber",
+  // 19-OM.17 — the external reference is written by the hand-off command only, so a client cannot
+  // forge (or collide) the idempotency anchor of a conversation-created Case.
+  "externalId",
+  "externalSource",
   "lastActivityAt",
   "firstResponseAt",
   "lastCustomerResponseAt",

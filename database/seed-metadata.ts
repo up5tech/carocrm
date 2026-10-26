@@ -122,7 +122,7 @@ const SD_CASE_STATUSES = ['New', 'Open', 'Pending Customer', 'Pending Internal',
 const SD_CASE_PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'];
 const SD_CASE_SEVERITIES = ['Low', 'Normal', 'High', 'Critical'];
 const SD_CASE_TYPES = ['Question', 'Incident', 'Problem', 'Service Request'];
-const SD_CASE_SOURCES = ['Web', 'Email', 'Portal', 'API', 'Web Form', 'Workflow', 'Phone'];
+const SD_CASE_SOURCES = ['Web', 'Email', 'Portal', 'API', 'Web Form', 'Workflow', 'Phone', 'Omnichannel'];
 const SD_CASE_SLA_STATES = ['NotApplicable', 'OnTrack', 'Warning', 'Breached', 'Paused', 'Met'];
 /** Division-of-labour vocabulary shared by queues and routing rules (SD.5, §5.3). */
 const SD_ASSIGNMENT_STRATEGIES = ['manual', 'roundRobin', 'leastBusy'];
@@ -3598,6 +3598,9 @@ function serviceDeskCaseEntity(): MetadataSeedEntry {
         // Portal access (§5.9): a hidden case is never returned to a portal client.
         isHiddenFromPortal: { type: 'bool', defaultValue: false, inDetail: true, inEdit: true },
         mergedIntoCaseId: { type: 'link', entityKey: 'Case', inDetail: true },
+        // 19-OM.17 — the hand-off idempotency anchor (server-owned: written only by the command).
+        externalId: { type: 'varchar', maxLength: 200, inDetail: true },
+        externalSource: { type: 'varchar', maxLength: 32, inDetail: true },
       },
       relations: {
         // Activities reach a case through explicit `entity_links` rows (the generic related-record

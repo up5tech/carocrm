@@ -24,7 +24,8 @@
 | OM.14 — WhatsApp/SMS integration | ✅ COMPLETE | `supported` flag + MMS unsupported row, localized refusal reasons, policy suite `omnichannel-whatsapp.test.ts`, CF-2 doc re-check |
 | OM.15 — Messenger/Instagram (conditional) | ✅ COMPLETE — verdict **NO-GO** (nothing implemented) | fresh Meta doc review 2026-10-26, CF-8/CF-9 flip conditions, `omnichannel-meta-gate.test.ts` fail-closed enforcement |
 | OM.16 — Email/Telegram (optional) | ✅ COMPLETE — verdict **gated** (nothing implemented) | null inbound provider verified, Telegram `secret_token` re-checked, CF-6/CF-10 flip conditions, `omnichannel-connectors-gate.test.ts` |
-| OM.17+ | ⏸ Not started | — |
+| OM.17 — ServiceDesk hand-off (E9) | ✅ COMPLETE | `Case.externalId`/`externalSource` + partial unique index (migration 081), `CaseHandoffService` create-or-link + trail, hand-off endpoints + inbox Case panel, `omnichannel-handoff.test.ts` |
+| OM.18+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -37,6 +38,21 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.17 (ServiceDesk hand-off, E9)
+
+- Migration 081: partial unique index on Case `externalId` + an index for the authoritative
+  `voice_conversations.case_id` link. `Case.externalId`/`externalSource` are metadata fields and
+  server-owned (client writes refused); `Omnichannel` added to `CASE_SOURCES`.
+- ServiceDesk `CaseHandoffService`: idempotent `createOrGet` (unique index resolves races),
+  `recordLink` with a `link_conversation` transition (idempotent per conversation), context read.
+  Link written by Voice's `linkCase`; conversations-for-case exposed as a workspace read contract.
+- Workspace: `GET …/case`, `POST …/case/handoff` (create-or-link, retry-safe), `GET
+  action/cases/:caseId/conversations`; inbox Case panel with Create/Link/Open; safe description
+  (customer label, channel, last customer-visible message — internal notes excluded in SQL).
+- Checks: `omnichannel-handoff.test.ts` 5/5; 114-test regression with only the five known ServiceDesk
+  environment failures; typecheck/lint/ui-conventions/build clean.
+
 
 ### 2026-10-26 — Phase 19-OM.16 (Email/Telegram — optional connectors)
 

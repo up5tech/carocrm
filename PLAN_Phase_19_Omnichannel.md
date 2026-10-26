@@ -1819,6 +1819,37 @@ Acceptance:
 
 ### Phase 19-OM.17 — ServiceDesk Handoff and Case Context
 
+**Status: COMPLETE (E9 delivered; re-scoped here from OM.11 as recorded).** The contract the phase
+needed now exists, additively in ServiceDesk:
+- **`Case.externalId` / `Case.externalSource`** are metadata fields marked **server-owned** (a client
+  write is refused by name), with a **partial unique index** (`uq_entity_records_case_external`,
+  migration 081) — one Case per external reference is a database guarantee.
+- **`CaseHandoffService.createOrGet`** is the create-or-link command: `Case:create` permission, an
+  idempotent find by `externalId` (a concurrent create resolves to the winner), `source: 'Omnichannel'`
+  (added to `CASE_SOURCES`), and a **`CaseTransition`** row (`command: 'handoff'`) written under the
+  module authority with the actor attributed. **`linkConversation`** records a `link_conversation`
+  transition, idempotent per conversation via `(caseId, idempotencyKey)`.
+- **The link itself** stays on the conversation (`voice_conversations.case_id`, written by Voice's
+  `linkCase`); the "`Case.conversations` relation" is exposed as a **read contract** — the workspace's
+  `GET action/cases/:caseId/conversations` — because the conversation is a dedicated table, not an
+  entity (the refinement described in feature contract §8). Indexed by migration 081.
+- **Safe payload**: the description carries the customer label, channel and the last
+  **customer-visible inbound** message excerpt — never an internal note (excluded in SQL), never
+  unrelated messages. Case status is only read for context; conversation state never changes.
+- **Recovery**: because the Case is anchored by `externalId`, a failure between creation and linking is
+  repaired by retrying the same command; the workspace surfaces the result (`created`/`linked`) and the
+  Case context (number, status) beside the conversation, with a Create/Link action in the inbox panel.
+
+Verification: `omnichannel-handoff.test.ts` 5/5 — create with the trail + origin + privacy-safe
+summary; retry → same Case, one `handoff` transition; link an existing Case + `link_conversation` trail
+(idempotent) + linked-conversation listing; Case edit does not change conversation status; the generic
+API cannot forge `externalId` (422) and an unauthorized hand-off is refused (403). Regression 11 files /
+114 tests with exactly the five known ServiceDesk environment failures (demo-seeded routing rules,
+shared settings row, time-dependent SLA clock) and no new ones; api+web typecheck, eslint,
+ui-conventions, web build clean.
+
+**Goal:** Make a conversation a reliable entry point for service operations.
+
 **Goal:** Make a conversation a reliable entry point for service operations.
 
 **The contract this phase needs does not exist yet, and the audit found the gap precisely.** `Case`

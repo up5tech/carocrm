@@ -7,6 +7,7 @@ import { OmnichannelCallService } from './omnichannel-call.service.js';
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
 import { OmnichannelDraftService } from './omnichannel-draft.service.js';
+import { OmnichannelHandoffService } from './omnichannel-handoff.service.js';
 import { OmnichannelIdentityService } from './omnichannel-identity.service.js';
 import { OmnichannelModuleHealthService } from './omnichannel-module-health.service.js';
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
@@ -66,6 +67,7 @@ const AssignInputSchema = z
   })
   .strict();
 const RouteInputSchema = z.object({ expectedVersion: z.number().int().min(0).optional() }).strict();
+const HandoffSchema = z.object({ linkCaseId: z.string().trim().min(1).max(120).optional() }).strict();
 const SnippetPreviewSchema = z
   .object({
     conversationId: z.string().trim().min(1).max(120).optional(),
@@ -98,6 +100,7 @@ export class OmnichannelController {
     @Inject(OmnichannelSnippetService) private readonly snippets: OmnichannelSnippetService,
     @Inject(OmnichannelDraftService) private readonly drafts: OmnichannelDraftService,
     @Inject(OmnichannelCallService) private readonly calls: OmnichannelCallService,
+    @Inject(OmnichannelHandoffService) private readonly handoff: OmnichannelHandoffService,
   ) {}
 
   /**
@@ -242,6 +245,31 @@ export class OmnichannelController {
     await this.permissions.assert('identityLink');
     const parsed = Number(limit ?? 50);
     return this.identities.conflicts(Number.isFinite(parsed) ? Math.min(Math.max(Math.trunc(parsed), 1), 200) : 50);
+  }
+
+  // ---------------------------------------------------------------------------
+  // ServiceDesk hand-off (19-OM.17) — a Case is created by its domain command, never generic CRUD
+  // ---------------------------------------------------------------------------
+
+  /** The Case linked to this conversation (read-only context; Case ACL enforced). */
+  @Get('action/conversations/:id/case')
+  async conversationCase(@Param('id') id: string) {
+    return this.handoff.context(id);
+  }
+
+  /** Create-or-link a Case for the conversation; idempotent, safe to retry after a failure. */
+  @HttpCode(200)
+  @Post('action/conversations/:id/case/handoff')
+  async handoffConversation(@Param('id') id: string, @Body() body: unknown) {
+    const parsed = HandoffSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid hand-off input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
+    return this.handoff.createOrLink(id, parsed.data);
+  }
+
+  /** Conversations linked to one Case (safe fields; the Case read ACL is the gate). */
+  @Get('action/cases/:caseId/conversations')
+  async caseConversations(@Param('caseId') caseId: string) {
+    return this.handoff.conversationsForCase(caseId);
   }
 
   // ---------------------------------------------------------------------------
