@@ -1023,7 +1023,7 @@ Acceptance:
 - The audit identifies current authoritative records/services for every channel that already exists. — **Met** (audit §6).
 - The agent explains what can be reused directly and what small extension is required. — **Met** (audit §4, §8 — 18 extensions, each owned by its current module).
 - No duplicate transport, inbox, Case, campaign engine, Portal auth, or AI runtime is proposed without a documented gap. — **Met** (audit §5, §7 — 22 gaps recorded; §0.2 D1–D3).
-- Stop at the end of this phase and report findings before starting Phase 19-OM.1. — **Met.** OM.1 has not been started.
+- Stop at the end of this phase and report findings before starting Phase 19-OM.1. — **Met** (OM.1 and OM.2 have since been delivered).
 
 ### Phase 19-OM.1 — Feature Contract and Channel Feasibility
 
@@ -1072,10 +1072,30 @@ Acceptance:
 - The first connector path can be tested without sending a real customer message.
 - The three OM.0 decisions are carried into the contract unchanged, or a replacement is recorded with an explicit rationale.
 
-All four criteria are **Met**; the evidence table is `feature-contract.md` §14. Stop at the end of
-this phase; **Phase 19-OM.2 has not been started.**
+All four criteria are **Met**; the evidence table is `feature-contract.md` §14. OM.2 has since been
+delivered (see its status below).
 
 ### Phase 19-OM.2 — Module Registration and Navigation
+
+**Status: COMPLETE.** The `Omnichannel` kernel module is registered (`apps/api/src/omnichannel/`,
+loadOrder 397) with the control-plane controller (`/api/v1/Omnichannel/action/{health,capabilities,nav,settings}`,
+OpenAPI tag `omnichannel`), the nine-capability synthetic-resource permission matrix
+(`OmnichannelConversation/Message/Assignment/Queue/Identity/Connection/Ops/Settings` — contract §10),
+the `omnichannel` settings document with the single `features.workspace` switch (navigation gate +
+menu-cache invalidation, the CRMChat/LeadScore precedent), the evidence-based module health view,
+the navigation seed (order 75, beside the inbox), the SPA workspace shell at `/omnichannel`, and
+`i18n/en|vi/omnichannel.json`. **No placeholder endpoints, no owned tables, no migration** — the
+records stay with their D1/D2 owners and the reserved webhook prefix has no controller yet (E2
+arrives with OM.5 together with the first real ingress, as contracted).
+
+Verification: `apps/api/test/omnichannel-module.test.ts` (7 tests — health evidence, least-privilege
+403 for a plain role, inbox role gets reads but never the settings document, menu entry present for a
+capable caller and absent for an incapable one, the workspace switch removes the entry and hides
+diagnostics from ordinary agents while administrators keep the way back in, unknown settings keys
+refused, generic entity API and Voice health unaffected); `navigation.test.ts` + `i18n.test.ts`
+(16 tests) green; browser check on the dev servers — module page renders in vi, every dependency and
+integration reports present, toggling the switch off hid the sidebar entry on reload and toggling it
+back on restored it; api+web `typecheck`, eslint, `check-ui-conventions` and the web build clean.
 
 **Goal:** Establish the module skeleton within existing conventions.
 
@@ -1089,9 +1109,9 @@ Tasks:
 
 Acceptance:
 
-- Module registers cleanly and can be enabled/disabled according to current conventions.
-- ACL defaults are least-privilege and no secret/config value is shown to ordinary agents.
-- Existing modules continue to load without a dependency cycle.
+- Module registers cleanly and can be enabled/disabled according to current conventions. — **Met** (full `AppModule` boot in tests; the `features.workspace` switch drives the navigation gate, the control-plane behaviour and the menu-cache drop, the same convention as `crmChat`/`eSignature`/`leadScore`).
+- ACL defaults are least-privilege and no secret/config value is shown to ordinary agents. — **Met** (a plain role answers 403 on every control-plane read; the settings document asks `settingsManage` on both verbs; health answers carry evidence and presence only — no configuration value, no secret).
+- Existing modules continue to load without a dependency cycle. — **Met** (generic Contact list and Voice health answered inside the same booted application; the feature-gate and menu-invalidator bindings resolve lazily through `ModuleRef`, the established CRMChat pattern).
 
 ### Phase 19-OM.3 — Persistence Model and Additive Migrations
 

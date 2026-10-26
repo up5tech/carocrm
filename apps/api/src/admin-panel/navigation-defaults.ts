@@ -97,6 +97,20 @@ export const NAVIGATION_PAGES: readonly NavigationSeed[] = [
     inQuickSearch: true,
     permission: { entity: 'CommunicationConversation', action: 'read' },
   },
+  // Phase 19-OM.2: the cross-channel agent workspace. Its records belong to VoiceCommunications
+  // (D1), so the entry is gated on the module's own synthetic capability — the same resource its
+  // control plane asserts — and on the `omnichannel` workspace switch, consulted after the ACL.
+  {
+    key: 'omnichannel',
+    kind: 'page',
+    route: '/omnichannel',
+    labelKey: 'omnichannel.nav.workspace',
+    icon: 'GlobalOutlined',
+    order: 75,
+    inQuickSearch: true,
+    permission: { entity: 'OmnichannelConversation', action: 'read' },
+    feature: { module: 'omnichannel', flag: 'workspace' },
+  },
   {
     key: 'voiceCommunications',
     kind: 'page',

@@ -1,0 +1,43 @@
+{
+  "module": {
+    "label": "Đa kênh",
+    "description": "Không gian làm việc chung cho nhân viên quản lý hội thoại khách hàng trên các kênh được hỗ trợ. Bản ghi hội thoại thuộc về module Thoại & Liên lạc; hàng đợi và định tuyến thuộc về Bàn phục vụ."
+  },
+  "nav": {
+    "workspace": "Đa kênh"
+  },
+  "page": {
+    "title": "Đa kênh",
+    "subtitle": "Không gian làm việc đa kênh của nhân viên. Giai đoạn 19-OM.2 đã đăng ký module; các màn hình hội thoại sẽ đến ở những giai đoạn tiếp theo.",
+    "loadFailed": "Không tải được không gian làm việc Đa kênh.",
+    "denied": "Bạn không có quyền hộp thư Đa kênh, nên không gian làm việc đóng với tài khoản này.",
+    "ready": "Nền tảng đã sẵn sàng",
+    "notReady": "Chưa được cung cấp",
+    "workspaceSwitch": "Không gian làm việc",
+    "reload": "Tải lại",
+    "disabled": "Không gian làm việc Đa kênh đang tắt.",
+    "disabledHint": "Quản trị viên có quyền cấu hình module có thể bật lại từ đầu trang này.",
+    "missingDependencies": "Thiếu thành phần nền tảng bắt buộc.",
+    "warnings": "Cảnh báo cấu hình",
+    "comingSoon": "Không gian làm việc còn chờ những gì",
+    "comingIngress": "Kênh đầu tiên: inbound và trả lời Twilio SMS/WhatsApp qua facade của Thoại & Liên lạc (19-OM.4–19-OM.8).",
+    "comingInbox": "Hộp thư nhân viên: danh sách hội thoại, dòng thời gian, ô soạn tin, phân công và bàn giao (19-OM.10–19-OM.17).",
+    "comingWidget": "Chat website: widget khách hàng và mô hình phiên ẩn danh (19-OM.9).",
+    "dependencies": "Nền tảng hệ thống",
+    "integrations": "Các module workspace xây dựng trên",
+    "myRights": "Quyền của tôi",
+    "module": "Module",
+    "phases": "Giai đoạn đã hoàn thành",
+    "present": "Có",
+    "missing": "Thiếu",
+    "optional": "Tùy chọn",
+    "granted": "Được cấp",
+    "notGranted": "Chưa cấp",
+    "col": {
+      "dependency": "Thành phần",
+      "evidence": "Bằng chứng",
+      "status": "Trạng thái",
+      "right": "Quyền"
+    }
+  }
+}

@@ -35,6 +35,7 @@ const LeadScorePage = lazy(() => import('./pages/LeadScorePage.js').then((m) => 
 const LoginPage = lazy(() => import('./pages/LoginPage.js').then((m) => ({ default: m.LoginPage })));
 const MarketingPreferencesPage = lazy(() => import('./pages/MarketingPreferencesPage.js').then((m) => ({ default: m.MarketingPreferencesPage })));
 const MyProfilePage = lazy(() => import('./pages/MyProfilePage.js').then((m) => ({ default: m.MyProfilePage })));
+const OmnichannelPage = lazy(() => import('./pages/OmnichannelPage.js').then((m) => ({ default: m.OmnichannelPage })));
 const PortalCsatPage = lazy(() => import('./pages/PortalCsatPage.js').then((m) => ({ default: m.PortalCsatPage })));
 const PortalHomePage = lazy(() => import('./pages/PortalHomePage.js').then((m) => ({ default: m.PortalHomePage })));
 const ProcessEditorPage = lazy(() => import('./pages/ProcessEditorPage.js').then((m) => ({ default: m.ProcessEditorPage })));
@@ -151,6 +152,10 @@ export function AppRoutes() {
         {/* Phase 19-LS.8: the scoring model workspace, before the entity wildcard so "lead-score"
             is never read as an entity name. Visibility and authorization are decided by the server. */}
         <Route path="/lead-score" element={<LeadScorePage />} />
+        {/* Phase 19-OM.2: the Omnichannel workspace shell, before the entity wildcard so
+            "omnichannel" is never read as an entity name. Visibility and authorization are decided
+            by the server (nav seed + ACL + the module's workspace switch). */}
+        <Route path="/omnichannel" element={<OmnichannelPage />} />
         {/* Phase 21.5: the handbook. `/docs/search` is declared before `/docs/:section` so the word
             "search" is never read as a section name, and all four sit before the entity wildcard so
             "docs" is never read as an entity. */}

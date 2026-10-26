@@ -4252,3 +4252,75 @@ export interface LeadConversionResult {
   readonly completedAt: string | null;
   readonly resultSummary: Readonly<Record<string, unknown>> | null;
 }
+
+/**
+ * Phase 19-OM.2 — the Omnichannel control plane views.
+ * Mirror `apps/api/src/omnichannel/omnichannel-module-health.service.ts` and the settings view.
+ */
+export interface OmnichannelDependencyView {
+  readonly id: string;
+  readonly label: string;
+  readonly present: boolean;
+  readonly required: boolean;
+  readonly evidence: string;
+}
+
+export interface OmnichannelHealthView {
+  readonly module: {
+    readonly id: string;
+    readonly name: string;
+    readonly version: string;
+    readonly loadOrder: number;
+    readonly apiPrefix: string;
+    readonly webhookPrefix: string;
+    readonly frontendRoute: string;
+    readonly implementedPhases: readonly string[];
+    readonly ownedTables: readonly string[];
+  };
+  readonly ok: boolean;
+  readonly workspaceReady: boolean;
+  readonly dependencies: readonly OmnichannelDependencyView[];
+  readonly optionalIntegrations: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly provides: string;
+    readonly present: boolean;
+  }[];
+  readonly features: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly enabled: boolean;
+    readonly settingsPath: string;
+  }[];
+  readonly callerRights: readonly { readonly key: string; readonly label: string; readonly granted: boolean }[];
+  readonly settings: {
+    readonly version: number;
+    readonly updatedAt: string | null;
+    readonly warnings: readonly string[];
+  };
+}
+
+export interface OmnichannelCapabilitiesView {
+  readonly capabilities: readonly {
+    readonly key: string;
+    readonly label: string;
+    readonly description: string;
+    readonly granted: boolean;
+  }[];
+}
+
+export interface OmnichannelSettingsView {
+  readonly settings: { readonly features: { readonly workspace: boolean } };
+  readonly version: number;
+  readonly updatedAt: string | null;
+  readonly updatedBy: string | null;
+  readonly warnings: readonly { readonly code: string; readonly message: string }[];
+  readonly features: Readonly<Record<string, boolean>>;
+}
+
+export interface OmnichannelNavView {
+  readonly visible: boolean;
+  readonly admin: boolean;
+  readonly enabled: boolean;
+  readonly resource: string;
+}

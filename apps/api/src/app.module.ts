@@ -55,6 +55,7 @@ import { LOGIC_CONTROLLERS, LOGIC_PROVIDERS } from './logic/index.js';
 import { MARKETING_AUTOMATION_CONTROLLERS, MARKETING_AUTOMATION_PROVIDERS } from './marketing-automation/index.js';
 import type { MetadataStoreService as MetadataStoreType } from './metadata/metadata-store.service.js';
 import { METADATA_STORE,MetadataStoreService,NAVIGATION_GROUP_KEYS } from './metadata/metadata-store.service.js';
+import { OMNICHANNEL_CONTROLLERS, OMNICHANNEL_MENU_INVALIDATOR, OMNICHANNEL_PROVIDERS, OmnichannelSettingsService } from './omnichannel/index.js';
 import { PORTAL_CONTROLLERS, PORTAL_PROVIDERS } from './portal/index.js';
 import { PREFERENCES_CONTROLLERS, PREFERENCES_PROVIDERS } from './preferences/index.js';
 import { PROCESS_CONTROLLERS, PROCESS_PROVIDERS } from './processes/index.js';
@@ -151,6 +152,10 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // generic `/api/v1/:entity` wildcard, or the control plane reads as "entity LeadScore, record
     // action". Lead CRUD itself stays exactly where it is: the generic entity controller.
     ...LEADSCORE_CONTROLLERS,
+    // Phase 19-OM.2: `/api/v1/Omnichannel/action/...` is a static prefix and must be matched before
+    // the generic `:entity` wildcard. The reserved provider webhook prefix
+    // `/api/v1/integrations/omnichannel/...` arrives with the first real channel ingress (19-OM.5).
+    ...OMNICHANNEL_CONTROLLERS,
     // `/api/v1/DocumentTemplate` and `/api/v1/document/action/preview` are static prefixes too.
     ...DOCUMENT_CONTROLLERS,
     // Phase 21: `/api/v1/Docs/{tree,page,search}` is a static prefix and must be matched before the
@@ -206,6 +211,10 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // conversion operation, and the module health view. The module owns no table, queue, adapter or
     // navigation entry yet — those arrive with the phases that use them.
     ...LEADSCORE_PROVIDERS,
+    // Phase 19-OM.2: the capability matrix, the settings document, the module health view and the
+    // visibility report. The module owns no table and no transport — the records stay with their
+    // D1/D2 owners and only the control plane is registered here.
+    ...OMNICHANNEL_PROVIDERS,
     ...DOCUMENT_PROVIDERS,
     // Phase 21: the in-app handbook — the content read path and the `docs` settings document's cache.
     ...DOCS_PROVIDERS,
@@ -252,6 +261,13 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
             const leadScore = ref.get(LeadScoreSettingsService, { strict: false });
             return (await leadScore.read()).settings.enabled === true;
           }
+          // Phase 19-OM.2: the Omnichannel workspace switch. Off, the sidebar drops the entry and
+          // the control plane answers 403 for non-administrators — the gate can only remove, never
+          // reveal (the menu pipeline consults it after the ACL).
+          if (module === 'omnichannel' && flag === 'workspace') {
+            const omnichannel = ref.get(OmnichannelSettingsService, { strict: false });
+            return (await omnichannel.settings()).features.workspace;
+          }
           return true;
         },
     },
@@ -259,6 +275,17 @@ import { WORKFLOW_CONTROLLERS, WORKFLOW_PROVIDERS } from './workflows/index.js';
     // the sidebar on the next render instead of after the TTL (`docs/admin/navigation.md`).
     {
       provide: CRM_CHAT_MENU_INVALIDATOR,
+      inject: [ModuleRef],
+      useFactory:
+        (ref: ModuleRef): MenuInvalidator =>
+        () => {
+          ref.get(NavigationService, { strict: false }).invalidate();
+        },
+    },
+    // Phase 19-OM.2: the same rule for the Omnichannel workspace switch — a flag write drops the
+    // per-user menu cache instead of waiting for the TTL.
+    {
+      provide: OMNICHANNEL_MENU_INVALIDATOR,
       inject: [ModuleRef],
       useFactory:
         (ref: ModuleRef): MenuInvalidator =>

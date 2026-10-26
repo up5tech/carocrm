@@ -1,0 +1,43 @@
+{
+  "module": {
+    "label": "Omnichannel",
+    "description": "A shared agent workspace for customer conversations across supported channels. The conversation records stay with Voice & Communications; queues and routing stay with Service Desk."
+  },
+  "nav": {
+    "workspace": "Omnichannel"
+  },
+  "page": {
+    "title": "Omnichannel",
+    "subtitle": "The cross-channel agent workspace. Phase 19-OM.2 registered the module; the conversation surfaces arrive with the following sub-phases.",
+    "loadFailed": "The Omnichannel workspace could not be loaded.",
+    "denied": "You do not hold the Omnichannel inbox capability, so the workspace is closed for this account.",
+    "ready": "Foundation in place",
+    "notReady": "Not provisioned yet",
+    "workspaceSwitch": "Workspace",
+    "reload": "Reload",
+    "disabled": "The Omnichannel workspace is switched off.",
+    "disabledHint": "An administrator with the module's settings capability can switch it on from this header.",
+    "missingDependencies": "Required platform pieces are missing.",
+    "warnings": "Configuration warnings",
+    "comingSoon": "What the workspace is still waiting for",
+    "comingIngress": "The first channel: Twilio SMS and WhatsApp inbound and reply, over the Voice & Communications facade (19-OM.4–19-OM.8).",
+    "comingInbox": "The agent inbox: conversation list, timeline, composer, assignment and hand-off (19-OM.10–19-OM.17).",
+    "comingWidget": "Website chat: the visitor widget and its anonymous session model (19-OM.9).",
+    "dependencies": "Platform foundation",
+    "integrations": "Modules the workspace builds on",
+    "myRights": "My capabilities",
+    "module": "Module",
+    "phases": "Delivered phases",
+    "present": "Present",
+    "missing": "Missing",
+    "optional": "Optional",
+    "granted": "Granted",
+    "notGranted": "Not granted",
+    "col": {
+      "dependency": "Dependency",
+      "evidence": "Evidence",
+      "status": "Status",
+      "right": "Capability"
+    }
+  }
+}

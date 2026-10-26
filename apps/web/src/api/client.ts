@@ -135,6 +135,10 @@ import type {
   Metadata,
   ModuleSettingsView,
   NavigationTree,
+  OmnichannelCapabilitiesView,
+  OmnichannelHealthView,
+  OmnichannelNavView,
+  OmnichannelSettingsView,
   PortalContext,
   PortalDashboardRow,
   PortalNavItemRow,
@@ -2112,6 +2116,12 @@ export const api = {
   leadScoreCapabilities: () => request<LeadScoreCapabilitiesView>('/LeadScore/action/capabilities'),
   leadScoreSettings: () => request<LeadScoreSettingsView>('/LeadScore/action/settings'),
   leadScoreSaveSettings: (patch: Record<string, unknown>) => request<LeadScoreSettingsView>('/LeadScore/action/settings', post(patch)),
+  /** Phase 19-OM.2: the Omnichannel control plane — health, rights, nav signal, settings document. */
+  omnichannelHealth: () => request<OmnichannelHealthView>('/Omnichannel/action/health'),
+  omnichannelCapabilities: () => request<OmnichannelCapabilitiesView>('/Omnichannel/action/capabilities'),
+  omnichannelNav: () => request<OmnichannelNavView>('/Omnichannel/action/nav'),
+  omnichannelSettings: () => request<OmnichannelSettingsView>('/Omnichannel/action/settings'),
+  omnichannelSaveSettings: (patch: Record<string, unknown>) => request<OmnichannelSettingsView>('/Omnichannel/action/settings', post(patch)),
   /** The fields, per-type operators, value kinds and condition limits the editor may offer. */
   leadScoreEditor: (modelId?: string) =>
     request<LeadScoreEditorCatalog>(`/LeadScore/action/editor${modelId === undefined ? '' : `?modelId=${encodeURIComponent(modelId)}`}`),
