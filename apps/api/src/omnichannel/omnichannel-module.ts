@@ -149,6 +149,7 @@ export const OMNICHANNEL_DEPENDENCIES: readonly OmnichannelDependency[] = [
   { id: 'conversation-store', label: "Conversation records (VoiceCommunications, D1)", kind: 'table', value: 'voice_conversations', required: true },
   { id: 'message-store', label: "Message records (VoiceCommunications, D1)", kind: 'table', value: 'voice_messages', required: true },
   { id: 'participant-store', label: "Participant records (VoiceCommunications, D1)", kind: 'table', value: 'voice_conversation_participants', required: true },
+  { id: 'thread-store', label: "Channel-thread records (VoiceCommunications, E6)", kind: 'table', value: 'voice_conversation_threads', required: true },
   { id: 'webhook-receipts', label: "Webhook receipt pipeline (VoiceCommunications)", kind: 'table', value: 'voice_webhook_events', required: true },
   { id: 'queue-engine', label: 'Queue and routing engine (ServiceDesk, D2)', kind: 'entity', value: 'CaseQueue', required: false },
   { id: 'crm-contacts', label: 'CRM contacts (identity matching)', kind: 'entity', value: 'Contact', required: true },
@@ -187,7 +188,7 @@ export const OMNICHANNEL_MODULE = {
   /** Frontend route of the agent workspace. */
   frontendRoute: '/omnichannel',
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ['19-OM.0', '19-OM.1', '19-OM.2'],
+  implementedPhases: ['19-OM.0', '19-OM.1', '19-OM.2', '19-OM.3'],
   /**
    * Metadata entities this module owns — deliberately empty (D1): the records live in their
    * owning modules and the workspace consumes facades. No entity is invented to populate menus.

@@ -10,7 +10,8 @@
 | OM.0 — Repository audit | ✅ COMPLETE | `repository-audit.md`, `capability-matrix.md`; decisions D1–D3 locked in plan §0.2 |
 | OM.1 — Feature contract & channel feasibility | ✅ COMPLETE (documentation only) | `feature-contract.md`, `channel-feasibility.md`, risk log update (contract §12) |
 | OM.2 — Module registration & navigation | ✅ COMPLETE | `apps/api/src/omnichannel/` (descriptor, permission matrix, settings document, health, nav, control plane), nav seed, `/omnichannel` SPA shell, i18n en/vi, `omnichannel-module.test.ts` |
-| OM.3+ | ⏸ Not started | — |
+| OM.3 — Persistence model & additive migrations | ✅ COMPLETE | `database/migrations/077_phase19_omnichannel_persistence.sql`, `omnichannel-persistence.test.ts`, voice architecture §4.1 |
+| OM.4+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -23,6 +24,20 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.3 (Persistence model and additive migrations)
+
+- Migration `077_phase19_omnichannel_persistence.sql` (owned by `VoiceCommunications`, D1) applied to the
+  configured DB. Strictly additive — no drop/rename/re-type, existing rows preserved.
+- `voice_conversations`: `priority|category|language|tags|current_queue_id|assignment_version|last_message_at|last_outbound_at|snoozed_until|closed_at|version`; `current_queue_id → entity_records` ON DELETE SET NULL (queue is a ServiceDesk reference, not a Case dependency — R10).
+- E6 `voice_conversation_threads` (N threads → 1 conversation) + `voice_messages.thread_id`; `external_thread_id` kept/written (deprecated); 1:1 backfill of thread + message links from existing data only.
+- E5 participant identity columns (`provider_identity|verification_state|link_confidence|link_reason|last_seen_at|source_provenance|account_key|channel`) + partial-unique `uq_voice_participants_provider_identity`.
+- `channel` CHECK widened to include `web_chat`; workspace query indexes (queue, snooze, last-message, unread, closed, participant-entity).
+- Mid-phase correction: the identity backfill initially labelled agent participants as `exact/verified`; scoped to `role='customer'` (agent/system carry a platform assignment, not an address resolution). Applied data + migration both fixed.
+- Checks: `omnichannel-persistence.test.ts` 5/5 (1:1 model, web_chat admitted, priority vocabulary, duplicate provider-identity + duplicate external-thread refused, no `omnichannel_conversation/message/queue` table); Voice (71) + navigation + i18n + omnichannel-module green; api typecheck + eslint clean; direct data-integrity queries confirm the backfill preserved the pre-existing demo conversation.
+- **Pre-existing, out of scope:** `service-desk.test.ts` has 2 failures from a shared demo-seeded `serviceDesk` settings row (`queues/sla=true`) these non-isolating tests assume absent; unrelated to migration 077 (no tracked OM.3 change touches ServiceDesk). Noted, not fixed (AGENTS §10).
+- Files: `database/migrations/077_...sql`, `apps/api/test/omnichannel-persistence.test.ts`, `apps/api/src/omnichannel/omnichannel-module.ts` (thread-store dependency + OM.3 phase), `docs/modules/voice-communications/architecture.md` §4.1, plan §14 OM.3, this log.
+- Next (OM.4): export `VoiceInboxService`/`VoiceMessagingService`/`VoiceProviderAdapter` from the Voice barrel (E1) + publish the inbox-read and message-send cross-module contracts (E14) + the `unsupported` category (E3) — the preconditions OM.5+ depend on.
 
 ### 2026-10-26 — Phase 19-OM.2 (Module registration and navigation)
 

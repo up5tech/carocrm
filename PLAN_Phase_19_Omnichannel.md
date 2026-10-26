@@ -1115,6 +1115,29 @@ Acceptance:
 
 ### Phase 19-OM.3 — Persistence Model and Additive Migrations
 
+**Status: COMPLETE.** Migration `077_phase19_omnichannel_persistence.sql`, owned by
+`VoiceCommunications` (D1), applied to the configured database. Strictly additive: the §5.2
+conversation fields (`priority`, `category`, `language`, `tags`, `current_queue_id`,
+`assignment_version`, `last_message_at`, `last_outbound_at`, `snoozed_until`, `closed_at`, `version`),
+the E5 participant identity-evidence columns + partial-unique provider-identity index, the E6
+`voice_conversation_threads` table (N threads → 1 conversation) with `voice_messages.thread_id`, the
+`channel` CHECK widened to include `web_chat`, and the workspace query indexes. `external_thread_id` and
+its unique index are kept (deprecated) so existing readers do not break; the 1:1 backfill copied only
+derivable facts (conversation identity → thread, customer address, message timestamps) and invented none.
+No `omnichannel_*` conversation/message/queue table exists — the reuse decision is visible in the schema.
+`current_queue_id` references `entity_records` ON DELETE SET NULL, keeping the queue a ServiceDesk
+*reference*, not a dependency (R10). Documented in `docs/modules/voice-communications/architecture.md` §4.1.
+
+Verification: `omnichannel-persistence.test.ts` (5 — 1:1 model holds over the whole store with no
+cross-conversation thread reference, `web_chat` admitted, workspace defaults + priority vocabulary
+enforced, duplicate provider-identity and duplicate external-thread-id refused, and no second
+conversation/message/queue table); the four Voice suites (71 tests) + `navigation` + `i18n` + the OM.2
+`omnichannel-module` suite all green; two backfill-labeling/data-integrity checks run directly against the
+configured DB; the agent-participant backfill was corrected mid-phase (identity labels now apply to the
+customer role only). api `typecheck` and eslint clean. *Two pre-existing `service-desk.test.ts` assertions
+fail because a shared, demo-seeded `serviceDesk` settings row (`queues/sla=true`) predates this phase and
+is unrelated to migration 077 (no tracked OM.3 change touches ServiceDesk) — left as-is per AGENTS §10.*
+
 **Goal:** Implement the minimum durable domain model needed for conversation and channel-thread linkage.
 
 **Decision D1 applies: there is no new domain model to create.** The logical entities in §5 map onto

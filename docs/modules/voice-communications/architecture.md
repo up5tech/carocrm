@@ -100,6 +100,45 @@ Idempotency is structural:
 - `voice_conversation_events` is append-only: assignment and status history are rows, never an
   overwritten column (§9.1).
 
+### 4.1 Omnichannel extensions (19-OM.3, migration 077) — reused, not rebuilt
+
+Decision D1 keeps the canonical conversation here; the Omnichannel workspace consumes these records
+through the Voice facade rather than owning a parallel store (the schema shows **no**
+`omnichannel_conversation`/`message`/`queue` table). All changes are additive — no column was dropped,
+renamed or re-typed and existing rows are preserved:
+
+- `voice_conversations` gained the workspace columns `priority` (`low|normal|high|urgent`, default
+  `normal`), `category`, `language`, `tags` (`jsonb` array), `current_queue_id`,
+  `assignment_version`, `last_message_at`, `last_outbound_at`, `snoozed_until`, `closed_at` and
+  `version`. `current_queue_id` references `entity_records` **ON DELETE SET NULL** — D2 keeps the queue
+  a ServiceDesk `CaseQueue` reference, never a Case dependency, and dropping a queue must never take a
+  conversation with it.
+- **N provider threads → 1 conversation** (extension E6): the new `voice_conversation_threads` table
+  (`conversation_id` CASCADE, `account_key`, `channel`, `external_thread_id`, `address`,
+  `provider_identity`) with unique `uq_voice_conversation_threads_external (account_key, channel,
+  external_thread_id)`; `voice_messages` gained `thread_id`. `voice_conversations.external_thread_id` is
+  kept and still written (deprecated) so nothing that reads it breaks. Each pre-existing 1:1 conversation
+  was backfilled exactly one thread and its messages linked; the backfill copies only facts already
+  present and invents none (`closed_at`/`last_outbound_at` stay NULL on historical rows).
+- `voice_conversations.channel` and `voice_messages.channel` CHECK widened to `('sms','mms','whatsapp','web_chat')`
+  for the first-release web-chat channel; no adapter ships MMS, so it stays vocabulary-only.
+- `voice_conversation_participants` gained the identity-evidence columns (extension E5):
+  `provider_identity`, `account_key`, `channel`, `verification_state` (`unverified|verified|disputed`),
+  `link_confidence` (`none|exact|manual|heuristic`), `link_reason`, `last_seen_at`, `source_provenance`,
+  and partial-unique `uq_voice_participants_provider_identity (account_key, channel, provider_identity,
+  conversation_id) WHERE provider_identity IS NOT NULL` — the schema half of "duplicate external identity
+  refused under concurrent delivery". Historical address-matched customer links were labelled
+  `verified/exact/migrated_address_match`; agent/system participants keep the honest default because their
+  entity reference is a platform assignment, not an address resolution.
+
+**Retention and access** (OM.3 acceptance): the new columns belong to the same retention classes as their
+host row — the conversation metadata and `message-body`/`webhook-diagnostic` clocks in
+`privacy-and-retention.md`; thread rows and provider-identity values carry no new message content and
+follow their conversation's lifecycle via `ON DELETE CASCADE`. Provider identities are channel addresses of
+the same class as the existing `address` column, so reading a participant (and thus its identity evidence)
+still requires the conversation's record ACL — no new surface bypasses it. The writers land in OM.6/OM.7;
+OM.3 is schema and constraints only.
+
 ## 5. Service authority
 
 Webhook processing has no human principal, so it runs as the module's documented system identity
