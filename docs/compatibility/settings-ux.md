@@ -130,13 +130,16 @@ behaviour, so none of them is an EspoCRM compatibility question.
   template designers. The permission-denied state of §5.7 is still not applied by the list, detail
   and dashboards pages, which keep their own error markup. `EmptyState`, `LoadingSkeleton` and
   `ErrorState` are used by the settings shell, the list page and the dashboards page.
-- **There is no automated axe audit** on the four core surfaces, and there is no frontend test
-  runner in this repository at all (`vitest.config.ts` covers `apps/api/test` and `packages/*/src`
-  only). The accessibility pass is a manual keyboard walkthrough plus a responsive check at 1440 px,
-  768 px and 390 px. The plan's acceptance criterion "axe passes on the four core surfaces" is
-  therefore **not met**.
+- **The automated axe audit exists and passes since 2026-10-26.** `@axe-core/playwright` scans the
+  four core surfaces (home, list, record, settings) under WCAG 2.0 A/AA tags and asserts zero
+  violations (`npx playwright test e2e/accessibility.spec.ts --project=chromium`); the scan found
+  real contrast/label defects, each fixed in the ink tokens, the selection accent, the pills, the
+  footer and the list toolbar's unnamed controls. Bounds are recorded in `docs/ux/accessibility.md`:
+  the audit certifies the default `blue` brand instance, the rule tags are WCAG 2.0 A/AA (not
+  2.1/2.2), and keyboard/focus paths remain a manual walkthrough. `pnpm test:web` plus the
+  `lint:ui` convention gate complete the quality-gate picture of 20.26.
 - **No Playwright spec covers the plan's §13.5 scenarios** (1–6); `e2e/` holds specs for the
-  earlier modules only.
+  earlier modules only, plus the §13.5 overflow/palette smoke and the axe audit itself.
 - **Contrast was not measured.** The palette uses the Ant Design token set; no contrast audit was
   run against the `carocrm-*` layer.
 

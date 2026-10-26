@@ -1,4 +1,5 @@
 import { AppstoreOutlined, DeleteOutlined, DownloadOutlined, DownOutlined, MoreOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, ThunderboltOutlined, UploadOutlined, UpOutlined } from '@ant-design/icons';
+import type { CheckboxProps } from 'antd';
 import { App as AntApp, Button, Card, Col, Dropdown, Input, Modal, Popconfirm, Row, Select, Space, Table, Tabs, Typography } from 'antd';
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -699,6 +700,7 @@ export function EntityListPage() {
         <Select
           style={{ minWidth: 220 }}
           placeholder={t('web.list.savedFilters')}
+          aria-label={t('web.list.savedFiltersAria')}
           allowClear
           value={activeFilterId}
           options={savedFilters.map((filter) => ({ value: filter.id, label: `${filter.name}${filter.isShared ? ` ${t('web.list.shared')}` : ''}` }))}
@@ -729,6 +731,7 @@ export function EntityListPage() {
                   <Select
                     style={{ width: '46%' }}
                     placeholder={t('web.list.operator')}
+                    aria-label={t('web.list.operatorAria')}
                     value={drafts.find((d) => d.field === entry.name)?.operator}
                     options={operatorOptions()}
                     onChange={(operator) => {
@@ -913,6 +916,12 @@ export function EntityListPage() {
         rowSelection={{
           selectedRowKeys: selected,
           onChange: (keys) => setSelected(keys.map(String)),
+          // §20.26 axe: the selection column's checkboxes render without accessible names —
+          // getCheckboxProps feeds each antd Checkbox, which forwards unknown props to its input.
+          // The aria name rides that same route; the cast is because `CheckboxProps` does not
+          // declare ARIA attributes even though antd forwards them.
+          getCheckboxProps: (record): Partial<CheckboxProps> =>
+            ({ 'aria-label': t('web.list.selectRowAria', { name: String(record[displayField] ?? record['id'] ?? '') }) }) as unknown as Partial<CheckboxProps>,
         }}
         locale={loadError ? { emptyText: <Typography.Text type="danger">{loadError}</Typography.Text> } : {}}
         onChange={(_pagination, _filters, sorter) => {

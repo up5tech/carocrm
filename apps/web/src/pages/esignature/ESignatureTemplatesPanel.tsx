@@ -139,7 +139,7 @@ export function ESignatureTemplatesPanel() {
       title={
         <div>
           <div>{t('esignature.templates.title')}</div>
-          <div style={{ marginTop: 2, color: '#737b85', fontSize: 12, fontWeight: 400 }}>{t('esignature.templates.hint')}</div>
+          <div style={{ marginTop: 2, color: 'var(--carocrm-ink-secondary)', fontSize: 12, fontWeight: 400 }}>{t('esignature.templates.hint')}</div>
         </div>
       }
       extra={

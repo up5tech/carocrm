@@ -3,7 +3,9 @@
 Scope: `PLAN_Phase_20_Settings_UX.md` §5.8, §13.6 and sub-phase 20.16. Target: WCAG 2.2 AA.
 
 This document records what is implemented, how it is verified, and — honestly — what is **not**
-verified. The automated axe pass the plan asks for does not exist in this repository.
+verified. As of §20.26 the SPA has an automated gate (`pnpm lint:ui` + `pnpm test:web`), but that gate
+is **not** an axe audit: it checks tokens, formatters, the empty-state contract and the conventions,
+not rendered contrast or ARIA on a live surface.
 
 ## Implemented
 
@@ -54,29 +56,63 @@ No interaction is drag-only. Every list that can be dragged also has move-up / m
 - ≤ 390 px: the save bar and the bulk bar get a `max-width` so they cannot cause horizontal
   overflow.
 
-## Verification actually performed
+## What the gate checks (§20.26)
 
-- A manual keyboard walkthrough of the settings shell, the main menu tab, the list view, the record
-  page and the command palette.
-- A browser check at 1440 px, 768 px and 390 px for overflow and for the responsive rules above.
-- The API test suite (`apps/api/test/`) covers the **server-side** half of accessibility: the
-  permission matrix, the last-administrator rule, and the settings/navigation authorization rules.
+`pnpm lint:ui` runs `scripts/check-ui-conventions.mjs` and fails on each of these (every one was a
+shipped defect first, not a style preference):
 
-## Known gaps
+1. a `t('…')` key that is missing from `i18n/en` (the UI would render the raw key);
+2. a `.slice(0, 19)` timestamp (prints UTC while the page prints the user's zone);
+3. a raw `<Empty>` outside `EmptyState.tsx` (the four empty situations must stay distinct);
+4. an internal `<a href="/…">` (a full page load drops SPA state);
+5. a hex colour literal outside `tokens.css` (and `theme.ts` must stay literal-free).
 
-- **No automated axe audit.** The plan's acceptance for 20.16 ("axe passes on the four core
-  surfaces") is **not met** — `axe-core` is not a dependency and no axe run exists. The manual
-  walkthrough is a review, not a pass.
-- **No frontend test runner.** `vitest.config.ts` includes `apps/api/test/**/*.test.ts` and
-  `packages/*/src/**/*.test.ts` only, so there are no component tests and no focus/ARIA assertions.
-- **Playwright smoke for Phase 20.** `e2e/accessibility.spec.ts` checks 390px overflow on list/detail/
-  settings and a keyboard path to the command palette. It is a smoke test, not an axe audit.
-- **Focus is not moved to the first invalid field** after a failed save.
-- **The palette does not accept `/`** as a focus shortcut, and it caps results at 12 per group
-  rather than the plan's 20.
-- **Contrast was not measured.** The palette follows the Ant Design token set; no contrast audit
-  was run against the `carocrm-*` layer.
-- **`PermissionDenied.tsx` and `HelpTip.tsx` were unused at the time of this pass; both are used
-  now** (a refused handbook page and the CRM chat workspace for the first, the Main Menu tab, the
-  docs cross-links and the two template designers for the second). The permission-denied state of
-  §5.7 is still not applied by the list, detail and dashboards pages.
+`node scripts/check-ui-conventions.mjs --self-test` proves each rule still catches a seeded
+violation, and a docs-truth rule refuses a "Still open" entry that names a feature the code ships.
+
+`pnpm test:web` (Vitest, `node` environment, no jsdom) adds 14 assertions:
+
+- **Tokens** — `carocrm.css` has zero hex literals, every `--carocrm-*` it uses is declared in
+  `tokens.css`, and the four themable accent tokens exist (§20.20).
+- **Formatters** — `formatDateTime`/`formatClock`/`formatRelative`/`formatNumber` are locale- and
+  timezone-aware and never emit a raw ISO slice or `Invalid Date` (§20.23).
+- **Empty state** — the title is the primary line, the four variants render distinct copy, and the
+  action slot renders (§20.22).
+- **Gate** — the convention script passes on the tree and catches a seeded violation in every rule.
+
+Still performed manually (a review, not a pass): a keyboard walkthrough of the settings shell, the
+main menu tab, the list view, the record page and the command palette; a browser check at 1440 / 768 /
+390 px. The API suite (`apps/api/test/`) covers the **server-side** half: the permission matrix, the
+last-administrator rule, and settings/navigation authorization.
+
+## What the gate does **not** check
+
+- **The axe audit runs, and it runs on a real browser render.** Since the axe piece of §20.26 landed
+  (2026-10-26), `e2e/accessibility.spec.ts` scans **home, list, record and settings** with
+  `@axe-core/playwright` under the WCAG 2.0 A/AA tags and asserts **zero violations** — the
+  β criterion of §20.16 ("axe passes on the four core surfaces") is now met by command
+  (`npx playwright test e2e/accessibility.spec.ts --project=chromium`), not by a walkthrough.
+  The shared QA webs for it are real fixes to the shipped surfaces: ink tokens raised to AA
+  (#66707a secondary/muted, #6e7681 faint), the selection accent colour moved to each accent's
+  *strong* tone (the plain accent on the soft selection background was 2.98:1), `colorPrimary`
+  and `colorLink` follow the strong tone (white on the plain accent was 3.2:1 on a primary
+  button), the settings save-bar `Typography.Text` repainted from `colorTextDescription` —
+  Ant Design's own 2.47:1 default — the footer, the status pills and the next-action label all
+  repainted to AA, the unnamed antd `Select`s in the list filters, the saved-filters picker and
+  every row-selection checkbox gained `aria-label`, and the antd table's measure row is now
+  `visibility: hidden` so it stops hiding a tabbable element. What remains **not** certified:
+  the seven *non-default* brand accent tones pass the same gate only where their `strong` tone
+  clears AA (blue, purple, magenta); the scan covers WCAG 2.0 A/AA, not 2.1/2.2 rules; and the
+  keyboard/first-invalid-field focus path is still asserted manually, not automatically.
+- **Automated contrast beyond the axe rule.** Axe's colour-contrast rule checked the four surfaces
+  above and passed; there is no separate sweep over every remaining combination of the token set.
+- **Interaction and focus are partially asserted.** The axe scan covers ARIA structure and labelling
+  automatically; keyboard paths and focus restoration are a manual walkthrough. The first-invalid-field
+  focus move after a failed save **is** implemented (`EntityEditPage` scrolls to and focuses the first
+  field with an error) but is not asserted by a test.
+- **Responsive layout is partly asserted.** The 390 px overflow smoke and the axe scans are automated;
+  the 1440 / 768 walkthroughs remain manual.
+- **`PermissionDenied.tsx` and `HelpTip.tsx` are used now** (a refused handbook page and the CRM chat
+  workspace for the first; the Main Menu tab, docs cross-links and the two template designers for the
+  second). The permission-denied state of §5.7 is still not applied by the list, detail and dashboards
+  pages, which keep their own error markup.

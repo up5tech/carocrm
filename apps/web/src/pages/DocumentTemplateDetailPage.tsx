@@ -236,7 +236,7 @@ export function DocumentTemplateDetailPage() {
                 column={1}
                 size="small"
                 colon={false}
-                styles={{ label: { width: 132, color: '#737b85' } }}
+                styles={{ label: { width: 132, color: 'var(--carocrm-ink-secondary)' } }}
                 items={[
                   { key: 'code', label: label('code'), children: <span className="carocrm-dtpl-code">{code}</span> },
                   {

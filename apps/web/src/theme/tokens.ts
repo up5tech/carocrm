@@ -27,12 +27,16 @@ export const COLOR = {
   surfaceSunken: '#fafafa',
   surfaceOverlay: '#ffffff',
 
-  // Ink (text and icons).
+  // Ink (text and icons). Secondary and both of the paler inks clear WCAG AA (4.5:1) on every light
+  // surface they render text on — the §20.26 axe gate fails otherwise: secondary is 5.04:1 over
+  // white and 4.63:1 over the page grey; faint is 4.59:1 over white.
   inkPrimary: '#31373d',
-  inkSecondary: '#737b85',
+  inkSecondary: '#66707a',
   inkMenu: '#5b636d',
-  inkMuted: '#8b939d',
-  inkFaint: '#a1a8b3',
+  // §20.26 axe gate: muted text is real text wherever it renders (kbd hints, uppercase meta
+  // labels), so it shares the secondary value — the four AA-checked surfaces fail otherwise.
+  inkMuted: '#66707a',
+  inkFaint: '#6e7681',
   inkInverse: '#ffffff',
 
   // Lines and borders.

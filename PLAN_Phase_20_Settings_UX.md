@@ -39,10 +39,10 @@
 > reorder/resize/freeze, list virtualization, the Favorites group, the record-page sticky header and
 > next-action band, "Save & new", the palette's `/` shortcut and server-persisted recents, the setup
 > banner's per-user dismissal, `nav.quickCreate` consumption, and KPI trend (target and previous
-> window are implemented). 2FA and menu preview-as are implemented. The
-> plan's 20.16 acceptance criterion ("axe passes on the four core surfaces") is **not met**: this
-> repository has no frontend test runner and no axe dependency, so the accessibility pass is a manual
-> keyboard walkthrough plus a responsive check — see `docs/ux/accessibility.md`.
+> window are implemented). 2FA and menu preview-as are implemented.
+> The plan's 20.16 acceptance criterion ("axe passes on the four core surfaces") is **met as of
+> 2026-10-26** (§20.26's axe piece: `@axe-core/playwright` scans home, list, record and settings
+> with zero WCAG 2.0 A/AA violations — see `docs/ux/accessibility.md`).
 >
 > This document remains the scope, architecture reference and implementation roadmap for Phase 20.
 > Implemented behaviour is documented in `docs/admin/settings.md`, `docs/admin/navigation.md`,
@@ -1416,8 +1416,9 @@ passes.
 Delivered: the focus-visible ring, 36 px desktop controls with 44 px touch targets on coarse
 pointers, `prefers-reduced-motion`, the ARIA labels on
 the palette, the checklist and the bulk bar, the responsive breakpoints at 1180 / 768 / 390 px, and a
-manual keyboard walkthrough. **The automated axe pass is not met** — this repository has no frontend
-test runner and no axe dependency. See `docs/ux/accessibility.md`.
+manual keyboard walkthrough. **The automated axe pass is met as of 2026-10-26** — the §20.26 axe
+piece scans home, list, record and settings with zero WCAG 2.0 A/AA violations.
+See `docs/ux/accessibility.md`.
 
 ### Phase 20.17 — Hardening, compatibility, and release readiness  ✅ done 2026-10-20
 
@@ -2015,7 +2016,7 @@ Acceptance: typing "timezone" from any screen reaches the Localization tab's tim
 keystrokes plus Enter; a tab the caller cannot open never appears in either surface; a module that
 adds a tab with keywords is searchable without a shell change; keyboard-only throughout.
 
-### Phase 20.26 — Frontend quality gate  ⬜ proposed
+### Phase 20.26 — Frontend quality gate  ✅ implemented 2026-10-26 (gate + tests + axe)
 
 Source: `docs/ux/ui-review.md` §5 and §8; `PLAN_Phase_20` 20.16's unmet acceptance criterion.
 
@@ -2044,6 +2045,46 @@ Acceptance: `pnpm test:web` runs green on a clean tree; axe reports zero violati
 surfaces; deleting an `aria-label` from an icon-only control, or adding a raw `<Empty>`, or
 reintroducing `.slice(0, 19)`, makes the gate fail; the deferral list matches the code; 20.16's
 acceptance criterion can be marked met with a command instead of a walkthrough.
+
+**Implemented 2026-10-26 (dependency-free part).**
+
+- `vitest.web.config.ts` + `pnpm test:web` — a SPA test project kept separate from the root
+  `vitest.config.ts` (which stays API/database-backed). `environment: 'node'`, no jsdom.
+- Four spec files, **14 assertions**: `theme/tokens.test.ts` (no hex in `carocrm.css`, every
+  `--carocrm-*` declared, accent tokens present), `state/i18n.test.ts` (locale/timezone formatters),
+  `components/EmptyState.test.tsx` (title primary, four variants distinct, action slot — server-rendered
+  via `react-dom/server`), `__tests__/conventions.test.ts` (gate passes + `--self-test` catches every
+  rule).
+- `scripts/check-ui-conventions.mjs` — added `--self-test` (each of the 5 rules must flag a seeded
+  violation and leave a clean sample alone) and a docs-truth rule (the "Still open" list must not name
+  a feature whose evidence file exists).
+- `pnpm lint` now runs the convention gate before ESLint, so the gate is in the normal lint path.
+- `docs/ux/accessibility.md` rewritten to "what the gate checks and what it does not".
+
+**The axe piece — done 2026-10-26 (same day, browser-rendered rather than jsdom).** The dependency
+friction above pointed at a jsdom + `@testing-library/react` + `vitest-axe` stack; a Playwright side
+needs exactly one dependency instead, audits the pages *as users actually render them* and reuses the
+e2e login/seed plumbing that already exists. The jsdom scope of the spec is unchanged. Added:
+
+- `@axe-core/playwright` (the only new dependency) and a second describe in
+  `e2e/accessibility.spec.ts`: an `AxeBuilder` scan (`wcag2a`, `wcag2aa` tags) asserting zero
+  violations on the four core surfaces — **home, list, record, settings** — as the plan's §20.21
+  names them.
+- The scan found real defects, and each one is fixed, not excluded: ink tokens raised to WCAG AA
+  (secondary/muted `66707a`, faint `6e7681` in `theme/tokens.ts` + the generated
+  `styles/tokens.css`), the menu/tab selection colour moved to each accent tone's `strong` value
+  (the plain accent on its soft selection background is 2.98:1), `colorPrimary`/`colorLink` and
+  `colorTextDescription` follow (`theme.ts`; the antd default description ink over white is
+  2.47:1), the status pills and the next-action label repainted, the footer colour raised, the
+  unnamed antd `Select`s in the list toolbar/filters given `aria-label`, every row-selection
+  checkbox named through `getCheckboxProps`, and antd's table measure row made
+  `visibility: hidden` so it no longer hides a tabbable element (axe's aria-hidden-focus).
+- Result: `npx playwright test e2e/accessibility.spec.ts --project=chromium` — 6/6 green, **zero
+  WCAG 2.0 A/AA violations** on all four surfaces. §20.16's acceptance criterion is met by
+  command. Known bounds, recorded in `docs/ux/accessibility.md`: the audit covers the default
+  `blue` brand instance (of the eight accent tones, only blue/purple/magenta's strong tone clears
+  AA over their soft background), the rule tags are WCAG 2.0 A/AA rather than 2.1/2.2, and
+  keyboard/focus paths remain a manual walkthrough.
 
 ### Phase 20.27 — A bounded first load, and writes that answer immediately  ⬜ proposed
 
@@ -2097,8 +2138,8 @@ the server's reason; returning to a stale tab shows fresh data.
   indistinguishable from an empty screen on several screens (both 20.22 — ✅ fixed 2026-10-25);
   admin and ops screens print UTC as if it were local time (20.23 — ✅ fixed 2026-10-25); the design
   system has no token layer, so the brand setting cannot set a colour and two sources of truth
-  already disagree (20.20); and 20.16's "axe passes" criterion is unmet because there is no frontend
-  test runner (20.26).
+  already disagree (20.20); and 20.16's "axe passes" criterion — met on 2026-10-26 via the
+  §20.26 axe piece (a frontend test runner and the axe audit both exists now).
 
 ### P1 — Required for comfortable daily use
 
@@ -2164,8 +2205,8 @@ Phase 20 is complete when all applicable checks below pass:
 - [x] Record pages have an unsaved-changes guard and keyboard `⌘/Ctrl+Enter` save. (20.13 — the sticky
       header, the next-action band, progressive disclosure and "Save & new" are documented deferrals)
 - [x] A command palette is reachable by keyboard from every screen and reveals nothing unauthorized. (20.14 — the `/` shortcut and the "see all" deep link are documented deferrals)
-- [~] Empty, loading, error and permission-denied states exist as shared components and are used. (20.11 — `EmptyState`, `LoadingSkeleton` and `ErrorState` are used by the settings shell, the list page and the dashboards page; `PermissionDenied` and `HelpTip` exist but are **not used by any page** — documented deferral)
-- [~] Keyboard operability is verified on the four core surfaces. (20.16 — focus-visible rings, 36 px desktop controls with 44 px touch targets on touch devices, `prefers-reduced-motion`, ARIA labels on the palette/checklist/bulk bar, and a manual keyboard walkthrough. **The axe-core automated audit the acceptance asks for is not done**: this repository has no frontend test runner and no axe dependency. WCAG 2.2 AA **contrast was not measured**.)
+- [x] Empty, loading, error and permission-denied states exist as shared components and are used. (20.11 + later — `EmptyState`, `LoadingSkeleton`, `ErrorState` and — since Phase 20.22 — `AppErrorBoundary` and `OfflineBanner` are used; `PermissionDenied` is consumed by the docs reader and the CRM chat workspace, `HelpTip` by the Main Menu tab, the docs cross-links and the two template designers)
+- [x] Keyboard operability is verified on the four core surfaces. (20.16 — focus-visible rings, 36 px desktop controls with 44 px touch targets on touch devices, `prefers-reduced-motion`, ARIA labels on the palette/checklist/bulk bar, a manual keyboard walkthrough, **and since 2026-10-26 the automated axe audit**: `@axe-core/playwright` scans home, list, record and settings with zero WCAG 2.0 A/AA violations; contrast is asserted by that same audit over the AA rule set.)
 - [x] Users can work on desktop, tablet and phone without losing function. (20.16 — responsive CSS at 768px and 390px: rail off-screen, bars constrained, forms stacked, tables scrollable; no horizontal overflow at 1440/768px, 390px fixed by save/bulk bar max-width)
 - [x] Tests cover happy paths, invalid input, permission denial, conflicts and bulk-action edge cases. (138 files / 1876 tests — API and package suites; there is **no frontend test runner** in this repository, so the UI half of the plan's §13.1/§13.4/§13.5 is covered by a manual browser walkthrough only)
 - [x] Lint, typecheck, build and the existing test/smoke suites were run; skipped checks documented. (`pnpm lint` clean, `pnpm typecheck` clean, `pnpm build` clean, `pnpm test` 138/1876 green, 2026-10-20)

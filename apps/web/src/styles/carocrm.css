@@ -361,9 +361,17 @@ body {
 .carocrm-footer {
   background: transparent;
   text-align: center;
-  color: var(--carocrm-ink-faint);
+  /* ink-secondary on the page background is 4.63:1; ink-faint on it is 4.21 (§20.26 axe). */
+  color: var(--carocrm-ink-secondary);
   font-size: 13px;
   padding: 18px 24px;
+}
+
+/* antd renders this row aria-hidden (§20.26 axe: aria-hidden-focus), but it keeps a tabindex="-1".
+   `visibility: hidden` takes it out of the tab order and the a11y tree without `display: none`,
+   which would break the column-width measurement the row exists for. */
+.ant-table-measure-row {
+  visibility: hidden;
 }
 
 /* ---- sidebar ---- */
@@ -401,7 +409,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.9px;
   text-transform: uppercase;
-  color: var(--carocrm-c-98a1ad);
+  color: var(--carocrm-ink-secondary);
 }
 
 .carocrm-nav-group {
@@ -678,12 +686,13 @@ body {
   font-size: 12px;
   line-height: 20px;
   background: var(--carocrm-c-e3f0ff);
-  color: var(--carocrm-accent);
+  /* strong tone: the plain accent over this pale blue is 2.77:1 (§20.26 axe, §20.16 AA). */
+  color: var(--carocrm-c-1f5fa9);
 }
 
-.carocrm-pill--green { background: var(--carocrm-c-ecfff3); color: var(--carocrm-state-success); }
-.carocrm-pill--amber { background: var(--carocrm-c-fffbe6); color: var(--carocrm-c-e8a33d); }
-.carocrm-pill--red { background: var(--carocrm-c-fdecec); color: var(--carocrm-state-error); }
+.carocrm-pill--green { background: var(--carocrm-c-ecfff3); color: var(--carocrm-c-1e7d46); }
+.carocrm-pill--amber { background: var(--carocrm-c-fffbe6); color: var(--carocrm-c-8a6116); }
+.carocrm-pill--red { background: var(--carocrm-c-fdecec); color: var(--carocrm-c-b0303a); }
 .carocrm-pill--grey { background: var(--carocrm-c-f2f3f5); color: var(--carocrm-ink-secondary); }
 
 /* ---------------------------------------------------------------------------
@@ -2432,7 +2441,8 @@ body {
 }
 
 .carocrm-next-action-label {
-  color: var(--carocrm-c-2f6ed9);
+  /* accent-strong, not the 2f6ed9 tint: on the band's pale blue the tint is 4.46:1 (§20.26 axe). */
+  color: var(--carocrm-accent-strong);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.07em;
@@ -2617,7 +2627,8 @@ body {
 
 .carocrm-admin-tab.is-selected {
   background: var(--carocrm-accent-soft);
-  color: var(--carocrm-accent);
+  /* Strong tone, not the plain accent: §20.16 AA (§20.26 axe) — white-on-soft texts too low. */
+  color: var(--carocrm-accent-strong);
   font-weight: 600;
 }
 
@@ -7069,7 +7080,7 @@ body.carocrm-reordering * {
 .carocrm-dashlet-grip {
   align-items: center;
   border-radius: 8px;
-  color: var(--carocrm-c-98a1ad);
+  color: var(--carocrm-ink-secondary);
   cursor: grab;
   display: inline-flex;
   flex: none;
@@ -7279,7 +7290,8 @@ body.carocrm-reordering * {
   background: var(--carocrm-c-f3f6fb);
   border: 1px solid var(--home-line);
   border-radius: 5px;
-  color: var(--home-faint);
+  /* ink-secondary, not the home faint: on this pale blue it needs 4.5:1 (§20.26 axe). */
+  color: var(--carocrm-ink-secondary);
   font-family: inherit;
   font-size: 11px;
   line-height: 1.5;

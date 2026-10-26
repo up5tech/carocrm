@@ -368,7 +368,7 @@ export function EntityDetailPage() {
   const covered = useMemo(() => layoutFieldNames(panels), [panels]);
   const others = useMemo(() => ordered.filter((entry) => !covered.has(entry.name)), [ordered, covered]);
 
-  const labelStyle = { width: 200, color: '#737b85', fontWeight: 400, paddingBlock: 10 };
+  const labelStyle = { width: 200, color: 'var(--carocrm-ink-secondary)', fontWeight: 400, paddingBlock: 10 };
   const contentStyle = { paddingBlock: 10, paddingInlineEnd: 24 };
   const describe = (list: FieldEntry[]) =>
     list.map((entry) => ({

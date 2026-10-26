@@ -20,7 +20,7 @@
  *
  * Run: `node scripts/check-ui-conventions.mjs` (also wired to `pnpm lint:ui`).
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
@@ -61,6 +61,46 @@ const RAW_ANCHOR_RE = /<a\s[^>]*href=\{?["'`]\/(?!api\/)/;
 // `#carocrm-content` is never matched) and one followed by more hex digits.
 const HEX_RE = /(#[0-9a-fA-F]{8}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{4}|#[0-9a-fA-F]{3})(?![0-9a-fA-F])(?![a-zA-Z0-9_-])/;
 
+/**
+ * `--self-test` proves the gate still catches each defect it exists for: every rule must flag a
+ * seeded violation and leave a clean sample alone. `pnpm test:web` runs this, so a broken regex is
+ * caught before it silently stops enforcing anything.
+ */
+function selfTest() {
+  const failures = [];
+  const cases = [
+    [
+      'missing i18n key',
+      "const x = t('core.__definitely_missing__');",
+      'const x = 1;',
+      (line) =>
+        [...line.matchAll(KEY_RE)].some(
+          (m) => !(m[1] in catalog) && !(`${m[1]}_one` in catalog) && !(`${m[1]}_other` in catalog),
+        ),
+    ],
+    ['ISO slice', 'a.slice(0, 19)', 'a.slice(0, 10)', (line) => SLICE_RE.test(line)],
+    ['raw <Empty>', '<Empty />', '<EmptyState />', (line) => RAW_EMPTY_RE.test(line)],
+    ['raw anchor', '<a href="/x">y</a>', '<Link to="/x">y</Link>', (line) => RAW_ANCHOR_RE.test(line)],
+    ['hex literal', 'color: #438eff;', 'color: var(--carocrm-accent);', (line) => HEX_RE.test(line)],
+  ];
+  for (const [name, bad, good, check] of cases) {
+    if (!check(bad)) failures.push(`${name}: seeded violation NOT caught`);
+    if (check(good)) failures.push(`${name}: clean sample wrongly flagged`);
+  }
+  return failures;
+}
+
+if (process.argv.includes('--self-test')) {
+  const failures = selfTest();
+  if (failures.length > 0) {
+    console.error(`ui conventions self-test: ${failures.length} failure(s)`);
+    for (const failure of failures) console.error(`  ${failure}`);
+    process.exit(1);
+  }
+  console.log('ui conventions self-test: ok (5 rules each catch a seeded violation)');
+  process.exit(0);
+}
+
 const violations = [];
 
 for (const file of walk(srcDir)) {
@@ -88,6 +128,35 @@ for (const file of walk(srcDir)) {
     if (RAW_ANCHOR_RE.test(line)) violations.push(`${at}  raw <a href="/…"> — use Link`);
     if (hexScoped && HEX_RE.test(line)) violations.push(`${at}  hex colour literal — use a --carocrm-* token (tokens.css)`);
   });
+}
+
+// Rule 6 (docs truth, §20.26): the authoritative "Still open" list must not name a feature the code
+// ships. Evidence is a file that proves the feature exists; the check only fires when that file is
+// present, so it never flags a genuinely-absent item.
+const compatibilityDoc = join(root, 'docs/compatibility/settings-ux.md');
+if (existsSync(compatibilityDoc)) {
+  const doc = readFileSync(compatibilityDoc, 'utf8');
+  const marker = 'Still open, confirmed absent';
+  const start = doc.indexOf(marker);
+  if (start !== -1) {
+    const rest = doc.slice(start + marker.length);
+    const end = rest.search(/\n\s*\n/);
+    const stillOpen = (end === -1 ? rest : rest.slice(0, end)).toLowerCase();
+    const shipped = [
+      { phrase: 'kebab', evidence: 'apps/web/src/pages/EntityListPage.tsx' },
+      { phrase: 'column reorder', evidence: 'apps/web/src/components/ColumnManager.tsx' },
+      { phrase: 'column resize', evidence: 'apps/web/src/pages/EntityListPage.tsx' },
+      { phrase: 'favorites group', evidence: 'apps/web/src/state/favorites.ts' },
+      { phrase: 'next-action band', evidence: 'apps/web/src/components/NextActionBand.tsx' },
+    ];
+    for (const item of shipped) {
+      if (stillOpen.includes(item.phrase) && existsSync(join(root, item.evidence))) {
+        violations.push(
+          `docs/compatibility/settings-ux.md  "Still open" names "${item.phrase}" but ${item.evidence} ships it`,
+        );
+      }
+    }
+  }
 }
 
 if (violations.length === 0) {

@@ -176,7 +176,7 @@ export function ESignatureRequestsPanel(props: {
       title={
         <div>
           <div>{t('esignature.requests.title')}</div>
-          <div style={{ marginTop: 2, color: '#737b85', fontSize: 12, fontWeight: 400 }}>{t('esignature.requests.hint')}</div>
+          <div style={{ marginTop: 2, color: 'var(--carocrm-ink-secondary)', fontSize: 12, fontWeight: 400 }}>{t('esignature.requests.hint')}</div>
         </div>
       }
       extra={

@@ -323,7 +323,7 @@ export function CRMChatPage() {
             {searchEnabled ? (
               <Input
                 allowClear
-                prefix={<SearchOutlined style={{ color: '#a1a8b3' }} />}
+                prefix={<SearchOutlined style={{ color: 'var(--carocrm-ink-faint)' }} />}
                 variant="filled"
                 value={search}
                 maxLength={200}

@@ -2772,20 +2772,26 @@ Do not put these directly into the kernel.
 
 ## Phase 20 — Settings, Administration and UX/UI
 
-Progress (2026-10-20): sub-phases 20.0–20.17 are implemented — the settings document registry with
+Progress (2026-10-20, updated 2026-10-26): sub-phases 20.0–20.17 are implemented — the settings document registry with
 versioning and optimistic concurrency, the tabbed administration shell, the General / Localization /
 Main Menu / Layout / Attachments / Users / Teams / Roles / API keys / Security / Messaging / Internal
 tabs, the hosted Sales, Service Desk and Customer Success documents, `GET /Navigation` resolved and
 ACL-filtered on the server, per-entity `nav` metadata, per-user preferences, the shared state
 components, the list-view power pack, the record-page guard, the command palette, the setup
-checklist, and the accessibility/responsive pass.
+checklist, and the accessibility/responsive pass. The 2026-10-25 UI/UX review spawned follow-up
+sub-phases 20.18–20.23 (record relation tabs, home workspace, tokens/state/formatters) — implemented
+— and §20.26's axe piece landed on 2026-10-26: **the plan's 20.16 acceptance criterion ("axe passes
+on the four core surfaces") is now met** with zero WCAG 2.0 A/AA violations.
 
 The remaining parts of the plan's §5 that are **not** built — cross-page "select all N matching
-records", bulk-action outcome counts, the row kebab menu, column reorder/resize/freeze, list
-virtualization, the Favorites group, the record-page sticky header and next-action band, "Save &
-new" — are listed as deferrals in `docs/compatibility/settings-ux.md`. There is no automated axe
-audit and no frontend test runner in this repository, so the plan's 20.16 acceptance criterion is
-not met; see `docs/ux/accessibility.md`.
+records" (actually shipped since the reconciliation; select-all is capped at the first 1 000),
+bulk-action outcome counts (shipped), the row kebab menu (shipped), column reorder/resize/freeze
+(shipped), list virtualization (closed by design: rows are server-paginated), the Favorites group
+(shipped), the record-page sticky header and next-action band (shipped), "Save & new" (shipped) —
+are reconciled against the working tree in `docs/compatibility/settings-ux.md` §"Status
+reconciliation". Review sub-phase 20.24 (one page frame), 20.25 (find a setting), 20.27 (bounded
+first load) and the dark-mode decision 20.21 remain open; see `PLAN_Phase_20_Settings_UX.md`
+§"Review-driven sub-phases".
 
 See `docs/admin/settings.md`, `docs/admin/navigation.md`, `docs/ux/`,
 `docs/compatibility/settings-ux.md` and `docs/reference/alpha-status.md`.

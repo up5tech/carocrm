@@ -11,14 +11,21 @@ export { ACCENT_NAMES, ACCENT_TONES, accentTone, COLOR, FONT_FAMILY } from './th
  */
 export const carocrmTheme: ThemeConfig = {
   token: {
-    colorPrimary: COLOR.accent,
+    // §20.26 axe gate: white text on the plain `accent` blue is 3.2:1, below WCAG AA's 4.5:1 for
+    // normal button text. Ant Design derives every filled surface (primary buttons, switches) from
+    // `colorPrimary`, so the *strong* tone (4.97:1 under white) is the shipped default.
+    colorPrimary: COLOR.accentStrong,
     colorInfo: COLOR.stateInfo,
-    colorLink: COLOR.accent,
+    // Same reasoning for links on white: the plain accent is 2.86:1, the strong tone 4.97:1.
+    colorLink: COLOR.accentStrong,
     colorSuccess: COLOR.stateSuccess,
     colorWarning: COLOR.stateWarning,
     colorError: COLOR.stateError,
     colorTextBase: COLOR.inkPrimary,
     colorTextSecondary: COLOR.inkSecondary,
+    // Typography.Text type="secondary" paints from colorTextDescription (not the secondary ink),
+    // whose antd default over white is 2.47:1 — the settings save bar was flagged for exactly that.
+    colorTextDescription: COLOR.inkSecondary,
     fontFamily: FONT_FAMILY,
     fontSize: 14,
     controlHeight: 36,
@@ -46,7 +53,9 @@ export const carocrmTheme: ThemeConfig = {
       itemBorderRadius: 8,
       itemBg: 'transparent',
       itemSelectedBg: COLOR.menuSelectedBg,
-      itemSelectedColor: COLOR.accent,
+      // The selection text uses the accent's *strong* tone: the plain `accent` blue on the soft
+      // selection background is 2.99:1, which the §20.26 axe gate correctly rejects (§20.16 AA).
+      itemSelectedColor: COLOR.accentStrong,
       itemColor: COLOR.inkMenu,
       subMenuItemBg: 'transparent',
       iconMarginInlineEnd: 10,
@@ -100,16 +109,16 @@ export function themeForBrand(primaryColor: string | undefined | null): ThemeCon
     ...carocrmTheme,
     token: {
       ...carocrmTheme.token,
-      colorPrimary: tone.fg,
-      colorInfo: tone.fg,
-      colorLink: tone.fg,
+      colorPrimary: tone.strong,
+      colorInfo: tone.strong,
+      colorLink: tone.strong,
     },
     components: {
       ...carocrmTheme.components,
       Menu: {
         ...carocrmTheme.components?.Menu,
         itemSelectedBg: tone.soft,
-        itemSelectedColor: tone.fg,
+        itemSelectedColor: tone.strong,
       },
     },
   };
