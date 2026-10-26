@@ -1778,6 +1778,31 @@ Acceptance:
 
 ### Phase 19-OM.16 — Optional Email and Telegram Connectors
 
+**Status: COMPLETE — both connectors evaluated, both remain gated (nothing implemented).**
+- **Email**: the shared seam (`packages/mail` `InboundMailProvider`) exists but the API binds
+  `NullInboundProvider` (verified in code at 2026-10-26) — there is no mailbox, no provider and no
+  credentials. The contract §15 non-competition rules are already fixed (one ingestion path, honour
+  the Email-to-Case markers, no second marker, no second mailbox poll). Enabling the channel requires
+  an operator-configured provider (E13) plus SPF/DKIM for sending; until then no adapter, no catalog
+  row and no DB channel value exists.
+- **Telegram**: the official Bot API docs were re-verified on 2026-10-26 — a bot only reaches chats
+  **with the bot**, and webhook protection is a `secret_token` sent as
+  `X-Telegram-Bot-Api-Secret-Token` (1–256 chars, `A-Z a-z 0-9 _ -`). Missing prerequisites: a
+  product decision on how customers initiate a bot chat, operator bot credentials, and an adapter.
+  Not implemented.
+- **Feature-flag discipline**: both channels are "off" in the strongest sense — they have no
+  feature flag, no adapter key, no catalog row and no database channel value; a forged conversation
+  is refused by the CHECK.
+- The connector work the tasks describe (signature/secret protection, event ids, media behaviour,
+  rate limits, retention) is documented per channel for the future adapter; the shared webhook
+  groundwork (raw-body, dedup receipts, adapter-verified signatures) would be reused unchanged.
+
+Verification: `omnichannel-connectors-gate.test.ts` 4/4 — no email/Telegram adapter keys (fail closed
+to `disabled`), no catalog rows, the DB CHECK refuses both channels, and the inbound email binding is
+the null provider (so Omnichannel cannot poll a second mailbox). No fixtures created.
+
+**Goal:** Extend channel coverage only where current shared services make the integration safe and feasible.
+
 **Goal:** Extend channel coverage only where current shared services make the integration safe and feasible.
 
 Tasks:

@@ -97,9 +97,16 @@
 
 ## CF-6 — Email (threaded conversation channel)
 
+> **19-OM.16 verdict (2026-10-26): NO-GO / DEFERRED — unchanged.** Flip conditions (all
+> operator-side): an IMAP/Graph provider bound to the existing port (E13), mailbox credentials and
+> SPF/DKIM for sending, and acceptance of the pre-decided non-competition rules (contract §15: one
+> ingestion path, honour `emailToCaseStatus`/`caseId`/`streamItemId`, never write a competing marker,
+> never poll a second mailbox). Until then there is no email adapter key, no catalog row, the database
+> channel CHECK refuses an `email` conversation, and the inbound provider is the null one.
+
 | Field | Value |
 | --- | --- |
-| Checked | 2026-10-26 |
+| Checked | **Re-checked 2026-10-26 at 19-OM.16 (code verification).** The shared seam exists but the API binds `NullInboundProvider` (`apps/api/src/email/index.ts`), so no mailbox is polled and no email event can enter the CRM. |
 | Official docs | n/a external; seam docs: `packages/mail` `InboundMailProvider` port |
 | Code reality | Outbound transports exist (SMTP/relay/memory/none); **inbound seam bound to `NullInboundProvider` — no IMAP/Graph provider installed** (G9). `Email` entity + `threadId` exist; ServiceDesk `EmailToCaseService` is manually triggered and its marker attrs are undeclared raw attrs (audit §5.2) |
 | Approval prerequisites (operator) | Mailbox credentials, IMAP/Graph app permissions, SPF/DKIM if sending, mailbox policy — all outside our repo |
@@ -154,9 +161,15 @@
 
 ## CF-10 — Telegram
 
+> **19-OM.16 verdict (2026-10-26): NO-GO / EXCLUDED — unchanged.** Flip conditions: a product
+> decision on how customers initiate a chat with the bot (there is no business-verified DM surface),
+> an operator-created bot and its token, an adapter implementing the Bot API webhook with the
+> `secret_token` header verification and its event dedup, and a channel-feasibility go record. No
+> adapter key, catalog row or conversation channel exists today.
+
 | Field | Value |
 | --- | --- |
-| Checked | 2026-10-26 (plan §16 links; no code) |
+| Checked | **Re-verified 2026-10-26 at 19-OM.16** against the official Bot API docs: webhooks may carry a `secret_token` (1–256 chars, `A-Z a-z 0-9 _ -`) in the `X-Telegram-Bot-Api-Secret-Token` header — the protection a future adapter would verify; a bot only receives messages in chats **with the bot**. |
 | Official docs | https://core.telegram.org/bots/api · https://core.telegram.org/bots/webhooks |
 | Account type | Bot via BotFather; webhook or long-polling |
 | Constraints | A bot only sees conversations **with its users** — "bot capability ≠ access to arbitrary personal conversations" (plan §4.1(6), §4.4). Customer-initiated path requires the user to find/message the bot; no business-verified DM surface equivalent to WhatsApp/Messenger |

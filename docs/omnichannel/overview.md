@@ -23,7 +23,8 @@
 | OM.13 — VoiceCommunications integration | ✅ COMPLETE | call context endpoints + voice catalog row + recent-calls panel, `omnichannel-calls.test.ts` |
 | OM.14 — WhatsApp/SMS integration | ✅ COMPLETE | `supported` flag + MMS unsupported row, localized refusal reasons, policy suite `omnichannel-whatsapp.test.ts`, CF-2 doc re-check |
 | OM.15 — Messenger/Instagram (conditional) | ✅ COMPLETE — verdict **NO-GO** (nothing implemented) | fresh Meta doc review 2026-10-26, CF-8/CF-9 flip conditions, `omnichannel-meta-gate.test.ts` fail-closed enforcement |
-| OM.16+ | ⏸ Not started | — |
+| OM.16 — Email/Telegram (optional) | ✅ COMPLETE — verdict **gated** (nothing implemented) | null inbound provider verified, Telegram `secret_token` re-checked, CF-6/CF-10 flip conditions, `omnichannel-connectors-gate.test.ts` |
+| OM.17+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -36,6 +37,16 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.16 (Email/Telegram — optional connectors)
+
+- Email: seam exists but `NullInboundProvider` is bound (code-verified); contract §15 rules pre-decided;
+  enabling requires E13 + SPF/DKIM. Telegram: Bot API re-checked (bot-only reach; `secret_token` in
+  `X-Telegram-Bot-Api-Secret-Token`); needs a bot, an initiation decision and an adapter.
+- Both stay gated by construction: no adapter keys, no catalog rows, DB CHECK refuses the channels;
+  the inbound email binding is the null provider (no second mailbox poll).
+- Checks: `omnichannel-connectors-gate.test.ts` 4/4; flip conditions recorded in CF-6/CF-10.
+
 
 ### 2026-10-26 — Phase 19-OM.15 (Meta Messenger/Instagram — conditional)
 
