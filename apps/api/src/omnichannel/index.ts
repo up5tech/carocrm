@@ -17,6 +17,7 @@ import type { Provider, Type } from '@nestjs/common';
 import { OmnichannelController } from './omnichannel.controller.js';
 import { OmnichannelAiService } from './omnichannel-ai.service.js';
 import { OmnichannelAiTools } from './omnichannel-ai-tools.js';
+import { OmnichannelAnalyticsService } from './omnichannel-analytics.service.js';
 import { OmnichannelCallService } from './omnichannel-call.service.js';
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelChatController } from './omnichannel-chat.controller.js';
@@ -52,6 +53,7 @@ export const OMNICHANNEL_PROVIDERS: Provider[] = [
   OmnichannelCallService,
   OmnichannelAiService,
   OmnichannelAiTools,
+  OmnichannelAnalyticsService,
   OmnichannelHandoffService,
   OmnichannelDataService,
   OmnichannelSnippetService,
@@ -61,6 +63,9 @@ export const OMNICHANNEL_PROVIDERS: Provider[] = [
   OmnichannelModuleHealthService,
 ];
 
+export type { OmnichannelAiRunView, OmnichannelAiTask } from './omnichannel-ai.service.js';
+export { OMNICHANNEL_AI_TASKS } from './omnichannel-ai.service.js';
+export type { OmnichannelAnalytics } from './omnichannel-analytics.service.js';
 export type { OmnichannelCallView } from './omnichannel-call.service.js';
 export type { OmnichannelCapabilityCatalog, OmnichannelChannelCapabilityView, OmnichannelChannelKey } from './omnichannel-capability.service.js';
 export { OMNICHANNEL_CAPABILITY_CATALOG_VERSION } from './omnichannel-capability.service.js';
@@ -68,8 +73,6 @@ export type { OmnichannelConversationView, OmnichannelThreadView } from './omnic
 export type { ConversationExport } from './omnichannel-data.service.js';
 export type { DraftView } from './omnichannel-draft.service.js';
 export type { OmnichannelHandoffResult } from './omnichannel-handoff.service.js';
-export { OMNICHANNEL_AI_TASKS } from './omnichannel-ai.service.js';
-export type { OmnichannelAiRunView, OmnichannelAiTask } from './omnichannel-ai.service.js';
 export type { OmnichannelIdentityCandidateView, OmnichannelIdentityConflict, OmnichannelIdentityReview, OmnichannelParticipantIdentityView } from './omnichannel-identity.service.js';
 export type { OmnichannelCapabilityDefinition,OmnichannelCapabilityKey } from './omnichannel-module.js';
 export { OMNICHANNEL_CAPABILITIES, OMNICHANNEL_FEATURES, OMNICHANNEL_MODULE } from './omnichannel-module.js';

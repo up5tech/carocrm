@@ -135,6 +135,7 @@ import type {
   Metadata,
   ModuleSettingsView,
   NavigationTree,
+  OmnichannelAnalytics,
   OmnichannelCallView,
   OmnichannelCapabilitiesView,
   OmnichannelCapabilityCatalog,
@@ -2178,6 +2179,7 @@ export const api = {
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/status`, post({ status })),
   omnichannelAssign: (conversationId: string, input: { userId?: string | null; teamId?: string | null; reason?: string; expectedVersion?: number }) =>
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/assign`, post(input)),
+  omnichannelAnalytics: (days = 30) => request<OmnichannelAnalytics>(`/Omnichannel/action/analytics?days=${String(days)}`),
   omnichannelAiSuggest: (task: 'summarize' | 'classify' | 'suggest_reply' | 'suggest_queue' | 'case_summary', conversationId: string) =>
     request<{ readonly runId: string; readonly agentId: string; readonly task: string }>('/Omnichannel/action/ai/suggest', post({ task, conversationId })),
   omnichannelAiRun: (runId: string, conversationId: string) =>

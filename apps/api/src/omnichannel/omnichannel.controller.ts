@@ -3,7 +3,8 @@ import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put, Quer
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
-import { OmnichannelAiService, OMNICHANNEL_AI_TASKS } from './omnichannel-ai.service.js';
+import { OMNICHANNEL_AI_TASKS,OmnichannelAiService } from './omnichannel-ai.service.js';
+import { OmnichannelAnalyticsService } from './omnichannel-analytics.service.js';
 import { OmnichannelCallService } from './omnichannel-call.service.js';
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
@@ -113,6 +114,7 @@ export class OmnichannelController {
     @Inject(OmnichannelHandoffService) private readonly handoff: OmnichannelHandoffService,
     @Inject(OmnichannelDataService) private readonly data: OmnichannelDataService,
     @Inject(OmnichannelAiService) private readonly ai: OmnichannelAiService,
+    @Inject(OmnichannelAnalyticsService) private readonly analytics: OmnichannelAnalyticsService,
   ) {}
 
   /**
@@ -404,6 +406,17 @@ export class OmnichannelController {
   async nav() {
     await this.permissions.assert('inboxView');
     return this.navigation.visibility();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Conversation analytics (19-OM.20) — dedicated path over the reused records, counts only
+  // ---------------------------------------------------------------------------
+
+  /** Aggregate metrics over a window (default 30 days); definitions in docs/omnichannel/analytics.md. */
+  @Get('action/analytics')
+  async analyticsOverview(@Query('days') days: unknown) {
+    const parsed = Number(days ?? 30);
+    return this.analytics.overview(Number.isFinite(parsed) ? Math.trunc(parsed) : 30);
   }
 
   // ---------------------------------------------------------------------------

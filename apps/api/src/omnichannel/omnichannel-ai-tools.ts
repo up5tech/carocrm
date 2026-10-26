@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
-import { AIToolRegistry, type AIToolContext, type AIToolDefinition } from '../ai-agents/index.js';
+import { type AIToolContext, type AIToolDefinition,AIToolRegistry } from '../ai-agents/index.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
 
 /**

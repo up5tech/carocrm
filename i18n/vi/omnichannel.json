@@ -47,7 +47,8 @@
     "pendingQueues": "Hàng đợi và định tuyến mở rộng từ Bàn phục vụ (19-OM.11).",
     "pendingRealtime": "Cập nhật trực tiếp thay thế polling bằng realtime dùng chung (19-OM.12).",
     "pendingHandoff": "Bàn giao Bàn phục vụ tạo hoặc liên kết Case (19-OM.17).",
-    "channelUnsupported": "không hỗ trợ"
+    "channelUnsupported": "không hỗ trợ",
+    "tabReports": "Báo cáo"
   },
   "chat": {
     "title": "Trò chuyện với chúng tôi",
@@ -154,5 +155,26 @@
     "timeout": "Nhà cung cấp hết thời gian chờ; kết quả chưa xác định và cần đối soát.",
     "provider_unavailable": "Nhà cung cấp đang không khả dụng; thử lại sau.",
     "unknown": "Nhà cung cấp lỗi không rõ nguyên nhân."
+  },
+  "reports": {
+    "loadFailed": "Không tải được phân tích hội thoại.",
+    "noData": "chưa có dữ liệu",
+    "inbound": "Gửi đến",
+    "outbound": "Gửi đi",
+    "unassigned": "Chưa phân công",
+    "handoffs": "Đã bàn giao",
+    "volume": "Số tin theo kênh",
+    "backlog": "Tồn đọng",
+    "snoozed": "Tạm hoãn",
+    "timing": "Thời gian",
+    "firstResponse": "Phản hồi đầu (TB)",
+    "replyDelay": "Độ trễ trả lời (TB)",
+    "reopenRate": "Tỷ lệ mở lại",
+    "delivery": "Kết quả gửi",
+    "failed": "Thất bại",
+    "undelivered": "Không gửi được",
+    "unknown": "Chưa xác định",
+    "provider": "Sức khỏe nhà cung cấp",
+    "unavailable": "Không khả dụng"
   }
 }

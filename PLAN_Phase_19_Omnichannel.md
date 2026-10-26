@@ -1996,6 +1996,31 @@ Acceptance:
 
 ### Phase 19-OM.20 — Conversation Analytics and Operational Reports
 
+**Status: COMPLETE.** Because the canonical records are dedicated tables (D1) and the generic report
+engine is metadata-driven (audit G7), this phase adds the documented **dedicated analytics path**
+(`docs/omnichannel/analytics.md` defines every metric literally) at
+`GET /api/v1/Omnichannel/action/analytics?days=N`:
+- **Metrics**: message volume by channel (internal notes excluded), backlog (statuses,
+  unassigned, snoozed — a live snapshot), assignment distribution, conversation first-response average,
+  reply delay (inbound → next visible reply), hand-off volume (`case_id` set), reopen rate from
+  `status_changed` events, delivery outcomes with **`unknown` reported separately** from failures, and
+  provider health + webhook backlog from the owner's records.
+- **Defensible definitions**: every metric cites its rows and timestamp; averages report `sample` and a
+  `null` + `unavailable` reason when the denominator is empty; nothing is inferred from a local
+  submission time. Case SLA stays in ServiceDesk; CSAT stays in CSAT.
+- **ACL/data**: `inboxView` + the conversation read ACL — the same visibility the inbox has for these
+  tables (entity-level; per-record ACL does not exist for dedicated tables, recorded G7). The payload
+  carries **no content, addresses or payloads**; the suite asserts that.
+- **UI**: a Reports tab (omni page) renders the server's numbers with honest "— (reason)" states.
+
+Verification: `omnichannel-analytics.test.ts` 6/6 — deterministic timestamps prove first response = 30
+min and reply delay = 30 min; internal-note exclusion (3 visible outbound vs. the note); delivery
+failed/unknown split with categories; reopen 1/1 → 100%; provider health from the account row;
+403 for an incapable caller; no content/address strings in the response. Regression green;
+api+web typecheck, eslint, ui-conventions, web build clean.
+
+**Goal:** Provide useful metrics with defensible definitions.
+
 **Goal:** Provide useful metrics with defensible definitions.
 
 Tasks:

@@ -4490,3 +4490,26 @@ export interface OmnichannelCaseContext {
   readonly source: string | null;
   readonly externalId: string | null;
 }
+
+/** Phase 19-OM.20 — conversation analytics (mirrors omnichannel-analytics.service.ts). */
+export interface OmnichannelAnalytics {
+  readonly window: { readonly days: number; readonly from: string; readonly to: string };
+  readonly volume: {
+    readonly byChannel: readonly { readonly channel: string; readonly inbound: number; readonly outbound: number }[];
+    readonly totalInbound: number;
+    readonly totalOutbound: number;
+  };
+  readonly backlog: { readonly byStatus: readonly { readonly status: string; readonly count: number }[]; readonly unassigned: number; readonly snoozed: number };
+  readonly assignment: readonly { readonly assignee: string; readonly count: number }[];
+  readonly firstResponse: { readonly averageMinutes: number | null; readonly sample: number; readonly unavailable?: string };
+  readonly replyDelay: { readonly averageMinutes: number | null; readonly sample: number; readonly unavailable?: string };
+  readonly handoffs: { readonly conversationsWithCase: number };
+  readonly reopenRate: { readonly reopened: number; readonly closedInWindow: number; readonly rate: number | null };
+  readonly delivery: { readonly failed: number; readonly undelivered: number; readonly unknown: number; readonly byCategory: readonly { readonly category: string; readonly count: number }[] };
+  readonly providerHealth: {
+    readonly available: boolean;
+    readonly reason?: string;
+    readonly accounts: readonly { readonly key: string; readonly status: string; readonly at: string | null }[];
+    readonly webhookBacklog: readonly { readonly status: string; readonly count: number }[];
+  };
+}

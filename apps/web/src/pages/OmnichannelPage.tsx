@@ -11,6 +11,7 @@ import { PageHeader } from '../components/PageHeader.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
 import { t } from '../state/i18n.js';
 import { InboxPanel } from './omnichannel/InboxPanel.js';
+import { ReportsPanel } from './omnichannel/ReportsPanel.js';
 
 /**
  * Phase 19-OM.2 — the Omnichannel workspace shell
@@ -245,6 +246,7 @@ export function OmnichannelPage() {
         defaultActiveKey="inbox"
         items={[
           { key: 'inbox', label: t('omnichannel.page.tabInbox'), children: <InboxPanel /> },
+          { key: 'reports', label: t('omnichannel.page.tabReports'), children: <ReportsPanel /> },
           { key: 'diagnostics', label: t('omnichannel.page.tabDiagnostics'), children: <DiagnosticsPanel /> },
         ]}
       />

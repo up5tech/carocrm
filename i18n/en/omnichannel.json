@@ -47,7 +47,8 @@
     "pendingQueues": "Queues and routing extend Service Desk (19-OM.11).",
     "pendingRealtime": "Live updates replace polling with the shared realtime seam (19-OM.12).",
     "pendingHandoff": "Service Desk hand-off creates or links a Case (19-OM.17).",
-    "channelUnsupported": "unsupported"
+    "channelUnsupported": "unsupported",
+    "tabReports": "Reports"
   },
   "chat": {
     "title": "Chat with us",
@@ -154,5 +155,26 @@
     "timeout": "The provider timed out; the outcome is unknown and must be reconciled.",
     "provider_unavailable": "The provider is unavailable; retry later.",
     "unknown": "The provider failed for an unknown reason."
+  },
+  "reports": {
+    "loadFailed": "The conversation analytics could not be loaded.",
+    "noData": "no data yet",
+    "inbound": "Inbound",
+    "outbound": "Outbound",
+    "unassigned": "Unassigned",
+    "handoffs": "Handed off",
+    "volume": "Message volume by channel",
+    "backlog": "Backlog",
+    "snoozed": "Snoozed",
+    "timing": "Timing",
+    "firstResponse": "First response (avg)",
+    "replyDelay": "Reply delay (avg)",
+    "reopenRate": "Reopen rate",
+    "delivery": "Delivery outcomes",
+    "failed": "Failed",
+    "undelivered": "Undelivered",
+    "unknown": "Unknown",
+    "provider": "Provider health",
+    "unavailable": "Unavailable"
   }
 }

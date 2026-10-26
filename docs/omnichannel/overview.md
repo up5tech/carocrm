@@ -27,7 +27,8 @@
 | OM.17 — ServiceDesk hand-off (E9) | ✅ COMPLETE | `Case.externalId`/`externalSource` + partial unique index (migration 081), `CaseHandoffService` create-or-link + trail, hand-off endpoints + inbox Case panel, `omnichannel-handoff.test.ts` |
 | OM.18 — Consent, retention, data rights | ✅ COMPLETE | `consent-and-retention.md`, module retention settings + purge, admin conversation export (audited, notes excluded), `omnichannel-consent.test.ts` |
 | OM.19 — AI-assisted workflow | ✅ COMPLETE | typed AI tasks over AIAgents, `omnichannel.send_message` material-write tool (E16), drafts-only composer button, `omnichannel-ai.test.ts` |
-| OM.20+ | ⏸ Not started | — |
+| OM.20 — Conversation analytics | ✅ COMPLETE | `analytics.md` definitions, dedicated analytics endpoint, Reports tab, `omnichannel-analytics.test.ts` |
+| OM.21+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -40,6 +41,18 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.20 (Conversation analytics)
+
+- `docs/omnichannel/analytics.md`: row/timestamp definitions for every metric, the honest-availability
+  rule, the ACL/data position, and what is deliberately absent (content, Case SLA, inferred delivery).
+- `GET action/analytics?days=N`: volume by channel (notes excluded), backlog + unassigned/snoozed,
+  assignment distribution, first response, reply delay, hand-offs, reopen rate, delivery states with
+  `unknown` separate, provider health + webhook backlog.
+- Reports tab in the Omni page renders server numbers; unavailable metrics show "— (reason)".
+- Checks: `omnichannel-analytics.test.ts` 6/6 with deterministic timestamps; regression green;
+  typecheck/lint/ui-conventions/build clean.
+
 
 ### 2026-10-26 — Phase 19-OM.19 (AI-assisted agent workflow)
 

@@ -1,10 +1,11 @@
-import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { randomUUID } from 'node:crypto';
+
+import { NotFoundError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
-import { AIAgentRunService } from '../ai-agents/index.js';
 import { AclApiService } from '../acl/acl-api.service.js';
+import { AIAgentRunService } from '../ai-agents/index.js';
 import { DatabaseService } from '../database/database.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
 import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
