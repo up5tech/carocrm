@@ -1220,6 +1220,26 @@ Acceptance:
 
 ### Phase 19-OM.5 — Inbound Webhook/Event Receipt Pipeline
 
+**Status: COMPLETE.** The plan's *"reuse an existing shared webhook ingestion service"* option was
+taken literally. `POST /api/v1/integrations/omnichannel/{providerKey}/{accountKey}/{kind}`
+(`omnichannel-webhook.controller.ts`) delegates to the exported `VoiceWebhookIngressService`: account
+resolution, body ceiling (`WEBHOOK_MAX_BODY_BYTES`), replay window, adapter-owned signature
+validation, the durable deduplicated receipt in `voice_webhook_events`, the fast `202`, job
+processing and admin replay all run unchanged — **no second receipt store, no second normalization
+path** (R1/D1). E2 delivered with it: `bootstrap.ts` preserves the exact request bytes for this
+prefix (parsed body still flows normally), so a future byte-signing adapter (19-OM.15) can verify
+what Twilio-style reconstruction cannot. `OMNICHANNEL_WEBHOOK_PREFIX` is now a single exported
+constant shared by route and hook.
+
+Verification: `omnichannel-ingress.test.ts` 5/5 — a signed callback records exactly one receipt and
+enqueues exactly one job; a repeated event answers `duplicate` with no second row or job; a forged
+signature is rejected **and recorded** (`INVALID_SIGNATURE`, never queued); unknown kind and a
+provider/account mismatch are refused; responses carry no secret or raw provider content;
+`information_schema` shows no `omnichannel_webhook*` table. Regression: Voice×5 (incl.
+Twilio/Asterisk adapters), all four Omnichannel suites, attachments (raw-body hook change),
+navigation, i18n — 11 files / 144 tests green; api typecheck + eslint clean. Only the in-process
+simulator was used; no external host contacted (audit §10).
+
 **Goal:** Receive events durably and safely.
 
 Tasks:
@@ -1233,9 +1253,9 @@ Tasks:
 
 Acceptance:
 
-- Forged or malformed webhook events are rejected.
-- A repeated event is acknowledged/handled according to provider protocol without duplicate side effects.
-- Processing failure is observable and recoverable without exposing raw credentials or PII in logs.
+- Forged or malformed webhook events are rejected. — **Met** (forged signature → 401 + recorded rejection; malformed/unknown kind → refused; the pair-mismatch guard refuses before any effect).
+- A repeated event is acknowledged/handled according to provider protocol without duplicate side effects. — **Met** (`duplicate: true` on the same dedup key; one receipt, one job — the unique constraint is the guarantee).
+- Processing failure is observable and recoverable without exposing raw credentials or PII in logs. — **Met** (`enqueue_failed` receipts stay visible for admin replay, payloads stored redacted + digest, denials name only the capability/receipt id).
 
 ### Phase 19-OM.6 — Canonical Conversation, Thread, and Message Services
 

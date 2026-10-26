@@ -12,7 +12,8 @@
 | OM.2 — Module registration & navigation | ✅ COMPLETE | `apps/api/src/omnichannel/` (descriptor, permission matrix, settings document, health, nav, control plane), nav seed, `/omnichannel` SPA shell, i18n en/vi, `omnichannel-module.test.ts` |
 | OM.3 — Persistence model & additive migrations | ✅ COMPLETE | `database/migrations/077_phase19_omnichannel_persistence.sql`, `omnichannel-persistence.test.ts`, voice architecture §4.1 |
 | OM.4 — Adapter & capability registry | ✅ COMPLETE | Voice barrel exports (E1), `unsupported` category (E3), `inbox.read`/`message.send` contracts (E14), `OmnichannelCapabilityService` + `action/channels`, page catalog card, `omnichannel-adapter.test.ts` |
-| OM.5+ | ⏸ Not started | — |
+| OM.5 — Inbound webhook/event receipt pipeline | ✅ COMPLETE | `omnichannel-webhook.controller.ts` (delegates to the shared Voice ingress), E2 raw-body hook, `omnichannel-ingress.test.ts` |
+| OM.6+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -25,6 +26,29 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.5 (Inbound webhook/event receipt pipeline)
+
+- The plan's "reuse an existing shared webhook ingestion service" option, taken literally:
+  `POST /api/v1/integrations/omnichannel/{providerKey}/{accountKey}/{kind}`
+  ([omnichannel-webhook.controller.ts](file:///Users/up5techjacky/Documents/projects/carocrmv2/apps/api/src/omnichannel/omnichannel-webhook.controller.ts))
+  delegates to the exported `VoiceWebhookIngressService` — account resolution, body ceiling, replay
+  window, adapter-owned signature validation, the durable dedup receipt in `voice_webhook_events`,
+  fast 202, job processing and admin replay all run unchanged. **No second receipt store, no second
+  normalization path** (R1; the two prefixes are aliases over one pipeline).
+- **E2 delivered**: `bootstrap.ts` raw-body `preParsing` allowlist gains the Omnichannel prefix — the
+  exact bytes are preserved (and forwarded to the adapter through the ingress contract) so a future
+  byte-signing provider (Meta, 19-OM.15) can verify what Twilio-style reconstruction cannot. The
+  parsed body still flows normally; esignature's tolerant-parser branch untouched.
+- Descriptor: `OMNICHANNEL_WEBHOOK_PREFIX` exported as a single source for route + hook; prefix is no
+  longer "reserved only".
+- Checks: `omnichannel-ingress.test.ts` 5/5 — signed callback records one receipt + exactly one job;
+  repeated event answers duplicate with no second row; forged signature → 401 and is *recorded*
+  (`INVALID_SIGNATURE`, never queued); unknown kind and provider/account mismatch → 404; no secret or
+  raw content in responses; `information_schema` proof no `omnichannel_webhook*` table exists. Broad
+  regression 11 suites / 144 tests green incl. `attachments-storage` (the raw-body hook change) and
+  the Twilio/Asterisk adapter suites. api typecheck + eslint clean; no frontend change in this phase.
+- Fake provider only — no external host contacted, no real message (audit §10 policy inherited).
 
 ### 2026-10-26 — Phase 19-OM.4 (Adapter and capability registry)
 

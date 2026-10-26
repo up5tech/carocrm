@@ -169,6 +169,15 @@ export const OMNICHANNEL_OPTIONAL_INTEGRATIONS = [
   { id: 'portal', label: 'Portal', provides: 'Authenticated customer identity for the web-chat path (contract §7)', markerEntity: '', markerTable: 'portals' },
 ] as const;
 
+/**
+ * The webhook prefix for provider ingress (contract §3 F6, extension E2). Delivered by 19-OM.5:
+ * the route delegates to the `VoiceCommunications` ingestion pipeline (D1/§2.4 — one receipt store,
+ * one dedup rule, one job), and `bootstrap.ts` preserves the exact request bytes for this prefix so
+ * a future byte-signing adapter (Meta, OM.15) can verify them. Provider keys are routing
+ * identifiers, never secrets.
+ */
+export const OMNICHANNEL_WEBHOOK_PREFIX = '/api/v1/integrations/omnichannel';
+
 export const OMNICHANNEL_MODULE = {
   id: 'Omnichannel',
   name: 'Omnichannel',
@@ -179,16 +188,16 @@ export const OMNICHANNEL_MODULE = {
   /** API prefix owned by the module's workspace commands; entity CRUD stays on `/api/v1/:entity`. */
   apiPrefix: '/api/v1/Omnichannel',
   /**
-   * The webhook prefix **reserved** for provider ingress (contract §3 F6, extension E2).
-   * No webhook controller answers on it yet — declaring it here is what lets `bootstrap.ts`
-   * learn the raw-body prefix (E2) in the same change that delivers the first real channel
-   * ingress (OM.5), not before.
+   * The provider webhook ingress prefix (19-OM.5, extension E2). The route delegates to the
+   * VoiceCommunications ingestion pipeline — one receipt store, one dedup rule, one job (D1, §2.4)
+   * — and `bootstrap.ts` preserves the raw request bytes for this prefix so a future byte-signing
+   * adapter (Meta, 19-OM.15) can verify them.
    */
-  webhookPrefix: '/api/v1/integrations/omnichannel',
+  webhookPrefix: OMNICHANNEL_WEBHOOK_PREFIX,
   /** Frontend route of the agent workspace. */
   frontendRoute: '/omnichannel',
   /** Sub-phases delivered by this module so far. */
-  implementedPhases: ['19-OM.0', '19-OM.1', '19-OM.2', '19-OM.3', '19-OM.4'],
+  implementedPhases: ['19-OM.0', '19-OM.1', '19-OM.2', '19-OM.3', '19-OM.4', '19-OM.5'],
   /**
    * Metadata entities this module owns — deliberately empty (D1): the records live in their
    * owning modules and the workspace consumes facades. No entity is invented to populate menus.

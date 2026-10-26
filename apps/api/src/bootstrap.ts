@@ -29,6 +29,7 @@ import type { ExtensionHost as ExtensionHostType } from './extensions/extension-
 import { setExtensionHost } from './extensions/extension-host.js';
 import { createExtensionHostModule } from './extensions/extension-host.module.js';
 import { readInstalledExtensions } from './extensions/extension-store.js';
+import { OMNICHANNEL_WEBHOOK_PREFIX } from './omnichannel/omnichannel-module.js';
 
 /**
  * Reads the installed extensions and assembles the host for this process (PLAN §38.3).
@@ -152,7 +153,11 @@ export async function createApp(
   fastifyInstance.decorateRequest('rawBody', null);
   fastifyInstance.addHook('preParsing', (request, _reply, payload, done) => {
     const esignature = request.url.startsWith(ESIGNATURE_WEBHOOK_PREFIX);
-    if (!esignature && !request.url.startsWith(ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX)) {
+    // Phase 19-OM.5 (E2): the Omnichannel ingress preserves the exact bytes like the other
+    // provider prefixes, but still parses the body normally — its pipeline reads the parsed shape
+    // today, and a future byte-signing adapter (19-OM.15) gets the raw bytes it needs.
+    const omnichannel = request.url.startsWith(OMNICHANNEL_WEBHOOK_PREFIX);
+    if (!esignature && !omnichannel && !request.url.startsWith(ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX)) {
       done(null, payload);
       return;
     }

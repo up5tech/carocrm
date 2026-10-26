@@ -7,9 +7,9 @@
  *
  * `OMNICHANNEL_CONTROLLERS` is spread into `AppModule` **before** `ENTITY_CONTROLLERS`: it owns the
  * static `/api/v1/Omnichannel` prefix, and the generic `:entity` wildcard has to stay last so static
- * routes win. The reserved webhook prefix (`OMNICHANNEL_MODULE.webhookPrefix`) has no controller
- * yet — the first provider ingress and the `bootstrap.ts` raw-body entry (extension E2) arrive
- * together in 19-OM.5, never one without the other.
+ * routes win. `OmnichannelWebhookController` (19-OM.5) answers on the module's webhook prefix and
+ * delegates to the shared `VoiceWebhookIngressService` — one receipt pipeline, one dedup rule, no
+ * second store (D1/§2.4); its `bootstrap.ts` raw-body entry (extension E2) landed with it.
  */
 
 import type { Provider, Type } from '@nestjs/common';
@@ -20,8 +20,9 @@ import { OmnichannelModuleHealthService } from './omnichannel-module-health.serv
 import { OmnichannelNavigationService } from './omnichannel-navigation.service.js';
 import { OmnichannelPermissionService } from './omnichannel-permission.service.js';
 import { noopMenuInvalidator, OMNICHANNEL_MENU_INVALIDATOR, OmnichannelSettingsService } from './omnichannel-settings.service.js';
+import { OmnichannelWebhookController } from './omnichannel-webhook.controller.js';
 
-export const OMNICHANNEL_CONTROLLERS: Type<unknown>[] = [OmnichannelController];
+export const OMNICHANNEL_CONTROLLERS: Type<unknown>[] = [OmnichannelController, OmnichannelWebhookController];
 
 export const OMNICHANNEL_PROVIDERS: Provider[] = [
   // Default menu-invalidator binding so an isolated boot works; `AppModule` overrides the token
