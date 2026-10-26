@@ -3,6 +3,7 @@ import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put, Quer
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
+import { OmnichannelAiService, OMNICHANNEL_AI_TASKS } from './omnichannel-ai.service.js';
 import { OmnichannelCallService } from './omnichannel-call.service.js';
 import { OmnichannelCapabilityService } from './omnichannel-capability.service.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
@@ -69,6 +70,14 @@ const AssignInputSchema = z
   .strict();
 const RouteInputSchema = z.object({ expectedVersion: z.number().int().min(0).optional() }).strict();
 const HandoffSchema = z.object({ linkCaseId: z.string().trim().min(1).max(120).optional() }).strict();
+const AiTaskSchema = z
+  .object({
+    task: z.enum([...OMNICHANNEL_AI_TASKS] as [string, ...string[]]),
+    conversationId: z.string().trim().min(1).max(120),
+    language: z.string().trim().max(40).optional(),
+    requestKey: z.string().trim().min(8).max(200).optional(),
+  })
+  .strict();
 const SnippetPreviewSchema = z
   .object({
     conversationId: z.string().trim().min(1).max(120).optional(),
@@ -103,6 +112,7 @@ export class OmnichannelController {
     @Inject(OmnichannelCallService) private readonly calls: OmnichannelCallService,
     @Inject(OmnichannelHandoffService) private readonly handoff: OmnichannelHandoffService,
     @Inject(OmnichannelDataService) private readonly data: OmnichannelDataService,
+    @Inject(OmnichannelAiService) private readonly ai: OmnichannelAiService,
   ) {}
 
   /**
@@ -394,6 +404,28 @@ export class OmnichannelController {
   async nav() {
     await this.permissions.assert('inboxView');
     return this.navigation.visibility();
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI assistance (19-OM.19) — typed tasks over AIAgents; suggestions never act
+  // ---------------------------------------------------------------------------
+
+  /** Queue a typed task (summarize/classify/suggest_reply/suggest_queue/case_summary). */
+  @HttpCode(202)
+  @Post('action/ai/suggest')
+  async aiSuggest(@Body() body: unknown) {
+    const parsed = AiTaskSchema.safeParse(body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid AI task input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
+    return this.ai.submit(parsed.data as Parameters<OmnichannelAiService['submit']>[0]);
+  }
+
+  /** Poll one run; the conversation id gates the read and the answer is labelled AI-generated. */
+  @Get('action/ai/runs/:runId')
+  async aiRun(@Param('runId') runId: string, @Query('conversationId') conversationId: string | undefined) {
+    if (typeof conversationId !== 'string' || conversationId === '') {
+      throw new ValidationError('A conversation id is required to read an AI run.');
+    }
+    return this.ai.run(runId, conversationId);
   }
 
   // ---------------------------------------------------------------------------

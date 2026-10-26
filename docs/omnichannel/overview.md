@@ -26,7 +26,8 @@
 | OM.16 — Email/Telegram (optional) | ✅ COMPLETE — verdict **gated** (nothing implemented) | null inbound provider verified, Telegram `secret_token` re-checked, CF-6/CF-10 flip conditions, `omnichannel-connectors-gate.test.ts` |
 | OM.17 — ServiceDesk hand-off (E9) | ✅ COMPLETE | `Case.externalId`/`externalSource` + partial unique index (migration 081), `CaseHandoffService` create-or-link + trail, hand-off endpoints + inbox Case panel, `omnichannel-handoff.test.ts` |
 | OM.18 — Consent, retention, data rights | ✅ COMPLETE | `consent-and-retention.md`, module retention settings + purge, admin conversation export (audited, notes excluded), `omnichannel-consent.test.ts` |
-| OM.19+ | ⏸ Not started | — |
+| OM.19 — AI-assisted workflow | ✅ COMPLETE | typed AI tasks over AIAgents, `omnichannel.send_message` material-write tool (E16), drafts-only composer button, `omnichannel-ai.test.ts` |
+| OM.20+ | ⏸ Not started | — |
 
 ## Decisions index (locked)
 
@@ -39,6 +40,20 @@
   conditional: CF-3 context, CF-4 web chat; all others NO-GO/EXCLUDED for the first release).
 
 ## Log
+
+### 2026-10-26 — Phase 19-OM.19 (AI-assisted agent workflow)
+
+- Typed task API (`summarize/classify/suggest_reply/suggest_queue/case_summary`) over
+  `AIAgentRunService` with `trigger: 'integration'`; agent profile from `ai.agentId`; prompts carry only
+  customer-visible context wrapped as data; results labelled AI-generated.
+- **E16**: registered `omnichannel.send_message` (`material_write`, requiresApproval) — AI sends pause
+  for human approval and execute through the actor-scoped facade; `outcome_unknown` is the no-retry
+  state.
+- Drafts-only posture: generation changes nothing; composer AI button fills the editable draft;
+  injection cannot alter tools/grants; AI failure leaves human replies untouched; CRMChat never
+  exposed.
+- Checks: `omnichannel-ai.test.ts` 4/4; 42-test regression; typecheck/lint/ui-conventions/build clean.
+
 
 ### 2026-10-26 — Phase 19-OM.18 (Consent, retention and data rights)
 

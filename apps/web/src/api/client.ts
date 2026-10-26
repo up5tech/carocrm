@@ -2178,6 +2178,12 @@ export const api = {
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/status`, post({ status })),
   omnichannelAssign: (conversationId: string, input: { userId?: string | null; teamId?: string | null; reason?: string; expectedVersion?: number }) =>
     request<OmnichannelConversationView>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/assign`, post(input)),
+  omnichannelAiSuggest: (task: 'summarize' | 'classify' | 'suggest_reply' | 'suggest_queue' | 'case_summary', conversationId: string) =>
+    request<{ readonly runId: string; readonly agentId: string; readonly task: string }>('/Omnichannel/action/ai/suggest', post({ task, conversationId })),
+  omnichannelAiRun: (runId: string, conversationId: string) =>
+    request<{ readonly runId: string; readonly status: string; readonly agentName: string; readonly result: string | null; readonly failureMessage: string | null; readonly aiGenerated: true }>(
+      `/Omnichannel/action/ai/runs/${encodeURIComponent(runId)}?conversationId=${encodeURIComponent(conversationId)}`,
+    ),
   omnichannelConversationCase: (conversationId: string) =>
     request<{ readonly case: OmnichannelCaseContext | null }>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/case`),
   omnichannelHandoff: (conversationId: string, input: { linkCaseId?: string } = {}) =>

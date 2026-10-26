@@ -1,4 +1,4 @@
-import { PartitionOutlined, ReloadOutlined, SendOutlined, UserAddOutlined } from '@ant-design/icons';
+import { PartitionOutlined, ReloadOutlined, RobotOutlined, SendOutlined, UserAddOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Badge, Button, Card, Col, Collapse, Input, List, message, Row, Select, Space, Switch, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -58,6 +58,7 @@ export function InboxPanel() {
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [draft, setDraft] = useState('');
   const [internalNote, setInternalNote] = useState(false);
+  const [aiPending, setAiPending] = useState(false);
   const loadedDraftFor = useRef<string | undefined>(undefined);
   const [actionError, setActionError] = useState<string | undefined>(undefined);
 
@@ -160,6 +161,32 @@ export function InboxPanel() {
     }, 1_200);
     return () => window.clearTimeout(timer);
   }, [draft, internalNote, selectedId]);
+
+  // 19-OM.19 — AI assistance produces an editable draft only; nothing is sent by the suggestion.
+  async function suggestWithAi(): Promise<void> {
+    if (selectedId === undefined || aiPending) return;
+    setAiPending(true);
+    setActionError(undefined);
+    try {
+      const queued = await api.omnichannelAiSuggest('suggest_reply', selectedId);
+      for (let attempt = 0; attempt < 15; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2_000));
+        const run = await api.omnichannelAiRun(queued.runId, selectedId);
+        if (run.status === 'succeeded' || run.status === 'partially_succeeded') {
+          if (run.result !== null) setDraft((current) => (current.trim() === '' ? run.result ?? '' : `${current}\n${run.result ?? ''}`));
+          return;
+        }
+        if (!['queued', 'running', 'waiting_for_approval', 'waiting_for_input', 'retry_wait'].includes(run.status)) {
+          throw new Error(run.failureMessage ?? t('omnichannel.inbox.aiFailed'));
+        }
+      }
+      throw new Error(t('omnichannel.inbox.aiTimeout'));
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : t('omnichannel.inbox.aiFailed'));
+    } finally {
+      setAiPending(false);
+    }
+  }
 
   const markRead = useMutation({
     mutationFn: (id: string) => api.omnichannelMarkRead(id),
@@ -371,6 +398,8 @@ export function InboxPanel() {
             caseView={caseContext.data?.case ?? null}
             handoffPending={handoff.isPending}
             onHandoff={(linkCaseId) => selected !== undefined && handoff.mutate({ id: selected.id, ...(linkCaseId === undefined ? {} : { linkCaseId }) })}
+            onAiSuggest={() => void suggestWithAi()}
+            aiPending={aiPending}
             canLink={granted.has('identityLink')}
             canAssign={granted.has('assign')}
             canReply={granted.has('reply')}
@@ -414,6 +443,8 @@ interface ConversationPaneProps {
   readonly caseView: OmnichannelCaseContext | null;
   readonly handoffPending: boolean;
   readonly onHandoff: (linkCaseId?: string) => void;
+  readonly onAiSuggest: () => void;
+  readonly aiPending: boolean;
   readonly canLink: boolean;
   readonly canAssign: boolean;
   readonly canReply: boolean;
@@ -542,6 +573,9 @@ function ConversationPane(props: ConversationPaneProps) {
               {t('omnichannel.inbox.internalNote')}
             </Typography.Text>
           </Space>
+          <Button size="small" icon={<RobotOutlined />} onClick={props.onAiSuggest} loading={props.aiPending} disabled={!props.canReply}>
+            {t('omnichannel.inbox.aiSuggest')}
+          </Button>
           <Select
             size="small"
             showSearch

@@ -339,7 +339,7 @@ key gaps).
 | E8 | Queue/routing accepts conversations + operators + business hours | ServiceDesk | OM.11 | **DONE — OM.11** (queue opt-in, rule object type, operators, business hours, decision reuse) |
 | E9 | Case `external_id` + create-or-link commands | ServiceDesk | OM.17 | **DONE — OM.17** (`Case.externalId`/`externalSource` server-owned + partial unique index, `CaseHandoffService.createOrGet`/`recordLink` with `CaseTransition` trail; link read contract on the conversation side) |
 | E11 | Generic per-user publish seam | shared platform | OM.12/realtime | open |
-| E16 | `material_write` channel-send tool registration | AIAgents | OM.19 only | open |
+| E16 | `material_write` channel-send tool registration | AIAgents | OM.19 only | **DONE — OM.19** (`omnichannel.send_message`, `material_write`, `requiresApproval`, executes under the actor's scope) |
 
 ---
 

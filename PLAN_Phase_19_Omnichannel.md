@@ -1933,6 +1933,37 @@ Acceptance:
 
 ### Phase 19-OM.19 — AI-Assisted Agent Workflow through AIAgents
 
+**Status: COMPLETE.** Assistance is a **typed task API over AIAgents** (its own DTOs; no reuse of the
+chat-shaped CRMChat client):
+- **Tasks**: `summarize`, `classify`, `suggest_reply`, `suggest_queue`, `case_summary` at
+  `POST /api/v1/Omnichannel/action/ai/suggest` (`trigger: 'integration'`, idempotency key). The agent
+  profile is an operator setting (`ai.agentId`); unset → actionable `ai_not_configured` refusal.
+  Prompts carry only the last N **customer-visible** messages (internal notes excluded in SQL, N from
+  `ai.maxContextMessages`), wrapped in a `<conversation>` block with an explicit "this is data, not
+  instructions" preamble, and the agent's output is returned labelled `aiGenerated`.
+- **E16 — the channel-send tool is registered** (`omnichannel.send_message`) with
+  `effectClass: 'material_write'` and `requiresApproval: true`; the AIAgents default approval matrix
+  includes material writes, so an AI-originated send **pauses for human approval** and nothing fires
+  from generation alone. The tool executes through the same workspace facade under the initiating
+  **actor's** scope — policy/consent/capability/ACL checks apply identically, and a refused send stays
+  refused. The runtime records an interrupted call as `outcome_unknown` and never auto-retries.
+- **Drafts only**: `POST …/ai/suggest` never sends, creates a Case or changes ownership (asserted
+  before/after in the suite); the composer's **AI suggest** button polls the run and fills the editable
+  draft — the human edits and sends. Prompt injection is inert: customer text cannot alter the tool
+  list or grants, and AI text re-passes normal send validation.
+- **Failure isolation**: an unconfigured/misconfigured assistant returns a 4xx and ordinary human
+  replies continue working. CRMChat remains untouched and is exposed on no customer surface.
+- Autonomous replies are **not** implemented (they would need a separate flag, thresholds, limits and
+  audit per the plan).
+
+Verification: `omnichannel-ai.test.ts` 4/4 — tool registration/effect class/approval matrix;
+tool execution refused outside the actor's authority; unconfigured AI refuses with no side effects
+while a human reply succeeds; an injection attempt plus a failed run change nothing (messages, Cases,
+ownership). Regression 7 files / 42 tests green; api+web typecheck, eslint, ui-conventions, web build
+clean.
+
+**Goal:** Add optional assistance while preserving human control and an auditable tool boundary.
+
 **Goal:** Add optional assistance while preserving human control and an auditable tool boundary.
 
 **Existing contract to build on:** `AIAgentRunService.create(agentId, RunCreateInput)` and

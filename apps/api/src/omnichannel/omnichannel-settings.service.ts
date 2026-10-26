@@ -78,11 +78,27 @@ const RetentionSettingsSchema = z
   .strict()
   .default({});
 
+/**
+ * 19-OM.19 — the AI posture. Suggestions are **drafts only**: Omnichannel calls AIAgents' run
+ * service with its own typed input and never sends, creates Cases or changes ownership by itself.
+ * `agentId` names the published agent profile the operator approved for this use; unset means the
+ * assistant is off and every AI endpoint answers an actionable refusal.
+ */
+const AiSettingsSchema = z
+  .object({
+    agentId: z.string().trim().max(120).default(''),
+    /** Maximum customer-visible messages included in a suggestion prompt. */
+    maxContextMessages: z.number().int().min(1).max(50).default(10),
+  })
+  .strict()
+  .default({});
+
 export const OmnichannelSettingsSchema = z
   .object({
     features: OmnichannelFeaturesSchema.default({}),
     webChat: WebChatSettingsSchema,
     retention: RetentionSettingsSchema,
+    ai: AiSettingsSchema,
   })
   .strict();
 

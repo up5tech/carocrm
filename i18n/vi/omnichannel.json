@@ -128,7 +128,10 @@
     "createCase": "Tạo Case",
     "linkCase": "Liên kết Case",
     "caseIdPlaceholder": "Id Case cần liên kết",
-    "openCase": "Mở Case"
+    "openCase": "Mở Case",
+    "aiSuggest": "AI gợi ý",
+    "aiFailed": "Gợi ý AI thất bại.",
+    "aiTimeout": "Gợi ý AI mất quá lâu; hãy thử lại sau."
   },
   "refusal": {
     "channel_disabled": "Kênh này đang tắt trong cài đặt Thoại & Liên lạc.",
