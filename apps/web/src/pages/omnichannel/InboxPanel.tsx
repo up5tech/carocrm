@@ -482,12 +482,15 @@ function ConversationPane(props: ConversationPaneProps) {
         <Space size={8} wrap>
           <Typography.Text strong>{conversation.customerName ?? conversation.customerAddress ?? conversation.id.slice(0, 8)}</Typography.Text>
           <Tag>{conversation.channel}</Tag>
-          <Tag>{t(`omnichannel.inbox.statuses.${conversation.status}`)}</Tag>
           {conversation.priority !== 'normal' ? <Tag color={conversation.priority === 'urgent' ? 'red' : 'orange'}>{conversation.priority}</Tag> : null}
           {conversation.assignedUserId === null ? <Tag color="gold">{t('omnichannel.inbox.unassignedTag')}</Tag> : <Tag color="blue">{t('omnichannel.inbox.assignedTag')}</Tag>}
         </Space>
       }
-      extra={
+    >
+      {/* The head carries the identity, the actions get their own row under it. Sharing one line
+          left the last tag orphaned below the name, and the status appeared twice — once as a tag
+          and once as the control that changes it. */}
+      <div className="carocrm-inbox-toolbar">
         <Space size={6} wrap>
           <Select
             size="small"
@@ -508,8 +511,7 @@ function ConversationPane(props: ConversationPaneProps) {
             {t('omnichannel.inbox.unassign')}
           </Button>
         </Space>
-      }
-    >
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420, overflowY: 'auto', paddingRight: 4 }} aria-live="polite">
         {props.entries.length === 0 ? <Typography.Text type="secondary">{t('omnichannel.inbox.noMessages')}</Typography.Text> : null}
         {props.entries.map((entry) =>
