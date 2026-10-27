@@ -44,9 +44,7 @@
     },
     "tabInbox": "Inbox",
     "tabDiagnostics": "Diagnostics",
-    "pendingQueues": "Queues and routing extend Service Desk (19-OM.11).",
-    "pendingRealtime": "Live updates replace polling with the shared realtime seam (19-OM.12).",
-    "pendingHandoff": "Service Desk hand-off creates or links a Case (19-OM.17).",
+    "pendingRealtime": "Live updates replace polling with the shared realtime publish seam (E11).",
     "channelUnsupported": "unsupported",
     "tabReports": "Reports",
     "tabOperations": "Operations"
@@ -93,8 +91,10 @@
       "received": "Received",
       "type": "Type",
       "status": "Status",
-      "failure": "Failure"
-    }
+      "failure": "Failure",
+      "capabilities": "Capabilities"
+    },
+    "noCapabilities": "No capabilities declared"
   },
   "chat": {
     "title": "Chat with us",
@@ -105,7 +105,9 @@
     "sendFailed": "The message could not be sent. Please try again.",
     "closed": "The chat is currently closed.",
     "unavailable": "The chat could not be started. Please try again later.",
-    "consentAccept": "I agree"
+    "consentAccept": "I agree",
+    "rateLimited": "You are sending messages too quickly. Please wait a moment.",
+    "connectionLost": "The connection was interrupted. The page will keep trying."
   },
   "inbox": {
     "view": "View",
@@ -178,7 +180,12 @@
     "openCase": "Open case",
     "aiSuggest": "AI suggest",
     "aiFailed": "The AI suggestion failed.",
-    "aiTimeout": "The AI suggestion is taking too long; try again later."
+    "aiTimeout": "The AI suggestion is taking too long; try again later.",
+    "language": "Language",
+    "queue": "Queue",
+    "unlink": "Unlink",
+    "unlinkReason": "Removed from the conversation by staff",
+    "denied": "You do not have the permission to read the conversation inbox."
   },
   "refusal": {
     "channel_disabled": "This channel is switched off in the Voice & Communications settings.",
@@ -221,6 +228,10 @@
     "undelivered": "Undelivered",
     "unknown": "Unknown",
     "provider": "Provider health",
-    "unavailable": "Unavailable"
+    "unavailable": "Unavailable",
+    "assignment": "Assignment",
+    "assignee": "Assignee",
+    "conversations": "Conversations",
+    "denied": "You do not have the permission to read the conversation reports."
   }
 }

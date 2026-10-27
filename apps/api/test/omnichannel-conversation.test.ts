@@ -272,12 +272,20 @@ describe('Omnichannel canonical conversation services (19-OM.6)', () => {
 
   it('owns no send/ingest/status implementation — the facade only reads the projection', () => {
     const dir = new URL('../src/omnichannel/', import.meta.url);
+    // Every Voice-owned table is read-only from here (D1). The one sanctioned exception is the
+    // participant identity columns: migration 077 gives them to Omnichannel (OM.7), so the identity
+    // service may update that one table and nothing else.
+    const sanctioned = new Set(['omnichannel-identity.service.ts']);
+    const voiceWrite = /\b(insert\s+into|update|delete\s+from)\s+voice_([a-z_]+)/gi;
     const offenders: string[] = [];
     for (const file of readdirSync(dir)) {
       if (!file.endsWith('.ts')) continue;
       const source = readFileSync(new URL(file, dir), 'utf8');
-      if (/insert\s+into\s+voice_messages/i.test(source) || /insert\s+into\s+voice_conversations/i.test(source) || /update\s+voice_conversations/i.test(source)) {
-        offenders.push(file);
+      for (const match of source.matchAll(voiceWrite)) {
+        const action = (match[1] ?? '').toLowerCase();
+        const table = match[2] ?? '';
+        const allowed = sanctioned.has(file) && action === 'update' && table === 'conversation_participants';
+        if (!allowed) offenders.push(`${file}: ${action} voice_${table}`);
       }
     }
     expect(offenders).toEqual([]);

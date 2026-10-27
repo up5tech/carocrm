@@ -5,6 +5,7 @@ import { api } from '../../api/client.js';
 import type { OmnichannelAnalytics } from '../../api/types.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
+import { PermissionDenied } from '../../components/PermissionDenied.js';
 import { t } from '../../state/i18n.js';
 
 /**
@@ -19,6 +20,8 @@ export function ReportsPanel() {
   const analytics = useQuery({ queryKey: ['omnichannel', 'analytics'], queryFn: () => api.omnichannelAnalytics(30), staleTime: 60_000 });
   if (analytics.isLoading) return <LoadingSkeleton rows={8} />;
   if (analytics.isError || analytics.data === undefined) {
+    // §20.11 — a refused read is a permission card, not an error toast over an empty panel.
+    if (analytics.isError && isForbidden(analytics.error)) return <PermissionDenied hint={t('omnichannel.reports.denied')} />;
     return <ErrorState message={t('omnichannel.reports.loadFailed')} onRetry={() => void analytics.refetch()} />;
   }
   const view: OmnichannelAnalytics = analytics.data;
@@ -57,6 +60,28 @@ export function ReportsPanel() {
               ))}
               <Tag>{t('omnichannel.reports.snoozed')}: {view.backlog.snoozed}</Tag>
             </Space>
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card size="small" title={t('omnichannel.reports.assignment')}>
+            {view.assignment.length === 0 ? (
+              <Typography.Text type="secondary">{t('omnichannel.reports.noData')}</Typography.Text>
+            ) : (
+              <Table
+                rowKey="assignee"
+                size="small"
+                pagination={false}
+                dataSource={[...view.assignment]}
+                columns={[
+                  {
+                    title: t('omnichannel.reports.assignee'),
+                    dataIndex: 'assignee',
+                    render: (value: string) => (value === 'unassigned' ? t('omnichannel.reports.unassigned') : value),
+                  },
+                  { title: t('omnichannel.reports.conversations'), dataIndex: 'count' },
+                ]}
+              />
+            )}
           </Card>
         </Col>
         <Col xs={24} lg={12}>
@@ -103,4 +128,11 @@ export function ReportsPanel() {
       </Row>
     </Space>
   );
+}
+
+/** A refused read (403) is a permission state, not a failure to retry. */
+function isForbidden(error: unknown): boolean {
+  const status = (error as { status?: number; body?: { error?: { code?: string } } }).status;
+  const code = (error as { body?: { error?: { code?: string } } }).body?.error?.code;
+  return status === 403 || code === 'AUTHORIZATION_DENIED';
 }

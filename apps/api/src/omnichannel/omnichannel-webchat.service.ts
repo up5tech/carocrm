@@ -170,15 +170,21 @@ export class OmnichannelWebChatService {
       throw new ValidationError('A chat message needs a stable client id.');
     }
 
-    if (config.requireConsent && session.consent_state !== 'granted') {
-      if (input.consent !== true) {
-        throw new ValidationError('Consent is required before the first message.', { refusals: ['consent_required'] });
+    if (config.requireConsent) {
+      // Consent is versioned: a visitor who agreed to version 1 has not agreed to version 2. The
+      // stored version is compared with the published one, so publishing new consent text asks the
+      // existing visitors again (admin-setup.md §3.3).
+      const consented = session.consent_state === 'granted' && session.consent_version === config.consentVersion;
+      if (!consented) {
+        if (input.consent !== true) {
+          throw new ValidationError('Consent is required before the first message.', { refusals: ['consent_required'] });
+        }
+        await sql`
+          update omnichannel_visitor_sessions
+          set consent_state = 'granted', consent_version = ${config.consentVersion}, consent_at = now(), modified_at = now()
+          where id = ${session.id}
+        `.execute(this.database.db);
       }
-      await sql`
-        update omnichannel_visitor_sessions
-        set consent_state = 'granted', consent_version = ${config.consentVersion}, consent_at = now(), modified_at = now()
-        where id = ${session.id}
-      `.execute(this.database.db);
     }
 
     await this.enforceRate(session, config.maxMessagesPerMinute);

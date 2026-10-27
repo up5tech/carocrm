@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -260,6 +262,16 @@ describe('Operations, diagnostics and recovery (19-OM.21)', () => {
     // Presence, never a value: the webhook secret cannot appear in any diagnostic answer.
     expect(JSON.stringify(result.body)).not.toContain(WEBHOOK_SECRET);
     expect(JSON.stringify(result.body)).not.toContain(PHONE);
+  });
+
+  it('never selects the ciphertext itself — only a presence flag', () => {
+    // `security-hardening.md` T8: the operations projection never selects ciphertext. The presence
+    // booleans are computed in SQL, so the encrypted columns never leave the database.
+    const source = readFileSync(new URL('../src/omnichannel/omnichannel-operations.service.ts', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/select[^;]*credential_encrypted\s*,/i);
+    expect(source).not.toMatch(/select[^;]*webhook_secret_encrypted\s*,/i);
+    expect(source).toMatch(/\(credential_encrypted is not null\) as has_credential/i);
+    expect(source).toMatch(/\(webhook_secret_encrypted is not null\) as has_webhook_secret/i);
   });
 
   it('lists failed receipts and inspects the redacted stored payload without a secret', async () => {

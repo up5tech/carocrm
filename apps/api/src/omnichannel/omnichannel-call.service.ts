@@ -1,4 +1,3 @@
-import { NotFoundError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
@@ -40,14 +39,13 @@ export class OmnichannelCallService {
   }
 
   /**
-   * The explicit "open conversation" action. The call is looked up through the owner's ACL-scoped
-   * list — a call this caller cannot see is a 404, not a probe.
+   * The explicit "open conversation" action. The call is looked up through the owner's own
+   * accessor — a call this caller cannot see is a 404, not a probe — and the lookup does not
+   * depend on how many calls the list happens to hold.
    */
   async openConversation(callId: string): Promise<{ readonly callId: string; readonly conversationId: string | null }> {
     await this.acl.assertAccess('CommunicationConversation', 'read');
-    const calls = await this.calls.list({ limit: 200, offset: 0 });
-    const call = calls.find((candidate) => candidate.id === callId);
-    if (call === undefined) throw new NotFoundError(`Call "${callId}" does not exist or is not visible.`);
+    const call = await this.calls.get(callId);
     return { callId, conversationId: await this.findConversationId(call) };
   }
 

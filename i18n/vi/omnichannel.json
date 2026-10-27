@@ -44,9 +44,7 @@
     },
     "tabInbox": "Hộp thư",
     "tabDiagnostics": "Chẩn đoán",
-    "pendingQueues": "Hàng đợi và định tuyến mở rộng từ Bàn phục vụ (19-OM.11).",
-    "pendingRealtime": "Cập nhật trực tiếp thay thế polling bằng realtime dùng chung (19-OM.12).",
-    "pendingHandoff": "Bàn giao Bàn phục vụ tạo hoặc liên kết Case (19-OM.17).",
+    "pendingRealtime": "Cập nhật trực tiếp thay thế polling bằng kênh realtime dùng chung (E11).",
     "channelUnsupported": "không hỗ trợ",
     "tabReports": "Báo cáo",
     "tabOperations": "Vận hành"
@@ -93,8 +91,10 @@
       "received": "Nhận lúc",
       "type": "Loại",
       "status": "Trạng thái",
-      "failure": "Lỗi"
-    }
+      "failure": "Lỗi",
+      "capabilities": "Khả năng"
+    },
+    "noCapabilities": "Chưa khai báo khả năng nào"
   },
   "chat": {
     "title": "Trò chuyện với chúng tôi",
@@ -105,7 +105,9 @@
     "sendFailed": "Không gửi được tin nhắn. Vui lòng thử lại.",
     "closed": "Kênh chat hiện đang đóng.",
     "unavailable": "Không thể bắt đầu trò chuyện. Vui lòng thử lại sau.",
-    "consentAccept": "Tôi đồng ý"
+    "consentAccept": "Tôi đồng ý",
+    "rateLimited": "Bạn gửi tin quá nhanh. Vui lòng đợi một chút.",
+    "connectionLost": "Kết nối bị gián đoạn. Trang sẽ tiếp tục thử lại."
   },
   "inbox": {
     "view": "Chế độ xem",
@@ -178,7 +180,12 @@
     "openCase": "Mở Case",
     "aiSuggest": "AI gợi ý",
     "aiFailed": "Gợi ý AI thất bại.",
-    "aiTimeout": "Gợi ý AI mất quá lâu; hãy thử lại sau."
+    "aiTimeout": "Gợi ý AI mất quá lâu; hãy thử lại sau.",
+    "language": "Ngôn ngữ",
+    "queue": "Hàng đợi",
+    "unlink": "Bỏ liên kết",
+    "unlinkReason": "Nhân viên gỡ liên kết khỏi cuộc hội thoại",
+    "denied": "Bạn không có quyền xem hộp thư hội thoại."
   },
   "refusal": {
     "channel_disabled": "Kênh này đang tắt trong cài đặt Thoại & Liên lạc.",
@@ -221,6 +228,10 @@
     "undelivered": "Không gửi được",
     "unknown": "Chưa xác định",
     "provider": "Sức khỏe nhà cung cấp",
-    "unavailable": "Không khả dụng"
+    "unavailable": "Không khả dụng",
+    "assignment": "Phân công",
+    "assignee": "Người được giao",
+    "conversations": "Hội thoại",
+    "denied": "Bạn không có quyền xem báo cáo hội thoại."
   }
 }

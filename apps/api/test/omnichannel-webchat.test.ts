@@ -143,6 +143,33 @@ describe('Website chat channel (19-OM.9)', () => {
     expect(JSON.stringify(list.body)).not.toMatch(/entityId|participantId|internal|assignedUserId|caseId/);
   });
 
+  it('asks a visitor who agreed to an older consent text again', async () => {
+    // The session already consented under version `test-1`. Publishing version `test-2` must ask
+    // the visitor again — a stored consent is consent to *that* text, not to the next one.
+    await restoreChatSettings({ consentVersion: 'test-2', consentText: 'AGENT_TEST consent notice v2' });
+    try {
+      const stale = await call('POST', '/api/v1/Omnichannel/chat/messages', { clientMessageId: `c_${RUN}_stale`, body: 'AGENT_TEST after new text' }, { origin: ORIGIN, cookie: `omni_visitor=${cookie}` });
+      expect(stale.status).toBe(422);
+      expect(JSON.stringify(stale.body)).toContain('consent_required');
+
+      const again = await call('POST', '/api/v1/Omnichannel/chat/messages', { clientMessageId: `c_${RUN}_v2`, body: 'AGENT_TEST after new text', consent: true }, { origin: ORIGIN, cookie: `omni_visitor=${cookie}` });
+      expect(again.status, JSON.stringify(again.body)).toBe(200);
+      const row = (await sql<{ consent_version: string | null }>`
+        select consent_version from omnichannel_visitor_sessions where visitor_key_hash is not null
+          and user_agent like ${`AGENT_TEST%${RUN}%`} limit 1
+      `.execute(ctx.database.db)).rows[0];
+      expect(row?.consent_version).toBe('test-2');
+    } finally {
+      await restoreChatSettings({ consentVersion: 'test-1', consentText: 'AGENT_TEST consent notice' });
+      // This suite's own session row: put its consent version back with the setting, so the rest
+      // of the suite is not asked to consent again.
+      await sql`
+        update omnichannel_visitor_sessions set consent_version = 'test-1'
+        where user_agent like ${`AGENT_TEST%${RUN}%`}
+      `.execute(ctx.database.db);
+    }
+  });
+
   it('reconciles an optimistically resent message by its client id', async () => {
     const again = await call('POST', '/api/v1/Omnichannel/chat/messages', { clientMessageId: `c_${RUN}_1`, body: 'AGENT_TEST hello' }, { origin: ORIGIN, cookie: `omni_visitor=${cookie}` });
     expect(again.status).toBe(200);

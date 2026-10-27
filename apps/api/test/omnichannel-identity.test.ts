@@ -207,6 +207,26 @@ describe('Omnichannel identity resolution (19-OM.7)', () => {
     expect(listed?.['conversationId']).toBe(conversationId);
   });
 
+  it('counts every conflict and pages through them, so the last page is not mistaken for the last conflict', async () => {
+    const first = await call('GET', '/api/v1/Omnichannel/action/identities/conflicts?limit=1');
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    const total = Number(first.body['total'] ?? 0);
+    expect(total).toBeGreaterThanOrEqual(1);
+    // The total is the number of conflicts waiting, not the length of the page.
+    expect((first.body['list'] as unknown[]).length).toBeLessThanOrEqual(1);
+    expect(first.body['hasMore']).toBe(total > 1);
+    expect(first.body['limit']).toBe(1);
+    expect(first.body['offset']).toBe(0);
+
+    const second = await call('GET', '/api/v1/Omnichannel/action/identities/conflicts?limit=1&offset=1');
+    expect(second.status, JSON.stringify(second.body)).toBe(200);
+    expect(second.body['total']).toBe(total);
+    expect(second.body['offset']).toBe(1);
+    const firstIds = (first.body['list'] as Record<string, unknown>[]).map((row) => row['participantId']);
+    const secondIds = (second.body['list'] as Record<string, unknown>[]).map((row) => row['participantId']);
+    for (const id of secondIds) expect(firstIds).not.toContain(id);
+  });
+
   it('records a staff link as a manual decision with its reason in the audit log, and never re-overwrites it', async () => {
     const linked = await call('POST', `/api/v1/Omnichannel/action/conversations/${conversationId}/identity/link`, {
       participantId,

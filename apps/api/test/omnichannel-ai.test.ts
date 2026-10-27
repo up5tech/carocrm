@@ -26,11 +26,15 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 const RUN = Date.now().toString(36);
 const ACCOUNT_KEY = `agent_test_om19_${RUN}`;
 const PHONE = '+14155550519';
+const PROVIDER_KEY = `agent-test-om19-${RUN}`;
 
 let ctx: ApiContext;
 let conversationId = '';
 let priorVoice: string | null = null;
 let priorOmnichannel: string | null = null;
+let priorAiAgents: unknown = null;
+const agentKeys: string[] = [];
+const runIds: string[] = [];
 type Body = Record<string, unknown>;
 
 async function call(method: 'GET' | 'POST', url: string, payload?: unknown): Promise<{ status: number; body: Body }> {
@@ -78,6 +82,8 @@ beforeAll(async () => {
   expect([200, 201], JSON.stringify(consent.body)).toContain(consent.status);
   const omniRow = await ctx.database.db.selectFrom('app_settings').select('data').where('name', '=', 'omnichannel').executeTakeFirst();
   priorOmnichannel = omniRow === undefined ? null : JSON.stringify(omniRow.data);
+  const aiRow = await ctx.database.db.selectFrom('app_settings').select('data').where('name', '=', 'aiAgents').executeTakeFirst();
+  priorAiAgents = aiRow?.data ?? null;
 
   const messaging = ctx.app.get(VoiceMessagingService, { strict: false });
   const ingested = await messaging.ingestInbound({
@@ -90,6 +96,29 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const db = ctx.database.db;
+  if (runIds.length > 0) {
+    await db.deleteFrom('ai_agent_runs').where('id', 'in', runIds).execute().catch(() => undefined);
+  }
+  const testAgents = await db.selectFrom('ai_agents').select('id').where('agent_key', 'in', agentKeys).execute();
+  if (testAgents.length > 0) {
+    const ids = testAgents.map((agent) => agent.id);
+    await db.deleteFrom('ai_agent_memory_items').where('agent_id', 'in', ids).execute().catch(() => undefined);
+    await db.deleteFrom('ai_agent_conversations').where('agent_id', 'in', ids).execute().catch(() => undefined);
+    await db.deleteFrom('ai_agent_approvals').where('agent_id', 'in', ids).execute().catch(() => undefined);
+  }
+  if (agentKeys.length > 0) await db.deleteFrom('ai_agents').where('agent_key', 'in', agentKeys).execute().catch(() => undefined);
+  await db.deleteFrom('ai_provider_connections').where('key', '=', PROVIDER_KEY).execute().catch(() => undefined);
+  if (priorAiAgents === null) {
+    await db.deleteFrom('app_settings').where('name', '=', 'aiAgents').execute().catch(() => undefined);
+  } else {
+    const serialized = JSON.stringify(priorAiAgents);
+    await db
+      .insertInto('app_settings')
+      .values({ name: 'aiAgents', data: serialized, modified_at: new Date() })
+      .onConflict((oc) => oc.column('name').doUpdateSet({ data: serialized, modified_at: new Date() }))
+      .execute()
+      .catch(() => undefined);
+  }
   await sql`delete from voice_consent_events where address = ${PHONE}`.execute(db).catch(() => undefined);
   await sql`delete from voice_conversations where account_key = ${ACCOUNT_KEY}`.execute(db).catch(() => undefined);
   await sql`delete from voice_webhook_events where account_key = ${ACCOUNT_KEY}`.execute(db).catch(() => undefined);
@@ -156,6 +185,123 @@ describe('AI assistance (19-OM.19)', () => {
     const after = await counts();
     // The customer message tried to instruct the assistant; generating a run changed nothing at all.
     expect(after).toEqual(before);
+    await setAi('');
+  });
+
+  it('lets an agent hold the send tool — the grant is valid, because the tool scopes no metadata entity', async () => {
+    const registry = ctx.app.get(AIToolRegistry, { strict: false });
+    const issues = await registry.validateGrant('omnichannel.send_message', true);
+    expect(issues).toEqual([]);
+  });
+
+  it('pauses an AI-originated send for a human and sends only after the approval', async () => {
+    // The tool is a material write, so the run must wait for a person. The fake provider proposes the
+    // send; nothing reaches the customer until the approval is decided.
+    const provider = await call('POST', '/api/v1/AIAgents/action/providers', {
+      kind: 'fake',
+      key: PROVIDER_KEY,
+      label: `AGENT_TEST ${RUN} om19 provider`,
+      baseUrl: 'https://example.com/v1',
+      models: ['fake-model'],
+      dataClasses: ['internal'],
+    });
+    expect(provider.status, JSON.stringify(provider.body)).toBe(201);
+    const settings = await call('POST', '/api/v1/AIAgents/action/settings', {
+      features: { definitions: true, execution: true, eventTriggers: true },
+      safety: { globalExecutionPaused: false, reason: null },
+      provider: { defaultKey: PROVIDER_KEY },
+    });
+    expect(settings.status, JSON.stringify(settings.body)).toBe(200);
+
+    const agentKey = `agent-test-om19-${RUN}-send`;
+    const created = await call('POST', '/api/v1/AIAgents/action/agents', {
+      key: agentKey,
+      name: `AGENT_TEST ${RUN} om19 sender`,
+      visibility: 'organization',
+      config: {
+        provider: { key: PROVIDER_KEY, model: 'fake-model', fallbackModels: [] },
+        dataClass: 'internal',
+        prompt: { system: 'You are a test agent.' },
+        input: { mode: 'text' },
+        output: { mode: 'text' },
+        memory: { mode: 'none' },
+        tools: [{ key: 'omnichannel.send_message' }],
+        limits: {
+          maxSteps: 6,
+          maxModelCalls: 6,
+          maxToolCalls: 4,
+          maxTokens: 12_000,
+          maxCostUsd: 0.5,
+          maxElapsedSeconds: 60,
+          maxRetries: 0,
+          maxOutputTokens: 1_024,
+          temperature: 0.2,
+        },
+        triggers: { manual: true, record: false, event: false, schedule: false, integration: true },
+        approval: { requireFor: ['material_write', 'high_impact'] },
+      },
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const agentId = String(created.body['id']);
+    agentKeys.push(agentKey);
+    const published = await call('POST', `/api/v1/AIAgents/action/agents/${agentId}/publish`, {});
+    expect(published.status, JSON.stringify(published.body)).toBe(200);
+
+    const messaging = ctx.app.get(VoiceMessagingService, { strict: false });
+    await messaging.ingestInbound({
+      accountKey: ACCOUNT_KEY,
+      event: {
+        kind: 'message',
+        providerMessageId: `om19_tool_${RUN}`,
+        state: 'delivered',
+        direction: 'inbound',
+        channel: 'sms',
+        from: PHONE,
+        to: null,
+        body: `Send the reply. __FAKE_TOOL__:omnichannel.send_message __FAKE_TOOL_ARGS__:{"conversationId":"${conversationId}","body":"AGENT_TEST_OM19 approved send","idempotencyKey":"om19_approved_${RUN}"}`,
+        occurredAt: new Date().toISOString(),
+        failureCategory: null,
+        vendorStatus: 'received',
+      },
+    });
+    // The baseline is taken after the fixture message: what must not change is the *send*.
+    const before = await counts();
+    await setAi(agentId);
+
+    const suggest = await call('POST', '/api/v1/Omnichannel/action/ai/suggest', { task: 'suggest_reply', conversationId });
+    expect(suggest.status, JSON.stringify(suggest.body)).toBe(202);
+    const runId = String(suggest.body['runId']);
+    runIds.push(runId);
+
+    const waiting = await call('POST', `/api/v1/AIAgents/action/runs/${runId}/execute`, {});
+    expect(waiting.status, JSON.stringify(waiting.body)).toBe(200);
+    expect((waiting.body['run'] as { status: string }).status).toBe('waiting_for_approval');
+    // Nothing was sent while the run waited for a person.
+    expect(await counts()).toEqual(before);
+
+    const inbox = await call('GET', '/api/v1/AIAgents/action/approvals?status=pending');
+    expect(inbox.status, JSON.stringify(inbox.body)).toBe(200);
+    const approvals = inbox.body['list'] as { id: string; runId: string; toolKey: string; actionClass: string }[];
+    const approval = approvals.find((entry) => entry.runId === runId);
+    expect(approval?.toolKey).toBe('omnichannel.send_message');
+    expect(approval?.actionClass).toBe('material_write');
+    if (approval === undefined) throw new Error('approval not found');
+
+    const approved = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, { note: 'Reviewed the proposed reply.' });
+    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+    expect((approved.body['approval'] as { status: string }).status).toBe('approved');
+
+    const resumed = await call('POST', `/api/v1/AIAgents/action/runs/${runId}/execute`, {});
+    expect(resumed.status, JSON.stringify(resumed.body)).toBe(200);
+    expect((resumed.body['run'] as { status: string }).status).toBe('succeeded');
+
+    const after = await counts();
+    expect(after.messages).toBe(before.messages + 1);
+    const sent = (await sql<{ body: string }>`
+      select body from voice_messages where conversation_id = ${conversationId} and direction = 'outbound'
+        and body = 'AGENT_TEST_OM19 approved send' limit 1
+    `.execute(ctx.database.db)).rows[0];
+    expect(sent?.body).toBe('AGENT_TEST_OM19 approved send');
     await setAi('');
   });
 });

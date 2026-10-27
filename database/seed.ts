@@ -141,6 +141,56 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
       ['noAccess', {}],
     );
 
+    // Phase 19-OM — the Omnichannel roles (contract §10, extension E18).
+    //
+    // The module's rights are *synthetic* permission resources (`OmnichannelConversation`,
+    // `OmnichannelMessage`, …), not metadata entities, so they never appear in the Entity Manager's
+    // role editor — an administrator could not grant the inbox to a team from the UI. These seeded
+    // roles make that possible: a real role holds the inbox rights from the start, and an
+    // administrator can extend them per role. `sysAdmin`'s wildcard stays the only holder of the
+    // administrator-class rights.
+    const omnichannelRoles: { id: string; name: string; permissions: Record<string, Record<string, string>> }[] = [
+      {
+        id: 'omnichannelAgent',
+        name: 'Omnichannel Agent',
+        permissions: {
+          OmnichannelConversation: { read: 'all' },
+          OmnichannelMessage: { create: 'yes' },
+        },
+      },
+      {
+        id: 'omnichannelSupervisor',
+        name: 'Omnichannel Supervisor',
+        permissions: {
+          OmnichannelConversation: { read: 'all' },
+          OmnichannelMessage: { create: 'yes' },
+          OmnichannelAssignment: { edit: 'yes' },
+          OmnichannelIdentity: { edit: 'yes' },
+          OmnichannelQueue: { edit: 'yes' },
+        },
+      },
+      {
+        id: 'omnichannelAdministrator',
+        name: 'Omnichannel Administrator',
+        permissions: {
+          OmnichannelConversation: { read: 'all' },
+          OmnichannelMessage: { create: 'yes' },
+          OmnichannelAssignment: { edit: 'yes' },
+          OmnichannelIdentity: { edit: 'yes' },
+          OmnichannelQueue: { edit: 'yes' },
+          OmnichannelConnection: { edit: 'yes' },
+          OmnichannelOps: { read: 'all', edit: 'yes' },
+          OmnichannelSettings: { edit: 'yes' },
+        },
+      },
+    ];
+    for (const role of omnichannelRoles) {
+      await pool.query(
+        `INSERT INTO roles (id, name, permissions) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, permissions = EXCLUDED.permissions`,
+        [role.id, role.name, role.permissions],
+      );
+    }
+
     // Phase 18 — default portal, its portal role, navigation and dashboard (PLAN §37).
     // The portal role grants entity-level read only; portal record visibility (contact/account
     // one-hop) is enforced by the portal ACL policy, never by the internal role tables.

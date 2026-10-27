@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -159,6 +161,15 @@ describe('VoiceCommunications integration (19-OM.13)', () => {
     expect(none.body['conversationId']).toBeNull();
     const missing = await call('POST', '/api/v1/Omnichannel/action/calls/does-not-exist/conversation', {});
     expect(missing.status).toBe(404);
+  });
+
+  it('resolves a call by its own id, not by scanning a page of the call list', () => {
+    // The owner's accessor answers for any call the caller may see. A list scan would answer 404 for
+    // every call outside the newest page — the bug this scan keeps out.
+    const source = readFileSync(new URL('../src/omnichannel/omnichannel-call.service.ts', import.meta.url), 'utf8');
+    const open = source.slice(source.indexOf('async openConversation'));
+    expect(open).not.toMatch(/calls\.list\(/);
+    expect(open).toMatch(/calls\.get\(/);
   });
 
   it('reports the voice connector honestly and independently of the messaging rows', async () => {

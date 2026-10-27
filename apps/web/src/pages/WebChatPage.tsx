@@ -3,6 +3,7 @@ import { Alert, Button, Card, Input, Space, Typography } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { t } from '../state/i18n.js';
+import { errorText } from './omnichannel/refusals.js';
 
 /**
  * Phase 19-OM.9 — the public website-chat widget (`/chat`, contract §7).
@@ -41,8 +42,15 @@ async function chatFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
   });
   if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
-    throw Object.assign(new Error(body.error?.message ?? `HTTP ${response.status}`), { status: response.status });
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: { message?: string; details?: { refusals?: string[] } };
+    };
+    // The refusal codes travel with the error, so the widget can say *why* in the visitor's language
+    // instead of showing the server's English sentence.
+    throw Object.assign(new Error(body.error?.message ?? `HTTP ${response.status}`), {
+      status: response.status,
+      body,
+    });
   }
   return (await response.json()) as T;
 }
@@ -104,7 +112,13 @@ export function WebChatPage() {
         })
         .catch((cause: unknown) => {
           const status = (cause as { status?: number }).status;
-          if (status === 401) void start();
+          if (status === 401) {
+            void start();
+            return;
+          }
+          // A rate limit or a temporary failure is the visitor's business: say so instead of
+          // pretending the conversation is quiet.
+          setError(status === 429 ? t('omnichannel.chat.rateLimited') : t('omnichannel.chat.connectionLost'));
         });
     }, 4_000);
     return () => window.clearInterval(timer);
@@ -125,7 +139,9 @@ export function WebChatPage() {
       setDraft('');
       setMessages((current) => [...current, { id: `pending_${clientMessageId}`, direction: 'inbound', body, createdAt: new Date().toISOString(), clientMessageId }]);
     } catch (cause) {
-      setError((cause as { message?: string }).message ?? t('omnichannel.chat.sendFailed'));
+      const status = (cause as { status?: number }).status;
+      if (status === 429) setError(t('omnichannel.chat.rateLimited'));
+      else setError(errorText(cause, 'omnichannel.chat.sendFailed'));
     } finally {
       setSending(false);
     }

@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ServiceDeskSettingsService } from '../src/service-desk/index.js';
 import { VoiceMessagingService } from '../src/voice-communications/index.js';
 import type { ApiContext } from './support/boot-api.js';
-import { authHeader, bootApi, createTestUser, shutdownApi } from './support/boot-api.js';
+import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-OM.11 — conversation routing through the ServiceDesk engine (D2, E8).
@@ -25,6 +25,7 @@ const RUN = Date.now().toString(36);
 const ACCOUNT_KEY = `agent_test_om11_${RUN}`;
 const PHONE = '+14155550181';
 const PHONE_WHATSAPP = '+14155550182';
+const PHONE_MMS = '+14155550183';
 const WEB_VISITOR = `visitor:om11-${RUN}`;
 
 let ctx: ApiContext;
@@ -61,7 +62,7 @@ async function createEntity(entity: string, data: Record<string, unknown>): Prom
   return id;
 }
 
-async function ingest(channel: 'sms' | 'whatsapp' | 'web_chat', from: string, id: string, accountKey = ACCOUNT_KEY): Promise<string> {
+async function ingest(channel: 'sms' | 'mms' | 'whatsapp' | 'web_chat', from: string, id: string, accountKey = ACCOUNT_KEY): Promise<string> {
   const messaging = ctx.app.get(VoiceMessagingService, { strict: false });
   const result = await messaging.ingestInbound({
     accountKey,
@@ -218,5 +219,45 @@ describe('Conversation routing (19-OM.11)', () => {
     const routed = await call('POST', `/api/v1/Omnichannel/action/conversations/${conversationA}/route`, {}, user.token);
     expect(routed.status).toBe(403);
     await ctx.database.db.deleteFrom('users').where('id', '=', user.id).execute().catch(() => undefined);
+  });
+
+  it('never falls back to a queue that has not opted in to conversations', async () => {
+    // The deployment's default queue obeys the same opt-in rule as a rule's queue: a conversation
+    // that matches no rule must not land in a Case-only queue either.
+    const settings = await call('POST', '/api/v1/ServiceDesk/action/settings', { assignment: { defaultQueueId: caseOnlyQueueId } });
+    expect(settings.status, JSON.stringify(settings.body)).toBe(200);
+    // `mms` matches none of this suite's conversation rules, so the fallback is the path under test.
+    const conversation = await ingest('mms', PHONE_MMS, `m_${RUN}`);
+    try {
+      const routed = await call('POST', `/api/v1/Omnichannel/action/conversations/${conversation}/route`, {});
+      expect(routed.status, JSON.stringify(routed.body)).toBe(200);
+      const decision = routed.body['decision'] as Record<string, unknown>;
+      expect(decision['queueId']).toBeNull();
+      expect(decision['fallbackReason']).toBe('no-rule-matched');
+      const row = (await sql<{ current_queue_id: string | null }>`
+        select current_queue_id from voice_conversations where id = ${conversation}
+      `.execute(ctx.database.db)).rows[0];
+      expect(row?.current_queue_id ?? null).toBeNull();
+    } finally {
+      await call('POST', '/api/v1/ServiceDesk/action/settings', { assignment: { defaultQueueId: null } });
+      await ctx.database.db.deleteFrom('voice_conversations').where('id', '=', conversation).execute().catch(() => undefined);
+    }
+  });
+
+  it('asks the queue-management right to route, so the capability is never a dead entry', async () => {
+    const role = `om11_queue_${RUN}`;
+    await createTestRole(ctx, {
+      id: role,
+      name: `AGENT_TEST OM11 assign only ${RUN}`,
+      permissions: { OmnichannelAssignment: { edit: 'yes' }, OmnichannelConversation: { read: 'all' } },
+    });
+    const user = await createTestUser(ctx, { userName: `AGENT_TEST OM11 assign-only ${RUN}`, roleIds: [role] });
+    try {
+      const routed = await call('POST', `/api/v1/Omnichannel/action/conversations/${conversationA}/route`, {}, user.token);
+      expect(routed.status).toBe(403);
+    } finally {
+      await ctx.database.db.deleteFrom('users').where('id', '=', user.id).execute().catch(() => undefined);
+      await ctx.database.db.deleteFrom('roles').where('id', '=', role).execute().catch(() => undefined);
+    }
   });
 });

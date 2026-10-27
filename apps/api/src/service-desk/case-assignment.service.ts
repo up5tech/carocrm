@@ -340,7 +340,7 @@ export class CaseAssignmentService {
         const ruleQueueId = text(rule.data["queueId"]) ?? defaultQueueId;
         if (ruleQueueId !== null) {
           const queue = await this.records.byId("CaseQueue", ruleQueueId);
-          if (queue !== undefined && queue.data["acceptsConversations"] !== true) continue; // case-only queue
+          if (queue !== undefined && !this.queueAccepts(queue, objectType)) continue; // case-only queue
         }
       }
       return this.decisionForRule(rule, defaultQueueId);
@@ -348,7 +348,7 @@ export class CaseAssignmentService {
     // No rule matched: fall back to the configured default queue, or retain the case unowned.
     if (defaultQueueId !== null) {
       const queue = await this.records.byId("CaseQueue", defaultQueueId);
-      if (queue !== undefined && queue.data["isActive"] !== false) {
+      if (queue !== undefined && queue.data["isActive"] !== false && this.queueAccepts(queue, objectType)) {
         return this.decisionForQueue(queue, {
           routingRuleId: null,
           routingRuleName: null,
@@ -406,6 +406,15 @@ export class CaseAssignmentService {
     }
     const target: Target = { assignedUserId: null, teamId: ruleTeamId, queueId: ruleQueueId };
     return this.wrapDecision(rule, target, "manual", null);
+  }
+
+  /**
+   * 19-OM.11 — a conversation is never sent to a queue that has not opted in. A Case keeps the
+   * queue's own behaviour (every queue accepts Cases); a conversation needs the explicit
+   * `acceptsConversations` flag. The rule's queue and the fallback queue obey the same rule.
+   */
+  private queueAccepts(queue: ServiceDeskRow, objectType: "case" | "conversation"): boolean {
+    return objectType !== "conversation" || queue.data["acceptsConversations"] === true;
   }
 
   private async decisionForQueue(

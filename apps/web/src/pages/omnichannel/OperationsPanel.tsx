@@ -37,6 +37,8 @@ export function OperationsPanel() {
   const { message } = AntApp.useApp();
   const queryClient = useQueryClient();
   const [days, setDays] = useState(7);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [inspected, setInspected] = useState<OmnichannelOperationEventDetail | null>(null);
   const [lastImpact, setLastImpact] = useState<OmnichannelOperationImpact | null>(null);
 
@@ -53,8 +55,8 @@ export function OperationsPanel() {
     retry: false,
   });
   const events = useQuery({
-    queryKey: ['omnichannel', 'operations', 'events'],
-    queryFn: () => api.omnichannelOperationEvents({ limit: 25 }),
+    queryKey: ['omnichannel', 'operations', 'events', page, pageSize],
+    queryFn: () => api.omnichannelOperationEvents({ limit: pageSize, offset: (page - 1) * pageSize }),
     staleTime: 15_000,
     retry: false,
   });
@@ -176,6 +178,12 @@ export function OperationsPanel() {
       key: 'lastEvent',
       render: (_, row) =>
         row.lastEventAt === null ? t('omnichannel.operations.never') : new Date(row.lastEventAt).toLocaleString(),
+    },
+    {
+      title: t('omnichannel.operations.col.capabilities'),
+      dataIndex: 'capabilities',
+      align: 'right' as const,
+      render: (value: number) => (value === 0 ? t('omnichannel.operations.noCapabilities') : String(value)),
     },
     {
       title: t('omnichannel.operations.col.awaiting'),
@@ -325,10 +333,20 @@ export function OperationsPanel() {
         <Table
           rowKey="id"
           size="small"
-          pagination={false}
           columns={eventColumns}
           dataSource={[...(events.data?.list ?? [])]}
           locale={{ emptyText: t('omnichannel.operations.noReceipts') }}
+          pagination={{
+            current: page,
+            pageSize,
+            total: events.data?.total ?? 0,
+            showSizeChanger: true,
+            pageSizeOptions: ['25', '50', '100'],
+            onChange: (next: number, size: number) => {
+              setPageSize(size);
+              setPage(next);
+            },
+          }}
         />
       </Card>
 

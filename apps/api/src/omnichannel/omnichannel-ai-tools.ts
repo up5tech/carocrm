@@ -50,7 +50,12 @@ export class OmnichannelAiTools {
       owningModule: 'Omnichannel',
       effectClass: 'material_write',
       requiresApproval: true,
-      entityScopes: ['CommunicationConversation', 'CommunicationMessage'],
+      // The tool writes conversation *records*, which live in the owner's tables and are addressed by
+      // the ACL resources `CommunicationConversation` / `CommunicationMessage` — not by metadata
+      // entities. A tool may only declare metadata entities as its scope (the registry refuses a
+      // grant whose scope is not registered), so the scope stays empty and the handler enforces the
+      // ACL itself: the run's actor scope, the conversation binding and the reply capability.
+      entityScopes: [],
       inputSchema: SendArgumentsSchema,
       inputJsonSchema: {
         type: 'object',

@@ -167,9 +167,7 @@ function DiagnosticsPanel() {
         message={t('omnichannel.page.comingSoon')}
         description={
           <ul style={{ margin: 0, paddingLeft: 18 }}>
-            <li>{t('omnichannel.page.pendingQueues')}</li>
             <li>{t('omnichannel.page.pendingRealtime')}</li>
-            <li>{t('omnichannel.page.pendingHandoff')}</li>
           </ul>
         }
         style={{ marginBottom: 16 }}

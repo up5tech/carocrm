@@ -182,9 +182,22 @@ export class OmnichannelIdentityService {
   }
 
   /** The review list: disputed or heuristic auto-links of conversations the caller may read. */
-  async conflicts(limit: number): Promise<{ readonly list: readonly OmnichannelIdentityConflict[]; readonly total: number }> {
+  async conflicts(
+    limit: number,
+    offset = 0,
+  ): Promise<{ readonly list: readonly OmnichannelIdentityConflict[]; readonly total: number; readonly limit: number; readonly offset: number; readonly hasMore: boolean }> {
     await this.permissions.assert('identityLink');
     await this.acl.assertAccess('CommunicationConversation', 'read');
+    // The total is counted over the whole result, not over the page: a reviewer must know how many
+    // conflicts are waiting, otherwise the last page looks like the last conflict.
+    const counted = (await sql<{ n: number }>`
+      select count(*)::int as n
+      from voice_conversation_participants p
+      join voice_conversations c on c.id = p.conversation_id
+      where p.role = 'customer'
+        and (p.verification_state = 'disputed' or p.link_confidence = 'heuristic')
+    `.execute(this.database.db)).rows[0];
+    const total = Number(counted?.n ?? 0);
     const rows = (await sql<{
       id: string;
       conversation_id: string;
@@ -200,10 +213,13 @@ export class OmnichannelIdentityService {
       where p.role = 'customer'
         and (p.verification_state = 'disputed' or p.link_confidence = 'heuristic')
       order by p.last_seen_at desc nulls last
-      limit ${limit}
+      limit ${limit} offset ${offset}
     `.execute(this.database.db)).rows;
     return {
-      total: rows.length,
+      total,
+      limit,
+      offset,
+      hasMore: offset + rows.length < total,
       list: rows.map((row) => ({
         participantId: row.id,
         conversationId: row.conversation_id,

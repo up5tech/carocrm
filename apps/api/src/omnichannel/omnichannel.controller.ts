@@ -207,10 +207,14 @@ export class OmnichannelController {
   /**
    * Run the deterministic routing decision for a conversation (ServiceDesk engine, D2) and apply it
    * through the record owner. Returns the decision so the workspace can explain it.
+   *
+   * Routing is the module's queue-management act, so it asks the queue-management right as well as
+   * the assignment right: the `queueManage` capability is a granted right, never a dead entry.
    */
   @HttpCode(200)
   @Post('action/conversations/:id/route')
   async routeConversation(@Param('id') id: string, @Body() body: unknown) {
+    await this.permissions.assert('queueManage');
     await this.permissions.assert('assign');
     const parsed = RouteInputSchema.safeParse(body ?? {});
     if (!parsed.success) throw new ValidationError('Invalid routing input.', { issues: parsed.error.issues.map((issue) => issue.path.join('.')) });
@@ -260,10 +264,14 @@ export class OmnichannelController {
 
   /** The ambiguous/uncertain links staff must review (contract §6 "visible uncertainty"). */
   @Get('action/identities/conflicts')
-  async identityConflicts(@Query('limit') limit: unknown) {
+  async identityConflicts(@Query('limit') limit: unknown, @Query('offset') offset: unknown) {
     await this.permissions.assert('identityLink');
     const parsed = Number(limit ?? 50);
-    return this.identities.conflicts(Number.isFinite(parsed) ? Math.min(Math.max(Math.trunc(parsed), 1), 200) : 50);
+    const parsedOffset = Number(offset ?? 0);
+    return this.identities.conflicts(
+      Number.isFinite(parsed) ? Math.min(Math.max(Math.trunc(parsed), 1), 200) : 50,
+      Number.isFinite(parsedOffset) && parsedOffset > 0 ? Math.trunc(parsedOffset) : 0,
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -447,10 +455,16 @@ export class OmnichannelController {
 
   /** Receipt backlog, newest first. Payloads are not included here; inspect one event for that. */
   @Get('action/operations/events')
-  async listOperationEvents(@Query('status') status: string | undefined, @Query('limit') limit: unknown) {
+  async listOperationEvents(
+    @Query('status') status: string | undefined,
+    @Query('limit') limit: unknown,
+    @Query('offset') offset: unknown,
+  ) {
     const parsed = Number(limit ?? 25);
+    const parsedOffset = Number(offset ?? 0);
     return this.operations.listEvents({
       limit: Number.isFinite(parsed) ? Math.trunc(parsed) : 25,
+      offset: Number.isFinite(parsedOffset) && parsedOffset > 0 ? Math.trunc(parsedOffset) : 0,
       ...(typeof status === 'string' && status.trim() !== '' ? { status: status.trim() } : {}),
     });
   }

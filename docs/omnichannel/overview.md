@@ -45,6 +45,39 @@
 
 ## Log
 
+### 2026-10-27 — Review corrections, part two (routing, consent, workspace UI, roles, AI tool)
+
+The second half of the independent review. Six defects and one structural gap, each with a test:
+
+- **A conversation could fall into a Case-only queue.** The `acceptsConversations` opt-in was checked
+  for a *rule's* queue but not for the deployment's **default** queue, so a conversation that matched
+  no rule landed in a queue that never opted in. One rule now governs both paths.
+- **The web-chat consent version was stored but never enforced.** A visitor who agreed to version 1
+  kept sending after the operator published version 2; the published version is now compared with the
+  stored one, so new consent text asks the existing visitors again.
+- **The identity review list counted the page, not the conflicts.** It now counts the whole result
+  and pages through it (`limit`/`offset`, `hasMore`), so the last page is not mistaken for the last
+  conflict.
+- **A call could not be opened.** The action scanned the newest 200 calls, so an older call answered
+  404; it now asks the owner for that call by id.
+- **`queueManage` was a dead right.** The capability was declared and granted to nobody because no
+  route asked for it; the **Route** action now asks for it.
+- **The operations projection selected the ciphertext.** The presence flags are now computed in SQL, so
+  the encrypted columns never leave the database — the claim `security-hardening.md` T8 already made.
+- **The AI send tool could never be granted.** Its `entityScopes` named `CommunicationConversation`
+  and `CommunicationMessage`, which are ACL resources and not metadata entities, so the registry
+  refused every grant. The tool scopes no metadata entity now (the handler enforces the ACL), and the
+  demo ships an **Omnichannel Assistant** that holds it. The approval gate is proven by a test: a run
+  that proposes a send waits for a human, sends nothing before the approval, and sends after it.
+- **Workspace UI**: the stale "coming soon" banner is gone (queues, routing and the Case hand-off are
+  delivered); the language and queue filters are there; the identity panel can **unlink** a wrong
+  manual link; the Reports panel renders the assignment distribution; the Operations panel pages
+  through the receipts; the conversation list is a real button (keyboard reachable); a refused read
+  is a permission card; the widget says what went wrong instead of swallowing it.
+- **Roles (E18)**: three seeded roles — `omnichannelAgent`, `omnichannelSupervisor`,
+  `omnichannelAdministrator` — hold the module's rights, so the inbox is reachable by a team and not
+  only by `sysAdmin`.
+
 ### 2026-10-27 — Review corrections (module switch, Case owner, Service Desk regression)
 
 An independent review of the whole module against `PLAN_Phase_19_Omnichannel.md` found three real

@@ -145,7 +145,6 @@ import type {
   OmnichannelDraftView,
   OmnichannelHealthView,
   OmnichannelIdentityReview,
-  OmnichannelNavView,
   OmnichannelOperationEvent,
   OmnichannelOperationEventDetail,
   OmnichannelOperationImpact,
@@ -2190,10 +2189,11 @@ export const api = {
       `/Omnichannel/action/operations/accounts/${encodeURIComponent(key)}/test`,
       post({}),
     ),
-  omnichannelOperationEvents: (query: { status?: string; limit?: number } = {}) => {
+  omnichannelOperationEvents: (query: { status?: string; limit?: number; offset?: number } = {}) => {
     const params = new URLSearchParams();
     if (query.status !== undefined && query.status !== '') params.set('status', query.status);
     if (query.limit !== undefined) params.set('limit', String(query.limit));
+    if (query.offset !== undefined && query.offset > 0) params.set('offset', String(query.offset));
     const suffix = params.toString();
     return request<{ readonly list: readonly OmnichannelOperationEvent[]; readonly total: number }>(
       `/Omnichannel/action/operations/events${suffix === '' ? '' : `?${suffix}`}`,
@@ -2253,8 +2253,6 @@ export const api = {
     ),
   omnichannelMarkRead: (conversationId: string) =>
     request<{ unreadCount: number }>(`/Omnichannel/action/conversations/${encodeURIComponent(conversationId)}/read`, post({})),
-  omnichannelNav: () => request<OmnichannelNavView>('/Omnichannel/action/nav'),
-  omnichannelSettings: () => request<OmnichannelSettingsView>('/Omnichannel/action/settings'),
   omnichannelSaveSettings: (patch: Record<string, unknown>) => request<OmnichannelSettingsView>('/Omnichannel/action/settings', post(patch)),
   /** The fields, per-type operators, value kinds and condition limits the editor may offer. */
   leadScoreEditor: (modelId?: string) =>

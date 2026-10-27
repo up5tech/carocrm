@@ -2,14 +2,18 @@ import { PartitionOutlined, ReloadOutlined, RobotOutlined, SendOutlined, UserAdd
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Badge, Button, Card, Col, Collapse, Input, List, message, Row, Select, Space, Switch, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { api } from '../../api/client.js';
 import type { OmnichannelCaseContext, OmnichannelConversationView, OmnichannelIdentityParticipant, OmnichannelThreadView, OmnichannelTimelineEntry } from '../../api/types.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
+import { PermissionDenied } from '../../components/PermissionDenied.js';
 import { t } from '../../state/i18n.js';
 import { useSession } from '../../state/session.js';
+import { inboxQuery, STATUS_OPTIONS, STATUS_VIEWS,type StatusView } from './filters.js';
+import { errorText as inboxErrorText } from './refusals.js';
 
 /**
  * Phase 19-OM.10 — the agent inbox workspace (plan §9.1–§9.2, §14 `19-OM.10`).
@@ -22,37 +26,14 @@ import { useSession } from '../../state/session.js';
  * assignment survive reconnects because every mutation re-reads the server's answer.
  */
 
-const STATUS_VIEWS = ['all', 'mine', 'unassigned', 'waiting_customer', 'waiting_agent', 'snoozed', 'closed'] as const;
-type StatusView = (typeof STATUS_VIEWS)[number];
-
-const STATUS_OPTIONS = ['open', 'pending_customer', 'pending_internal', 'resolved', 'closed', 'spam'] as const;
-
-function viewQuery(view: StatusView): { status?: string; assignee?: string; snoozed?: 'only' } {
-  switch (view) {
-    case 'mine':
-      return { assignee: 'me' };
-    case 'unassigned':
-      return { assignee: 'unassigned' };
-    case 'waiting_customer':
-      return { status: 'pending_customer' };
-    case 'waiting_agent':
-      return { status: 'pending_internal' };
-    case 'snoozed':
-      return { snoozed: 'only' };
-    case 'closed':
-      return { status: 'closed' };
-    case 'all':
-    default:
-      return {};
-  }
-}
-
 export function InboxPanel() {
   const principal = useSession((state) => state.principal);
   const queryClient = useQueryClient();
   const [view, setView] = useState<StatusView>('all');
   const [channel, setChannel] = useState<string | undefined>(undefined);
   const [priority, setPriority] = useState<string | undefined>(undefined);
+  const [language, setLanguage] = useState('');
+  const [queueId, setQueueId] = useState<string | undefined>(undefined);
   const [tag, setTag] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
@@ -60,17 +41,21 @@ export function InboxPanel() {
   const [internalNote, setInternalNote] = useState(false);
   const [aiPending, setAiPending] = useState(false);
   const loadedDraftFor = useRef<string | undefined>(undefined);
+  const draftEdited = useRef(false);
   const [actionError, setActionError] = useState<string | undefined>(undefined);
 
   const filters = useMemo(
-    () => ({
-      ...viewQuery(view),
-      ...(channel === undefined ? {} : { channel }),
-      ...(priority === undefined ? {} : { priority }),
-      ...(tag.trim() === '' ? {} : { tag: tag.trim() }),
-      ...(unreadOnly ? { unreadOnly: true } : {}),
-    }),
-    [view, channel, priority, tag, unreadOnly],
+    () =>
+      inboxQuery({
+        view,
+        channel,
+        priority,
+        language,
+        queueId,
+        tag,
+        unreadOnly,
+      }),
+    [view, channel, priority, language, queueId, tag, unreadOnly],
   );
 
   const capabilities = useQuery({ queryKey: ['omnichannel', 'capabilities'], queryFn: () => api.omnichannelCapabilities(), staleTime: 60_000 });
@@ -84,6 +69,22 @@ export function InboxPanel() {
     queryFn: () => api.omnichannelConversations({ limit: 50, ...filters }),
     refetchInterval: 10_000,
   });
+
+  // The queue filter needs the queues themselves; they are ServiceDesk's own configuration records
+  // and readable by every role (`CaseQueue: read 'all'`), so the list is the single source.
+  const queues = useQuery({
+    queryKey: ['omnichannel', 'queues'],
+    queryFn: () => api.list('CaseQueue', { maxSize: 200 }),
+    staleTime: 60_000,
+  });
+  const queueOptions = useMemo(
+    () =>
+      (queues.data?.list ?? []).map((row) => ({
+        value: String(row['id'] ?? ''),
+        label: String(row['name'] ?? row['id'] ?? ''),
+      })),
+    [queues.data],
+  );
 
   // Keep the selection valid after a filter change or a server-side assignment change.
   const selected: OmnichannelConversationView | undefined = useMemo(
@@ -143,12 +144,14 @@ export function InboxPanel() {
     if (selectedId === undefined) return;
     if (loadedDraftFor.current === selectedId) return;
     loadedDraftFor.current = selectedId;
+    draftEdited.current = false;
     setDraft('');
     setInternalNote(false);
     void api
       .omnichannelDraft(selectedId)
       .then(({ draft: stored }) => {
-        if (stored === null || loadedDraftFor.current !== selectedId) return;
+        // The agent may have started typing while the draft was loading: their text wins.
+        if (stored === null || loadedDraftFor.current !== selectedId || draftEdited.current) return;
         setDraft(stored.body);
         setInternalNote(stored.isInternalNote);
       })
@@ -259,8 +262,22 @@ export function InboxPanel() {
     onError: (error: unknown) => setActionError(errorText(error)),
   });
 
+  // 19-OM.7 — a wrong manual link is undone here, not by hand-editing the record: the reason is
+  // audited and the automatic evidence is recomputed on the next review.
+  const unlinkIdentity = useMutation({
+    mutationFn: (input: { id: string; participantId: string }) =>
+      api.omnichannelUnlinkIdentity(input.id, { participantId: input.participantId, reason: t('omnichannel.inbox.unlinkReason') }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['omnichannel', 'identity', selectedId] });
+      refresh();
+    },
+    onError: (error: unknown) => setActionError(errorText(error)),
+  });
+
   if (conversations.isLoading) return <LoadingSkeleton rows={10} />;
   if (conversations.isError) {
+    // §20.11 — a refused read is a permission card, not an error toast over an empty list.
+    if (isForbidden(conversations.error)) return <PermissionDenied hint={t('omnichannel.inbox.denied')} />;
     return <ErrorState message={t('omnichannel.inbox.loadFailed')} onRetry={() => void conversations.refetch()} />;
   }
 
@@ -292,6 +309,23 @@ export function InboxPanel() {
           onChange={(value: string | undefined) => setPriority(value)}
           aria-label={t('omnichannel.inbox.priority')}
           options={['low', 'normal', 'high', 'urgent'].map((key) => ({ value: key, label: t(`omnichannel.inbox.priorities.${key}`) }))}
+        />
+        <Input
+          value={language}
+          onChange={(event) => setLanguage(event.target.value)}
+          placeholder={t('omnichannel.inbox.language')}
+          style={{ width: 120 }}
+          aria-label={t('omnichannel.inbox.language')}
+        />
+        <Select
+          allowClear
+          value={queueId}
+          placeholder={t('omnichannel.inbox.queue')}
+          style={{ minWidth: 160 }}
+          onChange={(value: string | undefined) => setQueueId(value)}
+          aria-label={t('omnichannel.inbox.queue')}
+          loading={queues.isLoading}
+          options={queueOptions}
         />
         <Input
           value={tag}
@@ -333,8 +367,13 @@ export function InboxPanel() {
                         size="small"
                         disabled={call.conversationId === null}
                         onClick={() => {
-                          if (call.conversationId !== null) setSelectedId(call.conversationId);
-                          else void message.info(t('omnichannel.inbox.noConversation'));
+                          void api
+                            .omnichannelOpenCallConversation(call.id)
+                            .then((result) => {
+                              if (result.conversationId === null) void message.info(t('omnichannel.inbox.noConversation'));
+                              else setSelectedId(result.conversationId);
+                            })
+                            .catch((error: unknown) => setActionError(errorText(error)));
                         }}
                       >
                         {t('omnichannel.inbox.openConversation')}
@@ -356,35 +395,31 @@ export function InboxPanel() {
             ) : (
               <List
                 dataSource={[...(conversations.data?.list ?? [])]}
-                renderItem={(row) => (
-                  <List.Item
-                    onClick={() => selectConversation(row)}
-                    style={{
-                      cursor: 'pointer',
-                      paddingInline: 8,
-                      borderRadius: 8,
-                      background: row.id === selectedId ? 'var(--carocrm-surface-sunken)' : undefined,
-                    }}
-                  >
-                    <List.Item.Meta
-                      title={
-                        <Space size={6} wrap>
+                renderItem={(row) => {
+                  const active = row.id === selectedId;
+                  return (
+                    <List.Item style={{ paddingInline: 0 }}>
+                      <button
+                        type="button"
+                        className={`carocrm-om-conversation${active ? ' is-active' : ''}`}
+                        aria-current={active ? 'true' : undefined}
+                        onClick={() => selectConversation(row)}
+                      >
+                        <span className="carocrm-om-conversation-title">
                           <Badge count={row.unreadCount} size="small" />
                           <Typography.Text strong>{row.customerName ?? row.customerAddress ?? row.subject ?? row.id.slice(0, 8)}</Typography.Text>
                           <Tag>{row.channel}</Tag>
                           {row.priority !== 'normal' ? <Tag color={row.priority === 'urgent' ? 'red' : 'orange'}>{row.priority}</Tag> : null}
                           {row.snoozedUntil !== null ? <Tag color="purple">{t('omnichannel.inbox.snoozed')}</Tag> : null}
-                        </Space>
-                      }
-                      description={
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        </span>
+                        <span className="carocrm-om-conversation-meta">
                           {t(`omnichannel.inbox.statuses.${row.status}`)} · {row.lastActivityAt === null ? '—' : new Date(row.lastActivityAt).toLocaleString()}
                           {row.tags.length > 0 ? ` · ${row.tags.join(', ')}` : ''}
-                        </Typography.Text>
-                      }
-                    />
-                  </List.Item>
-                )}
+                        </span>
+                      </button>
+                    </List.Item>
+                  );
+                }}
               />
             )}
           </Card>
@@ -413,7 +448,10 @@ export function InboxPanel() {
               void api.omnichannelUseSnippet(key).catch(() => undefined);
             }}
             internalNote={internalNote}
-            onDraft={setDraft}
+            onDraft={(value) => {
+              draftEdited.current = true;
+              setDraft(value);
+            }}
             onInternalNote={setInternalNote}
             onSend={() => {
               if (selected === undefined || draft.trim() === '') return;
@@ -428,6 +466,10 @@ export function InboxPanel() {
             onLink={(participant: OmnichannelIdentityParticipant, entityType: 'Contact' | 'Lead', entityId: string) =>
               selected !== undefined && linkIdentity.mutate({ id: selected.id, participantId: participant.participantId, entityType, entityId })
             }
+            onUnlink={(participant: OmnichannelIdentityParticipant) =>
+              selected !== undefined && unlinkIdentity.mutate({ id: selected.id, participantId: participant.participantId })
+            }
+            unlinking={unlinkIdentity.isPending}
           />
         </Col>
       </Row>
@@ -462,11 +504,15 @@ interface ConversationPaneProps {
   readonly onRoute: () => void;
   readonly routing: boolean;
   readonly onLink: (participant: OmnichannelIdentityParticipant, entityType: 'Contact' | 'Lead', entityId: string) => void;
+  readonly onUnlink: (participant: OmnichannelIdentityParticipant) => void;
+  readonly unlinking: boolean;
 }
 
 function ConversationPane(props: ConversationPaneProps) {
   const { conversation } = props;
+  const navigate = useNavigate();
   const [linkCaseId, setLinkCaseId] = useState('');
+  const caseId = props.caseView?.id ?? null;
   if (conversation === undefined) {
     return (
       <Card className="carocrm-card">
@@ -621,7 +667,7 @@ function ConversationPane(props: ConversationPaneProps) {
                 <Tag color="geekblue">{props.caseView.caseNumber ?? props.caseView.id.slice(0, 8)}</Tag>
                 <Tag>{props.caseView.status}</Tag>
                 {props.caseView.priority !== null ? <Tag>{props.caseView.priority}</Tag> : null}
-                <Typography.Link href={`/Case/${encodeURIComponent(props.caseView.id)}`}>{t('omnichannel.inbox.openCase')}</Typography.Link>
+                <Typography.Link onClick={() => caseId !== null && navigate(`/Case/${encodeURIComponent(caseId)}`)}>{t('omnichannel.inbox.openCase')}</Typography.Link>
               </Space>
             ),
           },
@@ -664,6 +710,13 @@ function ConversationPane(props: ConversationPaneProps) {
                         ))}
                       </Space>
                     ) : null}
+                    {props.canLink && participant.entityId !== null && participant.entityId !== undefined ? (
+                      <div style={{ marginTop: 4 }}>
+                        <Button size="small" danger loading={props.unlinking} onClick={() => props.onUnlink(participant)}>
+                          {t('omnichannel.inbox.unlink')}
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </Space>
@@ -676,15 +729,12 @@ function ConversationPane(props: ConversationPaneProps) {
 }
 
 function errorText(error: unknown): string {
-  const body = (error as { body?: { error?: { message?: string; details?: { refusals?: string[] } } } }).body;
-  const message = body?.error?.message ?? (error instanceof Error ? error.message : t('omnichannel.inbox.actionFailed'));
-  const refusals = body?.error?.details?.refusals;
-  if (refusals === undefined || refusals.length === 0) return message;
-  // 19-OM.14 — an agent needs the *reason*, not the code: each refusal has an actionable sentence
-  // (window closed vs opted out vs unsupported lead to different next steps).
-  const reasons = refusals.map((code) => {
-    const translated = t(`omnichannel.refusal.${code}`);
-    return translated.startsWith('omnichannel.refusal.') ? code : translated;
-  });
-  return `${message} — ${reasons.join(' ')}`;
+  return inboxErrorText(error, 'omnichannel.inbox.actionFailed');
+}
+
+/** A refused read (403) is a permission state, not a failure to retry. */
+function isForbidden(error: unknown): boolean {
+  const status = (error as { status?: number; body?: { error?: { code?: string } } }).status;
+  const code = (error as { body?: { error?: { code?: string } } }).body?.error?.code;
+  return status === 403 || code === 'AUTHORIZATION_DENIED';
 }

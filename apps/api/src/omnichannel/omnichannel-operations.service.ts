@@ -69,14 +69,15 @@ export class OmnichannelOperationsService {
       provider_key: string;
       enabled: boolean;
       capabilities: unknown;
-      credential_encrypted: string | null;
-      webhook_secret_encrypted: string | null;
+      has_credential: boolean;
+      has_webhook_secret: boolean;
       last_health_status: string | null;
       last_health_detail: string | null;
       last_health_at: Date | null;
     }>`
       select key, label, provider_key, enabled, capabilities,
-             credential_encrypted, webhook_secret_encrypted,
+             (credential_encrypted is not null) as has_credential,
+             (webhook_secret_encrypted is not null) as has_webhook_secret,
              last_health_status, last_health_detail, last_health_at
       from voice_provider_accounts order by label
     `.execute(this.database.db)).rows;
@@ -87,8 +88,8 @@ export class OmnichannelOperationsService {
         label: view.label,
         providerKey: view.provider_key,
         enabled: view.enabled,
-        hasCredential: view.credential_encrypted !== null,
-        hasWebhookSecret: view.webhook_secret_encrypted !== null,
+        hasCredential: view.has_credential,
+        hasWebhookSecret: view.has_webhook_secret,
         health: {
           status: view.last_health_status,
           detail: view.last_health_detail,
@@ -119,9 +120,14 @@ export class OmnichannelOperationsService {
     return { ok: result.ok, checkedAt: result.checkedAt, detail: result.detail };
   }
 
-  async listEvents(query: { readonly status?: string | undefined; readonly limit: number }): Promise<{ readonly list: readonly ReceiptSummary[]; readonly total: number }> {
+  async listEvents(query: {
+    readonly status?: string | undefined;
+    readonly limit: number;
+    readonly offset?: number | undefined;
+  }): Promise<{ readonly list: readonly ReceiptSummary[]; readonly total: number }> {
     await this.permissions.assert('opsRead');
-    return this.ingress.list({ limit: Math.min(Math.max(query.limit, 1), 100), offset: 0, ...(query.status === undefined ? {} : { status: query.status }) });
+    const offset = query.offset === undefined ? 0 : Math.max(Math.trunc(query.offset), 0);
+    return this.ingress.list({ limit: Math.min(Math.max(query.limit, 1), 100), offset, ...(query.status === undefined ? {} : { status: query.status }) });
   }
 
   /** Receipt inspection: the ingress already stores a redacted payload; it is returned verbatim. */

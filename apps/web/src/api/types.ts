@@ -4318,13 +4318,6 @@ export interface OmnichannelSettingsView {
   readonly features: Readonly<Record<string, boolean>>;
 }
 
-export interface OmnichannelNavView {
-  readonly visible: boolean;
-  readonly admin: boolean;
-  readonly enabled: boolean;
-  readonly resource: string;
-}
-
 /** Phase 19-OM.4 — the channel capability catalog (mirrors omnichannel-capability.service.ts). */
 export interface OmnichannelChannelCapabilityView {
   readonly channel: string;

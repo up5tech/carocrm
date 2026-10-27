@@ -130,13 +130,25 @@ switch in Operations.
 
 ## 6. Roles
 
+Three roles ship with the platform and can be assigned to a user from **Admin → Users → Roles**:
+
+| Role | Holds | For |
+| --- | --- | --- |
+| `omnichannelAgent` | `inboxView`, `reply` | every agent who answers conversations |
+| `omnichannelSupervisor` | the above + `assign`, `identityLink`, `queueManage` | team leads |
+| `omnichannelAdministrator` | the above + `opsRead`, `opsReplay`, `connectionManage`, `settingsManage` | the module administrator |
+
+`sysAdmin`'s wildcard still holds every right. The module's rights are *synthetic permission
+resources*, not metadata entities, so they do not appear in the Entity Manager's role matrix — the
+seeded roles are how they are granted.
+
 | Capability | Resource/action | Typical holder |
 | --- | --- | --- |
 | `inboxView` | `OmnichannelConversation:read` | every agent |
 | `reply` | `OmnichannelMessage:create` | every agent |
 | `assign` | `OmnichannelAssignment:edit` | team lead |
 | `identityLink` | `OmnichannelIdentity:edit` | senior agent |
-| `queueManage` | `OmnichannelQueue:edit` | declared, not asserted by a route yet (ServiceDesk owns queue editing) |
+| `queueManage` | `OmnichannelQueue:edit` | the **Route** action — routing a conversation into a queue is the module's queue-management act (ServiceDesk still owns queue *configuration*) |
 | `opsRead` / `opsReplay` | `OmnichannelOps:read|edit` | operations |
 | `connectionManage` | `OmnichannelConnection:edit` | integration administrator |
 | `settingsManage` | `OmnichannelSettings:edit` | module administrator |
@@ -148,12 +160,18 @@ the channel catalog itself is available to any caller with `inboxView` and expos
 ## 7. AI assistance (optional)
 
 1. Create and publish an AI agent whose trigger allowlist includes **integration** and whose input
-   mode is text.
+   mode is text. The demo data ships one: **Omnichannel Assistant** (`omnichannel-assistant`), which
+   holds the `omnichannel.send_message` tool.
 2. Enable AIAgents execution and event triggers, and configure a provider.
 3. Set the agent in Omnichannel: `POST /api/v1/Omnichannel/action/settings` with
    `{ "ai": { "agentId": "<agent id>", "maxContextMessages": 10 } }`.
-4. Suggestions are drafts only; the send tool is `material_write` and waits for human approval. An
-   unconfigured or disabled agent answers an actionable refusal and never blocks human replies.
+4. Suggestions are drafts only; the send tool is `material_write` and waits for human approval — the
+   approval inbox (AIAgents → Approvals) is where that pause is decided. An unconfigured or disabled
+   agent answers an actionable refusal and never blocks human replies.
+
+> The tool may only be granted to an agent whose approval list contains `material_write`. The grant
+> is refused otherwise, and the tool scopes no metadata entity (it writes conversation records, which
+> the owner addresses by its ACL resources), so the registry accepts it.
 
 ## 8. Operations
 
