@@ -244,6 +244,13 @@
     "vi": "Tiếng Việt",
     "en": "English"
   },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "changeFailed": "Theme change failed."
+  },
   "projects": {
     "actionCancel": "Cancel",
     "actionComplete": "Complete",

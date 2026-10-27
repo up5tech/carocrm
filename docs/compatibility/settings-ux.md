@@ -138,6 +138,10 @@ behaviour, so none of them is an EspoCRM compatibility question.
   the audit certifies the default `blue` brand instance, the rule tags are WCAG 2.0 A/AA (not
   2.1/2.2), and keyboard/focus paths remain a manual walkthrough. `pnpm test:web` plus the
   `lint:ui` convention gate complete the quality-gate picture of 20.26.
+- **Dark mode (20.21) is switched from the avatar dropdown since 2026-10-27.** The `theme`
+  preference (`Sáng` / `Tối` / `Theo hệ thống`) sits in the user menu, right under the language,
+  and marks the mode in force with a tick. The write is optimistic — the CSS custom properties and
+  the Ant Design theme repaint in the same commit — and a failed write puts the server's value back.
 - **Dark mode (20.21) is audited in both modes since 2026-10-27.** The same four surfaces are
   scanned again with the `theme` preference set to `dark`. The dark pass is what exposed that the
   Ant Design theme carried light-mode values (`Layout.bodyBg`, `colorTextBase`, the Menu/Card/Table

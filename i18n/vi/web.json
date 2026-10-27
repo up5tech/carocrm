@@ -244,6 +244,13 @@
     "vi": "Tiếng Việt",
     "en": "English"
   },
+  "theme": {
+    "label": "Giao diện",
+    "light": "Sáng",
+    "dark": "Tối",
+    "system": "Theo hệ thống",
+    "changeFailed": "Đổi giao diện thất bại."
+  },
   "projects": {
     "actionCancel": "Huỷ",
     "actionComplete": "Hoàn thành",

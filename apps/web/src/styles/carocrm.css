@@ -2882,6 +2882,14 @@ body {
   flex: none;
 }
 
+/* The theme picker's tick. The placeholder keeps the three labels aligned when none of them is
+   the mode in force — an icon slot without one would shift the labels left. */
+.carocrm-menu-theme-tick {
+  display: inline-block;
+  width: 14px;
+  flex: none;
+}
+
 .carocrm-menu-preview {
   display: flex;
   flex-direction: column;

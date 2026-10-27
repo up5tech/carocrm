@@ -1,4 +1,5 @@
-import { AppstoreOutlined, DatabaseOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SearchOutlined, StarFilled } from '@ant-design/icons';
+import { AppstoreOutlined, CheckOutlined, DatabaseOutlined, MenuFoldOutlined, MenuUnfoldOutlined, SearchOutlined, StarFilled } from '@ant-design/icons';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { MenuProps } from 'antd';
 import { App as AntApp, Dropdown, Input, Layout, Menu } from 'antd';
 import type { ReactNode } from 'react';
@@ -18,7 +19,7 @@ import { usePreference } from '../state/preferences.js';
 import { useRecordVisit } from '../state/recent.js';
 import { useSession } from '../state/session.js';
 import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
-import { useResolvedTheme } from '../state/theme.js';
+import { type ThemePreference,useResolvedTheme } from '../state/theme.js';
 import { navAccent } from '../theme.js';
 import { AppErrorBoundary } from './AppErrorBoundary.js';
 import { CommandPalette } from './CommandPalette.js';
@@ -51,6 +52,37 @@ function useLanguageSwitch() {
 }
 
 type MenuItems = Required<MenuProps>['items'];
+
+/** The three modes the theme preference accepts, in the order the picker lists them. */
+const THEME_MODES = ['light', 'dark', 'system'] as const;
+
+/**
+ * Phase 20 §20.21: the signed-in user switches the theme right from the avatar menu, next to the
+ * language.
+ *
+ * The switch is optimistic on purpose. The preference is the server's value, but the screen must
+ * repaint in the same commit as the click — the CSS custom properties and the Ant Design theme
+ * read the same cached value, so a half-applied mode (dark CSS, light components) is never
+ * visible. A failed write invalidates the query, which puts the server's value back.
+ */
+function useThemeSwitch() {
+  const { message } = AntApp.useApp();
+  const client = useQueryClient();
+  const writer = useMutation({
+    mutationFn: (next: ThemePreference) => api.savePreference('theme', next),
+    onMutate: (next) => {
+      client.setQueryData(['preferences', 'theme'], { name: 'theme', value: next });
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['preferences', 'theme'] });
+    },
+    onError: (error) => {
+      void client.invalidateQueries({ queryKey: ['preferences', 'theme'] });
+      void message.error(error instanceof Error ? error.message : t('web.theme.changeFailed'));
+    },
+  });
+  return (next: ThemePreference) => writer.mutate(next);
+}
 
 /**
  * Shell selector (PLAN §37): portal users get the portal chrome, everyone else the internal
@@ -219,6 +251,21 @@ function InternalShell({ children }: { children: ReactNode }) {
     label: t(`web.language.${locale}`),
     onClick: () => switchLanguage(locale),
   }));
+
+  // The theme picker sits right under the language: both are "how do I want to read this screen".
+  const switchTheme = useThemeSwitch();
+  const themePref = usePreference<ThemePreference>('theme');
+  const currentTheme: ThemePreference =
+    themePref.value === 'light' || themePref.value === 'dark' || themePref.value === 'system'
+      ? themePref.value
+      : 'system';
+  const themeMenu: MenuItems = THEME_MODES.map((mode) => ({
+    key: `theme:${mode}`,
+    // The tick marks the mode in force; the placeholder keeps the three labels on one line.
+    icon: currentTheme === mode ? <CheckOutlined /> : <span className="carocrm-menu-theme-tick" />,
+    label: t(`web.theme.${mode}`),
+    onClick: () => switchTheme(mode),
+  }));
   // The handbook entry follows the instance's own switches: an organisation that moved its help to a
   // wiki gets a link to that wiki, and `showHelpMenu: false` takes the row away without a deploy.
   const docsSettings = useDocsSettings();
@@ -243,6 +290,7 @@ function InternalShell({ children }: { children: ReactNode }) {
     { key: 'profile', label: <Link to="/profile">{t('web.profile.title')}</Link> },
     ...helpItem,
     { key: 'language', label: t('web.language.label'), children: languageMenu },
+    { key: 'theme', label: t('web.theme.label'), children: themeMenu },
     {
       key: 'signout',
       label: t('core.app.signOut'),
