@@ -16,8 +16,9 @@
     }
   },
   "scripts": {
-    "lint": "node scripts/check-ui-conventions.mjs && eslint . --max-warnings=0",
-    "lint:fix": "eslint . --fix",
+    "lint": "node scripts/check-ui-conventions.mjs && eslint . --max-warnings=0 --cache",
+    "lint:fix": "eslint . --fix --cache",
+    "lint:changed": "node scripts/lint-changed.mjs",
     "lint:ui": "node scripts/check-ui-conventions.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
     "test": "vitest run",
@@ -31,7 +32,8 @@
     "db:seed": "tsx database/seed.ts",
     "demo:projects": "tsx scripts/projects-demo.ts",
     "demo:projects:purge": "tsx scripts/projects-demo.ts --purge",
-    "test:e2e": "bash scripts/e2e-smoke.sh"
+    "test:e2e": "bash scripts/e2e-smoke.sh",
+    "verify": "concurrently -n lint,typecheck,test,test:web -c cyan,magenta,yellow,green \"pnpm lint\" \"pnpm typecheck\" \"pnpm test\" \"pnpm test:web\""
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

@@ -110,6 +110,8 @@ For each task, follow this sequence:
 3. **Plan briefly**: for a non-trivial change, outline the smallest implementation and verification steps before editing.
 4. **Implement**: follow existing conventions and keep the change focused.
 5. **Verify**: run relevant linting, type checks, unit tests, and safe integration/API checks. Follow Section 3 for all database work.
+   - **During development**: use fast, scoped checks — `pnpm lint:changed` (lints only files changed since HEAD) instead of a full lint after every edit.
+   - **Before finishing a task**: run `pnpm verify` once. It runs `pnpm lint` (includes `lint:ui`, with eslint cache), `pnpm typecheck`, `pnpm test`, and `pnpm test:web` in parallel via `concurrently`. Do not substitute it with partial checks unless a check is irrelevant to the change; if a check is skipped, say so in the report.
 6. **Review**: inspect the diff for unrelated changes, secrets, unsafe SQL, missing authorization, unhandled errors, and accidental generated files.
 7. **Report**: summarize what changed, the checks run and their outcomes, and any remaining limitations. Be explicit if a check was skipped.
 
@@ -202,7 +204,7 @@ Frontend Design Rules — Vite + React + Ant Design
 - Keep component APIs, form validation, loading states, error handling, permissions, and business logic intact.
 - Ensure responsive behavior, keyboard accessibility, visible focus states, and clear empty/loading/error states.
 - Reuse existing project conventions and components before introducing new abstractions.
-- Run the existing build, lint, and relevant tests after implementation. Verify key interactions and responsive layouts in a browser when browser tooling is available.
+- Run the existing build, lint, and relevant tests after implementation (use `pnpm lint:changed` during development and `pnpm verify` before finishing; see Section 4). Verify key interactions and responsive layouts in a browser when browser tooling is available.
 
 ## 9. Testing Expectations
 

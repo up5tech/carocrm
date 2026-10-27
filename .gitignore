@@ -7,6 +7,7 @@ coverage
 .env.local
 .DS_Store
 test-results
+.eslintcache
 
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
