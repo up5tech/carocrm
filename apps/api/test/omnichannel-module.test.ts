@@ -193,6 +193,43 @@ describe('Omnichannel module registration (19-OM.2)', () => {
     expect(keysAfter.has('omnichannel')).toBe(true);
   });
 
+  it('answers the workspace surface with 403 while the switch is off, and keeps the control plane open', async () => {
+    const user = await createTestUser(ctx, { userName: `${RUN}-gate-inbox`, roleIds: [ROLE_INBOX] });
+    createdUserIds.push(user.id);
+    const off = await setWorkspace(false);
+    expect(off.status).toBe(200);
+
+    try {
+      // The switch is a server-side gate, not a hidden menu entry: the workspace refuses even an
+      // administrator who holds every capability.
+      const inbox = await call('GET', '/api/v1/Omnichannel/action/conversations', undefined, ctx.adminToken);
+      expect(inbox.status).toBe(403);
+      expect((inbox.body as { error?: { code?: string } }).error?.code).toBe('FEATURE_DISABLED');
+
+      const snippets = await call('GET', '/api/v1/Omnichannel/action/snippets', undefined, ctx.adminToken);
+      expect(snippets.status).toBe(403);
+      expect((snippets.body as { error?: { code?: string } }).error?.code).toBe('FEATURE_DISABLED');
+
+      // A capable ordinary agent is refused the same way.
+      const agent = await call('GET', '/api/v1/Omnichannel/action/conversations', undefined, user.token);
+      expect(agent.status).toBe(403);
+      expect((agent.body as { error?: { code?: string } }).error?.code).toBe('FEATURE_DISABLED');
+
+      // The control plane stays reachable, so the module can be inspected and switched back on.
+      const capabilities = await call('GET', '/api/v1/Omnichannel/action/capabilities');
+      expect(capabilities.status).toBe(200);
+      const nav = await call('GET', '/api/v1/Omnichannel/action/nav', undefined, user.token);
+      expect(nav.status).toBe(200);
+      const settings = await call('GET', '/api/v1/Omnichannel/action/settings');
+      expect(settings.status).toBe(200);
+      const purge = await call('POST', '/api/v1/Omnichannel/action/retention/purge');
+      expect(purge.status).toBe(200);
+    } finally {
+      const on = await setWorkspace(true);
+      expect(on.status).toBe(200);
+    }
+  });
+
   it('refuses an unknown settings key instead of silently accepting it', async () => {
     const result = await call('POST', '/api/v1/Omnichannel/action/settings', { features: { notAFlag: true } });
     expect(result.status).toBeGreaterThanOrEqual(400);

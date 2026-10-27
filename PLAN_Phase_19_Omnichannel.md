@@ -1109,7 +1109,7 @@ Tasks:
 
 Acceptance:
 
-- Module registers cleanly and can be enabled/disabled according to current conventions. — **Met** (full `AppModule` boot in tests; the `features.workspace` switch drives the navigation gate, the control-plane behaviour and the menu-cache drop, the same convention as `crmChat`/`eSignature`/`leadScore`).
+- Module registers cleanly and can be enabled/disabled according to current conventions. — **Met** (full `AppModule` boot in tests; the `features.workspace` switch drives the navigation gate, the control-plane behaviour and the menu-cache drop, the same convention as `crmChat`/`eSignature`/`leadScore`). **Corrected 2026-10-27:** the switch was only a *navigation* gate — the agent-facing routes kept answering with it off. `OmnichannelWorkspaceGuard` now gates the control-plane controller server-side (fail-closed, `@ControlPlane()` opts the health/capabilities/nav/settings and the data-rights commands out), so the warning the settings document shows is now true.
 - ACL defaults are least-privilege and no secret/config value is shown to ordinary agents. — **Met** (a plain role answers 403 on every control-plane read; the settings document asks `settingsManage` on both verbs; health answers carry evidence and presence only — no configuration value, no secret).
 - Existing modules continue to load without a dependency cycle. — **Met** (generic Contact list and Voice health answered inside the same booted application; the feature-gate and menu-invalidator bindings resolve lazily through `ModuleRef`, the established CRMChat pattern).
 
@@ -1868,7 +1868,7 @@ Tasks:
 - Reflect Case status as contextual information while keeping conversation state independent.
 - Display the handoff result and provide retry/recovery for temporary target-module errors.
 - Reuse ServiceDesk's SLA and case response policies for the linked Case; do not compute a duplicate Case SLA inside Omnichannel.
-- **Also record the ServiceDesk ownership bypass the audit found:** `assignedUserId` is not in `SERVER_OWNED_CASE_FIELDS`, so a regular user with Case edit rights can set the owner via the generic API, bypassing `CaseAssignment` and leaving no history row. Add it to the server-owned list.
+- **Also record the ServiceDesk ownership bypass the audit found:** `assignedUserId` is not in `SERVER_OWNED_CASE_FIELDS`, so a regular user with Case edit rights can set the owner via the generic API, bypassing `CaseAssignment` and leaving no history row. Add it to the server-owned list. — **Done 2026-10-27:** `assignedUserId` is server-owned now (the write guard refuses a client write, the owner leaves every Case form, the list page stops offering the bulk assign, and the voice hand-off no longer copies the conversation's assignee onto the Case); the supported path is the assignment command, which writes the owner and its trail.
 
 Acceptance:
 

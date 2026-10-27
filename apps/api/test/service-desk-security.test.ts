@@ -85,8 +85,51 @@ describe('phase 19-SD.17 — security (§9)', () => {
     await ctx.app.inject({ method: 'DELETE', url: `/api/v1/Case/${caseId}`, headers: authHeader(ctx.adminToken) });
   });
 
-  it('does not let a non-admin caller trigger an SLA scan', async () => {
-    const res = await ctx.app.inject({ method: 'POST', url: '/api/v1/ServiceDesk/action/sla/runScheduledCheck', headers: authHeader(agentA.token) });
+  it('refuses a client write of the owner, which the assignment command owns', async () => {
+    const created = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/v1/Case',
+      headers: authHeader(ctx.adminToken),
+      payload: { name: `AGENT_TEST_${runId} owner`, requesterName: 'R' },
+    });
+    expect(created.statusCode).toBeLessThan(300);
+    const caseId = (created.json() as Record<string, unknown>)['id'] as string;
+
+    // A create that names an owner is refused: the owner is Service Desk's to give.
+    const forgedCreate = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/v1/Case',
+      headers: authHeader(ctx.adminToken),
+      payload: { name: `AGENT_TEST_${runId} owner2`, requesterName: 'R', assignedUserId: agentA.id },
+    });
+    expect(forgedCreate.statusCode).toBe(422);
+
+    // A direct edit of the owner is refused too, and leaves the record untouched.
+    const forgedEdit = await ctx.app.inject({
+      method: 'PUT',
+      url: `/api/v1/Case/${caseId}`,
+      headers: authHeader(ctx.adminToken),
+      payload: { assignedUserId: agentA.id },
+    });
+    expect(forgedEdit.statusCode).toBe(422);
+    const read = await ctx.app.inject({ method: 'GET', url: `/api/v1/Case/${caseId}`, headers: authHeader(ctx.adminToken) });
+    expect((read.json() as Record<string, unknown>)['assignedUserId']).toBeNull();
+
+    // The supported path still works: the assignment command writes the owner and its history.
+    const assigned = await ctx.app.inject({
+      method: 'POST',
+      url: `/api/v1/ServiceDesk/action/case/${caseId}/assign`,
+      headers: authHeader(ctx.adminToken),
+      payload: { assignedUserId: agentA.id },
+    });
+    expect(assigned.statusCode, assigned.body).toBeLessThan(300);
+    const afterAssign = await ctx.app.inject({ method: 'GET', url: `/api/v1/Case/${caseId}`, headers: authHeader(ctx.adminToken) });
+    expect((afterAssign.json() as Record<string, unknown>)['assignedUserId']).toBe(agentA.id);
+
+    await ctx.app.inject({ method: 'DELETE', url: `/api/v1/Case/${caseId}`, headers: authHeader(ctx.adminToken) });
+  });
+
+  it('does not let a non-admin caller trigger an SLA scan', async () => {    const res = await ctx.app.inject({ method: 'POST', url: '/api/v1/ServiceDesk/action/sla/runScheduledCheck', headers: authHeader(agentA.token) });
     expect(res.statusCode).toBe(403);
   });
 

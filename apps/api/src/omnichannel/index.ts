@@ -36,6 +36,7 @@ import { OmnichannelSnippetService } from './omnichannel-snippet.service.js';
 import { OmnichannelWebChatTransport } from './omnichannel-webchat.adapter.js';
 import { OmnichannelWebChatService } from './omnichannel-webchat.service.js';
 import { OmnichannelWebhookController } from './omnichannel-webhook.controller.js';
+import { OmnichannelWorkspaceGuard } from './omnichannel-workspace.guard.js';
 
 export const OMNICHANNEL_CONTROLLERS: Type<unknown>[] = [OmnichannelController, OmnichannelChatController, OmnichannelWebhookController];
 
@@ -45,6 +46,8 @@ export const OMNICHANNEL_PROVIDERS: Provider[] = [
   { provide: OMNICHANNEL_MENU_INVALIDATOR, useValue: noopMenuInvalidator },
   // Settings first: the permission-free switch every other service and the kernel gate reads.
   OmnichannelSettingsService,
+  // The module switch as a route gate (fail-closed: a new route is covered unless it opts out).
+  OmnichannelWorkspaceGuard,
   OmnichannelPermissionService,
   OmnichannelNavigationService,
   OmnichannelCapabilityService,
@@ -85,3 +88,4 @@ export type { MenuInvalidator, OmnichannelSettings, OmnichannelSettingsView } fr
 export { noopMenuInvalidator, OMNICHANNEL_MENU_INVALIDATOR, OmnichannelSettingsService } from './omnichannel-settings.service.js';
 export { OMNICHANNEL_WEB_CHAT_ACCOUNT_KEY, OMNICHANNEL_WEB_CHAT_PROVIDER_KEY } from './omnichannel-webchat.adapter.js';
 export type { WebChatMessageView, WebChatSessionView } from './omnichannel-webchat.service.js';
+export { ControlPlane, OMNICHANNEL_CONTROL_PLANE_KEY, OmnichannelWorkspaceGuard } from './omnichannel-workspace.guard.js';

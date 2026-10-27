@@ -3555,6 +3555,9 @@ function serviceDeskCaseEntity(): MetadataSeedEntry {
       isEntity: true,
       fields: {
         ...standardFields,
+        // 19-OM.17 — the owner is Service Desk's to give (`CaseAssignment` writes it and records the
+        // history row), so it stays out of every Case form; the write guard refuses a client write.
+        assignedUserId: { ...standardFields['assignedUserId'], inEdit: false },
         // Identity and content.
         name: { ...standardFields.name, label: 'Subject', required: true, maxLength: 255, audited: true },
         caseNumber: { type: 'varchar', maxLength: 32, inList: true, inDetail: true, sortable: true, audited: true },

@@ -61,8 +61,15 @@ async function create(entity: string, payload: Record<string, unknown>, token = 
 }
 
 async function createCase(extra: Record<string, unknown> = {}): Promise<string> {
-  const id = await create('Case', { name: marker('subject'), requesterName: marker('Requester'), ...extra });
+  // The owner is Service Desk's to give: the record API refuses a direct write of it, so an owner
+  // in the payload is applied through the assignment command after the case exists.
+  const { assignedUserId, ...rest } = extra as { assignedUserId?: unknown };
+  const id = await create('Case', { name: marker('subject'), requesterName: marker('Requester'), ...rest });
   caseIds.push(id);
+  if (typeof assignedUserId === 'string') {
+    const assigned = await call('POST', `/api/v1/ServiceDesk/action/case/${id}/assign`, { assignedUserId });
+    expect(assigned.status, JSON.stringify(assigned.body)).toBeLessThan(300);
+  }
   return id;
 }
 

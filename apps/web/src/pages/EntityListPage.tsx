@@ -215,10 +215,12 @@ export function EntityListPage() {
 
   const bulkFields = useMemo(() => massUpdateEntries(definition.data), [definition.data]);
   // Assign writes the entity's own owner field; an entity without one (`assignedUserId`) has no
-  // assignment to offer, and the server says so too.
+  // assignment to offer, and the server says so too. A module that reserves the owner for itself
+  // keeps it out of the forms, so the list must not offer the assign either — the record API
+  // refuses that write.
   const assignFields = useMemo(() => {
     const owner = definition.data?.fields['assignedUserId'];
-    return owner === undefined ? [] : [{ name: 'assignedUserId', field: owner }];
+    return owner === undefined || owner.inEdit === false ? [] : [{ name: 'assignedUserId', field: owner }];
   }, [definition.data]);
 
   const caseInboxViews = useMemo(() => ([

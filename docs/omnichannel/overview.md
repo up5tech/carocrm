@@ -45,6 +45,37 @@
 
 ## Log
 
+### 2026-10-27 — Review corrections (module switch, Case owner, Service Desk regression)
+
+An independent review of the whole module against `PLAN_Phase_19_Omnichannel.md` found three real
+defects and one stale expectation. All four are fixed here.
+
+- **The workspace switch was not a server-side gate.** The settings warning told an administrator
+  "the module endpoints answer 403", but only the navigation seed and the public web-chat channel
+  ever read `features.workspace`; every agent-facing route kept working with the switch off. The
+  module now carries `OmnichannelWorkspaceGuard` on the control-plane controller — fail-closed by
+  default, so a route added later is covered unless it opts out with `@ControlPlane()`. The control
+  plane (health, capabilities, navigation, the settings document) and the data-rights commands
+  (export, retention purge) stay reachable, so an administrator can always inspect and switch the
+  module back on. The provider webhook prefix stays open on purpose: receipts are still recorded,
+  and stopping inbound effects is the per-connection switch's job. The AI send tool now asks the
+  switch too — it runs outside the request that queued it.
+- **The Case owner bypass the OM.17 audit found was still open.** `assignedUserId` was missing from
+  `SERVER_OWNED_CASE_FIELDS`, so a user with `Case:edit` could set the owner through the record API
+  and bypass `CaseAssignment` — no history row, no eligibility check. The plan asked for exactly
+  this (`PLAN_Phase_19_Omnichannel.md` §14, OM.17). The field is server-owned now: the write guard
+  refuses a client write, the owner leaves every Case form (`inEdit: false`), the list page stops
+  offering the bulk assign, and the voice hand-off no longer copies the conversation's assignee onto
+  the Case. The supported path is unchanged: the assignment command writes the owner and its trail.
+- **The Service Desk routing unit test was stale.** OM.11 widened the routing allowlist with the
+  conversation fields (`channel`, `language`, `category`) and the `notIn`/`contains`/`startsWith`
+  operators, but the owning module's own test still asserted that `category` was refused — the
+  Service Desk suite was red on `master`. The test now states the widened contract and keeps a
+  genuine negative case.
+- The Service Desk suites that still fail are the five documented **demo-seed** artifacts (the demo
+  seed enables the `queues`/`sla` features and ships routing rules of its own); they are not caused
+  by this module.
+
 ### 2026-10-26 — Phase 19-OM.23 (End-to-end QA and release readiness)
 
 - `omnichannel-e2e.test.ts` (4/4): full SMS-simulator chain inbound → identity → routing → agent

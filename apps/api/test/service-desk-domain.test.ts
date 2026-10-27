@@ -136,7 +136,15 @@ describe('resolution requirement (§5.2, 19-SD.4)', () => {
 describe('routing conditions (§5.3, 19-SD.5)', () => {
   it('accepts only allow-listed fields, operators and shapes', () => {
     expect(checkRoutingCondition({ field: 'priority', operator: 'equals', value: 'High' }).ok).toBe(true);
-    expect(checkRoutingCondition({ field: 'category', operator: 'equals', value: 'x' }).ok).toBe(false);
+    // 19-OM.11 — the same engine routes conversations (D2), so the conversation subject fields and
+    // the extra operators joined the allowlist. A Case carries none of those fields, so Case rule
+    // matching is unchanged.
+    expect(checkRoutingCondition({ field: 'category', operator: 'equals', value: 'x' }).ok).toBe(true);
+    expect(checkRoutingCondition({ field: 'channel', operator: 'contains', value: 'whatsapp' }).ok).toBe(true);
+    expect(checkRoutingCondition({ field: 'language', operator: 'startsWith', value: 'en' }).ok).toBe(true);
+    expect(checkRoutingCondition({ field: 'source', operator: 'notIn', value: ['Email'] }).ok).toBe(true);
+    // A field outside the allowlist is still refused: the allowlist is the only source of truth.
+    expect(checkRoutingCondition({ field: 'contactId', operator: 'equals', value: 'x' }).ok).toBe(false);
     expect(checkRoutingCondition({ field: 'priority', operator: 'regex', value: 'x' }).ok).toBe(false);
     expect(checkRoutingCondition({ field: 'source', operator: 'in', value: 'Email' }).ok).toBe(false);
     expect(checkRoutingCondition({ field: 'source', operator: 'in', value: ['Email'] }).ok).toBe(true);

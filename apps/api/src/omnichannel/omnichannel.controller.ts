@@ -1,5 +1,5 @@
 import { ValidationError } from '@carocrm/core/errors/index.js';
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
 
@@ -19,6 +19,7 @@ import { OmnichannelPermissionService } from './omnichannel-permission.service.j
 import { OmnichannelRoutingService } from './omnichannel-routing.service.js';
 import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
 import { OmnichannelSnippetService } from './omnichannel-snippet.service.js';
+import { ControlPlane, OmnichannelWorkspaceGuard } from './omnichannel-workspace.guard.js';
 
 /**
  * Phase 19-OM.2 — the `Omnichannel` control plane
@@ -100,6 +101,7 @@ function pageOf(limit: unknown, offset: unknown): { limit: number; offset: numbe
 
 @ApiTags('omnichannel')
 @Controller('api/v1/Omnichannel')
+@UseGuards(OmnichannelWorkspaceGuard)
 export class OmnichannelController {
   constructor(
     @Inject(OmnichannelModuleHealthService) private readonly health: OmnichannelModuleHealthService,
@@ -385,6 +387,7 @@ export class OmnichannelController {
    * Readable with the inbox capability — an agent who can open the workspace can see why it is
    * not ready; no secret or configuration value is in the answer (plan §8.1).
    */
+  @ControlPlane()
   @Get('action/health')
   async moduleHealth() {
     await this.permissions.assert('inboxView');
@@ -399,12 +402,14 @@ export class OmnichannelController {
    * Unauthenticated with the endpoint itself: the answer only describes the caller's own rights,
    * and every workspace route still enforces them server-side.
    */
+  @ControlPlane()
   @Get('action/capabilities')
   async capabilities() {
     return { capabilities: await this.permissions.describe() };
   }
 
   /** The module's own navigation signal. */
+  @ControlPlane()
   @Get('action/nav')
   async nav() {
     await this.permissions.assert('inboxView');
@@ -499,6 +504,7 @@ export class OmnichannelController {
   // ---------------------------------------------------------------------------
 
   /** Administrator export for a data-subject access request (customer-visible messages only). */
+  @ControlPlane()
   @Get('action/conversations/:id/export')
   async exportConversation(@Param('id') id: string) {
     return this.data.exportConversation(id);
@@ -506,6 +512,7 @@ export class OmnichannelController {
 
   /** Purge module-owned artefacts past their configured retention (drafts, expired sessions). */
   @HttpCode(200)
+  @ControlPlane()
   @Post('action/retention/purge')
   async purgeRetention() {
     return this.data.purge();
@@ -516,6 +523,7 @@ export class OmnichannelController {
    * policy — it is administered, not browsed — so both verbs ask `settingsManage`, the same right
    * the write needs (the `ESignature` precedent).
    */
+  @ControlPlane()
   @Get('action/settings')
   async readSettings() {
     await this.permissions.assert('settingsManage');
@@ -523,6 +531,7 @@ export class OmnichannelController {
   }
 
   @HttpCode(200)
+  @ControlPlane()
   @Post('action/settings')
   async updateSettings(@Body() body: unknown) {
     await this.permissions.assert('settingsManage');

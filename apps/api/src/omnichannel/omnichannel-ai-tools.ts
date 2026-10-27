@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { type AIToolContext, type AIToolDefinition,AIToolRegistry } from '../ai-agents/index.js';
 import { DatabaseService } from '../database/database.service.js';
 import { OmnichannelConversationService } from './omnichannel-conversation.service.js';
+import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
 
 /**
  * Phase 19-OM.19 — the channel-send tool (extension E16, plan §14 `19-OM.19`).
@@ -38,6 +39,7 @@ export class OmnichannelAiTools {
     @Inject(AIToolRegistry) private readonly registry: AIToolRegistry,
     @Inject(OmnichannelConversationService) private readonly conversations: OmnichannelConversationService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(OmnichannelSettingsService) private readonly settings: OmnichannelSettingsService,
   ) {
     const definition: AIToolDefinition = {
       key: OMNICHANNEL_SEND_TOOL,
@@ -75,6 +77,9 @@ export class OmnichannelAiTools {
         // The model may only send into the conversation its run was started from, under the same
         // human's scope. A hallucinated or injected conversation id is refused before any policy work.
         await this.assertRunScope(context, parsed.conversationId);
+        // The tool runs outside the request that queued it, so it asks the module switch itself: a
+        // workspace that was switched off after the run started must not send anything.
+        await this.settings.assertWorkspace();
         const result = await this.conversations.send(parsed.conversationId, {
           body: parsed.body,
           idempotencyKey: parsed.idempotencyKey,

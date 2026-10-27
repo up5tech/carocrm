@@ -1,4 +1,4 @@
-import { ValidationError } from '@carocrm/core/errors/index.js';
+import { FeatureDisabledError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
@@ -137,7 +137,8 @@ export function omnichannelSettingsWarnings(settings: OmnichannelSettings): Omni
   if (!settings.features.workspace) {
     warnings.push({
       code: 'workspaceDisabled',
-      message: 'The Omnichannel workspace is disabled: the menu entry is hidden and the module endpoints answer 403.',
+      message:
+        'The Omnichannel workspace is disabled: the menu entry is hidden and the workspace endpoints answer 403. Health, capabilities, navigation, the settings document and the retention purge stay reachable, so an administrator can still inspect the module and switch it back on.',
     });
   }
   if (settings.webChat.enabled && settings.webChat.allowedOrigins.length === 0) {
@@ -180,6 +181,16 @@ export class OmnichannelSettingsService {
   /** The effective answer behaviour paths use: off entirely when the module switch is off. */
   async workspaceEnabled(): Promise<boolean> {
     return this.isFeatureEnabled('workspace');
+  }
+
+  /**
+   * The module switch, as a gate. The workspace surface is dead while it is off: every agent-facing
+   * route answers 403, exactly as the settings warning says. The control plane — health,
+   * capabilities, navigation, the settings document itself and the retention purge — stays
+   * reachable, so an administrator can always inspect the module and switch it back on.
+   */
+  async assertWorkspace(): Promise<void> {
+    if (!(await this.workspaceEnabled())) throw new FeatureDisabledError('Omnichannel workspace');
   }
 
   async read(): Promise<OmnichannelSettingsView> {

@@ -307,8 +307,12 @@ export class EntityCrudService {
       this.acl.canUser(entity, 'delete'),
       this.acl.canUser(entity, 'stream'),
     ]);
-    // Only an entity that owns records through `assignedUserId` can be assigned.
-    const assignable = definition?.fields['assignedUserId'] !== undefined;
+    // Only an entity that owns records through `assignedUserId` can be assigned — and only while
+    // that field is still a client-editable one. A module that reserves the owner for itself (the
+    // Service Desk Case owner) keeps it out of the forms, so the list must not offer the bulk
+    // assign either: the record API would refuse every record it touched.
+    const owner = definition?.fields['assignedUserId'];
+    const assignable = owner !== undefined && owner.inEdit !== false;
     return {
       open: true,
       edit: edit !== 'no',

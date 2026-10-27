@@ -491,7 +491,9 @@ export class VoiceInboxService {
       requesterName: conversation.subject?.trim() !== '' && conversation.subject !== null
         ? conversation.subject.trim()
         : `Conversation ${conversation.id}`,
-      ...(conversation.assigned_user_id !== null ? { assignedUserId: conversation.assigned_user_id } : {}),
+      // The Case owner is Service Desk's to give (`CaseAssignment` writes it and records the
+      // history row); the record API refuses a client write of it. The conversation's assignee is
+      // not carried over — the Case enters the queue and the assignment engine owns it.
     });
     const caseId = typeof created['id'] === 'string' ? created['id'] : null;
     if (caseId === null) throw new ValidationError('The Case could not be created.');

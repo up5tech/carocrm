@@ -2,8 +2,8 @@ import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { AIAgentsSettingsService, AIToolRegistry, RUN_STATUSES, RUN_TRIGGERS } from '../src/ai-agents/index.js';
+import { OMNICHANNEL_AI_TASKS,OmnichannelSettingsService } from '../src/omnichannel/index.js';
 import { VoiceCommunicationsSettingsService, VoiceMessagingService } from '../src/voice-communications/index.js';
-import { OmnichannelSettingsService, OMNICHANNEL_AI_TASKS } from '../src/omnichannel/index.js';
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 

@@ -24,11 +24,16 @@ async function createCase(assignedUserId?: string): Promise<string> {
   const res = await call('POST', '/api/v1/Case', {
     name: marker('metric case'),
     requesterName: marker('Requester'),
-    ...(assignedUserId !== undefined ? { assignedUserId } : {}),
   });
   expect(res.status, JSON.stringify(res.body)).toBeLessThan(300);
   const id = String(res.body['id']);
   caseIds.push(id);
+  if (assignedUserId !== undefined) {
+    // The owner is Service Desk's to give: the record API refuses a direct write of it, so the
+    // case is created first and handed to the owner through the assignment command.
+    const assigned = await call('POST', `/api/v1/ServiceDesk/action/case/${id}/assign`, { assignedUserId });
+    expect(assigned.status, JSON.stringify(assigned.body)).toBeLessThan(300);
+  }
   return id;
 }
 

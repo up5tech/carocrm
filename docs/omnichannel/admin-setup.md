@@ -12,8 +12,20 @@
 3. Check `GET /api/v1/Omnichannel/action/health`: `workspaceReady` must be true and the required
    dependencies present. The sidebar entry appears through `GET action/nav`.
 
-The workspace switch also gates the public web-chat channel and every module endpoint; turning it
-off is the module-level kill switch (individual connections have their own switch in Operations).
+The workspace switch is a **server-side gate**, not a hidden menu entry. With it off:
+
+- every agent-facing route answers `403 FEATURE_DISABLED` — the inbox, timeline, replies, identity,
+  snippets, drafts, calls, Case hand-off, the reports, the operations views and the AI assistant;
+- the public web-chat channel is refused as well ("the website chat is not open");
+- the **control plane stays reachable**, so an administrator can always inspect and recover the
+  module: `action/health`, `action/capabilities`, `action/nav`, the settings document, the
+  data-rights export and the retention purge;
+- the provider webhook prefix stays open on purpose: receipts are still recorded so a later replay
+  has something to work with. Stopping inbound **effects** is the per-connection switch's job
+  (Operations → the connection's kill switch), and turning the workspace off hides the result.
+
+So turning the switch off is the module-level kill switch; the individual connections have their own
+switch in Operations.
 
 ## 2. Bind a provider account (SMS / WhatsApp via Twilio)
 

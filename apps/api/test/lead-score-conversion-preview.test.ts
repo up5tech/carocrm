@@ -171,8 +171,10 @@ beforeAll(async () => {
   await setSettings({
     enabled: true,
     // Only the switches this phase owns. Duplicate review is turned on in the one test that asserts the
-    // preview carries candidates, so nothing else depends on the resolver.
-    features: { fieldMapping: true, conversionPreview: true, duplicateDetection: false },
+    // preview carries candidates, so nothing else depends on the resolver. The Opportunity switch is
+    // stated off: the shared settings row is test residue that another suite may have left on, and
+    // the "switched-off" answer below must not depend on what that row happened to carry.
+    features: { fieldMapping: true, conversionPreview: true, duplicateDetection: false, opportunityConversion: false },
   });
   settingsAfterSetup = JSON.stringify(await storedSettings());
 }, 240_000);
