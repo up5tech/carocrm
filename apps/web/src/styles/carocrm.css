@@ -6056,6 +6056,40 @@ textarea.carocrm-etpl-source,
   color: var(--carocrm-ink-inverse);
 }
 
+/* Markdown answers are blocks now, so the browser's default paragraph/list margins make a one-line
+   question look like a large empty card. Keep the bubble compact: only the spacing between blocks
+   survives, and the first/last block never add padding of its own. */
+.carocrm-chat-markdown > :first-child {
+  margin-block-start: 0;
+}
+
+.carocrm-chat-markdown > :last-child {
+  margin-block-end: 0;
+}
+
+.carocrm-chat-markdown p {
+  margin: 0;
+}
+
+.carocrm-chat-markdown p + p,
+.carocrm-chat-markdown p + ul,
+.carocrm-chat-markdown p + ol,
+.carocrm-chat-markdown ul + p,
+.carocrm-chat-markdown ol + p {
+  margin-block-start: 8px;
+}
+
+.carocrm-chat-markdown ul,
+.carocrm-chat-markdown ol {
+  margin-block: 0;
+  padding-inline-start: 1.35em;
+}
+
+.carocrm-chat-markdown pre {
+  margin-block: 0;
+  white-space: pre;
+}
+
 .carocrm-convo-msg--system .carocrm-convo-bubble {
   background: var(--carocrm-c-f6f7f9);
   border-color: var(--carocrm-c-e3e7ee);

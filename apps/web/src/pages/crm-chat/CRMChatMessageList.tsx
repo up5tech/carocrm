@@ -1,9 +1,11 @@
 import { LinkOutlined, LockOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons';
+import { parseMarkdown } from '@carocrm/docs/parser.js';
 import { Button, Tag, Tooltip } from 'antd';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { CRMChatCitation, CRMChatMessageView, CRMChatReauthorizedCitation } from '../../api/types.js';
+import { DocBlocks } from '../../components/docs/DocBlocks.js';
 import { formatClock, formatDateTime, isSameCalendarDay, t } from '../../state/i18n.js';
 import { CRMChatFeedbackButtons } from './CRMChatFeedbackButtons.js';
 
@@ -135,8 +137,13 @@ function MessageItem({ message, feedbackEnabled }: MessageItemProps) {
           ) : null}
         </div>
 
-        {/* Message content - plain text, never interpreted as markup. */}
-        <div className="carocrm-convo-bubble">{message.content}</div>
+        {/* Message content - Markdown rendered as safe React elements (no HTML injection). */}
+        <div className="carocrm-convo-bubble carocrm-chat-markdown">
+          <DocBlocks
+            blocks={parseMarkdown(message.content).blocks}
+            context={{ pageKeys: new Set<string>(), section: '', onAnchor: () => {} }}
+          />
+        </div>
 
         {message.citations && message.citations.length > 0 ? (
           <div className="carocrm-chat-cites">
