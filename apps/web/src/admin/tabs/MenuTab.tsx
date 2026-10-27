@@ -1,5 +1,5 @@
-import { ArrowDownOutlined, ArrowUpOutlined, HolderOutlined, RollbackOutlined } from '@ant-design/icons';
-import { Alert, App as AntApp, Button, Card, Input, Select, Skeleton, Space, Switch, Typography } from 'antd';
+import { ArrowDownOutlined, ArrowUpOutlined, EditOutlined, HolderOutlined, RollbackOutlined } from '@ant-design/icons';
+import { Alert, App as AntApp, Button, Card, Form, Input, Modal, Select, Skeleton, Space, Switch, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 
 import { api } from '../../api/client.js';
@@ -40,6 +40,14 @@ interface MenuRow {
   accent?: string | undefined;
 }
 
+interface MenuEditorDraft {
+  key: string;
+  label: string;
+  labelKey: string;
+  icon?: string | undefined;
+  accent?: string | undefined;
+}
+
 const EMPTY_DOCUMENT: NavigationDocument = { items: [], groups: [], accentPalette: [] };
 
 export function MenuTab() {
@@ -56,6 +64,9 @@ export function MenuTab() {
   const [previewUsers, setPreviewUsers] = useState<{ id: string; userName: string }[]>([]);
   const [previewTree, setPreviewTree] = useState<NavigationTree | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  // The row keeps only its identity and actions; the presentation fields live in a modal so a long
+  // menu is not a wall of selects. Editing is a draft until Save, so Cancel leaves the row alone.
+  const [editor, setEditor] = useState<MenuEditorDraft | null>(null);
 
   const baseline = useMemo(() => {
     if (tree.data === undefined) return undefined;
@@ -142,6 +153,21 @@ export function MenuTab() {
 
   const patch = (key: string, next: Partial<MenuRow>): void => {
     setRows(current.map((row) => (row.key === key ? { ...row, ...next } : row)));
+  };
+
+  const openEditor = (row: MenuRow): void => {
+    setEditor({ key: row.key, label: row.label, labelKey: row.labelKey ?? '', icon: row.icon, accent: row.accent });
+  };
+
+  const applyEditor = (): void => {
+    if (editor === null) return;
+    const labelKey = editor.labelKey.trim();
+    patch(editor.key, {
+      labelKey: labelKey === '' ? undefined : labelKey,
+      icon: editor.icon,
+      accent: editor.accent,
+    });
+    setEditor(null);
   };
 
   const move = (key: string, delta: -1 | 1): void => {
@@ -259,37 +285,16 @@ export function MenuTab() {
                   </Typography.Text>
                 </span>
                 <div className="carocrm-menu-row-actions">
+                  <Button
+                    size="small"
+                    icon={<EditOutlined />}
+                    onClick={() => openEditor(row)}
+                    aria-label={t('web.adminMenu.editEntry', { name: row.label })}
+                  />
                   <Switch size="small" checked={row.enabled} aria-label={t('web.adminMenu.enableEntry')} onChange={(checked) => patch(row.key, { enabled: checked })} />
                   <Button size="small" icon={<ArrowUpOutlined />} onClick={() => move(row.key, -1)} aria-label={t('web.adminShell.movedUp')} />
                   <Button size="small" icon={<ArrowDownOutlined />} onClick={() => move(row.key, 1)} aria-label={t('web.adminShell.movedDown')} />
                 </div>
-              </div>
-              <div className="carocrm-menu-row-fields">
-                <Input
-                  size="small"
-                  className="carocrm-menu-row-labelkey"
-                  placeholder={t('web.adminMenu.labelKeyPlaceholder')}
-                  value={row.labelKey ?? ''}
-                  onChange={(event) => patch(row.key, { labelKey: event.target.value.trim() === '' ? undefined : event.target.value.trim() })}
-                />
-                <Select
-                  size="small"
-                  className="carocrm-menu-row-icon-select"
-                  placeholder={t('web.adminMenu.icon')}
-                  allowClear
-                  value={row.icon}
-                  options={NAV_ICON_NAMES.map((name) => ({ value: name, label: <span className="carocrm-menu-select-option"><span className="carocrm-menu-select-icon">{navIcon(name)}</span>{name}</span> }))}
-                  onChange={(value?: string) => patch(row.key, { icon: value })}
-                />
-                <Select
-                  size="small"
-                  className="carocrm-menu-row-accent"
-                  placeholder={t('web.adminMenu.accent')}
-                  allowClear
-                  value={row.accent}
-                  options={NAV_ACCENT_NAMES.map((name) => ({ value: name, label: <span className="carocrm-menu-select-option"><span className="carocrm-menu-select-swatch" style={{ background: navAccent(name, dark).fg }} />{name}</span> }))}
-                  onChange={(value?: string) => patch(row.key, { accent: value })}
-                />
               </div>
             </li>
           ))}
@@ -326,6 +331,51 @@ export function MenuTab() {
           </nav>
         ) : null}
       </Card>
+
+      <Modal
+        open={editor !== null}
+        title={editor === null ? undefined : t('web.adminMenu.editTitle', { name: editor.label })}
+        okText={t('web.common.save')}
+        cancelText={t('core.common.cancel')}
+        onOk={applyEditor}
+        onCancel={() => setEditor(null)}
+        destroyOnHidden
+      >
+        {editor === null ? null : (
+          <Form layout="vertical">
+            <Form.Item label={t('web.adminMenu.label')}>
+              <Input
+                autoFocus
+                placeholder={t('web.adminMenu.labelKeyPlaceholder')}
+                value={editor.labelKey}
+                onChange={(event) => setEditor({ ...editor, labelKey: event.target.value })}
+              />
+            </Form.Item>
+            <Form.Item label={t('web.adminMenu.icon')}>
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={t('web.adminMenu.icon')}
+                value={editor.icon}
+                options={NAV_ICON_NAMES.map((name) => ({ value: name, label: <span className="carocrm-menu-select-option"><span className="carocrm-menu-select-icon">{navIcon(name)}</span>{name}</span> }))}
+                onChange={(value?: string) => setEditor({ ...editor, icon: value })}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+            <Form.Item label={t('web.adminMenu.accent')}>
+              <Select
+                allowClear
+                placeholder={t('web.adminMenu.accent')}
+                value={editor.accent}
+                options={NAV_ACCENT_NAMES.map((name) => ({ value: name, label: <span className="carocrm-menu-select-option"><span className="carocrm-menu-select-swatch" style={{ background: navAccent(name, dark).fg }} />{name}</span> }))}
+                onChange={(value?: string) => setEditor({ ...editor, accent: value })}
+                style={{ width: '100%' }}
+              />
+            </Form.Item>
+          </Form>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -1097,7 +1097,10 @@ export const api = {
     if (params.entityId) query.set('entityId', params.entityId);
     if (params.entityType) query.set('entityType', params.entityType);
     if (params.offset !== undefined) query.set('offset', String(params.offset));
-    if (params.maxSize !== undefined) query.set('maxSize', String(params.maxSize));
+    // The audit endpoint is the one list route that names its page size `limit` (AuditController's
+    // ListQuerySchema); sending `maxSize` here was silently ignored, so the table received the
+    // server default (30) while pagination claimed 25 — the antd "dataSource > pageSize" warning.
+    if (params.maxSize !== undefined) query.set('limit', String(params.maxSize));
     return request<ListResult>(`/AuditLog?${query.toString()}`);
   },
 
