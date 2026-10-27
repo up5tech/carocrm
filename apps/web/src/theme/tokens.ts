@@ -19,6 +19,8 @@ export const COLOR = {
   accent: '#438eff',
   accentHover: '#7cb0ff',
   accentStrong: '#3d6fbf',
+  // The filled-surface accent: a badge or a pill that paints its label in white sits on this one.
+  accentPrimary: '#3d6fbf',
   accentSoft: '#f0f8ff',
 
   // Surfaces.
@@ -57,6 +59,56 @@ export const COLOR = {
   neutral: '#41474f',
 } as const;
 
+/**
+ * The dark half of the palette (PLAN_Phase_20_Settings_UX.md §20.21). Every token has a dark
+ * value — a missing one is a white panel that survives into dark mode, which is exactly the defect
+ * the dark-mode pass exists to remove.
+ *
+ * The inks are the light ones inverted around the dark surfaces, not a second guess: the primary ink
+ * is 15.5:1 on the page and 13.9:1 on a raised panel, the secondary 10.1:1 / 9.0:1 and the muted
+ * 7.5:1 / 6.7:1 — every one of them clears AA.
+ */
+export const DARK_COLOR: Record<keyof typeof COLOR, string> = {
+  accent: '#438eff',
+  accentHover: '#7cb0ff',
+  accentStrong: '#6fa9ff',
+  accentPrimary: '#3d6fbf',
+  accentSoft: '#1f2a37',
+
+  surfacePage: '#0f1115',
+  surfaceRaised: '#1a1d24',
+  surfaceSunken: '#14171d',
+  surfaceOverlay: '#1f1f1f',
+
+  inkPrimary: '#e6e9ef',
+  inkSecondary: '#b8bec6',
+  inkMenu: '#b8bec6',
+  inkMuted: '#9aa4b0',
+  inkFaint: '#9aa4b0',
+  inkInverse: '#ffffff',
+
+  lineSubtle: '#242932',
+  lineStrong: '#2a2f38',
+  lineFocus: '#7cb0ff',
+
+  stateSuccess: '#55c27f',
+  stateWarning: '#f8ac59',
+  stateError: '#fa626b',
+  stateInfo: '#438eff',
+
+  menuSelectedBg: '#1f2a37',
+  tableHeaderBg: '#14171d',
+  tableRowHover: '#1f2430',
+  neutral: '#c1c7ce',
+};
+
+export type Palette = Record<keyof typeof COLOR, string>;
+
+/** The palette for the mode the shell is currently rendering in. */
+export function palette(dark: boolean): Palette {
+  return dark ? DARK_COLOR : COLOR;
+}
+
 export type ColorToken = keyof typeof COLOR;
 
 /**
@@ -64,23 +116,62 @@ export type ColorToken = keyof typeof COLOR;
  * these names — never a free hex — so the server (brand.service.ts) and the SPA validate against the
  * same list. `blue` is the shipped default and must stay first.
  */
-export interface AccentTone {
+export interface AccentToneSet {
   readonly fg: string;
   readonly hover: string;
   readonly strong: string;
   readonly soft: string;
+  /**
+   * The filled-surface tone. A filled button paints its label in white, so this is the one role
+   * that has to stay deep enough for that label to clear AA — in dark mode it is *not* the bright
+   * `strong` tone, which is the text-on-dark accent instead.
+   */
+  readonly primary: string;
+}
+
+/**
+ * An accent with both halves of its tone set. The dark half is not a copy: `fg` is lightened until it
+ * clears 4.5:1 on the dark page (only purple moves), `strong` is the AA text tone on the soft
+ * background, and `soft` is the accent mixed into the dark page surface.
+ */
+export interface AccentTone extends AccentToneSet {
+  readonly dark: AccentToneSet;
 }
 
 const ACCENT_TONE_VALUES = {
-  blue: { fg: '#438eff', hover: '#7cb0ff', strong: '#3d6fbf', soft: '#f0f8ff' },
-  green: { fg: '#55c27f', hover: '#8fd9a8', strong: '#3d9c5f', soft: '#f0fbf6' },
-  orange: { fg: '#f8ac59', hover: '#fbc98f', strong: '#e0902f', soft: '#fff8f0' },
-  red: { fg: '#fa626b', hover: '#fc9aa0', strong: '#d9484f', soft: '#fff5f5' },
-  purple: { fg: '#722ed1', hover: '#9b6bd9', strong: '#5b23a8', soft: '#f7f3ff' },
-  cyan: { fg: '#13c2c2', hover: '#5bd6d6', strong: '#0e9c9c', soft: '#f0fbfb' },
-  magenta: { fg: '#eb2f96', hover: '#f26fb4', strong: '#c41f78', soft: '#fff0f8' },
-  gold: { fg: '#d4b106', hover: '#e6c84a', strong: '#a8871a', soft: '#fdfbe8' },
-};
+  blue: {
+    fg: '#438eff', hover: '#7cb0ff', strong: '#3d6fbf', primary: '#3d6fbf', soft: '#f0f8ff',
+    dark: { fg: '#438eff', hover: '#7cb0ff', strong: '#6fa9ff', soft: '#1f2a37', primary: '#3d6fbf' },
+  },
+  green: {
+    fg: '#55c27f', hover: '#8fd9a8', strong: '#3d9c5f', primary: '#3d9c5f', soft: '#f0fbf6',
+    dark: { fg: '#55c27f', hover: '#8fd9a8', strong: '#73cd96', soft: '#1a2d26', primary: '#3b975c' },
+  },
+  orange: {
+    fg: '#f8ac59', hover: '#fbc98f', strong: '#e0902f', primary: '#e0902f', soft: '#fff8f0',
+    dark: { fg: '#f8ac59', hover: '#fbce9e', strong: '#fac080', soft: '#342a20', primary: '#bf761d' },
+  },
+  red: {
+    fg: '#fa626b', hover: '#fc9aa0', strong: '#d9484f', primary: '#d9484f', soft: '#fff5f5',
+    dark: { fg: '#fa626b', hover: '#fca7ac', strong: '#fb8a90', soft: '#351e23', primary: '#d9484f' },
+  },
+  purple: {
+    fg: '#722ed1', hover: '#9b6bd9', strong: '#5b23a8', primary: '#5b23a8', soft: '#f7f3ff',
+    dark: { fg: '#9764dd', hover: '#be9fea', strong: '#ad85e4', soft: '#251e35', primary: '#5b23a8' },
+  },
+  cyan: {
+    fg: '#13c2c2', hover: '#5bd6d6', strong: '#0e9c9c', primary: '#0e9c9c', soft: '#f0fbfb',
+    dark: { fg: '#13c2c2', hover: '#32ebeb', strong: '#17e7e7', soft: '#102d31', primary: '#0d9595' },
+  },
+  magenta: {
+    fg: '#eb2f96', hover: '#f26fb4', strong: '#c41f78', primary: '#c41f78', soft: '#fff0f8',
+    dark: { fg: '#eb2f96', hover: '#f170b7', strong: '#ef54a9', soft: '#32162a', primary: '#c41f78' },
+  },
+  gold: {
+    fg: '#d4b106', hover: '#e6c84a', strong: '#a8871a', primary: '#a8871a', soft: '#fdfbe8',
+    dark: { fg: '#d4b106', hover: '#f9d628', strong: '#f8d00b', soft: '#2f2b13', primary: '#a18219' },
+  },
+} satisfies Record<string, AccentTone>;
 
 export type AccentName = keyof typeof ACCENT_TONE_VALUES;
 export const ACCENT_TONES: Record<AccentName, AccentTone> = ACCENT_TONE_VALUES;
@@ -90,6 +181,12 @@ export const ACCENT_NAMES: readonly string[] = Object.keys(ACCENT_TONE_VALUES);
 export function accentTone(name: string | undefined | null): AccentTone {
   if (name === undefined || name === null) return ACCENT_TONES.blue;
   return ACCENT_TONES[name as AccentName] ?? ACCENT_TONES.blue;
+}
+
+/** The half of an accent's tone set the current mode paints with. */
+export function accentToneSet(name: string | undefined | null, dark: boolean): AccentToneSet {
+  const tone = accentTone(name);
+  return dark ? tone.dark : tone;
 }
 
 /** Spacing scale (px). The SPA's 8px rhythm, named so a change lands everywhere at once. */

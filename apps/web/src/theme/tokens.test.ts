@@ -30,8 +30,25 @@ describe('design tokens (§20.20)', () => {
   });
 
   it('declares the themable accent tokens a brand colour overrides', () => {
-    for (const name of ['--carocrm-accent', '--carocrm-accent-hover', '--carocrm-accent-strong', '--carocrm-accent-soft']) {
+    for (const name of [
+      '--carocrm-accent',
+      '--carocrm-accent-hover',
+      '--carocrm-accent-strong',
+      '--carocrm-accent-primary',
+      '--carocrm-accent-soft',
+    ]) {
       expect(tokens).toContain(`${name}:`);
     }
+  });
+
+  /**
+   * §20.21: a token without a dark value keeps its light colour in dark mode and paints a white
+   * panel in a dark shell. The dark palette is one block, so the check is a set comparison.
+   */
+  it('every token has a dark value', () => {
+    const dark = tokens.slice(tokens.indexOf('[data-theme="dark"]'), tokens.indexOf('@media print'));
+    const declared = new Set([...tokens.matchAll(/^\s*(--carocrm-[a-z0-9-]+):/gm)].map((match) => match[1]));
+    const darkDeclared = new Set([...dark.matchAll(/^\s*(--carocrm-[a-z0-9-]+):/gm)].map((match) => match[1]));
+    expect([...declared].filter((name) => !darkDeclared.has(name))).toEqual([]);
   });
 });

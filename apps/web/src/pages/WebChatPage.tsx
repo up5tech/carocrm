@@ -160,7 +160,7 @@ export function WebChatPage() {
                     key={message.id}
                     style={{
                       alignSelf: message.direction === 'inbound' ? 'flex-end' : 'flex-start',
-                      background: message.direction === 'inbound' ? 'var(--carocrm-c-primary-soft, #e8f0fe)' : 'var(--carocrm-c-surface-alt, #f3f4f6)',
+                      background: message.direction === 'inbound' ? 'var(--carocrm-accent-soft)' : 'var(--carocrm-surface-sunken)',
                       borderRadius: 12,
                       padding: '8px 12px',
                       maxWidth: '82%',

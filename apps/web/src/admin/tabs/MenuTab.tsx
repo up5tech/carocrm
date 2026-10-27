@@ -9,6 +9,7 @@ import { HelpTip } from '../../components/HelpTip.js';
 import { useNavigation } from '../../state/admin.js';
 import { t } from '../../state/i18n.js';
 import { useMetadata } from '../../state/metadata.js';
+import { useResolvedTheme } from '../../state/theme.js';
 import { NAV_ACCENT_NAMES, navAccent } from '../../theme.js';
 import { useDocumentForm } from '../document-form.js';
 import { usePublishTabActions } from '../shell.js';
@@ -43,6 +44,8 @@ const EMPTY_DOCUMENT: NavigationDocument = { items: [], groups: [], accentPalett
 
 export function MenuTab() {
   const document = useDocumentForm<NavigationDocument>('navigation');
+  // An accent is a label colour, so the preview follows the mode it is painted in.
+  const dark = useResolvedTheme() === 'dark';
   const tree = useNavigation();
   const metadata = useMetadata();
   const { modal, message } = AntApp.useApp();
@@ -230,7 +233,7 @@ export function MenuTab() {
             <li
               key={row.key}
               className={`carocrm-menu-row carocrm-menu-row--${row.kind}${row.enabled ? '' : ' is-off'}${dragKey === row.key ? ' is-dragging' : ''}`}
-              style={{ paddingLeft: 8 + row.depth * 18, borderLeftColor: navAccent(row.accent).fg }}
+              style={{ paddingLeft: 8 + row.depth * 18, borderLeftColor: navAccent(row.accent, dark).fg }}
               draggable
               onDragStart={() => setDragKey(row.key)}
               onDragEnd={() => setDragKey(null)}
@@ -284,7 +287,7 @@ export function MenuTab() {
                   placeholder={t('web.adminMenu.accent')}
                   allowClear
                   value={row.accent}
-                  options={NAV_ACCENT_NAMES.map((name) => ({ value: name, label: <span className="carocrm-menu-select-option"><span className="carocrm-menu-select-swatch" style={{ background: navAccent(name).fg }} />{name}</span> }))}
+                  options={NAV_ACCENT_NAMES.map((name) => ({ value: name, label: <span className="carocrm-menu-select-option"><span className="carocrm-menu-select-swatch" style={{ background: navAccent(name, dark).fg }} />{name}</span> }))}
                   onChange={(value?: string) => patch(row.key, { accent: value })}
                 />
               </div>
@@ -345,6 +348,7 @@ function MenuPreviewTree({ nodes }: { nodes: readonly NavigationNode[] }) {
 }
 
 function MenuPreview({ rows }: { rows: readonly MenuRow[] }) {
+  const dark = useResolvedTheme() === 'dark';
   return (
     <>
       {rows
@@ -353,7 +357,7 @@ function MenuPreview({ rows }: { rows: readonly MenuRow[] }) {
           <span
             key={row.key}
             className={`carocrm-menu-preview-row carocrm-menu-preview-row--${row.kind}`}
-            style={{ paddingLeft: 6 + row.depth * 14, color: row.depth === 0 ? undefined : navAccent(row.accent).fg }}
+            style={{ paddingLeft: 6 + row.depth * 14, color: row.depth === 0 ? undefined : navAccent(row.accent, dark).fg }}
           >
             {row.label}
           </span>

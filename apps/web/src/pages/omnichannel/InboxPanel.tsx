@@ -363,7 +363,7 @@ export function InboxPanel() {
                       cursor: 'pointer',
                       paddingInline: 8,
                       borderRadius: 8,
-                      background: row.id === selectedId ? 'var(--carocrm-c-surface-alt, #f3f4f6)' : undefined,
+                      background: row.id === selectedId ? 'var(--carocrm-surface-sunken)' : undefined,
                     }}
                   >
                     <List.Item.Meta
@@ -527,11 +527,11 @@ function ConversationPane(props: ConversationPaneProps) {
                 borderRadius: 10,
                 background:
                   entry.message?.isInternalNote === true
-                    ? 'var(--carocrm-c-warning-soft, #fff7e6)'
+                    ? 'var(--carocrm-c-fffbe6)'
                     : entry.message?.direction === 'outbound'
-                      ? 'var(--carocrm-c-primary-soft, #e8f0fe)'
-                      : 'var(--carocrm-c-surface-alt, #f3f4f6)',
-                border: entry.message?.isInternalNote === true ? '1px dashed var(--carocrm-c-warning, #d48806)' : undefined,
+                      ? 'var(--carocrm-accent-soft)'
+                      : 'var(--carocrm-surface-sunken)',
+                border: entry.message?.isInternalNote === true ? '1px dashed var(--carocrm-state-warning)' : undefined,
               }}
             >
               {entry.message?.isInternalNote === true ? <Tag color="orange">{t('omnichannel.inbox.internalNote')}</Tag> : null}

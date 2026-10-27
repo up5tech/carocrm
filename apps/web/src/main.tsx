@@ -4,7 +4,7 @@ import './styles/carocrm.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { App as AntApp, ConfigProvider, theme as antdTheme } from 'antd';
 import type { ReactNode } from 'react';
-import { StrictMode, useEffect } from 'react';
+import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 
@@ -13,8 +13,8 @@ import { AppErrorBoundary } from './components/AppErrorBoundary.js';
 import { i18n, initI18n, initI18nFromCache } from './state/i18n.js';
 import { usePreference } from './state/preferences.js';
 import { useSettings } from './state/settings.js';
-import { applyThemePreference, isDarkPreference, readCachedThemePreference, type ThemePreference } from './state/theme.js';
-import { accentTone, themeForBrand } from './theme.js';
+import { applyResolvedTheme, applyThemePreference, cacheThemePreference, readCachedThemePreference, type ResolvedTheme, systemTheme, ThemeModeContext, type ThemePreference, watchSystemTheme } from './state/theme.js';
+import { accentToneSet, themeForBrand } from './theme.js';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: 'always' } },
@@ -40,6 +40,11 @@ const root = createRoot(container);
  * (set here on :root), and Ant Design's primary/info/link tokens come from `themeForBrand`. A null
  * brand keeps the shipped blue (§20.20). ConfigProvider lives inside the query provider because it
  * reads the public settings view.
+ *
+ * The theme is built for the *resolved* mode — the preference, or the OS when the preference is
+ * `system`. Ant Design does not recompute a token the caller sets explicitly when the algorithm
+ * changes, so a light-mode value left in the theme config would survive into dark mode and paint a
+ * white panel in a dark shell.
  */
 function BrandTheme({ children }: { children: ReactNode }): ReactNode {
   const settings = useSettings();
@@ -49,22 +54,47 @@ function BrandTheme({ children }: { children: ReactNode }): ReactNode {
     themePref.value === 'light' || themePref.value === 'dark' || themePref.value === 'system'
       ? themePref.value
       : readCachedThemePreference();
+  // The OS colour scheme, tracked so a `system` preference repaints when the OS flips while the tab
+  // is open. Ant Design's algorithm is chosen from the resolved mode, so the two halves of the
+  // interface — the CSS custom properties and the component theme — always agree.
+  const [osTheme, setOsTheme] = useState<ResolvedTheme>(() => systemTheme());
+  const resolvedTheme: ResolvedTheme = resolvedPref === 'system' ? osTheme : resolvedPref;
+  const isDark = resolvedTheme === 'dark';
+
   useEffect(() => {
-    const tone = accentTone(primaryColor);
+    if (resolvedPref !== 'system') return undefined;
+    return watchSystemTheme(setOsTheme);
+  }, [resolvedPref]);
+
+  useEffect(() => {
+    const tone = accentToneSet(primaryColor, isDark);
     const el = document.documentElement;
     el.style.setProperty('--carocrm-accent', tone.fg);
     el.style.setProperty('--carocrm-accent-hover', tone.hover);
     el.style.setProperty('--carocrm-accent-strong', tone.strong);
+    el.style.setProperty('--carocrm-accent-primary', tone.primary);
     el.style.setProperty('--carocrm-accent-soft', tone.soft);
-  }, [primaryColor]);
+  }, [primaryColor, isDark]);
   useEffect(() => {
-    applyThemePreference(resolvedPref);
+    applyResolvedTheme(resolvedTheme);
+  }, [resolvedTheme]);
+  useEffect(() => {
+    cacheThemePreference(resolvedPref);
   }, [resolvedPref]);
-  const isDark = isDarkPreference(resolvedPref);
+
+  const theme = useMemo(
+    () => ({
+      ...themeForBrand(primaryColor, isDark),
+      algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    }),
+    [primaryColor, isDark],
+  );
   return (
-    <ConfigProvider theme={{ ...themeForBrand(primaryColor), algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm }}>
-      <AntApp>{children}</AntApp>
-    </ConfigProvider>
+    <ThemeModeContext.Provider value={resolvedTheme}>
+      <ConfigProvider theme={theme}>
+        <AntApp>{children}</AntApp>
+      </ConfigProvider>
+    </ThemeModeContext.Provider>
   );
 }
 

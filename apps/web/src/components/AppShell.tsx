@@ -18,6 +18,7 @@ import { usePreference } from '../state/preferences.js';
 import { useRecordVisit } from '../state/recent.js';
 import { useSession } from '../state/session.js';
 import { DEFAULT_BRAND, useSettings } from '../state/settings.js';
+import { useResolvedTheme } from '../state/theme.js';
 import { navAccent } from '../theme.js';
 import { AppErrorBoundary } from './AppErrorBoundary.js';
 import { CommandPalette } from './CommandPalette.js';
@@ -113,6 +114,9 @@ function InternalShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { message } = AntApp.useApp();
   const { collapsed, setCollapsed, drawerOpen, setDrawerOpen, narrow } = useSidebar();
+  // The nav accent is a label colour, so it follows the mode: a deep accent (purple) is unreadable
+  // on the dark rail and the dark tone set is the one that clears AA there.
+  const dark = useResolvedTheme() === 'dark';
   const lastVisited = usePreference<string[]>('lastVisited');
   useEffect(() => {
     const routes = (lastVisited.value ?? []).slice(0, 3);
@@ -147,7 +151,7 @@ function InternalShell({ children }: { children: ReactNode }) {
     setOpenKeys(ancestorKeys(navigation.data.items, currentNavRoute(location.pathname)));
   }, [navigation.data, location.pathname]);
 
-  const navItems = useMemo<MenuItems>(() => toMenuItems(tree), [tree, locale]);
+  const navItems = useMemo<MenuItems>(() => toMenuItems(tree, dark), [tree, locale, dark]);
   const selectedKey = currentNavRoute(location.pathname);
   useRecordVisit(selectedKey);
 
@@ -477,14 +481,14 @@ function PortalShell({ children }: { children: ReactNode }) {
  * the shell never decides whether an entry exists, it renders what it was told. An accent tints the
  * label alongside the icon and the text, never replacing them (§5.8).
  */
-function toMenuItems(nodes: readonly NavigationNode[], depth = 0): MenuItems {
+function toMenuItems(nodes: readonly NavigationNode[], dark: boolean, depth = 0): MenuItems {
   const items: MenuItems = [];
   for (const node of nodes) {
     const text = node.kind === 'entity' ? entityNavLabel(node) : node.label;
-    const accent = node.accent === undefined ? undefined : navAccent(node.accent).fg;
+    const accent = node.accent === undefined ? undefined : navAccent(node.accent, dark).fg;
     const label = accent === undefined ? text : <span style={{ color: accent }}>{text}</span>;
     if (node.kind === 'group') {
-      const children = node.children === undefined ? [] : toMenuItems(node.children, depth + 1);
+      const children = node.children === undefined ? [] : toMenuItems(node.children, dark, depth + 1);
       if (depth === 0) items.push({ type: 'group', key: node.key, label, children });
       else items.push({ key: node.key, icon: navGroupIcon(node.key, node.icon), label, children });
       continue;

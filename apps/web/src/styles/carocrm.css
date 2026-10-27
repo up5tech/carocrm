@@ -45,7 +45,7 @@ body {
   border-radius: 8px;
   display: grid;
   place-items: center;
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
   background: linear-gradient(135deg, var(--carocrm-accent) 0%, var(--carocrm-c-6fa9ff) 100%);
   font-size: 14px;
   font-weight: 700;
@@ -251,7 +251,7 @@ body {
   display: grid;
   place-items: center;
   cursor: pointer;
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
   font-size: 13px;
   font-weight: 600;
   background: linear-gradient(135deg, var(--carocrm-accent), var(--carocrm-c-6fa9ff));
@@ -267,7 +267,7 @@ body {
 
 .carocrm-avatar--large {
   background: linear-gradient(135deg, var(--carocrm-accent), var(--carocrm-c-6fa9ff));
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
   font-size: 24px;
   font-weight: 600;
 }
@@ -1023,7 +1023,9 @@ body {
 }
 
 .carocrm-row-link {
-  color: var(--carocrm-accent);
+  /* The strong tone, not the plain accent: the accent is 2.86:1 on white, the strong tone 4.97:1,
+     so this is the difference between a link that reads and a link the §20.26 axe gate rejects. */
+  color: var(--carocrm-accent-strong);
   font-weight: 400;
 }
 
@@ -1140,7 +1142,7 @@ body {
 .carocrm-cal-filter {
   align-items: center;
   background: var(--carocrm-surface-raised);
-  border: 1px solid var(--carocrm-c-e6ebf2);
+  border: 1px solid var(--carocrm-line-strong);
   border-radius: 999px;
   color: var(--carocrm-ink-muted);
   cursor: pointer;
@@ -1295,8 +1297,8 @@ body {
 
 .carocrm-cal-cell--today .carocrm-cal-day,
 .carocrm-cal-cell--today:hover .carocrm-cal-day {
-  background: var(--carocrm-accent);
-  color: var(--carocrm-surface-raised);
+  background: var(--carocrm-accent-primary);
+  color: var(--carocrm-ink-inverse);
 }
 
 .carocrm-cal-events {
@@ -4416,7 +4418,7 @@ body {
 }
 
 .carocrm-doc-tools-list .ant-btn:hover {
-  color: var(--carocrm-c-1f6fe0);
+  color: var(--carocrm-accent-strong);
 }
 
 /* ---- landing, section cards, pager ---- */
@@ -4465,7 +4467,7 @@ body {
 
 .carocrm-doc-door:hover .carocrm-doc-door-icon {
   background: linear-gradient(135deg, var(--carocrm-accent), var(--carocrm-accent-hover));
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
 }
 
 .carocrm-doc-door-count {
@@ -4935,16 +4937,17 @@ body {
   margin-top: 6px;
 }
 
-/* HelpTip renders on the dark tooltip surface, so the link needs the inverted palette. */
+/* HelpTip renders on the dark tooltip surface in both modes, so the link needs the inverted
+   palette — a token that flips with the theme would go dark on the dark tooltip. */
 .carocrm-helptip-more .carocrm-docs-link {
-  color: var(--carocrm-c-e6ebf2);
+  color: var(--carocrm-ink-inverse);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .carocrm-helptip-more .carocrm-docs-link:hover,
 .carocrm-helptip-more .carocrm-docs-link:focus-visible {
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-accent-hover);
 }
 
 .carocrm-admin-docs-hash {
@@ -5610,7 +5613,7 @@ textarea.carocrm-etpl-source,
   background: linear-gradient(135deg, var(--carocrm-accent), var(--carocrm-accent-hover));
   border-radius: 12px;
   box-shadow: 0 6px 16px rgba(67, 142, 255, 0.28);
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
   display: inline-flex;
   flex: none;
   font-size: 19px;
@@ -5776,7 +5779,7 @@ textarea.carocrm-etpl-source,
 
 .carocrm-rail-item.is-active .carocrm-rail-avatar {
   background: linear-gradient(135deg, var(--carocrm-accent), var(--carocrm-accent-hover));
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
 }
 
 .carocrm-rail-text {
@@ -5795,7 +5798,7 @@ textarea.carocrm-etpl-source,
 }
 
 .carocrm-rail-item.is-active .carocrm-rail-name {
-  color: var(--carocrm-c-1f6fe0);
+  color: var(--carocrm-accent-strong);
 }
 
 .carocrm-rail-meta {
@@ -5933,7 +5936,7 @@ textarea.carocrm-etpl-source,
 
 .carocrm-convo-avatar--assistant {
   background: linear-gradient(135deg, var(--carocrm-accent), var(--carocrm-accent-hover));
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
 }
 
 .carocrm-convo-avatar--user {
@@ -5992,7 +5995,7 @@ textarea.carocrm-etpl-source,
   border-radius: 14px;
   border-top-right-radius: 5px;
   box-shadow: 0 2px 8px rgba(67, 142, 255, 0.22);
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
 }
 
 .carocrm-convo-msg--system .carocrm-convo-bubble {
@@ -6061,7 +6064,7 @@ textarea.carocrm-etpl-source,
   background: linear-gradient(135deg, var(--carocrm-accent), var(--carocrm-c-8fbaff));
   border-radius: 18px;
   box-shadow: 0 10px 24px rgba(67, 142, 255, 0.3);
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
   display: inline-flex;
   font-size: 24px;
   height: 56px;
@@ -6113,7 +6116,7 @@ textarea.carocrm-etpl-source,
 .carocrm-chat-suggestion:hover {
   background: var(--carocrm-c-f7fbff);
   border-color: var(--carocrm-c-9cc4ff);
-  color: var(--carocrm-c-1f6fe0);
+  color: var(--carocrm-accent-strong);
 }
 
 .carocrm-chat-suggestion:focus-visible {
@@ -6533,7 +6536,7 @@ textarea.carocrm-etpl-source,
 .carocrm-rail-item.is-active .carocrm-rail-avatar--mms,
 .carocrm-rail-item.is-active .carocrm-rail-avatar--voice {
   background: linear-gradient(135deg, var(--carocrm-accent), var(--carocrm-accent-hover));
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
 }
 
 .carocrm-rail-tags {
@@ -6553,9 +6556,9 @@ textarea.carocrm-etpl-source,
 
 .carocrm-rail-badge {
   align-items: center;
-  background: var(--carocrm-accent);
+  background: var(--carocrm-accent-primary);
   border-radius: 999px;
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
   display: inline-flex;
   flex: none;
   font-size: 10px;
@@ -6610,7 +6613,7 @@ textarea.carocrm-etpl-source,
   border-radius: 14px;
   border-top-right-radius: 5px;
   box-shadow: 0 2px 8px rgba(67, 142, 255, 0.22);
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
 }
 
 .carocrm-convo-msg--note .carocrm-convo-bubble {
@@ -6624,7 +6627,7 @@ textarea.carocrm-etpl-source,
 
 .carocrm-convo-avatar--outbound {
   background: linear-gradient(135deg, var(--carocrm-accent), var(--carocrm-accent-hover));
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
 }
 
 .carocrm-convo-avatar--inbound {
@@ -6748,14 +6751,14 @@ textarea.carocrm-etpl-source,
 }
 
 .carocrm-surface-switch .ant-segmented-item:hover:not(.ant-segmented-item-selected) {
-  color: var(--carocrm-c-1f6fe0);
+  color: var(--carocrm-accent-strong);
 }
 
 .carocrm-surface-switch .ant-segmented-item-selected,
 .carocrm-surface-switch .ant-segmented-thumb {
   background: var(--carocrm-surface-raised);
   box-shadow: 0 1px 3px rgba(16, 24, 40, 0.16);
-  color: var(--carocrm-c-1f6fe0);
+  color: var(--carocrm-accent-strong);
   font-weight: 600;
 }
 
@@ -7114,7 +7117,7 @@ body.carocrm-reordering * {
   border-radius: 999px;
   bottom: 24px;
   box-shadow: 0 8px 24px rgba(16, 24, 40, 0.22);
-  color: var(--carocrm-surface-raised);
+  color: var(--carocrm-ink-inverse);
   display: flex;
   font-size: 12.5px;
   gap: 8px;

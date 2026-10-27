@@ -1,122 +1,153 @@
 import type { ThemeConfig } from 'antd';
 
-import { ACCENT_NAMES, ACCENT_TONES, type AccentName,accentTone, COLOR, FONT_FAMILY } from './theme/tokens.js';
+import {
+  ACCENT_NAMES,
+  ACCENT_TONES,
+  type AccentName,
+  accentToneSet,
+  COLOR,
+  DARK_COLOR,
+  FONT_FAMILY,
+  palette,
+} from './theme/tokens.js';
 
-export { ACCENT_NAMES, ACCENT_TONES, accentTone, COLOR, FONT_FAMILY } from './theme/tokens.js';
+export {
+  ACCENT_NAMES,
+  ACCENT_TONES,
+  accentTone,
+  accentToneSet,
+  COLOR,
+  DARK_COLOR,
+  FONT_FAMILY,
+} from './theme/tokens.js';
 
 /**
  * CaroCRM design tokens (PLAN_Phase_20_Settings_UX.md §20.20). Every value below is read from
  * `tokens.ts` — there is no literal colour in this file, so an Ant Design token and the matching CSS
  * custom property (`styles/tokens.css`) can never drift apart.
+ *
+ * The theme is built for one mode at a time. Ant Design does not recompute a token the caller sets
+ * explicitly when the algorithm changes, so a fixed light value here survives into dark mode and
+ * paints a white panel in a dark shell — the defect §20.21 exists to remove. Every colour slot below
+ * is therefore taken from the palette of the mode being rendered.
  */
-export const carocrmTheme: ThemeConfig = {
-  token: {
-    // §20.26 axe gate: white text on the plain `accent` blue is 3.2:1, below WCAG AA's 4.5:1 for
-    // normal button text. Ant Design derives every filled surface (primary buttons, switches) from
-    // `colorPrimary`, so the *strong* tone (4.97:1 under white) is the shipped default.
-    colorPrimary: COLOR.accentStrong,
-    colorInfo: COLOR.stateInfo,
-    // Same reasoning for links on white: the plain accent is 2.86:1, the strong tone 4.97:1.
-    colorLink: COLOR.accentStrong,
-    colorSuccess: COLOR.stateSuccess,
-    colorWarning: COLOR.stateWarning,
-    colorError: COLOR.stateError,
-    colorTextBase: COLOR.inkPrimary,
-    colorTextSecondary: COLOR.inkSecondary,
-    // Typography.Text type="secondary" paints from colorTextDescription (not the secondary ink),
-    // whose antd default over white is 2.47:1 — the settings save bar was flagged for exactly that.
-    colorTextDescription: COLOR.inkSecondary,
-    fontFamily: FONT_FAMILY,
-    fontSize: 14,
-    controlHeight: 36,
-    controlHeightSM: 24,
-    controlHeightLG: 40,
-    borderRadius: 8,
-    borderRadiusSM: 4,
-    wireframe: false,
-    boxShadow: 'none',
-    boxShadowSecondary: 'none',
-  },
-  components: {
-    Layout: {
-      bodyBg: COLOR.surfacePage,
-      headerBg: COLOR.surfaceRaised,
-      headerHeight: 70,
-      headerPadding: '0 24px',
-      siderBg: COLOR.surfaceRaised,
-      footerBg: COLOR.surfaceRaised,
-      footerPadding: '24px',
-    },
-    Menu: {
-      itemHeight: 40,
-      itemMarginInline: 8,
-      itemBorderRadius: 8,
-      itemBg: 'transparent',
-      itemSelectedBg: COLOR.menuSelectedBg,
-      // The selection text uses the accent's *strong* tone: the plain `accent` blue on the soft
-      // selection background is 2.99:1, which the §20.26 axe gate correctly rejects (§20.16 AA).
-      itemSelectedColor: COLOR.accentStrong,
-      itemColor: COLOR.inkMenu,
-      subMenuItemBg: 'transparent',
-      iconMarginInlineEnd: 10,
-    },
-    Card: {
-      borderRadiusLG: 8,
-      paddingLG: 22,
-      headerBg: 'transparent',
-      headerHeight: 55,
-      headerFontSize: 15,
-      colorBorderSecondary: COLOR.lineStrong,
-    },
-    Pagination: {
-      itemSize: 32,
-      borderRadius: 6,
-    },
-    Table: {
-      headerBg: COLOR.tableHeaderBg,
-      headerColor: COLOR.inkPrimary,
-      headerSplitColor: 'transparent',
-      borderColor: COLOR.lineStrong,
-      cellPaddingBlock: 12,
-      cellPaddingInline: 16,
-      rowHoverBg: COLOR.tableRowHover,
-    },
-    Button: {
-      borderRadius: 6,
+export function carocrmTheme(dark: boolean): ThemeConfig {
+  const p = palette(dark);
+  const accent = accentToneSet(null, dark);
+  return {
+    token: {
+      // §20.26 axe gate: white text on the plain `accent` blue is 3.2:1, below WCAG AA's 4.5:1 for
+      // normal button text. Ant Design derives every filled surface (primary buttons, switches) from
+      // `colorPrimary`, so the *strong* tone (4.97:1 under white) is the shipped default.
+      colorPrimary: accent.primary,
+      colorInfo: p.stateInfo,
+      // Same reasoning for links on white: the plain accent is 2.86:1, the strong tone 4.97:1.
+      colorLink: accent.strong,
+      colorSuccess: p.stateSuccess,
+      colorWarning: p.stateWarning,
+      colorError: p.stateError,
+      // `colorTextBase` is what `colorText`, `colorTextHeading` and the text tints are derived from,
+      // so this one token decides whether the whole interface reads as light-on-dark or dark-on-light.
+      colorTextBase: p.inkPrimary,
+      colorTextSecondary: p.inkSecondary,
+      // Typography.Text type="secondary" paints from colorTextDescription (not the secondary ink),
+      // whose antd default over white is 2.47:1 — the settings save bar was flagged for exactly that.
+      colorTextDescription: p.inkSecondary,
+      fontFamily: FONT_FAMILY,
+      fontSize: 14,
       controlHeight: 36,
-      fontWeight: 500,
+      controlHeightSM: 24,
+      controlHeightLG: 40,
+      borderRadius: 8,
+      borderRadiusSM: 4,
+      wireframe: false,
+      boxShadow: 'none',
+      boxShadowSecondary: 'none',
     },
-    Input: { borderRadius: 6, controlHeight: 36 },
-    InputNumber: { borderRadius: 6, controlHeight: 36 },
-    // Select and DatePicker must match Input's height or Space.Compact rows sit crooked
-    Select: { borderRadius: 6, controlHeight: 36 },
-    DatePicker: { borderRadius: 6, controlHeight: 36 },
-    Tag: { borderRadiusSM: 4 },
-    Statistic: { contentFontSize: 24 },
-    Descriptions: { itemPaddingBottom: 12 },
-  },
-};
+    components: {
+      Layout: {
+        bodyBg: p.surfacePage,
+        headerBg: p.surfaceRaised,
+        headerHeight: 70,
+        headerPadding: '0 24px',
+        siderBg: p.surfaceRaised,
+        footerBg: p.surfaceRaised,
+        footerPadding: '24px',
+      },
+      Menu: {
+        itemHeight: 40,
+        itemMarginInline: 8,
+        itemBorderRadius: 8,
+        itemBg: 'transparent',
+        itemSelectedBg: p.menuSelectedBg,
+        // The selection text uses the accent's *strong* tone: the plain `accent` blue on the soft
+        // selection background is 2.99:1, which the §20.26 axe gate correctly rejects (§20.16 AA).
+        itemSelectedColor: accent.strong,
+        itemColor: p.inkMenu,
+        subMenuItemBg: 'transparent',
+        iconMarginInlineEnd: 10,
+      },
+      Card: {
+        borderRadiusLG: 8,
+        paddingLG: 22,
+        headerBg: 'transparent',
+        headerHeight: 55,
+        headerFontSize: 15,
+        colorBorderSecondary: p.lineStrong,
+      },
+      Pagination: {
+        itemSize: 32,
+        borderRadius: 6,
+      },
+      Table: {
+        headerBg: p.tableHeaderBg,
+        headerColor: p.inkPrimary,
+        headerSplitColor: 'transparent',
+        borderColor: p.lineStrong,
+        cellPaddingBlock: 12,
+        cellPaddingInline: 16,
+        rowHoverBg: p.tableRowHover,
+      },
+      Button: {
+        borderRadius: 6,
+        controlHeight: 36,
+        fontWeight: 500,
+      },
+      Input: { borderRadius: 6, controlHeight: 36 },
+      InputNumber: { borderRadius: 6, controlHeight: 36 },
+      // Select and DatePicker must match Input's height or Space.Compact rows sit crooked
+      Select: { borderRadius: 6, controlHeight: 36 },
+      DatePicker: { borderRadius: 6, controlHeight: 36 },
+      Tag: { borderRadiusSM: 4 },
+      Statistic: { contentFontSize: 24 },
+      Descriptions: { itemPaddingBottom: 12 },
+    },
+  };
+}
 
 /**
- * Build a theme for a brand accent name (General settings → `primaryColor`). Defaults to blue when
- * the name is unknown or absent. This recolours Ant Design's primary/info/link tokens and the menu's
- * selected row; the shell's own accent usages follow because `BrandTheme` also sets the
- * `--carocrm-accent*` CSS variables from the same tone set.
+ * Build a theme for a brand accent name (General settings → `primaryColor`) in the mode being
+ * rendered. Defaults to blue when the name is unknown or absent. This recolours Ant Design's
+ * primary/info/link tokens and the menu's selected row; the shell's own accent usages follow because
+ * `BrandTheme` also sets the `--carocrm-accent*` CSS variables from the same tone set.
  */
-export function themeForBrand(primaryColor: string | undefined | null): ThemeConfig {
-  const tone = accentTone(primaryColor);
+export function themeForBrand(primaryColor: string | undefined | null, dark = false): ThemeConfig {
+  const base = carocrmTheme(dark);
+  const tone = accentToneSet(primaryColor, dark);
   return {
-    ...carocrmTheme,
+    ...base,
     token: {
-      ...carocrmTheme.token,
-      colorPrimary: tone.strong,
+      ...base.token,
+      // A filled button paints its label in white, so the filled-surface tone is the accent's deep
+      // one, not the bright `strong` tone that reads as link text on a dark surface.
+      colorPrimary: tone.primary,
       colorInfo: tone.strong,
       colorLink: tone.strong,
     },
     components: {
-      ...carocrmTheme.components,
+      ...base.components,
       Menu: {
-        ...carocrmTheme.components?.Menu,
+        ...base.components?.Menu,
         itemSelectedBg: tone.soft,
         itemSelectedColor: tone.strong,
       },
@@ -136,8 +167,13 @@ export const NAV_ACCENTS: Record<string, { fg: string; soft: string }> = Object.
 
 export const NAV_ACCENT_NAMES: readonly string[] = ACCENT_NAMES;
 
-/** The accent pair for a name, or the neutral pair when the entry carries none. */
-export function navAccent(name: string | undefined): { fg: string; soft: string } {
-  if (name === undefined) return { fg: COLOR.inkFaint, soft: COLOR.surfaceRaised };
-  return NAV_ACCENTS[name] ?? { fg: COLOR.inkFaint, soft: COLOR.surfaceRaised };
+/**
+ * The accent pair for a name, or the neutral pair when the entry carries none. The dark half of the
+ * tone set is used in dark mode: the light `fg` of a deep accent (purple) does not clear AA on the
+ * dark page.
+ */
+export function navAccent(name: string | undefined, dark = false): { fg: string; soft: string } {
+  if (name === undefined) return dark ? { fg: DARK_COLOR.inkFaint, soft: DARK_COLOR.surfaceRaised } : { fg: COLOR.inkFaint, soft: COLOR.surfaceRaised };
+  const tone = accentToneSet(name, dark);
+  return { fg: tone.fg, soft: tone.soft };
 }

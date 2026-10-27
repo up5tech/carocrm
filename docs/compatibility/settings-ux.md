@@ -138,6 +138,13 @@ behaviour, so none of them is an EspoCRM compatibility question.
   the audit certifies the default `blue` brand instance, the rule tags are WCAG 2.0 A/AA (not
   2.1/2.2), and keyboard/focus paths remain a manual walkthrough. `pnpm test:web` plus the
   `lint:ui` convention gate complete the quality-gate picture of 20.26.
+- **Dark mode (20.21) is audited in both modes since 2026-10-27.** The same four surfaces are
+  scanned again with the `theme` preference set to `dark`. The dark pass is what exposed that the
+  Ant Design theme carried light-mode values (`Layout.bodyBg`, `colorTextBase`, the Menu/Card/Table
+  slots) that the dark algorithm does not recompute: the content area stayed light while the shell
+  went dark. The theme is now built per mode from `theme/tokens.ts`, every `--carocrm-*` token has a
+  dark value, and `lint:ui` fails on a token that does not — the check the plan's acceptance
+  criterion asked for.
 - **No Playwright spec covers the plan's §13.5 scenarios** (1–6); `e2e/` holds specs for the
   earlier modules only, plus the §13.5 overflow/palette smoke and the axe audit itself.
 - **Contrast was not measured.** The palette uses the Ant Design token set; no contrast audit was

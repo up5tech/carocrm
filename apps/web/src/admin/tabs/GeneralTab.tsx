@@ -104,6 +104,10 @@ export function GeneralTab() {
             <Select
               value={value?.primaryColor ?? ''}
               onChange={(next) => document.edit({ primaryColor: next === '' ? null : next })}
+              // The settings form drives its own document model, so antd's Form.Item never hands the
+              // field an id and the label cannot point at the control. The name is spelled out here
+              // so the combobox is not announced as an unlabelled input.
+              aria-label={t('web.adminSettings.brandColorLabel')}
               options={[
                 { value: '', label: t('web.adminSettings.brandColorDefault') },
                 ...NAV_ACCENT_NAMES.map((name) => ({

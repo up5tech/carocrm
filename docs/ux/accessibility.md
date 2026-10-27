@@ -65,15 +65,21 @@ shipped defect first, not a style preference):
 2. a `.slice(0, 19)` timestamp (prints UTC while the page prints the user's zone);
 3. a raw `<Empty>` outside `EmptyState.tsx` (the four empty situations must stay distinct);
 4. an internal `<a href="/…">` (a full page load drops SPA state);
-5. a hex colour literal outside `tokens.css` (and `theme.ts` must stay literal-free).
+5. a hex colour literal outside `tokens.css` (and `theme.ts` must stay literal-free);
+6. a `var(--carocrm-…, #literal)` fallback — the literal wins whenever the property is missing, so
+   the colour never follows the theme (this is how a light chat bubble survived into dark mode);
+7. a `--carocrm-*` token that is not declared in `tokens.css`, or that has no dark value in the
+   `[data-theme="dark"]` block — a token without one keeps its light colour in dark mode and paints
+   a white panel in a dark shell.
 
 `node scripts/check-ui-conventions.mjs --self-test` proves each rule still catches a seeded
 violation, and a docs-truth rule refuses a "Still open" entry that names a feature the code ships.
 
-`pnpm test:web` (Vitest, `node` environment, no jsdom) adds 14 assertions:
+`pnpm test:web` (Vitest, `node` environment, no jsdom) adds 15 assertions:
 
 - **Tokens** — `carocrm.css` has zero hex literals, every `--carocrm-*` it uses is declared in
-  `tokens.css`, and the four themable accent tokens exist (§20.20).
+  `tokens.css`, the five themable accent tokens exist (§20.20), and every declared token has a
+  dark value (§20.21).
 - **Formatters** — `formatDateTime`/`formatClock`/`formatRelative`/`formatNumber` are locale- and
   timezone-aware and never emit a raw ISO slice or `Invalid Date` (§20.23).
 - **Empty state** — the title is the primary line, the four variants render distinct copy, and the
@@ -92,6 +98,11 @@ last-administrator rule, and settings/navigation authorization.
   `@axe-core/playwright` under the WCAG 2.0 A/AA tags and asserts **zero violations** — the
   β criterion of §20.16 ("axe passes on the four core surfaces") is now met by command
   (`npx playwright test e2e/accessibility.spec.ts --project=chromium`), not by a walkthrough.
+  The same four surfaces are scanned a second time with the `theme` preference set to `dark`
+  (§20.21): the dark pass is what showed that the Ant Design theme carried light-mode values —
+  `Layout.bodyBg`, `colorTextBase`, the Menu/Card/Table slots — that the dark algorithm does not
+  recompute, so the content area stayed light inside a dark shell. The theme is now built per mode
+  from `theme/tokens.ts` and every `--carocrm-*` token has a dark value.
   The shared QA webs for it are real fixes to the shipped surfaces: ink tokens raised to AA
   (#66707a secondary/muted, #6e7681 faint), the selection accent colour moved to each accent's
   *strong* tone (the plain accent on the soft selection background was 2.98:1), `colorPrimary`

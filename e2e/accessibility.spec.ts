@@ -49,11 +49,30 @@ test.describe('accessibility and responsive smoke (Phase 20 §13.5)', () => {
 // render, not a jsdom mock, so what axe sees is what a user gets. Only WCAG 2.0 A/AA rules run;
 // "incomplete" results (axe needs the reviewer's eye) are not failures.
 async function scanSurfaces(page: Page): Promise<string[]> {
+  // Freeze the transitions first. The settings form enables itself once its document arrives, and a
+  // scan that lands inside antd's 0.3s colour transition reads the intermediate colour — a value no
+  // user ever sees for longer than a blink, but one axe would (rightly) call a contrast failure.
+  await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
   return results.violations.map((v) => {
     const n = v.nodes[0];
     return `${v.id} (${v.impact}) — target: ${n?.target.join(' ')}\n    html: ${n?.html.slice(0, 160)}\n    fix: ${n?.failureSummary?.replace(/\s+/g, ' ').slice(0, 300)}`;
   });
+}
+
+/**
+ * Phase 20 §20.21: the same four surfaces in dark mode. The theme is the server-side `theme`
+ * preference, so the switch happens through the same endpoint the settings screen uses — and the
+ * page is reloaded afterwards, because the shell reads the preference before the first paint.
+ */
+async function switchToDarkMode(page: Page): Promise<void> {
+  const token = await page.evaluate(() => window.localStorage.getItem('carocrm.accessToken'));
+  expect(token).toBeTruthy();
+  const response = await page.request.put('/api/v1/Preferences/theme', {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { value: 'dark' },
+  });
+  expect(response.ok()).toBe(true);
 }
 
 test.describe('axe audit (Phase 20 §20.16, §20.26)', () => {
@@ -94,6 +113,63 @@ test.describe('axe audit (Phase 20 §20.16, §20.26)', () => {
   test('settings', async ({ page }) => {
     await page.goto('/admin/settings');
     await expect(page.locator('main, [role="main"]').first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('combobox').first()).toBeEnabled({ timeout: 20_000 });
+    violations = await scanSurfaces(page);
+    expect(violations).toEqual([]);
+  });
+});
+
+test.describe('axe audit in dark mode (Phase 20 §20.21)', () => {
+  let violations: string[] = [];
+
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await switchToDarkMode(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    // The preference is per user and persists in the database: put it back so the light-mode run
+    // above is not affected by the order the suites execute in.
+    const token = await page.evaluate(() => window.localStorage.getItem('carocrm.accessToken'));
+    await page.request.put('/api/v1/Preferences/theme', {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { value: 'system' },
+    });
+  });
+
+  test('home', async ({ page }) => {
+    await page.goto('/home');
+    await expect(page.getByRole('main')).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('html[data-theme="dark"]')).toBeAttached({ timeout: 20_000 });
+    violations = await scanSurfaces(page);
+    expect(violations).toEqual([]);
+  });
+
+  test('list', async ({ page }) => {
+    await page.goto('/Contact');
+    await expect(page.locator('.ant-table-tbody').first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('html[data-theme="dark"]')).toBeAttached({ timeout: 20_000 });
+    violations = await scanSurfaces(page);
+    expect(violations).toEqual([]);
+  });
+
+  test('record', async ({ page }) => {
+    await page.goto('/Contact');
+    const firstRow = page.locator('tbody tr[data-row-key]').first();
+    await expect(firstRow).toBeVisible({ timeout: 20_000 });
+    await firstRow.click();
+    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    await expect(page.locator('html[data-theme="dark"]')).toBeAttached({ timeout: 20_000 });
+    violations = await scanSurfaces(page);
+    expect(violations).toEqual([]);
+  });
+
+  test('settings', async ({ page }) => {
+    await page.goto('/admin/settings');
+    await expect(page.locator('main, [role="main"]').first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('combobox').first()).toBeEnabled({ timeout: 20_000 });
+    await expect(page.locator('html[data-theme="dark"]')).toBeAttached({ timeout: 20_000 });
     violations = await scanSurfaces(page);
     expect(violations).toEqual([]);
   });

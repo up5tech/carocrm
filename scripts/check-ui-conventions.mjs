@@ -60,6 +60,28 @@ const RAW_ANCHOR_RE = /<a\s[^>]*href=\{?["'`]\/(?!api\/)/;
 // Hex colour literal. The negative lookaheads reject a value that is part of an identifier (so
 // `#carocrm-content` is never matched) and one followed by more hex digits.
 const HEX_RE = /(#[0-9a-fA-F]{8}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{4}|#[0-9a-fA-F]{3})(?![0-9a-fA-F])(?![a-zA-Z0-9_-])/;
+// `var(--carocrm-*, #literal)` — the literal wins whenever the property is missing.
+const FALLBACK_RE = /var\((--carocrm-[a-z0-9-]+)\s*,\s*(#[0-9a-fA-F]{3,8})\)/g;
+
+/**
+ * The token rule (§20.21): every token the styles and the components read must be declared, and every
+ * declared token must have a dark value. A token without one keeps its light colour in dark mode and
+ * paints a white panel in a dark shell.
+ */
+function tokenViolations(tokens, used) {
+  const declared = (text) => new Set([...text.matchAll(/(--carocrm-[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+  const light = declared(tokens.slice(tokens.indexOf(':root {'), tokens.indexOf('[data-theme="dark"]')));
+  const dark = declared(tokens.slice(tokens.indexOf('[data-theme="dark"]'), tokens.indexOf('@media print')));
+  const found = [];
+  for (const [token, at] of used) {
+    if (!light.has(token)) found.push(`${at}  ${token} is not declared in styles/tokens.css`);
+    else if (!dark.has(token)) found.push(`${at}  ${token} has no dark value in styles/tokens.css`);
+  }
+  for (const token of light) {
+    if (!dark.has(token)) found.push(`styles/tokens.css  ${token} has no dark value`);
+  }
+  return found;
+}
 
 /**
  * `--self-test` proves the gate still catches each defect it exists for: every rule must flag a
@@ -82,10 +104,30 @@ function selfTest() {
     ['raw <Empty>', '<Empty />', '<EmptyState />', (line) => RAW_EMPTY_RE.test(line)],
     ['raw anchor', '<a href="/x">y</a>', '<Link to="/x">y</Link>', (line) => RAW_ANCHOR_RE.test(line)],
     ['hex literal', 'color: #438eff;', 'color: var(--carocrm-accent);', (line) => HEX_RE.test(line)],
+    [
+      'literal fallback',
+      'background: var(--carocrm-c-surface-alt, #f3f4f6);',
+      'background: var(--carocrm-surface-sunken);',
+      (line) => [...line.matchAll(FALLBACK_RE)].length > 0,
+    ],
   ];
   for (const [name, bad, good, check] of cases) {
     if (!check(bad)) failures.push(`${name}: seeded violation NOT caught`);
     if (check(good)) failures.push(`${name}: clean sample wrongly flagged`);
+  }
+
+  // The token rule works on a set, so it gets its own fixture.
+  const fixture = (darkValues) => `:root {\n  --carocrm-surface-page: #f5f5f5;\n}\n[data-theme="dark"] {\n${darkValues}\n}\n@media print {\n}\n`;
+  const used = new Map([['--carocrm-surface-page', 'x.css:1']]);
+  if (tokenViolations(fixture('  --carocrm-surface-page: #0f1115;'), used).length > 0) {
+    failures.push('token rule: a complete palette wrongly flagged');
+  }
+  if (tokenViolations(fixture(''), used).length === 0) {
+    failures.push('token rule: a token without a dark value NOT caught');
+  }
+  const undeclared = new Map([['--carocrm-not-a-token', 'x.css:1']]);
+  if (tokenViolations(fixture('  --carocrm-surface-page: #0f1115;'), undeclared).length === 0) {
+    failures.push('token rule: an undeclared token NOT caught');
   }
   return failures;
 }
@@ -97,7 +139,7 @@ if (process.argv.includes('--self-test')) {
     for (const failure of failures) console.error(`  ${failure}`);
     process.exit(1);
   }
-  console.log('ui conventions self-test: ok (5 rules each catch a seeded violation)');
+  console.log('ui conventions self-test: ok (7 rules each catch a seeded violation)');
   process.exit(0);
 }
 
@@ -127,7 +169,33 @@ for (const file of walk(srcDir)) {
     }
     if (RAW_ANCHOR_RE.test(line)) violations.push(`${at}  raw <a href="/…"> — use Link`);
     if (hexScoped && HEX_RE.test(line)) violations.push(`${at}  hex colour literal — use a --carocrm-* token (tokens.css)`);
+    // A literal fallback behind `var()` means the property may not exist — and when it does not, the
+    // literal wins and the colour never follows the theme. That is how a light chat bubble survived
+    // into dark mode; the token has to exist instead.
+    for (const match of line.matchAll(FALLBACK_RE)) {
+      violations.push(`${at}  var(${match[1]}, ${match[2]}) — a literal fallback bypasses the token; declare --${match[1]} in tokens.css`);
+    }
   });
+}
+
+// Rule 7 (dark mode, §20.21): every token the styles and the components read must exist, and every
+// token that exists must have a dark value. A token without one keeps its light colour in dark mode
+// and paints a white panel in a dark shell — the defect this rule exists to keep from returning.
+{
+  const tokens = readFileSync(join(srcDir, 'styles/tokens.css'), 'utf8');
+  const used = new Map();
+  for (const file of walk(srcDir)) {
+    const rel = relative(root, file);
+    if (rel.endsWith('styles/tokens.css')) continue;
+    readFileSync(file, 'utf8')
+      .split('\n')
+      .forEach((line, index) => {
+        for (const match of line.matchAll(/var\((--carocrm-[a-z0-9-]+)/g)) {
+          if (!used.has(match[1])) used.set(match[1], `${rel}:${index + 1}`);
+        }
+      });
+  }
+  violations.push(...tokenViolations(tokens, used));
 }
 
 // Rule 6 (docs truth, §20.26): the authoritative "Still open" list must not name a feature the code
