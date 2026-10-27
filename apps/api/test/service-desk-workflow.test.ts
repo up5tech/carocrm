@@ -109,6 +109,8 @@ afterAll(async () => {
     await ctx.database.db.deleteFrom('notifications').where(sql`data ->> 'caseId'`, 'in', caseIds).execute();
     await ctx.database.db.deleteFrom('outbox_events').where(sql`payload ->> 'caseId'`, 'in', caseIds).execute();
   }
+  // Reactivate seeded routing rules deactivated for this run.
+  await ctx.database.db.updateTable('entity_records').set({ attrs: sql`attrs || ${JSON.stringify({ isActive: true })}::jsonb` }).where('entity_type', '=', 'RoutingRule').where(sql`name NOT LIKE ${'AGENT_TEST_%'}`).execute();
   // Generic records, children before parents.
   for (const entry of [...created].reverse()) {
     await call('DELETE', `/api/v1/${entry.entity}/${entry.id}`);
@@ -310,6 +312,8 @@ describe('assignment, queues and routing (§5.3, 19-SD.5)', () => {
     agentA = await createTestUser(ctx, { userName: `sd_a_${runId}`, teamIds: [teamA] });
     agentB = await createTestUser(ctx, { userName: `sd_b_${runId}`, teamIds: [teamA] });
     agentC = await createTestUser(ctx, { userName: `sd_c_${runId}`, teamIds: [teamB] });
+    // Deactivate seeded (non-test) routing rules so this run's rules are the only candidates.
+    await ctx.database.db.updateTable('entity_records').set({ attrs: sql`attrs || ${JSON.stringify({ isActive: false })}::jsonb` }).where('entity_type', '=', 'RoutingRule').where(sql`name NOT LIKE ${'AGENT_TEST_%'}`).execute();
   });
 
   async function makeQueue(suffix: string, extra: Record<string, unknown> = {}): Promise<string> {
@@ -417,7 +421,7 @@ describe('assignment, queues and routing (§5.3, 19-SD.5)', () => {
     });
     // A rule (matched by `type`) sends incidents to the queue; the empty team has no member to pick.
     await makeRule('incident', {
-      sortOrder: 0,
+      sortOrder: -1,
       queueId,
       conditions: JSON.stringify([{ field: 'type', operator: 'equals', value: 'Incident' }]),
     });
@@ -438,8 +442,8 @@ describe('assignment, queues and routing (§5.3, 19-SD.5)', () => {
   it('applies the first matching routing rule deterministically', async () => {
     const first = await makeQueue('r1', { strategy: 'manual' });
     const second = await makeQueue('r2', { strategy: 'manual' });
-    const ruleFirst = await makeRule('first', { sortOrder: 1, queueId: first });
-    await makeRule('second', { sortOrder: 2, queueId: second });
+    const ruleFirst = await makeRule('first', { sortOrder: -2, queueId: first });
+    await makeRule('second', { sortOrder: -1, queueId: second });
 
     const id = await createCase({ priority: 'High' });
     const routed = await call('POST', `/api/v1/ServiceDesk/action/case/${id}/route`, {});
