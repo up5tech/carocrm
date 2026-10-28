@@ -37,6 +37,8 @@
 | G24 | The marketing form's Lead write is silently truncated — six fields the form writes are not Lead fields, so they are deleted | marketing-automation | Medium | Open (22.12) |
 | G25 | There is no first-class campaign↔Lead link; the Lead carries only a free-text `source` | lead-score / marketing-automation | Medium | Open (22.12) |
 | G26 | There is no Sales→ESignature contract; a completed signature has no consumer in the platform | sales / esignature | Medium | Open (22.9+) |
+| G27 | Customer Success never creates or reads `Project`/`ProjectTask`; the only link is the plan's `projectId` | customer-success / projects | Medium | Open (22.10+) |
+| G28 | The customer-success suite leaves the default onboarding template's Task behind | customer-success (test hygiene) | Low | Open |
 
 ---
 
@@ -221,3 +223,18 @@
 - **Expected vs observed:** expected — a signed quote reaches the order it became; observed — a signature is a fact about a document, and Sales never hears of it.
 - **Status:** Open — this is a product decision rather than a defect, and it was found while building the Phase 22.9 journey (`docs/quality/phase-22-journey-quote-to-signature.md` §8, F1). The journey proves the *negative* the plan asks for (a signed document does not make an invoice paid), which holds precisely because no such path exists.
 - **Remaining risk:** an installation that expects "signed ⇒ paid" or "signed ⇒ ordered" will not get it, and no diagnostic will say so.
+
+## G27 — Customer Success never creates or reads a Project
+
+- **Module / contract:** customer-success ⇄ projects — "the onboarding plan and the delivery project are the same thing".
+- **Impact:** the only link is `CustomerSuccessPlan.projectId`, a reference written by `CustomerSuccessPlanService.create`. The health engine's facts (`loadFacts`) read no `Project` and no `ProjectTask`, no signal provider looks at one, and the Projects module never writes a Customer Success record. So completing a project milestone moves nothing in Customer Success: the profile's score, status, progress and onboarding state stay exactly where they were. That is the correct line — a delivery milestone is not a customer touch — but an installation that expects the two to move together will not get it.
+- **Status:** Open — a product decision rather than a defect, found while building the Phase 22.10 journey (`docs/quality/phase-22-journey-project-customer-success.md` §8, F1). The journey proves the negative the plan asks for.
+- **Remaining risk:** the same shape as G26 (no Sales→ESignature contract): a cross-module reaction that the product never promised.
+
+## G28 — The customer-success suite leaves the default onboarding template's Task behind
+
+- **Module / contract:** customer-success — test hygiene, not product behaviour.
+- **Impact:** `apps/api/test/customer-success.test.ts` starts the **default** onboarding playbook, whose first step is a `createTask` step, and the produced CRM `Task` is named `Schedule the kickoff call` — a name without the suite's `AGENT_TEST_` marker, so the suite's cleanup does not remove it. Every run of that suite leaves one row behind in the shared development database.
+- **Expected vs observed:** expected — the suite removes every record it created; observed — one unmarked `Task` per run.
+- **Status:** Open — the fix belongs to that suite (track the produced task's id and delete it, as the Phase 22.10 journey does). Recorded here rather than fixed in place, because the change belongs to another suite's own file.
+- **Remaining risk:** the shared database keeps accumulating one unmarked task per customer-success run.
