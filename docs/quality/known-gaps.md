@@ -36,6 +36,7 @@
 | G23 | A connector dead letter can be marked "replayed" without the failed work being re-run | advanced-integrations | Medium | Open (22.21) |
 | G24 | The marketing form's Lead write is silently truncated — six fields the form writes are not Lead fields, so they are deleted | marketing-automation | Medium | Open (22.12) |
 | G25 | There is no first-class campaign↔Lead link; the Lead carries only a free-text `source` | lead-score / marketing-automation | Medium | Open (22.12) |
+| G26 | There is no Sales→ESignature contract; a completed signature has no consumer in the platform | sales / esignature | Medium | Open (22.9+) |
 
 ---
 
@@ -212,3 +213,11 @@
 - **Module / contract:** lead-score / marketing-automation — "which campaign produced this lead".
 - **Impact:** the `Lead` entity carries only the free-text `source`. The campaign↔Lead association lives outside the Lead record: `marketing_events.campaign_id`, `MarketingConsent.campaignId`, `TargetListEntry` and the journey enrollment. LeadScore reads the `marketing_events` association (its engagement signal) and ignores the campaign id, so a score cannot say *which* campaign engaged the lead.
 - **Status:** Open — deferred to 22.12, together with G24: if the form's fields are declared, the Lead can carry the campaign it came from.
+
+## G26 — There is no Sales→ESignature contract, and a completed signature has no consumer
+
+- **Module / contract:** sales ⇄ esignature — "a quote is sent for signature" and "a signed document changes the commercial record".
+- **Impact:** the two modules do not import each other, no contract adapter exists for ESignature, and the events ESignature publishes (`esignature.requestCompleted`, `esignature.completedArtifactAvailable`) have **no subscriber** anywhere in the platform. The only link that exists is the generic pair `sourceEntityType` + `sourceRecordId` a signature request stores — `signature-record-entry.service.ts` lists `Quote`, `SalesOrder` and `Invoice` as entry points, so a request *may* name a commercial record, and nothing reads that link back.
+- **Expected vs observed:** expected — a signed quote reaches the order it became; observed — a signature is a fact about a document, and Sales never hears of it.
+- **Status:** Open — this is a product decision rather than a defect, and it was found while building the Phase 22.9 journey (`docs/quality/phase-22-journey-quote-to-signature.md` §8, F1). The journey proves the *negative* the plan asks for (a signed document does not make an invoice paid), which holds precisely because no such path exists.
+- **Remaining risk:** an installation that expects "signed ⇒ paid" or "signed ⇒ ordered" will not get it, and no diagnostic will say so.
