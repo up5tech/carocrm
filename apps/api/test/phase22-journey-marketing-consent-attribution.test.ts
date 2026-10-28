@@ -66,6 +66,9 @@ const sendIds: string[] = [];
 const createdIds: string[] = [];
 const jobIds: string[] = [];
 const entityIds: { entity: string; id: string }[] = [];
+/** The principals the metrics leg creates through the test helpers; they are this run's rows too. */
+const principalIds: string[] = [];
+const roleIds: string[] = [];
 /** Everything the provider was handed — the only proof of an outbound message in this journey. */
 const sentMessages: MarketingProviderMessage[] = [];
 
@@ -437,6 +440,11 @@ afterAll(async () => {
       await call('DELETE', `/api/v1/${entry.entity}/${entry.id}`);
     }
     await db.deleteFrom('entity_records').where('id', 'in', allEntityIds).where('deleted_at', 'is not', null).execute();
+    for (const principalId of principalIds) {
+      await db.deleteFrom('user_sessions').where('user_id', '=', principalId).execute();
+      await db.deleteFrom('users').where('id', '=', principalId).execute();
+    }
+    for (const roleId of roleIds) await db.deleteFrom('roles').where('id', '=', roleId).execute();
     await db.deleteFrom('email_accounts').where('id', '=', senderAccountId).execute();
     await restoreSettings(ctx, 'marketingAutomation', settingsBaseline);
     await restoreSettings(ctx, 'leadScore', leadScoreBaseline);
@@ -447,7 +455,10 @@ afterAll(async () => {
       select (
         (select count(*) from entity_records where name like ${`AGENT_TEST_${runId}%`}) +
         (select count(*) from marketing_events where campaign_id = ${campaignId}) +
-        (select count(*) from marketing_provider_webhook_inbox where provider = ${WEBHOOK_PROVIDER})
+        (select count(*) from marketing_provider_webhook_inbox where provider = ${WEBHOOK_PROVIDER}) +
+        (select count(*) from email_accounts where id = ${senderAccountId}) +
+        (select count(*) from users where id = any(${principalIds})) +
+        (select count(*) from roles where id = any(${roleIds}))
       )::text as n
     `.execute(db);
     const deliveries = sendIds.length === 0
@@ -981,6 +992,8 @@ describe('the journey: consent, a campaign, and what the provider says afterward
       },
     });
     const outsider = await createTestUser(ctx, { userName: `ma22outsider${runId.slice(-6)}`, roleIds: [outsiderRole] });
+    principalIds.push(outsider.id);
+    roleIds.push(outsiderRole);
 
     const recipients = await call('GET', `/api/v1/MarketingAutomation/action/send/${sendId}/recipients?limit=50`, undefined, outsider.token);
     expect(recipients.status, JSON.stringify(recipients.body)).toBe(200);
@@ -1013,6 +1026,8 @@ describe('the journey: consent, a campaign, and what the provider says afterward
       permissions: { Campaign: { read: 'no', create: 'no', edit: 'no', delete: 'no' } },
     });
     const stranger = await createTestUser(ctx, { userName: `ma22stranger${runId.slice(-6)}`, roleIds: [noAccessRole] });
+    principalIds.push(stranger.id);
+    roleIds.push(noAccessRole);
     const refused = await call('GET', `/api/v1/MarketingAutomation/action/campaign/${campaignId}/stats`, undefined, stranger.token);
     expect(refused.status, JSON.stringify(refused.body)).toBeGreaterThanOrEqual(400);
   });

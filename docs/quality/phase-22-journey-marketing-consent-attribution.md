@@ -122,6 +122,12 @@ frequency cap is read from the ledger at the same moment.
 | `pnpm exec vitest run apps/api/test/lead-score-schema.test.ts apps/api/test/marketing-automation-provider.test.ts` | passed once the `marketingAutomation` settings row was snapshotted under its real name (§8.7) and the Lead detail guard was told about the `Acquisition` panel |
 | Final `pnpm verify` | Passed — lint 0/0, typecheck clean, `pnpm test` 242 files / 3,252 tests, `pnpm test:web` 5 files / 21 tests |
 
+**A leak this suite found in itself.** The first version deleted every marketing row it created but not the
+two principals step 11 makes through the shared test helpers (`users`, `roles`) — and 50 of each had
+accumulated in the configured database by the time the leftover assertion was widened to cover them. They were
+removed by exact id, and the assertion now counts users, roles and the sender account as well as the records,
+so the suite cannot repeat it quietly.
+
 **Database discipline.** The configured primary database only (AGENTS.md §3.1). The one schema change is
 additive — a partial unique index over rows that did not exist before it — and was reviewed before it was
 applied; no database, schema or container was created and nothing was truncated, dropped or reset. The
