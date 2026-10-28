@@ -20,6 +20,7 @@
     "lint:fix": "eslint . --fix --cache",
     "lint:changed": "node scripts/lint-changed.mjs",
     "lint:ui": "node scripts/check-ui-conventions.mjs",
+    "lint:arch": "node scripts/check-architecture-boundaries.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p apps/web/tsconfig.json",
     "test": "vitest run",
     "test:web": "vitest run --config vitest.web.config.ts",
