@@ -31,7 +31,13 @@ import { Injectable } from '@nestjs/common';
  * service.
  */
 
-/** The contract keys this module knows about. */
+/**
+ * The contract keys this module knows about.
+ *
+ * Every key a module publishes must be listed here: `knownKeys()` is what the diagnostics and the
+ * admin UI compare against, so a published contract that is missing here is a contract the platform
+ * cannot account for.
+ */
 export const INTEGRATION_CONTRACT_KEYS = [
   'sales.payment.providerEvent',
   'sales.accounting.export',
@@ -42,6 +48,8 @@ export const INTEGRATION_CONTRACT_KEYS = [
   'projects.task.create',
   'serviceDesk.case.transition',
   'voiceCommunications.consent.suppress',
+  'voiceCommunications.inbox.read',
+  'voiceCommunications.message.send',
 ] as const;
 
 export type IntegrationContractKey = (typeof INTEGRATION_CONTRACT_KEYS)[number];

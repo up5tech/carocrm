@@ -216,6 +216,8 @@ export class FakeProviderAdapter implements ConnectorAdapter {
   private changeSequence = 0;
   /** The creation counter, which fixes the paging order. */
   private orderSequence = 0;
+  /** The scripted failures the next matching call must raise (Phase 22.6 contract tests). */
+  private readonly scriptedFailures: { readonly operation: string; readonly error: ProviderError }[] = [];
 
   constructor(options: FakeProviderAdapterOptions = {}) {
     const providerKey = options.providerKey ?? DEFAULT_FAKE_PROVIDER_KEY;
@@ -237,6 +239,20 @@ export class FakeProviderAdapter implements ConnectorAdapter {
   }
 
   /**
+   * Make the next call to `operation` fail the way a provider fails.
+   *
+   * The fake otherwise only ever fails for a reason the provider itself caused (a missing object, a
+   * broken cursor). A contract test also has to prove what the platform does with the failures a
+   * provider causes *by accident* — a timeout, a rate-limit answer, an expired credential — so the
+   * failure is scripted here instead of being re-implemented per test.
+   *
+   * The failure is consumed by the first matching call; `*` matches any operation.
+   */
+  failNextCall(operation: string, error: ProviderError): void {
+    this.scriptedFailures.push({ operation, error });
+  }
+
+  /**
    * Check the connection with the fake's cheapest, read-only call.
    *
    * It reads the credential and nothing else: the dataset is never touched, so a validation
@@ -244,6 +260,7 @@ export class FakeProviderAdapter implements ConnectorAdapter {
    */
   async validateConnection(context: ConnectorContext): Promise<ConnectionValidationResult> {
     this.counts = { ...this.counts, validateConnection: this.counts.validateConnection + 1 };
+    this.throwScripted('validateConnection');
     const apiKey = context.credential.apiKey;
     if (typeof apiKey !== 'string' || apiKey.trim() === '') {
       return {
@@ -266,6 +283,7 @@ export class FakeProviderAdapter implements ConnectorAdapter {
   /** The objects the provider exposes, in the order the declaration names them. */
   async listObjectSchemas(_context: ConnectorContext): Promise<readonly ExternalObjectSchema[]> {
     this.counts = { ...this.counts, listObjectSchemas: this.counts.listObjectSchemas + 1 };
+    this.throwScripted('listObjectSchemas');
     const declared = new Set(this.capabilities.objects.map((object) => object.objectType));
     return OBJECT_SCHEMAS.filter((schema) => declared.has(schema.objectType));
   }
@@ -273,6 +291,7 @@ export class FakeProviderAdapter implements ConnectorAdapter {
   /** The fields of one object. An unknown object type is a `not_found` failure. */
   async listFields(_context: ConnectorContext, objectType: string): Promise<readonly ExternalFieldSchema[]> {
     this.counts = { ...this.counts, listFields: this.counts.listFields + 1 };
+    this.throwScripted('listFields');
     const schema = OBJECT_SCHEMAS.find((candidate) => candidate.objectType === objectType);
     if (!schema) {
       throw new ProviderError('NOT_FOUND', `The provider offers no object type "${objectType}".`, {
@@ -296,6 +315,7 @@ export class FakeProviderAdapter implements ConnectorAdapter {
    */
   async fetchPage(input: FetchPageInput): Promise<FetchPageResult> {
     this.counts = { ...this.counts, fetchPage: this.counts.fetchPage + 1 };
+    this.throwScripted('fetchPage');
     const capability = this.requireCapability(input.objectType);
     if (!capability.read) {
       throw this.invalidRequest(`The provider does not allow reading "${input.objectType}".`, input.objectType);
@@ -321,6 +341,7 @@ export class FakeProviderAdapter implements ConnectorAdapter {
    */
   async fetchChanges(input: FetchChangesInput): Promise<FetchChangesResult> {
     this.counts = { ...this.counts, fetchChanges: this.counts.fetchChanges + 1 };
+    this.throwScripted('fetchChanges');
     const capability = this.requireCapability(input.objectType);
     if (!capability.read) {
       throw this.invalidRequest(`The provider does not allow reading "${input.objectType}".`, input.objectType);
@@ -348,6 +369,7 @@ export class FakeProviderAdapter implements ConnectorAdapter {
    */
   async upsertObject(input: UpsertObjectInput): Promise<ExternalMutationResult> {
     this.counts = { ...this.counts, upsertObject: this.counts.upsertObject + 1 };
+    this.throwScripted('upsertObject');
     const capability = this.requireCapability(input.objectType);
     const bucket = this.bucket(input.objectType);
     const existing = input.externalId === null ? undefined : bucket.get(input.externalId);
@@ -394,6 +416,7 @@ export class FakeProviderAdapter implements ConnectorAdapter {
    */
   async deleteObject(input: DeleteObjectInput): Promise<ExternalMutationResult> {
     this.counts = { ...this.counts, deleteObject: this.counts.deleteObject + 1 };
+    this.throwScripted('deleteObject');
     const capability = this.requireCapability(input.objectType);
     if (!capability.delete) {
       throw this.invalidRequest(`The provider does not allow deleting "${input.objectType}".`, input.objectType);
@@ -428,6 +451,7 @@ export class FakeProviderAdapter implements ConnectorAdapter {
     this.live.clear();
     this.tombstones.length = 0;
     this.idSequence.clear();
+    this.scriptedFailures.length = 0;
     this.counts = {
       validateConnection: 0,
       listObjectSchemas: 0,
@@ -595,6 +619,16 @@ export class FakeProviderAdapter implements ConnectorAdapter {
       retryable: false,
       detail,
     });
+  }
+
+  /** Raise the scripted failure for this operation, if one is queued. */
+  private throwScripted(operation: string): void {
+    const index = this.scriptedFailures.findIndex(
+      (failure) => failure.operation === operation || failure.operation === '*',
+    );
+    if (index < 0) return;
+    const [failure] = this.scriptedFailures.splice(index, 1);
+    if (failure !== undefined) throw failure.error;
   }
 }
 

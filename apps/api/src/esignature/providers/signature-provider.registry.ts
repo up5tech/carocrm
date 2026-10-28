@@ -1,6 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { providerNotConnectedError } from '../esignature-errors.js';
+import { assertSignatureProviderContract } from './signature-provider.contract.js';
 import { NotSupportedByProviderError } from './signature-provider.errors.js';
 import {
   adapterSupports,
@@ -64,6 +65,9 @@ export class SignatureProviderRegistry {
       throw new Error(`The signature provider adapter "${adapter.providerKey}" is a fake and cannot be registered in production.`);
     }
     assertAdapterContract(adapter);
+    // The full conformance suite, so an adapter that breaks the contract is refused here rather
+    // than at the first send (Phase 22.6).
+    assertSignatureProviderContract(adapter);
     if (this.adapters.has(adapter.providerKey)) {
       throw new Error(`A signature provider adapter for "${adapter.providerKey}" is already registered.`);
     }

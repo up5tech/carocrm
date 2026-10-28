@@ -50,9 +50,9 @@ function walk(dir) {
 }
 
 function checkFile(file) {
+  const rel = file.slice(ROOT.length + 1);
   if (!KNOWN_VIOLATIONS.has(file)) {
     // Only scan shared-core directories; composition root (api/src/*.ts) is out of scope.
-    const rel = file.slice(ROOT.length + 1);
     const top = rel.split('/')[0];
     if (!SHARED.has(top)) return;
   }

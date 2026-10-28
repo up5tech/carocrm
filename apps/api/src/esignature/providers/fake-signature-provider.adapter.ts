@@ -131,6 +131,8 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
   private readonly baseUri: string;
   private sequence = 0;
   private loseNextSend: { readonly correlationId: string | null } | null = null;
+  /** The scripted failures the next matching call must raise (Phase 22.6 contract tests). */
+  private readonly scriptedFailures: { readonly operation: string; readonly error: ProviderError }[] = [];
   /** Every call the domain made, for assertions that a draft or a preview performed no send. */
   readonly calls: { operation: string; at: string; detail: Record<string, unknown> }[] = [];
 
@@ -148,11 +150,26 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
     this.calls.length = 0;
     this.sequence = 0;
     this.loseNextSend = null;
+    this.scriptedFailures.length = 0;
   }
 
   /** Make the next `sendEnvelope` lose its response after the provider accepted the envelope. */
   loseNextSendResponse(): void {
     this.loseNextSend = { correlationId: null };
+  }
+
+  /**
+   * Make the next call to `operation` fail the way a provider fails.
+   *
+   * The fake otherwise only fails for a reason the provider itself caused (an unknown template, an
+   * envelope that is not open for signing). A contract test also has to prove what the platform
+   * does with the failures a provider causes *by accident* — a timeout, a rate-limit answer, an
+   * expired credential — so the failure is scripted here instead of being re-implemented per test.
+   *
+   * The failure is consumed by the first matching call; `*` matches any operation.
+   */
+  failNextCall(operation: string, error: ProviderError): void {
+    this.scriptedFailures.push({ operation, error });
   }
 
   /** The stored envelope, for a test that wants to inspect provider-side state directly. */
@@ -197,6 +214,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
   /** Remove a draft envelope. A sent one is kept: it is the provider's record of an invitation. */
   async abandonDraftEnvelope(context: SignatureProviderContext, providerEnvelopeId: string): Promise<{ deleted: boolean }> {
     this.record('abandonDraftEnvelope', context, { providerEnvelopeId });
+    this.throwScripted('abandonDraftEnvelope');
     const envelope = this.envelopes.get(providerEnvelopeId);
     if (envelope === undefined || envelope.state !== 'draft') return { deleted: false };
     this.envelopes.delete(providerEnvelopeId);
@@ -206,6 +224,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
 
   async connectionStatus(context: SignatureProviderContext): Promise<ProviderConnectionStatus> {
     this.record('connectionStatus', context, {});
+    this.throwScripted('connectionStatus');
     return { reachable: true, checkedAt: this.stamp(), detailCode: null };
   }
 
@@ -217,11 +236,13 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
    */
   async listTemplates(context: SignatureProviderContext): Promise<readonly ProviderTemplateSummary[]> {
     this.record('listTemplates', context, {});
+    this.throwScripted('listTemplates');
     return FAKE_TEMPLATES.map((template) => ({ ...template }));
   }
 
   async templateDetails(context: SignatureProviderContext, templateId: string): Promise<ProviderTemplateDetail> {
     this.record('templateDetails', context, { templateId });
+    this.throwScripted('templateDetails');
     const found = FAKE_TEMPLATES.find((template) => template.templateId === templateId);
     if (found === undefined) {
       throw new ProviderError('NOT_FOUND', 'The signature provider has no such template.', {
@@ -247,6 +268,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
 
   async accountContext(context: SignatureProviderContext): Promise<ProviderAccountContext> {
     this.record('accountContext', context, {});
+    this.throwScripted('accountContext');
     return {
       accountId: this.accountId,
       accountName: 'Fake Account',
@@ -273,6 +295,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
       mappedTabs: (input.mappedFields ?? []).length,
       embeddedRecipients: input.recipients.filter((recipient) => recipient.clientUserId !== null).length,
     });
+    this.throwScripted('prepareEnvelope');
     const existing = this.byIdempotencyKey.get(input.idempotencyKey);
     if (existing !== undefined) {
       const envelope = this.requireEnvelope(existing);
@@ -323,6 +346,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
    */
   async sendEnvelope(context: SignatureProviderContext, input: SendEnvelopeInput): Promise<SentEnvelope> {
     this.record('sendEnvelope', context, { providerEnvelopeId: input.providerEnvelopeId });
+    this.throwScripted('sendEnvelope');
     const envelope = this.requireEnvelope(input.providerEnvelopeId);
     const wasAlreadySent = envelope.state !== 'draft';
 
@@ -349,6 +373,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
 
   async envelopeStatus(context: SignatureProviderContext, providerEnvelopeId: string): Promise<ProviderEnvelopeStatus> {
     this.record('envelopeStatus', context, { providerEnvelopeId });
+    this.throwScripted('envelopeStatus');
     const envelope = this.envelopes.get(providerEnvelopeId);
     if (envelope === undefined) {
       return {
@@ -370,6 +395,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
 
   async listRecipients(context: SignatureProviderContext, providerEnvelopeId: string): Promise<readonly ProviderRecipientStatus[]> {
     this.record('listRecipients', context, { providerEnvelopeId });
+    this.throwScripted('listRecipients');
     return this.requireEnvelope(providerEnvelopeId).recipients.map(toRecipientStatus);
   }
 
@@ -386,6 +412,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
       recipientId: input.recipientId,
       returnUrlHost: safeHost(input.returnUrl),
     });
+    this.throwScripted('recipientView');
     const envelope = this.requireEnvelope(input.providerEnvelopeId);
     if (envelope.state !== 'sent' && envelope.state !== 'delivered' && envelope.state !== 'partially_signed') {
       throw new ProviderError('INVALID_REQUEST', 'The envelope is not open for signing.', {
@@ -423,6 +450,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
       providerEnvelopeId: input.providerEnvelopeId,
       recipients: input.recipientProviderIds.length,
     });
+    this.throwScripted('resendNotifications');
     const envelope = this.requireEnvelope(input.providerEnvelopeId);
     if (envelope.state !== 'sent' && envelope.state !== 'delivered' && envelope.state !== 'partially_signed') {
       throw new ProviderError('INVALID_REQUEST', 'The envelope is not open, so nothing can be resent.', {
@@ -437,6 +465,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
   /** Withdraw the envelope; every signer who has not finished is canceled. */
   async voidEnvelope(context: SignatureProviderContext, input: VoidEnvelopeInput): Promise<VoidResult> {
     this.record('voidEnvelope', context, { providerEnvelopeId: input.providerEnvelopeId, reasonLength: input.reason.length });
+    this.throwScripted('voidEnvelope');
     const envelope = this.requireEnvelope(input.providerEnvelopeId);
     if (envelope.state === 'completed' || envelope.state === 'voided' || envelope.state === 'declined' || envelope.state === 'expired') {
       throw new ProviderError('INVALID_REQUEST', 'The envelope is already closed.', {
@@ -458,6 +487,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
    */
   async downloadCompletedDocuments(context: SignatureProviderContext, providerEnvelopeId: string): Promise<readonly ProviderArtifact[]> {
     this.record('downloadCompletedDocuments', context, { providerEnvelopeId });
+    this.throwScripted('downloadCompletedDocuments');
     const envelope = this.requireEnvelope(providerEnvelopeId);
     return envelope.documents.map((document, index) => ({
       artifactKind: 'provider_signed_document' as const,
@@ -472,6 +502,7 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
 
   async downloadCompletionEvidence(context: SignatureProviderContext, providerEnvelopeId: string): Promise<readonly ProviderArtifact[]> {
     this.record('downloadCompletionEvidence', context, { providerEnvelopeId });
+    this.throwScripted('downloadCompletionEvidence');
     const envelope = this.requireEnvelope(providerEnvelopeId);
     return [
       {
@@ -600,6 +631,16 @@ export class FakeSignatureProviderAdapter implements SignatureProviderAdapter {
       });
     }
     return found;
+  }
+
+  /** Raise the scripted failure for this operation, if one is queued. */
+  private throwScripted(operation: string): void {
+    const index = this.scriptedFailures.findIndex(
+      (failure) => failure.operation === operation || failure.operation === '*',
+    );
+    if (index < 0) return;
+    const [failure] = this.scriptedFailures.splice(index, 1);
+    if (failure !== undefined) throw failure.error;
   }
 
   private record(operation: string, context: SignatureProviderContext, detail: Record<string, unknown>): void {
