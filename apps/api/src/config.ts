@@ -92,6 +92,30 @@ const ConfigSchema = z.object({
   platformVersion: z.string().default(PLATFORM_VERSION),
 });
 
+/** The development default. MUST never be accepted in production (Phase 22.4 / PLAN §9). */
+export const DEFAULT_JWT_SECRET = 'dev-only-secret-change-me';
+
+/**
+ * Phase 22.4 (PLAN §9, task 1/3) — the development default JWT secret must never be accepted in
+ * production. A known, guessable secret lets anyone forge session tokens, which is a full
+ * authentication bypass. We fail closed at boot so the misconfiguration surfaces immediately
+ * instead of silently shipping an insecure deployment.
+ *
+ * The e2e smoke run sets an explicit (non-default) secret with `NODE_ENV=production`, so it does
+ * not trip this guard. Only the *literal* development default is rejected; any operator-supplied
+ * secret (including one that merely meets the `min(8)` length) is accepted.
+ */
+export const ConfigSchemaRefined = ConfigSchema.superRefine((value, ctx) => {
+  if ((process.env.NODE_ENV ?? '').toLowerCase() === 'production' && value.jwtSecret === DEFAULT_JWT_SECRET) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['jwtSecret'],
+      message:
+        'JWT_SECRET must be set to a strong, unique secret in production; the development default ("dev-only-secret-change-me") is not allowed.',
+    });
+  }
+});
+
 export type AppConfig = z.infer<typeof ConfigSchema>;
 
 /** True/False from an env string; undefined when unset so a caller can apply its own default. */
@@ -129,7 +153,7 @@ function loadDotEnv(): void {
 
 export function buildConfig(): AppConfig {
   loadDotEnv();
-  return ConfigSchema.parse({
+  return ConfigSchemaRefined.parse({
     port: process.env.APP_PORT,
     host: process.env.APP_HOST,
     databaseUrl: process.env.DATABASE_URL,
