@@ -14,7 +14,7 @@ import type {
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../../components/PermissionDenied.js';
-import { t } from '../../state/i18n.js';
+import { formatDateTime,t } from '../../state/i18n.js';
 
 /**
  * Phase 19-OM.21 — operations, diagnostics and recovery (plan §14; `docs/omnichannel/runbook.md`).
@@ -168,7 +168,7 @@ export function OperationsPanel() {
             {row.health.status ?? t('omnichannel.operations.never')}
           </Tag>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {row.health.at === null ? t('omnichannel.operations.never') : new Date(row.health.at).toLocaleString()}
+            {row.health.at === null ? t('omnichannel.operations.never') : formatDateTime(row.health.at)}
           </Typography.Text>
         </Space>
       ),
@@ -177,7 +177,7 @@ export function OperationsPanel() {
       title: t('omnichannel.operations.col.lastEvent'),
       key: 'lastEvent',
       render: (_, row) =>
-        row.lastEventAt === null ? t('omnichannel.operations.never') : new Date(row.lastEventAt).toLocaleString(),
+        row.lastEventAt === null ? t('omnichannel.operations.never') : formatDateTime(row.lastEventAt),
     },
     {
       title: t('omnichannel.operations.col.capabilities'),
@@ -210,7 +210,7 @@ export function OperationsPanel() {
     {
       title: t('omnichannel.operations.col.received'),
       dataIndex: 'receivedAt',
-      render: (value: string) => new Date(value).toLocaleString(),
+      render: (value: string) => formatDateTime(value),
     },
     { title: t('omnichannel.operations.col.type'), dataIndex: 'eventType' },
     { title: t('omnichannel.inbox.channel'), dataIndex: 'accountKey' },

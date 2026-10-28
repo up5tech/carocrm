@@ -1,5 +1,6 @@
 {
   "list": {
+    "rateLimitedRetry": "Quá nhiều yêu cầu. Hãy thử lại sau {seconds} giây.",
     "refresh": "Tải lại",
     "exportCsv": "Xuất CSV",
     "importCsv": "Nhập CSV",
@@ -2492,6 +2493,7 @@
     "ariaLabel": "Danh sách thiết lập ban đầu"
   },
   "crmChat": {
+    "turnFailed": "Không gửi được lượt hỏi.",
     "title": "CRM Chat",
     "settingsButton": "Cài đặt",
     "subtitle": "Hỏi về dữ liệu CRM, xem bằng chứng và xác nhận trước khi bất kỳ thay đổi nào được thực hiện.",

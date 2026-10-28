@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Alert, Badge, Button, Card, Col, Descriptions, List, Row, Skeleton, Space, Statistic, Tag, Typography } from 'antd';
 
 import { api } from '../../api/client.js';
-import { t } from '../../state/i18n.js';
+import { formatDateTime,t } from '../../state/i18n.js';
 
 /**
  * Phase 19-AI.2–19-AI.4 — the module's diagnostic overview, unchanged in substance: it reports what
@@ -84,7 +84,7 @@ export function AIAgentsOverview() {
           <Card className="carocrm-card" size="small">
             <Statistic
               title={t('web.aiAgents.settingsVersion', { version: view.settings.version })}
-              value={view.settings.updatedAt === null ? t('web.aiAgents.neverUpdated') : new Date(view.settings.updatedAt).toLocaleDateString()}
+              value={view.settings.updatedAt === null ? t('web.aiAgents.neverUpdated') : formatDateTime(view.settings.updatedAt, false)}
               valueStyle={{ fontSize: 14 }}
             />
           </Card>

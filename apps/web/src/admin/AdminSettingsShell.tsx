@@ -9,7 +9,7 @@ import { navIcon } from '../components/entityIcons.js';
 import { ErrorState } from '../components/ErrorState.js';
 import { LoadingSkeleton } from '../components/LoadingSkeleton.js';
 import { useAdminPanel } from '../state/admin.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime,t } from '../state/i18n.js';
 import { SettingsShellProvider, useSettingsShellMeta, useSettingsShellState, useShellValue } from './shell.js';
 import { TAB_COMPONENTS } from './tabs.js';
 
@@ -231,7 +231,7 @@ function SaveBar() {
       <Typography.Text type="secondary" className="carocrm-admin-modified">
         {meta.modifiedAt === null
           ? t('web.adminShell.neverModified')
-          : t('web.adminShell.lastModified', { by: meta.modifiedBy ?? '-', at: new Date(meta.modifiedAt).toLocaleString() })}
+          : t('web.adminShell.lastModified', { by: meta.modifiedBy ?? '-', at: formatDateTime(meta.modifiedAt) })}
       </Typography.Text>
       <div className="carocrm-admin-savebar-actions">
         <Button onClick={() => shell.actions.current.onReload()} disabled={!meta.canSave}>

@@ -12,7 +12,7 @@ import { Alert, App as AntApp, Button, Card, Input, List, Space, Spin, Tag, Typo
 import { useCallback, useEffect, useState } from 'react';
 
 import { api, type StreamItem } from '../api/client.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime,t } from '../state/i18n.js';
 import { EmptyState } from './EmptyState.js';
 
 const { TextArea } = Input;
@@ -93,7 +93,7 @@ export function PortalCaseConversation({ caseId }: { readonly caseId: string }) 
                     <Typography.Text strong>{authorName(item)}</Typography.Text>
                     <Tag color="green">{t('web.portalCase.publicBadge')}</Tag>
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {new Date(item.createdAt).toLocaleString()}
+                      {formatDateTime(item.createdAt)}
                     </Typography.Text>
                   </Space>
                   <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>

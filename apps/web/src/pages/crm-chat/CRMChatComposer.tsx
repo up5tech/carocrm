@@ -231,7 +231,7 @@ export function CRMChatComposer(props: CRMChatComposerProps) {
       void queryClient.invalidateQueries({ queryKey: ['crmChat', 'conversations'] });
     },
     onError: (error) => {
-      setStreamError(error instanceof Error ? error.message : 'Failed to submit turn.');
+      setStreamError(error instanceof Error && error.message !== '' ? error.message : t('web.crmChat.turnFailed'));
       setTurnPhase('idle');
     },
   });

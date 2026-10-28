@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { api, type StreamItem } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime,t } from '../state/i18n.js';
 import { fieldLabel } from '../state/metadata.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -57,7 +57,7 @@ export function StreamItemRow({ item, definition, onDelete }: {
         <Space size={8} wrap>
           <Typography.Text strong>{item.type === 'Update' ? t('web.stream.systemUpdate') : authorOf(item)}</Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {new Date(item.createdAt).toLocaleString()}
+            {formatDateTime(item.createdAt)}
           </Typography.Text>
           {onDelete ? (
             <Button size="small" type="text" danger aria-label={t('web.stream.deletePost')} icon={<DeleteOutlined />} onClick={() => onDelete(item.id)} />

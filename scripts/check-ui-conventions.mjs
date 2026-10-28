@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * UI convention gate (PLAN_Phase_20_Settings_UX.md §20.22/§20.23/§20.20, gate formalised in §20.26).
+ * UI convention gate (PLAN_Phase_20_Settings_UX.md §20.22/§20.23/§20.20, gate formalised in §20.26;
+ * rules 5 and 6 added by PLAN_Phase_22_Integration_E2E_Hardening.md §14).
  *
- * Five rules, each of which is a defect this repository shipped at least once:
+ * Seven rules, each of which is a defect this repository shipped at least once:
  *
  * 1. **Every `t('…')` key exists in `i18n/en`.** A missing key is not a fallback — `t()` returns the
  *    key itself, so the operator reads `core.common.accessDenied` where a sentence belongs. Six of
@@ -13,7 +14,13 @@
  * 3. **No raw `<Empty>` outside `EmptyState.tsx`.** One component owns the empty state, so the four
  *    situations (nothing exists / nothing matched / filtered away / not permitted) stay distinct.
  * 4. **No `<a href="/…">`.** A full page load drops the SPA state; use `Link`.
- * 5. **No hex colour literal outside `tokens.css` (and `theme.ts` must stay literal-free).** Every
+ * 5. **No `new Date(x).toLocaleString()` outside `state/i18n.ts`.** That formatter uses the *host*
+ *    locale and zone, so the page shows one time in the browser's zone and another in the user's. A
+ *    number may still call `toLocaleString()`; only a date is a timezone claim.
+ * 6. **No black or white alpha literal as a `color`/`background` in a component.** Shadows are exempt
+ *    (they read the same in both themes); a text or surface colour that does not come from a token is
+ *    a colour that stops following the theme — which is how a placeholder dash went invisible in dark mode.
+ * 7. **No hex colour literal outside `tokens.css` (and `theme.ts` must stay literal-free).** Every
  *    colour lives in `styles/tokens.css` (generated from `theme/tokens.ts`); a literal elsewhere is a
  *    drift that breaks the single-source-of-truth rule §20.20 established. The only legal literals are
  *    in `tokens.css` and `theme/tokens.ts`.
@@ -62,6 +69,13 @@ const RAW_ANCHOR_RE = /<a\s[^>]*href=\{?["'`]\/(?!api\/)/;
 const HEX_RE = /(#[0-9a-fA-F]{8}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{4}|#[0-9a-fA-F]{3})(?![0-9a-fA-F])(?![a-zA-Z0-9_-])/;
 // `var(--carocrm-*, #literal)` — the literal wins whenever the property is missing.
 const FALLBACK_RE = /var\((--carocrm-[a-z0-9-]+)\s*,\s*(#[0-9a-fA-F]{3,8})\)/g;
+// A date formatted by the host: the browser's locale and zone, which disagree with every other
+// timestamp on the page. Numbers may still call `toLocaleString()` — only a date is a timezone claim.
+const HOST_DATE_RE = /new Date\((?:[^()]|\([^)]*\))*\)\.toLocale(?:String|DateString|TimeString)\(\)|\bdate\.toLocale(?:String|DateString|TimeString)\(\)/;
+// A black or white alpha literal used as a colour in an inline style. Shadows are exempt: they are the
+// same in both themes by design. A `color`/`background` literal is not — it is a colour that stops
+// following the theme, which is how a placeholder dash became invisible in dark mode.
+const ALPHA_INLINED_RE = /(?:color|background(?:-color)?)\s*:\s*['"]\s*rgba?\(\s*(?:0,\s*0,\s*0|255,\s*255,\s*255)/;
 
 /**
  * The token rule (§20.21): every token the styles and the components read must be declared, and every
@@ -110,6 +124,18 @@ function selfTest() {
       'background: var(--carocrm-surface-sunken);',
       (line) => [...line.matchAll(FALLBACK_RE)].length > 0,
     ],
+    [
+      'host-locale date',
+      'x = new Date(value).toLocaleString();',
+      'x = formatDateTime(value);',
+      (line) => HOST_DATE_RE.test(line),
+    ],
+    [
+      'alpha colour literal',
+      `<span style={{ color: 'rgba(0,0,0,0.25)' }}>—</span>`,
+      `<span style={{ color: 'var(--carocrm-c-8c8c8c)' }}>—</span>`,
+      (line) => ALPHA_INLINED_RE.test(line),
+    ],
   ];
   for (const [name, bad, good, check] of cases) {
     if (!check(bad)) failures.push(`${name}: seeded violation NOT caught`);
@@ -139,7 +165,7 @@ if (process.argv.includes('--self-test')) {
     for (const failure of failures) console.error(`  ${failure}`);
     process.exit(1);
   }
-  console.log('ui conventions self-test: ok (7 rules each catch a seeded violation)');
+  console.log('ui conventions self-test: ok (9 rules each catch a seeded violation)');
   process.exit(0);
 }
 
@@ -164,6 +190,12 @@ for (const file of walk(srcDir)) {
       violations.push(`${at}  missing i18n key: ${key}`);
     }
     if (SLICE_RE.test(line)) violations.push(`${at}  ISO slice instead of formatDateTime`);
+    if (HOST_DATE_RE.test(line) && !rel.endsWith('state/i18n.ts') && !rel.endsWith('.test.ts') && !rel.endsWith('.test.tsx')) {
+      violations.push(`${at}  date formatted by the host locale/zone — use formatDateTime/formatClock (state/i18n.ts)`);
+    }
+    if (ALPHA_INLINED_RE.test(line) && !rel.endsWith('.css')) {
+      violations.push(`${at}  black/white alpha literal as a colour — use a --carocrm-* token (tokens.css)`);
+    }
     if (RAW_EMPTY_RE.test(line) && !rel.endsWith('components/EmptyState.tsx')) {
       violations.push(`${at}  raw <Empty> — use EmptyState`);
     }

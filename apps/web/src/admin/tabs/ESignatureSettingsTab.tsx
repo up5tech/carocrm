@@ -397,7 +397,7 @@ export function ESignatureSettingsTab() {
                 {(fields, { add, remove }) => (
                   <Space direction="vertical" size={10} style={{ width: '100%', marginTop: 8 }}>
                     {fields.map((field) => (
-                      <Card key={field.key} size="small" style={{ background: 'rgba(0, 0, 0, 0.02)' }}>
+                      <Card key={field.key} size="small" style={{ background: 'var(--carocrm-surface-sunken)' }}>
                         <Row gutter={[8, 8]} align="bottom">
                           <Col xs={24} md={7}>
                             <Form.Item name={[field.name, 'label']} label={t('esignature.settings.ruleLabel')} rules={[{ required: true, max: 120 }]} style={{ marginBottom: 0 }}>

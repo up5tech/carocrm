@@ -9,6 +9,7 @@ import type { SalesLine, SalesLineTotals } from '../components/LineItemEditor.js
 import { LineItemEditor, linePayload, SalesTotalsPanel } from '../components/LineItemEditor.js';
 import { PermissionDenied } from '../components/PermissionDenied.js';
 import { useSalesPickers } from '../components/useSalesPickers.js';
+import { serverFieldErrors } from '../lib/serverFieldErrors.js';
 import { salesDocumentDate, salesDocumentKind } from '../sales/documents.js';
 import { PORTAL_HIDDEN_CASE_FIELDS } from '../service-desk/portal-case-fields.js';
 import { t } from '../state/i18n.js';
@@ -394,7 +395,20 @@ export function EntityEditPage() {
             void message.success(t('web.edit.saved'));
             navigate(`${base}/${entity}/${String(savedId ?? '')}`);
           } catch (error) {
-            void message.error(error instanceof Error ? error.message : t('web.edit.saveFailed'));
+            // §14 tasks 2 and 4: the server named the fields it refused, so mark those inputs — a toast
+            // that fades over a form which still looks valid sends the user pressing Save again.
+            const refused = serverFieldErrors(error, ordered.map((entry) => entry.name));
+            const names = Object.keys(refused);
+            if (names.length > 0) {
+              form.setFields(names.map((name) => ({ name, errors: [refused[name] ?? ''] })));
+              const first = names[0] ?? '';
+              form.scrollToField(first, { behavior: 'smooth', block: 'center' });
+              const instance = form.getFieldInstance(first) as { focus?: () => void } | null;
+              instance?.focus?.();
+              void message.error(t('web.edit.cannotSave'));
+            } else {
+              void message.error(error instanceof Error ? error.message : t('web.edit.saveFailed'));
+            }
           } finally {
             setSaving(false);
             setHasUnsavedChanges(false);

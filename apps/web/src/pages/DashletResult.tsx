@@ -2,7 +2,7 @@ import { Space, Table, Tag, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 
 import type { DashletRow } from '../api/client.js';
-import { t } from '../state/i18n.js';
+import { formatNumber, t } from '../state/i18n.js';
 
 interface ProjectTaskRow {
   id: string;
@@ -86,11 +86,11 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
     const trend = typeof result['trend'] === 'string' ? result['trend'] : undefined;
     return (
       <div>
-        <div className="carocrm-stat-value">{typeof value === 'number' ? value.toLocaleString() : String(value ?? '—')}</div>
+        <div className="carocrm-stat-value">{typeof value === 'number' ? formatNumber(value) : String(value ?? '—')}</div>
         {target !== undefined ? (
           <div className="carocrm-kpi-context">
             <Typography.Text type="secondary">
-              {t('web.dashboards.kpiTarget', { target: target.toLocaleString() })}
+              {t('web.dashboards.kpiTarget', { target: formatNumber(target) })}
               {percentOfTarget !== undefined ? ` · ${t('web.dashboards.kpiOfTarget', { percent: percentOfTarget })}` : ''}
             </Typography.Text>
             <div className="carocrm-kpi-bar" aria-hidden="true">
@@ -108,7 +108,7 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
           >
             {trend === 'up' ? '↑ ' : trend === 'down' ? '↓ ' : ''}
             {delta >= 0 ? '+' : ''}
-            {delta.toLocaleString()} {t('web.dashboards.kpiVsPrevious')}
+            {formatNumber(delta)} {t('web.dashboards.kpiVsPrevious')}
           </Typography.Text>
         ) : null}
         {hint}
@@ -128,7 +128,7 @@ export function DashletResult({ dashlet, result }: { dashlet: DashletRow; result
             <div style={{ flex: 1, background: 'var(--carocrm-c-f0f0f0)', borderRadius: 4 }}>
               <div style={{ width: `${String(Math.round((group.count / max) * 100))}%`, height: 10, background: 'var(--carocrm-c-438eff)', borderRadius: 4 }} />
             </div>
-            <Typography.Text>{group.count.toLocaleString()}</Typography.Text>
+            <Typography.Text>{formatNumber(group.count)}</Typography.Text>
           </div>
         ))}
         {hint}
@@ -234,7 +234,7 @@ function LeadScoreDashletBody({ data }: { data: Record<string, unknown> }) {
   for (const [key, value] of Object.entries(data)) {
     if (Array.isArray(value) || key === 'windowDays') continue;
     if (typeof value !== 'number') continue;
-    metrics.push({ key, value: value.toLocaleString() });
+    metrics.push({ key, value: formatNumber(value) });
   }
   const bands = Array.isArray(data['bands']) ? (data['bands'] as { band: string; count: number; averageScore: number | null }[]) : null;
   const statuses = Array.isArray(data['statuses']) ? (data['statuses'] as { status: string; count: number }[]) : null;

@@ -15,7 +15,7 @@ import type {
 } from '../../api/types.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
-import { t } from '../../state/i18n.js';
+import { formatDateTime,t } from '../../state/i18n.js';
 
 /**
  * Phase 19-ES.20 — the admin operations and recovery workbench
@@ -443,7 +443,7 @@ function shortId(value: string | null): string {
 }
 
 function formatMoment(value: string): string {
-  return new Date(value).toLocaleString();
+  return formatDateTime(value);
 }
 
 function tOr(key: string, fallback: string): string {

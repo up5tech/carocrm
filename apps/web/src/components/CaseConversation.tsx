@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api, type StreamItem } from '../api/client.js';
 import type { EntityDefinition } from '../api/types.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime,t } from '../state/i18n.js';
 import { EmptyState } from './EmptyState.js';
 import { updateSummary } from './StreamPanel.js';
 
@@ -324,7 +324,7 @@ function ConversationEntry({
           <Space size={8} wrap>
             <Tag>{t('web.serviceDesk.conversation.systemBadge')}</Tag>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {new Date(item.createdAt).toLocaleString()}
+              {formatDateTime(item.createdAt)}
             </Typography.Text>
           </Space>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
@@ -355,7 +355,7 @@ function ConversationEntry({
             </Tag>
           )}
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {new Date(item.createdAt).toLocaleString()}
+            {formatDateTime(item.createdAt)}
           </Typography.Text>
         </Space>
         {body !== '' ? (

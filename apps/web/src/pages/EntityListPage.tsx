@@ -305,7 +305,13 @@ export function EntityListPage() {
         setTotal(0);
         setLoadError(null);
       } else if (error instanceof ApiError && error.code === 'RATE_LIMITED') {
-        void message.warning(error.message);
+        // Throttled is transient: the grid keeps what the user was reading, and the server's own number
+        // (`details.retryAfterSeconds`, which the exception filter puts there for exactly this moment)
+        // tells them when to ask again instead of leaving them to guess.
+        const seconds = Number(error.details?.['retryAfterSeconds'] ?? 0);
+        void message.warning(
+          Number.isFinite(seconds) && seconds > 0 ? t('web.list.rateLimitedRetry', { seconds: String(seconds) }) : error.message,
+        );
       } else {
         setLoadError(error instanceof Error ? error.message : t('web.edit.notFound'));
         setRows([]);

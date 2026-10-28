@@ -64,6 +64,22 @@
 | G51 | The OAuth callback never compares the redirect URI its own comment claims it checks | advanced-integrations | Medium | Open (found 22.14) |
 | G52 | A provider's own error text is echoed into a 401, and a credential reference points at the connection, not the credential | advanced-integrations | Low | Open (found 22.14) |
 | G53 | A delivery deferred by a paused connection or a disabled module is never picked up again | advanced-integrations | Medium | Open (found 22.14) |
+| G54 | An unexpected error sent its own text to the browser inside `details.reason` | platform / SPA | High | Fixed (22.15) |
+| G55 | A rejected save never marked the fields the server named | platform / SPA | Medium | Fixed (22.15) |
+| G56 | `details.retryAfterSeconds` was produced by the server and read by no caller | platform / SPA | Low | Fixed (22.15) |
+| G57 | Fifteen screens formatted dates and numbers in the browser's locale and zone | platform / SPA | Medium | Fixed (22.15) |
+| G58 | A placeholder dash and two surfaces were painted with black alpha literals | platform / SPA | Low | Fixed (22.15) |
+| G59 | A loading skeleton said nothing to a screen reader | platform / SPA | Medium | Fixed (22.15) |
+| G60 | The webhooks tab decided "module not installed" from a message containing "404" | platform / SPA | Low | Fixed (22.15) |
+| G61 | One chat string was hard-coded English in a shared component | crm-chat / SPA | Low | Fixed (22.15) |
+| G62 | The chat action card rendered its own decision response instead of the server's | crm-chat / SPA | Medium | Fixed (22.15) |
+| G63 | No route guard sits in front of `/admin/*` — only the menu is filtered by the server | platform / SPA | Medium | Open (found 22.15) |
+| G64 | ~150 call sites still show `error.message` raw instead of the code-aware helper | platform / SPA | Medium | Open (found 22.15) |
+| G65 | Home content is chosen from `principal.roles` in the client, a rule the server does not mirror | platform / SPA | Low | Open (found 22.15) |
+| G66 | No browser spec asserts an error, denied or empty state, and login is English-only | platform / SPA / e2e | Medium | Open (found 22.15, belongs to 22.16) |
+| G67 | Column resize is mouse-only, and modal focus trap/restore rests on antd defaults with no assertion | platform / SPA | Low | Open (found 22.15) |
+| G68 | A core record write does not invalidate the module panels keyed to that record | platform / SPA | Low | Open (found 22.15) |
+| G69 | The Sales lot-traceability suite depends on lot stock the shared database no longer holds | sales (test isolation) | Medium | Open (found 22.15) |
 
 ---
 
@@ -463,3 +479,107 @@
 - **Expected vs observed:** expected — one documented policy for work already in flight when the operator stops the module, and a sweeper that acts on it; observed — the runbook's disable plan (pause, then turn features off) has no queue semantics attached to it.
 - **Status:** Open (found 22.14) — the journey asserts the enforceable part (no provider call goes out while a connection is paused, proven with the connector's own counter, and a full re-sync via `reconcile` recovers the data that matters), and records the rest rather than inventing a policy the plan has not decided.
 - **Remaining risk:** "we paused the connector during the outage" can still mean "the CRM changed underneath us", and an operator has no list of what arrived meanwhile beyond the receipts table.
+
+## G54 — An unexpected error sent its own text to the browser inside `details.reason`
+
+- **Module / contract:** platform — `apps/api/src/common/global-exception.filter.ts`, the `{error:{code,message,details}}` envelope every module answers with.
+- **Impact:** the filter's rule is sound — when the catalog replaces a message with the generic face of a code, the specific sentence travels as `details.reason` so the operator can act on it. It applied that rule to **every** status, including 5xx. A database driver's text quotes the statement it failed on (`update invoice_lines set amount = … — column "x" does not exist`), a connector's names the field that held a credential, and the SPA has components that render `details.reason` on screen by design (`CampaignLifecycleActions.tsx:61`, `AIAgentsSettingsTab.tsx:58`, `AIAgentsProvidersTab.tsx:53`, `lead-score/shared.tsx:72`). The plan's rule that a frontend error never surfaces SQL, a stack trace or a provider secret (§14 task 10) was therefore enforced everywhere except the one class of error that carries the most internals. A second face of the same problem: when no catalog is loaded, `translateErrorMessage` returns the original message, so a 500's raw text became the visible `message` too.
+- **Expected vs observed:** expected — a server failure answers with a code and a fixed sentence; observed — the internal text, in two fields, whenever a translation existed.
+- **Status:** Fixed (22.15) — a 5xx is now built from a fixed sentence with no `details.reason`, whichever catalog state it meets; the real error still goes to the log with the request id. Pinned by `apps/api/test/error-payload-hygiene.test.ts`, which asserts an SQL-shaped message appears in neither field while a 422's operator-facing sentence still does.
+- **Remaining risk:** a module that throws `InternalServerError` with its own `details` still ships those details; they are author-controlled and reviewed, unlike a driver's text.
+
+## G55 — A rejected save never marked the fields the server named
+
+- **Module / contract:** platform / SPA — `EntityEditPage.tsx`'s save handler; the API's record-validation answer (`details` keyed by field name, e.g. `{ emailAddress: 'Value must be a valid email address.', reason: 'Record validation failed.' }`).
+- **Impact:** the shared edit page — every entity's edit screen — put the refusal into one toast and left every input looking accepted. The user pressed Save again with the same values. The metadata form does validate required fields and patterns client-side, but the server owns more than the client can compute (referenced-record existence, module write guards, per-entity rules), and that is exactly the answer with field names in it. `details.errors` was read by no component at all.
+- **Expected vs observed:** expected — the input that was refused says so under itself; observed — a sentence in the corner and a form that looked fine.
+- **Status:** Fixed (22.15) — `apps/web/src/lib/serverFieldErrors.ts` maps the refusal onto the fields the form actually renders, and the page marks them, scrolls to the first and focuses it. Restricted to 400/422 by design: a 403 is not a typing problem and a 409 is a decision, so marking a field red for either would teach the user the wrong lesson. Six unit tests cover both shapes, both sources, unknown keys and the statuses that must answer nothing.
+
+## G56 — `details.retryAfterSeconds` was produced by the server and read by no caller
+
+- **Module / contract:** platform — the filter's 429 branch and `EntityListPage.tsx`'s throttled-list path.
+- **Impact:** the filter deliberately copies `Retry-After` into the body "so the SPA can back off without parsing prose", and nothing parsed it. A throttled list kept its rows and showed the generic sentence, so the operator could not tell a five-second backoff from a five-minute one.
+- **Status:** Fixed (22.15) — the list reads the number and names it (`web.list.rateLimitedRetry`, en + vi), falling back to the message when no number came.
+
+## G57 — Fifteen screens formatted dates and numbers in the browser's locale and zone
+
+- **Module / contract:** platform / SPA — `AdminSettingsShell`, `ApiKeysTab`, `WebhooksTab`, `CaseConversation`, `PortalCaseConversation`, `StreamPanel`, `StreamPage`, `ServiceDeskDashboardPage`, `VoiceCommunicationsPage`, `AIAgentsOverview`, `AIAgentsSettingsTab`, `ESignatureOperationsPanel`, `ESignatureRequestsPanel`, `InboxPanel`, `OperationsPanel`, plus the counters in `DashletResult` and `ReportsPage`.
+- **Impact:** `state/i18n.ts` owns `formatDateTime`/`formatClock`/`formatNumber` and its comment says they replace `new Date(x).toLocaleString()`, "which formats in the host locale and timezone and therefore disagrees with every other date on the page". Thirteen screens disagreed anyway, and seven more formatted numbers with the host locale. Two timestamps in one table — one in the user's zone, one in the browser's — is not a cosmetic difference on a screen an operator uses to decide who was on a call when it dropped. The convention gate missed them because its rule looked for `.slice(0, 19)`, not for the formatter it was meant to replace.
+- **Expected vs observed:** expected — one formatter per page, the user's zone and locale; observed — mixed, and a gate that did not see it.
+- **Status:** Fixed (22.15) — every call site now uses `formatDateTime`/`formatClock`/`formatNumber`, and the gate gained rule 5 (no host-locale date formatting outside `state/i18n.ts`, numbers exempt) so it cannot come back. `pnpm lint:ui` and its `--self-test` both cover the rule.
+
+## G58 — A placeholder dash and two surfaces were painted with black alpha literals
+
+- **Module / contract:** platform / SPA — `components/fields.tsx:84`, `crm-chat/CRMChatActionCard.tsx`, `admin/tabs/ESignatureSettingsTab.tsx`.
+- **Impact:** `rgba(0,0,0,0.25)` as the colour of the "no value" dash is a light-mode colour: on the dark theme it is black on near-black, so every empty field reads as blank space rather than as a deliberate em dash. The gate that exists to keep colour in `tokens.css` only looked for hex, so `rgba(` walked straight past it — the same defect class that once put a light chat bubble into dark mode, arriving through a different syntax.
+- **Status:** Fixed (22.15) — the three sites use `--carocrm-c-8c8c8c` and `--carocrm-surface-sunken`, both of which carry dark values, and gate rule 6 now refuses a black or white alpha literal used as a `color`/`background` while leaving shadows alone (a shadow is the same in both themes by design).
+
+## G59 — A loading skeleton said nothing to a screen reader
+
+- **Module / contract:** platform / SPA — `components/LoadingSkeleton.tsx`.
+- **Impact:** antd's `Skeleton` carries no role and no live region, and the shared wrapper added none, so a user who cannot see the bars has no signal that content is arriving — and no signal when it never does. `ErrorState` was fine (antd's `Alert` renders `role="alert"`), which is the asymmetry that makes this worth fixing: the failure is announced and the wait is not.
+- **Status:** Fixed (22.15) — the skeleton sits in `role="status"` with a polite live region and a visually hidden label in the reader's own language. `SharedStates.test.tsx` pins the structure (roles and live regions, not wording, because the node test project loads no catalog).
+
+## G60 — The webhooks tab decided "module not installed" from a message containing "404"
+
+- **Module / contract:** platform / SPA — `admin/tabs/WebhooksTab.tsx`.
+- **Impact:** `error.message.toLowerCase().includes('404')` is true for a record id, a port, a year in a timestamp, or a provider's own text. It decided whether the tab showed "this extension is not installed" or an error, so a false match told the operator to install something that was already there.
+- **Status:** Fixed (22.15) — it reads the HTTP status the `ApiError` already carries.
+
+## G61 — One chat string was hard-coded English in a shared component
+
+- **Module / contract:** crm-chat / SPA — `CRMChatComposer.tsx`.
+- **Impact:** the fallback for a failed turn was `'Failed to submit turn.'`, so a Vietnamese user got English at the exact moment they needed to understand why nothing was sent. Gate rule 1 checks that used keys *exist*, not that code contains no literal English, so a literal string in place of a key passes unseen.
+- **Status:** Fixed (22.15) — the message is the server's when there is one and `web.crmChat.turnFailed` (en + vi) when there is not.
+
+## G62 — The chat action card rendered its own decision response instead of the server's
+
+- **Module / contract:** crm-chat / SPA — `CRMChatActionCard.tsx`.
+- **Impact:** after confirm/reject the card showed what that call returned and told its parent. It never re-read `['crmChat','action',id]`, so the card could sit on "approved" while the run it triggered moved to `queued`, `failed`, or `blocked_by_policy` — the plan's §14 task 4 in miniature: a control that shows an intention instead of a confirmed result. Task 5 asks the same of high-impact actions, and an agent action executing on the user's behalf is one.
+- **Status:** Fixed (22.15) — the decision invalidates the action's own query, so what the card says is what the server last said.
+
+## G63 — No route guard sits in front of `/admin/*` — only the menu is filtered by the server
+
+- **Module / contract:** platform / SPA — `AppRoutes.tsx`.
+- **Impact:** the router gates on "is there a session" and "is this a portal user". It does not gate on capability, so a signed-in non-admin who types `/admin/users` reaches the page, and the page then refuses its own data with a permission card or a 403 list. The comments in the route table say "visibility is decided by the server", which is true of the navigation tree (`AppShell` renders the ACL-filtered result) and of every data call, but not of the route itself. §14 task 8 asks route guards and API authorization to *agree*; today they agree on outcome and disagree on the moment.
+- **Expected vs observed:** expected — a route a caller cannot serve does not render its chrome; observed — it renders and then reports the refusal inside itself.
+- **Status:** Open (found 22.15) — the fix needs a capability→route map (which module right each admin page requires), and that map is a product decision rather than a mechanical one. The behaviour is safe: no data is read that the server would not refuse, and the refusal states are the shared `PermissionDenied` card. Recorded rather than guessed at.
+
+## G64 — ~150 call sites still show `error.message` raw instead of the code-aware helper
+
+- **Module / contract:** platform / SPA — every `catch` that renders `error instanceof Error ? error.message : …`.
+- **Impact:** the server's answer is `{code, message, details}` and the useful reading depends on the code: a validation refusal should list its field issues, a rate limit should give the number (G56), a permission denial should not be a red toast at all. Most sites read only the message, and one module's helper (`errorMessage()` in `admin/tabs/identity.ts`) already does it properly — so the same failure looks different depending on which page the user happened to be on, which is exactly the consistency §14 is about.
+- **Status:** Open (found 22.15) — the shared edit page now handles the field-shaped case (G55) and the list page the throttled case; migrating the remaining call sites onto one helper is a wide mechanical change with ~150 small behaviour decisions in it, and it deserves its own pass rather than arriving inside a hardening phase.
+
+## G65 — Home content is chosen from `principal.roles` in the client, a rule the server does not mirror
+
+- **Module / contract:** platform / SPA — `home/SetupBanner.tsx`, `home/PulseStrip.tsx`, `pages/DashboardsPage.tsx`, `state/dashboard-default.ts`, `state/portal.ts`.
+- **Impact:** these pick what to show by looking at role names or `principal.type === 'admin'` on the stored session. No server rule corresponds, so a custom role that holds the right to read a dashboard can be denied the widget by a client-side name check, and an `admin`-typed principal with a reduced ACL is offered a setup banner whose every link 403s. It is not an authorization hole — every read is still enforced — but the two answers to "what may this person see" are computed differently.
+- **Status:** Open (found 22.15) — the honest fix is to serve the home page's blocks from the same capability endpoints the module pages already use. The current behaviour is cosmetic refusal after a render, so this is Low-impact and needs the dashboard capability story settled first.
+
+## G66 — No browser spec asserts an error, denied or empty state, and login is English-only
+
+- **Module / contract:** platform / SPA / e2e — `e2e/*.spec.ts`, `e2e/accessibility.spec.ts`.
+- **Impact:** the Playwright suite covers the happy path of login, CRUD, conversion, sales documents, omnichannel, AI agents and an axe pass over home/list/record/settings. Nothing drives a 403, a failed save, a throttled list or an empty filtered result, and no spec asserts focus returns to its trigger when a modal closes. `login()` looks up `getByLabel('User name')`, so the Vietnamese catalog is not exercised in the browser at all — which is where a missing key or an English-only fallback (G61) would actually show.
+- **Status:** Open (found 22.15) — this is Phase 22.16's brief (browser E2E critical paths), not a defect in the components. The node-side structural assertions added here (`SharedStates.test.tsx`) cover what the DOM-less project can reach.
+
+## G67 — Column resize is mouse-only, and modal focus trap/restore rests on antd defaults with no assertion
+
+- **Module / contract:** platform / SPA — `EntityListPage.tsx` resize handles, `LinkRecordModal.tsx` and the other shared modals.
+- **Impact:** the resizable header can be dragged but not keyboard-operated, so the list's width control is unavailable without a pointer; every modal relies on antd's built-in focus trap and restore, which is a reasonable default but is untested here, and one component adds its own `autoFocus` on top. The rest of the shared surface is genuinely accessible (skip link, `role="toolbar"` bulk bar with a live count, per-row labelled checkboxes, `aria-expanded` sections).
+- **Status:** Open (found 22.15) — the resize fix is a keyboard handler on the same handle; the focus assertions belong to the browser spec in G66, where they can be measured rather than assumed.
+
+## G68 — A core record write does not invalidate the module panels keyed to that record
+
+- **Module / contract:** platform / SPA — `components/RecordHeader.tsx` (rename, delete) against module queries such as `['eSignature','record-entry',type,id]` and the Lead Score chip.
+- **Impact:** the core record screens use plain `useState`, not react-query, so renaming or deleting a record leaves any mounted module panel holding its previous answer until the user gives the window focus or the panel's own stale time passes. The blast radius is bounded twice over — the provider is configured with `refetchOnWindowFocus: 'always'` and the affected queries are short-staled — which is why this is Low and not a correctness bug: a record that no longer exists still answers 404/410 from the server on any action.
+- **Status:** Open (found 22.15) — closing it needs a single invalidation seam (a core `onRecordChanged(entity,id)` broadcast the module panels subscribe to), which is an architecture decision for the frontend rather than a fix in a hardening phase.
+
+## G69 — The Sales lot-traceability suite depends on lot stock the shared database no longer holds
+
+- **Module / contract:** sales — `apps/api/test/sales-tracking.test.ts`, `19-S.15 — transfers and returns keep lot traceability` (and, on other runs of the same command, `lots and the removal policy > FIFO picks the oldest receipt`).
+- **Symptom:** the confirmation transitions answer `200`, the outbound half of the transfer records its split, and then the movement the test reads back for the **other** half carries no batch: `expected undefined to be 'LOT-A'`. Which of the three lot tests trips first moves between runs; the class does not.
+- **What was verified, and what was not.** Verified: it reproduces deterministically today in a solo `vitest run` of that one file; it reproduces with the only API source file this sub-phase changed (`global-exception.filter.ts`) reverted to `HEAD`, so it is not collateral of Phase 22.15; `sales_inventory_batch_stock` is **empty** outside a run, while the suite's own precondition assertions (`onHand > 1` for `LOT-A`) still pass, which is how a run can look adequately seeded and then write nothing attributable. Not verified: the root cause. It was not diagnosed here — the assertion that fails is in the Sales suite, and the diagnosis is a session of its own (what draws the batch rows to zero, and whether a long-lived dev API process with schedulers is moving stock underneath a test run).
+- **Expected vs observed:** expected — a suite that needs lot stock creates the stock it needs and restores it, so it says the same thing on the fortieth run against a shared database as on the first (AGENTS.md §3.3: identifiable, self-contained test records); observed — three tests that read `LOT-A` as though earlier tests in the same process had not drawn it down.
+- **Status:** Open (found 22.15) — recorded rather than fixed here, because the fix is either a per-test seeding step in Sales' own fixture helpers or a ledger cleanup in `afterAll`, and both belong to whoever owns 19-S.15, not to a UI/API consistency pass. The gate result for Phase 22.15 states this failure explicitly instead of working around it.
+- **Remaining risk:** `pnpm test` is red on a file that has nothing to do with the change under review, which teaches everyone to skim past red. That is the real cost, and it is why this is written down instead of being left as a flake.

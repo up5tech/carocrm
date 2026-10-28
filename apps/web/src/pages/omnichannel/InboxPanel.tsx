@@ -10,7 +10,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
 import { PermissionDenied } from '../../components/PermissionDenied.js';
-import { t } from '../../state/i18n.js';
+import { formatClock, formatDateTime,t } from '../../state/i18n.js';
 import { useSession } from '../../state/session.js';
 import { inboxQuery, STATUS_OPTIONS, STATUS_VIEWS,type StatusView } from './filters.js';
 import { errorText as inboxErrorText } from './refusals.js';
@@ -360,7 +360,7 @@ export function InboxPanel() {
                       <Typography.Text>{call.fromNumber ?? call.toNumber ?? call.id.slice(0, 8)}</Typography.Text>
                       <Tag>{call.state}</Tag>
                       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {call.startedAt === null ? '—' : new Date(call.startedAt).toLocaleString()}
+                        {call.startedAt === null ? '—' : formatDateTime(call.startedAt)}
                         {call.durationSeconds === null ? '' : ` · ${String(call.durationSeconds)}s`}
                       </Typography.Text>
                       <Button
@@ -413,7 +413,7 @@ export function InboxPanel() {
                           {row.snoozedUntil !== null ? <Tag color="purple">{t('omnichannel.inbox.snoozed')}</Tag> : null}
                         </span>
                         <span className="carocrm-om-conversation-meta">
-                          {t(`omnichannel.inbox.statuses.${row.status}`)} · {row.lastActivityAt === null ? '—' : new Date(row.lastActivityAt).toLocaleString()}
+                          {t(`omnichannel.inbox.statuses.${row.status}`)} · {row.lastActivityAt === null ? '—' : formatDateTime(row.lastActivityAt)}
                           {row.tags.length > 0 ? ` · ${row.tags.join(', ')}` : ''}
                         </span>
                       </button>
@@ -563,7 +563,7 @@ function ConversationPane(props: ConversationPaneProps) {
         {props.entries.map((entry) =>
           entry.kind === 'event' ? (
             <Typography.Text key={entry.id} type="secondary" style={{ textAlign: 'center', fontSize: 12 }}>
-              {entry.event?.kind} {entry.event?.toValue === null ? '' : `→ ${entry.event?.toValue}`} · {new Date(entry.at).toLocaleString()}
+              {entry.event?.kind} {entry.event?.toValue === null ? '' : `→ ${entry.event?.toValue}`} · {formatDateTime(entry.at)}
             </Typography.Text>
           ) : (
             <div
@@ -586,7 +586,7 @@ function ConversationPane(props: ConversationPaneProps) {
               <Typography.Text style={{ whiteSpace: 'pre-wrap' }}>{entry.message?.body ?? ''}</Typography.Text>
               <div>
                 <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                  {entry.message?.direction === 'outbound' ? `${t('omnichannel.inbox.sent')} · ${entry.message?.state}` : t('omnichannel.inbox.received')} · {new Date(entry.at).toLocaleTimeString()}
+                  {entry.message?.direction === 'outbound' ? `${t('omnichannel.inbox.sent')} · ${entry.message?.state}` : t('omnichannel.inbox.received')} · {formatClock(entry.at)}
                 </Typography.Text>
               </div>
             </div>

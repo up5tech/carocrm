@@ -7,7 +7,7 @@ import { api, type StreamItem } from '../api/client.js';
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { updateSummary } from '../components/StreamPanel.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime,t } from '../state/i18n.js';
 import { useEntity, useMetadata } from '../state/metadata.js';
 
 type View = 'followed' | 'own' | 'all';
@@ -116,7 +116,7 @@ function StreamRow({ item, label }: { item: StreamItem; label: string }) {
           </Typography.Text>
           <Link to={`/${item.entityType}/${item.entityId}`}>{label}</Link>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {new Date(item.createdAt).toLocaleString()}
+            {formatDateTime(item.createdAt)}
           </Typography.Text>
         </Space>
         <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>{body}</Typography.Paragraph>

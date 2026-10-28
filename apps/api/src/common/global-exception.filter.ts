@@ -123,7 +123,17 @@ export class GlobalExceptionFilter {
       error = new InternalServerError(exception instanceof Error ? exception.message : 'Internal server error.');
     }
 
-    const translated = translateErrorMessage(getLocale() ?? 'en', error.code, error.message);
+    // A 5xx is answered from a fixed sentence, not from the error's own text. The catalog normally
+    // replaces a known code with its localized face, but when no catalog is loaded the translator
+    // returns the original string — and an original that came from a database driver quotes a
+    // statement, and one that came from a connector names a credential field. The request is logged
+    // with the real error just below, so the caller loses nothing it is entitled to know.
+    const isServerFailure = error.statusCode >= 500;
+    const translated = translateErrorMessage(
+      getLocale() ?? 'en',
+      error.code,
+      isServerFailure ? 'Internal server error.' : error.message,
+    );
     const details: Record<string, unknown> = { ...(error.details ?? {}) };
     // A throttled caller needs the number, not just the sentence: the rate limiter already wrote
     // `Retry-After`, so it travels in the body as well and the SPA can back off without parsing prose.
@@ -135,7 +145,14 @@ export class GlobalExceptionFilter {
     // operator nothing. When it replaces a more specific message, that message travels as
     // `details.reason` so a caller can still explain WHY the request was refused — a blocked
     // dependency, a stage from another board.
-    if (translated !== error.message) details['reason'] = error.message;
+    //
+    // A 5xx is the one case where the message is not the operator's to read. It is the text of an
+    // unexpected error — a database driver quoting a statement, a connector naming a credential field —
+    // and the request is already logged with it (`log.error` below), so the client gets the generic
+    // face and nothing else. This is the plan's rule that a frontend error never surfaces SQL, a stack
+    // trace or a provider secret (§14 task 10), enforced where the body is built rather than at each
+    // call site that renders it.
+    if (translated !== error.message && error.statusCode < 500) details['reason'] = error.message;
     const body: ErrorBody = {
       error: {
         code: error.code,

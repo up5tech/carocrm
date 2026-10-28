@@ -8,7 +8,7 @@ import type { ReportDefinitionShape, ReportKind, ReportRow, ReportRunResult, Rep
 import { usePageDocs } from '../components/docs/PageDocs.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { PageHeader } from '../components/PageHeader.js';
-import { t } from '../state/i18n.js';
+import { formatNumber, t } from '../state/i18n.js';
 import { fieldLabel, navEntities, useMetadata } from '../state/metadata.js';
 import { useSession } from '../state/session.js';
 
@@ -536,7 +536,7 @@ export function ReportsPage() {
                     {Object.entries(result.metrics).map(([label, value]) => (
                       <div className="carocrm-reports-metric" key={label}>
                         <span className="carocrm-reports-metric-label">{label}</span>
-                        <span className="carocrm-reports-metric-value">{value === null ? '—' : value.toLocaleString()}</span>
+                        <span className="carocrm-reports-metric-value">{value === null ? '—' : formatNumber(value)}</span>
                       </div>
                     ))}
                   </div>
@@ -553,7 +553,7 @@ export function ReportsPage() {
                           <span className="carocrm-reports-bar-track">
                             <span className="carocrm-reports-bar-fill" style={{ width: `${percent}%` }} />
                           </span>
-                          <span className="carocrm-reports-bar-value">{value.toLocaleString()}</span>
+                          <span className="carocrm-reports-bar-value">{formatNumber(value)}</span>
                         </div>
                       );
                     })}

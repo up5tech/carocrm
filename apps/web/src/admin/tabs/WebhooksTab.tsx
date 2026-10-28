@@ -3,9 +3,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, App as AntApp, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 
-import { api } from '../../api/client.js';
+import { api, ApiError } from '../../api/client.js';
 import type { WebhookDeliveryRow, WebhookEndpointRow } from '../../api/types.js';
-import { t } from '../../state/i18n.js';
+import { formatDateTime,t } from '../../state/i18n.js';
 import { errorMessage } from './identity.js';
 
 /** The events the webhook-integration extension publishes; the endpoint subscribes to a subset. */
@@ -23,7 +23,10 @@ export function WebhooksTab() {
   const [editing, setEditing] = useState<string | null | undefined>(undefined);
 
   const reload = () => void client.invalidateQueries({ queryKey: ['webhookEndpoints'] });
-  const notInstalled = endpoints.isError && endpoints.error instanceof Error && endpoints.error.message.toLowerCase().includes('404');
+  // The route is missing when the platform that answers is older than the module. That is a *status*,
+  // so it is read as one: a message that happens to contain "404" — an id, a port, a record name — used
+  // to be how this tab decided to say "not installed".
+  const notInstalled = endpoints.isError && endpoints.error instanceof ApiError && endpoints.error.status === 404;
 
   const toggle = async (row: WebhookEndpointRow, next: boolean) => {
     const previous = endpoints.data;
@@ -186,7 +189,7 @@ function DeliveriesPanel({ endpointId }: { readonly endpointId: string }) {
           title: t('web.adminApiKeys.created'),
           dataIndex: 'createdAt',
           width: 180,
-          render: (value: string) => new Date(value).toLocaleString(),
+          render: (value: string) => formatDateTime(value),
         },
       ]}
     />

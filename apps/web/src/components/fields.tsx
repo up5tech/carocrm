@@ -81,7 +81,7 @@ export function FieldValue({
   /** Labels returned with the record; when present, link fields never fetch their target. */
   linkLabels?: LinkLabels | undefined;
 }) {
-  if (value === undefined || value === null || value === '') return <span style={{ color: 'rgba(0,0,0,0.25)' }}>—</span>;
+  if (value === undefined || value === null || value === '') return <span style={{ color: 'var(--carocrm-c-8c8c8c)' }}>—</span>;
 
   // A JSON payload is never printed raw (PLAN §13): the payload's own structure is the layout.
   if (isJsonPayload(field.type, value)) {

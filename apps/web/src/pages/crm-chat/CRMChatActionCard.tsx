@@ -1,5 +1,5 @@
 import { CheckOutlined, CloseOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, Descriptions, Space, Tag, Typography } from 'antd';
 
 import { api } from '../../api/client.js';
@@ -45,12 +45,18 @@ export function CRMChatActionCard(props: CRMChatActionCardProps) {
     retry: false,
   });
 
+  const client = useQueryClient();
+
   const decide = useMutation({
     mutationFn: async (decision: 'confirm' | 'reject') =>
       decision === 'confirm'
         ? api.crmChatConfirmAction(approvalId)
         : api.crmChatRejectAction(approvalId),
     onSuccess: (result) => {
+      // Ask the server again rather than keeping the answer this call returned: the decision also moves
+      // the run (queued → executing → settled), and a card that renders only its own response would
+      // show "approved" over a run that then failed.
+      void client.invalidateQueries({ queryKey: ['crmChat', 'action', approvalId] });
       onDecided?.(result.action);
     },
   });
@@ -114,7 +120,7 @@ export function CRMChatActionCard(props: CRMChatActionCardProps) {
                 padding: 8,
                 maxHeight: 180,
                 overflow: 'auto',
-                background: 'rgba(0,0,0,0.03)',
+                background: 'var(--carocrm-surface-sunken)',
                 borderRadius: 6,
                 fontSize: 12,
                 whiteSpace: 'pre-wrap',

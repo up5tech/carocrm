@@ -15,7 +15,7 @@ import type {
 import { EmptyState } from '../../components/EmptyState.js';
 import { ErrorState } from '../../components/ErrorState.js';
 import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
-import { t } from '../../state/i18n.js';
+import { formatDateTime,t } from '../../state/i18n.js';
 
 /**
  * Phase 19-ES.6 — the signature request list and draft editor
@@ -1490,5 +1490,5 @@ function recipientStatusColor(status: string): string {
 
 function formatMoment(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : formatDateTime(value);
 }

@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { ApiKeyRow, ApiKeySecret, ApiUserRow } from '../../api/types.js';
-import { t } from '../../state/i18n.js';
+import { formatDateTime,t } from '../../state/i18n.js';
 import { errorMessage, useRolesQuery } from './identity.js';
 
 /**
@@ -92,14 +92,14 @@ export function ApiKeysTab() {
               dataIndex: 'lastUsedAt',
               width: 180,
               responsive: ['md'],
-              render: (value: string | null) => (value === null ? '---' : new Date(value).toLocaleString()),
+              render: (value: string | null) => (value === null ? '---' : formatDateTime(value)),
             },
             {
               title: t('web.adminApiKeys.created'),
               dataIndex: 'createdAt',
               width: 180,
               responsive: ['md'],
-              render: (value: string) => new Date(value).toLocaleString(),
+              render: (value: string) => formatDateTime(value),
             },
             {
               title: '',
@@ -173,12 +173,12 @@ function KeysPanel({ apiUserId, onChanged, onIssued }: { readonly apiUserId: str
           dataIndex: 'id',
           render: (value: string) => <Typography.Text copyable={{ text: value }}>{value}</Typography.Text>,
         },
-        { title: t('web.adminApiKeys.created'), dataIndex: 'createdAt', width: 180, render: (value: string) => new Date(value).toLocaleString() },
+        { title: t('web.adminApiKeys.created'), dataIndex: 'createdAt', width: 180, render: (value: string) => formatDateTime(value) },
         {
           title: t('web.adminApiKeys.lastUsed'),
           dataIndex: 'lastUsedAt',
           width: 180,
-          render: (value: string | null) => (value === null ? '---' : new Date(value).toLocaleString()),
+          render: (value: string | null) => (value === null ? '---' : formatDateTime(value)),
         },
         {
           title: t('web.adminUsers.colStatus'),

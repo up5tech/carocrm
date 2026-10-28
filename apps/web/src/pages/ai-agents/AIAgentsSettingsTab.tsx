@@ -19,7 +19,7 @@ import { useEffect, useState } from 'react';
 
 import { api } from '../../api/client.js';
 import type { AIAgentsSettings } from '../../api/types.js';
-import { t } from '../../state/i18n.js';
+import { formatDateTime,t } from '../../state/i18n.js';
 
 /**
  * Phase 19-AI.2 — module policy administration
@@ -347,7 +347,7 @@ export function AIAgentsSettingsTab({ capabilities }: { readonly capabilities: R
           {t('web.aiAgents.settingsVersionMeta', {
             version: view.version,
             by: view.updatedBy ?? '-',
-            at: view.updatedAt === null ? t('web.aiAgents.neverUpdated') : new Date(view.updatedAt).toLocaleString(),
+            at: view.updatedAt === null ? t('web.aiAgents.neverUpdated') : formatDateTime(view.updatedAt),
           })}
         </Typography.Paragraph>
       </Form>

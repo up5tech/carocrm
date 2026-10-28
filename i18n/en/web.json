@@ -1,5 +1,6 @@
 {
   "list": {
+    "rateLimitedRetry": "Too many requests. Try again in {seconds} seconds.",
     "refresh": "Refresh",
     "exportCsv": "Export CSV",
     "importCsv": "Import CSV",
@@ -2492,6 +2493,7 @@
     "ariaLabel": "First-run setup checklist"
   },
   "crmChat": {
+    "turnFailed": "The turn could not be submitted.",
     "title": "CRM Chat",
     "settingsButton": "Settings",
     "subtitle": "Ask about your CRM data, review the evidence, and confirm an action before anything changes.",

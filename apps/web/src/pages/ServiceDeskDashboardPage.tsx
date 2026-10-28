@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { ServiceDeskMetrics } from '../api/types.js';
-import { t } from '../state/i18n.js';
+import { formatDateTime,t } from '../state/i18n.js';
 
 /**
  * Phase 19-SD.15 — the agent/team-lead dashboard (PLAN §13).
@@ -99,7 +99,7 @@ export function ServiceDeskDashboardPage() {
                 { title: t('web.serviceDesk.dashboard.status'), dataIndex: 'status' },
                 { title: t('web.serviceDesk.dashboard.priority'), dataIndex: 'priority' },
                 { title: t('web.serviceDesk.dashboard.assignee'), dataIndex: 'assignedUserId' },
-                { title: t('web.serviceDesk.dashboard.modified'), dataIndex: 'modifiedAt', render: (v) => (v ? new Date(String(v)).toLocaleString() : '') },
+                { title: t('web.serviceDesk.dashboard.modified'), dataIndex: 'modifiedAt', render: (v) => (v ? formatDateTime(String(v)) : '') },
               ]}
             />
           </Card>
