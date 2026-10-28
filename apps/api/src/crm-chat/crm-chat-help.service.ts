@@ -2,6 +2,7 @@ import { log } from '@carocrm/core/logger/index.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { DocsService } from '../docs/docs.service.js';
+import { EntityCrudService } from '../entity/entity.service.js';
 import type { KnowledgeArticleView } from '../service-desk/knowledge-base.service.js';
 import { KnowledgeBaseService } from '../service-desk/knowledge-base.service.js';
 
@@ -45,6 +46,7 @@ export class CRMChatHelpService {
   constructor(
     @Inject(KnowledgeBaseService) private readonly knowledgeBase: KnowledgeBaseService,
     @Inject(DocsService) private readonly docs: DocsService,
+    @Inject(EntityCrudService) private readonly entities: EntityCrudService,
   ) {}
 
   /**
@@ -141,11 +143,21 @@ export class CRMChatHelpService {
       // Filter articles with any match and sort by relevance
       const matches = scored
         .filter(({ score }) => score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, MAX_HELP_SOURCES)
-        .map(({ article, score }) => this.articleToHelpSource(article, score));
+        .sort((a, b) => b.score - a.score);
 
-      return matches;
+      // The corpus is portal-safe by *state* — published, not internal, in date — which is not the same
+      // thing as safe for this caller. A knowledge article this user may not open from
+      // `GET /api/v1/KnowledgeArticle/:id` must not reach them through Chat either, so each hit is
+      // re-read under the caller's own record ACL, exactly as a citation is (§9.2).
+      const sources: HelpSource[] = [];
+      for (const { article, score } of matches) {
+        if (sources.length >= MAX_HELP_SOURCES) break;
+        const readable = await this.entities.get('KnowledgeArticle', article.id).catch(() => null);
+        if (readable === null) continue;
+        sources.push(this.articleToHelpSource(article, score));
+      }
+
+      return sources;
     } catch (error) {
       // The knowledge base may be disabled or unavailable. That is an ordinary outcome for a
       // "how do I" question, so the answer is empty rather than an error — but the reason is

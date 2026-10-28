@@ -764,7 +764,7 @@ would need a capability, by the absence of a tool.
 
 | Intent | Example | Enabled by | Grounding |
 | --- | --- | --- | --- |
-| Help retrieval | "How do I create a workflow?" | `features.helpRetrieval` | Published knowledge articles (19-CHAT.9) |
+| Help retrieval | "How do I create a workflow?" | `features.helpRetrieval` | Published knowledge articles **that the caller may read**, plus handbook pages (19-CHAT.9; the record ACL is applied from Phase 22.13, because portal-safe and readable-by-you are different questions) |
 | CRM search | "Accounts in Hanoi with no activity this month" | `features.readTools` | Entity Engine list permission + plan |
 | Record summary | "Summarise this account and its open cases" | `features.readTools` | One record read under the caller's field rights |
 | Aggregates | "How many leads per source this quarter?" | `features.readTools` | Bounded aggregate over an allowlisted entity |

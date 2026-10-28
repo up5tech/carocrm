@@ -423,6 +423,17 @@ export class AIAgentsController {
     if (!(await this.tools.isEnabled(input.name))) {
       throw new ValidationError('Tool is not enabled.', { tool: input.name });
     }
+    // This door has no run, so it has nothing for an approval to attach to: no proposal a person read,
+    // no `ai_agent_approvals` row, no tool-call ledger entry. A tool whose effect class demands a human
+    // decision therefore cannot be honoured here, and honouring it would let one caller both propose and
+    // commit a material write with no trace (§9.1, §9.3). The run pipeline is the path for it.
+    const policy = await this.settings.settings();
+    if (def.requiresApproval || policy.approval.requireFor.includes(def.effectClass)) {
+      throw new ValidationError(
+        `Tool "${input.name}" writes at an effect class that requires a human decision, and a direct tool call carries no run to attach that decision to. Start an agent run and approve its proposal.`,
+        { tool: input.name, effectClass: def.effectClass, code: 'AI_TOOL_APPROVAL_REQUIRED' },
+      );
+    }
     const validated = def.inputSchema.parse(input.arguments ?? {});
     const principal = this.scope.requirePrincipal();
     const context = {

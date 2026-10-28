@@ -44,6 +44,12 @@
 | G31 | The campaign reports answered any authenticated caller, and the event log named recipients the caller could not open | marketing-automation | High | Fixed (22.12) |
 | G32 | A replayed attribution outcome double-counted the conversion and its revenue | marketing-automation | Medium | Fixed (22.12) |
 | G33 | The marketing webhook "signature" is the shared secret itself, and a delivery with no timestamp is never age-checked | marketing-automation | Medium | Open (found 22.12) |
+| G34 | Help retrieval read Service Desk's knowledge corpus with the caller's rights ignored | crm-chat → service-desk | Medium | Fixed (22.13) |
+| G35 | The MCP-shaped tool door could commit an approval-class write with no decision anywhere | ai-agents | Medium | Fixed (22.13) |
+| G36 | Three declared run and approval states are unreachable | ai-agents | Low | Open (found 22.13) |
+| G37 | A user whose Case scope is `own` cannot create a Case at all | service-desk / platform ACL | Medium | Open (found 22.13) |
+| G38 | `features.readTools` is declared as the gate for turns and queries and never enforced | crm-chat | Medium | Open (found 22.13) |
+| G39 | A turn's own `sources` list is handed back without re-authorization | crm-chat | Low | Open (found 22.13) |
 
 ---
 
@@ -285,3 +291,51 @@
 - **Verification:** found while building the Phase 22.12 journey, whose step 6 asserts today's behaviour (a 2020-dated `open` event with no timestamp header is processed).
 - **Status:** Open — the fix changes what every provider adapter must send (a per-event HMAC), so it belongs with the provider-binding work rather than to a journey; the assertion is left in place so the behaviour cannot drift further without a failing test.
 - **Remaining risk:** a leaked request (proxy log, support attachment) is a reusable credential for as long as the secret stays valid, and a replayed bounce or complaint can suppress an address that never asked for it.
+
+## G34 — Help retrieval read Service Desk's knowledge corpus with the caller's rights ignored
+
+- **Module / contract:** crm-chat → service-desk — `GET action/help/search`.
+- **Impact:** `CRMChatHelpService.searchKnowledgeBase` took `KnowledgeBaseService.portalArticles()` — which selects `entity_records` rows directly, filtered to published, non-internal, in-date — and returned each hit's title, summary and record id to any caller holding `use` plus the `helpRetrieval` flag. The same caller asking `GET /api/v1/KnowledgeArticle/<id>` was refused: the corpus is *portal-safe by state*, which is not the same question as *readable by you*, and Chat answered the second question with the first answer. The handbook half of the same route was already per-caller, because it goes through `DocsService`.
+- **Expected vs observed:** expected — a cross-module read through Chat grants the caller nothing they could not get directly (AGENTS.md §5.3, plan §13.6 step 4); observed — ids, titles and summaries of records the caller may not open.
+- **Status:** Fixed (22.13) — each knowledge hit is re-read under the caller's own record ACL and dropped silently when it fails, which is the rule the citation builder already applied to CRM records. Proven in the Phase 22.13 journey step 4: the entitled caller sees the article, a caller without `KnowledgeArticle: read` sees handbook pages only.
+- **Remaining risk:** the drop is silent, so a user who *should* have seen an article sees a shorter answer rather than a reason — the same trade the citation path makes, deliberately, because a reason is a disclosure.
+
+## G35 — The MCP-shaped tool door could commit an approval-class write with no decision anywhere
+
+- **Module / contract:** ai-agents — `POST action/mcp/call`.
+- **Impact:** the door checked the caller's `use` capability, that the tool was enabled, and that the arguments fitted its schema — then executed the handler. For a read tool that is exactly right. For `crm_update_record_fields`, whose registry entry says `material_write` and `requiresApproval: true`, it meant a single caller could commit the write that the run pipeline will only perform after one person proposes and a *different* right decides. The caller's record ACL still governed, so nothing was reached that a plain `PATCH /api/v1/Case/:id` would not have reached — what was bypassed was the decision and its trace: no run, no `ai_agent_approvals` row, no tool-call ledger.
+- **Expected vs observed:** expected — an effect class that demands a human decision demands it on every door (plan §13.6 acceptance: proposed and executed states are distinct); observed — one door where they collapsed into one caller.
+- **Status:** Fixed (22.13) — the door refuses a tool whose registry entry or the instance's `approval.requireFor` list demands a decision, with `AI_TOOL_APPROVAL_REQUIRED` naming the run pipeline as the path that can carry one. Proven in the Phase 22.13 journey step 12, which also shows a read through the same door still stops at the caller's own record rights.
+- **Remaining risk:** a client that used this door for writes gets a refusal rather than a silent downgrade; nothing in the SPA does, and the door's own documentation now says what it will not do.
+
+## G36 — Three declared run and approval states are unreachable
+
+- **Module / contract:** ai-agents — `RUN_STATUSES` and the approval decision vocabulary; `docs/quality/phase-22-journey-ai-controlled-actions.md` F3.
+- **Impact:** `partially_succeeded`, `waiting_for_input` and the `changes_requested` decision are in the schema checks, the route filters and the SPA's vocabulary, and no runtime path writes them. A run that stopped after committing one effect is reported `canceled`, which is true of the stopping but not distinguishable, at the status field, from a run that stopped having done nothing.
+- **Expected vs observed:** expected — every state an operator can filter on is one some path can produce; observed — three are reachable only through a database write.
+- **Status:** Open (found 22.13) — the honest alternatives are to produce them (`provideInput`/`resume` exist and wait only for a runtime that can park a run, and a review-decision with changes requested needs a re-propose path) or to retire the vocabulary; either is a product decision with an API-shape consequence, so it is recorded rather than silently narrowed. The journey asserts the inspectable truth instead: the tool ledger and timeline say exactly which effects committed.
+- **Remaining risk:** a dashboard filters for "partially succeeded" and reports an empty result as though nothing ever went partway.
+
+## G37 — A user whose Case scope is `own` cannot create a Case at all
+
+- **Module / contract:** service-desk write guard × the Entity Engine's own-scope assignment — `POST /api/v1/Case` as a non-administrator.
+- **Impact:** with `Case: { create: 'yes', read: 'own' }`, `prepareWrite` stamps `assignedUserId` into the create so the new record is visible to its creator at all, and the guard refuses any client write that changes `assignedUserId` by name — so the create answers `422 …These fields on Case are set by the Service Desk module and cannot be written through the record API: assignedUserId`. The user did not ask for that field; the platform set it for them. The practical result is that a deployment gives its agents `Case: read all` to let them create at all, which is the opposite of least privilege.
+- **Expected vs observed:** expected — an own-scoped create succeeds and lands owned by its creator; observed — a refusal naming a field the caller never sent.
+- **Status:** Open (found 22.13) — reproduced in the Phase 22.13 journey's setup and worked around by scoping the journey's limited user to Cases they may read but not create. The fix belongs to the guard's rule (accept an own-scope assignment that names the creator, refuse anything else), and it needs the queue-routing semantics decided: a newly created Case is exactly what routing wants to place.
+- **Remaining risk:** least-privilege roles keep being widened in practice rather than fixed in the guard.
+
+## G38 — `features.readTools` is declared as the gate for turns and queries and never enforced
+
+- **Module / contract:** crm-chat — `POST action/turns`, `POST action/query/execute`, and the route table in `crm-chat-contract.ts`.
+- **Impact:** the contract names `readTools` as the feature those two routes require, and `CRM_CHAT_ROUTES` is pinned against the served routes — but the only thing the turn path consults is assistant readiness (which reads the *AIAgents* execution flags), and the query route only checks the workspace plus `use`. An administrator who switches "Grounded CRM answers" off still gets answers built from live CRM records. The flag is real for write actions, which chain through `actionProposals` → `readTools`, so the one path that does honour it is the one that needs it least.
+- **Expected vs observed:** expected — a capability switch the operator can see is a switch the server enforces; observed — decorative for the two routes that most define the product.
+- **Status:** Open (found 22.13) — enforcing it is a one-line `assertFeature` on two routes, but it is a behaviour change for every deployment that left the flag off while the code ignored it, so it needs the deliberate decision (and the documentation that goes with it) rather than arriving inside a hardening journey. The Phase 22.13 journey therefore proves the boundary that *is* enforced — the record ACL in step 3 — and does not rely on the flag.
+- **Remaining risk:** a compliance answer of "we disabled grounded answers" is not true.
+
+## G39 — A turn's own `sources` list is handed back without re-authorization
+
+- **Module / contract:** crm-chat — `GET action/turns/:id`.
+- **Impact:** the turn status returns the run's `result` as recorded, and `sources` there are the raw `entity:id` references collected from the tool ledger at answer time. The citation builder re-reads each record under the caller's current ACL and drops what fails; this field does not, so a record that was readable when the answer was given and has since been revoked continues to appear as `Account:<id>` in the turn's own result. Visibility is bounded (the initiator, or a holder of `AIAgentAudit: read`), and what is disclosed is a reference to a record the reader once could open, which is why this is Low.
+- **Expected vs observed:** expected — one rule for "may this caller see this record", applied on every read; observed — two rules, one re-read and one replayed from the stored answer.
+- **Status:** Open (found 22.13) — recorded rather than fixed here because the fix is a small behaviour change (a silently shortened list) that should match how citations already behave, and the journey asserts the citation half, which is the surface the SPA renders.
+- **Remaining risk:** a long-lived turn keeps naming records its reader may no longer open.
