@@ -186,10 +186,18 @@ export class SyncOrchestrator {
     let failed = 0;
     let nextCursor: string | null = cursor;
     let cursorExpired = false;
+    let cancelled = false;
 
     try {
       for (let guard = 0; guard < 10_000; guard += 1) {
         if (options.maxRecords !== undefined && scanned >= options.maxRecords) break;
+        // An operator cancelled this run. The page already applied stays applied and the checkpoint
+        // already advanced stays advanced, so the next run continues from here instead of repeating
+        // work — which is the only way "cancel" and "resume" mean anything together.
+        if (await this.isCancelled(run.id)) {
+          cancelled = true;
+          break;
+        }
         const page = await this.executor.call(
           mapping.connectionId,
           async (context, adapter) => {
@@ -212,21 +220,34 @@ export class SyncOrchestrator {
         cursorExpired = page.cursorExpired;
         if (cursorExpired) break;
 
-        for (const object of page.objects) {
-          if (options.maxRecords !== undefined && scanned >= options.maxRecords) break;
+        // The run's budget is checked **before** the page is taken apart, and the checkpoint only
+        // moves past a page this process actually finished. Advancing past a page whose remaining
+        // records were cut off by `maxRecords` would tell the next run those records were applied,
+        // and they never would be.
+        const budget = options.maxRecords === undefined ? page.objects.length : Math.max(0, options.maxRecords - scanned);
+        const readable = page.objects.slice(0, budget);
+        for (const object of readable) {
           scanned += 1;
           const outcome = await this.applyObject(mapping, object, run.id);
           if (outcome.action === 'created' || outcome.action === 'updated') applied += 1;
           else if (outcome.action === 'skipped') skipped += 1;
           else failed += 1;
         }
-        nextCursor = page.nextCursor;
-        if (page.nextCursor === null) break;
+        const pageComplete = readable.length === page.objects.length;
+        nextCursor = pageComplete ? page.nextCursor : cursor;
+        if (pageComplete && nextCursor !== null) {
+          // The checkpoint advances **per page**, past the records already committed. Advancing it
+          // only when the loop ends meant an interruption — a provider error on page 40, a cancelled
+          // run, a dying process — discarded the cursor of 39 applied pages, and the next run started
+          // from the old cursor and re-read all of them.
+          await this.writeCheckpoint(mapping.id, 'inbound', nextCursor, false);
+        }
+        if (!pageComplete || page.nextCursor === null) break;
         cursor = page.nextCursor;
       }
 
       await this.writeCheckpoint(mapping.id, 'inbound', nextCursor, cursorExpired);
-      const status = failed > 0 && applied === 0 ? 'failed' : 'completed';
+      const status = cancelled ? 'cancelled' : failed > 0 && applied === 0 ? 'failed' : 'completed';
       await this.finishRun(run.id, {
         status,
         recordsScanned: scanned,
@@ -658,6 +679,19 @@ export class SyncOrchestrator {
     return { id: operation.id, status: 'pending', attempts };
   }
 
+  /**
+   * Whether an operator cancelled this run while it was working.
+   *
+   * The loop asks once per page: a run is a sequence of provider round-trips, so a page boundary is
+   * where stopping is both meaningful and cheap. Nothing else writes `cancelled`.
+   */
+  private async isCancelled(runId: string): Promise<boolean> {
+    const rows = await sql<{ status: string }>`
+      select status from integration_sync_runs where id = ${runId} limit 1
+    `.execute(this.database.db);
+    return rows.rows[0]?.status === 'cancelled';
+  }
+
   private async requireRunRow(runId: string): Promise<{ connection_id: string }> {
     const rows = await sql<{ connection_id: string }>`
       select connection_id from integration_sync_runs where id = ${runId} limit 1
@@ -691,10 +725,13 @@ export class SyncOrchestrator {
     return rows.rows.map((row) => toRunView(row));
   }
 
-  /** Cancel a run. A cancelled run stops at the next record boundary. */
+  /**
+   * Cancel a run. The running loop notices at the next page boundary and stops there, leaving the
+   * checkpoint of the pages it already applied in place, so the next run continues from that cursor.
+   */
   async cancelRun(runId: string): Promise<SyncRunView> {
     const run = await this.getRun(runId);
-    if (run.status === 'completed' || run.status === 'failed') {
+    if (run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled') {
       throw new ValidationError(`A run in "${run.status}" cannot be cancelled.`);
     }
     await sql`

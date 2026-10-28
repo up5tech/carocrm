@@ -6,10 +6,10 @@ import { ApiTags } from '@nestjs/swagger';
 import { sql } from 'kysely';
 import type { ZodTypeAny } from 'zod';
 
+import { Public } from '../auth/auth.guard.js';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 import { type AppConfig, CONFIG_TOKEN } from '../config.js';
 import { DatabaseService } from '../database/database.service.js';
-import { JobsService } from '../jobs/jobs.service.js';
 import { runAsAdvancedIntegrationsSystem } from './advanced-integrations-authority.js';
 import { AdvancedIntegrationsHealthService } from './advanced-integrations-health.service.js';
 import { AdvancedIntegrationsNavigationService } from './advanced-integrations-navigation.service.js';
@@ -92,7 +92,6 @@ export class AdvancedIntegrationsController {
     @Inject(IntegrationAuditService) private readonly audit: IntegrationAuditService,
     @Inject(IntegrationMetricsService) private readonly metricsService: IntegrationMetricsService,
     @Inject(IntegrationRetentionService) private readonly retention: IntegrationRetentionService,
-    @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
     @Inject(CONFIG_TOKEN) private readonly config: AppConfig,
@@ -273,6 +272,7 @@ export class AdvancedIntegrationsController {
 
   @Post('action/mappings')
   async createMapping(@Body() body: unknown) {
+    await this.permissions.assert('connectionAdmin');
     const input = parse(MappingCreateSchema, body);
     return this.mappings.create({
       connectionId: await resolveConnectionId(this.connections, input.providerKey),
@@ -301,6 +301,7 @@ export class AdvancedIntegrationsController {
 
   @Patch('action/mappings/:id')
   async updateMapping(@Param('id') id: string, @Body() body: unknown) {
+    await this.permissions.assert('connectionAdmin');
     const input = parse(MappingPatchSchema, body);
     return this.mappings.update(id, {
       ...(input.crmEntityType === undefined ? {} : { crmEntityType: input.crmEntityType }),
@@ -325,17 +326,20 @@ export class AdvancedIntegrationsController {
 
   @Post('action/mappings/:id/activate')
   async activateMapping(@Param('id') id: string) {
+    await this.permissions.assert('connectionAdmin');
     return this.mappings.activate(id);
   }
 
   @Post('action/mappings/:id/retire')
   async retireMapping(@Param('id') id: string) {
+    await this.permissions.assert('connectionAdmin');
     return this.mappings.retire(id);
   }
 
   /** A dry run: what the mapping would write, without writing it. */
   @Post('action/mappings/:id/preview')
   async previewMapping(@Param('id') id: string, @Body() body: unknown) {
+    await this.permissions.assert('use');
     const input = parse(MappingPreviewSchema, body);
     return this.mappings.preview(id, input.sample);
   }
@@ -346,6 +350,9 @@ export class AdvancedIntegrationsController {
 
   @Post('action/mappings/:id/sync')
   async runSync(@Param('id') id: string, @Body() body: unknown) {
+    // A sync writes CRM records under the **connection's** authority, not the caller's, so starting
+    // one is connection administration — not a read the whole module may perform.
+    await this.permissions.assert('connectionAdmin');
     const input = parse(SyncRunSchema, body ?? {});
     return this.orchestrator.runInbound(id, {
       ...(input.runType === undefined ? {} : { runType: input.runType }),
@@ -369,6 +376,7 @@ export class AdvancedIntegrationsController {
 
   @Post('action/runs/:id/cancel')
   async cancelRun(@Param('id') id: string) {
+    await this.permissions.assert('connectionAdmin');
     return this.orchestrator.cancelRun(id);
   }
 
@@ -384,6 +392,8 @@ export class AdvancedIntegrationsController {
 
   @Post('action/conflicts/:id/resolve')
   async resolveConflict(@Param('id') id: string, @Body() body: unknown) {
+    // A resolution decides which side a CRM record keeps, so it is a write on the connection.
+    await this.permissions.assert('connectionAdmin');
     const input = parse(ConflictResolveSchema, body);
     return this.conflicts.resolve(id, input.resolution);
   }
@@ -400,6 +410,7 @@ export class AdvancedIntegrationsController {
 
   @Post('action/dead-letters/:id/replay')
   async replayDeadLetter(@Param('id') id: string) {
+    await this.permissions.assert('connectionAdmin');
     return this.deadLetters.markReplayed(id);
   }
 
@@ -754,17 +765,20 @@ export class AdvancedIntegrationsController {
    * Retry **one** operation.
    *
    * The run and the checkpoint are untouched, so retrying a single record never restarts the
-   * whole sync.
+   * whole sync. What this does is re-open the operation — `pending`, its error cleared, its attempt
+   * counted — which is what the next delivery of that record needs: an object arriving again by
+   * webhook, or a re-read after `action/connections/:id/reconcile`, is recorded against the same
+   * idempotency key and applied again.
+   *
+   * It deliberately queues nothing. The adapter contract can read a **page** (`fetchPage`) but not
+   * one object by id, so there is no honest way to re-fetch just this record on demand, and a job
+   * naming a handler that does not exist only fills the job table with a permanent failure. See
+   * `docs/quality/known-gaps.md`.
    */
   @Post('action/operations/:id/retry')
   async retryOperation(@Param('id') id: string) {
     await this.permissions.assert('connectionAdmin');
-    const operation = await this.orchestrator.retryOperation(id);
-    await this.jobs.enqueue({
-      job: 'advancedIntegrations.retryOperation',
-      data: { operationId: operation.id },
-    });
-    return operation;
+    return this.orchestrator.retryOperation(id);
   }
 
   /** One conflict, with the field authority and the staleness check. */
@@ -790,6 +804,7 @@ export class AdvancedIntegrationsController {
    * provider should hear about it at all.
    */
   @HttpCode(200)
+  @Public()
   @Post('action/outbound-event')
   async outboundEvent(@Headers('x-worker-secret') secret: string | undefined, @Body() body: unknown) {
     this.assertWorkerSecret(secret);
@@ -811,6 +826,7 @@ export class AdvancedIntegrationsController {
    * idempotency guard, so a retried job does not apply the event twice.
    */
   @HttpCode(200)
+  @Public()
   @Post('action/process-webhook-event')
   async processWebhookEvent(@Headers('x-worker-secret') secret: string | undefined, @Body() body: unknown) {
     this.assertWorkerSecret(secret);
@@ -823,12 +839,17 @@ export class AdvancedIntegrationsController {
         objectType: input.objectType,
         externalId: input.externalId,
         eventType: input.eventType,
+        // The ingress already told the queue whether a domain service claimed this event. Without
+        // passing it on, the generic mapping path would apply an event a domain owns a second time,
+        // around the invariants that service enforces.
+        handled: input.handled,
       }),
     );
   }
 
   /** Push one queued outbound operation to the provider. */
   @HttpCode(200)
+  @Public()
   @Post('action/push-outbound')
   async pushOutbound(@Headers('x-worker-secret') secret: string | undefined, @Body() body: unknown) {
     this.assertWorkerSecret(secret);
@@ -837,6 +858,7 @@ export class AdvancedIntegrationsController {
   }
 
   @HttpCode(200)
+  @Public()
   @Post('action/notify-expiring-credentials')
   async notifyExpiringCredentials(@Headers('x-worker-secret') secret?: string) {
     this.assertWorkerSecret(secret);
@@ -854,6 +876,7 @@ export class AdvancedIntegrationsController {
    * deployment that did not opt in simply sees an empty report.
    */
   @HttpCode(200)
+  @Public()
   @Post('action/purge-retention')
   async purgeRetentionFromWorker(@Headers('x-worker-secret') secret?: string) {
     this.assertWorkerSecret(secret);

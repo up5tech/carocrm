@@ -21,7 +21,7 @@
 | G8 | The shared core imports two business domains | platform | Medium | Accepted (allow-listed) |
 | G9 | The default JWT secret is accepted in non-production environments | auth | High | Fixed (22.4) |
 | G10 | The architecture guard threw a `ReferenceError` instead of reporting a violation | platform | Medium | Fixed (22.6) |
-| G11 | The connector dead-letter replay route has no capability check | advanced-integrations | Medium | Open (22.17) |
+| G11 | The connector dead-letter replay route has no capability check | advanced-integrations | Medium | Fixed (22.14, as part of G43) |
 | G12 | The signature webhook inbox stamps a purge date that nothing acts on | esignature | Low | Open (22.21) |
 | G13 | Two provider receipt tables have no retention at all | voice-communications / marketing-automation | Low | Open (22.21) |
 | G14 | The `jobs` and `job_logs` tables have no retention | platform | Medium | Open (22.21) |
@@ -33,13 +33,13 @@
 | G20 | The payment provider event key is not scoped by provider | sales | Low | Open (22.19) |
 | G21 | A failed `jobs` row can be neither retried nor discarded through the API | platform | Medium | Open (22.21) |
 | G22 | The duplicate-job collapse looks for a status that never exists (`active`) | lead-score | Medium | Open (22.19) |
-| G23 | A connector dead letter can be marked "replayed" without the failed work being re-run | advanced-integrations | Medium | Open (22.21) |
+| G23 | A connector dead letter can be marked "replayed" without the failed work being re-run | advanced-integrations | Medium | Open (22.21; reproduced 22.14) |
 | G24 | The marketing form's Lead write is silently truncated — six fields the form writes are not Lead fields, so they are deleted | marketing-automation | Medium | Fixed (22.12) |
 | G25 | There is no first-class campaign↔Lead link; the Lead carries only a free-text `source` | lead-score / marketing-automation | Medium | Fixed (22.12) |
 | G26 | There is no Sales→ESignature contract; a completed signature has no consumer in the platform | sales / esignature | Medium | Open (22.9+) |
 | G27 | Customer Success never creates or reads `Project`/`ProjectTask`; the only link is the plan's `projectId` | customer-success / projects | Medium | Open (22.10+) |
 | G28 | The customer-success suite leaves the default onboarding template's Task behind | customer-success (test hygiene) | Low | Fixed (verified 22.11) |
-| G29 | A connector webhook delivery leaves a pending durable `jobs` row that the delivering suite does not remove | advanced-integrations (test hygiene) | Low | Open (partly fixed 22.11) |
+| G29 | A connector webhook delivery leaves a pending durable `jobs` row that the delivering suite does not remove | advanced-integrations (test hygiene) | Low | Open (partly fixed 22.11; the 22.14 journey removes its own) |
 | G30 | Hard-deleting an entity leaves its `stream_items` (and attachment rows) behind as orphans | platform (Entity Engine delete) | Medium | Open (found 22.11) |
 | G31 | The campaign reports answered any authenticated caller, and the event log named recipients the caller could not open | marketing-automation | High | Fixed (22.12) |
 | G32 | A replayed attribution outcome double-counted the conversion and its revenue | marketing-automation | Medium | Fixed (22.12) |
@@ -50,6 +50,20 @@
 | G37 | A user whose Case scope is `own` cannot create a Case at all | service-desk / platform ACL | Medium | Open (found 22.13) |
 | G38 | `features.readTools` is declared as the gate for turns and queries and never enforced | crm-chat | Medium | Open (found 22.13) |
 | G39 | A turn's own `sources` list is handed back without re-authorization | crm-chat | Low | Open (found 22.13) |
+| G40 | None of the connector's five worker doors could be reached by the worker | advanced-integrations | High | Fixed (22.14) |
+| G41 | The webhook job the API enqueues was refused by the door that receives it, and its domain-claim flag was dropped | advanced-integrations | High | Fixed (22.14) |
+| G42 | A verified webhook answered "no events" whenever the connector did not mention a challenge | advanced-integrations | Medium | Fixed (22.14) |
+| G43 | Nine connector write routes had no capability check anywhere | advanced-integrations | High | Fixed (22.14) |
+| G44 | The sync checkpoint advanced only at the end of the loop, and a bounded run advanced it past records it never applied | advanced-integrations | High | Fixed (22.14) |
+| G45 | Cancelling a run stopped nothing, and a cancelled run could be cancelled again | advanced-integrations | Medium | Fixed (22.14) |
+| G46 | `features.connections` was stored and displayed but enforced nothing | advanced-integrations | Medium | Fixed (22.14) |
+| G47 | Token refresh is implemented, serialised and tested — and no production path calls it | advanced-integrations | Medium | Open (found 22.14) |
+| G48 | The resilience layer the sync path never uses: rate limiter, retry policy, `assertCallable` | advanced-integrations | Medium | Open (found 22.14) |
+| G49 | `deletionPolicy: 'archive'` behaves exactly like `unlink` | advanced-integrations | Low | Open (found 22.14) |
+| G50 | A mapping asked for "the connection for this provider" gets one picked by name order | advanced-integrations | Medium | Open (found 22.14) |
+| G51 | The OAuth callback never compares the redirect URI its own comment claims it checks | advanced-integrations | Medium | Open (found 22.14) |
+| G52 | A provider's own error text is echoed into a 401, and a credential reference points at the connection, not the credential | advanced-integrations | Low | Open (found 22.14) |
+| G53 | A delivery deferred by a paused connection or a disabled module is never picked up again | advanced-integrations | Medium | Open (found 22.14) |
 
 ---
 
@@ -339,3 +353,113 @@
 - **Expected vs observed:** expected — one rule for "may this caller see this record", applied on every read; observed — two rules, one re-read and one replayed from the stored answer.
 - **Status:** Open (found 22.13) — recorded rather than fixed here because the fix is a small behaviour change (a silently shortened list) that should match how citations already behave, and the journey asserts the citation half, which is the surface the SPA renders.
 - **Remaining risk:** a long-lived turn keeps naming records its reader may no longer open.
+
+## G40 — None of the connector's five worker doors could be reached by the worker
+
+- **Module / contract:** advanced-integrations — `POST action/outbound-event`, `action/process-webhook-event`, `action/push-outbound`, `action/notify-expiring-credentials`, `action/purge-retention`.
+- **Impact:** the section these routes live in says, in its own comment, that the worker has no session so `@Public()` skips session authentication and the shared `x-worker-secret` is the authorisation. Four of the five routes (all but `action/dead-letters/:id/replay`'s neighbours) carried no `@Public()` decorator, so a session guard refused the worker before `assertWorkerSecret` was ever reached: `401 AUTHENTICATION_REQUIRED`. Every job in `ADVANCED_INTEGRATIONS_JOB_NAMES` is an HTTP proxy to one of those doors, so the whole asynchronous side of the module — a verified provider callback becoming a CRM record, an outbound push, the expiring-credential sweep, the retention purge — could not run in any deployment. Nothing noticed because every existing suite called the *services* directly, and the worker's own tests inject a fetcher instead of hitting the API.
+- **Expected vs observed:** expected — the worker posts the payload the API handed it and gets an answer; observed — a refusal that names no capability, because the request never reached the capability check.
+- **Status:** Fixed (22.14) — `@Public()` on all five doors, with the constant-time shared-capability comparison left as the only authority. Proven in the Phase 22.14 journey step 12, which reads the `jobs` row the ingress itself created and posts *that* to the door: no secret → 401, wrong length secret → 401, right secret → the event is applied.
+- **Remaining risk:** the doors are now reachable, so a leaked `REPORT_WORKER_SECRET` can drive them; that is the documented worker contract (ADR 0003) and it is the same capability every other module's door uses.
+
+## G41 — The webhook job the API enqueues was refused by the door that receives it
+
+- **Module / contract:** advanced-integrations — `WebhookIngressService.receive` → `advancedIntegrations.processWebhookEvent` → `action/process-webhook-event`.
+- **Impact:** the ingress put `kind` (the routing segment the provider used) into the job payload; the door parses that payload with `WebhookProcessSchema`, which is `.strict()` and does not declare `kind`. The worker forwards `context.data` verbatim, so every delivery failed with `400` at the door — one more way for a verified event to die between the API and the CRM. And `handled`, which the schema *does* accept and `processDelivery` honours (a domain service already claimed this event, so the generic mapping must not apply it a second time), was never passed on by the door — the guard was unreachable from the queue.
+- **Expected vs observed:** expected — the payload one component enqueues is the payload the next component accepts; observed — a producer and a consumer of the same contract disagreeing by one field in each direction.
+- **Status:** Fixed (22.14) — the enqueued payload carries exactly the fields the door accepts, and the door passes `handled` through. Journey step 12 proves both halves: a delivery a domain claimed answers `handled_by_domain` and leaves the record alone.
+
+## G42 — A verified webhook answered "no events" whenever the connector did not mention a challenge
+
+- **Module / contract:** advanced-integrations — the ingress's endpoint-validation branch.
+- **Impact:** `if (verification.challenge !== null)` was read as "this was a challenge", but a verification helper that returns only `{valid, reason}` yields `undefined`, which is `!== null`. So any connector whose `verifyWebhook` did not spell out `challenge: null` had every verified delivery answered as an empty event list: HTTP accepted, nothing recorded, nothing applied. The failure is silent in exactly the direction operators cannot see — the provider is told 202 and the CRM never changes.
+- **Expected vs observed:** expected — absence of a challenge means there was no challenge; observed — absence of a challenge *is* a challenge.
+- **Status:** Fixed (22.14) — the branch now tests the value, not its absence. The journey's connector returns the helper's result spread with an explicit `challenge: null`, so both readings are covered.
+
+## G43 — Nine connector write routes had no capability check anywhere
+
+- **Module / contract:** advanced-integrations — `POST action/mappings`, `PATCH action/mappings/:id`, `action/mappings/:id/activate`, `…/retire`, `…/sync`, `POST action/runs/:id/cancel`, `POST action/conflicts/:id/resolve`, `POST action/dead-letters/:id/replay`, plus the read-only `…/preview`.
+- **Impact:** the controller's header states the rule — every route checks a capability server-side, and each capability is checked by exactly one service, "so a route cannot drift from the matrix". For nine routes the matrix and the route had already drifted: neither the controller nor the service behind it asserted anything. A role holding only `AdvancedIntegrations: read` could create and activate a mapping, start a sync — which writes CRM records under the **connection's** authority, not the caller's — cancel a run, decide a conflict (choosing which side a record keeps) and mark a dead letter replayed. That last one is G11, which this entry subsumes.
+- **Expected vs observed:** expected — a write on a connection is connection administration; observed — a read right was a write right.
+- **Status:** Fixed (22.14) — the eight writes assert `connectionAdmin` at the controller (the seam an operator crosses, so no internal system path is affected) and `preview` keeps `use`, because a dry run writes nothing. Journey step 2 walks all eight with a viewer-only token and expects `403` on each, then makes the same calls as an operator and requires the refusal to come from the domain rather than from the permission layer.
+- **Remaining risk:** the module still has no narrower "who may decide a conflict" rule than `connectionAdmin`; a deployment that wants four-eyes on conflicts needs a new capability, not a new assertion.
+
+## G44 — The sync checkpoint advanced only at the end of the loop, and a bounded run advanced it past records it never applied
+
+- **Module / contract:** advanced-integrations — `SyncOrchestrator.runInbound`, `integration_sync_checkpoints.cursor_value`.
+- **Impact:** two faces of one missing rule. First, the cursor was written once, after the page loop finished, so an interruption — a provider error on page 40, a cancelled run, a dying process — discarded the progress of 39 applied pages, and the next run re-read every one of them; the table's own comment ("it advances only past an operation that succeeded") described the intent, not the code. Second, a run stopped by `maxRecords` in the middle of a page still advanced the cursor to the end of that page, so the records after the cut were recorded as behind the checkpoint and were never read again — silent, permanent data loss with a green run row.
+- **Expected vs observed:** expected — the cursor names the last thing this process committed; observed — it named a page the process had half-read, or nothing at all.
+- **Status:** Fixed (22.14) — the cursor is written per page, only when the page was consumed whole, and the budget is applied to the page before the cursor moves. Journey steps 8–10 pin all three behaviours: a rate-limited page 2 leaves `off:2` behind and the resume run reads the rest; a `maxRecords` stop inside page 2 leaves the cursor at the end of page 1, so the half-read record is read again (five records, not four) and still produces one CRM record; a cancelled run's cursor matches the pages it applied.
+- **Remaining risk:** a run that fails *between* the last record of a page and the cursor write re-reads that page on resume. That is the correct direction to be wrong in — at-least-once reading against an idempotent apply — and step 7 proves the apply is idempotent.
+
+## G45 — Cancelling a run stopped nothing, and a cancelled run could be cancelled again
+
+- **Module / contract:** advanced-integrations — `SyncOrchestrator.cancelRun` and the run loop.
+- **Impact:** `cancelRun` wrote `status = 'cancelled'` and its comment promised the run "stops at the next record boundary". The loop never read the row again, so the promise was prose: an operator pressed cancel, the answer said `cancelled`, and the run went on calling the provider and writing records until it finished — while the row that said `cancelled` was then overwritten by the loop's own final status. Cancelling an already-cancelled run was also accepted, because only `completed` and `failed` were treated as finished.
+- **Expected vs observed:** expected — a cancellation the operator sees is a cancellation that takes effect, and a terminal run is not cancellable twice; observed — a status the loop silently replaced.
+- **Status:** Fixed (22.14) — the loop asks once per page whether it was cancelled and stops there, keeping the counts of what it already applied, and `cancelled` joins `completed`/`failed` as a state that refuses a second cancel. Journey step 10 cancels from *inside* the run — the connector's page hook calls the cancel route while the loop is between pages — and asserts `cancelled`, two records scanned, `off:2` in the checkpoint, and a continuation run that reads the remaining five without duplicating anything.
+- **Remaining risk:** the boundary is a page, not a record, so a cancel waits for the current page's round-trip. That is the documented contract now and the page size is the operator's knob.
+
+## G46 — `features.connections` was stored and displayed but enforced nothing
+
+- **Module / contract:** advanced-integrations settings — `features.connections`, `AdvancedIntegrationsHealthService`, `docs/runbooks/advanced-integrations.md` §12.
+- **Impact:** the schema's own comment calls it "the connection control plane", and the runbook's disable plan tells an operator to turn the module's features off (`connections`, `oauth`). `oauth` is enforced (the flow refuses with a named feature); `connections` was read in exactly one place — the health report describing itself. So the documented way to stop the module stopped nothing, and the health report said "off" to an operator who believed it.
+- **Expected vs observed:** expected — a switch an operator can see is a switch the server enforces; observed — the control plane kept accepting writes.
+- **Status:** Fixed (22.14) — creating a connection is refused while the flag is off, naming the feature; reads, diagnostics and the existing connections keep answering, which is what the runbook says a disabled module does. Journey step 14 asserts refusal, the health report, and that re-enabling restores the write. Provider calls per se are gated by the connection's own state (`paused`, `revoked`, `reauthorization_required` are never permission to call), which step 14 also proves with the connector's own call counter.
+- **Remaining risk:** there is still no single "stop everything" switch — the module's kill switch is pause-the-connection plus features-off, and G53 records what happens to work already queued behind them.
+
+## G47 — Token refresh is implemented, serialised and tested — and no production path calls it
+
+- **Module / contract:** advanced-integrations — `OAuthFlowService.refresh`, `ConnectorExecutor.buildContext`.
+- **Impact:** `refresh()` takes an advisory lock per connection, re-checks under that lock whether another worker already rotated the token, stores the new pair and moves the connection to `reauthorization_required` if the provider refuses. It is correct and it is concurrency-safe. Nothing calls it: the only caller in the repository is `apps/api/test/advanced-integrations.test.ts`, and the executor reads the stored access token and hands it to the adapter without consulting its expiry. So a token that expires in the middle of a working day leaves the connection `connected`, every provider call failing, and no path marks it as needing reauthorization from a live authorization error — the operator finds out from failed runs, not from the connection's state.
+- **Expected vs observed:** expected — an expiring grant is refreshed before it is used, or the connection says so; observed — an expiry notice job exists (`features.expiryNotices`, `notifyExpiringCredentials`) that warns a human days ahead, and nothing else.
+- **Status:** Open (found 22.14) — the journey calls the service directly to prove the mechanism works and says so in the step, because pretending a route exists would be worse than recording that it does not. Wiring it up is a decision with a cost: refreshing inside the executor means a provider round-trip and a credential rotation in the middle of every call, and mapping an adapter's `authorization` failure to `reauthorization_required` changes what a deployment sees after an outage. Both belong in the connector-operations sub-phase, not smuggled into a hardening journey.
+- **Remaining risk:** a deployment whose provider issues short-lived tokens needs the expiry notice to be enough, and today it only produces a notification.
+
+## G48 — The resilience layer the sync path never uses
+
+- **Module / contract:** advanced-integrations — `resilience.ts` (`ProviderRateLimiter`, `decideRetry`, `computeRetryDelay`) and `assertCallable` in the domain.
+- **Impact:** the rate limiter is wired into the executor behind `options.rateLimit`, and no caller anywhere passes that option — `runInbound`, the webhook paths, the outbound push and the controller's own calls all use `executor.call(id, fn)`. So `integration_rate_limit_buckets` stays empty and a connector that documents `rateLimitStrategy: 'provider_header'` is throttled only by the provider's own refusal. `decideRetry`/`computeRetryDelay` — the bounded, jittered backoff the engine tests assert to the bit — are imported and re-exported by the orchestrator and never called by production code: the retry policy lives in the queue (`attempts`, exponential backoff) and in a hardcoded `attempts >= 5` in the outbound path. `assertCallable`, the domain's own rule about which states may call a provider, is exported and never used; the executor re-implements the same rule inline with different wording.
+- **Expected vs observed:** expected — a declared capability and a tested policy that nothing consults is a bug waiting for the day somebody trusts it; observed — the circuit breaker *is* live (it is the one part of `resilience.ts` the executor uses unconditionally), which is why the gap is easy to miss.
+- **Status:** Open (found 22.14) — recorded, not patched: passing `rateLimit` from the connector's declared strategy, or moving the queue's retry maths onto `decideRetry`, changes the timing of every deployment's syncs and needs a decision about who owns retries (provider budget, queue policy, or both). The journey asserts what is genuinely enforced instead — the breaker refuses through a poisoned connection, and a rate-limited page produces a named `RATE_LIMITED` failure with a dead letter.
+- **Remaining risk:** `docs/compatibility/advanced-integrations/provider-matrix.md` describes rate-limit strategies per connector; a reader can reasonably conclude the platform obeys them.
+
+## G49 — `deletionPolicy: 'archive'` behaves exactly like `unlink`
+
+- **Module / contract:** advanced-integrations — `DELETION_POLICIES` and `SyncOrchestrator.applyDeletion`.
+- **Impact:** three policies are declared and validated (`unlink`, `archive`, `ignore`) and the implementation branches only on `ignore`; everything else takes the unlink path. The docstring promises the record is archived. An operator who chose archive to keep an audit trail of provider-side deletions gets an unlink and a live record, and nothing says the choice was not honoured.
+- **Expected vs observed:** expected — a policy the API validates is a policy the engine implements; observed — two of three names mean one behaviour.
+- **Status:** Open (found 22.14) — a one-branch change (set `deleted_at`/archive state instead of only removing the link), but it changes what a CRM record looks like after a provider delete, which is a product decision with a restore path attached. The journey covers the `unlink` behaviour that exists.
+- **Remaining risk:** compliance answers built on "we archive what the provider deletes" are wrong.
+
+## G50 — A mapping asked for "the connection for this provider" gets one picked by name order
+
+- **Module / contract:** advanced-integrations — `POST action/mappings` and its `resolveConnectionId` helper.
+- **Impact:** the request names a provider, and the helper lists the caller's connections and takes the **first one whose provider key matches**, ordered by `provider_key, name`. A deployment with two connections to one provider (a sandbox and a production tenant; a revoked one awaiting deletion and a live one) silently binds the mapping — and therefore every sync and every webhook apply — to whichever name sorts first. A revoked connection sorts as easily as a live one.
+- **Expected vs observed:** expected — the caller chooses, or the platform chooses a *usable* connection and says which; observed — an ordering accident decides where CRM records come from.
+- **Status:** Open (found 22.14) — the journey works around it by keeping exactly one live connection per provider and deleting the ones it revokes, and records the workaround in its findings. The fix is an explicit `connectionId` on the mapping request, which is an API-shape change (and a metadata/migration question for existing mappings that only carry a provider key).
+- **Remaining risk:** a mapping bound to the wrong tenant reads real records from the wrong account.
+
+## G51 — The OAuth callback never compares the redirect URI its own comment claims it checks
+
+- **Module / contract:** advanced-integrations — `AdvancedIntegrationsOAuthCallbackController` header comment and `OAuthFlowService.complete`.
+- **Impact:** the controller states that the returning redirect URI is compared with the one stored on the state row. `complete()` takes `{state, code, error}` and has no redirect input at all, so nothing is compared. The state row is single-use, hashed, short-lived and bound to a connection and an initiating principal, which is what actually stops a replay — but the provider-facing binding an operator is told about (register the exact redirect) is not enforced by the platform.
+- **Expected vs observed:** expected — either compare it, or stop documenting it; observed — documentation of a check that is not there.
+- **Status:** Open (found 22.14) — closing it properly means sending `redirectUri` on the exchange (providers validate it against the registered value) or dropping the claim from the comment; the second is honest and the first is what a real OAuth client does, so it belongs with the OAuth wiring in G47 rather than arriving half-way here.
+- **Remaining risk:** a mis-registered redirect produces a provider-side error the platform reports as a generic authorization failure (`AUTHORIZATION_FAILED`), which is accurate but not actionable.
+
+## G52 — A provider's own error text is echoed into a 401, and a credential reference points at the connection, not the credential
+
+- **Module / contract:** advanced-integrations — `OAuthFlowService.complete` failure branch; `ConnectionLifecycleService` credential bookkeeping.
+- **Impact:** when the provider returns an `error` on the callback, the refusal message interpolates the provider's string — and that string is the one place an OAuth error response sometimes carries a code or a token fragment, which then reaches the operator's browser and whatever logs the message. Separately, `credential_reference_id` is written as the **connection's own id** rather than the credential row it is meant to reference, and it is not cleared when the credential is revoked, so the "reference" is a pointer that never pointed at anything and keeps pointing after the thing is gone; the module's own `secretHint()` helper (first two characters, mask, last two) is exported and never used, so an operator sees the credential *kind* and no recognizable hint.
+- **Expected vs observed:** expected — a refusal that carries a stable code and never the provider's raw words; a reference that identifies the row it names, and a hint that helps an operator recognise it. Observed — provider text in a message, and a column that duplicates `connection_id`.
+- **Status:** Open (found 22.14) — both are small and both touch what an operator reads, so they are grouped here for one deliberate pass. The journey asserts the part that matters today: no credential value appears in the connection, detail, runs, logs, health, metrics or audit trail — the *values* are safe; it is the reference and the echo that are wrong.
+- **Remaining risk:** an error-tracking pipeline that logs API messages can capture a provider error string containing something it should not keep.
+
+## G53 — A delivery deferred by a paused connection or a disabled module is never picked up again
+
+- **Module / contract:** advanced-integrations — `WebhookIngressService.processDelivery`, the connection state gate in the executor.
+- **Impact:** the receipt's status is the idempotency guard, and a delivery that is not applied stays `received`. Pausing a connection refuses provider *calls*, but a callback already in the queue still arrives and is still applied through the mapping, because applying a stored payload calls no provider. Turning `features.connections` off refuses new control-plane writes and does nothing to a queued job either. Either way, if a delivery is refused or fails, nothing sweeps the rows left `received`: the provider must send them again, and a provider that will not re-send a duplicate delivery for a row it deduplicates by id has lost the event with only a receipt to prove it happened.
+- **Expected vs observed:** expected — one documented policy for work already in flight when the operator stops the module, and a sweeper that acts on it; observed — the runbook's disable plan (pause, then turn features off) has no queue semantics attached to it.
+- **Status:** Open (found 22.14) — the journey asserts the enforceable part (no provider call goes out while a connection is paused, proven with the connector's own counter, and a full re-sync via `reconcile` recovers the data that matters), and records the rest rather than inventing a policy the plan has not decided.
+- **Remaining risk:** "we paused the connector during the outage" can still mean "the CRM changed underneath us", and an operator has no list of what arrived meanwhile beyond the receipts table.

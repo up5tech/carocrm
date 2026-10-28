@@ -128,8 +128,10 @@ export class WebhookIngressService {
               detail: verification.reason ?? 'invalid_signature',
             });
           }
-          if (verification.challenge !== null) {
-            // An endpoint-validation challenge. It is answered by the transport, not stored.
+          // A challenge is a non-empty answer the transport returns to the provider; the absence of one
+          // is not a challenge. Comparing with `!== null` made an adapter that omits the field answer
+          // "no events" for every verified delivery — a silently empty webhook pipeline.
+          if (verification.challenge) {
             return [] as readonly NormalizedProviderEvent[];
           }
           return adapter.normalizeWebhook({
@@ -191,6 +193,9 @@ export class WebhookIngressService {
       if (claimed) handled += 1;
       await this.jobs.enqueue({
         job: WEBHOOK_PROCESS_JOB,
+        // Exactly the fields `action/process-webhook-event` accepts. The door's schema is strict, so a
+        // field it does not know (the routing `kind`, which only the ingress needed) made every job
+        // fail with a 400 and no provider event was ever applied.
         data: {
           connectionId: connection.id,
           providerKey: input.providerKey,
@@ -198,7 +203,6 @@ export class WebhookIngressService {
           objectType: event.objectType,
           externalId: event.externalId,
           eventType: event.eventType,
-          kind: input.kind,
           handled: claimed,
         },
       });

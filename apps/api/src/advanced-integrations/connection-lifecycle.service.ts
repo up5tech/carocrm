@@ -169,6 +169,16 @@ export class ConnectionLifecycleService {
    */
   async create(input: ConnectionCreateInput): Promise<IntegrationConnectionView> {
     await this.permissions.assert('connectionAdmin');
+    // The settings document calls `features.connections` the control-plane switch, and the runbook
+    // tells an operator to turn it off to stop this module. Until here it stopped nothing: the flag
+    // was read only to describe itself in the health report.
+    const policy = await this.settings.settings();
+    if (!policy.features.connections) {
+      throw new ValidationError(
+        'The Advanced Integrations control plane is disabled. Enable features.connections before creating a connection.',
+        { feature: 'connections' },
+      );
+    }
     const provider = this.registry.require(input.providerKey);
     if (provider.adapter === null) {
       throw new ValidationError(
