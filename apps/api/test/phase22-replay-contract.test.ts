@@ -235,6 +235,8 @@ afterAll(async () => {
   await sql`delete from marketing_provider_webhook_inbox where provider = ${MARKETING_PROVIDER}`.execute(ctx.database.db);
   await sql`delete from marketing_events where provider = ${MARKETING_PROVIDER}`.execute(ctx.database.db);
   await ctx.database.db.deleteFrom('integration_webhook_deliveries').where('connection_id', '=', connectionId).execute();
+  // The delivery enqueues a durable job row before it is handled; this run's connection owns it.
+  await sql`delete from jobs where target->>'connectionId' = ${connectionId}`.execute(ctx.database.db);
   await ctx.database.db.deleteFrom('integration_connections').where('id', '=', connectionId).execute();
   await ctx.database.db.deleteFrom('entity_records').where('id', '=', accountId).execute();
   await shutdownApi();

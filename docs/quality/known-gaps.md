@@ -38,7 +38,9 @@
 | G25 | There is no first-class campaign↔Lead link; the Lead carries only a free-text `source` | lead-score / marketing-automation | Medium | Open (22.12) |
 | G26 | There is no Sales→ESignature contract; a completed signature has no consumer in the platform | sales / esignature | Medium | Open (22.9+) |
 | G27 | Customer Success never creates or reads `Project`/`ProjectTask`; the only link is the plan's `projectId` | customer-success / projects | Medium | Open (22.10+) |
-| G28 | The customer-success suite leaves the default onboarding template's Task behind | customer-success (test hygiene) | Low | Open |
+| G28 | The customer-success suite leaves the default onboarding template's Task behind | customer-success (test hygiene) | Low | Fixed (verified 22.11) |
+| G29 | A connector webhook delivery leaves a pending durable `jobs` row that the delivering suite does not remove | advanced-integrations (test hygiene) | Low | Open (partly fixed 22.11) |
+| G30 | Hard-deleting an entity leaves its `stream_items` (and attachment rows) behind as orphans | platform (Entity Engine delete) | Medium | Open (found 22.11) |
 
 ---
 
@@ -234,7 +236,23 @@
 ## G28 — The customer-success suite leaves the default onboarding template's Task behind
 
 - **Module / contract:** customer-success — test hygiene, not product behaviour.
-- **Impact:** `apps/api/test/customer-success.test.ts` starts the **default** onboarding playbook, whose first step is a `createTask` step, and the produced CRM `Task` is named `Schedule the kickoff call` — a name without the suite's `AGENT_TEST_` marker, so the suite's cleanup does not remove it. Every run of that suite leaves one row behind in the shared development database.
-- **Expected vs observed:** expected — the suite removes every record it created; observed — one unmarked `Task` per run.
-- **Status:** Open — the fix belongs to that suite (track the produced task's id and delete it, as the Phase 22.10 journey does). Recorded here rather than fixed in place, because the change belongs to another suite's own file.
-- **Remaining risk:** the shared database keeps accumulating one unmarked task per customer-success run.
+- **Impact:** `apps/api/test/customer-success.test.ts` used to start the **default** onboarding playbook, whose first step is a `createTask` step named `Schedule the kickoff call` — a name without the suite's `AGENT_TEST_` marker, so the suite's cleanup could not remove it and every run left one row behind.
+- **Expected vs observed:** expected — the suite removes every record it created; observed at the time — one unmarked `Task` per run.
+- **Status:** Fixed (verified during the 22.11 run on 2026-10-28) — the suite now installs its own playbook template whose task step is named with the run marker (`AGENT_TEST_csm… kickoff call`) and deletes it through the API: after a full `pnpm test` the database holds **zero** live `Schedule the kickoff call` rows and the run's marked task is soft-deleted. The Phase 22.10 journey does the same by tracking the produced task's id.
+- **Remaining risk:** none observed; a future change back to the shared default template would reintroduce it.
+
+## G29 — A connector webhook delivery leaves a pending durable `jobs` row that the delivering suite does not remove
+
+- **Module / contract:** advanced-integrations — test hygiene, plus the delivery seam itself.
+- **Impact:** `POST /api/v1/integrations/webhook/:connectionId/:key` stores a durable `jobs` row before the handler runs, so a suite that deletes its connection and delivery rows but not the job leaves a `pending` row whose `target->>'providerKey'` names a provider that no longer exists. `apps/api/test/advanced-integrations-engine.test.ts` has done this on every run since 2026-10-20 (29+ rows found in the configured database, `agent-test-webhook_*`). The Phase 22.7 replay suite showed the same shape (14 rows, `agent-test-p22-*`).
+- **Expected vs observed:** expected — a suite removes every row it created; observed — one pending `jobs` row per webhook delivery that the suite never dequeues.
+- **Status:** Partly fixed (22.11) — `phase22-replay-contract.test.ts` now deletes `jobs where target->>'connectionId' = ${connectionId}` in its `afterAll`, the rows its earlier runs left behind were removed by exact id, and two further runs of that suite (focused and inside `pnpm test`) left **zero** `agent-test-p22-*` jobs rows. The pre-existing engine suite still leaks; the same one-line predicate is the fix in that file too.
+- **Remaining risk:** orphan `jobs` rows keep accumulating, and a worker that scans the durable queue does work for connections that no longer exist.
+
+## G30 — Hard-deleting a record leaves its `stream_items` rows behind as orphans
+
+- **Module / contract:** platform — the Entity Engine delete path and the stream.
+- **Impact:** `stream_items` is polymorphic (`entity_type`, `entity_id`) with no foreign key to `entity_records` (migration `002_stream.sql`), and nothing in the platform removes its rows when a record is hard-deleted — `apps/api/src/stream/stream-hooks.ts` only inserts. So every hard delete leaves the record's timeline behind. One `pnpm test` run on 2026-10-28 added 570 such rows across 31 entity types (152 `SubscriptionPeriod`, 68 `LeadScoreModel`, 49 `MarketingSend`, 47 `Invoice`, … , 1 `Case`); the configured database now carries 4,640 orphan `Case` rows, 13,528 `SubscriptionPeriod` and 5,127 `LeadScoreModel`.
+- **Expected vs observed:** expected — either the delete path removes the record's stream rows (`stream_items` with their `stream_mentions`/`stream_attachments`) or a retention pass prunes rows whose subject no longer exists; observed — neither, so the stream tables only grow and a list of stream rows can name a record that no longer exists.
+- **Status:** Open (found 22.11) — a product decision, not a test fix: either the hard-delete path deletes `stream_items`/`stream_mentions`/`stream_attachments` for that record, or a retention pass prunes rows with no surviving subject. The Phase 22.11 journey proves the test-side discipline in the meantime: it deletes its own Case stream rows by `entity_id` before deleting the Case.
+- **Remaining risk:** unbounded growth in the stream tables, and a stale `entity_type`/`entity_id` pair that a future notification or stream reader could surface.
