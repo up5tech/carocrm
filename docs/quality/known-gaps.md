@@ -34,6 +34,8 @@
 | G21 | A failed `jobs` row can be neither retried nor discarded through the API | platform | Medium | Open (22.21) |
 | G22 | The duplicate-job collapse looks for a status that never exists (`active`) | lead-score | Medium | Open (22.19) |
 | G23 | A connector dead letter can be marked "replayed" without the failed work being re-run | advanced-integrations | Medium | Open (22.21) |
+| G24 | The marketing form's Lead write is silently truncated — six fields the form writes are not Lead fields, so they are deleted | marketing-automation | Medium | Open (22.12) |
+| G25 | There is no first-class campaign↔Lead link; the Lead carries only a free-text `source` | lead-score / marketing-automation | Medium | Open (22.12) |
 
 ---
 
@@ -195,3 +197,18 @@
 - **Module / contract:** advanced-integrations — `DeadLetterService.markReplayed`.
 - **Impact:** the route flips the status to `replayed` and writes an audit row; it does not re-enqueue the failed operation, and no route ever calls `markDiscarded`. An operator reading the queue sees "replayed" for work that was never retried.
 - **Status:** Open — deferred to 22.21, together with the operator API that G21 also needs.
+
+## G24 — The marketing form's Lead write is silently truncated
+
+- **Module / contract:** marketing-automation → CRM — the public web-form intake.
+- **Impact:** `MarketingFormService.createLead` writes `companyName`, `utmSource`, `utmMedium`, `utmCampaign`, `campaignId` and `formIntakeKey` onto a `Lead`. The `Lead` entity declares none of them, and `EntityCrudService.prepareWrite` deletes every key the metadata does not declare. So the company is lost (the Lead field is `company`), the campaign and UTM reference never reach the Lead, and the form's own intake-key idempotency lookup (`attrs ->> 'formIntakeKey'`) can never match — a repeated intake with a different e-mail address creates a second Lead.
+- **Expected vs observed:** expected — the intake records where the lead came from and the same intake key never creates two Leads; observed — the record keeps only `source`.
+- **Root cause:** two modules disagree about the Lead's shape. The form was written against a richer Lead than the metadata declares.
+- **Status:** Open — deferred to 22.12 (the marketing and acquisition journey), which is the sub-phase that owns this path. The fix is additive: declare the fields on the Lead (they need no migration, the attributes are JSONB) and write `company` rather than `companyName`.
+- **Verification:** found while building the Phase 22.8 journey (`docs/quality/phase-22-journey-lead-to-customer.md` §8, F3).
+
+## G25 — There is no first-class campaign↔Lead link
+
+- **Module / contract:** lead-score / marketing-automation — "which campaign produced this lead".
+- **Impact:** the `Lead` entity carries only the free-text `source`. The campaign↔Lead association lives outside the Lead record: `marketing_events.campaign_id`, `MarketingConsent.campaignId`, `TargetListEntry` and the journey enrollment. LeadScore reads the `marketing_events` association (its engagement signal) and ignores the campaign id, so a score cannot say *which* campaign engaged the lead.
+- **Status:** Open — deferred to 22.12, together with G24: if the form's fields are declared, the Lead can carry the campaign it came from.
