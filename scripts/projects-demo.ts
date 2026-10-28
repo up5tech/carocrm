@@ -467,6 +467,11 @@ async function main(): Promise<void> {
   const config = buildConfig();
   pool = new pg.Pool({ connectionString: config.databaseUrl, max: 2 });
 
+  // AGENTS.md §3.1: refuse to purge/seed against a production database unless explicitly forced.
+  if (process.env.NODE_ENV === 'production' && !process.argv.includes('--force')) {
+    throw new Error('projects-demo refused: NODE_ENV=production. Re-run with --force to purge/seed against this database.');
+  }
+
   await purge();
   if (purgeOnly) {
     await pool.end();

@@ -32,7 +32,7 @@
     "db:seed": "tsx database/seed.ts",
     "demo:projects": "tsx scripts/projects-demo.ts",
     "demo:projects:purge": "tsx scripts/projects-demo.ts --purge",
-    "test:e2e": "bash scripts/e2e-smoke.sh",
+    "test:e2e": "E2E_ALLOW_PRIMARY_DB=1 bash scripts/e2e-smoke.sh",
     "verify": "concurrently -n lint,typecheck,test,test:web -c cyan,magenta,yellow,green \"pnpm lint\" \"pnpm typecheck\" \"pnpm test\" \"pnpm test:web\""
   },
   "devDependencies": {

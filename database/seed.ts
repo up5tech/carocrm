@@ -125,6 +125,14 @@ async function seedProjectSystemRows(pool: pg.Pool): Promise<void> {
 }
 
 export async function seed(connectionString: string, options: SeedOptions = {}): Promise<void> {
+  // AGENTS.md §3.1: never run destructive reset/seed against a production database. Seeding
+  // overwrites role permissions and admin state, so it is opt-in only on approved non-prod DBs.
+  if (process.env.NODE_ENV === 'production' && process.env.SEED_FORCE !== '1') {
+    throw new Error(
+      'seed() refused: NODE_ENV=production. Seeding overwrites role permissions and is destructive; ' +
+        'only run it on an approved non-production database with SEED_FORCE=1.',
+    );
+  }
   await runMigrations(connectionString);
   const adminLogin = options.adminLogin ?? process.env.SEED_ADMIN_LOGIN ?? 'admin';
   const adminPassword = options.adminPassword ?? process.env.SEED_ADMIN_PASSWORD ?? 'admin';

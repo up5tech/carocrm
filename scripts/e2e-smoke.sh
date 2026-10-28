@@ -18,6 +18,13 @@ if [ -z "${DATABASE_URL:-}" ]; then
   echo "DATABASE_URL is not set; copy .env.example to .env first." >&2
   exit 1
 fi
+# AGENTS.md §3.1 / Phase 22.1: this script seeds AND writes test records to the CONFIGURED primary
+# database. Refuse unless explicitly opted in, so it can never run by accident against a prod-like env.
+if [ -z "${E2E_ALLOW_PRIMARY_DB:-}" ]; then
+  echo "REFUSED: scripts/e2e-smoke.sh seeds and writes to the configured primary database." >&2
+  echo "Set E2E_ALLOW_PRIMARY_DB=1 to opt in — only on a non-production dev database." >&2
+  exit 1
+fi
 export DATABASE_URL
 export APP_PORT="$PORT"
 export APP_HOST=127.0.0.1
@@ -25,6 +32,9 @@ export NODE_ENV=production
 export LOG_LEVEL=error
 export STORAGE_ROOT=".data/e2e-${RUN_ID}"
 export JWT_SECRET="e2e-se…tion"
+# seed.ts now refuses NODE_ENV=production without SEED_FORCE; this run deliberately targets the dev
+# database, so opt in (the DB name is confirmed non-prod by the operator who set E2E_ALLOW_PRIMARY_DB).
+export SEED_FORCE=1
 # Outbound mail is held in memory: this run must never reach a mail server (AGENTS.md §5.5).
 export MAIL_TRANSPORT=memory
 # The scratch queue the API test suite already uses: a send job queued here can never reach the real
