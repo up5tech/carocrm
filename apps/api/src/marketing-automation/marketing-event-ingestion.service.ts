@@ -1,4 +1,4 @@
-import { randomUUID , timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID , timingSafeEqual } from "node:crypto";
 
 import { Inject, Injectable } from "@nestjs/common";
 import { sql } from "kysely";
@@ -113,46 +113,55 @@ export class MarketingEventIngestionService {
       }
     }
 
-    const existing = await sql<{ id: string; processing_status: string; normalized_event_type: string | null }>`
-      select id, processing_status, normalized_event_type
-      from marketing_provider_webhook_inbox
-      where provider = ${input.provider} and dedup_key = ${dedupKey}
-      limit 1
-    `.execute(this.database.db);
-    const found = existing.rows[0];
-    if (found !== undefined) {
-      return {
-        inboxId: found.id,
-        duplicate: true,
-        normalizedType: (found.normalized_event_type as NormalizedMarketingEventType) ?? normalized,
-        processingStatus: found.processing_status,
-      };
-    }
-
-    const inboxId = randomUUID();
-    // Fail closed (§9.4, §15 `19-MA.10`): with no configured secret there is nothing to verify against,
-    // and a shared default would be a public constant anyone could sign with.
+    // Verification precedes trust (§9.4, §15 `19-MA.10`): with no configured secret there is nothing
+    // to verify against, and a shared default would be a public constant anyone could sign with.
+    //
+    // It also precedes the dedup lookup. A delivery is only a *replay* once it has proved it is the
+    // delivery that was seen before; a forged delivery that reuses a known key must be refused, not
+    // answered "already have it" — otherwise anybody could probe the inbox with a key they guessed.
     const configured = typeof input.secret === "string" && input.secret.trim() !== "";
     const signatureValid = configured && this.verifySignature(input.signature, input.secret);
 
     if (!signatureValid) {
-      await sql`
+      // A rejected delivery is evidence, so it is recorded — under a key of its own. A rejection must
+      // never occupy the key of the genuine delivery it pretended to be, or the genuine delivery
+      // would be dropped as a duplicate afterwards.
+      const rejectionId = randomUUID();
+      const recorded = await sql<{ id: string }>`
         insert into marketing_provider_webhook_inbox
           (id, provider, provider_event_id, dedup_key, event_type, signature_valid,
            processing_status, failure_reason, normalized_event_type)
         values
-          (${inboxId}, ${input.provider}, ${providerEventId}, ${dedupKey}, ${eventTypeRaw},
-           false, 'rejected', ${configured ? "INVALID_SIGNATURE" : "SECRET_NOT_CONFIGURED"}, ${normalized})
+          (${rejectionId}, ${input.provider}, ${providerEventId}, ${rejectedKey(input.provider, dedupKey, payload)},
+           ${eventTypeRaw}, false, 'rejected',
+           ${configured ? "INVALID_SIGNATURE" : "SECRET_NOT_CONFIGURED"}, ${normalized})
+        on conflict (provider, dedup_key) do nothing
+        returning id
       `.execute(this.database.db);
+      // The same forged body twice records one row: the second refusal reuses it.
+      let rejection = recorded.rows[0]?.id ?? rejectionId;
+      if (recorded.rows.length === 0) {
+        const existing = await sql<{ id: string }>`
+          select id from marketing_provider_webhook_inbox
+          where provider = ${input.provider} and dedup_key = ${rejectedKey(input.provider, dedupKey, payload)}
+          limit 1
+        `.execute(this.database.db);
+        rejection = existing.rows[0]?.id ?? rejection;
+      }
       return {
-        inboxId,
+        inboxId: rejection,
         duplicate: false,
         normalizedType: normalized,
         processingStatus: "rejected",
       };
     }
 
-    await sql`
+    // The claim is atomic. A SELECT followed by an INSERT lets two concurrent deliveries of the same
+    // event both decide they are the first, and the loser takes a unique violation (a 500 to the
+    // provider). `on conflict do nothing` makes the insert itself the decision, and the row that
+    // survives is the one everybody agrees on.
+    const inboxId = randomUUID();
+    const claimed = await sql<{ id: string }>`
       insert into marketing_provider_webhook_inbox
         (id, provider, provider_event_id, dedup_key, event_type, signature_valid,
          processing_status, normalized_event_type, campaign_id, send_id,
@@ -162,7 +171,26 @@ export class MarketingEventIngestionService {
          true, 'processing', ${normalized}, ${campaignId}, ${sendId},
          ${providerMessageId}, ${recipientEntityType}, ${recipientEntityId},
          ${JSON.stringify(redactPayload(payload))}::jsonb)
+      on conflict (provider, dedup_key) do nothing
+      returning id
     `.execute(this.database.db);
+
+    if (claimed.rows.length === 0) {
+      // Somebody already has this event. The answer is a safe acknowledgement, not a second effect.
+      const existing = await sql<{ id: string; processing_status: string; normalized_event_type: string | null }>`
+        select id, processing_status, normalized_event_type
+        from marketing_provider_webhook_inbox
+        where provider = ${input.provider} and dedup_key = ${dedupKey}
+        limit 1
+      `.execute(this.database.db);
+      const found = existing.rows[0];
+      return {
+        inboxId: found?.id ?? inboxId,
+        duplicate: true,
+        normalizedType: (found?.normalized_event_type as NormalizedMarketingEventType) ?? normalized,
+        processingStatus: found?.processing_status ?? "processing",
+      };
+    }
 
     const eventId = randomUUID();
     // `uq_marketing_events_inbox` (migration 042) is a *partial* index, and PostgreSQL only infers a
@@ -301,4 +329,23 @@ function redactPayload(payload: Record<string, unknown>): Record<string, unknown
     out[k] = v;
   }
   return out;
+}
+
+/**
+ * The key a **rejected** delivery is recorded under.
+ *
+ * A rejection must never occupy the key of the delivery it pretended to be: if it did, the genuine
+ * delivery would arrive afterwards, find its key taken and be dropped as a duplicate. So the
+ * rejection lives in its own namespace, keyed by the payload it carried — the same anti-poisoning
+ * rule the voice ingress uses (`voice-communications-domain.ts`).
+ */
+function rejectedKey(
+  provider: string,
+  dedupKey: string,
+  payload: Record<string, unknown>,
+): string {
+  const digest = createHash("sha256")
+    .update(`${provider}|${dedupKey}|${JSON.stringify(redactPayload(payload))}`)
+    .digest("hex");
+  return `rejected:${digest}`;
 }

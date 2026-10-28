@@ -557,87 +557,108 @@ export class PaymentService {
       input.eventType,
     );
 
-    return await runInTransaction(
-      this.database.db,
-      async (tx) =>
-        await runAsSalesInternal(async () => {
-          const created = await this.entities.create(
-            "PaymentProviderEventLog",
-            {
-              name: `${input.provider}:${input.eventType}`,
-              provider: input.provider,
-              providerEventId,
-              eventType: input.eventType,
-              paymentRequestId: input.paymentRequestId ?? null,
-              payload:
-                input.payload === undefined
-                  ? null
-                  : JSON.stringify(input.payload),
-              processedStatus: "received",
-              processedAt: new Date(),
-            },
-          );
-          const logId = requireId(created, "PaymentProviderEventLog");
-
-          let requestStatus: string | null = null;
-          if (
-            input.paymentRequestId !== undefined &&
-            input.paymentRequestId !== null
-          ) {
-            const request = await this.records.byId(
-              "PaymentRequest",
-              input.paymentRequestId,
-            );
-            if (request !== undefined) {
-              const current = text(request.data["status"]) ?? "pending";
-              const next =
-                paid && current === "pending"
-                  ? "paid"
-                  : failed && current === "pending"
-                    ? "failed"
-                    : null;
-              if (next !== null) {
-                await this.entities.update(
-                  "PaymentRequest",
-                  input.paymentRequestId,
-                  {
-                    status: next,
-                    providerReference:
-                      text(request.data["providerReference"]) ?? null,
-                  },
-                );
-                requestStatus = next;
-              } else {
-                requestStatus = current;
-              }
-            }
-          }
-
-          await this.entities.update("PaymentProviderEventLog", logId, {
-            processedStatus: requestStatus === null ? "ignored" : "processed",
-          });
-          await this.outbox.insertMany(tx, [
-            {
-              eventType: "sales.payment.providerEvent",
-              payload: {
+    try {
+      return await runInTransaction(
+        this.database.db,
+        async (tx) =>
+          await runAsSalesInternal(async () => {
+            const created = await this.entities.create(
+              "PaymentProviderEventLog",
+              {
+                name: `${input.provider}:${input.eventType}`,
                 provider: input.provider,
                 providerEventId,
                 eventType: input.eventType,
                 paymentRequestId: input.paymentRequestId ?? null,
-                paymentRequestStatus: requestStatus,
-                occurredAt: new Date().toISOString(),
+                payload:
+                  input.payload === undefined
+                    ? null
+                    : JSON.stringify(input.payload),
+                processedStatus: "received",
+                processedAt: new Date(),
               },
-            },
-          ]);
-          return {
-            id: logId,
-            providerEventId,
-            duplicate: false,
-            processedStatus: requestStatus === null ? "ignored" : "processed",
-            paymentRequestStatus: requestStatus,
-          };
-        }),
-    );
+            );
+            const logId = requireId(created, "PaymentProviderEventLog");
+
+            let requestStatus: string | null = null;
+            if (
+              input.paymentRequestId !== undefined &&
+              input.paymentRequestId !== null
+            ) {
+              const request = await this.records.byId(
+                "PaymentRequest",
+                input.paymentRequestId,
+              );
+              if (request !== undefined) {
+                const current = text(request.data["status"]) ?? "pending";
+                const next =
+                  paid && current === "pending"
+                    ? "paid"
+                    : failed && current === "pending"
+                      ? "failed"
+                      : null;
+                if (next !== null) {
+                  await this.entities.update(
+                    "PaymentRequest",
+                    input.paymentRequestId,
+                    {
+                      status: next,
+                      providerReference:
+                        text(request.data["providerReference"]) ?? null,
+                    },
+                  );
+                  requestStatus = next;
+                } else {
+                  requestStatus = current;
+                }
+              }
+            }
+
+            await this.entities.update("PaymentProviderEventLog", logId, {
+              processedStatus: requestStatus === null ? "ignored" : "processed",
+            });
+            await this.outbox.insertMany(tx, [
+              {
+                eventType: "sales.payment.providerEvent",
+                payload: {
+                  provider: input.provider,
+                  providerEventId,
+                  eventType: input.eventType,
+                  paymentRequestId: input.paymentRequestId ?? null,
+                  paymentRequestStatus: requestStatus,
+                  occurredAt: new Date().toISOString(),
+                },
+              },
+            ]);
+            return {
+              id: logId,
+              providerEventId,
+              duplicate: false,
+              processedStatus: requestStatus === null ? "ignored" : "processed",
+              paymentRequestStatus: requestStatus,
+            };
+          }),
+      );
+    } catch (error: unknown) {
+      // The unique index on the provider's event id is the decision. When two deliveries arrive at
+      // the same time, one of them loses that race and the loser must be answered as the duplicate
+      // it is — never as a second payment.
+      if (!isUniqueViolation(error)) throw error;
+      const raced = await this.records.find(
+        "PaymentProviderEventLog",
+        { providerEventId },
+        1,
+      );
+      const winner = raced[0];
+      if (winner === undefined) throw error;
+      return {
+        id: winner.id,
+        providerEventId,
+        duplicate: true,
+        processedStatus: text(winner.data["processedStatus"]) ?? "ignored",
+        paymentRequestStatus: null,
+      };
+    }
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -726,6 +747,15 @@ function requireId(created: Record<string, unknown>, entity: string): string {
   if (id === undefined)
     throw new ValidationError(`Creating a ${entity} returned no id.`);
   return id;
+}
+
+/** PostgreSQL error code 23505, unique_violation. */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "23505"
+  );
 }
 
 function text(value: unknown): string | undefined {

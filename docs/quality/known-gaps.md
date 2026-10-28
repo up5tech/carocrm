@@ -21,6 +21,19 @@
 | G8 | The shared core imports two business domains | platform | Medium | Accepted (allow-listed) |
 | G9 | The default JWT secret is accepted in non-production environments | auth | High | Fixed (22.4) |
 | G10 | The architecture guard threw a `ReferenceError` instead of reporting a violation | platform | Medium | Fixed (22.6) |
+| G11 | The connector dead-letter replay route has no capability check | advanced-integrations | Medium | Open (22.17) |
+| G12 | The signature webhook inbox stamps a purge date that nothing acts on | esignature | Low | Open (22.21) |
+| G13 | Two provider receipt tables have no retention at all | voice-communications / marketing-automation | Low | Open (22.21) |
+| G14 | The `jobs` and `job_logs` tables have no retention | platform | Medium | Open (22.21) |
+| G15 | No jitter on the queue or outbox retry | platform | Medium | Open (22.18) |
+| G16 | `JOB_BACKOFF_BASE_MS` is dead configuration and the two attempt settings can diverge | platform | Low | Open (22.21) |
+| G17 | The CSV import keeps its per-row errors in memory only | search | Low | Open (22.9) |
+| G18 | No projection compares an event's timestamp — every ordering guard is a state-machine rule | platform | Medium | Open (22.18) |
+| G19 | No door detects "same idempotency key, different body" | platform | Medium | Open (22.18 / 22.19) |
+| G20 | The payment provider event key is not scoped by provider | sales | Low | Open (22.19) |
+| G21 | A failed `jobs` row can be neither retried nor discarded through the API | platform | Medium | Open (22.21) |
+| G22 | The duplicate-job collapse looks for a status that never exists (`active`) | lead-score | Medium | Open (22.19) |
+| G23 | A connector dead letter can be marked "replayed" without the failed work being re-run | advanced-integrations | Medium | Open (22.21) |
 
 ---
 
@@ -101,3 +114,84 @@
 - **Status:** Fixed in 22.6 — `rel` is computed once at the top of `checkFile`.
 - **Verification:** `pnpm lint` (clean) and `pnpm lint:arch` (`OK: no new shared-core -> business-domain imports (known exceptions=2)`).
 - **Remaining risk:** none known; the guard still allow-lists the two reviewed exceptions from G8.
+
+---
+
+## G11 — The dead-letter replay route has no capability check
+
+- **Module / contract:** advanced-integrations — `POST /api/v1/AdvancedIntegrations/action/dead-letters/:id/replay`.
+- **Impact:** every other route in that controller checks a capability server-side (its own header comment says so), but this one does not. Any caller who can reach the controller can mark a dead letter as replayed.
+- **Status:** Open — deferred to 22.17 (security and privacy regression suite), where the authorization matrix becomes a test.
+- **Remaining risk:** the replay only flips a status and writes an audit row (see G23), so the damage today is a misleading queue rather than a re-run.
+
+## G12 — The signature webhook inbox stamps a purge date that nothing acts on
+
+- **Module / contract:** esignature — `signature_webhook_inbox.purge_after` (90 days by default).
+- **Impact:** the column is written and never read; the inbox and `signature_provider_events` grow without bound. The dedup rows are never deleted, so a late redelivery stays a duplicate — the safe side of the trade.
+- **Status:** Open — deferred to 22.21 (observability and runbooks), which is where a cleanup job belongs.
+
+## G13 — Two provider receipt tables have no retention at all
+
+- **Module / contract:** voice-communications (`voice_webhook_events`) and marketing-automation (`marketing_provider_webhook_inbox`).
+- **Impact:** the receipts accumulate. The marketing module declares a 30-day policy in `RETENTION_POLICIES` and its retention service only ever counts rows — the delete does not exist.
+- **Status:** Open — deferred to 22.21.
+
+## G14 — The `jobs` and `job_logs` tables have no retention
+
+- **Module / contract:** platform — the durable record of every job and every attempt.
+- **Impact:** the development database held 6 574 `jobs` rows. The kernel's `system.cleanupOutbox` and `system.pruneSessions` handlers exist but are **not seeded as schedules**, so nothing cleans them by default.
+- **Status:** Open — deferred to 22.21 (a scheduled sweep with a retention setting is an operations decision).
+
+## G15 — No jitter on the queue or the outbox retry
+
+- **Module / contract:** platform — `apps/worker/src/queue/job-consumer.ts` and `apps/worker/src/outbox/outbox-poller.ts`.
+- **Impact:** both backoffs are pure exponential. A fleet that failed at the same moment retries at the same moment, which is the opposite of what jitter is for. The only jittered retry in the codebase is the provider HTTP call (`advanced-integrations/resilience.ts`).
+- **Status:** Open — deferred to 22.18 (resilience and chaos-lite tests), which is where the retry policy as a whole is hardened.
+
+## G16 — Dead retry configuration
+
+- **Module / contract:** platform — `JOB_BACKOFF_BASE_MS` and `JOB_ATTEMPTS` on the API side.
+- **Impact:** the worker's `backoffStrategy` replaces BullMQ's own strategy, so the API's backoff base has no effect; and the effective attempt count is the one baked in at enqueue, so `JOB_ATTEMPTS=10` with `WORKER_JOB_ATTEMPTS=1` silently yields ten attempts.
+- **Status:** Open — deferred to 22.21.
+
+## G17 — The CSV import has no persisted per-item outcome
+
+- **Module / contract:** search — `import-export.service.ts`.
+- **Impact:** the per-row errors live in an in-memory result and are capped at 50; a re-import redoes every row, so a partially successful import cannot be resumed.
+- **Status:** Open — deferred to 22.9, where the import path is exercised as a journey.
+
+## G18 — No projection compares an event's timestamp
+
+- **Module / contract:** platform — every state projection (signature envelope, signature recipient, voice call, voice message, marketing delivery, payment request).
+- **Impact:** the ordering guards are state-machine rules, so a terminal state cannot regress — but an older event whose target is still a legal *forward* move does move the projection forward. A call that is `in_progress` today and receives a `ringing` event from yesterday becomes `ringing`.
+- **Status:** Open — deferred to 22.18. Changing it means deciding what an event's timestamp *means*, which is a product decision rather than a hardening fix.
+
+## G19 — No door detects "same idempotency key, different body"
+
+- **Module / contract:** platform — the five provider ingresses.
+- **Impact:** three of them store a body hash (`signature_webhook_inbox.payload_hash`, `signature_provider_events.payload_hash`, `voice_webhook_events.payload_digest`) and never compare it. A delivery that reuses a key with a different body is treated as a replay: the new body is discarded and nothing happens, so the platform is *safe* — but the mismatch is never surfaced to an operator.
+- **Status:** Open — deferred to 22.18 / 22.19, where a quarantine path would have to be designed and its operator story written.
+
+## G20 — The payment provider event key is not scoped by provider
+
+- **Module / contract:** sales — `PaymentProviderEventLog.providerEventId`.
+- **Impact:** the key is the provider's event id alone, so two providers sharing an id space would collide. Harmless today: only Stripe feeds the payment path.
+- **Status:** Open — recorded rather than changed, because changing the key would orphan the rows already recorded.
+
+## G21 — A failed `jobs` row can be neither retried nor discarded through the API
+
+- **Module / contract:** platform — `apps/api/src/jobs/`.
+- **Impact:** the jobs API exposes create, list, get, log and cancel. An operator who wants a failed job to run again must re-submit it by hand (`POST /api/v1/Job`), and there is no way to discard one. The admin "purge the job queue" operation drains the Redis waiting list only and leaves the table untouched.
+- **Status:** Open — deferred to 22.21 (operations), together with the runbook that says what an operator should do.
+
+## G22 — The duplicate-job collapse looks for a status that never exists
+
+- **Module / contract:** lead-score — `lead-score-recalculation.service.ts`.
+- **Impact:** the collapse filters `status IN ('pending','active')`, but a job's status is one of `pending | running | completed | failed | cancelled`. A second recalculation job can therefore be queued for the same lead while the first is still running.
+- **Status:** Open — deferred to 22.19 (data integrity and concurrency).
+
+## G23 — A dead letter can be marked "replayed" without the work being re-run
+
+- **Module / contract:** advanced-integrations — `DeadLetterService.markReplayed`.
+- **Impact:** the route flips the status to `replayed` and writes an audit row; it does not re-enqueue the failed operation, and no route ever calls `markDiscarded`. An operator reading the queue sees "replayed" for work that was never retried.
+- **Status:** Open — deferred to 22.21, together with the operator API that G21 also needs.

@@ -38,7 +38,9 @@ export interface RetentionPurgeReport {
   /** The cutoff the pass used. */
   readonly cutoff: Readonly<Record<string, string>>;
   readonly removed: {
+    /** Sync operation rows whose redacted payload was cleared. The row itself is kept as history. */
     readonly syncOperations: number;
+    /** Webhook delivery rows whose raw payload was cleared. The dedup key is kept. */
     readonly webhookDeliveries: number;
     readonly resolvedConflicts: number;
     readonly deadLetters: number;
@@ -46,7 +48,7 @@ export interface RetentionPurgeReport {
     readonly enrichmentResults: number;
     readonly auditRows: number;
   };
-  /** The total the pass removed. */
+  /** The total the pass cleared or removed. */
   readonly total: number;
 }
 
@@ -85,10 +87,13 @@ export class IntegrationRetentionService {
     const batch = policy.batchSize;
     const now = new Date();
 
-    // A sync operation's redacted payload. The operation row itself is the history; only the
-    // payload it carried goes.
+    // A sync operation's redacted payload. The operation row itself is the history — and it holds
+    // the `idempotency_key` that makes a replay a replay — so only the payload it carried goes.
+    // Deleting the row would hand the key back, and a provider that redelivers the same object
+    // afterwards would be applied a second time.
     const operations = await sql<{ id: string }>`
-      delete from integration_sync_operations
+      update integration_sync_operations
+      set payload = null
       where id in (
         select id from integration_sync_operations
         where payload is not null and created_at < ${new Date(now.getTime() - policy.syncOperationsDays * 86_400_000)}
@@ -100,9 +105,12 @@ export class IntegrationRetentionService {
 
     // A webhook delivery's raw provider payload — the largest and most personal thing the module
     // stores. A rejected delivery's payload was never stored at all, so only the accepted ones
-    // are here.
+    // are here. The row stays: it carries the `(connection_id, delivery_id)` dedup key, and a
+    // provider that redelivers the same delivery after the window must still be told it is a
+    // duplicate rather than being applied again.
     const deliveries = await sql<{ id: string }>`
-      delete from integration_webhook_deliveries
+      update integration_webhook_deliveries
+      set payload = null
       where id in (
         select id from integration_webhook_deliveries
         where payload is not null and received_at < ${new Date(now.getTime() - policy.webhookDeliveriesDays * 86_400_000)}
