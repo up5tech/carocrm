@@ -27,6 +27,7 @@ import { MarketingOperationsService } from "./marketing-operations.service.js";
 import { MarketingProviderBindingService } from "./marketing-provider-binding.service.js";
 import { MarketingProviderLimiter } from "./marketing-provider-limiter.js";
 import { MarketingPublicTokenService } from "./marketing-public-token.service.js";
+import { MarketingReportAccessService } from "./marketing-report-access.service.js";
 import { MarketingRetentionService } from "./marketing-retention.service.js";
 import { MarketingSendService } from "./marketing-send.service.js";
 import { MarketingSuppressionService } from "./marketing-suppression.service.js";
@@ -57,6 +58,8 @@ export const MARKETING_AUTOMATION_CONTROLLERS: Type<unknown>[] = [MarketingAutom
 export const MARKETING_AUTOMATION_PROVIDERS: Provider[] = [
   MarketingAutomationSettingsService,
   MarketingAutomationRecords,
+  // The report gate: a campaign's log, statistics and attribution answer to the campaign's own read grant.
+  MarketingReportAccessService,
   MarketingProviderRegistry,
   // The live adapter is bound at bootstrap (MA.7); the limiter is the one ceiling both the test send and,
   // later, the delivery worker share (§5.8, §11.2).

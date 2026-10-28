@@ -83,6 +83,30 @@ export class MarketingAutomationWriteGuardService implements OnApplicationBootst
         handler: (context) => this.handle(entity, context),
       });
     }
+    // The acquisition evidence Marketing Automation captures on a Lead (22.12) is written by the intake, not
+    // typed into a record: a client that could set `formIntakeKey` could make a later submission look like a
+    // duplicate of it, and a hand-written `campaignId` is an attribution claim the server never observed.
+    this.hooks.register({
+      name: "marketingAutomation.leadIntakeGuard",
+      phase: "beforeValidate",
+      entity: "Lead",
+      handler: (context) => this.checkLeadIntake(context),
+    });
+  }
+
+  private checkLeadIntake(context: HookContext): void {
+    if (isMarketingInternalWrite()) return;
+    const data = context.data;
+    if (data === undefined) return;
+    const changed =
+      context.operation === "create" ? Object.keys(data) : changedKeys(data, context.previous ?? {});
+    const offending = changed.filter((key) => LEAD_INTAKE_FIELDS.includes(key));
+    if (offending.length > 0) {
+      throw new ValidationError(
+        `These fields on Lead are captured by the marketing intake and cannot be written through the record API: ${offending.join(", ")}.`,
+        { entity: "Lead", fields: offending, code: "MARKETING_INTAKE_FIELDS_SERVER_OWNED" },
+      );
+    }
   }
 
   private async handle(entity: MarketingAutomationEntityType, context: HookContext): Promise<void> {
@@ -289,6 +313,13 @@ export class MarketingAutomationWriteGuardService implements OnApplicationBootst
     }
   }
 }
+
+/**
+ * The acquisition evidence the public form captures on a `Lead` (22.12). A Lead is not a Marketing Automation
+ * record, so this list sits apart from `SERVER_OWNED_FIELDS_BY_ENTITY` and is enforced by its own hook — the
+ * intake writes it under the module's service identity, and nobody else may claim it.
+ */
+const LEAD_INTAKE_FIELDS: readonly string[] = ["campaignId", "utmSource", "utmMedium", "utmCampaign", "formIntakeKey"];
 
 function safeJson(value: string): unknown {
   try {

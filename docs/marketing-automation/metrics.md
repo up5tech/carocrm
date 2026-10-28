@@ -64,7 +64,10 @@ stale without saying so.
 
 `GET …/action/campaign/:id/log` pages the same rows (`limit` capped at 500, `offset`) with a
 `normalizedType` filter. Access is the campaign's own record ACL — a report never reveals a recipient the
-caller could not open.
+caller could not open. That sentence is enforced since Phase 22.12 by `marketing-report-access.service.ts`
+(all four report routes answer to the campaign's read grant), and inside the log a recipient record the caller
+may not open comes back with its type, id and address digest cleared: the page carries a `hidden` count so the
+answer stays honest about what it left out, the same way `action/send/:id/recipients` does.
 
 ## 3. Delivery ledger vs. events
 
@@ -116,9 +119,9 @@ recorded and the block silently not applied. If the write fails anyway, the inbo
 | --- | --- |
 | `touches` | `marketing_events` rows for the campaign |
 | `uniqueRecipients` | distinct `recipient_entity_id` |
-| `conversions` | rows whose `normalized_type = 'conversion'` (written by `POST action/attribution` or a cross-module event) |
+| `conversions` | rows whose `normalized_type = 'conversion'` (written by `POST action/attribution` or a cross-module event). An outcome that names a `correlationId` is recorded **once** per campaign — the unique index `uq_marketing_events_internal_attribution` makes the write the decision and a replay answers `duplicate: true` (Phase 22.12, gap G32), so a retried job cannot inflate this count or the revenue below it |
 | `conversionRate` | `conversions / touches` |
-| `influencedRevenue` | `sum(properties->>'amount')` over conversion rows, or `null` when none |
+| `influencedRevenue` | `sum(properties->>'amount')` over conversion rows. The sum coalesces, so a campaign whose conversions carry no amount reads as **`0`** — "nothing measured", not "unknown"; only the absence of any numeric value at all answers `null` |
 | `asOf` | read timestamp |
 | `note` | the model's own caveat, returned with the number so a dashboard cannot drop it |
 

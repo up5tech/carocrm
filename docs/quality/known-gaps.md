@@ -34,13 +34,16 @@
 | G21 | A failed `jobs` row can be neither retried nor discarded through the API | platform | Medium | Open (22.21) |
 | G22 | The duplicate-job collapse looks for a status that never exists (`active`) | lead-score | Medium | Open (22.19) |
 | G23 | A connector dead letter can be marked "replayed" without the failed work being re-run | advanced-integrations | Medium | Open (22.21) |
-| G24 | The marketing form's Lead write is silently truncated — six fields the form writes are not Lead fields, so they are deleted | marketing-automation | Medium | Open (22.12) |
-| G25 | There is no first-class campaign↔Lead link; the Lead carries only a free-text `source` | lead-score / marketing-automation | Medium | Open (22.12) |
+| G24 | The marketing form's Lead write is silently truncated — six fields the form writes are not Lead fields, so they are deleted | marketing-automation | Medium | Fixed (22.12) |
+| G25 | There is no first-class campaign↔Lead link; the Lead carries only a free-text `source` | lead-score / marketing-automation | Medium | Fixed (22.12) |
 | G26 | There is no Sales→ESignature contract; a completed signature has no consumer in the platform | sales / esignature | Medium | Open (22.9+) |
 | G27 | Customer Success never creates or reads `Project`/`ProjectTask`; the only link is the plan's `projectId` | customer-success / projects | Medium | Open (22.10+) |
 | G28 | The customer-success suite leaves the default onboarding template's Task behind | customer-success (test hygiene) | Low | Fixed (verified 22.11) |
 | G29 | A connector webhook delivery leaves a pending durable `jobs` row that the delivering suite does not remove | advanced-integrations (test hygiene) | Low | Open (partly fixed 22.11) |
 | G30 | Hard-deleting an entity leaves its `stream_items` (and attachment rows) behind as orphans | platform (Entity Engine delete) | Medium | Open (found 22.11) |
+| G31 | The campaign reports answered any authenticated caller, and the event log named recipients the caller could not open | marketing-automation | High | Fixed (22.12) |
+| G32 | A replayed attribution outcome double-counted the conversion and its revenue | marketing-automation | Medium | Fixed (22.12) |
+| G33 | The marketing webhook "signature" is the shared secret itself, and a delivery with no timestamp is never age-checked | marketing-automation | Medium | Open (found 22.12) |
 
 ---
 
@@ -209,14 +212,14 @@
 - **Impact:** `MarketingFormService.createLead` writes `companyName`, `utmSource`, `utmMedium`, `utmCampaign`, `campaignId` and `formIntakeKey` onto a `Lead`. The `Lead` entity declares none of them, and `EntityCrudService.prepareWrite` deletes every key the metadata does not declare. So the company is lost (the Lead field is `company`), the campaign and UTM reference never reach the Lead, and the form's own intake-key idempotency lookup (`attrs ->> 'formIntakeKey'`) can never match — a repeated intake with a different e-mail address creates a second Lead.
 - **Expected vs observed:** expected — the intake records where the lead came from and the same intake key never creates two Leads; observed — the record keeps only `source`.
 - **Root cause:** two modules disagree about the Lead's shape. The form was written against a richer Lead than the metadata declares.
-- **Status:** Open — deferred to 22.12 (the marketing and acquisition journey), which is the sub-phase that owns this path. The fix is additive: declare the fields on the Lead (they need no migration, the attributes are JSONB) and write `company` rather than `companyName`.
-- **Verification:** found while building the Phase 22.8 journey (`docs/quality/phase-22-journey-lead-to-customer.md` §8, F3).
+- **Status:** Fixed (22.12) — `utmSource`, `utmMedium`, `utmCampaign`, `campaignId` and `formIntakeKey` are declared `Lead` fields (JSONB attributes, so no table changed), the form writes the declared `company` instead of `companyName`, and a record-API write of any of them is refused with `MARKETING_INTAKE_FIELDS_SERVER_OWNED` because that evidence belongs to the intake. They are shown in the Lead detail view's `Acquisition` panel — which the platform's own guard (`lead-score-schema.test.ts`) requires, because every `inDetail` field has to be placed rather than quietly dropped from the view.
+- **Verification:** found while building the Phase 22.8 journey (`docs/quality/phase-22-journey-lead-to-customer.md` §8, F3); proven by the Phase 22.12 journey step 2 (`docs/quality/phase-22-journey-marketing-consent-attribution.md`).
 
 ## G25 — There is no first-class campaign↔Lead link
 
 - **Module / contract:** lead-score / marketing-automation — "which campaign produced this lead".
 - **Impact:** the `Lead` entity carries only the free-text `source`. The campaign↔Lead association lives outside the Lead record: `marketing_events.campaign_id`, `MarketingConsent.campaignId`, `TargetListEntry` and the journey enrollment. LeadScore reads the `marketing_events` association (its engagement signal) and ignores the campaign id, so a score cannot say *which* campaign engaged the lead.
-- **Status:** Open — deferred to 22.12, together with G24: if the form's fields are declared, the Lead can carry the campaign it came from.
+- **Status:** Fixed (22.12) — `Lead.campaignId` is now a declared link to `Campaign`, audited and written only by the intake, so "which campaign produced this lead" is a fact on the Lead and a filterable reference rather than a join through the event log. The direction stays one-way (a Lead names one campaign); a campaign's Leads are read by filtering the Lead list, and `marketing_events` remains the touch-level record.
 
 ## G26 — There is no Sales→ESignature contract, and a completed signature has no consumer
 
@@ -256,3 +259,29 @@
 - **Expected vs observed:** expected — either the delete path removes the record's stream rows (`stream_items` with their `stream_mentions`/`stream_attachments`) or a retention pass prunes rows whose subject no longer exists; observed — neither, so the stream tables only grow and a list of stream rows can name a record that no longer exists.
 - **Status:** Open (found 22.11) — a product decision, not a test fix: either the hard-delete path deletes `stream_items`/`stream_mentions`/`stream_attachments` for that record, or a retention pass prunes rows with no surviving subject. The Phase 22.11 journey proves the test-side discipline in the meantime: it deletes its own Case stream rows by `entity_id` before deleting the Case.
 - **Remaining risk:** unbounded growth in the stream tables, and a stale `entity_type`/`entity_id` pair that a future notification or stream reader could surface.
+
+## G31 — The campaign reports answered any authenticated caller
+
+- **Module / contract:** marketing-automation — `GET action/campaign/:id/log`, `/stats`, `/attribution`, `/funnel`.
+- **Impact:** these four routes went straight to aggregates over `marketing_events` with no check that the caller may read the campaign at all, and the event log returns each recipient's record id and address digest. A marketer on another team could page through a campaign they cannot open and enumerate whose records it mailed — while the sibling report (`action/send/:id/recipients`) had applied record ACL from the start, and `docs/marketing-automation/metrics.md` §2 already promised "access is the campaign's own record ACL — a report never reveals a recipient the caller could not open". The code did not match its own documentation.
+- **Expected vs observed:** expected — a report answers to the campaign's read grant and names only recipients the caller may open; observed — an authenticated stranger got the whole log, and a caller with no Contact rights still got Contact ids and digests.
+- **Root cause:** the report services were written against the event table, not against the record; no shared gate existed to point them at.
+- **Status:** Fixed (22.12) — `marketing-report-access.service.ts` answers to the Campaign's record-level read grant and all four reports call it; the event log masks the recipient type, id and digest for records the caller cannot open and counts them in a `hidden` field, exactly as the recipient ledger does. Proven in the Phase 22.12 journey step 11 (an outsider sees counted-not-named rows; a caller without campaign rights is refused).
+- **Remaining risk:** none for these four routes; the same "reports must answer to the record's own grant" rule should be applied when new aggregate endpoints are added.
+
+## G32 — A replayed attribution outcome double-counted the conversion
+
+- **Module / contract:** marketing-automation — `POST action/attribution`.
+- **Impact:** the door that lets another module report "this campaign's work converted" inserted a `conversion` event unconditionally. The same `correlationId` arriving twice — a retried job, a replayed handler, an operator pressing again — counted the conversion twice and added its amount to `influencedRevenue` twice, so the report a marketer acts on could be inflated by nothing but a duplicate request. Phase 22.7 gave every other door an atomic claim; this one was not in its scope.
+- **Expected vs observed:** expected — one outcome per correlation id, and a replay answered as the duplicate it is; observed — two rows, two conversions, double revenue.
+- **Status:** Fixed (22.12) — migration `084_phase22_marketing_attribution_dedup.sql` adds the partial unique index `uq_marketing_events_internal_attribution` (internally-recorded conversions that name a correlation id, scoped by campaign), and `recordAttribution` now makes the write itself the decision: an insert that loses the race re-reads the winner and returns `duplicate: true`. An outcome without a correlation id is a different fact each time and still stands. Proven in the Phase 22.12 journey step 9.
+- **Remaining risk:** attribution is scoped by campaign by design — crediting the same outcome to two campaigns remains two intentional rows, not a duplicate.
+
+## G33 — The marketing webhook signature is the shared secret, and freshness is optional
+
+- **Module / contract:** marketing-automation — `POST webhook/:providerKey` (and its `webhooks/` alias).
+- **Impact:** `MarketingEventIngestionService.verifySignature` compares the `x-webhook-signature` header **to the configured secret itself** — it is not a signature over the payload. The door therefore cannot prove the body was not altered in transit, and because the five-minute replay window is only consulted when the caller sent an `x-webhook-timestamp`, a captured request without that header can be replayed at any later time and is recorded as a fresh delivery. The platform's other provider doors do it differently: Voice and ESignature sign `timestamp + body` and verify with a constant-time HMAC comparison.
+- **Expected vs observed:** expected — the door verifies a body-bound signature and refuses a stale delivery whether or not the caller volunteered a timestamp; observed — the secret itself is the credential, and an omitted header skips the age check.
+- **Verification:** found while building the Phase 22.12 journey, whose step 6 asserts today's behaviour (a 2020-dated `open` event with no timestamp header is processed).
+- **Status:** Open — the fix changes what every provider adapter must send (a per-event HMAC), so it belongs with the provider-binding work rather than to a journey; the assertion is left in place so the behaviour cannot drift further without a failing test.
+- **Remaining risk:** a leaked request (proxy log, support attachment) is a reusable credential for as long as the secret stays valid, and a replayed bounce or complaint can suppress an address that never asked for it.

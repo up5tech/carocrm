@@ -267,6 +267,23 @@ export const coreMetadata: MetadataSeedEntry[] = [
         company: { type: 'varchar', inList: true, inDetail: true, inEdit: true },
         industry: { type: 'varchar', inDetail: true, inEdit: true },
         source: { type: 'varchar', inList: true, inDetail: true, inEdit: true },
+        // --- Phase 22.12: the acquisition evidence the marketing form captures ---
+        //
+        // Marketing Automation has written these onto a Lead since 19-MA.15, but the entity declared none of
+        // them, and `EntityCrudService.prepareWrite` deletes every key metadata does not declare — so the
+        // campaign, the medium and the form's own idempotency key never reached the record, and a repeated
+        // intake with a corrected address created a second Lead instead of matching the first (`known-gaps.md`
+        // G24). They are `attrs` JSONB keys like the score projection, so no table changed.
+        //
+        // `campaignId` is a link, not a string: the Lead names the campaign that produced it, and the link is
+        // checked against a real Campaign before the form writes it (a public form cannot be allowed to fail
+        // on a stranger's typo, so an unknown id is dropped rather than refused).
+        utmSource: { type: 'varchar', maxLength: 255, inDetail: true },
+        utmMedium: { type: 'varchar', maxLength: 255, inDetail: true },
+        utmCampaign: { type: 'varchar', maxLength: 255, inDetail: true },
+        campaignId: { type: 'link', entityKey: 'Campaign', inDetail: true, audited: true },
+        // The intake key is machine evidence, not something a person reads or types.
+        formIntakeKey: { type: 'varchar', maxLength: 128, inDetail: false, inFilter: false },
         status: {
           type: 'enum',
           values: ['New', 'Assigned', 'In Process', 'Converted', 'Dead'],
@@ -370,6 +387,14 @@ export const coreMetadata: MetadataSeedEntry[] = [
                 label: 'Converted To',
                 position: 20,
                 fields: ['convertedAccountId', 'convertedContactId', 'convertedOpportunityId', 'convertedAt', 'convertedById', 'conversionOperationId'],
+              },
+              {
+                // 22.12: the evidence the marketing intake captured. `formIntakeKey` is not here because it is
+                // not `inDetail` — it is machine dedup evidence, read by the intake, not by a person.
+                name: 'acquisition',
+                label: 'Acquisition',
+                position: 30,
+                fields: ['campaignId', 'utmSource', 'utmMedium', 'utmCampaign'],
               },
             ],
           },

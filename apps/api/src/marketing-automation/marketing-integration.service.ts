@@ -45,19 +45,41 @@ export class MarketingIntegrationService {
     @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {}
 
-  /** Record a campaign outcome without duplicating Sales financial data (reference only). */
-  async recordAttribution(input: AttributionInput): Promise<{ id: string }> {
+  /**
+   * Record a campaign outcome without duplicating Sales financial data (reference only).
+   *
+   * A caller that names a correlation id is answering "did this piece of work convert?", and the same
+   * question asked twice is one answer: the second delivery is refused by the unique index behind
+   * `uq_marketing_events_internal_attribution` and comes back as the duplicate it is, instead of counting
+   * the conversion — and its amount — a second time in the campaign's report.
+   */
+  async recordAttribution(input: AttributionInput): Promise<{ id: string; duplicate: boolean }> {
     const id = randomUUID();
-    await sql`
+    const correlationId = input.correlationId?.trim() ?? null;
+    const inserted = await sql<{ id: string }>`
       insert into marketing_events
         (id, provider, provider_event_id, event_type, normalized_type,
          campaign_id, send_id, recipient_entity_type, recipient_entity_id, properties)
       values
-        (${id}, 'internal', ${input.correlationId ?? null}, 'attribution', 'conversion',
+        (${id}, 'internal', ${correlationId}, 'attribution', 'conversion',
          ${input.campaignId ?? null}, ${input.sendId ?? null}, ${input.referenceType ?? null},
          ${input.referenceId ?? null}, ${JSON.stringify({ outcome: input.outcome, journeyId: input.journeyId ?? null })}::jsonb)
+      on conflict (campaign_id, provider_event_id)
+        where provider = 'internal' and normalized_type = 'conversion' and provider_event_id is not null
+        do nothing
+      returning id
     `.execute(this.database.db);
-    return { id };
+    if (inserted.rows.length > 0) return { id, duplicate: false };
+
+    const existing = await sql<{ id: string }>`
+      select id from marketing_events
+      where provider = 'internal'
+        and normalized_type = 'conversion'
+        and provider_event_id = ${correlationId}
+        and campaign_id is not distinct from ${input.campaignId ?? null}
+      limit 1
+    `.execute(this.database.db);
+    return { id: existing.rows[0]?.id ?? id, duplicate: true };
   }
 
   /** Whether an optional module is available (metadata-marker based). */

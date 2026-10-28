@@ -111,7 +111,17 @@ record id.
   allows ten submissions per minute per caller address, and the controller passes `request.ip` so the limit is
   actually per caller rather than one deployment-wide bucket.
 * **Deduplication.** An `idempotencyKey` that already produced a Lead returns that Lead; without one, an
-  existing Lead with the same address is reused rather than duplicated.
+  existing Lead with the same address is reused rather than duplicated. The key is the Lead's own
+  `formIntakeKey` attribute — declared on the entity since Phase 22.12, because before that the write was
+  silently dropped and the lookup could never match (gap G24).
+* **What the form may leave on the Lead.** `company` (the declared field), `utmSource`, `utmMedium`,
+  `utmCampaign` and a `campaignId` link are captured as acquisition evidence, shown in the Lead detail view's
+  `Acquisition` panel. The three UTM values are detail-only; `campaignId` is a link and audited, because it
+  marks a business fact; `formIntakeKey` is not shown at all — it is dedup evidence the intake reads. A `campaignId` that is not a live Campaign is dropped rather than
+  refused — a stranger's form post must not fail, and must not invent attribution either. Those five
+  fields belong to the intake: a write through `/api/v1/Lead` that sets any of them is refused with
+  `MARKETING_INTAKE_FIELDS_SERVER_OWNED`, because a hand-typed intake key could make somebody else's
+  later submission look like a duplicate of it.
 * **Consent.** `consent: true` writes an `ExplicitOptIn` consent record with `policyVersion: "1"` and the form
   as `captureContext`. Without it, the Lead is still captured and **no** marketing consent is implied, and a
   journey is not enrolled.

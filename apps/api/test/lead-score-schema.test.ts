@@ -465,7 +465,10 @@ describe('metadata foundation (19-LS.2)', () => {
     const byName = new Map(panels.map((panel) => [panel.name, panel.fields ?? []]));
     // 19-LS.7 removed the generic `score` panel: its fields are `inDetail: false` now, and the Lead Score
     // card is their surface. `converted` stays, because nothing shows those references until 19-LS.13.
-    expect([...byName.keys()]).toEqual(['main', 'converted']);
+    // 22.12 added `acquisition`, the evidence the marketing intake captures (`docs/quality/
+    // phase-22-journey-marketing-consent-attribution.md` §7 F4) — this guard is what forces a new detail
+    // field to be placed rather than quietly dropped from the view.
+    expect([...byName.keys()]).toEqual(['main', 'converted', 'acquisition']);
     expect(byName.get('score')).toBeUndefined();
     expect(byName.get('converted')).toEqual(['convertedAccountId', 'convertedContactId', 'convertedOpportunityId', 'convertedAt', 'convertedById', 'conversionOperationId']);
     for (const field of ['status', 'company', 'emailAddress', 'phoneNumber', 'assignedUserId', 'title', 'source', 'industry']) {

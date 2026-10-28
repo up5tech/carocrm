@@ -104,6 +104,9 @@ export class MarketingFormService {
       .where(sql`attrs ->> 'emailAddress'`, "=", email)
       .executeTakeFirst();
     const reused = existingLead !== undefined;
+    // The campaign is a link now, and a stranger's form post can name anything. An id that is not a live
+    // Campaign is dropped — the submission still creates the Lead, and the attribution stays honest.
+    const campaignId = await this.existingCampaignId(input.campaignId);
     const leadId = reused ? String(existingLead.id) : await this.createLead({
       firstName,
       lastName,
@@ -113,7 +116,7 @@ export class MarketingFormService {
       utmSource: input.utmSource,
       utmMedium: input.utmMedium,
       utmCampaign: input.utmCampaign,
-      campaignId: input.campaignId,
+      ...(campaignId !== undefined ? { campaignId } : {}),
       key,
     });
 
@@ -130,7 +133,7 @@ export class MarketingFormService {
           source: "WebForm" as never,
           policyVersion: "1",
           captureContext: `form:${input.source ?? "web"}`,
-          ...(input.campaignId !== undefined ? { campaignId: input.campaignId } : {}),
+          ...(campaignId !== undefined ? { campaignId } : {}),
           ...(leadId !== null ? { leadId, subjectType: "Lead", subjectId: leadId } : {}),
           ...(key !== undefined && key !== "" ? { idempotencyKey: key } : {}),
         });
@@ -173,6 +176,20 @@ export class MarketingFormService {
     };
   }
 
+  /** A submitted campaign id is only evidence if that campaign exists here. */
+  private async existingCampaignId(value: string | undefined): Promise<string | undefined> {
+    const id = value?.trim() ?? "";
+    if (id === "") return undefined;
+    const found = await this.database.db
+      .selectFrom("entity_records")
+      .select("id")
+      .where("entity_type", "=", "Campaign")
+      .where("id", "=", id)
+      .where("deleted_at", "is", null)
+      .executeTakeFirst();
+    return found === undefined ? undefined : found.id;
+  }
+
   private async createLead(input: {
     readonly firstName: string;
     readonly lastName: string;
@@ -192,7 +209,7 @@ export class MarketingFormService {
           firstName: input.firstName,
           lastName: input.lastName,
           emailAddress: input.email,
-          ...(input.company !== undefined ? { companyName: input.company } : {}),
+          ...(input.company !== undefined ? { company: input.company } : {}),
           status: "New",
           source: input.source,
           ...(input.utmSource !== undefined ? { utmSource: input.utmSource } : {}),

@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { sql } from "kysely";
 
 import { DatabaseService } from "../database/database.service.js";
+import { MarketingReportAccessService } from "./marketing-report-access.service.js";
 
 /**
  * Phase 19-MA.17 — attribution and funnel analytics (§15 `19-MA.17`).
@@ -39,9 +40,13 @@ export interface FunnelReport {
 
 @Injectable()
 export class MarketingAttributionService {
-  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+  constructor(
+    @Inject(DatabaseService) private readonly database: DatabaseService,
+    @Inject(MarketingReportAccessService) private readonly reports: MarketingReportAccessService,
+  ) {}
 
   async attribution(campaignId: string, model: AttributionModel = "influenced"): Promise<AttributionReport> {
+    await this.reports.assertCampaignReadable(campaignId);
     const asOf = new Date().toISOString();
     const touches = await sql<{ count: string }>`
       select count(*)::text as count from marketing_events where campaign_id = ${campaignId}
@@ -82,6 +87,7 @@ export class MarketingAttributionService {
   }
 
   async funnel(campaignId: string): Promise<FunnelReport> {
+    await this.reports.assertCampaignReadable(campaignId);
     const asOf = new Date().toISOString();
     const rows = await sql<{ normalized_type: string; count: string }>`
       select normalized_type, count(*)::text as count
