@@ -83,6 +83,9 @@
 | G70 | An outbox event claimed by a worker that then died stayed `running` forever | platform (outbox) | High | Fixed (22.18) |
 | G71 | Offset pagination is a live window, not a snapshot | platform (entity list) | Low | Accepted (22.19) |
 | G72 | An AI approval did not pin the target record's version | ai-agents | Medium | Fixed (22.19) |
+| G73 | Bulk update/delete have no record-count cap and run one record at a time | platform (entity list) | Medium | Open (found 22.20) |
+| G74 | No per-query statement timeout or request deadline | platform (database) | Medium | Open (found 22.20) |
+| G75 | `sales-credits` flakes under the full parallel suite but passes solo and on rerun | sales (test isolation) | Low | Open (found 22.20) |
 
 ---
 
@@ -610,3 +613,27 @@
 - **Expected vs observed:** expected — an approval is about a version, and confirmation revalidates it; observed — the version was never captured, and the update tool wrote to whatever the record had become.
 - **Status:** Fixed (22.19). `AIToolPreviewTarget` carries the version; approval revalidation refuses a moved target (`422`, approval `invalidated`, run `blocked_by_policy`); the execution context carries the same version map to the preview and to the Entity Engine update, so a write that lands in between loses with `CONCURRENCY_CONFLICT`. A deleted target keeps the existing "human may approve, execution refuses" behaviour. Regression: `ai-agent-runs.test.ts` "refuses an approval whose target changed after the proposal was shown (22.19)" and "refuses to execute when the target moved after approval (22.19)".
 - **Remaining risk:** approvals created before this change carry no target version and are therefore not version-guarded; their approvals expire under the existing deadline.
+
+## G73 — Bulk update/delete have no record-count cap and run one record at a time
+
+- **Module / contract:** platform — `POST /api/v1/:entity/action/massUpdate` and `massDelete` (`EntityController.massPayload`, `EntityCrudService.massUpdate/massDelete`).
+- **Impact:** the only bound on `ids` is the 32 MB request-body limit; there is no `maxItems`, no chunking and no cancellation. The service loops over ids and issues one update/delete (with its own transaction, hooks and audit row) per record, so a large selection holds one HTTP request and one connection for the whole loop and produces N events/stream rows. A malformed or accidental 50 000-id selection is accepted and starts working.
+- **Expected vs observed:** expected — a documented bulk ceiling (or a bounded, queued operation) and a way to stop it; observed — an unbounded synchronous loop behind the generic controller.
+- **Status:** Open (found 22.20) — closing it changes the bulk API contract (a hard cap and/or a queued operation with a progress resource), which belongs with the operations/performance follow-up rather than a silent limit introduced in a baseline phase.
+- **Remaining risk:** a large bulk action degrades the API for every caller and can write tens of thousands of audit/stream/outbox rows in one request.
+
+## G74 — No per-query statement timeout or request deadline
+
+- **Module / contract:** platform — `DatabaseService` pool and the Fastify request lifecycle.
+- **Impact:** nothing sets `statement_timeout`/`lock_timeout` on the pool, no route has a request deadline, and the only related setting is BullMQ/provider socket timeouts. A query that waits on a lock (or a plan that degrades, as the 289 k-row outbox claim does) can hold a request and a connection indefinitely; the rate limiter bounds request *rate*, not request *duration*.
+- **Expected vs observed:** expected — a bounded query/request deadline with a stable error; observed — unlimited wait.
+- **Status:** Open (found 22.20) — the value is an operations decision (online DDL, reporting exports and migrations need different budgets), and setting it globally can break a legitimate long-running report. Recorded here so the performance baseline is not mistaken for a guarantee.
+- **Remaining risk:** one pathological query can exhaust the 10-connection pool and take the API down for other callers.
+
+## G75 — `sales-credits` flakes under the full parallel suite but passes solo and on rerun
+
+- **Module / contract:** sales — `apps/api/test/sales-credits.test.ts`, "allocating a credit note (19-S.11) > applies part of a credit to an invoice and both balances follow".
+- **Impact:** on the first full `pnpm test` after 22.20 (248 files, one process pool), that one assertion failed; the file passes when run solo (16/16) and the whole suite passed on the immediate full rerun (248 files / 3 307 tests). It shares the Sales ledger/lot database state with `sales-tracking` (G69) and is exposed by parallel file execution against the shared database, not by a 22.20 change (22.20 adds a read-only script and docs).
+- **Expected vs observed:** expected — a ledger test creates and restores the stock/credit it needs; observed — a full-suite scheduling/order dependency can leave the assertion reading a balance another file touched.
+- **Status:** Open (found 22.20) — same owner as G69 (Sales 19-S.11/19-S.15 fixture isolation). Do not "fix" it by retrying the suite; the test-side seeding/cleanup is the fix.
+- **Remaining risk:** a red full-suite run that passes on rerun teaches everyone to ignore red, which is the cost G69 already names.
