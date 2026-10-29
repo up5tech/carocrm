@@ -30,9 +30,9 @@
 | G17 | The CSV import keeps its per-row errors in memory only | search | Low | Open (22.9) |
 | G18 | No projection compares an event's timestamp — every ordering guard is a state-machine rule | platform | Medium | Accepted (22.18 decision) |
 | G19 | No door detects "same idempotency key, different body" | platform | Medium | Fixed (22.18) |
-| G20 | The payment provider event key is not scoped by provider | sales | Low | Open (22.19) |
+| G20 | The payment provider event key is not scoped by provider | sales | Low | Fixed (22.19) |
 | G21 | A failed `jobs` row can be neither retried nor discarded through the API | platform | Medium | Open (22.21) |
-| G22 | The duplicate-job collapse looks for a status that never exists (`active`) | lead-score | Medium | Open (22.19) |
+| G22 | The duplicate-job collapse looks for a status that never exists (`active`) | lead-score | Medium | Fixed (22.19) |
 | G23 | A connector dead letter can be marked "replayed" without the failed work being re-run | advanced-integrations | Medium | Open (22.21; reproduced 22.14) |
 | G24 | The marketing form's Lead write is silently truncated — six fields the form writes are not Lead fields, so they are deleted | marketing-automation | Medium | Fixed (22.12) |
 | G25 | There is no first-class campaign↔Lead link; the Lead carries only a free-text `source` | lead-score / marketing-automation | Medium | Fixed (22.12) |
@@ -40,7 +40,7 @@
 | G27 | Customer Success never creates or reads `Project`/`ProjectTask`; the only link is the plan's `projectId` | customer-success / projects | Medium | Open (22.10+) |
 | G28 | The customer-success suite leaves the default onboarding template's Task behind | customer-success (test hygiene) | Low | Fixed (verified 22.11) |
 | G29 | A connector webhook delivery leaves a pending durable `jobs` row that the delivering suite does not remove | advanced-integrations (test hygiene) | Low | Open (partly fixed 22.11; the 22.14 journey removes its own) |
-| G30 | Hard-deleting an entity leaves its `stream_items` (and attachment rows) behind as orphans | platform (Entity Engine delete) | Medium | Open (found 22.11) |
+| G30 | Hard-deleting an entity leaves its `stream_items` (and attachment rows) behind as orphans | platform (Entity Engine delete) | Medium | Accepted (22.19; deferred to 22.21 retention) |
 | G31 | The campaign reports answered any authenticated caller, and the event log named recipients the caller could not open | marketing-automation | High | Fixed (22.12) |
 | G32 | A replayed attribution outcome double-counted the conversion and its revenue | marketing-automation | Medium | Fixed (22.12) |
 | G33 | The marketing webhook "signature" is the shared secret itself, and a delivery with no timestamp is never age-checked | marketing-automation | Medium | Open (found 22.12) |
@@ -81,6 +81,8 @@
 | G68 | A core record write does not invalidate the module panels keyed to that record | platform / SPA | Low | Open (found 22.15) |
 | G69 | The Sales lot-traceability suite depends on lot stock the shared database no longer holds | sales (test isolation) | Medium | Open (found 22.15) |
 | G70 | An outbox event claimed by a worker that then died stayed `running` forever | platform (outbox) | High | Fixed (22.18) |
+| G71 | Offset pagination is a live window, not a snapshot | platform (entity list) | Low | Accepted (22.19) |
+| G72 | An AI approval did not pin the target record's version | ai-agents | Medium | Fixed (22.19) |
 
 ---
 
@@ -223,7 +225,7 @@
 
 - **Module / contract:** sales — `PaymentProviderEventLog.providerEventId`.
 - **Impact:** the key is the provider's event id alone, so two providers sharing an id space would collide. Harmless today: only Stripe feeds the payment path.
-- **Status:** Open — recorded rather than changed, because changing the key would orphan the rows already recorded.
+- **Status:** **Fixed (22.19).** The service looks events up by `(provider, providerEventId)` in both the fast path and the unique-violation answer. Migration 024 already had the correct scoped index (`uq_payment_provider_event`); migration 083 had added a second, narrower unique index on `providerEventId` alone while closing the concurrent-delivery race. Migration `085_phase22_payment_event_key_scoped.sql` drops that redundant index; the scoped index still makes the write the decision for concurrent deliveries of one provider. Regression: `sales-payments.test.ts` "scopes a provider event id by provider…". See `docs/quality/phase-22-data-integrity-concurrency.md` §6.5.
 
 ## G21 — A failed `jobs` row can be neither retried nor discarded through the API
 
@@ -235,7 +237,7 @@
 
 - **Module / contract:** lead-score — `lead-score-recalculation.service.ts`.
 - **Impact:** the collapse filters `status IN ('pending','active')`, but a job's status is one of `pending | running | completed | failed | cancelled`. A second recalculation job can therefore be queued for the same lead while the first is still running.
-- **Status:** Open — deferred to 22.19 (data integrity and concurrency).
+- **Status:** **Fixed (22.19).** The filter is now `('pending','running')`. Regression: `lead-score-recalculation.test.ts` "collapses a newer trigger even after the first job started running (G22)" — the first row is moved to `running`, a newer revision must answer `alreadyQueued` with the same id, and one row remains. See `docs/quality/phase-22-data-integrity-concurrency.md` §6.4.
 
 ## G23 — A dead letter can be marked "replayed" without the work being re-run
 
@@ -294,7 +296,7 @@
 - **Module / contract:** platform — the Entity Engine delete path and the stream.
 - **Impact:** `stream_items` is polymorphic (`entity_type`, `entity_id`) with no foreign key to `entity_records` (migration `002_stream.sql`), and nothing in the platform removes its rows when a record is hard-deleted — `apps/api/src/stream/stream-hooks.ts` only inserts. So every hard delete leaves the record's timeline behind. One `pnpm test` run on 2026-10-28 added 570 such rows across 31 entity types (152 `SubscriptionPeriod`, 68 `LeadScoreModel`, 49 `MarketingSend`, 47 `Invoice`, … , 1 `Case`); the configured database now carries 4,640 orphan `Case` rows, 13,528 `SubscriptionPeriod` and 5,127 `LeadScoreModel`.
 - **Expected vs observed:** expected — either the delete path removes the record's stream rows (`stream_items` with their `stream_mentions`/`stream_attachments`) or a retention pass prunes rows whose subject no longer exists; observed — neither, so the stream tables only grow and a list of stream rows can name a record that no longer exists.
-- **Status:** Open (found 22.11) — a product decision, not a test fix: either the hard-delete path deletes `stream_items`/`stream_mentions`/`stream_attachments` for that record, or a retention pass prunes rows with no surviving subject. The Phase 22.11 journey proves the test-side discipline in the meantime: it deletes its own Case stream rows by `entity_id` before deleting the Case.
+- **Status:** **Accepted (22.19), deferred to the 22.21 retention sweep.** Reviewed in 22.19: the production delete path is a *soft* delete, so a record and its stream rows stay together; the observed orphans come from hard deletes performed by tests and maintenance scripts, which have no product operation behind them. A cascade on polymorphic `stream_items` (no foreign key) is a schema/retention decision with its own review, not a concurrency fix. Tests in 22.19 clean their own stream/audit/outbox rows by exact id. Owner: platform; review: 22.21 (G12–G14 retention).
 - **Remaining risk:** unbounded growth in the stream tables, and a stale `entity_type`/`entity_id` pair that a future notification or stream reader could surface.
 
 ## G31 — The campaign reports answered any authenticated caller
@@ -592,3 +594,19 @@
 - **Expected vs observed:** expected — a claim is a lease with an expiry, so a dead worker's row becomes available again; observed — a claim was a permanent reservation and the only way out was manual SQL.
 - **Status:** Fixed (22.18). `CLAIM_SQL` now sets `available_at = now() + lease` and reclaims `running` rows whose lease expired; the lease is `WORKER_OUTBOX_LEASE_MS` (`outboxLeaseMs`, default 10 minutes). Dispatch is therefore at-least-once across a crash, which is only safe because handlers are required to be idempotent (AGENTS.md §5.5). Regression: `outbox-poller.test.ts` (SQL shape + lease parameter) and `env.test.ts` (the setting), plus a rolled-back PostgreSQL check in `docs/quality/phase-22-resilience-chaos.md` §5.2.
 - **Remaining risk:** a handler that runs longer than the lease can be executed twice on a healthy worker. Operators must size the lease above the slowest handler; the default of ten minutes is a starting point, not a measurement.
+
+## G71 — Offset pagination is a live window, not a snapshot
+
+- **Module / contract:** platform — the generic list API (`offset`/`maxSize` over the current order).
+- **Impact:** a page is a window over the order as it is when the query runs. An insert that sorts before the next page's boundary shifts the window (a row the caller already saw can move out, and a new row can appear); an edit that does not move the sort key does not. No authorization or money decision depends on a page's contents — the server filters every row by ACL and recomputes derived values — but a client that assumes a stable snapshot can show a duplicate or skip a record between two requests.
+- **Expected vs observed:** expected — either a documented window or a cursor; observed — an offset window with no cursor, and no documentation until 22.19.
+- **Status:** **Accepted (22.19).** `phase22-data-integrity.test.ts` pins the behaviour: an edit that leaves the sort key alone keeps the next page stable, a record inserted after the remaining page does not change it, and a record inserted before the boundary shifts it. A stable cursor is an API-shape decision for a later phase; until then the UI refetches after a write, and no workaround relies on client serialization.
+- **Remaining risk:** a long paging session over a changing dataset can show a duplicate or miss a row; consumers must treat the list as a view, not an export snapshot.
+
+## G72 — An AI approval did not pin the target record's version
+
+- **Module / contract:** ai-agents — `AIToolRegistry.previewUpdateFields`, `AIAgentApprovalService.revalidationFailure`, `AIAgentRunService.executeApprovedAction`.
+- **Impact:** the proposal stored the record id and the before/after values but not its version. Revalidation checked the tool, the grant, the agent version and whether the tool was enabled; it never checked that the record was still the one the human was shown. A record edited after the preview (or after the approval) was silently overwritten by the approved write — last-write-wins across an approval boundary.
+- **Expected vs observed:** expected — an approval is about a version, and confirmation revalidates it; observed — the version was never captured, and the update tool wrote to whatever the record had become.
+- **Status:** Fixed (22.19). `AIToolPreviewTarget` carries the version; approval revalidation refuses a moved target (`422`, approval `invalidated`, run `blocked_by_policy`); the execution context carries the same version map to the preview and to the Entity Engine update, so a write that lands in between loses with `CONCURRENCY_CONFLICT`. A deleted target keeps the existing "human may approve, execution refuses" behaviour. Regression: `ai-agent-runs.test.ts` "refuses an approval whose target changed after the proposal was shown (22.19)" and "refuses to execute when the target moved after approval (22.19)".
+- **Remaining risk:** approvals created before this change carry no target version and are therefore not version-guarded; their approvals expire under the existing deadline.

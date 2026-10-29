@@ -512,6 +512,27 @@ describe('the Lead-change decision (19-LS.6)', () => {
     expect((await jobRows({ leadId })).length).toBe(1);
   });
 
+  it('collapses a newer trigger even after the first job started running (G22)', async () => {
+    const model = await createPublishedModel('dedupe-running');
+    await enableScoring(model.id);
+    const leadId = await createLead('dedupe running lead', { company: 'Acme' });
+
+    const first = await workerCall(LEAD_CHANGED_PATH, { leadId, revision: 3, changed: ['company'] });
+    const firstJobId = decisionOf(first).jobId;
+    expect(decisionOf(first).queued).toBe(true);
+
+    // The job's status while a worker owns it is `running`; `active` is a BullMQ word, not a `jobs`
+    // status. A newer change for the same Lead+model must still collapse into it.
+    await ctx.database.db.updateTable('jobs').set({ status: 'running' }).where('id', '=', firstJobId ?? '').execute();
+
+    const newer = await workerCall(LEAD_CHANGED_PATH, { leadId, revision: 4, changed: ['industry'] });
+    expect(decisionOf(newer).reason).toBe('alreadyQueued');
+    expect(decisionOf(newer).jobId).toBe(firstJobId);
+    expect(decisionOf(newer).queued).toBe(false);
+
+    expect((await jobRows({ leadId })).length).toBe(1);
+  });
+
   it('does not re-trigger itself: the fields a score write changes can never move a score', async () => {
     const model = await createPublishedModel('loop');
     await enableScoring(model.id);

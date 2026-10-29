@@ -534,9 +534,11 @@ export class PaymentService {
       );
     assertNoSensitivePayload(input.payload);
 
+    // G20 — the provider's event id is unique *within a provider*, not across providers. Two
+    // gateways may legitimately use the same id space.
     const existing = await this.records.find(
       "PaymentProviderEventLog",
-      { providerEventId },
+      { provider: input.provider, providerEventId },
       1,
     );
     const found = existing[0];
@@ -646,7 +648,7 @@ export class PaymentService {
       if (!isUniqueViolation(error)) throw error;
       const raced = await this.records.find(
         "PaymentProviderEventLog",
-        { providerEventId },
+        { provider: input.provider, providerEventId },
         1,
       );
       const winner = raced[0];

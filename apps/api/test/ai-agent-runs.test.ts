@@ -789,6 +789,71 @@ describe('approval service and low-risk writes (19-AI.10)', () => {
     expect(succeeded.length).toBe(1);
   });
 
+  it('refuses an approval whose target changed after the proposal was shown (22.19)', async () => {
+    const { id } = await createAgent({
+      suffix: 'stale-version',
+      config: baseConfig({ tools: [{ key: 'crm_update_record_fields' }] }),
+    });
+    expect((await publish(id)).status).toBe(200);
+    const targetId = await createRecord('Task', `${MARKER} versioned task`);
+    const created = await runAgent(
+      id,
+      `__FAKE_TOOL__:crm_update_record_fields __FAKE_TOOL_ARGS__:{"entity":"Task","id":"${targetId}","fields":{"description":"${MARKER} agent write"}}`,
+    );
+    const idRun = String(created.body['id']);
+    expect((await executeRun(idRun)).body['run']).toMatchObject({ status: 'waiting_for_approval' });
+
+    const inbox = await call('GET', '/api/v1/AIAgents/action/approvals?status=pending', ctx.adminToken);
+    const approval = (inbox.body['list'] as { id: string; runId: string }[]).find((entry) => entry.runId === idRun);
+    if (approval === undefined) throw new Error('approval not found');
+
+    // A person edits the record after the preview: the proposal is about the version they saw.
+    const edited = await call('PATCH', `/api/v1/Task/${targetId}`, ctx.adminToken, { description: `${MARKER} human edit` });
+    expect(edited.status, JSON.stringify(edited.body)).toBe(200);
+
+    const refused = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, ctx.adminToken, {});
+    expect(refused.status, JSON.stringify(refused.body)).toBe(422);
+    expect(JSON.stringify(refused.body)).toContain('changed after the proposal');
+
+    const view = await call('GET', `/api/v1/AIAgents/action/approvals/${approval.id}`, ctx.adminToken);
+    expect(view.body['status']).toBe('invalidated');
+    const run = await call('GET', `/api/v1/AIAgents/action/runs/${idRun}`, ctx.adminToken);
+    expect(run.body['status']).toBe('blocked_by_policy');
+    const task = await call('GET', `/api/v1/Task/${targetId}`, ctx.adminToken);
+    expect(task.body['description']).toBe(`${MARKER} human edit`);
+  });
+
+  it('refuses to execute when the target moved after approval (22.19)', async () => {
+    const { id } = await createAgent({
+      suffix: 'stale-after-approval',
+      config: baseConfig({ tools: [{ key: 'crm_update_record_fields' }] }),
+    });
+    expect((await publish(id)).status).toBe(200);
+    const targetId = await createRecord('Task', `${MARKER} approved then edited`);
+    const created = await runAgent(
+      id,
+      `__FAKE_TOOL__:crm_update_record_fields __FAKE_TOOL_ARGS__:{"entity":"Task","id":"${targetId}","fields":{"description":"${MARKER} approved write"}}`,
+    );
+    const idRun = String(created.body['id']);
+    await executeRun(idRun);
+
+    const inbox = await call('GET', '/api/v1/AIAgents/action/approvals?status=pending', ctx.adminToken);
+    const approval = (inbox.body['list'] as { id: string; runId: string }[]).find((entry) => entry.runId === idRun);
+    if (approval === undefined) throw new Error('approval not found');
+    expect((await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, ctx.adminToken, {})).status).toBe(200);
+
+    // The record moves between the approval and the execution.
+    await call('PATCH', `/api/v1/Task/${targetId}`, ctx.adminToken, { description: `${MARKER} later human edit` });
+    const executed = await executeRun(idRun);
+    expect(executed.status, JSON.stringify(executed.body)).toBe(200);
+    const run = executed.body['run'] as { status: string; failureCategory: string | null };
+    expect(run.status).toBe('failed');
+    expect(run.failureCategory).toBe('approval_invalidated');
+
+    const task = await call('GET', `/api/v1/Task/${targetId}`, ctx.adminToken);
+    expect(task.body['description']).toBe(`${MARKER} later human edit`);
+  });
+
   it('rejects a proposal and ends the run without changing the record', async () => {
     const { id } = await createAgent({
       suffix: 'reject',

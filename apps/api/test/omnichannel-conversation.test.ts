@@ -199,6 +199,44 @@ describe('Omnichannel canonical conversation services (19-OM.6)', () => {
     expect(rows?.n).toBe('1');
   });
 
+  it('processes the same receipt concurrently into exactly one message (22.19)', async () => {
+    const eventId = `evt_${RUN}_concurrent`;
+    const messageId = `SM_${RUN}_concurrent`;
+    const body = {
+      eventId,
+      type: 'message.inbound',
+      messageId,
+      channel: 'sms',
+      from: PHONE,
+      to: '+14155550199',
+      body: 'AGENT_TEST_OM6 concurrent delivery',
+      occurredAt: new Date().toISOString(),
+    };
+    const accepted = await call('POST', `${OMNI}/message-events`, body, signedHeaders(body));
+    expect(accepted.status, JSON.stringify(accepted.body)).toBe(202);
+    const receiptId = String(accepted.body['eventId'] ?? '');
+
+    const processOnce = () =>
+      call('POST', '/api/v1/VoiceCommunications/action/webhook-events/process', { eventId: receiptId }, {
+        ...authHeader(ctx.adminToken),
+        'x-worker-secret': process.env.REPORT_WORKER_SECRET ?? '',
+      });
+    const [first, second] = await Promise.all([processOnce(), processOnce()]);
+    // Both callers are answered; neither is a 500 a worker would retry forever.
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+
+    const messages = (await sql<{ n: string }>`
+      select count(*)::text as n from voice_messages where account_key = ${ACCOUNT_KEY} and provider_message_id = ${messageId}
+    `.execute(ctx.database.db)).rows[0];
+    expect(messages?.n).toBe('1');
+    const events = (await sql<{ n: string }>`
+      select count(*)::text as n from voice_communication_events
+      where account_key = ${ACCOUNT_KEY} and kind = 'message' and external_id = ${messageId}
+    `.execute(ctx.database.db)).rows[0];
+    expect(events?.n).toBe('1');
+  });
+
   it('serves the workspace projection and delegates mark-read/status/assign to the owner', async () => {
     const list = await call('GET', '/api/v1/Omnichannel/action/conversations');
     expect(list.status).toBe(200);

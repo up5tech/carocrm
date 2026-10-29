@@ -5,8 +5,10 @@ import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import type { AIAgentApprovalsTable } from '../database/database.service.js';
 import { DatabaseService } from '../database/database.service.js';
+import type { PostgresRecordStore } from '../entity/entity-record.store.js';
+import { ENTITY_STORE } from '../entity/entity-record.store.js';
 import { AIAgentRunService } from './ai-agent-runs.service.js';
-import { AIToolRegistry } from './ai-agent-tools.js';
+import { AIToolRegistry, expectedTargetVersionsOf } from './ai-agent-tools.js';
 import { type RunStatus,TERMINAL_RUN_STATUSES } from './ai-agents-module.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 
@@ -74,6 +76,7 @@ export class AIAgentApprovalService {
     @Inject(AIAgentsPermissionService) private readonly permissions: AIAgentsPermissionService,
     @Inject(AIToolRegistry) private readonly tools: AIToolRegistry,
     @Inject(AIAgentRunService) private readonly runs: AIAgentRunService,
+    @Inject(ENTITY_STORE) private readonly store: PostgresRecordStore,
   ) {}
 
   async list(query: ApprovalListQuery = {}): Promise<{
@@ -307,6 +310,19 @@ export class AIAgentApprovalService {
 
   /** Reasons an approved proposal must not execute. Empty means it may. */
   private async revalidationFailure(approval: AIAgentApprovalsTable): Promise<string | null> {
+    // The decision is about the version the human was shown. A record that moved after the preview
+    // makes the proposal stale, and the answer is to ask again — not to apply the same write to
+    // whatever the record became (plan §18 task 4). A missing record is left to execution, which
+    // reports it through the tool's own ACL/not-found path.
+    for (const [key, expected] of Object.entries(expectedTargetVersionsOf(approval.targets))) {
+      const separator = key.indexOf(':');
+      if (separator <= 0) continue;
+      const record = await this.store.findById(key.slice(0, separator), key.slice(separator + 1));
+      if (record === undefined) continue;
+      if (record.version !== expected) {
+        return `The record changed after the proposal was shown (version ${String(expected)} → ${String(record.version)}); ask the assistant again.`;
+      }
+    }
     if (approval.tool_call_id === null) return 'The approval has no linked tool call.';
     const call = await this.database.db
       .selectFrom('ai_agent_tool_calls')

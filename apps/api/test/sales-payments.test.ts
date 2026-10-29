@@ -279,6 +279,42 @@ describe('provider events (19-S.10)', () => {
     expect(second.body['id']).toBe(first.body['id']);
   });
 
+  it('scopes a provider event id by provider, so two gateways may share an id space (G20)', async () => {
+    const eventId = `evt-shared-${fix.runId}`;
+    const alpha = await fix.call('POST', '/api/v1/Sales/providerEvent', {
+      provider: 'provider-alpha',
+      providerEventId: eventId,
+      eventType: 'payment.succeeded',
+      payload: { amount: '12.00', currency: 'USD' },
+    });
+    expect(alpha.status, JSON.stringify(alpha.body)).toBe(200);
+    expect(alpha.body).toMatchObject({ providerEventId: eventId, duplicate: false });
+    otherIds.push(String(alpha.body['id']));
+
+    // A different provider with an identical event id is a different event, not a replay.
+    const beta = await fix.call('POST', '/api/v1/Sales/providerEvent', {
+      provider: 'provider-beta',
+      providerEventId: eventId,
+      eventType: 'payment.succeeded',
+      payload: { amount: '12.00', currency: 'USD' },
+    });
+    expect(beta.status, JSON.stringify(beta.body)).toBe(200);
+    expect(beta.body).toMatchObject({ providerEventId: eventId, duplicate: false });
+    expect(String(beta.body['id'])).not.toBe(String(alpha.body['id']));
+    otherIds.push(String(beta.body['id']));
+
+    // The duplicate rule still applies within one provider.
+    const replay = await fix.call('POST', '/api/v1/Sales/providerEvent', {
+      provider: 'provider-alpha',
+      providerEventId: eventId,
+      eventType: 'payment.succeeded',
+      payload: { amount: '12.00', currency: 'USD' },
+    });
+    expect(replay.status, JSON.stringify(replay.body)).toBe(200);
+    expect(replay.body).toMatchObject({ duplicate: true });
+    expect(replay.body['id']).toBe(alpha.body['id']);
+  });
+
   it('refuses a payload that carries card data or a reusable secret', async () => {
     const result = await fix.call('POST', '/api/v1/Sales/providerEvent', {
       provider: 'test-provider',

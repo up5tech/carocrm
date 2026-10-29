@@ -564,7 +564,7 @@ export class LeadScoreRecalculationService {
       .selectFrom('jobs')
       .select('id')
       .where('job', '=', LEADSCORE_JOB_NAMES.recalculateLead)
-      .where('status', 'in', ['pending', 'active'])
+      .where('status', 'in', ['pending', 'running'])
       .where(sql`target ->> 'leadId'`, '=', leadId)
       .where(sql`target ->> 'modelVersion'`, '=', String(modelVersion))
       .limit(1)

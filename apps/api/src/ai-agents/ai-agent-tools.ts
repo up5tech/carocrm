@@ -33,12 +33,34 @@ export interface AIToolContext {
   /** The human who started the run; the tool executes inside their request scope. */
   readonly actorUserId: string;
   readonly idempotencyKey: string;
+  /**
+   * Targeted records' versions at proposal time, keyed `Entity:id`. Present when an approved action
+   * is revalidated or executed: the proposal the human saw is about that version, not whatever the
+   * record looks like now.
+   */
+  readonly expectedTargetVersions?: Readonly<Record<string, number>> | undefined;
 }
 
 export interface AIToolPreviewTarget {
   readonly type: string;
   readonly id: string;
   readonly label?: string | undefined;
+  /** The record's version when the proposal was built, when the tool can capture it. */
+  readonly version?: number | undefined;
+}
+
+/** The `Entity:id` version map a revalidation context expects from an approval's targets. */
+export function expectedTargetVersionsOf(targets: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!Array.isArray(targets)) return out;
+  for (const raw of targets) {
+    if (raw === null || typeof raw !== 'object') continue;
+    const target = raw as Record<string, unknown>;
+    if (typeof target['type'] !== 'string' || typeof target['id'] !== 'string') continue;
+    if (typeof target['version'] !== 'number' || !Number.isFinite(target['version'])) continue;
+    out[`${target['type']}:${target['id']}`] = target['version'];
+  }
+  return out;
 }
 
 export interface AIToolProposal {
@@ -409,7 +431,7 @@ export class AIToolRegistry {
       },
       maxResultBytes: 8_192,
       timeoutMs: 10_000,
-      preview: (args) => this.previewUpdateFields(args),
+      preview: (args, context) => this.previewUpdateFields(args, context),
       execute: (args, context) => this.updateFields(args, context),
     });
   }
@@ -664,7 +686,7 @@ export class AIToolRegistry {
     };
   }
 
-  private async previewUpdateFields(raw: unknown): Promise<AIToolProposal> {
+  private async previewUpdateFields(raw: unknown, context: AIToolContext): Promise<AIToolProposal> {
     const args = UpdateFieldsArgumentsSchema.parse(raw);
     const allowed = WRITABLE_FIELDS[args.entity] ?? [];
     const changes = Object.entries(args.fields);
@@ -680,8 +702,16 @@ export class AIToolRegistry {
     const current = await this.entities.get(
       args.entity,
       args.id,
-      changes.map(([field]) => field).join(','),
+      [...changes.map(([field]) => field), 'version'].join(','),
     );
+    // The proposal the human approved was about a version. Refuse rather than silently apply the
+    // same field write to a record that moved underneath the preview (Phase 22.19, plan §18 task 4).
+    const expected = context.expectedTargetVersions?.[`${args.entity}:${args.id}`];
+    if (expected !== undefined && expected !== Number(current['version'])) {
+      throw new ValidationError(
+        `The record changed after the proposal was shown (version ${String(expected)} → ${String(current['version'])}); ask the assistant again.`,
+      );
+    }
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
     for (const [field, value] of changes) {
@@ -690,7 +720,12 @@ export class AIToolRegistry {
     }
     return {
       summary: `Update ${String(changes.length)} field(s) on ${args.entity} "${displayName(current)}".`,
-      targets: [{ type: args.entity, id: args.id, label: displayName(current) }],
+      targets: [{
+        type: args.entity,
+        id: args.id,
+        label: displayName(current),
+        ...(Number.isFinite(Number(current['version'])) ? { version: Number(current['version']) } : {}),
+      }],
       detail: { before, after },
     };
   }
@@ -704,7 +739,14 @@ export class AIToolRegistry {
       }
       this.assertField(args.entity, field);
     }
-    const updated = await this.entities.update(args.entity, args.id, args.fields);
+    // The update itself carries the approved version, so a write that lands between approval and
+    // execution loses cleanly instead of overwriting the newer state.
+    const expected = context.expectedTargetVersions?.[`${args.entity}:${args.id}`];
+    const updated = await this.entities.update(
+      args.entity,
+      args.id,
+      expected === undefined ? args.fields : { ...args.fields, version: expected },
+    );
     return {
       summary: `Updated ${args.entity} "${displayName(updated)}".`,
       result: {

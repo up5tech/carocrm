@@ -30,7 +30,7 @@ import { AI_AGENT_RUN_JOB } from './ai-agent-jobs.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
 import type { AIToolContext, AIToolDefinition, AIToolProposal } from './ai-agent-tools.js';
-import { AIToolRegistry } from './ai-agent-tools.js';
+import { AIToolRegistry, expectedTargetVersionsOf } from './ai-agent-tools.js';
 import { type AgentStatus, type RunStatus, type RunTrigger,TERMINAL_RUN_STATUSES } from './ai-agents-module.js';
 import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 import { AIAgentsPolicyService } from './ai-agents-policy.service.js';
@@ -1460,6 +1460,8 @@ export class AIAgentRunService {
     readonly idempotencyKey: string;
     readonly step: number;
     readonly approvalId: string | null;
+    /** The versions the approved proposal was built against, when there was an approval. */
+    readonly expectedTargetVersions?: Readonly<Record<string, number>> | undefined;
   }): Promise<{ kind: 'succeeded'; message: string } | { kind: 'failed'; message: string } | { kind: 'unknown' }> {
     const now = new Date();
     const claimed = await this.database.db
@@ -1487,6 +1489,7 @@ export class AIAgentRunService {
       step: input.step,
       actorUserId: input.row.initiated_by_user_id ?? 'system',
       idempotencyKey: input.idempotencyKey,
+      ...(input.expectedTargetVersions === undefined ? {} : { expectedTargetVersions: input.expectedTargetVersions }),
     };
     const started = Date.now();
     try {
@@ -1694,6 +1697,7 @@ export class AIAgentRunService {
     transcript: AIProviderMessage[],
   ): Promise<'continue' | 'stop'> {
     const { approval, call } = pending;
+    const expectedTargetVersions = expectedTargetVersionsOf(approval.targets);
     if (approval.expires_at.getTime() < Date.now()) {
       await this.database.db
         .updateTable('ai_agent_approvals')
@@ -1741,6 +1745,7 @@ export class AIAgentRunService {
           step: call.step,
           actorUserId: row.initiated_by_user_id ?? 'system',
           idempotencyKey: call.idempotency_key,
+          expectedTargetVersions,
         });
       } catch (error) {
         await this.database.db
@@ -1773,6 +1778,7 @@ export class AIAgentRunService {
       idempotencyKey: call.idempotency_key,
       step: call.step,
       approvalId: approval.id,
+      expectedTargetVersions,
     });
     const now = new Date();
     await this.database.db
