@@ -63,8 +63,10 @@ guidance and the project's threat model.
 ## 5. Status
 
 - **Task 1 — risk-based test matrix: done** (see §7).
-- **Task 2 — regression tests: started.** Phase doc + risk matrix landed; the first regression-test batch is next.
-- **Next:** task 2 — author regression tests for the matrix rows that are not yet covered.
+- **Task 2 — regression tests: started.** First batch landed and is green: `apps/api/test/phase22-security-regression.test.ts`
+  (anonymous access boundary → 401, admin control → 200).
+- **Next:** task 2 — author regression tests for the remaining matrix rows (IDoA, injection/XSS, SSRF, cross-team
+  leakage); tasks 3–12 follow the same pattern.
 
 ## 6. Known limitations
 
