@@ -76,7 +76,7 @@
 | G63 | No route guard sits in front of `/admin/*` — only the menu is filtered by the server | platform / SPA | Medium | Open (found 22.15) |
 | G64 | ~150 call sites still show `error.message` raw instead of the code-aware helper | platform / SPA | Medium | Open (found 22.15) |
 | G65 | Home content is chosen from `principal.roles` in the client, a rule the server does not mirror | platform / SPA | Low | Open (found 22.15) |
-| G66 | No browser spec asserts an error, denied or empty state, and login is English-only | platform / SPA / e2e | Medium | Open (found 22.15, belongs to 22.16) |
+| G66 | No browser spec asserts an error, denied or empty state, and login is English-only | platform / SPA / e2e | Medium | Open (found 22.15; error/empty/denial browser spec added in 22.16, run pending) |
 | G67 | Column resize is mouse-only, and modal focus trap/restore rests on antd defaults with no assertion | platform / SPA | Low | Open (found 22.15) |
 | G68 | A core record write does not invalidate the module panels keyed to that record | platform / SPA | Low | Open (found 22.15) |
 | G69 | The Sales lot-traceability suite depends on lot stock the shared database no longer holds | sales (test isolation) | Medium | Open (found 22.15) |
@@ -561,7 +561,7 @@
 
 - **Module / contract:** platform / SPA / e2e — `e2e/*.spec.ts`, `e2e/accessibility.spec.ts`.
 - **Impact:** the Playwright suite covers the happy path of login, CRUD, conversion, sales documents, omnichannel, AI agents and an axe pass over home/list/record/settings. Nothing drives a 403, a failed save, a throttled list or an empty filtered result, and no spec asserts focus returns to its trigger when a modal closes. `login()` looks up `getByLabel('User name')`, so the Vietnamese catalog is not exercised in the browser at all — which is where a missing key or an English-only fallback (G61) would actually show.
-- **Status:** Open (found 22.15) — this is Phase 22.16's brief (browser E2E critical paths), not a defect in the components. The node-side structural assertions added here (`SharedStates.test.tsx`) cover what the DOM-less project can reach.
+- **Status:** Open (found 22.15) — this is Phase 22.16's brief (browser E2E critical paths), not a defect in the components. The node-side structural assertions added in 22.15 (`SharedStates.test.tsx`) cover what the DOM-less project can reach. Phase 22.16 started closing it with `e2e/critical-paths.spec.ts` (error / empty / denial assertions plus the secondary-locale login coverage); the first browser execution of that spec is pending, and the modal-focus half of the gap stays with this phase's browser spec (G67).
 
 ## G67 — Column resize is mouse-only, and modal focus trap/restore rests on antd defaults with no assertion
 
