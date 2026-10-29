@@ -90,6 +90,8 @@
 | G77 | No continuous metrics/tracing exporter; metrics are derived module documents | platform (observability) | Medium | Accepted (22.21) |
 | G78 | CI is a nightly integrity check, not a PR gate; a regression can land before detection | platform (CI) | Medium | Accepted (22.22 decision) |
 | G79 | `hooks-events` restore-event test flakes under the full parallel suite but passes solo | platform (test isolation) | Low | Open (found 22.22; review 2026-11-15) |
+| G80 | The restore drill is blocked: no approved isolated recovery environment, no approved RPO/RTO | platform (operations) | Medium | Blocked (22.23) |
+| G81 | No automated, encrypted, off-host backup; the existing demo artifact is partial and world-readable | platform (operations/security) | High | Open (found 22.23) |
 
 ---
 
@@ -672,3 +674,19 @@
 - **Expected vs observed:** expected — the event test creates its own record and filters its own outbox rows, so another file cannot page or delete them; observed — a full-suite run can still see the assertion fail, and the exact interference is not diagnosed.
 - **Status:** Open (found 22.22; **review 2026-11-15**) — same class as G69/G75 (shared-database parallel-suite isolation). The DB-free scheduled CI does not run it; the local `pnpm verify` does, and the flake register in `docs/quality/ci-gates.md` §7 tracks the owner/window.
 - **Remaining risk:** the local full gate can be red on a file unrelated to the change; do not treat a green rerun as a fix.
+
+## G80 — The restore drill is blocked: no approved isolated recovery environment, no approved RPO/RTO
+
+- **Module / contract:** platform — backup/restore (`docs/operations/backup-restore.md`, Phase 22.23).
+- **Impact:** the plan requires a restore exercise in an approved isolated recovery environment and an owner-approved RPO/RTO. Neither exists: the only database is the configured `carocrm_dev`, and the owner has not approved target values. Without the drill there is no measured RTO, no proof that files and DB metadata align after a restore, and no evidence that the real upgrade/migration path survives one. The demo NDJSON artifact cannot stand in for it (G81).
+- **Expected vs observed:** expected — a rehearsed restore with evidence and an explicit RPO/RTO; observed — the procedure and reconciliation policy are written, but no restore has run, and creating a database to run one would violate AGENTS.md §3.6.
+- **Status:** **Blocked (22.23)** — do not silently create a test/restore database. Unblock by approving an isolated target and a window, then running the procedure in the runbook; RPO/RTO remain unapproved. Owner: platform/operations. Review: when the environment is approved (no date until then).
+- **Remaining risk:** an untested backup is not a recovery plan; the release readiness (22.24) must not claim restore coverage.
+
+## G81 — No automated, encrypted, off-host backup; the existing demo artifact is partial and world-readable
+
+- **Module / contract:** platform — backup artifacts and retention.
+- **Impact:** the repository has no scheduled `pg_dump`, no file-storage backup, no off-host copy and no monitoring. The only artifact (`.data/demo/backup-2026-10-22T03-12-12-673Z`) is a 40-table NDJSON demo snapshot with **no** `users`, `roles`, `teams`, `app_settings`, `audit_log`, `outbox_events` or `jobs`; its files are **world-readable (644)**, have no encryption marker, and its newest file was **179.9 h** old on 2026-10-29. `archive_mode` is `off`, so there is no PITR. `pnpm verify:backup` flags 9 problems. File storage (`.data/files`, 1 846 files) has no backup artifact and sampled files are 644.
+- **Expected vs observed:** expected — scheduled full dumps plus matched file archives, checksums, encryption, restricted permissions, off-host retention and a freshness alert; observed — manual commands in a document and a partial, unencrypted demo snapshot.
+- **Status:** Open (22.23) — a production backup service is an operations/deployment decision (destination, key management, retention, cost). `verify:backup` and the procedure are in place so the next artifact can be checked; do not treat the demo snapshot as a recovery point.
+- **Remaining risk:** data loss up to the last unmonitored manual dump; a leaked backup because it is world-readable; inability to meet any approved RPO once one exists.
