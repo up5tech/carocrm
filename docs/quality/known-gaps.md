@@ -25,11 +25,11 @@
 | G12 | The signature webhook inbox stamps a purge date that nothing acts on | esignature | Low | Open (22.21) |
 | G13 | Two provider receipt tables have no retention at all | voice-communications / marketing-automation | Low | Open (22.21) |
 | G14 | The `jobs` and `job_logs` tables have no retention | platform | Medium | Open (22.21) |
-| G15 | No jitter on the queue or outbox retry | platform | Medium | Open (22.18) |
+| G15 | No jitter on the queue or outbox retry | platform | Medium | Fixed (22.18) |
 | G16 | `JOB_BACKOFF_BASE_MS` is dead configuration and the two attempt settings can diverge | platform | Low | Open (22.21) |
 | G17 | The CSV import keeps its per-row errors in memory only | search | Low | Open (22.9) |
-| G18 | No projection compares an event's timestamp — every ordering guard is a state-machine rule | platform | Medium | Open (22.18) |
-| G19 | No door detects "same idempotency key, different body" | platform | Medium | Open (22.18 / 22.19) |
+| G18 | No projection compares an event's timestamp — every ordering guard is a state-machine rule | platform | Medium | Accepted (22.18 decision) |
+| G19 | No door detects "same idempotency key, different body" | platform | Medium | Fixed (22.18) |
 | G20 | The payment provider event key is not scoped by provider | sales | Low | Open (22.19) |
 | G21 | A failed `jobs` row can be neither retried nor discarded through the API | platform | Medium | Open (22.21) |
 | G22 | The duplicate-job collapse looks for a status that never exists (`active`) | lead-score | Medium | Open (22.19) |
@@ -58,7 +58,7 @@
 | G45 | Cancelling a run stopped nothing, and a cancelled run could be cancelled again | advanced-integrations | Medium | Fixed (22.14) |
 | G46 | `features.connections` was stored and displayed but enforced nothing | advanced-integrations | Medium | Fixed (22.14) |
 | G47 | Token refresh is implemented, serialised and tested — and no production path calls it | advanced-integrations | Medium | Open (found 22.14) |
-| G48 | The resilience layer the sync path never uses: rate limiter, retry policy, `assertCallable` | advanced-integrations | Medium | Open (found 22.14) |
+| G48 | The resilience layer the sync path never uses: rate limiter, retry policy, `assertCallable` | advanced-integrations | Medium | Open (22.21; 22.18 decided scope) |
 | G49 | `deletionPolicy: 'archive'` behaves exactly like `unlink` | advanced-integrations | Low | Open (found 22.14) |
 | G50 | A mapping asked for "the connection for this provider" gets one picked by name order | advanced-integrations | Medium | Open (found 22.14) |
 | G51 | The OAuth callback never compares the redirect URI its own comment claims it checks | advanced-integrations | Medium | Open (found 22.14) |
@@ -80,6 +80,7 @@
 | G67 | Column resize is mouse-only, and modal focus trap/restore rests on antd defaults with no assertion | platform / SPA | Low | Open (found 22.15) |
 | G68 | A core record write does not invalidate the module panels keyed to that record | platform / SPA | Low | Open (found 22.15) |
 | G69 | The Sales lot-traceability suite depends on lot stock the shared database no longer holds | sales (test isolation) | Medium | Open (found 22.15) |
+| G70 | An outbox event claimed by a worker that then died stayed `running` forever | platform (outbox) | High | Fixed (22.18) |
 
 ---
 
@@ -185,14 +186,14 @@
 ## G14 — The `jobs` and `job_logs` tables have no retention
 
 - **Module / contract:** platform — the durable record of every job and every attempt.
-- **Impact:** the development database held 6 574 `jobs` rows. The kernel's `system.cleanupOutbox` and `system.pruneSessions` handlers exist but are **not seeded as schedules**, so nothing cleans them by default.
+- **Impact:** the development database held 6 574 `jobs` rows, and on 2026-10-29 **279 028 `pending` `outbox_events`** against 869 `processed`. The kernel's `system.cleanupOutbox` and `system.pruneSessions` handlers exist but are **not seeded as schedules**, so nothing cleans either table by default. The 22.18 outbox lease makes crash recovery correct but does not drain the backlog.
 - **Status:** Open — deferred to 22.21 (a scheduled sweep with a retention setting is an operations decision).
 
 ## G15 — No jitter on the queue or the outbox retry
 
 - **Module / contract:** platform — `apps/worker/src/queue/job-consumer.ts` and `apps/worker/src/outbox/outbox-poller.ts`.
 - **Impact:** both backoffs are pure exponential. A fleet that failed at the same moment retries at the same moment, which is the opposite of what jitter is for. The only jittered retry in the codebase is the provider HTTP call (`advanced-integrations/resilience.ts`).
-- **Status:** Open — deferred to 22.18 (resilience and chaos-lite tests), which is where the retry policy as a whole is hardened.
+- **Status:** **Fixed (22.18).** `apps/worker/src/backoff.ts` owns the plan and equal jitter; the outbox poller (`retryDelayMs`) and the BullMQ consumer (`jobRetryDelayMs` via `backoffStrategy`) both use it. `backoff.test.ts` pins the bounds and the spread; the poller/consumer tests pin the exact delay with an injected `random`. See `docs/quality/phase-22-resilience-chaos.md` §5.1.
 
 ## G16 — Dead retry configuration
 
@@ -210,13 +211,13 @@
 
 - **Module / contract:** platform — every state projection (signature envelope, signature recipient, voice call, voice message, marketing delivery, payment request).
 - **Impact:** the ordering guards are state-machine rules, so a terminal state cannot regress — but an older event whose target is still a legal *forward* move does move the projection forward. A call that is `in_progress` today and receives a `ringing` event from yesterday becomes `ringing`.
-- **Status:** Open — deferred to 22.18. Changing it means deciding what an event's timestamp *means*, which is a product decision rather than a hardening fix.
+- **Status:** **Accepted (22.18)** as a documented product decision: a provider's clock is not a contract this platform can verify (providers replay, batch and skew events independently), so provider timestamps stay informational and the state machine stays the ordering authority. The stale-forward case remains visible in the event timeline. Making timestamps authoritative needs a per-projection `last_event_at`, a rule for whose clock wins, and a migration for existing rows — not a hardening patch. Owner: platform. Review date: 2026-11-30, together with 22.19 concurrency work. See `docs/quality/phase-22-resilience-chaos.md` §7.
 
 ## G19 — No door detects "same idempotency key, different body"
 
 - **Module / contract:** platform — the five provider ingresses.
 - **Impact:** three of them store a body hash (`signature_webhook_inbox.payload_hash`, `signature_provider_events.payload_hash`, `voice_webhook_events.payload_digest`) and never compare it. A delivery that reuses a key with a different body is treated as a replay: the new body is discarded and nothing happens, so the platform is *safe* — but the mismatch is never surfaced to an operator.
-- **Status:** Open — deferred to 22.18 / 22.19, where a quarantine path would have to be designed and its operator story written.
+- **Status:** **Fixed (22.18).** Every hash-storing door compares on redelivery and keeps the first delivery as the receipt of record: voice stamps `failure_code = DEDUP_BODY_MISMATCH` on the receipt and returns `bodyMismatch`; ESignature writes a `provider.event_body_mismatch` audit entry (declared action, translated) and stamps the inbox receipt; the provider-event table's duplicate branch does the same. No quarantine table was needed — the receipt *is* the quarantine record, and an operator sees it where they already look. Regression: `phase22-out-of-order-events.test.ts` (voice), `esignature-events.test.ts` (signature). See `docs/quality/phase-22-resilience-chaos.md` §5.3.
 
 ## G20 — The payment provider event key is not scoped by provider
 
@@ -437,7 +438,7 @@
 - **Module / contract:** advanced-integrations — `resilience.ts` (`ProviderRateLimiter`, `decideRetry`, `computeRetryDelay`) and `assertCallable` in the domain.
 - **Impact:** the rate limiter is wired into the executor behind `options.rateLimit`, and no caller anywhere passes that option — `runInbound`, the webhook paths, the outbound push and the controller's own calls all use `executor.call(id, fn)`. So `integration_rate_limit_buckets` stays empty and a connector that documents `rateLimitStrategy: 'provider_header'` is throttled only by the provider's own refusal. `decideRetry`/`computeRetryDelay` — the bounded, jittered backoff the engine tests assert to the bit — are imported and re-exported by the orchestrator and never called by production code: the retry policy lives in the queue (`attempts`, exponential backoff) and in a hardcoded `attempts >= 5` in the outbound path. `assertCallable`, the domain's own rule about which states may call a provider, is exported and never used; the executor re-implements the same rule inline with different wording.
 - **Expected vs observed:** expected — a declared capability and a tested policy that nothing consults is a bug waiting for the day somebody trusts it; observed — the circuit breaker *is* live (it is the one part of `resilience.ts` the executor uses unconditionally), which is why the gap is easy to miss.
-- **Status:** Open (found 22.14) — recorded, not patched: passing `rateLimit` from the connector's declared strategy, or moving the queue's retry maths onto `decideRetry`, changes the timing of every deployment's syncs and needs a decision about who owns retries (provider budget, queue policy, or both). The journey asserts what is genuinely enforced instead — the breaker refuses through a poisoned connection, and a rate-limited page produces a named `RATE_LIMITED` failure with a dead letter.
+- **Status:** Open — deferred to 22.21 (operations) after review in 22.18. 22.18 aligned the queue's retry with the HTTP policy's equal jitter (G15) and made the outbox claim a lease, so the two remaining pieces need a decision rather than a patch: wiring `rateLimit` would invent capacity/refill numbers because `ConnectorCapabilities` declares only a strategy name, and moving the queue onto `decideRetry` changes who owns retries (provider budget vs queue policy). `assertCallable` stays a domain helper because the executor deliberately raises a `ProviderError` with a stable `configuration_invalid` code instead of a `ValidationError`. The journey asserts what is genuinely enforced instead — the breaker refuses through a poisoned connection, and a rate-limited page produces a named `RATE_LIMITED` failure with a dead letter.
 - **Remaining risk:** `docs/compatibility/advanced-integrations/provider-matrix.md` describes rate-limit strategies per connector; a reader can reasonably conclude the platform obeys them.
 
 ## G49 — `deletionPolicy: 'archive'` behaves exactly like `unlink`
@@ -583,3 +584,11 @@
 - **Expected vs observed:** expected — a suite that needs lot stock creates the stock it needs and restores it, so it says the same thing on the fortieth run against a shared database as on the first (AGENTS.md §3.3: identifiable, self-contained test records); observed — three tests that read `LOT-A` as though earlier tests in the same process had not drawn it down.
 - **Status:** Open (found 22.15) — recorded rather than fixed here, because the fix is either a per-test seeding step in Sales' own fixture helpers or a ledger cleanup in `afterAll`, and both belong to whoever owns 19-S.15, not to a UI/API consistency pass. The gate result for Phase 22.15 states this failure explicitly instead of working around it.
 - **Remaining risk:** `pnpm test` is red on a file that has nothing to do with the change under review, which teaches everyone to skim past red. That is the real cost, and it is why this is written down instead of being left as a flake.
+
+## G70 — An outbox event claimed by a worker that then died stayed `running` forever
+
+- **Module / contract:** platform — `apps/worker/src/outbox/outbox-poller.ts` (`CLAIM_SQL`).
+- **Impact:** the claim committed `status = 'running'` before the handler ran and never wrote a deadline. If the worker process died between the claim and `MARK_PROCESSED_SQL` — including after the handler had committed its own side effects but before the acknowledgement — no other worker could claim the row (`CLAIM_SQL` selected only `pending`), and no operator screen lists `running` as a problem. The fact was effectively lost, silently, while the outbox row still looked like work in progress.
+- **Expected vs observed:** expected — a claim is a lease with an expiry, so a dead worker's row becomes available again; observed — a claim was a permanent reservation and the only way out was manual SQL.
+- **Status:** Fixed (22.18). `CLAIM_SQL` now sets `available_at = now() + lease` and reclaims `running` rows whose lease expired; the lease is `WORKER_OUTBOX_LEASE_MS` (`outboxLeaseMs`, default 10 minutes). Dispatch is therefore at-least-once across a crash, which is only safe because handlers are required to be idempotent (AGENTS.md §5.5). Regression: `outbox-poller.test.ts` (SQL shape + lease parameter) and `env.test.ts` (the setting), plus a rolled-back PostgreSQL check in `docs/quality/phase-22-resilience-chaos.md` §5.2.
+- **Remaining risk:** a handler that runs longer than the lease can be executed twice on a healthy worker. Operators must size the lease above the slowest handler; the default of ten minutes is a starting point, not a measurement.

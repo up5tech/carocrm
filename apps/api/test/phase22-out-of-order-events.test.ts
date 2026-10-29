@@ -171,11 +171,40 @@ describe('an older status event cannot move a call backwards (22.7)', () => {
     const again = await call('POST', `${VOICE}/voice-events`, body, signedHeaders(body));
     expect(again.status, JSON.stringify(again.body)).toBe(202);
     expect(again.body['duplicate']).toBe(true);
+    // An identical redelivery is a duplicate and nothing more.
+    expect(again.body['bodyMismatch']).toBeUndefined();
 
     const receipts = await sql<{ count: string }>`
       select count(*)::text as count from voice_webhook_events
       where account_key = ${ACCOUNT_KEY} and vendor_event_id = ${String(body['eventId'])}
     `.execute(ctx.database.db);
     expect(Number(receipts.rows[0]?.count ?? '0')).toBe(1);
+  });
+
+  it('stamps a receipt whose event id is reused with a different body (G19)', async () => {
+    const eventId = `evt_${RUN}_body_mismatch`;
+    const firstBody = callEvent(eventId, 'in-progress', new Date().toISOString());
+    const first = await call('POST', `${VOICE}/voice-events`, firstBody, signedHeaders(firstBody));
+    expect(first.status, JSON.stringify(first.body)).toBe(202);
+    expect(first.body['duplicate']).toBe(false);
+
+    const mutatedBody = callEvent(eventId, 'completed', new Date().toISOString());
+    const replay = await call('POST', `${VOICE}/voice-events`, mutatedBody, signedHeaders(mutatedBody));
+    expect(replay.status, JSON.stringify(replay.body)).toBe(202);
+    expect(replay.body['duplicate']).toBe(true);
+    expect(replay.body['bodyMismatch']).toBe(true);
+
+    // The stored receipt and its processing state are the first delivery's; only the mismatch is
+    // stamped on it, so an operator can ask why one event id carried two bodies.
+    const receipts = await sql<{ count: string; processing_status: string; failure_code: string | null }>`
+      select count(*)::text as count,
+             min(processing_status) as processing_status,
+             min(failure_code) as failure_code
+      from voice_webhook_events
+      where account_key = ${ACCOUNT_KEY} and vendor_event_id = ${eventId}
+    `.execute(ctx.database.db);
+    expect(Number(receipts.rows[0]?.count ?? '0')).toBe(1);
+    expect(receipts.rows[0]?.processing_status).toBe('received');
+    expect(receipts.rows[0]?.failure_code).toBe('DEDUP_BODY_MISMATCH');
   });
 });

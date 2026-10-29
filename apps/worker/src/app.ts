@@ -217,6 +217,7 @@ export class WorkerApplication {
       maxAttempts: this.config.outboxMaxAttempts,
       backoffBaseMs: this.config.outboxBackoffBaseMs,
       backoffMaxMs: this.config.outboxBackoffMaxMs,
+      leaseMs: this.config.outboxLeaseMs,
     });
   }
 

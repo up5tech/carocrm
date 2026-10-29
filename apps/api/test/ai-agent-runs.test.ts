@@ -820,6 +820,45 @@ describe('approval service and low-risk writes (19-AI.10)', () => {
     expect(task.body['description']).not.toContain('rejected change');
   });
 
+  it('expires an approval past its deadline and refuses the late decision (22.18)', async () => {
+    const { id } = await createAgent({
+      suffix: 'expiry',
+      config: baseConfig({ tools: [{ key: 'crm_update_record_fields' }] }),
+    });
+    expect((await publish(id)).status).toBe(200);
+    const created = await runAgent(
+      id,
+      `__FAKE_TOOL__:crm_update_record_fields __FAKE_TOOL_ARGS__:{"entity":"Task","id":"${taskId}","fields":{"description":"${MARKER} expired approval"}}`,
+    );
+    const idRun = String(created.body['id']);
+    await executeRun(idRun);
+
+    const inbox = await call('GET', '/api/v1/AIAgents/action/approvals?status=pending', ctx.adminToken);
+    const approval = (inbox.body['list'] as { id: string; runId: string }[]).find((entry) => entry.runId === idRun);
+    if (approval === undefined) throw new Error('approval not found');
+
+    // Move the deadline into the past — the clock is the only thing this test changes.
+    await ctx.database.db
+      .updateTable('ai_agent_approvals')
+      .set({ expires_at: new Date(Date.now() - 60_000) })
+      .where('id', '=', approval.id)
+      .execute();
+
+    const late = await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, ctx.adminToken, {});
+    expect(late.status, JSON.stringify(late.body)).toBe(422);
+    expect(JSON.stringify(late.body)).toContain('expired');
+
+    const view = await call('GET', `/api/v1/AIAgents/action/approvals/${approval.id}`, ctx.adminToken);
+    expect(view.body['status']).toBe('expired');
+    const run = await call('GET', `/api/v1/AIAgents/action/runs/${idRun}`, ctx.adminToken);
+    expect(run.body['status']).toBe('expired');
+    expect(run.body['failureCategory']).toBe('approval_expired');
+
+    // The proposed write never happened.
+    const task = await call('GET', `/api/v1/Task/${taskId}`, ctx.adminToken);
+    expect(task.body['description']).not.toContain('expired approval');
+  });
+
   it('invalidates an approval whose target disappeared before execution', async () => {
     const { id } = await createAgent({
       suffix: 'stale',

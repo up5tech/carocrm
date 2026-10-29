@@ -1,6 +1,7 @@
 import type { Logger } from '@carocrm/core/logger/index.js';
 import type { OutboxEvent } from '@carocrm/jobs';
 
+import { equalJitterDelayMs, exponentialDelayMs } from '../backoff.js';
 import {
   asRecord,
   errorMessage,
@@ -25,19 +26,29 @@ import type { OutboxHandlerRegistry } from './outbox-registry.js';
  * - unknown event type  -> `processed` (warning logged, never clogs the queue)
  */
 
+/**
+ * Claim a batch, and re-claim a `running` row whose lease expired.
+ *
+ * A claim is committed before the handler runs, so a worker that dies mid-handler leaves the row
+ * `running` forever unless something takes it back. The lease is written into `available_at` when
+ * the row is claimed; once it passes, any worker may claim the row again. That makes dispatch
+ * **at-least-once** across a crash (handlers are idempotent by contract), instead of silently
+ * losing the event.
+ */
 export const CLAIM_SQL = `
   UPDATE outbox_events
-     SET status = 'running'
+     SET status = 'running',
+         available_at = now() + make_interval(secs => $2::double precision)
    WHERE id IN (
            SELECT id
              FROM outbox_events
-            WHERE status = 'pending'
+            WHERE status IN ('pending', 'running')
               AND available_at <= now()
             ORDER BY available_at, created_at
                FOR UPDATE SKIP LOCKED
               LIMIT $1
          )
-     AND status = 'pending'
+     AND status IN ('pending', 'running')
   RETURNING id, event_type, payload, attempts
 `;
 
@@ -72,13 +83,12 @@ export interface ClaimedEvent {
 
 export type EventOutcome = 'processed' | 'retried' | 'failed' | 'unknown';
 
-export function retryDelayMs(attempts: number, baseMs: number, maxMs: number): number {
-  const exponent = Math.max(0, Math.floor(attempts));
-  // 2^attempts * base, capped — attempts is the count *before* this failure, so the very
-  // first retry waits `baseMs`.
-  const delay = 2 ** exponent * baseMs;
-  if (!Number.isFinite(delay)) return maxMs;
-  return Math.min(delay, maxMs);
+export function retryDelayMs(attempts: number, baseMs: number, maxMs: number, random: () => number = Math.random): number {
+  // Exponential and capped, then equal-jittered — attempts is the count *before* this failure, so the
+  // very first retry waits somewhere between baseMs/2 and baseMs. The jitter (G15) keeps a fleet of
+  // workers that failed together from retrying together, and the `random` parameter keeps the delay
+  // testable.
+  return equalJitterDelayMs(exponentialDelayMs(attempts, baseMs, maxMs), random);
 }
 
 export function mapClaimedEvent(row: Row): ClaimedEvent {
@@ -99,6 +109,10 @@ export interface OutboxPollerOptions {
   maxAttempts: number;
   backoffBaseMs: number;
   backoffMaxMs: number;
+  /** How long a claim may stay `running` before another worker may take it back (22.18). */
+  leaseMs: number;
+  /** Injectable random for the retry jitter (G15), so the delay is testable. */
+  random?: () => number;
 }
 
 export class OutboxPoller {
@@ -167,7 +181,7 @@ export class OutboxPoller {
   }
 
   private async claim(): Promise<ClaimedEvent[]> {
-    const result = await this.options.db.query(CLAIM_SQL, [this.options.batchSize]);
+    const result = await this.options.db.query(CLAIM_SQL, [this.options.batchSize, this.options.leaseMs / 1000]);
     return result.rows.map((row) => mapClaimedEvent(row));
   }
 
@@ -197,7 +211,7 @@ export class OutboxPoller {
 
   private async markFailure(event: ClaimedEvent, error: unknown): Promise<EventOutcome> {
     const message = truncate(errorMessage(error));
-    const delayMs = retryDelayMs(event.attempts, this.options.backoffBaseMs, this.options.backoffMaxMs);
+    const delayMs = retryDelayMs(event.attempts, this.options.backoffBaseMs, this.options.backoffMaxMs, this.options.random);
     let outcome: EventOutcome = 'retried';
     try {
       const result = await this.options.db.query(MARK_RETRY_SQL, [

@@ -16,7 +16,7 @@ import { OutboxHandlerRegistry } from './outbox-registry.js';
 
 const CLAIM_FRAGMENT = 'for update skip locked';
 const PROCESSED_FRAGMENT = 'processed_at = now()';
-const RETRY_FRAGMENT = 'make_interval';
+const RETRY_FRAGMENT = 'case when attempts + 1';
 
 interface Harness {
   db: FakeDb;
@@ -39,34 +39,52 @@ function harness(rows: Record<string, unknown>[], overrides: Partial<OutboxPolle
     maxAttempts: 8,
     backoffBaseMs: 5000,
     backoffMaxMs: 900000,
+    leaseMs: 600_000,
+    // Pinned to the upper bound, so the queued delay stays the exact exponential plan the classic
+    // assertions below check; the jitter itself is pinned in `backoff.test.ts`.
+    random: () => 1,
     ...overrides,
   });
   return { db, registry, poller, logger };
 }
 
 describe('retryDelayMs', () => {
-  it('doubles from the base and caps at the ceiling', () => {
-    expect(retryDelayMs(0, 5000, 900000)).toBe(5000);
-    expect(retryDelayMs(1, 5000, 900000)).toBe(10000);
-    expect(retryDelayMs(3, 5000, 900000)).toBe(40000);
-    expect(retryDelayMs(7, 5000, 900000)).toBe(640000);
-    expect(retryDelayMs(8, 5000, 900000)).toBe(900000);
-    expect(retryDelayMs(40, 5000, 900000)).toBe(900000);
+  it('doubles from the base and caps at the ceiling when the jitter is pinned to the upper bound', () => {
+    expect(retryDelayMs(0, 5000, 900000, () => 1)).toBe(5000);
+    expect(retryDelayMs(1, 5000, 900000, () => 1)).toBe(10000);
+    expect(retryDelayMs(3, 5000, 900000, () => 1)).toBe(40000);
+    expect(retryDelayMs(7, 5000, 900000, () => 1)).toBe(640000);
+    expect(retryDelayMs(8, 5000, 900000, () => 1)).toBe(900000);
+    expect(retryDelayMs(40, 5000, 900000, () => 1)).toBe(900000);
+  });
+
+  it('jitters inside the upper half of the plan (G15) — never below half, never over the cap', () => {
+    expect(retryDelayMs(0, 5000, 900000, () => 0)).toBe(2500);
+    expect(retryDelayMs(3, 5000, 900000, () => 0)).toBe(20000);
+    expect(retryDelayMs(40, 5000, 900000, () => 0)).toBe(450000);
   });
 
   it('clamps negative attempt counts to the base delay', () => {
-    expect(retryDelayMs(-2, 5000, 900000)).toBe(5000);
+    expect(retryDelayMs(-2, 5000, 900000, () => 1)).toBe(5000);
   });
 });
 
 describe('outbox SQL shape', () => {
-  it('claims only pending rows whose available_at passed, locking with SKIP LOCKED', () => {
+  it('claims due rows — pending, or running past its lease — locking with SKIP LOCKED', () => {
     const sql = CLAIM_SQL.toLowerCase();
     expect(sql).toContain("set status = 'running'");
-    expect(sql).toContain("where status = 'pending'");
+    expect(sql).toContain("where status in ('pending', 'running')");
     expect(sql).toContain('available_at <= now()');
+    // The lease is written on claim, so a crashed worker's row becomes due again.
+    expect(sql).toContain('available_at = now() + make_interval');
     expect(sql).toContain('for update skip locked');
     expect(sql).toContain('returning id, event_type, payload, attempts');
+  });
+
+  it('passes the lease as seconds alongside the batch size', async () => {
+    const { db, poller } = harness([], { leaseMs: 90_000 });
+    await poller.tick();
+    expect(db.lastCall(CLAIM_FRAGMENT)?.params).toEqual([10, 90]);
   });
 
   it('marks successes processed and failures retried or dead-lettered', () => {
@@ -105,7 +123,7 @@ describe('OutboxPoller.tick', () => {
     expect(handled.map((event) => event.id)).toEqual(['event-1', 'event-2']);
     expect(handled[0]?.eventType).toBe('system.noop');
     expect(handled[0]?.payload).toEqual({ hello: 'world' });
-    expect(db.lastCall(CLAIM_FRAGMENT)?.params).toEqual([10]);
+    expect(db.lastCall(CLAIM_FRAGMENT)?.params).toEqual([10, 600]);
     expect(db.callsFor(PROCESSED_FRAGMENT)).toHaveLength(2);
     expect(db.lastCall(PROCESSED_FRAGMENT)?.params).toEqual(['event-2']);
     expect(db.callsFor(RETRY_FRAGMENT)).toHaveLength(0);

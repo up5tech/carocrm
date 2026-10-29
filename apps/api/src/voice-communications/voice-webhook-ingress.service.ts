@@ -51,6 +51,12 @@ export interface WebhookIngestResult {
   readonly accepted: boolean;
   readonly processingStatus: string;
   readonly reason?: string | undefined;
+  /**
+   * G19 — the delivery reused a known dedup key with a different body. The stored receipt and its
+   * processing state are kept; the mismatch is stamped on it (`DEDUP_BODY_MISMATCH`) so the
+   * operator queue can ask why one event id carried two bodies.
+   */
+  readonly bodyMismatch?: boolean | undefined;
 }
 
 interface ReceiptRow {
@@ -185,15 +191,37 @@ export class VoiceWebhookIngressService {
     if (eventId === null) {
       // The unique constraint answered: this callback was already recorded. No second job, no second
       // communication event (§15 `19-VC.5` acceptance "duplicate callbacks do not duplicate records").
-      const existing = (await sql<{ id: string; processing_status: string }>`
-        select id, processing_status from voice_webhook_events
+      const existing = (await sql<{ id: string; processing_status: string; payload_digest: string | null }>`
+        select id, processing_status, payload_digest from voice_webhook_events
         where account_key = ${account.key} and dedup_key = ${validatedDedupKey}
       `.execute(this.database.db)).rows[0];
+      // G19 — a redelivery under a known key with a *different* body is a duplicate to the provider
+      // (the stored delivery is kept, no second effect), but it is not a silent duplicate: the
+      // mismatch is stamped on the receipt so an operator can question why one event id carries two
+      // bodies. The genuine receipt and its processing state are never touched.
+      if (existing === undefined) {
+        // The unique index that refused the insert guarantees a row; a missing one is a broken
+        // invariant, not a duplicate to acknowledge.
+        throw new Error("The duplicate voice receipt could not be read.");
+      }
+      const receivedDigest = payloadDigest(validated.payload);
+      // A receipt written before digests were mandatory has nothing to compare; null is unknown,
+      // not a mismatch.
+      const bodyMismatch = existing.payload_digest !== null && existing.payload_digest !== receivedDigest;
+      if (bodyMismatch) {
+        await sql`
+          update voice_webhook_events
+          set failure_code = 'DEDUP_BODY_MISMATCH',
+              failure_detail = ${"A redelivery under this key carried a different body; the stored delivery was kept."}
+          where id = ${existing.id}
+        `.execute(this.database.db);
+      }
       return {
-        eventId: existing?.id ?? "",
+        eventId: existing.id,
         duplicate: true,
         accepted: true,
-        processingStatus: existing?.processing_status ?? "received",
+        processingStatus: existing.processing_status,
+        ...(bodyMismatch ? { bodyMismatch: true } : {}),
       };
     }
 

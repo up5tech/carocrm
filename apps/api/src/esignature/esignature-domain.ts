@@ -170,6 +170,9 @@ export const AUDIT_ACTIONS = [
   'send.completed',
   'provider.event_accepted',
   'provider.event_rejected',
+  // Added by 22.18 — a delivery reused a provider event id with a different body. It is a duplicate
+  // for state purposes (the first delivery is kept), but the mismatch is evidence an operator needs.
+  'provider.event_body_mismatch',
   // Added by ES.20: the recovery workbench retries an inbound delivery. It is an operator action on
   // evidence, never a resend; the trail says which receipt and which state was retried.
   'webhook.retryRequested',

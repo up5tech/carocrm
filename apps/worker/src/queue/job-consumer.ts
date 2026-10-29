@@ -4,6 +4,7 @@ import type { Job } from 'bullmq';
 import { Worker } from 'bullmq';
 import type { Redis } from 'ioredis';
 
+import { equalJitterDelayMs, exponentialDelayMs } from '../backoff.js';
 import { errorMessage } from '../db.js';
 import { type JobPayload,parseJobPayload } from './job-payload.js';
 import type { JobRepository } from './job-repository.js';
@@ -26,6 +27,24 @@ export interface JobConsumerOptions {
   attempts: number;
   backoffBaseMs: number;
   backoffMaxMs: number;
+  /** Injectable random for the jitter, so the delay is testable (defaults to `Math.random`). */
+  random?: () => number;
+}
+
+/**
+ * Phase 22.18/G15 — the BullMQ backoff delay for one retry.
+ *
+ * Exponential and capped, then equal-jittered: the computed delay is halved and the rest is left to
+ * chance, so a fleet that failed at the same moment spreads its retries across the upper half of the
+ * plan instead of repeating the thundering herd every attempt.
+ */
+export function jobRetryDelayMs(
+  attemptsMade: number,
+  baseMs: number,
+  maxMs: number,
+  random: () => number = Math.random,
+): number {
+  return equalJitterDelayMs(exponentialDelayMs(attemptsMade, baseMs, maxMs), random);
 }
 
 export class JobConsumer {
@@ -41,7 +60,7 @@ export class JobConsumer {
         name: `worker-${String(process.pid)}`,
         settings: {
           backoffStrategy: (attemptsMade: number): number =>
-            Math.min(2 ** Math.max(0, attemptsMade) * options.backoffBaseMs, options.backoffMaxMs),
+            jobRetryDelayMs(attemptsMade, options.backoffBaseMs, options.backoffMaxMs, options.random ?? Math.random),
         },
       },
     );

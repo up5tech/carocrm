@@ -62,6 +62,21 @@ describe('LocalFsStorage', () => {
     await expect(store.put({ key: 'ok.bin', body: Buffer.from('fine') })).resolves.toBeTruthy();
     expect((await readFile(escaped)).toString()).toBe('keep me');
   });
+
+  it('surfaces a download failure as a rejection instead of an empty file', async () => {
+    const store = await storage();
+    await expect(store.get('never-written.bin')).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(store.openRead('never-written.bin')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('surfaces an upload failure when the destination cannot be created (22.18)', async () => {
+    const store = await storage();
+    // The parent of the key is a regular file, so the storage layer cannot create the directory it
+    // needs. This is the local-driver equivalent of an object-store write failing mid-upload.
+    await writeFile(join(store.root, 'blocked'), 'not a directory');
+    await expect(store.put({ key: 'blocked/file.bin', body: Buffer.from('x') })).rejects.toThrow(/EEXIST|ENOTDIR/);
+    expect(await store.exists('blocked/file.bin')).toBe(false);
+  });
 });
 
 describe('upload hashing helper', () => {

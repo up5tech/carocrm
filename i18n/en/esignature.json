@@ -694,6 +694,7 @@
       "send.outcome_unknown": "Send outcome unknown",
       "provider.event_accepted": "Provider event accepted",
       "provider.event_rejected": "Provider event refused",
+      "provider.event_body_mismatch": "Provider event id reused with a different body",
       "approval.requested": "Approval requested",
       "approval.granted": "Approval granted",
       "approval.rejected": "Approval rejected",

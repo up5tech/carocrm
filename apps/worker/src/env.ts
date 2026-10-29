@@ -25,6 +25,11 @@ const WorkerConfigSchema = z.object({
   outboxBackoffBaseMs: z.coerce.number().int().min(100).max(60000).default(5000),
   /** Backoff ceiling (spec: 15 minutes). */
   outboxBackoffMaxMs: z.coerce.number().int().min(1000).max(86400000).default(900000),
+  /**
+   * How long a claimed event may stay `running` before another worker reclaims it (22.18). It must
+   * comfortably exceed the slowest event handler; a shorter lease trades a silence for duplicates.
+   */
+  outboxLeaseMs: z.coerce.number().int().min(1000).max(86400000).default(600000),
   jobConcurrency: z.coerce.number().int().min(1).max(100).default(5),
   /** BullMQ attempts per job (spec: 3 with backoff). */
   jobAttempts: z.coerce.number().int().min(1).max(20).default(3),
@@ -121,6 +126,7 @@ export function buildWorkerConfig(env: NodeJS.ProcessEnv = process.env): WorkerC
     outboxMaxAttempts: env.WORKER_MAX_ATTEMPTS,
     outboxBackoffBaseMs: env.WORKER_OUTBOX_BACKOFF_BASE_MS,
     outboxBackoffMaxMs: env.WORKER_OUTBOX_BACKOFF_MAX_MS,
+    outboxLeaseMs: env.WORKER_OUTBOX_LEASE_MS,
     jobConcurrency: env.WORKER_JOB_CONCURRENCY,
     jobAttempts: env.WORKER_JOB_ATTEMPTS,
     jobBackoffBaseMs: env.WORKER_JOB_BACKOFF_BASE_MS,

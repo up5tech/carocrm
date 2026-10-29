@@ -17,6 +17,7 @@ describe('buildWorkerConfig', () => {
     expect(config.outboxMaxAttempts).toBe(8);
     expect(config.outboxBackoffBaseMs).toBe(5000);
     expect(config.outboxBackoffMaxMs).toBe(900000);
+    expect(config.outboxLeaseMs).toBe(600000);
     expect(config.schedulerIntervalMs).toBe(30000);
     expect(config.jobAttempts).toBe(3);
     expect(config.jobBackoffBaseMs).toBe(5000);
@@ -31,6 +32,7 @@ describe('buildWorkerConfig', () => {
       WORKER_OUTBOX_POLL_INTERVAL_MS: '250',
       WORKER_OUTBOX_BATCH_SIZE: '3',
       WORKER_MAX_ATTEMPTS: '4',
+      WORKER_OUTBOX_LEASE_MS: '120000',
       WORKER_SCHEDULER_INTERVAL_MS: '1000',
       WORKER_JOB_ATTEMPTS: '5',
       WORKER_JOB_CONCURRENCY: '2',
@@ -42,6 +44,7 @@ describe('buildWorkerConfig', () => {
     expect(config.outboxPollIntervalMs).toBe(250);
     expect(config.outboxBatchSize).toBe(3);
     expect(config.outboxMaxAttempts).toBe(4);
+    expect(config.outboxLeaseMs).toBe(120000);
     expect(config.schedulerIntervalMs).toBe(1000);
     expect(config.jobAttempts).toBe(5);
     expect(config.jobConcurrency).toBe(2);

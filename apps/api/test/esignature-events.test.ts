@@ -413,6 +413,60 @@ describe('lifecycle events (acceptance 1 and 3)', () => {
     ).toBe(inboxCountBefore + 2);
   });
 
+  it('records a body mismatch when a provider event id is reused with a different body (G19)', async () => {
+    const id = await draft(null);
+    const { envelopeId } = await sent(id);
+    const providerRecipientId = (fake().envelope(envelopeId)?.recipients ?? [])[0]?.providerRecipientId ?? '';
+    const eventId = `evt-g19-body-${runId}`;
+    const first = await deliverAndProcess({
+      event_id: eventId,
+      envelope_id: envelopeId,
+      account_id: 'fake-account-1',
+      event_type: 'recipient_completed',
+      recipient_id: providerRecipientId,
+      recipient_status: 'completed',
+    });
+    expect(first.processed.status).toBe('processed');
+
+    // The same event id, a different body. It is a duplicate for state purposes — the first
+    // delivery stays the receipt of record — but the mismatch must not vanish silently.
+    const signed = signedWebhook({
+      event_id: eventId,
+      envelope_id: envelopeId,
+      account_id: 'fake-account-1',
+      event_type: 'recipient_declined',
+      recipient_id: providerRecipientId,
+      recipient_status: 'declined',
+    });
+    const replay = await app.inject({
+      method: 'POST',
+      url: `/api/v1/integrations/esignature/${connectionPublicId}`,
+      headers: { ...signed.headers, 'content-type': 'application/json' },
+      payload: Buffer.from(signed.rawBody),
+    });
+    expect(replay.statusCode, replay.body).toBe(202);
+
+    const receipts = await ctx.database.db
+      .selectFrom('signature_webhook_inbox')
+      .select(['id', 'state', 'payload_minimized'])
+      .where('connection_id', '=', connectionId)
+      .where(sql<boolean>`payload_minimized ->> 'providerEventId' = ${eventId}`)
+      .execute();
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]?.state).toBe('processed');
+
+    const audit = await ctx.database.db
+      .selectFrom('signature_audit_entries')
+      .selectAll()
+      .where('connection_id', '=', connectionId)
+      .where('action', '=', 'provider.event_body_mismatch')
+      .execute();
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.outcome).toBe('refused');
+    expect(audit[0]?.reason_safe).toBe('DEDUP_BODY_MISMATCH');
+    expect(audit[0]?.connection_id).toBe(connectionId);
+  });
+
   it('emits completedArtifactAvailable once for the stored artifacts', async () => {
     const id = await draft(null);
     const { envelopeId } = await sent(id);

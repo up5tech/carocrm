@@ -694,6 +694,7 @@
       "send.outcome_unknown": "Không rõ kết quả gửi",
       "provider.event_accepted": "Đã nhận sự kiện nhà cung cấp",
       "provider.event_rejected": "Sự kiện nhà cung cấp bị từ chối",
+      "provider.event_body_mismatch": "Mã sự kiện nhà cung cấp bị dùng lại với nội dung khác",
       "approval.requested": "Đã yêu cầu phê duyệt",
       "approval.granted": "Đã phê duyệt",
       "approval.rejected": "Đã từ chối",

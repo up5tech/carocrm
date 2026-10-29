@@ -20,7 +20,7 @@ import { SignatureProviderRegistry } from './providers/signature-provider.regist
 import { rawBodyHash } from './providers/signature-provider-signature.js';
 import { SignatureAuditRepository } from './signature-audit.repository.js';
 import { SignatureConnectionRepository } from './signature-connection.repository.js';
-import { SignatureProviderEventRepository } from './signature-provider-event.repository.js';
+import { payloadDigest, SignatureProviderEventRepository } from './signature-provider-event.repository.js';
 import { SignatureRecipientRepository } from './signature-recipient.repository.js';
 import { SignatureRequestRepository } from './signature-request.repository.js';
 import { SignatureWebhookInboxRepository } from './signature-webhook-inbox.repository.js';
@@ -73,6 +73,11 @@ export interface WebhookIngestResult {
    */
   readonly responseBody?: string | null;
   readonly responseContentType?: 'text/plain';
+  /**
+   * G19 — a duplicate delivery under a known key carried a different body. The first delivery stays
+   * the receipt of record; the mismatch is written to the audit trail for an operator to review.
+   */
+  readonly bodyMismatch?: boolean;
 }
 
 export interface WebhookProcessResult {
@@ -194,11 +199,27 @@ export class ESignatureWebhookService {
     }
 
     if (!accepted.created) {
+      // G19 — the dedup key is the provider's event id, so a redelivery that reuses it with a
+      // different body is answered as a duplicate (no second effect) but is not silently identical.
+      // The stored receipt is the delivery of record; the mismatch becomes audit evidence.
+      const bodyMismatch = accepted.delivery.payloadHash !== payloadHash;
+      if (bodyMismatch) {
+        await this.audit.append({
+          action: 'provider.event_body_mismatch',
+          connectionId: connection.id,
+          actor: { type: 'system' },
+          outcome: 'refused',
+          reasonSafe: 'DEDUP_BODY_MISMATCH',
+          detail: { storedPayloadHash: accepted.delivery.payloadHash, receivedPayloadHash: payloadHash },
+          correlationId: this.scope.requestId === 'unknown' ? null : this.scope.requestId,
+        });
+      }
       return {
         status: 'duplicate',
         httpStatus: acknowledgement?.status ?? 202,
         inboxId: accepted.delivery.id,
         reason: 'duplicate_delivery',
+        ...(bodyMismatch ? { bodyMismatch: true } : {}),
         ...(acknowledgement === null ? {} : { responseBody: acknowledgement.body, responseContentType: 'text/plain' as const }),
       };
     }
@@ -288,7 +309,27 @@ export class ESignatureWebhookService {
           purgeAfter: delivery.purgeAfter === null ? null : new Date(delivery.purgeAfter),
         });
         if (!appended.created) {
-          await this.inbox.markState(delivery.id, 'duplicate', { from: ['received', 'retryable'], errorSafe: 'duplicate_event' });
+          // G19 — a provider event id repeated with a different body is still one event for state
+          // purposes; the mismatch is stamped on the receipt and the audit trail instead of being
+          // discarded silently.
+          const receivedPayloadHash = payloadDigest(delivery.payloadMinimized);
+          const eventBodyMismatch = appended.event.payloadHash !== receivedPayloadHash;
+          await this.inbox.markState(delivery.id, 'duplicate', {
+            from: ['received', 'retryable'],
+            errorSafe: eventBodyMismatch ? 'duplicate_event_body_mismatch' : 'duplicate_event',
+          });
+          if (eventBodyMismatch) {
+            await this.audit.append({
+              action: 'provider.event_body_mismatch',
+              requestId: request.id,
+              connectionId: connection.id,
+              actor: { type: 'system' },
+              outcome: 'refused',
+              reasonSafe: 'DEDUP_BODY_MISMATCH',
+              detail: { storedPayloadHash: appended.event.payloadHash, receivedPayloadHash },
+              correlationId: delivery.correlationId,
+            });
+          }
           return { status: 'duplicate' as const, outcome: 'duplicate_event', requestId: request.id, completed: false };
         }
 
