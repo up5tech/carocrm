@@ -1,0 +1,63 @@
+# Phase 22.22 — the scheduled quality gate (PLAN_Phase_22_Integration_E2E_Hardening.md §21).
+#
+# Owner decisions for this phase:
+#   * GitHub Actions is the CI provider;
+#   * the trigger is SCHEDULED (plus manual dispatch), not PR-gated;
+#   * Layer 3 integration checks are NOT run in CI — they are sandbox-only and follow AGENTS.md.
+#
+# Consequences, enforced here rather than documented only:
+#   * no `services:` block, no Postgres/Redis, no database secret and no migration step;
+#   * `pnpm ci:gate` runs only DB-free layers: lint, UI conventions, architecture boundaries,
+#     typecheck, build, static migration checks, package+pure-API tests, worker tests, web tests and
+#     the secret scan;
+#   * no artifacts are uploaded (there is no browser layer here); if one is added later it must be
+#     sanitized and failure-only, never a full trace of a CRM record;
+#   * the job needs only `contents: read` and performs no deploy, provider callback, campaign or
+#     signature.
+name: Scheduled quality gate
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: DB-free quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+          run_install: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      # The lockfile is the only dependency input; a cache is limited to the pnpm store keyed by it
+      # (setup-node), so a stale build output cannot leak between runs.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the DB-free gate
+        run: pnpm ci:gate
+        env:
+          CI: 'true'
+          NODE_ENV: test
+          LOG_LEVEL: error
+          PINO_PRETTY: 'false'

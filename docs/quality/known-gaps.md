@@ -79,15 +79,17 @@
 | G66 | No browser spec asserts an error, denied or empty state, and login is English-only | platform / SPA / e2e | Medium | Open (found 22.15; error/empty/denial browser spec added in 22.16, run pending) |
 | G67 | Column resize is mouse-only, and modal focus trap/restore rests on antd defaults with no assertion | platform / SPA | Low | Open (found 22.15) |
 | G68 | A core record write does not invalidate the module panels keyed to that record | platform / SPA | Low | Open (found 22.15) |
-| G69 | The Sales lot-traceability suite depends on lot stock the shared database no longer holds | sales (test isolation) | Medium | Open (found 22.15) |
+| G69 | The Sales lot-traceability suite depends on lot stock the shared database no longer holds | sales (test isolation) | Medium | Open (found 22.15; review 2026-11-15) |
 | G70 | An outbox event claimed by a worker that then died stayed `running` forever | platform (outbox) | High | Fixed (22.18) |
 | G71 | Offset pagination is a live window, not a snapshot | platform (entity list) | Low | Accepted (22.19) |
 | G72 | An AI approval did not pin the target record's version | ai-agents | Medium | Fixed (22.19) |
 | G73 | Bulk update/delete have no record-count cap and run one record at a time | platform (entity list) | Medium | Open (found 22.20) |
 | G74 | No per-query statement timeout or request deadline | platform (database) | Medium | Open (found 22.20) |
-| G75 | `sales-credits` flakes under the full parallel suite but passes solo and on rerun | sales (test isolation) | Low | Open (found 22.20) |
+| G75 | `sales-credits` flakes under the full parallel suite but passes solo and on rerun | sales (test isolation) | Low | Open (found 22.20; review 2026-11-15) |
 | G76 | Readiness checks the database only; queue/provider health is on demand | platform (health) | Medium | Accepted (22.21) |
 | G77 | No continuous metrics/tracing exporter; metrics are derived module documents | platform (observability) | Medium | Accepted (22.21) |
+| G78 | CI is a nightly integrity check, not a PR gate; a regression can land before detection | platform (CI) | Medium | Accepted (22.22 decision) |
+| G79 | `hooks-events` restore-event test flakes under the full parallel suite but passes solo | platform (test isolation) | Low | Open (found 22.22; review 2026-11-15) |
 
 ---
 
@@ -589,7 +591,7 @@
 - **Symptom:** the confirmation transitions answer `200`, the outbound half of the transfer records its split, and then the movement the test reads back for the **other** half carries no batch: `expected undefined to be 'LOT-A'`. Which of the three lot tests trips first moves between runs; the class does not.
 - **What was verified, and what was not.** Verified: it reproduces deterministically today in a solo `vitest run` of that one file; it reproduces with the only API source file this sub-phase changed (`global-exception.filter.ts`) reverted to `HEAD`, so it is not collateral of Phase 22.15; `sales_inventory_batch_stock` is **empty** outside a run, while the suite's own precondition assertions (`onHand > 1` for `LOT-A`) still pass, which is how a run can look adequately seeded and then write nothing attributable. Not verified: the root cause. It was not diagnosed here — the assertion that fails is in the Sales suite, and the diagnosis is a session of its own (what draws the batch rows to zero, and whether a long-lived dev API process with schedulers is moving stock underneath a test run).
 - **Expected vs observed:** expected — a suite that needs lot stock creates the stock it needs and restores it, so it says the same thing on the fortieth run against a shared database as on the first (AGENTS.md §3.3: identifiable, self-contained test records); observed — three tests that read `LOT-A` as though earlier tests in the same process had not drawn it down.
-- **Status:** Open (found 22.15) — recorded rather than fixed here, because the fix is either a per-test seeding step in Sales' own fixture helpers or a ledger cleanup in `afterAll`, and both belong to whoever owns 19-S.15, not to a UI/API consistency pass. The gate result for Phase 22.15 states this failure explicitly instead of working around it.
+- **Status:** Open (found 22.15; **review 2026-11-15**) — recorded rather than fixed here, because the fix is either a per-test seeding step in Sales' own fixture helpers or a ledger cleanup in `afterAll`, and both belong to whoever owns 19-S.15, not to a UI/API consistency pass. Phase 22.22's scheduled CI is DB-free and therefore does not run this file; the local `pnpm verify` still does. The flake register in `docs/quality/ci-gates.md` §7 carries the owner/window; the gate result for Phase 22.15 states this failure explicitly instead of working around it.
 - **Remaining risk:** `pnpm test` is red on a file that has nothing to do with the change under review, which teaches everyone to skim past red. That is the real cost, and it is why this is written down instead of being left as a flake.
 
 ## G70 — An outbox event claimed by a worker that then died stayed `running` forever
@@ -637,7 +639,7 @@
 - **Module / contract:** sales — `apps/api/test/sales-credits.test.ts`, "allocating a credit note (19-S.11) > applies part of a credit to an invoice and both balances follow".
 - **Impact:** on the first full `pnpm test` after 22.20 (248 files, one process pool), that one assertion failed; the file passes when run solo (16/16) and the whole suite passed on the immediate full rerun (248 files / 3 307 tests). It shares the Sales ledger/lot database state with `sales-tracking` (G69) and is exposed by parallel file execution against the shared database, not by a 22.20 change (22.20 adds a read-only script and docs).
 - **Expected vs observed:** expected — a ledger test creates and restores the stock/credit it needs; observed — a full-suite scheduling/order dependency can leave the assertion reading a balance another file touched.
-- **Status:** Open (found 22.20) — same owner as G69 (Sales 19-S.11/19-S.15 fixture isolation). Do not "fix" it by retrying the suite; the test-side seeding/cleanup is the fix.
+- **Status:** Open (found 22.20; **review 2026-11-15**) — same owner as G69 (Sales 19-S.11/19-S.15 fixture isolation). Do not "fix" it by retrying the suite; the test-side seeding/cleanup is the fix. The DB-free scheduled CI does not run it; the register is in `docs/quality/ci-gates.md` §7.
 - **Remaining risk:** a red full-suite run that passes on rerun teaches everyone to ignore red, which is the cost G69 already names.
 
 ## G76 — Readiness checks the database only; queue/provider health is on demand
@@ -654,3 +656,19 @@
 - **Expected vs observed:** expected — either an operator-owned metrics/tracing backend (the plan permits OpenTelemetry only if compatible instrumentation exists) or an explicit decision to stay derived; observed — no exporter and no backend, now documented rather than implied.
 - **Status:** Accepted (22.21) — adding a second metrics stack was explicitly out of scope without an owner/backend; the operations snapshot and module metrics are the interim answer. Owner: platform/operations; revisit with 22.22 CI/observability or a deployment decision.
 - **Remaining risk:** no alerting on a latency/error regression, and no historical queue age; the snapshot is point-in-time.
+
+## G78 — CI is a nightly integrity check, not a PR gate
+
+- **Module / contract:** platform — `.github/workflows/quality-gate.yml`, `pnpm ci:gate`.
+- **Impact:** by owner decision for 22.22, the gate runs on a schedule (02:00 UTC) and manual dispatch, not on every pull request. A lint/type/unit/build/contract regression can merge into `master` and stay undetected until the next scheduled run; the PR itself has no automated check. The gate also has no database, so integration regressions are only caught by a local `pnpm verify` or a sandbox run.
+- **Expected vs observed:** expected — either a PR gate or an explicit accepted window; observed — scheduled-only with the window documented in `docs/quality/ci-gates.md` §1/§7 and no silent implication that CI blocks merges.
+- **Status:** Accepted (22.22) — changing the trigger to PR-gated is an owner/infrastructure decision (runner cost, database policy, browser cache), not something to switch on unilaterally. Owner: platform; revisit at 22.24 release readiness.
+- **Remaining risk:** the main branch can carry a red build or a type error for up to a day; keep the local pre-merge habit (`pnpm verify`) until the trigger changes.
+
+## G79 — `hooks-events` restore-event test flakes under the full parallel suite but passes solo
+
+- **Module / contract:** platform — `apps/api/test/hooks-events.test.ts`, "publishes entity.restored for a restore".
+- **Impact:** during the 22.22 closing `pnpm verify`, that assertion failed in the 250-file fork pool; the file passes solo (13/13) and the immediate full rerun passed it (only the known G75 credit flake remained). It shares the configured database with every other integration file and is exposed by parallel ordering, not by a 22.22 change (22.22 adds CI scripts/config and no production code).
+- **Expected vs observed:** expected — the event test creates its own record and filters its own outbox rows, so another file cannot page or delete them; observed — a full-suite run can still see the assertion fail, and the exact interference is not diagnosed.
+- **Status:** Open (found 22.22; **review 2026-11-15**) — same class as G69/G75 (shared-database parallel-suite isolation). The DB-free scheduled CI does not run it; the local `pnpm verify` does, and the flake register in `docs/quality/ci-gates.md` §7 tracks the owner/window.
+- **Remaining risk:** the local full gate can be red on a file unrelated to the change; do not treat a green rerun as a fix.

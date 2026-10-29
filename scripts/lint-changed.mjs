@@ -31,7 +31,9 @@ if (targets.length === 0) {
 }
 
 console.log(`Linting ${targets.length} changed file(s)...`);
-const eslint = new ESLint({ cache: true });
+// `warnIgnored: false` keeps a changed file that ESLint deliberately ignores (config files,
+// generated paths) from turning the fast check red just because git named it.
+const eslint = new ESLint({ cache: true, warnIgnored: false });
 const results = await eslint.lintFiles(targets);
 const formatter = await eslint.loadFormatter('stylish');
 const output = await formatter.format(results);
