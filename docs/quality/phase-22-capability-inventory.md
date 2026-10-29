@@ -154,3 +154,35 @@ Health → Auth → Identity → I18n → Settings → SetupChecklist → AdminP
 - [x] Dangerous test scripts identified **before** any was run (§5.2) — none were executed.
 - [x] No business data modified; DB access was `SELECT`-only against the configured primary database.
 - [x] Next sub-phase based on observed repository structure, not plan assumptions.
+
+---
+
+## 7. Phase 22.24 status update (2026-10-29)
+
+This addendum supersedes the "Implemented, insufficiently verified" base label for the entries below.
+It is based on the Phase 22 suites and journeys actually run, not on the original structural audit.
+Labels: **Verified** (its owner suite and the relevant cross-module journey pass), **Partial**
+(deliberately incomplete or a declared capability is not implemented), **Verified with residual
+risk** (works, but a tracked gap affects a release decision).
+
+| Capability | Final label | Evidence / residual risk |
+|---|---|---|
+| Entity Engine, metadata, ACL, audit, stream, search, reports, documents, hooks/workflows, BPM, attachments, email | **Verified with residual risk** | 22.4 ACL matrix, 22.7 replay/outbox, 22.15/22.17 security/UI suites; G6 (no consumers), G8 (allow-listed core imports), G30 (stream orphans), G64/G73/G74. |
+| Auth / identity / 2FA | **Verified** | `auth.test.ts` (19) + config JWT production guard (G9 fixed); no open high auth finding. |
+| Jobs / outbox / queue | **Verified with residual risk** | 22.7, 22.18 jitter/lease (G15/G70), 22.21 correlation; G21 (no retry/discard), G23 (dead-letter replay), G14 retention. |
+| Projects | **Verified with residual risk** | Projects suites + 22.10 journey; G27 (no Project↔CS read). |
+| Sales | **Verified with residual risk** | 28 suites, 22.9 quote→signature, 22.19 payment key/ledger; G20 fixed; G69/G75 flake (test isolation). |
+| CustomerSuccess | **Verified with residual risk** | 22.10 journey; G27; health/renewal notifications off by default. |
+| ServiceDesk | **Verified with residual risk** | 22.11 journey, SLA/domain suites; G37 (Case `own` create). |
+| MarketingAutomation | **Verified with residual risk** | 22.12 consent/attribution journey, replay contract; G33 (webhook signature/freshness). |
+| AIAgents | **Verified with residual risk** | 22.13 journey, 22.17 ACL/approval tests; G36 (unreachable states), declared triggers not implemented. |
+| CRMChat | **Partial** | foundation/security suites; `features.readTools` not enforced (G38), turn sources not re-authorized (G39); streaming/citation contract not fully implemented. |
+| VoiceCommunications | **Verified with residual risk** | 22.11 journey, webhook replay/out-of-order suites; retention gaps (G12/G13). |
+| AdvancedIntegrations | **Verified with residual risk** | 22.14 recovery journey, provider/replay contracts; G47/G48/G50/G51/G53. |
+| ESignature | **Verified with residual risk** | 22.9 journey, 22.17 provider contracts, lifecycle suites; no Sales→ESignature consumer (G26); non-production fake adapter is capability-gated. |
+| LeadScore | **Verified with residual risk** | 22.8 conversion journey, LS suites; G22 fixed; conversion service test gap (G3 low). |
+| Omnichannel | **Verified with residual risk** | 22.11 conversation→Case journey, security/e2e suites; groups 4–6 of the 22 OM review remain open (routing fallback, stale banner, no unlink/e2e/AI tool grant). |
+| Portal | **Partial / verified with residual risk** | `portal.test.ts` only; IDOR risk is covered by 22.17 ACL/BOLA tests but the module suite is thin. |
+| SPA / admin | **Verified with residual risk** | 22.15 consistency, 22.16 browser critical paths (4/4), 22.17 security; G63/G64/G65/G66/G67/G68. |
+| CI | **Verified** | 22.22 DB-free scheduled gate; G78 (no PR gate). |
+| Backup/restore | **Blocked** | G80/G81; no restore drill, no approved RPO/RTO, partial/world-readable demo artifact. |
