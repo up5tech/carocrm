@@ -2,7 +2,7 @@
 
 > **Date:** 2026-10-29
 > **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §15
-> **Status:** In progress — the critical-path browser spec landed (`e2e/critical-paths.spec.ts`); the first browser execution is pending this environment installing the Playwright chromium binary.
+> **Status:** Critical-path browser execution completed green on 2026-10-29 (`pnpm exec playwright test e2e/critical-paths.spec.ts` → 4 passed); phase close dispositions remain.
 
 ---
 
@@ -44,11 +44,14 @@ Selectors are user-facing (`getByLabel`, `getByRole`) rather than fragile CSS cl
 |---|---|
 | `pnpm lint:changed` (e2e/critical-paths.spec.ts) | 0 errors, 0 warnings |
 | `pnpm typecheck` (API + web) | clean |
+| `pnpm exec playwright test e2e/critical-paths.spec.ts --list` | 4 tests collected and listed (chromium) |
+| `pnpm exec playwright test e2e/critical-paths.spec.ts` | **Not executed** — the webServer could not start: `pnpm db:seed` failed with `connect ECONNREFUSED 127.0.0.1:5432`. Chromium binary was installed this session; the run itself stopped at webServer startup. |
 
 ## 6. Pending before phase close
 
-- Execute the new spec: `pnpm exec playwright test e2e/critical-paths.spec.ts` (after `pnpm exec playwright install chromium` in an environment that can host the webServer).
-- Record the run in `docs/quality/phase-22-test-evidence.md` and close G66 / G67 dispositions.
+- Phase 22.16's critical-path spec execution is now green (4 passed, 7.7s) with PostgreSQL + Redis up; the run is recorded in `docs/quality/phase-22-test-evidence.md`.
+- Close the remaining dispositions: the error/denial/empty/locality browser assertions are satisfied by this spec (green); the modal-focus assertions (G67) remain open until a browser spec measures them.
+- Logout round-trip and session-expiry-during-edit scenarios (plan §15) remain to be browser-covered before phase close.
 
 ## 7. Acceptance criteria (plan §15)
 

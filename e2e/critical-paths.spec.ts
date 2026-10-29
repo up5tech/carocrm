@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test';
+import { type APIRequestContext, expect, type Page, request, test } from '@playwright/test';
 
 const ADMIN = { user: process.env.E2E_ADMIN_LOGIN ?? 'admin', password: process.env.E2E_ADMIN_PASSWORD ?? 'admin' };
 
@@ -22,6 +22,14 @@ async function login(page: Page, creds: Creds, locale = 'en'): Promise<void> {
   await expect(page).toHaveURL(/\/home/, { timeout: 20_000 });
 }
 
+async function adminApi(): Promise<APIRequestContext> {
+  const context = await request.newContext();
+  const res = await context.post('/api/v1/Authentication', { data: { userName: ADMIN.user, password: ADMIN.password } });
+  expect(res.ok()).toBeTruthy();
+  const token = String((await res.json()).accessToken ?? '');
+  return request.newContext({ extraHTTPHeaders: { authorization: `Bearer ${token}` } });
+}
+
 test.describe('Phase 22.16 — browser E2E critical paths', () => {
   test('a refused login answers with the error state and a retry completes the journey', async ({ page }) => {
     await page.goto('/login');
@@ -36,10 +44,15 @@ test.describe('Phase 22.16 — browser E2E critical paths', () => {
   });
 
   test('the login screen renders the secondary enabled locale rather than an English fallback', async ({ page }) => {
-    await login(page, ADMIN, 'vi');
+    await page.addInitScript((l) => window.localStorage.setItem('carocrm.locale', l), 'vi');
+    await page.goto('/login');
     await expect(page.getByLabel('Tên đăng nhập')).toBeVisible();
     await expect(page.getByLabel('Mật khẩu')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Đăng nhập' })).toBeVisible();
+    await page.getByLabel('Tên đăng nhập').fill(ADMIN.user);
+    await page.getByLabel('Mật khẩu').fill(ADMIN.password);
+    await page.getByRole('button', { name: 'Đăng nhập' }).click();
+    await expect(page).toHaveURL(/\/home/, { timeout: 20_000 });
   });
 
   test('a filtered list with no match answers with the empty state and its clear action', async ({ page }) => {
@@ -63,7 +76,8 @@ test.describe('Phase 22.16 — browser E2E critical paths', () => {
     const runId = Date.now().toString(36);
     const userName = `AGENT_TEST_p22_noaccess_${runId}`;
     const password = 'reader-pass-123';
-    const created = await page.request.post('/api/v1/User', {
+    const admin = await adminApi();
+    const created = await admin.post('/api/v1/User', {
       data: {
         userName,
         password,
@@ -81,8 +95,9 @@ test.describe('Phase 22.16 — browser E2E critical paths', () => {
       await page.goto('/Account');
       await expect(page.getByText('Access denied')).toBeVisible({ timeout: 20_000 });
     } finally {
-      const removed = await page.request.delete(`/api/v1/User/${user.id}`);
+      const removed = await admin.delete(`/api/v1/User/${user.id}`);
       expect(removed.status()).toBeLessThan(300);
+      await admin.dispose();
     }
   });
 });
