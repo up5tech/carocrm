@@ -1,3 +1,4 @@
+import { getRequestId } from '@carocrm/core/context/index.js';
 import type { OutboxEvent } from '@carocrm/jobs';
 import { describe, expect, it } from 'vitest';
 
@@ -78,7 +79,7 @@ describe('outbox SQL shape', () => {
     // The lease is written on claim, so a crashed worker's row becomes due again.
     expect(sql).toContain('available_at = now() + make_interval');
     expect(sql).toContain('for update skip locked');
-    expect(sql).toContain('returning id, event_type, payload, attempts');
+    expect(sql).toContain('returning id, event_type, payload, attempts, correlation_id');
   });
 
   it('passes the lease as seconds alongside the batch size', async () => {
@@ -98,8 +99,11 @@ describe('outbox SQL shape', () => {
   });
 
   it('maps claimed rows into events', () => {
-    const event = mapClaimedEvent(outboxRow({ id: 'e9', event_type: 'x.y', payload: { a: 1 }, attempts: 2 }));
-    expect(event).toEqual({ id: 'e9', eventType: 'x.y', payload: { a: 1 }, attempts: 2 });
+    const event = mapClaimedEvent(
+      outboxRow({ id: 'e9', event_type: 'x.y', payload: { a: 1 }, attempts: 2, correlation_id: 'req-9' }),
+    );
+    expect(event).toEqual({ id: 'e9', eventType: 'x.y', payload: { a: 1 }, attempts: 2, correlationId: 'req-9' });
+    expect(mapClaimedEvent(outboxRow()).correlationId).toBeNull();
   });
 });
 
@@ -127,6 +131,18 @@ describe('OutboxPoller.tick', () => {
     expect(db.callsFor(PROCESSED_FRAGMENT)).toHaveLength(2);
     expect(db.lastCall(PROCESSED_FRAGMENT)?.params).toEqual(['event-2']);
     expect(db.callsFor(RETRY_FRAGMENT)).toHaveLength(0);
+  });
+
+  it('runs a handler inside the request context of the event (22.21)', async () => {
+    const { registry, poller } = harness([outboxRow({ correlation_id: 'req-outbox-9' })]);
+    let seen: string | undefined;
+    registry.register('system.noop', async () => {
+      seen = getRequestId();
+    });
+
+    await poller.tick();
+
+    expect(seen).toBe('req-outbox-9');
   });
 
   it('treats unknown event types as processed and logs a warning', async () => {

@@ -22,6 +22,7 @@ import { Pool } from 'pg';
 
 import { ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX } from './advanced-integrations/webhook-prefix.js';
 import { GlobalExceptionFilter } from './common/global-exception.filter.js';
+import { resolveRequestId } from './common/request-id.js';
 import type { AppConfig } from './config.js';
 import { buildConfig } from './config.js';
 import { ESIGNATURE_WEBHOOK_PREFIX } from './esignature/esignature-module.js';
@@ -154,6 +155,12 @@ export async function createApp(
   // cost memory on every call, and it would interfere with the multipart streaming that the
   // attachment upload relies on. The default JSON parser is left untouched.
   const fastifyInstance = app.getHttpAdapter().getInstance() as unknown as FastifyInstance;
+  // Every answer carries the request's correlation id. It is the handle a user gives support after
+  // a failure ("the error said req-…"), and the same value is written to outbox/job work (22.21).
+  fastifyInstance.addHook('onRequest', (request, reply, done) => {
+    reply.header('x-request-id', resolveRequestId(request.headers['x-correlation-id'], request.id));
+    done();
+  });
   fastifyInstance.decorateRequest('rawBody', null);
   fastifyInstance.addHook('preParsing', (request, _reply, payload, done) => {
     const esignature = request.url.startsWith(ESIGNATURE_WEBHOOK_PREFIX);
@@ -196,6 +203,9 @@ export async function createApp(
   await app.register(asPlugin(cors), {
     origin: config.corsOrigins === '' ? true : config.corsOrigins.split(','),
     credentials: true,
+    // The request id is the handle a user gives support after a failure. Without this the SPA
+    // cannot read the header on a cross-origin deployment.
+    exposedHeaders: ['x-request-id'],
   });
   await app.register(asPlugin(helmet), { global: true });
   await app.register(asPlugin(rateLimit), {

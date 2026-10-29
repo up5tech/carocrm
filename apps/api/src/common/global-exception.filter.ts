@@ -1,4 +1,4 @@
-import { getLocale } from '@carocrm/core/context/index.js';
+import { getLocale, getRequestId } from '@carocrm/core/context/index.js';
 import { AppError, InternalServerError } from '@carocrm/core/errors/index.js';
 import { log } from '@carocrm/core/logger/index.js';
 import type { ExecutionContext } from '@nestjs/common';
@@ -165,9 +165,9 @@ export class GlobalExceptionFilter {
     };
 
     if (error.statusCode >= 500) {
-      log.error({ err: exception, requestId: request.id, path: redactUrl(request.url) }, 'unhandled error');
+      log.error({ err: exception, requestId: getRequestId(), path: redactUrl(request.url) }, 'unhandled error');
     } else {
-      log.debug({ code: error.code, requestId: request.id, path: redactUrl(request.url) }, 'request error');
+      log.debug({ code: error.code, requestId: getRequestId(), path: redactUrl(request.url) }, 'request error');
     }
 
     void reply.status(error.statusCode).send(body);

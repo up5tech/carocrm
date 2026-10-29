@@ -2,6 +2,8 @@ export interface OutboxEvent {
   id: string;
   eventType: string;
   payload: Record<string, unknown>;
+  /** The request id that wrote the event, when there was one (22.21). */
+  correlationId?: string | null;
 }
 
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';

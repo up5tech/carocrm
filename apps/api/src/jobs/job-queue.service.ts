@@ -34,6 +34,8 @@ export interface JobQueuePort {
     data: Record<string, unknown>;
     jobRowId?: string | undefined;
     jobId?: string | undefined;
+    /** The request id this work belongs to, carried to the worker's log context (22.21). */
+    correlationId?: string | undefined;
     /** Delayed delivery (PLAN §36 timers): the job sits in the queue until this many ms elapse. */
     delayMs?: number | undefined;
   }): Promise<string>;
@@ -104,12 +106,14 @@ export class JobQueueService implements JobQueuePort {
     data: Record<string, unknown>;
     jobRowId?: string | undefined;
     jobId?: string | undefined;
+    correlationId?: string | undefined;
     delayMs?: number | undefined;
   }): Promise<string> {
     const payload: Record<string, unknown> = {
       job: input.job,
       data: input.data,
       ...(input.jobRowId === undefined ? {} : { jobRowId: input.jobRowId }),
+      ...(input.correlationId === undefined ? {} : { correlationId: input.correlationId }),
     };
     let added: { id?: string | number };
     try {

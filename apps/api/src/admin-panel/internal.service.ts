@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { AuthorizationDeniedError, ValidationError } from '@carocrm/core/errors/index.js';
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
@@ -26,6 +27,38 @@ export interface InternalInfoView {
   extensions: readonly string[];
   nodeVersion: string;
   uptimeSeconds: number;
+}
+
+/**
+ * Phase 22.21 — a read-only operations snapshot.
+ *
+ * It is **derived** from the tables the operator already trusts, like the module metrics in
+ * AdvancedIntegrations: there is no second metrics system to keep in sync. It answers the questions a
+ * runbook asks first — is work stuck, is anything dead-lettered, are a provider's receipts refusing,
+ * did an agent run fail — and carries no record content, token, provider payload or high-cardinality
+ * label. It is administrator-only and costs a handful of indexed counts per open page.
+ */
+export interface OperationsSnapshotView {
+  readonly generatedAt: string;
+  readonly outbox: { readonly byStatus: Record<string, number>; readonly oldestPendingAgeSeconds: number | null };
+  readonly jobs: {
+    readonly byStatus: Record<string, number>;
+    readonly oldestPendingAgeSeconds: number | null;
+    readonly failedLast24h: number;
+  };
+  readonly deadLetters: { readonly open: number; readonly total: number };
+  readonly webhooks: {
+    readonly signatureInbox: Record<string, number>;
+    readonly connectorDeliveries: Record<string, number>;
+    readonly voiceEvents: Record<string, number>;
+    readonly marketingInbox: Record<string, number>;
+  };
+  readonly integrations: {
+    readonly connections: Record<string, number>;
+    readonly circuitsOpen: number;
+    readonly syncRunsFailedLast24h: number;
+  };
+  readonly ai: { readonly approvalsPending: number; readonly runsFailedLast24h: number };
 }
 
 /**
@@ -80,6 +113,76 @@ export class InternalInfoService {
       nodeVersion: process.version,
       uptimeSeconds: Math.round(process.uptime()),
     };
+  }
+
+  async operations(): Promise<OperationsSnapshotView> {
+    this.requireSysAdmin();
+    const [
+      outbox,
+      outboxAge,
+      jobs,
+      jobsAge,
+      jobsFailed,
+      deadLetters,
+      signatureInbox,
+      connectorDeliveries,
+      voiceEvents,
+      marketingInbox,
+      connections,
+      circuits,
+      syncFailed,
+      approvals,
+      aiFailed,
+    ] = await Promise.all([
+      this.counts('select status, count(*)::text as n from outbox_events group by status'),
+      this.age('select coalesce(extract(epoch from now() - min(available_at))::bigint, 0)::text as age from outbox_events where status = \'pending\''),
+      this.counts('select status, count(*)::text as n from jobs group by status'),
+      this.age('select coalesce(extract(epoch from now() - min(created_at))::bigint, 0)::text as age from jobs where status = \'pending\''),
+      this.scalar('select count(*)::text as n from jobs where status = \'failed\' and finished_at >= now() - interval \'24 hours\''),
+      this.counts('select status, count(*)::text as n from integration_dead_letters group by status'),
+      this.counts('select state as status, count(*)::text as n from signature_webhook_inbox group by state'),
+      this.counts('select status, count(*)::text as n from integration_webhook_deliveries group by status'),
+      this.counts('select processing_status as status, count(*)::text as n from voice_webhook_events group by processing_status'),
+      this.counts('select processing_status as status, count(*)::text as n from marketing_provider_webhook_inbox group by processing_status'),
+      this.counts('select status, count(*)::text as n from integration_connections where deleted_at is null group by status'),
+      this.scalar('select count(*)::text as n from integration_circuit_states where state = \'open\''),
+      this.scalar('select count(*)::text as n from integration_sync_runs where status = \'failed\' and started_at >= now() - interval \'24 hours\''),
+      this.scalar('select count(*)::text as n from ai_agent_approvals where status = \'pending\''),
+      this.scalar('select count(*)::text as n from ai_agent_runs where status = \'failed\' and finished_at >= now() - interval \'24 hours\''),
+    ]);
+    return {
+      generatedAt: new Date().toISOString(),
+      outbox: { byStatus: outbox, oldestPendingAgeSeconds: outboxAge },
+      jobs: { byStatus: jobs, oldestPendingAgeSeconds: jobsAge, failedLast24h: jobsFailed },
+      deadLetters: { open: deadLetters['open'] ?? 0, total: Object.values(deadLetters).reduce((sum, value) => sum + value, 0) },
+      webhooks: {
+        signatureInbox,
+        connectorDeliveries,
+        voiceEvents,
+        marketingInbox,
+      },
+      integrations: {
+        connections,
+        circuitsOpen: circuits,
+        syncRunsFailedLast24h: syncFailed,
+      },
+      ai: { approvalsPending: approvals, runsFailedLast24h: aiFailed },
+    };
+  }
+
+  private async counts(query: string): Promise<Record<string, number>> {
+    const rows = await sql<{ status: string; n: string }>`${sql.raw(query)}`.execute(this.database.db);
+    return Object.fromEntries(rows.rows.map((row) => [row.status, Number(row.n)]));
+  }
+
+  private async scalar(query: string): Promise<number> {
+    return Number((await this.age(query)) ?? 0);
+  }
+
+  private async age(query: string): Promise<number | null> {
+    const rows = await sql<{ age: string }>`${sql.raw(query)}`.execute(this.database.db);
+    const value = rows.rows[0]?.age;
+    return value === undefined ? null : Number(value);
   }
 
   /** Drops every administrator-written entity override; the shipped definitions take over again. */

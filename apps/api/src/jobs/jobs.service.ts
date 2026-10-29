@@ -4,6 +4,8 @@ import { DuplicateRecordError, NotFoundError, ValidationError } from '@carocrm/c
 import { Inject, Injectable } from '@nestjs/common';
 import type { SelectQueryBuilder } from 'kysely';
 
+import type { RequestScope } from '../common/request-scope.js';
+import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import type { AppConfig } from '../config.js';
 import { CONFIG_TOKEN } from '../config.js';
 import type { Database } from '../database/database.service.js';
@@ -45,6 +47,7 @@ export class JobsService {
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(JobQueueService) private readonly queue: JobQueueService,
     @Inject(CONFIG_TOKEN) config: AppConfig,
+    @Inject(REQUEST_SCOPE_TOKEN) private readonly scope: RequestScope,
   ) {
     this.attempts = config.jobAttempts;
   }
@@ -63,7 +66,14 @@ export class JobsService {
     if (clash) throw new DuplicateRecordError(`Job "${id}" already exists.`);
 
     await this.insertPending(id, job, data, null);
-    const queueJobId = await this.queue.enqueue({ job, data, jobRowId: id, ...(input.delayMs === undefined ? {} : { delayMs: input.delayMs }) });
+    const correlationId = this.correlationId();
+    const queueJobId = await this.queue.enqueue({
+      job,
+      data,
+      jobRowId: id,
+      ...(correlationId === null ? {} : { correlationId }),
+      ...(input.delayMs === undefined ? {} : { delayMs: input.delayMs }),
+    });
     await this.database.db.updateTable('jobs').set({ queue_job_id: queueJobId }).where('id', '=', id).execute();
     return this.get(id);
   }
@@ -204,7 +214,13 @@ export class JobsService {
     const data = asObject(schedule.target);
     const jobId = randomUUID();
     await this.insertPending(jobId, schedule.job, data, 'cron');
-    const queueJobId = await this.queue.enqueue({ job: schedule.job, data, jobRowId: jobId });
+    const correlationId = this.correlationId();
+    const queueJobId = await this.queue.enqueue({
+      job: schedule.job,
+      data,
+      jobRowId: jobId,
+      ...(correlationId === null ? {} : { correlationId }),
+    });
     await this.database.db.updateTable('jobs').set({ queue_job_id: queueJobId }).where('id', '=', jobId).execute();
     await this.database.db
       .updateTable('scheduled_jobs')
@@ -213,6 +229,16 @@ export class JobsService {
       .execute();
 
     return this.get(jobId);
+  }
+
+  /**
+   * The request id this enqueue belongs to, when there is one. A worker-created job (or a call made
+   * before the request context exists) says `unknown`, and inventing a correlation id there would
+   * be worse than saying none: the worker log would point at a request that never existed.
+   */
+  private correlationId(): string | null {
+    const requestId = this.scope.requestId;
+    return requestId === '' || requestId === 'unknown' ? null : requestId.slice(0, 120);
   }
 
   private async insertPending(id: string, job: string, data: Record<string, unknown>, schedulingType: string | null): Promise<void> {

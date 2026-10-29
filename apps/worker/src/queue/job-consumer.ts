@@ -82,10 +82,12 @@ export class JobConsumer {
       const allowed = job?.opts.attempts;
       const attemptsMade = job?.attemptsMade ?? 0;
       const finalFailed = allowed === undefined ? true : attemptsMade >= allowed;
+      const correlationId = typeof job?.data?.correlationId === 'string' ? job.data.correlationId : null;
       this.options.log.error(
         {
           queueJobId: job?.id ?? null,
           jobName: job?.name ?? null,
+          correlationId,
           attemptsMade,
           allowedAttempts: allowed ?? this.options.attempts,
           finalFailed,

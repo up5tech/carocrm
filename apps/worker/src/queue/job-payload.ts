@@ -16,6 +16,8 @@ export type JobPayload = {
   scheduleId?: string | undefined;
   scheduledForMs?: number | undefined;
   jobRowId?: string | undefined;
+  /** The HTTP request id this work came from, so worker logs continue the same trace (22.21). */
+  correlationId?: string | undefined;
 };
 
 const JobPayloadSchema = z.object({
@@ -24,6 +26,7 @@ const JobPayloadSchema = z.object({
   scheduleId: z.string().min(1).optional(),
   scheduledForMs: z.number().int().nonnegative().optional(),
   jobRowId: z.string().min(1).max(64).optional(),
+  correlationId: z.string().min(1).max(120).optional(),
 });
 
 export function parseJobPayload(raw: unknown): JobPayload | undefined {
@@ -37,6 +40,7 @@ export function parseJobPayload(raw: unknown): JobPayload | undefined {
       ? { scheduledForMs: parsed.data.scheduledForMs }
       : {}),
     ...(parsed.data.jobRowId !== undefined ? { jobRowId: parsed.data.jobRowId } : {}),
+    ...(parsed.data.correlationId !== undefined ? { correlationId: parsed.data.correlationId } : {}),
   };
 }
 
@@ -46,6 +50,7 @@ export function buildJobPayload(input: {
   scheduleId?: string | undefined;
   scheduledForMs?: number | undefined;
   jobRowId?: string | undefined;
+  correlationId?: string | undefined;
 }): JobPayload {
   return {
     job: input.job,
@@ -53,6 +58,7 @@ export function buildJobPayload(input: {
     ...(input.scheduleId !== undefined ? { scheduleId: input.scheduleId } : {}),
     ...(input.scheduledForMs !== undefined ? { scheduledForMs: input.scheduledForMs } : {}),
     ...(input.jobRowId !== undefined ? { jobRowId: input.jobRowId } : {}),
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
   };
 }
 

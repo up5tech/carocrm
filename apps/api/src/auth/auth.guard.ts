@@ -3,6 +3,7 @@ import { AuthenticationRequiredError, AuthorizationDeniedError } from '@carocrm/
 import { type CanActivate, type CustomDecorator, type ExecutionContext,Inject, SetMetadata } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
+import { resolveRequestId } from '../common/request-id.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { AuthService } from './auth.service.js';
@@ -30,7 +31,8 @@ export class AuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     const reply = context.switchToHttp().getResponse<FastifyReply>();
-    this.scope.requestId = request.id;
+    // Keep the middleware's correlation id; only fall back to Fastify's id when none was supplied.
+    this.scope.requestId = resolveRequestId(request.headers['x-correlation-id'], request.id);
 
     const authHeader = request.headers.authorization;
     const cookieHeader = request.headers.cookie;

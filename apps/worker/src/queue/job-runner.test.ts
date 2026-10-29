@@ -1,3 +1,4 @@
+import { getRequestId } from '@carocrm/core/context/index.js';
 import type { JobContext, JobRunResult } from '@carocrm/jobs';
 import { JobRegistry } from '@carocrm/jobs';
 import { describe, expect, it } from 'vitest';
@@ -84,6 +85,19 @@ describe('runJob', () => {
     expect(stored.jobRowId).toBe(insert?.params[0]);
     expect(stored.attempt).toBe(1);
     expect(stored.maxAttempts).toBe(3);
+  });
+
+  it('runs the handler inside the request context of the enqueue (22.21)', async () => {
+    let seen: string | undefined;
+    const { registry, run } = harness();
+    registry.register('demo.trace', async (): Promise<JobRunResult> => {
+      seen = getRequestId();
+      return { status: 'completed' };
+    });
+
+    await run({ job: 'demo.trace', data: {}, correlationId: 'req-77' });
+
+    expect(seen).toBe('req-77');
   });
 
   it('passes userId from the job data into the handler context', async () => {

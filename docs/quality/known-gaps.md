@@ -86,6 +86,8 @@
 | G73 | Bulk update/delete have no record-count cap and run one record at a time | platform (entity list) | Medium | Open (found 22.20) |
 | G74 | No per-query statement timeout or request deadline | platform (database) | Medium | Open (found 22.20) |
 | G75 | `sales-credits` flakes under the full parallel suite but passes solo and on rerun | sales (test isolation) | Low | Open (found 22.20) |
+| G76 | Readiness checks the database only; queue/provider health is on demand | platform (health) | Medium | Accepted (22.21) |
+| G77 | No continuous metrics/tracing exporter; metrics are derived module documents | platform (observability) | Medium | Accepted (22.21) |
 
 ---
 
@@ -637,3 +639,18 @@
 - **Expected vs observed:** expected — a ledger test creates and restores the stock/credit it needs; observed — a full-suite scheduling/order dependency can leave the assertion reading a balance another file touched.
 - **Status:** Open (found 22.20) — same owner as G69 (Sales 19-S.11/19-S.15 fixture isolation). Do not "fix" it by retrying the suite; the test-side seeding/cleanup is the fix.
 - **Remaining risk:** a red full-suite run that passes on rerun teaches everyone to ignore red, which is the cost G69 already names.
+
+## G76 — Readiness checks the database only; queue/provider health is on demand
+
+- **Module / contract:** platform — `apps/api/src/health/health.controller.ts` (`/health/live`, `/health/ready`).
+- **Impact:** readiness answers whether the process is up and the database answers `SELECT 1`. It does not probe Redis/queue reachability or a provider. That is deliberate for the probe (a readiness check must be cheap and must not call a provider), but a load balancer can keep sending traffic while the queue is down, and an operator learns about a provider outage from a module page rather than from readiness.
+- **Status:** Accepted (22.21) — the safe probe is DB-only; queue/provider diagnostics are the module health endpoints (`AdvancedIntegrations/action/metrics`, ESignature operations/health, Voice/Omnichannel health) and the platform operations snapshot. Splitting readiness into an optional deep probe with its own budget is an operations decision (22.21 follow-up), not a change that belongs in every kubelet check.
+- **Remaining risk:** a deployment whose only health signal is `/health/ready` will not see a queue outage.
+
+## G77 — No continuous metrics/tracing exporter; metrics are derived module documents
+
+- **Module / contract:** platform — no Prometheus/StatsD/OTel exporter; module services compute counters from their own tables (`IntegrationMetricsService`, `crm-chat-observability`, the AdminInternal operations snapshot).
+- **Impact:** there is no time series: an operator sees the current counts and the gaps in `jobs`/`outbox`, but cannot graph request latency, error rate, retry rate or provider health over time without querying the database. Request latency was measured once by `scripts/perf-baseline.ts` (22.20), not continuously. Traces are the correlation ids (request → outbox `correlation_id` → worker log; request → job payload/result) rather than spans.
+- **Expected vs observed:** expected — either an operator-owned metrics/tracing backend (the plan permits OpenTelemetry only if compatible instrumentation exists) or an explicit decision to stay derived; observed — no exporter and no backend, now documented rather than implied.
+- **Status:** Accepted (22.21) — adding a second metrics stack was explicitly out of scope without an owner/backend; the operations snapshot and module metrics are the interim answer. Owner: platform/operations; revisit with 22.22 CI/observability or a deployment decision.
+- **Remaining risk:** no alerting on a latency/error regression, and no historical queue age; the snapshot is point-in-time.

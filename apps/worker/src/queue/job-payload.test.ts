@@ -77,3 +77,17 @@ describe('jobRowId (Jobs API row adoption, PLAN §24)', () => {
     expect(parseJobPayload({ job: 'system.noop', data: {}, jobRowId: 'x'.repeat(80) })).toBeUndefined();
   });
 });
+
+describe('correlationId (22.21)', () => {
+  it('round-trips the request id that enqueued the job', () => {
+    const payload = buildJobPayload({ job: 'system.noop', correlationId: 'req-abc' });
+    expect(payload.correlationId).toBe('req-abc');
+    expect(parseJobPayload(payload)?.correlationId).toBe('req-abc');
+    expect(buildJobPayload({ job: 'system.noop' }).correlationId).toBeUndefined();
+  });
+
+  it('refuses an empty or over-long correlation id', () => {
+    expect(parseJobPayload({ job: 'system.noop', data: {}, correlationId: '' })).toBeUndefined();
+    expect(parseJobPayload({ job: 'system.noop', data: {}, correlationId: 'x'.repeat(121) })).toBeUndefined();
+  });
+});

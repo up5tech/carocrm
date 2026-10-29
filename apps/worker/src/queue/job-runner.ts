@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { runWithRequestContext } from '@carocrm/core/context/index.js';
 import type { Logger } from '@carocrm/core/logger/index.js';
 import type { JobContext, JobLogLevel, JobRegistry, JobRunResult } from '@carocrm/jobs';
 
@@ -62,6 +63,8 @@ export async function runJob(deps: JobRunnerDeps, request: JobRunRequest): Promi
     queueJobId,
     attempt: request.attempt,
     maxAttempts: request.maxAttempts,
+    // Carried from the HTTP request that enqueued the job; a scheduled/worker-created job has none.
+    correlationId: payload.correlationId ?? null,
     scheduleId: payload.scheduleId ?? null,
     scheduledForMs: payload.scheduledForMs ?? null,
   };
@@ -79,7 +82,15 @@ export async function runJob(deps: JobRunnerDeps, request: JobRunRequest): Promi
 
   let runResult: JobRunResult;
   try {
-    runResult = await handler(context);
+    // Every log line the handler writes inherits the request id from the enqueue, so an operator can
+    // move from the HTTP request to the job's logs without guessing by timestamp (22.21).
+    runResult = await runWithRequestContext(
+      {
+        requestId: payload.correlationId ?? `job:${row.id}`,
+        ...(typeof payload.data['userId'] === 'string' ? { userId: payload.data['userId'] } : {}),
+      },
+      () => handler(context),
+    );
   } catch (error: unknown) {
     const message = truncate(errorMessage(error));
     await deps.repo.markFinished(row.id, 'failed', { ...meta, reason: 'handler_threw' }, tracker.lastMessage, message);

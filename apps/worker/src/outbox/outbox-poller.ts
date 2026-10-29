@@ -1,3 +1,4 @@
+import { runWithRequestContext } from '@carocrm/core/context/index.js';
 import type { Logger } from '@carocrm/core/logger/index.js';
 import type { OutboxEvent } from '@carocrm/jobs';
 
@@ -49,7 +50,7 @@ export const CLAIM_SQL = `
               LIMIT $1
          )
      AND status IN ('pending', 'running')
-  RETURNING id, event_type, payload, attempts
+  RETURNING id, event_type, payload, attempts, correlation_id
 `;
 
 export const MARK_PROCESSED_SQL = `
@@ -79,6 +80,7 @@ export interface ClaimedEvent {
   eventType: string;
   payload: Record<string, unknown>;
   attempts: number;
+  correlationId: string | null;
 }
 
 export type EventOutcome = 'processed' | 'retried' | 'failed' | 'unknown';
@@ -92,11 +94,13 @@ export function retryDelayMs(attempts: number, baseMs: number, maxMs: number, ra
 }
 
 export function mapClaimedEvent(row: Row): ClaimedEvent {
+  const correlation = row['correlation_id'];
   return {
     id: rowString(row, 'id'),
     eventType: rowString(row, 'event_type'),
     payload: asRecord(row['payload']),
     attempts: rowNumber(row, 'attempts'),
+    correlationId: typeof correlation === 'string' && correlation !== '' ? correlation : null,
   };
 }
 
@@ -154,7 +158,10 @@ export class OutboxPoller {
     if (claimed.length === 0) return claimed;
     for (const event of claimed) {
       const outcome = await this.dispatch(event);
-      this.options.log.info({ eventId: event.id, eventType: event.eventType, outcome }, 'outbox event handled');
+      this.options.log.info(
+        { eventId: event.id, eventType: event.eventType, correlationId: event.correlationId, outcome },
+        'outbox event handled',
+      );
     }
     return claimed;
   }
@@ -197,7 +204,12 @@ export class OutboxPoller {
     }
 
     try {
-      await handler(toOutboxEvent(event));
+      // Handler logs continue the request trace when the event came from one; a scheduled/worker
+      // event still gets a stable per-event id so its lines are attributable.
+      await runWithRequestContext(
+        { requestId: event.correlationId ?? `outbox:${event.id}` },
+        () => handler(toOutboxEvent(event)),
+      );
     } catch (error: unknown) {
       return await this.markFailure(event, error);
     }
@@ -233,6 +245,7 @@ export class OutboxPoller {
       {
         eventId: event.id,
         eventType: event.eventType,
+        correlationId: event.correlationId,
         error: message,
         nextOutcome: outcome,
         retryInMs: outcome === 'failed' ? null : delayMs,
@@ -244,5 +257,10 @@ export class OutboxPoller {
 }
 
 export function toOutboxEvent(event: ClaimedEvent): OutboxEvent {
-  return { id: event.id, eventType: event.eventType, payload: event.payload };
+  return {
+    id: event.id,
+    eventType: event.eventType,
+    payload: event.payload,
+    ...(event.correlationId === null ? {} : { correlationId: event.correlationId }),
+  };
 }
