@@ -16,6 +16,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { api } from '../api/client.js';
 import type { DocumentPreviewView } from '../api/types.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { StreamPanel } from '../components/StreamPanel.js';
 import { DOCUMENT_SAMPLE_DATA } from '../document/template-catalog.js';
 import { formatDateTime, t } from '../state/i18n.js';
@@ -38,6 +39,7 @@ function tokensOf(source: string): string[] {
 }
 
 export function DocumentTemplateDetailPage() {
+  usePageDocs('user/document-templates');
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { message } = AntApp.useApp();

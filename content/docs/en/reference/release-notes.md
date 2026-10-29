@@ -6,7 +6,7 @@ order: 50
 tags: [release, notes, version, changelog]
 aliases: ["ghi chú phát hành", "thay đổi theo phiên bản"]
 related: [reference/glossary, admin/settings-overview, getting-started/find-your-way]
-updated: 2026-10-21
+updated: 2026-10-30
 ---
 
 Nothing inside the application opens a list of what changed. There is no **What's new** screen, no version
@@ -20,6 +20,7 @@ whoever maintains your instance.
 
 | Document | What it is | Latest dated entry |
 | --- | --- | --- |
+| `docs/releases/2026-10-29-phase-22.md` | The hardening release note for the whole product: verified scope, migrations, operational actions and the remaining release blockers. | 2026-10-29. |
 | `docs/modules/crm-chat/RELEASE_NOTES.md` | The release notes for one module, by version. | v1.1, released 2026-10-21. |
 | `docs/implementation/service-desk-release.md` | A release checklist for one module: every sub-phase, its state, and the commands that prove it. | Release reference date 2026-10-17. |
 | `docs/reference/alpha-status.md` | The status report for the whole product: each capability, its state and its evidence, then the deliberate deviations. | 2026-10-12, with later phases appended. |
@@ -40,7 +41,26 @@ A note in this repository is written as evidence, not as marketing. Four parts a
 
 ## The most recent release
 
-The newest dated release note is CRM Chat v1.1, released 2026-10-21 with contract version 1.2.0. It is a
+The newest dated note is the **Phase 22 hardening release**, 2026-10-29. It adds no new module screen. It
+changes how the product fails, and what an operator must do before carrying real customer data. What a
+reader can notice:
+
+| What you see | What it means |
+| --- | --- |
+| An unexpected error shows a plain 5xx message | The driver or connector text no longer reaches the browser. |
+| Dates and numbers look the same on every screen | Both render through the shared helpers instead of per-screen formatting. |
+| Loading, empty, error and permission-denied states behave alike | The screens share one set of states, with a retry where retrying is meaningful. |
+| A production instance refuses to start with the development JWT secret | The fallback secret is development-only; a deployment must set its own. |
+| A backup writes a checksummed, encrypted artifact | `pnpm backup` is safe to schedule; `pnpm verify:backup` checks an artifact. |
+
+> [!WARNING]
+> The Phase 22 note records the release as **blocked for production**: there is no restore rehearsal and no
+> approved RPO/RTO yet. A backup exists; a tested restore does not. The release note names the other open
+> gaps with an owner and a review date.
+
+### The last module release
+
+The newest module-specific note is CRM Chat v1.1, released 2026-10-21 with contract version 1.2.0. It is a
 correction release: the earlier notes declared work that the review found unbuilt, and the application did
 not compile. What changed for a reader of that screen:
 

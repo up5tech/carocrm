@@ -75,8 +75,8 @@ does not rewind.
 ## Rendering and sending
 
 The **Send** button opens one modal for every document kind. It shows the server's render of the document
-— a chosen `DocumentTemplate`, or the built-in block layout when none is configured — and you pick
-recipients and add a cover note:
+— a chosen [document template](user/document-templates), or the built-in block layout when none is
+configured — and you pick recipients and add a cover note:
 
 - recipients may be left blank; the address is derived from the contact, then the account, and the send
   is refused only when there is genuinely nobody to mail,
@@ -94,6 +94,7 @@ recipients and add a cover note:
 ## Where to go next
 
 - [Record page](user/record-page) — how the header and the line panel sit on a document.
+- [Document templates](user/document-templates) — the page a sent document prints on.
 - [Lists and views](user/lists-and-views) — filtering the documents by stage and date.
 - [Entities, fields and layouts](admin/entities-and-fields) — why a field may be missing from the form.
 - [Settings overview](admin/settings-overview) — the Sales switches that turn purchasing and subscriptions on.

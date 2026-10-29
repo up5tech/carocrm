@@ -240,7 +240,7 @@ function DiagnosticsPanel() {
 export function OmnichannelPage() {
   return (
     <>
-      <PageHeader title={t('omnichannel.page.title')} subtitle={t('omnichannel.page.subtitle')} />
+      <PageHeader title={t('omnichannel.page.title')} subtitle={t('omnichannel.page.subtitle')} docKey="user/omnichannel" />
       <Tabs
         defaultActiveKey="inbox"
         items={[

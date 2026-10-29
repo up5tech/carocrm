@@ -35,6 +35,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 
 import { api, type RecordData } from '../api/client.js';
 import type { DocumentPreviewView } from '../api/types.js';
+import { usePageDocs } from '../components/docs/PageDocs.js';
 import { DOCUMENT_BLOCKS } from '../components/document/documentBlocks.js';
 import type { EmailVisualEditorHandle } from '../components/email/EmailVisualEditor.js';
 import { HelpTip } from '../components/HelpTip.js';
@@ -79,6 +80,7 @@ function insertToken(form: ReturnType<typeof Form.useForm>[0], token: string): v
 }
 
 export function DocumentTemplateDesignerPage() {
+  usePageDocs('user/document-templates');
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { message } = AntApp.useApp();

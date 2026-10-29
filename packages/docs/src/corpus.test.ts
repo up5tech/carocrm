@@ -53,11 +53,11 @@ describe('the shipped documentation corpus', () => {
     expect(report.errors).toEqual([]);
   });
 
-  it('carries the §4.8 inventory: 5 getting-started, 16 user, 25 admin, 5 reference', () => {
+  it('carries the §4.8 inventory: 5 getting-started, 18 user, 26 admin, 5 reference', () => {
     expect(english.sections.map((section) => `${section.key}:${String(section.pages.length)}`)).toEqual([
       'getting-started:5',
-      'user:16',
-      'admin:25',
+      'user:18',
+      'admin:26',
       'reference:5',
     ]);
   });
@@ -77,8 +77,8 @@ describe('the shipped documentation corpus', () => {
 
   it('translates the 18 P0 pages into `vi` and falls back to English for the rest', () => {
     const vietnamese = buildIndex(files, { locale: 'vi' });
-    // `en` still defines the tree, so a `vi` reader sees all four sections and all 51 pages.
-    expect(vietnamese.sections.map((section) => section.pages.length)).toEqual([5, 16, 25, 5]);
+    // `en` still defines the tree, so a `vi` reader sees all four sections and all 54 pages.
+    expect(vietnamese.sections.map((section) => section.pages.length)).toEqual([5, 18, 26, 5]);
 
     const p0 = [
       'getting-started/sign-in',
