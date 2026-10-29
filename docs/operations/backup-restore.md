@@ -1,9 +1,10 @@
 # Backup and restore — operations
 
-> Phase 22.23 audit (`PLAN_Phase_22_Integration_E2E_Hardening.md` §22).
-> **Status: restore drill blocked.** No approved isolated recovery environment exists, and the owner
-> has not approved RPO/RTO. The primary database was not altered; see
-> `docs/quality/phase-22-backup-restore-rehearsal.md` and G80.
+> Phase 22.23 audit (`PLAN_Phase_22_Integration_E2E_Hardening.md` §22) and Phase 22.25 backup
+> automation. **Status: restore drill still blocked.** No approved isolated recovery environment
+> exists, and the owner has not approved RPO/RTO. The primary database was not altered; see
+> `docs/quality/phase-22-backup-restore-rehearsal.md`, `docs/quality/phase-22-25-release-blocker-remediation.md`,
+> G80 and G81.
 
 This document is the procedure, the current evidence and the rules. It is not a claim that a restore
 has been rehearsed — it has not, and a backup that has never been restored is not a validated backup.
@@ -24,9 +25,9 @@ Not backed up by a database dump: browser state, logs (collector-owned), local `
 | Item | Finding |
 |---|---|
 | Primary database | `carocrm_dev`, PostgreSQL 16.13, 738 MB; read-only audit only. |
-| Backup automation | **None in the repository** (no backup service in `docker-compose.yml`, no cron/script, no off-host copy). The operational commands below are manual. |
+| Backup automation | Phase 22.25 adds `scripts/backup.mjs` (`pnpm backup`): pg_dump/files/checksums, gpg encryption required unless explicitly waived for local tooling, 700/600 permissions and opt-in retention. No deployment cron/off-host copy/alert is configured yet (G81 partial). |
 | Existing artifact | `.data/demo/backup-2026-10-22T03-12-12-673Z/` — 40 NDJSON tables, 1.9 MB, 31 379 rows, newest file **179.9 h** old. It is a demo-reset snapshot, **not a full backup**: it has no `users`, `roles`, `teams`, `app_settings`, `audit_log`, `outbox_events` or `jobs`. |
-| Artifact permissions | Files are **world-readable (644)**; no `.age`/`.gpg`/`.enc` encryption marker. |
+| Artifact permissions | Secured in 22.25: directory 700, files 600 (was world-readable 644). No `.age`/`.gpg`/`.enc` marker; the artifact remains a partial demo snapshot. |
 | WAL / PITR | `archive_mode = off`, `archive_command` disabled → **no point-in-time recovery**; the only RPO is the last dump (which is not scheduled). |
 | Dump tooling | `pg_dump`/`pg_restore` 16.13 are available in the Postgres container. A **schema-only** dump was created and listed (`429 KB`, 942 TOC entries) as a read-only tooling check; it was deleted. |
 | File storage | `.data/files` 7.9 MB / 1 846 files; sampled files are **world-readable (644)**; no file backup artifact was found. |
@@ -34,6 +35,39 @@ Not backed up by a database dump: browser state, logs (collector-owned), local `
 | RPO / RTO | **Not approved.** No business values exist; do not infer them from the dump cadence. |
 
 ## 3. Taking a backup
+
+### 3.0 The automated job (preferred)
+
+```bash
+# Configure once in a root-owned environment file (mode 600), not in the repository:
+#   BACKUP_ROOT=/var/backups/carocrm
+#   BACKUP_PG_CONTAINER=postgres16   # or install pg_dump on the host
+#   BACKUP_PG_USER=postgres
+#   BACKUP_PG_DB=carocrm_dev
+#   STORAGE_ROOT=/srv/carocrm/.data/files
+#   BACKUP_GPG_RECIPIENT=ops@example.invalid
+
+pnpm backup                      # full dump + files.tgz + SHA256SUMS + manifest.json
+pnpm backup --schema-only        # tooling check: no table data written
+pnpm backup --prune --keep-days=7
+```
+
+The script refuses to create a plaintext backup unless `--allow-plaintext` is passed, and refuses
+that flag when `NODE_ENV=production`. It writes a `phase22-*` directory with 700/600 permissions,
+checksums every file and verifies the dump archive with `pg_restore --list` before reporting success.
+`--prune` is opt-in and only removes `phase22-*` directories older than the retention window.
+
+Schedule example (deployment-owned; not installed by this repository):
+
+```cron
+# /etc/cron.d/carocrm-backup, environment file mode 600
+17 2 * * * root set -a; . /etc/carocrm/backup.env; set +a; cd /srv/carocrm && pnpm backup --prune
+```
+
+The schedule must also copy the encrypted artifact **off-host**, alert when the newest artifact is
+older than the approved RPO, and test the recipient key separately. None of that exists yet.
+
+### 3.1 Manual fallback
 
 Run from the deployment host; the environment variables are already set for the API.
 
@@ -60,11 +94,13 @@ age -r "$BACKUP_RECIPIENT" -o "backups/$TIMESTAMP/database.dump.age" "backups/$T
 **Verification without a restore:**
 
 ```bash
-# Full pg_dump archive: readable table of contents.
+# Full pg_dump archive: readable table of contents (the backup job already does this).
 pg_restore --list backups/<ts>/database.dump | head
 
 # NDJSON-directory format (the demo-reset artifact): integrity, core tables, age, permissions.
 pnpm verify:backup .data/demo/backup-<timestamp>
+# 2026-10-29 after the 22.25 chmod: 8 problems remain (missing core tables + stale), no permission
+# problem; it is still not a recovery backup.
 ```
 
 `pnpm verify:backup` is a read-only checker: valid gzip, core tables present and non-empty, newest file

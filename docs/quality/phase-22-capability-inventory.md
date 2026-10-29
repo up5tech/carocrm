@@ -185,4 +185,4 @@ risk** (works, but a tracked gap affects a release decision).
 | Portal | **Partial / verified with residual risk** | `portal.test.ts` only; IDOR risk is covered by 22.17 ACL/BOLA tests but the module suite is thin. |
 | SPA / admin | **Verified with residual risk** | 22.15 consistency, 22.16 browser critical paths (4/4), 22.17 security; G63/G64/G65/G66/G67/G68. |
 | CI | **Verified** | 22.22 DB-free scheduled gate; G78 (no PR gate). |
-| Backup/restore | **Blocked** | G80/G81; no restore drill, no approved RPO/RTO, partial/world-readable demo artifact. |
+| Backup/restore | **Blocked (partially remediated 22.25)** | G80/G81; `pnpm backup` + secure permissions/encryption guard/verification landed, but no deployment schedule/off-host and no restore drill/RPO-RTO. |

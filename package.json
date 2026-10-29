@@ -38,6 +38,7 @@
     "test:e2e": "E2E_ALLOW_PRIMARY_DB=1 bash scripts/e2e-smoke.sh",
     "ci:secrets": "node scripts/check-secrets.mjs",
     "ci:migrations": "node scripts/check-migrations.mjs",
+    "backup": "node scripts/backup.mjs",
     "verify:backup": "node scripts/verify-backup.mjs",
     "ci:gate": "pnpm lint && pnpm lint:arch && pnpm typecheck && pnpm build && pnpm ci:migrations && pnpm test:ci && pnpm test:worker && pnpm test:web && pnpm ci:secrets",
     "verify": "concurrently -n lint,typecheck,test,test:web -c cyan,magenta,yellow,green \"pnpm lint\" \"pnpm typecheck\" \"pnpm test\" \"pnpm test:web\""

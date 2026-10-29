@@ -91,7 +91,7 @@
 | G78 | CI is a nightly integrity check, not a PR gate; a regression can land before detection | platform (CI) | Medium | Accepted (22.22 decision) |
 | G79 | `hooks-events` restore-event test flakes under the full parallel suite but passes solo | platform (test isolation) | Low | Open (found 22.22; review 2026-11-15) |
 | G80 | The restore drill is blocked: no approved isolated recovery environment, no approved RPO/RTO | platform (operations) | Medium | Blocked (22.23) |
-| G81 | No automated, encrypted, off-host backup; the existing demo artifact is partial and world-readable | platform (operations/security) | High | Open (found 22.23) |
+| G81 | No automated, encrypted, off-host backup; the existing demo artifact is partial and world-readable | platform (operations/security) | High | Partially fixed (22.25) |
 
 ---
 
@@ -688,5 +688,5 @@
 - **Module / contract:** platform — backup artifacts and retention.
 - **Impact:** the repository has no scheduled `pg_dump`, no file-storage backup, no off-host copy and no monitoring. The only artifact (`.data/demo/backup-2026-10-22T03-12-12-673Z`) is a 40-table NDJSON demo snapshot with **no** `users`, `roles`, `teams`, `app_settings`, `audit_log`, `outbox_events` or `jobs`; its files are **world-readable (644)**, have no encryption marker, and its newest file was **179.9 h** old on 2026-10-29. `archive_mode` is `off`, so there is no PITR. `pnpm verify:backup` flags 9 problems. File storage (`.data/files`, 1 846 files) has no backup artifact and sampled files are 644.
 - **Expected vs observed:** expected — scheduled full dumps plus matched file archives, checksums, encryption, restricted permissions, off-host retention and a freshness alert; observed — manual commands in a document and a partial, unencrypted demo snapshot.
-- **Status:** Open (22.23) — a production backup service is an operations/deployment decision (destination, key management, retention, cost). `verify:backup` and the procedure are in place so the next artifact can be checked; do not treat the demo snapshot as a recovery point.
+- **Status:** **Partially fixed (22.25).** `scripts/backup.mjs` (`pnpm backup`) implements pg_dump + files, SHA-256 checksums, gpg-encryption required by default, 700/600 permissions, `pg_restore --list` verification, opt-in prefix-only retention and a schema-only tooling mode; the existing demo artifact was chmodded to 700/600 (the `verify:backup` permission finding is gone, 8 problems remain). Still missing, deployment-owned: a cron/systemd schedule, an off-host destination, a provisioned gpg recipient/key and a freshness alert. G81 stays High until those are evidenced; the demo snapshot is still not a recovery point. See `docs/quality/phase-22-25-release-blocker-remediation.md`.
 - **Remaining risk:** data loss up to the last unmonitored manual dump; a leaked backup because it is world-readable; inability to meet any approved RPO once one exists.

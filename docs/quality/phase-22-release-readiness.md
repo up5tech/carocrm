@@ -4,7 +4,9 @@
 > **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §23
 > **Decision: NO-GO for a production release.** The verified scope is substantially hardened, but two
 > release-blocking items remain: no restore evidence / approved RPO-RTO (G80) and no production-grade
-> backup (G81, High: unencrypted, world-readable, partial demo artifact; no schedule/off-host copy).
+> backup (G81, High: no deployment schedule/off-host copy; the demo artifact is partial and was
+> world-readable until 22.25). Phase 22.25 added a secure backup job and fixed the artifact
+> permissions, but the deployment schedule/off-host/key provisioning and the restore drill remain.
 > A conditional **alpha/pilot GO** is possible only with the owner's written acceptance of G80/G81 and
 > synthetic/demo data (see §7). This is not a claim of complete EspoCRM parity.
 
@@ -51,13 +53,13 @@ All seven journeys have recorded evidence; none depends on a live provider or re
 
 | Blocking criterion | Status | Evidence / decisive gap |
 |---|---|---|
-| Known critical vulnerability or unbounded authorization bypass | **No open critical auth bypass**; G81 is a High security/ops exposure | G81: backups are partial, world-readable, unencrypted, unscheduled → sensitive CRM content risk if real data is loaded. |
+| Known critical vulnerability or unbounded authorization bypass | **No open critical auth bypass**; G81 is a High security/ops exposure | G81: the only artifact is partial/stale and the deployment has no schedule/off-host copy/recipient key; 22.25 added the secure job and fixed artifact permissions, but real data would still lack a proven backup policy. |
 | Data corruption/loss in a critical cross-module path | **No open corruption defect; unproven recovery** | G80: no restore drill/RPO/RTO; a backup never restored is not a recovery plan. |
 | Duplicate irreversible external actions under ordinary retry/replay | **Fixed in the reviewed paths** | G19/G20/G22/G31/G32/G35/G40–G46 fixed and tested; residual medium G23/G47/G48/G53 are tracked. |
 | Unsafe database reset/migration behavior in automated commands | **Guarded** | 22.1 added production refusal/typed confirmation; 22.22 static migration check; migrations 083–086 are forward-only. Restore remains unproven (G80). |
 | Critical user journeys without reliable evidence | **Met** | 84 journey tests + 68 security tests + 22.16 browser evidence. |
 | Unhandled migration failure prevents startup/corrupts data | **No evidence of a current failure** | 86/86 migrations applied; static check; the post-restore migration path is unproven (G80). |
-| Secrets/sensitive content exposed by logs/artifacts | **Logger/CI clean; backup artifact fails** | Redaction test, `ci:secrets` clean, no tracked `.env`/dumps/test-results; G81 backup files 644/unencrypted. |
+| Secrets/sensitive content exposed by logs/artifacts | **Logger/CI clean; backup artifact fails** | Redaction test, `ci:secrets` clean, no tracked `.env`/dumps/test-results; G81 artifact permissions are fixed (700/600 in 22.25), but it is partial/stale and no encrypted deployment backup exists. |
 | Tests falsely report success when a provider/action failed or is ambiguous | **No open case found** | Fake providers script failures; ambiguity is represented (`send_unknown`, `outcome_unknown`, dead letters); residual G23 (dead-letter replay can mark replayed without re-running). |
 
 ## 5. Secrets, artifacts and safe defaults
@@ -78,7 +80,7 @@ All seven journeys have recorded evidence; none depends on a live provider or re
 
 | Risk | Severity | Owner | Action / review |
 |---|---|---|---|
-| G81 — no automated/encrypted/off-host backup; demo artifact partial, world-readable | **High** | platform/operations | Schedule full dump + files, checksum, encrypt, off-host, restrict to 600, alert on freshness. **Blocks production.** |
+| G81 — no deployment schedule/off-host backup; demo artifact partial (permissions fixed 22.25) | **High** | platform/operations | `pnpm backup` exists (encryption required, 600, checksums, retention); configure cron/off-host/recipient key/alert, then evidence it. **Blocks production.** |
 | G80 — no restore drill, no approved RPO/RTO | Medium (release-blocking evidence) | platform/operations + owner | Approve target/RPO/RTO, run the runbook drill, record duration/row counts/health. **Blocks production claim.** |
 | G69/G75/G79 — shared-DB flakes | Low | Sales/platform tests | Fix fixtures; review 2026-11-15; excluded from DB-free CI, not silent. |
 | G73/G74 — uncapped sequential bulk, no query/request deadline | Medium | platform | Product/ops decision; performance follow-up. |
@@ -104,7 +106,7 @@ by artifacts" and data-loss/recovery expectations are not met.
 3. acknowledgement that integration journeys are sandbox/fake-provider evidence, not live-provider
    certification.
 
-**Path to GO:** implement the backup schedule/encryption/permissions/off-host/alerting (G81), approve
+**Path to GO:** enable the backup schedule/off-host/recipient key/alerting (the job, encryption guard and 700/600 defaults exist), approve
 RPO/RTO, run the restore drill and migration rehearsal in the approved environment (G80), record the
 duration and row-count checks, then re-run this review. Medium items can remain as owner-accepted
 exceptions with the review dates already in the gap register.
