@@ -44,7 +44,7 @@ export const AdvancedIntegrationsSettingsSchema = z
         expiryNotices: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     oauth: z
       .object({
         /**
@@ -66,7 +66,7 @@ export const AdvancedIntegrationsSettingsSchema = z
         requireScopes: z.boolean().default(true),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     notifications: z
       .object({
         /**
@@ -76,7 +76,7 @@ export const AdvancedIntegrationsSettingsSchema = z
         reauthorizationWarningDays: z.number().int().min(0).max(90).default(7),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     /**
      * The retention policy (plan §14.3, §16.3).
      *
@@ -110,7 +110,7 @@ export const AdvancedIntegrationsSettingsSchema = z
         batchSize: z.number().int().min(1).max(10_000).default(1000),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     /**
      * The controlled debug mode (plan §16.2).
      *
@@ -132,7 +132,7 @@ export const AdvancedIntegrationsSettingsSchema = z
         expiresAt: z.string().datetime().nullish().default(null),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     /**
      * The health thresholds (plan §16.1, §16.3).
      *
@@ -149,7 +149,7 @@ export const AdvancedIntegrationsSettingsSchema = z
         webhookFailureWarning: z.number().int().min(1).max(1000).default(10),
       })
       .strict()
-      .default({}),
+      .prefault({}),
   })
   .strict();
 

@@ -11,6 +11,7 @@ import { generateId } from '@carocrm/core/utils/id.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
+import { patchOf } from '../common/patch-schema.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
@@ -149,7 +150,7 @@ export class PortalAdminService {
   async updatePortal(id: string, body: unknown): Promise<Record<string, unknown>> {
     this.requireAdmin();
     await this.portalRow(id);
-    const data = parseOrThrow(PortalInputSchema.partial(), body, 'portal');
+    const data = parseOrThrow(patchOf(PortalInputSchema), body, 'portal');
     await this.db
       .updateTable('portals')
       .set({
@@ -256,7 +257,7 @@ export class PortalAdminService {
   async updatePortalRole(id: string, body: unknown): Promise<Record<string, unknown>> {
     this.requireAdmin();
     await this.portalRoleRow(id);
-    const data = parseOrThrow(PortalRoleInputSchema.partial(), body, 'portal role');
+    const data = parseOrThrow(patchOf(PortalRoleInputSchema), body, 'portal role');
     await this.db
       .updateTable('portal_roles')
       .set({
@@ -344,7 +345,7 @@ export class PortalAdminService {
     this.requireAdmin();
     await this.portalRow(portalId);
     await this.navItem(portalId, itemId);
-    const data = parseOrThrow(PortalNavInputSchema.partial(), body, 'portal navigation item');
+    const data = parseOrThrow(patchOf(PortalNavInputSchema), body, 'portal navigation item');
     if (data.entity !== undefined && data.entity !== null) this.assertEntity(data.entity);
     await this.db
       .updateTable('portal_nav_items')
@@ -447,7 +448,7 @@ export class PortalAdminService {
   async updateDashboard(portalId: string, dashboardId: string, body: unknown): Promise<Record<string, unknown>> {
     this.requireAdmin();
     await this.dashboardRow(portalId, dashboardId);
-    const data = parseOrThrow(PortalDashboardInputSchema.partial(), body, 'portal dashboard');
+    const data = parseOrThrow(patchOf(PortalDashboardInputSchema), body, 'portal dashboard');
     if (data.portalRoleId !== undefined && data.portalRoleId !== null) await this.portalRoleRow(data.portalRoleId);
     await this.db.transaction().execute(async (tx) => {
       const becomesDefault = data.isDefault === true;
@@ -510,7 +511,7 @@ export class PortalAdminService {
     this.requireAdmin();
     await this.dashboardRow(portalId, dashboardId);
     await this.dashletRow(dashboardId, dashletId);
-    const data = parseOrThrow(PortalDashletInputSchema.partial(), body, 'portal dashlet');
+    const data = parseOrThrow(patchOf(PortalDashletInputSchema), body, 'portal dashlet');
     if (data.config !== undefined) this.assertDashletConfig(data.config);
     await this.db
       .updateTable('portal_dashlets')

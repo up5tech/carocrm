@@ -39,7 +39,7 @@ const CONSENT_BASIS_VALUES = [...CONSENT_BASES] as [ConsentBasis, ...ConsentBasi
 const CONSENT_SOURCE_VALUES = [...CONSENT_SOURCES] as [ConsentSource, ...ConsentSource[]];
 const SUPPRESSION_REASON_VALUES = [...SUPPRESSION_REASONS] as [SuppressionReason, ...SuppressionReason[]];
 
-export const SettingsPatchSchema = z.record(z.unknown());
+export const SettingsPatchSchema = z.record(z.string(), z.unknown());
 
 export const ProviderAccountCreateSchema = z
   .object({
@@ -49,7 +49,7 @@ export const ProviderAccountCreateSchema = z
     environment: z.enum(["test", "production"]).default("test"),
     enabled: z.boolean().default(false),
     capabilities: z.array(z.enum(CAPABILITIES)).default([]),
-    config: z.record(z.unknown()).default({}),
+    config: z.record(z.string(), z.unknown()).prefault({}),
     credential: z.string().min(1).max(4096).optional(),
     webhookSecret: z.string().min(1).max(4096).optional(),
   })
@@ -61,7 +61,7 @@ export const ProviderAccountPatchSchema = z
     environment: z.enum(["test", "production"]).optional(),
     enabled: z.boolean().optional(),
     capabilities: z.array(z.enum(CAPABILITIES)).optional(),
-    config: z.record(z.unknown()).optional(),
+    config: z.record(z.string(), z.unknown()).optional(),
     credential: z.string().min(1).max(4096).nullable().optional(),
     webhookSecret: z.string().min(1).max(4096).nullable().optional(),
   })
@@ -131,7 +131,7 @@ export const PolicyEvaluateSchema = z
     messageLength: z.number().int().min(0).max(100_000).optional(),
     templateKey: z.string().trim().max(128).nullable().optional(),
     templateLanguage: z.string().trim().max(16).optional(),
-    templateVariables: z.record(z.string()).optional(),
+    templateVariables: z.record(z.string(), z.string()).optional(),
   })
   .strict();
 
@@ -193,7 +193,7 @@ export const SendMessageSchema = z
     mediaAttachmentIds: z.array(z.string().trim().max(64)).max(10).optional(),
     templateKey: z.string().trim().max(128).optional(),
     templateLanguage: z.string().trim().max(16).optional(),
-    templateVariables: z.record(z.string()).optional(),
+    templateVariables: z.record(z.string(), z.string()).optional(),
     isInternalNote: z.boolean().optional(),
   })
   .strict();
@@ -286,7 +286,7 @@ export const TemplateUpsertSchema = z
   .strict();
 
 export const TemplateRenderSchema = z
-  .object({ variables: z.record(z.string()).default({}) })
+  .object({ variables: z.record(z.string(), z.string()).prefault({}) })
   .strict();
 
 export const ComposerValidateSchema = z

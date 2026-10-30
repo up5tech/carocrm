@@ -80,7 +80,7 @@ export const ExtensionManifestSchema = z
     /** Frontend contributions rendered by the SPA. */
     frontend: ExtensionFrontendSchema.optional(),
     /** Free-form package metadata (homepage, vendor, …); never interpreted by the platform. */
-    package: z.record(z.unknown()).optional(),
+    package: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
 

@@ -23,9 +23,14 @@ import { type DocumentView,SalesDocumentService } from "../document/document.ser
 import { documentRenderLine } from "../document/render-blocks.js";
 import type { SalesAuditContext } from "../document/types.js";
 import { baseFieldsFor } from "../money/currency.js";
-import { compare, parseDecimal, zero } from "../money/decimal.js";
 import { runAsSalesInternal } from "../sales-internal.js";
 import { SalesRecords, type SalesRow } from "../sales-records.js";
+import {
+  type AllocatablePage,
+  type AllocatableResult,
+  collectAllocatable,
+  DEFAULT_ALLOCATABLE_PAGE,
+} from "./allocatable.js";
 import { assertCreditAllocatable, assertSameCurrency } from "./allocation-math.js";
 import { SalesBalanceService } from "./balance.service.js";
 
@@ -328,7 +333,8 @@ export class CreditNoteService {
   async allocatableInvoices(
     creditNoteId: string | null,
     accountId: string | null,
-  ): Promise<readonly Record<string, unknown>[]> {
+    page: AllocatablePage = DEFAULT_ALLOCATABLE_PAGE,
+  ): Promise<AllocatableResult> {
     await this.acl.assertAccess("Invoice", "read");
     let currencyFilter: string | null = null;
     if (creditNoteId !== null) {
@@ -342,30 +348,30 @@ export class CreditNoteService {
     }
     const filters: Record<string, string> = { status: "issued" };
     if (accountId !== null) filters["accountId"] = accountId;
-    const invoices = await this.records.find("Invoice", filters, 500);
-    const result: Record<string, unknown>[] = [];
-    for (const invoice of invoices) {
-      const currency = text(invoice.data["currency"]) ?? null;
-      if (currencyFilter !== null && currency !== currencyFilter) continue;
-      const outstanding = await this.balances.outstandingOf(
-        this.database.db,
-        invoice,
-      );
-      const outstandingAmount = parseDecimal(outstanding);
-      if (compare(outstandingAmount, zero(outstandingAmount.scale)) <= 0)
-        continue;
-      result.push({
+    if (currencyFilter !== null) filters["currency"] = currencyFilter;
+    const slice = await collectAllocatable(
+      this.records,
+      this.balances,
+      this.database.db,
+      "Invoice",
+      filters,
+      page,
+    );
+    return {
+      list: slice.rows.map((invoice) => ({
         id: invoice.id,
         number: text(invoice.data["number"]) ?? null,
         accountId: text(invoice.data["accountId"]) ?? null,
-        currency,
+        currency: text(invoice.data["currency"]) ?? null,
         grossTotal: text(invoice.data["grossTotal"]) ?? "0",
         dueDate: text(invoice.data["dueDate"]) ?? null,
         paymentStatus: text(invoice.data["paymentStatus"]) ?? null,
-        outstanding,
-      });
-    }
-    return result;
+        outstanding: slice.outstanding.get(invoice.id) ?? "0",
+      })),
+      hasMore: slice.hasMore,
+      limit: page.limit,
+      offset: page.offset,
+    };
   }
 
   private actor(): string | null {

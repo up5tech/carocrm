@@ -103,15 +103,15 @@ browser, and exports.
 | Rate limit | **600 requests / minute / client**, global, OPTIONS excluded, `RATE_LIMITED` envelope | `apps/api/src/bootstrap.ts` |
 | CSV export | **10 000 rows**, paged in 500s, ACL `read` per page, not cancellable (synchronous) | `apps/api/src/search/import-export.service.ts`, `portal-shapes.ts` |
 | CSV import | **5 MiB / 2 000 rows**, per-row errors kept in memory (G17) | `portal-shapes.ts` |
-| Bulk update/delete | **no count cap**, one record at a time, body limit is the only bound → **G73** | `EntityCrudService.massUpdate/massDelete` |
-| DB query/request deadline | **none** (`statement_timeout` not set; no request deadline) → **G74** | `DatabaseService`, `bootstrap.ts` |
+| Bulk update/delete | **200 ids per request** (`MASS_ACTION_MAX_RECORDS`), one record at a time, duplicated ids collapsed; the SPA batches larger selections — **G73 fixed 22.26** | `EntityCrudService.massUpdate/massDelete`, `apps/web/src/api/client.ts` |
+| DB query/request deadline | statement **15 s** / lock **5 s** on the pool, request **30 s** (multipart exempt); all three configurable, `0` disables — **G74 fixed 22.26** | `DatabaseService`, `RequestTimeoutInterceptor`, `config.ts` |
 | Queue/outbox retry | outbox: 8 attempts, exponential + equal jitter, lease 10 min; jobs: 3 attempts, exponential + equal jitter | 22.18, `apps/worker/src/backoff.ts` |
 | Worker concurrency | 5 jobs by default; outbox batch 10 / poll 2 s | `apps/worker/src/env.ts` |
 
 Bulk and export permission handling: both go through `AclApiService` before touching records (`assertAccess(entity,
-'read'|'edit'|'delete')`), and export pages through the same ACL-filtered list as the UI. They are **bounded for
-export/import, not for bulk**; export is synchronous and offers no cancel, which the plan allows ("cancellable where
-supported") but should be stated.
+'read'|'edit'|'delete')`), and export pages through the same ACL-filtered list as the UI. Export, import and bulk are
+now all bounded (10 000 rows / 2 000 rows / 200 ids); every one of them is synchronous and offers no cancel, which the
+plan allows ("cancellable where supported") but should be stated.
 
 ## 7. Queue and background work (task 6)
 
@@ -156,10 +156,10 @@ resources, and this baseline is one machine, one dataset and one run.
 
 ## 10. Findings and gaps
 
-- **G73 — bulk update/delete are uncapped and sequential.** No count limit, one transaction per record, no
-  cancellation; a 32 MB id array is accepted. Needs an explicit ceiling or a queued operation, a product/API decision.
-- **G74 — no query/request deadline.** A lock wait or a degraded plan can hold a connection indefinitely; the pool is
-  10 connections. Needs an operations-owned `statement_timeout`/route budget, not a blind global value.
+- **G73 — bulk update/delete were uncapped and sequential.** *Fixed 22.26:* a 200-id ceiling per request, duplicated
+  ids collapsed, the SPA batches larger selections. One transaction per record and no cancel path remain.
+- **G74 — no query/request deadline.** *Fixed 22.26:* the pool carries a 15 s statement / 5 s lock deadline and the
+  request a 30 s budget (multipart exempt), each configurable and `0`-disablable for a measured long export.
 - **Outbox claim cost grows with the backlog.** 21 351 total cost and a parallel sort over ~241 k estimated rows at
   289 k pending. Retention/scheduling (G14/G21, 22.21) is the fix; the lease (22.18) is not the cause.
 - **Backlog ages are a capacity fact.** 17.3-day-old outbox events and 12.1-day-old pending jobs in the configured

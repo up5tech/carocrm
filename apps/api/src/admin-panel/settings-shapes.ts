@@ -144,14 +144,14 @@ export const SecuritySettingsSchema = z
         requireSymbol: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     session: z
       .object({
         idleLogoutMinutes: z.number().int().min(0).max(10080).default(0),
         singleSession: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     loginNotice: z.string().max(500).nullable().default(null),
   })
   .strict();

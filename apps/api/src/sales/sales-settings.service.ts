@@ -62,14 +62,14 @@ const RoundingModeSchema = z.enum(
 
 export const SalesSettingsSchema = z
   .object({
-    features: FeatureSchema.default({}),
+    features: FeatureSchema.prefault({}),
     currency: z
       .object({
         /** The installation's base currency; documents may still carry another when multiCurrency is on. */
         defaultCurrency: z.string().trim().min(3).max(3).default("USD"),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     pricing: z
       .object({
         /** Which source wins when both exist; see §4.3 for the full precedence. */
@@ -81,7 +81,7 @@ export const SalesSettingsSchema = z
         missingPricePolicy: z.enum(["error", "allowExplicit"]).default("error"),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     tax: z
       .object({
         /** `error` refuses a line with no applicable tax; zero tax must be configured, not assumed. */
@@ -99,14 +99,14 @@ export const SalesSettingsSchema = z
         roundingMode: RoundingModeSchema.default("half-up"),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     numbering: z
       .object({
         /** Series-level policy default; per-series rows may override it (`sales_number_series`). */
         allocation: z.enum(["issuance", "creation"]).default("issuance"),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     /**
      * Stock policy (19-S.14). Every value here changes what a stock movement does, so it is
      * validated at the boundary and versioned with the rest of the document (§4.15, §13).
@@ -156,7 +156,7 @@ export const SalesSettingsSchema = z
         excludeExpiredStock: z.boolean().default(true),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     /**
      * Product variants (19-S.15, §4.2). The attribute definitions are configuration, not code:
      * "do not hard-code industry-specific attributes". Everything here is validated even while
@@ -200,7 +200,7 @@ export const SalesSettingsSchema = z
         requireAllAttributes: z.boolean().default(true),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     /**
      * Recurring billing policy (19-S.16, §4.14). Every value here bounds how much work one billing
      * run may do, so an installation can never be taken over by a long-dated or daily subscription:
@@ -219,7 +219,7 @@ export const SalesSettingsSchema = z
         maxInvoicesPerRun: z.number().int().min(1).max(1_000).default(50),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     /** Fraction digits accepted for quantities (server-side; clients may not exceed it). */
     quantityPrecision: z.number().int().min(0).max(6).default(2),
   })

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+import { MASS_ACTION_MAX_RECORDS } from '../src/entity/entity.service.js';
 import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
@@ -456,5 +457,43 @@ describe('generic entity API — mass operations', () => {
     expect(removed.body['count']).toBe(2);
     const gone = await call('GET', `/api/v1/Account/${ids[0] as string}`);
     expect(gone.status).toBe(404);
+  });
+
+  // G73: the selection used to be bounded only by the 32 MiB body limit, and the loop ran one
+  // transaction per record behind one HTTP request.
+  it('refuses a bulk selection above the cap before touching any record', async () => {
+    const kept = await call('POST', '/api/v1/Account', { name: `Mass cap ${runId}` });
+    const id = String(kept.body['id']);
+    const ids = [id, ...Array.from({ length: MASS_ACTION_MAX_RECORDS }, (_, index) => `${id}-pad-${String(index)}`)];
+
+    const updated = await call('POST', '/api/v1/Account/action/massUpdate', { ids, data: { type: 'Oversized' } });
+    expect(updated.status).toBe(422);
+    expect(errorOf(updated.body)).toBe('VALIDATION_FAILED');
+    expect((updated.body['error'] as { details?: Record<string, unknown> }).details).toMatchObject({
+      max: MASS_ACTION_MAX_RECORDS,
+      requested: MASS_ACTION_MAX_RECORDS + 1,
+    });
+
+    // Nothing ran: the first id in the list is untouched.
+    const record = await call('GET', `/api/v1/Account/${id}`);
+    expect(record.body['type']).not.toBe('Oversized');
+
+    const removed = await call('POST', '/api/v1/Account/action/massDelete', { ids });
+    expect(removed.status).toBe(422);
+    expect(errorOf(removed.body)).toBe('VALIDATION_FAILED');
+    expect((await call('GET', `/api/v1/Account/${id}`)).status).toBe(200);
+
+    await call('POST', '/api/v1/Account/action/massDelete', { ids: [id] });
+  });
+
+  it('collapses a repeated id so one record is written once', async () => {
+    const created = await call('POST', '/api/v1/Account', { name: `Mass dupe ${runId}` });
+    const id = String(created.body['id']);
+
+    const updated = await call('POST', '/api/v1/Account/action/massUpdate', { ids: [id, id, id], data: { type: 'Analyst' } });
+    expect(updated.status).toBe(200);
+    expect(updated.body['count']).toBe(1);
+
+    await call('POST', '/api/v1/Account/action/massDelete', { ids: [id] });
   });
 });

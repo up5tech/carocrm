@@ -3,6 +3,7 @@ import { generateId } from '@carocrm/core/utils/id.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { AclApiService } from '../acl/acl-api.service.js';
+import { patchOf } from '../common/patch-schema.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import type { Database } from '../database/database.service.js';
@@ -80,7 +81,7 @@ export class DashboardService {
   async update(id: string, body: unknown): Promise<Record<string, unknown>> {
     const row = await this.dashboardRow(id);
     if (!this.scope.isAdmin && row.user_id !== this.scope.userId) throw new AuthorizationDeniedError('Only the dashboard owner or an administrator may update it.');
-    const p = DashboardInputSchema.partial().safeParse(body ?? {});
+    const p = patchOf(DashboardInputSchema).safeParse(body ?? {});
     if (!p.success) throw new ValidationError('Invalid dashboard.', { issues: p.error.issues.map((i) => i.message) });
     await this.database.db.updateTable('dashboards').set({
       ...(p.data.name !== undefined ? { name: p.data.name } : {}),
@@ -160,7 +161,7 @@ export class DashboardService {
     const dashboard = await this.dashboardRow(dashboardId);
     if (!this.scope.isAdmin && dashboard.user_id !== this.scope.userId) throw new AuthorizationDeniedError('Only the dashboard owner or an administrator may update dashlets.');
     await this.requireDashlet(dashboardId, dashletId);
-    const p = DashletInputSchema.partial().safeParse(body ?? {});
+    const p = patchOf(DashletInputSchema).safeParse(body ?? {});
     if (!p.success) throw new ValidationError('Invalid dashlet.', { issues: p.error.issues.map((i) => i.message) });
     if (p.data.config) this.assertDashletConfig(p.data.config, p.data.kind ?? (await this.requireDashlet(dashboardId, dashletId)).kind);
     await this.database.db.updateTable('dashlets').set({

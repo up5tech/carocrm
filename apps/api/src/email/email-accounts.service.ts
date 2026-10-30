@@ -17,6 +17,7 @@ import { type AccountSmtpConfig,createAccountSmtpTransport } from '@carocrm/mail
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
+import { patchOf } from '../common/patch-schema.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import type { AppConfig } from '../config.js';
@@ -147,7 +148,7 @@ export class EmailAccountsService {
 
   async update(id: string, payload: unknown): Promise<EmailAccountView> {
     this.requireAdmin();
-    const data = AccountInputSchema.partial().parse(payload);
+    const data = patchOf(AccountInputSchema).parse(payload);
     await this.row(id); // 404 before any write
     const encrypted = data.smtpPassword === undefined ? undefined : this.encryptPassword(data.smtpPassword);
     await this.database.db.transaction().execute(async (tx) => {

@@ -80,7 +80,7 @@ const TargetMappingSchema = z
     version: z.number().int().min(1).max(1_000_000).default(1),
     fields: z.array(MappingFieldSchema).max(64).default([]),
     /** Values a create needs and no Lead field supplies (today exactly `Opportunity.name`). */
-    createDefaults: z.record(z.unknown()).default({}),
+    createDefaults: z.record(z.string(), z.unknown()).prefault({}),
   })
   .strict();
 
@@ -141,7 +141,7 @@ const ConversionRecoverySchema = z
     staleAfterMinutes: z.number().int().min(5).max(1_440).default(60),
   })
   .strict()
-  .default({});
+  .prefault({});
 
 export const ConversionSectionSchema = z
   .object({
@@ -156,7 +156,7 @@ export const ConversionSectionSchema = z
     recovery: ConversionRecoverySchema,
   })
   .strict()
-  .default({});
+  .prefault({});
 
 /** Why one mapping line cannot run. Tokens the preview, the settings error and the report all share. */
 export type MappingIssueCode =

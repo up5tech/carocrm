@@ -25,7 +25,7 @@ import {
  * clear outside local development.
  */
 
-const SessionBody = z.object({ consent: z.boolean().optional() }).strict().default({});
+const SessionBody = z.object({ consent: z.boolean().optional() }).strict().prefault({});
 const SendBody = z
   .object({
     clientMessageId: z.string().trim().min(8).max(200),

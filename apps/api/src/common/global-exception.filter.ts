@@ -1,5 +1,5 @@
 import { getLocale, getRequestId } from '@carocrm/core/context/index.js';
-import { AppError, InternalServerError } from '@carocrm/core/errors/index.js';
+import { AppError, InternalServerError, RequestTimeoutError } from '@carocrm/core/errors/index.js';
 import { log } from '@carocrm/core/logger/index.js';
 import type { ExecutionContext } from '@nestjs/common';
 import { Catch, HttpException } from '@nestjs/common';
@@ -18,6 +18,14 @@ interface ErrorBody {
 /** PostgreSQL error code 23505, unique_violation. */
 function isUniqueViolation(exception: unknown): boolean {
   return typeof exception === 'object' && exception !== null && (exception as { code?: unknown }).code === '23505';
+}
+
+/**
+ * PostgreSQL error code 57014, `query_canceled` — what `statement_timeout` and `lock_timeout` raise,
+ * and also what an operator's `pg_cancel_backend` raises (G74).
+ */
+function isQueryCancelled(exception: unknown): boolean {
+  return typeof exception === 'object' && exception !== null && (exception as { code?: unknown }).code === '57014';
 }
 
 /**
@@ -114,6 +122,11 @@ export class GlobalExceptionFilter {
       // not express in a single check (Phase 19: one membership per user per project, one
       // dependency edge). It answers 409, not 500, and never repeats the SQL that produced it.
       error = new AppError('DUPLICATE_RECORD', 'That record already exists.', undefined, 409);
+    } else if (isQueryCancelled(exception)) {
+      // The pool's deadline fired (G74). The statement was cancelled by PostgreSQL and its
+      // transaction rolled back, so this is not a partial write and not the caller's fault: a 503
+      // with a stable code lets the SPA retry or narrow a bulk selection instead of showing a 500.
+      error = new RequestTimeoutError();
     } else if (hookErrorStatus !== undefined) {
       const message = exception instanceof Error ? exception.message : `HTTP ${hookErrorStatus}.`;
       error = new AppError(codeForStatus(hookErrorStatus), message, undefined, hookErrorStatus);

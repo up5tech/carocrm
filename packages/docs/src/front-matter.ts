@@ -201,7 +201,10 @@ export function readFrontMatter(source: string): FrontMatterResult {
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
       const path = issue.path.join('.');
-      issues.push(`${path === '' ? 'front-matter' : path}: ${issue.message}`);
+      // An author needs the field and the reason, not the schema's type vocabulary: zod words a
+      // missing value as an input-type mismatch ("expected string, received undefined").
+      const message = issue.code === 'invalid_type' && issue.input === undefined ? 'Required' : issue.message;
+      issues.push(`${path === '' ? 'front-matter' : path}: ${message}`);
     }
     return { ok: false, issues: dedupe(issues), unknownKeys, body: split.body };
   }

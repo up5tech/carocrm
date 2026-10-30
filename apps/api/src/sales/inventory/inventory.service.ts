@@ -28,6 +28,7 @@ import {
   sum,
   zero,
 } from "../money/decimal.js";
+import { decodePageCursor, encodePageCursor } from "../paging.js";
 import { runAsSalesInternal } from "../sales-internal.js";
 import {
   type SalesEntityType,
@@ -173,6 +174,27 @@ export interface BatchStockRow {
   readonly receivedAt: string | null;
 }
 
+/**
+ * One page of the movement ledger.
+ *
+ * The envelope answers the three questions a scrolling reader has: where does this page start
+ * (`offset`), how many rows match the filter altogether (`total`, absent when the caller switched
+ * the count off), and is there more below (`hasMore` — with the `nextCursor` that reaches it).
+ */
+export interface InventoryHistoryPage {
+  readonly list: readonly Record<string, unknown>[];
+  /** Where the page starts. Always `0` when the page was reached through a cursor. */
+  readonly offset: number;
+  /** How many rows this page holds. */
+  readonly count: number;
+  /** How many rows match the filter — the whole result, not what is left of it. */
+  readonly total?: number;
+  /** Whether another page follows. */
+  readonly hasMore: boolean;
+  /** The token that reaches the next page; absent when there is none. */
+  readonly nextCursor?: string;
+}
+
 /** What the configured removal policy would pick right now — the line editor's suggestion (task 7). */
 export interface PickingSuggestionView {
   readonly productId: string;
@@ -199,6 +221,9 @@ const RESERVATION_ENTITY: SalesEntityType = "InventoryReservation";
 const BATCH_ENTITY: SalesEntityType = "InventoryBatch";
 const SERIAL_ENTITY: SalesEntityType = "InventorySerial";
 const SCAN_LIMIT = 2_000;
+
+/** How many movements one history page holds when the caller does not say. */
+const HISTORY_PAGE_SIZE = 200;
 
 /** Identity resolved for a movement whose product is not tracked — the 19-S.14 behaviour. */
 const NO_IDENTITY = { batches: null, serials: null } as const;
@@ -1460,30 +1485,85 @@ export class InventoryService {
     };
   }
 
-  /** Movement history for a product and/or warehouse, newest first. */
+  /**
+   * Movement history for a product and/or warehouse, newest first, as a page.
+   *
+   * The page is read newest-first in SQL (`findPage`), not by taking the first `limit` rows of the
+   * table and sorting them here: `find` orders by the random `id`, so on a ledger larger than the
+   * limit it returned an arbitrary sample and the newest movement could be missing entirely — the
+   * panel then showed old movements labelled as the newest the filter had.
+   *
+   * The order is the one the rows are read in — newest recorded first, `id` breaking a tie — so a
+   * page and the cursor that follows it agree on where the boundary is. A row carries both the
+   * moment it was recorded (`createdAt`, the order) and the business moment it happened
+   * (`occurredAt`, the row's own field); a movement is never backdated, so the two agree.
+   *
+   * The reader may walk the ledger by `offset` (a position) or by `cursor` (the row the last page
+   * ended on). The cursor is the one that survives movement: a row written while the reader walks
+   * the pages does not move the boundary, so the walk neither repeats nor skips a row.
+   */
   async history(filters: {
     readonly productId?: string | null | undefined;
     readonly warehouseId?: string | null | undefined;
     readonly limit?: number | undefined;
-  }): Promise<readonly Record<string, unknown>[]> {
+    readonly offset?: number | undefined;
+    readonly cursor?: string | null | undefined;
+    readonly total?: boolean | undefined;
+  }): Promise<InventoryHistoryPage> {
     await this.acl.assertAccess(LEDGER_ENTITY, "read");
     const query: Record<string, string> = {};
     if (text(filters.productId ?? undefined) !== undefined)
       query["productId"] = filters.productId as string;
     if (text(filters.warehouseId ?? undefined) !== undefined)
       query["warehouseId"] = filters.warehouseId as string;
-    const rows = await this.records.find(
-      LEDGER_ENTITY,
-      query,
-      Math.min(filters.limit ?? 200, SCAN_LIMIT),
+    const requested = Number(filters.limit);
+    const limit = Math.min(
+      Math.max(
+        Number.isFinite(requested) ? Math.floor(requested) : HISTORY_PAGE_SIZE,
+        1,
+      ),
+      SCAN_LIMIT,
     );
-    return rows
-      .map((row): Record<string, unknown> => ({ id: row.id, ...row.data }))
-      .sort((left, right) =>
-        String(right["occurredAt"] ?? "").localeCompare(
-          String(left["occurredAt"] ?? ""),
-        ),
-      );
+    const cursor =
+      filters.cursor == null || filters.cursor.trim() === ""
+        ? undefined
+        : decodePageCursor(filters.cursor);
+    const requestedOffset = Number(filters.offset);
+    const offset =
+      cursor === undefined
+        ? Math.max(
+            Number.isFinite(requestedOffset) ? Math.floor(requestedOffset) : 0,
+            0,
+          )
+        : 0;
+    // One row more than the page holds: its presence is what says "there is another page".
+    const rows = await this.records.findPage(LEDGER_ENTITY, query, {
+      limit: limit + 1,
+      offset,
+      after: cursor,
+    });
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page[page.length - 1];
+    const total =
+      filters.total === false
+        ? undefined
+        : await this.records.countMatching(LEDGER_ENTITY, query);
+    return {
+      list: page.map((row): Record<string, unknown> => ({ id: row.id, ...row.data })),
+      offset,
+      count: page.length,
+      ...(total === undefined ? {} : { total }),
+      hasMore,
+      ...(hasMore && last !== undefined
+        ? {
+            nextCursor: encodePageCursor({
+              createdAt: last.createdAt,
+              id: last.id,
+            }),
+          }
+        : {}),
+    };
   }
 
   /**

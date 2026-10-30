@@ -23,6 +23,34 @@ import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 import type { PostgresRecordStore, StoreFindAnyOf, StoreReportAggregateResult, StoreReportRelation } from './entity-record.store.js';
 import { ENTITY_STORE } from './entity-record.store.js';
 
+/**
+ * How many records one `massUpdate`/`massDelete` request may touch (G73).
+ *
+ * Every record is its own transaction with its own hooks, audit row, stream post and outbox event, so
+ * the loop's cost is linear in the selection while the request body only limits its *size* (32 MiB,
+ * which is thousands of ids). 200 keeps the worst case inside one request deadline and gives the
+ * client a clear refusal to chunk against, instead of a request that works for minutes.
+ */
+export const MASS_ACTION_MAX_RECORDS = 200;
+
+/**
+ * The ids a bulk action will really write, after the cap.
+ *
+ * Duplicates are collapsed first: the same id twice would otherwise mean two transactions, two audit
+ * rows and two stream posts for one record. The cap is then checked against what would really run, so
+ * a list padded with repeats cannot slip past it.
+ */
+function checkedMassSelection(ids: readonly string[]): string[] {
+  const unique = [...new Set(ids)];
+  if (unique.length > MASS_ACTION_MAX_RECORDS) {
+    throw new ValidationError(
+      `A bulk action may change at most ${String(MASS_ACTION_MAX_RECORDS)} records at once; split the selection into smaller batches.`,
+      { max: MASS_ACTION_MAX_RECORDS, requested: unique.length },
+    );
+  }
+  return unique;
+}
+
 /** PLAN §16.2 list envelope always carries `total`; `?total=false` opts out (cheap lists). */
 function wantsTotal(query: ListQuery): boolean {
   const value = query.total;
@@ -284,10 +312,11 @@ export class EntityCrudService {
 
   async massUpdate(entity: string, ids: readonly string[], data: Record<string, unknown>): Promise<{ count: number; ids: string[] }> {
     this.assertEntity(entity);
+    const selection = checkedMassSelection(ids);
     await this.acl.assertAccess(entity, 'edit');
     await this.acl.assertFieldWrites(entity, data);
     const updated: string[] = [];
-    for (const id of ids) {
+    for (const id of selection) {
       try {
         await this.update(entity, id, data);
         updated.push(id);
@@ -324,9 +353,10 @@ export class EntityCrudService {
 
   async massDelete(entity: string, ids: readonly string[]): Promise<{ count: number; ids: string[] }> {
     this.assertEntity(entity);
+    const selection = checkedMassSelection(ids);
     await this.acl.assertAccess(entity, 'delete');
     const removed: string[] = [];
-    for (const id of ids) {
+    for (const id of selection) {
       try {
         await this.remove(entity, id);
         removed.push(id);

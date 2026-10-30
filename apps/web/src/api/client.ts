@@ -350,6 +350,37 @@ function patch(input: unknown): RequestInit {
   return { method: 'PATCH', body: JSON.stringify(input ?? {}) };
 }
 
+/**
+ * Mirrors the server's `MASS_ACTION_MAX_RECORDS` (G73). A bulk action over more ids is sent as
+ * consecutive batches whose outcomes are added up, so "select all" on a full page still works while
+ * every request stays bounded (and each batch is its own audited operation).
+ */
+const BULK_BATCH_SIZE = 200;
+
+/**
+ * Runs a bulk call in `BULK_BATCH_SIZE` batches. A failure after some batches succeeded is reported as
+ * such: those records are already written and audited, so the caller must refresh instead of retrying
+ * the whole selection and writing twice.
+ */
+async function inBulkBatches(
+  ids: string[],
+  call: (batch: string[]) => Promise<MassResult>,
+): Promise<MassResult> {
+  const applied: MassResult = { count: 0, ids: [] };
+  for (let index = 0; index < ids.length; index += BULK_BATCH_SIZE) {
+    try {
+      const batch = await call(ids.slice(index, index + BULK_BATCH_SIZE));
+      applied.count += batch.count;
+      applied.ids.push(...batch.ids);
+    } catch (error) {
+      if (applied.count === 0) throw error;
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`${reason} (${String(applied.count)} of ${String(ids.length)} records were already changed; refresh the list.)`);
+    }
+  }
+  return applied;
+}
+
 function listQuery(params: ListParams): string {
   const query = new URLSearchParams();
   if (params.where && params.where.length > 0) query.set('where', JSON.stringify(params.where));
@@ -1073,10 +1104,12 @@ export const api = {
     }),
   remove: (entity: string, id: string) => request<unknown>(`/${encodeURIComponent(entity)}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   massDelete: (entity: string, ids: string[]) =>
-    request<MassResult>(`/${encodeURIComponent(entity)}/action/massDelete`, { method: 'POST', body: JSON.stringify({ ids }) }),
+    inBulkBatches(ids, (batch) =>
+      request<MassResult>(`/${encodeURIComponent(entity)}/action/massDelete`, { method: 'POST', body: JSON.stringify({ ids: batch }) })),
   /** The server reads `data` (see `massPayload`), not `values`. */
   massUpdate: (entity: string, ids: string[], data: Record<string, unknown>) =>
-    request<MassResult>(`/${encodeURIComponent(entity)}/action/massUpdate`, { method: 'POST', body: JSON.stringify({ ids, data }) }),
+    inBulkBatches(ids, (batch) =>
+      request<MassResult>(`/${encodeURIComponent(entity)}/action/massUpdate`, { method: 'POST', body: JSON.stringify({ ids: batch, data }) })),
   /** Row actions for this entity, already filtered by the caller's ACL on the server. */
   rowActions: (entity: string) =>
     request<RowActions>(`/${encodeURIComponent(entity)}/action/rowActions`, { method: 'POST', body: JSON.stringify({}) }),

@@ -43,7 +43,7 @@ const CRMChatFeaturesSchema = z
 
 export const CRMChatSettingsSchema = z
   .object({
-    features: CRMChatFeaturesSchema.default({}),
+    features: CRMChatFeaturesSchema.prefault({}),
     assistant: z
       .object({
         /**
@@ -54,7 +54,7 @@ export const CRMChatSettingsSchema = z
         agentKey: z.string().trim().max(120).default(''),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     execution: z
       .object({
         /**
@@ -66,7 +66,7 @@ export const CRMChatSettingsSchema = z
         mode: z.enum(['queue', 'inline']).default('queue'),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     limits: z
       .object({
         maxMessageChars: z.number().int().min(1).max(20_000).default(8_000),
@@ -83,21 +83,21 @@ export const CRMChatSettingsSchema = z
         maxQueryResults: z.number().int().min(1).max(1000).default(100),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     retention: z
       .object({
         /** Instance ceiling. The `AIAgents` sweeper remains the only retention executor. */
         conversationsDays: z.number().int().min(1).max(3_650).default(30),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     safety: z
       .object({
         /** Independent write switch. A proposal feature flag alone never authorises a mutation. */
         allowWrites: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
   })
   .strict();
 

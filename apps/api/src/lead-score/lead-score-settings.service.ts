@@ -94,7 +94,7 @@ const DecaySweepSchema = z
     chunkSize: z.number().int().min(1).max(50).default(25),
   })
   .strict()
-  .default({});
+  .prefault({});
 
 /**
  * The engagement-signal policy. Separate from `scoring` because it belongs to the source, not to the model:
@@ -105,7 +105,7 @@ const SignalsSectionSchema = z
     decaySweep: DecaySweepSchema,
   })
   .strict()
-  .default({});
+  .prefault({});
 
 /**
  * The conversion policy (19-LS.12, contract §5.2/§7): which targets an installation may build, whether a
@@ -130,7 +130,7 @@ const InsightSectionSchema = z
     agentId: z.string().trim().min(1).max(64).nullable().default(null),
   })
   .strict()
-  .default({});
+  .prefault({});
 
 export const LeadScoreSettingsSchema = z
   .object({
@@ -140,9 +140,9 @@ export const LeadScoreSettingsSchema = z
      * exactly as it does today whether or not this module is installed.
      */
     enabled: z.boolean().default(false),
-    features: FeatureFlagsSchema.default({}),
-    scoring: ScoringSectionSchema.default({}),
-    signals: SignalsSectionSchema.default({}),
+    features: FeatureFlagsSchema.prefault({}),
+    scoring: ScoringSectionSchema.prefault({}),
+    signals: SignalsSectionSchema.prefault({}),
     conversion,
     insight: InsightSectionSchema,
   })

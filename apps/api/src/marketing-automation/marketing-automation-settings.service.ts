@@ -37,7 +37,7 @@ export const MarketingAutomationSettingsSchema = z
         templates: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     defaults: z
       .object({
         /**
@@ -53,7 +53,7 @@ export const MarketingAutomationSettingsSchema = z
           .default("UTC"),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     sender: z
       .object({
         /**
@@ -71,7 +71,7 @@ export const MarketingAutomationSettingsSchema = z
           .default(null),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     limits: z
       .object({
         /**
@@ -83,7 +83,7 @@ export const MarketingAutomationSettingsSchema = z
         maxResolveRecords: z.number().int().min(1).max(200_000).default(10_000),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     provider: z
       .object({
         /**
@@ -104,7 +104,7 @@ export const MarketingAutomationSettingsSchema = z
             maxConcurrency: z.number().int().min(1).max(50).default(1),
           })
           .strict()
-          .default({}),
+          .prefault({}),
         /**
          * The safe test send (§10.5, §15 `19-MA.7` task 3). A test send is a manufacturing-safety device:
          * it may only reach addresses an administrator listed here, and an empty list means **no test send at
@@ -118,10 +118,10 @@ export const MarketingAutomationSettingsSchema = z
             maxRecipients: z.number().int().min(1).max(20).default(5),
           })
           .strict()
-          .default({}),
+          .prefault({}),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     delivery: z
       .object({
         /**
@@ -168,7 +168,7 @@ export const MarketingAutomationSettingsSchema = z
           .default(""),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     safety: z
       .object({
         /**
@@ -182,7 +182,7 @@ export const MarketingAutomationSettingsSchema = z
         reason: z.string().trim().max(500).nullable().default(null),
       })
       .strict()
-      .default({}),
+      .prefault({}),
   })
   .strict();
 

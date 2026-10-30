@@ -62,7 +62,7 @@ const WebChatSettingsSchema = z
     maxBodyChars: z.number().int().min(100).max(20_000).default(2_000),
   })
   .strict()
-  .default({});
+  .prefault({});
 
 /**
  * 19-OM.18 — retention for the artefacts this module owns (drafts, visitor sessions). Message,
@@ -78,7 +78,7 @@ const RetentionSettingsSchema = z
     expiredSessionDays: z.number().int().min(1).max(3_650).default(30),
   })
   .strict()
-  .default({});
+  .prefault({});
 
 /**
  * 19-OM.19 — the AI posture. Suggestions are **drafts only**: Omnichannel calls AIAgents' run
@@ -93,11 +93,11 @@ const AiSettingsSchema = z
     maxContextMessages: z.number().int().min(1).max(50).default(10),
   })
   .strict()
-  .default({});
+  .prefault({});
 
 export const OmnichannelSettingsSchema = z
   .object({
-    features: OmnichannelFeaturesSchema.default({}),
+    features: OmnichannelFeaturesSchema.prefault({}),
     webChat: WebChatSettingsSchema,
     retention: RetentionSettingsSchema,
     ai: AiSettingsSchema,

@@ -210,7 +210,7 @@ describe('health scoring and overrides (§5.4, §5.5)', () => {
     // controller in this repository follows (`InvalidQueryError`). The domain rule in
     // `HealthService.setOverride` is the second line of defence.
     expect(bad.status).toBe(400);
-    expect(JSON.stringify(bad.body)).toContain('at least 1 character');
+    expect(JSON.stringify(bad.body)).toContain('a reason is required for an override');
   });
 
   it('returns the score history newest-first', async () => {

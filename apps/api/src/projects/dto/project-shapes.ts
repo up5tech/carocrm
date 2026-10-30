@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 
+import { patchOf } from '../../common/patch-schema.js';
 import { PROJECT_DEPENDENCY_TYPES, PROJECT_GROUP_TYPES, PROJECT_PRIORITIES, PROJECT_TASK_STATUSES } from '../project-domain.js';
 
 const id = z.string().trim().min(1).max(64);
@@ -14,11 +15,11 @@ const name = z.string().trim().min(1).max(255);
  * A UI control that has been cleared sends `null`, which means the same as "absent" for an optional
  * reference or date: both leave the field empty on the record.
  */
-const optId = id.nullish().transform((value) => value ?? undefined);
-const optText = z.string().trim().max(60_000).nullish().transform((value) => value === null || value === '' ? undefined : value);
-const optDay = day.nullish().transform((value) => value ?? undefined);
-const optPoints = z.number().int().min(0).max(100_000).nullish().transform((value) => value ?? undefined);
-const optHours = z.number().min(0).max(100_000).nullish().transform((value) => value ?? undefined);
+const optId = id.nullish().transform((value) => value ?? undefined).optional();
+const optText = z.string().trim().max(60_000).nullish().transform((value) => value === null || value === '' ? undefined : value).optional();
+const optDay = day.nullish().transform((value) => value ?? undefined).optional();
+const optPoints = z.number().int().min(0).max(100_000).nullish().transform((value) => value ?? undefined).optional();
+const optHours = z.number().min(0).max(100_000).nullish().transform((value) => value ?? undefined).optional();
 
 export const ProjectSettingsSchema = z
   .object({
@@ -49,7 +50,7 @@ export const GroupCreateSchema = z.object({
   newTaskPlacement: z.enum(['Top', 'Bottom']).default('Bottom'),
   sortOrder: z.number().int().min(0).max(1_000_000).optional(),
 });
-export const GroupUpdateSchema = GroupCreateSchema.partial().extend({ groupId: id });
+export const GroupUpdateSchema = patchOf(GroupCreateSchema).extend({ groupId: id });
 export const GroupDeleteSchema = z.object({ groupId: id, moveToGroupId: id.optional() });
 export const GroupReorderSchema = z.object({ groupIds: z.array(id).min(1).max(500) });
 
@@ -65,12 +66,12 @@ export const TaskCreateSchema = z.object({
   assigneeUserId: optId,
   dateStart: optDay,
   dateEnd: optDay,
-  priority: z.enum(PROJECT_PRIORITIES).nullish().transform((value) => value ?? undefined),
+  priority: z.enum(PROJECT_PRIORITIES).nullish().transform((value) => value ?? undefined).optional(),
   points: optPoints,
   estimateHours: optHours,
 });
 
-export const TaskUpdateSchema = TaskCreateSchema.partial().omit({ projectId: true });
+export const TaskUpdateSchema = patchOf(TaskCreateSchema).omit({ projectId: true });
 
 export const TaskMoveSchema = z.object({
   stageId: optId,

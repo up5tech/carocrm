@@ -41,7 +41,7 @@ export const AIAgentsSettingsSchema = z
         portalAssistant: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     provider: z
       .object({
         /**
@@ -51,7 +51,7 @@ export const AIAgentsSettingsSchema = z
         defaultKey: z.string().trim().max(64).default(''),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     limits: z
       .object({
         /** Finite ceilings every run must respect (§8.3). A published agent cannot raise them. */
@@ -66,7 +66,7 @@ export const AIAgentsSettingsSchema = z
         maxResultBytes: z.number().int().min(1024).max(1_048_576).default(65_536),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     approval: z
       .object({
         /** Effect classes that always require a human decision (§9.2). */
@@ -75,7 +75,7 @@ export const AIAgentsSettingsSchema = z
         ttlMinutes: z.number().int().min(1).max(1_440).default(60),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     retention: z
       .object({
         runEventsDays: z.number().int().min(1).max(3650).default(90),
@@ -84,14 +84,14 @@ export const AIAgentsSettingsSchema = z
         evaluationsDays: z.number().int().min(1).max(3650).default(180),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     safety: z
       .object({
         globalExecutionPaused: z.boolean().default(false),
         reason: z.string().trim().max(500).nullable().default(null),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     tools: z
       .object({
         /**
@@ -101,7 +101,7 @@ export const AIAgentsSettingsSchema = z
         disabled: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     dataPolicy: z
       .object({
         /**
@@ -113,7 +113,7 @@ export const AIAgentsSettingsSchema = z
         logPrompts: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
   })
   .strict();
 

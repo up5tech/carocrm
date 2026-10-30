@@ -49,7 +49,7 @@ export const ProviderConnectionCreateSchema = z
       .default(['public', 'internal']),
     /** Write-only. Never returned by any read path; omitted means no credential. */
     apiKey: z.string().trim().min(1).max(512).optional(),
-    config: ProviderConnectionConfigSchema.default({}),
+    config: ProviderConnectionConfigSchema.prefault({}),
     enabled: z.boolean().default(true),
   })
   .strict();

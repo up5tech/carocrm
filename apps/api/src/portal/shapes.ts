@@ -26,16 +26,16 @@ export const PortalInputSchema = z.object({
   name: z.string().trim().regex(PORTAL_NAME, 'Invalid portal name.'),
   urlPath: z.string().trim().regex(/^\/[A-Za-z0-9/_-]*$/, 'urlPath must start with "/".').max(190).default('/portal'),
   isActive: z.boolean().default(true),
-  settings: z.record(z.string(), z.unknown()).default({}),
+  settings: z.record(z.string(), z.unknown()).prefault({}),
 });
 
 export const PortalRoleInputSchema = z.object({
   id: z.string().min(1).max(36).optional(),
   name: z.string().trim().min(1).max(150),
-  permissions: z.record(z.string(), z.record(z.string(), z.enum(PORTAL_LEVELS))).default({}),
+  permissions: z.record(z.string(), z.record(z.string(), z.enum(PORTAL_LEVELS))).prefault({}),
   fieldPermissions: z
     .record(z.string(), z.record(z.string(), z.record(z.string(), z.enum(PORTAL_LEVELS))))
-    .default({}),
+    .prefault({}),
 });
 
 /** Links portal roles to a portal (every portal user of the portal holds them, PLAN §18.2). */
@@ -58,7 +58,7 @@ export const PortalDashboardInputSchema = z.object({
   name: z.string().trim().min(1).max(190),
   portalRoleId: z.string().trim().min(1).max(36).nullable().default(null),
   layout: z.array(z.unknown()).default([]),
-  config: z.record(z.string(), z.unknown()).default({}),
+  config: z.record(z.string(), z.unknown()).prefault({}),
   isDefault: z.boolean().default(false),
 });
 

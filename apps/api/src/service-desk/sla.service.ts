@@ -471,6 +471,11 @@ export class SlaService implements OnApplicationBootstrap {
    * Mark clocks that reached a configured warning threshold or passed their business-time
    * deadline. Paused clocks are skipped: a pause must never breach a target (§5.6). The scan is
    * bounded and returns `truncated` when more clocks remain for the next tick.
+   *
+   * The filter is applied in SQL, not after the limit. A clock table holds every clock ever made, so a
+   * plain `limit` over the whole table read an arbitrary window and left an overdue clock outside it
+   * untouched forever. Only clocks this loop can act on are read, earliest deadline first, so a
+   * truncated tick still covers the most urgent ones.
    */
   async checkBreaches(): Promise<{ checked: number; breached: number; warned: number; truncated: boolean }> {
     const settings = await this.settings.settings();
@@ -481,6 +486,9 @@ export class SlaService implements OnApplicationBootstrap {
       .select(["id", "attrs"])
       .where("entity_type", "=", "CaseSLAClock")
       .where("deleted_at", "is", null)
+      .where(sql<boolean>`coalesce(attrs ->> 'status', '') not in ('met', 'breached', 'paused')`)
+      .where(sql<boolean>`(attrs ->> 'dueAt') is not null`)
+      .orderBy(sql`attrs ->> 'dueAt'`, "asc")
       .limit(SLA_SCAN_BATCH_SIZE + 1)
       .execute();
     const truncated = rows.length > SLA_SCAN_BATCH_SIZE;
@@ -554,6 +562,10 @@ export class SlaService implements OnApplicationBootstrap {
       .select(["id", "attrs"])
       .where("entity_type", "=", "CaseSLAClock")
       .where("deleted_at", "is", null)
+      // Same reason as `checkBreaches`: the limit must bound the clocks that still need attention,
+      // not an arbitrary slice of every clock ever created.
+      .where(sql<boolean>`(attrs ->> 'status') in ('warning', 'breached')`)
+      .orderBy(sql`attrs ->> 'dueAt'`, "asc")
       .limit(SLA_SCAN_BATCH_SIZE + 1)
       .execute();
     const clocks = rows.length > SLA_SCAN_BATCH_SIZE ? rows.slice(0, SLA_SCAN_BATCH_SIZE) : rows;

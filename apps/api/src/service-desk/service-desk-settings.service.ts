@@ -55,7 +55,7 @@ export const ServiceDeskSettingsSchema = z
         notifications: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     numbering: z
       .object({
         prefix: z
@@ -73,7 +73,7 @@ export const ServiceDeskSettingsSchema = z
           .default(DEFAULT_CASE_NUMBERING.padding),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     defaults: z
       .object({
         status: StatusSchema.default(DEFAULT_CASE_DEFAULTS.status),
@@ -82,7 +82,7 @@ export const ServiceDeskSettingsSchema = z
         source: SourceSchema.default(DEFAULT_CASE_DEFAULTS.source),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     resolution: z
       .object({
         requireCode: z.boolean().default(true),
@@ -92,21 +92,21 @@ export const ServiceDeskSettingsSchema = z
         reopenWindowDays: z.number().int().min(0).max(3_650).default(0),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     assignment: z
       .object({
         /** Fallback queue for an unowned case when routing finds nothing else (§5.3). */
         defaultQueueId: z.string().trim().min(1).max(64).nullable().default(null),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     sla: z
       .object({
         /** Last successful SLA scan timestamp (SD.9). */
         lastScanAt: z.string().nullable().default(null),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     email: z
       .object({
         /**
@@ -116,7 +116,7 @@ export const ServiceDeskSettingsSchema = z
         replyFromAddress: z.string().trim().email().or(z.literal("")).default(""),
       })
       .strict()
-      .default({}),
+      .prefault({}),
   })
   .strict();
 

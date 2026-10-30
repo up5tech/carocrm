@@ -42,7 +42,7 @@ const SendMessageSchema = z
     idempotencyKey: z.string().trim().min(8).max(200),
     templateKey: z.string().trim().max(120).optional(),
     templateLanguage: z.string().trim().max(20).optional(),
-    templateVariables: z.record(z.string().max(2_000)).optional(),
+    templateVariables: z.record(z.string(), z.string().max(2_000)).optional(),
     mediaAttachmentIds: z.array(z.string().trim().min(1).max(120)).max(10).optional(),
     isInternalNote: z.boolean().optional(),
   })
@@ -84,7 +84,7 @@ const AiTaskSchema = z
 const SnippetPreviewSchema = z
   .object({
     conversationId: z.string().trim().min(1).max(120).optional(),
-    variables: z.record(z.string().max(200)).optional(),
+    variables: z.record(z.string(), z.string().max(200)).optional(),
   })
   .strict();
 const DraftSchema = z.object({ body: z.string().max(20_000), isInternalNote: z.boolean().optional() }).strict();

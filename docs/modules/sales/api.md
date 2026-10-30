@@ -425,7 +425,7 @@ The **credit-note and write-off commands** (19-S.11) follow the same pattern:
 ```text
 POST   /api/v1/Sales/creditNote/:id/allocate        apply part of an issued credit note to an issued invoice
 DELETE /api/v1/Sales/creditNote/allocation/:id      reverse an allocation (the row is kept and marked, §4.9)
-GET    /api/v1/Sales/creditNote/allocatableInvoices ?creditNoteId= &accountId= — issued invoices with their outstanding
+GET    /api/v1/Sales/creditNote/allocatableInvoices ?creditNoteId= &accountId= &limit= &offset= — issued invoices with their outstanding, newest first
 POST   /api/v1/Sales/creditNote/:id/render          render through a DocumentTemplate (or the built-in block layout)
 POST   /api/v1/Sales/write-off                      request a write-off (status `pending`, no balance changes)
 POST   /api/v1/Sales/write-off/:id/approve          administrator only; re-checks the amount against the live balance
@@ -440,11 +440,17 @@ The **purchasing commands** (19-S.13) are the same shapes on the payable side, a
 POST   /api/v1/Sales/purchaseOrder/:id/refreshReceipt   re-derive `partiallyReceived` / `received` from confirmed receipts
 POST   /api/v1/Sales/billCredit/:id/allocate            apply part of an issued bill credit to an issued bill
 DELETE /api/v1/Sales/billCredit/allocation/:id          reverse it; the row stays with the reversal trail
-GET    /api/v1/Sales/billCredit/allocatableBills        ?billCreditId= &supplierId= — issued bills and their outstanding
+GET    /api/v1/Sales/billCredit/allocatableBills        ?billCreditId= &supplierId= &limit= &offset= — issued bills and their outstanding, newest first
 GET    /api/v1/Sales/bill/:id/creditAllocations         the bill's credit history, live and reversed
-GET    /api/v1/Sales/allocatableDocuments?direction=outgoing&supplierId=  what a supplier payment can still settle
+GET    /api/v1/Sales/allocatableDocuments?direction=outgoing&supplierId=&limit=&offset=  what a supplier payment can still settle
 POST   /api/v1/Sales/action/resolveSupplierPrice        the buying price from `SupplierProductPrice` only (§4.11)
 ```
+
+The three **allocatable** lists are paged, because a picker has to be able to reach every eligible
+document: each returns `{ list, hasMore, limit, offset }`, ordered by creation time with the newest
+first, and `limit` defaults to 100 (maximum 500). `offset` counts eligible documents, so the documents
+with nothing outstanding that the lists omit never consume a page slot. `limit`/`offset` are optional
+and an out-of-range or non-integer value falls back to the default rather than erroring.
 
 A `Payment` names its counterparty by direction: `accountId`/`contactId` when it is incoming,
 `supplierId` when it is outgoing — a record that names both is refused. An allocation is accepted only

@@ -50,7 +50,7 @@ export const SavedFilterInputSchema = z.object({
 export const DashboardInputSchema = z.object({
   name: z.string().trim().min(1).max(190),
   layout: z.array(z.unknown()).default([]),
-  config: z.record(z.string(), z.unknown()).default({}),
+  config: z.record(z.string(), z.unknown()).prefault({}),
   isShared: z.boolean().default(false),
 });
 
@@ -64,7 +64,7 @@ export const DashletInputSchema = z.object({
   // computed by that module under the reader's own record scope.
   kind: z.enum(['list', 'chart', 'kpi', 'projectTasks', 'esignature', 'leadScore']),
   position: z.number().int().min(0).max(10_000).default(0),
-  config: z.record(z.string(), z.unknown()).default({}),
+  config: z.record(z.string(), z.unknown()).prefault({}),
 });
 
 export const DashletConfigSchema = z.object({

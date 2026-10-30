@@ -1,6 +1,7 @@
 import { ValidationError } from '@carocrm/core/errors/index.js';
 import type { HookContext } from '@carocrm/entity-engine/types/index.js';
 import { HOOK_PHASES } from '@carocrm/entity-engine/types/index.js';
+import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { AfterSaveHook } from '../src/entity/hooks.js';
@@ -52,23 +53,39 @@ async function createRecord(payload: Record<string, unknown>): Promise<CallResul
   return res;
 }
 
-/** Outbox rows this suite produced for one record, oldest first. */
+/**
+ * Outbox rows this suite produced for one record, oldest first.
+ *
+ * The filter runs in SQL, not in memory (G79). The outbox holds every event of the whole configured
+ * database, so reading it unfiltered made this assertion depend on how large that table happened to
+ * be and on whatever order the scan returned — which is exactly the interference a parallel suite
+ * produced. `created_at` is the same order the events were written in.
+ */
 async function eventsFor(entityId: string): Promise<{ eventType: string; payload: Record<string, unknown> }[]> {
   const rows = await ctx.database.db
     .selectFrom('outbox_events')
     .select(['event_type', 'payload'])
     .where('event_type', 'like', 'entity.%')
+    .where(sql<boolean>`payload ->> 'entityId'`, '=', entityId)
+    .where(sql<boolean>`payload ->> 'entityType'`, '=', entity)
+    .orderBy('created_at', 'asc')
     .execute();
-  return rows
-    .map((row) => ({ eventType: row.event_type, payload: (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) as Record<string, unknown> }))
-    .filter((row) => row.payload.entityId === entityId && row.payload.entityType === entity)
-    .sort((a, b) => String(a.payload.version).localeCompare(String(b.payload.version)));
+  return rows.map((row) => ({
+    eventType: row.event_type,
+    payload: (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) as Record<string, unknown>,
+  }));
 }
 
+/**
+ * Outbox rows for this suite's own entity type (G79). Counting the whole table made the rollback
+ * assertion fail whenever another file wrote an event between the two reads, which is not what the
+ * test is about.
+ */
 async function countOutboxRows(): Promise<number> {
   const row = await ctx.database.db
     .selectFrom('outbox_events')
     .select((eb) => eb.fn.countAll<number>().as('total'))
+    .where(sql<boolean>`payload ->> 'entityType'`, '=', entity)
     .executeTakeFirst();
   return Number(row?.total ?? 0);
 }

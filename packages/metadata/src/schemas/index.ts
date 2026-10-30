@@ -46,7 +46,7 @@ export const FieldDefinitionSchema = z.object({
   entityKey: z.string().optional(),
   values: z.array(z.string()).optional(),
   enum: z.array(z.string()).optional(),
-  options: z.record(z.any()).optional(),
+  options: z.record(z.string(), z.any()).optional(),
   notDisabled: z.boolean().optional(),
   inEdit: z.boolean().optional(),
   inDetail: z.boolean().optional(),
@@ -75,7 +75,7 @@ export const RelationDefinitionSchema = z.object({
   required: z.boolean().default(false),
   removable: z.boolean().default(true),
   straight: z.boolean().default(false),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 export type RelationDefinition = z.infer<typeof RelationDefinitionSchema>;
@@ -166,7 +166,7 @@ export type NavigationSection = z.infer<typeof NavigationSectionSchema>;
  * parsed and formula-checked by `@carocrm/formula` before metadata is accepted.
  */
 export const DynamicLogicSectionSchema = z.object({
-  rules: z.array(z.record(z.unknown())).max(100),
+  rules: z.array(z.record(z.string(), z.unknown())).max(100),
 });
 
 export type DynamicLogicSection = { rules: Record<string, unknown>[] };
@@ -186,15 +186,15 @@ export const EntityDefinitionSchema = z.object({
    * Per-view panel layout (PLAN §8). Each entry groups fields into a labelled panel; a view with no
    * entry falls back to the flat field order, so seeded entities keep working untouched.
    */
-  layouts: z.record(z.string(), z.array(LayoutDefinitionSchema)).default({}),
+  layouts: z.record(z.string(), z.array(LayoutDefinitionSchema)).prefault({}),
   /**
    * The relation area of the record page (PLAN_Phase_20_Settings_UX.md §5.11): either today's
    * stacked panels or the tabs the entity's detail layout arranges. Optional — an entity without
    * the section keeps the stacked page.
    */
   detailTabs: EntityRelationTabsSchema.optional(),
-  record: RecordDefinitionSchema.default({}),
-  client: ClientDefinitionSchema.default({}),
+  record: RecordDefinitionSchema.prefault({}),
+  client: ClientDefinitionSchema.prefault({}),
   nav: NavigationSectionSchema.optional(),
   dynamicLogic: DynamicLogicSectionSchema.optional(),
 });
@@ -250,7 +250,7 @@ export const MetadataManifestSchema = z.object({
   minPlatformVersion: z.string().optional(),
   dependencies: z.array(z.string()).default([]),
   permissions: z.array(z.string()).default([]),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 export type MetadataManifest = z.infer<typeof MetadataManifestSchema>;

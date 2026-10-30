@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { patchOf } from '../../common/patch-schema.js';
 import { CRMChatSettingsSchema } from '../crm-chat-settings.service.js';
 
 /**
@@ -7,8 +8,10 @@ import { CRMChatSettingsSchema } from '../crm-chat-settings.service.js';
  * (PLAN_Phase_19_CRM_Chat.md §8.5, §17 `19-CHAT.2`).
  *
  * Every shape is **strict**: an unknown key is a 422, not a silently ignored field. Each nested
- * object is derived from the settings schema and made partial, so a patch keeps exactly the
- * constraints a full write has — including every numeric range — instead of restating them here.
+ * object is derived from the settings schema through `patchOf()`, so a patch keeps exactly the
+ * constraints a full write has — including every numeric range — instead of restating them here, and
+ * a flag the client did not send stays unsent (`zod` 4 would otherwise resolve it to its default and
+ * the settings merge would write that default over the stored value).
  *
  * Chat endpoints are `action/…` commands, so no body schema accepts a record id or an owner from the
  * client: the route names the target and the server derives ownership from the authenticated
@@ -16,12 +19,12 @@ import { CRMChatSettingsSchema } from '../crm-chat-settings.service.js';
  */
 export const CRMChatSettingsPatchSchema = z
   .object({
-    features: CRMChatSettingsSchema.shape.features.removeDefault().partial().strict().optional(),
-    assistant: CRMChatSettingsSchema.shape.assistant.removeDefault().partial().strict().optional(),
-    execution: CRMChatSettingsSchema.shape.execution.removeDefault().partial().strict().optional(),
-    limits: CRMChatSettingsSchema.shape.limits.removeDefault().partial().strict().optional(),
-    retention: CRMChatSettingsSchema.shape.retention.removeDefault().partial().strict().optional(),
-    safety: CRMChatSettingsSchema.shape.safety.removeDefault().partial().strict().optional(),
+    features: patchOf(CRMChatSettingsSchema.shape.features.unwrap()).optional(),
+    assistant: patchOf(CRMChatSettingsSchema.shape.assistant.unwrap()).optional(),
+    execution: patchOf(CRMChatSettingsSchema.shape.execution.unwrap()).optional(),
+    limits: patchOf(CRMChatSettingsSchema.shape.limits.unwrap()).optional(),
+    retention: patchOf(CRMChatSettingsSchema.shape.retention.unwrap()).optional(),
+    safety: patchOf(CRMChatSettingsSchema.shape.safety.unwrap()).optional(),
   })
   .strict();
 

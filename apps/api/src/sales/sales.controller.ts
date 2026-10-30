@@ -87,6 +87,7 @@ import {
 } from "./inventory/inventory.service.js";
 import { InventoryOperationsService } from "./inventory/inventory-ops.service.js";
 import { SalesJobMonitorService } from "./job-monitoring/monitor.js";
+import { parseAllocatablePage } from "./payments/allocatable.js";
 import { AllocationService } from "./payments/allocation.service.js";
 import { BillCreditService } from "./payments/bill-credit.service.js";
 import { CreditNoteService } from "./payments/credit-note.service.js";
@@ -554,13 +555,14 @@ export class SalesController {
     @Query("direction") direction?: string,
     @Query("accountId") accountId?: string,
     @Query("supplierId") supplierId?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
   ) {
-    return {
-      list: await this.payments.allocatableDocuments(
-        direction === "outgoing" ? "outgoing" : "incoming",
-        { accountId: accountId ?? null, supplierId: supplierId ?? null },
-      ),
-    };
+    return await this.payments.allocatableDocuments(
+      direction === "outgoing" ? "outgoing" : "incoming",
+      { accountId: accountId ?? null, supplierId: supplierId ?? null },
+      parseAllocatablePage(limit, offset),
+    );
   }
 
   // -------------------------------------------------------------------------------------------
@@ -603,13 +605,14 @@ export class SalesController {
   async creditNoteAllocatableInvoices(
     @Query("creditNoteId") creditNoteId?: string,
     @Query("accountId") accountId?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
   ) {
-    return {
-      list: await this.creditNotes.allocatableInvoices(
-        creditNoteId ?? null,
-        accountId ?? null,
-      ),
-    };
+    return await this.creditNotes.allocatableInvoices(
+      creditNoteId ?? null,
+      accountId ?? null,
+      parseAllocatablePage(limit, offset),
+    );
   }
 
   /** Render a credit note through the kernel `document` module — a named template, or the built-in layout. */
@@ -715,13 +718,14 @@ export class SalesController {
   async billCreditAllocatableBills(
     @Query("billCreditId") billCreditId?: string,
     @Query("supplierId") supplierId?: string,
+    @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
   ) {
-    return {
-      list: await this.billCredits.allocatableBills(
-        billCreditId ?? null,
-        supplierId ?? null,
-      ),
-    };
+    return await this.billCredits.allocatableBills(
+      billCreditId ?? null,
+      supplierId ?? null,
+      parseAllocatablePage(limit, offset),
+    );
   }
 
   /** A provider-neutral request for a customer to pay. No gateway call happens here. */
@@ -877,20 +881,31 @@ export class SalesController {
     });
   }
 
-  /** Movement history, newest first. Never unbounded (§16.1). */
+  /**
+   * Movement history, newest first, as a page (§16.1: never unbounded).
+   *
+   * `?limit` sizes the page, `?offset` walks it by position and `?cursor` continues it from the row
+   * the previous page ended on. The cursor survives movements written meanwhile, so a deep scroll
+   * neither repeats nor skips a row; an offset is the cheaper walk and the weaker one (G71). A
+   * cursor wins over an offset — it *is* the position. `?total=false` skips the count.
+   */
   @Get("inventory/history")
   async inventoryHistory(
     @Query("productId") productId?: string,
     @Query("warehouseId") warehouseId?: string,
     @Query("limit") limit?: string,
+    @Query("offset") offset?: string,
+    @Query("cursor") cursor?: string,
+    @Query("total") total?: string,
   ) {
-    return {
-      list: await this.inventory.history({
-        productId: productId ?? null,
-        warehouseId: warehouseId ?? null,
-        limit: numberOrUndefined(limit),
-      }),
-    };
+    return await this.inventory.history({
+      productId: productId ?? null,
+      warehouseId: warehouseId ?? null,
+      limit: pageNumber(limit, "limit"),
+      offset: pageNumber(offset, "offset"),
+      cursor: cursor ?? null,
+      total: wantsTotal(total),
+    });
   }
 
   /** Compare the stock projection with the ledger; discrepancies are reported, never auto-corrected. */
@@ -1266,6 +1281,36 @@ function numberOrUndefined(value: string | undefined): number | undefined {
   if (value === undefined || value.trim() === "") return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * A page number the caller meant: a whole count of 0 or more.
+ *
+ * A page parameter that is not a number is a bad query, not a silent default — a reader that asked
+ * for page "abc" and received page 1 would not know it did not get what it asked for.
+ */
+function pageNumber(value: string | undefined, name: string): number | undefined {
+  if (value === undefined || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new InvalidQueryError(
+      `The "${name}" query parameter must be a whole number of 0 or more.`,
+      { parameter: name },
+    );
+  }
+  return parsed;
+}
+
+/**
+ * Whether the caller wants the count of the whole result.
+ *
+ * `?total=false` opts out — the same opt-out the entity list offers — so a reader that only wants
+ * the next page does not pay for a second pass over the filter.
+ */
+function wantsTotal(value: string | undefined): boolean {
+  if (value === undefined || value.trim() === "") return true;
+  const lowered = value.trim().toLowerCase();
+  return !(lowered === "false" || lowered === "0");
 }
 
 function parse<T extends ZodTypeAny>(schema: T, body: unknown): T["_output"] {

@@ -70,7 +70,10 @@ First-response history is not reset.
 `POST /api/v1/ServiceDesk/action/sla/run-scheduled-check` with `x-worker-secret`; the admin twin is
 `POST …/action/sla/runScheduledCheck`. The scan is bounded to 500 clocks per run, reports
 `truncated` when more remain, and records `settings.sla.lastScanAt` (without bumping the settings
-version). It also expires published Knowledge articles whose `expiresAt` has passed.
+version). Both sweeps filter in SQL — open clocks with a `dueAt` for the breach pass, clocks already
+`warning`/`breached` for the notification pass — and order by `dueAt` ascending, so a bounded run
+always covers the most urgent clocks and never leaves one unattended because the table outgrew the
+batch. It also expires published Knowledge articles whose `expiresAt` has passed.
 
 Returned counters: `checked`, `breached`, `warned`, `notified`, `escalated`, `expiredArticles`,
 `truncated`.

@@ -14,7 +14,9 @@ completes with `disabled: true` rather than failing and accumulating retries.
 A run is idempotent: fired thresholds and breach notification flags live on the clock, so a retry or
 overlapping run does not duplicate a notification. A failed notification is swallowed (counted as not
 sent) but the breach state remains. The scan is bounded to 500 clocks and reports `truncated`; the
-next tick continues.
+next tick continues. The bound applies to the clocks that still need attention — open, with a
+`dueAt`, earliest deadline first — not to an arbitrary slice of the whole clock table, so a clock is
+never skipped because the table grew past the batch size.
 
 `GET /ServiceDesk/action/settings` exposes `sla.lastScanAt`, and `/action/health` shows the module's
 dependency/feature state.

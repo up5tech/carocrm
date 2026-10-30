@@ -96,7 +96,7 @@ export const OverrideSchema = z.object({
   status: z.enum(
     HEALTH_STATUSES.filter((status) => status !== "unknown") as unknown as [string, ...string[]],
   ),
-  reason: z.string().trim().min(1).max(2000),
+  reason: z.string().trim().min(1, "a reason is required for an override").max(2000),
   expiresAt: optDay,
 }).strict();
 

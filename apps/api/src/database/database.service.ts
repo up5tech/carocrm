@@ -1732,7 +1732,15 @@ export class DatabaseService {
   readonly pool: pg.Pool;
 
   constructor(@Inject(CONFIG_TOKEN) config: AppConfig) {
-    this.pool = new pg.Pool({ connectionString: config.databaseUrl, max: 10 });
+    this.pool = new pg.Pool({
+      connectionString: config.databaseUrl,
+      max: 10,
+      // G74: both ceilings travel in the startup packet, so every connection the pool opens carries
+      // them before it runs a query. A cancelled statement rolls its transaction back; the failure
+      // reaches the caller as `REQUEST_TIMEOUT` (see `GlobalExceptionFilter`), never as a hung socket.
+      ...(config.databaseStatementTimeoutMs > 0 ? { statement_timeout: config.databaseStatementTimeoutMs } : {}),
+      ...(config.databaseLockTimeoutMs > 0 ? { lock_timeout: config.databaseLockTimeoutMs } : {}),
+    });
     this.db = new Kysely<Database>({
       dialect: new PostgresDialect({ pool: this.pool }),
     });

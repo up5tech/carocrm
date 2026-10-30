@@ -4,6 +4,7 @@ import { sql } from "kysely";
 
 import { DatabaseService } from "../database/database.service.js";
 import { currentTx } from "../entity/tx-context.js";
+import type { PageCursor } from "./paging.js";
 
 /**
  * Structural reads for the Sales domain services.
@@ -24,6 +25,18 @@ export interface SalesRow {
   readonly version: number;
   readonly name: string | null;
   readonly data: Record<string, unknown>;
+}
+
+/** A row of a page, plus the physical timestamp the page order is built on. */
+export interface SalesPageRow extends SalesRow {
+  /**
+   * `entity_records.created_at` — UTC, microsecond precision.
+   *
+   * The precision is what makes a keyset cursor exact: `now()` is the transaction clock, so rows
+   * written by one transaction share it, and a cursor rounded to milliseconds would drop the second
+   * of two such rows between two pages.
+   */
+  readonly createdAt: string;
 }
 
 /** Entity types this module owns; nothing else may be read through here. */
@@ -164,6 +177,82 @@ export class SalesRecords {
   }
 
   /**
+   * A chronological page of `entity`, newest first, for a picker or a paged list that must offer
+   * *every* eligible row.
+   *
+   * `find` orders by `id`, which is a random UUID: on a table larger than its limit it returns an
+   * arbitrary sample and silently drops every row outside it, so a document created a second ago can
+   * be missing from a 500-row picker. `created_at` is chronological and indexed, and `offset` walks
+   * that same order, so consecutive pages neither overlap nor skip.
+   *
+   * `after` turns the walk into a keyset: the page continues after the row the cursor names —
+   * a smaller `created_at`, or the same `created_at` with a larger `id`. The boundary is a row, not a
+   * position, so a row written while the reader walks the pages does not move it: the walk neither
+   * repeats nor skips a row (the alternative, an offset window, is G71).
+   */
+  async findPage(
+    entity: SalesEntityType,
+    filters: Readonly<Record<string, string>>,
+    options: {
+      readonly limit: number;
+      readonly offset?: number;
+      readonly after?: PageCursor | undefined;
+    },
+  ): Promise<SalesPageRow[]> {
+    const clauses = [
+      sql<boolean>`entity_type = ${entity}`,
+      sql<boolean>`deleted_at is null`,
+    ];
+    for (const [field, value] of Object.entries(filters)) {
+      attributeKey(field);
+      clauses.push(sql<boolean>`(attrs ->> ${field}::text) = ${value}`);
+    }
+    const after = options.after;
+    const rows = await sql<SalesRowShape>`
+      select id, version, name, attrs,
+             to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as created_at
+      from entity_records
+      where ${sql.join(clauses, sql` and `)}
+        ${
+          after === undefined
+            ? sql``
+            : sql`and (
+              created_at < ${after.createdAt}::timestamptz
+              or (created_at = ${after.createdAt}::timestamptz and id > ${after.id})
+            )`
+        }
+      order by created_at desc, id asc
+      limit ${options.limit} offset ${after === undefined ? (options.offset ?? 0) : 0}
+    `.execute(this.db);
+    return rows.rows.map(toPageRow);
+  }
+
+  /**
+   * How many live rows match a filter — the `total` of a page.
+   *
+   * A count is a second pass over the same filter, so a caller that only needs the next page can
+   * switch it off (`?total=false`).
+   */
+  async countMatching(
+    entity: SalesEntityType,
+    filters: Readonly<Record<string, string>>,
+  ): Promise<number> {
+    const clauses = [
+      sql<boolean>`entity_type = ${entity}`,
+      sql<boolean>`deleted_at is null`,
+    ];
+    for (const [field, value] of Object.entries(filters)) {
+      attributeKey(field);
+      clauses.push(sql<boolean>`(attrs ->> ${field}::text) = ${value}`);
+    }
+    const rows = await sql<{ total: string }>`
+      select count(*)::text as total from entity_records
+      where ${sql.join(clauses, sql` and `)}
+    `.execute(this.db);
+    return Number(rows.rows[0]?.total ?? "0");
+  }
+
+  /**
    * Every live row of `entity` whose `field` holds one of `values` — a single query for a list page,
    * so loading the items of many documents never becomes one query per document (§16.1).
    */
@@ -236,6 +325,8 @@ interface SalesRowShape {
   version: number;
   name: string | null;
   attrs: unknown;
+  /** Only the paged read selects it; the other reads do not need it. */
+  created_at?: string;
 }
 
 const PHYSICAL_NAME = "name";
@@ -244,6 +335,10 @@ function toRow(row: SalesRowShape): SalesRow {
   const data = isRecord(row.attrs) ? { ...row.attrs } : {};
   if (data[PHYSICAL_NAME] === undefined) data[PHYSICAL_NAME] = row.name;
   return { id: row.id, version: row.version, name: row.name, data };
+}
+
+function toPageRow(row: SalesRowShape): SalesPageRow {
+  return { ...toRow(row), createdAt: row.created_at ?? "" };
 }
 
 /** Shown to every caller: the entity name is the guard, not the string interpolation. */

@@ -42,7 +42,7 @@ export const VoiceCommunicationsSettingsSchema = z
         aiEnrichment: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     provider: z
       .object({
         /**
@@ -53,7 +53,7 @@ export const VoiceCommunicationsSettingsSchema = z
         defaultAccountKey: z.string().trim().max(64).default(""),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     policy: z
       .object({
         /** ISO 3166-1 alpha-2 region applied to a national phone number. */
@@ -75,7 +75,7 @@ export const VoiceCommunicationsSettingsSchema = z
             whatsapp: z.boolean().default(true),
           })
           .strict()
-          .default({}),
+          .prefault({}),
         /** Quiet hours are off by default; enabling them requires a valid window and time zone. */
         quietHours: z
           .object({
@@ -85,7 +85,7 @@ export const VoiceCommunicationsSettingsSchema = z
             timezone: z.string().trim().max(64).default("UTC"),
           })
           .strict()
-          .default({}),
+          .prefault({}),
         /**
          * WhatsApp customer-service window, in hours (§8.3). Read by the policy service with an
          * injectable clock; the provider's published value wins when an adapter supplies one.
@@ -100,7 +100,7 @@ export const VoiceCommunicationsSettingsSchema = z
         maxSendsPerMinute: z.number().int().min(0).max(100_000).default(0),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     webhook: z
       .object({
         /**
@@ -110,7 +110,7 @@ export const VoiceCommunicationsSettingsSchema = z
         replayWindowSeconds: z.number().int().min(30).max(900).default(300),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     /**
      * 19-VC.15 — media handling. A provider recording URL is fetched into private storage only when
      * the administrator says so; otherwise playback is refused rather than proxied blind.
@@ -129,7 +129,7 @@ export const VoiceCommunicationsSettingsSchema = z
         noticeRequired: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     /**
      * 19-VC.16 — AI enrichment. Both keys must be set for a summary/suggested reply to be produced;
      * the module calls the platform's AI gateway, never a provider directly.
@@ -142,7 +142,7 @@ export const VoiceCommunicationsSettingsSchema = z
         maxTranscriptChars: z.number().int().min(500).max(200_000).default(20_000),
       })
       .strict()
-      .default({}),
+      .prefault({}),
   })
   .strict();
 

@@ -12,7 +12,7 @@
     "@carocrm/core": "workspace:*",
     "@carocrm/metadata": "workspace:*",
     "kysely": "^0.28.0",
-    "zod": "^3.24.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

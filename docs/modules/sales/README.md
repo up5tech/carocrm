@@ -402,7 +402,7 @@ Commands (all under the module's own prefix):
 ```text
 GET    /api/v1/Sales/inventory/availability?productId=&warehouseId=   on-hand/reserved/available/incoming
 GET    /api/v1/Sales/inventory/stock?warehouseId=&productId=          a bounded page of levels
-GET    /api/v1/Sales/inventory/history?productId=&warehouseId=        the movement history, newest first
+GET    /api/v1/Sales/inventory/history?productId=&warehouseId=        the movement history, newest first, as a page
 POST   /api/v1/Sales/inventory/reconcile                              projection vs ledger
 GET    /api/v1/Sales/inventory/reservations?...                       active/released promises
 POST   /api/v1/Sales/inventory/reserve                                place a reservation
@@ -423,6 +423,25 @@ Warehouses themselves are ordinary metadata records (`/api/v1/Warehouse`); `Ware
 `InventoryReservation` are the six entities 19-S.14 registers (19-S.15 adds `InventoryBatch` and
 `InventorySerial`), and the write guard refuses every client write to the ledger and every
 client-set lifecycle field on the others.
+
+### Reading the movement history as a page
+
+`GET /api/v1/Sales/inventory/history` is a page, not a dump: `?limit` sizes it (200 by default,
+2 000 at most) and the answer carries `{ list, offset, count, total, hasMore, nextCursor }` — the
+count is skipped with `?total=false`.
+
+A reader that wants to go further back has two ways to ask, and they answer the same rows:
+
+- `?offset=200` — a **position**. It is a live window (G71): a movement written before the window
+  shifts it, so the next page can repeat a row or miss one.
+- `?cursor=<token>` — the row the last page ended on. The boundary is a row, not a position, so a
+  movement written while the reader walks the pages does not move it: the walk neither repeats nor
+  skips a row. The token is opaque — it is not a query a client may assemble — and one the endpoint
+  did not issue is refused with `400 INVALID_QUERY` rather than read as page one.
+
+A cursor wins over an offset, because it *is* the position. The page is ordered newest **recorded**
+first (`created_at desc`, `id` breaking a tie); a movement is never backdated, so this is also the
+order by business time.
 
 ## Inventory identity and removal (19-S.15)
 

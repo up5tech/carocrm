@@ -78,7 +78,7 @@ export const CustomerSuccessSettingsSchema = z
         adoptionSignal: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     lifecycle: z
       .object({
         stages: z
@@ -110,7 +110,7 @@ export const CustomerSuccessSettingsSchema = z
           .default([...LIFECYCLE_REASON_REQUIRED]),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     segments: z.array(z.string().trim().min(1).max(64)).max(50).default([]),
     assignment: z
       .object({
@@ -118,7 +118,7 @@ export const CustomerSuccessSettingsSchema = z
         defaultPolicy: z.enum(["unassigned", "accountOwner"]).default("unassigned"),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     health: z
       .object({
         thresholds: z.array(HealthBandSchema).default([...DEFAULT_HEALTH_THRESHOLDS]),
@@ -144,7 +144,7 @@ export const CustomerSuccessSettingsSchema = z
           ]),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     renewal: z
       .object({
         windows: z.array(z.number().int().min(1).max(3650)).max(12).default([...DEFAULT_RENEWAL_WINDOWS]),
@@ -152,13 +152,13 @@ export const CustomerSuccessSettingsSchema = z
         sourcePrecedence: z.enum(["manualFirst", "sourceFirst"]).default("manualFirst"),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     touchpoints: z
       .object({
         recencyDays: z.number().int().min(1).max(3650).default(30),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     playbooks: z
       .object({
         autoTriggersEnabled: z.boolean().default(false),
@@ -167,7 +167,7 @@ export const CustomerSuccessSettingsSchema = z
         enforceIdempotency: z.boolean().default(true),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     notifications: z
       .object({
         /** Whether the module writes in-app notification rows from its jobs. */
@@ -176,7 +176,7 @@ export const CustomerSuccessSettingsSchema = z
         cadenceDays: z.number().int().min(1).max(365).default(7),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     jobs: z
       .object({
         batchSize: z.number().int().min(1).max(1000).default(200),
@@ -184,7 +184,7 @@ export const CustomerSuccessSettingsSchema = z
         refreshIntervalDays: z.number().int().min(1).max(365).default(7),
       })
       .strict()
-      .default({}),
+      .prefault({}),
   })
   .strict()
   .superRefine((value, ctx) => {

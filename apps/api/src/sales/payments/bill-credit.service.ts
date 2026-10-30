@@ -12,9 +12,14 @@ import { EntityCrudService } from "../../entity/entity.service.js";
 import { runInTransaction } from "../../entity/tx-context.js";
 import type { SalesAuditContext } from "../document/types.js";
 import { baseFieldsFor } from "../money/currency.js";
-import { compare, parseDecimal, zero } from "../money/decimal.js";
 import { runAsSalesInternal } from "../sales-internal.js";
 import { SalesRecords, type SalesRow } from "../sales-records.js";
+import {
+  type AllocatablePage,
+  type AllocatableResult,
+  collectAllocatable,
+  DEFAULT_ALLOCATABLE_PAGE,
+} from "./allocatable.js";
 import {
   assertCreditAllocatable,
   assertSameCurrency,
@@ -315,7 +320,8 @@ export class BillCreditService {
   async allocatableBills(
     billCreditId: string | null,
     supplierId: string | null,
-  ): Promise<readonly Record<string, unknown>[]> {
+    page: AllocatablePage = DEFAULT_ALLOCATABLE_PAGE,
+  ): Promise<AllocatableResult> {
     await this.acl.assertAccess("Bill", "read");
     let currencyFilter: string | null = null;
     if (billCreditId !== null) {
@@ -329,29 +335,30 @@ export class BillCreditService {
     }
     const filters: Record<string, string> = { status: "issued" };
     if (supplierId !== null) filters["supplierId"] = supplierId;
-    const bills = await this.records.find("Bill", filters, 500);
-    const result: Record<string, unknown>[] = [];
-    for (const bill of bills) {
-      const currency = text(bill.data["currency"]) ?? null;
-      if (currencyFilter !== null && currency !== currencyFilter) continue;
-      const outstanding = await this.balances.outstandingOf(
-        this.database.db,
-        bill,
-      );
-      const amount = parseDecimal(outstanding);
-      if (compare(amount, zero(amount.scale)) <= 0) continue;
-      result.push({
+    if (currencyFilter !== null) filters["currency"] = currencyFilter;
+    const slice = await collectAllocatable(
+      this.records,
+      this.balances,
+      this.database.db,
+      "Bill",
+      filters,
+      page,
+    );
+    return {
+      list: slice.rows.map((bill) => ({
         id: bill.id,
         number: text(bill.data["number"]) ?? null,
         supplierId: text(bill.data["supplierId"]) ?? null,
-        currency,
+        currency: text(bill.data["currency"]) ?? null,
         grossTotal: text(bill.data["grossTotal"]) ?? "0",
         dueDate: text(bill.data["dueDate"]) ?? null,
         paymentStatus: text(bill.data["paymentStatus"]) ?? null,
-        outstanding,
-      });
-    }
-    return result;
+        outstanding: slice.outstanding.get(bill.id) ?? "0",
+      })),
+      hasMore: slice.hasMore,
+      limit: page.limit,
+      offset: page.offset,
+    };
   }
 
   private actor(): string | null {

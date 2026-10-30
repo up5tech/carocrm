@@ -67,7 +67,7 @@ interface WriteOffResult {
 
 let productSeq = 0;
 
-async function issueInvoice(amount: string, currency = 'USD'): Promise<string> {
+async function issueInvoice(amount: string, currency = 'USD', accountId?: string): Promise<string> {
   productSeq += 1;
   const product = await fix.createProduct({
     sku: `AGENT-${fix.runId}-C${productSeq}`,
@@ -79,6 +79,7 @@ async function issueInvoice(amount: string, currency = 'USD'): Promise<string> {
       name: `AGENT_TEST_${fix.runId} Invoice ${productSeq}`,
       currency,
       invoiceDate: '2026-10-15',
+      ...(accountId === undefined ? {} : { accountId }),
     },
     items: [
       {
@@ -310,6 +311,33 @@ describe('allocating a credit note (19-S.11)', () => {
       (item) => item.id === invoiceId,
     );
     expect(row).toMatchObject({ outstanding: '70.00', currency: 'USD' });
+  });
+
+  it('offers every eligible invoice, newest first, across pages (G75)', async () => {
+    // The list used to take an arbitrary 500-row sample ordered by random UUID, so a brand-new
+    // invoice could be missing from an account's picker entirely. Ordering is chronological now and
+    // `offset` walks that same order, which is what this asserts on three invoices of one account.
+    const accountId = await fix.create('Account', { name: `AGENT_TEST_${fix.runId} Allocation Pickers` });
+    const first = await issueInvoice('10.00', 'USD', accountId);
+    const second = await issueInvoice('20.00', 'USD', accountId);
+    const third = await issueInvoice('30.00', 'USD', accountId);
+
+    const pageOne = await fix.call(
+      'GET',
+      `/api/v1/Sales/creditNote/allocatableInvoices?accountId=${accountId}&limit=2`,
+    );
+    expect(pageOne.status, JSON.stringify(pageOne.body)).toBe(200);
+    expect((pageOne.body['list'] as { id: string }[]).map((item) => item.id)).toEqual([third, second]);
+    expect(pageOne.body['hasMore']).toBe(true);
+    expect(pageOne.body['limit']).toBe(2);
+
+    const pageTwo = await fix.call(
+      'GET',
+      `/api/v1/Sales/creditNote/allocatableInvoices?accountId=${accountId}&limit=2&offset=2`,
+    );
+    expect(pageTwo.status, JSON.stringify(pageTwo.body)).toBe(200);
+    expect((pageTwo.body['list'] as { id: string }[]).map((item) => item.id)).toEqual([first]);
+    expect(pageTwo.body['hasMore']).toBe(false);
   });
 
   it("refuses an allocation beyond the credit note's remainder", async () => {

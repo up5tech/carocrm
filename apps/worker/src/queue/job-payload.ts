@@ -22,7 +22,7 @@ export type JobPayload = {
 
 const JobPayloadSchema = z.object({
   job: z.string().min(1),
-  data: z.record(z.unknown()).default({}),
+  data: z.record(z.string(), z.unknown()).prefault({}),
   scheduleId: z.string().min(1).optional(),
   scheduledForMs: z.number().int().nonnegative().optional(),
   jobRowId: z.string().min(1).max(64).optional(),

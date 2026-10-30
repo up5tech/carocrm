@@ -166,6 +166,49 @@ export class SalesBalanceService {
   }
 
   /**
+   * `outstandingOf` for a page of documents: four queries in total, not four per document.
+   *
+   * The allocation editor asks this for every candidate it lists. Calling `outstandingOf` in a loop
+   * turned one picker load into thousands of round trips; the arithmetic is identical because both
+   * paths end in `documentOutstanding`.
+   */
+  async outstandingOfMany(
+    tx: BalanceExecutor,
+    documents: readonly SalesRow[],
+  ): Promise<Map<string, string>> {
+    if (documents.length === 0) return new Map();
+    const ids = documents.map((document) => document.id);
+    const [allocations, credits, writeOffs, billCredits] = await Promise.all([
+      this.amountsMatchingMany(tx, "PaymentAllocation", "documentId", ids),
+      this.amountsMatchingMany(tx, "CreditNoteAllocation", "invoiceId", ids, {
+        notReversed: true,
+      }),
+      this.amountsMatchingMany(tx, "WriteOff", "invoiceId", ids, {
+        status: "approved",
+      }),
+      this.amountsMatchingMany(tx, "BillCreditAllocation", "billId", ids, {
+        notReversed: true,
+      }),
+    ]);
+    const result = new Map<string, string>();
+    for (const document of documents) {
+      result.set(
+        document.id,
+        documentOutstanding(
+          text(document.data["grossTotal"]) ?? "0",
+          allocations.get(document.id) ?? [],
+          credits.get(document.id) ?? [],
+          [
+            ...(writeOffs.get(document.id) ?? []),
+            ...(billCredits.get(document.id) ?? []),
+          ],
+        ),
+      );
+    }
+    return result;
+  }
+
+  /**
    * Write the document's outstanding balance and its *payment* status. The document's own `status` is
    * not touched: an invoice that is fully paid is still an issued invoice (§4.7).
    */
@@ -258,6 +301,43 @@ export class SalesBalanceService {
       where ${sql.join(clauses, sql` and `)}
     `.execute(tx);
     return rows.rows.map((row) => row.amount ?? "0");
+  }
+
+  /**
+   * `amountsMatching` for many documents at once, keyed by the owning document's id. Same allowlist,
+   * same bound parameters; one query instead of one per document.
+   */
+  private async amountsMatchingMany(
+    tx: BalanceExecutor,
+    entity: string,
+    field: string,
+    ids: readonly string[],
+    filter: AmountFilter = {},
+  ): Promise<Map<string, string[]>> {
+    assertAttribute(field);
+    const clauses = [
+      sql<boolean>`entity_type = ${entity}`,
+      sql<boolean>`deleted_at is null`,
+      sql<boolean>`(attrs ->> ${field}::text) in (${sql.join(ids)})`,
+    ];
+    if (filter.status !== undefined) {
+      clauses.push(sql<boolean>`(attrs ->> 'status') = ${filter.status}`);
+    }
+    if (filter.notReversed === true) {
+      clauses.push(sql<boolean>`(attrs ->> 'reversedAt') is null`);
+    }
+    const rows = await sql<{ ref: string; amount: string | null }>`
+      select attrs ->> ${field}::text as ref, attrs ->> 'amount' as amount
+      from entity_records
+      where ${sql.join(clauses, sql` and `)}
+    `.execute(tx);
+    const result = new Map<string, string[]>();
+    for (const row of rows.rows) {
+      const amounts = result.get(row.ref) ?? [];
+      amounts.push(row.amount ?? "0");
+      result.set(row.ref, amounts);
+    }
+    return result;
   }
 }
 

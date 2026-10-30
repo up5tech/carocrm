@@ -9,6 +9,23 @@ const ConfigSchema = z.object({
   host: z.string().default('127.0.0.1'),
   databaseUrl: z.string().default('postgres://postgres:postgres@127.0.0.1:5432/carocrm_dev'),
   databaseAdminUrl: z.string().default('postgres://postgres:postgres@127.0.0.1:5432/postgres'),
+  /**
+   * Server-side ceiling on a single statement (G74). A query that waits on a lock, or a plan that
+   * degrades, is cancelled by PostgreSQL instead of holding a request and one of the pool's ten
+   * connections indefinitely. `0` disables the ceiling for a deployment whose exports/DDL legitimately
+   * run longer; migrations, `pg_dump` and the seed scripts open their own connections and are
+   * unaffected either way.
+   */
+  databaseStatementTimeoutMs: z.coerce.number().int().min(0).max(3_600_000).default(15_000),
+  /** How long a statement may wait for a lock before PostgreSQL cancels it (G74); `0` disables it. */
+  databaseLockTimeoutMs: z.coerce.number().int().min(0).max(3_600_000).default(5_000),
+  /**
+   * HTTP request deadline (G74). The rate limiter bounds how *often* a client calls, never how long
+   * one call may take; without a deadline a pathological handler holds a client, a connection and a
+   * slot in the pool for as long as it wants. Multipart uploads are exempt (the body streams for as
+   * long as the upload lasts) and `0` disables the deadline.
+   */
+  requestTimeoutMs: z.coerce.number().int().min(0).max(600_000).default(30_000),
   redisUrl: z.string().default('redis://127.0.0.1:6379'),
   jwtSecret: z.string().min(8).default('dev-only-secret-change-me'),
   accessTokenTtlSeconds: z.coerce.number().int().default(900),
@@ -158,6 +175,9 @@ export function buildConfig(): AppConfig {
     host: process.env.APP_HOST,
     databaseUrl: process.env.DATABASE_URL,
     databaseAdminUrl: process.env.DATABASE_ADMIN_URL,
+    databaseStatementTimeoutMs: process.env.DATABASE_STATEMENT_TIMEOUT_MS,
+    databaseLockTimeoutMs: process.env.DATABASE_LOCK_TIMEOUT_MS,
+    requestTimeoutMs: process.env.REQUEST_TIMEOUT_MS,
     redisUrl: process.env.REDIS_URL,
     jwtSecret: process.env.JWT_SECRET,
     accessTokenTtlSeconds: process.env.ACCESS_TOKEN_TTL,

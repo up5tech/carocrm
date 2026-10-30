@@ -8,6 +8,7 @@
   "CONCURRENCY_CONFLICT": "Bản ghi đã bị thay đổi bởi người khác. Vui lòng tải lại và thử lại.",
   "INVALID_QUERY": "Truy vấn không hợp lệ.",
   "RATE_LIMITED": "Vượt giới hạn tần suất. Vui lòng thử lại sau.",
+  "REQUEST_TIMEOUT": "Yêu cầu xử lý quá lâu. Không có dữ liệu nào bị ghi dở; hãy thử lại hoặc thu hẹp phạm vi yêu cầu.",
   "FILE_TOO_LARGE": "Tệp quá lớn.",
   "FEATURE_DISABLED": "Tính năng này đã bị tắt trên hệ thống.",
   "INTERNAL_ERROR": "Lỗi hệ thống.",

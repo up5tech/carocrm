@@ -91,9 +91,9 @@ gate `pnpm verify` locally, so they are tracked rather than ignored:
 
 | ID | Test | Owner | Window | Action |
 |---|---|---|---|---|
-| G69 | `sales-tracking.test.ts` — "transfers and returns keep lot traceability" (lot stock) | Sales / 19-S.15 | Review 2026-11-15 | Fix the per-test seeding/restore or quarantine the file from the local DB gate with the owner's sign-off; do not retry silently. |
-| G75 | `sales-credits.test.ts` — "applies part of a credit to an invoice…" (parallel-suite ordering) | Sales / 19-S.11 | Review 2026-11-15 | Same: self-contained fixture/restore; currently passes solo and on rerun. |
-| G79 | `hooks-events.test.ts` — "publishes entity.restored for a restore" (parallel-suite ordering) | platform / event tests | Review 2026-11-15 | Self-contained record/outbox filter; passes solo and in a full rerun. Do not treat a green rerun as a fix. |
+| G69 | `sales-tracking.test.ts` — "transfers and returns keep lot traceability" | Sales / 19-S.15 | Closed 22.26 | **Resolved, not flaky:** `GET /Sales/inventory/history` returned an arbitrary 200-row UUID sample, so the movement the test read back was often missing. Fixed by reading the page newest-first in SQL. |
+| G75 | `sales-credits.test.ts` — "applies part of a credit to an invoice…" | Sales / 19-S.11 | Closed 22.26 | **Resolved, not flaky:** the picker capped the read at 500 unordered rows, so 71 existing invoices were unreachable once the database passed 500. Fixed by the paged `collectAllocatable` read; the register entry stays as history. |
+| G79 | `hooks-events.test.ts` — "publishes entity.restored for a restore" (parallel-suite ordering) | platform / event tests | Closed 22.26 | **Resolved, cause unconfirmed:** both helpers read the entire `outbox_events` table and filtered in memory (and counted it globally). They now filter by entity/record in SQL and count only this suite's entity, so the assertion no longer depends on the table's size or on other files' writes. A future red here is a new diagnosis. |
 
 A new flaky test must be entered here with an owner, a review date and whether it is quarantined;
 "passes on rerun" is not a resolution.

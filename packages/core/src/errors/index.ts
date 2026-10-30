@@ -65,6 +65,18 @@ export class RateLimitError extends AppError {
   }
 }
 
+/**
+ * The work behind a request outlived its deadline (G74). The deadline is enforced twice: PostgreSQL
+ * cancels the statement (`statement_timeout`/`lock_timeout`) and the HTTP interceptor stops waiting
+ * for the handler. Either way the caller gets one stable code instead of a hung socket or a bare 500.
+ * It is a 503 because nothing the caller sent is wrong — the request may simply be retried.
+ */
+export class RequestTimeoutError extends AppError {
+  constructor(message = 'The request took too long to complete.', details?: Record<string, unknown>) {
+    super('REQUEST_TIMEOUT', message, details, 503);
+  }
+}
+
 export class FileTooLargeError extends AppError {
   constructor(maxSize: number) {
     super('FILE_TOO_LARGE', `File exceeds maximum size of ${maxSize} bytes.`, { maxSize }, 413);

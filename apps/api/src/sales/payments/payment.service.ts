@@ -23,6 +23,12 @@ import { runAsSalesInternal } from "../sales-internal.js";
 import { SalesRecords, type SalesRow } from "../sales-records.js";
 import { SalesSettingsService } from "../sales-settings.service.js";
 import {
+  type AllocatablePage,
+  type AllocatableResult,
+  collectAllocatable,
+  DEFAULT_ALLOCATABLE_PAGE,
+} from "./allocatable.js";
+import {
   assertDirectionAllows,
   PAYMENT_DIRECTIONS,
   PAYMENT_TRANSITIONS,
@@ -410,7 +416,8 @@ export class PaymentService {
   async allocatableDocuments(
     direction: PaymentDirection,
     filters: { readonly accountId?: string | null; readonly supplierId?: string | null } = {},
-  ): Promise<readonly Record<string, unknown>[]> {
+    page: AllocatablePage = DEFAULT_ALLOCATABLE_PAGE,
+  ): Promise<AllocatableResult> {
     const entity = direction === "incoming" ? "Invoice" : "Bill";
     assertDirectionAllows(direction, entity);
     await this.acl.assertAccess(entity, "read");
@@ -420,16 +427,16 @@ export class PaymentService {
     const query: Record<string, string> = { status: "issued" };
     if (counterpartyId !== undefined && counterpartyId !== null && counterpartyId !== "")
       query[counterpartyField] = counterpartyId;
-    const documents = await this.records.find(entity, query, 500);
-    const result: Record<string, unknown>[] = [];
-    for (const document of documents) {
-      const outstanding = await this.balances.outstandingOf(
-        this.database.db,
-        document,
-      );
-      const amount = parseDecimal(outstanding);
-      if (compare(amount, zero(amount.scale)) <= 0) continue;
-      result.push({
+    const slice = await collectAllocatable(
+      this.records,
+      this.balances,
+      this.database.db,
+      entity,
+      query,
+      page,
+    );
+    return {
+      list: slice.rows.map((document) => ({
         id: document.id,
         entity,
         number: text(document.data["number"]) ?? null,
@@ -438,11 +445,13 @@ export class PaymentService {
         currency: text(document.data["currency"]) ?? null,
         grossTotal: text(document.data["grossTotal"]) ?? "0",
         dueDate: text(document.data["dueDate"]) ?? null,
-        outstanding,
+        outstanding: slice.outstanding.get(document.id) ?? "0",
         direction,
-      });
-    }
-    return result;
+      })),
+      hasMore: slice.hasMore,
+      limit: page.limit,
+      offset: page.offset,
+    };
   }
 
   // ---------------------------------------------------------------------------------------------

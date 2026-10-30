@@ -23,6 +23,7 @@ import { Pool } from 'pg';
 import { ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX } from './advanced-integrations/webhook-prefix.js';
 import { GlobalExceptionFilter } from './common/global-exception.filter.js';
 import { resolveRequestId } from './common/request-id.js';
+import { RequestTimeoutInterceptor } from './common/request-timeout.interceptor.js';
 import type { AppConfig } from './config.js';
 import { buildConfig } from './config.js';
 import { ESIGNATURE_WEBHOOK_PREFIX } from './esignature/esignature-module.js';
@@ -228,6 +229,9 @@ export async function createApp(
   });
 
   app.useGlobalFilters(new GlobalExceptionFilter());
+  // G74: the request deadline. Registered here, next to the filter that answers it, so the two halves
+  // of the behaviour are read together.
+  app.useGlobalInterceptors(new RequestTimeoutInterceptor(config.requestTimeoutMs));
   app.enableShutdownHooks();
 
   const instance = app.getHttpAdapter().getInstance() as unknown as FastifyInstance;

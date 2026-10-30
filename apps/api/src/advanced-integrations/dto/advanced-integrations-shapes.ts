@@ -112,7 +112,7 @@ export const MappingCreateSchema = z
     conflictPolicy: z.enum(['provider_wins', 'crm_wins', 'manual', 'newest_wins']).default('manual'),
     deletionPolicy: z.enum(['unlink', 'archive', 'ignore']).default('unlink'),
     /** Per-field authority, e.g. `{"amount": "provider", "title": "crm"}`. */
-    fieldAuthority: z.record(z.string().trim().min(1).max(120), z.string().trim().min(1).max(40)).default({}),
+    fieldAuthority: z.record(z.string().trim().min(1).max(120), z.string().trim().min(1).max(40)).prefault({}),
     fields: z.array(FieldMappingSchema).max(200).default([]),
   })
   .strict();

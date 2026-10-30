@@ -3,6 +3,7 @@ import { generateId } from '@carocrm/core/utils/id.js';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { AclApiService } from '../acl/acl-api.service.js';
+import { patchOf } from '../common/patch-schema.js';
 import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import type { Database } from '../database/database.service.js';
@@ -70,7 +71,7 @@ export class SavedFilterService {
   async update(id: string, body: unknown): Promise<Record<string, unknown>> {
     const row = await this.row(id);
     if (!this.scope.isAdmin && row.user_id !== this.scope.userId) throw new AuthorizationDeniedError('Only the filter owner or an administrator may update it.');
-    const p = SavedFilterInputSchema.partial().safeParse(body ?? {});
+    const p = patchOf(SavedFilterInputSchema).safeParse(body ?? {});
     if (!p.success) throw new ValidationError('Invalid saved filter.', { issues: p.error.issues.map((i) => i.message) });
     if (p.data.entityType) this.assertEntity(p.data.entityType);
     await this.database.db.updateTable('saved_filters').set({

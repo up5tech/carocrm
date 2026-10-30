@@ -131,7 +131,7 @@ const AgentLimitsSchema = z
     temperature: z.number().min(0).max(2).default(DEFAULT_AGENT_LIMITS.temperature),
   })
   .strict()
-  .default({});
+  .prefault({});
 
 const AgentOutputSchema = z
   .object({
@@ -139,7 +139,7 @@ const AgentOutputSchema = z
     schema: BoundedJsonSchemaSchema.optional(),
   })
   .strict()
-  .default({});
+  .prefault({});
 
 export const AgentProviderSchema = z
   .object({
@@ -166,7 +166,7 @@ export const AgentConfigSchema = z
         inputHint: z.string().trim().max(500).optional(),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     input: z
       .object({
         mode: z.enum(['text', 'record']).default('text'),
@@ -174,7 +174,7 @@ export const AgentConfigSchema = z
         entity: z.string().trim().min(1).max(120).optional(),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     tools: z.array(ToolGrantSchema).max(MAX_TOOLS).default([]),
     limits: AgentLimitsSchema,
     output: AgentOutputSchema,
@@ -192,7 +192,7 @@ export const AgentConfigSchema = z
         retentionDays: z.number().int().min(1).max(3650).default(30),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     triggers: z
       .object({
         manual: z.boolean().default(true),
@@ -202,13 +202,13 @@ export const AgentConfigSchema = z
         integration: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     approval: z
       .object({
         requireFor: z.array(z.enum(EFFECT_CLASSES)).default(['material_write', 'high_impact']),
       })
       .strict()
-      .default({}),
+      .prefault({}),
   })
   .strict()
   .superRefine((config, ctx) => {

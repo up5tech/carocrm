@@ -8,6 +8,7 @@
   "CONCURRENCY_CONFLICT": "This record has been modified by someone else. Please refresh and try again.",
   "INVALID_QUERY": "Invalid query.",
   "RATE_LIMITED": "Rate limit exceeded. Please try again later.",
+  "REQUEST_TIMEOUT": "The request took too long to complete. Nothing was left half-written; try again or narrow the request.",
   "FILE_TOO_LARGE": "The file is too large.",
   "FEATURE_DISABLED": "This feature is disabled on this instance.",
   "INTERNAL_ERROR": "Internal server error.",

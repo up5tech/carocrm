@@ -125,7 +125,7 @@ export const ESignatureSettingsSchema = z
         approvals: z.boolean().default(false),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     provider: z
       .object({
         /**
@@ -145,7 +145,7 @@ export const ESignatureSettingsSchema = z
               })
               .strict(),
           )
-          .default({}),
+          .prefault({}),
         /**
          * @deprecated The DocuSign integration key in its original single-provider shape.
          *
@@ -158,7 +158,7 @@ export const ESignatureSettingsSchema = z
         productionIntegrationKey: z.string().trim().max(128).default(''),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     documents: z
       .object({
         /** Ceiling for one document's raw bytes, enforced against the attachment row before upload. */
@@ -167,7 +167,7 @@ export const ESignatureSettingsSchema = z
         allowedExtensions: z.array(ExtensionSchema).min(1).max(20).default([...DEFAULT_ALLOWED_EXTENSIONS]),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     signing: z
       .object({
         /** Days until an envelope expires when the sender names no date (plan §13.3 options step). */
@@ -187,7 +187,7 @@ export const ESignatureSettingsSchema = z
         embeddedReturnHosts: z.array(z.string().trim().toLowerCase().max(253)).max(20).default([]),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     webhooks: z
       .object({
         /** The HTTPS endpoint an administrator registers in DocuSign Connect for this installation. */
@@ -203,7 +203,7 @@ export const ESignatureSettingsSchema = z
         maxPayloadBytes: z.number().int().min(1_024).max(2_097_152).default(262_144),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     retention: z
       .object({
         /** Days the minimized raw webhook payload is kept; `0` keeps none beyond the dedup key. */
@@ -215,7 +215,7 @@ export const ESignatureSettingsSchema = z
         completedArtifactDays: z.number().int().min(0).max(3_650).default(0),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     approval: z
       .object({
         /**
@@ -233,7 +233,7 @@ export const ESignatureSettingsSchema = z
         preventSelfApproval: z.boolean().default(true),
       })
       .strict()
-      .default({}),
+      .prefault({}),
     /**
      * Instance-specific environment guidance, reported by the health endpoint. It is a note, not a
      * switch: `sysAdmin` only may change it, and it never unlocks a capability.
