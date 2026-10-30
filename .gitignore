@@ -12,3 +12,10 @@ test-results
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
 .freebuff
+
+# Graphify generated data
+graphify-out/
+**/graphify-out/
+
+# Temporary Graphify files
+.graphify-cache/
