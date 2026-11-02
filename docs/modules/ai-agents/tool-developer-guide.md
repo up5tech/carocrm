@@ -72,3 +72,29 @@ Never let the model compute a date. Accept a token from `ai-agent-periods.ts` (`
 Resolve "mine" from `AIToolContext.actorUserId` via `AIAgentActorDirectoryService`; never accept a
 user id as an argument. The same service feeds the system prompt, so a tool and the prompt cannot
 describe the acting user differently.
+
+## Write tools
+
+A write tool is only useful if the record it creates can be found again. Four rules, each learned
+from a shipped defect:
+
+- **Attach it to what it is about.** Create through the owning service and then link with
+  `entities.link()`, resolving the relation name from metadata rather than hardcoding it. A task with
+  no parent, a note on nothing and a call nobody can find on the account are records that answer no
+  question.
+- **Use the owning service, not an insert.** `StreamService.create()` brings the parent's `stream`
+  ACL action, mentions, followers and audit with it. Reaching around it produces a note that looks
+  right and notifies nobody.
+- **Drafting is not sending.** `crm_draft_email` writes `status: 'Draft'` and never calls
+  `EmailService.queueSend`; `queueSend` independently refuses any status outside `Draft`/`Failed`.
+  Two guards, because one of them will eventually be refactored.
+- **Declare the class and keep it.** Widening an allowlist (for example adding
+  `Opportunity.stage`) does not soften `material_write`: the tool keeps `requiresApproval`, the
+  version check and the proposal the human saw.
+
+Pass `context.idempotencyKey` to any service that accepts one, so a retried step cannot write twice.
+Tests should assert the effect — the `stream_items` row, the `entity_links` row, the absence of a
+`system.sendEmail` job — and not the tool's own return value, which is a claim rather than evidence.
+
+The version string on an upgraded tool (`'1'` → `'2'`) is audit metadata: `ai_agent_tool_grants`
+records `tool_version` but authorises by `key`, so bumping it does not invalidate existing grants.

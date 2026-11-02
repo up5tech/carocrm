@@ -8,6 +8,7 @@ import type { EntityCrudService } from '../entity/entity.service.js';
 import { EntityCrudService as EntityService } from '../entity/entity.service.js';
 import type { MetadataStoreService } from '../metadata/metadata-store.service.js';
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
+import { StreamService } from '../stream/stream.service.js';
 import { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
 import type { ResolvedPeriod } from './ai-agent-periods.js';
 import { localDateString, PERIOD_TOKEN_MAX_LENGTH, resolvePeriod } from './ai-agent-periods.js';
@@ -118,14 +119,20 @@ const READABLE_ENTITIES = [
   'Quote',
 ] as const;
 
-/** Entities a field update may address, with the fields it may change. */
+/**
+ * Entities a field update may address, with the fields it may change.
+ *
+ * Widened in `19-CHAT.22`. The rule is unchanged: a field is here only if changing it is
+ * **reversible and domain-validated** by the Entity Engine. Nothing that deletes, merges, or moves
+ * money is on this list — those belong to `high_impact` and need their own design.
+ */
 const WRITABLE_FIELDS: Readonly<Record<string, readonly string[]>> = {
   Account: ['description'],
   Contact: ['description'],
-  Lead: ['description', 'status'],
-  Opportunity: ['description'],
-  Case: ['description', 'status'],
-  Task: ['description', 'status'],
+  Lead: ['description', 'status', 'assignedUserId'],
+  Opportunity: ['description', 'stage', 'amount', 'closeDate'],
+  Case: ['description', 'status', 'priority', 'assignedUserId'],
+  Task: ['description', 'status', 'dateEnd', 'assignedUserId'],
 };
 
 /**
@@ -235,6 +242,57 @@ const CreateTaskArgumentsSchema = z
     /** ISO date or date-time; the Entity Engine validates it against the field type. */
     dateStart: z.string().trim().max(40).optional(),
     assignedUserId: z.string().trim().min(1).max(120).optional(),
+    /** The record this task is about, so it appears on that record's timeline (`19-CHAT.22`). */
+    parent: z
+      .object({
+        entity: z.enum(READABLE_ENTITIES),
+        id: z.string().trim().min(1).max(120),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
+/** The record types a note, call or email can be attached to. */
+const RELATED_TARGETS = ['Account', 'Contact', 'Lead', 'Opportunity', 'Case'] as const;
+
+const RelatedSchema = z
+  .object({
+    entity: z.enum(RELATED_TARGETS),
+    id: z.string().trim().min(1).max(120),
+  })
+  .strict();
+
+const PostNoteArgumentsSchema = z
+  .object({
+    entity: z.enum(READABLE_ENTITIES),
+    id: z.string().trim().min(1).max(120),
+    text: z.string().trim().min(1).max(4_000),
+  })
+  .strict();
+
+const LogActivityArgumentsSchema = z
+  .object({
+    kind: z.enum(['Call', 'Meeting']),
+    name: z.string().trim().min(1).max(255),
+    /** When it happened. ISO date-time; the Entity Engine validates the type. */
+    dateStart: z.string().trim().min(1).max(40),
+    durationMinutes: z.number().int().min(1).max(1_440).optional(),
+    /** What came of it — the reason the record exists. */
+    outcome: z.string().trim().max(4_000).optional(),
+    related: RelatedSchema.optional(),
+    assignedUserId: z.string().trim().min(1).max(120).optional(),
+  })
+  .strict();
+
+const DraftEmailArgumentsSchema = z
+  .object({
+    subject: z.string().trim().min(1).max(255),
+    body: z.string().trim().min(1).max(8_000),
+    /** Recipients; the Email entity validates each address. */
+    to: z.array(z.string().trim().min(3).max(320)).max(5).optional(),
+    related: RelatedSchema.optional(),
+    templateId: z.string().trim().min(1).max(64).optional(),
   })
   .strict();
 
@@ -337,6 +395,7 @@ export class AIToolRegistry {
     @Inject(AIAgentsSettingsService) private readonly settings: AIAgentsSettingsService,
     @Inject(DocsService) private readonly docs: DocsService,
     @Inject(AIAgentActorDirectoryService) private readonly actors: AIAgentActorDirectoryService,
+    @Inject(StreamService) private readonly stream: StreamService,
   ) {
     this.register({
       key: 'crm_search_records',
@@ -613,11 +672,111 @@ export class AIToolRegistry {
       execute: (args) => this.docsReadPage(args),
     });
     this.register({
+      key: 'crm_post_note',
+      label: 'Post a note on a record',
+      description:
+        'Add a note to one authorized CRM record, visible on that record\'s timeline. Use it to record the outcome of a call or a decision the user just described. The note is attributed to the acting user.',
+      version: '1',
+      owningModule: 'AIAgents',
+      effectClass: 'low_write',
+      requiresApproval: false,
+      entityScopes: READABLE_ENTITIES,
+      inputSchema: PostNoteArgumentsSchema,
+      inputJsonSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['entity', 'id', 'text'],
+        properties: {
+          entity: { type: 'string', enum: [...READABLE_ENTITIES] },
+          id: jsonSchemaString(120),
+          text: jsonSchemaString(4_000),
+        },
+      },
+      maxResultBytes: 4_096,
+      timeoutMs: 10_000,
+      preview: (args) => this.previewPostNote(args),
+      execute: (args, context) => this.postNote(args, context),
+    });
+    this.register({
+      key: 'crm_log_activity',
+      label: 'Log a call or meeting',
+      description:
+        'Record a Call or Meeting that already happened, optionally linked to the Account or Contact it concerned. It records history: it sends nothing to the customer and schedules nothing.',
+      version: '1',
+      owningModule: 'AIAgents',
+      effectClass: 'low_write',
+      requiresApproval: false,
+      entityScopes: ['Call', 'Meeting'],
+      inputSchema: LogActivityArgumentsSchema,
+      inputJsonSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['kind', 'name', 'dateStart'],
+        properties: {
+          kind: { type: 'string', enum: ['Call', 'Meeting'] },
+          name: jsonSchemaString(255),
+          dateStart: jsonSchemaString(40),
+          durationMinutes: { type: 'integer', minimum: 1, maximum: 1_440 },
+          outcome: jsonSchemaString(4_000),
+          related: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['entity', 'id'],
+            properties: {
+              entity: { type: 'string', enum: [...RELATED_TARGETS] },
+              id: jsonSchemaString(120),
+            },
+          },
+          assignedUserId: jsonSchemaString(120),
+        },
+      },
+      maxResultBytes: 8_192,
+      timeoutMs: 10_000,
+      preview: (args) => this.previewLogActivity(args),
+      execute: (args, context) => this.logActivity(args, context),
+    });
+    this.register({
+      key: 'crm_draft_email',
+      label: 'Draft an email',
+      description:
+        'Create an email **draft** on a record. It is never sent: the user reviews and sends it from the record. Use it when asked to write a follow-up; do not claim the email was sent.',
+      version: '1',
+      owningModule: 'AIAgents',
+      effectClass: 'low_write',
+      requiresApproval: false,
+      entityScopes: ['Email'],
+      inputSchema: DraftEmailArgumentsSchema,
+      inputJsonSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['subject', 'body'],
+        properties: {
+          subject: jsonSchemaString(255),
+          body: jsonSchemaString(8_000),
+          to: { type: 'array', maxItems: 5, items: jsonSchemaString(320) },
+          related: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['entity', 'id'],
+            properties: {
+              entity: { type: 'string', enum: [...RELATED_TARGETS] },
+              id: jsonSchemaString(120),
+            },
+          },
+          templateId: jsonSchemaString(64),
+        },
+      },
+      maxResultBytes: 4_096,
+      timeoutMs: 10_000,
+      preview: (args) => this.previewDraftEmail(args),
+      execute: (args, context) => this.draftEmail(args, context),
+    });
+    this.register({
       key: 'crm_create_task',
       label: 'Create an internal task',
       description:
-        'Create a Task assigned within the calling user\'s ACL scope. The task is internal CRM work; it sends nothing to a customer.',
-      version: '1',
+        'Create a Task assigned within the calling user\'s ACL scope, optionally attached to the record it is about so it appears on that record\'s timeline. The task is internal CRM work; it sends nothing to a customer.',
+      version: '2',
       owningModule: 'AIAgents',
       effectClass: 'low_write',
       requiresApproval: false,
@@ -632,6 +791,15 @@ export class AIToolRegistry {
           description: jsonSchemaString(4_000),
           dateStart: jsonSchemaString(40),
           assignedUserId: jsonSchemaString(120),
+          parent: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['entity', 'id'],
+            properties: {
+              entity: { type: 'string', enum: [...READABLE_ENTITIES] },
+              id: jsonSchemaString(120),
+            },
+          },
         },
       },
       maxResultBytes: 8_192,
@@ -643,8 +811,8 @@ export class AIToolRegistry {
       key: 'crm_update_record_fields',
       label: 'Propose a field update',
       description:
-        'Change a small, allowlisted set of fields on one authorized CRM record (description, and status on a task/case/lead). This is a material write and requires human approval.',
-      version: '1',
+        'Change a small, allowlisted set of fields on one authorized CRM record: description, status, owner, priority, an opportunity\'s stage/amount/close date, a task\'s due date. This is a material write and requires human approval.',
+      version: '2',
       owningModule: 'AIAgents',
       effectClass: 'material_write',
       requiresApproval: true,
@@ -1127,16 +1295,177 @@ export class AIToolRegistry {
   // write handlers
   // -------------------------------------------------------------------------
 
+  /**
+   * `crm_post_note` — the most common AI-CRM action: recording what a call concluded.
+   *
+   * The note is written by `StreamService`, not by an insert of our own, so the parent's `stream`
+   * ACL action is enforced, mentions resolve, followers are notified and the audit trail is the same
+   * one a human note produces. The author is the run's actor, and the idempotency key means a retried
+   * step cannot post the same note twice.
+   */
+  private async previewPostNote(raw: unknown): Promise<AIToolProposal> {
+    const args = PostNoteArgumentsSchema.parse(raw);
+    return {
+      summary: `Post a note on ${args.entity} ${args.id}.`,
+      targets: [{ type: args.entity, id: args.id }],
+      detail: { text: args.text },
+    };
+  }
+
+  private async postNote(raw: unknown, context: AIToolContext): Promise<AIToolResult> {
+    const args = PostNoteArgumentsSchema.parse(raw);
+    this.assertReadableEntity(args.entity);
+    // Read the parent first: it turns "not yours" into a 404 the model can report, before any write.
+    const record = await this.entities.get(args.entity, args.id);
+    const item = await this.stream.create(args.entity, args.id, {
+      type: 'Post',
+      post: args.text,
+      idempotencyKey: context.idempotencyKey,
+    });
+    return {
+      summary: `Posted a note on ${args.entity} "${displayName(record)}".`,
+      result: {
+        entity: args.entity,
+        id: args.id,
+        name: displayName(record),
+        streamItemId: item.id,
+        createdAt: item.createdAt,
+        idempotencyKey: context.idempotencyKey,
+      },
+      resultRef: `${args.entity}:${args.id}`,
+    };
+  }
+
+  /**
+   * `crm_log_activity` — history, not scheduling.
+   *
+   * The record is created with `status: 'Held'` and, when a related record is given, linked through
+   * the activity's own `accounts` / `contacts` relation. Nothing is sent to the customer: a Call or
+   * Meeting record is internal evidence that the conversation happened.
+   */
+  private async previewLogActivity(raw: unknown): Promise<AIToolProposal> {
+    const args = LogActivityArgumentsSchema.parse(raw);
+    return {
+      summary: `Log the ${args.kind.toLowerCase()} "${args.name}".`,
+      targets: [
+        { type: args.kind, id: 'new', label: args.name },
+        ...(args.related === undefined ? [] : [{ type: args.related.entity, id: args.related.id }]),
+      ],
+      detail: {
+        kind: args.kind,
+        name: args.name,
+        dateStart: args.dateStart,
+        durationMinutes: args.durationMinutes ?? null,
+        outcome: args.outcome ?? null,
+        related: args.related ?? null,
+      },
+    };
+  }
+
+  private async logActivity(raw: unknown, context: AIToolContext): Promise<AIToolResult> {
+    const args = LogActivityArgumentsSchema.parse(raw);
+    this.assertActivityEntity(args.kind);
+    const created = await this.entities.create(args.kind, {
+      name: args.name,
+      status: 'Held',
+      dateStart: args.dateStart,
+      ...(args.durationMinutes === undefined ? {} : { duration: args.durationMinutes }),
+      ...(args.outcome === undefined ? {} : { description: args.outcome }),
+      ...(args.assignedUserId === undefined ? { assignedUserId: context.actorUserId } : { assignedUserId: args.assignedUserId }),
+    });
+    const id = String(created['id'] ?? '');
+    if (id === '') throw new Error(`The created ${args.kind} has no identifier.`);
+    const related = args.related === undefined ? undefined : await this.linkRelated(args.kind, id, args.related);
+    return {
+      summary: `Logged the ${args.kind.toLowerCase()} "${args.name}"${related === undefined ? '' : ` on ${related.entity} ${related.id}`}.`,
+      result: {
+        entity: args.kind,
+        id,
+        name: args.name,
+        status: 'Held',
+        dateStart: args.dateStart,
+        related: related ?? null,
+        idempotencyKey: context.idempotencyKey,
+      },
+      resultRef: `${args.kind}:${id}`,
+    };
+  }
+
+  /**
+   * `crm_draft_email` — a draft, and only a draft.
+   *
+   * Two independent guards keep it from becoming a send: the record is created with
+   * `status: 'Draft'`, and this tool never calls `EmailService.queueSend`, which itself refuses any
+   * status outside `Draft`/`Failed`. The user opens the record and sends it under their own
+   * authorisation.
+   */
+  private async previewDraftEmail(raw: unknown): Promise<AIToolProposal> {
+    const args = DraftEmailArgumentsSchema.parse(raw);
+    return {
+      summary: `Draft the email "${args.subject}".`,
+      targets: [
+        { type: 'Email', id: 'new', label: args.subject },
+        ...(args.related === undefined ? [] : [{ type: args.related.entity, id: args.related.id }]),
+      ],
+      detail: {
+        subject: args.subject,
+        to: args.to ?? [],
+        body: args.body,
+        related: args.related ?? null,
+        sends: false,
+      },
+    };
+  }
+
+  private async draftEmail(raw: unknown, context: AIToolContext): Promise<AIToolResult> {
+    const args = DraftEmailArgumentsSchema.parse(raw);
+    if (!this.metadata.registry.hasEntity('Email')) {
+      throw new ValidationError('Email is not installed in this deployment.');
+    }
+    const created = await this.entities.create('Email', {
+      // The record's display name is the subject (Email metadata).
+      name: args.subject,
+      status: 'Draft',
+      direction: 'Outbound',
+      body: args.body,
+      ...(args.to === undefined ? {} : { toAddressList: args.to.join(', ') }),
+      ...(args.templateId === undefined ? {} : { templateId: args.templateId }),
+      ...(args.related === undefined ? {} : { parentType: args.related.entity, parentId: args.related.id }),
+    });
+    const id = String(created['id'] ?? '');
+    if (id === '') throw new Error('The created email has no identifier.');
+    const related = args.related === undefined ? undefined : await this.linkRelated('Email', id, args.related);
+    return {
+      summary: `Drafted the email "${args.subject}" — not sent.`,
+      result: {
+        entity: 'Email',
+        id,
+        subject: args.subject,
+        status: 'Draft',
+        to: args.to ?? [],
+        related: related ?? null,
+        sent: false,
+        note: 'This is a draft. The user must open it and send it; the assistant did not send anything.',
+        idempotencyKey: context.idempotencyKey,
+      },
+      resultRef: `Email:${id}`,
+    };
+  }
+
   private async previewCreateTask(raw: unknown): Promise<AIToolProposal> {
     const args = CreateTaskArgumentsSchema.parse(raw);
     return {
       summary: `Create the internal task "${args.name}".`,
-      targets: [{ type: 'Task', id: 'new', label: args.name }],
+      targets: [
+        { type: 'Task', id: 'new', label: args.name },
+        ...(args.parent === undefined ? [] : [{ type: args.parent.entity, id: args.parent.id }]),
+      ],
       detail: {
         name: args.name,
         description: args.description ?? null,
         dateStart: args.dateStart ?? null,
         assignedUserId: args.assignedUserId ?? null,
+        parent: args.parent ?? null,
       },
     };
   }
@@ -1145,22 +1474,72 @@ export class AIToolRegistry {
     const args = CreateTaskArgumentsSchema.parse(raw);
     const created = await this.entities.create('Task', {
       name: args.name,
+      // A task with no owner is a task nobody does; default to the person who asked.
+      assignedUserId: args.assignedUserId ?? context.actorUserId,
       ...(args.description === undefined ? {} : { description: args.description }),
       ...(args.dateStart === undefined ? {} : { dateStart: args.dateStart }),
-      ...(args.assignedUserId === undefined ? {} : { assignedUserId: args.assignedUserId }),
     });
     const id = String(created['id'] ?? '');
     if (id === '') throw new Error('The created task has no identifier.');
+    const parent = args.parent === undefined ? undefined : await this.linkRelated('Task', id, args.parent);
     return {
-      summary: `Created the internal task "${args.name}".`,
+      summary: `Created the internal task "${args.name}"${parent === undefined ? '' : ` on ${parent.entity} ${parent.id}`}.`,
       result: {
         entity: 'Task',
         id,
         name: args.name,
+        assignedUserId: args.assignedUserId ?? context.actorUserId,
+        parent: parent ?? null,
         idempotencyKey: context.idempotencyKey,
       },
       resultRef: `Task:${id}`,
     };
+  }
+
+  /**
+   * Link a newly created record to the record it is about.
+   *
+   * The relation name is read from metadata (the one whose target is the related entity), so this
+   * works for an activity's `accounts`/`contacts`, an email's `leads`, and a task on any declared
+   * relation. `entities.link()` writes the `entity_links` row and syncs the attribute link, which is
+   * exactly what the related panel and the reverse lookup read.
+   */
+  private async linkRelated(
+    from: string,
+    fromId: string,
+    related: { entity: string; id: string },
+  ): Promise<{ entity: string; id: string; relation: string }> {
+    const relation = this.relationTo(from, related.entity);
+    if (relation === undefined) {
+      throw new ValidationError(
+        `A ${from} cannot be linked to a ${related.entity} in this deployment.`,
+        { entity: from, relatedEntity: related.entity, supported: this.linkableTargets(from) },
+      );
+    }
+    await this.entities.link(from, fromId, relation, related.id);
+    return { entity: related.entity, id: related.id, relation };
+  }
+
+  /** The relation on `entity` that points at `target`, if the metadata declares one. */
+  private relationTo(entity: string, target: string): string | undefined {
+    const relations = this.metadata.registry.getRelations(entity);
+    for (const [name, relation] of Object.entries(relations)) {
+      if (relation.target === target && (relation.type === 'manyMany' || relation.type === 'oneToMany')) {
+        return name;
+      }
+    }
+    return undefined;
+  }
+
+  /** Targets a record of `entity` can be attached to — listed so the model can retry usefully. */
+  private linkableTargets(entity: string): string[] {
+    const relations = this.metadata.registry.getRelations(entity);
+    const out = new Set<string>();
+    for (const relation of Object.values(relations)) {
+      if (relation.type !== 'manyMany' && relation.type !== 'oneToMany') continue;
+      if (relation.target !== undefined) out.add(relation.target);
+    }
+    return [...out].sort();
   }
 
   private async previewUpdateFields(raw: unknown, context: AIToolContext): Promise<AIToolProposal> {

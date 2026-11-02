@@ -1,6 +1,6 @@
 # PLAN — CRM Chat Assistant (`CRMChat`)
 
-> **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 and 19-CHAT.21 shipped 2026-11-02; 19-CHAT.22 → 19-CHAT.24 planned  
+> **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 → 19-CHAT.22 shipped 2026-11-02; 19-CHAT.23 → 19-CHAT.24 planned  
 > **Plan version:** 1.2.0 (2026-11-02)  
 > **As-built companion:** `plans/SPEC.md` — §7 is the shipped AI layer, §8 the gap analysis, §9 the tool-catalogue design that phases 20–24 implement  
 > **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Capabilities  
@@ -49,7 +49,7 @@ contract. Work that is still open is specified as **19-CHAT.20 → 19-CHAT.24** 
 | 19-CHAT.0 → 19-CHAT.19 | **Shipped** 2026-10-21 (module v1.1.0, contract v1.2.0) | `docs/modules/crm-chat/RELEASE_NOTES.md`; 9 Chat suites under `apps/api/test/crm-chat*.test.ts`; `docs/architecture/crm-chat-contract.md` |
 | 19-CHAT.20 — acting-user context | **Shipped** 2026-11-02 | `apps/api/src/ai-agents/ai-agent-actor.ts`, `apps/api/test/ai-agent-actor.test.ts` |
 | 19-CHAT.21 — read tool family | **Shipped** 2026-11-02 | 4 tools, registry 8 → 12 keys; `ai-agent-periods.test.ts` (16 pure cases) + 8 new cases in `ai-agent-runs.test.ts`; design in `plans/SPEC.md` §9.2 |
-| 19-CHAT.22 — write loop closure | Planned | §17 phase 19-CHAT.22; design in `plans/SPEC.md` §9.3, §9.5 |
+| 19-CHAT.22 — write loop closure | **Shipped** 2026-11-02 | `crm_post_note`, `crm_log_activity`, `crm_draft_email`, `crm_create_task` v2, `crm_update_record_fields` v2; registry 12 → 15 keys; 6 new cases in `ai-agent-runs.test.ts` |
 | 19-CHAT.23 — module intelligence tools | Planned | §17 phase 19-CHAT.23; design in `plans/SPEC.md` §9.4 |
 | 19-CHAT.24 — tool-aware suggestions, evaluation, release | Planned | §17 phase 19-CHAT.24; design in `plans/SPEC.md` §9.7 |
 
@@ -87,13 +87,13 @@ At completion, an authorized user can:
 9. Use suggested prompts and reusable prompt templates without giving the assistant broader permissions than the user already has.
 10. View a clear status when information is missing, a tool is unavailable, a request is ambiguous, or a provider fails.
 
-**Where these outcomes stand today.** 1, 2, 3, 4, 7, 8, 9 and 10 are served. Outcome 3 now includes
+**Where these outcomes stand today.** 1, 2, 3, 4, 6, 7, 8, 9 and 10 are served. Outcome 3 includes
 aggregation and activities — `crm_aggregate` and `crm_list_activities` — so "how many", "total
 value" and "by stage" are numbers from SQL rather than a model's arithmetic. Outcome 4 is reachable
-because `crm_cross_module` exposes the curated scenarios as a tool. Still open: outcome 5 covers
-records and help articles but not saved reports (phase 23); outcome 6 covers two write tools, neither
-of which can attach a note or an email to the record it is about (phase 22); and the two suggestion
-chips that need activity negation or email drafting still cannot be honoured (phases 23 and 22).
+because `crm_cross_module` exposes the curated scenarios as a tool. Outcome 6 now records work where
+it belongs: notes on the timeline, calls and meetings as history, drafts that are never sent, tasks
+with a parent. Still open: outcome 5 covers records and help articles but not saved reports, and the
+one suggestion chip that needs a negative activity query cannot be honoured (both phase 23).
 
 ### 1.2 Example user journeys
 
@@ -1347,11 +1347,22 @@ no approval, no migration. Took the registry from 8 keys to 12.
 
 ---
 
-### Phase 19-CHAT.22 — Write Loop Closure
+### Phase 19-CHAT.22 — Write Loop Closure ✅ shipped 2026-11-02
 
-The registry has two write tools and neither can attach anything to the record it is about. A task
-with no parent appears on no timeline and answers no question, so "create a follow-up task" currently
-produces a record the user will never find again.
+The registry had two write tools and neither could attach anything to the record it was about. A task
+with no parent appears on no timeline and answers no question, so "create a follow-up task" produced
+a record the user would never find again.
+
+**What the implementation settled, beyond this sketch:**
+
+| Decision | Reason |
+|---|---|
+| Notes go through `StreamService.create()` with the run's idempotency key | The parent's `stream` ACL action, mentions, followers and audit then behave exactly as for a manual note — and a retried step cannot post twice |
+| The link is written by `entities.link()`, with the relation **read from metadata** | One helper serves an activity's `accounts`, an email's `leads` and a task's parent; an unsupported target is a validation error that lists what is supported, not a silent no-op |
+| `crm_log_activity` only accepts `Account`/`Contact`/`Lead`/`Opportunity`/`Case` as `related` | Activities declare only `accounts`/`contacts`; accepting an entity with no declared relation would promise a link that cannot exist |
+| `crm_draft_email` writes both the relation link and `parentType`/`parentId` | The related panel reads the link; the parent columns are what the mail module and the record header read |
+| The version bump on the two upgraded tools is audit metadata, not compatibility | `ai_agent_tool_grants` stores `tool_version` but authorises by `key`, so an existing grant keeps working. The plan's original wording ("published grants reference the version") was wrong; the code is the fact |
+| Tests assert effects, not return values | A `stream_items` row with the actor as author, an `entity_links` row, and **no** `system.sendEmail` job for the draft. A tool's own claim that it did not send is not evidence |
 
 **Tasks**
 - `crm_post_note` via `StreamService.create()` — the most common AI CRM action is recording what a call concluded. Author is the actor; the agent is recorded as the source.
@@ -1361,7 +1372,7 @@ produces a record the user will never find again.
 - `crm_update_record_fields` **v2**: widen the writable allowlist — `Opportunity(stage, amount, closeDate)`, `Case(priority, assignedUserId)`, `Task(dateEnd, assignedUserId)`, `Lead(assignedUserId)`. It stays `material_write`, keeps `requiresApproval`, and keeps the version check.
 - Gate the whole family behind `features.actionProposals` **and** `safety.allowWrites`, exactly as the shipped proposal flow does.
 
-**Acceptance criteria**
+**Acceptance criteria** (verified — `ai-agent-runs.test.ts`, "write tool family")
 - A task created through the tool appears on the parent record's timeline/related panel; a parent the caller cannot read is a validation error.
 - A drafted email exists with `status = 'Draft'`, and the test asserts no send job was enqueued — the assertion is on the queue, not on the tool's return value.
 - A note created through the tool is attributed to the actor and produces the same stream/audit rows a manual note does.
@@ -1514,6 +1525,7 @@ Do not copy upstream source code, translations, icons, frontend assets, or brand
 |---|---|---|
 | 1.0.0 | 2026-10-20 | Initial plan: product contract, threat model, data model, roadmap 19-CHAT.0 → 19-CHAT.19. |
 | 1.1.0 | 2026-10-21 | Module shipped (contract v1.2.0). This file was **not** updated, which is why it still described the module as planned. |
+| 1.4.0 | 2026-11-02 | Phase 19-CHAT.22 shipped: `crm_post_note` (Stream), `crm_log_activity`, `crm_draft_email` (never sends), `crm_create_task` v2 (parent + actor default), `crm_update_record_fields` v2 (wider allowlist, same class). Registry 12 → 15 keys. Corrected the plan's claim that grants reference a tool version. |
 | 1.3.0 | 2026-11-02 | Phase 19-CHAT.21 shipped: `crm_aggregate`, `crm_list_activities`, `crm_actor_context` (in `ai-agents`) and `crm_cross_module` (contributed by `crm-chat`); `ai-agent-periods.ts` resolver; `AIAgentActorDirectoryService` shared with the prompt; `EntityService.linkedSourceIds`. Registry 8 → 12 keys. Updated §0.1, §1.1, §17 phase 21. |
 | 1.2.0 | 2026-11-02 | Status corrected to implemented; added §0.1 delivery status and the two rules that follow from it. Added §1.1 capability-status paragraph, §5.4/§5.5/§5.6/§6.3/§10.3/§14.3 requirements learned from the shipped module, §18.1 v2 addendum, §19.2 v2 boundary. Added phases 19-CHAT.20 (shipped) → 19-CHAT.24 (planned) implementing the catalogue in `plans/SPEC.md` §9. Rewrote the final instruction to start at 19-CHAT.21. |
 

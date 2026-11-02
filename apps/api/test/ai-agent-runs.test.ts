@@ -199,12 +199,16 @@ beforeAll(async () => {
     name: `${MARKER} AI read tools`,
     permissions: {
       AIAgent: { read: 'yes' },
-      Account: { read: 'all' },
-      Contact: { read: 'all' },
-      Opportunity: { read: 'all' },
-      Task: { read: 'all' },
-      Call: { read: 'all' },
-      Meeting: { read: 'all' },
+      // `19-CHAT.22` adds write tools that run as this user: a note needs `stream`, and the
+      // created records need `create`. `read: 'all'` stays for the read-family assertions.
+      Account: { read: 'all', create: 'all', edit: 'all', stream: 'all' },
+      Contact: { read: 'all', create: 'all', edit: 'all', stream: 'all' },
+      Opportunity: { read: 'all', create: 'all', edit: 'all', stream: 'all' },
+      Task: { read: 'all', create: 'all', edit: 'all', stream: 'all' },
+      Call: { read: 'all', create: 'all', edit: 'all', stream: 'all' },
+      Meeting: { read: 'all', create: 'all', edit: 'all', stream: 'all' },
+      Email: { read: 'all', create: 'all', edit: 'all', stream: 'all' },
+      Lead: { read: 'all', create: 'all', edit: 'all', stream: 'all' },
     },
   });
   const toolsUser = await createTestUser(ctx, { userName: USER_TOOLS, roleIds: [ROLE_TOOLS] });
@@ -269,7 +273,16 @@ afterAll(async () => {
     await db.deleteFrom('ai_agent_conversations').where('agent_id', 'in', ids).execute();
   }
   await db.deleteFrom('ai_agents').where('agent_key', 'like', `agent-test-${runId}-%`).execute();
-  if (entityIds.length > 0) await db.deleteFrom('entity_records').where('id', 'in', entityIds).execute();
+  if (entityIds.length > 0) {
+    // 19-CHAT.22 creates records and links through the API, so the rows that point at them go first:
+    // a stream item or an `entity_links` row would otherwise outlive the record it describes.
+    await db.deleteFrom('stream_items').where('entity_id', 'in', entityIds).execute();
+    await db
+      .deleteFrom('entity_links')
+      .where((eb) => eb.or([eb('record_id_a', 'in', entityIds), eb('record_id_b', 'in', entityIds)]))
+      .execute();
+    await db.deleteFrom('entity_records').where('id', 'in', entityIds).execute();
+  }
   if (baselineSettings === null) {
     await db.deleteFrom('app_settings').where('name', '=', 'aiAgents').execute();
   } else {
@@ -437,6 +450,11 @@ describe('agent definitions and versions (19-AI.5)', () => {
     // 19-CHAT.21: the read family added for the AI-CRM questions the product already advertises.
     for (const key of ['crm_actor_context', 'crm_aggregate', 'crm_list_activities', 'crm_cross_module']) {
       expect(catalogue.some((tool) => tool.key === key && tool.effectClass === 'read'), key).toBe(true);
+    }
+    // 19-CHAT.22: the write loop. Every one of these is low-risk enough to run without approval;
+    // the material write below is the only tool that pauses for a human.
+    for (const key of ['crm_post_note', 'crm_log_activity', 'crm_draft_email', 'crm_create_task']) {
+      expect(catalogue.some((tool) => tool.key === key && tool.effectClass === 'low_write'), key).toBe(true);
     }
     // Every tool that writes is either approval-gated or explicitly low-risk; nothing in this
     // catalogue may claim `material_write` without the approval flag (SPEC §9.1 rule 4).
@@ -1308,100 +1326,112 @@ describe('pricing snapshots and quota enforcement (19-AI.13)', () => {
  * is the same path a model takes, so a schema, ACL or summary regression fails here rather than in
  * production.
  */
-describe('read tool family: aggregate, activities, actor, cross-module (19-CHAT.21)', () => {
-  /**
-   * The cost-budget case earlier in this file installs a $1-per-token card and leaves it in place
-   * for the rest of the run, so any later run spends its whole budget on the first model call and
-   * never reaches a tool. Replace it with a cheap one for this block; the suite's `afterAll` removes
-   * every snapshot for this provider key, so nothing outlives the file.
-   */
-  beforeAll(async () => {
-    await ctx.database.db.deleteFrom('ai_agent_pricing_snapshots').where('provider_key', '=', PROVIDER_KEY).execute();
-    const snapshot = await call('POST', '/api/v1/AIAgents/action/pricing', ctx.adminToken, {
-      providerKey: PROVIDER_KEY,
-      model: 'fake-model',
-      inputPricePerMillion: 0.1,
-      outputPricePerMillion: 0.2,
-    });
-    expect(snapshot.status, JSON.stringify(snapshot.body)).toBe(201);
-    pricingSnapshotIds.push(String(snapshot.body['id']));
+/**
+ * The cost-budget case earlier in this file installs a $1-per-token card and leaves it in place for
+ * the rest of the run, so any later run spends its whole budget on the first model call and never
+ * reaches a tool. Every tool-family block restores a cheap card first; the suite's `afterAll`
+ * removes every snapshot for this provider key, so nothing outlives the file.
+ */
+async function ensureCheapPricing(): Promise<void> {
+  await ctx.database.db.deleteFrom('ai_agent_pricing_snapshots').where('provider_key', '=', PROVIDER_KEY).execute();
+  const snapshot = await call('POST', '/api/v1/AIAgents/action/pricing', ctx.adminToken, {
+    providerKey: PROVIDER_KEY,
+    model: 'fake-model',
+    inputPricePerMillion: 0.1,
+    outputPricePerMillion: 0.2,
   });
+  expect(snapshot.status, JSON.stringify(snapshot.body)).toBe(201);
+  pricingSnapshotIds.push(String(snapshot.body['id']));
+}
 
-  /** The grants an agent needs to reach the whole read family. */
-  const TOOL_GRANTS = [
-    { key: 'crm_search_records' },
-    { key: 'crm_actor_context' },
-    { key: 'crm_aggregate' },
-    { key: 'crm_list_activities' },
-    { key: 'crm_cross_module' },
-  ];
+/** The grants an agent needs to reach the read family (19-CHAT.21). */
+const READ_TOOL_GRANTS = [
+  { key: 'crm_search_records' },
+  { key: 'crm_actor_context' },
+  { key: 'crm_aggregate' },
+  { key: 'crm_list_activities' },
+  { key: 'crm_cross_module' },
+];
 
-  async function toolAgent(suffix: string): Promise<string> {
-    const { id } = await createAgent({ suffix, config: baseConfig({ tools: TOOL_GRANTS }) });
-    const published = await publish(id);
-    expect(published.status, JSON.stringify(published.body)).toBe(200);
-    return id;
-  }
+/** The grants an agent needs to reach the write family (19-CHAT.22). */
+const WRITE_TOOL_GRANTS = [
+  { key: 'crm_post_note' },
+  { key: 'crm_log_activity' },
+  { key: 'crm_draft_email' },
+  { key: 'crm_create_task' },
+  { key: 'crm_update_record_fields' },
+];
 
-  /** Creates one record through the API and registers it for cleanup by exact id. */
-  async function createEntityRecord(entity: string, data: Record<string, unknown>): Promise<string> {
-    const created = await call('POST', `/api/v1/${entity}`, ctx.adminToken, data);
-    expect(created.status, JSON.stringify(created.body)).toBe(201);
-    const id = String(created.body['id']);
-    entityIds.push(id);
-    return id;
-  }
+/** A published agent holding exactly `tools`. */
+async function toolAgent(suffix: string, tools: readonly { key: string }[]): Promise<string> {
+  const { id } = await createAgent({ suffix, config: baseConfig({ tools }) });
+  const published = await publish(id);
+  expect(published.status, JSON.stringify(published.body)).toBe(200);
+  return id;
+}
 
-  interface ToolCallOutcome {
-    readonly status: string;
-    readonly summary: string | null;
-    readonly errorCategory: string | null;
-    readonly result: Record<string, unknown> | null;
-    readonly truncated: boolean;
-  }
+/** Creates one record through the API and registers it for cleanup by exact id. */
+async function createEntityRecord(entity: string, data: Record<string, unknown>): Promise<string> {
+  const created = await call('POST', `/api/v1/${entity}`, ctx.adminToken, data);
+  expect(created.status, JSON.stringify(created.body)).toBe(201);
+  const id = String(created.body['id']);
+  entityIds.push(id);
+  return id;
+}
 
-  /**
-   * Runs one tool and returns what the runtime recorded.
-   *
-   * `outcome` is read from the table rather than the API projection: the projection deliberately
-   * omits the result payload, and the assertions here are about the payload.
-   */
-  async function runTool(
-    agentId: string,
-    toolKey: string,
-    args: Record<string, unknown>,
-    token: string = ctx.adminToken,
-  ): Promise<ToolCallOutcome> {
-    const created = await call('POST', `/api/v1/AIAgents/action/agents/${agentId}/runs`, token, {
-      input: { text: `__FAKE_TOOL__:${toolKey} __FAKE_TOOL_ARGS__:${JSON.stringify(args)}` },
-    });
-    expect(created.status, JSON.stringify(created.body)).toBe(201);
-    const id = String(created.body['id']);
-    runIds.push(id);
-    const executed = await executeRun(id);
-    expect(executed.status, JSON.stringify(executed.body)).toBe(200);
+interface ToolCallOutcome {
+  readonly status: string;
+  readonly summary: string | null;
+  readonly errorCategory: string | null;
+  readonly result: Record<string, unknown> | null;
+  readonly truncated: boolean;
+}
 
-    const row = await ctx.database.db
-      .selectFrom('ai_agent_tool_calls')
-      .select(['status', 'error_category', 'outcome'])
-      .where('run_id', '=', id)
-      .where('tool_key', '=', toolKey)
-      .executeTakeFirst();
-    expect(row, `no tool call recorded for ${toolKey}`).toBeDefined();
-    const outcome = (row?.outcome ?? null) as
-      | { summary?: string; result?: Record<string, unknown>; truncated?: boolean }
-      | null;
-    return {
-      status: String(row?.status ?? ''),
-      summary: outcome?.summary ?? null,
-      errorCategory: row?.error_category ?? null,
-      result: outcome?.result ?? null,
-      truncated: outcome?.truncated === true,
-    };
-  }
+/**
+ * Runs one tool and returns what the runtime recorded.
+ *
+ * `outcome` is read from the table rather than the API projection: the projection deliberately
+ * omits the result payload, and the assertions here are about the payload.
+ */
+async function runTool(
+  agentId: string,
+  toolKey: string,
+  args: Record<string, unknown>,
+  token: string = ctx.adminToken,
+): Promise<ToolCallOutcome> {
+  const created = await call('POST', `/api/v1/AIAgents/action/agents/${agentId}/runs`, token, {
+    input: { text: `__FAKE_TOOL__:${toolKey} __FAKE_TOOL_ARGS__:${JSON.stringify(args)}` },
+  });
+  expect(created.status, JSON.stringify(created.body)).toBe(201);
+  const id = String(created.body['id']);
+  runIds.push(id);
+  const executed = await executeRun(id);
+  expect(executed.status, JSON.stringify(executed.body)).toBe(200);
+
+  const row = await ctx.database.db
+    .selectFrom('ai_agent_tool_calls')
+    .select(['status', 'error_category', 'outcome'])
+    .where('run_id', '=', id)
+    .where('tool_key', '=', toolKey)
+    .executeTakeFirst();
+  expect(row, `no tool call recorded for ${toolKey}`).toBeDefined();
+  const outcome = (row?.outcome ?? null) as
+    | { summary?: string; result?: Record<string, unknown>; truncated?: boolean }
+    | null;
+  return {
+    status: String(row?.status ?? ''),
+    summary: outcome?.summary ?? null,
+    errorCategory: row?.error_category ?? null,
+    result: outcome?.result ?? null,
+    truncated: outcome?.truncated === true,
+  };
+}
+
+describe('read tool family: aggregate, activities, actor, cross-module (19-CHAT.21)', () => {
+  beforeAll(ensureCheapPricing);
 
   it('tells the model who it acts for, including the local day and zone', async () => {
-    const agentId = await toolAgent('tool-actor');
+    const agentId = await toolAgent('tool-actor', READ_TOOL_GRANTS);
     const outcome = await runTool(agentId, 'crm_actor_context', {}, toolsToken);
 
     expect(outcome.status).toBe('succeeded');
@@ -1419,7 +1449,7 @@ describe('read tool family: aggregate, activities, actor, cross-module (19-CHAT.
   });
 
   it('counts and sums in SQL, grouped by one field, over a resolved quarter', async () => {
-    const agentId = await toolAgent('tool-aggregate');
+    const agentId = await toolAgent('tool-aggregate', READ_TOOL_GRANTS);
     const today = new Date().toISOString().slice(0, 10);
     await createEntityRecord('Opportunity', {
       name: `${MARKER} agg proposal A`,
@@ -1475,7 +1505,7 @@ describe('read tool family: aggregate, activities, actor, cross-module (19-CHAT.
   });
 
   it('refuses to aggregate for a caller who may not read the entity, instead of returning a total', async () => {
-    const agentId = await toolAgent('tool-aggregate-deny');
+    const agentId = await toolAgent('tool-aggregate-deny', READ_TOOL_GRANTS);
     const outcome = await runTool(
       agentId,
       'crm_aggregate',
@@ -1493,7 +1523,7 @@ describe('read tool family: aggregate, activities, actor, cross-module (19-CHAT.
   });
 
   it('rejects a period that does not say which date it applies to', async () => {
-    const agentId = await toolAgent('tool-aggregate-schema');
+    const agentId = await toolAgent('tool-aggregate-schema', READ_TOOL_GRANTS);
     const outcome = await runTool(agentId, 'crm_aggregate', {
       entity: 'Opportunity',
       metric: 'count',
@@ -1506,7 +1536,7 @@ describe('read tool family: aggregate, activities, actor, cross-module (19-CHAT.
   });
 
   it('lists only the acting user\'s activities for "mine"', async () => {
-    const agentId = await toolAgent('tool-activities');
+    const agentId = await toolAgent('tool-activities', READ_TOOL_GRANTS);
     const now = new Date().toISOString();
     const mine = await createEntityRecord('Task', {
       name: `${MARKER} mine today`,
@@ -1539,7 +1569,7 @@ describe('read tool family: aggregate, activities, actor, cross-module (19-CHAT.
   });
 
   it('lists the activities linked to one record, and says so when the relation is empty', async () => {
-    const agentId = await toolAgent('tool-activities-record');
+    const agentId = await toolAgent('tool-activities-record', READ_TOOL_GRANTS);
     const account = await createEntityRecord('Account', { name: `${MARKER} call account` });
     const emptyAccount = await createEntityRecord('Account', { name: `${MARKER} quiet account` });
     const callId = await createEntityRecord('Call', {
@@ -1575,7 +1605,7 @@ describe('read tool family: aggregate, activities, actor, cross-module (19-CHAT.
   });
 
   it('runs a curated cross-module scenario and reports its steps', async () => {
-    const agentId = await toolAgent('tool-cross-module');
+    const agentId = await toolAgent('tool-cross-module', READ_TOOL_GRANTS);
     const account = await createEntityRecord('Account', { name: `${MARKER} 360 account` });
 
     const outcome = await runTool(agentId, 'crm_cross_module', {
@@ -1592,7 +1622,7 @@ describe('read tool family: aggregate, activities, actor, cross-module (19-CHAT.
   });
 
   it('refuses an undeclared scenario by naming the ones it knows', async () => {
-    const agentId = await toolAgent('tool-cross-module-unknown');
+    const agentId = await toolAgent('tool-cross-module-unknown', READ_TOOL_GRANTS);
     const account = await createEntityRecord('Account', { name: `${MARKER} unknown scenario` });
 
     const outcome = await runTool(agentId, 'crm_cross_module', {
@@ -1601,5 +1631,195 @@ describe('read tool family: aggregate, activities, actor, cross-module (19-CHAT.
     });
     expect(outcome.status).toBe('failed');
     expect(outcome.result).toBeNull();
+  });
+});
+
+/**
+ * Phase 19-CHAT.22 — the write loop
+ * (plans/PLAN_Phase_19_CRM_Chat.md §17 `19-CHAT.22`; `plans/SPEC.md` §9.3, §9.5).
+ *
+ * A write tool is only useful if the record it creates can be found again: on the parent's timeline,
+ * on the record's related panel, with an owner. These cases assert the *effect*, not the return
+ * value — the stream row, the `entity_links` row, the absent queue job.
+ */
+describe('write tool family: notes, activities, drafts, tasks (19-CHAT.22)', () => {
+  beforeAll(ensureCheapPricing);
+
+  it('posts a note on the record timeline, attributed to the acting user', async () => {
+    const agentId = await toolAgent('write-note', WRITE_TOOL_GRANTS);
+    const account = await createEntityRecord('Account', { name: `${MARKER} note account` });
+    const text = `${MARKER} called about the renewal — they want the two-year term`;
+
+    const outcome = await runTool(agentId, 'crm_post_note', { entity: 'Account', id: account, text }, toolsToken);
+    expect(outcome.status, outcome.summary ?? '').toBe('succeeded');
+
+    const result = outcome.result as Record<string, unknown>;
+    expect(result['entity']).toBe('Account');
+    const streamItemId = String(result['streamItemId']);
+    expect(streamItemId).not.toBe('');
+
+    // The note is a stream item on the parent, written by the run's initiator — not by the executor,
+    // and not by a service account.
+    const row = await ctx.database.db
+      .selectFrom('stream_items')
+      .select(['entity_type', 'entity_id', 'type', 'post', 'created_by_id'])
+      .where('id', '=', streamItemId)
+      .executeTakeFirst();
+    expect(row?.entity_type).toBe('Account');
+    expect(row?.entity_id).toBe(account);
+    expect(row?.type).toBe('Post');
+    expect(row?.post).toBe(text);
+    expect(row?.created_by_id).toBe(toolsUserId);
+  });
+
+  it('logs a call that already happened and links it to the account', async () => {
+    const agentId = await toolAgent('write-call', WRITE_TOOL_GRANTS);
+    const account = await createEntityRecord('Account', { name: `${MARKER} call log account` });
+
+    const outcome = await runTool(
+      agentId,
+      'crm_log_activity',
+      {
+        kind: 'Call',
+        name: `${MARKER} renewal call`,
+        dateStart: new Date().toISOString(),
+        durationMinutes: 30,
+        outcome: 'They will sign next week.',
+        related: { entity: 'Account', id: account },
+      },
+      toolsToken,
+    );
+    expect(outcome.status, outcome.summary ?? '').toBe('succeeded');
+
+    const result = outcome.result as Record<string, unknown>;
+    // Logged history, not a plan: the record says the call happened.
+    expect(result['status']).toBe('Held');
+    const callId = String(result['id']);
+    entityIds.push(callId);
+    const record = await call('GET', `/api/v1/Call/${callId}`, ctx.adminToken);
+    expect(record.body['status']).toBe('Held');
+    expect(record.body['description']).toBe('They will sign next week.');
+    expect(record.body['duration']).toBe(30);
+
+    // The link is what puts the call on the account's related panel.
+    const related = await call('GET', `/api/v1/Call/${callId}/accounts`, ctx.adminToken);
+    expect((related.body['list'] as { id: string }[]).map((entry) => entry.id)).toContain(account);
+  });
+
+  it('drafts an email and enqueues nothing', async () => {
+    const agentId = await toolAgent('write-email', WRITE_TOOL_GRANTS);
+    const account = await createEntityRecord('Account', { name: `${MARKER} email account` });
+    const to = `buyer-${runId}@example.com`;
+
+    const outcome = await runTool(
+      agentId,
+      'crm_draft_email',
+      {
+        subject: `${MARKER} renewal follow-up`,
+        body: 'Thanks for the call today. The two-year term is attached.',
+        to: [to],
+        related: { entity: 'Account', id: account },
+      },
+      toolsToken,
+    );
+    expect(outcome.status, outcome.summary ?? '').toBe('succeeded');
+
+    const result = outcome.result as Record<string, unknown>;
+    expect(result['status']).toBe('Draft');
+    expect(result['sent']).toBe(false);
+    const emailId = String(result['id']);
+    entityIds.push(emailId);
+
+    const record = await call('GET', `/api/v1/Email/${emailId}`, ctx.adminToken);
+    expect(record.body['status']).toBe('Draft');
+    expect(record.body['toAddressList']).toBe(to);
+    expect(record.body['direction']).toBe('Outbound');
+
+    // The proof that nothing was sent is the queue, not the tool's own claim: `queueSend` writes a
+    // `system.sendEmail` job naming the email, and this tool never calls it.
+    const queued = await ctx.database.db
+      .selectFrom('jobs')
+      .select('id')
+      .where('job', '=', 'system.sendEmail')
+      .where(sql`target::text like ${`%${emailId}%`}`)
+      .execute();
+    expect(queued).toEqual([]);
+  });
+
+  it('creates a task on the record it is about, assigned to the asker by default', async () => {
+    const agentId = await toolAgent('write-task', WRITE_TOOL_GRANTS);
+    const account = await createEntityRecord('Account', { name: `${MARKER} task parent account` });
+
+    const outcome = await runTool(
+      agentId,
+      'crm_create_task',
+      { name: `${MARKER} send the revised quote`, parent: { entity: 'Account', id: account } },
+      toolsToken,
+    );
+    expect(outcome.status, outcome.summary ?? '').toBe('succeeded');
+
+    const result = outcome.result as Record<string, unknown>;
+    const taskId = String(result['id']);
+    entityIds.push(taskId);
+    // No owner given: the person who asked owns it. A task nobody owns is a task nobody does.
+    expect(result['assignedUserId']).toBe(toolsUserId);
+    const task = await call('GET', `/api/v1/Task/${taskId}`, ctx.adminToken);
+    expect(task.body['assignedUserId']).toBe(toolsUserId);
+
+    const related = await call('GET', `/api/v1/Task/${taskId}/accounts`, ctx.adminToken);
+    expect((related.body['list'] as { id: string }[]).map((entry) => entry.id)).toContain(account);
+  });
+
+  it('still requires approval to move an opportunity stage, and applies it once approved', async () => {
+    const agentId = await toolAgent('write-stage', WRITE_TOOL_GRANTS);
+    const opportunity = await createEntityRecord('Opportunity', {
+      name: `${MARKER} stage deal`,
+      amount: '1000.00',
+      stage: 'Proposal',
+      closeDate: new Date().toISOString().slice(0, 10),
+    });
+
+    const created = await runAgent(
+      agentId,
+      `__FAKE_TOOL__:crm_update_record_fields __FAKE_TOOL_ARGS__:{"entity":"Opportunity","id":"${opportunity}","fields":{"stage":"Price Negotiation"}}`,
+    );
+    const idRun = String(created.body['id']);
+    expect((await executeRun(idRun)).body['run']).toMatchObject({ status: 'waiting_for_approval' });
+
+    const inbox = await call('GET', '/api/v1/AIAgents/action/approvals?status=pending', ctx.adminToken);
+    const approval = (inbox.body['list'] as { id: string; runId: string; actionClass: string }[]).find(
+      (entry) => entry.runId === idRun,
+    );
+    expect(approval?.actionClass).toBe('material_write');
+    if (approval === undefined) throw new Error('approval not found');
+
+    // The widening did not soften the class: the proposal names the field and its before/after.
+    const detail = await call('GET', `/api/v1/AIAgents/action/approvals/${approval.id}`, ctx.adminToken);
+    expect(JSON.stringify(detail.body)).toContain('Price Negotiation');
+
+    expect(
+      (await call('POST', `/api/v1/AIAgents/action/approvals/${approval.id}/approve`, ctx.adminToken, { note: 'ok' })).status,
+    ).toBe(200);
+    expect((await executeRun(idRun)).body['run']).toMatchObject({ status: 'succeeded' });
+
+    const after = await call('GET', `/api/v1/Opportunity/${opportunity}`, ctx.adminToken);
+    expect(after.body['stage']).toBe('Price Negotiation');
+  });
+
+  it('refuses a field that is not on the allowlist, before anything is written', async () => {
+    const agentId = await toolAgent('write-badfield', WRITE_TOOL_GRANTS);
+    const account = await createEntityRecord('Account', { name: `${MARKER} locked name` });
+
+    const created = await runAgent(
+      agentId,
+      `__FAKE_TOOL__:crm_update_record_fields __FAKE_TOOL_ARGS__:{"entity":"Account","id":"${account}","fields":{"name":"renamed by the assistant"}}`,
+    );
+    const idRun = String(created.body['id']);
+    const executed = await executeRun(idRun);
+    // The proposal cannot even be built, so the run is refused rather than paused for a human.
+    expect((executed.body['run'] as { status: string }).status).not.toBe('waiting_for_approval');
+
+    const after = await call('GET', `/api/v1/Account/${account}`, ctx.adminToken);
+    expect(after.body['name']).toBe(`${MARKER} locked name`);
   });
 });
