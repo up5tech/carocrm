@@ -20,6 +20,8 @@ import { FakeProviderAdapter } from './ai-provider-fake.js';
 import { AIProviderGateway } from './ai-provider-gateway.service.js';
 import { OpenAICompatibleProviderAdapter } from './ai-provider-openai-compatible.js';
 
+export type { AIAgentActorContext, AIAgentActorTeam } from './ai-agent-actor.js';
+export { actorPromptLines, promptSafe, systemPrompt } from './ai-agent-actor.js';
 export { AIAgentApprovalService } from './ai-agent-approvals.service.js';
 export type { AgentVersionDetail, AgentView } from './ai-agent-definitions.service.js';
 export { AIAgentDefinitionService } from './ai-agent-definitions.service.js';

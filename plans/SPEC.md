@@ -5,7 +5,7 @@
 | **Phiên bản** | 1.0.0 |
 | **Ngày** | 2026-11-02 |
 | **Phạm vi** | Toàn hệ thống (as-built) + đặc tả tầng AI CRM v2 |
-| **Trạng thái** | §1–§7: đã triển khai. §8–§11: đề xuất, **chưa triển khai**. |
+| **Trạng thái** | §1–§7: đã triển khai. §9.6: **đã triển khai 2026-11-02**. §9.1–§9.5, §9.7–§11: đề xuất, **chưa triển khai**. |
 | **Ngôn ngữ** | Prose tiếng Việt; định danh, khoá tool, đường dẫn, schema giữ nguyên tiếng Anh. |
 
 ---
@@ -58,7 +58,7 @@ Port cấu trúc class PHP; sao chép schema upstream; chạy extension PHP; mic
 | Workspace package | 19 package trong `packages/` (`acl`, `entity-engine`, `query-engine`, `metadata`, `reports`, `bpm`, `workflow`, `document`, `mail`, `files`, `search`, `core`, `ui-schema`, `api-client`, `extension-sdk`, `jobs`, `formula`, `docs`, `test-kit`) |
 | App | `api`, `web`, `worker` (+ `graphify-out` là output sinh tự động) |
 | Test | 215 file test API (`apps/api/test`), 39 test trong `packages/`, 7 test web, 22 spec Playwright |
-| Entity metadata | ~100 entity nghiệp vụ + tài liệu, khai báo trong `database/seed-metadata.ts` (literal hoặc factory) |
+| Entity metadata | 115 entity nghiệp vụ + tài liệu (số đo từ log boot `metadata loaded entities:115`), khai báo trong `database/seed-metadata.ts` (literal hoặc factory) |
 
 ### 2.1 Cổng kiểm
 
@@ -250,6 +250,19 @@ Chat không tự chọn agent: quản trị viên lưu **key** của một profi
 5. Không có tool SQL thô, shell, filesystem hay HTTP tuỳ ý — và không được thêm nếu chưa có thiết kế sandbox được review riêng.
 6. `idempotencyKey` suy ra từ run + step + tool-call identity.
 
+### 7.6 Danh tính người khởi chạy trong system prompt (đã triển khai 2026-11-02)
+
+`apps/api/src/ai-agents/ai-agent-actor.ts` dựng khối "Acting user" trong system message: `id`, `name`, `role`, `teams` và một câu nói rõ id này là thứ để lọc (`assignedUserId`). `AIAgentRunService.actorContext()` đọc `users` + `users_teams` một lần cho mỗi lần thực thi run, không phải mỗi bước.
+
+| Quy tắc | Lý do |
+|---|---|
+| Khối vắng mặt khi run không có actor | Run do hệ thống khởi tạo vẫn chạy; thiếu actor không phải lỗi |
+| Mọi giá trị đi qua `promptSafe()` | Tên người dùng và tên team là văn bản do người dùng kiểm soát, nằm trong **system** message — không được phép mở dòng mới |
+| Dòng `- id: <id>` có định dạng cố định | `FakeProviderAdapter.actorIdFromSystem()` đọc đúng dòng này; đổi định dạng là đổi cả hai nơi |
+| Id là của người **khởi chạy**, không phải người bấm execute | `row.initiated_by_user_id`; run xếp hàng do A tạo, B thực thi vẫn là "của A" |
+
+Đây là thứ khiến câu hỏi dạng "của tôi" trả lời được **bằng tool hiện có** — `crm_search_records` nhận `criteria: [{ field: "assignedUserId", operator: "equals", value: "<id>" }]`. Không cần tool mới cho trường hợp này.
+
 ---
 
 ## 8. Phân tích khoảng trống so với tiêu chí AI CRM
@@ -260,20 +273,20 @@ Chat không tự chọn agent: quản trị viên lưu **key** của một profi
 |---|---|---|
 | Truy vấn & đọc bản ghi | Đã có | 4 tool đọc generic |
 | Tổng hợp, so sánh, dự báo | **Chưa có** | Không có `aggregate`/`groupBy` trong registry |
-| Bối cảnh "của tôi" | **Chưa có** | `systemPrompt()` không chứa user id |
+| Bối cảnh "của tôi" | Đã có (§7.6) | `ai-agent-actor.ts` bơm `id`/`teams` vào system prompt |
 | Hoạt động & timeline | **Chưa có** | `Call`/`Meeting`/`Email` ngoài `READABLE_ENTITIES`; không tool Stream |
 | Ghi lại kết quả công việc | Một phần | Chỉ `crm_create_task`, task không gắn bản ghi cha |
 | Trí tuệ module (score/health/SLA) | **Chưa có** | Service có, tool không |
 | Duyệt & kiểm toán | Đã có | `ai_agent_approvals`, audit, evaluation |
 
-### 8.2 Bốn chip: ba câu không trả lời được
+### 8.2 Bốn chip: hai câu đã trả lời được, hai câu chưa
 
-| Chip | Nguyên nhân gốc |
-|---|---|
-| "Cơ hội đang mở **của tôi**" | `systemPrompt()` (`ai-agent-runs.service.ts:2381`) chỉ nhận `agentName` + `config`, không có actor. Model không biết `userId` nên không lọc được `assignedUserId`; nó sẽ bỏ filter (trả bản ghi của người khác trong ACL) hoặc bịa. |
-| "Account không có hoạt động tháng này" | Không có tool Stream/activity và không có `NOT EXISTS` → không thể tính. |
-| "Deal chốt quý này" | Làm được nửa vời: `closeDate` + `greaterThan`/`lessThan` (`:128`), nhưng **không có mốc thời gian tương đối**, model tự tính ngày → sai lệch. |
-| "Soạn email follow-up" | `Email` không nằm trong `READABLE_ENTITIES` (`:105`), không có tool soạn nháp → model viết chay. |
+| Chip | Trạng thái | Nguyên nhân gốc |
+|---|---|---|
+| "Cơ hội đang mở **của tôi**" | **Đã sửa (§7.6)** | Trước: `systemPrompt()` chỉ nhận `agentName` + `config`, không có actor. Nay prompt mang `id` + `teams`, và `crm_search_records` lọc được `assignedUserId` — có test end-to-end chứng minh chuỗi này. |
+| "Deal chốt quý này" | **Đã trả lời được, còn thô** | `closeDate` + `greaterThan`/`lessThan` là đủ để lọc, nhưng **không có mốc thời gian tương đối** nên model phải tự tính ngày → dễ lệch. `crm_aggregate` (§9.2) mới làm nó chắc chắn. |
+| "Account không có hoạt động tháng này" | Chưa | Không có tool Stream/activity và không có `NOT EXISTS` → không thể tính. |
+| "Soạn email follow-up" | Chưa | `Email` không nằm trong `READABLE_ENTITIES` (`:105`), không có tool soạn nháp → model viết chay. |
 
 ### 8.3 Năm khiếm khuyết cấu trúc
 
@@ -463,19 +476,20 @@ Không tool nào trong bảng này được để `ai-agents` import ngược do
 
 Không thêm `delete`, `merge`, hay bất kỳ thao tác không hoàn tác được — chúng thuộc nhóm `high_impact` và cần thiết kế riêng.
 
-### 9.6 Sửa gốc: actor trong system prompt
+### 9.6 Sửa gốc: actor trong system prompt — ✅ đã triển khai
 
-`systemPrompt(agentName, config)` (`ai-agent-runs.service.ts:2381`) nhận thêm tham số thứ ba:
+Đặc tả gốc ở đây là "thêm tham số thứ ba cho `systemPrompt`". Bản triển khai đi xa hơn một bước vì lý do test được: `systemPrompt` **được chuyển ra khỏi** `ai-agent-runs.service.ts` (file 2500 dòng) sang module thuần `apps/api/src/ai-agents/ai-agent-actor.ts`, để khối actor test được mà không cần boot API.
 
-```ts
-systemPrompt(agentName, config, {
-  userId: row.initiated_by_user_id,
-  displayName: '…',        // một lookup users, cache theo run
-  teamIds: ['…'],
-})
-```
+| Thành phần | Vai trò |
+|---|---|
+| `AIAgentActorContext` | `userId`, `displayName`, `userName`, `isAdmin`, `teams[]` |
+| `promptSafe(value, max)` | Bỏ ký tự điều khiển, gộp whitespace, cắt độ dài — chặn tên người dùng mở dòng mới trong system message |
+| `actorPromptLines(actor)` | Khối `Acting user`, gồm dòng `- id: <id>` có định dạng cố định |
+| `systemPrompt(agentName, config, actor?)` | Ghép khối vào giữa operating rules và agent instructions; `actor` vắng → prompt y như cũ |
+| `AIAgentRunService.actorContext(userId)` | Hai truy vấn có biên (`users`, `users_teams` ⟕ `teams`), một lần cho mỗi lần thực thi run |
+| `FakeProviderAdapter` `__FAKE_ECHO_ACTOR__` | Seam test: trả về **đúng** id trong dòng `- id:`, không trả phần còn lại của prompt |
 
-Prompt thêm một khối ngắn: *"You act for user `<id>` (`<name>`), teams `<ids>`. When the user says "my", "mine" or "our", filter on `assignedUserId` / team scope accordingly."*
+**Bằng chứng:** `apps/api/test/ai-agent-actor.test.ts` (10 case thuần, có trong `vitest.ci.config.ts`) và một case end-to-end trong `ai-agent-runs.test.ts` chứng minh chuỗi đầy đủ — run do user hạn chế khởi tạo, admin thực thi, model nhận đúng id của **người khởi tạo**, và `crm_search_records` lọc được `assignedUserId` bằng chính id đó.
 
 Đây là thay đổi **rẻ nhất và giá trị cao nhất** trong toàn bộ đề xuất: nó sửa D5 và chip #1 mà không cần tool nào.
 
@@ -485,7 +499,7 @@ Chip trở thành **dữ liệu khai báo**, mỗi chip mang `requiresTool`; UI 
 
 | Chip | `requiresTool` |
 |---|---|
-| Cơ hội đang mở của tôi | `crm_actor_context` |
+| Cơ hội đang mở của tôi | — (đã chạy được bằng `crm_search_records` sau §9.6) |
 | Pipeline theo giai đoạn quý này | `crm_aggregate` |
 | Hôm nay tôi có gì? | `crm_list_activities` |
 | Tóm tắt 360° account này | `crm_cross_module` |
@@ -519,9 +533,13 @@ Xoá/merge bản ghi; gửi email/SMS thật; ghi tài chính (quote, invoice, p
 
 `pnpm lint` → `pnpm lint:arch` (DAG không đổi) → `pnpm typecheck` → `pnpm test:ci` (một file mỗi lần chạy) → `pnpm test:web`.
 
+Test thuần mới phải được thêm vào `PURE_API_TESTS` trong `vitest.ci.config.ts` — gate CI **không có database**, nên một file test boot app hoặc chạm Postgres không được nằm ở đó. `ai-agent-actor.test.ts` đã được thêm theo đúng quy tắc này.
+
 ### 10.3 Rollback
 
 Tool mới vô hiệu hoá bằng `settings.tools.disabled` (không cần deploy). Chip tự ẩn theo `assistant.tools`. Không có migration nào trong đợt 1–2, nên rollback là cấu hình, không phải dữ liệu.
+
+Riêng §9.6 đã triển khai: rollback là truyền `undefined` cho tham số thứ ba của `systemPrompt` — prompt trở về đúng chuỗi cũ, không có schema, không có dữ liệu nào phải hoàn tác.
 
 ---
 
@@ -535,6 +553,8 @@ Tool mới vô hiệu hoá bằng `settings.tools.disabled` (không cần deploy
 | Registry phình làm model chọn sai tool | Trung bình | Thêm theo đợt, mỗi đợt có eval; giữ mô tả tool khác biệt rõ |
 | Chu trình phụ thuộc khi domain đăng ký tool | Cao | §9.1 luật 6 + `pnpm lint:arch` |
 | Chip gợi ý lệch năng lực agent | Thấp | `requiresTool` + lọc theo `assistant.tools` |
+| Tên người dùng/team chứa chỉ thị độc hại trong system message | Trung bình | `promptSafe()` gộp newline + cắt độ dài (§9.6); có case test riêng |
+| Model lọc nhầm "của tôi" thành toàn bộ dữ liệu | Thấp | Prompt nói rõ id là để lọc; nếu không lọc được thì phải nói ra, không được trình bày bản ghi người khác như của user |
 
 ---
 
@@ -543,3 +563,4 @@ Tool mới vô hiệu hoá bằng `settings.tools.disabled` (không cần deploy
 | Phiên bản | Ngày | Thay đổi |
 |---|---|---|
 | 1.0.0 | 2026-11-02 | Bản đầu. Chốt đặc tả as-built §1–§7; thêm phân tích khoảng trống §8 và đặc tả AI CRM tool catalogue v2 §9–§11. |
+| 1.1.0 | 2026-11-02 | Triển khai §9.6: `ai-agent-actor.ts` (khối "Acting user" + `promptSafe`), `AIAgentRunService.actorContext()`, seam `__FAKE_ECHO_ACTOR__`. Thêm `ai-agent-actor.test.ts` (10 case thuần) và 1 case end-to-end trong `ai-agent-runs.test.ts`. Cập nhật §7.6, §8.1, §8.2. Số entity chính xác: 115. |

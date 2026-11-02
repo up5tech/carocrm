@@ -24,7 +24,11 @@ import {
  *  - with tools it returns no tool call unless the prompt names `__FAKE_TOOL__:<tool>`, in which
  *    case it proposes that tool. Arguments default to `{"query":"fake"}` and can be supplied after
  *    `__FAKE_TOOL_ARGS__:` on the same line as JSON, which lets a test exercise a real registry tool
- *    without inventing a second provider.
+ *    without inventing a second provider;
+ *  - `__FAKE_ECHO_ACTOR__` answers with the acting user's id, read from the `- id:` line of the
+ *    system message (`plans/SPEC.md` §9.6). Only that one value is echoed, never the surrounding
+ *    prompt, so the seam proves the actor reached the model without becoming a prompt-disclosure
+ *    tool.
  *
  * The registry registers this adapter **only outside production** (`AIAgentsModule` factory), so an
  * administrator cannot configure a fake provider on a live deployment.
@@ -85,10 +89,13 @@ export class FakeProviderAdapter implements AIProviderAdapter {
     let structured: unknown | null = null;
     if (request.responseFormat?.type === 'json_schema') structured = { ok: true };
 
+    const echoedActor = prompt.includes('__FAKE_ECHO_ACTOR__') ? actorIdFromSystem(request) : null;
     const text =
-      request.responseFormat?.type === 'json_schema'
-        ? JSON.stringify(structured)
-        : `Fake response to: ${prompt.slice(0, 200)}`;
+      echoedActor !== null
+        ? echoedActor
+        : request.responseFormat?.type === 'json_schema'
+          ? JSON.stringify(structured)
+          : `Fake response to: ${prompt.slice(0, 200)}`;
 
     return {
       providerRequestId: `fake-${String(Date.now())}`,
@@ -150,6 +157,17 @@ function lastUserContent(request: AIProviderRequest): string {
     if (message?.role === 'user') return message.content;
   }
   return '';
+}
+
+/**
+ * The acting-user id, and nothing else. `ACTOR_BLOCK_ABSENT` is a value rather than `null` so a test
+ * can tell "the block is missing" apart from "the seam did not run".
+ */
+function actorIdFromSystem(request: AIProviderRequest): string {
+  const system = request.messages.find((message) => message.role === 'system');
+  if (system === undefined) return 'ACTOR_BLOCK_ABSENT';
+  const match = /^- id: (\S+)$/m.exec(system.content);
+  return match?.[1] ?? 'ACTOR_BLOCK_ABSENT';
 }
 
 async function sleep(ms: number, signal: AbortSignal | undefined): Promise<void> {

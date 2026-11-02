@@ -38,6 +38,7 @@ const PROVIDER_KEY = `agent-test-ai5-${runId}`;
 
 let ctx: ApiContext;
 let useToken = '';
+let useUserId = '';
 let editToken = '';
 let baselineSettings: unknown = null;
 const createdUserIds: string[] = [];
@@ -166,6 +167,7 @@ beforeAll(async () => {
   const useUser = await createTestUser(ctx, { userName: USER_USE, roleIds: [ROLE_USE] });
   const editUser = await createTestUser(ctx, { userName: USER_EDIT, roleIds: [ROLE_EDIT] });
   useToken = useUser.token;
+  useUserId = useUser.id;
   editToken = editUser.token;
   createdUserIds.push(useUser.id, editUser.id);
 
@@ -436,6 +438,40 @@ describe('read-only run end to end (19-AI.6–19-AI.9)', () => {
     const replay = await executeRun(idRun);
     expect((replay.body['run'] as { status: string }).status).toBe('succeeded');
     expect((replay.body['run'] as { counters: { modelCalls: number } }).counters.modelCalls).toBe(2);
+  });
+
+  it('tells the model which user it acts for, so "my" questions can be filtered (§9.6)', async () => {
+    const id = await publishedAgent('actor-context');
+    // Started by the restricted `use` user, not the administrator: the actor in the prompt must be
+    // the run's initiator, never whoever happens to execute the queued run.
+    const created = await call('POST', `/api/v1/AIAgents/action/agents/${id}/runs`, useToken, {
+      input: { text: '__FAKE_ECHO_ACTOR__' },
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const actorRunId = String(created.body['id']);
+    runIds.push(actorRunId);
+
+    const executed = await executeRun(actorRunId);
+    expect(executed.status).toBe(200);
+    const run = executed.body['run'] as { status: string; result: { text: string } };
+    expect(run.status).toBe('succeeded');
+    expect(run.result.text).toBe(useUserId);
+
+    // The id in the prompt is only worth printing if the search tool accepts it as a filter.
+    // A field the registry rejects (or an unsupported operator) fails the tool call, so a
+    // `succeeded` call is the proof that "my open opportunities" is answerable with the tools that
+    // already exist — no new tool required for the acting-user case.
+    const filtered = await runAgent(
+      id,
+      `__FAKE_TOOL__:crm_search_records __FAKE_TOOL_ARGS__:{"entity":"Opportunity","criteria":[{"field":"assignedUserId","operator":"equals","value":"${useUserId}"}],"maxSize":3}`,
+    );
+    const filteredRunId = String(filtered.body['id']);
+    expect((await executeRun(filteredRunId)).status).toBe(200);
+    const filteredCalls = await call('GET', `/api/v1/AIAgents/action/runs/${filteredRunId}/toolCalls`, ctx.adminToken);
+    const firstCall = (filteredCalls.body['list'] as { toolKey: string; status: string; summary: string | null }[])[0];
+    expect(firstCall?.toolKey).toBe('crm_search_records');
+    expect(firstCall?.status).toBe('succeeded');
+    expect(firstCall?.summary).toContain('Found');
   });
 
   it('refuses to run a read tool when the starter cannot read the entity', async () => {
