@@ -2,6 +2,7 @@ import type { Provider } from '@nestjs/common';
 
 import { AIAgentApprovalService } from './ai-agent-approvals.service.js';
 import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
+import { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
 import { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentPricingService } from './ai-agent-pricing.service.js';
@@ -25,9 +26,13 @@ export { actorPromptLines, promptSafe, systemPrompt } from './ai-agent-actor.js'
 export { AIAgentApprovalService } from './ai-agent-approvals.service.js';
 export type { AgentVersionDetail, AgentView } from './ai-agent-definitions.service.js';
 export { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
+export type { AIAgentActorProfile } from './ai-agent-directory.service.js';
+export { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
 export { AIAgentEvaluationService } from './ai-agent-evaluations.service.js';
 export { AI_AGENT_RETENTION_JOB, AI_AGENT_RUN_JOB } from './ai-agent-jobs.js';
 export { AIAgentMemoryService } from './ai-agent-memory.service.js';
+export type { PeriodToken, ResolvedPeriod } from './ai-agent-periods.js';
+export { isPeriodToken, localDateString, PERIOD_TOKENS, resolvePeriod } from './ai-agent-periods.js';
 export { AIAgentPricingService } from './ai-agent-pricing.service.js';
 export { AIAgentQuotaService } from './ai-agent-quota.service.js';
 export type { AIAgentRunView, RunCreateInput, RunExecutionResult } from './ai-agent-runs.service.js';
@@ -62,6 +67,7 @@ export const AI_AGENTS_PROVIDERS: Provider[] = [
   AIAgentsPermissionService,
   AIAgentsPolicyService,
   AIAgentsModuleHealthService,
+  AIAgentActorDirectoryService,
   AIToolRegistry,
   AIAgentDefinitionService,
   AIAgentEvaluationService,

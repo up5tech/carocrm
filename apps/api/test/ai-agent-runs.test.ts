@@ -32,14 +32,22 @@ const runId = Date.now().toString(36);
 const MARKER = `AGENT_TEST_${runId}`;
 const ROLE_USE = `AGENT_TEST-ai5-use-${runId}`;
 const ROLE_EDIT = `AGENT_TEST-ai5-edit-${runId}`;
+const ROLE_DENY = `AGENT_TEST-ai5-deny-${runId}`;
+const ROLE_TOOLS = `AGENT_TEST-ai5-tools-${runId}`;
 const USER_USE = `AGENT_TEST-ai5-use-user-${runId}`;
 const USER_EDIT = `AGENT_TEST-ai5-edit-user-${runId}`;
+const USER_DENY = `AGENT_TEST-ai5-deny-user-${runId}`;
+const USER_TOOLS = `AGENT_TEST-ai5-tools-user-${runId}`;
 const PROVIDER_KEY = `agent-test-ai5-${runId}`;
 
 let ctx: ApiContext;
 let useToken = '';
 let useUserId = '';
 let editToken = '';
+let denyToken = '';
+let toolsToken = '';
+let toolsUserId = '';
+let adminUserId = '';
 let baselineSettings: unknown = null;
 const createdUserIds: string[] = [];
 const agentKeys: string[] = [];
@@ -150,6 +158,7 @@ async function executeRun(id: string): Promise<CallResult> {
 
 beforeAll(async () => {
   ctx = await bootApi();
+  adminUserId = String((await call('GET', '/api/v1/AppUser/me', ctx.adminToken)).body['id'] ?? '');
 
   const rows = await ctx.database.db.selectFrom('app_settings').select('data').where('name', '=', 'aiAgents').execute();
   baselineSettings = rows[0]?.data ?? null;
@@ -170,6 +179,38 @@ beforeAll(async () => {
   useUserId = useUser.id;
   editToken = editUser.token;
   createdUserIds.push(useUser.id, editUser.id);
+
+  // 19-CHAT.21: a caller who may run agents but may not read Opportunity. The aggregate tool must
+  // refuse rather than return a total — an aggregate is the easiest way to leak restricted records.
+  await createTestRole(ctx, {
+    id: ROLE_DENY,
+    name: `${MARKER} AI deny opportunity`,
+    permissions: { AIAgent: { read: 'yes' }, Opportunity: { read: 'no' } },
+  });
+  const denyUser = await createTestUser(ctx, { userName: USER_DENY, roleIds: [ROLE_DENY] });
+  denyToken = denyUser.token;
+  createdUserIds.push(denyUser.id);
+
+  // 19-CHAT.21: a non-admin who may read the entities the read tools address. `read: 'all'` is
+  // deliberate — it proves the tools' own filters ("mine", the period, the criteria) do the
+  // narrowing, rather than the ACL happening to hide the rows the assertion is about.
+  await createTestRole(ctx, {
+    id: ROLE_TOOLS,
+    name: `${MARKER} AI read tools`,
+    permissions: {
+      AIAgent: { read: 'yes' },
+      Account: { read: 'all' },
+      Contact: { read: 'all' },
+      Opportunity: { read: 'all' },
+      Task: { read: 'all' },
+      Call: { read: 'all' },
+      Meeting: { read: 'all' },
+    },
+  });
+  const toolsUser = await createTestUser(ctx, { userName: USER_TOOLS, roleIds: [ROLE_TOOLS] });
+  toolsToken = toolsUser.token;
+  toolsUserId = toolsUser.id;
+  createdUserIds.push(toolsUser.id);
 
   const provider = await call('POST', '/api/v1/AIAgents/action/providers', ctx.adminToken, {
     kind: 'fake',
@@ -251,7 +292,7 @@ afterAll(async () => {
     .where(sql`data->'settings'->'provider'->>'defaultKey'`, '=', PROVIDER_KEY)
     .execute();
   if (createdUserIds.length > 0) await db.deleteFrom('users').where('id', 'in', createdUserIds).execute();
-  await db.deleteFrom('roles').where('id', 'in', [ROLE_USE, ROLE_EDIT]).execute();
+  await db.deleteFrom('roles').where('id', 'in', [ROLE_USE, ROLE_EDIT, ROLE_DENY]).execute();
   await shutdownApi();
 });
 
@@ -393,6 +434,13 @@ describe('agent definitions and versions (19-AI.5)', () => {
     const catalogue = tools.body['tools'] as { key: string; effectClass: string; enabled: boolean }[];
     expect(catalogue.some((tool) => tool.key === 'crm_read_record' && tool.effectClass === 'read')).toBe(true);
     expect(catalogue.some((tool) => tool.key === 'crm_update_record_fields' && tool.effectClass === 'material_write')).toBe(true);
+    // 19-CHAT.21: the read family added for the AI-CRM questions the product already advertises.
+    for (const key of ['crm_actor_context', 'crm_aggregate', 'crm_list_activities', 'crm_cross_module']) {
+      expect(catalogue.some((tool) => tool.key === key && tool.effectClass === 'read'), key).toBe(true);
+    }
+    // Every tool that writes is either approval-gated or explicitly low-risk; nothing in this
+    // catalogue may claim `material_write` without the approval flag (SPEC §9.1 rule 4).
+    expect(catalogue.filter((tool) => tool.effectClass === 'high_impact')).toEqual([]);
   });
 });
 
@@ -1248,5 +1296,310 @@ describe('pricing snapshots and quota enforcement (19-AI.13)', () => {
     expect(denied.status).toBe(403);
     const list = await call('GET', '/api/v1/AIAgents/action/quotas', useToken);
     expect(list.status).toBe(403);
+  });
+});
+
+/**
+ * Phase 19-CHAT.21 — the read tool family
+ * (plans/PLAN_Phase_19_CRM_Chat.md §17 `19-CHAT.21`; `plans/SPEC.md` §9.2 T1.1–T1.4).
+ *
+ * Each case drives a **real** tool through a real run: the fake provider proposes the call, the
+ * registry validates and executes it, and the outcome is read back from `ai_agent_tool_calls`. That
+ * is the same path a model takes, so a schema, ACL or summary regression fails here rather than in
+ * production.
+ */
+describe('read tool family: aggregate, activities, actor, cross-module (19-CHAT.21)', () => {
+  /**
+   * The cost-budget case earlier in this file installs a $1-per-token card and leaves it in place
+   * for the rest of the run, so any later run spends its whole budget on the first model call and
+   * never reaches a tool. Replace it with a cheap one for this block; the suite's `afterAll` removes
+   * every snapshot for this provider key, so nothing outlives the file.
+   */
+  beforeAll(async () => {
+    await ctx.database.db.deleteFrom('ai_agent_pricing_snapshots').where('provider_key', '=', PROVIDER_KEY).execute();
+    const snapshot = await call('POST', '/api/v1/AIAgents/action/pricing', ctx.adminToken, {
+      providerKey: PROVIDER_KEY,
+      model: 'fake-model',
+      inputPricePerMillion: 0.1,
+      outputPricePerMillion: 0.2,
+    });
+    expect(snapshot.status, JSON.stringify(snapshot.body)).toBe(201);
+    pricingSnapshotIds.push(String(snapshot.body['id']));
+  });
+
+  /** The grants an agent needs to reach the whole read family. */
+  const TOOL_GRANTS = [
+    { key: 'crm_search_records' },
+    { key: 'crm_actor_context' },
+    { key: 'crm_aggregate' },
+    { key: 'crm_list_activities' },
+    { key: 'crm_cross_module' },
+  ];
+
+  async function toolAgent(suffix: string): Promise<string> {
+    const { id } = await createAgent({ suffix, config: baseConfig({ tools: TOOL_GRANTS }) });
+    const published = await publish(id);
+    expect(published.status, JSON.stringify(published.body)).toBe(200);
+    return id;
+  }
+
+  /** Creates one record through the API and registers it for cleanup by exact id. */
+  async function createEntityRecord(entity: string, data: Record<string, unknown>): Promise<string> {
+    const created = await call('POST', `/api/v1/${entity}`, ctx.adminToken, data);
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const id = String(created.body['id']);
+    entityIds.push(id);
+    return id;
+  }
+
+  interface ToolCallOutcome {
+    readonly status: string;
+    readonly summary: string | null;
+    readonly errorCategory: string | null;
+    readonly result: Record<string, unknown> | null;
+    readonly truncated: boolean;
+  }
+
+  /**
+   * Runs one tool and returns what the runtime recorded.
+   *
+   * `outcome` is read from the table rather than the API projection: the projection deliberately
+   * omits the result payload, and the assertions here are about the payload.
+   */
+  async function runTool(
+    agentId: string,
+    toolKey: string,
+    args: Record<string, unknown>,
+    token: string = ctx.adminToken,
+  ): Promise<ToolCallOutcome> {
+    const created = await call('POST', `/api/v1/AIAgents/action/agents/${agentId}/runs`, token, {
+      input: { text: `__FAKE_TOOL__:${toolKey} __FAKE_TOOL_ARGS__:${JSON.stringify(args)}` },
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(201);
+    const id = String(created.body['id']);
+    runIds.push(id);
+    const executed = await executeRun(id);
+    expect(executed.status, JSON.stringify(executed.body)).toBe(200);
+
+    const row = await ctx.database.db
+      .selectFrom('ai_agent_tool_calls')
+      .select(['status', 'error_category', 'outcome'])
+      .where('run_id', '=', id)
+      .where('tool_key', '=', toolKey)
+      .executeTakeFirst();
+    expect(row, `no tool call recorded for ${toolKey}`).toBeDefined();
+    const outcome = (row?.outcome ?? null) as
+      | { summary?: string; result?: Record<string, unknown>; truncated?: boolean }
+      | null;
+    return {
+      status: String(row?.status ?? ''),
+      summary: outcome?.summary ?? null,
+      errorCategory: row?.error_category ?? null,
+      result: outcome?.result ?? null,
+      truncated: outcome?.truncated === true,
+    };
+  }
+
+  it('tells the model who it acts for, including the local day and zone', async () => {
+    const agentId = await toolAgent('tool-actor');
+    const outcome = await runTool(agentId, 'crm_actor_context', {}, toolsToken);
+
+    expect(outcome.status).toBe('succeeded');
+    const result = outcome.result as Record<string, unknown>;
+    expect(result['userId']).toBe(toolsUserId);
+    expect(result['available']).toBe(true);
+    expect(typeof result['timezone']).toBe('string');
+    expect(String(result['timezone'])).not.toBe('');
+    // A zone name the resolver accepts: the same value feeds `resolvePeriod`.
+    expect(() => new Intl.DateTimeFormat('en-US', { timeZone: String(result['timezone']) })).not.toThrow();
+    expect(String(result['today'])).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(Array.isArray(result['teams'])).toBe(true);
+    // The caller's own details only, proven exactly rather than by a guess about the admin's address.
+    expect(result['email']).toBe(`${USER_TOOLS}@example.com`);
+  });
+
+  it('counts and sums in SQL, grouped by one field, over a resolved quarter', async () => {
+    const agentId = await toolAgent('tool-aggregate');
+    const today = new Date().toISOString().slice(0, 10);
+    await createEntityRecord('Opportunity', {
+      name: `${MARKER} agg proposal A`,
+      amount: '1000.00',
+      stage: 'Proposal',
+      closeDate: today,
+      assignedUserId: toolsUserId,
+    });
+    await createEntityRecord('Opportunity', {
+      name: `${MARKER} agg proposal B`,
+      amount: '2500.50',
+      stage: 'Proposal',
+      closeDate: today,
+      assignedUserId: toolsUserId,
+    });
+    await createEntityRecord('Opportunity', {
+      name: `${MARKER} agg review`,
+      amount: '400.00',
+      stage: 'Review',
+      closeDate: today,
+      assignedUserId: toolsUserId,
+    });
+
+    const outcome = await runTool(agentId, 'crm_aggregate', {
+      entity: 'Opportunity',
+      metric: 'sum',
+      field: 'amount',
+      groupBy: 'stage',
+      criteria: [{ field: 'name', operator: 'contains', value: MARKER }],
+      dateField: 'closeDate',
+      period: 'this_quarter',
+      maxGroups: 5,
+    });
+
+    expect(outcome.status, outcome.summary ?? '').toBe('succeeded');
+    const result = outcome.result as Record<string, unknown>;
+    const rows = result['rows'] as { key: string; count: number; value: number; display?: string }[];
+
+    // Ordered by the metric, descending: the biggest stage first.
+    expect(rows[0]?.key).toBe('Proposal');
+    expect(rows[0]?.count).toBe(2);
+    expect(rows[0]?.value).toBe(3_500.5);
+    // Money keeps a formatted companion so the answer can quote a readable amount.
+    expect(rows[0]?.display).toBe('3,500.50');
+    expect(rows.find((row) => row.key === 'Review')?.value).toBe(400);
+
+    // The period is resolved server-side and reported, so the answer can state its window.
+    const period = result['period'] as { label: string; from: string; to: string } | null;
+    expect(period?.label).toMatch(/^\d{4}-Q[1-4]$/);
+    expect(new Date(String(period?.from)).getTime()).toBeLessThan(new Date(String(period?.to)).getTime());
+    expect(result['truncated']).toBe(false);
+    expect(result['matchedRows']).toBe(3);
+  });
+
+  it('refuses to aggregate for a caller who may not read the entity, instead of returning a total', async () => {
+    const agentId = await toolAgent('tool-aggregate-deny');
+    const outcome = await runTool(
+      agentId,
+      'crm_aggregate',
+      {
+        entity: 'Opportunity',
+        metric: 'count',
+        criteria: [{ field: 'name', operator: 'contains', value: MARKER }],
+      },
+      denyToken,
+    );
+
+    expect(outcome.status).toBe('failed');
+    // The point of the case: no rows, therefore no number that could describe hidden records.
+    expect(outcome.result).toBeNull();
+  });
+
+  it('rejects a period that does not say which date it applies to', async () => {
+    const agentId = await toolAgent('tool-aggregate-schema');
+    const outcome = await runTool(agentId, 'crm_aggregate', {
+      entity: 'Opportunity',
+      metric: 'count',
+      period: 'this_quarter',
+    });
+
+    // The schema refuses the call before it reaches SQL, and names the missing argument.
+    expect(outcome.status).not.toBe('succeeded');
+    expect(outcome.errorCategory).toBe('invalid_arguments');
+  });
+
+  it('lists only the acting user\'s activities for "mine"', async () => {
+    const agentId = await toolAgent('tool-activities');
+    const now = new Date().toISOString();
+    const mine = await createEntityRecord('Task', {
+      name: `${MARKER} mine today`,
+      status: 'Not Started',
+      dateStart: now,
+      assignedUserId: toolsUserId,
+    });
+    const someoneElse = await createEntityRecord('Task', {
+      name: `${MARKER} not mine today`,
+      status: 'Not Started',
+      dateStart: now,
+      assignedUserId: adminUserId,
+    });
+
+    const outcome = await runTool(
+      agentId,
+      'crm_list_activities',
+      { kind: 'Task', scope: 'mine', period: 'today', maxSize: 25 },
+      toolsToken,
+    );
+
+    expect(outcome.status, outcome.summary ?? '').toBe('succeeded');
+    const result = outcome.result as Record<string, unknown>;
+    const activities = result['activities'] as { id: string; assignedUserId?: string }[];
+    const ids = activities.map((activity) => activity.id);
+    expect(ids).toContain(mine);
+    // A teammate's task inside the same ACL window must not appear under "my day".
+    expect(ids).not.toContain(someoneElse);
+    for (const activity of activities) expect(activity.assignedUserId).toBe(toolsUserId);
+  });
+
+  it('lists the activities linked to one record, and says so when the relation is empty', async () => {
+    const agentId = await toolAgent('tool-activities-record');
+    const account = await createEntityRecord('Account', { name: `${MARKER} call account` });
+    const emptyAccount = await createEntityRecord('Account', { name: `${MARKER} quiet account` });
+    const callId = await createEntityRecord('Call', {
+      name: `${MARKER} discovery call`,
+      status: 'Held',
+      dateStart: new Date().toISOString(),
+      assignedUserId: adminUserId,
+    });
+
+    // The relation is declared on the activity (`accounts`), so the link is written from that side.
+    const linked = await call('PUT', `/api/v1/Call/${callId}/accounts/${account}`, ctx.adminToken);
+    expect(linked.status, JSON.stringify(linked.body)).toBe(200);
+
+    const found = await runTool(agentId, 'crm_list_activities', {
+      kind: 'Call',
+      scope: 'record',
+      record: { entity: 'Account', id: account },
+    });
+    expect(found.status, found.summary ?? '').toBe('succeeded');
+    const foundResult = found.result as Record<string, unknown>;
+    expect((foundResult['activities'] as { id: string }[]).map((activity) => activity.id)).toContain(callId);
+
+    const none = await runTool(agentId, 'crm_list_activities', {
+      kind: 'Call',
+      scope: 'record',
+      record: { entity: 'Account', id: emptyAccount },
+    });
+    expect(none.status).toBe('succeeded');
+    const noneResult = none.result as Record<string, unknown>;
+    expect(noneResult['count']).toBe(0);
+    // An empty relation is reported as an empty relation, not as a permission problem.
+    expect(String(noneResult['reason'])).toContain('not a permission problem');
+  });
+
+  it('runs a curated cross-module scenario and reports its steps', async () => {
+    const agentId = await toolAgent('tool-cross-module');
+    const account = await createEntityRecord('Account', { name: `${MARKER} 360 account` });
+
+    const outcome = await runTool(agentId, 'crm_cross_module', {
+      scenario: 'account-360',
+      rootId: account,
+    });
+    expect(outcome.status, outcome.summary ?? '').toBe('succeeded');
+    const result = outcome.result as Record<string, unknown>;
+    expect(result['scenario']).toBe('account-360');
+    expect(result['rootEntity']).toBe('Account');
+    const steps = result['steps'] as { relation: string; count: number }[];
+    expect(steps.map((step) => step.relation)).toContain('opportunities');
+    expect(typeof result['partial']).toBe('boolean');
+  });
+
+  it('refuses an undeclared scenario by naming the ones it knows', async () => {
+    const agentId = await toolAgent('tool-cross-module-unknown');
+    const account = await createEntityRecord('Account', { name: `${MARKER} unknown scenario` });
+
+    const outcome = await runTool(agentId, 'crm_cross_module', {
+      scenario: 'everything-about-everything',
+      rootId: account,
+    });
+    expect(outcome.status).toBe('failed');
+    expect(outcome.result).toBeNull();
   });
 });

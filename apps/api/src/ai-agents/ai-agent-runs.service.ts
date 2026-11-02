@@ -28,6 +28,7 @@ import {
   validateBoundedJsonSchema,
 } from './ai-agent-config.js';
 import { AIAgentDefinitionService } from './ai-agent-definitions.service.js';
+import { AIAgentActorDirectoryService } from './ai-agent-directory.service.js';
 import { AI_AGENT_RUN_JOB } from './ai-agent-jobs.js';
 import { AIAgentMemoryService } from './ai-agent-memory.service.js';
 import { AIAgentQuotaService } from './ai-agent-quota.service.js';
@@ -157,6 +158,7 @@ export class AIAgentRunService {
     @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(AIAgentMemoryService) private readonly memory: AIAgentMemoryService,
     @Inject(AIAgentQuotaService) private readonly quotas: AIAgentQuotaService,
+    @Inject(AIAgentActorDirectoryService) private readonly actors: AIAgentActorDirectoryService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -1834,7 +1836,9 @@ export class AIAgentRunService {
   // -------------------------------------------------------------------------
 
   /**
-   * `plans/SPEC.md` §9.6 — who this run acts for.
+   * `plans/SPEC.md` §9.6 — who this run acts for; `19-CHAT.21` moved the lookup into
+   * `AIAgentActorDirectoryService` so the prompt and the `crm_actor_context` tool can never describe
+   * the same person differently.
    *
    * Two bounded reads, once per execution attempt rather than once per step: the caller's own
    * identity row and their team memberships. A missing or deleted user is not an error — the run
@@ -1843,36 +1847,14 @@ export class AIAgentRunService {
    * prompt-building query.
    */
   private async actorContext(userId: string | null): Promise<AIAgentActorContext | undefined> {
-    if (userId === null || userId === '') return undefined;
-    const user = await this.database.db
-      .selectFrom('users')
-      .select(['user_name', 'first_name', 'last_name', 'is_admin'])
-      .where('id', '=', userId)
-      .where('is_deleted', '=', false)
-      .executeTakeFirst();
-    if (user === undefined) return undefined;
-
-    const teams = await this.database.db
-      .selectFrom('users_teams')
-      .innerJoin('teams', 'teams.id', 'users_teams.team_id')
-      .select(['teams.id', 'teams.name'])
-      .where('users_teams.user_id', '=', userId)
-      .where('teams.is_deleted', '=', false)
-      .orderBy('teams.name', 'asc')
-      .limit(50)
-      .execute();
-
-    const display = [user.first_name ?? '', user.last_name ?? '']
-      .map((part) => part.trim())
-      .filter((part) => part !== '')
-      .join(' ');
-
+    const profile = await this.actors.profile(userId);
+    if (profile === undefined) return undefined;
     return {
-      userId,
-      displayName: display === '' ? user.user_name : display,
-      userName: user.user_name,
-      isAdmin: user.is_admin,
-      teams: teams.map((team) => ({ id: team.id, name: team.name })),
+      userId: profile.userId,
+      displayName: profile.displayName,
+      userName: profile.userName,
+      isAdmin: profile.isAdmin,
+      teams: profile.teams,
     };
   }
 

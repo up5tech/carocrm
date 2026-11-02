@@ -18,6 +18,7 @@ import { CRMChatQueryService } from './crm-chat-query.service.js';
 import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 import { CRMChatStreamingService } from './crm-chat-streaming.service.js';
 import { CRM_CHAT_MENU_INVALIDATOR, noopMenuInvalidator } from './crm-chat-tokens.js';
+import { CRMChatToolContribution } from './crm-chat-tool-contribution.js';
 
 export type { CRMChatCapabilitiesView } from './crm-chat.controller.js';
 export { CRMChatController } from './crm-chat.controller.js';
@@ -129,6 +130,7 @@ export const CRM_CHAT_PROVIDERS: Provider[] = [
   CRMChatStreamingService,
   CRMChatActionService,
   CRMChatModuleHealthService,
+  CRMChatToolContribution,
   // Default seam: an isolated module test has no navigation surface to invalidate. `AppModule`
   // overrides this with `NavigationService.invalidate()`.
   { provide: CRM_CHAT_MENU_INVALIDATOR, useValue: noopMenuInvalidator },

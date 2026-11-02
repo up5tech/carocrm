@@ -231,6 +231,26 @@ export class EntityCrudService {
     };
   }
 
+  /**
+   * Ids of `source` records that link **to** one target through a declared relation — the reverse of
+   * `related()`, for the case where the relation is declared only on the child.
+   *
+   * An activity declares `accounts` and `contacts`; an Account declares no `calls`, so "the calls
+   * about this account" has no forward relation to walk. This returns the ids; the caller reads them
+   * with `list()`, which applies the record predicate, so a linked-but-unreadable activity never
+   * appears.
+   */
+  async linkedSourceIds(
+    source: string,
+    relationName: string,
+    target: string,
+    targetId: string,
+  ): Promise<string[]> {
+    this.assertEntity(source);
+    this.assertEntity(target);
+    return this.store.linkedSourceIds(source, relationName, target, targetId);
+  }
+
   // -------------------------------------------------------------------------
   // writes
   // -------------------------------------------------------------------------

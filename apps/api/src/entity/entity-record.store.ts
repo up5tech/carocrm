@@ -442,6 +442,30 @@ export class PostgresRecordStore implements RecordStorePort {
   }
 
   /**
+   * The reverse of {@link linkedRecordIds}: the `source` records that link **to** one target.
+   *
+   * Used where the relation is declared only on the child — an activity's `accounts` / `contacts`
+   * panel — so "the calls about this account" is one indexed lookup rather than a scan of every
+   * activity. The caller still reads the rows through the Entity Engine, which applies its ACL.
+   */
+  async linkedSourceIds(
+    sourceEntity: string,
+    relationName: string,
+    targetEntity: string,
+    targetId: string,
+  ): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('entity_links')
+      .select('record_id_a')
+      .where('entity_type_a', '=', sourceEntity)
+      .where('relation_name', '=', relationName)
+      .where('entity_type_b', '=', targetEntity)
+      .where('record_id_b', '=', targetId)
+      .execute();
+    return rows.map((row) => row.record_id_a);
+  }
+
+  /**
    * Phase 18 portal visibility: whether a record is linked, in either direction, to any of
    * `otherIds` (the portal user's contact/account) through the generic link store.
    */

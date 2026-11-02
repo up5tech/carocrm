@@ -20,6 +20,7 @@ const PURE_API_TESTS = [
   'advanced-integrations-connectors.test.ts',
   'advanced-integrations-transformation.test.ts',
   'ai-agent-actor.test.ts',
+  'ai-agent-periods.test.ts',
   'ai-providers.test.ts',
   'config-jwt-secret.test.ts',
   'crm-chat-contract.test.ts',

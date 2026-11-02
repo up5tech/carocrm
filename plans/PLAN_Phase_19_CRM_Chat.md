@@ -1,6 +1,8 @@
 # PLAN — CRM Chat Assistant (`CRMChat`)
 
-> **Status:** Planned  
+> **Status:** Implemented — 19-CHAT.0 → 19-CHAT.19 shipped 2026-10-21 (v1.1.0); 19-CHAT.20 and 19-CHAT.21 shipped 2026-11-02; 19-CHAT.22 → 19-CHAT.24 planned  
+> **Plan version:** 1.2.0 (2026-11-02)  
+> **As-built companion:** `plans/SPEC.md` — §7 is the shipped AI layer, §8 the gap analysis, §9 the tool-catalogue design that phases 20–24 implement  
 > **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Capabilities  
 > **Suggested module name:** `CRMChat`  
 > **Module slug:** `crm-chat`  
@@ -18,7 +20,7 @@
 
 Read `AGENTS.MD`, `plans/PLAN.md`, and the actual source code for `AIAgents`, the Entity Engine, ACL, Search, Activities, Notifications, Jobs, Attachments, Dashboard, and the existing frontend shell before implementing this plan.
 
-This plan describes intended behavior. It is not evidence that a dependency already exists or is implemented. Start with **Phase 19-CHAT.0 only**. Inspect the repository, migration history, public API conventions, module manifests, tool contracts, provider adapters, UI conventions, tests, and database test scripts before selecting an implementation.
+This plan describes intended behavior. Where it and the code disagree, the code is the fact and this file is the bug — that has already happened once, in the direction of the plan being wrong. Read §0.1 before anything else: it tells you which phases are shipped and which are open. For open work, inspect the repository, migration history, public API conventions, module manifests, tool contracts, provider adapters, UI conventions, tests, and database test scripts before selecting an implementation.
 
 ### Non-negotiable rules
 
@@ -35,6 +37,32 @@ This plan describes intended behavior. It is not evidence that a dependency alre
 - **Do not create a new test database, temporary database, shadow database, test schema, Docker database, or per-agent/per-run database.** Inspect test scripts first and follow `AGENTS.MD` exactly.
 - Never run real outbound emails, SMS, phone calls, payments, external writes, or irreversible integrations as a side effect of automated tests. Use fake/stub providers and narrowly scoped `AGENT_TEST_...` data.
 - Do not mark a phase complete without recording acceptance evidence and any limitations.
+
+### Delivery status (2026-11-02)
+
+The module is **built and running**, not planned. Phases 19-CHAT.0 → 19-CHAT.19 are the historical
+specification that produced the shipped module; they stay in this file because they define its
+contract. Work that is still open is specified as **19-CHAT.20 → 19-CHAT.24** in §17.
+
+| Phase range | Status | Evidence |
+|---|---|---|
+| 19-CHAT.0 → 19-CHAT.19 | **Shipped** 2026-10-21 (module v1.1.0, contract v1.2.0) | `docs/modules/crm-chat/RELEASE_NOTES.md`; 9 Chat suites under `apps/api/test/crm-chat*.test.ts`; `docs/architecture/crm-chat-contract.md` |
+| 19-CHAT.20 — acting-user context | **Shipped** 2026-11-02 | `apps/api/src/ai-agents/ai-agent-actor.ts`, `apps/api/test/ai-agent-actor.test.ts` |
+| 19-CHAT.21 — read tool family | **Shipped** 2026-11-02 | 4 tools, registry 8 → 12 keys; `ai-agent-periods.test.ts` (16 pure cases) + 8 new cases in `ai-agent-runs.test.ts`; design in `plans/SPEC.md` §9.2 |
+| 19-CHAT.22 — write loop closure | Planned | §17 phase 19-CHAT.22; design in `plans/SPEC.md` §9.3, §9.5 |
+| 19-CHAT.23 — module intelligence tools | Planned | §17 phase 19-CHAT.23; design in `plans/SPEC.md` §9.4 |
+| 19-CHAT.24 — tool-aware suggestions, evaluation, release | Planned | §17 phase 19-CHAT.24; design in `plans/SPEC.md` §9.7 |
+
+Two rules follow from this split, and both have already cost time when ignored:
+
+1. **Do not re-implement a shipped phase.** Before writing a phase 0–19 task, read the module. The
+   release notes record nine areas where the declaration did not survive contact with the code: the
+   build itself, stream event names, citations, query-filter safety, cross-module reachability,
+   action-proposal façade, feedback/prompts/search routes, test role wiring, and the contract's own
+   field names. The text lost every one of those arguments.
+2. **Do not extend a shipped phase in place.** A new capability is a new phase with its own
+   acceptance evidence, because the shipped contract (`docs/architecture/crm-chat-contract.md`)
+   is versioned and consumed by the SPA.
 
 ---
 
@@ -58,6 +86,14 @@ At completion, an authorized user can:
 8. Resume recent conversations, search conversation history, rename/archive conversations, and provide answer feedback subject to retention policy.
 9. Use suggested prompts and reusable prompt templates without giving the assistant broader permissions than the user already has.
 10. View a clear status when information is missing, a tool is unavailable, a request is ambiguous, or a provider fails.
+
+**Where these outcomes stand today.** 1, 2, 3, 4, 7, 8, 9 and 10 are served. Outcome 3 now includes
+aggregation and activities — `crm_aggregate` and `crm_list_activities` — so "how many", "total
+value" and "by stage" are numbers from SQL rather than a model's arithmetic. Outcome 4 is reachable
+because `crm_cross_module` exposes the curated scenarios as a tool. Still open: outcome 5 covers
+records and help articles but not saved reports (phase 23); outcome 6 covers two write tools, neither
+of which can attach a note or an email to the record it is about (phase 22); and the two suggestion
+chips that need activity negation or email drafting still cannot be honoured (phases 23 and 22).
 
 ### 1.2 Example user journeys
 
@@ -259,6 +295,11 @@ Users can ask for individual records, lists, statistics, trends, and summaries. 
 - Link citations to existing CRM record detail/list routes only after confirming the current user has access.
 - If the relevant field, relation, definition, or data is missing, ask a targeted clarification or state the limitation.
 - When data changes during a conversation, do not assume the previous result remains fresh; re-query when freshness matters.
+- Resolve the acting user **server-side** and put it in the system prompt, so "my", "mine" and "our" become a filter the model can actually apply. A model that is not told who it acts for either drops the filter — returning other people's records inside ACL — or invents one.
+- Resolve relative periods ("this quarter", "last 30 days", "next week") **server-side** from the user's timezone and the fiscal calendar, and state the resolved range in the answer. Letting the model compute dates from "today" produces silent off-by-one-quarter errors that look like data problems.
+- Answer counting, totals and group-by questions only through a dedicated aggregate tool with a bounded group count, so the number comes from SQL and not from a model summing a truncated list of 25 rows.
+- Never accept a user id, team id or role from the model as a query parameter. Anything actor-scoped is derived from the run's initiating user, never passed in.
+- Expose every analysis path the product claims **as a tool**. A capability reachable only through a REST route is, to the model, a capability that does not exist.
 
 ### 5.5 Cross-module analysis
 
@@ -269,6 +310,8 @@ Users can ask for individual records, lists, statistics, trends, and summaries. 
 - Apply authorization before computing counts, ranks, and aggregates to prevent inference through hidden records.
 - Return traceable evidence such as “based on 12 visible accounts” and a query timestamp.
 - If one source module is unavailable, either return a clearly partial answer or ask whether to continue with the available modules.
+- Make the supported paths **declarative and enumerable**: a scenario the installation cannot serve is reported as `partial` with a per-step reason, never as a 500 and never as an empty success.
+- Register the analysis tool from the module that owns the service, so the agent runtime never imports a domain module (see §14.3 and phase 19-CHAT.21).
 
 ### 5.6 Actions and workflows
 
@@ -283,6 +326,10 @@ Users can ask for individual records, lists, statistics, trends, and summaries. 
 - For bulk operations, show a count and a representative preview; require stronger confirmation at configured thresholds.
 - If partial execution is possible, explain which actions are committed and which are still pending. Do not promise atomicity across modules/external systems when it is not available.
 - Never create a fake success response when a tool failed or returned an unknown result.
+- Link what a write creates to the record it is about. A task, note or call with no parent is a record the user will not find again — it appears on no timeline and answers no question. The parent entity and id are part of the tool's input, not something the model is trusted to add later.
+- Drafting is not sending. An email produced by a tool is a `Draft` record and must never reach the send queue; the user opens it and sends it from the record, under their own authorisation.
+- Record work that already happened through the owning service — Stream for notes, Activities for calls and meetings — so audit, followers, notifications and hooks fire exactly as they do for a manual edit.
+- Declare the effect class and approval requirement on every write tool. A `material_write` cannot be published without `requiresApproval`; widening the writable-field allowlist (phase 19-CHAT.22) does not change the class.
 
 ### 5.7 Feedback and continuous improvement
 
@@ -321,6 +368,9 @@ Required layout:
 - Example prompt categories: “My work”, “Sales pipeline”, “Customer health”, “Open support cases”, “Marketing performance”, “Create a follow-up plan”.
 - Do not expose sensitive names or metrics in suggestion text if the user cannot view the underlying data.
 - Keep templates as prompt aids, not executable scripts or sources of authorization.
+- Make each suggestion declare the tool it needs (`requiresTool`) and render it only when the answering agent's grant includes that tool. The Chat payload already carries `capabilities.assistant.tools`; a suggestion that ignores it is a promise the assistant cannot keep.
+- Hide a suggestion whose tool is missing rather than showing it disabled with an explanation. A dead control still reads as "the product is broken", and the honest fix is not to advertise it.
+- Prefer four suggestions that always work over eight that sometimes do. When a suggestion is wrong for the agent's tool set, the answer is to change the suggestion, not to give every agent every tool.
 
 ### 6.4 Accessibility and responsive behavior
 
@@ -332,11 +382,29 @@ Required layout:
 
 ## 7. Data Model and Persistence
 
-The precise schema must follow existing conventions discovered in Phase 19-CHAT.0. Prefer the Entity Engine for normal CRM entities and dedicated tables only where high-write-volume conversation storage or event ordering justifies them.
+**As built.** Chat stores nothing that AIAgents already stores. Migration
+`database/migrations/062_phase19_crm_chat.sql` adds exactly three tables; everything else is a view
+over the runtime's own tables, filtered by owner.
 
-### 7.1 Proposed entities/tables
+| Need | Storage | Added by |
+|---|---|---|
+| Conversation | `ai_agent_conversations` | reused (AIAgents) |
+| Message | `ai_agent_messages` | reused (AIAgents) |
+| Turn | `ai_agent_runs` | reused (AIAgents) |
+| Tool trace | `ai_agent_tool_calls` | reused (AIAgents) |
+| Provider usage | `ai_agent_provider_requests` | reused (AIAgents) |
+| Citation | `crm_chat_citations` | migration 062 |
+| Feedback | `crm_chat_feedback` | migration 062 |
+| Saved prompt | `crm_chat_prompts` | migration 062 |
 
-Names are illustrative; do not duplicate existing AIAgents conversation, memory, or run tables without a documented reason.
+That split is the reason the module has no second orchestration engine and no retention policy of its
+own: a conversation is deleted where the runtime deletes it, and a run's usage is counted where the
+runtime counts it.
+
+### 7.1 Entities and tables — original design sketch
+
+The field lists below are the design intent, kept because they explain the three added tables. Names
+are illustrative; the shipped DDL is the authority.
 
 #### `crm_chat_conversation`
 
@@ -502,22 +570,34 @@ Only where the repository's module configuration conventions require module-owne
 
 Use Server-Sent Events if compatible with the existing NestJS HTTP adapter and infrastructure. NestJS supports SSE routes using an observable event stream; follow the version installed in the repository and its proxy/runtime constraints. If the app already uses WebSockets or another standardized transport, use that existing mechanism instead of adding a second one.
 
-Proposed event types:
+Event types — **as built** (`CRM_CHAT_STREAM_EVENTS`, `apps/api/src/crm-chat/crm-chat-contract.ts`):
 
 - `turn.started`
-- `assistant.delta`
-- `assistant.message`
-- `tool.started` (user-safe summary only)
-- `tool.progress`
+- `tool.started`
+- `tool.completed`
 - `citation.added`
 - `action.proposed`
 - `approval.required`
-- `run.checkpoint`
+- `assistant.message`
+- `usage.summary`
 - `turn.completed`
 - `turn.failed`
 - `turn.cancelled`
-- `usage.summary`
 - `heartbeat`
+
+Three differences from the original proposal, each deliberate:
+
+| Proposed | Built | Why |
+|---|---|---|
+| `assistant.delta` | **absent** | The runtime does not stream model deltas; the final answer is read back from the conversation message the run wrote. Emitting a fake delta stream would have been a lie with a progress bar. |
+| `tool.progress` | `tool.completed` | The runtime reports a tool's outcome, not its percentage. A progress bar invented from a start event is worse than no bar. |
+| `run.checkpoint` | **absent** | Checkpoints are `approval.required`; a second event type for the same fact invites a client that handles one and not the other. |
+
+The original v1.0.0 build mapped `run.started`, `assistant.response`, `citation.added`,
+`action.proposed`, `approval.required`, `usage.summary` and `run.succeeded` — names the runtime never
+emits. The stream delivered a synthetic start and heartbeats and nothing else: no tool events, no
+answer, no approval, no usage. When changing this list, assert against the runtime's emitted events,
+not against a second copy of the vocabulary.
 
 ### 9.2 Streaming requirements
 
@@ -578,6 +658,10 @@ For factual answers based on CRM data:
 - Follow fiscal-calendar configuration if the CRM supports it; otherwise state the calendar assumptions.
 - Do not infer a value as zero merely because it is absent or inaccessible.
 - Do not leak counts from restricted records through summaries or group-by operations.
+- Compute aggregates in SQL, never in prose. A number in an answer must have come from a `count`/`sum`/`avg`/`min`/`max` over an ACL-filtered query; a model adding up a truncated page of rows produces a confident, wrong figure.
+- Bound the grouping: one dimension, a capped group count, and an explicit `truncated` flag. Grouping by a high-cardinality field yields a list rather than an insight and spends the context budget on rows nobody reads.
+- Distinguish "no rows" from "not permitted" from "field is empty". All three are tempting to render as `0`, and `0` is a factual claim about the business that the tool did not make.
+- Keep money as the canonical decimal string (`apps/api/src/sales/money/decimal.ts`) through the whole path. A tool that round-trips an amount through a JavaScript number has already lost precision before the model sees it.
 
 ### 10.4 Context size controls
 
@@ -708,20 +792,25 @@ Audit logs must not store unrestricted prompt contents by default. Use redaction
 
 ## 13. Configuration and Administration
 
-Provide an admin configuration surface only for settings that are not already owned by AIAgents or the platform.
+Settings **as built** — one validated row named `crmChat` in the platform's `app_settings`
+(`apps/api/src/crm-chat/crm-chat-settings.service.ts`). Nothing here duplicates provider or model
+configuration; that stays in `AIAgents` and Chat stores only the agent key.
 
-Potential settings:
+| Group | Keys | Default | Note |
+|---|---|---|---|
+| `features` | `workspace`, `readTools`, `helpRetrieval`, `actionProposals`, `feedback`, `conversationSearch` | only `workspace` on | A flag is *effective* only when its `requires` chain is on, so a deployment cannot claim a capability its prerequisite cannot deliver |
+| `assistant` | `agentKey` | `''` | Empty means "not configured": the workspace renders setup, not a composer. The module never guesses which agent to run |
+| `execution` | `mode` = `queue` \| `inline` | `queue` | `inline` runs in the API process for a single-process dev install; run row, lease, quota and audit are identical |
+| `limits` | `maxMessageChars` 8000, `maxContextRefs` 5, `maxActiveTurnsPerUser` 1, `maxConversationsPerUser` 200, `turnTimeoutSeconds` 180, `heartbeatSeconds` 15, `maxConcurrentQueries` 3, `maxTurnsPerMinute` 10, `maxQueryResults` 100 | — | Quotas cannot be bypassed by opening more conversations |
+| `retention` | `conversationsDays` 30 | 30 | Instance ceiling only; the AIAgents sweeper remains the single retention executor |
+| `safety` | `allowWrites` | `false` | Independent write switch. `features.actionProposals` alone never authorises a mutation |
 
-- Feature enabled/disabled globally and by role/team.
-- Which agent profile is the default CRM assistant.
-- Allowed tools/tool groups, referenced from AIAgents policy rather than duplicated.
-- Read/write action classes available in Chat.
-- Maximum input length, result count, context size, turn duration, concurrent runs, and request rate.
-- Conversation retention and whether feedback is enabled.
-- Default suggested prompts and approved help sources.
-- Streaming transport settings and safe reconnect behavior.
-- Provider/model selection only if owned by AIAgents; otherwise link administrators to the existing owner screen.
-- Feature flag for cross-module analytics and separately gated write actions.
+Settings the original plan expected but that deliberately live elsewhere:
+
+- **Allowed tools / tool groups** — `AIAgents` policy, including `settings.tools.disabled`. Chat reads grants, it does not define them.
+- **Provider/model selection** — the AIAgents provider screens. A second surface would be a second truth.
+- **Default suggested prompts** — now data in the SPA with a `requiresTool` field (phase 19-CHAT.24), not an admin setting. A prompt is UI copy; making it configurable invites an installation to advertise a capability it never granted.
+- **Cross-module analytics flag** — the scenarios are curated server-side and reported `partial` per step, so there is no half-working state to gate.
 
 Requirements:
 - Configuration is validated and audited.
@@ -771,6 +860,17 @@ Integrate only with capabilities that are implemented and enabled:
 - `Portal`: not used as an identity bypass; portal-specific Chat is separate future scope.
 
 The absence of one module must not break Chat for other modules. Tool discovery should report available capabilities based on registry and permissions at runtime.
+
+**Who registers a domain tool.** `crm-chat` imports `ai-agents`, and `docs/architecture/module-contracts.md`
+records the dependency graph as a DAG. The reverse edge is therefore forbidden: `ai-agents` may not
+import a domain module to reach its service. When a tool needs a domain service, the **domain** calls
+`AIToolRegistry.register()` at bootstrap with its own definition, and `ai-agents` only validates the
+grant (`entityScopes` must name entities the metadata registry knows). `pnpm lint:arch` enforces the
+rule, and it is the cheapest way to discover a violation — a cycle introduced at 11 p.m. surfaces as a
+lint failure rather than as an import-order bug at boot.
+
+Tools that need only shared core (entity engine, metadata, reports, documents) are declared inside
+`ai-agents` and need no such hand-off.
 
 ---
 
@@ -891,11 +991,29 @@ Build a versioned, sanitized evaluation set including:
 
 Evaluate factual correctness, evidence/citation validity, permission compliance, action safety, helpfulness, latency, and cost. Do not use production customer conversations as evaluation data without explicit governance and redaction.
 
+**As built.** The set is `apps/api/test/crm-chat-evaluation.test.ts` — one suite, not a spreadsheet, so
+it runs in the same command as everything else and cannot silently rot. It seeds its own
+`AGENT_TEST_chat_eval_*` users, snapshots and restores both the AI and Chat settings rows, and asserts
+through the HTTP surface rather than through internal functions. Eight further suites cover the
+contract, conversations, security, docs/help, engagement, inline execution, and the AIAgents
+integration.
+
+Two gaps this arrangement leaves, which phase 19-CHAT.24 is meant to close: there is no case per **tool**, and
+there is no case that fails when a tool is *removed* from the registry. A suite that only tests the
+happy path cannot tell you that a capability disappeared.
+
 ---
 
 ## 17. Delivery Roadmap
 
 Implement the phases sequentially. Do not start later phases before the repository audit and required interface decisions are recorded. The specific numbers are planning identifiers and do not change the broader `plans/PLAN.md` numbering.
+
+**Phases 19-CHAT.0 → 19-CHAT.19 shipped on 2026-10-21.** They are kept verbatim as the specification
+the module was built against; read them to understand a contract, not to find work. The open phases
+are **19-CHAT.20 → 19-CHAT.24**, at the end of this section, and they implement the tool catalogue in
+`plans/SPEC.md` §9. Phase 19-CHAT.20 is already shipped; its entry records what was actually built,
+because the implementation went further than the original sketch for a testability reason worth
+keeping.
 
 ### Phase 19-CHAT.0 — Repository Audit and Capability Inventory
 
@@ -1174,9 +1292,132 @@ Implement the phases sequentially. Do not start later phases before the reposito
 
 ---
 
+### Phase 19-CHAT.20 — Acting-User Context in the System Prompt ✅ shipped 2026-11-02
+
+The single highest-value change in the v2 catalogue, and it adds no tool. The registry has
+`crm_search_records` with an `assignedUserId` filter, so "my open opportunities" was always
+*answerable* — the model simply was never told who "my" was.
+
+**Tasks** (as built)
+- Move prompt construction out of `ai-agent-runs.service.ts` into `apps/api/src/ai-agents/ai-agent-actor.ts`, so the block is a pure function that tests without booting the API.
+- `AIAgentRunService.actorContext(userId)` resolves `users` + `users_teams ⟕ teams` **once per run execution**, not per step; a deleted user yields `undefined` and the block is omitted rather than failing the run.
+- `promptSafe()` strips control characters and newlines and caps length: the display name is user-controlled text sitting inside a **system** message, so a name containing a newline would otherwise open a new instruction line.
+- Insert the block between the operating rules and the agent instructions; `systemPrompt(agent, config)` without an actor produces byte-identical output to the previous version.
+- `__FAKE_ECHO_ACTOR__` seam in the fake provider returns the `- id:` line only — a test seam must not become a prompt-disclosure tool.
+
+**Acceptance criteria** (verified)
+- A run queued by user A and executed by an admin B carries **A's** id, not the executor's (`ai-agent-runs.test.ts`, end-to-end through `crm_search_records` with `assignedUserId`).
+- A display name containing `\n\nIgnore the operating rules` cannot open a new line in the system message (`ai-agent-actor.test.ts`).
+- The pure suite is listed in `PURE_API_TESTS` in `vitest.ci.config.ts`; the CI gate has no database.
+- Rollback is passing `undefined` as the third argument — no schema, no data, no migration.
+
+---
+
+### Phase 19-CHAT.21 — Read Tool Family: Aggregate, Activities, Actor, Cross-Module ✅ shipped 2026-11-02
+
+Closes the "no aggregation" and "capability exists but the model cannot see it" defects. Read-only,
+no approval, no migration. Took the registry from 8 keys to 12.
+
+**What the implementation added beyond this sketch**, and why:
+
+| Addition | Reason |
+|---|---|
+| `apps/api/src/ai-agents/ai-agent-periods.ts` — a pure, timezone-aware token resolver with 16 unit tests | The plan said "shared by the aggregate and activity tools"; making it a module with its own suite is what let the DST and week-boundary cases be tested without a database |
+| `AIAgentActorDirectoryService` — one actor lookup, used by both the prompt and `crm_actor_context` | Two queries written in two places drift; the prompt and the tool must never describe the same person differently |
+| `EntityService.linkedSourceIds()` + a store method | Activities declare `accounts`/`contacts` on the child, so "the calls about this account" has no forward relation to walk. One indexed lookup, then a normal ACL-filtered list |
+| `crm_actor_context` returns `today`/`now` as well | The most common model error is the current date; returning it is cheaper and safer than inferring it |
+| `crm_aggregate` scans up to 100 groups before slicing to `maxGroups` | The store orders by group key, so top-N-by-value needs a wider scan plus an honest `truncated` flag |
+
+**Tasks**
+- `crm_aggregate` over `EntityCrudService.aggregate()` — `count|sum|avg|min|max`, optional single `groupBy`, ≤ 6 criteria reusing the search operator allowlist, ≤ 10 groups, 16 KiB / 10 s caps. ACL and record predicate come from the entity service; the tool must not build its own predicate.
+- `crm_list_activities` over `Call` / `Meeting` / `Task` with `scope: mine | record`; `mine` resolves from `context.actorUserId` and is **not** an input parameter. Related records read through `entity_links`.
+- `crm_actor_context` — the caller's own id, name, locale, timezone, teams. Nothing about another user, no role of anyone else.
+- `crm_cross_module` over `CRMChatCrossModuleService.run()`, registered **from `crm-chat`** (§14.3) so the DAG is untouched. The scenario enum is the installation's declared list, not a hardcoded union.
+- Server-side relative-period resolution (`this_quarter`, `last_month`, `rolling:30d`, `next_week`) in the actor's timezone, shared by the aggregate and activity tools. The model passes a token; it never computes a date.
+- Dual schema per tool: Zod `inputSchema` (strict) **and** hand-written `inputJsonSchema` — the model never sees Zod. `entityScopes` may only name seeded entities, or the grant cannot be published.
+- Update `docs/modules/ai-agents/tool-developer-guide.md` with the aggregate and relative-period patterns.
+
+**Acceptance criteria** (verified — `ai-agent-runs.test.ts`, "read tool family")
+- "Pipeline by stage this quarter" returns ≤ 10 groups whose `sum(amount)` equals the same aggregate run directly against the database; the answer states the resolved date range.
+- A caller without `Opportunity: read` receives an authorisation error or an empty result with an explicit reason — **never** a number. Aggregates are the easiest way to leak restricted records.
+- "What do I have today?" returns only the initiating user's activities, even when a teammate's activities fall inside the same ACL window.
+- A cross-module scenario the installation does not declare returns `partial: true` with a per-step reason and HTTP 200, not a 500 and not an empty success.
+- Each new tool is in the catalogue assertion in `ai-agent-runs.test.ts`; deleting one turns the suite red.
+- `pnpm lint:arch` unchanged; `pnpm typecheck` clean.
+
+---
+
+### Phase 19-CHAT.22 — Write Loop Closure
+
+The registry has two write tools and neither can attach anything to the record it is about. A task
+with no parent appears on no timeline and answers no question, so "create a follow-up task" currently
+produces a record the user will never find again.
+
+**Tasks**
+- `crm_post_note` via `StreamService.create()` — the most common AI CRM action is recording what a call concluded. Author is the actor; the agent is recorded as the source.
+- `crm_log_activity` for `Call` / `Meeting` with `status: Held` and an optional `related {entity, id}`. It records work that already happened and sends nothing to the customer.
+- `crm_draft_email` creates an `Email` with `status: 'Draft'`. It must never call `queueSend`, and `queueSend` must keep refusing non-sendable statuses — the safety is in the service, not in the tool's good intentions.
+- `crm_create_task` **v2**: add `parent {entity, id}`, default `assignedUserId` to the actor. Publish as `version: '2'`; do not edit v1 in place, because published grants reference the version.
+- `crm_update_record_fields` **v2**: widen the writable allowlist — `Opportunity(stage, amount, closeDate)`, `Case(priority, assignedUserId)`, `Task(dateEnd, assignedUserId)`, `Lead(assignedUserId)`. It stays `material_write`, keeps `requiresApproval`, and keeps the version check.
+- Gate the whole family behind `features.actionProposals` **and** `safety.allowWrites`, exactly as the shipped proposal flow does.
+
+**Acceptance criteria**
+- A task created through the tool appears on the parent record's timeline/related panel; a parent the caller cannot read is a validation error.
+- A drafted email exists with `status = 'Draft'`, and the test asserts no send job was enqueued — the assertion is on the queue, not on the tool's return value.
+- A note created through the tool is attributed to the actor and produces the same stream/audit rows a manual note does.
+- `crm_update_record_fields` v2 still fails to publish without `requiresApproval`; a field outside the allowlist is a 422, never a silent no-op.
+- Rollback is `settings.tools.disabled` in AIAgents settings. No migration is introduced by this phase.
+
+---
+
+### Phase 19-CHAT.23 — Module Intelligence Tools
+
+Five thin wrappers over services that already exist. The rule for this phase is that no business rule
+is re-derived: if the domain service computes a health score, the tool returns that number.
+
+**Tasks**
+- `crm_lead_score` → `LeadScoreExplanationService.score/history` (registered by `lead-score`).
+- `crm_customer_health` → `CustomerSuccessHealthService.explanation` (registered by `customer-success`).
+- `crm_case_context` → `Case` + `CaseSLAClock` + `KnowledgeBaseService.suggestForCase` + CSAT (registered by `service-desk`).
+- `crm_stale_records` → `entity_records` with a single `NOT EXISTS` over `stream_items`. Do not fetch records and filter in JavaScript; the whole point is that the database does the exclusion.
+- `crm_run_report` → `ReportService.list/run`, only reports the caller can see (registered by `ai-agents` — `reports` is shared core).
+
+**Acceptance criteria**
+- Each tool's returned score equals the owning service's value for the same record in the same test.
+- A disabled or uninstalled module removes its tool from the catalogue, and Chat says the capability is unavailable rather than failing the turn.
+- `crm_stale_records` runs one query, not N+1, and respects record ACL — a record the caller cannot read never appears in the "silent" list.
+- `crm_run_report` cannot return a report the caller is not permitted to run.
+
+---
+
+### Phase 19-CHAT.24 — Tool-Aware Suggestions, Evaluation, and Release
+
+The four suggestion chips are hardcoded. Two of them still promise what the assistant cannot do
+(activity-based and email drafting), and a third — "deals closing this quarter" — only half-works
+because the model has to compute the date range itself. This phase makes a suggestion a claim the UI
+can verify.
+
+**Tasks**
+- Turn the suggestion list into data, each entry carrying `requiresTool`; render only those whose tool appears in `capabilities.assistant.tools`. No API change — the payload already carries it and today only the diagnostics drawer reads it.
+- Add one evaluation case per tool to `crm-chat-evaluation.test.ts`, in both Vietnamese and English, that fails if the tool is removed.
+- Extend the catalogue assertion to the full set (20 keys) and record each tool's effect class, approval requirement and `entityScopes`.
+- Update `docs/architecture/crm-chat-contract.md` (capabilities payload semantics), `plans/SPEC.md` §7/§9 to as-built, and `docs/modules/crm-chat/RELEASE_NOTES.md`.
+- Run the full gate: `pnpm lint` (sanctioned scope), `pnpm lint:arch`, `pnpm lint:ui`, `pnpm typecheck`, `pnpm test:ci` one file at a time, `pnpm test:web`, and the Playwright chat spec with `no_proxy='*'`.
+
+**Acceptance criteria**
+- No suggestion renders for a tool the answering agent lacks (component test, not a screenshot).
+- Removing any tool turns at least one evaluation case red — an untested tool is an unowned tool.
+- `pnpm lint:ui` clean: no missing `t()` key, no raw `<Empty>`, no sliced timestamp in the new UI.
+- Release notes state the new tool count, the two version bumps, and the rollback path for each phase.
+
+---
+
 ## 18. Definition of Done
 
-The module is not complete until all applicable criteria are satisfied:
+The list below is the gate the shipped module was accepted against, and it stays the standing gate
+for every new phase. A v2 phase that touches a row must re-verify it rather than assume the earlier
+pass still holds — the v1.0.0 release notes are the cautionary example: nineteen phases were marked
+complete while four services did not compile.
 
 - [ ] `CRMChat` is registered following repository naming conventions, with no `Ua` prefix.
 - [ ] Repository audit and `AIAgents` integration contract are documented.
@@ -1196,11 +1437,27 @@ The module is not complete until all applicable criteria are satisfied:
 - [ ] No real outbound communication, campaign, payment, or external write was triggered by tests.
 - [ ] Actual executed checks and known limitations are recorded.
 
+### 18.1 Addendum for the v2 tool catalogue (19-CHAT.21 → 19-CHAT.24)
+
+These are the failure modes the shipped module actually exhibits, so each one gets a criterion:
+
+- [ ] Every suggestion is backed by a tool the answering agent holds; none promises a capability the run cannot reach.
+- [ ] Every number in an answer came from an aggregate query. A model summing a truncated page is a fabricated statistic, not an approximation.
+- [ ] Relative periods are resolved server-side in the actor's timezone and the resolved range is stated in the answer.
+- [ ] Every write links to its parent record and appears on that record's timeline.
+- [ ] No tool can send external communication. Drafting produces a `Draft`; sending remains a human action on the record.
+- [ ] No aggregate leaks a restricted record's existence through a count, a total or a group.
+- [ ] Every tool has a dual schema, byte/time caps, registered `entityScopes`, one evaluation case, and a catalogue entry.
+- [ ] Every tool's owning module respects the DAG; `pnpm lint:arch` proves it.
+- [ ] Every tool is disableable through AIAgents settings without a deploy or a migration.
+
 ---
 
-## 19. Recommended Initial Release Boundary
+## 19. Release Boundaries
 
-Do not attempt every advanced capability in the first coding-agent pass. After Phase 19-CHAT.0 and 19-CHAT.1 establish the real repository capabilities, target this initial vertical slice:
+### 19.1 Initial release — delivered 2026-10-21
+
+The first pass was deliberately narrow. This is what it contained, and it shipped:
 
 1. Private conversation history and a usable Chat workspace.
 2. Integration with the existing AIAgents runtime/provider/tool registry.
@@ -1209,7 +1466,24 @@ Do not attempt every advanced capability in the first coding-agent pass. After P
 5. One low-risk write workflow implemented through preview + explicit confirmation, such as creating a follow-up task.
 6. Audit, rate limiting, cancellation, safe error handling, and evaluation tests.
 
-Only after that vertical slice passes end-to-end tests should the agent broaden cross-module aggregation, complex multi-step actions, richer charts, or additional tool families.
+### 19.2 v2 boundary — 19-CHAT.21 → 19-CHAT.24
+
+The next boundary is defined by *questions the product already advertises and cannot answer*, not by
+features that would be nice to have. In scope:
+
+1. Aggregation with one bounded group-by, so counts, totals and pipeline-by-stage become facts.
+2. Activity listing and the actor context, so "my day" and "my pipeline" work.
+3. Reachability of the cross-module scenarios the module already implements.
+4. Write loop closure: note, activity, draft email, task with a parent.
+5. Module intelligence wrappers for score, health, case context, stale records and saved reports.
+6. Suggestions filtered by the agent's actual grants.
+
+Out of scope, and each for a reason rather than for lack of time: record deletion and merge
+(irreversible, needs its own threat model); real email/SMS/call sending (external side effect, needs
+the domain's approval flow, not chat confirmation); financial writes such as quotes, invoices and
+payments (canonical money path, approval semantics differ); arbitrary SQL, HTTP or code execution;
+a public portal assistant (separate identity and tenancy model); vector search over unrestricted CRM
+content (an ACL bypass dressed as a feature).
 
 ---
 
@@ -1218,6 +1492,10 @@ Only after that vertical slice passes end-to-end tests should the agent broaden 
 Use these references for architectural/security guidance, checking current official documentation during implementation. The implementation must still follow the installed library versions and the repository's established contracts.
 
 - Project roadmap: `plans/PLAN.md`
+- As-built specification: `plans/SPEC.md` (§7 shipped AI layer, §8 gap analysis, §9 tool catalogue)
+- Module release notes: `docs/modules/crm-chat/RELEASE_NOTES.md`
+- API/stream contract: `docs/architecture/crm-chat-contract.md`
+- Tool authoring guide: `docs/modules/ai-agents/tool-developer-guide.md`
 - Coding and database safety rules: `AGENTS.MD`
 - Existing agent runtime plan: `plans/PLAN_Phase_19_AI_Agents.md` if present in the repository
 - Existing domain plans: `plans/PLAN_Phase_19_Sales.md`, `plans/PLAN_Phase_19_Projects.md`, `plans/PLAN_Phase_19_Customer_Success.md`, `plans/PLAN_Phase_19_ServiceDesk.md`, `plans/PLAN_Phase_19_Marketing_Automation.md`, `plans/PLAN_Phase_19_Voice_Communications.md`, and `plans/PLAN_Phase_19_Advanced_Integrations.md` where present
@@ -1230,6 +1508,28 @@ Do not copy upstream source code, translations, icons, frontend assets, or brand
 
 ---
 
+## 21. Change Log
+
+| Version | Date | Change |
+|---|---|---|
+| 1.0.0 | 2026-10-20 | Initial plan: product contract, threat model, data model, roadmap 19-CHAT.0 → 19-CHAT.19. |
+| 1.1.0 | 2026-10-21 | Module shipped (contract v1.2.0). This file was **not** updated, which is why it still described the module as planned. |
+| 1.3.0 | 2026-11-02 | Phase 19-CHAT.21 shipped: `crm_aggregate`, `crm_list_activities`, `crm_actor_context` (in `ai-agents`) and `crm_cross_module` (contributed by `crm-chat`); `ai-agent-periods.ts` resolver; `AIAgentActorDirectoryService` shared with the prompt; `EntityService.linkedSourceIds`. Registry 8 → 12 keys. Updated §0.1, §1.1, §17 phase 21. |
+| 1.2.0 | 2026-11-02 | Status corrected to implemented; added §0.1 delivery status and the two rules that follow from it. Added §1.1 capability-status paragraph, §5.4/§5.5/§5.6/§6.3/§10.3/§14.3 requirements learned from the shipped module, §18.1 v2 addendum, §19.2 v2 boundary. Added phases 19-CHAT.20 (shipped) → 19-CHAT.24 (planned) implementing the catalogue in `plans/SPEC.md` §9. Rewrote the final instruction to start at 19-CHAT.21. |
+
+---
+
 ## Final Instruction to the Coding Agent
 
-Implement only **Phase 19-CHAT.0 — Repository Audit and Capability Inventory** first. Report the actual findings, paths, APIs, schemas, available tool/approval/streaming contracts, missing capabilities, migration risks, and the smallest implementation plan. Do not start later phases until this audit is complete. Follow `AGENTS.MD` for every database operation and never create a separate test database or reset the configured database.
+Phases 19-CHAT.0 → 19-CHAT.20 are shipped. Do not re-implement them and do not extend them in place;
+a new capability is a new phase with its own acceptance evidence.
+
+Start at **Phase 19-CHAT.21 — Read Tool Family**. Before writing a tool:
+
+1. Read `plans/SPEC.md` §7 for the shipped registry and §9 for the tool design rules — especially §9.1 rule 6, which decides whether your tool belongs in `ai-agents` or in the domain module that owns the service.
+2. Read `apps/api/src/ai-agents/ai-agent-tools.ts` end to end. The registry is deliberately small; adding to it is a design decision, not a configuration change.
+3. Read the owning service before wrapping it. If the service already applies ACL, use it — do not build a second predicate.
+4. Add the Zod schema **and** the hand-written JSON Schema. The model never sees Zod.
+5. Add the catalogue assertion and one evaluation case in the same commit. A tool without a test is a tool nobody will notice breaking.
+
+Follow `AGENTS.MD` for every database operation. Never create a separate test database, shadow schema or container, and never reset the configured database. Never let a test send a real message.

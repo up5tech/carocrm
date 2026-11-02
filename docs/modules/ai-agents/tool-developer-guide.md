@@ -28,3 +28,47 @@ Each definition requires:
 
 Default matrix: `read` and `low_write` may run automatically within ACL; `material_write` and
 `high_impact` require human approval unless policy says otherwise.
+
+## Contributing a tool from a domain module
+
+`ai-agents` may not import a business domain: `crm-chat` imports `ai-agents`, and
+`docs/architecture/module-contracts.md` records the graph as a DAG. When a tool needs a domain
+service, the domain registers it itself at bootstrap through the public
+`AIToolRegistry.register()` — `crm_cross_module` in
+`apps/api/src/crm-chat/crm-chat-tool-contribution.ts` is the worked example.
+
+`register()` throws on a duplicate key, so two modules claiming one tool is a boot failure rather
+than a silent override. `ai-agents` still owns the grant check: `entityScopes` must name entities
+the metadata registry knows, and a `material_write` cannot be granted without approval.
+
+## Aggregation tools
+
+A number in an answer must come from SQL. Use `EntityCrudService.aggregate()`, which applies the
+caller's record predicate before it groups — never fetch rows and sum them in JavaScript.
+
+- Pass `fieldType` for every dimension and metric. The store casts numerics and dates from it; a
+  missing type compares JSON text and silently returns wrong groupings.
+- The store orders groups by key and returns at most `maxGroups + 1` rows, so "top N by value"
+  requires a wider scan (`AGGREGATE_GROUP_SCAN`) followed by an in-memory sort and slice. Report
+  `truncated` when the scan hit its ceiling.
+- `currency` and `decimal` fields are canonical decimal strings on the way in and numbers on the way
+  out of the store; attach a formatted `display` so an answer can quote a readable amount.
+
+## Relative periods
+
+Never let the model compute a date. Accept a token from `ai-agent-periods.ts` (`this_quarter`,
+`last_month`, `rolling:30d`, …), resolve it against the **actor's** timezone, and return the resolved
+`{ label, from, to, timezone }` with the result so the answer can state its window.
+
+- A period is meaningless without the date field it applies to: require both, and name the
+  candidate date fields when the caller omits one.
+- Week boundaries are Monday-based (ISO-8601); quarters are calendar quarters.
+- The resolver converts local wall clocks to instants with a two-pass offset correction, which is
+  what makes a DST boundary land on the correct side. It is covered by
+  `apps/api/test/ai-agent-periods.test.ts`.
+
+## Actor-scoped tools
+
+Resolve "mine" from `AIToolContext.actorUserId` via `AIAgentActorDirectoryService`; never accept a
+user id as an argument. The same service feeds the system prompt, so a tool and the prompt cannot
+describe the acting user differently.
