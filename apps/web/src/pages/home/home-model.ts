@@ -2,7 +2,7 @@ import type { CalendarEvent, DashboardRow,DashletRow } from '../../api/client.js
 import type { ProcessTaskView } from '../../api/types.js';
 
 /**
- * Pure derivations for the home workspace (PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
+ * Pure derivations for the home workspace (plans/PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
  *
  * Nothing here touches React or the network, so every rule the page states in prose — which greeting
  * it shows, which day the agenda covers, how many KPI tiles appear, what counts as overdue — is one

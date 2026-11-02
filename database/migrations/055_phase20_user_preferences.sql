@@ -1,4 +1,4 @@
--- Phase 20.10 — per-user preferences (PLAN_Phase_20_Settings_UX.md §5.9, §20.10)
+-- Phase 20.10 — per-user preferences (plans/PLAN_Phase_20_Settings_UX.md §5.9, §20.10)
 --
 -- Additive only (AGENTS.md §3.5): one new table; no existing table is altered, no row is touched.
 -- A preference is a small named document owned by exactly one account — the primary key is

@@ -13,7 +13,7 @@ import { authHeader, bootApi, shutdownApi } from "./support/boot-api.js";
 
 /**
  * Phase 19-MA.9 — the queue-based delivery runtime
- * (PLAN_Phase_19_Marketing_Automation.md §5.7, §5.8, §11, §15 `19-MA.9` acceptance).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.7, §5.8, §11, §15 `19-MA.9` acceptance).
  *
  * Runs against the configured primary database through the real HTTP API (AGENTS.md §3.1): no test
  * database is created, and **nothing here sends mail** — the only provider that ever becomes "live"

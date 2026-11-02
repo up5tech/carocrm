@@ -6,7 +6,7 @@ import { EntityCrudService as EntityService } from '../entity/entity.service.js'
 
 /**
  * Phase 19-CHAT.10 — Read-Only CRM Tools and Safe Query Plans
- * (PLAN_Phase_19_CRM_Chat.md §10, §17 `19-CHAT.10`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §10, §17 `19-CHAT.10`).
  *
  * This service provides safe, read-only access to CRM data for the Chat assistant. It ensures:
  * - All queries are validated against metadata (no arbitrary SQL)

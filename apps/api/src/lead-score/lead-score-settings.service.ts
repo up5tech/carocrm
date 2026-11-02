@@ -10,7 +10,7 @@ import { LEADSCORE_FEATURES, LEADSCORE_PENDING_FEATURES, type LeadScoreFeatureDe
 
 /**
  * Phase 19-LS.1 — the `leadScore` settings document
- * (`PLAN_Phase_19_LeadScore.md` §15.2, §16 `19-LS.1`; audit §1, §9 D13).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §15.2, §16 `19-LS.1`; audit §1, §9 D13).
  *
  * The platform already owns instance settings (`app_settings`), so this module adds no second store:
  * it keeps one validated, versioned row named `leadScore`, exactly like `Sales`, `CustomerSuccess`,

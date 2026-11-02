@@ -2,7 +2,7 @@ import type { AclAction } from '@carocrm/acl/types/index.js';
 
 /**
  * Phase 19-AI.2 — the `AIAgents` module descriptor
- * (PLAN_Phase_19_AI_Agents.md §1.1, §4.2, §5, §9, §20 `19-AI.2`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §1.1, §4.2, §5, §9, §20 `19-AI.2`).
  *
  * The module is a kernel domain directory under `apps/api/src`, like Projects, Sales, Customer
  * Success, Service Desk and Marketing Automation. Its records do **not** live in `entity_records`:

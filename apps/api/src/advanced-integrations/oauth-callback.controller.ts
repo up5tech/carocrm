@@ -11,7 +11,7 @@ import { OAUTH_CALLBACK_PATH, OAuthFlowService } from './oauth-flow.service.js';
 
 /**
  * Phase 19-INT.5 — the OAuth callback
- * (`PLAN_Phase_19_Advanced_Integrations.md` §7.2, §13.5; `19-INT.5`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §7.2, §13.5; `19-INT.5`).
  *
  * The provider redirects the administrator's browser here, so the route carries **no session**: it
  * is `@Public()`. The platform's own defences take over:

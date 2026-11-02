@@ -1,4 +1,4 @@
--- Phase 19-SD — Service Desk (PLAN_Phase_19_ServiceDesk.md §5.1, §5.3, §6.1; sub-phase 19-SD.2).
+-- Phase 19-SD — Service Desk (plans/PLAN_Phase_19_ServiceDesk.md §5.1, §5.3, §6.1; sub-phase 19-SD.2).
 --
 -- Case records live in the generic `entity_records` store (JSONB `attrs`) exactly like every other
 -- CRM entity, so the Entity Engine keeps CRUD, validation, field ACL, audit, stream, attachments and

@@ -30,7 +30,7 @@ import { LeadScoreSignalsService } from './lead-score-signals.js';
 
 /**
  * Phase 19-LS.1 — module health, read from the running system
- * (`PLAN_Phase_19_LeadScore.md` §4.1, §15.2, §16 `19-LS.1`; audit §1, §12).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §4.1, §15.2, §16 `19-LS.1`; audit §1, §12).
  *
  * "The module is registered, loads cleanly and does not conflict with existing Lead behavior" is only
  * honest if an operator can *see* it, so every fact here is queried: `information_schema` for the

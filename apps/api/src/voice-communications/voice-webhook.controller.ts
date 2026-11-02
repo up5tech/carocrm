@@ -7,7 +7,7 @@ import { VoiceWebhookIngressService } from "./voice-webhook-ingress.service.js";
 
 /**
  * Phase 19-VC.5 — provider webhook ingress
- * (`PLAN_Phase_19_Voice_Communications.md` §11.4, §15 `19-VC.5`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §11.4, §15 `19-VC.5`).
  *
  * `POST /api/v1/integrations/voice-communications/{providerKey}/{accountKey}/{kind}` with
  * `kind ∈ voice-events | message-events | status-events | media-events` (`media-events` carries

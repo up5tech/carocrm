@@ -1,6 +1,6 @@
 /**
  * Phase 19-LS.1 — the `LeadScore` module descriptor
- * (`PLAN_Phase_19_LeadScore.md` §4.1, §16 `19-LS.1`; audit §2, §9).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §4.1, §16 `19-LS.1`; audit §2, §9).
  *
  * Like Customer Success, Sales and ESignature, `LeadScore` is a kernel domain directory under
  * `apps/api/src` rather than an installable extension package: the extension SDK exposes no entity

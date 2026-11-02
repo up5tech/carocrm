@@ -10,7 +10,7 @@ import { LoadingSkeleton } from '../../components/LoadingSkeleton.js';
 import { t } from '../../state/i18n.js';
 
 /**
- * Phase 19-ES.19 — the operational reporting screen (PLAN_Phase_19_ESignature.md §14).
+ * Phase 19-ES.19 — the operational reporting screen (plans/PLAN_Phase_19_ESignature.md §14).
  *
  * Every figure is the server's answer under the caller's own record scope. The panel never derives a
  * rate locally, so a shared dashboard and this screen cannot disagree about what "completed" means.

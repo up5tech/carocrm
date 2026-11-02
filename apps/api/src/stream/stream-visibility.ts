@@ -1,6 +1,6 @@
 /**
  * Phase 19-SD.6 — the shared conversation visibility model
- * (PLAN_Phase_19_ServiceDesk.md §5.4, §10.3).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §5.4, §10.3).
  *
  * Every conversation entry and every attachment carries an *explicit* visibility classification, and
  * the rule that decides who may see it lives here — one pure function, imported by the Stream

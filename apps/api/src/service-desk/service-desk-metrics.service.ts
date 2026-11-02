@@ -8,7 +8,7 @@ import { CASE_ENTITY, CASE_STATUSES } from "./service-desk-domain.js";
 import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 
 /**
- * Phase 19-SD.15 — Service Desk metrics (PLAN_Phase_19_ServiceDesk.md §13).
+ * Phase 19-SD.15 — Service Desk metrics (plans/PLAN_Phase_19_ServiceDesk.md §13).
  *
  * Every Case aggregate goes through `EntityCrudService.aggregate`, the same validated Query Engine
  * and record ACL predicate as the list API, so a count can never include a case the caller cannot

@@ -5,7 +5,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-CHAT.5 — AIAgents integration adapter contract tests
- * (PLAN_Phase_19_CRM_Chat.md §17 `19-CHAT.5`, acceptance: "Chat does not implement a second planning
+ * (plans/PLAN_Phase_19_CRM_Chat.md §17 `19-CHAT.5`, acceptance: "Chat does not implement a second planning
  * loop, tool executor, provider gateway or approval engine; missing/incompatible AIAgents capabilities
  * produce explicit errors and documented integration tasks").
  *

@@ -5,7 +5,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { PreferencesService, type PreferenceView } from './preferences.service.js';
 
 /**
- * Per-user preferences (PLAN_Phase_20_Settings_UX.md §20.10). The routes carry no user id on purpose:
+ * Per-user preferences (plans/PLAN_Phase_20_Settings_UX.md §20.10). The routes carry no user id on purpose:
  * the caller's own row is the only one reachable, so the enforcement is the shape of the API rather
  * than a check that could be forgotten. Unauthenticated requests are refused by the global guard.
  */

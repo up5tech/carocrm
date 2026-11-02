@@ -1,6 +1,6 @@
 # Phase 22.11 — Omnichannel conversation to ServiceDesk Case
 
-**Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §13.4.  
+**Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.4.  
 **Suite:** `apps/api/test/phase22-journey-omnichannel-servicedesk.test.ts`.  
 **Status:** Implemented and verified — the focused journey and the full `pnpm verify` gate both pass.
 

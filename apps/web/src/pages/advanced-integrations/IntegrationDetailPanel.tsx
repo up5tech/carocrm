@@ -15,7 +15,7 @@ import {
 
 /**
  * Phase 19-INT.14 — the connection detail panel
- * (`PLAN_Phase_19_Advanced_Integrations.md` §15.3).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15.3).
  *
  * Two columns. On the left, the identity and the state of the connection — provider, account,
  * owner, permissions, adapter version. On the right, **what the operator has to act on**. The

@@ -17,7 +17,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, purgeEntityEvents,
 
 /**
  * Phase 19-ES.6 — signature request draft and CRUD, through the API
- * (`PLAN_Phase_19_ESignature.md` §8.2, §11, §13.2, §18 `19-ES.6`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.2, §11, §13.2, §18 `19-ES.6`).
  *
  * The three acceptance criteria are the spine of this file:
  *

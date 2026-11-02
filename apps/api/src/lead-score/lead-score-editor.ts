@@ -43,7 +43,7 @@ import {
 
 /**
  * Phase 19-LS.8 — what a model editor is allowed to offer
- * (`PLAN_Phase_19_LeadScore.md` §6.1, §6.3, §9.4, §12, §16 `19-LS.8`; audit §5.2, §11).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.1, §6.3, §9.4, §12, §16 `19-LS.8`; audit §5.2, §11).
  *
  * The plan's exit criterion is that an administrator can manage a deterministic model **without editing raw
  * JSON manually or running code**. A rule's condition is stored as a JSON tree (LS.2: the platform has no

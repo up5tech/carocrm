@@ -43,7 +43,7 @@ and settings.
 - Audit and feature contract: `docs/implementation/esignature-audit.md`
 - Completion reports: `docs/implementation/esignature-es1-completion-report.md` through
   `esignature-es22-completion-report.md`
-- Plan: `PLAN_Phase_19_ESignature.md`
+- Plan: `plans/PLAN_Phase_19_ESignature.md`
 
 ## Status
 

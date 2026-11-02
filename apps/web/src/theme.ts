@@ -22,7 +22,7 @@ export {
 } from './theme/tokens.js';
 
 /**
- * CaroCRM design tokens (PLAN_Phase_20_Settings_UX.md §20.20). Every value below is read from
+ * CaroCRM design tokens (plans/PLAN_Phase_20_Settings_UX.md §20.20). Every value below is read from
  * `tokens.ts` — there is no literal colour in this file, so an Ant Design token and the matching CSS
  * custom property (`styles/tokens.css`) can never drift apart.
  *
@@ -156,7 +156,7 @@ export function themeForBrand(primaryColor: string | undefined | null, dark = fa
 }
 
 /**
- * Menu accent tokens (PLAN_Phase_20_Settings_UX.md §4.4). An accent is one of eight named tokens,
+ * Menu accent tokens (plans/PLAN_Phase_20_Settings_UX.md §4.4). An accent is one of eight named tokens,
  * never a free colour: the server validates the name against the same list, so a settings document
  * can only choose a treatment the design system already owns. Colour marks a group, it is never the
  * only signal — the label and icon carry the meaning too (§5.8).

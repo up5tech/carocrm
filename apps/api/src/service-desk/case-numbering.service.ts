@@ -8,7 +8,7 @@ import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 
 /**
  * Phase 19-SD.3 — transaction-safe case numbering
- * (PLAN_Phase_19_ServiceDesk.md §5.1 invariants, §7.3 concurrency).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §5.1 invariants, §7.3 concurrency).
  *
  * A case number must be unique even under concurrent creation, and must never be produced by
  * counting existing rows. The platform already has the right primitive: a Postgres sequence, whose

@@ -28,7 +28,7 @@ import { type SalesFixture, salesFixture } from './support/sales-fixtures.js';
 
 /**
  * Phase 22.9 — the journey: a quote becomes a signed document
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §13.2, steps 1–10).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.2, steps 1–10).
  *
  * One story, in order, through the public contracts: a Sales quote is the commercial record, a
  * signature request is created **against that quote**, the reviewed bytes become an immutable

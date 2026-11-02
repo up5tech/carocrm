@@ -1,6 +1,6 @@
 # Phase 19-ES.18 — CRM Domain Entry Points and Events
 
-> `PLAN_Phase_19_ESignature.md` §2.3, §15, §18 `Phase 19-ES.18`.
+> `plans/PLAN_Phase_19_ESignature.md` §2.3, §15, §18 `Phase 19-ES.18`.
 > Acceptance: ESignature works if optional modules are not installed; a signed file does not
 > automatically mark invoices paid or opportunities won; event replay does not duplicate downstream
 > actions.

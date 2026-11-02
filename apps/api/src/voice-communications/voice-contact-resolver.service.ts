@@ -13,7 +13,7 @@ import { VoiceCommunicationsSettingsService } from "./voice-communications-setti
 
 /**
  * Phase 19-VC.6 — contact resolution and safe identity matching
- * (`PLAN_Phase_19_Voice_Communications.md` §7.2, §15 `19-VC.6`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.2, §15 `19-VC.6`).
  *
  * The resolver answers one question: *which CRM records may this caller be?* — and it answers it
  * without disclosing a record the caller's user cannot read.

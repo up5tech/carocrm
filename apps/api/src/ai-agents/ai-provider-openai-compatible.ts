@@ -15,7 +15,7 @@ import {
 
 /**
  * Phase 19-AI.4 — the OpenAI-compatible chat-completions adapter
- * (PLAN_Phase_19_AI_Agents.md §6.1, §6.4, §20 `19-AI.4`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §6.1, §6.4, §20 `19-AI.4`).
  *
  * One adapter serves every provider that exposes the `/chat/completions` contract. It uses Node's
  * `fetch` — no vendor SDK — so provider types never enter the domain:

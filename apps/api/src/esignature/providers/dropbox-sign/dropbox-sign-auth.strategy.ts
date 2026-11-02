@@ -10,7 +10,7 @@ import type { DropboxSignTransport } from './dropbox-sign-transport.js';
 
 /**
  * Phase 19-ES multi-provider follow-on — Dropbox Sign's authorization strategy
- * (`PLAN_Phase_19_ESignature.md` §4.1, §9.2).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.1, §9.2).
  *
  * Dropbox Sign's API-key style has no consent screen, no code exchange and no refresh: the key *is*
  * the grant. So the strategy answers the one question the connection service needs — "which account

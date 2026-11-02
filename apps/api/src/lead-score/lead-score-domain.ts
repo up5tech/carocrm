@@ -1,6 +1,6 @@
 /**
  * Phase 19-LS.1 — the module's stable identifiers
- * (`PLAN_Phase_19_LeadScore.md` §4.1, §16 `19-LS.1`; audit `docs/implementation/lead-score-audit.md` §2, §9).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §4.1, §16 `19-LS.1`; audit `docs/implementation/lead-score-audit.md` §2, §9).
  *
  * Nothing in this file computes a score or converts a lead. These are the names the rest of the
  * module — and the platform's ACL, settings, job and event registries — address `LeadScore` by, so

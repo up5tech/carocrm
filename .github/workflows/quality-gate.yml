@@ -1,4 +1,4 @@
-# Phase 22.22 — the scheduled quality gate (PLAN_Phase_22_Integration_E2E_Hardening.md §21).
+# Phase 22.22 — the scheduled quality gate (plans/PLAN_Phase_22_Integration_E2E_Hardening.md §21).
 #
 # Owner decisions for this phase:
 #   * GitHub Actions is the CI provider;

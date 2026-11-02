@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
 /**
- * Phase 22.22 — the CI-safe test project (`PLAN_Phase_22_Integration_E2E_Hardening.md` §21).
+ * Phase 22.22 — the CI-safe test project (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §21).
  *
  * The root `vitest.config.ts` collects `apps/api/test/**` and boots the configured database for most
  * of those files. The scheduled CI gate has **no database service** (the owner's decision for 22.22:

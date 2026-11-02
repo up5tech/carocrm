@@ -16,7 +16,7 @@ import {
 
 /**
  * Phase 19-MA.6 — the marketing content renderer, tested as pure functions
- * (PLAN_Phase_19_Marketing_Automation.md §5.4, §9.4, §15 `19-MA.6` acceptance).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.4, §9.4, §15 `19-MA.6` acceptance).
  *
  * These are the rules the plan pins to the phase without a database: unsafe markup is dropped rather
  * than repaired, unknown or unsettled placeholders are reported instead of leaking, link schemes are

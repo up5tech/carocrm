@@ -12,7 +12,7 @@ import { SignatureRequestRepository } from './signature-request.repository.js';
 
 /**
  * Phase 19-ES.2 — document snapshots and derived artifacts
- * (`PLAN_Phase_19_ESignature.md` §6.3, §4.5, §16).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.3, §4.5, §16).
  *
  * The row records **what the bytes were**, not where they live now: a SHA-256 of the exact content
  * handed to the provider, the name, the MIME type and the size at that moment, plus an immutable

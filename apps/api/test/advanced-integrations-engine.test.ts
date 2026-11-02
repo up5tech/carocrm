@@ -33,7 +33,7 @@ import { bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-INT.6–19-INT.13 — the Advanced Integrations engine tests
- * (`PLAN_Phase_19_Advanced_Integrations.md` §8, §9, §10, §11; `19-INT.6`–`19-INT.13`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §8, §9, §10, §11; `19-INT.6`–`19-INT.13`).
  *
  * Runs against the configured primary database (AGENTS.md §3.1). Every row created here carries a
  * unique run marker and is deleted by id in `afterAll`; no table is reset or truncated and no extra

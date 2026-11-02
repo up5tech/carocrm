@@ -7,7 +7,7 @@ import { t } from '../../state/i18n.js';
 
 /**
  * Phase 19-LS.8 — the shared vocabulary of the model editor
- * (`PLAN_Phase_19_LeadScore.md` §6.1, §12, §16 `19-LS.8`).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.1, §12, §16 `19-LS.8`).
  *
  * One rule runs through this file: **the SPA never decides what a legal rule is.** The field list, the
  * operators a type can answer, the value control and the condition's structural limits all come from

@@ -16,7 +16,7 @@ import {
 } from '../src/service-desk/service-desk-domain.js';
 
 /**
- * Phase 19-SD — pure Service Desk domain helpers (PLAN_Phase_19_ServiceDesk.md §5.1, §7.5).
+ * Phase 19-SD — pure Service Desk domain helpers (plans/PLAN_Phase_19_ServiceDesk.md §5.1, §7.5).
  *
  * No database, no HTTP: these are the rules the numbering service, the write guard and the metadata
  * seed all agree on, so they are worth pinning directly.

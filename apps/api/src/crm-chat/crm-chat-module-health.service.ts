@@ -20,7 +20,7 @@ import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 
 /**
  * Phase 19-CHAT.2 — module health
- * (PLAN_Phase_19_CRM_Chat.md §13, §15.3, §17 `19-CHAT.2`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §13, §15.3, §17 `19-CHAT.2`).
  *
  * Every fact is read from the running system: `information_schema`, the live hook registry, the
  * metadata registry, the Chat settings row and the owner module's readiness. Nothing is hard-coded

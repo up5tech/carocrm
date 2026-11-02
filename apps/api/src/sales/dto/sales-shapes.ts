@@ -6,7 +6,7 @@ import { IMPLEMENTED_DOCUMENT_KINDS } from "../document/descriptors.js";
  * Phase 19-S.2 – 19-S.5 — request shapes for the `/api/v1/Sales` domain commands.
  *
  * Validation happens here, at the boundary, and nowhere trusts a client-submitted total or price
- * (PLAN_Phase_19_Sales.md §7.3). Monetary and quantity values are canonical decimal strings; the
+ * (plans/PLAN_Phase_19_Sales.md §7.3). Monetary and quantity values are canonical decimal strings; the
  * domain services parse them with the exact decimal engine, so a JSON `number` never reaches money
  * arithmetic.
  */

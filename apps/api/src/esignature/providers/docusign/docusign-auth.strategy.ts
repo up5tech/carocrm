@@ -21,7 +21,7 @@ import type { DocuSignTransport } from './docusign-transport.js';
 
 /**
  * Multi-provider follow-on — DocuSign's authorization strategy
- * (`PLAN_Phase_19_ESignature.md` §9.2; wrapped out of `docusign-oauth.ts`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §9.2; wrapped out of `docusign-oauth.ts`).
  *
  * The connection service no longer constructs a DocuSign client: it asks this strategy, which is
  * registered under the provider key, to build the consent URL, exchange the code, refresh the token

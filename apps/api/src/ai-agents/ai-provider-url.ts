@@ -5,7 +5,7 @@ import { ValidationError } from '@carocrm/core/errors/index.js';
 
 /**
  * Phase 19-AI.4 — provider URL safety
- * (PLAN_Phase_19_AI_Agents.md §7.4, §11.1, §20 `19-AI.4`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §7.4, §11.1, §20 `19-AI.4`).
  *
  * A provider `baseUrl` is administrator-supplied, but it is still an outbound destination chosen by
  * configuration. The rules are deliberately narrow:

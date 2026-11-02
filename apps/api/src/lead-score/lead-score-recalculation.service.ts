@@ -22,7 +22,7 @@ import { isEngagementSource } from './lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.6 — deciding *when* to score, in the background
- * (`PLAN_Phase_19_LeadScore.md` §4.2, §9.3–§9.4, §10.2, §11.1, §16 `19-LS.6`; audit §5.4, §11).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §4.2, §9.3–§9.4, §10.2, §11.1, §16 `19-LS.6`; audit §5.4, §11).
  *
  * LS.5 could score a Lead only when somebody asked for that one Lead. This phase adds the two things plan
  * §16 asks for — a subscription to committed Lead changes, and a bounded rebuild over a set — and both are

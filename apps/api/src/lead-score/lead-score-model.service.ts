@@ -18,7 +18,7 @@ import { validateModel } from './lead-score-validator.js';
 
 /**
  * Phase 19-LS.3 — the score model lifecycle
- * (`PLAN_Phase_19_LeadScore.md` §6.1, §9.1, §16 `19-LS.3`; audit §5.1).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.1, §9.1, §16 `19-LS.3`; audit §5.1).
  *
  * This service owns the four things a record API must never decide for itself:
  *

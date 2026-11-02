@@ -1,4 +1,4 @@
--- Phase 19 — the Project Task dashlet kind (PLAN_Phase_19_Projects.md §4.16).
+-- Phase 19 — the Project Task dashlet kind (plans/PLAN_Phase_19_Projects.md §4.16).
 --
 -- `dashlets.kind` carried a CHECK from the three generic Phase 12 kinds. Projects needs a fourth,
 -- because "due in the next N days, owned by me or shared with me" is not expressible as a plain

@@ -2,7 +2,7 @@ import type { ESignatureSettings } from './esignature-settings.service.js';
 
 /**
  * Phase 19-ES.2 — retention and data-minimization rules
- * (`PLAN_Phase_19_ESignature.md` §6.3, §6.5, §12.1; `19-ES.2` task "define retention/data-minimization
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.3, §6.5, §12.1; `19-ES.2` task "define retention/data-minimization
  * behavior and soft-delete rules").
  *
  * The rule the plan is emphatic about is a tension, and this file resolves it in one direction only:

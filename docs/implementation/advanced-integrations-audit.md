@@ -1,6 +1,6 @@
 # Phase 19-INT.0 — Repository audit and feature contract
 
-> `PLAN_Phase_19_Advanced_Integrations.md` §4 (Repository Audit and Architecture Decisions),
+> `plans/PLAN_Phase_19_Advanced_Integrations.md` §4 (Repository Audit and Architecture Decisions),
 > §19 `19-INT.0`.
 > Acceptance: repository findings cite concrete paths/services; scope is reduced to confirmed gaps;
 > no code or schema changes are made until this audit is reviewed against actual conventions.
@@ -8,10 +8,10 @@
 > **This phase changed no code, no migration and no schema.** The only database access was a
 > read-only connectivity check against the configured primary project database (AGENTS.MD §3.1).
 
-Audited: `AGENTS.MD`, `PLAN.md` (Phase 19), `PLAN_Phase_19_Advanced_Integrations.md`,
-`PLAN_Phase_19_Sales.md`, `PLAN_Phase_19_Projects.md`, `PLAN_Phase_19_Customer_Success.md`,
-`PLAN_Phase_19_ServiceDesk.md`, `PLAN_Phase_19_Marketing_Automation.md`,
-`PLAN_Phase_19_AI_Agents.md`, `PLAN_Phase_19_Voice_Communications.md`, plus the whole working
+Audited: `AGENTS.MD`, `plans/PLAN.md` (Phase 19), `plans/PLAN_Phase_19_Advanced_Integrations.md`,
+`plans/PLAN_Phase_19_Sales.md`, `plans/PLAN_Phase_19_Projects.md`, `plans/PLAN_Phase_19_Customer_Success.md`,
+`plans/PLAN_Phase_19_ServiceDesk.md`, `plans/PLAN_Phase_19_Marketing_Automation.md`,
+`plans/PLAN_Phase_19_AI_Agents.md`, `plans/PLAN_Phase_19_Voice_Communications.md`, plus the whole working
 tree: `apps/api` (357 TS files), `apps/web` (118 files), `apps/worker`, `packages/*` (18),
 `modules/*` (3), `database/migrations` (55 files), `database/seed-metadata.ts`, `i18n/`,
 `e2e/` (12 specs), `scripts/`.

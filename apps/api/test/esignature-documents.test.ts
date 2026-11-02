@@ -19,7 +19,7 @@ import { bootApi, createTestRole, createTestUser, shutdownApi } from './support/
 
 /**
  * Phase 19-ES.5 — the secure document snapshot service, against the configured database and the
- * configured file storage (`PLAN_Phase_19_ESignature.md` §4.5, §6.3, §12.9, §18 `19-ES.5`).
+ * configured file storage (`plans/PLAN_Phase_19_ESignature.md` §4.5, §6.3, §12.9, §18 `19-ES.5`).
  *
  * The three acceptance criteria are the three things this file is built to prove:
  *

@@ -4,7 +4,7 @@ import { api } from '../api/client.js';
 import type { AdminPanelView, NavigationDocument, NavigationNode, NavigationTree, SettingsDocument } from '../api/types.js';
 
 /**
- * Server state for Phase 20 (PLAN_Phase_20_Settings_UX.md §9.4). TanStack Query owns all of it; the
+ * Server state for Phase 20 (plans/PLAN_Phase_20_Settings_UX.md §9.4). TanStack Query owns all of it; the
  * keys are the invalidation contract — a settings write drops the document, the public settings view
  * and the navigation tree, because a menu edit is only visible once `/Navigation` is re-resolved.
  */

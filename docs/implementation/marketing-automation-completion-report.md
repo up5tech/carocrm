@@ -1,6 +1,6 @@
 # Phase 19-MA — Marketing Automation completion report
 
-> **Plan:** `PLAN_Phase_19_Marketing_Automation.md` (§16 Definition of Done, §17 Release Checklist).
+> **Plan:** `plans/PLAN_Phase_19_Marketing_Automation.md` (§16 Definition of Done, §17 Release Checklist).
 > **Module:** `MarketingAutomation`, API prefix `/api/v1/MarketingAutomation`, directory
 > `apps/api/src/marketing-automation`, settings row `marketingAutomation`.
 > **Status:** complete for phases 19-MA.0 – 19-MA.19. This report is the evidence, not a summary of intent:

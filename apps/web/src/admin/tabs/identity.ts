@@ -4,7 +4,7 @@ import { api,ApiError } from '../../api/client.js';
 import type { ListResult, Role, TeamRow, UserRow } from '../../api/types.js';
 
 /**
- * Shared vocabulary and lookups for the identity tabs (PLAN_Phase_20_Settings_UX.md §4.3 rows 9–12).
+ * Shared vocabulary and lookups for the identity tabs (plans/PLAN_Phase_20_Settings_UX.md §4.3 rows 9–12).
  *
  * The action and level names are the ones the enforced ACL reads (`AclAction` / `AclRoleLevel` in
  * `packages/acl`), restated here because the SPA does not depend on that package. Keeping them in one

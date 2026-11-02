@@ -32,7 +32,7 @@ import { verifyMailchimpStyleSignature } from '../kit/webhook-signatures.js';
 
 /**
  * Phase 19-INT.18 / 19-INT.20 — the Mailchimp connector
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.5; `19-INT.20`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.5; `19-INT.20`).
  *
  * Audience members and campaign activity, and **nothing else**. The plan is explicit that the
  * campaign builder, the journeys, the send queue, the unsubscribe UI and the consent policy stay

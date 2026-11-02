@@ -41,7 +41,7 @@ import { AIProviderGateway } from './ai-provider-gateway.service.js';
 
 /**
  * Phase 19-AI.7–19-AI.10 — the durable run engine
- * (PLAN_Phase_19_AI_Agents.md §7.3, §7.5, §8, §9, §20 `19-AI.7`–`19-AI.10`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §7.3, §7.5, §8, §9, §20 `19-AI.7`–`19-AI.10`).
  *
  * A run is a row, not a process. The state that matters — counters, the resolved version, the tool
  * ledger, the pending approval — lives in Postgres, so a worker restart resumes from the same place.

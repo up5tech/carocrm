@@ -4,7 +4,7 @@ import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from './support/boot-api.js';
 
 /**
- * Phase 20.4, 20.5 and 20.6 — the resolved menu (PLAN_Phase_20_Settings_UX.md §4.4, §4.5, §13.2).
+ * Phase 20.4, 20.5 and 20.6 — the resolved menu (plans/PLAN_Phase_20_Settings_UX.md §4.4, §4.5, §13.2).
  *
  * The rules this suite exists to protect: the document is presentation only, the ACL decides last,
  * and with no document written the tree is the menu the sidebar used to build in code.

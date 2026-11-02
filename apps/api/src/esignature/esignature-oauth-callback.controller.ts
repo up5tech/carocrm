@@ -11,7 +11,7 @@ import { ESignatureConnectionService } from './esignature-connection.service.js'
 
 /**
  * Phase 19-ES.4 — the DocuSign OAuth callback
- * (`PLAN_Phase_19_ESignature.md` §8.1, §9.2, §14; `19-ES.4`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.1, §9.2, §14; `19-ES.4`).
  *
  * This is the module's **only** unauthenticated route, and it exists on its own rather than inside
  * `ESignatureController` because that controller's invariant is "every route checks a capability

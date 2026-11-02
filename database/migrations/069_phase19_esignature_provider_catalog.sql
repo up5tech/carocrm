@@ -1,5 +1,5 @@
 -- Phase 19-ES multi-provider follow-on — widen the `provider_key` allowlists
--- (`PLAN_Phase_19_ESignature.md` §1.2, §6.1, §9.4).
+-- (`plans/PLAN_Phase_19_ESignature.md` §1.2, §6.1, §9.4).
 --
 -- Migration 064 pinned every provider-keyed table to `docusign`, which was correct for a
 -- single-adapter release and is now the one storage fact that would stop a second provider from

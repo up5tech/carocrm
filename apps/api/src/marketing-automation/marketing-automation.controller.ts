@@ -81,7 +81,7 @@ import { MarketingTestSendService } from "./marketing-test-send.service.js";
 
 /**
  * Phase 19-MA.1/MA.3 — the `MarketingAutomation` command surface
- * (PLAN_Phase_19_Marketing_Automation.md §8.1–§8.4, §15 `19-MA.1`, `19-MA.3`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §8.1–§8.4, §15 `19-MA.1`, `19-MA.3`).
  *
  * Entity CRUD stays on the generic `/api/v1/:entity` API — a campaign and a target list are metadata
  * records, and the Entity Engine already serves list/detail/create/edit/delete for them with ACL, field

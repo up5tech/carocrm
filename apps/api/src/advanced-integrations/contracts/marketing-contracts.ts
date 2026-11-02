@@ -6,7 +6,7 @@ import { IntegrationContractRegistry } from '../integration-contracts.js';
 
 /**
  * Phase 19-INT.25 — the `MarketingAutomation` contracts
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.5, §14.2; `19-INT.25`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.5, §14.2; `19-INT.25`).
  *
  * `MarketingAutomation` owns consent and suppression. A connector may **report** what a provider
  * said about a person; it may never decide the consent state itself.

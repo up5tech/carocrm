@@ -11,7 +11,7 @@ import { dimensionLabel, errorText, parseJsonArray, parseJsonObject, selectableF
 
 /**
  * Phase 19-LS.8 — the model's own configuration
- * (`PLAN_Phase_19_LeadScore.md` §3.3, §5.1, §6.3, §16 `19-LS.8`).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §3.3, §5.1, §6.3, §16 `19-LS.8`).
  *
  * Three of these attributes are stored as JSON in text fields (LS.2), and each gets a real control instead of
  * a textarea: the qualification bands are rows of band + range, the dimension weights are one number per

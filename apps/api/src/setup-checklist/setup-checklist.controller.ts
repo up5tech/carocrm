@@ -7,7 +7,7 @@ import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { SetupChecklistService } from './setup-checklist.service.js';
 
 /**
- * The first-run checklist (PLAN_Phase_20_Settings_UX.md §4.10). Administration guidance, so it is
+ * The first-run checklist (plans/PLAN_Phase_20_Settings_UX.md §4.10). Administration guidance, so it is
  * administrator-only on the server as well as hidden in the SPA — hiding a panel is not authorization
  * (AGENTS.MD §5.3).
  */

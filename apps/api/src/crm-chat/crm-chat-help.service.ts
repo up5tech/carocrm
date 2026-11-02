@@ -8,7 +8,7 @@ import { KnowledgeBaseService } from '../service-desk/knowledge-base.service.js'
 
 /**
  * Phase 19-CHAT.9 — CRM Help Retrieval
- * (PLAN_Phase_19_CRM_Chat.md §5.3, §17 `19-CHAT.9`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §5.3, §17 `19-CHAT.9`).
  *
  * This service answers "how do I" questions by searching approved help sources:
  * - The in-app product handbook (`content/docs`, served by the `Docs` module)

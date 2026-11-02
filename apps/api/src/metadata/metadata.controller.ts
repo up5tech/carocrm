@@ -27,7 +27,7 @@ export class MetadataController {
     @Inject(FormulaService) private readonly formulas: FormulaService,
     @Inject(I18nService) private readonly i18n: I18nService,
     // The navigation groups belong to the admin panel, which depends on this module; the seam keeps
-    // the dependency pointing the right way (PLAN_Phase_20_Settings_UX.md §4.5).
+    // the dependency pointing the right way (plans/PLAN_Phase_20_Settings_UX.md §4.5).
     @Inject(NAVIGATION_GROUP_KEYS) @Optional() private readonly navigationGroups: NavigationGroupKeys | undefined,
   ) {}
 
@@ -277,7 +277,7 @@ export class MetadataController {
   }
 
   /**
-   * The relation-tab arrangement is declarative metadata (PLAN_Phase_20_Settings_UX.md §5.11): it
+   * The relation-tab arrangement is declarative metadata (plans/PLAN_Phase_20_Settings_UX.md §5.11): it
    * names the entity's own relations, so a tab may not reference a relation the entity does not
    * have. This validates the declaration only and never touches the database schema
    * (AGENTS.md §3.4). The shape of the section — tab ids, labels, one relation in one tab — is

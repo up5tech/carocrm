@@ -39,7 +39,7 @@ import { WebhookIngressService } from './webhook-ingress.service.js';
 
 /**
  * Phase 19-INT.2–19-INT.13 — the module barrel
- * (`PLAN_Phase_19_Advanced_Integrations.md` §5.1; `19-INT.2`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §5.1; `19-INT.2`).
  *
  * The repository's module convention: a directory under `apps/api/src/`, an `index.ts` that exports
  * the controller and provider arrays, and one spread in `app.module.ts`. The shell never imports

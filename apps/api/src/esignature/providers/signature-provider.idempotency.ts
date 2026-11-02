@@ -4,7 +4,7 @@ import { getRequestId } from '@carocrm/core/context/index.js';
 
 /**
  * Phase 19-ES.3 — correlation ids and idempotency keys for provider calls
- * (`PLAN_Phase_19_ESignature.md` §4.3, §5.2, §16; audit §5.3; `19-ES.3` task "define provider error
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.3, §5.2, §16; audit §5.3; `19-ES.3` task "define provider error
  * categories, capabilities, correlation IDs and idempotency behavior").
  *
  * One rule, applied to every mutating call: **the key is derived from the platform's intent, never

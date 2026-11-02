@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { adminTabDocKeys } from '../src/admin-panel/admin-panel.service.js';
 
 /**
- * The content contract test (`PLAN_Phase_21_Documentation.md` §13.3): the shipped corpus linted with the
+ * The content contract test (`plans/PLAN_Phase_21_Documentation.md` §13.3): the shipped corpus linted with the
  * server's own knowledge, which is the one thing the engine's `corpus.test.ts` cannot check from inside
  * `packages/docs`.
  *

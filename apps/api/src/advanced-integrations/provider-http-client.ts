@@ -2,7 +2,7 @@ import { errorForStatus, errorForTransport, parseRetryAfter, ProviderError } fro
 
 /**
  * Phase 19-INT.6 — the provider HTTP client
- * (`PLAN_Phase_19_Advanced_Integrations.md` §11.1, §11.4; `19-INT.6`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §11.1, §11.4; `19-INT.6`).
  *
  * Every outbound call to a provider goes through this client. It exists so that the reliability
  * rules live in **one** place instead of being re-implemented by every connector:

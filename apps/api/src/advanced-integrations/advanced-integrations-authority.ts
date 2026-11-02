@@ -2,7 +2,7 @@ import type { AuthenticatedPrincipal, RequestScope } from '../common/request-sco
 
 /**
  * Phase 19-INT.5 — the documented service-authority model for the module's background work
- * (`PLAN_Phase_19_Advanced_Integrations.md` §7.2).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §7.2).
  *
  * Two paths in this module have **no human session**:
  *

@@ -17,7 +17,7 @@ import {
 import type { SalesAuditContext } from "./types.js";
 
 /**
- * Phase 19-S.2 — commercial document numbering (PLAN_Phase_19_Sales.md §4.4, §8.3).
+ * Phase 19-S.2 — commercial document numbering (plans/PLAN_Phase_19_Sales.md §4.4, §8.3).
  *
  * Rules this service implements, and only these:
  *
@@ -112,7 +112,7 @@ export class SalesNumberingService {
    * Runs in one transaction: the series row is locked (`FOR UPDATE`), an existing allocation for
    * the same document is reused, and the incremented value plus its ledger row are written before
    * the lock is released. A unique-constraint race is a domain outcome the caller can retry, not a
-   * silent success (PLAN_Phase_19_Sales.md §6.3).
+   * silent success (plans/PLAN_Phase_19_Sales.md §6.3).
    */
   async allocate(
     code: string,
@@ -213,7 +213,7 @@ export class SalesNumberingService {
 
   /**
    * Provision series rows (install/bootstrap). Idempotent: an existing code keeps its counter, its
-   * prefix and its padding — a re-run never resets a sequence (PLAN_Phase_19_Sales.md §17.1).
+   * prefix and its padding — a re-run never resets a sequence (plans/PLAN_Phase_19_Sales.md §17.1).
    */
   async ensureSeries(
     series: readonly NumberSeriesSeed[] = DEFAULT_NUMBER_SERIES,

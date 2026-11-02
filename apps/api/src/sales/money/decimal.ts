@@ -5,7 +5,7 @@ import { ValidationError } from "@carocrm/core/errors/index.js";
  *
  * The kernel has no decimal library: `numeric` JSON attributes are only cast to `numeric` inside
  * query expressions (`entity-record.store.ts` `attrCast`), and JavaScript `number` arithmetic is
- * binary floating point. Money must never travel through it (PLAN_Phase_19_Sales.md §5.7), so the
+ * binary floating point. Money must never travel through it (plans/PLAN_Phase_19_Sales.md §5.7), so the
  * Sales module carries its own exact representation:
  *
  *   value = units / 10^scale      (`units` is a `bigint`, `scale` a non-negative integer)
@@ -173,7 +173,7 @@ export function compare(left: Decimal, right: Decimal): -1 | 0 | 1 {
  *
  * Going up is exact (multiply the integer). Going down divides and applies `mode`; the caller
  * chooses the mode per rounding stage, so the same input always produces the same output
- * (PLAN_Phase_19_Sales.md §4.12 "deterministic and explainable").
+ * (plans/PLAN_Phase_19_Sales.md §4.12 "deterministic and explainable").
  */
 export function rescale(
   value: Decimal,

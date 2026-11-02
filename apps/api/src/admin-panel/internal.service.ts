@@ -62,7 +62,7 @@ export interface OperationsSnapshotView {
 }
 
 /**
- * The `internal` tab's backend (PLAN_Phase_20_Settings_UX.md §4.3 row 8).
+ * The `internal` tab's backend (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 8).
  *
  * Reads are administrator-only facts. The two writes are the guarded danger zone: each demands the
  * exact typed confirmation string, and each lands in `schema_changes` — a destructive action no one

@@ -6,7 +6,7 @@ import { SETTINGS_DOCUMENT_KEY } from './admin.js';
 import { i18n } from './i18n.js';
 
 /**
- * Server state for the in-app handbook (PLAN_Phase_21_Documentation.md §9.4), following `state/admin.ts`.
+ * Server state for the in-app handbook (plans/PLAN_Phase_21_Documentation.md §9.4), following `state/admin.ts`.
  *
  * Every key carries the locale the reader is looking at, because the same URL answers differently in `en`
  * and `vi` — and a `vi` page may be English text under a fallback notice. Switching language from the

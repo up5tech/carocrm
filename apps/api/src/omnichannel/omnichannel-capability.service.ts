@@ -9,7 +9,7 @@ import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
 
 /**
  * Phase 19-OM.4 — the adapter/capability registry the workspace reads
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2` capability lookup; feature contract §2.1, §11;
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2` capability lookup; feature contract §2.1, §11;
  * feasibility records CF-1/CF-2/CF-4).
  *
  * Channel availability is a computed answer, never a hard-coded assumption (plan §4.1): it reads

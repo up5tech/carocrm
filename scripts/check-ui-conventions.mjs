@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * UI convention gate (PLAN_Phase_20_Settings_UX.md §20.22/§20.23/§20.20, gate formalised in §20.26;
- * rules 5 and 6 added by PLAN_Phase_22_Integration_E2E_Hardening.md §14).
+ * UI convention gate (plans/PLAN_Phase_20_Settings_UX.md §20.22/§20.23/§20.20, gate formalised in §20.26;
+ * rules 5 and 6 added by plans/PLAN_Phase_22_Integration_E2E_Hardening.md §14).
  *
  * Seven rules, each of which is a defect this repository shipped at least once:
  *
@@ -266,5 +266,5 @@ if (violations.length === 0) {
 
 console.error(`ui conventions: ${violations.length} violation(s)\n`);
 for (const violation of violations) console.error(`  ${violation}`);
-console.error('\nSee docs/ux/design-principles.md and PLAN_Phase_20_Settings_UX.md §20.22–§20.26.');
+console.error('\nSee docs/ux/design-principles.md and plans/PLAN_Phase_20_Settings_UX.md §20.22–§20.26.');
 process.exit(1);

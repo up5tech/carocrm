@@ -37,7 +37,7 @@ import { verifyBase64HmacSha256 } from '../kit/webhook-signatures.js';
 
 /**
  * Phase 19-INT.22 — the Shopify connector, the first ecommerce provider
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.7; `19-INT.22`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.7; `19-INT.22`).
  *
  * **Why Shopify and not WooCommerce.** The provider matrix (§1) lists Shopify first in tier 3, and
  * Shopify publishes a documented Admin API with a stable versioned endpoint scheme, a signed

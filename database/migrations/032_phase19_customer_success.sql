@@ -1,4 +1,4 @@
--- Phase 19 — Customer Success (PLAN_Phase_19_Customer_Success.md §6.4).
+-- Phase 19 — Customer Success (plans/PLAN_Phase_19_Customer_Success.md §6.4).
 --
 -- Customer Success records live in the generic `entity_records` store (JSONB `attrs`) exactly like
 -- every other CRM entity, so the Entity Engine keeps ownership of CRUD, validation, audit, stream and

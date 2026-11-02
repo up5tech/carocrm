@@ -34,7 +34,7 @@ import { MarketingAutomationSettingsService } from "./marketing-automation-setti
 
 /**
  * Phase 19-MA.3 – MA.5 — the Marketing Automation write guard
- * (PLAN_Phase_19_Marketing_Automation.md §5.1, §5.2, §5.3, §8.2, §8.4, §15 `19-MA.3`–`19-MA.5`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.1, §5.2, §5.3, §8.2, §8.4, §15 `19-MA.3`–`19-MA.5`).
  *
  * The generic record API reaches the same rows the domain services write, so these `beforeValidate` handlers
  * are what make the module's promises enforceable rather than advisory:

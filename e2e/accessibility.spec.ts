@@ -45,7 +45,7 @@ test.describe('accessibility and responsive smoke (Phase 20 §13.5)', () => {
 });
 
 // Phase 20 §20.16 / §20.26: the "axe passes on the four core surfaces" criterion — home, list,
-// record and settings (PLAN_Phase_20_Settings_UX.md §20.21 lists them). The scan is a real browser
+// record and settings (plans/PLAN_Phase_20_Settings_UX.md §20.21 lists them). The scan is a real browser
 // render, not a jsdom mock, so what axe sees is what a user gets. Only WCAG 2.0 A/AA rules run;
 // "incomplete" results (axe needs the reviewer's eye) are not failures.
 async function scanSurfaces(page: Page): Promise<string[]> {

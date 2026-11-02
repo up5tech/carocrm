@@ -1,5 +1,5 @@
 /**
- * Per-user preferences (PLAN_Phase_20_Settings_UX.md §5.9, §20.10) — a small module on purpose: the
+ * Per-user preferences (plans/PLAN_Phase_20_Settings_UX.md §5.9, §20.10) — a small module on purpose: the
  * named-document schemas, the owner-only service and the three routes. Nothing else depends on it;
  * consumers (list density, default dashboard, later 20.12 column sets) talk to the SPA client.
  */

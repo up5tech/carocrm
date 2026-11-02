@@ -2,7 +2,7 @@ import { ApiError } from '../api/client.js';
 
 /**
  * The per-field refusals a save came back with
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §14 tasks 2 and 4).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §14 tasks 2 and 4).
  *
  * The API answers a rejected record with the refused field names in the error's `details` — the Entity
  * Engine writes `{ emailAddress: 'Value must be a valid email address.', reason: '…' }`, and a module

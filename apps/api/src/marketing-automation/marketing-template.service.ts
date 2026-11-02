@@ -27,7 +27,7 @@ import {
 
 /**
  * Phase 19-MA.6 — recipient-context rendering, content preview and immutable template revisions
- * (PLAN_Phase_19_Marketing_Automation.md §5.4, §6.2, §9.4, §15 `19-MA.6`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.4, §6.2, §9.4, §15 `19-MA.6`).
  *
  * The `EmailTemplate` record stays platform-owned and editable; this service never forks it. What it
  * adds is the *marketing* view on top:

@@ -1,6 +1,6 @@
 # Phase 19-ES.15 — Completed Documents and Completion Evidence
 
-> `PLAN_Phase_19_ESignature.md` §4.5, §6.3, §12, §16, §18 `Phase 19-ES.15`.
+> `plans/PLAN_Phase_19_ESignature.md` §4.5, §6.3, §12, §16, §18 `Phase 19-ES.15`.
 > Acceptance: the signed copy and completion evidence are available to authorized users only; the
 > original source document remains unchanged; retrying a download does not create duplicate artifacts.
 >

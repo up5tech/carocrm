@@ -17,7 +17,7 @@ interface BrandDocument {
 }
 
 /**
- * General tab (PLAN_Phase_20_Settings_UX.md §4.3 row 1): the `brand` document — page title, footer
+ * General tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 1): the `brand` document — page title, footer
  * line and the logo attachment. It is the brand half of what used to be `AdminSettingsPage`, now
  * saved through the settings document registry so it carries a version and a last-modified footer.
  */

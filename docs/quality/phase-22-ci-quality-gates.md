@@ -1,7 +1,7 @@
 # Phase 22.22 — CI Quality Gates
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §21
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §21
 > **Status:** Complete for the owner-selected model — **GitHub Actions, scheduled/manual, DB-free**.
 > Layers 1 and 2 run nightly; Layer 3 is sandbox-only by decision; browser/extended layers remain
 > manual. G78 records the consequence (no PR gate).

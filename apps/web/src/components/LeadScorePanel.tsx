@@ -39,7 +39,7 @@ function signalValueText(value: number | string | null): string {
 }
 
 /**
- * Phase 19-LS.7 — the score of one Lead, explained (PLAN_Phase_19_LeadScore.md §11.1, §12, §16 `19-LS.7`;
+ * Phase 19-LS.7 — the score of one Lead, explained (plans/PLAN_Phase_19_LeadScore.md §11.1, §12, §16 `19-LS.7`;
  * audit §5.3–§5.4; contract `docs/compatibility/lead-score.md` §3).
  *
  * The plan's exit criterion for this phase is one sentence: *the UI uses API data and never bypasses

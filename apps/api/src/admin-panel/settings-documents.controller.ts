@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { SettingsDocumentService } from './settings-document.service.js';
 
 /**
- * Settings document API (PLAN_Phase_20_Settings_UX.md §8.1).
+ * Settings document API (plans/PLAN_Phase_20_Settings_UX.md §8.1).
  *
  * `GET /Settings` stays the public brand/locale read and `POST /Settings` stays the legacy flat
  * write; both share validation with these routes because the legacy controller delegates to the same

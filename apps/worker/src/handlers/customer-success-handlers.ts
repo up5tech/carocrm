@@ -3,7 +3,7 @@ import type { JobContext, JobHandler, JobRegistry } from "@carocrm/jobs";
 
 /**
  * Phase 19-CS.11 — the Customer Success module's scheduled work, registered in the worker composition
- * root (PLAN_Phase_19_Customer_Success.md §11.1).
+ * root (plans/PLAN_Phase_19_Customer_Success.md §11.1).
  *
  * Like `registerSalesJobs`, a handler deliberately does **not** touch the Customer Success tables
  * itself. Recalculating health, expiring an override or advancing a playbook run is a domain

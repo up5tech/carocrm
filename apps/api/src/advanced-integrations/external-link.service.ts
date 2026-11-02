@@ -10,7 +10,7 @@ import { ConnectionLifecycleService } from './connection-lifecycle.service.js';
 
 /**
  * Phase 19-INT.7 — external id links and record resolution
- * (`PLAN_Phase_19_Advanced_Integrations.md` §8.3; `19-INT.7`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §8.3; `19-INT.7`).
  *
  * A link is the platform's record that "this provider object is this CRM record". It is the
  * single mechanism that makes a sync idempotent and a duplicate detectable.

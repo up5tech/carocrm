@@ -5,7 +5,7 @@ import { t } from '../state/i18n.js';
 import { DocsLink } from './docs/DocsLink.js';
 
 /**
- * A reusable help-tip (PLAN_Phase_20_Settings_UX.md §20.11).
+ * A reusable help-tip (plans/PLAN_Phase_20_Settings_UX.md §20.11).
  *
  * Usage: place next to a label or form field where the reader might need context that would clutter the
  * main text. The icon is always the same so users learn its meaning once and recognise it everywhere.

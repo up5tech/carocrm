@@ -4,7 +4,7 @@ import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestUser, shutdownApi } from './support/boot-api.js';
 
 /**
- * Phase 20.1 — the settings document registry (PLAN_Phase_20_Settings_UX.md §4.2, §8.1, §13.3).
+ * Phase 20.1 — the settings document registry (plans/PLAN_Phase_20_Settings_UX.md §4.2, §8.1, §13.3).
  *
  * Runs against the configured project database (AGENTS.md §3.1). Only the documents this suite
  * writes are touched, each is snapshotted and restored, and the audit/event rows it produces are
@@ -98,7 +98,7 @@ describe('settings document registry API', () => {
 
     // The catalog answers with what this caller may read, so a regular user is offered the brand and
     // locale documents the shell needs, plus the `docs` switches every reader is allowed to know about
-    // (PLAN_Phase_21_Documentation.md §6.1), and nothing else.
+    // (plans/PLAN_Phase_21_Documentation.md §6.1), and nothing else.
     const limited = await call('GET', '/api/v1/Settings/documents', regularToken);
     expect(limited.status).toBe(200);
     expect((limited.body['documents'] as { name: string }[]).map((entry) => entry.name)).toEqual(['brand', 'i18n', 'docs']);

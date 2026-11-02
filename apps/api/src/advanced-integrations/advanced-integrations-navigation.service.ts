@@ -5,7 +5,7 @@ import { IntegrationRegistry } from './integration-registry.service.js';
 
 /**
  * Phase 19-INT.2 — the module-visibility signal the navigation asked for
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.4; `19-INT.2`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.4; `19-INT.2`).
  *
  * `AdvancedIntegrations` owns no metadata entity: its connections are control-plane state in a
  * dedicated table, so the navigation would either be invisible or answer 403 on every link. This

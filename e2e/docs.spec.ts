@@ -1,7 +1,7 @@
 import { type APIRequestContext, expect, type Page, request, test } from '@playwright/test';
 
 /**
- * Phase 21 — the handbook in the browser (PLAN_Phase_21_Documentation.md §13.5, five scenarios).
+ * Phase 21 — the handbook in the browser (plans/PLAN_Phase_21_Documentation.md §13.5, five scenarios).
  *
  * These are the five things a reader actually does, and each one has broken before: the sidebar entry is
  * gated on a settings document, the tree is filtered by what the caller may read, the search has to answer

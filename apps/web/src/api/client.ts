@@ -620,7 +620,7 @@ export const api = {
   saveSettings: (input: SettingsPatch) => request<SettingsView>('/Settings', post(input)),
 
   // Phase 20: the administration panel, the resolved menu and the settings document registry
-  // (PLAN_Phase_20_Settings_UX.md §8.1).
+  // (plans/PLAN_Phase_20_Settings_UX.md §8.1).
   adminPanel: () => request<AdminPanelView>('/AdminPanel'),
   /** Storage figures for the Attachments tab (PLAN_Phase_20 §4.3 row 5); administrator-only. */
   storageUsage: () =>
@@ -1418,7 +1418,7 @@ export const api = {
       method: 'DELETE',
     }),
 
-  // Phase 19 — Projects domain commands (PLAN_Phase_19_Projects.md §7.2).
+  // Phase 19 — Projects domain commands (plans/PLAN_Phase_19_Projects.md §7.2).
   projectCapabilities: (projectId: string) =>
     request<ProjectCapabilities>(`/Project/${encodeURIComponent(projectId)}/action/capabilities`),
   projectPlan: (projectId: string) => request<ProjectPlanView>(`/Project/${encodeURIComponent(projectId)}/action/plan`),
@@ -1488,7 +1488,7 @@ export const api = {
   removeProjectTaskCollaborator: (taskId: string, userId: string) =>
     request<{ removed: boolean }>(`/ProjectTask/${encodeURIComponent(taskId)}/action/collaboratorRemove`, post({ userId })),
 
-  // Phase 19-S.17 — Sales domain commands (PLAN_Phase_19_Sales.md §7.2).
+  // Phase 19-S.17 — Sales domain commands (plans/PLAN_Phase_19_Sales.md §7.2).
   salesHealth: () => request<SalesHealthView>('/Sales/action/health'),
   salesNavigation: () =>
     request<{ visible: boolean; readableEntities: number; entities: readonly string[] }>('/Sales/action/nav'),
@@ -1563,7 +1563,7 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  // Phase 19-SD.4/SD.5 — Service Desk commands (PLAN_Phase_19_ServiceDesk.md §8.2). Entity CRUD stays
+  // Phase 19-SD.4/SD.5 — Service Desk commands (plans/PLAN_Phase_19_ServiceDesk.md §8.2). Entity CRUD stays
   // on the generic `/Case` API; these cover the state machine and assignment/routing only.
   serviceDeskCapabilities: (caseId: string) =>
     request<ServiceDeskCapabilities>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/capabilities`),
@@ -1582,7 +1582,7 @@ export const api = {
   serviceDeskMetrics: (range: { from?: string; to?: string } = {}) =>
     request<ServiceDeskMetrics>(`/ServiceDesk/action/metrics${simpleQuery(range)}`),
 
-  // Phase 19-SD.6 — case conversation (PLAN_Phase_19_ServiceDesk.md §5.4). The reply/note commands
+  // Phase 19-SD.6 — case conversation (plans/PLAN_Phase_19_ServiceDesk.md §5.4). The reply/note commands
   // fix the visibility server-side; the composer only chooses which command to send.
   serviceDeskConversation: (caseId: string, params: { maxSize?: number; offset?: number } = {}) =>
     request<StreamListResult>(
@@ -1597,7 +1597,7 @@ export const api = {
     request<ServiceDeskMessageResult>(`/ServiceDesk/action/case/${encodeURIComponent(caseId)}/note`, post(input)),
 
 
-  // Phase 19-MA.1/MA.3 — Marketing Automation commands (PLAN_Phase_19_Marketing_Automation.md §8.1–§8.2).
+  // Phase 19-MA.1/MA.3 — Marketing Automation commands (plans/PLAN_Phase_19_Marketing_Automation.md §8.1–§8.2).
   // Campaign CRUD stays on the generic `/Campaign` API; these are the module surface and the state machine,
   // and every command is re-validated server-side. `capabilities` is the answer the panel renders, so the
   // buttons a user sees are the moves the server will accept for them.

@@ -13,7 +13,7 @@ import { type RequestAccessScope, SignatureRequestRepository } from './signature
 
 /**
  * Phase 19-ES.18 — the CRM record entry point
- * (`PLAN_Phase_19_ESignature.md` §2.3, §13.1, §18 `19-ES.18`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §2.3, §13.1, §18 `19-ES.18`).
  *
  * A record detail page should be able to offer "start a signature request from this record" without
  * every module importing ESignature and without ESignature importing every module. The answer is one

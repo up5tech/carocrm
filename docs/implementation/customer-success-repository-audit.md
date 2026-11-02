@@ -7,8 +7,8 @@ taken. It does **not** restate the plan.
 
 ## 1. Method
 
-- Read `AGENTS.MD`, `PLAN.md` (Phase 19), `docs/module-guide.md`, `PLAN_Phase_19_Sales.md`,
-  `docs/implementation/sales-repository-audit.md`, `PLAN_Phase_19_Projects.md` and
+- Read `AGENTS.MD`, `plans/PLAN.md` (Phase 19), `docs/module-guide.md`, `plans/PLAN_Phase_19_Sales.md`,
+  `docs/implementation/sales-repository-audit.md`, `plans/PLAN_Phase_19_Projects.md` and
   `docs/modules/projects/` first, as instructed.
 - Every prerequisite below is marked **verified** (read in the working tree) or **rejected** (turned
   out not to exist / not to work as assumed). Plan §3's audit table was re-verified section by

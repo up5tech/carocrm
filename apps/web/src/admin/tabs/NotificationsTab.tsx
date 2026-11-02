@@ -11,7 +11,7 @@ interface NotificationsDocument {
 }
 
 /**
- * Notifications tab (PLAN_Phase_20_Settings_UX.md §4.3 row 17): the instance defaults new
+ * Notifications tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 17): the instance defaults new
  * notification preferences start from. Per-user choices (20.10) override these, so the tab says what
  * it is: the default, not a mandate.
  */

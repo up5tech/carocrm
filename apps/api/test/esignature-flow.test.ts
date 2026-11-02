@@ -20,7 +20,7 @@ import { bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-ES.3 — the initial end-to-end slice, driven by the fake provider
- * (`PLAN_Phase_19_ESignature.md` §17.2, §18 `19-ES.3` acceptance: "end-to-end domain workflow can
+ * (`plans/PLAN_Phase_19_ESignature.md` §17.2, §18 `19-ES.3` acceptance: "end-to-end domain workflow can
  * run with the fake provider"; the slice agreed in `docs/implementation/esignature-audit.md` §8).
  *
  * One signed request, start to finish, with no credentials and no network: a connection, a synthetic

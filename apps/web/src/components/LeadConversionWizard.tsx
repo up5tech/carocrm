@@ -17,7 +17,7 @@ import { useMetadata } from '../state/metadata.js';
 
 /**
  * Phase 19-LS.14 — the conversion card and its wizard
- * (`PLAN_Phase_19_LeadScore.md` §7.1–§7.4, §11.4, §16 `19-LS.14`; contract §8, §12.2; compat §4.1–§4.3).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §7.1–§7.4, §11.4, §16 `19-LS.14`; contract §8, §12.2; compat §4.1–§4.3).
  *
  * The screen is deliberately thin, for the same reason the Lead Score card is: **the server owns every
  * decision this form presents.** The card is shown because

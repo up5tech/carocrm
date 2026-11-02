@@ -11,7 +11,7 @@ import {
 
 /**
  * Phase 19-CHAT.2 — the module's capability gate
- * (PLAN_Phase_19_CRM_Chat.md §7, §12.1, §17 `19-CHAT.2`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §7, §12.1, §17 `19-CHAT.2`).
  *
  * One authorization engine, one evaluator. Each Chat right is a **synthetic permission resource**
  * checked by `AclApiService`, so the same request-scoped role snapshot, the same `sysAdmin`/admin

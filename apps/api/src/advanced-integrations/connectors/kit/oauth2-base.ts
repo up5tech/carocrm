@@ -11,7 +11,7 @@ import { buildUrl, ConnectorHttp, isJsonObject, jsonBody, readString } from './c
 
 /**
  * Phase 19-INT.16–19-INT.24 — the shared OAuth 2.0 authorization-code flow
- * (`PLAN_Phase_19_Advanced_Integrations.md` §7.2; `19-INT.5`, `19-INT.16`–`19-INT.24`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §7.2; `19-INT.5`, `19-INT.16`–`19-INT.24`).
  *
  * The platform owns the flow; a connector owns only the vendor's endpoints and field names. That
  * split is already the rule of `OAuthFlowService` — it generates the state, the PKCE verifier and

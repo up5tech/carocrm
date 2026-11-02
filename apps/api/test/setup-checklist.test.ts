@@ -4,7 +4,7 @@ import type { ApiContext } from './support/boot-api.js';
 import { ADMIN_LOGIN, ADMIN_PASSWORD, authHeader, bootApi, createTestUser, loginAs, shutdownApi } from './support/boot-api.js';
 
 /**
- * Phase 20 §4.10 / §20.15 — the setup checklist (PLAN_Phase_20_Settings_UX.md).
+ * Phase 20 §4.10 / §20.15 — the setup checklist (plans/PLAN_Phase_20_Settings_UX.md).
  *
  * The checklist is guidance for a fresh instance, so its *content* depends on the database it runs
  * against. What this suite pins is what must hold on any instance: the eight checks the plan names

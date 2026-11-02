@@ -15,7 +15,7 @@ import { OmnichannelCapabilityService } from './omnichannel-capability.service.j
 
 /**
  * Phase 19-OM.6 — the workspace conversation facade
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.6`; feature contract §2.1; decision D1).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.6`; feature contract §2.1; decision D1).
  *
  * Every operation composes the exported Voice services — `VoiceInboxService` for reads, mark-read,
  * status and assignment; `VoiceMessagingService` for reconcile — so there is **no second

@@ -9,7 +9,7 @@ import { t } from '../../state/i18n.js';
 import { ACL_ACTIONS, type AclLevel,aclLevel, errorMessage, maxAclLevel, useRolesQuery, useTeamsQuery, useUsersQuery } from './identity.js';
 
 /**
- * Teams tab (PLAN_Phase_20_Settings_UX.md §4.3 row 10): team CRUD, membership and an overview of
+ * Teams tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 10): team CRUD, membership and an overview of
  * what the team's roles grant.
  *
  * Membership is written through the team here and through the user in the users tab; both end in the

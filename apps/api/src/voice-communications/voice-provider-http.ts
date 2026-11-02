@@ -5,7 +5,7 @@ import { categorizeHttpStatus, VoiceProviderError } from "./voice-provider.js";
  *
  * A provider request must never hold a worker slot forever, must not follow a redirect to an
  * unexpected destination, and must surface a categorized failure instead of a raw `fetch` error
- * (`PLAN_Phase_19_Voice_Communications.md` §11.2, §13.2). Credentials and request bodies are never
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §11.2, §13.2). Credentials and request bodies are never
  * logged here.
  */
 export const VOICE_PROVIDER_TIMEOUT_MS = 15_000;

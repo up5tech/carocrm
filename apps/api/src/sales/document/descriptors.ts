@@ -7,7 +7,7 @@ import { DEFAULT_LOCK_POLICY, type DocumentLockPolicy } from "./lock.js";
  * Phase 19-S.6 — the document-type descriptors every commercial document is driven by.
  *
  * Quotes, sales orders, invoices, credit notes, delivery orders and return orders do **not** share one
- * status machine (PLAN_Phase_19_Sales.md §4.4: "Each document type must own its allowed transitions
+ * status machine (plans/PLAN_Phase_19_Sales.md §4.4: "Each document type must own its allowed transitions
  * and its own validation"), but they do share the same *shape* of problem: an entity, a child item
  * entity, a number series, a set of states, a set of named transitions, and the conversions that may
  * produce another document from them.

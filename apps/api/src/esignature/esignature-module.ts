@@ -22,7 +22,7 @@ import {
 
 /**
  * Phase 19-ES.1 — the `ESignature` module descriptor and security contract
- * (`PLAN_Phase_19_ESignature.md` §5, §12, §18 `19-ES.1`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §5, §12, §18 `19-ES.1`).
  *
  * ESignature is a kernel domain directory under `apps/api/src`, like AI Agents, Voice
  * Communications and Advanced Integrations: it owns no auth, ACL, queue, outbox, audit trail,
@@ -559,7 +559,7 @@ export const IMPLEMENTED_PHASES = [
 ] as const;
 
 /**
- * The DocuSign Connect prefix (`PLAN_Phase_19_ESignature.md` §8.3).
+ * The DocuSign Connect prefix (`plans/PLAN_Phase_19_ESignature.md` §8.3).
  *
  * The endpoint lives under the platform's integration webhook prefix because it needs the exact raw
  * body for HMAC verification; `bootstrap.ts` preserves that body for this prefix as well as the

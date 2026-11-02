@@ -1,7 +1,7 @@
 # PLAN — Phase 19: ESignature Module (`ESignature`)
 
 > **Status:** Planned  
-> **Parent roadmap:** `PLAN.md` — Phase 19: Advanced Domains  
+> **Parent roadmap:** `plans/PLAN.md` — Phase 19: Advanced Domains  
 > **Module name:** `ESignature`  
 > **Module key / slug:** `esignature`  
 > **Backend module class:** `ESignatureModule`  
@@ -17,7 +17,7 @@
 Read these files before implementation:
 
 1. `AGENTS.MD`
-2. `PLAN.md`
+2. `plans/PLAN.md`
 3. Any existing plans for `Sales`, `Projects`, `CustomerSuccess`, `ServiceDesk`, `AdvancedIntegrations`, `AIAgents`, and `CRMChat` if they are present in the repository.
 4. The actual repository code, module manifests, migration history, API conventions, frontend conventions, and test scripts.
 
@@ -1059,7 +1059,7 @@ Each sub-phase must be implemented and accepted separately. The numbering is for
 
 Tasks:
 
-- Read `AGENTS.MD`, `PLAN.md`, existing module plans and implemented code.
+- Read `AGENTS.MD`, `plans/PLAN.md`, existing module plans and implemented code.
 - Inspect module registry/manifests, API conventions, metadata/Entity Engine, record ACL, file storage, Activities, notifications, jobs, audit, secrets/encryption, outbound request wrapper, and OAuth integrations.
 - Identify existing document/version/download services; do not design parallel file storage.
 - Identify whether generic signature/e-signature entities or provider connections already exist.

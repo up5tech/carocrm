@@ -9,7 +9,7 @@ import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 
 /**
  * Phase 19-AI.13 — scoped quotas and atomic enforcement
- * (PLAN_Phase_19_AI_Agents.md §12.2 "quota scopes", §12.3 "budget enforcement", §20 `19-AI.13`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §12.2 "quota scopes", §12.3 "budget enforcement", §20 `19-AI.13`).
  *
  * The `ai_agent_budget_policies` table ships with migration 045; this service is what makes it
  * mean something:

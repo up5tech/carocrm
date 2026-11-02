@@ -1,6 +1,6 @@
 -- Phase 19-ES.2 — ESignature persistence: connections, requests, recipients, document snapshots,
 -- provider events, the webhook inbox, template mappings and the lifecycle audit trail.
--- (PLAN_Phase_19_ESignature.md §6, §7, §10, §12.1, §18 `19-ES.2`; data-model decision in
+-- (plans/PLAN_Phase_19_ESignature.md §6, §7, §10, §12.1, §18 `19-ES.2`; data-model decision in
 -- docs/implementation/esignature-audit.md §6.)
 --
 -- ADDITIVE ONLY (AGENTS.md §3.5): eight new tables and their indexes. No existing table, column or

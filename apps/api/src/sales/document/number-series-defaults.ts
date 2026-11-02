@@ -1,5 +1,5 @@
 /**
- * Phase 19-S.2 — default document number series (PLAN_Phase_19_Sales.md §4.4, §8.3).
+ * Phase 19-S.2 — default document number series (plans/PLAN_Phase_19_Sales.md §4.4, §8.3).
  *
  * Kept free of Nest and database imports on purpose: the installer seed (`database/seed.ts`) writes
  * these rows with its raw pool, and the runtime service reads the same list, so the seeded series

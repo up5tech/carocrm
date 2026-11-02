@@ -1,6 +1,6 @@
 # Lead Score — operations and recovery runbook
 
-> Phase 19-LS.18 deliverable (`PLAN_Phase_19_LeadScore.md` §16, §17; audit §11 `LS.18`).
+> Phase 19-LS.18 deliverable (`plans/PLAN_Phase_19_LeadScore.md` §16, §17; audit §11 `LS.18`).
 > Companion documents: `docs/compatibility/lead-score.md` ·
 > `docs/implementation/lead-score-conversion-contract.md` ·
 > `docs/implementation/lead-score-ls18-completion-report.md`.

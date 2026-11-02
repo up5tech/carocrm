@@ -1,5 +1,5 @@
 -- Phase 19-S.12 – 19-S.13 — delivery/return orders and the purchasing documents
--- (PLAN_Phase_19_Sales.md §4.10, §4.12, §5.8).
+-- (plans/PLAN_Phase_19_Sales.md §4.10, §4.12, §5.8).
 --
 -- Documents and items stay ordinary metadata entities in `entity_records`; what JSON alone cannot
 -- express is the uniqueness a commercial document number needs and the indexes the list, detail,

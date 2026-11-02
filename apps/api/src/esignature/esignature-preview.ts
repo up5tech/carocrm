@@ -14,7 +14,7 @@ import type { SignatureTemplateMapping } from './signature-template-mapping.repo
 
 /**
  * Phase 19-ES.8 — the send preview, as a pure function
- * (`PLAN_Phase_19_ESignature.md` §4.3, §4.4, §11.2, §13.3 step 6, §18 `19-ES.8`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.3, §4.4, §11.2, §13.3 step 6, §18 `19-ES.8`).
  *
  * The preview is the **whole** of what a send would carry: the documents as snapshotted (with the hash of
  * each), the recipients as submitted, the routing, the message, the provider account and the policy in

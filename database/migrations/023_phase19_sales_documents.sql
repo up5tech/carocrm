@@ -1,4 +1,4 @@
--- Phase 19-S.6 – 19-S.12 — commercial documents and their line items (PLAN_Phase_19_Sales.md §5.8).
+-- Phase 19-S.6 – 19-S.12 — commercial documents and their line items (plans/PLAN_Phase_19_Sales.md §5.8).
 --
 -- Documents and items are ordinary metadata entities in `entity_records`, so what JSON alone cannot
 -- express — the uniqueness a commercial document number needs, and the indexes the list/detail,

@@ -17,7 +17,7 @@ import { RULE_DIMENSIONS } from './lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.4 — the deterministic scoring engine
- * (`PLAN_Phase_19_LeadScore.md` §3.1, §6.2–§6.5, §16 `19-LS.4`; audit §5.2, §11 `LS.4`).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §3.1, §6.2–§6.5, §16 `19-LS.4`; audit §5.2, §11 `LS.4`).
  *
  * Plan §16 asks for one acceptance and it is a strong one: *the same model and the same input snapshot
  * produce the same auditable result*. That rules out more than a bug — it rules out any design where the

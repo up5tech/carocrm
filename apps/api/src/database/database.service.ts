@@ -667,7 +667,7 @@ export interface ExtensionMigrationsTable {
 }
 
 /**
- * Phase 19-S.2 — Sales document number series (PLAN_Phase_19_Sales.md §4.4, §8.3).
+ * Phase 19-S.2 — Sales document number series (plans/PLAN_Phase_19_Sales.md §4.4, §8.3).
  *
  * One row per commercial document series. `next_number` is the *unallocated* next value; allocation
  * increments it inside a row-locked transaction, which is what makes concurrent issuance safe.
@@ -700,7 +700,7 @@ export interface SalesDocumentNumbersTable {
 }
 
 /**
- * Phase 19-AI — provider connections (PLAN_Phase_19_AI_Agents.md §4.4, §6.2).
+ * Phase 19-AI — provider connections (plans/PLAN_Phase_19_AI_Agents.md §4.4, §6.2).
  *
  * `api_key_encrypted` is a write-only AES-256-GCM payload. No read path returns it; API views expose
  * `hasApiKey`. `models`/`data_classes` are JSON arrays; `config` is validated provider configuration.

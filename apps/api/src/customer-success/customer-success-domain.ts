@@ -1,5 +1,5 @@
 /**
- * Phase 19-CS — Customer Success pure domain rules (PLAN_Phase_19_Customer_Success.md §5, §13).
+ * Phase 19-CS — Customer Success pure domain rules (plans/PLAN_Phase_19_Customer_Success.md §5, §13).
  *
  * Nothing in this file touches Nest, the database or the request scope: every rule is a function
  * over plain values, so lifecycle policy, health scoring, goal progress, risk transitions, playbook

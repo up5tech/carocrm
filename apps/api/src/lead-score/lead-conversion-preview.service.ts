@@ -22,7 +22,7 @@ import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 
 /**
  * Phase 19-LS.12 — the side-effect-free conversion preview
- * (`PLAN_Phase_19_LeadScore.md` §7.1–§7.4, §8.3, §11.4; audit §11 `LS.12`; contract §8).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §7.1–§7.4, §8.3, §11.4; audit §11 `LS.12`; contract §8).
  *
  * The exit criterion is *"the preview is side-effect-free and faithfully describes the operation that would
  * run"*, and both halves are structural here rather than promised:

@@ -15,7 +15,7 @@ import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 
 /**
  * Phase 19-SD.7 — Email-to-Case ingestion and outbound replies
- * (PLAN_Phase_19_ServiceDesk.md §5.5, §7.1).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §5.5, §7.1).
  */
 export interface ProcessEmailResult {
   readonly emailId: string;

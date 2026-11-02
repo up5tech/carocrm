@@ -11,7 +11,7 @@ import {
 
 /**
  * Phase 19-INT.2 — the module's capability gate
- * (`PLAN_Phase_19_Advanced_Integrations.md` §14.1; `19-INT.2`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §14.1; `19-INT.2`).
  *
  * The platform has one authorization engine. Rather than inventing a parallel "integration
  * permissions" table, each module right is a **synthetic permission resource** evaluated by

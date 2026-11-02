@@ -7,7 +7,7 @@ import { CASE_ACTIVE_STATUSES } from "./service-desk-domain.js";
 
 /**
  * Phase 19-SD.4/SD.5 — structural reads for the Service Desk domain services
- * (PLAN_Phase_19_ServiceDesk.md §5.3, §6.1).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §5.3, §6.1).
  *
  * Everything a *user* sees goes through `EntityCrudService`, so record-level ACL, field masking and
  * serialisation stay in one place. This service answers the different, metadata-level questions a

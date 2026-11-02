@@ -1,6 +1,6 @@
 # Phase 19-ES.20 — Admin Operations and Recovery Workbench
 
-> `PLAN_Phase_19_ESignature.md` §14, §16, §18 `Phase 19-ES.20`.
+> `plans/PLAN_Phase_19_ESignature.md` §14, §16, §18 `Phase 19-ES.20`.
 > Acceptance: operators can diagnose common integration problems without secret exposure; manual
 > retry is unavailable where it could create duplicate sends; a provider outage does not block
 > unrelated CRM features.

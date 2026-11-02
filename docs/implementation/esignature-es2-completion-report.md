@@ -1,6 +1,6 @@
 # Phase 19-ES.2 — Database schema and domain entities
 
-> `PLAN_Phase_19_ESignature.md` §6, §7, §18 `Phase 19-ES.2`.
+> `plans/PLAN_Phase_19_ESignature.md` §6, §7, §18 `Phase 19-ES.2`.
 > Acceptance: the migration is reviewed and applied safely according to `AGENTS.md`; request state
 > transitions are unit-tested; provider envelope ids are unique in the appropriate
 > connection/account context.

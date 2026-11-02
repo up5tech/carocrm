@@ -2,7 +2,7 @@ import { ValidationError } from '@carocrm/core/errors/index.js';
 
 /**
  * Phase 19-INT.2 — the `AdvancedIntegrations` domain vocabulary
- * (`PLAN_Phase_19_Advanced_Integrations.md` §6, §7.1; `19-INT.2`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §6, §7.1; `19-INT.2`).
  *
  * The module owns the *control plane* of connectivity: which providers exist, how a connection is
  * configured, how it is authorized, and what it is allowed to do. It does not own the CRM records

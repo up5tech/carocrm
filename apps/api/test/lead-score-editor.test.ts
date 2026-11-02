@@ -11,7 +11,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.8 — the model editor's contract
- * (`PLAN_Phase_19_LeadScore.md` §6.1, §6.3, §12, §16 `19-LS.8`; audit §5.2, §11).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.1, §6.3, §12, §16 `19-LS.8`; audit §5.2, §11).
  *
  * The exit criterion is that an administrator can manage a deterministic model **without editing raw JSON or
  * running code**. That holds only if the form's choices and the validator's rules are the same set, so this

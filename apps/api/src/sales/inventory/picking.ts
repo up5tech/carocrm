@@ -23,7 +23,7 @@ function unitCount(value: Decimal): number {
  * Phase 19-S.15 — the pure half of stock identity and removal: which unit of a product a movement
  * consumes, and what a lot/serial line must look like before it may be recorded.
  *
- * `PLAN_Phase_19_Sales.md` §4.15 asks for FIFO/FEFO/LIFO "as configurable options … with
+ * `plans/PLAN_Phase_19_Sales.md` §4.15 asks for FIFO/FEFO/LIFO "as configurable options … with
  * deterministic ordering" and §19-S.15 asks that "expired/invalid lots are not selected when the
  * configured policy forbids them". Both live here as functions of their arguments — no clock, no
  * database — so `apps/api/test/sales-picking.test.ts` can pin the exact ordering, the expiry gate

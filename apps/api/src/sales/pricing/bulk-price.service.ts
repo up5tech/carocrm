@@ -26,7 +26,7 @@ import { SalesRecords, type SalesRow } from "../sales-records.js";
 import { SalesSettingsService } from "../sales-settings.service.js";
 
 /**
- * Phase 19-S.4 — bulk price update (PLAN_Phase_19_Sales.md §4.3 last bullets, §16.1).
+ * Phase 19-S.4 — bulk price update (plans/PLAN_Phase_19_Sales.md §4.3 last bullets, §16.1).
  *
  * Requirements this service exists to meet: a **preview** of what would change and how many records
  * are affected, a permission check before any write, a bounded transaction, an audit record for the

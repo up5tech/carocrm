@@ -1,6 +1,6 @@
 # Advanced Integrations — sync semantics per provider
 
-> Phase 19-INT.16–19-INT.24 deliverable (`PLAN_Phase_19_Advanced_Integrations.md` §8, §3.3;
+> Phase 19-INT.16–19-INT.24 deliverable (`plans/PLAN_Phase_19_Advanced_Integrations.md` §8, §3.3;
 > `19-INT.16`–`19-INT.24`).
 > Status: **the engine's semantics are delivered; each provider's pagination facts are the
 > implementation's pins, not verified observations of a live account.**

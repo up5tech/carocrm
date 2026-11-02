@@ -1,6 +1,6 @@
 # Sales integration contracts (Phase 19-S.19)
 
-`PLAN_Phase_19_Sales.md` §11. Sales is a **producer of commercial facts and a consumer of payment
+`plans/PLAN_Phase_19_Sales.md` §11. Sales is a **producer of commercial facts and a consumer of payment
 outcomes**. It is not a gateway, a ledger, or a customer-health system, and these contracts are the
 boundary where another module may read or drive it. Every shape here is versioned:
 `SALES_CONTRACT_VERSION` (`apps/api/src/sales/integrations/sales-integration.service.ts`) is echoed as

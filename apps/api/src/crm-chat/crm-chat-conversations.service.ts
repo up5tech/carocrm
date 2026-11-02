@@ -11,7 +11,7 @@ import { CRMChatPolicyService } from './crm-chat-policy.service.js';
 
 /**
  * Phase 19-CHAT.4 — conversation and message APIs
- * (PLAN_Phase_19_CRM_Chat.md §6.2, §7.4, §17 `19-CHAT.4`; contract §6.2, §7.6).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §6.2, §7.4, §17 `19-CHAT.4`; contract §6.2, §7.6).
  *
  * ## Why this service reads the AI Agents tables directly
  *

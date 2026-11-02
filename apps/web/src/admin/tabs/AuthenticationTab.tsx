@@ -11,7 +11,7 @@ interface SecurityDocument {
 }
 
 /**
- * Authentication tab (PLAN_Phase_20_Settings_UX.md §4.3 row 14): the `security` document — password
+ * Authentication tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 14): the `security` document — password
  * policy, session policy and the sign-in notice. It edits policy only; it never grants or bypasses
  * access, and the server re-checks the administrator level on every write.
  */

@@ -1,5 +1,5 @@
 /**
- * The front-matter contract (`PLAN_Phase_21_Documentation.md` §4.2).
+ * The front-matter contract (`plans/PLAN_Phase_21_Documentation.md` §4.2).
  *
  * A deliberately small YAML subset is parsed here instead of pulling in a YAML library: the corpus
  * needs scalars, one-level inline maps and inline arrays, and nothing else. That narrowness is the

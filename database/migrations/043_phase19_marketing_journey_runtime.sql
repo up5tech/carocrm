@@ -1,5 +1,5 @@
 -- Phase 19-MA.13 — journey enrollment dedupe and step idempotency
--- (PLAN_Phase_19_Marketing_Automation.md §6.4, §15 `19-MA.13`).
+-- (plans/PLAN_Phase_19_Marketing_Automation.md §6.4, §15 `19-MA.13`).
 -- Additive only: unique indexes over rows this module owns.
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_entity_records_marketing_journey_enrollment_dedupe

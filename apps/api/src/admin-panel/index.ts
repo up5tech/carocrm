@@ -1,5 +1,5 @@
 /**
- * Admin panel barrel — integrator entry point (PLAN_Phase_20_Settings_UX.md §7.1).
+ * Admin panel barrel — integrator entry point (plans/PLAN_Phase_20_Settings_UX.md §7.1).
  *
  * Wire into AppModule:
  *   controllers: [...ADMIN_PANEL_CONTROLLERS]   // after ...SETTINGS_CONTROLLERS, before the `:entity` wildcard

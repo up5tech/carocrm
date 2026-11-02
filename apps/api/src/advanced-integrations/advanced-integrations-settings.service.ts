@@ -9,7 +9,7 @@ import { ADVANCED_INTEGRATIONS_SETTINGS_KEY } from './advanced-integrations-modu
 
 /**
  * Phase 19-INT.2 — the module's settings
- * (`PLAN_Phase_19_Advanced_Integrations.md` §5.2; `19-INT.2`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §5.2; `19-INT.2`).
  *
  * The platform already owns instance settings (`app_settings`), so this module keeps **one**
  * validated, versioned row named `AdvancedIntegrations` there — the same shape as

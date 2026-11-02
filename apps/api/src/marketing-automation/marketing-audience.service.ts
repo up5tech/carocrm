@@ -47,7 +47,7 @@ import { emailIdentity } from "./marketing-identity.js";
 
 /**
  * Phase 19-MA.4 — audience resolution, composition, preview and snapshots
- * (PLAN_Phase_19_Marketing_Automation.md §5.2, §6.1, §7.1 `MarketingAudienceService`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.2, §6.1, §7.1 `MarketingAudienceService`).
  *
  * Four rules drive the whole file, and each one is an acceptance criterion of the phase:
  *

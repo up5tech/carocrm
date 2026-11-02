@@ -1,6 +1,6 @@
 # Phase 19-LS.17 — Optional AI-assisted fit insight: completion report
 
-`PLAN_Phase_19_LeadScore.md` §6.7, §11.1, §16 (`19-LS.17`); audit §7.3, §11 `LS.17`; compatibility
+`plans/PLAN_Phase_19_LeadScore.md` §6.7, §11.1, §16 (`19-LS.17`); audit §7.3, §11 `LS.17`; compatibility
 `docs/compatibility/lead-score.md` §2, §8; the module descriptor `apps/api/src/lead-score/lead-score-module.ts`.
 
 **Exit criterion (plan §16):** *core scoring works with AI disabled; AI text cannot change scores without

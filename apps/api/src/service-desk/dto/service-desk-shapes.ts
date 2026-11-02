@@ -11,7 +11,7 @@ import {
 
 /**
  * Phase 19-SD — request shapes for the Service Desk domain commands
- * (`/api/v1/ServiceDesk`, PLAN_Phase_19_ServiceDesk.md §8.2).
+ * (`/api/v1/ServiceDesk`, plans/PLAN_Phase_19_ServiceDesk.md §8.2).
  *
  * Entity CRUD stays on the generic `/api/v1/Case` API, so these shapes cover the module-level
  * commands: settings, numbering preview, the case state machine (SD.4) and assignment/routing

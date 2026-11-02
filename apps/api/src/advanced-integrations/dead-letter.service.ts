@@ -11,7 +11,7 @@ import { redactProviderError } from './provider-error.js';
 
 /**
  * Phase 19-INT.11 — dead letters
- * (`PLAN_Phase_19_Advanced_Integrations.md` §11.2; `19-INT.11`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §11.2; `19-INT.11`).
  *
  * A dead letter is a terminal failure that a human has to look at. The platform's worker already
  * logs `'bullmq job permanently failed (dead letter)'`, but a log line is not a store: nothing can

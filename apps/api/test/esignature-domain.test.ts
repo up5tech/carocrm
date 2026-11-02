@@ -39,7 +39,7 @@ import { normalizeFieldMappings, normalizeRoleMappings } from '../src/esignature
 
 /**
  * Phase 19-ES.2 — the domain rules, tested without a database
- * (`PLAN_Phase_19_ESignature.md` §17.1, §18 `19-ES.2` acceptance
+ * (`plans/PLAN_Phase_19_ESignature.md` §17.1, §18 `19-ES.2` acceptance
  * "request state transitions are unit-tested").
  *
  * These are the decisions the later phases are not allowed to re-litigate: who may move a request

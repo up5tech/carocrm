@@ -6,7 +6,7 @@
  * page is broken — a typo must not take the handbook down for a reader. The lint has no readers to
  * protect, only authors to warn, so everything it dislikes is an error and the build fails.
  *
- * Every rule in `PLAN_Phase_21_Documentation.md` §11 is here, and each one is exercised by a fixture
+ * Every rule in `plans/PLAN_Phase_21_Documentation.md` §11 is here, and each one is exercised by a fixture
  * that violates exactly it, so a rule cannot rot into a no-op without a test noticing.
  */
 

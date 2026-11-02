@@ -23,7 +23,7 @@ import { type SignatureRequest,SignatureRequestRepository } from './signature-re
 
 /**
  * Phase 19-ES.5 — the secure document snapshot service
- * (`PLAN_Phase_19_ESignature.md` §4.5, §6.3, §12.9, §18 `19-ES.5`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.5, §6.3, §12.9, §18 `19-ES.5`).
  *
  * A signature request does not point at an attachment. It points at a **snapshot of the bytes that
  * were submitted**, because an attachment is a live CRM record: it can be renamed, unlinked, or — the

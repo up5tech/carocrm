@@ -10,7 +10,7 @@ import { ADMIN_PERMISSION_ENTITY } from "./voice-communications-domain.js";
 
 /**
  * Phase 19-VC.11 — WhatsApp Business template policy
- * (`PLAN_Phase_19_Voice_Communications.md` §8.3, §15 `19-VC.11`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §8.3, §15 `19-VC.11`).
  *
  * The provider owns template approval; this module records what the provider told us and validates a
  * send against that record before anything is dispatched. Three rules:

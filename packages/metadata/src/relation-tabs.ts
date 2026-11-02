@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Record-page relation tabs (PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
+ * Record-page relation tabs (plans/PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
  *
  * A record page renders one card per relationship, stacked in metadata order. That is unreadable
  * for an Account or an Opportunity with eight relations, and nothing on the page can be reordered

@@ -1,6 +1,6 @@
 # Phase 19-LS.10 — Conversion Domain Audit and State Contract: completion report
 
-`PLAN_Phase_19_LeadScore.md` §2.3, §3.4–§3.5, §4.3–§4.4, §5.5–§5.7, §7.1–§7.8, §8.3–§8.4, §9.1–§9.4,
+`plans/PLAN_Phase_19_LeadScore.md` §2.3, §3.4–§3.5, §4.3–§4.4, §5.5–§5.7, §7.1–§7.8, §8.3–§8.4, §9.1–§9.4,
 §10.2–§10.4, §11.4, §13.4, §14.1–§14.3, §16 (`19-LS.10`); audit §6 (the LS.0 sketch this phase decided),
 §11 `LS.10`, decisions D4/D7/D12, gaps G2/G3/G6; compatibility `docs/compatibility/lead-score.md` §2.1–§2.5,
 §4.1–§4.4, §5.2–§5.5, §7 (U3/U5/U14), §8 verification record.

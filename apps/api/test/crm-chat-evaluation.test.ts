@@ -6,7 +6,7 @@ import { restoreSettings, snapshotSettings } from './support/settings-snapshot.j
 
 /**
  * Phase 19-CHAT.17 — Evaluation and End-to-End Verification
- * (PLAN_Phase_19_CRM_Chat.md §16, §17 `19-CHAT.17`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §16, §17 `19-CHAT.17`).
  *
  * This test suite provides a versioned evaluation set covering:
  * - Vietnamese and English prompts

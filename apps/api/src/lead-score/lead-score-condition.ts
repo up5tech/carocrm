@@ -3,7 +3,7 @@ import { CRITERIA_OPERATORS } from '@carocrm/formula';
 
 /**
  * Phase 19-LS.3 — the bounded, declarative condition a score rule may use
- * (`PLAN_Phase_19_LeadScore.md` §5.2, §6.2; audit §5.2, decision D8).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §5.2, §6.2; audit §5.2, decision D8).
  *
  * A score decides what a salesperson looks at first. Plan §0.1-5 makes it non-negotiable that the
  * decision is explainable, and §6.2 makes it non-negotiable that a rule cannot be code. So a condition

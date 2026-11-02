@@ -1,7 +1,7 @@
 # Phase 19 — Projects Module (`projects`)
 
 > **Status:** Implemented 2026-10-13 — see `docs/modules/projects/` (README, data-model, permissions, api, compatibility) and the "Projects" section of `docs/reference/alpha-status.md` for what was built, what is deferred and the verification actually run.  
-> **Parent roadmap:** `PLAN.md` — Phase 19: Advanced Domains  
+> **Parent roadmap:** `plans/PLAN.md` — Phase 19: Advanced Domains  
 > **Target runtime:** NestJS / TypeScript backend with the existing React SPA  
 > **Functional reference:** EspoCRM Project Management documentation, especially [Projects](https://docs.espocrm.com/extensions/project-management/projects/)  
 > **Implementation rule:** Build on the platform completed in Phases 0–18. Do not reimplement kernel capabilities inside this module.
@@ -45,7 +45,7 @@ The module may contribute metadata, domain services, authorization policies, UI 
 
 ## 2. Reference Baseline and Compatibility Notes
 
-Use the project-wide compatibility policy in `PLAN.md`:
+Use the project-wide compatibility policy in `plans/PLAN.md`:
 
 - **Phase A baseline:** EspoCRM 9.3.x documented behavior where the existing plan requires that baseline.
 - **Phase B baseline:** newer upstream behavior only when explicitly recorded as an intentional later enhancement.
@@ -68,7 +68,7 @@ The upstream Project Management documentation describes features including proje
 
 ## 3. Prerequisites and Repository Audit
 
-Before implementation, the coding agent must read `AGENTS.MD` and `PLAN.md`, inspect the repository, and identify what Phases 0–18 actually delivered. **Do not assume a subsystem exists merely because it appears in the master plan.**
+Before implementation, the coding agent must read `AGENTS.MD` and `plans/PLAN.md`, inspect the repository, and identify what Phases 0–18 actually delivered. **Do not assume a subsystem exists merely because it appears in the master plan.**
 
 ### 3.1 Verify available platform capabilities
 
@@ -434,7 +434,7 @@ Requirements:
 
 ## 5. Domain Model and Persistence Design
 
-Use the existing Entity Engine and selected persistence layer (see `PLAN.md`). The following is a logical model, not a command to use these exact table names if the repository has a stronger established naming convention.
+Use the existing Entity Engine and selected persistence layer (see `plans/PLAN.md`). The following is a logical model, not a command to use these exact table names if the repository has a stronger established naming convention.
 
 ### 5.1 Core records
 
@@ -872,7 +872,7 @@ Implement the module incrementally. Keep every sub-phase small enough to review.
 
 Tasks:
 
-- Read `AGENTS.MD`, the master `PLAN.md`, and relevant implementations from Phases 0–18.
+- Read `AGENTS.MD`, the master `plans/PLAN.md`, and relevant implementations from Phases 0–18.
 - Confirm actual module, metadata, route, migration, frontend, event, audit, and test conventions.
 - Write a short gap analysis for missing dependencies and identify what must be extended versus reused.
 - Freeze the initial Project fields, task statuses, stage mapping, group types, project-role permission meanings, and delete/clone policies.
@@ -1197,4 +1197,4 @@ After the audit, continue in the phase order in Section 16. A sub-phase should b
 6. EspoCRM Attachments: https://docs.espocrm.com/development/attachments/
 7. EspoCRM Activities and Calendar: https://docs.espocrm.com/user-guide/activities-and-calendar/
 
-The official Project Management documentation is the functional reference. The repository's `PLAN.md`, `AGENTS.MD`, implemented kernel behavior, and explicit compatibility baseline determine how those behaviors should be realized in this NestJS codebase.
+The official Project Management documentation is the functional reference. The repository's `plans/PLAN.md`, `AGENTS.MD`, implemented kernel behavior, and explicit compatibility baseline determine how those behaviors should be realized in this NestJS codebase.

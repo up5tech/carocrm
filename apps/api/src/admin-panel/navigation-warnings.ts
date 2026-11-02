@@ -3,7 +3,7 @@ import type { SettingsWarning } from './settings-registry.service.js';
 import type { NavigationSettings } from './settings-shapes.js';
 
 /**
- * Configuration problems in the `navigation` document (PLAN_Phase_20_Settings_UX.md §4.4, §11).
+ * Configuration problems in the `navigation` document (plans/PLAN_Phase_20_Settings_UX.md §4.4, §11).
  *
  * These never block a save: an unknown key is ignored rather than refused, so a document written
  * before an upgrade keeps working, and the administrator is told about it in the tab's warning list

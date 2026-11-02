@@ -3,7 +3,7 @@ import { Alert, Button, Typography } from 'antd';
 import { t } from '../state/i18n.js';
 
 /**
- * A reusable error-state card (PLAN_Phase_20_Settings_UX.md §20.11).
+ * A reusable error-state card (plans/PLAN_Phase_20_Settings_UX.md §20.11).
  *
  * Usage: wrap any page's fetch failure so the retry action is always present and labelled the same way.
  * The `onRetry` callback is optional — when omitted the card shows the message without a button, which

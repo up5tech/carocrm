@@ -18,7 +18,7 @@ import {
 } from "./customer-success-settings.service.js";
 
 /**
- * Phase 19-CS.1 / 19-CS.14 — module health and diagnostics (PLAN_Phase_19_Customer_Success.md §8.2).
+ * Phase 19-CS.1 / 19-CS.14 — module health and diagnostics (plans/PLAN_Phase_19_Customer_Success.md §8.2).
  *
  * "Unavailable optional integrations are reported, not fatal": the module starts with no Service
  * Desk and no adoption connector, and this endpoint is where an operator sees exactly that, together

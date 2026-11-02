@@ -17,7 +17,7 @@ import { VoiceWhatsappTemplateService } from "./voice-whatsapp-template.service.
 
 /**
  * Phase 19-VC.6 — channel policy evaluation
- * (`PLAN_Phase_19_Voice_Communications.md` §8.4, §9.2, §13.4, §15 `19-VC.6`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §8.4, §9.2, §13.4, §15 `19-VC.6`).
  *
  * One function decides whether an outbound operation may proceed, and it is the only place that
  * decision is made (§8.4's eight checks). Every refusal carries a code from

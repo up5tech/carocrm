@@ -6,7 +6,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-ES.1 — module registration and the security contract
- * (`PLAN_Phase_19_ESignature.md` §18 `19-ES.1`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §18 `19-ES.1`).
  *
  * The three acceptance criteria this suite exists to protect:
  *   1. the module appears **only** for a caller whose ACL holds the read capability;

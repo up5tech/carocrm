@@ -1,5 +1,5 @@
 -- Phase 19-AI.14 — evaluation suites, cases and results
--- (PLAN_Phase_19_AI_Agents.md §17, §20 `19-AI.14`).
+-- (plans/PLAN_Phase_19_AI_Agents.md §17, §20 `19-AI.14`).
 --
 -- An evaluation is a repeatable engineering artifact, not a score that proves safety (§17.1). A
 -- suite groups cases; each case names a deterministic grader (schema validity, tool permissions,

@@ -25,7 +25,7 @@ import { type SignatureProviderDescriptor, SignatureProviderRegistry } from './p
 
 /**
  * Phase 19-ES.1 — module health and the security contract, readable
- * (`PLAN_Phase_19_ESignature.md` §13.5, §14, §18 `19-ES.1`; audit §2).
+ * (`plans/PLAN_Phase_19_ESignature.md` §13.5, §14, §18 `19-ES.1`; audit §2).
  *
  * "The module is registered and disabled cleanly when unconfigured" is only honest if an operator
  * can *see* the state, so every fact here is read from the running system: the metadata registry,

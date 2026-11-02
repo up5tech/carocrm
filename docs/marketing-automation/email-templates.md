@@ -1,6 +1,6 @@
 # Email templates, content preview and revisions
 
-> **Phase:** 19-MA.6 (PLAN_Phase_19_Marketing_Automation.md §5.4, §6.2, §9.4; §15 `19-MA.6`).
+> **Phase:** 19-MA.6 (plans/PLAN_Phase_19_Marketing_Automation.md §5.4, §6.2, §9.4; §15 `19-MA.6`).
 > **Where the code lives:** the renderer is `apps/api/src/marketing-automation/marketing-template-render.ts`
 > (pure functions, no I/O), the record-reading and sealing services are `marketing-template.service.ts`, and
 > the campaign validation maps the render findings into its own report in

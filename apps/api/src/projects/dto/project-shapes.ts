@@ -1,5 +1,5 @@
 /**
- * Phase 19 request shapes (PLAN_Phase_19_Projects.md §7.3). The controller parses these; the domain
+ * Phase 19 request shapes (plans/PLAN_Phase_19_Projects.md §7.3). The controller parses these; the domain
  * services receive already-validated values, so no service has to second-guess a payload.
  */
 import { z } from 'zod';

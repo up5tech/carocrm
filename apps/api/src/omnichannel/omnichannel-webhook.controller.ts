@@ -7,7 +7,7 @@ import { VoiceWebhookIngressService } from '../voice-communications/index.js';
 
 /**
  * Phase 19-OM.5 — the Omnichannel webhook ingress route
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.5`; feature contract §3 F6; decision D1).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.5`; feature contract §3 F6; decision D1).
  *
  * `POST /api/v1/integrations/omnichannel/{providerKey}/{accountKey}/{kind}` with
  * `kind ∈ voice-events | message-events | status-events | media-events`.

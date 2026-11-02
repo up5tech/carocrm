@@ -13,7 +13,7 @@ import type {
 
 /**
  * Phase 19-INT.6 — the typed connector adapter port
- * (`PLAN_Phase_19_Advanced_Integrations.md` §5.3; `19-INT.6`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §5.3; `19-INT.6`).
  *
  * This is the contract every connector implements, and the only place a vendor's HTTP details,
  * payloads, token quirks, cursors and signature algorithms may live. The shared runtime consumes

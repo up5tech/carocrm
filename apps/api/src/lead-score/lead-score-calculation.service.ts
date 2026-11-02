@@ -25,7 +25,7 @@ import { signalPlans } from './lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.5 — computing a score and *keeping* it
- * (`PLAN_Phase_19_LeadScore.md` §3.1, §5.3–§5.4, §6.3, §8.2, §9.1–§9.2, §10.2, §16 `19-LS.5`; audit §5.3, §11).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §3.1, §5.3–§5.4, §6.3, §8.2, §9.1–§9.2, §10.2, §16 `19-LS.5`; audit §5.3, §11).
  *
  * LS.4 proved that a model and a snapshot answer the same question the same way. This service is what makes
  * that answer visible without recomputing it on every list read, which plan §4.2 forbids. It writes two

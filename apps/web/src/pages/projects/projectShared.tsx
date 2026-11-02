@@ -7,7 +7,7 @@ import type { ProjectCapabilities, ProjectPlanView, ProjectTaskRow } from '../..
 import { t } from '../../state/i18n.js';
 
 /**
- * Shared scaffolding for the Phase 19 Projects views (PLAN_Phase_19_Projects.md §8).
+ * Shared scaffolding for the Phase 19 Projects views (plans/PLAN_Phase_19_Projects.md §8).
  *
  * One query key per project so a move in the Plan view and a rename in the Board view invalidate
  * the same cache, and one shell that draws the view tabs. The capability document is fetched with

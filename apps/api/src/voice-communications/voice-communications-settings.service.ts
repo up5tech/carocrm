@@ -8,7 +8,7 @@ import { PENDING_FEATURES, VOICE_FEATURES } from "./voice-communications-module.
 
 /**
  * Phase 19-VC.2 — Voice & Communications domain settings
- * (`PLAN_Phase_19_Voice_Communications.md` §13, §15 `19-VC.2` task 3).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §13, §15 `19-VC.2` task 3).
  *
  * The platform already owns instance settings (`app_settings`), so this module keeps **one**
  * validated, versioned row named `voiceCommunications` there — the same shape as

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 /**
  * Phase 19-MA.2 — pure Marketing Automation domain vocabulary and decisions
- * (PLAN_Phase_19_Marketing_Automation.md §5.1, §5.3, §5.5, §6.1–§6.5, §7.1, §7.4).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.1, §5.3, §5.5, §6.1–§6.5, §7.1, §7.4).
  *
  * Everything in this file is a constant or a pure function: no Nest dependency, no database, no I/O,
  * no clock read outside an injected `now`. The metadata seed, the settings schema, the write guard, the

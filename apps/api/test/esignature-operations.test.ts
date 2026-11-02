@@ -12,7 +12,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-ES.20 — admin operations and the recovery workbench
- * (`PLAN_Phase_19_ESignature.md` §14, §16, §18 `19-ES.20`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §14, §16, §18 `19-ES.20`).
  *
  * The acceptance criteria, one group each:
  *

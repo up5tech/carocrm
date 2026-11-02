@@ -2,7 +2,7 @@
 
 **Delivered in:** Phase 19-MA.10 (normalized events), Phase 19-MA.11 (campaign log and statistics),
 Phase 19-MA.17 (attribution and funnel).
-**Plan:** `PLAN_Phase_19_Marketing_Automation.md` §5.9, §5.11, §5.14, §15 `19-MA.11`, `19-MA.17`.
+**Plan:** `plans/PLAN_Phase_19_Marketing_Automation.md` §5.9, §5.11, §5.14, §15 `19-MA.11`, `19-MA.17`.
 **Code:** `marketing-event-ingestion.service.ts` (normalization and feedback), `marketing-campaign-log.service.ts`
 (log and stats), `marketing-attribution.service.ts` (attribution and funnel), `marketing-operations.service.ts`
 (operational counters). Storage: `marketing_events` (migration 042),

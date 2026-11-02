@@ -15,14 +15,14 @@ Customer Success (19-CS), Service Desk (19-SD), Marketing Automation (19-MA), Vo
 (19-ES) — plus Phase 20 (settings, administration and end-user UX) and Phase 21 (the in-app
 handbook).**
 
-_Roadmap_ — [PLAN.md](PLAN.md) for the kernel and module roadmap, plus the phase-level plans
-[Projects](PLAN_Phase_19_Projects.md) · [Sales](PLAN_Phase_19_Sales.md) ·
-[Customer Success](PLAN_Phase_19_Customer_Success.md) · [Service Desk](PLAN_Phase_19_ServiceDesk.md) ·
-[Marketing Automation](PLAN_Phase_19_Marketing_Automation.md) ·
-[Voice & Communications](PLAN_Phase_19_Voice_Communications.md) ·
-[AI Agents](PLAN_Phase_19_AI_Agents.md) · [Advanced Integrations](PLAN_Phase_19_Advanced_Integrations.md) ·
-[CRM Chat](PLAN_Phase_19_CRM_Chat.md) · [E-Signature](PLAN_Phase_19_ESignature.md) ·
-[Settings & UX](PLAN_Phase_20_Settings_UX.md) · [In-app documentation](PLAN_Phase_21_Documentation.md).
+_Roadmap_ — [plans/PLAN.md](plans/PLAN.md) for the kernel and module roadmap, plus the phase-level plans
+[Projects](plans/PLAN_Phase_19_Projects.md) · [Sales](plans/PLAN_Phase_19_Sales.md) ·
+[Customer Success](plans/PLAN_Phase_19_Customer_Success.md) · [Service Desk](plans/PLAN_Phase_19_ServiceDesk.md) ·
+[Marketing Automation](plans/PLAN_Phase_19_Marketing_Automation.md) ·
+[Voice & Communications](plans/PLAN_Phase_19_Voice_Communications.md) ·
+[AI Agents](plans/PLAN_Phase_19_AI_Agents.md) · [Advanced Integrations](plans/PLAN_Phase_19_Advanced_Integrations.md) ·
+[CRM Chat](plans/PLAN_Phase_19_CRM_Chat.md) · [E-Signature](plans/PLAN_Phase_19_ESignature.md) ·
+[Settings & UX](plans/PLAN_Phase_20_Settings_UX.md) · [In-app documentation](plans/PLAN_Phase_21_Documentation.md).
 
 _Kernel_ — metadata engine with DB-backed overrides, generic entity/query/ACL engines, a
 metadata-driven React SPA and Entity Manager, stream, calendar, dynamic logic + sandboxed formula
@@ -183,7 +183,7 @@ _Phase 19_ —
   and conversion metrics — the scored population, the bands, the freshness and the conversions — computed under
   the reader's own record scope, and a `leadScore` dashlet puts one of those views on a dashboard. The
   operations runbook is [docs/runbooks/lead-score-operations.md](docs/runbooks/lead-score-operations.md). See
-  [PLAN_Phase_19_LeadScore.md](PLAN_Phase_19_LeadScore.md),
+  [plans/PLAN_Phase_19_LeadScore.md](plans/PLAN_Phase_19_LeadScore.md),
   [docs/implementation/lead-score-audit.md](docs/implementation/lead-score-audit.md),
   [docs/implementation/lead-score-ls1-completion-report.md](docs/implementation/lead-score-ls1-completion-report.md),
   [docs/implementation/lead-score-ls2-completion-report.md](docs/implementation/lead-score-ls2-completion-report.md),
@@ -208,13 +208,13 @@ _Phase 20_ — settings, administration and end-user UX: a settings-document reg
 concurrency and audit, the tabbed administration shell with a server-resolved, ACL-filtered main menu
 (`GET /api/v1/Navigation`), per-user preferences, the list-view power pack, the command palette, the
 first-run setup checklist and the shared record/list states. See
-[PLAN_Phase_20_Settings_UX.md](PLAN_Phase_20_Settings_UX.md).
+[plans/PLAN_Phase_20_Settings_UX.md](plans/PLAN_Phase_20_Settings_UX.md).
 
 _Phase 21_ — the in-app handbook: a reviewed Markdown corpus in `content/docs/` (`en` plus the `vi`
 P0 set), a pure documentation engine in `packages/docs` (documented Markdown subset, search ranking,
 a lint that fails a release on a dead link or a missing page), served at `/docs` in the SPA and
 `GET /api/v1/Docs/(tree|page|search)`, with a **Docs** tab in the administration area. See
-[PLAN_Phase_21_Documentation.md](PLAN_Phase_21_Documentation.md) and
+[plans/PLAN_Phase_21_Documentation.md](plans/PLAN_Phase_21_Documentation.md) and
 [docs/reference/docs-authoring.md](docs/reference/docs-authoring.md).
 
 _Not built yet_ — real inbound mail collection (`POST /api/v1/Email/action/pollInbound` runs a null

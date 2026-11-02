@@ -7,7 +7,7 @@ import { useModuleDocument } from '../module-document.js';
 import { usePublishTabActions } from '../shell.js';
 
 /**
- * A module settings document hosted by the administration shell (PLAN_Phase_20_Settings_UX.md §4.3
+ * A module settings document hosted by the administration shell (plans/PLAN_Phase_20_Settings_UX.md §4.3
  * rows 21-22, §9.1). Service Desk and Customer Success never had a settings screen: their documents
  * are validated, versioned and warnings-bearing on the server, so this renders the leaf policies as
  * real controls and lets the module's own endpoint refuse an invalid value with its reason.

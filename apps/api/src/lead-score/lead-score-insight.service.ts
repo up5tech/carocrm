@@ -29,7 +29,7 @@ import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 
 /**
  * Phase 19-LS.17 — the optional AI fit insight
- * (`PLAN_Phase_19_LeadScore.md` §6.7, §11.1, §16 `19-LS.17`; audit §7.3; compatibility §2/§8).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.7, §11.1, §16 `19-LS.17`; audit §7.3; compatibility §2/§8).
  *
  * The exit criterion is two-sided: *core scoring works with AI disabled*, and *AI text cannot change a
  * score*. Both are structural here rather than promised:

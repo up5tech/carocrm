@@ -1,6 +1,6 @@
 # Phase 19-ES.12 — Envelope and Recipient State Synchronization
 
-> `PLAN_Phase_19_ESignature.md` §4.7, §10.3, §10.4, §18 `Phase 19-ES.12`.
+> `plans/PLAN_Phase_19_ESignature.md` §4.7, §10.3, §10.4, §18 `Phase 19-ES.12`.
 > Acceptance: completed is shown only after a trusted event/reconciliation proves envelope completion;
 > recipient completion does not incorrectly complete a multi-recipient envelope; state cannot move
 > backwards because of a duplicate or older event.

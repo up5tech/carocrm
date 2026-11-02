@@ -1,6 +1,6 @@
 # `AIAgents` architecture and domain contract
 
-> **Plan:** `PLAN_Phase_19_AI_Agents.md` §4–§9, §20 Phase 19-AI.1.
+> **Plan:** `plans/PLAN_Phase_19_AI_Agents.md` §4–§9, §20 Phase 19-AI.1.
 > **Status:** delivered in 19-AI.1. Contracts here are binding for AI.2 onwards.
 > **Module:** `AIAgents`, key/route `ai-agents`, no `Ua` prefix.
 

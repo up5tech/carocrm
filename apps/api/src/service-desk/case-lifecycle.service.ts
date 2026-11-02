@@ -28,7 +28,7 @@ import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 
 /**
  * Phase 19-SD.4 — the `Case` state machine and resolution workflow
- * (PLAN_Phase_19_ServiceDesk.md §5.2, §7.1 `CaseCommandService`, §7.2–§7.5).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §5.2, §7.1 `CaseCommandService`, §7.2–§7.5).
  *
  * Every status move is a server-side command, never a bare field write: `status` is editable through
  * the record API only as far as the write guard allows, and the transitions an agent may run are the

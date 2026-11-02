@@ -10,7 +10,7 @@
 ## v1.1.0 — Phase completion (2026-10-21)
 
 This release closes the gaps found when the module was reviewed against
-`PLAN_Phase_19_CRM_Chat.md`. The v1.0.0 notes claimed every phase through 19-CHAT.18 was
+`plans/PLAN_Phase_19_CRM_Chat.md`. The v1.0.0 notes claimed every phase through 19-CHAT.18 was
 implemented; the review showed that several were declared but not built, and that the build itself
 did not compile. This release makes the claim true.
 

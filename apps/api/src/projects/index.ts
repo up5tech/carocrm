@@ -15,7 +15,7 @@ import { ProjectViewService } from './project-view.service.js';
 import { ProjectController, ProjectTaskController } from './projects.controller.js';
 
 /**
- * Projects domain module barrel (PLAN_Phase_19_Projects.md §6.1).
+ * Projects domain module barrel (plans/PLAN_Phase_19_Projects.md §6.1).
  *
  * Like every other domain here, Projects is a directory under `apps/api/src`, not a second
  * framework: the Entity Engine, ACL, stream, audit, attachments and dashboards are the kernel's and

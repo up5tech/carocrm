@@ -1,4 +1,4 @@
-# PLAN.md — EspoCRM Reimplementation in NestJS
+# plans/PLAN.md — EspoCRM Reimplementation in NestJS
 
 ## 1. Document Purpose
 
@@ -2760,7 +2760,7 @@ Implement in separate modules:
 - Marketing automation.
 - AI agents (Phase 19-AI.0–19-AI.19 implemented; 19-AI.18's protocol half is delivered as the
   authenticated, allowlisted MCP-compatible adapter while model-backed retrieval stays deferred; see
-  `PLAN_Phase_19_AI_Agents.md` and `docs/modules/ai-agents/`).
+  `plans/PLAN_Phase_19_AI_Agents.md` and `docs/modules/ai-agents/`).
 - Voice/communications.
 - Advanced integrations.
 - ESignature
@@ -2791,12 +2791,12 @@ bulk-action outcome counts (shipped), the row kebab menu (shipped), column reord
 are reconciled against the working tree in `docs/compatibility/settings-ux.md` §"Status
 reconciliation". Review sub-phase 20.24 (one page frame), 20.25 (find a setting), 20.27 (bounded
 first load) and the dark-mode decision 20.21 shipped 2026-10-26; Phase 20 is complete as of
-2026-10-26; see `PLAN_Phase_20_Settings_UX.md` §"Review-driven sub-phases".
+2026-10-26; see `plans/PLAN_Phase_20_Settings_UX.md` §"Review-driven sub-phases".
 
 See `docs/admin/settings.md`, `docs/admin/navigation.md`, `docs/ux/`,
 `docs/compatibility/settings-ux.md` and `docs/reference/alpha-status.md`.
 
-Implement, as specified in `PLAN_Phase_20_Settings_UX.md`:
+Implement, as specified in `plans/PLAN_Phase_20_Settings_UX.md`:
 
 - A metadata-driven, tabbed Administration area with a settings-document registry (brand,
   localization, layouts, main menu, attachments, jobs, audit, internal, users, teams, roles, API
@@ -2817,7 +2817,7 @@ and an end user completes daily CRM work with minimal hunting, typing and contex
 ## Phase 21 — In-App Documentation and Product Help
 
 Progress: ✅ implemented 2026-10-21 (21.0–21.10). Scope, architecture and work order in
-`PLAN_Phase_21_Documentation.md`; operations in `docs/admin/documentation.md`; deferrals and deviations
+`plans/PLAN_Phase_21_Documentation.md`; operations in `docs/admin/documentation.md`; deferrals and deviations
 in `docs/compatibility/documentation.md`. `/docs` ships 46 `en` pages across four sections with 17
 translated into `vi`, reachable from the sidebar, the avatar menu, the command palette and the screen the
 reader is standing on.
@@ -2827,7 +2827,7 @@ no in-app reference. Phase 21 adds a `/docs` surface written for the two audienc
 system — the **administrator** and the **CRM user** — searchable, bilingual, permission-aware and
 deep-linked from the screens it describes.
 
-Implement, as specified in `PLAN_Phase_21_Documentation.md`:
+Implement, as specified in `plans/PLAN_Phase_21_Documentation.md`:
 
 - `content/docs/<locale>/<section>/<slug>.md` — versioned user-facing content with a strict
   front-matter contract and a documented Markdown subset, kept out of the engineering `docs/` tree.

@@ -1,6 +1,6 @@
 # Advanced Integrations — webhook security per provider
 
-> Phase 19-INT.16–19-INT.24 deliverable (`PLAN_Phase_19_Advanced_Integrations.md` §10.2, §18;
+> Phase 19-INT.16–19-INT.24 deliverable (`plans/PLAN_Phase_19_Advanced_Integrations.md` §10.2, §18;
 > `19-INT.12`, `19-INT.16`–`19-INT.24`).
 > Status: **the shared ingress is delivered; each provider's algorithm below is the
 > implementation's pin, not a verified observation of a live account.**

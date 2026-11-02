@@ -24,7 +24,7 @@ import {
 
 /**
  * Phase 19-ES.7 — the template catalog and the mapping validation
- * (`PLAN_Phase_19_ESignature.md` §6.7, §4.4, §5.2, §8.2, §18 `19-ES.7`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.7, §4.4, §5.2, §8.2, §18 `19-ES.7`).
  *
  * A provider template is a contract's skeleton: named roles that must be filled and tabs that must
  * carry values. The mapping says which CRM recipient fills each role and which CRM attribute may reach

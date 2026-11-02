@@ -9,7 +9,7 @@ import { t } from '../../state/i18n.js';
 import { projectQueryKey, ProjectShell,useErrorReporter, useProjectCapabilities, useProjectPlan, useProjectRefresh  } from './projectShared.js';
 
 /**
- * Members and their project roles (PLAN_Phase_19_Projects.md §4.4).
+ * Members and their project roles (plans/PLAN_Phase_19_Projects.md §4.4).
  *
  * The list is the project's membership, not the CRM team: adding someone here says what they may do
  * inside this project, and the server answers the same question when it authorises any call. The

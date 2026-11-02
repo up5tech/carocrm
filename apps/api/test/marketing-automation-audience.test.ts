@@ -6,7 +6,7 @@ import { authHeader, bootApi, shutdownApi } from "./support/boot-api.js";
 
 /**
  * Phase 19-MA.4 — audience membership, resolution, composition and snapshots
- * (PLAN_Phase_19_Marketing_Automation.md §5.2, §15 `19-MA.4` acceptance).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.2, §15 `19-MA.4` acceptance).
  *
  * Runs against the configured primary database through the real HTTP API (AGENTS.md §3.1); no test database
  * is created and nothing here sends a message. Every record carries the `runId` marker and is removed by

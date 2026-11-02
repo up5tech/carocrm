@@ -2,7 +2,7 @@ import { ValidationError } from '@carocrm/core/errors/index.js';
 
 /**
  * Phase 19-INT.3 — the versioned connector capability schema
- * (`PLAN_Phase_19_Advanced_Integrations.md` §5.4; `19-INT.3`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §5.4; `19-INT.3`).
  *
  * A connector declares what it can do. The declaration is **data**, validated against this file's
  * rules, and it is the single answer to two questions:

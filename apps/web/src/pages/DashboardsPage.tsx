@@ -551,7 +551,7 @@ export function DashboardsPage() {
       const values = await dashletForm.validateFields();
       const kind = String(values.kind);
       // The Project Task dashlet is configured by its own options, not by an entity + filter pair
-      // (PLAN_Phase_19_Projects.md §4.16).
+      // (plans/PLAN_Phase_19_Projects.md §4.16).
       const config =
         kind === 'projectTasks'
           ? {

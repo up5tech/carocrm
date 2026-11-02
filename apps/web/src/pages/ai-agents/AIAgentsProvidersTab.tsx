@@ -28,7 +28,7 @@ import { t } from '../../state/i18n.js';
 
 /**
  * Phase 19-AI.4 — provider connection administration
- * (PLAN_Phase_19_AI_Agents.md §6, §14.4, §20 `19-AI.4`; docs/modules/ai-agents/provider-configuration.md).
+ * (plans/PLAN_Phase_19_AI_Agents.md §6, §14.4, §20 `19-AI.4`; docs/modules/ai-agents/provider-configuration.md).
  *
  * A connection is one approved model endpoint. The form never presents a policy value as free text:
  * the adapter is chosen from the ones the server actually registered, the model list is an

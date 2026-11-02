@@ -22,7 +22,7 @@ a stock valuation, and the §4.13 exchange-rate snapshot those base-currency fig
 phase is what finally **persists** rather than only reads.** The
 authoritative scope and the
 phase-by-phase roadmap live in
-[`PLAN_Phase_19_Sales.md`](../../PLAN_Phase_19_Sales.md). What is **not** built, and why, is
+[`plans/PLAN_Phase_19_Sales.md`](../../../plans/PLAN_Phase_19_Sales.md). What is **not** built, and why, is
 [`sales-phase19-gap-report.md`](../../implementation/sales-phase19-gap-report.md) — the 19-S.20 deliverable
 that lists the deferred Tier 2/3/4 features, the unresolved jurisdiction and accounting items, and the
 verification evidence per suite. The list of phases actually claimed is

@@ -11,7 +11,7 @@ import { CRM_CHAT_MENU_INVALIDATOR, type MenuInvalidator } from './crm-chat-toke
 
 /**
  * Phase 19-CHAT.2 — the `crmChat` instance settings row
- * (PLAN_Phase_19_CRM_Chat.md §13, §17 `19-CHAT.2`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §13, §17 `19-CHAT.2`).
  *
  * The platform owns `app_settings`, so the module keeps **one** validated, versioned row named
  * `crmChat` — the same shape `aiAgents`, Marketing, Sales and Service Desk use. Nothing here is a

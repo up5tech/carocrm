@@ -6,7 +6,7 @@ was missing, and the decisions taken for 19-SD.1 – 19-SD.3. It does not restat
 
 ## 1. Method
 
-- Read `AGENTS.MD`, `PLAN.md` (Phase 19), `PLAN_Phase_19_ServiceDesk.md`, `docs/module-guide.md`,
+- Read `AGENTS.MD`, `plans/PLAN.md` (Phase 19), `plans/PLAN_Phase_19_ServiceDesk.md`, `docs/module-guide.md`,
   `docs/implementation/customer-success-repository-audit.md`, `docs/modules/projects/` and
   `docs/modules/sales/` first, as instructed.
 - Checked specifically for a pre-existing canonical Case/ticket entity, an existing mail-to-case
@@ -57,7 +57,7 @@ reachable from the record they belong to.
 | Index declarations in metadata are **not** DDL | the `indexes` arrays vs. the reviewed migrations |
 | `database/migrate.ts` sorts `database/migrations/*.sql`, skips applied rows in `schema_migrations`, applies each file in one transaction | `database/migrate.ts` |
 | `033` was the next free migration number | `ls database/migrations/` → `001_init.sql` … `032_phase19_customer_success.sql` |
-| A Postgres sequence is already the repository's own advice for atomic identifiers where a gapless ledger is not required | `PLAN_Phase_19_ServiceDesk.md` §5.1 ("use a sequence or a transaction-safe allocation service") |
+| A Postgres sequence is already the repository's own advice for atomic identifiers where a gapless ledger is not required | `plans/PLAN_Phase_19_ServiceDesk.md` §5.1 ("use a sequence or a transaction-safe allocation service") |
 
 Decision: one additive migration, `database/migrations/033_phase19_service_desk.sql`, creates the
 sequence `service_desk_case_number_seq`, a partial unique index on the stored case number, and the

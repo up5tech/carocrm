@@ -7,7 +7,7 @@ import { IntegrationAuditService } from './integration-audit.service.js';
 
 /**
  * Phase 19-INT.26 — the retention policy
- * (`PLAN_Phase_19_Advanced_Integrations.md` §14.3, §16.3; `19-INT.26`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §14.3, §16.3; `19-INT.26`).
  *
  * The plan asks for *"per-provider/payload retention periods and purge routines for raw payload
  * diagnostics"*, and it asks for them to be **explicit** rather than implicit: a deployment must

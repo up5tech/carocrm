@@ -10,7 +10,7 @@ import { projectQueryKey, ProjectShell,useErrorReporter, useProjectCapabilities,
 import { ProjectTaskModal } from './ProjectTaskModal.js';
 
 /**
- * Gantt view (PLAN_Phase_19_Projects.md §4.12): a hand-drawn SVG timeline — bars for dated tasks, a
+ * Gantt view (plans/PLAN_Phase_19_Projects.md §4.12): a hand-drawn SVG timeline — bars for dated tasks, a
  * marker for each milestone, a path for each dependency.
  *
  * Nothing here is an offline model of the project: a drag or a resize is converted into the same day

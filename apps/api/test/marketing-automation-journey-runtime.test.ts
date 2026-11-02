@@ -8,7 +8,7 @@ import { authHeader, bootApi, shutdownApi } from "./support/boot-api.js";
 
 /**
  * Phase 19-MA.12/19-MA.13 — journey versions, enrollment and step execution
- * (PLAN_Phase_19_Marketing_Automation.md §5.6, §5.7, §15 `19-MA.12`, `19-MA.13` acceptance).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.6, §5.7, §15 `19-MA.12`, `19-MA.13` acceptance).
  *
  * The existing `marketing-automation-journey.test.ts` proves the *graph validator* and the action/trigger
  * catalogs as pure functions. What it could not prove — and what this suite exists for — is the runtime's

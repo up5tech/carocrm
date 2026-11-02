@@ -25,7 +25,7 @@ import {
 
 /**
  * Phase 19-INT.24 — the generic REST connector
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.10; `19-INT.24`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.10; `19-INT.24`).
  *
  * A connector for a **vetted** external REST API. Not a way to reach any URL: the endpoint is a
  * reviewed configuration (see `generic-rest-endpoint.ts`) and this file only reads through it.

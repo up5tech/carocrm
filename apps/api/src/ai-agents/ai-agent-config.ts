@@ -6,7 +6,7 @@ import { DATA_CLASSES, EFFECT_CLASSES } from './ai-agents-module.js';
 
 /**
  * Phase 19-AI.5 — the typed agent configuration
- * (PLAN_Phase_19_AI_Agents.md §5.1, §5.3, §20 `19-AI.5`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §5.1, §5.3, §20 `19-AI.5`).
  *
  * An agent's draft is free-form JSON in the database but **never** free-form policy: every value a
  * run depends on is parsed by this schema, bounded, and given a safe default. A draft that fails

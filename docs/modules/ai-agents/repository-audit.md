@@ -1,8 +1,8 @@
 # Phase 19-AI.0 — `AIAgents` repository audit
 
-> **Plan:** `PLAN_Phase_19_AI_Agents.md` §3 (required audit), §20 Phase 19-AI.0.
+> **Plan:** `plans/PLAN_Phase_19_AI_Agents.md` §3 (required audit), §20 Phase 19-AI.0.
 > **Status:** delivered in 19-AI.0. This document is the snapshot the later sub-phases build on.
-> It was produced by reading this checkout, not from `PLAN.md` claims.
+> It was produced by reading this checkout, not from `plans/PLAN.md` claims.
 > **Naming:** the module is `AIAgents`, the registry key and route slug are `ai-agents`, and no name
 > carries a `Ua` prefix.
 

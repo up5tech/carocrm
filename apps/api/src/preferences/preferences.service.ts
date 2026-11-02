@@ -13,7 +13,7 @@ export interface PreferenceView {
 }
 
 /**
- * Per-user preferences (PLAN_Phase_20_Settings_UX.md §5.9, §20.10).
+ * Per-user preferences (plans/PLAN_Phase_20_Settings_UX.md §5.9, §20.10).
  *
  * Ownership is structural: every query keys off the caller's own id and the routes carry no user id,
  * so there is no code path that could read another account's row — not for administrators either.

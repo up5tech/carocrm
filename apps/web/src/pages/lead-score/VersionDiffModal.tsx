@@ -9,7 +9,7 @@ import { bandLabel, dimensionLabel, effectLabel, statusLabel } from './shared.js
 
 /**
  * Phase 19-LS.8 — two versions of one model, side by side
- * (`PLAN_Phase_19_LeadScore.md` §5.1, §6.1, §16 `19-LS.8`).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §5.1, §6.1, §16 `19-LS.8`).
  *
  * Plan §6.1 asks an administrator to be able to answer "what changed between the version every stored score
  * names and the draft I am about to publish". A published version is immutable (LS.2 guard), so a comparison

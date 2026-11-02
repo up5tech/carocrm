@@ -8,7 +8,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-OM.20 — conversation analytics over the reused records
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.20`; `docs/omnichannel/analytics.md`).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.20`; `docs/omnichannel/analytics.md`).
  *
  * Against the configured primary database (AGENTS.md §3.1). Fixtures are created through the owner's
  * ingest/send services and then timestamped with SQL so the window is deterministic: every fixture is

@@ -12,7 +12,7 @@ import { SignatureRequestRepository } from './signature-request.repository.js';
 
 /**
  * Phase 19-ES.2 — the recipient projection
- * (`PLAN_Phase_19_ESignature.md` §6.4, §4.4, §4.7, §10.3).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.4, §4.4, §4.7, §10.3).
  *
  * Two facts the rest of the module depends on are enforced here:
  *

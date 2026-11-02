@@ -5,7 +5,7 @@ import { GlobalExceptionFilter } from '../src/common/global-exception.filter.js'
 
 /**
  * Phase 22.15 — the error envelope the SPA is allowed to see
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §14 tasks 2 and 10).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §14 tasks 2 and 10).
  *
  * One envelope, one rule: a refusal the operator needs to understand keeps its specific text, and an
  * unexpected failure keeps nothing but its code. The filter is where that line is drawn, so it is

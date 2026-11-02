@@ -7,7 +7,7 @@ import { LEADSCORE_CAPABILITIES, type LeadScoreCapabilityDefinition, type LeadSc
 
 /**
  * Phase 19-LS.1 — the module's capability gate
- * (`PLAN_Phase_19_LeadScore.md` §9.1, §9.2; audit §2, §9).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §9.1, §9.2; audit §2, §9).
  *
  * The platform has one authorization engine. Rather than inventing a parallel "lead score
  * permissions" table, each module right is a **synthetic permission resource** evaluated by

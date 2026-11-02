@@ -24,7 +24,7 @@ import { PROVIDER_KEY_DOCUSIGN } from './providers/signature-provider.keys.js';
 
 /**
  * Phase 19-ES.1 — the module's settings and security policy
- * (`PLAN_Phase_19_ESignature.md` §4.1, §11.1, §12, §18 `19-ES.1`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.1, §11.1, §12, §18 `19-ES.1`).
  *
  * The platform already owns instance settings (`app_settings`), so this module keeps **one**
  * validated, versioned row named `ESignature` there — the same shape as

@@ -1,4 +1,4 @@
--- Phase 19-ES.19 — the ESignature operational dashlet kind (PLAN_Phase_19_ESignature.md §14).
+-- Phase 19-ES.19 — the ESignature operational dashlet kind (plans/PLAN_Phase_19_ESignature.md §14).
 --
 -- `dashlets.kind` carried a CHECK from the three generic Phase 12 kinds plus Projects' `projectTasks`.
 -- The ESignature dashlet is configured by a curated report key, not by an entity/groupBy pair, so it

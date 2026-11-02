@@ -37,7 +37,7 @@ import { SIGNATURE_PROVIDER_CATALOG } from './providers/signature-provider.catal
 
 /**
  * Phase 19-ES.1 — the `ESignature` control-plane API
- * (`PLAN_Phase_19_ESignature.md` §8.1, §12, §18 `19-ES.1`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.1, §12, §18 `19-ES.1`).
  *
  * Only the control plane exists at this phase: identity, the caller's capabilities, the security
  * policy, and a probe of the gate that stands in front of every provider call. Requests,

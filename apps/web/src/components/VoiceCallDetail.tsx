@@ -10,7 +10,7 @@ import { EmptyState } from './EmptyState.js';
 
 /**
  * Phase 19-VC.15–19-VC.16 — one call's media and transcript
- * (`PLAN_Phase_19_Voice_Communications.md` §7.5–§7.6, §15 `19-VC.15`, `19-VC.16`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.5–§7.6, §15 `19-VC.15`, `19-VC.16`).
  *
  * Playback goes through the API, which authorizes the parent call and serves the bytes from private
  * storage — the browser never sees a provider URL or token. The transcript is opt-in and the AI

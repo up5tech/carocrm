@@ -35,7 +35,7 @@ import { readChallenge, verifyClientState } from '../kit/webhook-signatures.js';
 
 /**
  * Phase 19-INT.17 — the Microsoft 365 connector
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.2; `19-INT.17`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.2; `19-INT.17`).
  *
  * Outlook calendar and contacts through Microsoft Graph.
  *

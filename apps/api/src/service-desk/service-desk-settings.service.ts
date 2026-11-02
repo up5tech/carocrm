@@ -22,7 +22,7 @@ import {
 
 /**
  * Phase 19-SD.2 — Service Desk domain settings
- * (PLAN_Phase_19_ServiceDesk.md §14.1).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §14.1).
  *
  * The platform already owns instance settings (`app_settings`, `POST /api/v1/Settings`), so this
  * module keeps one validated, versioned row named `serviceDesk` in the same table rather than a

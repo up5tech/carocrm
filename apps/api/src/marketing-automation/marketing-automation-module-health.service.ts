@@ -22,7 +22,7 @@ import {
 
 /**
  * Phase 19-MA.1 — module health and diagnostics
- * (PLAN_Phase_19_Marketing_Automation.md §14, §15 `19-MA.1` task 6, §12.5).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §14, §15 `19-MA.1` task 6, §12.5).
  *
  * "Module loads and can be enabled/disabled… missing optional integrations do not crash application startup"
  * is only honest if an operator can *see* the state, so every fact here is read from the running platform —

@@ -18,7 +18,7 @@ import { t } from '../../state/i18n.js';
 
 /**
  * Phase 19-ES.7 — the template catalog and mapping screen
- * (`PLAN_Phase_19_ESignature.md` §6.7, §13.1, §18 `19-ES.7`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.7, §13.1, §18 `19-ES.7`).
  *
  * Two halves, deliberately separate: the **catalog** is what the provider's account holds right now, and
  * the **mapping** is the CRM's configuration built from it. Refresh reads the first; nothing here ever

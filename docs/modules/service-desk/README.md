@@ -6,7 +6,7 @@ with metadata in `database/seed-metadata.ts` and four additive migrations,
 `database/migrations/034_phase19_service_desk_workflow.sql`,
 `database/migrations/035_phase19_service_desk_conversation.sql` and
 `database/migrations/036_phase19_service_desk_hardening.sql`. Functional reference: the documented
-product requirements in [`PLAN_Phase_19_ServiceDesk.md`](../../PLAN_Phase_19_ServiceDesk.md),
+product requirements in [`plans/PLAN_Phase_19_ServiceDesk.md`](../../../plans/PLAN_Phase_19_ServiceDesk.md),
 reproduced as clean-room TypeScript behaviour — no upstream source, asset, translation or schema is
 copied.
 
@@ -31,7 +31,7 @@ settings endpoint refuses nothing but the health endpoint reports each dependenc
 | [operations.md](operations.md) | jobs, retries, monitoring and failed-ingress operations |
 | [testing.md](testing.md) | safe test commands and test-data cleanup rules |
 | [compatibility.md](compatibility.md) | deviations from the plan wording and known limitations |
-| [`PLAN_Phase_19_ServiceDesk.md`](../../PLAN_Phase_19_ServiceDesk.md) | the full product scope and acceptance criteria |
+| [`plans/PLAN_Phase_19_ServiceDesk.md`](../../../plans/PLAN_Phase_19_ServiceDesk.md) | the full product scope and acceptance criteria |
 
 ## What it gives a user
 

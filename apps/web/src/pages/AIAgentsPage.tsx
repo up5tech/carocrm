@@ -18,7 +18,7 @@ import { AIAgentsUsageTab } from './ai-agents/AIAgentsUsageTab.js';
 
 /**
  * Phase 19-AI.5–19-AI.10 — the AI Agents workspace
- * (PLAN_Phase_19_AI_Agents.md §15, §20).
+ * (plans/PLAN_Phase_19_AI_Agents.md §15, §20).
  *
  * One page, five surfaces: diagnostics, definitions, the run console, the approval inbox and usage.
  * A tab exists only when the caller holds the capability it needs, but the server enforces every

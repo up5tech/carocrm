@@ -24,7 +24,7 @@ import { LeadScoreThresholdService } from './lead-score-threshold.service.js';
 import { LeadScoreWriteGuardService } from './lead-score-write-guard.service.js';
 
 /**
- * Phase 19-LS.1 — the `LeadScore` module barrel (`PLAN_Phase_19_LeadScore.md` §4.1, §16 `19-LS.1`).
+ * Phase 19-LS.1 — the `LeadScore` module barrel (`plans/PLAN_Phase_19_LeadScore.md` §4.1, §16 `19-LS.1`).
  *
  * Like Customer Success, Sales and ESignature, Lead Score is a kernel domain directory under
  * `apps/api/src`, not an installable extension package and not a second framework: score and

@@ -26,7 +26,7 @@ export type PortalPredicate = {
 };
 
 /**
- * Phase 19 project-scoped access (PLAN_Phase_19_Projects.md §4.4, §9): the global own/team scope
+ * Phase 19 project-scoped access (plans/PLAN_Phase_19_Projects.md §4.4, §9): the global own/team scope
  * PLUS access granted by the current user's `ProjectRole` in the record's project. It is a union
  * because the role is how a member reaches a colleague's task; it is bounded by membership, so a
  * role can never open a record of a project the user does not belong to, and an entity-level 'no'

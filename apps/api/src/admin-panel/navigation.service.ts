@@ -16,7 +16,7 @@ import type { SettingsWarning } from './settings-registry.service.js';
 import type { NavigationItem, NavigationSettings } from './settings-shapes.js';
 
 /**
- * Navigation resolution (PLAN_Phase_20_Settings_UX.md §4.4, §7.2, §14).
+ * Navigation resolution (plans/PLAN_Phase_20_Settings_UX.md §4.4, §7.2, §14).
  *
  * The pipeline never changes shape: shipped defaults → the `navigation` settings document → ACL
  * filtering → ordering. Running the ACL last is what makes the hard rule of §10 true — the document

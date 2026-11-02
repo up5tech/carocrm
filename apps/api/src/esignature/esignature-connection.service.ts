@@ -44,7 +44,7 @@ import { SignatureOAuthStateRepository } from './signature-oauth-state.repositor
 
 /**
  * Phase 19-ES.4 — DocuSign OAuth and the connection lifecycle
- * (`PLAN_Phase_19_ESignature.md` §6.1, §8.1, §9.2, §13.4, §18 `19-ES.4`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.1, §8.1, §9.2, §13.4, §18 `19-ES.4`).
  *
  * This is the only place in the product that touches a credential. The rules, in the order a security
  * review needs them:

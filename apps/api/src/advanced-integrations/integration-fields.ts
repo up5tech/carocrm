@@ -2,7 +2,7 @@ import type { MetadataStoreService } from '../metadata/metadata-store.service.js
 
 /**
  * Phase 19-INT.15 — the field catalogue
- * (`PLAN_Phase_19_Advanced_Integrations.md` §15.4).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15.4).
  *
  * The mapping builder shows two lists side by side: the provider's fields and the CRM's. The
  * provider's come from the connector; the CRM's come from the metadata registry. This module is

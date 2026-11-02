@@ -1,6 +1,6 @@
 # Phase 19-LS.13 — Conversion Operation and Transactional Execution: completion report
 
-`PLAN_Phase_19_LeadScore.md` §3.4, §4.3, §7.6, §7.8, §8.3, §9.2, §13.4-6…11, §14.3, §16 (`19-LS.13`); audit
+`plans/PLAN_Phase_19_LeadScore.md` §3.4, §4.3, §7.6, §7.8, §8.3, §9.2, §13.4-6…11, §14.3, §16 (`19-LS.13`); audit
 §11 `LS.13`; contract `docs/implementation/lead-score-conversion-contract.md` §3, §4, §6, §10, §11, §13;
 compatibility `docs/compatibility/lead-score.md` §4.2–§4.3, §8.
 

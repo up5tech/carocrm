@@ -11,7 +11,7 @@ import { subscribeNotificationPush } from '../state/notifications.js';
 
 /**
  * Phase 19-VC.9 — the incoming-call banner
- * (`PLAN_Phase_19_Voice_Communications.md` §7.1–§7.2, §15 `19-VC.9`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.1–§7.2, §15 `19-VC.9`).
  *
  * The server decides **who** is notified (the call's assignee or the endpoint team's members) and
  * **which controls** a call accepts, so this component renders the number, the permitted caller

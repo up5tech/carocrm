@@ -11,7 +11,7 @@ import {
 
 /**
  * Phase 19-INT.2 — the module manifest
- * (`PLAN_Phase_19_Advanced_Integrations.md` §5.2, §14.1; `19-INT.2`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §5.2, §14.1; `19-INT.2`).
  *
  * One place declares what the module is allowed to do and who may do it. The manifest is *code*,
  * not configuration: a capability that is not declared here cannot be checked, and a capability

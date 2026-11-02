@@ -1,5 +1,5 @@
 -- Phase 19-ES multi-provider follow-on — allow an API-key credential in the ESignature vault
--- (`PLAN_Phase_19_ESignature.md` §4.1, §9.2; Dropbox Sign adapter).
+-- (`plans/PLAN_Phase_19_ESignature.md` §4.1, §9.2; Dropbox Sign adapter).
 --
 -- Dropbox Sign authenticates every API call with the account's API key (HTTP Basic, key as username,
 -- empty password), and derives its callback `event_hash` from that same key. The key is a credential:

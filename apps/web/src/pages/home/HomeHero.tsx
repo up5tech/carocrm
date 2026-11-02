@@ -12,7 +12,7 @@ import { dayEvents, focusSentence, greetingKey, overdueCount } from './home-mode
 import { useHomeAgenda, useHomeTasks } from './useHomeData.js';
 
 /**
- * The band at the top of the home workspace (PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
+ * The band at the top of the home workspace (plans/PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
  *
  * It states the day in one sentence: who you are, what today is, what needs an answer — then the
  * three things a user does from here: find a record, create one, or open the dashboards. The hero is

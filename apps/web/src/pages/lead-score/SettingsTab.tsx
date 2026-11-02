@@ -10,7 +10,7 @@ import { named } from './shared.js';
 
 /**
  * Phase 19-LS.8 — the module's control plane
- * (`PLAN_Phase_19_LeadScore.md` §2.2, §9.3, §12, §16 `19-LS.8`).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §2.2, §9.3, §12, §16 `19-LS.8`).
  *
  * Everything on this screen is the settings document the gate reads, and it is written through the same
  * endpoint the CLI would: there is no second place a switch lives. Two rules shape the form:

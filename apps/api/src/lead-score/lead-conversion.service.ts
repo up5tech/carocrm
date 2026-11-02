@@ -29,7 +29,7 @@ import { type ConversionStatus } from './lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.13 — running the conversion, once
- * (`PLAN_Phase_19_LeadScore.md` §3.4, §4.3, §7.6, §7.8, §8.3; audit §11 `LS.13`; contract §3, §4, §10).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §3.4, §4.3, §7.6, §7.8, §8.3; audit §11 `LS.13`; contract §3, §4, §10).
  *
  * The exit criterion has two halves and they pull in opposite directions: *retrying the same operation cannot
  * create duplicate targets*, and *a failed atomic operation leaves no inconsistent state*. This service answers

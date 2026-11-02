@@ -7,7 +7,7 @@ import { stableStringify } from "./voice-communications-domain.js";
  *
  * A vendor signature is compared in constant time and the algorithm lives with the adapter that
  * owns it; nothing above the adapter boundary invents a signature scheme
- * (`PLAN_Phase_19_Voice_Communications.md` §11.4). The canonical-JSON rule is documented in
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §11.4). The canonical-JSON rule is documented in
  * `docs/modules/voice-communications/providers.md`: HMAC-SHA256 over
  * `timestamp + "." + stable JSON`. It is used by the simulator and by the Asterisk event bridge.
  */

@@ -1,6 +1,6 @@
 /**
  * Phase 19-SD — pure Service Desk domain vocabulary and helpers
- * (PLAN_Phase_19_ServiceDesk.md §5.1, §5.2, §7.5).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §5.1, §5.2, §7.5).
  *
  * Everything here is a constant or a pure function: no Nest dependency, no database, no I/O. The
  * metadata seed, the settings schema and the write guard all read these same lists, so a status or a

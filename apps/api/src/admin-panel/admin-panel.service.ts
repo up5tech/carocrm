@@ -3,7 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { type SettingsLevel,SettingsRegistryService } from './settings-registry.service.js';
 
 /**
- * Administration panel descriptors (PLAN_Phase_20_Settings_UX.md §4.1, §4.9).
+ * Administration panel descriptors (plans/PLAN_Phase_20_Settings_UX.md §4.1, §4.9).
  *
  * One source of truth for the settings tab rail, the `/admin/settings/:tabKey` routes and the
  * standalone administration screens, so the sidebar, the rail and the router cannot drift apart.
@@ -27,7 +27,7 @@ export interface AdminPanelTab {
   /** The settings document a tab edits, when it has one. */
   readonly document?: string;
   /**
-   * The handbook page that documents this screen (`PLAN_Phase_21_Documentation.md` §5.6). One field on
+   * The handbook page that documents this screen (`plans/PLAN_Phase_21_Documentation.md` §5.6). One field on
    * the catalog covers every tab, so a tab header can offer "Learn more" without each tab implementing
    * its own help affordance — and the content lint fails a release where the key stops resolving.
    */

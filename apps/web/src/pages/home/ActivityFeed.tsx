@@ -9,7 +9,7 @@ import { HomeSkeleton } from './HomeSkeleton.js';
 import { useHomeActivity } from './useHomeData.js';
 
 /**
- * "What changed" (PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
+ * "What changed" (plans/PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
  *
  * The latest five entries of the stream the user follows — the same entries `/stream?view=followed`
  * lists, with the same generated sentences. An empty feed invites a search instead of showing an

@@ -7,7 +7,7 @@ import { t } from '../../state/i18n.js';
 import { errorMessage } from './identity.js';
 
 /**
- * Internal tab (PLAN_Phase_20_Settings_UX.md §4.3 row 8): instance facts and the guarded danger zone.
+ * Internal tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 8): instance facts and the guarded danger zone.
  * The two destructive actions live behind exact typed confirmations on the server — the modal typing
  * is the client's mirror of that, never the enforcement — and every execution is audited.
  */

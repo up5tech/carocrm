@@ -1,7 +1,7 @@
 # Phase 22.12 — Journey: marketing consent, a campaign send, and what the provider says afterwards
 
 > **Date:** 2026-10-28
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §13.5 (steps 1–10) and its acceptance assertions
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.5 (steps 1–10) and its acceptance assertions
 > **Test:** `apps/api/test/phase22-journey-marketing-consent-attribution.test.ts` (11 ordered steps)
 > **Depends on:** `docs/quality/phase-22-journey-lead-to-customer.md` (22.8), `docs/quality/phase-22-idempotency-retry.md` (22.7)
 > **Status:** Implemented and verified — the focused journey and the full `pnpm verify` gate both pass.

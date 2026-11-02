@@ -1,6 +1,6 @@
 # Phase 19-LS.11 — Duplicate Detection and Candidate Review: completion report
 
-`PLAN_Phase_19_LeadScore.md` §7.1, §7.3, §9.1–§9.4, §13.4-5/13/14, §16 (`19-LS.11`); audit §11 `LS.11`,
+`plans/PLAN_Phase_19_LeadScore.md` §7.1, §7.3, §9.1–§9.4, §13.4-5/13/14, §16 (`19-LS.11`); audit §11 `LS.11`,
 gaps G3 (superseded) / G10; contract `docs/implementation/lead-score-conversion-contract.md` §1.4, §9, §12.3;
 compatibility `docs/compatibility/lead-score.md` §4.2, §7 (U3), §8.
 

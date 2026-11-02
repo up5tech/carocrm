@@ -66,7 +66,7 @@ describe('Phase 8 — entity layout configuration', () => {
 });
 
 /**
- * Phase 20.18 — the record-page relation tabs (PLAN_Phase_20_Settings_UX.md §5.11).
+ * Phase 20.18 — the record-page relation tabs (plans/PLAN_Phase_20_Settings_UX.md §5.11).
  *
  * The arrangement is entity metadata: it belongs to the entity's detail layout, so it is written
  * through the same `POST /Metadata/:entity` route as the panels. The rules are the schema's — a

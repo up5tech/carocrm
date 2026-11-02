@@ -1,6 +1,6 @@
 # UX design principles (Phase 20, part B)
 
-Scope: `PLAN_Phase_20_Settings_UX.md` §5. This document turns the plan's UX section into rules a
+Scope: `plans/PLAN_Phase_20_Settings_UX.md` §5. This document turns the plan's UX section into rules a
 change can be reviewed against. It describes the principles the current SPA already follows; it is
 not a redesign proposal.
 

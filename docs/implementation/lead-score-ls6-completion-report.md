@@ -1,6 +1,6 @@
 # Phase 19-LS.6 — Event-Driven and Manual Recalculation: completion report
 
-Delivered 2026-10-24. Scope: `PLAN_Phase_19_LeadScore.md` §4.2, §9.1–§9.4, §10.2, §11.1, §15.2 stage 5,
+Delivered 2026-10-24. Scope: `plans/PLAN_Phase_19_LeadScore.md` §4.2, §9.1–§9.4, §10.2, §11.1, §15.2 stage 5,
 §16 `19-LS.6`; contract in `docs/implementation/lead-score-audit.md` §5.4 and §11; compatibility rows in
 `docs/compatibility/lead-score.md` §3, §8 and §9.
 

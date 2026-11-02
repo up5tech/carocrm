@@ -12,7 +12,7 @@ import { SettingsRegistryService } from './settings-registry.service.js';
 
 /**
  * Read, write and reset for the settings documents registered in `SettingsRegistryService`
- * (PLAN_Phase_20_Settings_UX.md §4.2, §6.2, §7.2). Every document stays one row of the existing
+ * (plans/PLAN_Phase_20_Settings_UX.md §4.2, §6.2, §7.2). Every document stays one row of the existing
  * `app_settings` table, so this phase adds no settings store.
  */
 export interface SettingsDocumentView<T = unknown> {

@@ -61,7 +61,7 @@ import {
 
 /**
  * Phase 19-AI.2–19-AI.4 — the `AIAgents` foundation API
- * (PLAN_Phase_19_AI_Agents.md §14, §20 `19-AI.2`–`19-AI.4`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §14, §20 `19-AI.2`–`19-AI.4`).
  *
  * Only the foundation routes exist here: diagnostics, capability introspection, module settings and
  * provider connections. Definition, run, approval, usage and evaluation routes arrive with their

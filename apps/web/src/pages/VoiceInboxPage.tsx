@@ -29,7 +29,7 @@ import { formatClock, formatDateTime, isSameCalendarDay, t } from '../state/i18n
 
 /**
  * Phase 19-VC.12–19-VC.14 — the agent workspace
- * (`PLAN_Phase_19_Voice_Communications.md` §9–§10, §15 `19-VC.12` … `19-VC.14`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §9–§10, §15 `19-VC.12` … `19-VC.14`).
  *
  * One screen with two surfaces: the conversation inbox (list + timeline + composer) and the call log
  * (session detail, recordings, transcript). The server decides visibility, policy and idempotency:

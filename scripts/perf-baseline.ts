@@ -1,7 +1,7 @@
 /* eslint-disable no-console -- the table this CLI prints is its deliverable. */
 /**
  * Phase 22.20 — read-only performance and capacity baseline
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §19).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §19).
  *
  * What this does, and what it deliberately does not:
  *

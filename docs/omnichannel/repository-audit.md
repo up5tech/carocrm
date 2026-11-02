@@ -1,6 +1,6 @@
 # Phase 19-OM.0 — Omnichannel repository audit
 
-> `PLAN_Phase_19_Omnichannel.md` §14 `19-OM.0`.
+> `plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.0`.
 > Deliverables: this document and `docs/omnichannel/capability-matrix.md`.
 > Acceptance: the audit identifies the current authoritative records/services for every channel that
 > already exists; what can be reused directly; what small extension is required; and no duplicate
@@ -10,7 +10,7 @@
 > **This phase produced no code, no migration and no metadata change.** Only documentation.
 >
 > **Update — decisions locked.** The three architectural questions this audit raised were decided
-> after it was written, and are now recorded in `PLAN_Phase_19_Omnichannel.md` §0.2:
+> after it was written, and are now recorded in `plans/PLAN_Phase_19_Omnichannel.md` §0.2:
 >
 > - **D1** — the canonical conversation record is the existing **`voice_conversations`**, extended
 >   additively. Omnichannel owns the workspace and the multi-channel policy; VoiceCommunications
@@ -23,11 +23,11 @@
 > This audit's §4, §5, §7, §8 and §9 remain the evidence base for those decisions; §12 has been
 > updated to reflect what is now settled and what is still genuinely open.
 
-Audited on branch `master` at commit `7701d8e`. Sources read: `AGENTS.MD`, `PLAN.md`,
-`PLAN_Phase_19_Omnichannel.md` (§0–§13), `PLAN_Phase_19_Voice_Communications.md`,
-`PLAN_Phase_19_ServiceDesk.md`, `PLAN_Phase_19_Marketing_Automation.md`,
-`PLAN_Phase_19_Advanced_Integrations.md`, `PLAN_Phase_19_AI_Agents.md`,
-`PLAN_Phase_19_CRM_Chat.md`, `docs/module-guide.md`, `docs/modules/voice-communications/providers.md`,
+Audited on branch `master` at commit `7701d8e`. Sources read: `AGENTS.MD`, `plans/PLAN.md`,
+`plans/PLAN_Phase_19_Omnichannel.md` (§0–§13), `plans/PLAN_Phase_19_Voice_Communications.md`,
+`plans/PLAN_Phase_19_ServiceDesk.md`, `plans/PLAN_Phase_19_Marketing_Automation.md`,
+`plans/PLAN_Phase_19_Advanced_Integrations.md`, `plans/PLAN_Phase_19_AI_Agents.md`,
+`plans/PLAN_Phase_19_CRM_Chat.md`, `docs/module-guide.md`, `docs/modules/voice-communications/providers.md`,
 `docs/compatibility/voice-communications.md`, `apps/api/src/**`, `apps/web/src/**`, `apps/worker/src/**`,
 `packages/*`, `database/migrations/*`, `database/seed.ts`, `database/seed-metadata.ts`,
 `vitest.config.ts`, `docker-compose.yml`, `scripts/`.

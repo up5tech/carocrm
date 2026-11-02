@@ -1,6 +1,6 @@
 /**
  * Phase 19-OM.2 — the `Omnichannel` module descriptor
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`, `docs/omnichannel/feature-contract.md` §3 F1, §10).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`, `docs/omnichannel/feature-contract.md` §3 F1, §10).
  *
  * Omnichannel is a kernel domain directory under `apps/api/src`, not an installable extension
  * package, and it owns **no record store of its own** (contract decision D1): the canonical

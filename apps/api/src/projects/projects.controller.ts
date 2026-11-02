@@ -36,7 +36,7 @@ import { ProjectTaskService, type TaskTransitionKind } from './project-task.serv
 import { ProjectViewService } from './project-view.service.js';
 
 /**
- * Projects domain commands (PLAN_Phase_19_Projects.md §7.2).
+ * Projects domain commands (plans/PLAN_Phase_19_Projects.md §7.2).
  *
  * Everything a single metadata record can express — list, read, create, edit, delete, relations,
  * attachments, stream — stays on the generic `/api/v1/:entity` API. These routes exist only where a

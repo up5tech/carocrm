@@ -2,7 +2,7 @@ import type { ExternalFieldSchema } from '../../connector-adapter.port.js';
 
 /**
  * Phase 19-INT.23 — the accounting connector framework
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.8; `19-INT.23`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.8; `19-INT.23`).
  *
  * The plan asks for a framework and *one* first provider. This file holds the parts that are the
  * same for every accounting package, so the first provider only describes its own endpoints and

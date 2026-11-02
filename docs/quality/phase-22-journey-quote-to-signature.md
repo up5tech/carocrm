@@ -1,7 +1,7 @@
 # Phase 22.9 — Journey: a quote becomes a signed document
 
 > **Date:** 2026-10-28
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §13.2 (steps 1–10) and its acceptance assertions
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.2 (steps 1–10) and its acceptance assertions
 > **Test:** `apps/api/test/phase22-journey-quote-to-signature.test.ts` (12 ordered steps)
 > **Depends on:** `docs/quality/phase-22-journey-lead-to-customer.md` (22.8), `docs/quality/phase-22-idempotency-retry.md` (22.7)
 > **Status:** Implemented. The journey runs end to end against the configured primary database with the in-process fake provider; the three acceptance assertions hold.

@@ -10,7 +10,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.13 — the convert command, its operation record and its recovery
- * (`PLAN_Phase_19_LeadScore.md` §3.4, §4.3, §7.6, §7.8, §8.3, §16 `19-LS.13`; audit §11 `LS.13`; contract §3,
+ * (`plans/PLAN_Phase_19_LeadScore.md` §3.4, §4.3, §7.6, §7.8, §8.3, §16 `19-LS.13`; audit §11 `LS.13`; contract §3,
  * §4, §10, §11).
  *
  * The exit criterion is two-sided, and the suite drives both sides through the real routes:

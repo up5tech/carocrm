@@ -33,7 +33,7 @@ import type { HealthFacts, HealthSignalResult } from "./customer-success-signals
 import { HealthSignalRegistry } from "./customer-success-signals.js";
 
 /**
- * Phase 19-CS.4 / 19-CS.5 — the health engine (PLAN_Phase_19_Customer_Success.md §5.4).
+ * Phase 19-CS.4 / 19-CS.5 — the health engine (plans/PLAN_Phase_19_Customer_Success.md §5.4).
  *
  * The engine loads every fact it needs once, runs the configured signals, and delegates the actual
  * arithmetic to the pure `computeHealthScore` (§5.4.3). It then keeps the append-only snapshot

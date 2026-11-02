@@ -23,7 +23,7 @@ import { MarketingSuppressionService } from "./marketing-suppression.service.js"
 
 /**
  * Phase 19-MA.5 — public unsubscribe, preference centre and opt-in confirmation
- * (PLAN_Phase_19_Marketing_Automation.md §5.3.1, §5.3.2, §8.3, §9.3).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.3.1, §5.3.2, §8.3, §9.3).
  *
  * These are the only unauthenticated paths in the module, so they carry the plan's privacy rules directly:
  *

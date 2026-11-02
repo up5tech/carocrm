@@ -1,5 +1,5 @@
 /**
- * Demo data for the Projects module (PLAN_Phase_19_Projects.md §4–§8).
+ * Demo data for the Projects module (plans/PLAN_Phase_19_Projects.md §4–§8).
  *
  * Everything is created through the real HTTP API of the booted application — never with raw SQL —
  * so the Projects guards derive each task status from its stage, check assignee membership, the

@@ -13,7 +13,7 @@ import { IntegrationsRunsTab } from './advanced-integrations/IntegrationsRunsTab
 
 /**
  * Phase 19-INT.14 / 19-INT.15 — the Advanced Integrations workspace
- * (`PLAN_Phase_19_Advanced_Integrations.md` §15; `19-INT.14`, `19-INT.15`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15; `19-INT.14`, `19-INT.15`).
  *
  * One page, five surfaces: the connector catalog, the connections to those connectors, the
  * mapping builder, the sync run history and the conflict workbench.

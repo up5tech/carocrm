@@ -1,6 +1,6 @@
 # Phase 19-ES.14 — Embedded Signing
 
-> `PLAN_Phase_19_ESignature.md` §4.6, §12.7, §18 `Phase 19-ES.14`.
+> `plans/PLAN_Phase_19_ESignature.md` §4.6, §12.7, §18 `Phase 19-ES.14`.
 > Acceptance: an authorized recipient can start embedded signing in the demo environment; unrelated
 > users cannot request a view for another recipient; completing the browser view does not itself mark
 > the local request completed — the provider event/status does.

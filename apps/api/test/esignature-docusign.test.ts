@@ -32,7 +32,7 @@ import { connectSignature } from '../src/esignature/providers/signature-provider
 
 /**
  * Phase 19-ES.4 — the DocuSign wire mapping, proved without a network
- * (`PLAN_Phase_19_ESignature.md` §9.2, §9.3, §17.3; `19-ES.4` acceptance
+ * (`plans/PLAN_Phase_19_ESignature.md` §9.2, §9.3, §17.3; `19-ES.4` acceptance
  * "no test needs production provider credentials").
  *
  * Every case here drives a **stub transport** — an in-process object that answers like DocuSign —

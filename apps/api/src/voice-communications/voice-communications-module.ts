@@ -1,6 +1,6 @@
 /**
  * Phase 19-VC.2 — the `VoiceCommunications` module descriptor
- * (`PLAN_Phase_19_Voice_Communications.md` §3.3, §15 `19-VC.2`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §3.3, §15 `19-VC.2`).
  *
  * Like Sales, Service Desk, Customer Success, Marketing Automation and AI Agents, Voice &
  * Communications is a kernel domain directory under `apps/api/src`, not an installable extension

@@ -1,5 +1,5 @@
 -- Phase 19-MA.4/MA.5 — audience consent, suppression, public links and snapshots
--- (PLAN_Phase_19_Marketing_Automation.md §5.2, §5.3, §6.1, §6.3, §6.7, §15 `19-MA.4`–`19-MA.5`).
+-- (plans/PLAN_Phase_19_Marketing_Automation.md §5.2, §5.3, §6.1, §6.3, §6.7, §15 `19-MA.4`–`19-MA.5`).
 --
 -- Consent, suppression, public-token and snapshot *headers* are ordinary metadata records in
 -- `entity_records`, like every other CRM record in this platform, so ACL, validation, audit and search stay

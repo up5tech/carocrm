@@ -7,7 +7,7 @@ import { authHeader, bootApi, createTestTeam, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-VC.7–19-VC.9 — call sessions, the Call Activity, click-to-call and caller context
- * (`PLAN_Phase_19_Voice_Communications.md` §7.1–§7.4, §15 `19-VC.7`–`19-VC.9`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.1–§7.4, §15 `19-VC.7`–`19-VC.9`).
  *
  * Runs against the configured database through the real HTTP API. The only provider is the
  * simulator, whose `sandboxRecipients` allowlist contains exactly the test destination, so no real

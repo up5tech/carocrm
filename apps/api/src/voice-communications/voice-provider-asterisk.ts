@@ -31,7 +31,7 @@ import { assertHttpUrl, requestVoiceProviderJson } from "./voice-provider-http.j
 
 /**
  * Asterisk adapter — outbound ARI control and a signed inbound-event bridge
- * (`PLAN_Phase_19_Voice_Communications.md` §6.3, §15 `19-VC.10`–`19-VC.11`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §6.3, §15 `19-VC.10`–`19-VC.11`).
  *
  * Asterisk is a PBX, not a SaaS with a webhook subscription. This adapter therefore has two halves:
  *

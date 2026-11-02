@@ -1,12 +1,12 @@
 # Phase 19-LS.0 — Repository audit and feature contract
 
-> `PLAN_Phase_19_LeadScore.md` §16 `Phase 19-LS.0`, with the decisions required by §19.
+> `plans/PLAN_Phase_19_LeadScore.md` §16 `Phase 19-LS.0`, with the decisions required by §19.
 > Acceptance: documentation only — no code, no migration, no second database, and no duplicate
 > Lead/Contact/Account/Opportunity entity or conversion service proposed.
 > Companion behavior/deviation record: `docs/compatibility/lead-score.md`.
 
 Audited on **2026-10-24** against this checkout (`master`, latest commit `d2cb53b`):
-`PLAN.md`, `AGENTS.MD`, `PLAN_Phase_19_LeadScore.md`, `pnpm-workspace.yaml`, `apps/api/src/**`,
+`plans/PLAN.md`, `AGENTS.MD`, `plans/PLAN_Phase_19_LeadScore.md`, `pnpm-workspace.yaml`, `apps/api/src/**`,
 `apps/worker/src/**`, `apps/web/src/**`, `packages/**`, `modules/**`, `database/migrations/**`,
 `database/seed.ts`, `database/seed-metadata.ts`, `i18n/**`, `docs/compatibility/**`,
 `docs/implementation/**`, root and per-app `package.json`, `docker-compose.yml`, `.env.example`.
@@ -64,7 +64,7 @@ from an exhaustive grep over `apps/`, `packages/`, `modules/`, `database/`, `i18
   preferences (`apps/api/src/preferences/preference-shapes.ts`) or metadata.
 - **No scoring/rule engine for leads.** The only score concept shipped is Customer Success health
   scoring (§3.4). No `LeadScore`/`lead_score` identifier exists outside
-  `PLAN_Phase_19_LeadScore.md` itself.
+  `plans/PLAN_Phase_19_LeadScore.md` itself.
 - **No generic duplicate-detection service.** Only the pieces listed in §3.5.
 - **No phone-number normalizer.** ~~Nothing equivalent to `normalizeEmailAddress` exists for phone; no
   libphonenumber dependency in any `package.json`.~~ **Corrected in 19-LS.10:** this finding is stale.

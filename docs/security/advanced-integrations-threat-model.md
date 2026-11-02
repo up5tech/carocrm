@@ -1,6 +1,6 @@
 # Advanced Integrations — security threat model
 
-> Phase 19-INT.26 deliverable (`PLAN_Phase_19_Advanced_Integrations.md` §18; `19-INT.26`).
+> Phase 19-INT.26 deliverable (`plans/PLAN_Phase_19_Advanced_Integrations.md` §18; `19-INT.26`).
 > Scope: the `AdvancedIntegrations` module, its connectors and its cross-module contracts.
 > Runbook: `docs/runbooks/advanced-integrations.md`.
 > Compatibility: `docs/compatibility/advanced-integrations.md` · `webhook-security.md`.

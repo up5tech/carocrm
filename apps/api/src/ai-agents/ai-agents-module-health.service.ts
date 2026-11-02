@@ -21,7 +21,7 @@ import { providerPresets } from './ai-provider-presets.js';
 
 /**
  * Phase 19-AI.2/19-AI.4 — module health
- * (PLAN_Phase_19_AI_Agents.md §16, §20 `19-AI.2`/`19-AI.4`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §16, §20 `19-AI.2`/`19-AI.4`).
  *
  * Every fact is read from the running system: `information_schema`, the live hook registry, the
  * registered adapters, the settings row and the connection count. Nothing is hard-coded `true`.

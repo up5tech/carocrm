@@ -1,6 +1,6 @@
 # Phase 19-LS.4 — Deterministic Scoring Engine: completion report
 
-Delivered 2026-10-24. Scope: `PLAN_Phase_19_LeadScore.md` §3.1, §6.2–§6.5, §8.1, §9.2, §9.4, §15.2
+Delivered 2026-10-24. Scope: `plans/PLAN_Phase_19_LeadScore.md` §3.1, §6.2–§6.5, §8.1, §9.2, §9.4, §15.2
 stage 3, §16 `19-LS.4`; contract in `docs/implementation/lead-score-audit.md` §5.2–§5.3 and §11;
 compatibility rows in `docs/compatibility/lead-score.md` §3 and §8.
 

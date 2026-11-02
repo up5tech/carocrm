@@ -22,7 +22,7 @@ import { CustomerSuccessRiskService } from "./customer-success-risk.service.js";
 import { CustomerSuccessSettingsService } from "./customer-success-settings.service.js";
 
 /**
- * Phase 19-CS.8 — playbooks and onboarding (PLAN_Phase_19_Customer_Success.md §5.11, §5.5).
+ * Phase 19-CS.8 — playbooks and onboarding (plans/PLAN_Phase_19_Customer_Success.md §5.11, §5.5).
  *
  * A template is validated configuration; a run snapshots the steps it started with, so editing the
  * template later cannot mutate in-flight work. Every trigger carries a deterministic idempotency key,

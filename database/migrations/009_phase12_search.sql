@@ -1,4 +1,4 @@
--- 009_phase12_search.sql — make substring search indexable (PLAN.md §30 Stage 1, Phase 12 acceptance)
+-- 009_phase12_search.sql — make substring search indexable (plans/PLAN.md §30 Stage 1, Phase 12 acceptance)
 --
 -- 008 added a trigram index over a concatenation expression. PostgreSQL can only use an expression
 -- index when the query predicate *is* that expression, and the Query Engine emits one `ILIKE` per

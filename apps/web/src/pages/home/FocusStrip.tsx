@@ -7,7 +7,7 @@ import { agendaSlice, nearestDue, overdueCount } from './home-model.js';
 import { useHomeAgenda, useHomeApprovals, useHomeTasks } from './useHomeData.js';
 
 /**
- * The three cards under the hero (PLAN_Phase_20_Settings_UX.md §5.6, §20.19): what needs an answer,
+ * The three cards under the hero (plans/PLAN_Phase_20_Settings_UX.md §5.6, §20.19): what needs an answer,
  * what is on today, what is waiting for a decision.
  *
  * Each card is one link — no nested controls — so the whole card is a single tab stop and its

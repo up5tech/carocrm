@@ -1,21 +1,21 @@
 # AGENTS.MD — Coding Agent Instructions
 
-These instructions apply to all coding agents working in this repository. Read this file and `PLAN.md` before implementing features, changing database schemas, or running tests.
+These instructions apply to all coding agents working in this repository. Read this file and `plans/PLAN.md` before implementing features, changing database schemas, or running tests.
 
 ## 1. Project Goal and Source of Truth
 
 This repository is a clean-room reimplementation of EspoCRM using NestJS and TypeScript. The goal is to reproduce documented product behavior and architectural concepts, not to translate PHP files line by line.
 
-- Treat `PLAN.md` as the product scope, architecture reference, and implementation roadmap.
+- Treat `plans/PLAN.md` as the product scope, architecture reference, and implementation roadmap.
 - Treat this `AGENTS.MD` as the operating rules for coding, testing, and database safety.
-- **Database and test-lifecycle rules in this file take precedence over any general plan or framework default that would create extra test databases.** If `PLAN.md`, a package script, a test framework, or a generated template suggests creating a test database, do not do so automatically. Use the existing configured primary project database as described in Section 3.
+- **Database and test-lifecycle rules in this file take precedence over any general plan or framework default that would create extra test databases.** If `plans/PLAN.md`, a package script, a test framework, or a generated template suggests creating a test database, do not do so automatically. Use the existing configured primary project database as described in Section 3.
 - Inspect the existing repository and its conventions before making changes. Do not assume a planned directory, package, script, or dependency already exists.
 - Make the smallest coherent change that solves the task. Avoid unrelated refactors, broad file rewrites, and speculative abstractions.
 - Do not report work as complete unless the relevant checks were actually run or clearly identify what could not be run.
 
 ## 2. Expected Technology Direction
 
-Follow the stack selected in `PLAN.md`, adapting only when the repository already has an established, deliberate choice:
+Follow the stack selected in `plans/PLAN.md`, adapting only when the repository already has an established, deliberate choice:
 
 - Node.js and TypeScript with strict type checking.
 - NestJS for the backend; Fastify may be used as the HTTP adapter where already configured.
@@ -105,7 +105,7 @@ Before adding or changing test infrastructure, confirm that it will not create a
 
 For each task, follow this sequence:
 
-1. **Inspect**: read the relevant implementation, types, tests, scripts, configuration, and applicable parts of `PLAN.md`.
+1. **Inspect**: read the relevant implementation, types, tests, scripts, configuration, and applicable parts of `plans/PLAN.md`.
 2. **Understand**: identify the feature boundary, callers, data flow, permissions, migration implications, and side effects.
 3. **Plan briefly**: for a non-trivial change, outline the smallest implementation and verification steps before editing.
 4. **Implement**: follow existing conventions and keep the change focused.
@@ -121,7 +121,7 @@ Never make a test pass by weakening an assertion, skipping a meaningful test, di
 
 ### 5.1 Modular monolith first
 
-- Keep the initial system a modular monolith as specified in `PLAN.md`; do not introduce microservices without an explicit architectural decision.
+- Keep the initial system a modular monolith as specified in `plans/PLAN.md`; do not introduce microservices without an explicit architectural decision.
 - Place code in the existing package/module boundaries. Keep domain logic out of controllers and React components.
 - Use clear interfaces for persistence, metadata, ACL, event dispatch, jobs, files, email, and extension points.
 - Avoid circular dependencies. Shared kernel packages must not import application-specific modules.
@@ -130,7 +130,7 @@ Never make a test pass by weakening an assertion, skipping a meaningful test, di
 
 The Entity Engine is a central product capability, not a collection of hard-coded CRUD controllers.
 
-- Keep entity definitions, field definitions, relations, layouts, validation, and access behavior driven by metadata where required by `PLAN.md`.
+- Keep entity definitions, field definitions, relations, layouts, validation, and access behavior driven by metadata where required by `plans/PLAN.md`.
 - Validate metadata and user-supplied field values at runtime.
 - Do not build SQL from untrusted entity names, field names, sort keys, filter values, or metadata. Use allowlists, safe identifier handling, parameterized values, and validated query plans.
 - Keep serialization, relation loading, field-level permissions, and record-level ACL consistent across list, detail, search, export, and API paths.
@@ -148,7 +148,7 @@ The Entity Engine is a central product capability, not a collection of hard-code
 
 ### 5.4 API conventions
 
-- Follow the documented `/api/v1` API approach in `PLAN.md` and preserve consistent response/error formats.
+- Follow the documented `/api/v1` API approach in `plans/PLAN.md` and preserve consistent response/error formats.
 - Validate request DTOs and reject invalid input with clear, stable error responses.
 - Maintain pagination, sorting, filtering, and relation behavior consistently.
 - Update OpenAPI definitions and API tests when public contracts change.
@@ -163,7 +163,7 @@ The Entity Engine is a central product capability, not a collection of hard-code
 
 ## 6. Clean-Room and License Compliance
 
-- Use EspoCRM public documentation and documented behavior as references, consistent with `PLAN.md`.
+- Use EspoCRM public documentation and documented behavior as references, consistent with `plans/PLAN.md`.
 - Do not copy or mechanically translate EspoCRM PHP source files, frontend assets, translations, icons, branding, or other upstream copyrighted materials into this repository unless the intended use is explicitly reviewed and permitted by the applicable license.
 - Implement equivalent behavior independently in TypeScript.
 - Keep references to compatibility behavior in project documentation and report any unresolved licensing/compliance question rather than making legal assumptions.
@@ -230,7 +230,7 @@ Before running test commands, inspect their setup and teardown behavior. Report 
 
 A task is complete when, as applicable:
 
-- The implementation follows `PLAN.md` and existing repository conventions.
+- The implementation follows `plans/PLAN.md` and existing repository conventions.
 - Validation, authorization, error handling, and observability are addressed.
 - Database changes use reviewed, version-controlled migrations and preserve existing data.
 - Tests are added or updated and the relevant safe checks have been run.

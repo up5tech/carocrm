@@ -5,7 +5,7 @@
 > and where it deviated. Two items are open on purpose: the corpus has no screenshots (21.3 deferred) and
 > `vi` covers the P0 set only, pending a native-speaker review — both in
 > `docs/compatibility/documentation.md`.
-> **Parent roadmap:** `PLAN.md` — Phase 21 (added to §57 alongside this document)
+> **Parent roadmap:** `plans/PLAN.md` — Phase 21 (added to §57 alongside this document)
 > **Target runtime:** the existing NestJS API + React SPA; no new service, no new database.
 > **Functional reference:** EspoCRM's in-app help surface and the documentation/onboarding patterns of
 > mainstream CRM products (§2), mapped onto capabilities this repository already ships.
@@ -127,7 +127,7 @@ Applied in §5:
    none either. Nothing in the repo parses Markdown today.
 3. **No `/docs` route**, no navigation entry, no help menu item, no settings document.
 4. **`HelpTip` exists but is used by no page** — an explicit Phase 20 deferral
-   (`PLAN_Phase_20_Settings_UX.md` §19). It is the natural carrier for "Learn more" (§5.6).
+   (`plans/PLAN_Phase_20_Settings_UX.md` §19). It is the natural carrier for "Learn more" (§5.6).
 5. **No content test.** Nothing would notice if a page documented a screen that no longer exists.
 
 ### 3.3 Gap handling
@@ -1116,8 +1116,8 @@ defaults apply.
 
 | File | Content |
 |---|---|
-| `PLAN_Phase_21_Documentation.md` | This plan |
-| `PLAN.md` §57 | Phase 21 entry with scope and acceptance |
+| `plans/PLAN_Phase_21_Documentation.md` | This plan |
+| `plans/PLAN.md` §57 | Phase 21 entry with scope and acceptance |
 | `docs/admin/documentation.md` | How the docs surface works: content tree, front-matter, lint, settings document, deployment |
 | `docs/reference/docs-authoring.md` | The author's guide: the Markdown subset, screenshots, review rules, how to add a page in 10 minutes |
 | `docs/compatibility/documentation.md` | Deferrals, deviations from this plan, known limitations |
@@ -1454,7 +1454,7 @@ Functional reference (help surfaces and documentation UX):
 6. In-app help and contextual guidance patterns:
    https://uitop.design/blog/best-ux-practices-for-crm-and-internal-business-systems/
 
-Internal references: `PLAN.md` (§12 Metadata, §19 Entity Manager, §37 Portals, §41 i18n, §42
-Configuration, §57 Phases), `AGENTS.MD`, `PLAN_Phase_20_Settings_UX.md` (§4.4 navigation, §9 frontend,
+Internal references: `plans/PLAN.md` (§12 Metadata, §19 Entity Manager, §37 Portals, §41 i18n, §42
+Configuration, §57 Phases), `AGENTS.MD`, `plans/PLAN_Phase_20_Settings_UX.md` (§4.4 navigation, §9 frontend,
 §19 deferrals — `HelpTip` and `PermissionDenied` unused), `docs/admin/settings.md`,
 `docs/admin/navigation.md`, `docs/ux/design-principles.md`, `docs/reference/alpha-status.md`.

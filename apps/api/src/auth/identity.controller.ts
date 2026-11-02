@@ -24,7 +24,7 @@ export class IdentityController {
   }
 
   /**
-   * The assignee picker (PLAN_Phase_20_Settings_UX.md §5.3). Declared before `User/:id` so the
+   * The assignee picker (plans/PLAN_Phase_20_Settings_UX.md §5.3). Declared before `User/:id` so the
    * literal segment wins over the wildcard, and deliberately narrower than `GET /User`.
    */
   @Get('User/assignable')

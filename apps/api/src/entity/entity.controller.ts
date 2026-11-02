@@ -35,7 +35,7 @@ export class EntityController {
   }
 
   /**
-   * Which row actions the caller may see on this entity's list (PLAN_Phase_20_Settings_UX.md §5.3).
+   * Which row actions the caller may see on this entity's list (plans/PLAN_Phase_20_Settings_UX.md §5.3).
    * POST rather than GET because the wildcard `:entity/:id/:relation` GET would swallow the route.
    */
   @HttpCode(200)

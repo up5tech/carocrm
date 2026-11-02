@@ -23,7 +23,7 @@ import { ControlPlane, OmnichannelWorkspaceGuard } from './omnichannel-workspace
 
 /**
  * Phase 19-OM.2 — the `Omnichannel` control plane
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`).
  *
  * Only the control plane exists at this phase: the caller's rights, the module's own navigation
  * signal, health, and the settings document that switches the workspace. The inbox, composer,

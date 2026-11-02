@@ -1,6 +1,6 @@
 /**
  * Phase 19-INT.6 — the normalized provider error model
- * (`PLAN_Phase_19_Advanced_Integrations.md` §11.2; `19-INT.6`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §11.2; `19-INT.6`).
  *
  * A connector translates its vendor's error into this shape. **Nothing above the adapter sees a
  * vendor type**, and no error carries a credential: the provider's own message may quote a

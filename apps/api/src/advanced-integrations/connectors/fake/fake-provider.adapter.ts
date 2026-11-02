@@ -17,7 +17,7 @@ import { ProviderError } from '../../provider-error.js';
 
 /**
  * Phase 19-INT.6 — the deterministic fake provider adapter
- * (`PLAN_Phase_19_Advanced_Integrations.md` §17.2, §19-INT.6 acceptance; `19-INT.6`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §17.2, §19-INT.6 acceptance; `19-INT.6`).
  *
  * The plan asks for *"adapter contract tests and a fake provider adapter"*, and the acceptance
  * criterion is that *"a fake connector can validate, list schemas, fetch pages and return

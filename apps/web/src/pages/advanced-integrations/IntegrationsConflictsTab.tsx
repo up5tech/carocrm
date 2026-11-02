@@ -9,7 +9,7 @@ import { formatTimestamp, PanelEmpty, SectionToolbar } from './shared.js';
 
 /**
  * Phase 19-INT.15 — the conflict workbench
- * (`PLAN_Phase_19_Advanced_Integrations.md` §15.5).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15.5).
  *
  * A conflict is a record that changed on **both** sides. The workbench shows the two sides side
  * by side, field by field, with the changed fields marked — and it says which rule decides the

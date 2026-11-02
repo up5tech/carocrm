@@ -75,7 +75,7 @@ import {
 /**
  * Phase 19-S.14 — the stock ledger and the projection it is reconciled against.
  *
- * `PLAN_Phase_19_Sales.md` §4.15 asks for an append-only movement ledger, availability that
+ * `plans/PLAN_Phase_19_Sales.md` §4.15 asks for an append-only movement ledger, availability that
  * distinguishes on-hand/reserved/available/incoming, concurrency-safe reservations and a
  * reconciliation against the ledger. This service is where those meet the database:
  *

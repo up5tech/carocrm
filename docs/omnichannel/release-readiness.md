@@ -1,6 +1,6 @@
 # Omnichannel — release readiness (19-OM.23)
 
-> Phase 19-OM.23 report (`PLAN_Phase_19_Omnichannel.md` §14). It records what is supported, what was
+> Phase 19-OM.23 report (`plans/PLAN_Phase_19_Omnichannel.md` §14). It records what is supported, what was
 > verified, what must be configured, measured performance, upgrade steps, open risks and the
 > connectors that remain disabled. Setup steps are in `admin-setup.md`; incidents in `runbook.md`.
 

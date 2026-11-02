@@ -12,7 +12,7 @@ import { VoiceCallDetail } from './VoiceCallDetail.js';
 
 /**
  * Phase 19-VC.17 — the Communications panel on a CRM record
- * (`PLAN_Phase_19_Voice_Communications.md` §10.4, §15 `19-VC.17`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §10.4, §15 `19-VC.17`).
  *
  * The panel is **record-ACL aware by construction**: the request carries the record the operator is
  * already looking at, and the server answers only if that record is readable. It renders summaries

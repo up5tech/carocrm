@@ -4,7 +4,7 @@ import type { ApiContext, TestUser } from './support/boot-api.js';
 import { ADMIN_LOGIN, ADMIN_PASSWORD, authHeader, bootApi, createTestRole, createTestUser, loginAs, shutdownApi } from './support/boot-api.js';
 
 /**
- * Phase 20 §5.3 — row actions and bulk writes (PLAN_Phase_20_Settings_UX.md).
+ * Phase 20 §5.3 — row actions and bulk writes (plans/PLAN_Phase_20_Settings_UX.md).
  *
  * The list view used to offer Edit and Delete to everybody and could only delete in bulk. The rules
  * this suite protects: the **action catalog is decided on the server** (`POST /:entity/action/rowActions`)

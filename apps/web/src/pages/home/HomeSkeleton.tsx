@@ -1,5 +1,5 @@
 /**
- * Card-shaped loading placeholders (PLAN_Phase_20_Settings_UX.md §5.7, §20.19).
+ * Card-shaped loading placeholders (plans/PLAN_Phase_20_Settings_UX.md §5.7, §20.19).
  *
  * The home cards load independently, so a skeleton is never a full-page spinner: each card draws the
  * rows it is about to fill, which keeps the layout from jumping when the data arrives. The shimmer is

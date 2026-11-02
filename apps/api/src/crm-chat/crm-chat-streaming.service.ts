@@ -6,7 +6,7 @@ import { AIToolRegistry } from '../ai-agents/ai-agent-tools.js';
 import { DatabaseService } from '../database/database.service.js';
 
 /**
- * Phase 19-CHAT.6 — streaming event types (PLAN_Phase_19_CRM_Chat.md §9.1, §17 `19-CHAT.6`;
+ * Phase 19-CHAT.6 — streaming event types (plans/PLAN_Phase_19_CRM_Chat.md §9.1, §17 `19-CHAT.6`;
  * contract §8.1).
  *
  * These are the user-safe events Chat streams to the UI. They never expose internal tool arguments,

@@ -16,7 +16,7 @@
 Read these documents and inspect the corresponding implementation before modifying anything:
 
 1. `AGENTS.MD`.
-2. `PLAN.md`.
+2. `plans/PLAN.md`.
 3. Every relevant module plan that exists in the repository, including Plans for Projects, Sales, CustomerSuccess, ServiceDesk, MarketingAutomation, AIAgents, VoiceCommunications, AdvancedIntegrations, CRMChat, ESignature, Omnichannel, and LeadScore.
 4. The actual NestJS module registry, API routes, DTOs, domain services, Entity Engine, metadata, ACL, event definitions, queue processors, migrations, test scripts, frontend routing, and existing CI workflows.
 5. Existing implementation notes, compatibility documents, release notes, known-issue lists, and test reports.
@@ -133,7 +133,7 @@ Use current primary documentation while implementing the matching sub-phase; pin
 - Node.js test runner documentation if already selected by the repository: https://nodejs.org/api/test.html
 
 Current repository selections (verified): **Vitest** for API/integration tests (`apps/api/test/*.test.ts`) and **Playwright** for browser E2E (root `playwright.config.ts`, specs in `e2e/*.spec.ts`). Do not introduce another runner.
-- Existing project architecture and compatibility references: `PLAN.md`, `AGENTS.MD`, the implemented module plans, API/OpenAPI documents, and migration history.
+- Existing project architecture and compatibility references: `plans/PLAN.md`, `AGENTS.MD`, the implemented module plans, API/OpenAPI documents, and migration history.
 
 Do not add a testing tool because a referenced document uses it. First audit the current stack. Keep one standard approach for each test level unless a concrete compatibility or technical reason requires an exception.
 
@@ -231,7 +231,7 @@ Determine what actually exists, what is functional, and what needs verification 
 
 ### Tasks
 
-1. Read `AGENTS.MD` and the relevant parts of `PLAN.md`.
+1. Read `AGENTS.MD` and the relevant parts of `plans/PLAN.md`.
 2. Inventory package/workspace structure, package manager, runtime, test runner, lint/type-check tools, build scripts, frontend build, migrations, queue, cache, storage, mail, and provider configuration.
 3. Inventory every registered NestJS module and frontend route. Confirm whether its UI is reachable and its APIs are registered.
 4. For each module, inspect representative create/read/update flows, validations, ACL, migrations, background tasks, emitted events, and existing tests.

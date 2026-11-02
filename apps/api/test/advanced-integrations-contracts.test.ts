@@ -18,7 +18,7 @@ import { bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-INT.25 / 19-INT.26 — the cross-module contracts, the audit trail, the metrics and the
- * retention policy (`PLAN_Phase_19_Advanced_Integrations.md` §14.2, §14.3, §14.4, §16; `19-INT.25`,
+ * retention policy (`plans/PLAN_Phase_19_Advanced_Integrations.md` §14.2, §14.3, §14.4, §16; `19-INT.25`,
  * `19-INT.26`).
  *
  * Runs against the configured primary database (AGENTS.md §3.1). Every row created here carries a

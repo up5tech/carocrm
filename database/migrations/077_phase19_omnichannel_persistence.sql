@@ -1,4 +1,4 @@
--- Phase 19-OM.3 — Omnichannel additive persistence (PLAN_Phase_19_Omnichannel.md §14 OM.3,
+-- Phase 19-OM.3 — Omnichannel additive persistence (plans/PLAN_Phase_19_Omnichannel.md §14 OM.3,
 -- decisions D1/E4/E5/E6, docs/omnichannel/feature-contract.md §4/§5.1, contract §10).
 --
 -- Owned by VoiceCommunications (D1: the canonical conversation record stays `voice_conversations`).

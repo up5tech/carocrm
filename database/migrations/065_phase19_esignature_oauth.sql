@@ -1,6 +1,6 @@
 -- Phase 19-ES.4 — DocuSign OAuth and the connection lifecycle: the module's own credential vault
 -- and its own single-use authorization states.
--- (PLAN_Phase_19_ESignature.md §6.1, §8.1, §9.2, §18 `19-ES.4`; reuse decision in
+-- (plans/PLAN_Phase_19_ESignature.md §6.1, §8.1, §9.2, §18 `19-ES.4`; reuse decision in
 -- docs/implementation/esignature-audit.md §3, §4.)
 --
 -- ADDITIVE ONLY (AGENTS.md §3.5): two new tables and their indexes. No existing table, column or row

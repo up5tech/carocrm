@@ -17,7 +17,7 @@ import { CustomerSuccessPlanService } from "./customer-success-plan.service.js";
 import { CustomerSuccessRecords, type CustomerSuccessRow } from "./customer-success-records.js";
 
 /**
- * Phase 19-CS.6 — measurable goals inside a plan (PLAN_Phase_19_Customer_Success.md §5.7).
+ * Phase 19-CS.6 — measurable goals inside a plan (plans/PLAN_Phase_19_Customer_Success.md §5.7).
  *
  * Progress is computed by the pure `computeGoalProgress` for every direction (increase, decrease,
  * maintain, boolean, manual), bounded to 0–100 and safe against division by zero. Changing a goal

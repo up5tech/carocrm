@@ -23,7 +23,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, purgeEntityEvents,
 
 /**
  * Phase 19-ES.8 — recipient routing and the send preview
- * (`PLAN_Phase_19_ESignature.md` §4.3, §4.4, §11.2, §13.3, §18 `19-ES.8`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.3, §4.4, §11.2, §13.3, §18 `19-ES.8`).
  *
  * The acceptance criteria, one group each:
  *

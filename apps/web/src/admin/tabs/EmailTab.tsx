@@ -11,7 +11,7 @@ import { errorMessage } from './identity.js';
 const SECURITY_MODES = ['none', 'starttls', 'ssl'] as const;
 
 /**
- * Email tab (PLAN_Phase_20_Settings_UX.md §4.3 row 16): the outbound mailboxes and the transport
+ * Email tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 16): the outbound mailboxes and the transport
  * status, over the existing `/EmailAccount` and `/Email` APIs. A mailbox password is write-only —
  * the list can only say whether one is stored — so "masked" is a property of the API, not of the form.
  */

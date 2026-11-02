@@ -19,7 +19,7 @@ import { isSignatureProviderKey, SIGNATURE_PROVIDER_KEYS } from './providers/sig
 
 /**
  * Phase 19-ES.2 — the signature request repository
- * (`PLAN_Phase_19_ESignature.md` §6.2, §4.3, §4.7, §8.2; `19-ES.2` acceptance
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.2, §4.3, §4.7, §8.2; `19-ES.2` acceptance
  * "request state transitions are unit-tested", "provider envelope IDs unique in the appropriate
  * connection/account context").
  *

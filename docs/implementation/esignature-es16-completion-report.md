@@ -1,6 +1,6 @@
 # Phase 19-ES.16 — Reminders, Resend, Void and Correction
 
-> `PLAN_Phase_19_ESignature.md` §4.3, §16, §18 `Phase 19-ES.16`.
+> `plans/PLAN_Phase_19_ESignature.md` §4.3, §16, §18 `Phase 19-ES.16`.
 > Acceptance: unsupported or terminal-state actions fail clearly and do not call the provider;
 > void/correction actions are audited with actor and reason; completion cannot be reversed by a local
 > status edit.

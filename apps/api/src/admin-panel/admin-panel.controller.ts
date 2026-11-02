@@ -17,7 +17,7 @@ const ExplainSchema = z.object({
 });
 
 /**
- * `GET /api/v1/AdminPanel` and `GET /api/v1/Navigation` (PLAN_Phase_20_Settings_UX.md §8.1), plus
+ * `GET /api/v1/AdminPanel` and `GET /api/v1/Navigation` (plans/PLAN_Phase_20_Settings_UX.md §8.1), plus
  * `POST /api/v1/AdminPanel/action/acl-explain` for the Permissions tab's "who can see what" helper
  * (§4.8).
  *

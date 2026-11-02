@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 /**
  * Phase 19-INT.25 — the cross-module integration contracts
- * (`PLAN_Phase_19_Advanced_Integrations.md` §14.2, §19 `19-INT.25`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §14.2, §19 `19-INT.25`).
  *
  * A connector changes CRM data, and CRM data is **owned by a domain module**. The plan is
  * unambiguous: *"Invoke the owning domain service or approved internal integration contract"* and

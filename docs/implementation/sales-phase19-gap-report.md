@@ -1,6 +1,6 @@
 # Sales — Phase 19-S gap report (19-S.20 task 12)
 
-`PLAN_Phase_19_Sales.md` §14, Phase 19-S.20: *"Produce a gap report listing deferred Tier 2/3/4 features
+`plans/PLAN_Phase_19_Sales.md` §14, Phase 19-S.20: *"Produce a gap report listing deferred Tier 2/3/4 features
 and unresolved jurisdiction/accounting items."* This is that list, and it is the authoritative statement
 of what **is not** built. The implemented surface is in
 [`docs/modules/sales/README.md`](../modules/sales/README.md); the published boundaries are in

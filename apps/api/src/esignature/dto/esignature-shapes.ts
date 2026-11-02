@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { SIGNATURE_PROVIDER_KEYS } from '../providers/signature-provider.keys.js';
 
 /**
- * Phase 19-ES.1 — request shapes (`PLAN_Phase_19_ESignature.md` §8; AGENTS.md §5.4).
+ * Phase 19-ES.1 — request shapes (`plans/PLAN_Phase_19_ESignature.md` §8; AGENTS.md §5.4).
  *
  * Every shape is strict: an unknown key is rejected instead of silently ignored, so a typo in a
  * feature name cannot be stored and quietly do nothing. The controller parses shape only; policy

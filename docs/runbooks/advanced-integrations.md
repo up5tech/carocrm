@@ -1,6 +1,6 @@
 # Advanced Integrations — operator runbook
 
-> Phase 19-INT.26 / 19-INT.27 deliverable (`PLAN_Phase_19_Advanced_Integrations.md` §16.3, §19
+> Phase 19-INT.26 / 19-INT.27 deliverable (`plans/PLAN_Phase_19_Advanced_Integrations.md` §16.3, §19
 > `19-INT.26`, `19-INT.27`).
 > Companion documents: `docs/compatibility/advanced-integrations.md` · `providers.md` ·
 > `oauth-scopes.md` · `sync-semantics.md` · `webhook-security.md`.

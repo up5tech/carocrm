@@ -36,7 +36,7 @@ import { MarketingTestSendService } from "./marketing-test-send.service.js";
 
 /**
  * Phase 19-MA.1 – 19-MA.7 — Marketing Automation module barrel
- * (PLAN_Phase_19_Marketing_Automation.md §7.1, §15 `19-MA.1`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §7.1, §15 `19-MA.1`).
  *
  * Like Projects, Sales, Customer Success and Service Desk, this is a directory under `apps/api/src` and not
  * a second framework: records use the generic `entity_records` store, and ACL, validation, audit, stream,

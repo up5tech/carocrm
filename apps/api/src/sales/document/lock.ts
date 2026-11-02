@@ -6,7 +6,7 @@ import {
 /**
  * Phase 19-S.2 — issuance locking, as a contract the later document phases enforce (19-S.9+).
  *
- * An issued document is not an ordinary editable record (PLAN_Phase_19_Sales.md §4.7). This module
+ * An issued document is not an ordinary editable record (plans/PLAN_Phase_19_Sales.md §4.7). This module
  * holds the parts that do not depend on any particular document table: which kinds exist, which
  * fields are protected once the document is issued, whether a given lock policy locks an issued
  * document, and who may unlock it. The per-document state machines stay with their own services —
@@ -98,7 +98,7 @@ export function protectedFields(kind: SalesDocumentKind): readonly string[] {
 }
 
 /**
- * Lock policy. `lockOnIssue` is the configured default (PLAN_Phase_19_Sales.md §13, feature
+ * Lock policy. `lockOnIssue` is the configured default (plans/PLAN_Phase_19_Sales.md §13, feature
  * `issuanceLocking`); `unlockRequiresPermission` keeps an administrator's unlock a dedicated,
  * audited action instead of an ordinary edit.
  */

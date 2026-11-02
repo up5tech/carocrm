@@ -12,7 +12,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-OM.18 — consent enforcement, retention and data rights
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.18`; `docs/omnichannel/consent-and-retention.md`).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.18`; `docs/omnichannel/consent-and-retention.md`).
  *
  * Against the configured primary database (AGENTS.md §3.1). Conversations are created through the
  * owner's ingest service; consent/suppression through the owner's service. Rows are `agent_test_om18_*`

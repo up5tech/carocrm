@@ -28,7 +28,7 @@ import { VoiceProviderAccountsService } from "./voice-provider-accounts.service.
 
 /**
  * Phase 19-VC.5 — durable provider-event processing
- * (`PLAN_Phase_19_Voice_Communications.md` §4.3, §11.4, §15 `19-VC.5`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §4.3, §11.4, §15 `19-VC.5`).
  *
  * The receipt is the durable fact; this service turns it into a **normalized communication event**
  * exactly once. Two constraints make that structural rather than hopeful:

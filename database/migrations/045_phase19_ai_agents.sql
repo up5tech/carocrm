@@ -1,4 +1,4 @@
--- Phase 19-AI — AI Agents foundation (PLAN_Phase_19_AI_Agents.md §4.4, §5, §8, §9, §12, §20 `19-AI.3`).
+-- Phase 19-AI — AI Agents foundation (plans/PLAN_Phase_19_AI_Agents.md §4.4, §5, §8, §9, §12, §20 `19-AI.3`).
 --
 -- Additive only (AGENTS.md §3.5): every statement is `CREATE TABLE/INDEX ... IF NOT EXISTS`, no table is
 -- dropped, truncated or rewritten, no column is renamed or repurposed, and no existing row is modified.

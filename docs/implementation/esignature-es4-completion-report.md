@@ -1,6 +1,6 @@
 # Phase 19-ES.4 — DocuSign OAuth and connection lifecycle
 
-> `PLAN_Phase_19_ESignature.md` §6.1, §8.1, §9.2, §9.3, §9.4, §13.4, §18 `Phase 19-ES.4`.
+> `plans/PLAN_Phase_19_ESignature.md` §6.1, §8.1, §9.2, §9.3, §9.4, §13.4, §18 `Phase 19-ES.4`.
 > Acceptance: a demo account can authorize and the connection test succeeds; credentials are absent
 > from logs, frontend bundles, API responses and normal configuration output; an expired or revoked
 > consent changes the connection state and disables unsafe sends.

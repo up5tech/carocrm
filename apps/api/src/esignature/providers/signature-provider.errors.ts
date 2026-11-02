@@ -8,7 +8,7 @@ import type { SignatureProviderOperation } from './signature-provider.port.js';
 
 /**
  * Phase 19-ES.3 — the adapter-side error taxonomy
- * (`PLAN_Phase_19_ESignature.md` §5.2, §4.3, §9.3, §16; audit §5.1, §5.8; `19-ES.3` task
+ * (`plans/PLAN_Phase_19_ESignature.md` §5.2, §4.3, §9.3, §16; audit §5.1, §5.8; `19-ES.3` task
  * "define provider error categories, capabilities, correlation IDs and idempotency behavior").
  *
  * The nine platform categories in `advanced-integrations/provider-error.ts` are **reused, not

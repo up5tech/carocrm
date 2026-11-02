@@ -11,7 +11,7 @@ import { formatTimestamp, RiskTag } from './shared.js';
 
 /**
  * Phase 19-AI.10 — the approval inbox
- * (PLAN_Phase_19_AI_Agents.md §9.2, §9.3, §15.5, §20 `19-AI.10`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §9.2, §9.3, §15.5, §20 `19-AI.10`).
  *
  * The reviewer sees the exact proposal: the tool, its effect class, the target record and the
  * before/after values. Approving is a recorded decision attributed to the reviewer; the engine still

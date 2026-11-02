@@ -1,6 +1,6 @@
 # Phase 19-LS.5 — Scoring History, Explanation and Freshness: completion report
 
-Delivered 2026-10-24. Scope: `PLAN_Phase_19_LeadScore.md` §3.1, §5.3–§5.4, §6.3, §6.5, §8.2, §9.1–§9.2,
+Delivered 2026-10-24. Scope: `plans/PLAN_Phase_19_LeadScore.md` §3.1, §5.3–§5.4, §6.3, §6.5, §8.2, §9.1–§9.2,
 §10.2, §15.2 stages 4–5, §16 `19-LS.5`; contract in `docs/implementation/lead-score-audit.md` §5.2–§5.3 and
 §11; compatibility rows in `docs/compatibility/lead-score.md` §3, §7 and §8.
 

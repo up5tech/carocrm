@@ -2,7 +2,7 @@ import type { AuthenticatedPrincipal, RequestScope } from '../common/request-sco
 
 /**
  * Phase 19-ES.4 — the service authority for the paths with no human session
- * (`PLAN_Phase_19_ESignature.md` §8.1, §9.2; the model ADR 0003 establishes for Advanced
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.1, §9.2; the model ADR 0003 establishes for Advanced
  * Integrations and Voice & Communications).
  *
  * Two ESignature paths run without a logged-in user:

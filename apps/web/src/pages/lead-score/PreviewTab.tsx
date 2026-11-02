@@ -11,7 +11,7 @@ import { bandLabel, errorText, named, sourceLabel, statusLabel } from './shared.
 
 /**
  * Phase 19-LS.8 — preview a model against a sample and change nothing
- * (`PLAN_Phase_19_LeadScore.md` §6.1, §9.4, §15.2 stage 3, §16 `19-LS.8`; audit §5, §11).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.1, §9.4, §15.2 stage 3, §16 `19-LS.8`; audit §5, §11).
  *
  * This is the step between drafting a model and freezing a version, and the screen exists to make it
  * routine. Two properties are worth stating on the page, because they are the reason it is safe to press:

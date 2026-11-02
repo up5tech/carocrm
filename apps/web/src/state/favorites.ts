@@ -2,7 +2,7 @@ import type { NavigationNode } from '../api/types.js';
 import { usePreference } from './preferences.js';
 
 /**
- * Favorites / pinned navigation (PLAN_Phase_20_Settings_UX.md §5.1).
+ * Favorites / pinned navigation (plans/PLAN_Phase_20_Settings_UX.md §5.1).
  *
  * The list is the `favorites` preference, which lives on the server so it follows the account to the
  * next device (§5.9) — never `localStorage`. It stores **routes**, and the shell resolves them

@@ -20,7 +20,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, purgeEntityEvents,
 
 /**
  * Phase 19-ES.17 — the approval workflow and policy engine
- * (`PLAN_Phase_19_ESignature.md` §11.1, §11.2, §18 `19-ES.17`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §11.1, §11.2, §18 `19-ES.17`).
  *
  * The acceptance criteria, one group each:
  *

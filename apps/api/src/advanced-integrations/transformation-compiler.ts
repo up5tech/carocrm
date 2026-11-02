@@ -2,7 +2,7 @@ import { ValidationError } from '@carocrm/core/errors/index.js';
 
 /**
  * Phase 19-INT.8 — the transformation compiler
- * (`PLAN_Phase_19_Advanced_Integrations.md` §9.2; `19-INT.8`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §9.2; `19-INT.8`).
  *
  * The plan is explicit about what a field mapping may do to a value: *"Implement a safe,
  * allowlisted transformation set. Do not evaluate arbitrary expressions, scripts or code."*

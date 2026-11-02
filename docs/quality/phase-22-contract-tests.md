@@ -1,7 +1,7 @@
 # Phase 22.6 — Domain Contract Tests
 
 > **Date:** 2026-10-28
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §11 (tasks 1–10) and its acceptance criteria
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §11 (tasks 1–10) and its acceptance criteria
 > **Depends on:** `docs/architecture/contract-catalog.md` (22.3), `docs/architecture/module-contracts.md` (22.2), `docs/quality/phase-22-transaction-migration-audit.md` (22.5)
 > **Status:** Implemented. 48 new automated assertions across 5 files; 2 product defects fixed; no new database, no destructive command, no external effect.
 

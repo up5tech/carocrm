@@ -7,7 +7,7 @@ import { WebhookIngressService } from './webhook-ingress.service.js';
 
 /**
  * Phase 19-INT.12 — the shared webhook endpoint
- * (`PLAN_Phase_19_Advanced_Integrations.md` §10, §13.5; `19-INT.12`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §10, §13.5; `19-INT.12`).
  *
  * One endpoint serves every connector:
  *

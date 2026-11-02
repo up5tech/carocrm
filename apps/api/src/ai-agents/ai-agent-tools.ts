@@ -13,7 +13,7 @@ import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 
 /**
  * Phase 19-AI.6 — the server-side tool registry
- * (PLAN_Phase_19_AI_Agents.md §7.1–§7.5, §20 `19-AI.6`, `19-AI.10`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §7.1–§7.5, §20 `19-AI.6`, `19-AI.10`).
  *
  * Tools are registered by trusted application code only. A model selects a **key** and supplies
  * **arguments**; it can never name a handler, a URL, a table, SQL or a permission rule. Every

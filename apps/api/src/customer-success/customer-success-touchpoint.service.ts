@@ -18,7 +18,7 @@ import { CustomerSuccessNotificationService } from "./customer-success-notificat
 import { CustomerSuccessRecords, type CustomerSuccessRow } from "./customer-success-records.js";
 
 /**
- * Phase 19-CS.9 — touchpoints and success reviews (PLAN_Phase_19_Customer_Success.md §5.10).
+ * Phase 19-CS.9 — touchpoints and success reviews (plans/PLAN_Phase_19_Customer_Success.md §5.10).
  *
  * The module adds CSM context on top of the existing Task/Call/Meeting/Email entities — it never
  * builds a second scheduler. A structured review is a small `CustomerSuccessReview` record that

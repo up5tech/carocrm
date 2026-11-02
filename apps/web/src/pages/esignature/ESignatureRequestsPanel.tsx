@@ -19,7 +19,7 @@ import { formatDateTime,t } from '../../state/i18n.js';
 
 /**
  * Phase 19-ES.6 — the signature request list and draft editor
- * (`PLAN_Phase_19_ESignature.md` §8.2, §13.2, §13.3, §18 `19-ES.6`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.2, §13.2, §13.3, §18 `19-ES.6`).
  *
  * The list and the drawer are one screen on purpose: a request is reviewed, corrected and sent in the
  * same place it is found. Everything shown is the server's answer — the list query is filtered and

@@ -1,5 +1,5 @@
 /**
- * Phase 19-S.17 — default document templates (PLAN_Phase_19_Sales.md §13, S.17 task 3).
+ * Phase 19-S.17 — default document templates (plans/PLAN_Phase_19_Sales.md §13, S.17 task 3).
  *
  * Standard PDF/email templates for each Sales document type, seeded once and never overwritten.
  * An operator can edit, deactivate or replace them through the DocumentTemplate UI; the built-in

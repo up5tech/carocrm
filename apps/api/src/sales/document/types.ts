@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
  * Phase 19-S.2 — contracts every Sales document type reuses.
  *
  * Quotes, sales orders, invoices, credit notes and the rest do **not** share one status machine
- * (PLAN_Phase_19_Sales.md §4.4), but they do share the same input/output vocabulary: a typed line
+ * (plans/PLAN_Phase_19_Sales.md §4.4), but they do share the same input/output vocabulary: a typed line
  * item, a tax resolution, an audit context and an idempotency key. Those live here so the pricing,
  * tax and totals services stay independent of any specific document.
  */
@@ -20,7 +20,7 @@ export interface SalesAuditContext {
 
 /**
  * Stable idempotency key for a command that must not repeat an irreversible effect
- * (PLAN_Phase_19_Sales.md §6.3, §4.14).
+ * (plans/PLAN_Phase_19_Sales.md §6.3, §4.14).
  *
  * The key is a digest of the *meaningful* inputs only — never a random value and never a timestamp —
  * so a retried request produces the same key and a different request produces a different one.

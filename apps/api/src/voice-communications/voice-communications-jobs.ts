@@ -1,5 +1,5 @@
 /**
- * Phase 19-VC.5 — job names (`PLAN_Phase_19_Voice_Communications.md` §11.4, §15 `19-VC.5`).
+ * Phase 19-VC.5 — job names (`plans/PLAN_Phase_19_Voice_Communications.md` §11.4, §15 `19-VC.5`).
  *
  * `JOB_NAME` allows 2–4 dot-separated alphanumeric segments, so `voiceCommunications.*` is valid and
  * matches the module's event namespace. The worker calls the API's processing endpoint with the

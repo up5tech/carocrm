@@ -6,7 +6,7 @@ import { IntegrationContractRegistry } from '../integration-contracts.js';
 
 /**
  * Phase 19-INT.25 — the `Sales` contracts
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.4, §12.8, §14.2; `19-INT.25`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.4, §12.8, §14.2; `19-INT.25`).
  *
  * `Sales` owns the commercial document lifecycle. Three of its behaviours are reachable from a
  * connector, and each is published as a contract rather than re-implemented:

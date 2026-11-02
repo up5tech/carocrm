@@ -15,7 +15,7 @@ import { OmnichannelPermissionService } from './omnichannel-permission.service.j
 import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
 
 /**
- * Phase 19-OM.2 — module health and diagnostics (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`:
+ * Phase 19-OM.2 — module health and diagnostics (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`:
  * "module health/diagnostic hooks as appropriate"; the pattern `VoiceCommunicationsModuleHealthService`
  * and `ESignatureModuleHealthService` established).
  *

@@ -1,6 +1,6 @@
 # Phase 19-ES.7 — Template Catalog and Field/Role Mapping
 
-> `PLAN_Phase_19_ESignature.md` §6.7, §4.4, §5.2, §8.2, §13.1, §18 `Phase 19-ES.7`.
+> `plans/PLAN_Phase_19_ESignature.md` §6.7, §4.4, §5.2, §8.2, §13.1, §18 `Phase 19-ES.7`.
 > Acceptance: an administrator can refresh the template catalog and configure a mapping; mapping
 > validation rejects unknown or unauthorized field references; templates and ids stay associated with
 > the correct provider account.

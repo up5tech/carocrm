@@ -1,7 +1,7 @@
 # Phase 22.14 — Journey: a connector that breaks, and what the platform does about it
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §13.7 (steps 1–8) and its acceptance assertions
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.7 (steps 1–8) and its acceptance assertions
 > **Test:** `apps/api/test/phase22-journey-integrations-recovery.test.ts` (14 ordered steps)
 > **Depends on:** `docs/quality/phase-22-journey-ai-controlled-actions.md` (22.13), `docs/quality/phase-22-contract-tests.md` (22.6), `docs/runbooks/advanced-integrations.md`
 > **Status:** Implemented and verified — the focused journey and the full `pnpm verify` gate both pass.

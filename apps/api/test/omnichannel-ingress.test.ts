@@ -7,7 +7,7 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-OM.5 — the Omnichannel webhook ingress route over the shared Voice receipt pipeline
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.5`; feature contract §3 F6; decision D1).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.5`; feature contract §3 F6; decision D1).
  *
  * Against the configured primary database (AGENTS.md §3.1): nothing is created, reset or truncated;
  * the only provider is the in-process simulator, so no external host is contacted and no real

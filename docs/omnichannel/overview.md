@@ -1,6 +1,6 @@
 # Omnichannel (Phase 19-OM) — overview & implementation log
 
-> Living log for `PLAN_Phase_19_Omnichannel.md` §14 ("after each sub-phase, update
+> Living log for `plans/PLAN_Phase_19_Omnichannel.md` §14 ("after each sub-phase, update
 > `docs/omnichannel/overview.md` or an implementation log"). Newest entry first.
 
 ## Sub-phase status
@@ -80,7 +80,7 @@ The second half of the independent review. Six defects and one structural gap, e
 
 ### 2026-10-27 — Review corrections (module switch, Case owner, Service Desk regression)
 
-An independent review of the whole module against `PLAN_Phase_19_Omnichannel.md` found three real
+An independent review of the whole module against `plans/PLAN_Phase_19_Omnichannel.md` found three real
 defects and one stale expectation. All four are fixed here.
 
 - **The workspace switch was not a server-side gate.** The settings warning told an administrator
@@ -96,7 +96,7 @@ defects and one stale expectation. All four are fixed here.
 - **The Case owner bypass the OM.17 audit found was still open.** `assignedUserId` was missing from
   `SERVER_OWNED_CASE_FIELDS`, so a user with `Case:edit` could set the owner through the record API
   and bypass `CaseAssignment` — no history row, no eligibility check. The plan asked for exactly
-  this (`PLAN_Phase_19_Omnichannel.md` §14, OM.17). The field is server-owned now: the write guard
+  this (`plans/PLAN_Phase_19_Omnichannel.md` §14, OM.17). The field is server-owned now: the write guard
   refuses a client write, the owner leaves every Case form (`inEdit: false`), the list page stops
   offering the bulk assign, and the voice hand-off no longer copies the conversation's assignee onto
   the Case. The supported path is unchanged: the assignment command writes the owner and its trail.

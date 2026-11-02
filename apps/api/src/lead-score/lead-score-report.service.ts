@@ -10,7 +10,7 @@ import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 
 /**
  * Phase 19-LS.18 — the operational report of the score and the conversion
- * (`PLAN_Phase_19_LeadScore.md` §16 `19-LS.18`; audit §11 `LS.18`; compatibility §2/§8).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §16 `19-LS.18`; audit §11 `LS.18`; compatibility §2/§8).
  *
  * The plan asks for "suitable score/conversion metrics" in the **existing** reporting and dashboard surfaces.
  * This service is that surface for Lead Score, and it is deliberately small: four views over the numbers the

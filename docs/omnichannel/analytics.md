@@ -1,6 +1,6 @@
 # Omnichannel — conversation analytics (definitions)
 
-> Phase 19-OM.20 (`PLAN_Phase_19_Omnichannel.md` §10.1, §14; endpoint
+> Phase 19-OM.20 (`plans/PLAN_Phase_19_Omnichannel.md` §10.1, §14; endpoint
 > `GET /api/v1/Omnichannel/action/analytics?days=N`). Every metric is recomputable from the
 > authoritative records below; the JSON field names match this document.
 

@@ -1,5 +1,5 @@
 /**
- * Phase 19-S.17 — sending a commercial document by mail (PLAN_Phase_19_Sales.md §9.4, S.17 task 4).
+ * Phase 19-S.17 — sending a commercial document by mail (plans/PLAN_Phase_19_Sales.md §9.4, S.17 task 4).
  *
  * One modal for the ten document kinds. It previews the render the server would send, collects
  * recipients and a cover note, and then calls the send command — which **issues** a draft through the

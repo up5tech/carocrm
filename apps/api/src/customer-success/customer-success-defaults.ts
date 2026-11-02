@@ -1,6 +1,6 @@
 /**
  * Phase 19-CS.6.6 — the module's default onboarding playbook
- * (PLAN_Phase_19_Customer_Success.md §6.6: "Seed default lifecycle/scoring/template records under
+ * (plans/PLAN_Phase_19_Customer_Success.md §6.6: "Seed default lifecycle/scoring/template records under
  * idempotent keys").
  *
  * The record itself lives in `entity_records` and is ordinary configuration: an administrator can

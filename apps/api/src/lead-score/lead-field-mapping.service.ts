@@ -9,7 +9,7 @@ import { CONVERSION_TARGETS, type ConversionTarget } from './lead-score-vocabula
 
 /**
  * Phase 19-LS.12 — the Lead-to-target field map, and the type rules a map must obey
- * (`PLAN_Phase_19_LeadScore.md` §5.7, §7.4; audit §11 `LS.12`; contract §7).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §5.7, §7.4; audit §11 `LS.12`; contract §7).
  *
  * A mapping is configuration that **writes records**, so it is validated at two levels and neither is
  * optional:

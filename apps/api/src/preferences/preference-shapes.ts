@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * The named preference documents (PLAN_Phase_20_Settings_UX.md §5.9). A name not registered here is
+ * The named preference documents (plans/PLAN_Phase_20_Settings_UX.md §5.9). A name not registered here is
  * refused, so the table stays a preferences store rather than becoming a second general-purpose blob
  * store; a new consumer (20.12's column sets and favorites ordering, the command palette's recents)
  * registers its schema here and needs no migration.

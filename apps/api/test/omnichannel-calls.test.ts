@@ -13,7 +13,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-OM.13 — VoiceCommunications integration: call context, honest catalog, reconciliation
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.13`).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.13`).
  *
  * Against the configured primary database (AGENTS.md §3.1); simulator only. Call sessions are inserted
  * as `AGENT_TEST_OM13_*` rows (they would normally come from the voice webhook pipeline), the

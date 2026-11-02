@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api/client.js';
 
 /**
- * Client access to the signed-in user's preferences (PLAN_Phase_20_Settings_UX.md §5.9, §20.10).
+ * Client access to the signed-in user's preferences (plans/PLAN_Phase_20_Settings_UX.md §5.9, §20.10).
  *
  * A preference is the server's value, not a copy: one query key per name, a write invalidates them
  * all, and `value === undefined` (query loading) is distinct from `value === null` (the user never set

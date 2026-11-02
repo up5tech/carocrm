@@ -14,7 +14,7 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-INT.14 / 19-INT.15 — the administration API
- * (`PLAN_Phase_19_Advanced_Integrations.md` §15).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15).
  *
  * Runs against the configured primary database (AGENTS.md §3.1). Every row created here carries a
  * unique run marker and is deleted **by id** in `afterAll`; no table is reset or truncated and no

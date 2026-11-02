@@ -37,7 +37,7 @@ import { type DocuSignTransport,parseJson } from './docusign-transport.js';
 
 /**
  * Phase 19-ES.4 — the DocuSign adapter that answers in production
- * (`PLAN_Phase_19_ESignature.md` §5.1, §5.2, §6.1, §9.3, §18 `19-ES.4`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §5.1, §5.2, §6.1, §9.3, §18 `19-ES.4`).
  *
  * This is the **first real adapter**, and it is deliberately partial. ES.4's task list is the
  * connection: prove the credential, resolve the account, report health. Envelope creation, sending,

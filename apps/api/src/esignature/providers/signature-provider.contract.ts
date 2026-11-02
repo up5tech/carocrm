@@ -9,7 +9,7 @@ import {
 
 /**
  * Phase 22.6 — the reusable signature-provider conformance suite
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §11 task 7).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §11 task 7).
  *
  * `advanced-integrations/connector-contract.ts` already answers "what is a correct connector?" once,
  * as data, so a seventh connector does not repeat ten assertions. The signature providers had no

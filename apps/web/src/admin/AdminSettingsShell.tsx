@@ -14,7 +14,7 @@ import { SettingsShellProvider, useSettingsShellMeta, useSettingsShellState, use
 import { TAB_COMPONENTS } from './tabs.js';
 
 /**
- * The tabbed administration shell (PLAN_Phase_20_Settings_UX.md §4.1, §9.1, §9.2).
+ * The tabbed administration shell (plans/PLAN_Phase_20_Settings_UX.md §4.1, §9.1, §9.2).
  *
  * `/admin/settings/:tabKey` renders one lazy tab inside a rail of the groups the server resolved for
  * this caller. The shell — not the tab — owns the sticky save bar, the unsaved-changes guard and the

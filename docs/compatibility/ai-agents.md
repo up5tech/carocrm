@@ -1,6 +1,6 @@
 # AI Agents — compatibility and clean-room status
 
-> **Plan:** `PLAN_Phase_19_AI_Agents.md` §2.1, §6 (clean-room), §21.
+> **Plan:** `plans/PLAN_Phase_19_AI_Agents.md` §2.1, §6 (clean-room), §21.
 > **Module:** `AIAgents` — registry key and route slug `ai-agents`, no `Ua` prefix.
 > **Status:** baseline was written in 19-AI.0; this document now covers the delivered phases
 > **19-AI.0–19-AI.19** together (19-AI.18 is delivered as the authenticated MCP-compatible protocol
@@ -44,7 +44,7 @@ OpenAI-compatible chat-completions contract; no vendor SDK is vendored.
 | 19-AI.15–19-AI.17 | Domain reach is deliberately narrow: `crm_search_records`/`crm_read_record` only ever run inside the Entity Engine under the *initiating user's* current ACL, so Sales/CustomerSuccess/ServiceDesk/Projects/Marketing data is read through the same permissioned path instead of module-owned copies. Sales financial state is untouched (the only write tools are Task creation and a field update that must pass approval); there is no marketing send path in the module at all — consent/dispatch remain wholly MarketingAutomation's, and ServiceDesk internal-note visibility is enforced by the Stream module's own visibility rules. No circular import exists: `AIAgents` imports only kernel entity/metadata services. |
 | 19-AI.18 (protocol half) | MCP-compatible protocol adapter: `GET action/mcp/tools`, `POST action/mcp/call` — session-authenticated, `use` capability enforced, allowlisted registry lookup, strict schema validation, disabled tools refused, and (since Phase 22.13) a tool whose effect class demands a human decision is refused here because this door carries no run for an approval to attach to; model-backed retrieval stays deferred. |
 | 19-AI.19 | Threat-model re-review, kill switch (blocks new runs and high-impact tools), elapsed/token/cost/step budgets, worker-lease recovery that cannot duplicate tool effects, retention sweep, redaction of denied arguments and secrets from every ledger/trace (secret encryption verified write-only in `ai-providers.test.ts`). |
-| 19-AI.20 | Lint/type-check/build/test suites run green against the configured primary database (§6); `PLAN.md` status updated; this document rewritten. |
+| 19-AI.20 | Lint/type-check/build/test suites run green against the configured primary database (§6); `plans/PLAN.md` status updated; this document rewritten. |
 
 ---
 

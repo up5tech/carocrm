@@ -5,7 +5,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-CHAT.2 — module registration, capabilities, feature flags, navigation and diagnostics
- * (PLAN_Phase_19_CRM_Chat.md §17 `19-CHAT.2`, acceptance: "authorized users can open the Chat
+ * (plans/PLAN_Phase_19_CRM_Chat.md §17 `19-CHAT.2`, acceptance: "authorized users can open the Chat
  * workspace shell; unauthorized users cannot access the route or API; disabled Chat is absent from
  * navigation and enforced server-side").
  *

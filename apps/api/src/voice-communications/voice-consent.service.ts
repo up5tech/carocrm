@@ -12,7 +12,7 @@ import { VoiceCommunicationsSettingsService } from "./voice-communications-setti
 
 /**
  * Phase 19-VC.6 — channel consent and suppression
- * (`PLAN_Phase_19_Voice_Communications.md` §5.2, §8.4, §13.4, §15 `19-VC.6`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §5.2, §8.4, §13.4, §15 `19-VC.6`).
  *
  * MarketingAutomation's consent is **email-only** (`MarketingConsent.channel = ['Email']`, identity =
  * email hash), so it stays authoritative for email and this module owns the non-email channels. The

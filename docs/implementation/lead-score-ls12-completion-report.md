@@ -1,6 +1,6 @@
 # Phase 19-LS.12 — Field Mapping and Conversion Preview: completion report
 
-`PLAN_Phase_19_LeadScore.md` §5.7, §7.1–§7.4, §8.3, §9.1–§9.2, §11.4, §16 (`19-LS.12`); audit §11 `LS.12`;
+`plans/PLAN_Phase_19_LeadScore.md` §5.7, §7.1–§7.4, §8.3, §9.1–§9.2, §11.4, §16 (`19-LS.12`); audit §11 `LS.12`;
 contract `docs/implementation/lead-score-conversion-contract.md` §5.2, §6, §7, §8, §12.1; compatibility
 `docs/compatibility/lead-score.md` §4.1–§4.3, §5.2, §8.
 

@@ -1,5 +1,5 @@
 -- 035_phase19_service_desk_conversation.sql — Phase 19-SD.6: explicit conversation visibility
--- (PLAN_Phase_19_ServiceDesk.md §5.4, §10.3).
+-- (plans/PLAN_Phase_19_ServiceDesk.md §5.4, §10.3).
 --
 -- Every conversation entry and every attachment now carries an explicit visibility classification,
 -- enforced server-side rather than inferred from the UI or the author:

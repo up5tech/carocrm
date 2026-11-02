@@ -4,7 +4,7 @@ import type { EnrichmentAdapter, EnrichmentContext, EnrichmentOutcome, Enrichmen
 
 /**
  * Phase 19-INT.24 — the one enrichment provider: a vetted REST enrichment endpoint
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.9; `19-INT.24`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.9; `19-INT.24`).
  *
  * The plan asks for **one** selected enrichment provider at a time. This is it: a REST endpoint
  * that answers with values for a bounded set of fields. It is not a vendor SDK, because the plan

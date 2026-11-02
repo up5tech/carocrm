@@ -8,7 +8,7 @@ import { type SalesFixture, salesFixture } from './support/sales-fixtures.js';
 
 /**
  * Phase 22.8 — the journey: lead acquisition, scoring, qualification, and conversion
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §13.1, steps 1–10).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.1, steps 1–10).
  *
  * One story, in order, through the public contracts only: a Lead arrives, the active model scores
  * it, a campaign engagement moves its band, the band says "Sales Ready" and **nothing happens** —

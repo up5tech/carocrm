@@ -29,7 +29,7 @@ import type { OAuth2ProviderConfig } from '../kit/oauth2-base.js';
 
 /**
  * Phase 19-INT.16 — the Google Workspace connector
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.1; `19-INT.16`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.1; `19-INT.16`).
  *
  * Calendar and Contacts, through the platform's own HTTP client. Two things about this connector
  * are worth reading before the code:

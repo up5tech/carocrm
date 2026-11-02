@@ -9,7 +9,7 @@ import { compare, isNegative, parseDecimal } from "../money/decimal.js";
  * Every rule here is a function of its inputs, so it can be unit-tested without a database and used
  * from the same three places with the same answer: the `beforeValidate` hook (a record save), a
  * domain command, and an admin preview. A rule that only lived in a controller would be a side door
- * through `PUT /api/v1/Product/:id` (PLAN_Phase_19_Sales.md §4.1, §4.4).
+ * through `PUT /api/v1/Product/:id` (plans/PLAN_Phase_19_Sales.md §4.1, §4.4).
  */
 
 export const PRODUCT_TYPES = ["Goods", "Service"] as const;

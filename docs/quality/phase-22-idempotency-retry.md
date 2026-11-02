@@ -1,7 +1,7 @@
 # Phase 22.7 — Idempotency, Outbox/Inbox, and Retry Hardening
 
 > **Date:** 2026-10-28
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §12 (tasks 1–10) and its acceptance criteria
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §12 (tasks 1–10) and its acceptance criteria
 > **Depends on:** `docs/architecture/contract-catalog.md` (22.3), `docs/quality/phase-22-contract-tests.md` (22.6)
 > **Status:** Implemented. The inventory and the strategy are written down, five defects are fixed, and the required scenarios that were unproven are now proven by tests.
 

@@ -23,7 +23,7 @@ import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 
 /**
  * Phase 19-SD.3 – 19-SD.5 — the `Case` write guard, number allocator and routing-rule validator
- * (PLAN_Phase_19_ServiceDesk.md §5.1 invariants, §5.3 routing rules, §7.3, §11.1).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §5.1 invariants, §5.3 routing rules, §7.3, §11.1).
  *
  * The generic record API reaches the very same row the domain services write, so these
  * `beforeValidate` handlers enforce the case invariants every write must satisfy:

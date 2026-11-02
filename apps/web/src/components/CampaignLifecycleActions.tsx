@@ -1,6 +1,6 @@
 /**
  * Phase 19-MA.3 — the campaign lifecycle panel
- * (PLAN_Phase_19_Marketing_Automation.md §8.2, §8.4, §10.2).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §8.2, §8.4, §10.2).
  *
  * Like `CaseLifecycleActions`, this is an *entry point*, not a rule engine. `GET
  * /MarketingAutomation/action/campaign/:id/capabilities` answers, from the server's own ACL and the

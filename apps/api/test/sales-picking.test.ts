@@ -27,7 +27,7 @@ import {
  * Phase 19-S.15 — the pure stock-identity rules: which unit a removal policy consumes, what a
  * lot/serial line must look like, and how a variant is validated. No database, no clock: today's
  * date and every candidate are arguments, so the exact ordering, the expiry gate and every refusal
- * are pinned rather than observed (PLAN_Phase_19_Sales.md §4.2, §4.15, §19-S.15).
+ * are pinned rather than observed (plans/PLAN_Phase_19_Sales.md §4.2, §4.15, §19-S.15).
  *
  * Every rule gets its negative case (AGENTS.MD §9): an expired lot under an excluding policy, a
  * shortage, a fractional serial quantity, an unknown variant code, a duplicate serial in one line.

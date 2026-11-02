@@ -1,7 +1,7 @@
 # Phase 19-CHAT.0 — `CRMChat` repository audit
 
-> **Plan:** `PLAN_Phase_19_CRM_Chat.md` §17 (`Phase 19-CHAT.0`), §20 final instruction.
-> **Status:** delivered in 19-CHAT.0. Everything below was read from this checkout; `PLAN.md` claims
+> **Plan:** `plans/PLAN_Phase_19_CRM_Chat.md` §17 (`Phase 19-CHAT.0`), §20 final instruction.
+> **Status:** delivered in 19-CHAT.0. Everything below was read from this checkout; `plans/PLAN.md` claims
 > were not treated as evidence. **No code, schema or configuration was changed by this audit.**
 > **Naming:** module `CRMChat`, registry key / route slug `crm-chat`, NestJS module `CRMChatModule`,
 > SPA route `/crm-chat`. No `Ua` prefix anywhere.

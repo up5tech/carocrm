@@ -1,7 +1,7 @@
 # Phase 22.8 — Journey: lead acquisition, scoring, qualification, and conversion
 
 > **Date:** 2026-10-28
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §13.1 (steps 1–10) and its acceptance assertions
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.1 (steps 1–10) and its acceptance assertions
 > **Test:** `apps/api/test/phase22-journey-lead-to-customer.test.ts` (12 ordered steps)
 > **Depends on:** `docs/quality/phase-22-contract-tests.md` (22.6), `docs/quality/phase-22-idempotency-retry.md` (22.7)
 > **Status:** Implemented. The journey runs end to end against the configured primary database; the three acceptance assertions hold.

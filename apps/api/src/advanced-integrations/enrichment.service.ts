@@ -18,7 +18,7 @@ import { ProviderError } from './provider-error.js';
 
 /**
  * Phase 19-INT.24 — the data enrichment service
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.9; `19-INT.24`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.9; `19-INT.24`).
  *
  * Enrichment is the one feature in this module where the platform **asks** somebody else about a
  * CRM record and then offers to change it. That makes the interesting questions not "how do I call

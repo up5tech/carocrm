@@ -1,7 +1,7 @@
 # Phase 22.18 — Resilience and Chaos-Lite Tests
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §17
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §17
 > **Status:** Complete — deterministic fault injection mapped to existing suites; three hardening fixes landed
 > (queue/outbox jitter, outbox claim lease, provider-key body-mismatch detection) with regression tests; decisions
 > recorded for the items that need a product/operations call (G18, G48).

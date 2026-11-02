@@ -6,7 +6,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { t } from '../state/i18n.js';
 
 /**
- * Offline banner (PLAN_Phase_20_Settings_UX.md §20.22, plan §1.1 "offline states everywhere").
+ * Offline banner (plans/PLAN_Phase_20_Settings_UX.md §20.22, plan §1.1 "offline states everywhere").
  *
  * React Query already owns the network state: `onlineManager` listens to `navigator.onLine` and the
  * `online`/`offline` events, and pauses every query while the browser is offline instead of firing

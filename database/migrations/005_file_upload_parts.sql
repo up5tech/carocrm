@@ -1,4 +1,4 @@
--- 005_file_upload_parts.sql — per-chunk ledger for chunked uploads (PLAN.md §25)
+-- 005_file_upload_parts.sql — per-chunk ledger for chunked uploads (plans/PLAN.md §25)
 --
 -- `part_count` and `received` alone cannot tell whether a chunk index was already counted, so a
 -- retried part would inflate the totals and a gap would look complete. The ledger records each

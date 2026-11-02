@@ -1,7 +1,7 @@
 # Phase 22.13 — Journey: a controlled action through CRMChat and AI Agents
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §13.6 (steps 1–10) and its acceptance assertions
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.6 (steps 1–10) and its acceptance assertions
 > **Test:** `apps/api/test/phase22-journey-ai-controlled-actions.test.ts` (12 ordered steps)
 > **Depends on:** `docs/quality/phase-22-journey-marketing-consent-attribution.md` (22.12), `docs/quality/phase-22-contract-tests.md` (22.6)
 > **Status:** Implemented and verified — the focused journey and the full `pnpm verify` gate both pass.

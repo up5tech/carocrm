@@ -139,7 +139,7 @@ export const ClientDefinitionSchema = z.object({
 export type ClientDefinition = z.infer<typeof ClientDefinitionSchema>;
 
 /**
- * Per-entity navigation behaviour (PLAN_Phase_20_Settings_UX.md §4.5). Optional: an entity without a
+ * Per-entity navigation behaviour (plans/PLAN_Phase_20_Settings_UX.md §4.5). Optional: an entity without a
  * `nav` section keeps the grouping and order the platform ships with. `hidden` is presentation — the
  * entity stays fully usable by URL and API.
  */
@@ -188,7 +188,7 @@ export const EntityDefinitionSchema = z.object({
    */
   layouts: z.record(z.string(), z.array(LayoutDefinitionSchema)).prefault({}),
   /**
-   * The relation area of the record page (PLAN_Phase_20_Settings_UX.md §5.11): either today's
+   * The relation area of the record page (plans/PLAN_Phase_20_Settings_UX.md §5.11): either today's
    * stacked panels or the tabs the entity's detail layout arranges. Optional — an entity without
    * the section keeps the stacked page.
    */

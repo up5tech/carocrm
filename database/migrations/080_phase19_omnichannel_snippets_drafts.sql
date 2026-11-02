@@ -1,5 +1,5 @@
 -- Phase 19-OM.12 — canned replies, drafts and message tools
--- (PLAN_Phase_19_Omnichannel.md §14 OM.12; ownership: snippets in VoiceCommunications, drafts in
+-- (plans/PLAN_Phase_19_Omnichannel.md §14 OM.12; ownership: snippets in VoiceCommunications, drafts in
 -- Omnichannel).
 --
 -- 1. `voice_message_templates` (the existing shared snippet store, VC.14) gains what the workspace

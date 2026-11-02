@@ -1,6 +1,6 @@
 # Phase 19-ES.1 — Module registration and security contract
 
-> `PLAN_Phase_19_ESignature.md` §18 `Phase 19-ES.1`.
+> `plans/PLAN_Phase_19_ESignature.md` §18 `Phase 19-ES.1`.
 > Acceptance: the module appears only for authorized users; no provider operation is possible before
 > a connection is enabled; naming is `ESignature` / `esignature` / `ESignatureModule` with no `Ua`
 > prefix. **No migration and no test database** (`AGENTS.md` §3), and no provider call.

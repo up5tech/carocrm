@@ -19,7 +19,7 @@ import {
 
 /**
  * Phase 19-LS.2 / 19-LS.3 — the write guard for the fields, records and lifecycle states Lead Score owns
- * (`PLAN_Phase_19_LeadScore.md` §0.1-8, §5.3–§5.6, §7.6, §16 `19-LS.3`; audit §4–§6).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §0.1-8, §5.3–§5.6, §7.6, §16 `19-LS.3`; audit §4–§6).
  *
  * The domain commands are not the only way into these rows. `/api/v1/Lead/:id` reaches the same record
  * that holds the score projection, and `/api/v1/LeadScoreEvaluation` reaches the history. So this guard

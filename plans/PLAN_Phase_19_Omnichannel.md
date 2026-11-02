@@ -1,7 +1,7 @@
 # PLAN — Phase 19: Omnichannel (`Omnichannel`)
 
 > **Status:** Planned  
-> **Parent roadmap:** `PLAN.md` — Advanced CRM Domains  
+> **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Domains  
 > **Canonical module name:** `Omnichannel`  
 > **NestJS module class:** `OmnichannelModule`  
 > **Module key / frontend slug:** `omnichannel`  
@@ -19,13 +19,13 @@
 Read the following before making code or schema changes:
 
 1. `AGENTS.MD`
-2. `PLAN.md`
-3. `PLAN_Phase_19_Voice_Communications.md`
-4. `PLAN_Phase_19_ServiceDesk.md`
-5. `PLAN_Phase_19_Marketing_Automation.md`
-6. `PLAN_Phase_19_Advanced_Integrations.md`
-7. `PLAN_Phase_19_AI_Agents.md`
-8. `PLAN_Phase_19_CRM_Chat.md`
+2. `plans/PLAN.md`
+3. `plans/PLAN_Phase_19_Voice_Communications.md`
+4. `plans/PLAN_Phase_19_ServiceDesk.md`
+5. `plans/PLAN_Phase_19_Marketing_Automation.md`
+6. `plans/PLAN_Phase_19_Advanced_Integrations.md`
+7. `plans/PLAN_Phase_19_AI_Agents.md`
+8. `plans/PLAN_Phase_19_CRM_Chat.md`
 9. Existing Portal, Activities, Email, Attachments, Notifications, Jobs, ACL, Search, Reporting, Workflow/BPM, consent, and module-registration implementations.
 
 This plan expresses intended behavior. It does not prove that every dependency or channel connector exists. Start with **Phase 19-OM.0 only**. Inspect the actual repository, schema and migration history, module manifests, existing channel adapters, and test scripts before deciding what to create or extend.
@@ -1003,7 +1003,7 @@ Goal: Establish what the repository already implements before making architectur
 
 Tasks:
 
-- Read `AGENTS.MD`, `PLAN.md`, and relevant existing module plans and code.
+- Read `AGENTS.MD`, `plans/PLAN.md`, and relevant existing module plans and code.
 - Inspect `VoiceCommunications`, `ServiceDesk`, `MarketingAutomation`, `Portal`, `AIAgents`, `CRMChat`, `AdvancedIntegrations`, Activities, Email, attachments, consent/suppression, notification, job, realtime, audit, Search, reporting, Entity Engine, and ACL implementations.
 - Determine whether shared inbox, conversations, messages, provider adapter interfaces, webhook receipt/deduplication, queue/routing, chat widget, or channel identity entities already exist.
 - Inspect repository migrations, indexes, test commands, Docker/CI scripts, package manager, realtime implementation, and any test setup/teardown hooks.

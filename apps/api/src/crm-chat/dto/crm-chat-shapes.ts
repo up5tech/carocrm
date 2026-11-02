@@ -5,7 +5,7 @@ import { CRMChatSettingsSchema } from '../crm-chat-settings.service.js';
 
 /**
  * Phase 19-CHAT.2 — request shapes for the module's domain commands
- * (PLAN_Phase_19_CRM_Chat.md §8.5, §17 `19-CHAT.2`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §8.5, §17 `19-CHAT.2`).
  *
  * Every shape is **strict**: an unknown key is a 422, not a silently ignored field. Each nested
  * object is derived from the settings schema through `patchOf()`, so a patch keeps exactly the

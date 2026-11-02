@@ -1,4 +1,4 @@
--- Phase 19-OM.9 — Website chat channel (PLAN_Phase_19_Omnichannel.md §14 OM.9;
+-- Phase 19-OM.9 — Website chat channel (plans/PLAN_Phase_19_Omnichannel.md §14 OM.9;
 -- docs/omnichannel/feature-contract.md §7).
 --
 -- Two additive structures only:

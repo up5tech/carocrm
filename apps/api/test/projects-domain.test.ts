@@ -17,7 +17,7 @@ import {
 } from '../src/projects/project-domain.js';
 
 /**
- * Phase 19 unit tests (PLAN_Phase_19_Projects.md §12.1) — the rules that must hold regardless of
+ * Phase 19 unit tests (plans/PLAN_Phase_19_Projects.md §12.1) — the rules that must hold regardless of
  * what the database or the UI does. No Nest, no database.
  */
 

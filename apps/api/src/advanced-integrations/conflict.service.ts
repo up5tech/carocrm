@@ -12,7 +12,7 @@ import { IntegrationAuditService } from './integration-audit.service.js';
 
 /**
  * Phase 19-INT.10 — conflicts and the deletion policy
- * (`PLAN_Phase_19_Advanced_Integrations.md` §8.5; `19-INT.10`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §8.5; `19-INT.10`).
  *
  * A conflict is raised when the same record changed **on both sides** between two syncs and the
  * platform cannot decide which is newer — either the provider offers no timestamp, or the two

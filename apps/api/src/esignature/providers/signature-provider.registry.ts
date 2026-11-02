@@ -14,7 +14,7 @@ import {
 
 /**
  * Phase 19-ES.3 — the adapter registry
- * (`PLAN_Phase_19_ESignature.md` §5.2, §9.1, §9.4; audit §5.1; `19-ES.3`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §5.2, §9.1, §9.4; audit §5.1; `19-ES.3`).
  *
  * One place decides *which* adapter answers for a provider key, and the decision has two hard edges:
  *

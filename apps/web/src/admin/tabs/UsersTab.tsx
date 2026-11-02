@@ -12,7 +12,7 @@ import { errorMessage, errorRule, useRolesQuery, useTeamsQuery } from './identit
 const PAGE_SIZE = 20;
 
 /**
- * Users tab (PLAN_Phase_20_Settings_UX.md §4.3 row 9): the account list behind the existing
+ * Users tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 9): the account list behind the existing
  * `/User` API — search, role/team/status filters, create, edit, activate/deactivate, password reset
  * and delete. Nothing here decides access: the server re-checks administrator rights on every call
  * and refuses the change that would leave the instance without an active administrator, which the

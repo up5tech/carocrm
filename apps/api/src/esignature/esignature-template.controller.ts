@@ -13,7 +13,7 @@ import { ESignatureTemplateService } from './esignature-template.service.js';
 
 /**
  * Phase 19-ES.7 — the template catalog and mapping API
- * (`PLAN_Phase_19_ESignature.md` §6.7, §8.2, §18 `19-ES.7`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.7, §8.2, §18 `19-ES.7`).
  *
  * Two literal prefixes, `catalog/` and `mappings/`, rather than one `:connectionId` segment: a mapping
  * list and a template detail would otherwise be the same shape to the router, and mixing them up is how

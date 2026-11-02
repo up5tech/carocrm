@@ -7,7 +7,7 @@ import { DomainEventBus, entityPayloadOf, SUBSCRIBE_ALL } from './domain-event-b
 
 /**
  * Phase 22.6 — the event consumer contract
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §11 task 6; `docs/architecture/contract-catalog.md` §3).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §11 task 6; `docs/architecture/contract-catalog.md` §3).
  *
  * The platform's rule is **additive tolerance**: a producer may add fields to an event payload, and a
  * consumer built against the older contract must keep working. The platform carries no

@@ -1,4 +1,4 @@
--- Phase 19-S — module identity rename: `ua-sales` → `sales` (PLAN_Phase_19_Sales.md §1, §14).
+-- Phase 19-S — module identity rename: `ua-sales` → `sales` (plans/PLAN_Phase_19_Sales.md §1, §14).
 --
 -- The Sales settings document lives in the kernel's `app_settings` table under the module's name
 -- (`apps/api/src/sales/sales-settings.service.ts`). Renaming the module must not silently discard an

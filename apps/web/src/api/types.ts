@@ -368,7 +368,7 @@ export interface ListResult<T = Record<string, unknown>> {
 }
 
 /**
- * What the server says a list row may offer this caller (PLAN_Phase_20_Settings_UX.md §5.3).
+ * What the server says a list row may offer this caller (plans/PLAN_Phase_20_Settings_UX.md §5.3).
  * Entity-level: a record outside the caller's own/team scope can still refuse the operation itself.
  */
 export interface RowActions {
@@ -932,7 +932,7 @@ export interface PortalUserRow {
   modifiedAt: string;
 }
 
-/** Phase 19 — Projects read models (PLAN_Phase_19_Projects.md §4.12, §7). */
+/** Phase 19 — Projects read models (plans/PLAN_Phase_19_Projects.md §4.12, §7). */
 export interface ProjectTaskRow {
   id: string;
   name: string | null;
@@ -1012,7 +1012,7 @@ export interface CloneResult {
   counts: Record<string, number>;
 }
 
-/** Phase 19-S.17 — Sales domain command types (PLAN_Phase_19_Sales.md §7). */
+/** Phase 19-S.17 — Sales domain command types (plans/PLAN_Phase_19_Sales.md §7). */
 
 export interface SalesSettingsView {
   settings: Record<string, unknown>;
@@ -1190,7 +1190,7 @@ export interface ServiceDeskCapabilities {
 
 /**
  * Phase 19-MA.3 — Marketing Automation campaign contracts
- * (PLAN_Phase_19_Marketing_Automation.md §8.2, §8.4). The report shape is the server's, not a client-side
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §8.2, §8.4). The report shape is the server's, not a client-side
  * guess: the SPA renders the findings it is given and never re-derives whether a campaign may run.
  */
 export interface MarketingFinding {
@@ -1253,7 +1253,7 @@ export interface MarketingNavigationVisibility {
 
 /**
  * Phase 19-MA.4/MA.5 — audience and consent contracts the SPA renders
- * (PLAN_Phase_19_Marketing_Automation.md §8.1–§8.4). The categories and counts are the server's; the page
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §8.1–§8.4). The categories and counts are the server's; the page
  * never recomputes eligibility, so a client cannot make a blocked recipient look sendable.
  */
 export interface MarketingAudienceCategory {
@@ -1394,7 +1394,7 @@ export interface ServiceDeskMetrics {
 
 /**
  * Phase 20 — settings documents, the administration panel and the resolved navigation tree
- * (PLAN_Phase_20_Settings_UX.md §8.1). `warnings` are configuration problems the server reports but
+ * (plans/PLAN_Phase_20_Settings_UX.md §8.1). `warnings` are configuration problems the server reports but
  * does not enforce, so a tab shows them next to the values that caused them.
  */
 export interface SettingsDocumentWarning {
@@ -2757,7 +2757,7 @@ export interface AdvancedIntegrationsCapabilitiesView {
 
 /**
  * Phase 19-CHAT.2 — the Chat workspace contract the SPA renders
- * (PLAN_Phase_19_CRM_Chat.md §8, §13). The server decides every field: the shell shows what the
+ * (plans/PLAN_Phase_19_CRM_Chat.md §8, §13). The server decides every field: the shell shows what the
  * caller may do and why the workspace is not ready, instead of inferring it from hidden controls.
  */
 export type CRMChatAssistantState =
@@ -3063,7 +3063,7 @@ export interface CRMChatSettingsView {
 }
 
 /**
- * Phase 21.5 — the in-app handbook (PLAN_Phase_21_Documentation.md §8.2, §9.1).
+ * Phase 21.5 — the in-app handbook (plans/PLAN_Phase_21_Documentation.md §8.2, §9.1).
  *
  * The block contract is imported from `@carocrm/docs` rather than copied: the API serialises the engine's
  * `DocBlock` tree and the SPA renders it, so a type duplicated here would be a second definition of the

@@ -2,7 +2,7 @@ import type { ConnectorCredential } from '../../connector-adapter.port.js';
 
 /**
  * Phase 19-INT.24 — the bounded enrichment provider interface
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.9; `19-INT.24`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.9; `19-INT.24`).
  *
  * The plan asks for *"a bounded adapter pattern for one selected enrichment provider at a time"*.
  * This is that pattern, and "bounded" is the whole point:

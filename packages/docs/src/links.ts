@@ -2,7 +2,7 @@
  * Links: classification, resolution and the route allowlist.
  *
  * A documentation page can point at three things, and each one has to be checked differently
- * (`PLAN_Phase_21_Documentation.md` §4.5): another page in the corpus, a screen of the running app,
+ * (`plans/PLAN_Phase_21_Documentation.md` §4.5): another page in the corpus, a screen of the running app,
  * or the internet outside it. The interesting failure mode is not a broken link — it is a page that
  * *silently* stops working because a route was renamed, which is why the app-route half is a validated
  * allowlist rather than a string test.

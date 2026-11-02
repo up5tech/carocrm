@@ -1,7 +1,7 @@
 # Sales repository audit (Phase 19-S.0)
 
 Deliverable of **Phase 19-S.0 — Repository Audit and Feature Contract** of
-[`PLAN_Phase_19_Sales.md`](../../PLAN_Phase_19_Sales.md) §14. It records what the repository actually
+[`plans/PLAN_Phase_19_Sales.md`](../../plans/PLAN_Phase_19_Sales.md) §14. It records what the repository actually
 contains, what the Sales module reuses, and which documented behaviours are in scope.
 
 | Field | Value |
@@ -311,7 +311,7 @@ API with `AGENT_TEST_<runId>` markers, and remove exactly those ids in `cleanup(
 * The repository-wide rename `UaSales` / `ua-sales` / `uaSales` → `Sales` / `sales` was applied and
   re-checked by an exhaustive search over the repository. The same sweep removed the `ua-` / `Ua`
   prefix from every other module identity it touched: the `OPTIONAL_INTEGRATIONS` ids, the six
-  `ua-`-prefixed file names under `apps/api/test`, and the module names listed in `PLAN.md`
+  `ua-`-prefixed file names under `apps/api/test`, and the module names listed in `plans/PLAN.md`
   (`Projects`, `Workflows`, `Bpm`, `Reports`, …).
 
 ### 10.2 What could NOT be verified
@@ -332,7 +332,7 @@ The six `ua-*`-prefixed files under `apps/api/test` were renamed to `sales-*`, a
 `support/ua-sales-fixtures.ts` shim deleted, with plain `mv` / `rm`. Not `git mv` / `git rm`: the whole
 Sales module is untracked in git, so git refuses those with `fatal: not under version control`. The
 same pass removed the `ua-` prefix from the `OPTIONAL_INTEGRATIONS` ids and from the module names in
-`PLAN.md` / this plan.
+`plans/PLAN.md` / this plan.
 
 ### 10.4 Open items
 

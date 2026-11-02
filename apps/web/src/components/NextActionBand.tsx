@@ -19,7 +19,7 @@ export interface NextActionBandProps {
 }
 
 /**
- * The record's single most useful next step (PLAN_Phase_20_Settings_UX.md §5.4).
+ * The record's single most useful next step (plans/PLAN_Phase_20_Settings_UX.md §5.4).
  *
  * It is computed, not configured: the first pipeline field the entity declares (`status`, `stage` or
  * `state`) that has more than one value, and the value that follows the record's current one. That is

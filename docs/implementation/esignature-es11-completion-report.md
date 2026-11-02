@@ -1,6 +1,6 @@
 # Phase 19-ES.11 — DocuSign Connect Webhook Intake
 
-> `PLAN_Phase_19_ESignature.md` §8.3, §10.1–§10.3, §12.1, §18 `Phase 19-ES.11`.
+> `plans/PLAN_Phase_19_ESignature.md` §8.3, §10.1–§10.3, §12.1, §18 `Phase 19-ES.11`.
 > Acceptance: an invalid webhook cannot change request state or create side effects; duplicate delivery
 > creates no duplicate artifacts or notifications; an accepted event is durable before the success
 > acknowledgement.

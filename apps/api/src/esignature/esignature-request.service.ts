@@ -57,7 +57,7 @@ import { SignatureTemplateMappingRepository } from './signature-template-mapping
 
 /**
  * Phase 19-ES.6 — signature request draft and CRUD
- * (`PLAN_Phase_19_ESignature.md` §6.2, §8.2, §11, §13.2, §18 `19-ES.6`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.2, §8.2, §11, §13.2, §18 `19-ES.6`).
  *
  * This is the first HTTP surface over the module's own records, so it is also where the two
  * authorization questions the plan asks on every command are answered together:

@@ -1,4 +1,4 @@
--- 008_phase12.sql — Search / saved filters / dashboards (PLAN.md §30–§33, Phase 12)
+-- 008_phase12.sql — Search / saved filters / dashboards (plans/PLAN.md §30–§33, Phase 12)
 --
 -- Additive only: existing rows keep their meaning, new columns default to the old shape.
 -- `saved_filters` / `dashboards` already exist from 001_init.sql; this file only adds the

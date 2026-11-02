@@ -12,7 +12,7 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-LS.2 — the Lead Score schema and metadata foundation
- * (`PLAN_Phase_19_LeadScore.md` §5; audit §4–§6; report `docs/implementation/lead-score-ls2-completion-report.md`).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §5; audit §4–§6; report `docs/implementation/lead-score-ls2-completion-report.md`).
  *
  * Runs against the configured primary database (AGENTS.md §3.1). No test database is created; nothing is
  * reset, truncated or dropped; `afterAll` removes the `AGENT_TEST_LS2_` records by exact id and restores

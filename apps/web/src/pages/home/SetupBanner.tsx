@@ -8,7 +8,7 @@ import { useSession } from '../../state/session.js';
 import { useHomeSetup } from './useHomeData.js';
 
 /**
- * The first-run checklist as a slim banner under the hero (PLAN_Phase_20_Settings_UX.md §4.10, §20.19).
+ * The first-run checklist as a slim banner under the hero (plans/PLAN_Phase_20_Settings_UX.md §4.10, §20.19).
  *
  * Administrators only, while the checklist is incomplete: progress plus the next two steps, each a
  * deep link. At 100 % it disappears, and a user who is not an administrator never sees it at all.

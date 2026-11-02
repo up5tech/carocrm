@@ -17,7 +17,7 @@ import { OmnichannelPermissionService } from './omnichannel-permission.service.j
 
 /**
  * Phase 19-OM.7 — identity review and record linking
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.7`; feature contract §6; migration 078).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.7`; feature contract §6; migration 078).
  *
  * The matching itself stays with `VoiceContactResolverService` (phone normalization, bounded keys,
  * entity-level then record-level ACL, hidden matches never named). This service adds the Omnichannel

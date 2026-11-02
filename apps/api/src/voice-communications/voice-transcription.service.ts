@@ -14,7 +14,7 @@ import { VoiceProviderAccountsService } from './voice-provider-accounts.service.
 
 /**
  * Phase 19-VC.16 — transcription and AI enrichment
- * (`PLAN_Phase_19_Voice_Communications.md` §7.6, §15 `19-VC.16`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.6, §15 `19-VC.16`).
  *
  * The boundaries this file enforces:
  *  - **Opt-in twice.** `features.transcripts` gates transcript retrieval, `features.aiEnrichment`

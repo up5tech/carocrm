@@ -15,7 +15,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-OM.22 — security, privacy and resilience hardening
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.22`; `docs/omnichannel/security-hardening.md`).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.22`; `docs/omnichannel/security-hardening.md`).
  *
  * Against the configured primary database (AGENTS.md §3.1): fixtures are `agent_test_om22_*`, every
  * write is a narrow insert/delete, and both settings rows are restored byte-for-byte.

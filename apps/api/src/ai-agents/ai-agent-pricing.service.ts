@@ -9,7 +9,7 @@ import type { AIProviderUsage } from './ai-provider.js';
 
 /**
  * Phase 19-AI.13 — pricing snapshots for the usage ledger
- * (PLAN_Phase_19_AI_Agents.md §12.1 "versioned configured price data", §20 `19-AI.13`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §12.1 "versioned configured price data", §20 `19-AI.13`).
  *
  * §12.1 is explicit: never hard-code rates in business logic; use versioned, admin-maintained or
  * provider-returned pricing data, and clearly label estimated costs versus authoritative provider

@@ -5,7 +5,7 @@ import { ADMIN_PERMISSION_ENTITY } from "./voice-communications-domain.js";
 
 /**
  * Phase 19-VC.2 — the module-visibility signal the navigation asked for
- * (`PLAN_Phase_19_Voice_Communications.md` §12.4, §15 `19-VC.2` task 2).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §12.4, §15 `19-VC.2` task 2).
  *
  * The SPA builds a nav group from the metadata every record entity contributes. Voice &
  * Communications owns no metadata entity yet (its records are dedicated tables, audit §6), so the

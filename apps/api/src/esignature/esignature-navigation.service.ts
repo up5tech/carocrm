@@ -6,7 +6,7 @@ import { ESignatureSettingsService } from './esignature-settings.service.js';
 
 /**
  * Phase 19-ES.1 — the module-visibility signal the navigation and the SPA ask for
- * (`PLAN_Phase_19_ESignature.md` §13.1; `19-ES.1`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §13.1; `19-ES.1`).
  *
  * ESignature owns no metadata entity: its requests and connections will be dedicated tables, so the
  * sidebar would otherwise either show a page that answers 403 on every call or hide a page the

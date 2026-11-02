@@ -5,7 +5,7 @@ import { OmnichannelSettingsService } from './omnichannel-settings.service.js';
 
 /**
  * Phase 19-OM.2 — the module-visibility signal the navigation asked for
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`; contract §3 F1).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`; contract §3 F1).
  *
  * Omnichannel owns no metadata entity (decision D1: the records live in `VoiceCommunications`), so
  * the sidebar would otherwise either show a page that answers 403 on every call or hide a page the

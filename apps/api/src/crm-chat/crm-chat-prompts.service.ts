@@ -11,7 +11,7 @@ import { CRMChatPermissionService } from './crm-chat-permission.service.js';
 import { CRMChatPolicyService } from './crm-chat-policy.service.js';
 
 /**
- * Phase 19-CHAT.14 — saved prompt templates (PLAN_Phase_19_CRM_Chat.md §7.6, §17 `19-CHAT.14`;
+ * Phase 19-CHAT.14 — saved prompt templates (plans/PLAN_Phase_19_CRM_Chat.md §7.6, §17 `19-CHAT.14`;
  * contract §6.5, §7.6).
  *
  * A template is **data, never a program**. It is a name and a body the owner inserts into the

@@ -12,7 +12,7 @@ import {
 
 /**
  * Phase 19-MA.1 – 19-MA.3 — Marketing Automation scaffold, settings and campaign lifecycle
- * (PLAN_Phase_19_Marketing_Automation.md §5.1, §8.2, §8.4, §9.2, §15 `19-MA.1`–`19-MA.3` acceptance).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.1, §8.2, §8.4, §9.2, §15 `19-MA.1`–`19-MA.3` acceptance).
  *
  * These run against the already-configured primary database through the real HTTP API (AGENTS.md §3.1): no
  * database, schema, container or test database is created, and nothing here sends a message — the mail

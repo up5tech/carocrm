@@ -44,7 +44,7 @@ function carriesRoute(nodes: readonly NavigationNode[], route: string): boolean 
 }
 
 /**
- * Command palette (PLAN_Phase_20_Settings_UX.md §5.2, §20.14).
+ * Command palette (plans/PLAN_Phase_20_Settings_UX.md §5.2, §20.14).
  *
  * `⌘/Ctrl+K` and `/` open it from every screen (the `/` shortcut stays out of the way while the
  * caret is in a field, so typing a slash never steals focus). Three modes: commands (navigate, pin

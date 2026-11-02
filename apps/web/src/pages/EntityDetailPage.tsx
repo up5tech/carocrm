@@ -233,7 +233,7 @@ function RelationPanel({ parent, parentId, name, label, targetDefinition, base, 
 }
 
 /**
- * The relation area of a record page (PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
+ * The relation area of a record page (plans/PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
  *
  * The entity's `detailTabs` metadata decides whether the relations render as today's stacked panels
  * or as tabs an administrator arranged in Entity Manager → Layout → detail. This component only

@@ -1,5 +1,5 @@
 -- Phase 19-MA.4/MA.5 — rename the audience-membership and consent reference attributes
--- (supersedes two indexes from 037; PLAN_Phase_19_Marketing_Automation.md §5.2, §6.1, §6.3).
+-- (supersedes two indexes from 037; plans/PLAN_Phase_19_Marketing_Automation.md §5.2, §6.1, §6.3).
 --
 -- `entityType` cannot be a record attribute in this platform: the record API treats it as an immutable
 -- input, because it is the physical discriminator column of `entity_records` (`entity_type`). An attribute

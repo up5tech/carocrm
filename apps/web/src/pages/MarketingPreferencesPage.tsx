@@ -1,6 +1,6 @@
 /**
  * Phase 19-MA.5 — the public preference and unsubscribe page
- * (PLAN_Phase_19_Marketing_Automation.md §5.3.1, §5.3.2, §8.3).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.3.1, §5.3.2, §8.3).
  *
  * The page receives only the opaque token from the link: it never names, loads or searches a CRM record, so
  * a leaked URL cannot be used to browse anything, and someone testing addresses against it learns nothing —

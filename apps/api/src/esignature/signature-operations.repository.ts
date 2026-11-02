@@ -6,7 +6,7 @@ import { currentTx } from '../entity/tx-context.js';
 import { type RequestAccessScope, requestAccessSql } from './signature-request.repository.js';
 
 /**
- * Phase 19-ES.20 — the recovery read model (`PLAN_Phase_19_ESignature.md` §14, §16, §18).
+ * Phase 19-ES.20 — the recovery read model (`plans/PLAN_Phase_19_ESignature.md` §14, §16, §18).
  *
  * Every request list here is filtered by the same record-scope predicate the request list uses, so
  * an operator with `connectionRead` but a narrow `SignatureRequest` scope never learns that a

@@ -1,6 +1,6 @@
 # LeadScore — compatibility and behavior reference
 
-> Phase 19-LS.0 onwards (`PLAN_Phase_19_LeadScore.md` §0.2, §16 `19-LS.0`).
+> Phase 19-LS.0 onwards (`plans/PLAN_Phase_19_LeadScore.md` §0.2, §16 `19-LS.0`).
 > Repository audit and feature contract: `docs/implementation/lead-score-audit.md`.
 > Status: **19-LS.0, 19-LS.1 and 19-LS.2 delivered** (LS.0 = audit, feature contract and decisions
 > D1–D13; LS.1 = module registration: descriptor, capability matrix, `leadScore` settings document,

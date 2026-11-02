@@ -27,7 +27,7 @@ import { MarketingTemplateService } from "./marketing-template.service.js";
 
 /**
  * Phase 19-MA.3 — campaign send-readiness validation
- * (PLAN_Phase_19_Marketing_Automation.md §5.1, §8.4, §9.3, §15 `19-MA.3`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.1, §8.4, §9.3, §15 `19-MA.3`).
  *
  * §5.1 is the requirement: *"Prevent a campaign from becoming Scheduled/Running unless audience resolution,
  * consent policy, template, sender/provider, tracking settings and required content validation pass."* This

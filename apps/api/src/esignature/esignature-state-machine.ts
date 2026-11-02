@@ -8,7 +8,7 @@ import {
 
 /**
  * Phase 19-ES.2 — the signature request state machine
- * (`PLAN_Phase_19_ESignature.md` §4.7, §1.2, §4.3; `19-ES.2` acceptance
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.7, §1.2, §4.3; `19-ES.2` acceptance
  * "request state transitions are unit-tested").
  *
  * The table is the whole product rule in one place, and it encodes the one thing this module may

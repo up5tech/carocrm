@@ -22,7 +22,7 @@ import {
 
 /**
  * Phase 19-AI.4 — provider connections and credential storage
- * (PLAN_Phase_19_AI_Agents.md §6.2, §6.3, §14.4, §20 `19-AI.4`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §6.2, §6.3, §14.4, §20 `19-AI.4`).
  *
  * The module reuses the platform's encrypted-secret primitive (`ENCRYPTION_KEY` + AES-256-GCM, the
  * same one `email_accounts` uses). A provider key is **write-only**: no read path returns it, no log

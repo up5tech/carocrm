@@ -6,7 +6,7 @@ import { authHeader, bootApi, createTestUser, shutdownApi } from './support/boot
 
 /**
  * Phase 22.21 — observability and operator surfaces
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §20 tasks 1, 4, 6, 9).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §20 tasks 1, 4, 6, 9).
  *
  * What this proves through the real API against the configured database:
  *

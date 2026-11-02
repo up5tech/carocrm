@@ -1,7 +1,7 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test';
 
 /**
- * Phase 19-LS.14 — the conversion wizard (`PLAN_Phase_19_LeadScore.md` §7.1–§7.4, §11.4, §16 `19-LS.14`;
+ * Phase 19-LS.14 — the conversion wizard (`plans/PLAN_Phase_19_LeadScore.md` §7.1–§7.4, §11.4, §16 `19-LS.14`;
  * contract §8; compat §4.1), extended in 19-LS.16 with the optional Opportunity target.
  *
  * The exit criterion is *"a user can complete valid Contact/Account conversion end-to-end with clear

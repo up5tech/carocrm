@@ -17,7 +17,7 @@ import { restoreSettings, snapshotSettings } from './support/settings-snapshot.j
 
 /**
  * Phase 22.12 — the journey: marketing automation, consent, and attribution
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §13.5, steps 1–10, and its acceptance assertions).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.5, steps 1–10, and its acceptance assertions).
  *
  * One story, in order, through the public contracts: a person consents, a campaign is built around them, the
  * audience is validated and the suppression list reviewed, the send is decided (sealed, approved, queued),

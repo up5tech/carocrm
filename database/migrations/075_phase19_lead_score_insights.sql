@@ -1,4 +1,4 @@
--- Phase 19-LS.17 — the AI insight read path (PLAN_Phase_19_LeadScore.md §6.7, §11.1, §16 `19-LS.17`;
+-- Phase 19-LS.17 — the AI insight read path (plans/PLAN_Phase_19_LeadScore.md §6.7, §11.1, §16 `19-LS.17`;
 -- repository audit docs/implementation/lead-score-audit.md §7.3).
 --
 -- Additive only, and index-only (AGENTS.md §3.5). No table is created, dropped or renamed, no column is

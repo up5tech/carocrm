@@ -1,6 +1,6 @@
 /**
  * Phase 19-CS.1 — the `CustomerSuccess` module descriptor
- * (PLAN_Phase_19_Customer_Success.md §14, `19-CS.1`).
+ * (plans/PLAN_Phase_19_Customer_Success.md §14, `19-CS.1`).
  *
  * Like Sales and Projects, Customer Success is a kernel domain directory under `apps/api/src`, not an
  * installable extension package: the extension SDK deliberately exposes no entity CRUD facade, so a

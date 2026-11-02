@@ -22,7 +22,7 @@ import {
 
 /**
  * Phase 19-CS.1 / 19-CS.4 — Customer Success domain settings
- * (PLAN_Phase_19_Customer_Success.md §5.13).
+ * (plans/PLAN_Phase_19_Customer_Success.md §5.13).
  *
  * The platform already owns instance settings (`app_settings`, `POST /api/v1/Settings`), so this
  * module does not introduce a second store: it keeps one validated, versioned row named

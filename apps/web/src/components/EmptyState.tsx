@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { t } from '../state/i18n.js';
 
 /**
- * The four situations that used to share one sentence (PLAN_Phase_20_Settings_UX.md §20.22).
+ * The four situations that used to share one sentence (plans/PLAN_Phase_20_Settings_UX.md §20.22).
  *
  * - `no-records` — the list is genuinely empty; the fix is to create something.
  * - `no-results` — a search found nothing; the fix is a different query.
@@ -51,7 +51,7 @@ function variantCopy(variant: EmptyVariant): VariantCopy {
 }
 
 /**
- * A reusable empty state (PLAN_Phase_20_Settings_UX.md §20.11, revised in §20.22).
+ * A reusable empty state (plans/PLAN_Phase_20_Settings_UX.md §20.11, revised in §20.22).
  *
  * The primary line is the **title**, the secondary line is the **hint**, and `action` is the one
  * thing that fixes the situation. Before §20.22 the title was passed as antd `Empty`'s child — the

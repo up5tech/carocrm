@@ -1,7 +1,7 @@
 # Phase 22.21 — Observability and Operational Runbooks
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §20
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §20
 > **Status:** Complete — correlation now runs request → outbox/job → worker log, log redaction is tested,
 > an administrator operations snapshot exists, the platform runbook covers the eight required scenarios,
 > and two tabletop walkthroughs are recorded with their test evidence. G76 (readiness is DB-only) and G77

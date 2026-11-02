@@ -19,7 +19,7 @@ import { errorText, statusLabel, useEditorCatalog } from './lead-score/shared.js
 
 /**
  * Phase 19-LS.8 — the scoring model workspace
- * (`PLAN_Phase_19_LeadScore.md` §6.1, §12, §16 `19-LS.8`; audit §11).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.1, §12, §16 `19-LS.8`; audit §11).
  *
  * The plan's exit criterion is that an administrator can manage a deterministic model **without editing raw
  * JSON manually or running code**, so the tabs are the four verbs of that job in the order §15.2 rolls them

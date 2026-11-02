@@ -1,6 +1,6 @@
 # Record page and forms (Phase 20, part B)
 
-Scope: `PLAN_Phase_20_Settings_UX.md` §5.4, §5.5 and sub-phase 20.13. Two surfaces: the read view
+Scope: `plans/PLAN_Phase_20_Settings_UX.md` §5.4, §5.5 and sub-phase 20.13. Two surfaces: the read view
 of a record and the form that edits it.
 
 Code: `apps/web/src/pages/EntityDetailPage.tsx`, `apps/web/src/pages/EntityEditPage.tsx`.

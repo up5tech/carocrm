@@ -47,7 +47,7 @@ import {
  * Every catalog/pricing/tax invariant that one record can break is enforced here, on the
  * `beforeValidate` phase of the Entity Engine, because a record can arrive through the generic
  * `POST/PUT /api/v1/:entity` routes exactly as easily as through a domain command. A rule that
- * only lived in a command would be a side door (PLAN_Phase_19_Sales.md §4.1–§4.4, §8).
+ * only lived in a command would be a side door (plans/PLAN_Phase_19_Sales.md §4.1–§4.4, §8).
  *
  * The database constraints in migration 021 remain the backstop for the invariants that are
  * expressible there (the case-insensitive unique SKU); the hooks turn them into a clear 409/422

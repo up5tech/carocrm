@@ -1,7 +1,7 @@
 import type { DashboardRow } from '../api/client.js';
 
 /**
- * Which dashboard a user lands on (PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
+ * Which dashboard a user lands on (plans/PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
  *
  * Both the Dashboards page and the home page need this answer, and they must never disagree, so
  * the priority lives here instead of in either page:

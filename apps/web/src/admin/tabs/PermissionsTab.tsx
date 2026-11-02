@@ -14,7 +14,7 @@ interface DeclaredRow {
 }
 
 /**
- * Permissions tab (PLAN_Phase_20_Settings_UX.md §4.3 row 15): a read-only summary of the mandatory
+ * Permissions tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 15): a read-only summary of the mandatory
  * layer under the role matrix. Access is composed from roles (additive, strongest level wins) plus the
  * roles linked to the user's teams, and administrator accounts bypass all of it. This page shows what
  * the shipped metadata declares per entity and what each role states, so an administrator can read

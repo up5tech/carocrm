@@ -55,7 +55,7 @@
 > This document remains the scope, architecture reference and implementation roadmap for Phase 20.
 > Implemented behaviour is documented in `docs/admin/settings.md`, `docs/admin/navigation.md`,
 > `docs/ux/` and the deviations in `docs/compatibility/settings-ux.md`.
-> **Parent roadmap:** `PLAN.md` — Phase 20 (added to §57 alongside this document)
+> **Parent roadmap:** `plans/PLAN.md` — Phase 20 (added to §57 alongside this document)
 > **Target runtime:** NestJS / TypeScript backend with the existing React SPA
 > **Functional reference:** EspoCRM Administration documentation and the Administration Panel /
 > User Interface concepts, plus documented UX behavior of leading CRM products
@@ -128,7 +128,7 @@ phase introduces.
 
 ## 2. Reference Baseline and Compatibility Notes
 
-Use the project-wide compatibility policy in `PLAN.md`:
+Use the project-wide compatibility policy in `plans/PLAN.md`:
 
 - **Phase A baseline:** EspoCRM 9.3.x documented behavior where this plan requires that baseline.
 - **Phase B baseline:** newer upstream behavior only when explicitly recorded as an intentional later
@@ -181,7 +181,7 @@ Sources and the specific patterns adopted are listed in §21.
 
 ## 3. Prerequisites and Repository Audit
 
-The coding agent must read `AGENTS.MD` and `PLAN.md` and inspect the repository before implementing.
+The coding agent must read `AGENTS.MD` and `plans/PLAN.md` and inspect the repository before implementing.
 **Do not assume a subsystem exists because it appears in the master plan.** The audit below records
 what is actually in the repository as of this plan.
 
@@ -1209,7 +1209,7 @@ configured primary database for integration tests — never a new database.
 - `docs/compatibility/settings-ux.md` — deviations from upstream administration behavior. ✅ (+ the
   §5.11 deviation when 20.18 lands)
 - Update `docs/reference/alpha-status.md` and `docs/reference/compatibility-matrix.md`. ✅
-- Update `PLAN.md` §57 status once the phase lands. ✅
+- Update `plans/PLAN.md` §57 status once the phase lands. ✅
 
 ---
 
@@ -2308,10 +2308,10 @@ Market UX references applied in §5:
 12. CRM system UX by role and task — navigation, saved lists, bulk edit with preview and undo:
     https://www.anoda.mobi/ux-blog/designing-effective-crm-system-anoda-ux
 
-Internal references: `PLAN.md` (§12 Metadata, §19 Entity Manager, §20 Layouts, §37 Portals, §38
+Internal references: `plans/PLAN.md` (§12 Metadata, §19 Entity Manager, §20 Layouts, §37 Portals, §38
 Extensions, §42 Configuration, §57 Phases, §58 API registry), `AGENTS.MD`, `docs/reference/alpha-status.md`,
 and the Phase 19 module plans in `PLAN_Phase_19_*.md`.
 
 The upstream documentation is the functional reference for *what administrators can configure*. This
-repository's `PLAN.md`, `AGENTS.MD`, implemented kernel behavior and explicit compatibility baseline
+repository's `plans/PLAN.md`, `AGENTS.MD`, implemented kernel behavior and explicit compatibility baseline
 determine how those capabilities are realized in this NestJS codebase.

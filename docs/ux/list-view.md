@@ -1,6 +1,6 @@
 # List view (Phase 20, part B)
 
-Scope: `PLAN_Phase_20_Settings_UX.md` §5.3 and sub-phase 20.12. The list view is the surface a rep
+Scope: `plans/PLAN_Phase_20_Settings_UX.md` §5.3 and sub-phase 20.12. The list view is the surface a rep
 spends the day on; it is generic over entity metadata — the same page renders Opportunities and
 Knowledge Articles.
 

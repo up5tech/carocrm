@@ -1,4 +1,4 @@
--- 003_jobs.sql — job progress, logs, retries and cancellation (PLAN.md §24)
+-- 003_jobs.sql — job progress, logs, retries and cancellation (plans/PLAN.md §24)
 -- Additive only: existing `jobs` rows keep their meaning, new columns default to the old shape.
 
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS progress         INTEGER;

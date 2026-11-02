@@ -1,7 +1,7 @@
 # Phase 22.15 — Shared UI/API consistency
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §14 (tasks 1–10) and its acceptance criteria
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §14 (tasks 1–10) and its acceptance criteria
 > **Tests:** `apps/api/test/error-payload-hygiene.test.ts` (6), `apps/web/src/lib/serverFieldErrors.test.ts` (6), `apps/web/src/components/SharedStates.test.tsx` (4), `node scripts/check-ui-conventions.mjs` (9 gate rules, `--self-test` included)
 > **Depends on:** `docs/compatibility/settings-ux.md` (the Phase 20 shared-surface contract), `docs/quality/phase-22-capability-inventory.md` (22.3)
 > **Status:** Implemented. Every check this sub-phase owns passes; the full gate is red on one pre-existing Sales test file (G69), which is not collateral of these changes — see §4.

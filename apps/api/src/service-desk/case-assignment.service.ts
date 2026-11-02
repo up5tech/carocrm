@@ -33,7 +33,7 @@ import { SlaService } from "./sla.service.js";
 
 /**
  * Phase 19-SD.5 — assignment, queues, routing and workload
- * (PLAN_Phase_19_ServiceDesk.md §5.3, §7.1 `CaseAssignmentService`, §7.3).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §5.3, §7.1 `CaseAssignmentService`, §7.3).
  *
  * Ownership is a server decision: a case reaches an owner through this service, never by a client
  * writing `assignedUserId` directly (the write guard refuses that). Three paths converge here —

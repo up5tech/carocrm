@@ -1,6 +1,6 @@
 # CRM Chat — security threat model
 
-> Phase 19-CHAT.1 deliverable (`PLAN_Phase_19_CRM_Chat.md` §12, §17 `19-CHAT.1`).
+> Phase 19-CHAT.1 deliverable (`plans/PLAN_Phase_19_CRM_Chat.md` §12, §17 `19-CHAT.1`).
 > Scope: the `CRMChat` module, its conversation surface and its cross-module contract with `AIAgents`.
 > Contract: `docs/architecture/crm-chat-contract.md` · Audit: `docs/modules/crm-chat/repository-audit.md`.
 
@@ -173,7 +173,7 @@ confirmation view (§10 of the contract) must be explicit rather than a one-line
 
 ## 4. The plan's security acceptance scenarios
 
-`PLAN_Phase_19_CRM_Chat.md` §12 lists the scenarios a reviewer will run. Each maps to a concrete check:
+`plans/PLAN_Phase_19_CRM_Chat.md` §12 lists the scenarios a reviewer will run. Each maps to a concrete check:
 
 | Scenario | Where it is exercised |
 | --- | --- |

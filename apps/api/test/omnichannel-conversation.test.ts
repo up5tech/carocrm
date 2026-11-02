@@ -9,7 +9,7 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-OM.6 — canonical conversation / thread / message services
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.6`; feature contract §4; decisions D1 + E6 + E7).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.6`; feature contract §4; decisions D1 + E6 + E7).
  *
  * Against the configured primary database (AGENTS.md §3.1); only the in-process simulator is used —
  * no external host, no real message. Every row this suite writes belongs to its

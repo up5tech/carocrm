@@ -1,4 +1,4 @@
--- Phase 19-CHAT.3 — the three tables Chat owns (PLAN_Phase_19_CRM_Chat.md §7, §17 `19-CHAT.3`).
+-- Phase 19-CHAT.3 — the three tables Chat owns (plans/PLAN_Phase_19_CRM_Chat.md §7, §17 `19-CHAT.3`).
 --
 -- Additive only (AGENTS.md §3.5): three new tables and their indexes. No existing table is altered,
 -- no column is renamed or repurposed, and no row is rewritten. Conversation and message history stay

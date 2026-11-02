@@ -1,6 +1,6 @@
 # Platform operations and incident runbook
 
-> Phase 22.21 deliverable (`PLAN_Phase_22_Integration_E2E_Hardening.md` §20).
+> Phase 22.21 deliverable (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §20).
 > Module-specific procedures are linked, not duplicated: the module runbooks know their queues and
 > state machines better than a platform page can.
 

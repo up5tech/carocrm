@@ -15,7 +15,7 @@ import {
  * Phase 19-S.14 — the pure half of inventory: the movement ledger's vocabulary, the availability
  * arithmetic and the two small state machines (transfer, adjustment).
  *
- * `PLAN_Phase_19_Sales.md` §4.15 makes the ledger the source of truth: "Physical stock is derived
+ * `plans/PLAN_Phase_19_Sales.md` §4.15 makes the ledger the source of truth: "Physical stock is derived
  * from immutable stock movements or a rigorously maintained projection reconciled to that ledger."
  * The persisted projection (`sales_inventory_stock`) exists for locking and for fast reads, and
  * `reconcileStock` below is what proves it still equals the ledger.

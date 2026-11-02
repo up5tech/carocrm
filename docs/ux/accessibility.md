@@ -1,6 +1,6 @@
 # Accessibility (Phase 20, part B)
 
-Scope: `PLAN_Phase_20_Settings_UX.md` §5.8, §13.6 and sub-phase 20.16. Target: WCAG 2.2 AA.
+Scope: `plans/PLAN_Phase_20_Settings_UX.md` §5.8, §13.6 and sub-phase 20.16. Target: WCAG 2.2 AA.
 
 This document records what is implemented, how it is verified, and — honestly — what is **not**
 verified. As of §20.26 the SPA has an automated gate (`pnpm lint:ui` + `pnpm test:web`), but that gate

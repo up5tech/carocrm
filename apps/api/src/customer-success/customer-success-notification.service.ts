@@ -7,7 +7,7 @@ import { DatabaseService } from "../database/database.service.js";
 import { CustomerSuccessSettingsService } from "./customer-success-settings.service.js";
 
 /**
- * Phase 19-CS.11 — the module's in-app notification writer (PLAN_Phase_19_Customer_Success.md §11.3).
+ * Phase 19-CS.11 — the module's in-app notification writer (plans/PLAN_Phase_19_Customer_Success.md §11.3).
  *
  * The platform has no notification service; the established writer is a worker job handler that
  * inserts into the `notifications` table directly. Rather than invent a wrapper around a

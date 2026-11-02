@@ -1,6 +1,6 @@
 # Phase 19-LS.1 — Domain boundaries, naming, and module registration
 
-> `PLAN_Phase_19_LeadScore.md` §16 `Phase 19-LS.1`, on the feature contract in
+> `plans/PLAN_Phase_19_LeadScore.md` §16 `Phase 19-LS.1`, on the feature contract in
 > [`lead-score-audit.md`](lead-score-audit.md) and the behavior record in
 > [`../compatibility/lead-score.md`](../compatibility/lead-score.md).
 > Acceptance: the module loads, is discoverable, and does not conflict with existing Lead behavior.

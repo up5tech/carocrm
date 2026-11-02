@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import { t } from '../state/i18n.js';
 
 /**
- * The record page's relation area (PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
+ * The record page's relation area (plans/PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
  *
  * The page is a **renderer**: the arrangement — stacked panels or named tabs — is the entity's
  * `detailTabs` metadata, written by an administrator in Entity Manager → Layout → detail. Nothing

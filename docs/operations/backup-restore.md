@@ -1,6 +1,6 @@
 # Backup and restore — operations
 
-> Phase 22.23 audit (`PLAN_Phase_22_Integration_E2E_Hardening.md` §22) and Phase 22.25 backup
+> Phase 22.23 audit (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §22) and Phase 22.25 backup
 > automation. **Status: restore drill still blocked.** No approved isolated recovery environment
 > exists, and the owner has not approved RPO/RTO. The primary database was not altered; see
 > `docs/quality/phase-22-backup-restore-rehearsal.md`, `docs/quality/phase-22-25-release-blocker-remediation.md`,

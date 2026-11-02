@@ -27,7 +27,7 @@ function formatBytes(bytes: number): string {
 }
 
 /**
- * Attachments tab (PLAN_Phase_20_Settings_UX.md §4.3 row 5): the `fileStorage` document — upload
+ * Attachments tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 5): the `fileStorage` document — upload
  * limits and the extension allowlist — plus what is actually stored.
  *
  * The storage figures come from `GET /StorageUsage`, which counts attachment rows instead of

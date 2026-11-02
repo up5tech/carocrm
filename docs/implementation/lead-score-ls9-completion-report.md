@@ -1,6 +1,6 @@
 # Phase 19-LS.9 — Qualification Workflow and Signals: completion report
 
-`PLAN_Phase_19_LeadScore.md` §6.4, §6.6, §10.3, §10.4, §16 (`19-LS.9`); audit §11 `LS.9`, decisions D7/D9/D11,
+`plans/PLAN_Phase_19_LeadScore.md` §6.4, §6.6, §10.3, §10.4, §16 (`19-LS.9`); audit §11 `LS.9`, decisions D7/D9/D11,
 gaps G2/G6; compatibility `docs/compatibility/lead-score.md` §3 (Recalculation, Threshold actions, Signals a
 rule may read), §7 deviations, §8 verification record.
 

@@ -5,7 +5,7 @@ import type { ESignatureErrorCode } from './esignature-module.js';
 
 /**
  * Phase 19-ES.1 — the module's error contract
- * (`PLAN_Phase_19_ESignature.md` §8.2, §5.2, §16; audit §5.8; `19-ES.1`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.2, §5.2, §16; audit §5.8; `19-ES.1`).
  *
  * Two layers, deliberately kept apart:
  *

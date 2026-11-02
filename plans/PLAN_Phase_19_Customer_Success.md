@@ -1,6 +1,6 @@
 # Phase 19 — Customer Success Module (`CustomerSuccess`)
 
-> **Parent roadmap:** `PLAN.md` — Phase 19: Advanced Domains  
+> **Parent roadmap:** `plans/PLAN.md` — Phase 19: Advanced Domains  
 > **Priority:** Implement after `Sales` and `Projects`. Both are already shipped in this repository and are optional consumers of this module.  
 > **Module ID:** `CustomerSuccess`  
 > **Display name:** Customer Success  
@@ -15,11 +15,11 @@
 Read these files before implementation:
 
 1. `AGENTS.MD`
-2. `PLAN.md`
-3. `PLAN_Phase_19_Customer_Success.md` (this file)
-4. `PLAN_Phase_19_Sales.md` and `docs/implementation/sales-repository-audit.md` — the closest precedent, an already-shipped Phase 19 domain
+2. `plans/PLAN.md`
+3. `plans/PLAN_Phase_19_Customer_Success.md` (this file)
+4. `plans/PLAN_Phase_19_Sales.md` and `docs/implementation/sales-repository-audit.md` — the closest precedent, an already-shipped Phase 19 domain
 5. `docs/module-guide.md` — the runtime rules, API conventions and cross-module contracts
-6. `PLAN_Phase_19_Projects.md` and `docs/modules/projects/` — the second shipped Phase 19 domain
+6. `plans/PLAN_Phase_19_Projects.md` and `docs/modules/projects/` — the second shipped Phase 19 domain
 
 This plan describes target behavior, not proof that every prerequisite exists. **Start with Phase 19-CS.0 only.** §3 of this plan records what was verified in the working tree on the reference date; re-verify anything you depend on rather than trusting this document. Do not infer implementation from a plan alone.
 
@@ -1049,7 +1049,7 @@ Build incrementally, one sub-phase at a time. Sub-phase identifiers use `19-CS.*
 ### Phase 19-CS.0 — Repository Audit and Feature Contract
 
 Tasks:
-- Read `AGENTS.MD`, the relevant `PLAN.md` sections, `docs/module-guide.md`, and the Sales and Projects plans plus their audit/module docs.
+- Read `AGENTS.MD`, the relevant `plans/PLAN.md` sections, `docs/module-guide.md`, and the Sales and Projects plans plus their audit/module docs.
 - Re-verify §3 against the working tree; treat any drift as a finding.
 - Confirm which optional providers (§3.7) are present and how each is detected.
 - Write `docs/implementation/customer-success-repository-audit.md`.
@@ -1428,7 +1428,7 @@ Do not report a test as passed unless the command actually ran and passed. Separ
 
 ## 19. Coding Agent Execution Rules
 
-1. Read `AGENTS.MD` and the relevant `PLAN.md` sections before touching code.
+1. Read `AGENTS.MD` and the relevant `plans/PLAN.md` sections before touching code.
 2. Begin with Phase 19-CS.0 and inspect the real repository before implementing assumptions.
 3. Implement one sub-phase at a time; keep each change reviewable and tested before moving on.
 4. Reuse generic platform services. Do not build a second ORM, ACL system, Activity scheduler, notification engine, job queue, dashboard framework or settings store.
@@ -1454,4 +1454,4 @@ The implementation must use the established NestJS modular-monolith architecture
 
 **Recommended coding-agent starting prompt:**
 
-> Read `AGENTS.MD`, `PLAN.md`, `docs/module-guide.md`, `PLAN_Phase_19_Customer_Success.md`, and `docs/implementation/sales-repository-audit.md`. Execute Phase 19-CS.0 only: re-verify the audit facts against the working tree, confirm which optional providers are present and how each is detected, and write `docs/implementation/customer-success-repository-audit.md` plus `docs/modules/customer-success/compatibility.md`. Note that `CustomerSuccessProfile` is a fixed entity name required by the shipped Sales integration marker. Do not implement later phases until the audit is complete. Do not create any database or schema. Preserve existing data and changes.
+> Read `AGENTS.MD`, `plans/PLAN.md`, `docs/module-guide.md`, `plans/PLAN_Phase_19_Customer_Success.md`, and `docs/implementation/sales-repository-audit.md`. Execute Phase 19-CS.0 only: re-verify the audit facts against the working tree, confirm which optional providers are present and how each is detected, and write `docs/implementation/customer-success-repository-audit.md` plus `docs/modules/customer-success/compatibility.md`. Note that `CustomerSuccessProfile` is a fixed entity name required by the shipped Sales integration marker. Do not implement later phases until the audit is complete. Do not create any database or schema. Preserve existing data and changes.

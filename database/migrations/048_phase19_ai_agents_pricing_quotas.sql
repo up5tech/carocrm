@@ -1,5 +1,5 @@
 -- Phase 19-AI.13 — pricing snapshots for the usage ledger
--- (PLAN_Phase_19_AI_Agents.md §12.1 "versioned configured price data").
+-- (plans/PLAN_Phase_19_AI_Agents.md §12.1 "versioned configured price data").
 --
 -- Costs must never be hard-coded in business logic. An administrator maintains a snapshot per
 -- provider/model, prices are per million tokens, and the ledger records which snapshot produced an

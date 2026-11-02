@@ -15,7 +15,7 @@ export interface CRMChatActionCardProps {
 }
 
 /**
- * Phase 19-CHAT.12 — the action proposal card (PLAN_Phase_19_CRM_Chat.md §10, §17 `19-CHAT.12`;
+ * Phase 19-CHAT.12 — the action proposal card (plans/PLAN_Phase_19_CRM_Chat.md §10, §17 `19-CHAT.12`;
  * contract §6.4, §10).
  *
  * A proposal is a **write the assistant wants to make**. The user sees exactly what would change

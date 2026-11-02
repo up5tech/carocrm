@@ -18,7 +18,7 @@ import { JobQueueService } from './job-queue.service.js';
 /**
  * `<module>.<action>` — 2 to 4 dot-separated segments. CamelCase is allowed in every segment, so a
  * module that names itself `customerSuccess` can register `customerSuccess.recalculateHealthBatch`
- * (PLAN_Phase_19_Customer_Success.md §9). Kept identical in shape to `EVENT_TYPE` in
+ * (plans/PLAN_Phase_19_Customer_Success.md §9). Kept identical in shape to `EVENT_TYPE` in
  * `apps/api/src/events/event-bus.ts`.
  */
 const JOB_NAME = /^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*){1,3}$/;

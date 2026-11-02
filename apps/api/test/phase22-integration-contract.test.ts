@@ -20,7 +20,7 @@ import { bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 22.6 — the cross-module contract matrix
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §11 tasks 1, 3, 8; `docs/architecture/contract-catalog.md`).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §11 tasks 1, 3, 8; `docs/architecture/contract-catalog.md`).
  *
  * Runs against the configured primary database (AGENTS.md §3.1). Every row it creates carries a
  * unique run marker and is deleted by id in `afterAll`; no table is reset or truncated.

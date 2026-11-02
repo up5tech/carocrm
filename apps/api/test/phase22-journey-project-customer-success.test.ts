@@ -8,7 +8,7 @@ import { type ProjectFixture, projectFixture } from './support/projects-fixtures
 
 /**
  * Phase 22.10 — the journey: project onboarding, Customer Success, and renewal
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §13.3, steps 1–9).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.3, steps 1–9).
  *
  * One story, in order, through the public contracts: an Account gets a Customer Success profile and a
  * CSM, an onboarding playbook starts, the linked Project carries a milestone, the onboarding step

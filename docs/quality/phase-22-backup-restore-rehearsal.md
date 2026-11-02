@@ -1,7 +1,7 @@
 # Phase 22.23 — Backup, Restore and Migration Rehearsal
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §22
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §22
 > **Status: BLOCKED** on the restore exercise (tasks 3–6). The audit, artifact verification,
 > recovery procedure and reconciliation policy are complete; there is **no approved isolated
 > recovery environment** and **no approved RPO/RTO**, and the plan/AGENTS.md forbid creating a new

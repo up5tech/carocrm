@@ -23,7 +23,7 @@ export interface DocRequires {
   readonly action: string;
 }
 
-/** The validated front-matter of one page. Field rules: `PLAN_Phase_21_Documentation.md` §4.2. */
+/** The validated front-matter of one page. Field rules: `plans/PLAN_Phase_21_Documentation.md` §4.2. */
 export interface DocFrontMatter {
   readonly title: string;
   readonly summary: string;

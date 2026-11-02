@@ -3,7 +3,7 @@ import { assertProviderUrl, ProviderHttpError } from '../../../advanced-integrat
 
 /**
  * Phase 19-ES.4 — the HTTP door DocuSign is reached through
- * (`PLAN_Phase_19_ESignature.md` §9.3; audit §4 "never hard-code a data center host").
+ * (`plans/PLAN_Phase_19_ESignature.md` §9.3; audit §4 "never hard-code a data center host").
  *
  * Advanced Integrations' `createProviderHttpClient` owns the rules this module needs and are not
  * negotiable — a bounded timeout, redirects never followed, credentials banned from the URL, and the

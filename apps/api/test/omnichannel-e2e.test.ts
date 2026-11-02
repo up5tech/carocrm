@@ -15,7 +15,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-OM.23 — end-to-end acceptance and release readiness
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.23`; `docs/omnichannel/release-readiness.md`).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.23`; `docs/omnichannel/release-readiness.md`).
  *
  * The first fully supported channel is Twilio SMS behind the in-process simulator: no network call,
  * no real number, no secondary database. The suite walks the release acceptance chain on the

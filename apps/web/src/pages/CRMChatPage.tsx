@@ -52,7 +52,7 @@ function threadInitial(title: string | null): string {
 
 /**
  * Phase 19-CHAT.2 — the CRM Chat workspace shell
- * (PLAN_Phase_19_CRM_Chat.md §6.1, §6.3, §17 `19-CHAT.2`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §6.1, §6.3, §17 `19-CHAT.2`).
  *
  * What this page is: the navigation surface, the state machine of "can this deployment chat at all?",
  * and the evidence for *why not* when it cannot. It issues two reads — capabilities and, on demand,

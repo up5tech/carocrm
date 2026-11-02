@@ -9,7 +9,7 @@ import { AUDIT_ACTIONS, type ESignatureAuditAction } from './esignature-domain.j
 
 /**
  * Phase 19-ES.2 — the lifecycle audit trail
- * (`PLAN_Phase_19_ESignature.md` §6.6, §12.13).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.6, §12.13).
  *
  * The kernel `audit_log` records changes to CRM *records*. The actions this module cares about are
  * not record edits: a request was reviewed, a send was confirmed, an embedded view was created, an

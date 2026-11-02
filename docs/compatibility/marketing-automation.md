@@ -3,7 +3,7 @@
 **Status:** baseline, written in Phase 19-MA.0. Grows as sub-phases land; every row that moves to
 `implemented` names the acceptance rule that was actually tested in this project.
 
-Plan reference: `PLAN_Phase_19_Marketing_Automation.md` §1.3 (clean-room and compatibility boundary),
+Plan reference: `plans/PLAN_Phase_19_Marketing_Automation.md` §1.3 (clean-room and compatibility boundary),
 §2 (reference baseline), §14 (documentation list).
 
 ## 1. Position

@@ -30,7 +30,7 @@ const TERMINAL_MESSAGE_STATES: ReadonlySet<string> = new Set(['read', 'failed', 
 
 /**
  * Phase 19-VC.10 — SMS/MMS (and WhatsApp through the same gateway)
- * (`PLAN_Phase_19_Voice_Communications.md` §8.1–§8.3, §15 `19-VC.10`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §8.1–§8.3, §15 `19-VC.10`).
  *
  * The durable send path is: policy → message row (`queued`, with an idempotency key) → a second
  * policy check at dispatch time → adapter → `sent`/`failed`. The message row exists before the

@@ -2,7 +2,7 @@ import type { AclAction } from '@carocrm/acl/types/index.js';
 
 /**
  * Phase 19-CHAT.2 — the `CRMChat` module descriptor
- * (PLAN_Phase_19_CRM_Chat.md §4.1, §7, §13, §17 `19-CHAT.2`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §4.1, §7, §13, §17 `19-CHAT.2`).
  *
  * `CRMChat` is the conversational product experience. It owns conversations, turns, citations,
  * feedback and prompt templates as a *user-facing* surface, and delegates every model call, tool

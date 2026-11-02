@@ -1,6 +1,6 @@
 # Phase 19-ES.9 — DocuSign Envelope Preparation
 
-> `PLAN_Phase_19_ESignature.md` §4.3, §4.5, §5.2, §6.2, §6.7, §13.3, §18 `Phase 19-ES.9`.
+> `plans/PLAN_Phase_19_ESignature.md` §4.3, §4.5, §5.2, §6.2, §6.7, §13.3, §18 `Phase 19-ES.9`.
 > Acceptance: a demo provider accepts a draft envelope for the synthetic test document; retrying
 > preparation cannot create uncontrolled duplicate provider drafts; provider state maps to local
 > draft/prepared state accurately.

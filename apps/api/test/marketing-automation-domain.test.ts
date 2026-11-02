@@ -47,7 +47,7 @@ import {
 
 /**
  * Phase 19-MA.2 — the domain contracts, tested as pure functions
- * (PLAN_Phase_19_Marketing_Automation.md §12.1, §15 `19-MA.2` acceptance).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §12.1, §15 `19-MA.2` acceptance).
  *
  * These are the rules the rest of the module is built on, so they are checked before any HTTP route or
  * database row exists: "Domain states and transition rules are documented and unit-tested" and "Provider

@@ -1,6 +1,6 @@
 /**
  * Phase 19-AI.7/19-AI.8 — the job names shared by the API and the worker
- * (PLAN_Phase_19_AI_Agents.md §8.1, §20 `19-AI.7`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §8.1, §20 `19-AI.7`).
  *
  * The worker owns no AI logic: like the marketing, sales and service-desk cron twins it calls the
  * API's worker-authorised endpoint, so the run engine has one implementation and one authorization

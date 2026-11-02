@@ -1,6 +1,6 @@
 # Phase 19-ES.6 — Signature Request Draft and CRUD
 
-> `PLAN_Phase_19_ESignature.md` §6.2, §8.2, §11, §13.1–§13.3, §18 `Phase 19-ES.6`.
+> `plans/PLAN_Phase_19_ESignature.md` §6.2, §8.2, §11, §13.1–§13.3, §18 `Phase 19-ES.6`.
 > Acceptance: a user can create, edit and view a draft request; sent requests cannot be modified
 > through generic PATCH endpoints; linked-record ACL is enforced.
 >

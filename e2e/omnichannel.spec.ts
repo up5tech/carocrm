@@ -2,7 +2,7 @@ import { type APIRequestContext, expect, type Page, test } from '@playwright/tes
 
 /**
  * Phase 19-OM.10 / OM.20 / OM.21 — the Omnichannel workspace in the browser
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.10`, `19-OM.20`, `19-OM.21`).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.10`, `19-OM.20`, `19-OM.21`).
  *
  * Three things have broken before and are guarded here:
  *

@@ -56,7 +56,7 @@ export const DashboardInputSchema = z.object({
 
 export const DashletInputSchema = z.object({
   name: z.string().trim().min(1).max(190),
-  // `projectTasks` is the Phase 19 Project Task dashlet (PLAN_Phase_19_Projects.md §4.16): the same
+  // `projectTasks` is the Phase 19 Project Task dashlet (plans/PLAN_Phase_19_Projects.md §4.16): the same
   // three generic kinds cannot express "due in the next N days, owned or shared with me".
   // `esignature` is the Phase 19-ES.19 operational dashlet, whose aggregate is computed by the
   // ESignature module under the reader's own record scope.

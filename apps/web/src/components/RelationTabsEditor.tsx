@@ -33,7 +33,7 @@ import { t } from '../state/i18n.js';
 
 /**
  * The relation-tab editor of the entity's detail layout settings
- * (PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
+ * (plans/PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
  *
  * The arrangement is **entity metadata**: it belongs to the layout of the detail view, next to the
  * field panels, and is edited by an administrator here — not on the record page, which only renders

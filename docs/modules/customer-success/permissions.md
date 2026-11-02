@@ -1,7 +1,7 @@
 # Customer Success — permissions and security model
 
 Scope: how the module authorises reads, writes, transitions and automation. Normative references are
-sections of `PLAN_Phase_19_Customer_Success.md`; code locations are on the line numbers of the
+sections of `plans/PLAN_Phase_19_Customer_Success.md`; code locations are on the line numbers of the
 shipped files. **Nothing here is UI-only** — every rule below runs on the server before a row moves.
 
 ## 1. The one rule everything else follows

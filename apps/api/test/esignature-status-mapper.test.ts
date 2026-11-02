@@ -9,7 +9,7 @@ import {
 
 /**
  * Phase 19-ES.12 — the pure status mapper
- * (`PLAN_Phase_19_ESignature.md` §4.7, §10.3, §10.4).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.7, §10.3, §10.4).
  *
  * The acceptance criteria this file holds directly: a recipient completing never completes a
  * multi-recipient envelope, and an older/duplicate event cannot move the projection backwards.

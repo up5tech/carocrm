@@ -25,7 +25,7 @@ import {
  * calculation needs — how many fraction digits a currency has, and how a document rate snapshot is
  * validated — and states them as an explicit contract instead of guessing.
  *
- * Amounts are decimal strings at every boundary (PLAN_Phase_19_Sales.md §4.13, §5.7): no function
+ * Amounts are decimal strings at every boundary (plans/PLAN_Phase_19_Sales.md §4.13, §5.7): no function
  * here accepts or returns a JavaScript `number`.
  */
 
@@ -253,7 +253,7 @@ export interface Money {
  *
  * The amount may name fewer fraction digits than the currency (`"10"` for USD) and is normalized
  * to the currency scale (`"10.00"`). It may **not** name more: silently rounding a client-supplied
- * amount would change the value without saying so (PLAN_Phase_19_Sales.md §5.7). Internal
+ * amount would change the value without saying so (plans/PLAN_Phase_19_Sales.md §5.7). Internal
  * calculations use {@link moneyFromDecimal} and state their rounding mode instead.
  */
 export function parseMoney(amount: string, currency: string): Money {
@@ -371,7 +371,7 @@ export function sumMoney(values: readonly Money[], currency: string): Money {
 }
 
 /**
- * Exchange-rate snapshot (PLAN_Phase_19_Sales.md §4.13).
+ * Exchange-rate snapshot (plans/PLAN_Phase_19_Sales.md §4.13).
  *
  * **Convention, stated once and used everywhere:** `rate` is the number of *base-currency* units
  * for ONE *document-currency* unit (`document → base`). A document snapshot therefore converts with

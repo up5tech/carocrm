@@ -90,7 +90,7 @@ export interface RecordMutation {
 }
 
 /**
- * The row actions a list row may offer, decided on the server (PLAN_Phase_20_Settings_UX.md §5.3:
+ * The row actions a list row may offer, decided on the server (plans/PLAN_Phase_20_Settings_UX.md §5.3:
  * "contents are permission-filtered server-side, so a user never sees an action that will fail").
  *
  * These are **entity**-level answers. A record scoped to someone else's team can still refuse an

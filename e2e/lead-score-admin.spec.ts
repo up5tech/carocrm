@@ -2,7 +2,7 @@ import { type APIRequestContext, expect, type Locator, type Page, test } from '@
 
 /**
  * Phase 19-LS.8 — the scoring model workspace
- * (`PLAN_Phase_19_LeadScore.md` §6.1, §9.4, §16 `19-LS.8`; audit §11).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.1, §9.4, §16 `19-LS.8`; audit §11).
  *
  * The exit criterion is one sentence: *an admin can manage a deterministic model without editing raw JSON
  * manually or running code.* So this spec does the whole job through the form and the commands, and asserts

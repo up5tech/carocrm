@@ -1,4 +1,4 @@
--- 007_email_accounts.sql — sending mailboxes (PLAN.md §28.1, §28.3)
+-- 007_email_accounts.sql — sending mailboxes (plans/PLAN.md §28.1, §28.3)
 --
 -- A CRM install can have several mailboxes (sales@, support@, per-user). The account owns the SMTP
 -- connection settings; the actual sending still happens in the worker through the §24 queue.

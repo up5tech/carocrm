@@ -1,6 +1,6 @@
 /**
  * Phase 19-AI.4 — vendor-neutral provider contract
- * (PLAN_Phase_19_AI_Agents.md §6.1, §20 `19-AI.4`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §6.1, §20 `19-AI.4`).
  *
  * Domain code depends on this file only. No vendor SDK type, HTTP response shape or provider error
  * crosses this boundary: an adapter normalizes text, structured output, tool calls, usage, finish

@@ -14,7 +14,7 @@ import { AIAgentsPermissionService } from './ai-agents-permission.service.js';
 
 /**
  * Phase 19-AI.10 — approval inbox and decisions
- * (PLAN_Phase_19_AI_Agents.md §9.2, §9.3, §14.3, §20 `19-AI.10`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §9.2, §9.3, §14.3, §20 `19-AI.10`).
  *
  * A pending approval is a **proposal**, not a permission grant. Approving records who accepted which
  * exact proposal (tool, argument hash, targets), and the engine revalidates the tool, the grant, the

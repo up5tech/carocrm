@@ -8,7 +8,7 @@ import { currentTx } from '../entity/tx-context.js';
 
 /**
  * Phase 19-ES.2 — template mappings
- * (`PLAN_Phase_19_ESignature.md` §6.7, §4.4).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.7, §4.4).
  *
  * A mapping says which DocuSign template a CRM workflow uses, which of its roles a CRM recipient
  * fills, and which CRM values may reach its tabs. It is configuration a provider call is built from,

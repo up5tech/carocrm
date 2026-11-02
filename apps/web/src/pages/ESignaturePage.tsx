@@ -26,7 +26,7 @@ import { ESignatureTemplatesPanel } from './esignature/ESignatureTemplatesPanel.
 
 /**
  * Phase 19-ES.1 — the ESignature module page
- * (`PLAN_Phase_19_ESignature.md` §13.1, §18 `19-ES.1`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §13.1, §18 `19-ES.1`).
  *
  * ES.1 registered the module and its security contract; ES.4 added the provider connections, because
  * an administrator cannot reach the state the gate reports without a way to create and authorize one.

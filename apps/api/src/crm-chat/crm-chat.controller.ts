@@ -46,7 +46,7 @@ import {
 
 /**
  * Phase 19-CHAT.2 — the `CRMChat` foundation API
- * (PLAN_Phase_19_CRM_Chat.md §8, §13, §17 `19-CHAT.2`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §8, §13, §17 `19-CHAT.2`).
  *
  * Only the foundation routes exist here: capabilities, diagnostics and the administrative settings
  * row. Conversation, turn, streaming, citation, feedback and prompt routes arrive with their own

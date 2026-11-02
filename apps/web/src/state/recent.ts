@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { usePreference } from './preferences.js';
 
 /**
- * Recently visited routes (PLAN_Phase_20_Settings_UX.md §5.1, §5.2).
+ * Recently visited routes (plans/PLAN_Phase_20_Settings_UX.md §5.1, §5.2).
  *
  * The list is the `lastVisited` preference, so it is the account's — not this browser's. It used to
  * live in `localStorage`, which meant a second device forgot everything and a shared machine leaked

@@ -12,7 +12,7 @@ import { CustomerSuccessRecords, type CustomerSuccessRow } from "./customer-succ
 import { CustomerSuccessSettingsService } from "./customer-success-settings.service.js";
 
 /**
- * Phase 19-CS.2 / 19-CS.3 — the portfolio-facing profile (PLAN_Phase_19_Customer_Success.md §5.1).
+ * Phase 19-CS.2 / 19-CS.3 — the portfolio-facing profile (plans/PLAN_Phase_19_Customer_Success.md §5.1).
  *
  * One `CustomerSuccessProfile` per Account, enforced by both service validation and a partial unique
  * index (migration 032). Creating a profile never creates an Account; it references one. The latest

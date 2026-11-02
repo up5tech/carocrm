@@ -8,7 +8,7 @@ import { AI_PROVIDER_PRESETS, presetForConnection, providerPresets } from '../sr
 import { assertSafeProviderBaseUrl, isPrivateAddress } from '../src/ai-agents/ai-provider-url.js';
 
 /**
- * Phase 19-AI.4 — provider contract tests (PLAN_Phase_19_AI_Agents.md §6, §17.3, §18.1).
+ * Phase 19-AI.4 — provider contract tests (plans/PLAN_Phase_19_AI_Agents.md §6, §17.3, §18.1).
  *
  * These are pure: no database, no network, no billable call. `fetch` is stubbed for the adapter
  * tests, and the fake adapter covers the deterministic orchestration path used by later sub-phases.

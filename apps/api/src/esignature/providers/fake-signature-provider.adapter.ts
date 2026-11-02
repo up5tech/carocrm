@@ -39,7 +39,7 @@ import {
 
 /**
  * Phase 19-ES.3 — the fake signature provider
- * (`PLAN_Phase_19_ESignature.md` §17, §18 `19-ES.3`; audit §5.1 "the only adapter used by automated
+ * (`plans/PLAN_Phase_19_ESignature.md` §17, §18 `19-ES.3`; audit §5.1 "the only adapter used by automated
  * tests"; mirrors `advanced-integrations/connectors/fake/fake-provider.adapter.ts`).
  *
  * It is a **contract implementation**, not a simulator of DocuSign's behaviour: it answers every

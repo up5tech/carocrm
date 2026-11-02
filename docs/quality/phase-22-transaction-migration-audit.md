@@ -1,6 +1,6 @@
 # Phase 22.5 — Persistence, Transactions, and Migration Verification
 
-**Plan:** PLAN_Phase_22_Integration_E2E_Hardening.md §10
+**Plan:** plans/PLAN_Phase_22_Integration_E2E_Hardening.md §10
 **Objective:** Verify that cross-module operations are atomic where possible and recoverable where distributed/external side effects make full transactions impossible.
 **Status:** Verified · no code changes required (no evidence-backed defects) · 1 read-only migration-status check run
 

@@ -101,7 +101,7 @@ export class IdentityService {
   }
 
   /**
-   * The assignee picker behind the list view's **Assign** action (PLAN_Phase_20_Settings_UX.md §5.3).
+   * The assignee picker behind the list view's **Assign** action (plans/PLAN_Phase_20_Settings_UX.md §5.3).
    *
    * This is not `GET /User`: that list is administrator-only and carries fields a rep must not see
    * (roles, teams, flags, email). An assignee lookup answers one question — who may this work be
@@ -136,7 +136,7 @@ export class IdentityService {
 
   /**
    * Refuse a change that would leave the instance with no active administrator
-   * (PLAN_Phase_20_Settings_UX.md §4.7). An account is administrative the same way `AclApiService`
+   * (plans/PLAN_Phase_20_Settings_UX.md §4.7). An account is administrative the same way `AclApiService`
    * decides it — `is_admin`, `type = 'admin'`, or the built-in `sysAdmin` role — and the rule is
    * checked against the state *after* the change, so deactivating, demoting or deleting the last one
    * is what fails rather than the field being edited.

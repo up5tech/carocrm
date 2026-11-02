@@ -1,7 +1,7 @@
-# PLAN_Phase_19_AI_Agents.md — AI Agents Module
+# plans/PLAN_Phase_19_AI_Agents.md — AI Agents Module
 
 > **Status:** Implementation plan  
-> **Parent roadmap:** `PLAN.md` — NestJS reimplementation of EspoCRM  
+> **Parent roadmap:** `plans/PLAN.md` — NestJS reimplementation of EspoCRM  
 > **Phase identifier:** Phase 19 — `AIAgents`  
 > **Module name:** `AIAgents` (**do not add a `Ua` prefix**)  
 > **Module registry key / route slug:** `ai-agents`  
@@ -121,7 +121,7 @@ Before writing code, inspect the actual repository. The plan is not a substitute
 
 ### 3.1 Required audit items
 
-- Read `PLAN.md`, `AGENTS.MD`, existing module conventions, and relevant recent implementation plans.
+- Read `plans/PLAN.md`, `AGENTS.MD`, existing module conventions, and relevant recent implementation plans.
 - Inspect the module registry, navigation/metadata registration, DI conventions, permissions/scopes, API response/error shape, and migration system.
 - Inspect `package.json`, workspace files, lockfiles, provider SDKs, validation libraries, logging/tracing, job framework, cache, encryption utilities, and test scripts before adding dependencies.
 - Confirm whether an AI provider abstraction or gateway already exists; list supported providers/models and their credential storage mechanism without printing secrets.
@@ -146,7 +146,7 @@ Create or update a concise audit document, for example `docs/modules/ai-agents/r
 - Security findings and any implementation blockers.
 - Approved first-release boundary and items explicitly deferred.
 
-Do not mark a feature as existing merely because it appears in `PLAN.md`. Verify the implementation.
+Do not mark a feature as existing merely because it appears in `plans/PLAN.md`. Verify the implementation.
 
 ### 3.3 Mandatory stop conditions
 
@@ -1116,7 +1116,7 @@ Execute one sub-phase at a time. Every phase must pass its exit criteria before 
 ### Phase 19-AI.0 — Repository Audit and Feature Contract
 
 **Tasks**
-- Read `PLAN.md`, `AGENTS.MD`, this file, and existing module/AI/provider/job patterns.
+- Read `plans/PLAN.md`, `AGENTS.MD`, this file, and existing module/AI/provider/job patterns.
 - Verify which provider abstraction, AI assistance, tool registry, audit, ACL, quota, and queue components are already present.
 - Inspect optional integrations and their public service contracts.
 - Produce `docs/modules/ai-agents/repository-audit.md` and a compact dependency map.
@@ -1390,7 +1390,7 @@ Execute one sub-phase at a time. Every phase must pass its exit criteria before 
 - Verify each permission and state transition in a matrix.
 - Test run visibility, approval inbox, quotas, cancellation, archival, deletion/retention, and integrations.
 - Write user and administrator documentation, API docs, tool developer guide, security guide, provider troubleshooting, evaluation guide, and operation runbooks.
-- Update `PLAN.md` implementation status only for verified completed work.
+- Update `plans/PLAN.md` implementation status only for verified completed work.
 
 **Exit criteria**
 - Required tests pass or skipped tests are explicitly documented with the reason.
@@ -1466,7 +1466,7 @@ The module is complete only when all applicable criteria below are met.
 ## 23. Final Instructions to the Coding Agent
 
 1. Start with **Phase 19-AI.0 only**. Do not begin implementing the entire module immediately.
-2. Read `PLAN.md` and `AGENTS.MD`; their repository conventions and database-safety rules are mandatory.
+2. Read `plans/PLAN.md` and `AGENTS.MD`; their repository conventions and database-safety rules are mandatory.
 3. Inspect the actual codebase and provide the repository audit, dependency map, feature gaps, migration proposal, and safe verification commands.
 4. Use the exact module name `AIAgents`; do not introduce a `Ua` prefix.
 5. Build on the existing PostgreSQL database and persistence layer; do not create a new test database, test schema, database container, or shadow database.

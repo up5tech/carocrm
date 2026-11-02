@@ -11,7 +11,7 @@ import { AgentStatusTag, EffectTag, formatTimestamp, shortChecksum } from './sha
 
 /**
  * Phase 19-AI.5/19-AI.8 — agent definitions and immutable versions
- * (PLAN_Phase_19_AI_Agents.md §5, §15.2, §15.3, §20 `19-AI.5`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §5, §15.2, §15.3, §20 `19-AI.5`).
  *
  * The editor never presents a policy value as free text: limits are bounded number inputs, tools are
  * a checkbox list of registered keys, and the provider/model pair comes from the server's allowlist.

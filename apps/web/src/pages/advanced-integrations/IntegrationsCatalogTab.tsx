@@ -11,7 +11,7 @@ import { type ConnectionTone, PanelEmpty, SectionToolbar, TonePill } from './sha
 
 /**
  * Phase 19-INT.14 — the connector catalog
- * (`PLAN_Phase_19_Advanced_Integrations.md` §15.1).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15.1).
  *
  * The catalog is a **scannable list**, not a card grid. A CRM administrator with twenty
  * connectors does not browse; they scan for one. Each row leads with a status rail — the health of

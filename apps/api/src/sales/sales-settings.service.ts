@@ -11,7 +11,7 @@ import { isKnownCurrency } from "./money/currency.js";
 import { ROUNDING_MODES, type RoundingMode } from "./money/decimal.js";
 
 /**
- * Phase 19-S.2 — Sales domain settings (PLAN_Phase_19_Sales.md §13).
+ * Phase 19-S.2 — Sales domain settings (plans/PLAN_Phase_19_Sales.md §13).
  *
  * The platform already owns instance settings (`app_settings`, `POST /api/v1/Settings`), so this
  * module does not introduce a second store: it keeps one validated, versioned row named `sales`

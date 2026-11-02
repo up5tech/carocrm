@@ -7,7 +7,7 @@ import {
 
 /**
  * Phase 19-INT.16–19-INT.24 — the shared connector kit
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12; `19-INT.16`–`19-INT.24`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12; `19-INT.16`–`19-INT.24`).
  *
  * Nine connectors are delivered in these phases, and none of them may re-implement the rules the
  * platform already owns. This file is the first half of that: the **HTTP** half.

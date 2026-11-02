@@ -16,7 +16,7 @@ import {
 } from "../money/decimal.js";
 
 /**
- * Phase 19-S.4 — declarative price rules (PLAN_Phase_19_Sales.md §4.3).
+ * Phase 19-S.4 — declarative price rules (plans/PLAN_Phase_19_Sales.md §4.3).
  *
  * A price rule is **data**: a list of matching criteria and one of three named actions. There is no
  * SQL, no JavaScript, no formula string — an administrator cannot make the server execute arbitrary
@@ -114,7 +114,7 @@ export function priceRuleIssues(input: {
     }
   }
   // A rule with no criteria is *book-wide*: it applies to every product the price book resolves
-  // (PLAN_Phase_19_Sales.md §4.3 lists criteria as supported conditions, not a requirement).
+  // (plans/PLAN_Phase_19_Sales.md §4.3 lists criteria as supported conditions, not a requirement).
   switch (input.action.type) {
     case "percentAdjustment": {
       try {
@@ -226,7 +226,7 @@ export interface OrderedPriceRules {
 }
 
 /**
- * Deterministic rule ordering (PLAN_Phase_19_Sales.md §4.3): lower `priority` first, then narrower
+ * Deterministic rule ordering (plans/PLAN_Phase_19_Sales.md §4.3): lower `priority` first, then narrower
  * `specificity`, then `id` ascending. Applicable rules are never ordered by database row order.
  */
 export function orderPriceRules(

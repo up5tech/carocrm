@@ -15,7 +15,7 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-LS.9 — engagement signals, threshold actions and the decay sweep
- * (`PLAN_Phase_19_LeadScore.md` §6.3, §6.4, §6.6, §10.1–§10.4, §16 `19-LS.9`; audit §7.1, gap G6, §11).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.3, §6.4, §6.6, §10.1–§10.4, §16 `19-LS.9`; audit §7.1, gap G6, §11).
  *
  * The acceptance is two clauses, and each is driven here through the real routes against the configured
  * primary database (AGENTS.md §3.1 — no test database, no reset):

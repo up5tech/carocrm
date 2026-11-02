@@ -26,7 +26,7 @@ import { emailIdentity } from "./marketing-identity.js";
 
 /**
  * Phase 19-MA.5 — consent state and its audit trail
- * (PLAN_Phase_19_Marketing_Automation.md §5.3, §6.3, §7.1 `MarketingConsentService`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.3, §6.3, §7.1 `MarketingConsentService`).
  *
  * Consent is the gate everything else stands on, so the rules this service enforces are the plan's, not
  * conveniences:

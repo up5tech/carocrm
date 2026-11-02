@@ -29,7 +29,7 @@ import { ProjectRecords } from './project-records.js';
 import { isDomainProjectWrite } from './project-write-context.js';
 
 /**
- * Phase 19 validation engine (PLAN_Phase_19_Projects.md §10).
+ * Phase 19 validation engine (plans/PLAN_Phase_19_Projects.md §10).
  *
  * Every Project invariant is enforced here, on the `beforeValidate` / `beforeDelete` phases of the
  * Entity Engine, because the same record can arrive through a domain command *or* through the
@@ -540,7 +540,7 @@ export class ProjectGuardService implements OnApplicationBootstrap {
 
   /**
    * A global level of `all` / `yes` is the documented "global policy explicitly permits it"
-   * (PLAN_Phase_19_Projects.md §9.1) — project roles then stop narrowing that principal.
+   * (plans/PLAN_Phase_19_Projects.md §9.1) — project roles then stop narrowing that principal.
    */
   private async isUnrestricted(entity: string, action: 'read' | 'edit' | 'delete'): Promise<boolean> {
     if (this.scope.isAdmin) return true;

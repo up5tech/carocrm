@@ -35,7 +35,7 @@ import { PREVIEW_SYSTEM_LINK_SENTINELS } from "./marketing-template-render.js";
 
 /**
  * Phase 19-MA.9 — the queue-based delivery runtime
- * (PLAN_Phase_19_Marketing_Automation.md §5.7, §5.8, §11, §15 `19-MA.9`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.7, §5.8, §11, §15 `19-MA.9`).
  *
  * This is the one place a campaign message is handed to a provider. `MarketingSendService` decides *what*
  * may be sent (validation, approval, transitions), `MarketingDeliveryLedger` owns the per-recipient state

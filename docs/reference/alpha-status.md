@@ -449,7 +449,7 @@ built entirely in `/admin/processes` and answered in `/tasks`; nothing in the ke
   and `listRoles`/`getRole`/`listTeams`/`getTeam` missed `requireAdmin()` so a portal user
   could read internal roles.
 
-## Projects (Phase 19, PLAN_Phase_19_Projects.md, completed 2026-10-13)
+## Projects (Phase 19, plans/PLAN_Phase_19_Projects.md, completed 2026-10-13)
 
 - Ten metadata entities (`Project`, `ProjectCategory`, `ProjectBoard`, `ProjectBoardStage`,
   `ProjectRole`, `ProjectMember`, `ProjectGroup`, `ProjectTask`, `ProjectTaskCollaborator`,
@@ -598,7 +598,7 @@ can group by.
 
 ## Phase 20 — Settings, Administration and the resolved main menu (added 2026-10-18)
 
-Implemented: sub-phases **20.1 – 20.6** of `PLAN_Phase_20_Settings_UX.md`. The end-user UX half
+Implemented: sub-phases **20.1 – 20.6** of `plans/PLAN_Phase_20_Settings_UX.md`. The end-user UX half
 (20.11 – 20.16) and the remaining administration tabs (20.7 – 20.10) are not built.
 
 | Deliverable | Where |
@@ -668,7 +668,7 @@ Three incidental repairs were made alongside this phase, none of them part of it
 
 ## Phase 20.7 — Users, teams, roles and API keys (added 2026-10-19)
 
-Implemented: the four identity tabs of `PLAN_Phase_20_Settings_UX.md` §4.3 (rows 9–12). They are tabs
+Implemented: the four identity tabs of `plans/PLAN_Phase_20_Settings_UX.md` §4.3 (rows 9–12). They are tabs
 in the same shell but **record** editors, so the sticky save bar is hidden for a tab with no settings
 document — each action is its own write through the existing identity API.
 
@@ -740,7 +740,7 @@ Two defects the walkthrough found and fixed on the way:
 
 ## Phase 20.8 — Layout manager tab (added 2026-10-19)
 
-Implemented: the `layout` tab of `PLAN_Phase_20_Settings_UX.md` §4.3 row 3. The drag & drop editor that
+Implemented: the `layout` tab of `plans/PLAN_Phase_20_Settings_UX.md` §4.3 row 3. The drag & drop editor that
 lived inside the Entity Manager was extracted verbatim into `apps/web/src/components/LayoutEditor.tsx`
 and is now hosted by both places, so there is one editing behavior instead of two that can drift.
 
@@ -786,7 +786,7 @@ metadata).
 
 ## Phase 20.9 — Security, Messaging, Integrations and Internal tabs (added 2026-10-19)
 
-Implemented: the seven remaining administration tabs of `PLAN_Phase_20_Settings_UX.md` §4.3 rows 5, 8,
+Implemented: the seven remaining administration tabs of `plans/PLAN_Phase_20_Settings_UX.md` §4.3 rows 5, 8,
 14–17 and 19, plus the `security` group in the rail. One new API surface — `/AdminInternal` — backs the
 internal tab; everything else is UI over capability that already existed.
 
@@ -833,7 +833,7 @@ Verification actually run (all against the configured database, no extra databas
 
 ## Phase 20.10 — Per-user preferences (added 2026-10-19)
 
-Implemented: the preference resource, endpoint and client of `PLAN_Phase_20_Settings_UX.md` §5.9/§20.10,
+Implemented: the preference resource, endpoint and client of `plans/PLAN_Phase_20_Settings_UX.md` §5.9/§20.10,
 plus the first two consumers.
 
 | Deliverable | Where |
@@ -876,7 +876,7 @@ list-view power pack and the command palette's job.
 
 ## Phase 20.11–20.17 — Shared states, list-view power pack, record page, command palette, checklist and hardening (added 2026-10-20)
 
-Implemented: sub-phases **20.11 – 20.17** of `PLAN_Phase_20_Settings_UX.md` — the end-user UX half
+Implemented: sub-phases **20.11 – 20.17** of `plans/PLAN_Phase_20_Settings_UX.md` — the end-user UX half
 of the phase. 20.11 (shared state components), 20.12 (the list-view power pack), 20.13 (the record
 page and the forms), 20.14 (the command palette), 20.15 (role-scoped default dashboards, the setup
 checklist and the onboarding empty states), 20.16 (the accessibility and responsive pass) and 20.17
@@ -926,7 +926,7 @@ criterion ("axe passes on the four core surfaces") is not met.
 
 ## Phase 21 — In-app documentation and product help (added 2026-10-21)
 
-Scope: `PLAN_Phase_21_Documentation.md`, sub-phases 21.0–21.10. The product now carries its own handbook:
+Scope: `plans/PLAN_Phase_21_Documentation.md`, sub-phases 21.0–21.10. The product now carries its own handbook:
 `/docs` renders 54 pages in `en` across four sections (`getting-started`, `user`, `admin`, `reference`),
 18 of which are translated into `vi` (51 at the Phase 21 close; the Omnichannel and document-template
 pages followed).
@@ -963,7 +963,7 @@ menu tab.
 
 ## Phase 20.19 — The home workspace (added 2026-10-24)
 
-Implemented: the last planned sub-phase of `PLAN_Phase_20_Settings_UX.md` — `/home` is a workspace
+Implemented: the last planned sub-phase of `plans/PLAN_Phase_20_Settings_UX.md` — `/home` is a workspace
 instead of an inventory. Frontend-only: **no endpoint, migration, table, dependency or database
 write**.
 
@@ -1020,7 +1020,7 @@ Known limits:
 
 ## Phase 20.20 — Design token layer and brand colour (added 2026-10-26)
 
-Implemented: the design token layer of `PLAN_Phase_20_Settings_UX.md` §17 (20.20) — `apps/web/src/theme/tokens.ts`
+Implemented: the design token layer of `plans/PLAN_Phase_20_Settings_UX.md` §17 (20.20) — `apps/web/src/theme/tokens.ts`
 as the single source of colour, the generated `apps/web/src/styles/tokens.css`, the Ant Design theme
 built from it, and the literal sweep; `brand.primaryColor` (a named accent) recolours the shell. Deferred
 inside 20.20: consolidating the 16 breakpoints to 390 / 768 / 1180 / 1440 (task 6, polish).

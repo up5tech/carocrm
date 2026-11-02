@@ -22,7 +22,7 @@ import {
 
 /**
  * Phase 19-INT.8 — the object and field mapping service
- * (`PLAN_Phase_19_Advanced_Integrations.md` §9; `19-INT.8`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §9; `19-INT.8`).
  *
  * A mapping says which provider object feeds which CRM entity, and how each provider field reaches
  * each CRM field. Two rules shape it:

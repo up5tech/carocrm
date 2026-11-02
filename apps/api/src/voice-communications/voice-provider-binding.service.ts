@@ -6,7 +6,7 @@ import { TwilioProviderAdapter } from "./voice-provider-twilio.js";
 
 /**
  * Registers the production adapters once at module start, following the
- * `MarketingProviderBindingService` precedent (`PLAN_Phase_19_Voice_Communications.md` §6.3).
+ * `MarketingProviderBindingService` precedent (`plans/PLAN_Phase_19_Voice_Communications.md` §6.3).
  *
  * Registration is code, not data: an operator can configure an account, but cannot install an
  * adapter at runtime, and a provider that was removed from this list fails closed to `none` while

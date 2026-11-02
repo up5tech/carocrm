@@ -4,7 +4,7 @@ import type { SignatureProviderKey } from './signature-provider.keys.js';
 
 /**
  * Multi-provider follow-on — the provider **authorization** contract
- * (`PLAN_Phase_19_ESignature.md` §4.1, §5.2, §9.2).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.1, §5.2, §9.2).
  *
  * Envelope operations live on `SignatureProviderAdapter`; establishing the credential they run
  * against lives here. Keeping the two apart is what lets the connection service be provider-neutral:

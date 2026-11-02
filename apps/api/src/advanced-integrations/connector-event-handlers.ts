@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 /**
  * Phase 19-INT.19 / 19-INT.20 — the connector event handler registry
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.4, §12.5, §19-INT.25; `19-INT.19`, `19-INT.20`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.4, §12.5, §19-INT.25; `19-INT.19`, `19-INT.20`).
  *
  * Some provider events are **not** CRM records. A Stripe payment event is a *fact about money*
  * and belongs to the Sales domain service, which knows the financial invariants, writes the audit

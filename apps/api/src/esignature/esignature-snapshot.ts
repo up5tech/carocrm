@@ -4,7 +4,7 @@ import { ValidationError } from '@carocrm/core/errors/index.js';
 
 /**
  * Phase 19-ES.2 — the immutable snapshot envelope
- * (`PLAN_Phase_19_ESignature.md` §4.3, §6.2, §11.2; audit §1 "immutable snapshot precedent").
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.3, §6.2, §11.2; audit §1 "immutable snapshot precedent").
  *
  * Two things must stay true after an envelope is sent, and both are decided by this file rather than
  * by remembering to be careful:

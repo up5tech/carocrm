@@ -5,7 +5,7 @@ import { EntityCrudService } from '../entity/entity.service.js';
 import { expandOccurrences, type RecurrenceConfig } from './recurrence.js';
 
 /**
- * Phase 19 adds `ProjectTask` as a read-only calendar entity (PLAN_Phase_19_Projects.md §4.13): a
+ * Phase 19 adds `ProjectTask` as a read-only calendar entity (plans/PLAN_Phase_19_Projects.md §4.13): a
  * task with a start date appears on the calendar, and the calendar never writes it back.
  */
 export const DEFAULT_CALENDAR_ENTITIES = ['Task', 'Call', 'Meeting', 'ProjectTask'] as const;

@@ -1,6 +1,6 @@
 # Advanced Integrations — acceptance evidence
 
-> Phase 19-INT.27 deliverable (`PLAN_Phase_19_Advanced_Integrations.md` §19 `19-INT.27`).
+> Phase 19-INT.27 deliverable (`plans/PLAN_Phase_19_Advanced_Integrations.md` §19 `19-INT.27`).
 > This document records **what was actually run**, what it proved, and what it did **not** prove.
 > Compatibility: `docs/compatibility/advanced-integrations.md` · `providers.md`.
 > Runbook: `docs/runbooks/advanced-integrations.md`.

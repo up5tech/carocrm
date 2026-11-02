@@ -17,7 +17,7 @@ import { ADVANCED_INTEGRATIONS_WEBHOOK_PREFIX } from './webhook-prefix.js';
 
 /**
  * Phase 19-INT.12 — the shared webhook ingress
- * (`PLAN_Phase_19_Advanced_Integrations.md` §10; `19-INT.12`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §10; `19-INT.12`).
  *
  * One ingress serves every connector. The order of the steps is the security posture:
  *

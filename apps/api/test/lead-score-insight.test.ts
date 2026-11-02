@@ -15,7 +15,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.17 — the optional AI fit insight
- * (`PLAN_Phase_19_LeadScore.md` §6.7, §11.1, §16 `19-LS.17`; audit §7.3; compatibility §2/§8).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.7, §11.1, §16 `19-LS.17`; audit §7.3; compatibility §2/§8).
  *
  * The exit criterion has two halves, and this suite drives both:
  *

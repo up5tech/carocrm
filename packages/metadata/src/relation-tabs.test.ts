@@ -19,7 +19,7 @@ import {
 } from './relation-tabs.js';
 
 /**
- * The relation-tab arrangement (PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
+ * The relation-tab arrangement (plans/PLAN_Phase_20_Settings_UX.md §5.11, sub-phase 20.18).
  *
  * These helpers are the whole contract between the API (which validates a write) and the SPA (which
  * normalizes a read), so the cases below are the ones the product promises: no relation is ever

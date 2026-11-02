@@ -23,7 +23,7 @@ import {
 import { ProjectTaskModal, statusTag } from './ProjectTaskModal.js';
 
 /**
- * Plan view (PLAN_Phase_19_Projects.md §4.12): ordered groups of ordered tasks, dragged to move.
+ * Plan view (plans/PLAN_Phase_19_Projects.md §4.12): ordered groups of ordered tasks, dragged to move.
  *
  * A drop is a request, not an edit. The card is placed optimistically and the screen is refetched
  * from the server either way, so a refused move (another project's group, a blocked dependency, a

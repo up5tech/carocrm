@@ -1,6 +1,6 @@
 # Marketing provider adapters, limits and the safe test send
 
-> **Phase:** 19-MA.7 (PLAN_Phase_19_Marketing_Automation.md §1.2, §5.8, §9.4, §13, §15 `19-MA.7`).
+> **Phase:** 19-MA.7 (plans/PLAN_Phase_19_Marketing_Automation.md §1.2, §5.8, §9.4, §13, §15 `19-MA.7`).
 > **Where the code lives:** the contract, registry and fake are
 > [`marketing-automation-provider.ts`](../../apps/api/src/marketing-automation/marketing-automation-provider.ts);
 > the live adapter is

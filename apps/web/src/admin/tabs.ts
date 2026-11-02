@@ -1,7 +1,7 @@
 import { type ComponentType, lazy, type LazyExoticComponent } from 'react';
 
 /**
- * Tab key → lazy component (PLAN_Phase_20_Settings_UX.md §9.1). A tab is a route-level chunk, so the
+ * Tab key → lazy component (plans/PLAN_Phase_20_Settings_UX.md §9.1). A tab is a route-level chunk, so the
  * administration bundle does not grow with the catalog: opening the Sales settings never pulls the
  * menu editor in, and vice versa. The keys match `GET /AdminPanel`; a key the server lists with no
  * component here renders the refusal state rather than a blank tab.

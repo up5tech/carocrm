@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 /**
  * The contract between a settings tab and the shell that hosts it
- * (PLAN_Phase_20_Settings_UX.md §4.1, §9.2).
+ * (plans/PLAN_Phase_20_Settings_UX.md §4.1, §9.2).
  *
  * The shell owns the sticky save bar, so every tab offers Save / Discard / Reload in the same place
  * and under the same rules: Save is enabled only while the tab is dirty, a failed write keeps the

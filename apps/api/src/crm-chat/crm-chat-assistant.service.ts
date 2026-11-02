@@ -8,7 +8,7 @@ import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 
 /**
  * Phase 19-CHAT.2 — assistant readiness
- * (PLAN_Phase_19_CRM_Chat.md §4.4, §14.1, §17 `19-CHAT.2`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §4.4, §14.1, §17 `19-CHAT.2`).
  *
  * Chat never selects an agent implicitly. The administrator stores the **key** of the published
  * profile that answers, and this service answers one question: is that profile able to serve a turn

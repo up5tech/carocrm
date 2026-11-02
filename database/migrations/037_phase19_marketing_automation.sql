@@ -1,4 +1,4 @@
--- Phase 19-MA — Marketing Automation (PLAN_Phase_19_Marketing_Automation.md §6.1, §6.7, §15 `19-MA.2`).
+-- Phase 19-MA — Marketing Automation (plans/PLAN_Phase_19_Marketing_Automation.md §6.1, §6.7, §15 `19-MA.2`).
 --
 -- Campaign and audience records live in the generic `entity_records` store (JSONB `attrs`) exactly like
 -- every other CRM entity, so the Entity Engine keeps CRUD, validation, field ACL, audit, stream,

@@ -10,7 +10,7 @@ import { MarketingProviderRegistry } from "./marketing-automation-provider.js";
 
 /**
  * Phase 19-MA.1/MA.2 — Marketing Automation domain settings
- * (PLAN_Phase_19_Marketing_Automation.md §13, §15 `19-MA.1` task 4, `19-MA.2` task 2).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §13, §15 `19-MA.1` task 4, `19-MA.2` task 2).
  *
  * The platform already owns instance settings (`app_settings`), so this module keeps **one** validated,
  * versioned row named `marketingAutomation` in that table rather than a second store — the same shape as

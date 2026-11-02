@@ -4,7 +4,7 @@ import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestUser, shutdownApi } from './support/boot-api.js';
 
 /**
- * Phase 20.10 — per-user preferences (PLAN_Phase_20_Settings_UX.md §5.9, §20.10).
+ * Phase 20.10 — per-user preferences (plans/PLAN_Phase_20_Settings_UX.md §5.9, §20.10).
  *
  * The guarantee under test: preferences follow the user across devices (a fresh login still sees them)
  * and never leak between users. There is no route that names another user, so the leak test is that a

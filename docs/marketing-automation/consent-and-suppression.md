@@ -1,7 +1,7 @@
 # Marketing Automation — consent, suppression, eligibility and public unsubscribe
 
 **Delivered in:** Phase 19-MA.5 (this document) on the contracts declared in Phase 19-MA.2.
-**Plan:** `PLAN_Phase_19_Marketing_Automation.md` §5.3, §5.3.1, §5.3.2, §6.3, §6.8, §9.3, §13, §15 (`19-MA.5`).
+**Plan:** `plans/PLAN_Phase_19_Marketing_Automation.md` §5.3, §5.3.1, §5.3.2, §6.3, §6.8, §9.3, §13, §15 (`19-MA.5`).
 **Code:** [apps/api/src/marketing-automation](../../apps/api/src/marketing-automation) —
 `marketing-identity.ts` (address digest, token primitives), `marketing-consent.service.ts`,
 `marketing-suppression.service.ts`, `marketing-eligibility.service.ts`,

@@ -1,6 +1,6 @@
 /**
  * Phase 19-SD.1 — the `ServiceDesk` module descriptor
- * (PLAN_Phase_19_ServiceDesk.md §7.1, `19-SD.1`).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §7.1, `19-SD.1`).
  *
  * Like Projects, Sales and Customer Success, Service Desk is a kernel domain directory under
  * `apps/api/src`, not an installable extension package: entity records use the generic

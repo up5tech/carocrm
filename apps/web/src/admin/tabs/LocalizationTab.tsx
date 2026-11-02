@@ -13,7 +13,7 @@ interface I18nDocument {
 }
 
 /**
- * Localization tab (PLAN_Phase_20_Settings_UX.md §4.3 row 2): the `i18n` document — which languages
+ * Localization tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 2): the `i18n` document — which languages
  * this instance offers, which one it starts in, and the time zone records are shown in. Dates and
  * numbers follow these two values through the shared formatter, so there is no separate format
  * setting to keep in sync.

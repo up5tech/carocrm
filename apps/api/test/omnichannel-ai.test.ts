@@ -9,7 +9,7 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-OM.19 — AI assistance as typed tasks, with the send tool behind the approval matrix
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.19`; extension E16).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.19`; extension E16).
  *
  * Against the configured primary database (AGENTS.md §3.1); no LLM call is made — the suite does not
  * require an agent profile, and where a run is attempted with a bogus agent it must fail without any

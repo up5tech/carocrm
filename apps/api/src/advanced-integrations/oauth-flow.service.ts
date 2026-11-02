@@ -24,7 +24,7 @@ import type {
 
 /**
  * Phase 19-INT.5 — the OAuth flow
- * (`PLAN_Phase_19_Advanced_Integrations.md` §7.2; `19-INT.5`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §7.2; `19-INT.5`).
  *
  * The platform owns the flow; the connector owns only the provider's HTTP details.
  *

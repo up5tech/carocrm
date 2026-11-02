@@ -2,7 +2,7 @@ import { fingerprint } from "./marketing-automation-domain.js";
 
 /**
  * Phase 19-MA.6 — the marketing content renderer: personalisation, sanitisation and link rules
- * (PLAN_Phase_19_Marketing_Automation.md §5.4, §5.10 privacy of content, §9.4, §15 `19-MA.6`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.4, §5.10 privacy of content, §9.4, §15 `19-MA.6`).
  *
  * Everything here is a pure function over strings — no Nest, no database, no clock, no I/O — so the
  * adversarial cases can be unit-tested directly and the Service (which reads records) stays thin.

@@ -20,7 +20,7 @@ import type { AIProviderMessage } from './ai-provider.js';
 
 /**
  * Phase 19-AI.12 — conversation, checkpoint and retention memory
- * (PLAN_Phase_19_AI_Agents.md §10, §20 `19-AI.12`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §10, §20 `19-AI.12`).
  *
  * Three rules shape this service:
  *

@@ -3,7 +3,7 @@ import { Card, Skeleton } from 'antd';
 import { t } from '../state/i18n.js';
 
 /**
- * A reusable loading skeleton (PLAN_Phase_20_Settings_UX.md §20.11).
+ * A reusable loading skeleton (plans/PLAN_Phase_20_Settings_UX.md §20.11).
  *
  * Usage: replace ad-hoc `<Card loading>` or raw `<Skeleton>` calls with this so the height and
  * paragraph count are consistent across list, detail and settings pages. The `rows` prop lets a page

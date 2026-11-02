@@ -8,7 +8,7 @@ import { IntegrationRegistry } from './integration-registry.service.js';
 
 /**
  * Phase 19-INT.2 — module health and diagnostics
- * (`PLAN_Phase_19_Advanced_Integrations.md` §14; `19-INT.2`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §14; `19-INT.2`).
  *
  * "The module loads cleanly" is only honest if an operator can *see* the state, so every fact here
  * is read from the running platform — the bound connectors, the live settings row and the

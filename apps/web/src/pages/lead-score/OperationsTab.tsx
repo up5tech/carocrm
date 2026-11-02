@@ -12,7 +12,7 @@ import { errorText } from './shared.js';
 
 /**
  * Phase 19-LS.8 — the rebuild and its queue
- * (`PLAN_Phase_19_LeadScore.md` §8.2, §9.4, §10.2, §11.1, §16 `19-LS.8`; audit §11).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §8.2, §9.4, §10.2, §11.1, §16 `19-LS.8`; audit §11).
  *
  * A rebuild is a *job*, so this screen has two halves that answer two different questions: what am I asking
  * for, and what is the queue doing about it. Both stay the server's business:

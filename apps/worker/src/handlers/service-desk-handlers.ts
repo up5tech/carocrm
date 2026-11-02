@@ -2,7 +2,7 @@ import type { Logger } from "@carocrm/core/logger/index.js";
 import type { JobContext, JobHandler, JobRegistry } from "@carocrm/jobs";
 
 /**
- * Phase 19-SD.9 — Service Desk scheduled SLA scanning (PLAN_Phase_19_ServiceDesk.md §5.7, §12.1).
+ * Phase 19-SD.9 — Service Desk scheduled SLA scanning (plans/PLAN_Phase_19_ServiceDesk.md §5.7, §12.1).
  *
  * The scan itself runs in the API: it loads clocks and policies, writes warning/breach state,
  * escalates cases and writes notifications, which only the application layer may do correctly.

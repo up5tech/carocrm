@@ -11,7 +11,7 @@ import { type CredentialState, type SecretKind } from './advanced-integrations-d
 
 /**
  * Phase 19-INT.4 — the credential vault
- * (`PLAN_Phase_19_Advanced_Integrations.md` §6.3, §7.3; `19-INT.4`; ADR 0001).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §6.3, §7.3; `19-INT.4`; ADR 0001).
  *
  * The platform already owns a secret-at-rest primitive: AES-256-GCM with a per-encryption random
  * IV and a self-describing payload (`packages/core/src/utils/crypto.ts`), keyed by

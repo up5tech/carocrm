@@ -14,7 +14,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.11 — duplicate detection and candidate review
- * (`PLAN_Phase_19_LeadScore.md` §7.1, §7.3, §9.2, §16 `19-LS.11`; audit §11 `LS.11`; contract §9).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §7.1, §7.3, §9.2, §16 `19-LS.11`; audit §11 `LS.11`; contract §9).
  *
  * The exit criterion is one sentence: *ambiguous matches cannot result in silent auto-linking or
  * auto-merge.* Two properties make that true here, and both are driven through the real route against the

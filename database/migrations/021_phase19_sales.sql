@@ -1,5 +1,5 @@
 -- Phase 19 — Sales & Commercial Operations (`sales`), phases 19-S.2–19-S.5
--- (PLAN_Phase_19_Sales.md §5, §8.3).
+-- (plans/PLAN_Phase_19_Sales.md §5, §8.3).
 --
 -- Sales entities (Product, ProductCategory, PriceBook, …) are ordinary metadata entities in the
 -- generic `entity_records` store, so the Entity Engine keeps CRUD, validation, audit, stream and

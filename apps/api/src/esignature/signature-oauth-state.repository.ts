@@ -9,7 +9,7 @@ import { hashOAuthState, pkceChallengeFor } from './providers/docusign/docusign-
 
 /**
  * Phase 19-ES.4 — the in-flight authorization state
- * (`PLAN_Phase_19_ESignature.md` §8.1, §9.2; `19-ES.4` task
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.1, §9.2; `19-ES.4` task
  * "handle state verification, redirect allowlists, reauthorization … ").
  *
  * An authorization state answers one question: *is this callback the completion of a request this

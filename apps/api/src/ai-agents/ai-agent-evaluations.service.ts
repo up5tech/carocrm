@@ -12,7 +12,7 @@ import { AIProviderConnectionService } from './ai-provider-connections.service.j
 
 /**
  * Phase 19-AI.14 — evaluation suites, graders and the publication gate
- * (PLAN_Phase_19_AI_Agents.md §17, §20 `19-AI.14`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §17, §20 `19-AI.14`).
  *
  * §17.1 is the design brief: evaluation is a repeatable engineering process, not a score that
  * proves an agent safe. This service therefore:

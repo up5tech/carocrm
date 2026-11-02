@@ -2,7 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
  * Phase 19-INT.16–19-INT.24 — provider webhook signature verification
- * (`PLAN_Phase_19_Advanced_Integrations.md` §10.2; `19-INT.12`, `19-INT.16`–`19-INT.24`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §10.2; `19-INT.12`, `19-INT.16`–`19-INT.24`).
  *
  * A provider webhook is **unauthenticated by design** — the provider holds no CRM session — so the
  * provider's own signature is the only thing that makes a delivery trustworthy. Getting that

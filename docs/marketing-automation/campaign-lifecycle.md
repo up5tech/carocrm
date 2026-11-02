@@ -4,7 +4,7 @@
 (audience resolution and preview), Phase 19-MA.5 (the consent gate behind `CONSENT_NOT_CONFIGURED`) and
 Phase 19-MA.8 (the send definition a campaign schedules *into* — see
 [`send-definitions.md`](send-definitions.md)).
-**Plan:** `PLAN_Phase_19_Marketing_Automation.md` §5.1, §5.2, §8.2, §8.4, §15.
+**Plan:** `plans/PLAN_Phase_19_Marketing_Automation.md` §5.1, §5.2, §8.2, §8.4, §15.
 **Code:** [apps/api/src/marketing-automation](../../apps/api/src/marketing-automation) —
 `marketing-automation-domain.ts` (the tables below), `marketing-campaign.service.ts` (commands),
 `marketing-campaign-validation.service.ts` (the gate), `marketing-audience.service.ts` (resolution and

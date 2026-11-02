@@ -22,7 +22,7 @@ export interface SeedOptions {
 }
 
 /**
- * Phase 19 default configuration rows (PLAN_Phase_19_Projects.md §14.1): one default Project Board
+ * Phase 19 default configuration rows (plans/PLAN_Phase_19_Projects.md §14.1): one default Project Board
  * with its stages, and the three built-in project roles. They are ordinary `entity_records` rows so
  * the Entity Engine, admin UI and ACL treat them like any other configuration record.
  *
@@ -70,7 +70,7 @@ const DEFAULT_PROJECT_ROLES: readonly { id: string; name: string; policy: Record
 ];
 
 /**
- * Phase 19-CS.6.6 — the default onboarding playbook (PLAN_Phase_19_Customer_Success.md §6.6).
+ * Phase 19-CS.6.6 — the default onboarding playbook (plans/PLAN_Phase_19_Customer_Success.md §6.6).
  *
  * Without a template, `startOnboarding` falls back to manual tracking: correct, but a fresh
  * installation would never show the playbook machinery it just installed. This is ordinary
@@ -324,21 +324,21 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
     );
 
     // Phase 19 — default Project Board with its stage rows and the built-in project roles
-    // (PLAN_Phase_19_Projects.md §14.1). Inserted once with fixed ids: re-running the seed never
+    // (plans/PLAN_Phase_19_Projects.md §14.1). Inserted once with fixed ids: re-running the seed never
     // duplicates them and never overwrites an administrator's edits.
     await seedProjectSystemRows(pool);
 
     // Phase 19-S — the document number series the Sales module allocates from
-    // (PLAN_Phase_19_Sales.md §4.4). `ON CONFLICT (code) DO NOTHING`: a series keeps its counter,
+    // (plans/PLAN_Phase_19_Sales.md §4.4). `ON CONFLICT (code) DO NOTHING`: a series keeps its counter,
     // prefix and padding once it exists, so re-running the seed can never reset a sequence.
     await seedSalesNumberSeries(pool);
 
     // Phase 19-CS.6.6 — the default onboarding playbook, installed once under a fixed id
-    // (PLAN_Phase_19_Customer_Success.md §6.6).
+    // (plans/PLAN_Phase_19_Customer_Success.md §6.6).
     await seedCustomerSuccessSystemRows(pool);
 
     // Phase 19-S.17 — default DocumentTemplate rows for every Sales document type
-    // (PLAN_Phase_19_Sales.md S.17 task 3). DocumentTemplate is an ordinary metadata entity stored
+    // (plans/PLAN_Phase_19_Sales.md S.17 task 3). DocumentTemplate is an ordinary metadata entity stored
     // in `entity_records`; `ON CONFLICT (id) DO NOTHING`: an operator's edits survive a seed re-run.
     const insertTemplate = async (id: string, template: (typeof DEFAULT_DOCUMENT_TEMPLATES)[number]): Promise<void> => {
       await pool.query(
@@ -409,7 +409,7 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
        ON CONFLICT (id) DO NOTHING`,
     );
 
-    // Quote validity (PLAN_Phase_19_Sales.md 19-S.7): a quote whose valid-until date has passed is
+    // Quote validity (plans/PLAN_Phase_19_Sales.md 19-S.7): a quote whose valid-until date has passed is
     // expired once a day. The operation is idempotent, so a re-run or a retry changes nothing.
     await pool.query(
       `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
@@ -417,7 +417,7 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
        ON CONFLICT (id) DO NOTHING`,
     );
 
-    // Invoice ageing (PLAN_Phase_19_Sales.md 19-S.9): an issued invoice past its due date is marked
+    // Invoice ageing (plans/PLAN_Phase_19_Sales.md 19-S.9): an issued invoice past its due date is marked
     // overdue once a day, emitting one event per invoice. Idempotent, so a re-run emits nothing.
     await pool.query(
       `INSERT INTO scheduled_jobs (id, job, scheduling, target, enabled)
@@ -463,7 +463,7 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
        VALUES ('csEvaluateReviewReminders', 'customerSuccess.evaluateReviewReminders', '5 3 * * *', '{}'::jsonb, TRUE)
        ON CONFLICT (id) DO NOTHING`,
     );
-    // Lead Score decay sweep (PLAN_Phase_19_LeadScore.md §6.4, 19-LS.9): a score whose engagement signal
+    // Lead Score decay sweep (plans/PLAN_Phase_19_LeadScore.md §6.4, 19-LS.9): a score whose engagement signal
     // decays goes out of date with nobody editing the Lead, so the calendar asks for a bounded rebuild. The
     // schedule always exists; `settings.signals.decaySweep.enabled` decides whether the run does anything,
     // and the API answers `skipped: disabled` when it does not — so an operator turns one thing on.
@@ -472,7 +472,7 @@ export async function seed(connectionString: string, options: SeedOptions = {}):
        VALUES ('leadScoreDecaySweep', 'leadScore.decaySweep', '35 3 * * *', '{}'::jsonb, TRUE)
        ON CONFLICT (id) DO NOTHING`,
     );
-    // Conversion recovery (PLAN_Phase_19_LeadScore.md §7.8, 19-LS.13): a conversion whose process died between
+    // Conversion recovery (plans/PLAN_Phase_19_LeadScore.md §7.8, 19-LS.13): a conversion whose process died between
     // its claim and its work leaves a `processing` row nobody can answer. The schedule exists; the module's
     // `conversion.recovery.enabled` decides whether the run does anything, so an operator turns one thing on.
     await pool.query(

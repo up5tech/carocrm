@@ -1,6 +1,6 @@
 # ESignature — compatibility and behavior reference
 
-> Phase 19-ES.0 to 19-ES.22 deliverables (`PLAN_Phase_19_ESignature.md` §3.3, §18).
+> Phase 19-ES.0 to 19-ES.22 deliverables (`plans/PLAN_Phase_19_ESignature.md` §3.3, §18).
 > Status: **19-ES.0 through 19-ES.22 delivered** (ES.1 registers the module and the security contract;
 > ES.2 adds the schema and the domain rules; ES.3 adds the provider contract, the registry and the
 > in-process fake; ES.4 adds DocuSign's OAuth grant, the connection lifecycle and the live adapter;

@@ -7,7 +7,7 @@ import { AIAgentsSettingsService } from './ai-agents-settings.service.js';
 
 /**
  * Phase 19-AI.2 — module policy gate
- * (PLAN_Phase_19_AI_Agents.md §8.5, §19.2, §20 `19-AI.2`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §8.5, §19.2, §20 `19-AI.2`).
  *
  * Every future path that creates a run or executes a high-impact tool calls this service first. The
  * two switches are deliberately separate:

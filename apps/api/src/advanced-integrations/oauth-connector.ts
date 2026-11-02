@@ -1,6 +1,6 @@
 /**
  * Phase 19-INT.5 — the OAuth surface a connector implements
- * (`PLAN_Phase_19_Advanced_Integrations.md` §7.2; `19-INT.5`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §7.2; `19-INT.5`).
  *
  * These are the **provider-facing** types. The platform owns the flow — the state machine, the
  * single-use state, the PKCE verifier, the scope bookkeeping, the vault and the refresh lock — and

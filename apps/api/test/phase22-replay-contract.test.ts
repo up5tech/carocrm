@@ -13,7 +13,7 @@ import { bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 22.7 — the replay contract
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §12 tasks 2, 3 and 6; required scenarios "same
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §12 tasks 2, 3 and 6; required scenarios "same
  * webhook delivered at least twice", "an idempotency key is reused with a different request body").
  *
  * Runs against the configured primary database (AGENTS.md §3.1). Nothing is reset or truncated; every

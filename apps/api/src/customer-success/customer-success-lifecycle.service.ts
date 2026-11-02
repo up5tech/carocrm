@@ -11,7 +11,7 @@ import { CustomerSuccessRecords } from "./customer-success-records.js";
 import { CustomerSuccessSettingsService } from "./customer-success-settings.service.js";
 
 /**
- * Phase 19-CS.3 — lifecycle management (PLAN_Phase_19_Customer_Success.md §5.3).
+ * Phase 19-CS.3 — lifecycle management (plans/PLAN_Phase_19_Customer_Success.md §5.3).
  *
  * Transitions are validated server-side against the configured edge set, and a move to an important
  * stage (`churned`, `atRisk`) requires a reason. A client-side dropdown is not access control, so the

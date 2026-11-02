@@ -1,6 +1,6 @@
 # Phase 19-LS.14 — Conversion Wizard UI and Converted-To Panel: completion report
 
-`PLAN_Phase_19_LeadScore.md` §7.1–§7.4, §11.4, §13.4-6/7, §16 (`19-LS.14`); audit §11 `LS.14`; contract
+`plans/PLAN_Phase_19_LeadScore.md` §7.1–§7.4, §11.4, §13.4-6/7, §16 (`19-LS.14`); audit §11 `LS.14`; contract
 `docs/implementation/lead-score-conversion-contract.md` §8, §11.4, §12.2; compatibility
 `docs/compatibility/lead-score.md` §3 (Conversion interface), §4.1–§4.3, §8.
 

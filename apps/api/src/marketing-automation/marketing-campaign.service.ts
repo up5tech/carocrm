@@ -32,7 +32,7 @@ import { MarketingCampaignValidationService } from "./marketing-campaign-validat
 
 /**
  * Phase 19-MA.3 — the `Campaign` lifecycle
- * (PLAN_Phase_19_Marketing_Automation.md §5.1, §8.2, §15 `19-MA.3`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.1, §8.2, §15 `19-MA.3`).
  *
  * Every status move is a **named server-side command**, never a bare field write: §8.2 is explicit that a
  * client must not be able to move a campaign by patching `status`. One command validates the source state,

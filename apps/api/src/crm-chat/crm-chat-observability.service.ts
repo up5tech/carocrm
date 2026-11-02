@@ -9,7 +9,7 @@ import { DatabaseService } from '../database/database.service.js';
 
 /**
  * Phase 19-CHAT.16/19-CHAT.17 — usage, limits and observability
- * (PLAN_Phase_19_CRM_Chat.md §15.3, §17 `19-CHAT.16`/`19-CHAT.17`; contract §6.8, §11).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §15.3, §17 `19-CHAT.16`/`19-CHAT.17`; contract §6.8, §11).
  *
  * ## Chat does not invent usage
  *

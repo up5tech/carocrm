@@ -9,7 +9,7 @@ import { EmptyState } from './EmptyState.js';
 
 /**
  * Phase 19-ES.18 — the ESignature entry point on a CRM record page
- * (`PLAN_Phase_19_ESignature.md` §2.3, §13.1, §18 `19-ES.18`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §2.3, §13.1, §18 `19-ES.18`).
  *
  * The component is generic: it renders on every record page (outside the portal), asks the server
  * whether this entity is a supported entry point and whether the caller may use it, and disappears

@@ -9,7 +9,7 @@ import { useModuleDocument } from '../module-document.js';
 import { usePublishTabActions } from '../shell.js';
 
 /**
- * Sales settings, hosted as a tab of the administration shell (PLAN_Phase_20_Settings_UX.md §4.3 row
+ * Sales settings, hosted as a tab of the administration shell (plans/PLAN_Phase_20_Settings_UX.md §4.3 row
  * 20, §9.1). It was moved out of `AdminSettingsPage` unchanged in substance: one form owns the whole
  * document, the server's version and warnings are shown rather than dropped, and groups the backend
  * does not have are not invented here.

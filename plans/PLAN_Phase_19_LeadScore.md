@@ -1,7 +1,7 @@
 # Phase 19 — Lead Scoring & Conversion Module (`LeadScore`)
 
 > **Status:** Planned  
-> **Parent roadmap:** `PLAN.md` — Advanced CRM Domains  
+> **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Domains  
 > **Canonical module name:** `LeadScore`  
 > **Module key / frontend slug:** `lead-score`  
 > **NestJS module class:** `LeadScoreModule`  
@@ -15,7 +15,7 @@
 
 ## 0. Instructions for the Coding Agent
 
-Read `AGENTS.MD`, `PLAN.md`, this plan, and the actual Lead, Contact, Account, Opportunity, ACL, metadata, audit, workflow, job, and UI implementations before changing code.
+Read `AGENTS.MD`, `plans/PLAN.md`, this plan, and the actual Lead, Contact, Account, Opportunity, ACL, metadata, audit, workflow, job, and UI implementations before changing code.
 
 This plan defines desired behavior; it is not evidence that every dependency already exists. **Begin with Phase `19-LS.0` only.** Inspect the repository, current Lead fields and lifecycle, module registration, migrations, APIs, tests, and configured database before deciding what must be added. Record findings in a repository audit/feature-contract document before implementing later phases.
 

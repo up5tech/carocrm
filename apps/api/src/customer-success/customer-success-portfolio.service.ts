@@ -12,7 +12,7 @@ import {
 import { CustomerSuccessSettingsService } from "./customer-success-settings.service.js";
 
 /**
- * Phase 19-CS.3 — the portfolio and its queues (PLAN_Phase_19_Customer_Success.md §5.2).
+ * Phase 19-CS.3 — the portfolio and its queues (plans/PLAN_Phase_19_Customer_Success.md §5.2).
  *
  * Every read goes through `EntityCrudService`, which applies the global record scope and the
  * record-level ACL predicate **before** any row is returned, so an aggregate can never leak a count

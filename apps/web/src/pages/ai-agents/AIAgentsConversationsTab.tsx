@@ -11,7 +11,7 @@ import { formatTimestamp } from './shared.js';
 
 /**
  * Phase 19-AI.12 — conversation memory and retention
- * (PLAN_Phase_19_AI_Agents.md §10, §15, §20 `19-AI.12`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §10, §15, §20 `19-AI.12`).
  *
  * Only the caller's own threads are returned by the server; the UI never assembles a conversation
  * list from ids. Deleting a thread is the user's explicit privacy control, while the retention card

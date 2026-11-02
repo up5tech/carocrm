@@ -2,7 +2,7 @@
 
 **Delivered in:** Phase 19-MA.5 (public tokens), 19-MA.10 (webhook verification), 19-MA.15 (public forms),
 19-MA.18 (retention, diagnostics), 19-MA.19 (hardening).
-**Plan:** `PLAN_Phase_19_Marketing_Automation.md` §5.3, §5.3.1, §5.3.2, §5.10, §9, §15 `19-MA.19`.
+**Plan:** `plans/PLAN_Phase_19_Marketing_Automation.md` §5.3, §5.3.1, §5.3.2, §5.10, §9, §15 `19-MA.19`.
 **Code:** `marketing-public-token.service.ts`, `marketing-event-ingestion.service.ts`, `marketing-form.service.ts`,
 `marketing-automation.controller.ts` (public routes), `marketing-identity.ts`, `marketing-retention.service.ts`,
 `config.ts` (`MARKETING_WEBHOOK_SECRET`).

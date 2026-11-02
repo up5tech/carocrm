@@ -18,7 +18,7 @@ import { type OAuth2ConnectorOptions,OAuth2Flow } from './oauth2-base.js';
 
 /**
  * Phase 19-INT.16–19-INT.24 — the base classes every connector extends
- * (`PLAN_Phase_19_Advanced_Integrations.md` §5.3; `19-INT.16`–`19-INT.24`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §5.3; `19-INT.16`–`19-INT.24`).
  *
  * A connector is a **vendor adapter**, and the vendor-specific part of it is small: a URL, a
  * header, a field name, a pagination rule. Everything the platform owns — the capability

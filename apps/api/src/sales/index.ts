@@ -31,7 +31,7 @@ import { SubscriptionService } from "./subscriptions/subscription.service.js";
 import { SalesTaxService } from "./tax/tax.service.js";
 
 /**
- * Sales & Commercial Operations module barrel (PLAN_Phase_19_Sales.md §14, 19-S.1).
+ * Sales & Commercial Operations module barrel (plans/PLAN_Phase_19_Sales.md §14, 19-S.1).
  *
  * Like every other domain here, Sales is a directory under `apps/api/src`, not a second framework:
  * entity records use the generic `entity_records` store, and ACL, audit, stream, attachments,

@@ -20,7 +20,7 @@ import {
 import { ProjectTaskModal } from './ProjectTaskModal.js';
 
 /**
- * Kanban board (PLAN_Phase_19_Projects.md §4.12): one column per stage of the project's board, one
+ * Kanban board (plans/PLAN_Phase_19_Projects.md §4.12): one column per stage of the project's board, one
  * group at a time.
  *
  * A column drop is a stage change, which the server turns into the mapped status and guards with the

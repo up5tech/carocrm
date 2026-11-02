@@ -1,6 +1,6 @@
 /**
  * Phase 19-LS.2 — the enumerated vocabularies Lead Score records use
- * (`PLAN_Phase_19_LeadScore.md` §3.1–§3.3, §5.1–§5.5; audit §4–§6).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §3.1–§3.3, §5.1–§5.5; audit §4–§6).
  *
  * These are the code side of the enums declared in `database/seed-metadata.ts` (`LS_BANDS`,
  * `LS_MODEL_STATUSES`, …). The duplication is deliberate and is the pattern Customer Success already

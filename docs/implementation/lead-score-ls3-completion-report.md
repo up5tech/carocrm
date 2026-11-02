@@ -1,6 +1,6 @@
 # Phase 19-LS.3 — Model and rule configuration
 
-> `PLAN_Phase_19_LeadScore.md` §16 `Phase 19-LS.3`, on the contract in
+> `plans/PLAN_Phase_19_LeadScore.md` §16 `Phase 19-LS.3`, on the contract in
 > [`lead-score-audit.md`](lead-score-audit.md) §5 and the foundations in
 > [`lead-score-ls2-completion-report.md`](lead-score-ls2-completion-report.md).
 > Acceptance: **invalid models cannot be published and published versions are immutable.**

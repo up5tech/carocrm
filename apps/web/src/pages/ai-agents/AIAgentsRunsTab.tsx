@@ -11,7 +11,7 @@ import { formatTimestamp, ResultText, RunStatusTag } from './shared.js';
 
 /**
  * Phase 19-AI.7/19-AI.8 — the run console
- * (PLAN_Phase_19_AI_Agents.md §15.4, §16.1, §20 `19-AI.7`–`19-AI.8`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §15.4, §16.1, §20 `19-AI.7`–`19-AI.8`).
  *
  * The six outcome families are visibly distinct: success, partial, failure, blocked, canceled and
  * unknown-outcome each have their own tag and message. The timeline is the server's append-only

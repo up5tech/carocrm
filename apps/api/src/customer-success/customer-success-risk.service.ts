@@ -17,7 +17,7 @@ import { CustomerSuccessNotificationService } from "./customer-success-notificat
 import { CustomerSuccessRecords, type CustomerSuccessRow } from "./customer-success-records.js";
 
 /**
- * Phase 19-CS.7 — risks and churn prevention (PLAN_Phase_19_Customer_Success.md §5.8).
+ * Phase 19-CS.7 — risks and churn prevention (plans/PLAN_Phase_19_Customer_Success.md §5.8).
  *
  * A risk is *not* a health status: a customer may carry several risks that together contribute to
  * health, and a Critical risk never sets the lifecycle to `churned` on its own (§5.8, §13.7).

@@ -1,4 +1,4 @@
--- 001_init.sql — CRM Kernel Alpha schema (PLAN.md §44)
+-- 001_init.sql — CRM Kernel Alpha schema (plans/PLAN.md §44)
 
 CREATE TABLE IF NOT EXISTS users (
   id               TEXT PRIMARY KEY,

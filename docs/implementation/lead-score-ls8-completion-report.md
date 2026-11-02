@@ -1,6 +1,6 @@
 # Phase 19-LS.8 — Scoring Model Administration UI: completion report
 
-Delivered 2026-10-25. Scope: `PLAN_Phase_19_LeadScore.md` §6.1, §6.3, §9.4, §12, §16 `19-LS.8`; contract in
+Delivered 2026-10-25. Scope: `plans/PLAN_Phase_19_LeadScore.md` §6.1, §6.3, §9.4, §12, §16 `19-LS.8`; contract in
 `docs/implementation/lead-score-audit.md` §5.2, §11; compatibility rows in `docs/compatibility/lead-score.md`
 §3, §7 and §9.
 

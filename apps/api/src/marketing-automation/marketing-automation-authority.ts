@@ -3,7 +3,7 @@ import { runAsMarketingInternal } from "./marketing-automation-internal.js";
 
 /**
  * Phase 19-MA.3 — the documented service-authority model for Marketing Automation internals
- * (PLAN_Phase_19_Marketing_Automation.md §9.2, §7.2; AGENTS.md §5.5).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §9.2, §7.2; AGENTS.md §5.5).
  *
  * §9.2 is explicit: "background jobs act under an explicit service identity and permission model; they must
  * not rely on an expired human session or silently become an all-powerful bypass". A campaign refresh, an

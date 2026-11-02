@@ -21,7 +21,7 @@ import {
 
 /**
  * Phase 19-MA.1 – MA.5 — request shapes for the Marketing Automation commands
- * (`/api/v1/MarketingAutomation`, PLAN_Phase_19_Marketing_Automation.md §8.1–§8.4).
+ * (`/api/v1/MarketingAutomation`, plans/PLAN_Phase_19_Marketing_Automation.md §8.1–§8.4).
  *
  * Entity CRUD stays on the generic `/api/v1/:entity` API, so these shapes cover the module-level commands:
  * settings, the campaign state machine, audience membership and snapshots, consent and suppression, and the

@@ -13,7 +13,7 @@ import {
 
 /**
  * Phase 19-SD.4 – 19-SD.5 — case state machine, assignment, queues and routing
- * (PLAN_Phase_19_ServiceDesk.md §5.2, §5.3, §7.1, §7.2, §7.4).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §5.2, §5.3, §7.1, §7.2, §7.4).
  *
  * These run against the already-configured primary database through the real HTTP API (AGENTS.md §3.1):
  * no database, schema or container is created. Every record this suite makes carries the `runId`

@@ -1,4 +1,4 @@
--- 002_stream.sql — Stream / timeline and notifications (PLAN.md §26)
+-- 002_stream.sql — Stream / timeline and notifications (plans/PLAN.md §26)
 
 CREATE TABLE IF NOT EXISTS stream_items (
   id             TEXT PRIMARY KEY,

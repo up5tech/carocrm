@@ -1,6 +1,6 @@
 /**
  * Phase 19-CHAT.2 — the navigation feature-gate seam
- * (`apps/api/src/admin-panel/navigation.service.ts`, PLAN_Phase_19_CRM_Chat.md §17 `19-CHAT.2`).
+ * (`apps/api/src/admin-panel/navigation.service.ts`, plans/PLAN_Phase_19_CRM_Chat.md §17 `19-CHAT.2`).
  *
  * The menu pipeline is `defaults → navigation document → ACL → order`. A module page whose route is
  * not a metadata entity had no way to disappear when its module is switched off: the ACL only answers

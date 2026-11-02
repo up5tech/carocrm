@@ -23,7 +23,7 @@ export interface BulkEditModalProps {
 }
 
 /**
- * The value chooser behind the bulk bar (PLAN_Phase_20_Settings_UX.md §5.3). It reuses `FieldEditor`
+ * The value chooser behind the bulk bar (plans/PLAN_Phase_20_Settings_UX.md §5.3). It reuses `FieldEditor`
  * so a bulk write accepts exactly what the record form accepts — the same enum options, the same
  * date format, the same validation — instead of a second editor that can drift.
  */

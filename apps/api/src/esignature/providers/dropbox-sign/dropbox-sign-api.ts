@@ -8,7 +8,7 @@ import {
 
 /**
  * Phase 19-ES multi-provider follow-on — the Dropbox Sign API v3 client
- * (`PLAN_Phase_19_ESignature.md` §5.1, §5.2, §9.3).
+ * (`plans/PLAN_Phase_19_ESignature.md` §5.1, §5.2, §9.3).
  *
  * One small client, shared by the authorization strategy (the account lookup) and the adapter (every
  * envelope operation). It owns exactly three things:

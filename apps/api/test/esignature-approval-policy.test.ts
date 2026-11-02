@@ -5,7 +5,7 @@ import { ESignatureSettingsSchema } from '../src/esignature/esignature-settings.
 
 /**
  * Phase 19-ES.17 — the approval policy engine
- * (`PLAN_Phase_19_ESignature.md` §11.1, §18 `19-ES.17`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §11.1, §18 `19-ES.17`).
  *
  * The engine is pure, so every policy decision is unit-tested without a database or a provider. The
  * cases below are the plan's policy examples: source type, a value/risk field and a monetary

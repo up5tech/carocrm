@@ -1,5 +1,5 @@
 /**
- * The Markdown subset → `DocBlock[]` parser (`PLAN_Phase_21_Documentation.md` §4.3).
+ * The Markdown subset → `DocBlock[]` parser (`plans/PLAN_Phase_21_Documentation.md` §4.3).
  *
  * It is a *total* parser: every input produces blocks, and anything outside the documented subset
  * produces a block that is safe plus an `issue` that the lint turns into a build failure. That split

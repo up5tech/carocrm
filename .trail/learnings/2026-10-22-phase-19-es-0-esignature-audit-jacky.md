@@ -12,7 +12,7 @@ touches:
   - content/docs/en/user/activities-and-tasks.md
   - i18n/en/web.json
   - i18n/vi/web.json
-  - PLAN_Phase_19_ESignature.md
+  - plans/PLAN_Phase_19_ESignature.md
   - apps/api/src/email/email-template-preview.service.ts
 ---
 

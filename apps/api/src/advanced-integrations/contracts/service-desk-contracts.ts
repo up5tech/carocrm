@@ -5,7 +5,7 @@ import { IntegrationContractRegistry } from '../integration-contracts.js';
 
 /**
  * Phase 19-INT.25 — the `ServiceDesk` contract
- * (`PLAN_Phase_19_Advanced_Integrations.md` §14.2, §19 `19-INT.25`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §14.2, §19 `19-INT.25`).
  *
  * `ServiceDesk` owns the case lifecycle: the statuses, the allowed transitions, the resolution
  * codes and the transition history. A connector may report that a conversation happened; it may

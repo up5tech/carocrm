@@ -15,7 +15,7 @@ import { useDocumentForm } from '../document-form.js';
 import { usePublishTabActions } from '../shell.js';
 
 /**
- * Main Menu tab (PLAN_Phase_20_Settings_UX.md §4.4) — the headline settings capability of the phase.
+ * Main Menu tab (plans/PLAN_Phase_20_Settings_UX.md §4.4) — the headline settings capability of the phase.
  *
  * The rows are the entries this instance can actually show, taken from the server-resolved tree and
  * merged with the overrides the `navigation` document holds. An editor row can be renamed, moved,

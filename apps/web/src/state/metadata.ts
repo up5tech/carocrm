@@ -90,7 +90,7 @@ export function filterEntries(definition: EntityDefinition | undefined): FieldEn
 }
 
 /**
- * Plain values a bulk write may set (PLAN_Phase_20_Settings_UX.md §5.3). The entity's `massUpdate`
+ * Plain values a bulk write may set (plans/PLAN_Phase_20_Settings_UX.md §5.3). The entity's `massUpdate`
  * layout picks the set when it has one; without that layout the fields the edit form shows are the
  * candidates. Computed fields are excluded because the server recalculates them, and a link is left
  * out because a record id typed into a box is not a picker — the owner link has its own **Assign**.

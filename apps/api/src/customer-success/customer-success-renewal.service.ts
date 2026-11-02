@@ -19,7 +19,7 @@ import { CustomerSuccessRecords } from "./customer-success-records.js";
 import { CustomerSuccessSettingsService } from "./customer-success-settings.service.js";
 
 /**
- * Phase 19-CS.10 — renewal readiness (PLAN_Phase_19_Customer_Success.md §5.9).
+ * Phase 19-CS.10 — renewal readiness (plans/PLAN_Phase_19_Customer_Success.md §5.9).
  *
  * Renewal readiness is visibility and workflow support, never a billing system: it reads the manual
  * profile fields and, when the Sales/Subscriptions module is present, an authorised summary of the

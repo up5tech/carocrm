@@ -1,6 +1,6 @@
 # Phase 19-LS.2 — Schema and metadata foundation
 
-> `PLAN_Phase_19_LeadScore.md` §16 `Phase 19-LS.2`, on the contract in
+> `plans/PLAN_Phase_19_LeadScore.md` §16 `Phase 19-LS.2`, on the contract in
 > [`lead-score-audit.md`](lead-score-audit.md) §4–§6 and the registration in
 > [`lead-score-ls1-completion-report.md`](lead-score-ls1-completion-report.md).
 > Acceptance: *schema and metadata validate against the current project conventions*, verified against

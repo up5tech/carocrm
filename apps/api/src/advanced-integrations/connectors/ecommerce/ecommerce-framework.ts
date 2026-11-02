@@ -2,7 +2,7 @@ import type { ExternalFieldSchema } from '../../connector-adapter.port.js';
 
 /**
  * Phase 19-INT.22 — the ecommerce connector framework
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.7; `19-INT.22`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.7; `19-INT.22`).
  *
  * The plan asks for a **framework** and *one* first provider, not a family of half-implemented
  * stores. This file holds the parts that are the same for every store, so the first provider only

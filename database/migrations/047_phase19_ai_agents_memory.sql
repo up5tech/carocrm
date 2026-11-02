@@ -1,4 +1,4 @@
--- Phase 19-AI.12 — conversations, messages and scoped memory (PLAN_Phase_19_AI_Agents.md §10, §20).
+-- Phase 19-AI.12 — conversations, messages and scoped memory (plans/PLAN_Phase_19_AI_Agents.md §10, §20).
 --
 -- Additive only (AGENTS.md §3.5): new tables, one nullable column and indexes. No existing row is
 -- rewritten and no column is dropped or repurposed. A run without a conversation stays `NULL`, so

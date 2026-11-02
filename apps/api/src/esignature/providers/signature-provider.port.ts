@@ -2,7 +2,7 @@ import type { ESignatureConnectionEnvironment } from '../esignature-domain.js';
 
 /**
  * Phase 19-ES.3 — the provider adapter contract
- * (`PLAN_Phase_19_ESignature.md` §5.2, §9.1; audit §5.1; `19-ES.3`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §5.2, §9.1; audit §5.1; `19-ES.3`).
  *
  * This is the **only** vocabulary a signature provider is allowed to speak inside the CRM. Nothing
  * above this file may see a DocuSign type, a DocuSign status string or a DocuSign payload — the

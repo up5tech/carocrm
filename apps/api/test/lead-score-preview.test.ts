@@ -5,7 +5,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.4 — the deterministic engine admitted through a real, side-effect-free door
- * (`PLAN_Phase_19_LeadScore.md` §6.1, §8.1, §9.2, §9.4, §15.2 stage 3; audit §5, §11; report
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.1, §8.1, §9.2, §9.4, §15.2 stage 3; audit §5, §11; report
  * `docs/implementation/lead-score-ls4-completion-report.md`).
  *
  * `lead-score-evaluator.test.ts` already pins the arithmetic. What only an API run can prove is the three

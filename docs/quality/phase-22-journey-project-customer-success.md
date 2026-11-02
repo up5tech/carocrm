@@ -1,7 +1,7 @@
 # Phase 22.10 — Journey: project onboarding, Customer Success, and renewal
 
 > **Date:** 2026-10-28
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §13.3 (steps 1–9) and its acceptance assertions
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.3 (steps 1–9) and its acceptance assertions
 > **Test:** `apps/api/test/phase22-journey-project-customer-success.test.ts` (11 ordered steps)
 > **Depends on:** `docs/quality/phase-22-journey-lead-to-customer.md` (22.8), `docs/quality/phase-22-journey-quote-to-signature.md` (22.9)
 > **Status:** Implemented. The journey runs end to end against the configured primary database; the two acceptance assertions hold.

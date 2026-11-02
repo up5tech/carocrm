@@ -6,7 +6,7 @@ import { ProviderError } from './provider-error.js';
 
 /**
  * Phase 19-INT.11 — retry policy, rate limiting and the circuit breaker
- * (`PLAN_Phase_19_Advanced_Integrations.md` §11.2; `19-INT.11`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §11.2; `19-INT.11`).
  *
  * The three mechanisms live together because they answer the same question from different angles:
  * **how often may we call this provider right now?**

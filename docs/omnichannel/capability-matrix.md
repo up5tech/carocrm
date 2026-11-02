@@ -1,6 +1,6 @@
 # Phase 19-OM.0 — Omnichannel capability matrix
 
-> Companion to `docs/omnichannel/repository-audit.md`. `PLAN_Phase_19_Omnichannel.md` §14 `19-OM.0`.
+> Companion to `docs/omnichannel/repository-audit.md`. `plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.0`.
 > Read the audit first: every row here refers to it by section (e.g. *audit §4.5*).
 >
 > **Status legend**
@@ -202,7 +202,7 @@ A blunt readiness read for the 23 sub-phases, **after the three OM.0 decisions w
 
 ## J. Decisions locked at Phase 19-OM.0
 
-Recorded in `PLAN_Phase_19_Omnichannel.md` §0.2. They are binding on every later sub-phase.
+Recorded in `plans/PLAN_Phase_19_Omnichannel.md` §0.2. They are binding on every later sub-phase.
 
 | # | Decision | Replaces |
 | --- | --- | --- |

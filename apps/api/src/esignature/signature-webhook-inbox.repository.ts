@@ -9,7 +9,7 @@ import { canonicalJson } from './esignature-snapshot.js';
 
 /**
  * Phase 19-ES.2 — the webhook inbox: the durable receipt, before anything is decided
- * (`PLAN_Phase_19_ESignature.md` §10.1, §8.3, §10.3).
+ * (`plans/PLAN_Phase_19_ESignature.md` §10.1, §8.3, §10.3).
  *
  * The intake rule is that the HTTP handler does almost nothing: verify, persist, acknowledge. This
  * table is where "persist" lands, and its shape encodes the rest of §10.1 —

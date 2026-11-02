@@ -1,6 +1,6 @@
 # Omnichannel — consent, preferences, retention and data rights
 
-> Phase 19-OM.18 (`PLAN_Phase_19_Omnichannel.md` §14). Companion to the feature contract (§6, §9) and
+> Phase 19-OM.18 (`plans/PLAN_Phase_19_Omnichannel.md` §14). Companion to the feature contract (§6, §9) and
 > `docs/modules/voice-communications/privacy-and-retention.md`. **Omnichannel owns no consent store.**
 
 ## 1. Consent source of truth (per channel, never merged)

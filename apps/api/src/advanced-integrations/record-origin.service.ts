@@ -5,7 +5,7 @@ import { DatabaseService } from '../database/database.service.js';
 
 /**
  * Phase 19-INT.13 — the origin of a CRM change
- * (`PLAN_Phase_19_Advanced_Integrations.md` §11.6; `19-INT.13`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §11.6; `19-INT.13`).
  *
  * This is how an **echo** is prevented. Without it, an inbound sync writes a CRM record, the
  * write produces a domain event, the event produces an outbound operation, and the outbound

@@ -31,7 +31,7 @@ const EMPTY_ROLE: ProjectRolePolicy = {
 };
 
 /**
- * Project membership and role policy (PLAN_Phase_19_Projects.md §4.4, §9).
+ * Project membership and role policy (plans/PLAN_Phase_19_Projects.md §4.4, §9).
  *
  * Two jobs, deliberately kept apart:
  *  - the record-scope decision, which mirrors the SQL the record store emits so a list and a

@@ -25,7 +25,7 @@ import { ProviderError } from '../src/advanced-integrations/provider-error.js';
 
 /**
  * Phase 19-INT.16–19-INT.24 — the connector tests
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12, §17.1; `19-INT.16`–`19-INT.24`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12, §17.1; `19-INT.16`–`19-INT.24`).
  *
  * These are **unit** tests: no database, no network, no clock. Every provider is reached through
  * an injected `fetch`, so a test can never open a socket, and the assertions are about behaviour

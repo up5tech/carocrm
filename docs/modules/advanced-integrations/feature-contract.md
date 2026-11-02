@@ -1,6 +1,6 @@
 # Advanced Integrations — feature contract
 
-> Phase 19-INT.1 deliverable (`PLAN_Phase_19_Advanced_Integrations.md` §19 `19-INT.1`).
+> Phase 19-INT.1 deliverable (`plans/PLAN_Phase_19_Advanced_Integrations.md` §19 `19-INT.1`).
 > Acceptance: *decisions and unresolved dependencies are documented; no connector is enabled by default.*
 > Repository audit: `docs/implementation/advanced-integrations-audit.md`.
 > Compatibility: `docs/compatibility/advanced-integrations.md` · `provider-matrix.md`.

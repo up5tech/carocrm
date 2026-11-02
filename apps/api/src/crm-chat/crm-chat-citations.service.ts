@@ -8,7 +8,7 @@ import type { EntityCrudService } from '../entity/entity.service.js';
 import { EntityCrudService as EntityService } from '../entity/entity.service.js';
 
 /**
- * Phase 19-CHAT.8 — citation materialisation (PLAN_Phase_19_CRM_Chat.md §7.4, §17 `19-CHAT.8`;
+ * Phase 19-CHAT.8 — citation materialisation (plans/PLAN_Phase_19_CRM_Chat.md §7.4, §17 `19-CHAT.8`;
  * contract §10, §11).
  *
  * ## Where a citation comes from

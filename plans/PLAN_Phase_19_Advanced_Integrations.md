@@ -14,7 +14,7 @@
 > Threat model: `docs/security/advanced-integrations-threat-model.md`.
 > This document remains the scope, architecture reference and implementation roadmap.
 >
-> **Parent roadmap:** `PLAN.md` — Phase 19: Advanced Domains  
+> **Parent roadmap:** `plans/PLAN.md` — Phase 19: Advanced Domains  
 > **Module name:** `AdvancedIntegrations`  
 > **Module class:** `AdvancedIntegrationsModule`  
 > **Module slug:** `advanced-integrations`  
@@ -32,7 +32,7 @@
 Read these documents before changing the repository:
 
 1. `AGENTS.MD`
-2. `PLAN.md`
+2. `plans/PLAN.md`
 3. The completed or planned module plans for `Sales`, `Projects`, `CustomerSuccess`, `ServiceDesk`, `MarketingAutomation`, `AIAgents`, and `VoiceCommunications`.
 4. Existing integration plans or code for Google, Microsoft 365/Outlook, Zoom, Stripe, Mailchimp, Meta/Facebook Lead Ads, ecommerce, accounting, data enrichment, and webhooks, if any exist in the repository.
 
@@ -1498,7 +1498,7 @@ Threat-model these trust boundaries: CRM users, provider admins, OAuth callbacks
 
 ### Phase 19-INT.0 — Repository Audit and Feature Contract
 
-- Read `PLAN.md`, `AGENTS.MD`, and all relevant completed/planned module plans.
+- Read `plans/PLAN.md`, `AGENTS.MD`, and all relevant completed/planned module plans.
 - Inspect module registration, API conventions, metadata, ACL, queue/jobs, external account storage, secrets, email, webhooks, outbox, audit and frontend admin patterns.
 - Locate any partial integrations or provider-specific code already present.
 - Document existing/partial/missing capability matrix and module boundaries.

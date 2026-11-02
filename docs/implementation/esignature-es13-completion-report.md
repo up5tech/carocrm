@@ -1,6 +1,6 @@
 # Phase 19-ES.13 — Remote Signing Progress UI
 
-> `PLAN_Phase_19_ESignature.md` §13.2, §13.4, §18 `Phase 19-ES.13`.
+> `plans/PLAN_Phase_19_ESignature.md` §13.2, §13.4, §18 `Phase 19-ES.13`.
 > Acceptance: a user can track signer progress without the provider dashboard for routine cases;
 > restricted users cannot view hidden recipient data, source records or event payloads.
 >

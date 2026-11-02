@@ -28,7 +28,7 @@ import { ESignatureRequestService } from './esignature-request.service.js';
 
 /**
  * Phase 19-ES.6 — the signature request draft API
- * (`PLAN_Phase_19_ESignature.md` §8.2, §13.2, §18 `19-ES.6`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.2, §13.2, §18 `19-ES.6`).
  *
  * The routes the wizard and the list screen call. Every one of them delegates to a service that checks
  * the capability *and* the record scope before it answers; the controller only parses shapes, so a

@@ -14,7 +14,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-ES.7 — the template catalog and mapping API
- * (`PLAN_Phase_19_ESignature.md` §6.7, §8.2, §13.1, §18 `19-ES.7`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.7, §8.2, §13.1, §18 `19-ES.7`).
  *
  * The acceptance criteria are the spine:
  *

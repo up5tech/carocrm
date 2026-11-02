@@ -24,7 +24,7 @@ the upstream file layout, and copies no upstream source, asset or translation.
 | An API key secret can be re-read by a super admin | Never returned after the creating response | The server stores only a hash (`auth.service.issueApiKey`), so "shown once" is a property of the data, not a UI rule. Rotation is issue-new + revoke-old, offered as one button. |
 | Layout manager is an `EntityLayoutManager` per entity panel | One shared `LayoutEditor` component hosted by both the Entity Manager and a settings `layout` tab | Copying the editor into the shell would let the two drift. The tab hosts it with the shell's save bar (`usesSaveBar` descriptor flag) and an entity picker; the Entity Manager keeps its inline actions. |
 | User list shows team membership | The list omits `teams`; the editor reads `GET /User/:id` | Keeping the page cheap matters more than one column, and the row the form writes is the row it read. `title` and `phone` are in both DTOs so a save cannot blank them. |
-| Relation panels are administrator-defined layout panels | A **per-entity, administrator-arranged** `detailTabs` section of the entity definition: today's stacked panels, or tabs the entity's detail layout defines | Arranging relations inside the entity's detail layout follows upstream's model (the layout describes the page) rather than deviating from it. The section is entity metadata written through `POST /Metadata/:entity` next to `layouts`, not a per-user preference: a record page is a shared surface, and a page whose sections move per viewer cannot be referenced in support, training or a link. The panels themselves are untouched: the same `/Related` calls, the same ACL, the same link/unlink actions. See `docs/ux/record-tabs.md` and `PLAN_Phase_20_Settings_UX.md` §5.11. |
+| Relation panels are administrator-defined layout panels | A **per-entity, administrator-arranged** `detailTabs` section of the entity definition: today's stacked panels, or tabs the entity's detail layout defines | Arranging relations inside the entity's detail layout follows upstream's model (the layout describes the page) rather than deviating from it. The section is entity metadata written through `POST /Metadata/:entity` next to `layouts`, not a per-user preference: a record page is a shared surface, and a page whose sections move per viewer cannot be referenced in support, training or a link. The panels themselves are untouched: the same `/Related` calls, the same ACL, the same link/unlink actions. See `docs/ux/record-tabs.md` and `plans/PLAN_Phase_20_Settings_UX.md` §5.11. |
 
 ## Behaviour that matches upstream intent
 
@@ -173,7 +173,7 @@ behaviour, so none of them is an EspoCRM compatibility question.
 
 The relation area of a record page can render as today's stacked panels or as tabs the
 administrator arranges in the entity's **detail layout settings**
-(PLAN_Phase_20_Settings_UX.md §5.11). The arrangement is entity metadata, written through
+(plans/PLAN_Phase_20_Settings_UX.md §5.11). The arrangement is entity metadata, written through
 `POST /Metadata/:entity` next to `layouts`; the record page only renders it and offers no editor.
 These are the gaps in the shipped arrangement.
 

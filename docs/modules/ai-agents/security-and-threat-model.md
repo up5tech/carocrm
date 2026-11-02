@@ -1,6 +1,6 @@
 # `AIAgents` security and threat model
 
-> **Plan:** `PLAN_Phase_19_AI_Agents.md` §11, §20 Phase 19-AI.1.
+> **Plan:** `plans/PLAN_Phase_19_AI_Agents.md` §11, §20 Phase 19-AI.1.
 > **Status:** delivered in 19-AI.1; re-reviewed in 19-AI.19.
 > **Scope:** agent definitions, provider gateway, tool execution, approvals, runs, memory, usage and
 > the administration surface.

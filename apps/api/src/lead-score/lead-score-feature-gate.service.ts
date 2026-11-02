@@ -12,7 +12,7 @@ import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 
 /**
  * Phase 19-LS.1 — the single gate in front of every Lead Score operation
- * (`PLAN_Phase_19_LeadScore.md` §9.2, §15.2; audit §2, §9 D13).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §9.2, §15.2; audit §2, §9 D13).
  *
  * LS.1 ships no scoring and no conversion command. It ships the **answer** those commands will ask
  * for first, so that a later phase cannot forget one of the three questions and so that "nothing is

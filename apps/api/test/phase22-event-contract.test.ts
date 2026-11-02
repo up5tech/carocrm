@@ -10,7 +10,7 @@ import { bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 22.6 — the domain-event contract
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §11 task 5; `docs/architecture/contract-catalog.md` §3).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §11 task 5; `docs/architecture/contract-catalog.md` §3).
  *
  * Runs against the configured primary database (AGENTS.md §3.1). Nothing is reset or truncated; the
  * records this run creates are deleted by id.

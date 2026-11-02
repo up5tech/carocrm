@@ -28,7 +28,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, purgeEntityEvents,
 
 /**
  * Phases 19-ES.11–19-ES.16 — Connect intake, projection, embedded signing, completed artifacts and
- * lifecycle actions (`PLAN_Phase_19_ESignature.md` §10, §13.2–§13.4, §16, §18).
+ * lifecycle actions (`plans/PLAN_Phase_19_ESignature.md` §10, §13.2–§13.4, §16, §18).
  *
  * One suite drives the whole post-send story with the fake provider and the configured database:
  *

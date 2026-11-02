@@ -2,7 +2,7 @@ import type { AuthenticatedPrincipal, RequestScope } from "../common/request-sco
 
 /**
  * Phase 19-VC.5 — the documented service-authority model for module internals
- * (`PLAN_Phase_19_Voice_Communications.md` §9.2, §13.3).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §9.2, §13.3).
  *
  * §9.2 is explicit: background work acts under an explicit service identity, never an expired human
  * session and never a silent all-powerful bypass. The webhook processor is the first such worker: it

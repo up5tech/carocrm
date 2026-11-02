@@ -7,7 +7,7 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-OM.10 — the inbox filters are server-side and ACL-scoped
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.10`; acceptance "inbox filters use server-side
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.10`; acceptance "inbox filters use server-side
  * ACL-constrained data, not client filtering").
  *
  * Against the configured primary database (AGENTS.md §3.1). Conversations are created through the

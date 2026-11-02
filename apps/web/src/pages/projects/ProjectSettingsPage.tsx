@@ -9,7 +9,7 @@ import { t } from '../../state/i18n.js';
 import { ProjectShell,useErrorReporter, useProjectCapabilities, useProjectPlan, useProjectRefresh  } from './projectShared.js';
 
 /**
- * Project settings and cloning (PLAN_Phase_19_Projects.md §4.11, §4.15).
+ * Project settings and cloning (plans/PLAN_Phase_19_Projects.md §4.11, §4.15).
  *
  * Each switch is a rule the API enforces as well: turning a feature off hides its controls here and
  * makes the server refuse a direct write to it — but nothing stored is erased, so switching it back

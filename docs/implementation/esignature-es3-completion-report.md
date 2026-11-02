@@ -1,6 +1,6 @@
 # Phase 19-ES.3 — Provider adapter contract and fake adapter
 
-> `PLAN_Phase_19_ESignature.md` §5.2, §9, §10.2, §17, §18 `Phase 19-ES.3`.
+> `plans/PLAN_Phase_19_ESignature.md` §5.2, §9, §10.2, §17, §18 `Phase 19-ES.3`.
 > Acceptance: an end-to-end domain workflow runs with the fake provider; no test needs production
 > credentials; an unsupported capability returns an explicit safe error.
 >

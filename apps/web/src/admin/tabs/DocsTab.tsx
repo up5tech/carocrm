@@ -7,7 +7,7 @@ import { useDocumentForm } from '../document-form.js';
 import { usePublishTabActions } from '../shell.js';
 
 /**
- * The `Docs` settings tab (PLAN_Phase_21_Documentation.md §12, §17 21.7).
+ * The `Docs` settings tab (plans/PLAN_Phase_21_Documentation.md §12, §17 21.7).
  *
  * Two jobs in one screen. The switches decide whether the handbook exists for this instance and where it
  * lives — including `externalUrl`, which is the answer for an organisation that already has a wiki and

@@ -1,6 +1,6 @@
 # Phase 22.4 — Identity, Authorization, and Context Propagation
 
-**Plan:** PLAN_Phase_22_Integration_E2E_Hardening.md §9
+**Plan:** plans/PLAN_Phase_22_Integration_E2E_Hardening.md §9
 **Objective:** Prove that synchronous APIs, background jobs, provider callbacks, and AI-agent actions do not bypass the effective security model.
 **Status:** Implemented and verified · 1 fix applied (Phase 22.0 High-risk #1) · 4 findings recorded
 

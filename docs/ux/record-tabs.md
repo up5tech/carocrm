@@ -1,6 +1,6 @@
 # Record-page relation tabs (Phase 20.18)
 
-Scope: `PLAN_Phase_20_Settings_UX.md` §5.11 and sub-phase 20.18. Two surfaces, one arrangement:
+Scope: `plans/PLAN_Phase_20_Settings_UX.md` §5.11 and sub-phase 20.18. Two surfaces, one arrangement:
 
 - the **record page's relation area** — the cards that list the records related to the one being
   viewed;

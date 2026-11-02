@@ -29,7 +29,7 @@ export interface SalesOptionalIntegration {
   /**
    * The metadata marker an optional module registers when it is installed. Detection reads the
    * metadata registry rather than importing the other module, so absence can never break startup
-   * (PLAN_Phase_19_Sales.md §3.3).
+   * (plans/PLAN_Phase_19_Sales.md §3.3).
    */
   readonly markerEntity: string;
 }
@@ -234,7 +234,7 @@ export const SALES_MODULE = {
   /** API prefix owned by the module's domain commands; entity CRUD stays on `/api/v1/:entity`. */
   apiPrefix: "/api/v1/Sales",
   /**
-   * Phases implemented so far (PLAN_Phase_19_Sales.md §14).
+   * Phases implemented so far (plans/PLAN_Phase_19_Sales.md §14).
    *
    * `19-S.6` is the shared document infrastructure; `19-S.7` is quotes, including rendering a quote
    * through the kernel `document` module and emailing it through the mail module; `19-S.8`/`19-S.9` are

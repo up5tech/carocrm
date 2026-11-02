@@ -6,7 +6,7 @@ import { StorageUsageService } from './storage-usage.service.js';
 
 /**
  * `GET /api/v1/StorageUsage` — the figures behind the Attachments tab
- * (PLAN_Phase_20_Settings_UX.md §4.3 row 5). Administrator-only, enforced in the service.
+ * (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 5). Administrator-only, enforced in the service.
  */
 @ApiTags('admin-panel')
 @Controller('api/v1/StorageUsage')

@@ -40,7 +40,7 @@
 > `docs/marketing-automation/integration.md`; operations:
 > `docs/runbooks/marketing-send-operations.md`; incidents:
 > `docs/runbooks/marketing-provider-incidents.md`.
-> **Parent roadmap:** `PLAN.md` — CRM advanced domains / Marketing Automation  
+> **Parent roadmap:** `plans/PLAN.md` — CRM advanced domains / Marketing Automation  
 > **Module name:** `MarketingAutomation` (**do not add a `Ua` prefix**)  
 > **Module key / slug:** `marketing-automation` (follow repository conventions if they differ)  
 > **Suggested backend class:** `MarketingAutomationModule`  
@@ -53,7 +53,7 @@
 
 ## 0. Instructions for the Coding Agent
 
-Read `AGENTS.MD`, the relevant sections of `PLAN.md`, and this entire plan before implementing this module.
+Read `AGENTS.MD`, the relevant sections of `plans/PLAN.md`, and this entire plan before implementing this module.
 
 ### 0.1 Non-negotiable rules
 
@@ -1237,7 +1237,7 @@ Implement in the order below. Each sub-phase needs its own review and acceptance
 
 **Tasks**
 
-1. Read `PLAN.md`, `AGENTS.MD` and current module conventions.
+1. Read `plans/PLAN.md`, `AGENTS.MD` and current module conventions.
 2. Inventory shared Email, EmailTemplate, Campaign, TargetList, Contact, Lead, Account, Opportunity, consent/preference, Workflow/BPM, job, queue, event bus, ACL, report and Portal components.
 3. Determine whether an inbound/outbound provider layer already exists and identify its guarantees, rate-limits, event handling and tests.
 4. Identify existing CRM campaign analytics and tracking functions to reuse.

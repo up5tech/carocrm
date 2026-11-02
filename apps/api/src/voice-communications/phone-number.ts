@@ -1,6 +1,6 @@
 /**
  * Phase 19-VC.6 — phone-number normalization behind an adapter seam
- * (`PLAN_Phase_19_Voice_Communications.md` §7.1, §15 `19-VC.6` task 1).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.1, §15 `19-VC.6` task 1).
  *
  * Two implementations share one interface:
  *

@@ -16,7 +16,7 @@ import { ReportsPanel } from './omnichannel/ReportsPanel.js';
 
 /**
  * Phase 19-OM.2 — the Omnichannel workspace shell
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`; `docs/omnichannel/feature-contract.md` §3 F1).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`; `docs/omnichannel/feature-contract.md` §3 F1).
  *
  * What OM.2 delivers is the module, not the inbox, so this page answers the operator's real first
  * questions: is the module switched on, which platform pieces are in place, which rights do I hold,

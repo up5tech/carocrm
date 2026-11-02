@@ -1,6 +1,6 @@
 # Customer Success — completion report (Phase 19-CS)
 
-Maps every sub-phase of `PLAN_Phase_19_Customer_Success.md` to what was built, the checks that
+Maps every sub-phase of `plans/PLAN_Phase_19_Customer_Success.md` to what was built, the checks that
 actually ran, their results, and what remains open. Date of this report: 17 October 2026.
 
 **Module id** `CustomerSuccess` (no prefix); **entities keep the `CustomerSuccess` prefix**, and

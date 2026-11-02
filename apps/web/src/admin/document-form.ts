@@ -7,7 +7,7 @@ import { useSettingsDocument, useSettingsDocumentResetter, useSettingsDocumentWr
 import { t } from '../state/i18n.js';
 
 /**
- * One settings document, edited as a draft (PLAN_Phase_20_Settings_UX.md §9.2).
+ * One settings document, edited as a draft (plans/PLAN_Phase_20_Settings_UX.md §9.2).
  *
  * The tab owns the form; this owns the round trip: it reads the server value and its version, keeps a
  * local draft, reports dirtiness, saves with the version it read, and on a 409 keeps the user's input

@@ -3,7 +3,7 @@ import { assertProviderUrl, ProviderHttpError } from '../../../advanced-integrat
 
 /**
  * Phase 19-ES multi-provider follow-on — the HTTP door Dropbox Sign is reached through
- * (`PLAN_Phase_19_ESignature.md` §5.2, §9.3).
+ * (`plans/PLAN_Phase_19_ESignature.md` §5.2, §9.3).
  *
  * DocuSign's transport is reused in shape, not in code: that one is typed for JSON strings, and
  * Dropbox Sign's create-and-send call is `multipart/form-data` with the document bytes inline. The

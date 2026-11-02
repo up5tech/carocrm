@@ -7,7 +7,7 @@ import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 
 /**
  * Phase 19-CHAT.2 — module policy gate
- * (PLAN_Phase_19_CRM_Chat.md §11.1, §13, §17 `19-CHAT.2`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §11.1, §13, §17 `19-CHAT.2`).
  *
  * Two independent decisions, always in this order and never merged:
  *

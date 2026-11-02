@@ -1,11 +1,11 @@
 # Phase 19-VC.0 — Repository audit and feature contract
 
-> `PLAN_Phase_19_Voice_Communications.md` §15 `19-VC.0`.
+> `plans/PLAN_Phase_19_Voice_Communications.md` §15 `19-VC.0`.
 > Acceptance: no code or migration before this document; no assumption that a planned service
 > exists; provider scope and integration contracts agreed; no test database and no duplicate
 > generic entity created.
 
-Audited: `PLAN.md`, `AGENTS.MD`, `pnpm-workspace.yaml`, `apps/api/src`, `packages/*`,
+Audited: `plans/PLAN.md`, `AGENTS.MD`, `pnpm-workspace.yaml`, `apps/api/src`, `packages/*`,
 `database/migrations`, `database/seed-metadata.ts`, the module guide and the existing domain
 modules (Sales, Service Desk, Customer Success, Marketing Automation, AI Agents, Projects, Portal).
 

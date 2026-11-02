@@ -7,7 +7,7 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 22.7 — the out-of-order event contract
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §12 task 4; required scenario "older status event
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §12 task 4; required scenario "older status event
  * arrives after a newer event").
  *
  * Runs against the configured primary database (AGENTS.md §3.1). Nothing is reset or truncated; the

@@ -59,7 +59,7 @@ import { MarketingTemplateService } from "./marketing-template.service.js";
 
 /**
  * Phase 19-MA.8 — the send definition, its audience snapshot and the dry run
- * (PLAN_Phase_19_Marketing_Automation.md §5.5, §5.6, §6.1, §6.2, §8.2, §8.4, §15 `19-MA.8`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.5, §5.6, §6.1, §6.2, §8.2, §8.4, §15 `19-MA.8`).
  *
  * A `MarketingSend` is one message within a campaign, and it is the record of *a decision*: what content
  * (a sealed revision, §6.2), to which frozen audience (an MA.4 snapshot bound by `sendId`), under which

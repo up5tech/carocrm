@@ -1,7 +1,7 @@
 # Phase 22.16 — Browser E2E critical paths
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §15
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §15
 > **Status:** Critical-path browser execution completed green on 2026-10-29 (`pnpm exec playwright test e2e/critical-paths.spec.ts` → 4 passed); phase close dispositions remain.
 
 ---

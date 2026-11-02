@@ -1,7 +1,7 @@
 # Phase 22.24 — Release Readiness and Residual Risk Review
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §23
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §23
 > **Decision: NO-GO for a production release.** The verified scope is substantially hardened, but two
 > release-blocking items remain: no restore evidence / approved RPO-RTO (G80) and no production-grade
 > backup (G81, High: no deployment schedule/off-host copy; the demo artifact is partial and was

@@ -20,7 +20,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, purgeEntityEvents,
 
 /**
  * Phase 19-ES.10 — controlled send and ambiguous outcome recovery
- * (`PLAN_Phase_19_ESignature.md` §4.3, §11.1, §16, §18 `19-ES.10`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.3, §11.1, §16, §18 `19-ES.10`).
  *
  * The acceptance criteria, one group each:
  *

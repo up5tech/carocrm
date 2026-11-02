@@ -10,7 +10,7 @@ import { CRMChatPermissionService } from './crm-chat-permission.service.js';
 import { CRMChatPolicyService } from './crm-chat-policy.service.js';
 
 /**
- * Phase 19-CHAT.12 — action proposal and confirmation (PLAN_Phase_19_CRM_Chat.md §10, §17 `19-CHAT.12`;
+ * Phase 19-CHAT.12 — action proposal and confirmation (plans/PLAN_Phase_19_CRM_Chat.md §10, §17 `19-CHAT.12`;
  * contract §6.4, §10).
  *
  * ## Chat owns no proposal record

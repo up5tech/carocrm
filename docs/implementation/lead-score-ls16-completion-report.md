@@ -1,6 +1,6 @@
 # Phase 19-LS.16 — Optional Opportunity conversion: completion report
 
-`PLAN_Phase_19_LeadScore.md` §7.2, §7.4, §11.4, §16 (`19-LS.16`); audit §11 `LS.16`, decision D5; contract §5.1
+`plans/PLAN_Phase_19_LeadScore.md` §7.2, §7.4, §11.4, §16 (`19-LS.16`); audit §11 `LS.16`, decision D5; contract §5.1
 row 8, §6.2 case 2, §8.4, §13.1; compatibility `docs/compatibility/lead-score.md` §2.4, §4.1, §5.2, §8.
 
 **Exit criterion (plan §16):** *Opportunity create/link inside the same command, Sales stage semantics

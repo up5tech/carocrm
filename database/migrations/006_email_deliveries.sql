@@ -1,4 +1,4 @@
--- 006_email_deliveries.sql — outbound email delivery state (PLAN.md §28.3)
+-- 006_email_deliveries.sql — outbound email delivery state (plans/PLAN.md §28.3)
 --
 -- An Email is an entity record (its content lives in `entity_records.attrs`); this table is the
 -- operational side of the same message: one row per recipient, with what the provider answered.

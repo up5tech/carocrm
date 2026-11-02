@@ -1,6 +1,6 @@
 # AI provider configuration
 
-> **Plan:** `PLAN_Phase_19_AI_Agents.md` §6, §14.4, §20 Phase 19-AI.4.
+> **Plan:** `plans/PLAN_Phase_19_AI_Agents.md` §6, §14.4, §20 Phase 19-AI.4.
 > **Status:** delivered in 19-AI.4.
 > **Audience:** administrators configuring model providers; operators diagnosing a connection.
 

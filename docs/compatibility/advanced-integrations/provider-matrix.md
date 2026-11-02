@@ -1,6 +1,6 @@
 # Advanced Integrations — provider matrix
 
-> Phase 19-INT.0 deliverable (`PLAN_Phase_19_Advanced_Integrations.md` §3.3, §4.2, §19 `19-INT.0`).
+> Phase 19-INT.0 deliverable (`plans/PLAN_Phase_19_Advanced_Integrations.md` §3.3, §4.2, §19 `19-INT.0`).
 > Updated by 19-INT.16–19-INT.24: **nine connectors are implemented.**
 > Parent document: `docs/compatibility/advanced-integrations.md`.
 > Repository audit: `docs/implementation/advanced-integrations-audit.md`.

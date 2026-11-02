@@ -31,7 +31,7 @@ import {
 import { assertHttpUrl, requestVoiceProviderJson } from "./voice-provider-http.js";
 
 /**
- * Twilio adapter — voice, SMS and WhatsApp (`PLAN_Phase_19_Voice_Communications.md` §15
+ * Twilio adapter — voice, SMS and WhatsApp (`plans/PLAN_Phase_19_Voice_Communications.md` §15
  * `19-VC.10`–`19-VC.11`).
  *
  * Implemented against Twilio's documented REST API (`2010-04-01`) and `X-Twilio-Signature`

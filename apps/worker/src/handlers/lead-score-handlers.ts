@@ -5,7 +5,7 @@ import { type DomainEventBus, subscribeToMutation } from '../events/domain-event
 
 /**
  * Phase 19-LS.6 — the Lead Score worker side
- * (`PLAN_Phase_19_LeadScore.md` §4.2, §9.3, §10.2, §11.1, §16 `19-LS.6`; audit §5.4).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §4.2, §9.3, §10.2, §11.1, §16 `19-LS.6`; audit §5.4).
  *
  * Three pieces, and none of them decides anything about scoring:
  *

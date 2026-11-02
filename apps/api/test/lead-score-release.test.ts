@@ -12,7 +12,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.18 — the release sweep: reporting, the security matrix, concurrency, the query and migration
- * review (`PLAN_Phase_19_LeadScore.md` §16 `19-LS.18`; audit §11 `LS.18`).
+ * review (`plans/PLAN_Phase_19_LeadScore.md` §16 `19-LS.18`; audit §11 `LS.18`).
  *
  * The plan's exit criterion for this phase is *"every requirement is mapped to an implementation and a
  * verification result; no unresolved critical security or data-integrity defect remains"*. The mapping lives in

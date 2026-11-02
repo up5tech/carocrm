@@ -6,7 +6,7 @@ import type { SignatureRequest } from './signature-request.repository.js';
 
 /**
  * Phase 19-ES.18 — the ESignature domain-event contract
- * (`PLAN_Phase_19_ESignature.md` §15, §18 `19-ES.18`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §15, §18 `19-ES.18`).
  *
  * Every lifecycle fact the CRM announces goes through the platform's transactional outbox (`EventBus`),
  * never through a provider-shaped payload or a direct module-to-module call. The contract is

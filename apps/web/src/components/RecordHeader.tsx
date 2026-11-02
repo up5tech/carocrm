@@ -21,7 +21,7 @@ export interface RecordHeaderProps {
 }
 
 /**
- * The record page's sticky header (PLAN_Phase_20_Settings_UX.md §5.4).
+ * The record page's sticky header (plans/PLAN_Phase_20_Settings_UX.md §5.4).
  *
  * It keeps the record's identity in view while the page scrolls: the name (editable in place when
  * the caller may edit), the entity it belongs to, and the two fields a reader asks about first —

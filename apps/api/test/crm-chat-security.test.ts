@@ -6,7 +6,7 @@ import { restoreSettings, snapshotSettings } from './support/settings-snapshot.j
 
 /**
  * Phase 19-CHAT.15 — Privacy, Security, and Audit Hardening tests
- * (PLAN_Phase_19_CRM_Chat.md §12, §16.3, §17 `19-CHAT.15`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §12, §16.3, §17 `19-CHAT.15`).
  *
  * These tests verify that:
  * - Prompt injection attempts are handled safely

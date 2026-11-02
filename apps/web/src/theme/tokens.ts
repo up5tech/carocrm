@@ -1,6 +1,6 @@
 /**
  * CaroCRM design tokens — the single source of truth for the SPA's visual language
- * (PLAN_Phase_20_Settings_UX.md §20.20).
+ * (plans/PLAN_Phase_20_Settings_UX.md §20.20).
  *
  * Every colour the interface uses is named here. `styles/tokens.css` is generated to declare each
  * token as a `--carocrm-*` custom property (the only place a literal colour may appear in the web
@@ -60,7 +60,7 @@ export const COLOR = {
 } as const;
 
 /**
- * The dark half of the palette (PLAN_Phase_20_Settings_UX.md §20.21). Every token has a dark
+ * The dark half of the palette (plans/PLAN_Phase_20_Settings_UX.md §20.21). Every token has a dark
  * value — a missing one is a white panel that survives into dark mode, which is exactly the defect
  * the dark-mode pass exists to remove.
  *

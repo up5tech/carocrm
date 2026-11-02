@@ -4,7 +4,7 @@ A read-only audit of the shipped SPA (`apps/web`), taken after Phase 20.19, to d
 Phase 20 UX half still needs. It is a **review plus a proposal**, not a redesign: everything below is
 expressed in the existing `carocrm-*` design language and the existing kernel (metadata, ACL,
 `/Preferences`, admin descriptors). The proposed sub-phases 20.20–20.27 are written into
-`PLAN_Phase_20_Settings_UX.md` §17.
+`plans/PLAN_Phase_20_Settings_UX.md` §17.
 
 Every number in this document was measured on the working tree at commit time; the command that
 produces it is listed in §7 so the review can be re-run instead of trusted.
@@ -202,7 +202,7 @@ Worth stating explicitly so the upgrade list does not turn into a rewrite:
 ## 5. Proposed upgrade path
 
 Seven sub-phases, ordered by dependency and by how much they unlock. Full scope, acceptance criteria
-and verification plans are in `PLAN_Phase_20_Settings_UX.md` §17.
+and verification plans are in `plans/PLAN_Phase_20_Settings_UX.md` §17.
 
 | # | Sub-phase | Priority | Depends on | Why it is worth the work |
 |---|---|---|---|---|

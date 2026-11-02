@@ -5,7 +5,7 @@ import { authHeader, bootApi, createTestUser, shutdownApi } from './support/boot
 
 /**
  * Phase 20.7 — the identity API the administration tabs are built on
- * (PLAN_Phase_20_Settings_UX.md §4.7, §10.1). Runs against the configured database; every account,
+ * (plans/PLAN_Phase_20_Settings_UX.md §4.7, §10.1). Runs against the configured database; every account,
  * role and team it creates carries this run's marker and is removed again.
  */
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

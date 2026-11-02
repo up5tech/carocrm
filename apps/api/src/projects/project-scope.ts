@@ -3,7 +3,7 @@ import type { AclAction } from '@carocrm/acl/types/index.js';
 import { type ProjectRolePolicy,ROLE_FIELD_FOR_ACTION, ROLE_SCOPE_ALL, ROLE_SCOPE_ASSIGNED, ROLE_SCOPE_OWN } from './project-domain.js';
 
 /**
- * Which records a `ProjectRole` speaks for, and with which of its fields (PLAN_Phase_19_Projects.md
+ * Which records a `ProjectRole` speaks for, and with which of its fields (plans/PLAN_Phase_19_Projects.md
  * §4.4, §9). This is the only place that turns an entity/action pair into role semantics, and every
  * value here is an application constant: the ACL evaluator and the record store take the descriptor
  * as data, so no request can name a role field or a permitted value.

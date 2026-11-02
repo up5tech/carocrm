@@ -14,7 +14,7 @@ import {
  * Phase 19-S.7 — a quote as a document.
  *
  * The kernel's `document` module renders a template and lays a block model out; it deliberately knows
- * nothing about quotes (PLAN_Phase_19_Sales.md §4.4 keeps the document engine type-agnostic). So the
+ * nothing about quotes (plans/PLAN_Phase_19_Sales.md §4.4 keeps the document engine type-agnostic). So the
  * block model of a *quote* is this module's job, built from the shared block vocabulary in
  * `render-blocks.ts` and from the same facts the engine already froze: the document's own totals.
  *

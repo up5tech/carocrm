@@ -1,6 +1,6 @@
 # ESignature — operations and recovery runbook
 
-> Phase 19-ES.20 deliverable (`PLAN_Phase_19_ESignature.md` §14, §16, §18 `19-ES.20`).
+> Phase 19-ES.20 deliverable (`plans/PLAN_Phase_19_ESignature.md` §14, §16, §18 `19-ES.20`).
 > Companion documents: `docs/compatibility/esignature.md` · `esignature-es20-completion-report.md`.
 > UI: **E-Signature → Operations and recovery** (`/esignature`, shown to `SignatureConnection:read`).
 

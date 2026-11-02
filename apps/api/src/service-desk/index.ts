@@ -29,7 +29,7 @@ export { SlaService } from "./sla.service.js";
 export { WebToCaseService } from "./web-to-case.service.js";
 
 /**
- * Phase 19-SD.1 – 19-SD.7 — Service Desk module barrel (PLAN_Phase_19_ServiceDesk.md §7.1).
+ * Phase 19-SD.1 – 19-SD.7 — Service Desk module barrel (plans/PLAN_Phase_19_ServiceDesk.md §7.1).
  */
 export const SERVICE_DESK_CONTROLLERS: Type<unknown>[] = [ServiceDeskController];
 

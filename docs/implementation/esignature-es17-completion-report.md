@@ -1,6 +1,6 @@
 # Phase 19-ES.17 — Approval Workflow and Policy Engine
 
-> `PLAN_Phase_19_ESignature.md` §11.1, §11.2, §18 `Phase 19-ES.17`.
+> `plans/PLAN_Phase_19_ESignature.md` §11.1, §11.2, §18 `Phase 19-ES.17`.
 > Acceptance: a request cannot be sent while a required approval is pending or rejected; an approval
 > applies only to the exact reviewed snapshot; every decision is auditable.
 >

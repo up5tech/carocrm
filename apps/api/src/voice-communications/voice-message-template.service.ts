@@ -10,7 +10,7 @@ import { VoiceCommunicationsSettingsService } from './voice-communications-setti
 
 /**
  * Phase 19-VC.14 — shared service templates (local snippets) and composer validation
- * (`PLAN_Phase_19_Voice_Communications.md` §10.1, §15 `19-VC.14`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §10.1, §15 `19-VC.14`).
  *
  * Deliberate boundaries:
  *  - **No HTML, ever.** A snippet is plain text. Placeholders are `{{name}}` tokens with a strict

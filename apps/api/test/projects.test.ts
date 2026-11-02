@@ -7,7 +7,7 @@ import { projectFixture, reasonOf } from './support/projects-fixtures.js';
 
 /**
  * Phase 19 — Projects: records, boards, groups, tasks and the read projections
- * (PLAN_Phase_19_Projects.md §12.2, §12.3). Admin-token calls only; the role and membership rules
+ * (plans/PLAN_Phase_19_Projects.md §12.2, §12.3). Admin-token calls only; the role and membership rules
  * are in `projects-security.test.ts`.
  */
 let ctx: ApiContext;

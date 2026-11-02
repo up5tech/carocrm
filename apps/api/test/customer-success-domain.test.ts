@@ -21,7 +21,7 @@ import {
 import { type HealthFacts, SupportSignalProvider } from '../src/customer-success/customer-success-signals.js';
 
 /**
- * Phase 19-CS unit tests (PLAN_Phase_19_Customer_Success.md §15.1).
+ * Phase 19-CS unit tests (plans/PLAN_Phase_19_Customer_Success.md §15.1).
  *
  * The health engine, lifecycle policy, goal progress, risk rules, playbook validation, renewal
  * windows and meaningful-touch qualification are pure functions, so they are exercised here without a

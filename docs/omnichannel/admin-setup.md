@@ -1,6 +1,6 @@
 # Omnichannel — administrator setup
 
-> Phase 19-OM.23 (`PLAN_Phase_19_Omnichannel.md` §14). This is the customer-facing configuration
+> Phase 19-OM.23 (`plans/PLAN_Phase_19_Omnichannel.md` §14). This is the customer-facing configuration
 > checklist for the first release. Operations incidents are in `runbook.md`; scope and known
 > limitations are in `release-readiness.md`.
 

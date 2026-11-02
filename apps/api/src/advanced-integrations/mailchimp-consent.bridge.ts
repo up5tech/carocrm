@@ -6,7 +6,7 @@ import { RecordOriginService } from './record-origin.service.js';
 
 /**
  * Phase 19-INT.20 / 19-INT.25 — the Mailchimp consent bridge
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.5, §14.2; `19-INT.20`, `19-INT.25`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.5, §14.2; `19-INT.20`, `19-INT.25`).
  *
  * An external unsubscribe, a complaint and a hard bounce are **three different facts**, and the
  * plan requires each of them to reach `MarketingAutomation` *"promptly, using its explicit

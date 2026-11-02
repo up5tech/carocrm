@@ -31,7 +31,7 @@ import { authHeader, bootApi, shutdownApi } from "./support/boot-api.js";
 
 /**
  * Phase 19-MA.7 — provider adapter, capability metadata, error classification, the rate/concurrency
- * interface and the safe test send (PLAN_Phase_19_Marketing_Automation.md §5.8, §8.2, §10.2, §10.5,
+ * interface and the safe test send (plans/PLAN_Phase_19_Marketing_Automation.md §5.8, §8.2, §10.2, §10.5,
  * §15 `19-MA.7`).
  *
  * Two halves, because the phase has two different risks:

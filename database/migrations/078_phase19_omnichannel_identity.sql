@@ -1,4 +1,4 @@
--- Phase 19-OM.7 — Omnichannel identity resolution (PLAN_Phase_19_Omnichannel.md §14 OM.7;
+-- Phase 19-OM.7 — Omnichannel identity resolution (plans/PLAN_Phase_19_Omnichannel.md §14 OM.7;
 -- docs/omnichannel/feature-contract.md §6).
 --
 -- The Voice contact resolver matches a stored `phoneNumber` as digits

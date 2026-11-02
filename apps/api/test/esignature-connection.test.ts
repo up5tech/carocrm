@@ -14,7 +14,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-ES.4 — DocuSign OAuth and the connection lifecycle, through the API
- * (`PLAN_Phase_19_ESignature.md` §8.1, §9.2, §13.4, §18 `19-ES.4`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.1, §9.2, §13.4, §18 `19-ES.4`).
  *
  * Runs against the already-configured primary database (AGENTS.md §3.1): no database, schema or copy is
  * created; every row carries this run's marker and is removed by its exact id afterwards, children

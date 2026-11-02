@@ -1,6 +1,6 @@
 # Advanced Integrations — compatibility and behavior reference
 
-> Phase 19-INT.0 deliverable (`PLAN_Phase_19_Advanced_Integrations.md` §3.3, §4.2, §19 `19-INT.0`).
+> Phase 19-INT.0 deliverable (`plans/PLAN_Phase_19_Advanced_Integrations.md` §3.3, §4.2, §19 `19-INT.0`).
 > Status: **audit complete; the module is implemented (19-INT.0–19-INT.27).**
 > Canonical module name: `AdvancedIntegrations` (no `Ua` prefix). API prefix:
 > `/api/v1/AdvancedIntegrations`; webhook prefix:

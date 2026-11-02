@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 /**
  * Phase 19-LS.2 — the "this write comes from a Lead Score domain service" marker, and the field lists
- * the write guard protects (`PLAN_Phase_19_LeadScore.md` §5, §7.6; audit §4, §6).
+ * the write guard protects (`plans/PLAN_Phase_19_LeadScore.md` §5, §7.6; audit §4, §6).
  *
  * Two different callers write the same rows: a user through the generic `/api/v1/Lead/:id` API, and a
  * Lead Score domain service through `EntityCrudService` (storing a score projection, appending an

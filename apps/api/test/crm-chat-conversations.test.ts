@@ -6,7 +6,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-CHAT.4 — conversation and message APIs
- * (`PLAN_Phase_19_CRM_Chat.md` §17 `19-CHAT.4`; contract §6.2, §7.6, §13).
+ * (`plans/PLAN_Phase_19_CRM_Chat.md` §17 `19-CHAT.4`; contract §6.2, §7.6, §13).
  *
  * Acceptance: two users cannot read or mutate one another's private conversations; message history is
  * paginated and stable under concurrent inserts; repeated submissions with one idempotency key cannot

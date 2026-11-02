@@ -7,7 +7,7 @@ import { authHeader, bootApi, createTestRole, createTestTeam, createTestUser, sh
 
 /**
  * Phase 19-OM.12 — canned replies and per-agent drafts
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.12`; migration 080).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.12`; migration 080).
  *
  * Against the configured primary database (AGENTS.md §3.1). Snippets are created through the owner's
  * endpoint (`om12_*` keys), the conversation through the owner's ingest service, and every row this

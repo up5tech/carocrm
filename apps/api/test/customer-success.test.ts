@@ -5,7 +5,7 @@ import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestUser, purgeEntityEvents, shutdownApi } from './support/boot-api.js';
 
 /**
- * Phase 19-CS — Customer Success API/integration tests (PLAN_Phase_19_Customer_Success.md §15.2, §15.3).
+ * Phase 19-CS — Customer Success API/integration tests (plans/PLAN_Phase_19_Customer_Success.md §15.2, §15.3).
  *
  * These run against the already-configured primary database through the real HTTP API (AGENTS.md §3.1):
  * no database, schema or container is created. Every record this suite makes carries the `runId` marker

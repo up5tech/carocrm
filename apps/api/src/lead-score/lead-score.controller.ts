@@ -29,7 +29,7 @@ import { LeadScoreReportService } from './lead-score-report.service.js';
 import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 
 /**
- * Phase 19-LS.1 — the `LeadScore` control plane (`PLAN_Phase_19_LeadScore.md` §4.1, §8, §16 `19-LS.1`).
+ * Phase 19-LS.1 — the `LeadScore` control plane (`plans/PLAN_Phase_19_LeadScore.md` §4.1, §8, §16 `19-LS.1`).
  *
  * What exists here grows with each sub-phase, and every route passes the same permission service and the
  * same gate rather than re-implementing a check: LS.1 added identity, rights, the settings document and the

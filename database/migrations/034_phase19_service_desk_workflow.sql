@@ -1,5 +1,5 @@
 -- Phase 19-SD — Service Desk state machine, queues, routing and history
--- (PLAN_Phase_19_ServiceDesk.md §5.2, §5.3, §6.1; sub-phases 19-SD.4 and 19-SD.5).
+-- (plans/PLAN_Phase_19_ServiceDesk.md §5.2, §5.3, §6.1; sub-phases 19-SD.4 and 19-SD.5).
 --
 -- Case, queue, routing-rule and history records all live in the generic `entity_records` store
 -- (JSONB `attrs`), exactly like every other CRM entity, so the Entity Engine keeps CRUD, validation,

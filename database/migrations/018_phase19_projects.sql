@@ -1,4 +1,4 @@
--- Phase 19 — Projects (PLAN_Phase_19_Projects.md §5).
+-- Phase 19 — Projects (plans/PLAN_Phase_19_Projects.md §5).
 --
 -- Project records live in the generic `entity_records` store (JSONB `attrs`) exactly like every
 -- other CRM entity, so the Entity Engine keeps ownership of CRUD, validation, audit, stream and

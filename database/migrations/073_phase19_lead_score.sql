@@ -1,4 +1,4 @@
--- Phase 19-LS.2 — Lead Score schema foundation (PLAN_Phase_19_LeadScore.md §5, §16 `19-LS.2`;
+-- Phase 19-LS.2 — Lead Score schema foundation (plans/PLAN_Phase_19_LeadScore.md §5, §16 `19-LS.2`;
 -- repository audit docs/implementation/lead-score-audit.md §4, decisions D3/D7).
 --
 -- What this file is.

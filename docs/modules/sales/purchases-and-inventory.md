@@ -7,7 +7,7 @@ how a quantity is tracked.
 
 Reference: EspoCRM Sales Pack documentation — Purchases, Purchase Orders, Receipt Orders, Bills, Bill
 Credits and Inventory Management (<https://docs.espocrm.com/extensions/sales-pack/overview/>),
-reproduced as clean-room TypeScript behaviour. `PLAN_Phase_19_Sales.md` §4.11, §4.15 and §4.12 are the
+reproduced as clean-room TypeScript behaviour. `plans/PLAN_Phase_19_Sales.md` §4.11, §4.15 and §4.12 are the
 product requirements.
 
 ## Purchasing (19-S.13)

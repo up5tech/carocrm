@@ -3,7 +3,7 @@ import type { JobContext, JobHandler, JobRegistry } from '@carocrm/jobs';
 
 /**
  * Phase 19-ES.11 / 19-ES.15 — ESignature's background work, registered in the worker composition root
- * (`PLAN_Phase_19_ESignature.md` §10.1, §16, §18).
+ * (`plans/PLAN_Phase_19_ESignature.md` §10.1, §16, §18).
  *
  * Like every other module handler, it does not touch the module's tables itself. Applying a provider
  * event and retrieving completed artifacts are domain operations that go through the state machine,

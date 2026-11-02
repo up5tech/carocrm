@@ -15,7 +15,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.12 — the field map and the side-effect-free conversion preview
- * (`PLAN_Phase_19_LeadScore.md` §5.7, §7.1–§7.4, §8.3, §11.4, §16 `19-LS.12`; audit §11 `LS.12`;
+ * (`plans/PLAN_Phase_19_LeadScore.md` §5.7, §7.1–§7.4, §8.3, §11.4, §16 `19-LS.12`; audit §11 `LS.12`;
  * contract §7, §8).
  *
  * The exit criterion is *"the preview is side-effect-free and faithfully describes the operation that would

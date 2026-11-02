@@ -4,7 +4,7 @@ Implemented in `apps/api/src/customer-success` (backend), registered once in
 `apps/api/src/app.module.ts`, with metadata in `database/seed-metadata.ts`, the idempotent seed rows
 in `database/seed.ts` and one additive migration,
 `database/migrations/032_phase19_customer_success.sql`. Functional reference: the documented product
-requirements in [`PLAN_Phase_19_Customer_Success.md`](../../PLAN_Phase_19_Customer_Success.md),
+requirements in [`plans/PLAN_Phase_19_Customer_Success.md`](../../../plans/PLAN_Phase_19_Customer_Success.md),
 reproduced as clean-room TypeScript behaviour — no upstream source, asset, translation or schema is
 copied.
 

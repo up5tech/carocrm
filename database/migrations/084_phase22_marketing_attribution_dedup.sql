@@ -1,5 +1,5 @@
 -- Phase 22.12 — an attributed conversion is recorded once per correlation id
--- (PLAN_Phase_22_Integration_E2E_Hardening.md §13.5 step 8, and the §12 rule this closes: "a duplicate
+-- (plans/PLAN_Phase_22_Integration_E2E_Hardening.md §13.5 step 8, and the §12 rule this closes: "a duplicate
 -- delivery never produces a second business effect").
 --
 -- `POST /api/v1/MarketingAutomation/action/attribution` is how another module tells Marketing Automation

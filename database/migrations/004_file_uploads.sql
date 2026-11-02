@@ -1,4 +1,4 @@
--- 004_file_uploads.sql — chunked uploads for large files (PLAN.md §25)
+-- 004_file_uploads.sql — chunked uploads for large files (plans/PLAN.md §25)
 --
 -- A client reserves an upload, sends parts out of order if it likes, then completes: the parts are
 -- assembled into the final storage key, scanned and turned into one `attachments` row. Only

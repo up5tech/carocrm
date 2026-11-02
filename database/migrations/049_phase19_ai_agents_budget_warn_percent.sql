@@ -1,5 +1,5 @@
 -- Phase 19-AI.13 — soft-limit warning threshold on budget policies
--- (PLAN_Phase_19_AI_Agents.md §12.3: "soft limits should emit warnings … not silently become
+-- (plans/PLAN_Phase_19_AI_Agents.md §12.3: "soft limits should emit warnings … not silently become
 -- hard limits"). Additive and nullable: an existing policy keeps its hard limits and simply
 -- never warns until an administrator sets a threshold.
 

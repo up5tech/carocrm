@@ -1,6 +1,6 @@
 # Omnichannel — security, privacy and resilience hardening (19-OM.22)
 
-> Phase 19-OM.22 (`PLAN_Phase_19_Omnichannel.md` §14). Scope: the module's core data paths —
+> Phase 19-OM.22 (`plans/PLAN_Phase_19_Omnichannel.md` §14). Scope: the module's core data paths —
 > cross-channel identity, public web chat, provider webhooks, conversation/message reads, exports,
 > attachments/media, and AI assistance. Method: a route-by-route ACL review, a data-flow review for
 > customer-visible vs agent-only fields, a webhook/session review, dependency and license inspection,

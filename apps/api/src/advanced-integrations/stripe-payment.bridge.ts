@@ -7,7 +7,7 @@ import { RecordOriginService } from './record-origin.service.js';
 
 /**
  * Phase 19-INT.19 / 19-INT.25 — the Stripe payment bridge
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.4, §14.2; `19-INT.19`, `19-INT.25`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.4, §14.2; `19-INT.19`, `19-INT.25`).
  *
  * A Stripe payment event is a fact about money, so it is applied through the **`Sales` contract**
  * `sales.payment.providerEvent` and **not** through the generic mapping path. That single

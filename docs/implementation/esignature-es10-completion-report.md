@@ -1,6 +1,6 @@
 # Phase 19-ES.10 — Controlled Send and Ambiguous Outcome Recovery
 
-> `PLAN_Phase_19_ESignature.md` §4.3, §11.1, §11.2, §16, §18 `Phase 19-ES.10`.
+> `plans/PLAN_Phase_19_ESignature.md` §4.3, §11.1, §11.2, §16, §18 `Phase 19-ES.10`.
 > Acceptance: one deliberate action results in at most one effective send in tested retry scenarios; an
 > ambiguous outcome results in `send_unknown` or a reconciliation state, never an unsafe blind retry; all
 > sends record sender, time, source, documents and recipients.

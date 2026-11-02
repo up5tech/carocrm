@@ -21,7 +21,7 @@ import {
 
 /**
  * Phase 19-INT.16–19-INT.24 — the connector catalog registration
- * (`PLAN_Phase_19_Advanced_Integrations.md` §5.2, §12; `19-INT.16`–`19-INT.24`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §5.2, §12; `19-INT.16`–`19-INT.24`).
  *
  * The registry is **code-registered** (ADR 0002, decision 5), so a connector's capability
  * declaration cannot drift from the adapter that implements it. This service is where the nine

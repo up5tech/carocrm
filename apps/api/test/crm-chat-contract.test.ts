@@ -16,7 +16,7 @@ import { CRM_CHAT_CAPABILITIES, CRM_CHAT_FEATURES } from '../src/crm-chat/crm-ch
 
 /**
  * Phase 19-CHAT.1/19-CHAT.2 — the contract cannot drift from the code or from the document
- * (`PLAN_Phase_19_CRM_Chat.md` §17; deliverable "Versioned TypeScript/OpenAPI contract proposal").
+ * (`plans/PLAN_Phase_19_CRM_Chat.md` §17; deliverable "Versioned TypeScript/OpenAPI contract proposal").
  *
  * Three artifacts describe the same surface: the prose contract
  * (`docs/architecture/crm-chat-contract.md`), the route table in `crm-chat-contract.ts`, and the

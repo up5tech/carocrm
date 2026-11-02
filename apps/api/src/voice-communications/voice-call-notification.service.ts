@@ -8,7 +8,7 @@ import { VoiceCommunicationsSettingsService } from "./voice-communications-setti
 
 /**
  * Phase 19-VC.9 — incoming-call notifications
- * (`PLAN_Phase_19_Voice_Communications.md` §7.2, §15 `19-VC.9`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.2, §15 `19-VC.9`).
  *
  * The platform has no realtime gateway (audit §1), so the popup's delivery mechanism is the existing
  * `notifications` table — the same store Service Desk and Customer Success write — and the SPA polls

@@ -9,7 +9,7 @@ import { t } from '../../state/i18n.js';
 import { PROJECT_STATUS_COLORS, useErrorReporter, useProjectRefresh } from './projectShared.js';
 
 /**
- * The task and milestone editor (PLAN_Phase_19_Projects.md §8.2).
+ * The task and milestone editor (plans/PLAN_Phase_19_Projects.md §8.2).
  *
  * A control appears only when the project has that feature on *and* the server says the caller may
  * use it; the same rule is enforced again by the API, so this is presentation, never permission

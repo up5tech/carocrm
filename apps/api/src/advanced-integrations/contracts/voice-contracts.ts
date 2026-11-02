@@ -7,7 +7,7 @@ import { IntegrationContractRegistry } from '../integration-contracts.js';
 
 /**
  * Phase 19-INT.25 — the `VoiceCommunications` contract
- * (`PLAN_Phase_19_Advanced_Integrations.md` §14.2, §19 `19-INT.25`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §14.2, §19 `19-INT.25`).
  *
  * `VoiceCommunications` owns communication delivery, and with it the opt-outs: a person who asked
  * a number not to be called must not be called by anything, including a connector.

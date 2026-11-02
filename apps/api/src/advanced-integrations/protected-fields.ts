@@ -1,6 +1,6 @@
 /**
  * Phase 19-INT.25 — the protected field policy
- * (`PLAN_Phase_19_Advanced_Integrations.md` §14.2; `19-INT.25`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §14.2; `19-INT.25`).
  *
  * The plan says: *"Do not allow imported payload fields to assign owners, teams, permissions,
  * roles, payment status, consent, or other protected values unless an explicit reviewed mapping and

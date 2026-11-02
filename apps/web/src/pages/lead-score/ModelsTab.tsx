@@ -26,7 +26,7 @@ import { VersionDiffModal } from './VersionDiffModal.js';
 
 /**
  * Phase 19-LS.8 — the model list and the lifecycle of one version
- * (`PLAN_Phase_19_LeadScore.md` §5.1, §6.1, §9.3, §16 `19-LS.8`; audit §11).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §5.1, §6.1, §9.3, §16 `19-LS.8`; audit §11).
  *
  * The split between this screen and the API is the one the module was built on:
  *

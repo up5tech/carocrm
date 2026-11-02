@@ -1,13 +1,13 @@
 # Phase 19-ES.0 — Repository audit and feature contract
 
-> `PLAN_Phase_19_ESignature.md` §18 `Phase 19-ES.0`. Continued by
+> `plans/PLAN_Phase_19_ESignature.md` §18 `Phase 19-ES.0`. Continued by
 > `esignature-es1-completion-report.md` (19-ES.1), `esignature-es2-completion-report.md` (19-ES.2)
 > and `esignature-es3-completion-report.md` (19-ES.3).
 > Acceptance: no code or migration before this document; no assumption that a planned service
 > exists; provider scope and integration contracts agreed; no test database and no duplicate
 > generic entity created.
 
-Audited: `PLAN.md`, `AGENTS.MD`, `pnpm-workspace.yaml`, `apps/api/src`, `apps/worker/src`,
+Audited: `plans/PLAN.md`, `AGENTS.MD`, `pnpm-workspace.yaml`, `apps/api/src`, `apps/worker/src`,
 `apps/web/src`, `packages/*`, `database/migrations`, `database/seed-metadata.ts`,
 `docs/compatibility/*` and the existing domain modules (Advanced Integrations, Sales,
 Service Desk, Customer Success, Marketing Automation, AI Agents, Voice Communications,

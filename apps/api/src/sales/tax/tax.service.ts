@@ -19,7 +19,7 @@ import {
 } from "./totals.js";
 
 /**
- * Phase 19-S.5 — tax resolution and totals preview (PLAN_Phase_19_Sales.md §4.12, §7.2).
+ * Phase 19-S.5 — tax resolution and totals preview (plans/PLAN_Phase_19_Sales.md §4.12, §7.2).
  *
  * The engine is the pure pair in `tax-rules.ts` / `totals.ts`; this service is the only place that
  * reads rows and hands them in. It answers one question per line — "which tax code and rate apply

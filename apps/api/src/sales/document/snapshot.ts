@@ -6,7 +6,7 @@ import { ValidationError } from "@carocrm/core/errors/index.js";
  * Phase 19-S.2 — immutable commercial snapshots.
  *
  * An issued document must stay renderable and reproducible after the product catalog, price books,
- * tax rules, accounts, exchange rates or templates change (PLAN_Phase_19_Sales.md §5.8). The rule
+ * tax rules, accounts, exchange rates or templates change (plans/PLAN_Phase_19_Sales.md §5.8). The rule
  * this module implements is simple and testable: at issuance the document's commercial facts are
  * **copied by value** into a snapshot envelope, the envelope is frozen, and it carries a digest of
  * exactly the bytes that were captured. Rendering reads the envelope — never the live catalog.

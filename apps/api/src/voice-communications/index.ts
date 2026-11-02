@@ -26,7 +26,7 @@ import { VoiceWhatsappTemplateService } from "./voice-whatsapp-template.service.
 
 /**
  * Phase 19-VC.2 — Voice & Communications module barrel
- * (`PLAN_Phase_19_Voice_Communications.md` §3.3, §15 `19-VC.2`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §3.3, §15 `19-VC.2`).
  *
  * Like Projects, Sales, Customer Success, Service Desk, Marketing Automation and AI Agents, this is a
  * directory under `apps/api/src` and not a second framework: CRM records use the generic

@@ -21,7 +21,7 @@ import { ConnectionStatusPill, ScopeChips } from './shared.js';
 
 /**
  * Phase 19-INT.14 — the connection setup wizard
- * (`PLAN_Phase_19_Advanced_Integrations.md` §15.2).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15.2).
  *
  * The wizard is deliberately **linear and explicit**. Its steps follow the plan:
  *

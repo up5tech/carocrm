@@ -5,7 +5,7 @@ import type { ModuleSettingsView, SettingsDocumentWarning } from '../api/types.j
 
 /**
  * A module settings document (`sales`, `serviceDesk`, `customerSuccess`) edited as a draft
- * (PLAN_Phase_20_Settings_UX.md §8.3, §9.1).
+ * (plans/PLAN_Phase_20_Settings_UX.md §8.3, §9.1).
  *
  * The document stays owned by its module: the tab reads and writes the module's own endpoint, and the
  * shell supplies the save bar around it. Version, actor and warnings come from the same response, so

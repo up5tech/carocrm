@@ -4,7 +4,7 @@ import type { LeadScoreErrorCode } from './lead-score-module.js';
 
 /**
  * Phase 19-LS.1 — the module's error contract
- * (`PLAN_Phase_19_LeadScore.md` §8.4; audit §2).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §8.4; audit §2).
  *
  * `LeadScoreError` extends the platform `AppError`, so a refusal reaches the client inside the
  * established envelope (`{ error: { code, message, details } }`) with a stable code, and the

@@ -22,7 +22,7 @@ import {
 /**
  * Phase 19-S.1 — module health and diagnostics.
  *
- * "Unavailable optional integrations are reported, not fatal" (PLAN_Phase_19_Sales.md §3.3): the
+ * "Unavailable optional integrations are reported, not fatal" (plans/PLAN_Phase_19_Sales.md §3.3): the
  * module starts with none of Stripe, Accounting, Customer Success or a variant-enabled catalog
  * installed, and this endpoint is where an operator sees exactly that, together with the settings
  * warnings and the entity/numbering checks that decide whether the module can work at all.

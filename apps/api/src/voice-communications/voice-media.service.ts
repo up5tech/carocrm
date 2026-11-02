@@ -16,7 +16,7 @@ import type { NormalizedRecordingEvent } from './voice-provider.js';
 
 /**
  * Phase 19-VC.15 — recording and secure media handling
- * (`PLAN_Phase_19_Voice_Communications.md` §7.5, §15 `19-VC.15`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.5, §15 `19-VC.15`).
  *
  * The security model, in order:
  *  1. A recording callback only ever creates a **reference** (`voice_media`, kind `recording`). The

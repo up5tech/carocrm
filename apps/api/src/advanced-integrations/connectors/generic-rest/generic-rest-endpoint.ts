@@ -4,7 +4,7 @@ import { isJsonObject, readBooleanOption, readNumberOption, readStringListOption
 
 /**
  * Phase 19-INT.24 — the generic REST endpoint configuration
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.10; `19-INT.24`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.10; `19-INT.24`).
  *
  * The generic REST connector is **not** an escape hatch. The plan is explicit: *"This is not an
  * arbitrary 'connect to any URL' escape hatch"*, and *"Do not make arbitrary outbound HTTP or raw

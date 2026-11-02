@@ -5,7 +5,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { type DocsSearchResult, DocsService, type DocsTree } from './docs.service.js';
 
 /**
- * `GET /api/v1/Docs/{tree,page/:section/:slug,search}` (PLAN_Phase_21_Documentation.md §8).
+ * `GET /api/v1/Docs/{tree,page/:section/:slug,search}` (plans/PLAN_Phase_21_Documentation.md §8).
  *
  * Mounted on the static `Docs` prefix **before** the generic `:entity` wildcard, for the same reason
  * `I18n` and `Settings` are: a reader's bookmark `/api/v1/Docs/tree` must never be read as "the `tree`

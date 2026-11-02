@@ -10,7 +10,7 @@ import { restoreSettings, snapshotSettings } from './support/settings-snapshot.j
 
 /**
  * Phase 22.13 — the journey: a controlled action through CRMChat and AI Agents
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §13.6, steps 1–10, and its acceptance assertions).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.6, steps 1–10, and its acceptance assertions).
  *
  * One story, in order, through the public contracts: a person with **limited** rights asks the assistant
  * about records they may see, and the answer is built from a tool result that only ever contained those

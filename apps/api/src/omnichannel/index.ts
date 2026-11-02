@@ -1,5 +1,5 @@
 /**
- * Phase 19-OM.2 — the module barrel (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`).
+ * Phase 19-OM.2 — the module barrel (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.2`).
  *
  * The repository's module convention: a directory under `apps/api/src/`, an `index.ts` that exports
  * the controller and provider arrays, and one spread in `app.module.ts`. The shell never imports

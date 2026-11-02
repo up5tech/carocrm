@@ -6,7 +6,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-AI.5–19-AI.10 — definitions, versions, tools, runs and approvals
- * (PLAN_Phase_19_AI_Agents.md §18, §20 `19-AI.5`–`19-AI.10`), plus the adversarial
+ * (plans/PLAN_Phase_19_AI_Agents.md §18, §20 `19-AI.5`–`19-AI.10`), plus the adversarial
  * prompt-injection boundaries required by §11.2/§17.2 and End-to-End scenario #9.
  *
  * Runs against the configured primary database (AGENTS.md §3.1). Every row carries the run marker,

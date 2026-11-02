@@ -15,7 +15,7 @@ import { WebhookIngressService } from './webhook-ingress.service.js';
 
 /**
  * Phase 19-INT.14 — the connector catalog and the connection detail document
- * (`PLAN_Phase_19_Advanced_Integrations.md` §15.1, §15.3).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15.1, §15.3).
  *
  * The catalog answers *"what can this installation connect to?"* and the detail answers *"what is
  * wrong with this connection?"*. Both are **reports**, not commands: they never change anything.

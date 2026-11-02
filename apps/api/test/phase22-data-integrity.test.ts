@@ -6,7 +6,7 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 22.19 — data integrity and concurrency
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §18 tasks 5 and 8).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §18 tasks 5 and 8).
  *
  * Two invariants the Entity Engine claims, driven through the real API against the configured
  * database (AGENTS.md §3.1):

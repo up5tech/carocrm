@@ -1,6 +1,6 @@
 # Phase 19-ES.8 — Recipient Routing and Send Preview
 
-> `PLAN_Phase_19_ESignature.md` §4.3, §4.4, §6.2, §11.1, §11.2, §13.3, §18 `Phase 19-ES.8`.
+> `plans/PLAN_Phase_19_ESignature.md` §4.3, §4.4, §6.2, §11.1, §11.2, §13.3, §18 `Phase 19-ES.8`.
 > Acceptance: a multi-recipient preview accurately reflects the final request; wrong or ambiguous signer
 > mappings are blocked; no external send occurs during draft or preparation.
 >

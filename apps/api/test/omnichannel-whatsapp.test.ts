@@ -7,7 +7,7 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-OM.14 — WhatsApp/SMS replies through the owning adapter, with honest policy refusals
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.14`; feasibility CF-2/CF-5).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.14`; feasibility CF-2/CF-5).
  *
  * Against the configured primary database (AGENTS.md §3.1); simulator only. The WhatsApp window is
  * derived by the owner from **inbound communication events**, so this suite produces one through the

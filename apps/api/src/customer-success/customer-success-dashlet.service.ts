@@ -5,7 +5,7 @@ import { CustomerSuccessPortfolioService } from "./customer-success-portfolio.se
 
 /**
  * Phase 19-CS.13 — the Customer Success dashlet catalogue
- * (PLAN_Phase_19_Customer_Success.md §5.12, §8.2).
+ * (plans/PLAN_Phase_19_Customer_Success.md §5.12, §8.2).
  *
  * The platform's dashboard framework already renders an entity-list dashlet plus chart/kpi kinds over
  * any metadata entity, so the module contributes *definitions* (the machine-readable description of

@@ -1,6 +1,6 @@
 # In-app documentation (Phase 21)
 
-Scope: `PLAN_Phase_21_Documentation.md`. Implemented: 21.0 audit and content contract, 21.1 the engine,
+Scope: `plans/PLAN_Phase_21_Documentation.md`. Implemented: 21.0 audit and content contract, 21.1 the engine,
 21.2 the API module + settings document + navigation entry, 21.3 the administrator handbook content,
 21.4 the CRM user guide content, 21.5 the reader UI, 21.6 landing, search and entry points, 21.7
 contextual help and the admin tab, 21.8 the P1 pages and the `vi` translation of the P0 set, 21.9 the

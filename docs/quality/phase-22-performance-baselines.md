@@ -1,7 +1,7 @@
 # Phase 22.20 — Performance and Capacity Baselines
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §19
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §19
 > **Status:** Complete as a **baseline**, not a load test. Read-only measurements, plans and capacity
 > observations recorded; two capacity gaps opened (G73, G74); no production code changed to chase a number.
 

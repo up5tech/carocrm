@@ -32,7 +32,7 @@ import { readChallenge } from '../kit/webhook-signatures.js';
 
 /**
  * Phase 19-INT.21 — the Meta Lead Ads connector
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.6; `19-INT.21`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.6; `19-INT.21`).
  *
  * Lead form submissions, imported into CRM Leads.
  *

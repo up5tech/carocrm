@@ -2,7 +2,7 @@
 
 > **Status:** Implemented and verified on 2026-10-17 (19-SD.0 – 19-SD.18). See §23 for the
 > phase-by-phase evidence, commands actually run and remaining limitations.
-> **Parent roadmap:** `PLAN.md` — Phase 19: Advanced Domains  
+> **Parent roadmap:** `plans/PLAN.md` — Phase 19: Advanced Domains  
 > **Module name:** `ServiceDesk`  
 > **Backend module class:** `ServiceDeskModule`  
 > **Frontend route/slug:** `service-desk`  
@@ -19,11 +19,11 @@
 Read these files before implementation:
 
 1. `AGENTS.MD`
-2. `PLAN.md`
-3. `PLAN_Phase_19_ServiceDesk.md`
-4. `PLAN_Phase_19_Projects.md`
-5. `PLAN_Phase_19_Sales.md`
-6. `PLAN_Phase_19_Customer_Success.md`
+2. `plans/PLAN.md`
+3. `plans/PLAN_Phase_19_ServiceDesk.md`
+4. `plans/PLAN_Phase_19_Projects.md`
+5. `plans/PLAN_Phase_19_Sales.md`
+6. `plans/PLAN_Phase_19_Customer_Success.md`
 7. Existing API, module, metadata, portal, email, activity, attachment, workflow, jobs, notification, reporting, and migration documentation in the repository.
 
 This plan describes the desired behavior. It does **not** prove that a dependency is already implemented. Start with **Phase 19-SD.0 only**. Inspect the actual codebase, migration history, metadata registry, entity model, mail adapters, portal implementation, test scripts, module manifests, and all database-backed test setup before progressing.
@@ -1381,7 +1381,7 @@ Implement one sub-phase at a time. Do not ask the agent to generate the entire m
 
 Tasks:
 
-1. Read `AGENTS.MD`, `PLAN.md`, and the completed `Projects`, `Sales`, and `CustomerSuccess` plans.
+1. Read `AGENTS.MD`, `plans/PLAN.md`, and the completed `Projects`, `Sales`, and `CustomerSuccess` plans.
 2. Inspect the module registry, Entity Engine, metadata, ACL, API, migration runner, frontend routes, tests, mail, Stream, attachment, portal, Knowledge Base, Jobs, Workflow/BPM, notifications, reports, and search.
 3. Check whether a canonical Case/ticket entity already exists; inspect schema, metadata, APIs, relations, UI, and access behavior.
 4. Identify reusable mail-to-case and public/internal Stream capabilities.

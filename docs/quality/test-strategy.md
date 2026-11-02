@@ -3,7 +3,7 @@
 > **Date:** 2026-10-28
 > **Depends on:** `docs/quality/phase-22-capability-inventory.md` (Phase 22.0)
 > **Status:** Implemented (policy + focused script guards). No new test database was created; no destructive command was run.
-> **Governing rules:** `AGENTS.md` §3 (Database and Testing Policy), `PLAN_Phase_22_Integration_E2E_Hardening.md` §6 and §26.
+> **Governing rules:** `AGENTS.md` §3 (Database and Testing Policy), `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §6 and §26.
 
 ---
 

@@ -1,7 +1,7 @@
 # Phase 22.19 — Data Integrity and Concurrency
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §18
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §18
 > **Status:** Complete — invariant register built from the existing suites; three defects fixed (G20, G22, and the
 > AI approval's unpinned target version); two behaviours accepted and documented (G30, offset pagination);
 > regression tests landed and the gate is green.

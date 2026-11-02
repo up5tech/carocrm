@@ -12,7 +12,7 @@ import {
 
 /**
  * Phase 19-AI.4 — deterministic fake adapter
- * (PLAN_Phase_19_AI_Agents.md §17.3 "fake provider adapters", §18.2 "use fake providers").
+ * (plans/PLAN_Phase_19_AI_Agents.md §17.3 "fake provider adapters", §18.2 "use fake providers").
  *
  * Routine tests must never call a billable API. This adapter produces deterministic responses and
  * can simulate failures from the prompt itself, so orchestration, retry and redaction tests stay

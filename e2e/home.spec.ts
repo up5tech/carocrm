@@ -11,7 +11,7 @@ async function login(page: Page) {
 }
 
 /**
- * The home workspace (`PLAN_Phase_20_Settings_UX.md` §20.19).
+ * The home workspace (`plans/PLAN_Phase_20_Settings_UX.md` §20.19).
  *
  * The regression this guards is the page `/home` used to be: one stat tile per enabled entity, each
  * fed by `GET /{Entity}?maxSize=1`. So the test asserts both halves — the workspace renders, and no

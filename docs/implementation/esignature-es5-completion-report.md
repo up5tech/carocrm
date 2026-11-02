@@ -1,6 +1,6 @@
 # Phase 19-ES.5 — Secure Document Snapshot Service
 
-> `PLAN_Phase_19_ESignature.md` §4.5, §6.3, §12.9, §18 `Phase 19-ES.5`.
+> `plans/PLAN_Phase_19_ESignature.md` §4.5, §6.3, §12.9, §18 `Phase 19-ES.5`.
 > Acceptance: source files cannot be overwritten by a provider result; the snapshot hash/version is
 > stable for the exact submitted bytes; unauthorized source documents cannot be attached to a request.
 >

@@ -1,6 +1,6 @@
 # Phase 19-ES.21 — Security, Privacy, Performance and Release Hardening
 
-> `PLAN_Phase_19_ESignature.md` §12, §13.6, §18 `Phase 19-ES.21`.
+> `plans/PLAN_Phase_19_ESignature.md` §12, §13.6, §18 `Phase 19-ES.21`.
 > Acceptance: high-risk findings are fixed or explicitly documented and accepted; no secrets or
 > signing URLs appear in app logs, API responses or frontend telemetry; security and provider tests
 > pass without production credentials.

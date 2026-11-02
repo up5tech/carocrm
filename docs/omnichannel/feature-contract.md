@@ -1,6 +1,6 @@
 # Phase 19-OM.1 — Omnichannel feature contract (first release)
 
-> Plan: `PLAN_Phase_19_Omnichannel.md` §14 `19-OM.1`. Inputs: `docs/omnichannel/repository-audit.md`
+> Plan: `plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.1`. Inputs: `docs/omnichannel/repository-audit.md`
 > (audit), `docs/omnichannel/capability-matrix.md` (matrix), plan §0.2 decisions **D1/D2/D3**.
 > Companion: `docs/omnichannel/channel-feasibility.md` (per-channel feasibility gate).
 > This document is the signed contract for the **first release**. Later sub-phases implement it;

@@ -21,7 +21,7 @@ import type { ProviderCheckInput } from './dto/ai-agents-shapes.js';
 
 /**
  * Phase 19-AI.4 — the provider gateway
- * (PLAN_Phase_19_AI_Agents.md §6, §12.1, §16, §20 `19-AI.4`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §6, §12.1, §16, §20 `19-AI.4`).
  *
  * This is the only place a model call is made. It does not know an agent's business rules; it
  * enforces the transport-level policy that must hold for every call:

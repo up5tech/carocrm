@@ -1,5 +1,5 @@
 /**
- * Phase 19-CS.11 — the Customer Success module's job names (PLAN_Phase_19_Customer_Success.md §11.1).
+ * Phase 19-CS.11 — the Customer Success module's job names (plans/PLAN_Phase_19_Customer_Success.md §11.1).
  *
  * The API and the worker are separate packages, so each side declares the same names: the worker
  * registers handlers under them (`apps/worker/src/handlers/customer-success-handlers.ts`) and the API

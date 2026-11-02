@@ -4083,7 +4083,7 @@ body {
   }
 }
 
-/* ---- Phase 21.5: the in-app handbook (PLAN_Phase_21_Documentation.md §9.3, §5.10, §5.8) ---- */
+/* ---- Phase 21.5: the in-app handbook (plans/PLAN_Phase_21_Documentation.md §9.3, §5.10, §5.8) ---- */
 
 /* The sheet fills the content area — a capped card left a grey band on both sides of a wide screen.
    What stays narrow is the document inside it: the three columns keep their measure and are
@@ -7301,7 +7301,7 @@ body.carocrm-reordering * {
   font-weight: 600;
 }
 
-/* ---- Phase 20.19: the home workspace (PLAN_Phase_20_Settings_UX.md §5.6) ----
+/* ---- Phase 20.19: the home workspace (plans/PLAN_Phase_20_Settings_UX.md §5.6) ----
    A calm operating cockpit: one soft hero band, three focus cards that state the day in one
    sentence, then the agenda and the pulse. White surfaces, 14px radius, one hairline border and the
    page's only large type in the greeting. No image, no new font, no chart wall. */

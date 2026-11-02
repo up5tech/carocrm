@@ -9,7 +9,7 @@ import { useMetadata } from '../../state/metadata.js';
 import { usePublishTabActions } from '../shell.js';
 
 /**
- * Layout tab (PLAN_Phase_20_Settings_UX.md §4.3 row 3, §20.8): the per-entity layout manager hosted in
+ * Layout tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 3, §20.8): the per-entity layout manager hosted in
  * the settings shell. The editor itself is the same component the Entity Manager uses — one editing
  * behavior, two hosts — and its draft is reported to the shell, so Save/Discard/dirty guard come from
  * the shared save bar instead of a second button row.

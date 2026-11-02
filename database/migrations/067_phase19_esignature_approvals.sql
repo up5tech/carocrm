@@ -1,4 +1,4 @@
--- Phase 19-ES.17 — approval workflow columns (PLAN_Phase_19_ESignature.md §11, §18 `19-ES.17`).
+-- Phase 19-ES.17 — approval workflow columns (plans/PLAN_Phase_19_ESignature.md §11, §18 `19-ES.17`).
 --
 -- Additive only: four nullable columns on signature_requests. No row is rewritten and no existing
 -- meaning changes. `approved_at`, `approved_by_id`, `approved_digest` and `approval_reason` already

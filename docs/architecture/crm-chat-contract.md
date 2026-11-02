@@ -1,6 +1,6 @@
 # `CRMChat` — product contract (v1)
 
-> **Plan:** `PLAN_Phase_19_CRM_Chat.md` §17 (`Phase 19-CHAT.1`); decisions rest on
+> **Plan:** `plans/PLAN_Phase_19_CRM_Chat.md` §17 (`Phase 19-CHAT.1`); decisions rest on
 > `docs/modules/crm-chat/repository-audit.md` (19-CHAT.0).
 > **Status:** delivered in 19-CHAT.1 and implemented in full through 19-CHAT.18
 > (`apps/api/src/crm-chat/`). Every route in §6 is served by the controller; the route table in
@@ -10,7 +10,7 @@
 > **Naming:** module `CRMChat`, route slug `crm-chat`, API prefix `/api/v1/CRMChat`, SPA route
 > `/crm-chat`. No `Ua` prefix anywhere.
 
-This document is the authority for what Chat exposes. `PLAN.md` describes intent; the audit describes
+This document is the authority for what Chat exposes. `plans/PLAN.md` describes intent; the audit describes
 what the repository can do; this contract is what code must match. A route that is not here does not
 exist, and a field that is not here must not be invented by the SPA.
 

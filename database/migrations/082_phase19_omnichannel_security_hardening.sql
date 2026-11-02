@@ -1,5 +1,5 @@
 -- Phase 19-OM.22 — security hardening: diagnostic/processing payload split
--- (PLAN_Phase_19_Omnichannel.md §14 OM.22; docs/omnichannel/security-hardening.md).
+-- (plans/PLAN_Phase_19_Omnichannel.md §14 OM.22; docs/omnichannel/security-hardening.md).
 --
 -- The webhook receipt stores two payloads from now on:
 --   * `payload_redacted` — the diagnostic copy returned by operations inspection. Credential-like

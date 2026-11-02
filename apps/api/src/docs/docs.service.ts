@@ -16,7 +16,7 @@ import { I18nService } from '../i18n/i18n.service.js';
 import { DocsSettingsService } from './docs-settings.service.js';
 
 /**
- * The content read path (PLAN_Phase_21_Documentation.md §7.4).
+ * The content read path (plans/PLAN_Phase_21_Documentation.md §7.4).
  *
  * Two properties are worth protecting:
  *

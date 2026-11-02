@@ -17,7 +17,7 @@ import {
 
 /**
  * Phase 19-INT.6 / 19-INT.11 — the connector executor
- * (`PLAN_Phase_19_Advanced_Integrations.md` §11.1; `19-INT.6`, `19-INT.11`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §11.1; `19-INT.6`, `19-INT.11`).
  *
  * The executor is the **only** path from the engine to a connector. It is where the reliability
  * rules are applied, so no engine code can accidentally call a provider without them:

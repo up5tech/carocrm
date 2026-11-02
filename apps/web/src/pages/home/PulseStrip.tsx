@@ -10,7 +10,7 @@ import { HomeSkeleton } from './HomeSkeleton.js';
 import { useHomeDashboards, useHomePulse } from './useHomeData.js';
 
 /**
- * "What is the pulse" (PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
+ * "What is the pulse" (plans/PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
  *
  * At most three KPI dashlets from the dashboard the user lands on — curated by an administrator in
  * Dashboards, never a hard-coded list here. No dashboard, no KPI dashlet or a failed request means the

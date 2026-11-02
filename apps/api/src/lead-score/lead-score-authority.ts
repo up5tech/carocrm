@@ -2,7 +2,7 @@ import type { AuthenticatedPrincipal, RequestScope } from '../common/request-sco
 
 /**
  * Phase 19-LS.6 — the service authority for background score work
- * (`PLAN_Phase_19_LeadScore.md` §9.2, §10.2; audit §5.4).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §9.2, §10.2; audit §5.4).
  *
  * A queued job has no user session, and the platform's documented answer is the one Customer Success
  * established (`customer-success-authority.ts`): run the job under a `system` principal carrying the built-in

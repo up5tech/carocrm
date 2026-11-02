@@ -4,7 +4,7 @@ import type { ApiContext } from './support/boot-api.js';
 import { authHeader, bootApi, createTestUser, shutdownApi } from './support/boot-api.js';
 
 /**
- * Phase 20.9 — the internal tab's guarded danger zone (PLAN_Phase_20_Settings_UX.md §4.3 row 8).
+ * Phase 20.9 — the internal tab's guarded danger zone (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 8).
  *
  * The refusals are exercised over HTTP; the destructive success paths are deliberately NOT executed
  * against this shared database — resetting metadata would discard every administrator's Entity Manager

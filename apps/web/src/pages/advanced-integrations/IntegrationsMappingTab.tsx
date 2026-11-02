@@ -10,7 +10,7 @@ import { formatTimestamp, PanelEmpty, SectionToolbar, WarningList } from './shar
 
 /**
  * Phase 19-INT.15 — the mapping builder
- * (`PLAN_Phase_19_Advanced_Integrations.md` §15.4).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15.4).
  *
  * The builder is a **two-pane view with a wire between them**: the provider's fields on the left,
  * the CRM's fields on the right, and the transformation in the middle. A mapping is a routing

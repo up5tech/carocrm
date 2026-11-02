@@ -7,7 +7,7 @@ import { ESIGNATURE_CAPABILITIES, type ESignatureCapabilityDefinition, type ESig
 
 /**
  * Phase 19-ES.1 — the module's capability gate
- * (`PLAN_Phase_19_ESignature.md` §12; `19-ES.1`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §12; `19-ES.1`).
  *
  * The platform has one authorization engine. Rather than inventing a parallel "signature
  * permissions" table, each module right is a **synthetic permission resource** evaluated by

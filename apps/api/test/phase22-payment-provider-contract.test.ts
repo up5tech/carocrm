@@ -15,7 +15,7 @@ import { FakePaymentDelivery, FakePaymentProvider } from './support/fake-payment
 
 /**
  * Phase 22.6 — the payment provider contract
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §11 tasks 3, 10; `docs/architecture/contract-catalog.md` §3).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §11 tasks 3, 10; `docs/architecture/contract-catalog.md` §3).
  *
  * Runs against the configured primary database (AGENTS.md §3.1). Nothing is reset or truncated; the
  * records this run creates are deleted by id.

@@ -16,7 +16,7 @@ import { isSignatureProviderKey, SIGNATURE_PROVIDER_KEYS } from './providers/sig
 
 /**
  * Phase 19-ES.2 — the provider connection repository
- * (`PLAN_Phase_19_ESignature.md` §6.1, §4.1; `19-ES.2`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.1, §4.1; `19-ES.2`).
  *
  * This row is the *non-secret* half of a connection: the environment, the discovered account
  * context, the granted scopes and the health timestamps (plan §6.1). The credential half — the client

@@ -8,7 +8,7 @@ import { authHeader, bootApi, createTestUser, shutdownApi } from "./support/boot
 /**
  * Phase 19-VC.12–19-VC.17 — unified inbox, assignment/Service Desk handoff, service snippets,
  * recordings/media, transcription/AI enrichment and the CRM panel
- * (`PLAN_Phase_19_Voice_Communications.md` §9–§10, §15 `19-VC.12` … `19-VC.17`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §9–§10, §15 `19-VC.12` … `19-VC.17`).
  *
  * No network: the simulator is the provider, the fake AI adapter is the model, and `fetch` is
  * stubbed for the one media download the recording path performs.

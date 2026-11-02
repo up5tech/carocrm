@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
 /**
- * The SPA's own test project (PLAN_Phase_20_Settings_UX.md §20.26).
+ * The SPA's own test project (plans/PLAN_Phase_20_Settings_UX.md §20.26).
  *
  * Kept separate from the root `vitest.config.ts` (which boots the API against the configured
  * database) so `pnpm test` stays database-backed while `pnpm test:web` stays fast and

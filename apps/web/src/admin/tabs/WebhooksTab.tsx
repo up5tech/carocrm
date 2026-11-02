@@ -12,7 +12,7 @@ import { errorMessage } from './identity.js';
 const WEBHOOK_EVENTS = ['record.created', 'record.updated', 'record.deleted'] as const;
 
 /**
- * Webhooks tab (PLAN_Phase_20_Settings_UX.md §4.3 row 19): the endpoints the `webhook-integration`
+ * Webhooks tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 19): the endpoints the `webhook-integration`
  * extension serves, with delivery history. When the extension is not installed the routes answer 404 —
  * the tab shows that as a state, not as an error toast.
  */

@@ -1,6 +1,6 @@
 # Phase 19-ES.22 — End-to-End QA and Release Readiness
 
-> `PLAN_Phase_19_ESignature.md` §17, §18 `Phase 19-ES.22`, §19 Definition of Done.
+> `plans/PLAN_Phase_19_ESignature.md` §17, §18 `Phase 19-ES.22`, §19 Definition of Done.
 > Acceptance: all required scenarios in §17 pass for the fake adapter; production remains disabled
 > until an administrator explicitly configures and enables a production connection; no new database,
 > schema, container or copy was created for tests; a release checklist and support runbook are
@@ -103,4 +103,4 @@ No automated test in the repository sends a real signing invitation or uses a pr
 
 The module is released as **DocuSign-first, fake-adapter-verified, production-disabled by default**.
 An administrator must explicitly configure and enable a production connection before any real
-envelope can be sent. This matches `PLAN_Phase_19_ESignature.md` §19 and §22.
+envelope can be sent. This matches `plans/PLAN_Phase_19_ESignature.md` §19 and §22.

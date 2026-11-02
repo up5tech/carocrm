@@ -1,6 +1,6 @@
 # Voice & Communications — compatibility and behavior reference
 
-> Phase 19-VC.0 deliverable (`PLAN_Phase_19_Voice_Communications.md` §1.3, §16).
+> Phase 19-VC.0 deliverable (`plans/PLAN_Phase_19_Voice_Communications.md` §1.3, §16).
 > Status: **19-VC.0–19-VC.17 delivered** (API + SPA surfaces).
 > Canonical module name: `VoiceCommunications` (no `Ua` prefix). API prefix:
 > `/api/v1/VoiceCommunications`; webhook prefix: `/api/v1/integrations/voice-communications`.

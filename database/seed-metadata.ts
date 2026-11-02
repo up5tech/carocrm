@@ -67,7 +67,7 @@ const emailRelations: Record<string, Record<string, unknown>> = {
 };
 
 /**
- * Phase 19 — Projects (PLAN §19 / PLAN_Phase_19_Projects.md §5).
+ * Phase 19 — Projects (PLAN §19 / plans/PLAN_Phase_19_Projects.md §5).
  *
  * Every Project record lives in the generic `entity_records` store like any other CRM entity, so
  * the Entity Engine provides CRUD, field validation, audit, stream, attachments and record ACL for
@@ -88,7 +88,7 @@ const projectFields = (extra: Record<string, Record<string, unknown>> = {}): Rec
 });
 
 /**
- * Customer Success enum values (PLAN_Phase_19_Customer_Success.md §4). Declared **above**
+ * Customer Success enum values (plans/PLAN_Phase_19_Customer_Success.md §4). Declared **above**
  * `coreMetadata`, which is evaluated at module load and calls `customerSuccessEntities()`: a `const`
  * below it would still be in its temporal dead zone at that moment.
  */
@@ -112,7 +112,7 @@ const CS_SENTIMENTS = ['positive', 'neutral', 'negative', 'unknown'];
 const CS_ACTIVITY_TYPES = ['Call', 'Meeting', 'Task', 'Email'];
 
 /**
- * Phase 19-SD — Service Desk case vocabulary (PLAN_Phase_19_ServiceDesk.md §5.1, §5.2).
+ * Phase 19-SD — Service Desk case vocabulary (plans/PLAN_Phase_19_ServiceDesk.md §5.1, §5.2).
  *
  * Declared above `coreMetadata`, which is evaluated at module load and calls `serviceDeskCaseEntity()`.
  * The lists mirror `apps/api/src/service-desk/service-desk-domain.ts`; that module is the authority
@@ -130,7 +130,7 @@ const SD_FALLBACK_BEHAVIORS = ['unassigned', 'fallbackOwner'];
 
 /**
  * Phase 19-MA — Marketing Automation vocabulary
- * (PLAN_Phase_19_Marketing_Automation.md §5.1, §5.2, §6.1; audit §3).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.1, §5.2, §6.1; audit §3).
  *
  * Declared above `coreMetadata`, which is evaluated at module load and calls `marketingCampaignEntity()`.
  * These lists mirror `apps/api/src/marketing-automation/marketing-automation-domain.ts`, which is the
@@ -144,7 +144,7 @@ const MA_MEMBERSHIP_MODES = ['static', 'dynamic'];
 const MA_TARGET_LIST_STATUSES = ['Active', 'Archived'];
 const MA_TARGET_LIST_ENTRY_SOURCES = ['Manual', 'Import', 'Criteria', 'Api', 'Journey'];
 // Phase 19-MA.5 — consent, suppression and public-token vocabulary
-// (PLAN_Phase_19_Marketing_Automation.md §5.3, §6.3; mirrors marketing-automation-domain.ts).
+// (plans/PLAN_Phase_19_Marketing_Automation.md §5.3, §6.3; mirrors marketing-automation-domain.ts).
 const MA_CONSENT_STATUSES = ['Unknown', 'PendingConfirmation', 'Consented', 'OptedOut', 'Suppressed', 'Invalid'];
 const MA_CONSENT_CHANNELS = ['Email'];
 const MA_CONSENT_BASES = ['ExplicitOptIn', 'DoubleOptIn', 'LegacyImport', 'ManualRecord', 'Contractual', 'ProviderConfirmed'];
@@ -163,7 +163,7 @@ const MA_JOURNEY_ENROLLMENT_STATES = ['Active', 'Waiting', 'Suspended', 'Exited'
 const MA_JOURNEY_STEP_STATUSES = ['Running', 'Completed', 'Failed', 'Skipped', 'Waiting'];
 // The recipient ledger (migration 041) is a table rather than an entity, so its state vocabulary lives only
 // in `marketing-automation-domain.ts` (`RECIPIENT_DELIVERY_STATUSES`) — there is no metadata enum to drift.
-// Phase 19-LS — Lead Score vocabulary (PLAN_Phase_19_LeadScore.md §3, §5; audit §4).
+// Phase 19-LS — Lead Score vocabulary (plans/PLAN_Phase_19_LeadScore.md §3, §5; audit §4).
 //
 // These are the metadata side of the same vocabularies the module reads in
 // `apps/api/src/lead-score/lead-score-domain.ts`. They are enums rather than free text because a band,
@@ -292,7 +292,7 @@ export const coreMetadata: MetadataSeedEntry[] = [
           inDetail: true,
           inEdit: true,
         },
-        // --- Phase 19-LS.2: the current-score projection (PLAN_Phase_19_LeadScore.md §5.3) ---
+        // --- Phase 19-LS.2: the current-score projection (plans/PLAN_Phase_19_LeadScore.md §5.3) ---
         //
         // These are `attrs` JSONB keys, not columns: the physical/attribute split is
         // `PHYSICAL_KEYS` in apps/api/src/entity/entity-record.store.ts and none of these belong to it,
@@ -932,7 +932,7 @@ export const coreMetadata: MetadataSeedEntry[] = [
   // Phase 19-S — Sales & Commercial Operations (`sales`)
   // -------------------------------------------------------------------------
   //
-  // The catalog, pricing and tax entities (PLAN_Phase_19_Sales.md §5.1, §5.4). They are ordinary
+  // The catalog, pricing and tax entities (plans/PLAN_Phase_19_Sales.md §5.1, §5.4). They are ordinary
   // metadata entities in `entity_records`, served by the generic API/Entity Engine like every other
   // record; the Sales module adds the cross-record rules in `apps/api/src/sales` and the expression
   // indexes in `database/migrations/021_phase19_sales.sql`.
@@ -960,7 +960,7 @@ export const coreMetadata: MetadataSeedEntry[] = [
   // the Entity Engine keeps CRUD, validation, field ACL, audit, stream and search, and the Sales
   // module adds the state machine, numbering, issuance snapshot and locking in
   // `apps/api/src/sales/document`. Items are real records rather than one opaque JSON blob, so
-  // item-level filtering, reporting and custom fields keep working (PLAN_Phase_19_Sales.md §4.4).
+  // item-level filtering, reporting and custom fields keep working (plans/PLAN_Phase_19_Sales.md §4.4).
   //
   // The state lists here mirror `apps/api/src/sales/document/descriptors.ts`; the descriptor is the
   // authority, and a drift between the two is caught by the metadata health check.
@@ -996,7 +996,7 @@ export const coreMetadata: MetadataSeedEntry[] = [
   // -----------------------------------------------------------------------
   //
   // Warehouses, the append-only movement ledger, reviewed adjustments, controlled transfers and the
-  // reservations an order places (PLAN_Phase_19_Sales.md §4.15, §5.5). The state lists here mirror
+  // reservations an order places (plans/PLAN_Phase_19_Sales.md §4.15, §5.5). The state lists here mirror
   // `apps/api/src/sales/inventory/ledger.ts`; that module is the authority.
   salesWarehouseEntity(),
   salesInventoryTransactionEntity(),
@@ -1009,7 +1009,7 @@ export const coreMetadata: MetadataSeedEntry[] = [
   // Phase 19-S.15 — batch/serial stock identity (`sales`)
   // -----------------------------------------------------------------------
   //
-  // The lot and unit records a removal policy picks from (PLAN_Phase_19_Sales.md §4.15, §5.5).
+  // The lot and unit records a removal policy picks from (plans/PLAN_Phase_19_Sales.md §4.15, §5.5).
   // Their quantities live in `sales_inventory_batch_stock` (migration 029) and in the serials'
   // own `status`, both maintained only by the inventory service — the record API may create a lot's
   // metadata and correct its dates, but never its identity or a unit's state.
@@ -1029,7 +1029,7 @@ export const coreMetadata: MetadataSeedEntry[] = [
   // A payment is a recorded financial event, not a gateway object: amount, currency, direction, date,
   // method, counterparty, reference. Everything provider-specific lives in a provider module, and this
   // module's contract with it is a provider-neutral payment request plus an idempotent event log keyed
-  // by the provider's own event id (PLAN_Phase_19_Sales.md §4.8).
+  // by the provider's own event id (plans/PLAN_Phase_19_Sales.md §4.8).
   salesPaymentMethodEntity(),
   salesPaymentChannelEntity(),
   salesPaymentEntity(),
@@ -1046,7 +1046,7 @@ export const coreMetadata: MetadataSeedEntry[] = [
   coreDocumentTemplateEntity(),
 
   // -------------------------------------------------------------------------
-  // Phase 19-CS — Customer Success (PLAN_Phase_19_Customer_Success.md §6)
+  // Phase 19-CS — Customer Success (plans/PLAN_Phase_19_Customer_Success.md §6)
   // -------------------------------------------------------------------------
   ...customerSuccessEntities(),
 
@@ -1054,7 +1054,7 @@ export const coreMetadata: MetadataSeedEntry[] = [
   // Phase 19-SD — Service Desk (`ServiceDesk`): the canonical support-case entity
   // -------------------------------------------------------------------------
   //
-  // `Case` is the single ticket entity (PLAN_Phase_19_ServiceDesk.md §5.1). It is an ordinary
+  // `Case` is the single ticket entity (plans/PLAN_Phase_19_ServiceDesk.md §5.1). It is an ordinary
   // metadata record in `entity_records`, so the Entity Engine keeps CRUD, validation, field ACL,
   // audit, stream, attachments and search; the Service Desk module adds numbering, the write guard
   // and the `service_desk_case_number_seq` sequence in `apps/api/src/service-desk` and
@@ -1065,13 +1065,13 @@ export const coreMetadata: MetadataSeedEntry[] = [
 
   // -------------------------------------------------------------------------
   // Phase 19-MA — Marketing Automation (`MarketingAutomation`): campaign and audience records
-  // (PLAN_Phase_19_Marketing_Automation.md §6.1; audit §3 for the ownership decisions).
+  // (plans/PLAN_Phase_19_Marketing_Automation.md §6.1; audit §3 for the ownership decisions).
   // -------------------------------------------------------------------------
   ...marketingAutomationEntities(),
 
   // -------------------------------------------------------------------------
   // Phase 19-LS — Lead Score (`LeadScore`): score models, rules, evaluation history and the
-  // lead conversion operation (PLAN_Phase_19_LeadScore.md §5; audit §4, §5, §6).
+  // lead conversion operation (plans/PLAN_Phase_19_LeadScore.md §5; audit §4, §5, §6).
   //
   // All four are ordinary metadata entities in `entity_records`, so the Entity Engine keeps validation,
   // field ACL, audit, stream, attachments, hooks and search, and the module adds the evaluator and the
@@ -1589,7 +1589,7 @@ interface DocumentSpec {
    *
    * `mappedBy` names the *child field prefix*: `mappedBy: 'source'` resolves through `sourceId`, which
    * is how a quote finds the sales orders generated from it and an order finds its invoices
-   * (PLAN_Phase_19_Sales.md §4.5 "relationship panels for related Opportunity, Sales Orders and
+   * (plans/PLAN_Phase_19_Sales.md §4.5 "relationship panels for related Opportunity, Sales Orders and
    * generated documents").
    */
   readonly extraRelations?: Record<string, Record<string, unknown>>;
@@ -3099,7 +3099,7 @@ function salesWriteOffEntity(): MetadataSeedEntry {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 19-CS — Customer Success entities (PLAN_Phase_19_Customer_Success.md §6)
+// Phase 19-CS — Customer Success entities (plans/PLAN_Phase_19_Customer_Success.md §6)
 //
 // Every Customer Success record lives in the generic `entity_records` store like any other CRM
 // entity, so the Entity Engine provides CRUD, field validation, audit, stream, attachments and record
@@ -3561,7 +3561,7 @@ function customerSuccessEntities(): MetadataSeedEntry[] {
 }
 
 /**
- * Phase 19-SD.2 / 19-SD.3 — the canonical `Case` entity (PLAN_Phase_19_ServiceDesk.md §5.1, §6.1).
+ * Phase 19-SD.2 / 19-SD.3 — the canonical `Case` entity (plans/PLAN_Phase_19_ServiceDesk.md §5.1, §6.1).
  *
  * `name` is the case subject: the record's display field IS the subject, exactly as the `Email`
  * entity's display name is its subject, so lists, search and stream posts read what an agent
@@ -3691,7 +3691,7 @@ function serviceDeskCaseEntity(): MetadataSeedEntry {
 
 /**
  * SD.5 — queue configuration: `CaseQueue`, its `QueueMember` join and the `RoutingRule` table
- * (PLAN_Phase_19_ServiceDesk.md §5.3, §6.1).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §5.3, §6.1).
  *
  * These are ordinary metadata records, so configuration is listable/auditable/importable through the
  * generic API like any other entity, and the module's `beforeValidate` guard refuses writes while the
@@ -3827,7 +3827,7 @@ function serviceDeskQueueEntities(): MetadataSeedEntry[] {
 
 /**
  * SD.4/SD.5 — durable case history: `CaseTransition` (the state machine) and `CaseAssignment`
- * (ownership), PLAN_Phase_19_ServiceDesk.md §5.2, §5.3, §6.1.
+ * (ownership), plans/PLAN_Phase_19_ServiceDesk.md §5.2, §5.3, §6.1.
  *
  * Generic audit records old/new field values with an actor and a timestamp, which is enough to prove
  * *that* something happened — but it cannot carry a transition **reason**, the **command** that ran, a
@@ -4087,7 +4087,7 @@ function serviceDeskHistoryEntities(): MetadataSeedEntry[] {
 
 /**
  * Phase 19-MA — Marketing Automation records
- * (PLAN_Phase_19_Marketing_Automation.md §5.1, §5.2, §6.1, §15 `19-MA.2`–`19-MA.3`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.1, §5.2, §6.1, §15 `19-MA.2`–`19-MA.3`).
  *
  * Names are the canonical ones the audit fixes (`Campaign`, `TargetList`), not parallel `Marketing*`
  * inventions beside an existing record: §0.2 and §5.1 ask for the platform's campaign and audience records,
@@ -4912,7 +4912,7 @@ function marketingAutomationEntities(): MetadataSeedEntry[] {
 }
 
 // ---------------------------------------------------------------------------
-// Phase 19-LS — Lead Score (PLAN_Phase_19_LeadScore.md §5; audit §4–§6)
+// Phase 19-LS — Lead Score (plans/PLAN_Phase_19_LeadScore.md §5; audit §4–§6)
 // ---------------------------------------------------------------------------
 
 /**

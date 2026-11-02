@@ -1,5 +1,5 @@
 /**
- * Phase 19-ES.1 — the module barrel (`PLAN_Phase_19_ESignature.md` §5.1, §18 `19-ES.1`).
+ * Phase 19-ES.1 — the module barrel (`plans/PLAN_Phase_19_ESignature.md` §5.1, §18 `19-ES.1`).
  *
  * The repository's module convention: a directory under `apps/api/src/`, an `index.ts` that exports
  * the controller and provider arrays, and one spread in `app.module.ts`. The shell never imports the

@@ -1,7 +1,7 @@
 import { type APIRequestContext, expect, type Page,test } from '@playwright/test';
 
 /**
- * Phase 19-LS.7 — the Lead Score surface (PLAN_Phase_19_LeadScore.md §11.1, §12, §16 `19-LS.7`;
+ * Phase 19-LS.7 — the Lead Score surface (plans/PLAN_Phase_19_LeadScore.md §11.1, §12, §16 `19-LS.7`;
  * report `docs/implementation/lead-score-ls7-completion-report.md`).
  *
  * The plan's exit criterion is a sentence about the boundary, not about pixels: *the UI uses API data and

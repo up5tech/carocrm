@@ -1,6 +1,6 @@
 # Advanced Integrations — the delivered connector contracts
 
-> Phase 19-INT.16–19-INT.24 deliverable (`PLAN_Phase_19_Advanced_Integrations.md` §3.3, §12;
+> Phase 19-INT.16–19-INT.24 deliverable (`plans/PLAN_Phase_19_Advanced_Integrations.md` §3.3, §12;
 > `19-INT.16`–`19-INT.24`).
 > Status: **nine connectors implemented; every contract verified by the platform's own test
 > suite, none verified against a live vendor sandbox.**

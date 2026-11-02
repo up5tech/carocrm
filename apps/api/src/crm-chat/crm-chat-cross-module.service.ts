@@ -8,7 +8,7 @@ import type { MetadataStoreService } from '../metadata/metadata-store.service.js
 import { METADATA_STORE } from '../metadata/metadata-store.service.js';
 
 /**
- * Phase 19-CHAT.11 — cross-module analysis (PLAN_Phase_19_CRM_Chat.md §5.5, §17 `19-CHAT.11`;
+ * Phase 19-CHAT.11 — cross-module analysis (plans/PLAN_Phase_19_CRM_Chat.md §5.5, §17 `19-CHAT.11`;
  * contract §6.7).
  *
  * ## No implicit joins

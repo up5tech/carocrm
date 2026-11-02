@@ -279,7 +279,7 @@ export class AclApiService {
   }
 
   /**
-   * "Why can this user do this?" for the Permissions tab (PLAN_Phase_20_Settings_UX.md §4.8).
+   * "Why can this user do this?" for the Permissions tab (plans/PLAN_Phase_20_Settings_UX.md §4.8).
    *
    * The evaluation is the same `roleLevel`/`maxLevel` pair `canUser` uses, so the explanation cannot
    * disagree with the decision. It answers for an **arbitrary** user, which the request-scoped

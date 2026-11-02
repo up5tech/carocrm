@@ -2,7 +2,7 @@ import type { AuthenticatedPrincipal, RequestScope } from "../common/request-sco
 
 /**
  * Phase 19-SD.4/SD.5 — the documented service-authority model for Service Desk internals
- * (PLAN_Phase_19_ServiceDesk.md §7.3, §10.1; AGENTS.md §5.5).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §7.3, §10.1; AGENTS.md §5.5).
  *
  * Two writes are structural rather than user commands: a transition/assignment history row, and the
  * round-robin cursor on a queue. Neither is something a client may forge, and neither should be

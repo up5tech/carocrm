@@ -33,7 +33,7 @@ import {
 } from "./quote-document.js";
 
 /**
- * Phase 19-S.7 — rendering and sending a quote (PLAN_Phase_19_Sales.md §4.5, 19-S.7 task 5).
+ * Phase 19-S.7 — rendering and sending a quote (plans/PLAN_Phase_19_Sales.md §4.5, 19-S.7 task 5).
  *
  * This is the half of a quote that leaves the CRM: it turns the quote into a document and hands it to
  * the mail module. It owns **no** new mechanism:

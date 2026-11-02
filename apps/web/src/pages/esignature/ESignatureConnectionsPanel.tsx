@@ -13,7 +13,7 @@ import { t } from '../../state/i18n.js';
 
 /**
  * Phase 19-ES.4 — the provider connections panel
- * (`PLAN_Phase_19_ESignature.md` §8.1, §13.4).
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.1, §13.4).
  *
  * The screen an administrator stands on to make the module's acceptance testable: create a connection,
  * authorize it, test it, switch it, disconnect it. Two rules it exists to keep visible:

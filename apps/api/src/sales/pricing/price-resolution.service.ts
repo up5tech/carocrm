@@ -20,7 +20,7 @@ import type {
 import { applyPriceRuleAction, orderPriceRules } from "./price-rules.js";
 
 /**
- * Phase 19-S.4 — price resolution (PLAN_Phase_19_Sales.md §4.3).
+ * Phase 19-S.4 — price resolution (plans/PLAN_Phase_19_Sales.md §4.3).
  *
  * Deterministic and explainable: the same context always resolves to the same price, and the result
  * names the exact source that won — a price book entry, an applied rule, the product's own unit

@@ -1,6 +1,6 @@
 # Settings and Administration (Phase 20)
 
-Scope: `PLAN_Phase_20_Settings_UX.md` §4, §5, §7, §8. Implemented: 20.1 registry and documents, 20.2
+Scope: `plans/PLAN_Phase_20_Settings_UX.md` §4, §5, §7, §8. Implemented: 20.1 registry and documents, 20.2
 the tabbed shell, 20.3 General/Localization and the hosted module documents, 20.4 navigation
 resolution, 20.5 the Main Menu tab, 20.6 per-entity navigation metadata, 20.7
 users/teams/roles/API keys, 20.8 the layout manager tab, 20.9 the security, messaging, integrations and

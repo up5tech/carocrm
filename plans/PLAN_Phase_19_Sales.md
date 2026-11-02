@@ -1,6 +1,6 @@
 # Phase 19 — Sales & Commercial Operations Module
 
-> **Parent roadmap:** `PLAN.md` — Phase 19: Advanced Domains  
+> **Parent roadmap:** `plans/PLAN.md` — Phase 19: Advanced Domains  
 > **Priority:** Implement before `CustomerSuccess` and before integrations that require commercial documents, especially `StripeIntegration`.  
 > **Module ID:** `sales`  
 > **Display name:** Sales & Commercial Operations  
@@ -15,9 +15,9 @@
 Read these files before implementation:
 
 1. `AGENTS.MD`
-2. `PLAN.md`
-3. `PLAN_Phase_19_Sales.md`
-4. `PLAN_Phase_19_Customer_Success.md` for the intended downstream integration contract
+2. `plans/PLAN.md`
+3. `plans/PLAN_Phase_19_Sales.md`
+4. `plans/PLAN_Phase_19_Customer_Success.md` for the intended downstream integration contract
 5. Any existing plans for Stripe, accounting, projects, reports, workflows, BPM, and other modules that already exist in the repository
 
 This plan describes the target behavior, not proof that every prerequisite already exists. **Start with Phase 19-S.0 only.** Inspect the real repository, database migration history, module manifests, test scripts, and existing CRM entities before implementing later phases. Do not infer implementation from a plan alone.
@@ -1020,7 +1020,7 @@ Execute these sub-phases sequentially. A sub-phase may be split into smaller pul
 
 Tasks:
 
-1. Read `AGENTS.MD`, the relevant sections of `PLAN.md`, this plan, and downstream integration plans.
+1. Read `AGENTS.MD`, the relevant sections of `plans/PLAN.md`, this plan, and downstream integration plans.
 2. Inspect the actual codebase and database migration history.
 3. Verify Core CRM entities and platform primitives listed in Section 3.
 4. Search for existing Sales/Product/Quote/Invoice/Payment/Inventory/Subscription code, metadata, route handlers, UI screens, migrations and translations.
@@ -1496,7 +1496,7 @@ Tasks:
 
 ## 15. Testing Strategy
 
-Tests must complement the shared test conventions in `AGENTS.MD` and `PLAN.md`. Every test involving a money, document, payment, tax, or inventory invariant must include at least one negative/invalid case.
+Tests must complement the shared test conventions in `AGENTS.MD` and `plans/PLAN.md`. Every test involving a money, document, payment, tax, or inventory invariant must include at least one negative/invalid case.
 
 ### 15.1 Unit tests
 
@@ -1697,7 +1697,7 @@ Documentation must explain which features are implemented, which require optiona
 
 Use this prompt when starting implementation:
 
-> Read `AGENTS.MD`, `PLAN.md`, and `PLAN_Phase_19_Sales.md`. Execute **Phase 19-S.0 only**: audit the actual codebase, existing core CRM entities, module conventions, money/currency implementation, migration history, test lifecycle, and all relevant dependencies. Create `docs/implementation/sales-repository-audit.md` with verified source locations, prerequisites, integration boundaries, and a feature compatibility contract. Do not implement later phases yet. Do not create a database or schema. Do not run destructive setup or reset scripts. Preserve existing data and all uncommitted user changes. Report commands inspected, findings, blockers, and recommended next phase.
+> Read `AGENTS.MD`, `plans/PLAN.md`, and `plans/PLAN_Phase_19_Sales.md`. Execute **Phase 19-S.0 only**: audit the actual codebase, existing core CRM entities, module conventions, money/currency implementation, migration history, test lifecycle, and all relevant dependencies. Create `docs/implementation/sales-repository-audit.md` with verified source locations, prerequisites, integration boundaries, and a feature compatibility contract. Do not implement later phases yet. Do not create a database or schema. Do not run destructive setup or reset scripts. Preserve existing data and all uncommitted user changes. Report commands inspected, findings, blockers, and recommended next phase.
 
 ---
 
@@ -1721,4 +1721,4 @@ The Sales Pack release notes page lists version 4.4.0 dated August 25, 2026, inc
 - Inventory Management: <https://docs.espocrm.com/extensions/sales-pack/inventory-management/>
 - Sales Pack API: <https://docs.espocrm.com/extensions/sales-pack/api/>
 
-**Compliance reminder:** Follow the clean-room rules in `PLAN.md` and `AGENTS.MD`. Official documentation is a behavioral reference. Do not copy upstream code, assets, translations, trademarks, or non-permitted content. Check licensing and target-market tax/e-invoicing requirements with qualified counsel or specialists where distribution/compliance questions arise.
+**Compliance reminder:** Follow the clean-room rules in `plans/PLAN.md` and `AGENTS.MD`. Official documentation is a behavioral reference. Do not copy upstream code, assets, translations, trademarks, or non-permitted content. Check licensing and target-market tax/e-invoicing requirements with qualified counsel or specialists where distribution/compliance questions arise.

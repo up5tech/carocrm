@@ -6,7 +6,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.5 — computing a score and keeping it
- * (`PLAN_Phase_19_LeadScore.md` §3.1, §5.3–§5.4, §8.2, §9.1–§9.2, §10.2, §16 `19-LS.5`; report
+ * (`plans/PLAN_Phase_19_LeadScore.md` §3.1, §5.3–§5.4, §8.2, §9.1–§9.2, §10.2, §16 `19-LS.5`; report
  * `docs/implementation/lead-score-ls4-completion-report.md` for the engine half).
  *
  * LS.4 proved the arithmetic. This suite is about what happens when that answer is **stored**, which is

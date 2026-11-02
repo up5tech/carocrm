@@ -16,7 +16,7 @@ import { SignatureConnectionRepository } from './signature-connection.repository
 
 /**
  * Phase 19-ES.1 — the single gate in front of every provider operation
- * (`PLAN_Phase_19_ESignature.md` §4.1, §5.2, §8.2, §12; `19-ES.1` acceptance
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.1, §5.2, §8.2, §12; `19-ES.1` acceptance
  * "no provider operations are possible before a connection is enabled").
  *
  * One place answers three questions, in this order, and nothing else may answer them:

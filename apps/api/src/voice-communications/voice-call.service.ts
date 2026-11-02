@@ -1,6 +1,6 @@
 /**
  * Phase 19-VC.7 — call sessions, provider correlation and the Call Activity
- * (`PLAN_Phase_19_Voice_Communications.md` §7.3–§7.4, §15 `19-VC.7`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.3–§7.4, §15 `19-VC.7`).
  *
  * One logical call is one `voice_call_sessions` row, correlated with the provider by
  * `(account_key, provider_call_id)`. Replayed or out-of-order callbacks update that row through

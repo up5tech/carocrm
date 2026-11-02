@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 /**
  * Phase 19-VC.1 — pure Voice & Communications domain vocabulary and decisions
- * (`PLAN_Phase_19_Voice_Communications.md` §6.1, §7.3, §8.1, §9.2, §11.5, §15 `19-VC.1`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §6.1, §7.3, §8.1, §9.2, §11.5, §15 `19-VC.1`).
  *
  * Everything here is a constant or a pure function: no Nest dependency, no database, no I/O, no
  * clock read outside an injected `now`. The adapter contract, the settings schema, the policy
@@ -580,7 +580,7 @@ const REDACTED_VALUE = "[redacted]";
  * Diagnostic copy of a provider payload: credential-like keys are dropped entirely, and the fields
  * that carry customer content, addresses or media URLs are masked. Processing reads
  * `payload_internal`, so the diagnostic copy can be safe to inspect without breaking normalization
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.22`).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.22`).
  */
 export function redactPayload(body: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};

@@ -1,5 +1,5 @@
 -- Phase 19-VC.12–19-VC.17 — Conversation/inbox history, service templates, recordings, transcripts
--- (PLAN_Phase_19_Voice_Communications.md §15, tasks 19-VC.12 … 19-VC.16).
+-- (plans/PLAN_Phase_19_Voice_Communications.md §15, tasks 19-VC.12 … 19-VC.16).
 --
 -- Additive only. Everything here is module-owned state; no existing table is altered destructively.
 

@@ -7,7 +7,7 @@ import { MAX_SIGNAL_EVENTS_PER_PLAN, type SignalPlan, type SignalSourceState } f
 
 /**
  * Phase 19-LS.9 — the engagement signal read
- * (`PLAN_Phase_19_LeadScore.md` §6.3, §6.4, §10.1, §16 `19-LS.9`; audit §7.1, gap G6).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.3, §6.4, §10.1, §16 `19-LS.9`; audit §7.1, gap G6).
  *
  * Plan §10.1 allows only event sources that *truly exist*, and the audit settled what Marketing Automation
  * actually is for this module: engagement lives in the `marketing_events` table, and MA publishes no

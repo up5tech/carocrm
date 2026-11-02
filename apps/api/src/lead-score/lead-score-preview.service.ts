@@ -12,7 +12,7 @@ import { signalPlans } from './lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.4 — preview a score model against a bounded, authorized sample of Leads
- * (`PLAN_Phase_19_LeadScore.md` §6.1, §8.1, §9.4, §15.2 stage 3; audit §5, §11).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.1, §8.1, §9.4, §15.2 stage 3; audit §5, §11).
  *
  * This is the door the deterministic engine is admitted through, and it is deliberately the *only* one at
  * this phase. Plan §15.2 stages the rollout as: model administration, then **"preview scoring on a limited

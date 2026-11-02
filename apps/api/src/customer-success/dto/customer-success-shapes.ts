@@ -1,5 +1,5 @@
 /**
- * Phase 19-CS request shapes (PLAN_Phase_19_Customer_Success.md §8.2).
+ * Phase 19-CS request shapes (plans/PLAN_Phase_19_Customer_Success.md §8.2).
  *
  * The controller parses these; the domain services receive already-validated values, so no service
  * has to second-guess a payload. `.strict()` rejects unknown fields, exactly like

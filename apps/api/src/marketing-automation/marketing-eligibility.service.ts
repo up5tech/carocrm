@@ -20,7 +20,7 @@ import { type AppliedSuppression,MarketingSuppressionService } from "./marketing
 
 /**
  * Phase 19-MA.5 — the single eligibility gate
- * (PLAN_Phase_19_Marketing_Automation.md §5.3, §7.1 `MarketingEligibilityService`, §0.1 rule 8).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.3, §7.1 `MarketingEligibilityService`, §0.1 rule 8).
  *
  * §0.1 rule 8 says consent and suppression are mandatory server-side gates that *nothing* may bypass — no
  * UI toggle, workflow, journey action, retry, manual bulk send or API command. That is only true if there is

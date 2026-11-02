@@ -1,6 +1,6 @@
 # CI quality gates
 
-> Phase 22.22 (`PLAN_Phase_22_Integration_E2E_Hardening.md` §21). This document is the contract for
+> Phase 22.22 (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §21). This document is the contract for
 > what runs in CI, what is deliberately sandbox-only, and what is still manual.
 
 ## 1. Decisions

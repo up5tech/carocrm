@@ -7,7 +7,7 @@ import { MAX_BATCH_CHUNK, MAX_BATCH_TOTAL } from '../lead-score-recalculation.se
 import { CONVERSION_TARGETS } from '../lead-score-vocabulary.js';
 
 /**
- * Phase 19-LS.1 — request shapes (`PLAN_Phase_19_LeadScore.md` §8.4, §16 `19-LS.1`; AGENTS.md §5.4).
+ * Phase 19-LS.1 — request shapes (`plans/PLAN_Phase_19_LeadScore.md` §8.4, §16 `19-LS.1`; AGENTS.md §5.4).
  *
  * Every shape is strict: an unknown key is rejected instead of silently ignored, so a typo in a switch
  * name cannot be stored and quietly do nothing. The controller parses shape only; policy lives in the

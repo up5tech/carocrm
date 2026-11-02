@@ -11,7 +11,7 @@ import {
 
 /**
  * Phase 19-AI.2 — the module's capability gate
- * (PLAN_Phase_19_AI_Agents.md §11, §14.5, §20 `19-AI.2`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §11, §14.5, §20 `19-AI.2`).
  *
  * The platform has one authorization engine. Rather than inventing a parallel "agent permissions"
  * table, each module right is a **synthetic permission resource** evaluated by `AclApiService`, so

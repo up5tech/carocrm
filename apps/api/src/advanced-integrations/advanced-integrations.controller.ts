@@ -55,7 +55,7 @@ import { WebhookIngressService } from './webhook-ingress.service.js';
 
 /**
  * Phase 19-INT.2–19-INT.5 — the `AdvancedIntegrations` control-plane API
- * (`PLAN_Phase_19_Advanced_Integrations.md` §13.1, §13.4; `19-INT.2`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §13.1, §13.4; `19-INT.2`).
  *
  * Only the control plane exists here: the provider catalog, connections, credentials, the OAuth
  * flow and the module's own diagnostics. Mapping, sync, conflicts and webhooks arrive with their

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Phase 19-AI.4 — request shapes
- * (PLAN_Phase_19_AI_Agents.md §14.4, §20 `19-AI.4`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §14.4, §20 `19-AI.4`).
  *
  * Every shape is strict: an unknown key is rejected instead of silently ignored. The controller
  * parses shape only; business rules (provider resolution, secret encryption, URL safety, model

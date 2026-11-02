@@ -21,7 +21,7 @@ import { CustomerSuccessTouchpointService } from "./customer-success-touchpoint.
 import { CustomerSuccessWriteGuardService } from "./customer-success-write-guard.service.js";
 
 /**
- * Phase 19-CS.1 — Customer Success module barrel (PLAN_Phase_19_Customer_Success.md §14, `19-CS.1`).
+ * Phase 19-CS.1 — Customer Success module barrel (plans/PLAN_Phase_19_Customer_Success.md §14, `19-CS.1`).
  *
  * Like Sales and Projects, `CustomerSuccess` is a kernel domain directory under `apps/api/src`, not a
  * second framework: entity records use the generic `entity_records` store, and ACL, audit, stream,

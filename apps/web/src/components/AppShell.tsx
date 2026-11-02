@@ -164,7 +164,7 @@ function InternalShell({ children }: { children: ReactNode }) {
   // query-string-only change (filtering a list) moves nothing.
   useRouteFocus();
   setLiveRegionTranslator(t as never);
-  // Phase 20 (PLAN_Phase_20_Settings_UX.md §4.4): the menu is the tree the server resolved for this
+  // Phase 20 (plans/PLAN_Phase_20_Settings_UX.md §4.4): the menu is the tree the server resolved for this
   // caller — ACL-filtered, ordered and renamed by the Main Menu tab. The shell used to build it from
   // hard-coded name sets plus two per-module visibility probes; both are gone.
   const navigation = useNavigation();

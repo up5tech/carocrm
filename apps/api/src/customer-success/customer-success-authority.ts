@@ -2,7 +2,7 @@ import type { AuthenticatedPrincipal, RequestScope } from "../common/request-sco
 
 /**
  * Phase 19-CS.11 — the documented service-authority model for background work
- * (PLAN_Phase_19_Customer_Success.md §11.1, §9.2).
+ * (plans/PLAN_Phase_19_Customer_Success.md §11.1, §9.2).
  *
  * A scheduled job has no user session, and PLAN §11.1 is explicit that system jobs "use the
  * documented service-authority model, not a user context". The platform's own capability is the

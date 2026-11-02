@@ -12,7 +12,7 @@ export interface SetupChecklistItem {
 }
 
 /**
- * Setup checklist (PLAN_Phase_20_Settings_UX.md §4.10, §20.15): a guided first-run experience for
+ * Setup checklist (plans/PLAN_Phase_20_Settings_UX.md §4.10, §20.15): a guided first-run experience for
  * administrators. Each item has a deep link into the relevant settings page. Completion is
  * structural — an item is "done" when the underlying resource exists (a menu override row, a
  * mailbox, a workflow, the brand row's logo, an administrator's entity override) — so the list

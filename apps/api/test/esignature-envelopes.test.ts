@@ -21,7 +21,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, purgeEntityEvents,
 
 /**
  * Phase 19-ES.9 — provider envelope preparation
- * (`PLAN_Phase_19_ESignature.md` §4.3, §6.2, §13.3, §18 `19-ES.9`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.3, §6.2, §13.3, §18 `19-ES.9`).
  *
  * The acceptance criteria, one group each:
  *

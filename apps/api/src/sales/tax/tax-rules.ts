@@ -7,7 +7,7 @@ import {
 import { parseDecimal } from "../money/decimal.js";
 
 /**
- * Phase 19-S.5 — declarative tax rules and rates (PLAN_Phase_19_Sales.md §4.12).
+ * Phase 19-S.5 — declarative tax rules and rates (plans/PLAN_Phase_19_Sales.md §4.12).
  *
  * Tax selection must be deterministic and explainable, and a rule change must never alter an
  * already-issued invoice (issued documents keep their snapshot; §4.12 last bullets). Everything in
@@ -253,7 +253,7 @@ export interface TaxRateSelection {
 /**
  * Pick the rate for a tax code and context. Applicable rates are those of the code, active, inside
  * their window, and either jurisdiction-neutral or matching the context. Among them the most recent
- * `effectiveFrom` wins; a tie is a conflict (PLAN_Phase_19_Sales.md §4.12 "overlapping rules").
+ * `effectiveFrom` wins; a tie is a conflict (plans/PLAN_Phase_19_Sales.md §4.12 "overlapping rules").
  */
 export function selectTaxRate(
   rates: readonly TaxRateInput[],

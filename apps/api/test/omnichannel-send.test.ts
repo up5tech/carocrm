@@ -13,7 +13,7 @@ import { authHeader, bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-OM.8 — outbound command, send state and reconciliation
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.8`; contract §9; extension E7).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.8`; contract §9; extension E7).
  *
  * Against the configured primary database (AGENTS.md §3.1). The reply path uses the in-process
  * simulator; the timeout path uses a tiny scripted adapter registered through the documented DI seam

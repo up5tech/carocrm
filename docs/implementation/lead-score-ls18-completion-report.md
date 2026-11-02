@@ -1,6 +1,6 @@
 # Phase 19-LS.18 — Reporting, security sweep and release: completion report
 
-`PLAN_Phase_19_LeadScore.md` §16 `19-LS.18`, §17 (Definition of Done); audit §11 `LS.18`; compatibility
+`plans/PLAN_Phase_19_LeadScore.md` §16 `19-LS.18`, §17 (Definition of Done); audit §11 `LS.18`; compatibility
 `docs/compatibility/lead-score.md` §2, §8; the runbook `docs/runbooks/lead-score-operations.md`.
 
 **Exit criterion (plan §16):** *every requirement is mapped to an implementation and a verification result; no

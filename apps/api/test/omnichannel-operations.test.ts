@@ -14,7 +14,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-OM.21 — administration, diagnostics and recovery
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.21`; runbook `docs/omnichannel/runbook.md`).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.21`; runbook `docs/omnichannel/runbook.md`).
  *
  * Against the configured primary database (AGENTS.md §3.1). Fixtures live under
  * `agent_test_om21_*`, are created through the owner's ingress/send services, and are removed by

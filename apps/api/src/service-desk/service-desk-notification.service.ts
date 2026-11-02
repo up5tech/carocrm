@@ -6,7 +6,7 @@ import { ServiceDeskSettingsService } from "./service-desk-settings.service.js";
 
 /**
  * Phase 19-SD.5/SD.6 — assignment and reply notifications
- * (PLAN_Phase_19_ServiceDesk.md §12.3, acceptance "notifications reflect the new assignment" and
+ * (plans/PLAN_Phase_19_ServiceDesk.md §12.3, acceptance "notifications reflect the new assignment" and
  * "Add notifications with event/recipient idempotency").
  *
  * The platform already owns the in-app notification store (`notifications`, the same table Customer

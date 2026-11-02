@@ -1,7 +1,7 @@
 # Phase 22 — Test Evidence
 
 > **Date:** 2026-10-29
-> **Sub-phase under this record:** Phase 22.16 — Browser E2E critical paths (`PLAN_Phase_22_Integration_E2E_Hardening.md` §15)
+> **Sub-phase under this record:** Phase 22.16 — Browser E2E critical paths (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §15)
 > **Status:** Browser execution completed green for the Phase 22.16 critical-path spec (2026-10-29); full workstream evidence still to be accumulated through 22.24.
 
 ---

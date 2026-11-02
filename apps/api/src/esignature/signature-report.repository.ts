@@ -11,7 +11,7 @@ import {
 
 /**
  * Phase 19-ES.19 — the read model behind the operational reports and the ESignature dashlet
- * (`PLAN_Phase_19_ESignature.md` §14, §18 `19-ES.19`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §14, §18 `19-ES.19`).
  *
  * Every query starts from the same record-scope predicate the request list uses
  * (`requestAccessSql`), so a report can only ever aggregate rows the caller could open. The

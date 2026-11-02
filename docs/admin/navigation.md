@@ -1,6 +1,6 @@
 # Main menu and navigation (Phase 20)
 
-Scope: `PLAN_Phase_20_Settings_UX.md` §4.4, §4.5, §7.2, §14. Files: `apps/api/src/admin-panel/`
+Scope: `plans/PLAN_Phase_20_Settings_UX.md` §4.4, §4.5, §7.2, §14. Files: `apps/api/src/admin-panel/`
 (`navigation.service.ts`, `navigation-defaults.ts`, `navigation-warnings.ts`, `settings-shapes.ts`) and
 `apps/web/src/admin/tabs/MenuTab.tsx`.
 

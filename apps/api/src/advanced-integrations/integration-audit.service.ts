@@ -10,7 +10,7 @@ import { redactSecrets } from './advanced-integrations-domain.js';
 
 /**
  * Phase 19-INT.26 — the module's audit trail
- * (`PLAN_Phase_19_Advanced_Integrations.md` §14.4, §16.2; `19-INT.26`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §14.4, §16.2; `19-INT.26`).
  *
  * The kernel audit hook records changes to **entities**. The plan §14.4 asks for an audit event
  * for every privileged module action as well: a connection paused, a mapping published, a sync

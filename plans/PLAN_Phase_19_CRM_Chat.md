@@ -1,7 +1,7 @@
 # PLAN — CRM Chat Assistant (`CRMChat`)
 
 > **Status:** Planned  
-> **Parent roadmap:** `PLAN.md` — Advanced CRM Capabilities  
+> **Parent roadmap:** `plans/PLAN.md` — Advanced CRM Capabilities  
 > **Suggested module name:** `CRMChat`  
 > **Module slug:** `crm-chat`  
 > **NestJS module/class:** `CRMChatModule`  
@@ -16,7 +16,7 @@
 
 ## 0. Instructions for the Coding Agent
 
-Read `AGENTS.MD`, `PLAN.md`, and the actual source code for `AIAgents`, the Entity Engine, ACL, Search, Activities, Notifications, Jobs, Attachments, Dashboard, and the existing frontend shell before implementing this plan.
+Read `AGENTS.MD`, `plans/PLAN.md`, and the actual source code for `AIAgents`, the Entity Engine, ACL, Search, Activities, Notifications, Jobs, Attachments, Dashboard, and the existing frontend shell before implementing this plan.
 
 This plan describes intended behavior. It is not evidence that a dependency already exists or is implemented. Start with **Phase 19-CHAT.0 only**. Inspect the repository, migration history, public API conventions, module manifests, tool contracts, provider adapters, UI conventions, tests, and database test scripts before selecting an implementation.
 
@@ -895,12 +895,12 @@ Evaluate factual correctness, evidence/citation validity, permission compliance,
 
 ## 17. Delivery Roadmap
 
-Implement the phases sequentially. Do not start later phases before the repository audit and required interface decisions are recorded. The specific numbers are planning identifiers and do not change the broader `PLAN.md` numbering.
+Implement the phases sequentially. Do not start later phases before the repository audit and required interface decisions are recorded. The specific numbers are planning identifiers and do not change the broader `plans/PLAN.md` numbering.
 
 ### Phase 19-CHAT.0 — Repository Audit and Capability Inventory
 
 **Tasks**
-- Inspect `PLAN.md`, `AGENTS.MD`, `AIAgents`, provider gateway, tool registry, run APIs, approvals, memory/context, usage tracking, search, entity access, global navigation, streaming infrastructure, notification/jobs, and frontend layout conventions.
+- Inspect `plans/PLAN.md`, `AGENTS.MD`, `AIAgents`, provider gateway, tool registry, run APIs, approvals, memory/context, usage tracking, search, entity access, global navigation, streaming infrastructure, notification/jobs, and frontend layout conventions.
 - Inspect real database migrations and identify existing conversation/message/run tables.
 - Inspect current API response envelopes, DTO validation, auth/ACL middleware, route names, feature flags, and test scripts.
 - Identify modules that are implemented versus only planned.
@@ -1217,10 +1217,10 @@ Only after that vertical slice passes end-to-end tests should the agent broaden 
 
 Use these references for architectural/security guidance, checking current official documentation during implementation. The implementation must still follow the installed library versions and the repository's established contracts.
 
-- Project roadmap: `PLAN.md`
+- Project roadmap: `plans/PLAN.md`
 - Coding and database safety rules: `AGENTS.MD`
-- Existing agent runtime plan: `PLAN_Phase_19_AI_Agents.md` if present in the repository
-- Existing domain plans: `PLAN_Phase_19_Sales.md`, `PLAN_Phase_19_Projects.md`, `PLAN_Phase_19_Customer_Success.md`, `PLAN_Phase_19_ServiceDesk.md`, `PLAN_Phase_19_Marketing_Automation.md`, `PLAN_Phase_19_Voice_Communications.md`, and `PLAN_Phase_19_Advanced_Integrations.md` where present
+- Existing agent runtime plan: `plans/PLAN_Phase_19_AI_Agents.md` if present in the repository
+- Existing domain plans: `plans/PLAN_Phase_19_Sales.md`, `plans/PLAN_Phase_19_Projects.md`, `plans/PLAN_Phase_19_Customer_Success.md`, `plans/PLAN_Phase_19_ServiceDesk.md`, `plans/PLAN_Phase_19_Marketing_Automation.md`, `plans/PLAN_Phase_19_Voice_Communications.md`, and `plans/PLAN_Phase_19_Advanced_Integrations.md` where present
 - NestJS Server-Sent Events documentation: https://docs.nestjs.com/techniques/server-sent-events
 - OWASP GenAI / LLM Top 10 (current project): https://genai.owasp.org/initiatives/top-10-for-llm-and-genai/
 - OWASP GenAI LLM Top 10 2026 source: https://github.com/GenAI-Security-Project/GenAI-LLM-Top10/tree/main/2026

@@ -1,6 +1,6 @@
 /**
  * Phase 19-ES.1 — the `ESignature` domain vocabulary
- * (`PLAN_Phase_19_ESignature.md` §4.7, §6.1, §6.6, §12; `19-ES.1`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.7, §6.1, §6.6, §12; `19-ES.1`).
  *
  * This file declares names, not behaviour: the ACL resources every route is evaluated against, the
  * normalized lifecycle the schema (ES.2) will persist, the secret kinds the vault (ES.4) will hold,

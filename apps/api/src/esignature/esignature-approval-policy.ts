@@ -2,7 +2,7 @@ import type { ApprovalRule, ESignatureSettings } from './esignature-settings.ser
 
 /**
  * Phase 19-ES.17 — the approval policy engine, as a pure function
- * (`PLAN_Phase_19_ESignature.md` §11.1, §18 `19-ES.17`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §11.1, §18 `19-ES.17`).
  *
  * The policy answers one question for a prepared request: **does this set of bytes need a second
  * person's decision before it can leave the CRM?** It is evaluated from the linked source record's

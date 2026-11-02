@@ -29,7 +29,7 @@ import { verifyStripeStyleSignature } from '../kit/webhook-signatures.js';
 
 /**
  * Phase 19-INT.19 — the Stripe connector
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.4; `19-INT.19`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.4; `19-INT.19`).
  *
  * This is the most sensitive connector in the module, so the design is deliberately **narrow**.
  *

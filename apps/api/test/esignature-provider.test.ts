@@ -38,7 +38,7 @@ import {
 
 /**
  * Phase 19-ES.3 — the provider contract, the registry and the fake adapter
- * (`PLAN_Phase_19_ESignature.md` §5.2, §4.3, §9.1, §10, §17, §18 `19-ES.3`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §5.2, §4.3, §9.1, §10, §17, §18 `19-ES.3`).
  *
  * Acceptance covered here:
  *   - an end-to-end domain workflow runs against the fake provider (the flow suite below);

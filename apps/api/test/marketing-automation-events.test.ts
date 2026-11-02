@@ -9,7 +9,7 @@ import { authHeader, bootApi, shutdownApi } from "./support/boot-api.js";
 
 /**
  * Phase 19-MA.10 / 19-MA.14 — provider webhooks, event normalization and suppression feedback
- * (PLAN_Phase_19_Marketing_Automation.md §5.9, §11.3, §15 `19-MA.10`, `19-MA.14` acceptance).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.9, §11.3, §15 `19-MA.10`, `19-MA.14` acceptance).
  *
  * Runs against the configured primary database through the real HTTP API (AGENTS.md §3.1): no test
  * database is created, and nothing here sends mail — a webhook is an inbound call, not a delivery.

@@ -20,7 +20,7 @@ import {
 
 /**
  * Phase 19-SD.1 — module health and diagnostics
- * (PLAN_Phase_19_ServiceDesk.md §17 "activation should provide a clear diagnostic").
+ * (plans/PLAN_Phase_19_ServiceDesk.md §17 "activation should provide a clear diagnostic").
  *
  * "Unavailable optional integrations are reported, not fatal": the module starts with no Email
  * adapter, no Portal case scope and no Knowledge Base, and this endpoint is where an operator sees

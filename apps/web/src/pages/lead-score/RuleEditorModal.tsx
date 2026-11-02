@@ -9,7 +9,7 @@ import { bandLabel, dimensionLabel, effectLabel, errorText, metricFields, named,
 
 /**
  * Phase 19-LS.8 — one rule, authored as a form
- * (`PLAN_Phase_19_LeadScore.md` §3.1, §6.2, §6.4, §16 `19-LS.8`).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §3.1, §6.2, §6.4, §16 `19-LS.8`).
  *
  * The record itself is written through the generic entity API, because that is the only path the LS.2 write
  * guard watches: a published model's rules are frozen by the guard, not by this modal hiding a button

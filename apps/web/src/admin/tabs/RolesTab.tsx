@@ -15,7 +15,7 @@ type FieldPermissions = Record<string, Record<string, Partial<Record<'read' | 'e
 const ROLE_PAGE_SIZE = 20;
 
 /**
- * Roles tab (PLAN_Phase_20_Settings_UX.md §4.3 row 11): role CRUD plus the entity and field permission
+ * Roles tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 11): role CRUD plus the entity and field permission
  * matrix, written straight to `/Role` — the same document `AclApiService` evaluates, so there is no
  * second copy of the truth.
  *

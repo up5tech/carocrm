@@ -24,7 +24,7 @@ import { requiredScopesFor } from './provider-capabilities.js';
 
 /**
  * Phase 19-INT.4 — the connection lifecycle
- * (`PLAN_Phase_19_Advanced_Integrations.md` §6.2, §7.1, §7.3, §7.4; `19-INT.4`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §6.2, §7.1, §7.3, §7.4; `19-INT.4`).
  *
  * A connection is the platform's record of one configured installation/account/tenant of a
  * provider. This service owns its state machine, its configuration and its ownership.

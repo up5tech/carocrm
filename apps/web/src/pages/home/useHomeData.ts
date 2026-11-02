@@ -6,7 +6,7 @@ import type { ProcessInstanceListResult, ProcessTaskListResult, SetupChecklistVi
 import { kpiDashletsOf, localDayBounds, localDayKey } from './home-model.js';
 
 /**
- * One React Query key per home card (PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
+ * One React Query key per home card (plans/PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
  *
  * Each card owns its own request and its own loading/empty/error state, so one failing source never
  * blanks the page and the page issues the same handful of requests whatever the module count is.

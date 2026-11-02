@@ -1,7 +1,7 @@
 import type { AclAction } from '@carocrm/acl/types/index.js';
 
 /**
- * The menu the platform ships with (PLAN_Phase_20_Settings_UX.md §4.4, §15.2).
+ * The menu the platform ships with (plans/PLAN_Phase_20_Settings_UX.md §4.4, §15.2).
  *
  * These are the entries `AppShell.tsx` used to hard-code. They move here so the resolved tree comes
  * from one place, the `navigation` settings document can override it, and the SPA renders what the

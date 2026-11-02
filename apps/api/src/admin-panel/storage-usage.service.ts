@@ -5,7 +5,7 @@ import type { RequestScope } from '../common/request-scope.js';
 import { REQUEST_SCOPE_TOKEN } from '../common/request-scope.js';
 import { DatabaseService } from '../database/database.service.js';
 
-/** What the Attachments tab reports about the file store (PLAN_Phase_20_Settings_UX.md §4.3 row 5). */
+/** What the Attachments tab reports about the file store (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 5). */
 export interface StorageUsageView {
   /** Files currently stored. */
   attachments: number;

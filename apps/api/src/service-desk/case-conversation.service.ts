@@ -18,7 +18,7 @@ import { SlaService } from "./sla.service.js";
 
 /**
  * Phase 19-SD.6 — case conversation: public replies, internal notes and the visibility-safe timeline
- * (PLAN_Phase_19_ServiceDesk.md §5.4, §7.1, §8.2, acceptance "Agents can create public and internal
+ * (plans/PLAN_Phase_19_ServiceDesk.md §5.4, §7.1, §8.2, acceptance "Agents can create public and internal
  * entries according to permission" / "Portal APIs can never return internal content").
  *
  * This service adds *no* second conversation store: a public reply and an internal note are two

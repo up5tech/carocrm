@@ -1,4 +1,4 @@
--- Phase 19-OM.17 — ServiceDesk hand-off contract (E9; PLAN_Phase_19_Omnichannel.md §14 OM.17;
+-- Phase 19-OM.17 — ServiceDesk hand-off contract (E9; plans/PLAN_Phase_19_Omnichannel.md §14 OM.17;
 -- docs/omnichannel/feature-contract.md §8).
 --
 -- The Case side of the link: `Case.externalId`/`externalSource` are metadata fields (server-owned;

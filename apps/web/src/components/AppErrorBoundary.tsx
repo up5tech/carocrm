@@ -19,7 +19,7 @@ interface State {
 }
 
 /**
- * Render-failure boundary (PLAN_Phase_20_Settings_UX.md §20.22).
+ * Render-failure boundary (plans/PLAN_Phase_20_Settings_UX.md §20.22).
  *
  * Without one, a throw inside any component unmounts the whole React tree and the operator is left
  * with a blank page and no explanation — one malformed record payload or one bad metadata field

@@ -24,7 +24,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, purgeEntityEvents,
 
 /**
  * Phase 19-ES.18 — lifecycle events and CRM record entry points
- * (`PLAN_Phase_19_ESignature.md` §2.3, §15, §18 `19-ES.18`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §2.3, §15, §18 `19-ES.18`).
  *
  * What this suite pins down:
  *

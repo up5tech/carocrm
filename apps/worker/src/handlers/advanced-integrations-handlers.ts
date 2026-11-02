@@ -5,7 +5,7 @@ import type { DomainEventBus, DomainEventMessage } from '../events/domain-event-
 
 /**
  * Phase 19-INT.12 / 19-INT.13 — the Advanced Integrations module's scheduled work, registered in
- * the worker composition root (`PLAN_Phase_19_Advanced_Integrations.md` §10, §11.6).
+ * the worker composition root (`plans/PLAN_Phase_19_Advanced_Integrations.md` §10, §11.6).
  *
  * Like `registerCustomerSuccessJobs`, a handler deliberately does **not** touch the module's tables
  * itself. Processing a provider callback, pushing an outbound operation and reacting to a CRM

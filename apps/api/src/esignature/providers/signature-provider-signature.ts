@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 /**
  * Phase 19-ES.3 — the provider-side HMAC kit
- * (`PLAN_Phase_19_ESignature.md` §10.2; audit §1 "timing-safe HMAC verifiers").
+ * (`plans/PLAN_Phase_19_ESignature.md` §10.2; audit §1 "timing-safe HMAC verifiers").
  *
  * DocuSign Connect signs the **exact bytes it sent**, so the only honest verification is over the raw
  * body, and the exact header layout, encoding and (where present) timestamp form are captured from a

@@ -5,7 +5,7 @@ import { IntegrationContractRegistry } from '../integration-contracts.js';
 
 /**
  * Phase 19-INT.25 — the `CustomerSuccess` contract
- * (`PLAN_Phase_19_Advanced_Integrations.md` §14.2, §19 `19-INT.25`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §14.2, §19 `19-INT.25`).
  *
  * `CustomerSuccess` owns the customer health, the renewal tracking and the CSM assignment. The
  * compatibility document says it plainly: *"May sync approved fields; never computes CSM health."*

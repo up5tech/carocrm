@@ -1,7 +1,7 @@
 # Phase 22 — Known Gaps and Defects
 
 > **Date:** 2026-10-28 (opened in Phase 22.6; entries 22.0–22.5 consolidated)
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §3.2
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §3.2
 > **Rule:** every entry names the evidence it rests on. A gap that is not reproduced is a hypothesis, and a hypothesis is labelled as one.
 > **Status vocabulary:** `Open` · `Fixed` (with the commit/test) · `Accepted` (a deliberate decision, with the reason) · `Deferred` (belongs to a later sub-phase, named)
 

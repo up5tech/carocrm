@@ -13,7 +13,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
  * prefixed and removed by exact id.
  *
  * The point is the plan's LS.1 exit criterion: *the module loads, is discoverable, and does not
- * conflict with existing Lead behavior* (PLAN_Phase_19_LeadScore.md §16). "Does not conflict" is proved
+ * conflict with existing Lead behavior* (plans/PLAN_Phase_19_LeadScore.md §16). "Does not conflict" is proved
  * by exercising the generic Lead/Contact/Account/Opportunity API inside the same booted application
  * that now carries the module, and by the health view reporting the untouched core lifecycle.
  */

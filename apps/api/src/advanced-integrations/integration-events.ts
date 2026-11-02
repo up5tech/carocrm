@@ -5,7 +5,7 @@ import { DatabaseService } from '../database/database.service.js';
 
 /**
  * Phase 19-INT.25 — the integration events
- * (`PLAN_Phase_19_Advanced_Integrations.md` §19 `19-INT.25`; plan §11.6).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §19 `19-INT.25`; plan §11.6).
  *
  * The plan says: *"Publish integration events only through approved contracts/outbox."* Two words
  * carry the requirement:

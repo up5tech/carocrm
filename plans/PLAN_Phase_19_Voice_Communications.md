@@ -1,7 +1,7 @@
 # PLAN — Phase 19: Voice & Communications Module (`VoiceCommunications`)
 
 > **Status:** Planned  
-> **Parent roadmap:** `PLAN.md` — advanced CRM domains  
+> **Parent roadmap:** `plans/PLAN.md` — advanced CRM domains  
 > **Target runtime:** NestJS / TypeScript backend with the existing React SPA  
 > **Canonical module name:** `VoiceCommunications`  
 > **Module key / frontend slug:** `voice-communications`  
@@ -805,7 +805,7 @@ Execute these sub-phases sequentially unless the repository audit identifies an 
 
 Tasks:
 
-- Read `PLAN.md`, `AGENTS.MD`, package/workspace structure and conventions from neighboring modules.
+- Read `plans/PLAN.md`, `AGENTS.MD`, package/workspace structure and conventions from neighboring modules.
 - Inspect existing entities/services for Calls, Activities, Emails, Messages, phone fields, Files, consent, audit, Notifications, Jobs, provider settings, and API/webhook infrastructure.
 - Inspect `ServiceDesk`, `MarketingAutomation`, `AIAgents`, `CustomerSuccess`, `Sales`, `Projects`, and Portal integration contracts.
 - Inspect test scripts and migration infrastructure before executing any database-backed command.
@@ -1235,7 +1235,7 @@ The module is complete for the selected release scope only when all relevant sta
 
 ## 19. Coding-Agent Execution Instructions
 
-1. Read `PLAN.md` and `AGENTS.MD` first, then inspect the actual repository structure and neighboring modules.
+1. Read `plans/PLAN.md` and `AGENTS.MD` first, then inspect the actual repository structure and neighboring modules.
 2. Start with **Phase 19-VC.0 only**. Deliver the repository audit and feature contract before implementing provider-specific code.
 3. Implement one sub-phase at a time. Do not generate all provider adapters, UI and schemas in one large change.
 4. Before choosing a provider SDK, check installed dependencies, current provider docs and the repository's package manager/lockfile. Do not add multiple SDKs without a concrete scope.

@@ -16,7 +16,7 @@ const INSIGHT_ENTITY: LeadScoreEntityType = 'LeadScoreInsight';
 
 /**
  * Phase 19-LS.5 — the module's own structural reads
- * (`PLAN_Phase_19_LeadScore.md` §4.4, §5.3–§5.4, §8.2; audit §5.3, §11 `LS.5`).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §4.4, §5.3–§5.4, §8.2; audit §5.3, §11 `LS.5`).
  *
  * Two different questions are asked of Lead Score data, and they need two different doors:
  *

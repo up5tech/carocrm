@@ -12,7 +12,7 @@ import {
 
 /**
  * Phase 19-MA.8 — the per-recipient marketing delivery ledger
- * (PLAN_Phase_19_Marketing_Automation.md §5.5, §6.5; audit §3 `MarketingRecipientDelivery`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §5.5, §6.5; audit §3 `MarketingRecipientDelivery`).
  *
  * This is the one marketing structure that is a table rather than a metadata record, for the same reason
  * `marketing_audience_snapshot_entries` (migration 038) and `email_deliveries` (006) are: one row per resolved

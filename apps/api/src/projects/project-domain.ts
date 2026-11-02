@@ -1,5 +1,5 @@
 /**
- * Phase 19 — Projects: pure domain rules (PLAN_Phase_19_Projects.md §4, §10).
+ * Phase 19 — Projects: pure domain rules (plans/PLAN_Phase_19_Projects.md §4, §10).
  *
  * Nothing here touches Nest, the database or the request scope: every rule is a function over plain
  * values so the invariants can be unit-tested directly (§12.1) and reused by the policy service, the

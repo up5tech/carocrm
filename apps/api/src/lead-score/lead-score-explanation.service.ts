@@ -14,7 +14,7 @@ import { LeadScoreSettingsService } from './lead-score-settings.service.js';
 
 /**
  * Phase 19-LS.5 — explaining a score and saying whether it is current
- * (`PLAN_Phase_19_LeadScore.md` §3.1, §5.3–§5.4, §6.5, §8.2, §9.1–§9.2, §16 `19-LS.5`; audit §5.3).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §3.1, §5.3–§5.4, §6.5, §8.2, §9.1–§9.2, §16 `19-LS.5`; audit §5.3).
  *
  * The phase's acceptance is a sentence a salesperson can act on: *"users can explain the score and know
  * whether it is current."* Two things therefore have to be answered together and cannot be inferred from the

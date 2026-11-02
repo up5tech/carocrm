@@ -13,7 +13,7 @@ import { EventBus } from '../events/event-bus.js';
 /**
  * Phase 19-VC.12 + 19-VC.13 — the unified inbox domain: conversation listing, timeline, read
  * state, status, assignment history and the Service Desk handoff
- * (`PLAN_Phase_19_Voice_Communications.md` §9, §15 `19-VC.12`/`19-VC.13`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §9, §15 `19-VC.12`/`19-VC.13`).
  *
  * Invariants this file owns:
  *  - **Assignment/status changes keep history.** Every change writes a `voice_conversation_events`

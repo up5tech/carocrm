@@ -5,7 +5,7 @@ import { type DocuSignHttpResponse, type DocuSignTransport,formBody, parseJson }
 
 /**
  * Phase 19-ES.4 — DocuSign's OAuth 2.0 surface
- * (`PLAN_Phase_19_ESignature.md` §8.1, §9.2, §9.4; audit §4 "OAuth"; `19-ES.4`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.1, §9.2, §9.4; audit §4 "OAuth"; `19-ES.4`).
  *
  * The grant is **Confidential Authorization Code** — the default the plan and the audit agree on for
  * an administrator-authorized integration. JWT server-to-server is explicitly non-default (plan §9.2)

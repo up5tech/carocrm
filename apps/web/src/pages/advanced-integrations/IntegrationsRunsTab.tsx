@@ -9,7 +9,7 @@ import { formatDuration, PanelEmpty, SectionToolbar } from './shared.js';
 
 /**
  * Phase 19-INT.15 — the sync run history
- * (`PLAN_Phase_19_Advanced_Integrations.md` §15.5).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15.5).
  *
  * A run list is only useful if an operator can get from "it failed" to "this record failed
  * because of this field". The run list shows the counts and the error; the drawer shows the

@@ -8,7 +8,7 @@ import { SetupBanner } from './home/SetupBanner.js';
 import { TodayAgenda } from './home/TodayAgenda.js';
 
 /**
- * The home workspace (PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
+ * The home workspace (plans/PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
  *
  * Four questions, in this order: what needs me now (the focus strip), what is on today (the agenda),
  * what is the pulse (at most three KPI dashlets of the user's default dashboard) and what changed (the

@@ -13,7 +13,7 @@ import { restoreSettings, snapshotSettings } from './support/settings-snapshot.j
 
 /**
  * Phase 22.14 — the journey: a connector that breaks, and what the platform does about it
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §13.7, steps 1–8, and its acceptance assertions).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.7, steps 1–8, and its acceptance assertions).
  *
  * One story through the public contracts, with a hand-built provider that fails on cue:
  * an operator registers a connection, authorizes it through a real OAuth dance, and the credential

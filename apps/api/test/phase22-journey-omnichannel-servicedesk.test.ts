@@ -21,7 +21,7 @@ import { restoreSettings, snapshotSettings } from './support/settings-snapshot.j
 
 /**
  * Phase 22.11 — the journey: an Omnichannel conversation becomes a ServiceDesk case
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §13.4, steps 1–10).
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §13.4, steps 1–10).
  *
  * One story, in order, through the public contracts: a signed provider event arrives, it is
  * deduplicated and mapped to one canonical conversation and one canonical contact, the conversation

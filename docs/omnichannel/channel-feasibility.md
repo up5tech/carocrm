@@ -1,6 +1,6 @@
 # Phase 19-OM.1 — Omnichannel channel feasibility records
 
-> Plan: `PLAN_Phase_19_Omnichannel.md` §4.3 gate, §14 `19-OM.1`. One record per candidate channel.
+> Plan: `plans/PLAN_Phase_19_Omnichannel.md` §4.3 gate, §14 `19-OM.1`. One record per candidate channel.
 > A channel **must not** have an adapter, UI entry, or committed feature until its record is GO.
 >
 > **Evidence basis and re-verification duty.** The "Checked" date below is the date this record was

@@ -18,7 +18,7 @@ import { constantTimeEqual, signCanonicalWebhook } from "./voice-provider-crypto
 
 /**
  * Phase 19-VC.4 — the provider adapter contract, the registry and the simulator
- * (`PLAN_Phase_19_Voice_Communications.md` §6.1–§6.3, §15 `19-VC.4`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §6.1–§6.3, §15 `19-VC.4`).
  *
  * The domain must not depend on one vendor's API (§1.2 "provider-neutral domain"), so a provider is
  * named by exactly this interface and nothing else in the module may know a vendor exists. This

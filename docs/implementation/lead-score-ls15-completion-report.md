@@ -1,6 +1,6 @@
 # Phase 19-LS.15 — History, Activities and Attribution Preservation: completion report
 
-`PLAN_Phase_19_LeadScore.md` §7.5, §16 (`19-LS.15`); audit §11 `LS.15`; contract
+`plans/PLAN_Phase_19_LeadScore.md` §7.5, §16 (`19-LS.15`); audit §11 `LS.15`; contract
 `docs/implementation/lead-score-conversion-contract.md` §10.5; compatibility `docs/compatibility/lead-score.md`
 §4.4, §8.
 

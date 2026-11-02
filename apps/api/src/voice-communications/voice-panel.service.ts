@@ -8,7 +8,7 @@ import { EntityCrudService } from '../entity/entity.service.js';
 
 /**
  * Phase 19-VC.17 — CRM panels: communication history in the record's own context
- * (`PLAN_Phase_19_Voice_Communications.md` §10.4, §15 `19-VC.17`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §10.4, §15 `19-VC.17`).
  *
  * Rules:
  *  - **Record-ACL aware.** The panel refuses anything the caller cannot read through the entity

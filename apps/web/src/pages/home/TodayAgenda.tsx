@@ -17,7 +17,7 @@ const TYPE_CLASS: Record<string, string> = {
 };
 
 /**
- * "What is on today" (PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
+ * "What is on today" (plans/PLAN_Phase_20_Settings_UX.md §5.6, §20.19).
  *
  * Up to six entries with a time gutter and a type dot; the rest are counted and linked rather than
  * dropped. An empty day says so — the card never shows a blank rectangle.

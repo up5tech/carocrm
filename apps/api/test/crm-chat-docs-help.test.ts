@@ -7,7 +7,7 @@ import { restoreSettings, snapshotSettings } from './support/settings-snapshot.j
 
 /**
  * Phase 19-CHAT.9 — handbook-backed help answers
- * (PLAN_Phase_19_CRM_Chat.md §5.3, §17 `19-CHAT.9`; acceptance: "Help answers cite approved material and
+ * (plans/PLAN_Phase_19_CRM_Chat.md §5.3, §17 `19-CHAT.9`; acceptance: "Help answers cite approved material and
  * admit when no reliable source is found").
  *
  * A user asks Chat how to use the product. The answer must come from the in-app handbook (`content/docs`,

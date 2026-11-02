@@ -10,7 +10,7 @@ import { runAsCustomerSuccessInternal } from "./customer-success-internal.js";
 import { CustomerSuccessRecords } from "./customer-success-records.js";
 
 /**
- * Phase 19-CS.6 — success plans (PLAN_Phase_19_Customer_Success.md §5.6).
+ * Phase 19-CS.6 — success plans (plans/PLAN_Phase_19_Customer_Success.md §5.6).
  *
  * A plan keeps its own lifecycle, enforces at most one primary active plan per profile by default,
  * and rolls its goals up into a progress figure. Completed and canceled plans are history: they are

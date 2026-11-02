@@ -9,7 +9,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.3 — the score model lifecycle: validate, publish, archive, new version
- * (`PLAN_Phase_19_LeadScore.md` §6.1, §9.1, §16 `19-LS.3`; audit §5.1; report
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.1, §9.1, §16 `19-LS.3`; audit §5.1; report
  * `docs/implementation/lead-score-ls3-completion-report.md`).
  *
  * The phase's exit criterion is two sentences, and each gets its own group of assertions:

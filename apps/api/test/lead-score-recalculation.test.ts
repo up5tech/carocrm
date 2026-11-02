@@ -8,7 +8,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.6 — deciding *when* to score, in the background
- * (`PLAN_Phase_19_LeadScore.md` §4.2, §9.3–§9.4, §10.2, §11.1, §16 `19-LS.6`; report
+ * (`plans/PLAN_Phase_19_LeadScore.md` §4.2, §9.3–§9.4, §10.2, §11.1, §16 `19-LS.6`; report
  * `docs/implementation/lead-score-ls6-completion-report.md`).
  *
  * LS.5 proved that scoring one Lead is safe to repeat. This phase is about *who* asks for it and *how often*,

@@ -1,4 +1,4 @@
--- Phase 19-LS.18 — the Lead Score operational dashlet kind (PLAN_Phase_19_LeadScore.md §16 `19-LS.18`).
+-- Phase 19-LS.18 — the Lead Score operational dashlet kind (plans/PLAN_Phase_19_LeadScore.md §16 `19-LS.18`).
 --
 -- `dashlets.kind` carried a CHECK from the three generic Phase 12 kinds plus Projects' `projectTasks` and
 -- ESignature's `esignature`. The Lead Score dashlet shows one of the module's curated score/conversion views,

@@ -7,7 +7,7 @@ import {
 
 /**
  * Phase 19-ES.12 — the provider-event to projection mapper
- * (`PLAN_Phase_19_ESignature.md` §4.7, §10.3, §10.4, §18 `19-ES.12`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.7, §10.3, §10.4, §18 `19-ES.12`).
  *
  * A Connect delivery is evidence, not a command. This file turns one verified event into the two
  * things the application may do with it — an optional recipient move and an optional envelope move —

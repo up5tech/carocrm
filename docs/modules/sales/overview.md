@@ -92,5 +92,5 @@ Delivered by 19-S.0 – 19-S.5:
 * [product-catalog-and-pricing.md](product-catalog-and-pricing.md)
 * [money-tax-currency.md](money-tax-currency.md)
 * [api.md](api.md) · [permissions.md](permissions.md)
-* [`PLAN_Phase_19_Sales.md`](../../PLAN_Phase_19_Sales.md) — authoritative scope and roadmap
+* [`plans/PLAN_Phase_19_Sales.md`](../../../plans/PLAN_Phase_19_Sales.md) — authoritative scope and roadmap
 * [../../implementation/sales-repository-audit.md](../../implementation/sales-repository-audit.md) — the 19-S.0 audit

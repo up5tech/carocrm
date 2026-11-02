@@ -7,7 +7,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-OM.7 — identity resolution, ambiguity and staff linking
- * (`PLAN_Phase_19_Omnichannel.md` §14 `19-OM.7`; feature contract §6; migration 078).
+ * (`plans/PLAN_Phase_19_Omnichannel.md` §14 `19-OM.7`; feature contract §6; migration 078).
  *
  * Against the configured primary database (AGENTS.md §3.1); in-process simulator only. The account,
  * consent, settings and CRM records this suite creates are `AGENT_TEST_OM7_*` / `agent_test_om7_*`

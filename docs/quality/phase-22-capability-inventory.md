@@ -2,7 +2,7 @@
 
 > **Date:** 2026-10-27
 > **Method:** Read-only audit. No business data was modified. Database inspection used the configured primary database (`carocrm_dev`, name only — credentials never printed) and was limited to `SELECT` queries and migration-status checks.
-> **Label semantics:** per `PLAN_Phase_22_Integration_E2E_Hardening.md` §0.2. Because this audit verified *structure* (routes, migrations, tests present) but did not re-run the suites, almost every module is labeled **Implemented, insufficiently verified** — re-running the relevant suites is the job of Phase 22.1+, not of this audit.
+> **Label semantics:** per `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §0.2. Because this audit verified *structure* (routes, migrations, tests present) but did not re-run the suites, almost every module is labeled **Implemented, insufficiently verified** — re-running the relevant suites is the job of Phase 22.1+, not of this audit.
 > **Sources:** file inspection of `apps/api/src`, `apps/worker/src`, `apps/web/src`, `apps/api/test`, `e2e/`, `database/migrations`, `scripts/`; live schema query against `carocrm_dev`.
 
 ---

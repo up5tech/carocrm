@@ -1,6 +1,6 @@
 /**
  * Provider presets — the popular endpoints an administrator picks from
- * (PLAN_Phase_19_AI_Agents.md §6.2, §6.3, §14.4; docs/modules/ai-agents/provider-configuration.md).
+ * (plans/PLAN_Phase_19_AI_Agents.md §6.2, §6.3, §14.4; docs/modules/ai-agents/provider-configuration.md).
  *
  * The **kind** of a connection is a transport protocol, not a vendor name: the `openai-compatible`
  * adapter serves every provider that exposes `/chat/completions`, so OpenAI, Groq, DeepSeek,

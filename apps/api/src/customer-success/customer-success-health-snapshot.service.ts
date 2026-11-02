@@ -6,7 +6,7 @@ import { runAsCustomerSuccessInternal } from "./customer-success-internal.js";
 import { CustomerSuccessRecords, type CustomerSuccessRow } from "./customer-success-records.js";
 
 /**
- * Phase 19-CS.5 — append-only health snapshots (PLAN_Phase_19_Customer_Success.md §5.4.4).
+ * Phase 19-CS.5 — append-only health snapshots (plans/PLAN_Phase_19_Customer_Success.md §5.4.4).
  *
  * A snapshot is the source of truth for *why* a profile currently looks the way it does: it records
  * the score, the calculated status, the effective status, the component scores, the configuration

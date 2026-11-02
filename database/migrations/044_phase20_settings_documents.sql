@@ -1,4 +1,4 @@
--- Phase 20 — Settings documents (PLAN_Phase_20_Settings_UX.md §6.1, §15.1)
+-- Phase 20 — Settings documents (plans/PLAN_Phase_20_Settings_UX.md §6.1, §15.1)
 --
 -- Additive only (AGENTS.md §3.5, §3.6): no table is created, dropped, truncated or rewritten, no
 -- column changes meaning, and no existing row is overwritten. Every insert is guarded by

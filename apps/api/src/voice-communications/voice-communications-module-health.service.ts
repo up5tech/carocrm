@@ -21,7 +21,7 @@ import { VoiceProviderRegistry } from "./voice-provider.js";
 
 /**
  * Phase 19-VC.2 — module health and diagnostics
- * (`PLAN_Phase_19_Voice_Communications.md` §14, §15 `19-VC.2`, §18).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §14, §15 `19-VC.2`, §18).
  *
  * "Module loads without changing unrelated modules" is only honest if an operator can *see* the
  * state, so every fact here is read from the running platform — the metadata registry,

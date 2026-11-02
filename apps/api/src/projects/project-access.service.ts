@@ -23,7 +23,7 @@ export interface ProjectCapabilities {
  * The authority question every Projects command asks first: is this principal allowed to act on
  * this project, and through which rule?
  *
- * Two gates, in the order PLAN_Phase_19_Projects.md §9 sets out: the global ACL must grant the
+ * Two gates, in the order plans/PLAN_Phase_19_Projects.md §9 sets out: the global ACL must grant the
  * entity action at all (otherwise the kernel already rejected the request), and inside the project
  * either the global level is broad enough to stand on its own or the caller's `ProjectRole` grants
  * the dimension. A role can never open a project the user is not a member of.

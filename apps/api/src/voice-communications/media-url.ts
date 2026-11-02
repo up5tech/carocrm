@@ -4,7 +4,7 @@ import { assertSafeProviderBaseUrl } from '../ai-agents/ai-provider-url.js';
 
 /**
  * Phase 19-VC.15 — media URL safety
- * (`PLAN_Phase_19_Voice_Communications.md` §7.5, §15 `19-VC.15`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §7.5, §15 `19-VC.15`).
  *
  * A provider recording URL is an outbound destination chosen by a callback, which is strictly worse
  * than an administrator-supplied base URL. The platform's SSRF validator is reused so both features

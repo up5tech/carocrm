@@ -13,7 +13,7 @@ import type { SignatureProviderAdapter, SignatureProviderContext } from '../src/
 
 /**
  * Phase 22.6 — the shared provider contract suite and the provider failure matrix
- * (`PLAN_Phase_22_Integration_E2E_Hardening.md` §11 tasks 7 and 10; acceptance: "fake providers
+ * (`plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §11 tasks 7 and 10; acceptance: "fake providers
  * simulate success, validation failures, timeout, rate-limit response, authentication expiry").
  *
  * Pure unit tests: no database, no HTTP, no clock. What they prove is a fact about the *contracts*:

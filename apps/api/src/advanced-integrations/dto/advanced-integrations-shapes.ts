@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * Phase 19-INT.2–19-INT.5 — request shapes
- * (`PLAN_Phase_19_Advanced_Integrations.md` §13; `19-INT.2`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §13; `19-INT.2`).
  *
  * Every shape is strict: an unknown key is rejected instead of silently ignored. The controller
  * parses shape only; business rules (provider resolution, state-machine validation, secret

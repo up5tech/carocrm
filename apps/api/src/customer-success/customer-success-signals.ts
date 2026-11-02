@@ -15,7 +15,7 @@ import type { CustomerSuccessRow } from "./customer-success-records.js";
 import type { CustomerSuccessSettings } from "./customer-success-settings.service.js";
 
 /**
- * Phase 19-CS.4 — health signal providers (PLAN_Phase_19_Customer_Success.md §5.4.2).
+ * Phase 19-CS.4 — health signal providers (plans/PLAN_Phase_19_Customer_Success.md §5.4.2).
  *
  * Each provider is a pure function over a `HealthFacts` bundle the health service loads **once**, so
  * scoring never becomes an N+1 query and stays unit-testable without a database. In particular:

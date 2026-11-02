@@ -3,7 +3,7 @@ import type { JobContext, JobHandler, JobRegistry } from '@carocrm/jobs';
 
 /**
  * Phase 19-AI.7 — the durable run worker
- * (PLAN_Phase_19_AI_Agents.md §8.1, §8.5, §20 `19-AI.7`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §8.1, §8.5, §20 `19-AI.7`).
  *
  * The handler owns **no** agent logic. It calls the API's worker-authorised endpoint, exactly like the
  * marketing, sales, customer-success and service-desk jobs. That keeps one run engine and one

@@ -1,7 +1,7 @@
 # Phase 22.17 — Security and Privacy Regression Suite
 
 > **Date:** 2026-10-29
-> **Plan:** `PLAN_Phase_22_Integration_E2E_Hardening.md` §16
+> **Plan:** `plans/PLAN_Phase_22_Integration_E2E_Hardening.md` §16
 > **Status:** Complete — risk-based security test matrix + regression suites landed; 11 new tests green; exceptions
 > dispositioned in §9.
 

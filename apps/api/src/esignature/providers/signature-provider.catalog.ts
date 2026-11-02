@@ -3,7 +3,7 @@ import { BASE_SIGNATURE_PROVIDER_CAPABILITIES, type SignatureProviderCapabilitie
 
 /**
  * Multi-provider follow-on — the signature provider catalog
- * (`PLAN_Phase_19_ESignature.md` §1.2, §5.2, §6.1, §9.4).
+ * (`plans/PLAN_Phase_19_ESignature.md` §1.2, §5.2, §6.1, §9.4).
  *
  * DocuSign is the reference integration, not the product. This catalog is the one place that says
  * *which* e-signature providers this installation understands, how each one authenticates, what it

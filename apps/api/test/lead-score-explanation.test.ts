@@ -6,7 +6,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.5 — "users can explain the score and know whether it is current"
- * (`PLAN_Phase_19_LeadScore.md` §3.1, §5.4, §6.5, §8.2, §9.1–§9.2, §16 `19-LS.5`; report
+ * (`plans/PLAN_Phase_19_LeadScore.md` §3.1, §5.4, §6.5, §8.2, §9.1–§9.2, §16 `19-LS.5`; report
  * `docs/implementation/lead-score-ls5-completion-report.md`).
  *
  * The write path is proved in `lead-score-calculation.test.ts`. This suite is the read half, and it is

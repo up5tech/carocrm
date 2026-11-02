@@ -9,7 +9,7 @@ import { ESignatureWebhookService } from './esignature-webhook.service.js';
 
 /**
  * Phase 19-ES.11 — the DocuSign Connect endpoint
- * (`PLAN_Phase_19_ESignature.md` §8.3, §10.1, §18 `19-ES.11`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.3, §10.1, §18 `19-ES.11`).
  *
  * `POST /api/v1/integrations/esignature/{connectionPublicId}` — the random, non-secret routing id the
  * connection was created with. The route is `@Public()` because DocuSign holds no CRM session; the

@@ -7,7 +7,7 @@ import { authHeader, bootApi, shutdownApi } from "./support/boot-api.js";
 
 /**
  * Phase 19-VC.10–19-VC.11 — SMS/MMS and WhatsApp messaging
- * (`PLAN_Phase_19_Voice_Communications.md` §8.1–§8.3, §15 `19-VC.10`, `19-VC.11`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §8.1–§8.3, §15 `19-VC.10`, `19-VC.11`).
  *
  * The simulator's `sandboxRecipients` allowlist contains exactly one test number, so no automated
  * run can message a real phone (§15.4). Delivery state is only ever asserted after a callback.

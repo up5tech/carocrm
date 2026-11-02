@@ -23,7 +23,7 @@ import { decideRetry, DEFAULT_RETRY_POLICY } from './resilience.js';
 
 /**
  * Phase 19-INT.9 — the sync orchestrator
- * (`PLAN_Phase_19_Advanced_Integrations.md` §8; `19-INT.9`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §8; `19-INT.9`).
  *
  * The orchestrator drives one sync run over one mapping. The rules it implements are the ones the
  * feature contract fixes:

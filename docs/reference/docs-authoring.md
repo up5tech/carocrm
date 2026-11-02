@@ -6,7 +6,7 @@ lint refuses. It describes the implementation in `packages/docs` — if this fil
 the parser is right and this file has a bug.
 
 - Engine: `packages/docs/src/` (parser, index, search, lint)
-- Roadmap and rationale: `PLAN_Phase_21_Documentation.md` §4
+- Roadmap and rationale: `plans/PLAN_Phase_21_Documentation.md` §4
 - Admin-facing mechanics: `docs/admin/documentation.md`
 
 ## 1. Where a page lives

@@ -1,5 +1,5 @@
 -- Phase 22.7 — the provider's event id is the idempotency key of a payment event
--- (PLAN_Phase_22_Integration_E2E_Hardening.md §12 tasks 2 and 3).
+-- (plans/PLAN_Phase_22_Integration_E2E_Hardening.md §12 tasks 2 and 3).
 --
 -- A provider payment event is ingested twice whenever the provider retries, and two deliveries can
 -- also arrive at the same time. The check ("has this event id been recorded before?") and the write

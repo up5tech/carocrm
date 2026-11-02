@@ -1,6 +1,6 @@
 # Phase 19-ES.19 — Search, Reports and Dashlets
 
-> `PLAN_Phase_19_ESignature.md` §14, §18 `Phase 19-ES.19`.
+> `plans/PLAN_Phase_19_ESignature.md` §14, §18 `Phase 19-ES.19`.
 > Acceptance: reports obey record and field ACL; aggregate results do not leak inaccessible record
 > details; date and status definitions are documented.
 >

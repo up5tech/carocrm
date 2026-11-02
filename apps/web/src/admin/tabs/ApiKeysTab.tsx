@@ -9,7 +9,7 @@ import { formatDateTime,t } from '../../state/i18n.js';
 import { errorMessage, useRolesQuery } from './identity.js';
 
 /**
- * API keys tab (PLAN_Phase_20_Settings_UX.md §4.3 row 12): API accounts, key issuance and revocation
+ * API keys tab (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 12): API accounts, key issuance and revocation
  * against `/ApiUser` and `/ApiKey`.
  *
  * The secret is shown exactly once, in the dialog that reports the call which created it. Every other

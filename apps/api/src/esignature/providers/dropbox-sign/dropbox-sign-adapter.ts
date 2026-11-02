@@ -45,7 +45,7 @@ import {
 
 /**
  * Phase 19-ES multi-provider follow-on — the Dropbox Sign adapter
- * (`PLAN_Phase_19_ESignature.md` §1.2, §5.2, §9.3, §10).
+ * (`plans/PLAN_Phase_19_ESignature.md` §1.2, §5.2, §9.3, §10).
  *
  * The second live adapter, and the one that proves the provider boundary is real: it speaks a
  * different authentication model (API key, not OAuth), a different request encoding (multipart files,

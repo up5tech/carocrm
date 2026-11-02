@@ -17,7 +17,7 @@ import { compileFieldMappings } from './transformation-compiler.js';
 
 /**
  * Phase 19-INT.13 — outbound sync, the outbox and echo prevention
- * (`PLAN_Phase_19_Advanced_Integrations.md` §11.6; `19-INT.13`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §11.6; `19-INT.13`).
  *
  * A CRM record changes → the platform publishes a domain event → the worker delivers it → this
  * service decides whether the provider should hear about it.

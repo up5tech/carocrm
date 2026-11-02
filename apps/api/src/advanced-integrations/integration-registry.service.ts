@@ -13,7 +13,7 @@ import {
 
 /**
  * Phase 19-INT.3 — the provider registry
- * (`PLAN_Phase_19_Advanced_Integrations.md` §5.2, §5.3, §5.4; `19-INT.3`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §5.2, §5.3, §5.4; `19-INT.3`).
  *
  * The registry is the module's catalog: which connectors this installation offers, what each one
  * can do, and whether its declaration is coherent. It is **code-registered**, so a capability can

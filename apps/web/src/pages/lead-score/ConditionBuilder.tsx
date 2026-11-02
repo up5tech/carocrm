@@ -10,7 +10,7 @@ import { fieldOf, named, operatorLabel, selectableFields } from './shared.js';
 
 /**
  * Phase 19-LS.8 — the rule condition builder
- * (`PLAN_Phase_19_LeadScore.md` §6.2, §6.3, §12, §16 `19-LS.8`).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.2, §6.3, §12, §16 `19-LS.8`).
  *
  * A condition is stored as a declarative JSON tree in a text attribute (LS.2: the platform has no object
  * field type), and plan §6.2 forbids anything else in it — no formula, no expression, no SQL. The exit

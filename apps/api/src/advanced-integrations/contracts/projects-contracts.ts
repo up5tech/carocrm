@@ -5,7 +5,7 @@ import { IntegrationContractRegistry } from '../integration-contracts.js';
 
 /**
  * Phase 19-INT.25 — the `Projects` contract
- * (`PLAN_Phase_19_Advanced_Integrations.md` §14.2, §19 `19-INT.25`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §14.2, §19 `19-INT.25`).
  *
  * `Projects` owns the delivery board: the projects, their stages, their tasks and the rules about
  * who may change them. A connector may report that work happened; it may not rearrange the board.

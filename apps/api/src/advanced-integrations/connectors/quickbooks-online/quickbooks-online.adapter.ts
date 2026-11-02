@@ -35,7 +35,7 @@ import type { OAuth2ProviderConfig } from '../kit/oauth2-base.js';
 
 /**
  * Phase 19-INT.23 — the QuickBooks Online connector, the first accounting provider
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.8; `19-INT.23`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.8; `19-INT.23`).
  *
  * **Why QuickBooks Online and not Xero.** The provider matrix (§1) lists QuickBooks Online first
  * in tier 3. QBO publishes a documented query endpoint that returns a company's customers,

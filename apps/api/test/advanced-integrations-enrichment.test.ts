@@ -12,7 +12,7 @@ import { bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-INT.19 / 19-INT.20 / 19-INT.24 — the enrichment and the domain bridges
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.4, §12.5, §12.9; `19-INT.19`, `19-INT.20`,
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.4, §12.5, §12.9; `19-INT.19`, `19-INT.20`,
  * `19-INT.24`).
  *
  * Runs against the configured primary database (AGENTS.MD §3.1). Every row this run creates

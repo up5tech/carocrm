@@ -12,7 +12,7 @@ import {
 
 /**
  * Phase 19-SD.1 – 19-SD.3 — Service Desk module, persistence and Case CRUD
- * (PLAN_Phase_19_ServiceDesk.md §7.1, §7.2, §7.3, §11.1).
+ * (plans/PLAN_Phase_19_ServiceDesk.md §7.1, §7.2, §7.3, §11.1).
  *
  * These run against the already-configured primary database through the real HTTP API (AGENTS.md §3.1):
  * no database, schema or container is created. Every record this suite makes carries the `runId`

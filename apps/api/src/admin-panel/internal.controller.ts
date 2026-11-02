@@ -4,7 +4,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { InternalInfoService, type InternalInfoView, type OperationsSnapshotView } from './internal.service.js';
 
 /**
- * The internal tab's routes (PLAN_Phase_20_Settings_UX.md §4.3 row 8). Static prefixes so they never
+ * The internal tab's routes (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 8). Static prefixes so they never
  * collide with the generic `:entity` wildcard; the service enforces the system-administrator level on
  * every route, so the controller stays a thin adapter.
  */

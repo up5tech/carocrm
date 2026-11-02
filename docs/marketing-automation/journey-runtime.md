@@ -3,7 +3,7 @@
 **Delivered in:** Phase 19-MA.12 (graph schema, validation, immutable versions), Phase 19-MA.13 (enrollment,
 claims, waits, conditions, recovery), Phase 19-MA.14 (the allowlisted action catalog and the CRM-event
 trigger), Phase 19-MA.16 (cross-module events).
-**Plan:** `PLAN_Phase_19_Marketing_Automation.md` §5.6, §5.7, §6.4, §11, §15 `19-MA.12`–`19-MA.14`.
+**Plan:** `plans/PLAN_Phase_19_Marketing_Automation.md` §5.6, §5.7, §6.4, §11, §15 `19-MA.12`–`19-MA.14`.
 **Code:** [apps/api/src/marketing-automation](../../apps/api/src/marketing-automation) —
 `marketing-journey-definition.service.ts` (schema, validation, publish), `marketing-journey-runtime.service.ts`
 (enrollment, claim, step execution), `marketing-journey-action.service.ts` (actions),

@@ -22,7 +22,7 @@ import {
 
 /**
  * Phase 19-MA.4/MA.5 — the audience and identity contracts, tested as pure functions
- * (PLAN_Phase_19_Marketing_Automation.md §12.1, §15 `19-MA.4`–`19-MA.5` acceptance).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §12.1, §15 `19-MA.4`–`19-MA.5` acceptance).
  *
  * These are the rules that make "no user-provided SQL is executed" and "public endpoints do not leak contact
  * existence" testable without a database: what the criteria parser refuses, what the query translator is

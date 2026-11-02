@@ -1,7 +1,7 @@
 /**
  * Identifiers: URL slugs and heading anchors.
  *
- * A slug is a permalink (`PLAN_Phase_21_Documentation.md` §4.1 rule 2), so the transformation that
+ * A slug is a permalink (`plans/PLAN_Phase_21_Documentation.md` §4.1 rule 2), so the transformation that
  * produces one has to be boring and stable. The one thing that is *not* obvious is Vietnamese:
  * `Cấu hình` must become `cau-hinh`, both because a reader can type an accented anchor more easily
  * than a percent-encoded one and because the search index has to agree with the anchor about what a

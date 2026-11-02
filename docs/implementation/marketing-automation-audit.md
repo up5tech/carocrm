@@ -1,10 +1,10 @@
 # Phase 19-MA.0 — Marketing Automation repository audit and feature contract
 
-> **Plan:** `PLAN_Phase_19_Marketing_Automation.md` §4.2 (required audit deliverable), §15 Phase 19-MA.0.
+> **Plan:** `plans/PLAN_Phase_19_Marketing_Automation.md` §4.2 (required audit deliverable), §15 Phase 19-MA.0.
 > **Delivered in:** 19-MA.0. No schema, entity or code change was made by this phase — the audit's own
 > rule (§4.2: "Do not add a duplicate Campaign or TargetList entity before completing this audit").
 > **Method:** every claim below was read out of this checkout (file:line). Nothing is assumed from
-> `PLAN.md`, from an upstream EspoCRM layout, or from a previous session's report.
+> `plans/PLAN.md`, from an upstream EspoCRM layout, or from a previous session's report.
 >
 > **Read this as the MA.0 snapshot.** It is deliberately frozen at the state the repository was in before the
 > module existed. MA.1–MA.5 have since built `Campaign`, `TargetList`, `TargetListEntry`, `CampaignTransition`,
@@ -124,7 +124,7 @@ This is the platform's provider layer and the module must use it, not rebuild it
 - **Boundary:** a workflow run is *record-scoped, one-shot, one run per (workflow, version, record)*.
   It has no cross-contact state, no re-entry policy, no branch-by-audience, no provider side-effect
   ledger. Encoding a marketing journey in `WorkflowDefinition` would mean contorting the generic engine
-  for one domain — the thing §0.1 rule 2 and §5.4 of `PLAN.md` forbid.
+  for one domain — the thing §0.1 rule 2 and §5.4 of `plans/PLAN.md` forbid.
 - **Decision:** `MarketingJourney` gets its own *runtime* (enrollment + step execution records, MA.12–MA.14)
   and reuses everything that is genuinely generic: `@carocrm/formula` for conditions, the `jobs` queue and
   `scheduled_jobs` for waits, the outbox `EventBus` for triggers, and the workflow **action catalog seam**

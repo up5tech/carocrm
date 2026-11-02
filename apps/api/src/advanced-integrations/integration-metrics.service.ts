@@ -5,7 +5,7 @@ import { DatabaseService } from '../database/database.service.js';
 
 /**
  * Phase 19-INT.26 — the module's metrics
- * (`PLAN_Phase_19_Advanced_Integrations.md` §16.1; `19-INT.26`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §16.1; `19-INT.26`).
  *
  * The platform has **no metrics or telemetry facility** (the compatibility document says so
  * plainly), and building one is not this module's job. So the metrics here are **derived**: they

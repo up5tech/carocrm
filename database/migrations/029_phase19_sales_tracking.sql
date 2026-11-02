@@ -1,5 +1,5 @@
 -- Phase 19-S.15 — Product variants, batch/serial tracking and removal policies
--- (PLAN_Phase_19_Sales.md §4.2, §4.15, §5.5).
+-- (plans/PLAN_Phase_19_Sales.md §4.2, §4.15, §5.5).
 --
 -- The lot (`InventoryBatch`) and serial (`InventorySerial`) records are ordinary metadata entities in
 -- the generic `entity_records` store, so list/detail/search/ACL/audit come from the Entity Engine,

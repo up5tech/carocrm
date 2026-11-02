@@ -3,7 +3,7 @@
  *
  * Commercial documents carry **dates**, not instants: an effective price window, a tax-rate window
  * and a due date all mean "this day", and the comparison must not shift with the viewer's timezone
- * (PLAN_Phase_19_Sales.md §4.14 "date-only semantics consistently"). Everything here is UTC, and a
+ * (plans/PLAN_Phase_19_Sales.md §4.14 "date-only semantics consistently"). Everything here is UTC, and a
  * `YYYY-MM-DD` string is the canonical form at every boundary.
  */
 

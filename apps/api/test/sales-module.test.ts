@@ -63,7 +63,7 @@ describe('module registration and health (19-S.1)', () => {
     // Optional modules are reported by their metadata marker. Stripe and accounting are absent and
     // reported as such — the boot itself proves absence is survivable. Customer Success is the
     // opposite case: Phase 19-CS registered the `CustomerSuccessProfile` marker entity, so the
-    // shipped integration reports `available` (PLAN_Phase_19_Customer_Success.md §12.8). The marker
+    // shipped integration reports `available` (plans/PLAN_Phase_19_Customer_Success.md §12.8). The marker
     // name is fixed by `sales-module.ts`; a rename here or there turns a working integration into a
     // permanently "unavailable" one with no error.
     const optional = new Map(body.optionalIntegrations.map((integration) => [integration.id, integration]));

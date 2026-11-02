@@ -4,7 +4,7 @@ import { Card, Typography } from 'antd';
 import { t } from '../state/i18n.js';
 
 /**
- * A reusable permission-denied card (PLAN_Phase_20_Settings_UX.md §20.11).
+ * A reusable permission-denied card (plans/PLAN_Phase_20_Settings_UX.md §20.11).
  *
  * Usage: replace the ad-hoc `<Alert type="error">` or blank pages that currently appear when a user
  * reaches a URL they are not authorised to see. The message is intentionally generic — it never leaks

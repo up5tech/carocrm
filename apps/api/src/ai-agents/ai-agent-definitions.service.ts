@@ -28,7 +28,7 @@ import { AIProviderConnectionService } from './ai-provider-connections.service.j
 
 /**
  * Phase 19-AI.5 — agent definitions and immutable versions
- * (PLAN_Phase_19_AI_Agents.md §5.1–§5.3, §20 `19-AI.5`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §5.1–§5.3, §20 `19-AI.5`).
  *
  * Two rules shape every method here:
  *

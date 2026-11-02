@@ -9,7 +9,7 @@ import { DATA_CLASSES, type DataClass, EFFECT_CLASSES,type EffectClass } from '.
 
 /**
  * Phase 19-AI.2 — the `aiAgents` instance settings row
- * (PLAN_Phase_19_AI_Agents.md §5.1, §12, §19, §20 `19-AI.2`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §5.1, §12, §19, §20 `19-AI.2`).
  *
  * The platform already owns `app_settings`, so the module keeps **one** validated, versioned row
  * named `aiAgents` — the same shape Marketing Automation, Sales and Service Desk use. Nothing here

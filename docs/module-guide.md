@@ -1,6 +1,6 @@
 # Module Guide (CRM Kernel Alpha)
 
-Read this before adding code. Scope: PLAN.md tasks 01–22 (CRM Kernel Alpha, PLAN §73, plus the SPA,
+Read this before adding code. Scope: plans/PLAN.md tasks 01–22 (CRM Kernel Alpha, PLAN §73, plus the SPA,
 stream/calendar and the PLAN §21–§22 dynamic logic + formula engine).
 
 ## Runtime rules (IMPORTANT)

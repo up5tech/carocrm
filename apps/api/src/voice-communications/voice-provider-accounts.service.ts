@@ -27,7 +27,7 @@ import {
 
 /**
  * Phase 19-VC.4 — provider accounts, endpoints, credential references and health
- * (`PLAN_Phase_19_Voice_Communications.md` §5.1, §11.1, §13.1, §15 `19-VC.4`).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §5.1, §11.1, §13.1, §15 `19-VC.4`).
  *
  * The module reuses the platform's encrypted-secret primitive (`ENCRYPTION_KEY` + AES-256-GCM, the
  * same one `email_accounts` and `ai_provider_connections` use). A credential and a webhook secret are

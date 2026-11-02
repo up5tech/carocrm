@@ -9,7 +9,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-ES.19 — authorized search, operational reports and the ESignature dashlet
- * (`PLAN_Phase_19_ESignature.md` §14, §18 `19-ES.19`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §14, §18 `19-ES.19`).
  *
  * The acceptance criteria, one group each:
  *

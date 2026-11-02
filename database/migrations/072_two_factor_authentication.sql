@@ -1,4 +1,4 @@
--- Two-factor authentication (PLAN_Phase_20_Settings_UX.md §4.3 row 14, §4.9).
+-- Two-factor authentication (plans/PLAN_Phase_20_Settings_UX.md §4.3 row 14, §4.9).
 --
 -- Additive only (AGENTS.md §3.5): three columns on `users` (two nullable, one NOT NULL DEFAULT)
 -- and two new tables. No column is altered, no row is touched, so an instance that never enables

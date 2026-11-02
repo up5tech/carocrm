@@ -1,5 +1,5 @@
 -- Phase 19-ES.8 — the template mapping a draft uses, if it uses one.
--- (PLAN_Phase_19_ESignature.md §4.3, §6.2, §6.7, §11.2, §18 `19-ES.8`.)
+-- (plans/PLAN_Phase_19_ESignature.md §4.3, §6.2, §6.7, §11.2, §18 `19-ES.8`.)
 --
 -- ADDITIVE ONLY (AGENTS.md §3.5): one nullable column and one partial index. No existing column, row or
 -- constraint is touched, and every request that predates this migration simply has no mapping.

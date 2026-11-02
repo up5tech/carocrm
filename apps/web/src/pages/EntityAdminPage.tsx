@@ -258,7 +258,7 @@ function SettingsTab({ entity, patch }: { entity: EntityDefinition; patch: (body
 }
 
 /**
- * Navigation tab (PLAN_Phase_20_Settings_UX.md §4.5): how this entity behaves in the main menu.
+ * Navigation tab (plans/PLAN_Phase_20_Settings_UX.md §4.5): how this entity behaves in the main menu.
  *
  * These values are metadata, edited through the same `POST /Metadata/:entity` path as every other
  * section, and the server resolves them into `GET /Navigation`. Hiding an entity removes it from the

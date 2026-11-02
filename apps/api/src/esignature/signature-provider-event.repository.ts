@@ -10,7 +10,7 @@ import { canonicalJson } from './esignature-snapshot.js';
 
 /**
  * Phase 19-ES.2 — the normalized provider event history
- * (`PLAN_Phase_19_ESignature.md` §6.5, §10.1, §10.3).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6.5, §10.1, §10.3).
  *
  * Append-only, and it is the answer to "what did the provider actually tell us, in what order". Two
  * properties make the later phases safe:

@@ -10,7 +10,7 @@ import type { EvaluationTrigger } from './lead-score-vocabulary.js';
 
 /**
  * Phase 19-LS.9 — what a score change is allowed to cause
- * (`PLAN_Phase_19_LeadScore.md` §6.6, §10.3, §10.4, §16 `19-LS.9`; audit §11 `LS.9`).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §6.6, §10.3, §10.4, §16 `19-LS.9`; audit §11 `LS.9`).
  *
  * Plan §6.6 sets the boundary this file lives inside: a threshold crossing **may** emit an event and **may**
  * notify somebody, and it must **not** convert the Lead or touch an unrelated lifecycle field. So the whole

@@ -6,7 +6,7 @@ import { AclApiService } from '../acl/acl-api.service.js';
 import { OMNICHANNEL_CAPABILITIES, type OmnichannelCapabilityDefinition, type OmnichannelCapabilityKey } from './omnichannel-module.js';
 
 /**
- * Phase 19-OM.2 — the module's capability gate (`PLAN_Phase_19_Omnichannel.md` §8.1, §14 `19-OM.2`;
+ * Phase 19-OM.2 — the module's capability gate (`plans/PLAN_Phase_19_Omnichannel.md` §8.1, §14 `19-OM.2`;
  * `docs/omnichannel/feature-contract.md` §10).
  *
  * One authorization engine for the whole CRM: every Omnichannel right is a **synthetic permission

@@ -33,7 +33,7 @@ import { hmacSha256Base64Padded, readChallenge, verifyTimestampedHmacSha256Hex }
 
 /**
  * Phase 19-INT.18 — the Zoom connector
- * (`PLAN_Phase_19_Advanced_Integrations.md` §12.3; `19-INT.18`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §12.3; `19-INT.18`).
  *
  * Meetings, and only meetings. Voice, call centre, SMS and messaging belong to
  * `VoiceCommunications` (provider matrix §1.2), and **recordings are not implemented at all** —

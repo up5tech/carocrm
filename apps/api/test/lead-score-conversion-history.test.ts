@@ -6,7 +6,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-LS.15 — what a conversion does to the Lead's history
- * (`PLAN_Phase_19_LeadScore.md` §7.5, §16 `19-LS.15`; audit §11 `LS.15`; contract §10.5).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §7.5, §16 `19-LS.15`; audit §11 `LS.15`; contract §10.5).
  *
  * The exit criterion is *"conversion does not lose source context or broaden access to related data"*, and the
  * answer this build gives is deliberately conservative: **the conversion touches none of it**. It writes the

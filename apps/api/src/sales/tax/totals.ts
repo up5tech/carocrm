@@ -35,7 +35,7 @@ import {
 } from "../money/decimal.js";
 
 /**
- * Phase 19-S.5 — the customer/document totals engine (PLAN_Phase_19_Sales.md §4.12, §5.7).
+ * Phase 19-S.5 — the customer/document totals engine (plans/PLAN_Phase_19_Sales.md §4.12, §5.7).
  *
  * Pure calculation: it receives resolved tax facts per line and returns the document numbers. It
  * never reads the database, never sends mail and never trusts a client-submitted total — the server

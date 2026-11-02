@@ -1,6 +1,6 @@
 # `CRMChat` repository audit — pointer
 
-`PLAN_Phase_19_CRM_Chat.md` §17 names this path for the Phase 19-CHAT.0 deliverable. This repository
+`plans/PLAN_Phase_19_CRM_Chat.md` §17 names this path for the Phase 19-CHAT.0 deliverable. This repository
 keeps module audits beside the module, so the audit itself lives at
 [`docs/modules/crm-chat/repository-audit.md`](../modules/crm-chat/repository-audit.md).
 
@@ -19,7 +19,7 @@ Summary of what that document establishes:
   `false`, streaming adapter unverified, no article search endpoint, markdown-rendering dependency
   decision.
 
-Do not treat any capability as available on the strength of `PLAN.md` alone; the audit marks each one
+Do not treat any capability as available on the strength of `plans/PLAN.md` alone; the audit marks each one
 `available`, `partial` or `missing` with the exact file and line it was verified at.
 
 Same folder, delivered after this audit:
@@ -34,7 +34,7 @@ Same folder, delivered after this audit:
 ## Delivery status (added 2026-10-21)
 
 The audit above describes the repository as it was at 19-CHAT.0. Every gap it listed has since been
-closed, and a completion review against `PLAN_Phase_19_CRM_Chat.md` found and fixed several things
+closed, and a completion review against `plans/PLAN_Phase_19_CRM_Chat.md` found and fixed several things
 the audit could not have seen — the module did not compile, the SSE translator mapped event names
 the runtime never emitted, the citation table was never written, and four contract routes had no
 implementation.

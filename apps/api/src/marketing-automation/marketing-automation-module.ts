@@ -1,6 +1,6 @@
 /**
  * Phase 19-MA.1 — the `MarketingAutomation` module descriptor
- * (PLAN_Phase_19_Marketing_Automation.md §0.1–§0.2, §4.3, §7.1, §15 `19-MA.1`).
+ * (plans/PLAN_Phase_19_Marketing_Automation.md §0.1–§0.2, §4.3, §7.1, §15 `19-MA.1`).
  *
  * Like Projects, Sales, Customer Success and Service Desk, Marketing Automation is a kernel domain
  * directory under `apps/api/src`, not an installable extension package: its records use the generic
@@ -9,7 +9,7 @@
  *
  * The id carries **no prefix** (`MarketingAutomation`, never `Ua…`). Names are the documented product
  * concepts, not parallel inventions: the canonical campaign record is `Campaign` and the audience record
- * is `TargetList`, exactly as `PLAN_Phase_19_Marketing_Automation.md` §0.2 and the audit
+ * is `TargetList`, exactly as `plans/PLAN_Phase_19_Marketing_Automation.md` §0.2 and the audit
  * (`docs/implementation/marketing-automation-audit.md` §3) decide, so a second "marketing" table for the
  * same fact can never appear beside them.
  *

@@ -1,6 +1,6 @@
 # Omnichannel — operations runbook
 
-> Phase 19-OM.21 (`PLAN_Phase_19_Omnichannel.md` §14). This runbook covers the failure modes an
+> Phase 19-OM.21 (`plans/PLAN_Phase_19_Omnichannel.md` §14). This runbook covers the failure modes an
 > administrator can see and recover from **through the product**, without database access. Every
 > figure and action below reads or commands the owners' existing records — provider accounts,
 > `voice_webhook_events`, `voice_messages` state — never a parallel operational store.

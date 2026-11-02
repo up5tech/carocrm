@@ -70,7 +70,7 @@ import { VoiceWhatsappTemplateService } from "./voice-whatsapp-template.service.
 
 /**
  * Phase 19-VC.2–19-VC.6 — the `VoiceCommunications` command surface
- * (`PLAN_Phase_19_Voice_Communications.md` §11.1–§11.3, §12.4, §15).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §11.1–§11.3, §12.4, §15).
  *
  * CRM record CRUD stays on the generic `/api/v1/:entity` API. These routes exist for what a single
  * record cannot express: module diagnostics, the settings document, provider/account lifecycle,

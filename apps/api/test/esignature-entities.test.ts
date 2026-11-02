@@ -17,7 +17,7 @@ import { bootApi, shutdownApi } from './support/boot-api.js';
 
 /**
  * Phase 19-ES.2 — the persistence and the guarded lifecycle, against the configured database
- * (`PLAN_Phase_19_ESignature.md` §6, §7, §17.2; `19-ES.2` acceptance).
+ * (`plans/PLAN_Phase_19_ESignature.md` §6, §7, §17.2; `19-ES.2` acceptance).
  *
  * Runs on the already-configured primary database (AGENTS.md §3.1). No database, schema, container or
  * copy is created; every row carries `AGENT_TEST_<runId>` and is removed by its exact id in

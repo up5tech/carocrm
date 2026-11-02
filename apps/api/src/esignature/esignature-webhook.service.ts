@@ -27,7 +27,7 @@ import { SignatureWebhookInboxRepository } from './signature-webhook-inbox.repos
 
 /**
  * Phase 19-ES.11 — DocuSign Connect intake and processing
- * (`PLAN_Phase_19_ESignature.md` §8.3, §10, §12.1, §16, §18 `19-ES.11`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §8.3, §10, §12.1, §16, §18 `19-ES.11`).
  *
  * The HTTP handler does three things and nothing more: verify the delivery, persist it durably, and
  * acknowledge. Everything that could change a contract's state happens in `processDelivery`, from a

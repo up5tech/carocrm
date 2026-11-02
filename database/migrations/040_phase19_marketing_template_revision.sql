@@ -1,5 +1,5 @@
 -- Phase 19-MA.6 — template content revisions
--- (PLAN_Phase_19_Marketing_Automation.md §5.4, §6.2, §15 `19-MA.6`).
+-- (plans/PLAN_Phase_19_Marketing_Automation.md §5.4, §6.2, §15 `19-MA.6`).
 --
 -- `MarketingTemplateRevision` rows are ordinary metadata records in `entity_records`, exactly like
 -- CampaignTransition or MarketingAudienceSnapshot before them: ACL, audit and serialisation stay in the

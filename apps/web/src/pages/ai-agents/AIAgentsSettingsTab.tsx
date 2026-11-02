@@ -23,7 +23,7 @@ import { formatDateTime,t } from '../../state/i18n.js';
 
 /**
  * Phase 19-AI.2 — module policy administration
- * (PLAN_Phase_19_AI_Agents.md §5.1, §8.5, §9.2, §11.4, §12, §14.4, §20 `19-AI.2`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §5.1, §8.5, §9.2, §11.4, §12, §14.4, §20 `19-AI.2`).
  *
  * This is where an administrator decides whether agents may run at all and how far they may go:
  * the feature switches, the instance ceilings, the approval classes, the retention windows, the

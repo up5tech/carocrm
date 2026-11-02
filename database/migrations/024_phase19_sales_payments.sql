@@ -1,5 +1,5 @@
 -- Phase 19-S.10 – 19-S.11 — payments, allocations and the records that adjust a balance
--- (PLAN_Phase_19_Sales.md §4.8, §5.8).
+-- (plans/PLAN_Phase_19_Sales.md §4.8, §5.8).
 --
 -- Payments and allocations are ordinary metadata entities in `entity_records`. What JSON alone cannot
 -- express is here: the unique key that makes provider-event ingestion idempotent, and the indexes the

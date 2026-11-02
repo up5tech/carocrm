@@ -14,7 +14,7 @@ export interface CRMChatFeedbackButtonsProps {
 }
 
 /**
- * Phase 19-CHAT.14 — answer feedback (PLAN_Phase_19_CRM_Chat.md §7.6, §17 `19-CHAT.14`;
+ * Phase 19-CHAT.14 — answer feedback (plans/PLAN_Phase_19_CRM_Chat.md §7.6, §17 `19-CHAT.14`;
  * contract §6.3, §7.6).
  *
  * A rating is an auditable fact about one answer, recorded once per user per answer. It is

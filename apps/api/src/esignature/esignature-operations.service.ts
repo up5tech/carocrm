@@ -22,7 +22,7 @@ import {
 
 /**
  * Phase 19-ES.20 — the admin operations and recovery read model
- * (`PLAN_Phase_19_ESignature.md` §14, §16, §18 `19-ES.20`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §14, §16, §18 `19-ES.20`).
  *
  * The workbench answers three questions without ever calling the provider:
  *

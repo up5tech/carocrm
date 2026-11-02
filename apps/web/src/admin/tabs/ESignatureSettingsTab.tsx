@@ -11,7 +11,7 @@ import { usePublishTabActions } from '../shell.js';
 
 /**
  * Phase 19-ES.1 — the ESignature administration screen
- * (`PLAN_Phase_19_ESignature.md` §4.1, §11.1, §13.5, §18 `19-ES.1`).
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.1, §11.1, §13.5, §18 `19-ES.1`).
  *
  * One validated document, edited as a draft and saved through the module's own endpoint, which
  * refuses an unknown key and refuses a **secret-shaped value** with its reason: the credential vault

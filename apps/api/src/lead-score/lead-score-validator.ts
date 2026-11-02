@@ -25,7 +25,7 @@ import {
 
 /**
  * Phase 19-LS.3 — the model and rule validator
- * (`PLAN_Phase_19_LeadScore.md` §5.1, §5.2, §6.1–§6.5, §9.3; audit §5).
+ * (`plans/PLAN_Phase_19_LeadScore.md` §5.1, §5.2, §6.1–§6.5, §9.3; audit §5).
  *
  * This is where "invalid models cannot be published" (plan §16 `19-LS.3`) actually means something. It
  * is pure: no database, no clock, no I/O. Given the model's stored attributes and the rules that belong

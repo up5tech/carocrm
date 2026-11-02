@@ -5,7 +5,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-CHAT.11/19-CHAT.12/19-CHAT.14/19-CHAT.17 — the engagement surfaces
- * (`PLAN_Phase_19_CRM_Chat.md` §7.6, §10, §15.3, §17; contract §6.3–§6.8).
+ * (`plans/PLAN_Phase_19_CRM_Chat.md` §7.6, §10, §15.3, §17; contract §6.3–§6.8).
  *
  * These are the routes that were *specified* in the contract but had no implementation: saved
  * prompt templates, answer feedback, the action proposal façade, the curated cross-module paths

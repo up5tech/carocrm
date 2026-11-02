@@ -6,7 +6,7 @@ import { assertAdapterSatisfiesCapabilities, CONNECTOR_CAPABILITY_SCHEMA_VERSION
 
 /**
  * Phase 19-INT.6 — the reusable connector conformance suite
- * (`PLAN_Phase_19_Advanced_Integrations.md` §17.1, §17.2, §19-INT.6 acceptance; `19-INT.6`).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §17.1, §17.2, §19-INT.6 acceptance; `19-INT.6`).
  *
  * The plan asks for *"adapter contract tests"*. A test file per connector does not scale: the
  * seventh connector repeats the same ten assertions, and a reviewer has to read all of them to

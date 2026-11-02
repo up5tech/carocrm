@@ -1,5 +1,5 @@
 -- Phase 19-MA.8 — send definition, audience snapshot binding and recipient delivery records
--- (PLAN_Phase_19_Marketing_Automation.md §5.5, §5.6, §6.1, §6.5, §15 `19-MA.8`).
+-- (plans/PLAN_Phase_19_Marketing_Automation.md §5.5, §5.6, §6.1, §6.5, §15 `19-MA.8`).
 --
 -- `MarketingSend` and `MarketingSendTransition` are ordinary metadata records in `entity_records`, exactly
 -- like `Campaign` and `CampaignTransition` before them, so ACL, audit, validation and serialisation stay in

@@ -5,7 +5,7 @@ import type { ZodTypeAny } from 'zod';
 import { REQUEST_SCOPE_TOKEN, type RequestScope } from '../common/request-scope.js';
 
 /**
- * Settings document registry (PLAN_Phase_20_Settings_UX.md §4.2, §7.2).
+ * Settings document registry (plans/PLAN_Phase_20_Settings_UX.md §4.2, §7.2).
  *
  * The single place that answers "what settings documents exist, who may read and write them, and
  * what is valid". Documents stay in `app_settings` — one row per document — so this phase does not

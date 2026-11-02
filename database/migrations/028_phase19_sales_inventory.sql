@@ -1,5 +1,5 @@
 -- Phase 19-S.14 — Warehouses, the stock ledger, adjustments, transfers and reservations
--- (PLAN_Phase_19_Sales.md §4.15, §5.5, §5.8).
+-- (plans/PLAN_Phase_19_Sales.md §4.15, §5.5, §5.8).
 --
 -- The ledger (`InventoryTransaction`), its corrections (`InventoryAdjustment`), transfers
 -- (`TransferOrder`/`TransferOrderItem`) and reservations (`InventoryReservation`) are ordinary

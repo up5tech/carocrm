@@ -7,7 +7,7 @@ import { authHeader, bootApi, createTestRole, createTestUser, shutdownApi } from
 
 /**
  * Phase 19-AI.2–19-AI.4 — foundation integration tests
- * (PLAN_Phase_19_AI_Agents.md §18, §20 `19-AI.2`–`19-AI.4`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §18, §20 `19-AI.2`–`19-AI.4`).
  *
  * Runs against the configured primary database (AGENTS.md §3.1). Every row created here carries a
  * unique run marker and is deleted by id in `afterAll`; no table is reset or truncated and no extra

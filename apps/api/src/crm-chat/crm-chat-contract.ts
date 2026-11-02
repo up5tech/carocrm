@@ -2,7 +2,7 @@ import type { CRMChatCapabilityKey, CRMChatFeatureKey } from './crm-chat-module.
 
 /**
  * Phase 19-CHAT.1 — the machine-readable half of the versioned contract
- * (`PLAN_Phase_19_CRM_Chat.md` §17 `19-CHAT.1`, deliverable: "Versioned TypeScript/OpenAPI contract
+ * (`plans/PLAN_Phase_19_CRM_Chat.md` §17 `19-CHAT.1`, deliverable: "Versioned TypeScript/OpenAPI contract
  * proposal"; prose in `docs/architecture/crm-chat-contract.md`).
  *
  * The prose contract and this file must agree. Each entry is the *whole* surface Chat may expose, so a

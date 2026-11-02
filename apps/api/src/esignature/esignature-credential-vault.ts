@@ -12,7 +12,7 @@ import { encryptionKeyMissingError } from './esignature-errors.js';
 
 /**
  * Phase 19-ES.4 — the module's credential vault
- * (`PLAN_Phase_19_ESignature.md` §4.1, §6.1, §9.2; `19-ES.4` acceptance
+ * (`plans/PLAN_Phase_19_ESignature.md` §4.1, §6.1, §9.2; `19-ES.4` acceptance
  * "credentials are absent from logs, frontend bundles, API responses and normal configuration output").
  *
  * Advanced Integrations' `EncryptedCredentialVault` is the pattern, and the *table* is not reusable:

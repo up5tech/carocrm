@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * Settings document schemas for Phase 20 (PLAN_Phase_20_Settings_UX.md §4.2, §6.2).
+ * Settings document schemas for Phase 20 (plans/PLAN_Phase_20_Settings_UX.md §4.2, §6.2).
  *
  * Every document is one row of the existing `app_settings` table; the registry in
  * `settings-registry.service.ts` pairs these schemas with a read/write level. Validation happens
@@ -180,7 +180,7 @@ export const NotificationsSettingsSchema = z
 export type NotificationsSettings = z.infer<typeof NotificationsSettingsSchema>;
 
 /**
- * The in-app documentation surface (PLAN_Phase_21_Documentation.md §6.1).
+ * The in-app documentation surface (plans/PLAN_Phase_21_Documentation.md §6.1).
  *
  * It only decides **whether and where** the handbook is reachable. The content itself is files in
  * `content/docs/`, not rows, so there is nothing here to author — which is the point: an instance can

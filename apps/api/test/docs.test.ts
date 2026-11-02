@@ -5,7 +5,7 @@ import { authHeader, bootApi, createTestUser, loginAs, shutdownApi } from './sup
 
 /**
  * Phase 21.2 — the docs HTTP surface, the `docs` settings document and the sidebar entry
- * (PLAN_Phase_21_Documentation.md §13.2 and the §10.2 authorization matrix).
+ * (plans/PLAN_Phase_21_Documentation.md §13.2 and the §10.2 authorization matrix).
  *
  * Runs against the configured project database (AGENTS.md §3.1): nothing is created, reset or truncated.
  * The suite snapshots the `docs` row before it writes anything and puts it back, deletes only the event

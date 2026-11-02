@@ -7,7 +7,7 @@ import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 
 /**
  * Phase 19-CHAT.5 — narrow AIAgents integration adapter
- * (PLAN_Phase_19_CRM_Chat.md §4.1, §14.1, §17 `19-CHAT.5`).
+ * (plans/PLAN_Phase_19_CRM_Chat.md §4.1, §14.1, §17 `19-CHAT.5`).
  *
  * This adapter is the **only** place where CRMChat calls into the AIAgents runtime. It does not
  * implement a second planning loop, tool executor, provider gateway or approval engine. Every call

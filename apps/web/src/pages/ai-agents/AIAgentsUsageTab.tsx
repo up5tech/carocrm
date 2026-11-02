@@ -9,7 +9,7 @@ import { t } from '../../state/i18n.js';
 
 /**
  * Phase 19-AI.10/19-AI.13 — usage, quotas and cost administration
- * (PLAN_Phase_19_AI_Agents.md §12, §15, §20 `19-AI.13`).
+ * (plans/PLAN_Phase_19_AI_Agents.md §12, §15, §20 `19-AI.13`).
  *
  * The numbers come from the run and provider ledgers. Cost is explicitly labelled: `estimate`
  * means the figure was priced from an admin-maintained snapshot, `none` means the deployment has

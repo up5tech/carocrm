@@ -16,7 +16,7 @@ export interface ColumnManagerProps {
 }
 
 /**
- * Column manager (PLAN_Phase_20_Settings_UX.md §5.3): show/hide and reorder the list columns, saved
+ * Column manager (plans/PLAN_Phase_20_Settings_UX.md §5.3): show/hide and reorder the list columns, saved
  * per user per entity in the `columns` preference.
  *
  * Reordering is buttons, not drag: `Shift+Tab`/`Enter` on "Move up" is the keyboard path, so no

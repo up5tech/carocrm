@@ -10,7 +10,7 @@ import { ConnectionStatusPill, formatTimestamp, MaskedCredential, PanelEmpty, Se
 
 /**
  * Phase 19-INT.14 — the connection list
- * (`PLAN_Phase_19_Advanced_Integrations.md` §15.3).
+ * (`plans/PLAN_Phase_19_Advanced_Integrations.md` §15.3).
  *
  * The list is the operator's map of the wires. Each row answers, at a glance: which provider, what
  * state, who owns it, whether a credential is stored, whether the permissions it needs are all

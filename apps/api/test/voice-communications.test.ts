@@ -16,7 +16,7 @@ import {
 /**
  * Phase 19-VC.2–19-VC.6 — module registration, provider accounts, webhook ingress/processing,
  * contact resolution and channel policy
- * (`PLAN_Phase_19_Voice_Communications.md` §15 `19-VC.2`–`19-VC.6` acceptance).
+ * (`plans/PLAN_Phase_19_Voice_Communications.md` §15 `19-VC.2`–`19-VC.6` acceptance).
  *
  * Runs against the configured primary database through the real HTTP API (AGENTS.md §3.1). No
  * database, schema or container is created. The only provider is the in-process simulator: nothing

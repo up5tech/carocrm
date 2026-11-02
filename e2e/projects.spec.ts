@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
 /**
- * Phase 19 — Projects in the browser (PLAN_Phase_19_Projects.md §12.4, §12.5 scenarios 3-10).
+ * Phase 19 — Projects in the browser (plans/PLAN_Phase_19_Projects.md §12.4, §12.5 scenarios 3-10).
  *
  * The journey is the one a project owner actually walks: create a project on the seeded board, plan
  * groups and tasks, complete work, read it back from the board and the Gantt view, manage members,
