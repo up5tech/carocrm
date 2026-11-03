@@ -2512,6 +2512,7 @@
     "privateByDefault": "Hội thoại là riêng tư; chia sẻ là tính năng rõ ràng và có ghi nhật ký.",
     "threadTitle": "Hội thoại",
     "notReadyTitle": "Trợ lý chưa sẵn sàng",
+    "gatedTitle": "Trả lời theo dữ liệu CRM đang bị tắt",
     "emptyThread": "Chưa có nội dung",
     "emptyThreadHint": "Câu trả lời, nguồn tham chiếu và hành động đề xuất sẽ hiển thị ở đây.",
     "untitled": "Hội thoại chưa có tiêu đề",

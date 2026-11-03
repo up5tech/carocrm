@@ -55,6 +55,10 @@ export const SERVER_OWNED_CASE_FIELDS: readonly string[] = [
   "caseNumber",
   // 19-OM.17 — the owner is Service Desk's to give: `CaseAssignment` writes it and records the
   // history row. A client write would set the same column without that trail, so it is refused.
+  // One exception (G37): on a **create**, the record API itself stamps the caller into this field
+  // whenever their read scope is `own`/`team`, so refusing it made a least-privilege agent unable to
+  // open a case at all. That stamp is initial ownership, not an assignment, and the guard accepts only
+  // the value that names the caller — see `isSelfOwnershipOnCreate`.
   "assignedUserId",
   // 19-OM.17 — the external reference is written by the hand-off command only, so a client cannot
   // forge (or collide) the idempotency anchor of a conversation-created Case.

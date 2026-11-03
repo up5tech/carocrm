@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AIAgentRunService } from '../src/ai-agents/ai-agent-runs.service.js';
 import { CRMChatAIAgentsClientService } from '../src/crm-chat/crm-chat-ai-agents-client.service.js';
+import { CRMChatCitationService } from '../src/crm-chat/crm-chat-citations.service.js';
 import {
   CRMChatSettingsSchema,
   type CRMChatSettingsService,
@@ -20,10 +21,14 @@ function buildService(mode: 'queue' | 'inline') {
   });
   const execute = vi.fn().mockResolvedValue({ run: { id: 'run-1' }, claimed: true, waitingForApproval: false });
   const settings = { settings: vi.fn().mockResolvedValue({ execution: { mode } }) };
+  // The adapter re-authorizes a turn's sources on the way out (G39); this suite is about dispatch, so
+  // the projection is passed through untouched.
+  const citations = { reauthorizedResult: vi.fn(async (result: unknown) => result) };
 
   const service = new CRMChatAIAgentsClientService(
     { create, execute } as unknown as AIAgentRunService,
     settings as unknown as CRMChatSettingsService,
+    citations as unknown as CRMChatCitationService,
   );
   return { service, create, execute };
 }

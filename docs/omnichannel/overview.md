@@ -100,6 +100,12 @@ defects and one stale expectation. All four are fixed here.
   refuses a client write, the owner leaves every Case form (`inEdit: false`), the list page stops
   offering the bulk assign, and the voice hand-off no longer copies the conversation's assignee onto
   the Case. The supported path is unchanged: the assignment command writes the owner and its trail.
+  One narrow exception, added 2026-11-03 (G37): a **create** may carry `assignedUserId` when it names the
+  caller, because that is the value the record API itself stamps whenever the caller's read scope is
+  `own`/`team` — refusing it made least-privilege agents unable to open a case, and installations were
+  granting `Case: read all` to work around that. The bypass OM.17 closed stays closed: an **update** is
+  still refused, a create naming anybody else is still refused, and the stamp writes no `CaseAssignment`
+  row because no hand-over happened.
 - **The Service Desk routing unit test was stale.** OM.11 widened the routing allowlist with the
   conversation fields (`channel`, `language`, `category`) and the `notIn`/`contains`/`startsWith`
   operators, but the owning module's own test still asserted that `category` was refused — the

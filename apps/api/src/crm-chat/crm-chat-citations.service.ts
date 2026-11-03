@@ -216,6 +216,52 @@ export class CRMChatCitationService {
     return out;
   }
 
+  /**
+   * The turn's own `sources` list, filtered by the same rule the citations use (G39).
+   *
+   * `sources` are the raw `result_ref` values the runtime recorded for the successful tool calls, so
+   * they are references the answer was built from — not references the reader may still open. Re-reading
+   * each one under the caller's *current* rights is the only way this field obeys one rule instead of
+   * two: a record that was readable when the answer was given and has since been revoked stops appearing,
+   * exactly as its citation would stop being rendered.
+   *
+   * A reference that names no record — a bare id, or anything that is not `Entity:id` — is kept as it is.
+   * There is nothing to look up, so there is nothing to re-authorize, and dropping it would hide a fact
+   * the answer already states in its own text.
+   */
+  async visibleSources(sources: readonly unknown[]): Promise<string[]> {
+    const visible: string[] = [];
+    for (const entry of sources) {
+      if (typeof entry !== 'string' || entry === '') continue;
+      const separator = entry.indexOf(':');
+      const entity = separator > 0 ? entry.slice(0, separator) : '';
+      const id = separator > 0 ? entry.slice(separator + 1) : '';
+      if (entity === '' || id === '' || !/^[A-Z][A-Za-z0-9_]*$/.test(entity)) {
+        visible.push(entry);
+        continue;
+      }
+      if (entity === HELP_DOCUMENT_REF_KIND) {
+        const page = await this.readDocsPage(id);
+        if (page !== null) visible.push(entry);
+        continue;
+      }
+      const record = await this.entities.get(entity, id).catch(() => null);
+      if (record !== null) visible.push(entry);
+    }
+    return visible;
+  }
+
+  /**
+   * The runtime's stored `result` with its `sources` re-authorized. Any other shape is returned
+   * untouched: this is a projection rule about one field, not a rewrite of the answer.
+   */
+  async reauthorizedResult(result: unknown): Promise<unknown> {
+    if (typeof result !== 'object' || result === null) return result;
+    const record = result as Record<string, unknown>;
+    if (!Array.isArray(record['sources'])) return result;
+    return { ...record, sources: await this.visibleSources(record['sources'] as readonly unknown[]) };
+  }
+
   private toView(row: CRMChatCitationsTable): CRMChatCitationView {
     return {
       id: row.id,

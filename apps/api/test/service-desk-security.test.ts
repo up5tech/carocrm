@@ -26,15 +26,64 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Every case this file made carries the run marker in its name, so it is removed by that exact
+  // predicate — nothing else in the shared database is touched.
+  const made = await ctx.database.db
+    .selectFrom('entity_records')
+    .select('id')
+    .where('entity_type', '=', 'Case')
+    .where('name', 'like', `AGENT_TEST_${runId}%`)
+    .execute();
+  const ids = made.map((row) => row.id);
+  if (ids.length > 0) {
+    await ctx.database.db.deleteFrom('stream_items').where('entity_id', 'in', ids).execute();
+    await ctx.database.db.deleteFrom('entity_records').where('id', 'in', ids).execute();
+  }
   for (const id of userIds) await ctx.database.db.deleteFrom('users').where('id', '=', id).execute();
   for (const id of roleIds) await ctx.database.db.deleteFrom('roles').where('id', '=', id).execute();
   await shutdownApi();
 });
 
 describe('phase 19-SD.17 — security (§9)', () => {
+  it('an own-scope create succeeds and lands owned by its creator (G37)', async () => {
+    // The record API stamps the creator into `assignedUserId` when their read scope is `own`, because
+    // otherwise the new record would be invisible to them. The Case guard used to refuse that stamp as
+    // if the caller had written a server-owned field, so a least-privilege agent could not open a case
+    // at all — and installations fixed it by granting `read: all`.
+    const created = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/v1/Case',
+      headers: authHeader(agentA.token),
+      payload: { name: `AGENT_TEST_${runId} own-scope create`, requesterName: 'R' },
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    const body = created.json() as Record<string, unknown>;
+    const caseId = String(body['id'] ?? '');
+    expect(caseId).not.toBe('');
+    expect(body['assignedUserId']).toBe(agentA.id);
+
+    const readBack = await ctx.app.inject({ method: 'GET', url: `/api/v1/Case/${caseId}`, headers: authHeader(agentA.token) });
+    expect(readBack.statusCode).toBe(200);
+
+    // The stamp is the only thing accepted: a caller who *asks* to hand the case to somebody else is
+    // still refused, by the record API's own assignment rule this time.
+    const forged = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/v1/Case',
+      headers: authHeader(agentA.token),
+      payload: { name: `AGENT_TEST_${runId} other owner`, requesterName: 'R', assignedUserId: agentB.id },
+    });
+    expect(forged.statusCode).toBeGreaterThanOrEqual(400);
+    expect(forged.statusCode).not.toBe(201);
+  });
+
   it('agent cannot read another agent\'s case (IDOR)', async () => {
     const c = await ctx.app.inject({ method: 'POST', url: '/api/v1/Case', headers: authHeader(agentA.token), payload: { name: `AGENT_TEST_${runId} subj`, requesterName: 'R' } });
+    // Asserted as a real record: a create that failed would answer 404 for `/Case/undefined` and this
+    // test would pass without ever having read a case.
+    expect(c.statusCode, c.body).toBe(201);
     const caseId = (c.json() as Record<string, unknown>)['id'] as string;
+    expect(caseId).toBeDefined();
     const read = await ctx.app.inject({ method: 'GET', url: `/api/v1/Case/${caseId}`, headers: authHeader(agentB.token) });
     expect([403, 404]).toContain(read.statusCode);
   });

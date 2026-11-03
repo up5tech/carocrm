@@ -56,10 +56,12 @@ beforeAll(async () => {
   ctx = await bootApi();
 
   // Help search belongs to `features.helpRetrieval`, so this suite turns it on and puts the stored
-  // document back afterwards.
+  // document back afterwards. `readTools` belongs to the turn and query routes this suite drives — with
+  // G38 enforced, leaving it off would make every submission below a feature refusal instead of the
+  // security answer the test is actually asserting.
   baselineChatSettings = await snapshotSettings(ctx, 'crmChat');
   const chatSettings = await call('POST', '/api/v1/CRMChat/action/settings', ctx.adminToken, {
-    features: { helpRetrieval: true },
+    features: { helpRetrieval: true, readTools: true },
   });
   expect(chatSettings.status, JSON.stringify(chatSettings.body)).toBe(200);
 

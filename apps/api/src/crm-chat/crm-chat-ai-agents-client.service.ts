@@ -3,6 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import type { RunCreateInput } from '../ai-agents/ai-agent-runs.service.js';
 import { AIAgentRunService } from '../ai-agents/ai-agent-runs.service.js';
+import { CRMChatCitationService } from './crm-chat-citations.service.js';
 import { CRMChatSettingsService } from './crm-chat-settings.service.js';
 
 /**
@@ -52,6 +53,7 @@ export class CRMChatAIAgentsClientService {
   constructor(
     @Inject(AIAgentRunService) private readonly runs: AIAgentRunService,
     @Inject(CRMChatSettingsService) private readonly settings: CRMChatSettingsService,
+    @Inject(CRMChatCitationService) private readonly citations: CRMChatCitationService,
   ) {}
 
   /**
@@ -98,6 +100,10 @@ export class CRMChatAIAgentsClientService {
   /**
    * Retrieve the current status of a turn. The turn ID is the same as the AIAgents run ID because
    * Chat reuses the run as its turn identifier (no duplication).
+   *
+   * `result.sources` is re-authorized on the way out (G39). The runtime recorded those references at
+   * answer time, under whoever could read then; returning them as stored would mean the citations obeyed
+   * the caller's current rights while this field obeyed the past ones.
    */
   async getTurnStatus(turnId: string): Promise<CrmChatTurnStatus> {
     const run = await this.runs.get(turnId);
@@ -107,7 +113,7 @@ export class CRMChatAIAgentsClientService {
       runId: run.id,
       status: run.status,
       conversationId: run.conversationId,
-      result: run.result,
+      result: await this.citations.reauthorizedResult(run.result),
       failureMessage: run.failureMessage,
       cancelRequested: run.cancelRequested,
     };

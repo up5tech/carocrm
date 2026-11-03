@@ -40,6 +40,7 @@ settings endpoint refuses nothing but the health endpoint reports each dependenc
 | One canonical support case (`Case`) with subject, classification, requester and ownership | `GET/POST /api/v1/Case`, the generic Entity Engine |
 | A transaction-safe, unique case number allocated at creation | Postgres sequence `service_desk_case_number_seq`; `GET /api/v1/ServiceDesk/action/caseNumberPreview` previews the next one |
 | Server-owned fields a client cannot forge (case number, timeline stamps, SLA summary, escalation state) | `beforeValidate` write guard (`service-desk-write-guard.service.ts`) |
+| The Case owner, which `CaseAssignment` owns — with one exception: a **create** naming the caller is the record API's own `own`/`team` scope stamp, not a hand-over (G37, 2026-11-03) | the same write guard (`isSelfOwnershipOnCreate`) |
 | A case must carry a requester: a CRM record (Account/Contact/Lead) or a channel-supplied name/email | the same write guard |
 | List, search, filter, sort, pagination, export, stream, audit and record/field ACL | the generic Entity Engine and `AclApiService`, reused unchanged |
 | Validated module settings (numbering prefix/padding, defaults, resolution requirement, optional feature flags) | `GET/POST /api/v1/ServiceDesk/action/settings` |

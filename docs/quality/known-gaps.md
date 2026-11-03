@@ -47,9 +47,9 @@
 | G34 | Help retrieval read Service Desk's knowledge corpus with the caller's rights ignored | crm-chat → service-desk | Medium | Fixed (22.13) |
 | G35 | The MCP-shaped tool door could commit an approval-class write with no decision anywhere | ai-agents | Medium | Fixed (22.13) |
 | G36 | Three declared run and approval states are unreachable | ai-agents | Low | Open (found 22.13) |
-| G37 | A user whose Case scope is `own` cannot create a Case at all | service-desk / platform ACL | Medium | Open (found 22.13) |
-| G38 | `features.readTools` is declared as the gate for turns and queries and never enforced | crm-chat | Medium | Open (found 22.13) |
-| G39 | A turn's own `sources` list is handed back without re-authorization | crm-chat | Low | Open (found 22.13) |
+| G37 | A user whose Case scope is `own` cannot create a Case at all | service-desk / platform ACL | Medium | Fixed (2026-11-03) |
+| G38 | `features.readTools` is declared as the gate for turns and queries and never enforced | crm-chat | Medium | Fixed (2026-11-03, deployment-visible) |
+| G39 | A turn's own `sources` list is handed back without re-authorization | crm-chat | Low | Fixed (2026-11-03) |
 | G40 | None of the connector's five worker doors could be reached by the worker | advanced-integrations | High | Fixed (22.14) |
 | G41 | The webhook job the API enqueues was refused by the door that receives it, and its domain-claim flag was dropped | advanced-integrations | High | Fixed (22.14) |
 | G42 | A verified webhook answered "no events" whenever the connector did not mention a challenge | advanced-integrations | Medium | Fixed (22.14) |
@@ -73,7 +73,7 @@
 | G60 | The webhooks tab decided "module not installed" from a message containing "404" | platform / SPA | Low | Fixed (22.15) |
 | G61 | One chat string was hard-coded English in a shared component | crm-chat / SPA | Low | Fixed (22.15) |
 | G62 | The chat action card rendered its own decision response instead of the server's | crm-chat / SPA | Medium | Fixed (22.15) |
-| G63 | No route guard sits in front of `/admin/*` — only the menu is filtered by the server | platform / SPA | Medium | Open (found 22.15) |
+| G63 | No route guard sits in front of `/admin/*` — only the menu is filtered by the server | platform / SPA | Medium | Fixed (2026-11-03) |
 | G64 | ~150 call sites still show `error.message` raw instead of the code-aware helper | platform / SPA | Medium | Open (found 22.15) |
 | G65 | Home content is chosen from `principal.roles` in the client, a rule the server does not mirror | platform / SPA | Low | Open (found 22.15) |
 | G66 | No browser spec asserts an error, denied or empty state, and login is English-only | platform / SPA / e2e | Medium | Open (found 22.15; error/empty/denial browser spec added in 22.16, run pending) |
@@ -364,7 +364,23 @@
 - **Module / contract:** service-desk write guard × the Entity Engine's own-scope assignment — `POST /api/v1/Case` as a non-administrator.
 - **Impact:** with `Case: { create: 'yes', read: 'own' }`, `prepareWrite` stamps `assignedUserId` into the create so the new record is visible to its creator at all, and the guard refuses any client write that changes `assignedUserId` by name — so the create answers `422 …These fields on Case are set by the Service Desk module and cannot be written through the record API: assignedUserId`. The user did not ask for that field; the platform set it for them. The practical result is that a deployment gives its agents `Case: read all` to let them create at all, which is the opposite of least privilege.
 - **Expected vs observed:** expected — an own-scoped create succeeds and lands owned by its creator; observed — a refusal naming a field the caller never sent.
-- **Status:** Open (found 22.13) — reproduced in the Phase 22.13 journey's setup and worked around by scoping the journey's limited user to Cases they may read but not create. The fix belongs to the guard's rule (accept an own-scope assignment that names the creator, refuse anything else), and it needs the queue-routing semantics decided: a newly created Case is exactly what routing wants to place.
+- **Status:** **Fixed 2026-11-03.** `ServiceDeskWriteGuardService` now accepts `assignedUserId` on a
+  **create** when it names the caller the record API scoped the record to
+  (`isSelfOwnershipOnCreate`, `apps/api/src/service-desk/service-desk-write-guard.service.ts`), and refuses
+  it in every other position — an update, or a create naming anybody else (the record API's own
+  "can only be assigned to yourself" rule fires first for the latter). Asserted by
+  `service-desk-security.test.ts` ("an own-scope create succeeds and lands owned by its creator"), which
+  checks the 201, the `assignedUserId`, the read-back and the forged-other-owner refusal; verified by
+  mutation — disabling the exception returns the original `422 … cannot be written through the record API:
+  assignedUserId`.
+  **The queue-routing question the entry asked for is decided as follows:** the stamp is *initial
+  ownership*, not an assignment, so it writes no `CaseAssignment` history row (nothing was handed over)
+  and it does not trigger routing — a case that arrives owned by its creator is not the record routing
+  wants to place; `action/route` stays the explicit command and `CaseAssignmentService.assign` stays the
+  only writer of the assignment trail.
+  **Collateral finding, also fixed:** the IDOR test at `service-desk-security.test.ts:36` had been passing
+  vacuously the whole time — its create answered 422, so it read `/Case/undefined` and got the expected
+  404. It now asserts the create returns 201 before anything else.
 - **Remaining risk:** least-privilege roles keep being widened in practice rather than fixed in the guard.
 
 ## G38 — `features.readTools` is declared as the gate for turns and queries and never enforced
@@ -372,7 +388,16 @@
 - **Module / contract:** crm-chat — `POST action/turns`, `POST action/query/execute`, and the route table in `crm-chat-contract.ts`.
 - **Impact:** the contract names `readTools` as the feature those two routes require, and `CRM_CHAT_ROUTES` is pinned against the served routes — but the only thing the turn path consults is assistant readiness (which reads the *AIAgents* execution flags), and the query route only checks the workspace plus `use`. An administrator who switches "Grounded CRM answers" off still gets answers built from live CRM records. The flag is real for write actions, which chain through `actionProposals` → `readTools`, so the one path that does honour it is the one that needs it least.
 - **Expected vs observed:** expected — a capability switch the operator can see is a switch the server enforces; observed — decorative for the two routes that most define the product.
-- **Status:** Open (found 22.13) — enforcing it is a one-line `assertFeature` on two routes, but it is a behaviour change for every deployment that left the flag off while the code ignored it, so it needs the deliberate decision (and the documentation that goes with it) rather than arriving inside a hardening journey. The Phase 22.13 journey therefore proves the boundary that *is* enforced — the record ACL in step 3 — and does not rely on the flag.
+- **Status:** **Fixed 2026-11-03.** `POST action/turns` and `POST action/query/execute` now call
+  `policy.assertFeature('readTools')` (`apps/api/src/crm-chat/crm-chat.controller.ts`), and
+  `actions.canStartTurn` is the conjunction of workspace, `readTools` effective and assistant readiness so
+  the composer cannot offer a refused send. Asserted by `crm-chat.test.ts` ("obeys the readTools switch on
+  the two routes it gates"), which checks the refusal, the capability answer and the fact that a request
+  past the gate is answered by validation rather than by the flag. The deliberate decision the entry asked
+  for was taken and documented: `docs/architecture/crm-chat-contract.md` §7.1 and
+  `docs/modules/crm-chat/RELEASE_NOTES.md` both state that **a deployment with the flag off stops
+  answering until an operator switches it on**, including help-only installations, because a help turn
+  travels the same route.
 - **Remaining risk:** a compliance answer of "we disabled grounded answers" is not true.
 
 ## G39 — A turn's own `sources` list is handed back without re-authorization
@@ -380,7 +405,13 @@
 - **Module / contract:** crm-chat — `GET action/turns/:id`.
 - **Impact:** the turn status returns the run's `result` as recorded, and `sources` there are the raw `entity:id` references collected from the tool ledger at answer time. The citation builder re-reads each record under the caller's current ACL and drops what fails; this field does not, so a record that was readable when the answer was given and has since been revoked continues to appear as `Account:<id>` in the turn's own result. Visibility is bounded (the initiator, or a holder of `AIAgentAudit: read`), and what is disclosed is a reference to a record the reader once could open, which is why this is Low.
 - **Expected vs observed:** expected — one rule for "may this caller see this record", applied on every read; observed — two rules, one re-read and one replayed from the stored answer.
-- **Status:** Open (found 22.13) — recorded rather than fixed here because the fix is a small behaviour change (a silently shortened list) that should match how citations already behave, and the journey asserts the citation half, which is the surface the SPA renders.
+- **Status:** **Fixed 2026-11-03.** `CRMChatCitationService.reauthorizedResult()` applies the citation rule
+  to the turn's `sources` and `CRMChatAIAgentsClientService.getTurnStatus()` runs it on every read, so
+  `GET action/turns/:turnId` cannot name a record the reader has lost. Asserted by
+  `crm-chat-evaluation.test.ts` ("stops naming a record the reader has lost"), which answers a turn from a
+  real `crm_read_record` call, soft-deletes the record, and re-reads the turn; verified by mutation — with
+  the filter removed the same assertion fails naming the revoked record. A reference that is not shaped
+  `Entity:id` is passed through unchanged (nothing to look up), and the answer text is not rewritten.
 - **Remaining risk:** a long-lived turn keeps naming records its reader may no longer open.
 
 ## G40 — None of the connector's five worker doors could be reached by the worker
@@ -556,7 +587,19 @@
 - **Module / contract:** platform / SPA — `AppRoutes.tsx`.
 - **Impact:** the router gates on "is there a session" and "is this a portal user". It does not gate on capability, so a signed-in non-admin who types `/admin/users` reaches the page, and the page then refuses its own data with a permission card or a 403 list. The comments in the route table say "visibility is decided by the server", which is true of the navigation tree (`AppShell` renders the ACL-filtered result) and of every data call, but not of the route itself. §14 task 8 asks route guards and API authorization to *agree*; today they agree on outcome and disagree on the moment.
 - **Expected vs observed:** expected — a route a caller cannot serve does not render its chrome; observed — it renders and then reports the refusal inside itself.
-- **Status:** Open (found 22.15) — the fix needs a capability→route map (which module right each admin page requires), and that map is a product decision rather than a mechanical one. The behaviour is safe: no data is read that the server would not refuse, and the refusal states are the shared `PermissionDenied` card. Recorded rather than guessed at.
+- **Status:** **Fixed 2026-11-03 — without inventing the map the entry said was needed.** The guard reads
+  the server's own answer instead: `GET /AdminPanel` is already filtered per caller
+  (`admin-panel.service.ts:115`, `TAB_CATALOG.filter((tab) => this.registry.mayRead(tab.level))`) and is
+  the same data the menu is built from, so route and navigation cannot drift.
+  `apps/web/src/admin/RequireAdministration.tsx` wraps the nine standalone `/admin/*` routes (entity
+  manager ×2, audit log, jobs, extensions, workflows ×2, processes ×2, portals) and renders the shared
+  `PermissionDenied` card instead of the page when the caller's panel does not offer that route; a panel
+  that failed to load is a refusal with a retry, never an implicit allow. `/admin/settings*` needed
+  nothing — the shell already resolves the tab against the same server list.
+  Asserted in `apps/web/src/admin/RequireAdministration.test.tsx` (5 cases: allowed, refused, empty
+  panel, param page under its base route, pending) and checked in a browser as a `noAccess` user typing
+  `/admin/jobs`: the denial card renders and **no page chrome does** (no `.carocrm-page-title`, no jobs
+  table), while the same URL as an administrator still renders the page.
 
 ## G64 — ~150 call sites still show `error.message` raw instead of the code-aware helper
 

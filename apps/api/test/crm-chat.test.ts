@@ -171,12 +171,14 @@ describe('CRMChat module shell (19-CHAT.2)', () => {
     const assistant = recordOf(result.body['assistant']);
     const assistantState = String(assistant['state']);
     expect(['not-configured', 'unresolvable', 'ready']).toContain(assistantState);
+    // `readTools` is enforced on the turn route (G38), so `canStartTurn` is the conjunction of the flag
+    // and readiness — asserted from the flags this very response reports, not from a guess about them.
+    const readToolsEffective = (result.body['features'] as { key: string; effective: boolean }[]).some(
+      (feature) => feature.key === 'readTools' && feature.effective,
+    );
     const actions = recordOf(result.body['actions']);
-    if (assistantState === 'ready') {
-      expect(actions['canStartTurn']).toBe(true);
-      expect(actions['reason']).toBeNull();
-    } else {
-      expect(actions['canStartTurn']).toBe(false);
+    expect(actions['canStartTurn']).toBe(assistantState === 'ready' && readToolsEffective);
+    if (assistantState !== 'ready' || !readToolsEffective) {
       expect(String(actions['reason'] ?? '')).not.toBe('');
     }
     expect(actions['canConfirmWrite']).toBe(false);
@@ -192,6 +194,58 @@ describe('CRMChat module shell (19-CHAT.2)', () => {
     const proposals = features.find((feature) => feature.key === 'actionProposals');
     expect(proposals?.enabled).toBe(false);
     expect(proposals?.effective).toBe(false);
+  });
+
+  it('obeys the readTools switch on the two routes it gates (G38)', async () => {
+    // The route table names `readTools` for the turn and for the grounded query, so a deployment that
+    // switched "Grounded CRM answers" off must refuse both. Before this rule was enforced the flag was
+    // decorative on exactly the two routes that define the product, and an operator's compliance answer
+    // of "we disabled grounded answers" was not true.
+    const refusedTurn = await call('POST', '/api/v1/CRMChat/action/turns', useToken, {
+      prompt: `${MARKER} what is my open pipeline`,
+    });
+    expect(refusedTurn.status).toBe(403);
+    expect(errorCode(refusedTurn)).toBe('FEATURE_DISABLED');
+
+    const refusedQuery = await call('POST', '/api/v1/CRMChat/action/query/execute', useToken, {
+      entity: 'Account',
+      limit: 5,
+    });
+    expect(refusedQuery.status).toBe(403);
+    expect(errorCode(refusedQuery)).toBe('FEATURE_DISABLED');
+
+    // The capability answer has to agree with the gate, or the composer offers a send the server refuses.
+    const off = await call('GET', '/api/v1/CRMChat/action/capabilities', useToken);
+    const offActions = off.body['actions'] as { canStartTurn: boolean; reason: string | null };
+    expect(offActions.canStartTurn).toBe(false);
+    expect(String(offActions.reason)).toContain('readTools');
+
+    // With the flag on, the refusal changes character: the gate moved, so what answers now is the
+    // validation behind it. Asserted as "no longer a feature refusal" rather than as a ready assistant,
+    // because whether this installation has one is not what this test is about.
+    const on = await patchSettings({ features: { readTools: true } });
+    expect(on.status, JSON.stringify(on.body)).toBe(200);
+    try {
+      const enabled = await call('GET', '/api/v1/CRMChat/action/capabilities', useToken);
+      const enabledActions = enabled.body['actions'] as { reason: string | null };
+      expect(String(enabledActions.reason ?? '')).not.toContain('readTools');
+
+      const emptyPrompt = await call('POST', '/api/v1/CRMChat/action/turns', useToken, { prompt: '' });
+      expect(emptyPrompt.status).toBe(400);
+      expect(errorCode(emptyPrompt)).not.toBe('FEATURE_DISABLED');
+
+      const unknownEntity = await call('POST', '/api/v1/CRMChat/action/query/execute', useToken, {
+        entity: 'NotAnEntity',
+        limit: 5,
+      });
+      // Past the gate, the query engine's own answer arrives — an unknown entity is a refusal by the
+      // engine (400/404/422), never a feature refusal.
+      expect([400, 404, 422]).toContain(unknownEntity.status);
+      expect(errorCode(unknownEntity)).not.toBe('FEATURE_DISABLED');
+    } finally {
+      const restored = await patchSettings({ features: { readTools: false } });
+      expect(restored.status, JSON.stringify(restored.body)).toBe(200);
+    }
   });
 
   it('keeps settings away from a caller who only holds the workspace right', async () => {

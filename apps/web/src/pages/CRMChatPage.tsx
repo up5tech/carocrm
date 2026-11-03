@@ -254,6 +254,12 @@ export function CRMChatPage() {
     data.capabilities.some((capability) => capability.key === 'feedback' && capability.granted);
   const promptsGranted = data.capabilities.some((capability) => capability.key === 'prompts' && capability.granted);
 
+  // G38 — a turn is refused for one of two different reasons, and the title has to name the right one:
+  // "the assistant is not ready" would blame an agent configuration the administrator never touched
+  // when the actual cause is the Grounded-CRM-answers switch.
+  const readToolsEffective = data.features.some((feature) => feature.key === 'readTools' && feature.effective);
+  const blockedTitle = readToolsEffective ? t('web.crmChat.notReadyTitle') : t('web.crmChat.gatedTitle');
+
   const startNewConversation = (): void => {
     setSelectedId(undefined);
     setOlder([]);
@@ -403,7 +409,7 @@ export function CRMChatPage() {
               <Alert
                 type="info"
                 showIcon
-                message={t('web.crmChat.notReadyTitle')}
+                message={blockedTitle}
                 description={data.actions.reason ?? data.assistant.reason}
               />
             ) : null}
@@ -414,7 +420,7 @@ export function CRMChatPage() {
                   <ThunderboltOutlined />
                 </span>
                 <h2 className="carocrm-chat-hero-title">
-                  {data.actions.canStartTurn ? t('web.crmChat.heroTitle') : t('web.crmChat.notReadyTitle')}
+                  {data.actions.canStartTurn ? t('web.crmChat.heroTitle') : blockedTitle}
                 </h2>
                 <p className="carocrm-chat-hero-hint">
                   {data.actions.canStartTurn ? t('web.crmChat.heroHint') : t('web.crmChat.selectConversation')}

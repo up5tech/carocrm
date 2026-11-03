@@ -352,7 +352,21 @@ interface CRMChatCapabilitiesView {
 `enabled` is `features.workspace && permitted`, so a caller whose role lost the right sees `false` even
 while the deployment flag is on. `effective` is the flag **after** its `requires` chain — the only value
 the UI may treat as "this works". `actions.canStartTurn` is the single field the composer keys on; it is
-`false` whenever the assistant cannot answer, and `reason` always explains why.
+`false` whenever the assistant cannot answer **or `features.readTools` is not effective**, and `reason`
+always explains why.
+
+**`readTools` is enforced, not decorative** (G38, 2026-11-03). `POST action/turns` and
+`POST action/query/execute` require it, exactly as the route table in §6 has always said. Before this,
+the turn path consulted only assistant readiness, so an administrator who switched "Grounded CRM answers"
+off still got answers built from live CRM records — a compliance answer that was not true. Two
+consequences an operator must know:
+
+- A deployment that never switched the flag on **loses chat turns** when it upgrades. Switching
+  `crmChat.features.readTools` on is the intended way to keep them, and the flag's own label ("Grounded
+  CRM answers") is now an accurate description of what turning it off does.
+- A **help-only** installation is affected too: handbook answers travel the same turn route, so serving
+  them requires `readTools` on even though no CRM record is read. Splitting the route is a contract
+  change (§15), not something this enforcement assumed away.
 
 ### 7.2 `CRMChatModuleHealthView` — implemented
 
@@ -486,6 +500,14 @@ interface CRMChatTurnView {                  // 19-CHAT.5/6
   usage: { steps: number; toolCalls: number; inputTokens: number; outputTokens: number } | null;
   error: { code: string; message: string } | null;
 }
+
+**`result.sources` is re-authorized on every read** (G39, 2026-11-03). The turn's stored `result` carries
+the `Entity:id` references the runtime recorded from its successful tool calls at answer time. The
+citation builder already re-reads each record under the caller's *current* rights; the raw list now obeys
+the same rule, so a record the reader has lost since the answer was written stops being named by
+`GET action/turns/:turnId` instead of living there forever. A reference that names no record (a bare id,
+anything not shaped `Entity:id`) is returned as it is — there is nothing to look up. The answer text
+itself is not rewritten: shortening this list is a visibility rule, not a content edit.
 
 interface CRMChatCitationView {              // 19-CHAT.8
   id: string; sourceType: 'crm_record' | 'query_result' | 'report' | 'help_document';
@@ -775,6 +797,8 @@ states the reasons they are safe.
 | `1.2.0` | 19-CHAT.17 | Per-turn usage read-out added (`action/turns/:turnId/usage`). |
 | `1.2.0` | 19-CHAT.20–19-CHAT.23 | No route, request shape, response shape, stream event or error code changed, so the contract version stays: the twelve tools added to the `AIAgents` registry are behind the existing turn surface, and Chat still neither grants nor executes a tool (§9). |
 | `1.2.0` | 19-CHAT.24 | `assistant.tools` documented as load-bearing: the workspace renders only the suggestions whose tool the answering agent holds. Module version 1.1.0 → 1.2.0; `implementedPhases` now lists 19-CHAT.20–24. No payload changed, so the contract version stays `1.2.0`. |
+| `1.2.0` | G38 (2026-11-03) | `features.readTools` is now **enforced** on `POST action/turns` and `POST action/query/execute`, which is what §6 already declared; `actions.canStartTurn` reports the same rule so the composer cannot offer a refused send. No path or shape changed — the behaviour moved to match the contract, and the enforcement is a **deployment-visible change**: an installation with the flag off stops answering until an administrator switches it on. |
+| `1.2.0` | G39 (2026-11-03) | `GET action/turns/:turnId` re-authorizes `result.sources` with the citation rule (§10) instead of replaying what the run recorded, so a revoked record stops being named. Response *shape* is unchanged — one array can now be shorter — so the contract version stays `1.2.0`. |
 
 ---
 

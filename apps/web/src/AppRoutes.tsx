@@ -3,6 +3,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { AdminSettingsShell } from './admin/AdminSettingsShell.js';
+import { RequireAdministration } from './admin/RequireAdministration.js';
 import { AppShell } from './components/AppShell.js';
 import { LoadingSkeleton } from './components/LoadingSkeleton.js';
 import { useSession } from './state/session.js';
@@ -192,16 +193,19 @@ export function AppRoutes() {
         <Route path="/:entity/create" element={<EntityEditPage />} />
         <Route path="/:entity/:id" element={<EntityDetailPage />} />
         <Route path="/:entity/:id/edit" element={<EntityEditPage />} />
-        <Route path="/admin/entity-manager" element={<EntityManagerPage />} />
-        <Route path="/admin/entity-manager/:entityName" element={<EntityAdminPage />} />
-        <Route path="/admin/audit-log" element={<AdminAuditPage />} />
-        <Route path="/admin/jobs" element={<AdminJobsPage />} />
-        <Route path="/admin/extensions" element={<AdminExtensionsPage />} />
-        <Route path="/admin/workflows" element={<WorkflowsPage />} />
-        <Route path="/admin/workflows/:id" element={<WorkflowEditorPage />} />
-        <Route path="/admin/processes" element={<ProcessesPage />} />
-        <Route path="/admin/processes/:id" element={<ProcessEditorPage />} />
-        <Route path="/admin/portals" element={<AdminPortalsPage />} />
+        {/* G63 — each administration page is wrapped in the guard that asks the server's own admin-panel
+            answer before the page renders. `/admin/settings*` needs none: the shell resolves the tab
+            against the same server list and shows its own refusal when the caller has no such tab. */}
+        <Route path="/admin/entity-manager" element={<RequireAdministration route="/admin/entity-manager"><EntityManagerPage /></RequireAdministration>} />
+        <Route path="/admin/entity-manager/:entityName" element={<RequireAdministration route="/admin/entity-manager"><EntityAdminPage /></RequireAdministration>} />
+        <Route path="/admin/audit-log" element={<RequireAdministration route="/admin/audit-log"><AdminAuditPage /></RequireAdministration>} />
+        <Route path="/admin/jobs" element={<RequireAdministration route="/admin/jobs"><AdminJobsPage /></RequireAdministration>} />
+        <Route path="/admin/extensions" element={<RequireAdministration route="/admin/extensions"><AdminExtensionsPage /></RequireAdministration>} />
+        <Route path="/admin/workflows" element={<RequireAdministration route="/admin/workflows"><WorkflowsPage /></RequireAdministration>} />
+        <Route path="/admin/workflows/:id" element={<RequireAdministration route="/admin/workflows"><WorkflowEditorPage /></RequireAdministration>} />
+        <Route path="/admin/processes" element={<RequireAdministration route="/admin/processes"><ProcessesPage /></RequireAdministration>} />
+        <Route path="/admin/processes/:id" element={<RequireAdministration route="/admin/processes"><ProcessEditorPage /></RequireAdministration>} />
+        <Route path="/admin/portals" element={<RequireAdministration route="/admin/portals"><AdminPortalsPage /></RequireAdministration>} />
         {/* Phase 20: the settings shell owns `/admin/settings/:tabKey`; the bare URL redirects to the
             first tab this caller may open, so existing bookmarks keep landing somewhere useful. */}
         <Route path="/admin/settings" element={<AdminSettingsShell />} />

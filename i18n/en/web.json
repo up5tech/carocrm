@@ -2512,6 +2512,7 @@
     "privateByDefault": "Conversations are private to you; sharing is an explicit, audited feature.",
     "threadTitle": "Conversation",
     "notReadyTitle": "The assistant is not ready",
+    "gatedTitle": "Grounded CRM answers are switched off",
     "emptyThread": "Nothing to show yet",
     "emptyThreadHint": "Answers, sources and proposed actions will appear here.",
     "untitled": "Untitled conversation",

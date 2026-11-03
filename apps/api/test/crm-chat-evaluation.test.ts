@@ -943,4 +943,41 @@ describe('per-tool evaluation set (19-CHAT.24)', () => {
       }
     }
   });
+
+  it('stops naming a record the reader has lost (G39)', async () => {
+    // A turn's `sources` are the `result_ref` values the runtime recorded when it answered. Returning
+    // them as stored means the citations obey the reader's current rights while this field obeys the
+    // past ones, so the same rule has to cover both.
+    await useAssistant(0); // `crm_read_record` is granted to the first catalogue assistant.
+    const accountId = await createRecord('Account', { name: `${MARKER} source to revoke` }, toolToken);
+    const turn = await call('POST', '/api/v1/CRMChat/action/turns', toolToken, {
+      prompt: `Read this account. __FAKE_TOOL__:crm_read_record __FAKE_TOOL_ARGS__:{"entity":"Account","id":"${accountId}"}`,
+      idempotencyKey: `${MARKER}-g39-${String(Math.random())}`,
+    });
+    expect(turn.status, JSON.stringify(turn.body)).toBe(201);
+    const turnId = String(turn.body['turnId'] ?? '');
+    runIds.push(turnId);
+
+    const settled = await settledRun(turnId);
+    expect(settled['status'], JSON.stringify(settled)).toBe('succeeded');
+
+    const whileReadable = await call('GET', `/api/v1/CRMChat/action/turns/${turnId}`, toolToken);
+    expect(whileReadable.status).toBe(200);
+    const named = ((whileReadable.body['result'] as { sources?: string[] })?.sources ?? []) as string[];
+    expect(named, 'the record the answer was built from is named while the reader may open it').toContain(
+      `Account:${accountId}`,
+    );
+
+    // Take the record away. Nothing else about the turn changes: the answer text stays, the reference
+    // goes, exactly as its citation would.
+    const removed = await call('DELETE', `/api/v1/Account/${accountId}`, toolToken);
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+
+    const afterRemoval = await call('GET', `/api/v1/CRMChat/action/turns/${turnId}`, toolToken);
+    expect(afterRemoval.status).toBe(200);
+    const remaining = ((afterRemoval.body['result'] as { sources?: string[] })?.sources ?? []) as string[];
+    expect(remaining, 'a record the reader can no longer read must not be named').not.toContain(
+      `Account:${accountId}`,
+    );
+  });
 });

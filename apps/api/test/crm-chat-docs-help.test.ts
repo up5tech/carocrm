@@ -153,7 +153,8 @@ beforeAll(async () => {
   expect(aiSettings.status).toBe(200);
 
   const chatSettings = await call('POST', '/api/v1/CRMChat/action/settings', ctx.adminToken, {
-    features: { workspace: true, helpRetrieval: true },
+    // A help answer travels the turn route, and `POST action/turns` is gated on `readTools` (G38).
+    features: { workspace: true, helpRetrieval: true, readTools: true },
   });
   expect(chatSettings.status, JSON.stringify(chatSettings.body)).toBe(200);
 

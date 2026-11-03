@@ -66,6 +66,30 @@ filter reads the agent's **grants**, so a deployment that wants a question to st
 remove the grant (or republish the assistant without the tool) — the rule is written into
 `docs/architecture/crm-chat-contract.md` §7.5.
 
+### Behaviour change — `crmChat.features.readTools` is now enforced (G38)
+
+`POST action/turns` and `POST action/query/execute` refuse with `403 FEATURE_DISABLED` while the flag is
+off. The route table always said they required it; the turn path only consulted assistant readiness, so an
+administrator who switched "Grounded CRM answers" off still received answers built from live CRM records —
+a compliance answer that was not true. `actions.canStartTurn` now reports the same rule, so the composer
+cannot offer a send the server would refuse.
+
+**Action required by an operator who wants chat to keep answering:** switch
+`crmChat.features.readTools` on (Settings → CRM Chat, or `POST /api/v1/CRMChat/action/settings` with
+`{"features":{"readTools":true}}`). Handbook-only installations need it too: a help answer travels the
+same turn route.
+
+Rollback is code, not configuration — the enforcement is one `assertFeature` per route in
+`apps/api/src/crm-chat/crm-chat.controller.ts`.
+
+### Visibility fix — a turn no longer names records the reader has lost (G39)
+
+`GET action/turns/:turnId` returns the run's `result.sources` — the `Entity:id` references its successful
+tool calls recorded at answer time. Those were replayed as stored, so a record the reader could open when
+the answer was written but has since lost kept appearing in the turn. The field now goes through the same
+ACL re-read the citations already use, so one rule covers both surfaces. The response shape is unchanged;
+the array can be shorter, and the answer text is not rewritten.
+
 ### Verification
 
 * `apps/api/test/crm-chat-evaluation.test.ts` — 61 cases: the 19-CHAT.17 set plus **one case per tool, in

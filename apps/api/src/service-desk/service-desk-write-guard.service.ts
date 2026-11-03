@@ -82,7 +82,17 @@ export class ServiceDeskWriteGuardService implements OnApplicationBootstrap {
       }
       const changed =
         context.operation === "create" ? Object.keys(data) : changedKeys(data, context.previous ?? {});
-      const offending = changed.filter((key) => SERVER_OWNED_CASE_FIELDS.includes(key));
+      const offending = changed.filter(
+        (key) =>
+          SERVER_OWNED_CASE_FIELDS.includes(key) &&
+          // G37 — on a create, `assignedUserId` is not a client choice at all: the record API stamps
+          // the creator into it whenever the caller's read scope is `own` or `team`, so that the new
+          // record is visible to them. Refusing that stamp made a least-privilege Case role unable to
+          // create a Case at all, and installations answered by granting `read: all` — the opposite of
+          // what the scope was for. A create naming anybody else is still refused (the record API
+          // rejects it before this guard, and the rule below does not weaken that).
+          !(key === "assignedUserId" && this.isSelfOwnershipOnCreate(context, data)),
+      );
       if (offending.length > 0) {
         throw new ValidationError(
           `These fields on Case are set by the Service Desk module and cannot be written through the record API: ${offending.join(", ")}.`,
@@ -121,6 +131,20 @@ export class ServiceDeskWriteGuardService implements OnApplicationBootstrap {
     if (typeof current === "string" && current.trim() !== "") return;
     const allocation = await this.numbering.allocate();
     data["caseNumber"] = allocation.formatted;
+  }
+
+  /**
+   * Whether a create's `assignedUserId` names the caller the platform scoped the record to (G37).
+   *
+   * This is the initial ownership stamp, not an assignment: nobody decided to hand the case to anyone,
+   * so no `CaseAssignment` history row belongs to it — the assignment command stays the only writer of
+   * that trail, and routing stays an explicit command (`action/route`), which a case that arrives with
+   * its own creator as owner does not need.
+   */
+  private isSelfOwnershipOnCreate(context: HookContext, data: Record<string, unknown>): boolean {
+    if (context.operation !== "create") return false;
+    const userId = this.scope.userId;
+    return userId !== undefined && data["assignedUserId"] === userId;
   }
 
   /**

@@ -151,11 +151,16 @@ export class CRMChatController {
     const writesEnabled =
       settingsView.effectiveFeatures.actionProposals && settingsView.settings.safety.allowWrites;
     const assistantReady = assistant.state === 'ready';
+    // G38 — `readTools` is enforced on `POST action/turns`, so the answer here has to agree with the
+    // gate or the composer would offer a send the server refuses.
+    const readToolsEffective = settingsView.effectiveFeatures.readTools;
     const reason = !settingsView.features.workspace
       ? 'The Chat workspace is disabled by an administrator.'
-      : !assistantReady
-        ? assistant.reason
-        : null;
+      : !readToolsEffective
+        ? 'Grounded CRM answers are disabled by an administrator (crmChat.features.readTools).'
+        : !assistantReady
+          ? assistant.reason
+          : null;
     return {
       module: {
         id: CRM_CHAT_MODULE.id,
@@ -180,7 +185,7 @@ export class CRMChatController {
       assistant,
       limits: settingsView.settings.limits,
       actions: {
-        canStartTurn: workspaceEnabled && assistantReady,
+        canStartTurn: workspaceEnabled && readToolsEffective && assistantReady,
         canConfirmWrite: workspaceEnabled && writesEnabled && assistantReady,
         reason,
       },
@@ -235,7 +240,10 @@ export class CRMChatController {
    */
   @Post('action/turns')
   async createTurn(@Body() body: unknown) {
-    await this.policy.assertWorkspace();
+    // G38 — the route table names `readTools` as this route's feature, so the flag is enforced here
+    // rather than only advertised. An answer built from live CRM records is the capability the switch
+    // describes, and a switch an operator can see has to be a switch the server obeys.
+    await this.policy.assertFeature('readTools');
     const input = parse(CRMChatTurnCreateSchema, body);
 
     // How many context references a turn may carry is a deployment limit, not a client choice.
@@ -360,7 +368,8 @@ export class CRMChatController {
    */
   @Post('action/query/execute')
   async executeQuery(@Body() body: unknown) {
-    await this.policy.assertWorkspace();
+    // G38 — same rule as the turn route: this is the grounded-read surface, so `readTools` gates it.
+    await this.policy.assertFeature('readTools');
 
     const schema = z.object({
       entity: z.string().trim().min(1).max(120),
